@@ -161,6 +161,15 @@ keep the Resources/StreamingAssets copies in sync (the `CanonicalJson` law).
 
 ## 6. Non-goals / flags for the owner
 
+- **Canonical source = Blink (owner 2026-06-18).** The player-facing weapon+gear collection
+  is generated from the Blink RPG bundle via Addressables (`BlinkGearSource` + the "Gear"
+  Addressables group); see [[blink-canonical-art-foundation]] / `docs/BLINK_NOTES.md`. 400
+  weapons + 25 outfit sets loaded, addressable-keyed in `prefabPath` with `loadVia:"addressable"`.
+- **Display gating — OPEN (owner 2026-06-18, "how to show low-level gear").** With ~460 items
+  the store/inventory must filter what's shown. The data already carries the hook: `req.level`
+  + `rarity`/tier. Decide the rule — **level-range-bound** (show within ±N of player level) vs
+  **milestone-bound** (unlock at tiers/milestones). It's a PRESENTATION filter (reads the data),
+  not a data change; set it when wiring the native store panel.
 - **Per-slot vs full-body armor** — today armor is modeled as full-body outfit (`slot` is
   effectively one). Decide if Gear gets head/chest/legs slots before the generator runs (it
   changes the entry granularity).

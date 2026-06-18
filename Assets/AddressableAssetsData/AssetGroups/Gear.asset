@@ -1,0 +1,2148 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Gear
+  m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.AddressableAssetGroup
+  m_GroupName: Gear
+  m_GUID: d19c14018859243459f64789751bfc5f
+  m_SerializeEntries:
+  - m_GUID: 0101e6804763e9247b7a106ae800fae6
+    m_Address: gear/weapon/Crossbow2h_06
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 023e8fa0af9607047a7839984027e230
+    m_Address: gear/weapon/SpellBook1h_25
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0319cc8f42bd86b428584c0e8056553c
+    m_Address: gear/weapon/Bow2h_10
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 034742e2081c924418e48b40c6ce742a
+    m_Address: gear/weapon/Mace1h_12
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 03ebd05183e58ed4eba4abc590225902
+    m_Address: gear/armor/LandWarrior_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 044749c4460a4b349920e8dabfcabd2c
+    m_Address: gear/weapon/SpellBook1h_05
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 06f720d4b45bff24ab8409cf9df74ec2
+    m_Address: gear/armor/Engineer_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0838a5d748b0a854c955d4e23e3371e8
+    m_Address: gear/weapon/Claws1h_15
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0842226d94f463d4facde6cec1aa2b2f
+    m_Address: gear/weapon/Sword2h_21
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 085b8c12a447bbc4b99e75ea51392040
+    m_Address: gear/weapon/Scythe2h_14
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 09692d4ec1ca227429eef15e8c87a52e
+    m_Address: gear/weapon/Hammer2h_04
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 09b15185b7615cb4a984dc200e5b1657
+    m_Address: gear/weapon/SpellBook1h_21
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0a2cf3141f8d69a41b3a3ad4efddb1ae
+    m_Address: gear/weapon/Dagger1h_11
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0a6935f2bf42b9448b9192a0a9f55d18
+    m_Address: gear/weapon/Axe2h_18
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0ac39c45fee9a9b4289cbf6e72e0f6bd
+    m_Address: gear/weapon/Bow2h_22
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0b00492512711c84691b61ee12ad342e
+    m_Address: gear/weapon/Hammer2h_22
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0b69364fed55df3499615f8de084a0c4
+    m_Address: gear/weapon/Polearm2h_11
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0c1df5ddb3a5afd4788a6c210c16ba8e
+    m_Address: gear/weapon/Polearm2h_23
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0c278024db3a637479adc52977deae56
+    m_Address: gear/weapon/Shield1h_15
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0c30751a36d98344682aa779899c9409
+    m_Address: gear/weapon/Scythe2h_12
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0c36e617ce4d56749994532f78ca0880
+    m_Address: gear/weapon/Staff2h_09
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0ce770a81ad4fa146be81b1fdbfa2020
+    m_Address: gear/weapon/Staff2h_23
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0d495e33694b3e941895d2c18744e657
+    m_Address: gear/weapon/Axe2h_04
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0e4f65f8f7709bb45a9efac90c433d47
+    m_Address: gear/weapon/Sword1h_04
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0e8f3e2eab703414489a4d158581b25b
+    m_Address: gear/weapon/Claws1h_25
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0e9a3b13c42ddb14a8082518f5c5c613
+    m_Address: gear/weapon/Polearm2h_06
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0f59a6a235450dc44b99ade21e1404c8
+    m_Address: gear/weapon/Sword2h_09
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0fb93febf5d07e644bc3cf9a97cd0cef
+    m_Address: gear/weapon/Mace1h_10
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 10228287b33aceb49851c55140771faf
+    m_Address: gear/weapon/Hammer2h_13
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 103fa7a2c1238924faab0f36ef41e6d7
+    m_Address: gear/armor/Centurion_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1085fea729bc5034d92d50f2a9a7b648
+    m_Address: gear/weapon/Sword2h_08
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 10c5e83ee2139a74fad2074026edf87b
+    m_Address: gear/weapon/Wand1h_13
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 11402b4c22abc9348b471f3178db2cfa
+    m_Address: gear/weapon/Axe2h_15
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1146e4e1ab157c545a8989ca4d4e917b
+    m_Address: gear/weapon/Scythe2h_07
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 11bd8fa18f3188e468ed42c5c57eb48a
+    m_Address: gear/weapon/Mace1h_18
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 11c998b48e0149043b33113c4b24e97c
+    m_Address: gear/weapon/Axe2h_24
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 124a9928e2e79cf49842d939e3cd7f12
+    m_Address: gear/weapon/Axe2h_21
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 13a914db5bc1d0041a952b7ced5105eb
+    m_Address: gear/weapon/Crossbow2h_01
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 14c81ab775297614b9f82c068b8b8c6d
+    m_Address: gear/weapon/Polearm2h_18
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 15b71412e85a8d54daa8eb1eaa7d53a2
+    m_Address: gear/weapon/SpellBook1h_16
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 15b7f79f596f2b64ca9b4b910f46b3c3
+    m_Address: gear/weapon/Crossbow2h_20
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1604d2ebe0c9e774a8cca6ecdc031812
+    m_Address: gear/weapon/Axe2h_10
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 16c86023a38369d45a3ceb55adb8f834
+    m_Address: gear/weapon/Axe2h_13
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 16f55c3cca2bebc48bff339a1cdaf445
+    m_Address: gear/weapon/SpellBook1h_20
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 172177c1ec84e0147a9e49da9a31e25e
+    m_Address: gear/weapon/Mace1h_13
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 17ae7d31169e357459c5c45f2d0cd848
+    m_Address: gear/weapon/SpellBook1h_04
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 181072d464dc2c64699dca19a6fcdc66
+    m_Address: gear/armor/Basic4_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 187b32b615d05964a910deb52797a491
+    m_Address: gear/armor/Hydra_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1924de756bde2d7479647afee11a1e7b
+    m_Address: gear/weapon/Bow2h_03
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 19f2d583778dc734c8e343a8f2793551
+    m_Address: gear/weapon/Scythe2h_11
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1b4b922614ca2e64996997304fc4a48c
+    m_Address: gear/weapon/Wand1h_14
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1b7783d732ebf2f42879d906ed37d240
+    m_Address: gear/weapon/Dagger1h_24
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1bd2fb843eb8af546a85295390738a69
+    m_Address: gear/weapon/Polearm2h_15
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1c2805407bea1d3459260e658f7c1a7e
+    m_Address: gear/armor/Basic9_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1cf2afcedd83ac640876134f77d1aec9
+    m_Address: gear/weapon/Scythe2h_22
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1d4bbd92c5738504bad8c90ffb5a2b3b
+    m_Address: gear/weapon/Shield1h_19
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1d4f586c8038ad54a94d0af40c823a76
+    m_Address: gear/weapon/Claws1h_17
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1fb9a4892f3742546925e81bafc2fe2e
+    m_Address: gear/weapon/Mace1h_19
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 20f12573fc3576043989f64559133b41
+    m_Address: gear/weapon/Crossbow2h_22
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 21135f576581e2442a9b2b192db90c21
+    m_Address: gear/weapon/Sword1h_09
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 21749f2fb9c139140bd37fe02cd62869
+    m_Address: gear/weapon/Shield1h_08
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 23484fbfe704f4d488f1bc2f74f2d6c9
+    m_Address: gear/weapon/Mace1h_09
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2490f58fbbfaf3f4d884e7a28ae13151
+    m_Address: gear/weapon/Shield1h_22
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 265030a8caf388b458064614766c15c6
+    m_Address: gear/weapon/Axe1h_17
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 267ea307520d6624c8a80cec5c64d520
+    m_Address: gear/weapon/Dagger1h_18
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 268c04861eecb84439ab6b1403f0394b
+    m_Address: gear/weapon/Axe2h_09
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 26db2ac6044d2954ea465e9dfef3a656
+    m_Address: gear/weapon/Shield1h_11
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 26f7f7b4ad846df4886e7dea03e068fc
+    m_Address: gear/weapon/Claws1h_20
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2731ba97ce6d263448060b61ba3cf52a
+    m_Address: gear/weapon/Staff2h_05
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 27f091794a1ae7e46b4290fbf87380ea
+    m_Address: gear/weapon/Axe1h_09
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 280252a6ba2c2ec498b7f99a2878856c
+    m_Address: gear/weapon/Sword2h_14
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 286d323fb0abefc47a07ef7f487de284
+    m_Address: gear/weapon/SpellBook1h_01
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 28ff373acb9c9e14dbe6343d227d9511
+    m_Address: gear/weapon/Crossbow2h_09
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2a14eed91490ce04bb2849701d40fb13
+    m_Address: gear/weapon/Scythe2h_01
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2a33b25cb37197e4fb1f73809b4587eb
+    m_Address: gear/weapon/Crossbow2h_12
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2ab2d2326922f96469249f121d0485b1
+    m_Address: gear/weapon/Sword1h_10
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2b65daf3b26b40848a4a2ff96c7ee82c
+    m_Address: gear/weapon/Dagger1h_04
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2bd4c8a11278e844ea2ddeee87d824a1
+    m_Address: gear/weapon/Mace1h_03
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2ce144f61a19e86458b2374e391153b7
+    m_Address: gear/weapon/SpellBook1h_19
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2d54d6f51c303a946b1455605f6f314a
+    m_Address: gear/weapon/SpellBook1h_14
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2d7816e246be21b469dbce07ff3ec233
+    m_Address: gear/weapon/Mace1h_22
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2dba25ad4e515294f8142868b45fc62f
+    m_Address: gear/weapon/Hammer2h_14
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2dcf858866583a54f80af356e50d7b55
+    m_Address: gear/weapon/Sword2h_16
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2dcf90d7c41c04548a6e8aee4bac9cec
+    m_Address: gear/weapon/Claws1h_18
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 307640e790f219547a503f50a6fd06a7
+    m_Address: gear/weapon/Bow2h_21
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 30bce660632ee3e44af9e517eb1f0f73
+    m_Address: gear/weapon/Sword1h_23
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 31acba57e08296f48858b063711522f0
+    m_Address: gear/weapon/Shield1h_16
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 31b854a1767b90243ba86898d4a55bf0
+    m_Address: gear/weapon/Axe1h_12
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3270cf4468834e74fb9cd56ba12c730d
+    m_Address: gear/armor/Bear_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 33233f65e200ab0489c7219ca866423f
+    m_Address: gear/weapon/Dagger1h_14
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 333ade93350f0e7499f6ee267ad55541
+    m_Address: gear/weapon/Axe2h_12
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 341311077271b7b46a44fee9edb01b6e
+    m_Address: gear/weapon/Crossbow2h_25
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 349c38bf18afdee4395983fb3bb5aecd
+    m_Address: gear/weapon/Hammer2h_03
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 35499616ab56a0b40aea8dd769b6a7d7
+    m_Address: gear/weapon/Mace1h_02
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 36a14d53b30a3da459add9bbe69e77cc
+    m_Address: gear/weapon/Bow2h_13
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3745feeb3d17d6d4797c062df4c72910
+    m_Address: gear/weapon/Sword1h_06
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 376d4ceb4f129a04ba492e45dbef25db
+    m_Address: gear/weapon/Crossbow2h_04
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 38be88e69d78d9c47afa5d19d8010d4f
+    m_Address: gear/weapon/Scythe2h_21
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 39340af8a8037c04a84a91c20af87f79
+    m_Address: gear/weapon/Dagger1h_09
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3a0feed2807b870488fb6ff2b5795ea3
+    m_Address: gear/weapon/Polearm2h_07
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3b4b93e03226d044aafd194c13ed496d
+    m_Address: gear/weapon/Scythe2h_24
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3b656d896f0b7f04f99e18822453dc8a
+    m_Address: gear/weapon/Axe2h_02
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3c4e6ae2c8df6e843ae2a28f25dfb4f7
+    m_Address: gear/weapon/Polearm2h_10
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3c588709fa463794c95bf10ed2acb799
+    m_Address: gear/weapon/Bow2h_08
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3ddb1bf4a4902c149af9cb333fa64899
+    m_Address: gear/weapon/Hammer2h_15
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3f618fe4fe978ca4bbb2399121b5a03d
+    m_Address: gear/weapon/Wand1h_06
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3f864aa9cd6240747acff9f42756811a
+    m_Address: gear/weapon/Staff2h_25
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3fa2351287f44364699cd6b71bfaac79
+    m_Address: gear/weapon/Claws1h_02
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3fc9142b41d17e44da592f287e059c6e
+    m_Address: gear/weapon/Sword2h_03
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 40e590bb5073b074586cab564e3c03cb
+    m_Address: gear/weapon/Sword1h_20
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 410c00734e357de4181928458c9e143e
+    m_Address: gear/weapon/Axe1h_23
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 417187a21ebe6094691982996c225cc8
+    m_Address: gear/weapon/Polearm2h_02
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 44a7834c1005a1545a6854f4f13befda
+    m_Address: gear/weapon/Claws1h_24
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 44b13f8aa2ce8ef41aea66055ecc7926
+    m_Address: gear/weapon/Bow2h_20
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 44cc8a02984d95345b79dcbd17a014aa
+    m_Address: gear/weapon/Claws1h_16
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 45d976d9740a7264ea829d976beb4546
+    m_Address: gear/weapon/Polearm2h_08
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 462f3e2e32fbaf742b8523351d1f4402
+    m_Address: gear/weapon/Sword2h_02
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 463798a36cabd7c4998123e967be75e3
+    m_Address: gear/weapon/Wand1h_12
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4655994c57d89e745866bdace5d772ae
+    m_Address: gear/weapon/Sword2h_06
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4662b5c4a4c798a41a86355a58a15586
+    m_Address: gear/weapon/Sword1h_05
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 472b4b49c752e8f438b0688aabd92381
+    m_Address: gear/weapon/Staff2h_21
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4878e25b6d8e6774984d004080c2034a
+    m_Address: gear/weapon/Dagger1h_21
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 48c178a632863ca4394cd86edb29fbf5
+    m_Address: gear/weapon/Sword2h_11
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 48d413af10055434d88d45a882f8a97a
+    m_Address: gear/weapon/Shield1h_03
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 493118580b9f34647bdd33129e71fe4f
+    m_Address: gear/weapon/Polearm2h_21
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 499a9512b590fcb4e99a906d839e7e8f
+    m_Address: gear/weapon/Shield1h_07
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4abc5c8013e85db42987ddfa9a5feebc
+    m_Address: gear/weapon/Staff2h_03
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4ae007ff01bd73e4f95ef4c41ebd0a0c
+    m_Address: gear/weapon/Wand1h_10
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4ae3af99d9b5cb04abfd529ec25fd2fa
+    m_Address: gear/weapon/Staff2h_08
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4c25e9be0475b104cbac8ae31f76b6c4
+    m_Address: gear/weapon/SpellBook1h_09
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4c87249e76ef08a4eb4519e8aeb0f85d
+    m_Address: gear/weapon/Axe1h_04
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4cb3ff31b59c04341b3a8c284bd28e2a
+    m_Address: gear/weapon/Bow2h_07
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4dd6fdae1afe3f74c9ac3d9e255f99f8
+    m_Address: gear/weapon/Crossbow2h_10
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4dd878d109d8cef42a0359bf76e89aa2
+    m_Address: gear/weapon/Polearm2h_14
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4f529c09b15ad4441af75c2f83a5db6e
+    m_Address: gear/weapon/Staff2h_24
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 503afb09cd37caf4c96dffddd52be805
+    m_Address: gear/weapon/Wand1h_18
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5068a279eb054214a90f388923a5370e
+    m_Address: gear/weapon/Shield1h_23
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 509ead530df1820479740931c786a04b
+    m_Address: gear/weapon/Hammer2h_06
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 514f1bdce2aba334b9b73f7a601b0059
+    m_Address: gear/weapon/Scythe2h_23
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 516715012537b6445aa73f7f9414840f
+    m_Address: gear/weapon/Polearm2h_22
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5201d7562fcce404e907ffaf458f2f4b
+    m_Address: gear/weapon/Hammer2h_19
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 52dc873110bb86945a9178db71b41869
+    m_Address: gear/armor/Basic2_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 52fbbccb0ccf5cb44b24865848d045ac
+    m_Address: gear/weapon/Scythe2h_25
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5305c81f38f8c3145a9465a17623b63c
+    m_Address: gear/weapon/SpellBook1h_15
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 534128eb90ebe4d408a5d56a63e351d2
+    m_Address: gear/armor/Boar_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 53591d94420893a40bf47017b62b623d
+    m_Address: gear/weapon/Shield1h_17
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 53ba3b779dcace049abd4805a340fcf1
+    m_Address: gear/weapon/Sword1h_24
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5443e750c057b3442ae42bfffb622b1d
+    m_Address: gear/weapon/Polearm2h_09
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 545d9ec9c7446b7468328bcc5da5060a
+    m_Address: gear/weapon/Claws1h_13
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 549e81e04db5cf8449a763e0f2750bb2
+    m_Address: gear/weapon/Sword1h_15
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 559c6f1e9ff873c43ac66b5572badecc
+    m_Address: gear/weapon/SpellBook1h_02
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 55ec3072cb63b124c803d02afcc6acb4
+    m_Address: gear/weapon/Claws1h_10
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 56274c4500ade97409b4a97977faae5f
+    m_Address: gear/weapon/Staff2h_14
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 56c05a258269d254d85e483374a00657
+    m_Address: gear/weapon/Sword2h_18
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 59404b210a536e74d9b2d3352f1f8a8e
+    m_Address: gear/weapon/Polearm2h_16
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 59457280f17e9524bbd2a1f63c9af8da
+    m_Address: gear/weapon/Hammer2h_07
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 594a1e5b48fe66e4ea053331ee63704f
+    m_Address: gear/weapon/Dagger1h_07
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 594e25965ec212c4eb7745be0e25c7d6
+    m_Address: gear/weapon/Wand1h_19
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5a5ca869a9dfe114c94f7548112774c9
+    m_Address: gear/weapon/Claws1h_12
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5b6ad111a506dde4f9991248c56b49b8
+    m_Address: gear/weapon/Polearm2h_03
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5c99f4513f54488489b92639d6fef67c
+    m_Address: gear/weapon/Claws1h_09
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5d8cbbc7562b0a749acaaa9e340b1306
+    m_Address: gear/weapon/Sword2h_22
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5e9ca5ea627413441baaaaff8187ab09
+    m_Address: gear/weapon/Wand1h_05
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5ee97dea5a9a8af43a8608189b7353eb
+    m_Address: gear/weapon/Wand1h_22
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5fcf4ea4b8067de4b8c6486608913891
+    m_Address: gear/weapon/SpellBook1h_22
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 619ed4ed94beaec42968f7b16c650727
+    m_Address: gear/weapon/Sword1h_17
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 622a8ff4bb048e94dbd3db733d3a33ec
+    m_Address: gear/weapon/Crossbow2h_17
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 66c3d5684875ee74da0ecfdd46f9414f
+    m_Address: gear/weapon/Hammer2h_11
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 68c18692c2360d5429d8a05e09f81fae
+    m_Address: gear/weapon/Crossbow2h_13
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 694a8ae37fb9cb84c8033dfe000f35dd
+    m_Address: gear/weapon/Hammer2h_18
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 69603881ea603d84eb17c0c46228ef63
+    m_Address: gear/weapon/Mace1h_17
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6ac585ac219bd654a8f160fef16aacf3
+    m_Address: gear/weapon/Dagger1h_23
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6c6550b6bfcdba1499b435ecd45e958f
+    m_Address: gear/weapon/Sword1h_01
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6c8a2b2354a51fb42837eac8f9326431
+    m_Address: gear/weapon/Sword1h_07
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6c9945d135f7e0b43bdc47409e21e9b0
+    m_Address: gear/weapon/Hammer2h_02
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6cc8e859f593141449de3e1a88928bab
+    m_Address: gear/armor/BeastHunter_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6d447ce6b78dbbe40b9c1011235c5c2c
+    m_Address: gear/weapon/Dagger1h_05
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6ed42453e5ed6ee4eae85e357804d7b1
+    m_Address: gear/weapon/SpellBook1h_11
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 70298a77db11245499fc927697222c75
+    m_Address: gear/armor/Bird_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 70812c5ce7ecaff45abc3e2e436b3399
+    m_Address: gear/weapon/Claws1h_06
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 70b9da20f2c537a45a730481f0d3c1c6
+    m_Address: gear/weapon/Sword1h_25
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 718d400351aa5fa489d604b312d51ca5
+    m_Address: gear/weapon/Axe2h_20
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 72238a21ddc45004b8d1ebdc7c5a496b
+    m_Address: gear/weapon/Polearm2h_25
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 74ac20093ba86304481dcab124c73a27
+    m_Address: gear/weapon/Sword1h_14
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 753c50361ae6c0b4ea6af569603e2711
+    m_Address: gear/weapon/Sword2h_01
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7658df652d0aba14993106d361a52d7d
+    m_Address: gear/weapon/Axe2h_22
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 767969e0c4a96f84589d171166804d64
+    m_Address: gear/weapon/Axe2h_14
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7688826aa40b21449ac4f06b3979af73
+    m_Address: gear/armor/Basic10_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 769a433414a584a459a473e17497f12a
+    m_Address: gear/weapon/Shield1h_02
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 76a5951f9d335124aa40bace40cbafcb
+    m_Address: gear/weapon/Scythe2h_20
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 76cd5351de180af4482b14c1349e0730
+    m_Address: gear/weapon/Bow2h_16
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7779a49c112bd624087e8dc8d1efee55
+    m_Address: gear/weapon/Staff2h_16
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 77c06587494b0e14d8e0079d545d658b
+    m_Address: gear/weapon/Axe1h_07
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 792a50f50afdb344f97e6004a4fcf958
+    m_Address: gear/weapon/Staff2h_01
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 79f1dee5241a6f347b3ccd17eb53a83e
+    m_Address: gear/weapon/Axe2h_01
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7a56b04158b89a9488995688c5ad8fbc
+    m_Address: gear/weapon/Mace1h_08
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7bafeb37e92ce744783cb595b261c7c4
+    m_Address: gear/weapon/Crossbow2h_08
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7beb081a275a963458a3816f74fda232
+    m_Address: gear/weapon/Wand1h_24
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7ca8be2f32586c04fa1f69818f12a161
+    m_Address: gear/weapon/Claws1h_11
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7ccb9073206d2f347bbfda5214743c58
+    m_Address: gear/weapon/Axe2h_25
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7efd6857a99da034d98771d8c7279f44
+    m_Address: gear/weapon/Sword1h_19
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7ff813f899f7a4a41b3590a4545dac5e
+    m_Address: gear/weapon/Axe1h_13
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 804b6b242312d8d4f9d307b002170c68
+    m_Address: gear/weapon/Axe1h_25
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 80844bf5aec345143a2ec349ef5f836f
+    m_Address: gear/weapon/Mace1h_16
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 82632ecf4d624b24792c0f58c725b6d8
+    m_Address: gear/weapon/Claws1h_22
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 83bccd5eda52bc643a6f567ab2d5e695
+    m_Address: gear/weapon/Mace1h_14
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 83d8a15e582cdd94e9f19088278daab9
+    m_Address: gear/weapon/Axe1h_16
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 841cfe65590b5fb408a804e0e62c9dd9
+    m_Address: gear/weapon/Crossbow2h_21
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8424f52cbe337b04882b906ac1f04ca7
+    m_Address: gear/weapon/Staff2h_12
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8469fd1bbf415e449b501f5fbe2e970c
+    m_Address: gear/weapon/Sword2h_23
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 84c79a22a0bf99c418c4cacc5a6c739d
+    m_Address: gear/weapon/Hammer2h_24
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 855459adcf4b131459328681530ed3a1
+    m_Address: gear/weapon/Dagger1h_19
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 858989b9438770647b536c4a31a10971
+    m_Address: gear/weapon/Hammer2h_16
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 86b2ca25515a39f4b94caad933231cee
+    m_Address: gear/weapon/Claws1h_03
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 86e10946688ef9a4bacf4b7b123e9e8f
+    m_Address: gear/weapon/Scythe2h_09
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 875696190612ec94f8bee6c08120e077
+    m_Address: gear/weapon/Dagger1h_10
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 878070c6ecc61aa488dec6b91759b4d1
+    m_Address: gear/weapon/Dagger1h_20
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 87af5b0c69168af46803d1e944a9be81
+    m_Address: gear/weapon/Crossbow2h_14
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 87b80885c423e624ab0780d2daa7832e
+    m_Address: gear/weapon/Claws1h_04
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 87ccec0e3bcd335458eb311c7971bfa4
+    m_Address: gear/weapon/Hammer2h_10
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 87f00acce80628046b9e915121f18427
+    m_Address: gear/armor/Dragonic_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 886179bd241cea04182fda3e0975bcb8
+    m_Address: gear/weapon/Staff2h_20
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 88f7fc43a9706664a9df0d94caf4f799
+    m_Address: gear/weapon/Axe1h_22
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8992ea53174a63f4789294724167e881
+    m_Address: gear/weapon/Axe2h_08
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 89da472f13fe6ac49924b6cd167246d2
+    m_Address: gear/weapon/Shield1h_10
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8b25c3f5c91d7ad418131e70f0fd2763
+    m_Address: gear/weapon/Sword2h_25
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8b5d04a6c5048cb4588588a722fe173a
+    m_Address: gear/weapon/Wand1h_25
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8b97a1574c996a94480dd925cae2ca48
+    m_Address: gear/weapon/Staff2h_11
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8de5da0c891c23b4ebd23c1cf3059518
+    m_Address: gear/weapon/Shield1h_24
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8e0cd282860a48b4384f13018160728b
+    m_Address: gear/weapon/Sword1h_11
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8eebb097dde40a241acddb7c03cec873
+    m_Address: gear/weapon/Wand1h_16
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8f198cafe4e1baf41be7e40ba24be9cc
+    m_Address: gear/weapon/Crossbow2h_23
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9050f71a49396fd48a78b4b560096d93
+    m_Address: gear/armor/Basic8_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 91e63db97066b4346bcd15e6f9a919f6
+    m_Address: gear/weapon/Shield1h_14
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 922336cd4dd2e604cacbcdf81c25c3d9
+    m_Address: gear/weapon/Axe1h_03
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 92b5dcb312ee5e14e9632df10df5dd59
+    m_Address: gear/weapon/Sword2h_12
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9314028ad52a8b041ad85519b1f6228d
+    m_Address: gear/weapon/Claws1h_08
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 939a075abe6061649ac4f95b368cb0a7
+    m_Address: gear/weapon/Bow2h_24
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 93c4bc6257bdb2b47b3f27cfd5a45de6
+    m_Address: gear/armor/PantherKnight_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 93d8cc7124ccfa14e8f1b6d78f302abe
+    m_Address: gear/weapon/Bow2h_15
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 944e571897b0df7469dae4b82572114f
+    m_Address: gear/armor/DragonHunter_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 945e63f446b7cb54680bd361d10fddd3
+    m_Address: gear/weapon/Axe1h_10
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 949665889e1a0ad4aa41c2b87665e44a
+    m_Address: gear/weapon/Claws1h_01
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 973e804b872801d4a8da4ee76491130d
+    m_Address: gear/weapon/Scythe2h_18
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9847b35b10bfdd64f9c05f7b7cf4c7a1
+    m_Address: gear/weapon/Sword1h_08
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9896fae39e2c754439f757c702a70479
+    m_Address: gear/weapon/Axe1h_05
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9b459567e4f19734ea81fe3078c4bfec
+    m_Address: gear/weapon/Axe1h_15
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9b77152d5ad65254e8ce84df6ea84aef
+    m_Address: gear/weapon/Mace1h_04
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9c83dd081f3442c4da42f9ffa5fb6994
+    m_Address: gear/weapon/Mace1h_01
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9c9a6b4fa734ee642810d70542e13f68
+    m_Address: gear/weapon/SpellBook1h_23
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9d3fdff9dfd68ee4eb2427f86161ad51
+    m_Address: gear/weapon/Bow2h_02
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9dc4f082169dd2c448230652b5cc31fb
+    m_Address: gear/weapon/Sword1h_16
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9e2e77b03cc3a2648856261d6b960a33
+    m_Address: gear/weapon/Hammer2h_01
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a02b138b40c93414da07d6b0c692bfa7
+    m_Address: gear/weapon/Bow2h_18
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a02eab1e043c40b4d919b2f71666a653
+    m_Address: gear/weapon/Polearm2h_17
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a18cd46ed25253243b3d250f4fb78c7f
+    m_Address: gear/weapon/SpellBook1h_13
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a193cd7bae1fba04aa09b20c43060967
+    m_Address: gear/weapon/Axe2h_23
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a19d1e69c4f26144985fb7fada39ef42
+    m_Address: gear/weapon/Bow2h_11
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a1ccadb2455c66b4bb786d37b5ecaa73
+    m_Address: gear/weapon/Axe2h_19
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a1fed874e07b3454d82a7eab5fcc0010
+    m_Address: gear/weapon/Sword2h_10
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a27ea0d65a92c6e4c8f206502e87a75e
+    m_Address: gear/weapon/Staff2h_10
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a4cf0e36727b921448e7bfa369126bb8
+    m_Address: gear/weapon/Staff2h_22
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a4ea6307410b63f46a0a623b396b28ad
+    m_Address: gear/weapon/Mace1h_07
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a6911c65bc8b8c247aa2508716087bb5
+    m_Address: gear/weapon/Scythe2h_04
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a6e8782ab3706d44589c2195c712441f
+    m_Address: gear/weapon/Hammer2h_21
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a73fa708c228e6c43a9a6b50c963612f
+    m_Address: gear/weapon/Hammer2h_17
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a7c2adaf5e13b5443b79bb685496d766
+    m_Address: gear/weapon/Scythe2h_19
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a868d7273a511ba49bca48f3a230ba84
+    m_Address: gear/weapon/Dagger1h_03
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a898da3850d96c34a9f9ec50a0c3b0af
+    m_Address: gear/weapon/Bow2h_25
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a9e1177e6768bc14a81de13207113e11
+    m_Address: gear/weapon/Claws1h_05
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a9ed11661999a2f4bba5e65e1aaf9f5f
+    m_Address: gear/weapon/Polearm2h_19
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a9fc5b09ff474534183d68d08156d89c
+    m_Address: gear/weapon/Mace1h_11
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ab863f0b50959fb4183b4701f41c95b5
+    m_Address: gear/weapon/Polearm2h_04
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: abf6d67e138555845a777db19739516f
+    m_Address: gear/weapon/Sword2h_07
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ac010fd77464a9141abc26c4bfcdabe7
+    m_Address: gear/weapon/Axe1h_24
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ac39f2b1c91960546a52f724485186c1
+    m_Address: gear/weapon/Shield1h_13
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: acc4047e0f9be5c4badc2a48cb631260
+    m_Address: gear/weapon/Axe1h_19
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ad6fd596aad5ab8429609db0ab23a527
+    m_Address: gear/weapon/Axe1h_11
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: adaabbc8101c69a4aa4d973d93ecf00f
+    m_Address: gear/weapon/Hammer2h_23
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: addb3ff1312f7e14bb4942b5724e0e3f
+    m_Address: gear/weapon/Polearm2h_12
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: af4bcdb8865261b44a78a30328bafd0d
+    m_Address: gear/weapon/Axe2h_11
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: af834b2b028f356449c6fb5165607250
+    m_Address: gear/weapon/Crossbow2h_24
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: afeebe3bd97d9b94995964c4decc6c6d
+    m_Address: gear/armor/Basic7_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b14622a75a4d9b641a5f81a14ae8875d
+    m_Address: gear/weapon/Shield1h_04
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b2a6e2b69fe5fb5439934f192e6566d4
+    m_Address: gear/weapon/Shield1h_25
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b2c27f2f7aa62584989ac67744b1ebaf
+    m_Address: gear/weapon/Staff2h_07
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b3803237a93d80144957d9ce427870b3
+    m_Address: gear/weapon/Axe1h_14
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b484175eaec07c146ab11a7bdd271373
+    m_Address: gear/weapon/Sword1h_13
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b48503e7985a7ac448e93d601684b996
+    m_Address: gear/weapon/Axe2h_05
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b55dbcaebc5708f4ea96679b57e4fa6e
+    m_Address: gear/weapon/Hammer2h_20
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b59594a8a40416c4aa8295b98e3c1087
+    m_Address: gear/weapon/Mace1h_06
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b7722063f239e43499760700c55b23de
+    m_Address: gear/weapon/Wand1h_02
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b792aa1aaf099044cb09c2ef2debe123
+    m_Address: gear/weapon/Bow2h_23
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b83494ed18f0ca34583b6de594feb869
+    m_Address: gear/weapon/Sword1h_21
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b940871c047b8df4a955328b12e0ab75
+    m_Address: gear/weapon/Claws1h_19
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bb447df85d1540d4daf32f13deb0ef5a
+    m_Address: gear/weapon/Mace1h_05
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bbecc346d0a53d44988286b698ff1a97
+    m_Address: gear/weapon/Axe2h_06
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bc3b2ec55d412c64b825ce3fbf953ec5
+    m_Address: gear/weapon/Dagger1h_15
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bc8c116f8d487774e8f02faee133bdae
+    m_Address: gear/weapon/Mace1h_20
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bcc1c4e4bb5d23d4c81bfdf1588da3cf
+    m_Address: gear/weapon/Axe2h_17
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bda0ad36ed509834b8f6a0dac059a43e
+    m_Address: gear/weapon/Shield1h_18
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bdd2870c040370b47af6ba87ada567b7
+    m_Address: gear/weapon/Crossbow2h_02
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bf3a1dc4eae83844dbe2df85cb2d7e2a
+    m_Address: gear/weapon/Shield1h_20
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c09ff2e25bbf56247a651bcde35db1de
+    m_Address: gear/weapon/Axe2h_07
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c12f52bcc95ce4f4b9e925590fcc3219
+    m_Address: gear/weapon/Dagger1h_17
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c1e379b45faac334ba51e1bd7b65266c
+    m_Address: gear/weapon/SpellBook1h_07
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c2077a61a348cb64da413fd9d96acade
+    m_Address: gear/armor/Basic5_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c2277fcff39e41d4f810397bb61c8d1b
+    m_Address: gear/armor/Minotaur_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c2de3c38ce0bbe44c83e9c3676c2fdf9
+    m_Address: gear/weapon/Scythe2h_16
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c366f85f0ed679c489d2d7fe0a2d2a10
+    m_Address: gear/weapon/Scythe2h_03
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c3df4b50b2cd008459c936b1c5fbdab4
+    m_Address: gear/weapon/SpellBook1h_06
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c43b33f7808c49d46b3d9f1a2b97df29
+    m_Address: gear/weapon/Wand1h_20
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c46e65234b197784e9b8966a18a8d3fd
+    m_Address: gear/armor/Basic6_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c4857dbf68775c64dae79f87cb225e37
+    m_Address: gear/weapon/SpellBook1h_12
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c4ae5fa06a5d8c64fb6d0f751a1784bf
+    m_Address: gear/armor/Basic1_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c4cb3d217af7e4c4ba4ba0775916c06d
+    m_Address: gear/weapon/Shield1h_01
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c4dfe0cadf4ca824f8e8d68968a377d2
+    m_Address: gear/weapon/Bow2h_12
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c4f3d2f5de9f99e458b068e9f7c51c0d
+    m_Address: gear/weapon/Bow2h_14
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c52f49107ff928d49b5879cff7fc4e08
+    m_Address: gear/weapon/Bow2h_19
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c57458c0e19bce644aecb84ea94cfd54
+    m_Address: gear/weapon/Wand1h_23
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c57ac84e6b880634287e2cd16820c3f1
+    m_Address: gear/weapon/Wand1h_17
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c6bc050c9af2ab5439848376680b34e2
+    m_Address: gear/weapon/Sword1h_18
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c6be6a4dd6b1e0f48845ad23d0c7bc96
+    m_Address: gear/weapon/Staff2h_13
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c704b92e63e3ba544a1cd737280fd5de
+    m_Address: gear/weapon/Mace1h_24
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c711b898b17bc6c49b87a1b3c3707ed0
+    m_Address: gear/weapon/Axe2h_03
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c720fa3117366b04ba36a2aa481b8671
+    m_Address: gear/weapon/Axe1h_01
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c90ad05335fcb464290007f5e1ed9aa3
+    m_Address: gear/weapon/Mace1h_25
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c97257fc6fc8bb74aa372362c84d7296
+    m_Address: gear/weapon/Shield1h_09
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ca0560607f4c88948af2798d356c8338
+    m_Address: gear/weapon/Wand1h_09
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ca48180d6330c0143bb2d23d1390d222
+    m_Address: gear/weapon/Dagger1h_06
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cb8cf3e5e7e39ae41a40847a40f923e4
+    m_Address: gear/weapon/Wand1h_07
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cbe08ebd5ce67dd46adfb579ea439447
+    m_Address: gear/weapon/Scythe2h_10
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cc0dd91059f8aa445a4ac8dba8e9b853
+    m_Address: gear/weapon/Scythe2h_17
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cc5dfa4cc0134f040b5404a1dfa60fae
+    m_Address: gear/weapon/Dagger1h_02
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cd09910a728b44b4fb2d6dcfbd7d9a34
+    m_Address: gear/weapon/Crossbow2h_15
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ce38370364ab3bd4994256031fc04cf9
+    m_Address: gear/weapon/Dagger1h_16
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ce4f56c5632846145aeef5cd7eb3fc4a
+    m_Address: gear/weapon/Dagger1h_25
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ced01e66bbebe374685e397ebde128b4
+    m_Address: gear/weapon/Wand1h_08
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cfb3702854dab664ea84ea285fc93563
+    m_Address: gear/weapon/Shield1h_12
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cfc3dab89aa828147b379277d02f8c63
+    m_Address: gear/weapon/Sword2h_20
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d0a0d6abb92c6854d8cad3ccb2f57fa5
+    m_Address: gear/weapon/Sword1h_02
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d0cce14659aec324f823534344b6375b
+    m_Address: gear/weapon/Sword2h_15
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d110c66cf3b74fa4ba99beec66be5107
+    m_Address: gear/weapon/Crossbow2h_19
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d1bd22ae7c0d5dd4b937dc13f261d13d
+    m_Address: gear/weapon/Hammer2h_08
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d275564f482a6924589fd593ede56770
+    m_Address: gear/weapon/Dagger1h_13
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d2c5af35e5e49374f8bf198eb0cae8ef
+    m_Address: gear/weapon/SpellBook1h_08
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d2c918ba1b64edd49a5fdc48c2f6291a
+    m_Address: gear/weapon/Wand1h_03
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d2f34c4b4a9de3f4fa2f3c29a01fcd6f
+    m_Address: gear/weapon/Dagger1h_12
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d33deec5d94d99140be870c1d090c4ba
+    m_Address: gear/weapon/Axe2h_16
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d3df5c10ef43ffd4baaeee78e3d7918e
+    m_Address: gear/weapon/Wand1h_21
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d4226034117d418439eb509b4f746af4
+    m_Address: gear/weapon/Bow2h_17
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d478b7b2bb48cd5439484c19e1df7cd2
+    m_Address: gear/weapon/Wand1h_04
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d54e3e2ce61e3ca4a937e64947dd9654
+    m_Address: gear/armor/Basic3_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d604238d568d992469cb790ee8860bf2
+    m_Address: gear/weapon/Staff2h_17
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d66aed1dad1bc6c499a8d6ef553b332e
+    m_Address: gear/weapon/Scythe2h_13
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d69750ce4a9132846a57c3b2ff8a504f
+    m_Address: gear/weapon/Dagger1h_22
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d6bc15134c9a00a4fb775b47df0b1254
+    m_Address: gear/weapon/Bow2h_01
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d6f59eccee7a4904fb06df7b24bbf534
+    m_Address: gear/weapon/Bow2h_04
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d6fa271bc4e6b4e4a99be49b8a4cd6e0
+    m_Address: gear/weapon/Scythe2h_08
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d79cf545850573d49a4e1150c55c4316
+    m_Address: gear/weapon/Scythe2h_02
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d7af364e2ee903447a21f26aafc7f84a
+    m_Address: gear/weapon/Sword1h_22
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d7bf369950395c6408d56d78a6ed7010
+    m_Address: gear/weapon/Staff2h_06
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d834f0f4b902b6841a9a84bd8e10e7ab
+    m_Address: gear/weapon/Dagger1h_01
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d838cb2cf78b578488d2c4914e44e040
+    m_Address: gear/weapon/Sword1h_12
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d8e9594c9e15c024c99856249ab5c6d4
+    m_Address: gear/weapon/Crossbow2h_03
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d9b86e7c247fe4e459386084f0651f61
+    m_Address: gear/weapon/Sword2h_19
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: da7b4b479627503419da014173fd6a64
+    m_Address: gear/weapon/Crossbow2h_07
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: db3a24c9bd365a942a68ed7253b608d6
+    m_Address: gear/weapon/Polearm2h_01
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dbfa375476dbc684b93d67b4eb118a54
+    m_Address: gear/weapon/Polearm2h_20
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dc00602a9c6534044a72cf17fc8c5442
+    m_Address: gear/weapon/Polearm2h_24
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dced62d3284357e4ab459614d900fbbc
+    m_Address: gear/weapon/Axe1h_02
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dd9152936e5a15e4f81cbc37d46ee139
+    m_Address: gear/weapon/Wand1h_11
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e1aead28b65e9534bb7ed209fa113ab5
+    m_Address: gear/weapon/Staff2h_19
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e2136c848aecc6444821d2d2b304269b
+    m_Address: gear/weapon/SpellBook1h_18
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e23c4333314a6a3419d7a489d8ca97a6
+    m_Address: gear/weapon/Axe1h_08
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e3ef0e08e197ecb4983e669ebfcb3874
+    m_Address: gear/weapon/SpellBook1h_24
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e4453bc1c9733bd46adaa8b12423ba4a
+    m_Address: gear/weapon/Scythe2h_06
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e502a2d23fdc54d46bd8244a2c19e0ff
+    m_Address: gear/weapon/Axe1h_21
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e56f226c8eb73c04ba1f5576b3d1ae67
+    m_Address: gear/weapon/Scythe2h_15
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e5ae972d709ac004fa82fda174be13a5
+    m_Address: gear/weapon/Hammer2h_25
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e60d623e89356d44e8c31f31654b48f8
+    m_Address: gear/weapon/Polearm2h_13
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e662e3d6e4af1fa4a9765010b0855b1b
+    m_Address: gear/weapon/Shield1h_21
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e75dfe587a180f14094a3eaea12dc2e6
+    m_Address: gear/weapon/Claws1h_14
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e8727178a678da74d8e6e0a9d4711e9e
+    m_Address: gear/weapon/Wand1h_01
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e8b9a22cf3111924caa4048c73481773
+    m_Address: gear/weapon/Mace1h_23
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e9373d722047ff546b93ea04c5027f5c
+    m_Address: gear/weapon/Claws1h_23
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e9da3318dbb79394e890edc34af960ad
+    m_Address: gear/weapon/Claws1h_21
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: eb1f40626b7b9b047a6777b588681a02
+    m_Address: gear/weapon/Staff2h_02
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: eca5235a973551740ababb98a76a9e26
+    m_Address: gear/weapon/Crossbow2h_05
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ed070e6460c918e4fae3f5d1cafecd89
+    m_Address: gear/weapon/Bow2h_06
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ed0bf2eb2ae5a1a46acf72c81876dc07
+    m_Address: gear/weapon/Bow2h_09
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ed96408b031d50c4c9179ec9bf901682
+    m_Address: gear/weapon/Bow2h_05
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: edc2d31c2188bc34fbc0311e4021992d
+    m_Address: gear/armor/DemonHunter_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ee6659b5390ebae4a9fbb2f602bfb161
+    m_Address: gear/weapon/SpellBook1h_03
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: eea308fcb0140d247b87ac0fdd6e67ba
+    m_Address: gear/weapon/Crossbow2h_18
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: eebb9e3cf75abaa40a3080382364dfc4
+    m_Address: gear/weapon/Axe1h_06
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: eec7342098c498d418141f5a3633beb6
+    m_Address: gear/weapon/SpellBook1h_10
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ef3bd09dc3af60841bfe7e72d2d15497
+    m_Address: gear/weapon/Sword2h_24
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f07f3c2742d4e2b4c84f1e20f0a034b2
+    m_Address: gear/weapon/Shield1h_06
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f0c27e1e68e8bf446aae27363e361714
+    m_Address: gear/weapon/Sword1h_03
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f12beed08b92d12418d9eac49888c0b2
+    m_Address: gear/weapon/Staff2h_18
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f158515045c56594c83d80c7ff942bdf
+    m_Address: gear/weapon/Sword2h_04
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f219b39ff47fa2642b06b7a51853168d
+    m_Address: gear/weapon/Axe1h_20
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f431d5c20b25aff45a59021dea746bc3
+    m_Address: gear/weapon/SpellBook1h_17
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f5486bfe4a3557f4085b62a6a25300c4
+    m_Address: gear/weapon/Sword2h_13
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f567499f54a392c40afe19de5da3bf92
+    m_Address: gear/weapon/Crossbow2h_16
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f591ffb6dc0b79f40955688980e8a0b0
+    m_Address: gear/weapon/Axe1h_18
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f618d473cbf645b4a9ea08fab76d49c8
+    m_Address: gear/weapon/Wand1h_15
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f63d177b70382aa47afacdd38bacb54f
+    m_Address: gear/weapon/Staff2h_04
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f6da474eee6c24c489486da8cbc3469e
+    m_Address: gear/weapon/Sword2h_05
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f7f5c038bf958ec469f8f336b311757b
+    m_Address: gear/weapon/Mace1h_15
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f80d1bd1ca891e047a8855854001f51c
+    m_Address: gear/weapon/Mace1h_21
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f9a8852123c4db740be8a25461464e3a
+    m_Address: gear/weapon/Crossbow2h_11
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fa5d5a4d1e8ecad498ad97a0a5bb7b34
+    m_Address: gear/weapon/Scythe2h_05
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fa61a26d8c8848645a60e76cb17ef6c4
+    m_Address: gear/weapon/Shield1h_05
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: faedc2868678ca34d95f3c447de59ad0
+    m_Address: gear/weapon/Claws1h_07
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fb3559a2da1fd4e47be754ea4a8fa928
+    m_Address: gear/weapon/Sword2h_17
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fca45b6284e50f248abd9253fd0224ee
+    m_Address: gear/weapon/Polearm2h_05
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fdd2469e9cec6ad4c99e5ba65f1db198
+    m_Address: gear/weapon/Hammer2h_09
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fddc98fdf187b1d40a4bce4f01b7d25d
+    m_Address: gear/weapon/Hammer2h_05
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fdde9ef892b273748859a370db9e4187
+    m_Address: gear/weapon/Dagger1h_08
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fdff3a032ab752a4c9328893b6432c5a
+    m_Address: gear/weapon/Staff2h_15
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fea486e8ad3cf4048874c4759e5ef407
+    m_Address: gear/armor/Savage_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ff83fb2a23350944399aebd2f6cfa169
+    m_Address: gear/armor/LionGuard_Male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ffb7feae802a5674294656ef73e9c3ce
+    m_Address: gear/weapon/Hammer2h_12
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 73b1d645ccb43af47916e90d8a1f17d4, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: ac8c2626db66293479b27d996811daab, type: 2}
+    - {fileID: 11400000, guid: b4ab498db9ca87b4ca381b1d6c018134, type: 2}

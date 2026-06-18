@@ -14,6 +14,7 @@ key paths + how-to-use-from-code + gotchas + sources.
 - **Lean Touch / CW** → [`LEANTOUCH_NOTES.md`](LEANTOUCH_NOTES.md) — cross-platform touch/mouse/pinch (namespace `Lean.Touch`); ref asmdefs `LeanTouch`+`LeanCommon`+`CW.Common`; only `*Driver` classes touch it.
 - **Quaternius MegaKit** → [`QUATERNIUS_NOTES.md`](QUATERNIUS_NOTES.md) — CC0 modular medieval kit, **already URP (ShaderGraph, no magenta-fix)**; the source art for the Village2 factory; per-piece pivot variance.
 - **UniTask (Cysharp)** → [`UNITASK_NOTES.md`](UNITASK_NOTES.md) — zero-alloc async (`Cysharp.Threading.Tasks`, v2.5.10); `.Forget()` not `async void`; no thread-pool on WebGL.
+- **Blink RPG Art bundle** → [`BLINK_NOTES.md`](BLINK_NOTES.md) — the largest GEAR source: ~400 fantasy weapon prefabs (16 categories) + ~290 full-body outfit sets; **gitignored / outside Resources → needs the Addressables gear enabler** to feed the item-model collection (`ITEM_MODEL.md`).
 
 ## Art-only packs (no API — meshes/materials only)
 

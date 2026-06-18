@@ -81,11 +81,35 @@ namespace DeNelle.Editor.Catalog
         {
             public string fileNameNoExt;   // e.g. "sword_A"
             public string loadPath;         // runtime address, e.g. "Heroes/Props/Weapons/sword_A"
+
+            // ── Addressables-backed source extras (Blink). NULL for a Resources source,
+            //    in which case the legacy name-derivation + "tripo_" id slug applies. ──
+            // loadVia: how the runtime resolves loadPath — null/"resources" (default) vs
+            //          "addressable". A future equip loader branches on this.
+            public string loadVia;
+            // Pre-derived facts the Blink source carries (its filenames encode category +
+            // hand directly). When set they OVERRIDE the name-substring derivation so a
+            // Blink "Sword1h_01" classifies deterministically. Null => derive from name.
+            public string idOverride;       // e.g. "blink_sword1h_01"
+            public string displayOverride;  // e.g. "Sword1h 01 (Blink)"
+            public string categoryOverride; // e.g. "sword"
+            public string kindOverride;     // "Weapon" | "Gear"
+            public string handOverride;     // "1h" | "2h"
+            public string jobOverride;      // e.g. "knight" | "any"
+            public string slotOverride;     // armor only, e.g. "Body"
+            public string weightOverride;   // armor only, "light" | "heavy" | "any"
+            public string damageTypeOverride; // "melee" | "ranged" | "magic"
         }
 
-        // The runtime-loadable gear sources scanned this run.
+        // The gear sources scanned this run.
+        // PRIMARY = the Blink RPG bundle via Addressables (docs/BLINK_NOTES.md — "the
+        // Addressables gear enabler"): the largest owned weapon/armor collection. It
+        // produces the generated:true rows that fill the catalog. The Resources source
+        // stays for the small committed Tripo weapon set (different id namespace,
+        // "tripo_*", so the two never collide). The merge preserves authored/manual rows.
         private static readonly IGearSource[] Sources =
         {
+            new BlinkGearSource(),
             new ResourcesFolderSource(
                 resFolder: "Heroes/Props/Weapons",
                 assetFolder: "Assets/Resources/Heroes/Props/Weapons",
@@ -111,7 +135,9 @@ namespace DeNelle.Editor.Catalog
                         continue;
                     }
 
-                    string category = DeriveCategory(model.fileNameNoExt);
+                    // A source may pre-derive the category (Blink encodes it in the
+                    // filename + folder); otherwise derive from the name (Tripo/Resources).
+                    string category = model.categoryOverride ?? DeriveCategory(model.fileNameNoExt);
                     if (category == null)
                     {
                         Debug.LogWarning($"[GearCatalogGenerator] '{model.fileNameNoExt}' — no known category in name; skipped (add a category keyword or author manually).");
@@ -119,7 +145,7 @@ namespace DeNelle.Editor.Catalog
                         continue;
                     }
 
-                    string kind = DeriveKind(category); // "Weapon" | "Gear"
+                    string kind = model.kindOverride ?? DeriveKind(category); // "Weapon" | "Gear"
                     JObject row = BuildGeneratedRow(model, category, kind);
                     if (kind == "Gear") generatedArmor.Add(row);
                     else                generatedWeapons.Add(row);
@@ -281,22 +307,26 @@ namespace DeNelle.Editor.Catalog
 
         private static JObject BuildGeneratedRow(ScannedModel model, string category, string kind)
         {
-            string id   = DeriveId(model.fileNameNoExt);
-            string job  = DeriveJob(category);
-            var t       = RarityTemplate[DefaultRarity];
+            // A source may pre-derive these (Blink). Otherwise derive from name/category.
+            string id         = model.idOverride        ?? DeriveId(model.fileNameNoExt);
+            string job        = model.jobOverride       ?? DeriveJob(category);
+            string hand       = model.handOverride      ?? DeriveHand(category);
+            string damageType = model.damageTypeOverride ?? DeriveDamageType(category);
+            string name       = model.displayOverride   ?? DeriveDisplayName(model.fileNameNoExt);
+            var t             = RarityTemplate[DefaultRarity];
 
             var row = new JObject
             {
                 ["id"]          = id,
-                ["name"]        = DeriveDisplayName(model.fileNameNoExt),
+                ["name"]        = name,
                 ["icon"]        = CategoryEmoji(category),     // legacy emoji placeholder
                 ["kind"]        = kind,                         // derived
                 ["category"]    = category,                     // derived
                 ["job"]         = job,                          // derived classFit
-                ["hand"]        = DeriveHand(category),         // derived
-                ["damageType"]  = DeriveDamageType(category),   // derived
+                ["hand"]        = hand,                          // derived
+                ["damageType"]  = damageType,                   // derived
                 ["rarity"]      = DefaultRarity,                // STUB — author retunes
-                ["prefabPath"]  = model.loadPath,               // derived (the asset link)
+                ["prefabPath"]  = model.loadPath,               // derived: Resources path OR Addressable address
                 // capabilities omitted → loader applies the kind default
                 // (Carriable|Equippable). An author may add an explicit override.
 
@@ -304,6 +334,15 @@ namespace DeNelle.Editor.Catalog
                 ["generated"]   = true,    // distinguishes generated from authored
                 ["manual"]      = false,   // set true by hand to lock the row forever
             };
+
+            // How the runtime resolves prefabPath: "addressable" (Blink) vs Resources
+            // (default; field omitted so existing tripo rows are byte-identical).
+            if (!string.IsNullOrEmpty(model.loadVia))
+                row["loadVia"] = model.loadVia;
+
+            // Armor slot/weight (Blink full-body sets carry these; ITEM_MODEL §6 — slot=Body).
+            if (!string.IsNullOrEmpty(model.slotOverride))   row["slot"]   = model.slotOverride;
+            if (!string.IsNullOrEmpty(model.weightOverride)) row["weight"] = model.weightOverride;
 
             // ── STAT STUBS (rarity-templated placeholders; NOT final balance) ──
             if (kind == "Gear")
@@ -314,7 +353,7 @@ namespace DeNelle.Editor.Catalog
             else
             {
                 row["damageMult"] = t.dmg;
-                if (DeriveDamageType(category) == "melee")
+                if (damageType == "melee")
                     row["reach"] = 0f; // 0 = unset (PlayerAttackController default); author tunes
             }
 
@@ -341,6 +380,13 @@ namespace DeNelle.Editor.Catalog
                 case "staff":  return "\U0001FA84"; // 🪄
                 case "wand":   return "\U0001FA84";
                 case "censer": return "\U0001F56F"; // 🕯
+                case "crossbow": return "\U0001F3F9"; // 🏹
+                case "polearm":
+                case "scythe":   return "\U0001F531"; // 🔱
+                case "spellbook": return "\U0001F4D5"; // 📕
+                case "claws":    return "\U0001F43E"; // 🐾
+                case "outfit":
+                case "armor":    return "\U0001F9E5"; // 🧥
                 default:        return "⚔";     // ⚔
             }
         }
@@ -433,8 +479,9 @@ namespace DeNelle.Editor.Catalog
         private static void RefreshGeneratedRow(JObject prev, JObject gen)
         {
             // Always re-derive the LOOK / classification fields (generator owns these).
+            // loadVia/slot are generator-owned look facts too (the asset-link half).
             foreach (var key in new[] { "name", "kind", "category", "job", "hand",
-                                        "damageType", "prefabPath", "icon" })
+                                        "damageType", "prefabPath", "icon", "loadVia", "slot" })
             {
                 if (gen[key] != null) prev[key] = gen[key];
             }
@@ -443,7 +490,7 @@ namespace DeNelle.Editor.Catalog
 
             // Stat stubs: keep whatever is on prev (could be a partial human tune). If a
             // stub is entirely absent on prev, seed it from the freshly generated row.
-            foreach (var key in new[] { "rarity", "damageMult", "defense", "hpBonus",
+            foreach (var key in new[] { "rarity", "weight", "damageMult", "defense", "hpBonus",
                                         "reach", "buyWood", "buyFood", "buyIron",
                                         "buyCrystals" })
             {
@@ -600,6 +647,206 @@ namespace DeNelle.Editor.Catalog
                 rows.Sort((a, b) => string.Compare(a.fileNameNoExt, b.fileNameNoExt,
                                                    StringComparison.OrdinalIgnoreCase));
                 foreach (var r in rows) yield return r;
+            }
+        }
+
+        // =====================================================================
+        // SOURCE — Blink RPG bundle via Addressables (THE primary gear source)
+        // =====================================================================
+
+        /// <summary>Scans the gitignored Blink RPG bundle (weapons + full-body armor outfit
+        /// sets) and yields a ScannedModel per asset whose <c>loadPath</c> is the ADDRESSABLE
+        /// ADDRESS (not a Resources path) and whose <c>loadVia</c> = "addressable". It encodes
+        /// the category/kind/hand/job/damageType/slot/weight directly from the Blink filename +
+        /// folder (§4 derive-from-name law), so the row classifies deterministically without
+        /// the legacy name-substring guess. The addresses MATCH BlinkAddressableMarker's
+        /// scheme exactly (gear/weapon/&lt;name&gt;, gear/armor/&lt;set&gt;_Male) so prefabPath
+        /// resolves once the marker has run. Absent pack (fresh clone) ⇒ folders invalid ⇒
+        /// yields nothing (no phantom rows).</summary>
+        private sealed class BlinkGearSource : IGearSource
+        {
+            public string Name => "Blink (Addressables) — Weapons + Armor sets";
+
+            public IEnumerable<ScannedModel> Scan()
+            {
+                foreach (var m in ScanWeapons()) yield return m;
+                foreach (var m in ScanArmorSets()) yield return m;
+            }
+
+            // ── Weapons: 16 categories × 25, filename encodes category + hand. ──
+            private IEnumerable<ScannedModel> ScanWeapons()
+            {
+                foreach (var (guid, address) in BlinkAddressableMarker.EnumerateWeaponPrefabs())
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(guid);
+                    if (string.IsNullOrEmpty(path)) continue;
+                    string fileName = Path.GetFileNameWithoutExtension(path); // e.g. "Sword1h_01"
+
+                    string category = BlinkWeaponCategory(fileName);
+                    if (category == null)
+                    {
+                        Debug.LogWarning($"[GearCatalogGenerator] Blink weapon '{fileName}' — unrecognised category prefix; skipped.");
+                        continue;
+                    }
+
+                    yield return new ScannedModel
+                    {
+                        fileNameNoExt      = fileName,
+                        loadPath           = address,                 // the Addressable address
+                        loadVia            = "addressable",
+                        idOverride         = BlinkSlug("blink_", fileName),
+                        displayOverride    = BlinkDisplayName(fileName),
+                        categoryOverride   = category,
+                        kindOverride       = "Weapon",
+                        handOverride       = BlinkWeaponHand(fileName),
+                        jobOverride        = BlinkWeaponJob(category),
+                        damageTypeOverride = BlinkWeaponDamageType(category),
+                    };
+                }
+            }
+
+            // ── Armor: ONE entry per SET (canonical = the Male variant). slot=Body. ──
+            private IEnumerable<ScannedModel> ScanArmorSets()
+            {
+                foreach (var (guid, address) in BlinkAddressableMarker.EnumerateArmorSetPrefabs())
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(guid);
+                    if (string.IsNullOrEmpty(path)) continue;
+                    string fileName = Path.GetFileNameWithoutExtension(path); // e.g. "Centurion_HumanMale"
+
+                    if (!BlinkAddressableMarker.TryParseArmorSet(fileName, out string setName, out _))
+                        continue;
+
+                    yield return new ScannedModel
+                    {
+                        fileNameNoExt    = setName,                  // "Centurion"
+                        loadPath         = address,                  // "gear/armor/Centurion_Male"
+                        loadVia          = "addressable",
+                        idOverride       = BlinkSlug("blink_armor_", setName),
+                        displayOverride  = BlinkDisplayName(setName),
+                        categoryOverride = "outfit",                 // maps to kind=Gear via DeriveKind
+                        kindOverride     = "Gear",
+                        jobOverride      = "any",                    // armor gates by weight, not job
+                        slotOverride     = "Body",                   // full-body (ITEM_MODEL §6)
+                        weightOverride   = BlinkArmorWeight(setName),
+                    };
+                }
+            }
+
+            // ── Blink weapon category vocabulary (filename PREFIX before the digits) ──
+            // Names: Axe1h, Axe2h, Sword1h, Sword2h, Dagger1h, Bow2h, Crossbow2h,
+            // Shield1h, Mace1h, Polearm2h, Scythe2h, Hammer2h, Staff2h, Wand1h,
+            // SpellBook1h, Claws1h. Map each to a canonical catalog category.
+            private static string BlinkWeaponCategory(string fileName)
+            {
+                string lower = (fileName ?? string.Empty).ToLowerInvariant();
+                // Order: most-specific first (e.g. "crossbow" before "bow").
+                if (lower.StartsWith("crossbow"))  return "crossbow";
+                if (lower.StartsWith("bow"))        return "bow";
+                if (lower.StartsWith("sword"))      return "sword";
+                if (lower.StartsWith("axe"))        return "axe";
+                if (lower.StartsWith("dagger"))     return "dagger";
+                if (lower.StartsWith("shield"))     return "shield";
+                if (lower.StartsWith("mace"))       return "mace";
+                if (lower.StartsWith("polearm"))    return "polearm";
+                if (lower.StartsWith("scythe"))     return "scythe";
+                if (lower.StartsWith("hammer"))     return "hammer";
+                if (lower.StartsWith("staff"))      return "staff";
+                if (lower.StartsWith("wand"))       return "wand";
+                if (lower.StartsWith("spellbook"))  return "spellbook";
+                if (lower.StartsWith("claws") || lower.StartsWith("claw")) return "claws";
+                return null;
+            }
+
+            // hand from the "1h"/"2h" token in the filename; fall back by category.
+            private static string BlinkWeaponHand(string fileName)
+            {
+                string lower = (fileName ?? string.Empty).ToLowerInvariant();
+                if (lower.Contains("2h")) return "2h";
+                if (lower.Contains("1h")) return "1h";
+                return "1h";
+            }
+
+            // classFit by category (ITEM_MODEL §3): sword/axe/hammer→knight;
+            // bow/crossbow/dagger→ranger; staff/wand/spellbook→mage; mace→cleric;
+            // shield→any (off-hand); polearm/scythe/claws default knight (melee front-line).
+            private static string BlinkWeaponJob(string category)
+            {
+                switch (category)
+                {
+                    case "sword":
+                    case "axe":
+                    case "hammer":
+                    case "polearm":
+                    case "scythe":
+                    case "claws":     return "knight";
+                    case "bow":
+                    case "crossbow":
+                    case "dagger":    return "ranger";
+                    case "staff":
+                    case "wand":
+                    case "spellbook": return "mage";
+                    case "mace":      return "cleric";
+                    case "shield":    return "any";
+                    default:          return "any";
+                }
+            }
+
+            private static string BlinkWeaponDamageType(string category)
+            {
+                switch (category)
+                {
+                    case "bow":
+                    case "crossbow":  return "ranged";
+                    case "staff":
+                    case "wand":
+                    case "spellbook": return "magic";
+                    default:          return "melee";
+                }
+            }
+
+            // Armor weight tier from the set name. Basic + cloth/light themed sets → light
+            // (Ranger/Mage); plate/knight/beast-armour themed sets → heavy (Knight/Cleric).
+            // Unknown ⇒ "any" (universal). Author retunes; weight is seed-once (not clobbered).
+            private static string BlinkArmorWeight(string setName)
+            {
+                string lower = (setName ?? string.Empty).ToLowerInvariant();
+                // Heavy / plate-class themed sets.
+                if (lower.Contains("centurion") || lower.Contains("knight") ||
+                    lower.Contains("guard")     || lower.Contains("minotaur") ||
+                    lower.Contains("dragon")    || lower.Contains("hydra") ||
+                    lower.Contains("bear")      || lower.Contains("boar") ||
+                    lower.Contains("land"))
+                    return "heavy";
+                // Light / cloth-leather class.
+                if (lower.Contains("basic")   || lower.Contains("cloth") ||
+                    lower.Contains("leather") || lower.Contains("hunter") ||
+                    lower.Contains("savage")  || lower.Contains("bird") ||
+                    lower.Contains("engineer"))
+                    return "light";
+                return "any";
+            }
+
+            // ── Shared name helpers ──
+
+            /// <summary>Slug: prefix + lowercased, non-alnum→'_'. e.g. "Sword1h_01" → "blink_sword1h_01".</summary>
+            private static string BlinkSlug(string prefix, string fileNameNoExt)
+            {
+                var sb = new StringBuilder(prefix);
+                foreach (char c in (fileNameNoExt ?? string.Empty).ToLowerInvariant())
+                    sb.Append(char.IsLetterOrDigit(c) ? c : '_');
+                return sb.ToString();
+            }
+
+            /// <summary>Prettified display name + " (Blink)" tag. "Sword1h_01" → "Sword1h 01 (Blink)".</summary>
+            private static string BlinkDisplayName(string fileNameNoExt)
+            {
+                string[] tokens = (fileNameNoExt ?? string.Empty).Replace('-', '_')
+                    .Split(new[] { '_' }, StringSplitOptions.RemoveEmptyEntries);
+                var pretty = tokens.Select(tk =>
+                    tk.Length == 1 ? tk.ToUpperInvariant()
+                                   : char.ToUpperInvariant(tk[0]) + tk.Substring(1));
+                return string.Join(" ", pretty) + " (Blink)";
             }
         }
     }
