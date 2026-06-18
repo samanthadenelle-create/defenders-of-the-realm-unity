@@ -109,10 +109,20 @@ namespace DeNelle.Village
         {
             for (var cur = t; cur != null; cur = cur.parent)
             {
-                if (cur.CompareTag("Player") || cur.CompareTag("HeroTarget"))
+                // "Player" is a built-in tag; "HeroTarget" may be undefined
+                // (CompareTag throws on an undefined tag) — guard the second check.
+                if (cur.CompareTag("Player") || HasTag(cur, "HeroTarget"))
                     return true;
             }
             return false;
+        }
+
+        /// <summary>Undefined-tag-safe CompareTag (Unity throws on an undefined tag).</summary>
+        private static bool HasTag(Component c, string tag)
+        {
+            if (c == null) return false;
+            try { return c.CompareTag(tag); }
+            catch (UnityEngine.UnityException) { return false; }
         }
 
         /// <summary>True while the wrapped structure component still exists.</summary>

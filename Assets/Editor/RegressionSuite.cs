@@ -870,7 +870,9 @@ namespace DeNelle.Editor
             {
                 foreach (var t in root.GetComponentsInChildren<Transform>(true))
                 {
-                    if (t.CompareTag("Player") || t.CompareTag("HeroTarget")) { heroPresent = true; break; }
+                    // "Player" is a built-in tag; "HeroTarget" may be undefined
+                    // (CompareTag throws on an undefined tag) — guard the second check.
+                    if (t.CompareTag("Player") || HasTagSafe(t, "HeroTarget")) { heroPresent = true; break; }
                 }
                 if (heroPresent) break;
             }
@@ -878,6 +880,14 @@ namespace DeNelle.Editor
                 return Fail("no Player/HeroTarget-tagged hero in the scene (hero not present/visible)");
 
             return Pass("scene opens with 0 missing scripts + a Player/HeroTarget hero present");
+        }
+
+        /// <summary>Undefined-tag-safe CompareTag (Unity throws on an undefined tag).</summary>
+        private static bool HasTagSafe(Component c, string tag)
+        {
+            if (c == null) return false;
+            try { return c.CompareTag(tag); }
+            catch (UnityEngine.UnityException) { return false; }
         }
 
         // ── Gate 4: SmartMobileCamera.CameraYaw is the SINGLE yaw authority ────
