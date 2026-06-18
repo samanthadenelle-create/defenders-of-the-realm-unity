@@ -23,6 +23,26 @@ namespace DeNelle.Core.Diagnostics
         /// <summary>Master switch. Leave on while we are stabilising the loop.</summary>
         public static bool Enabled = true;
 
+        // --- pluggable SINK (owner spec 2026-06-18: "log OR weblog") --------------
+        // ALL FlowTrace output is routed through Sink.{Info,Warn,Error} instead of
+        // Debug.* directly, so the destination is swappable at runtime (Unity console
+        // vs. a remote weblog) with NO change to the ~hundreds of call sites and NO
+        // redeploy. Default = UnityLogSink (Debug.Log/LogWarning/LogError), i.e. the
+        // exact shipped behaviour. Configure(...) (below) selects log-vs-weblog from
+        // a config/remote source and can flip it back at any time. The sink call is
+        // the only added indirection when on, and is never reached when Enabled=false
+        // (the Allowed() / _active gates short-circuit first), so the off path stays
+        // zero-alloc.
+        /// <summary>Where every FlowTrace line goes. Swap at runtime via <see cref="Configure"/>
+        /// (or assign directly). Never null — falls back to <see cref="UnityLogSink"/>.</summary>
+        public static ITraceSink Sink
+        {
+            get => s_sink ?? s_defaultSink;
+            set => s_sink = value ?? s_defaultSink;
+        }
+        private static readonly ITraceSink s_defaultSink = new UnityLogSink();
+        private static ITraceSink s_sink = s_defaultSink;
+
         // --- per-category gating (INSTRUMENTATION_STANDARD §1.2) -----------------
         // The category is the existing first arg ("system"), so call sites never change.
         // s_only == null  => all categories allowed (default; no shipped-behaviour change).
@@ -62,22 +82,49 @@ namespace DeNelle.Core.Diagnostics
             return true;
         }
 
-        /// <summary>Log a flow step you reached. Cheap; safe to leave in hot paths only via Throttle.</summary>
+        // --- thread-riding depth (owner 2026-06-18: "let it ride the thread all the way
+        // down at every step"). A [ThreadStatic] nesting counter indents every line by call
+        // depth so one run renders the FULL nested execution path top-to-bottom. Lightweight:
+        // one int per thread, zero heap alloc, dark when Enabled=false.
+        [System.ThreadStatic] private static int s_depth;
+
+        // Smart deep depth (owner 2026-06-18: "4000 deep is simple math"). Keep a real
+        // visual indent up to a sane cap; beyond it, emit a compact "[d<N>] " marker
+        // instead of an N*2-space pad — so a 4000-deep thread costs an int + a tiny
+        // string, never an 8000-char allocation. Shallow paths (the common case) are
+        // unchanged. Pre-built pads for the capped range keep the hot path alloc-free.
+        private const int MaxVisualDepth = 24;
+        private static readonly string[] s_pads = BuildPads();
+        private static string[] BuildPads()
+        {
+            var pads = new string[MaxVisualDepth + 1];
+            for (int i = 0; i <= MaxVisualDepth; i++) pads[i] = new string(' ', i * 2);
+            return pads;
+        }
+        private static string Pad()
+        {
+            int d = s_depth;
+            if (d <= 0) return string.Empty;
+            if (d <= MaxVisualDepth) return s_pads[d];           // pre-built, zero alloc
+            return "[d" + d + "] ";                               // compact marker for extreme depth
+        }
+
+        /// <summary>Log a flow step you reached (indented by call depth — rides the thread).</summary>
         public static void Step(string system, string message)
         {
-            if (Allowed(system)) Debug.Log($"[Flow:{system}] {message}");
+            if (Allowed(system)) Sink.Info($"[Flow:{system}] {Pad()}{message}");
         }
 
         /// <summary>Log a flow anomaly (missing ref, fallback taken, unexpected branch).</summary>
         public static void Warn(string system, string message)
         {
-            if (Allowed(system)) Debug.LogWarning($"[Flow:{system}] {message}");
+            if (Allowed(system)) Sink.Warn($"[Flow:{system}] {Pad()}{message}");
         }
 
         /// <summary>Log an error-level flow failure (exception caught, hard stop).</summary>
         public static void Fail(string system, string message)
         {
-            if (Allowed(system)) Debug.LogError($"[Flow:{system}] {message}");
+            if (Allowed(system)) Sink.Error($"[Flow:{system}] {Pad()}{message}");
         }
 
         // --- throttled logging (for per-frame / per-spawn hot paths) ---
@@ -94,7 +141,7 @@ namespace DeNelle.Core.Diagnostics
             string k = system + "/" + key;
             if (s_nextAt.TryGetValue(k, out float next) && now < next) return;
             s_nextAt[k] = now + everySeconds;
-            Debug.Log($"[Flow:{system}] {message}");
+            Sink.Info($"[Flow:{system}] {message}");
         }
 
         // --- once-only logging (for "did this run at all" checks) ---
@@ -106,7 +153,7 @@ namespace DeNelle.Core.Diagnostics
             if (!Allowed(system)) return;
             string k = system + "/" + key;
             if (!s_seen.Add(k)) return;
-            Debug.Log($"[Flow:{system}] {message}");
+            Sink.Info($"[Flow:{system}] {message}");
         }
 
         /// <summary>Reset once/throttle state — call on scene reload if you want fresh first-hit logs.</summary>
@@ -153,10 +200,181 @@ namespace DeNelle.Core.Diagnostics
                 float ms = Time.realtimeSinceStartup * 1000f - _startMs;
                 string msg = $"{_what} took {ms:F1}ms";
                 if (_warnAboveMs > 0f && ms > _warnAboveMs)
-                    Debug.LogWarning($"[Flow:{_system}] {msg} (over {_warnAboveMs:F0}ms budget)");
+                    Sink.Warn($"[Flow:{_system}] {msg} (over {_warnAboveMs:F0}ms budget)");
                 else
-                    Debug.Log($"[Flow:{_system}] {msg}");
+                    Sink.Info($"[Flow:{_system}] {msg}");
             }
         }
+
+        // --- Enter: ride the thread all the way down --------------------------------
+        // A scoped enter/exit trace that follows the execution thread down through every
+        // layer. Each nested Enter indents deeper, so one run shows the WHOLE call path and
+        // exactly where it stopped. Lightweight readonly struct, zero heap alloc.
+        // USAGE:  using var _ = FlowTrace.Enter("Seam", "Cross to OuterWorld");
+        public static FlowScope Enter(string system, string what) => new FlowScope(system, what);
+
+        /// <summary>Enter/exit scope from <see cref="Enter"/>: logs "-&gt; what", indents, and on
+        /// Dispose logs "&lt;- what (Xms)" + de-indents. Rides the thread down.</summary>
+        public readonly struct FlowScope : System.IDisposable
+        {
+            private readonly string _system;
+            private readonly string _what;
+            private readonly float _startMs;
+            private readonly bool _active;
+
+            internal FlowScope(string system, string what)
+            {
+                _system = system;
+                _what = what;
+                _active = Allowed(system);
+                if (_active)
+                {
+                    Sink.Info($"[Flow:{system}] {Pad()}-> {what}");
+                    s_depth++;
+                    _startMs = Time.realtimeSinceStartup * 1000f;
+                }
+                else _startMs = 0f;
+            }
+
+            public void Dispose()
+            {
+                if (!_active) return;
+                s_depth = s_depth > 0 ? s_depth - 1 : 0;
+                float ms = Time.realtimeSinceStartup * 1000f - _startMs;
+                Sink.Info($"[Flow:{_system}] {Pad()}<- {_what} ({ms:F1}ms)");
+            }
+        }
+
+        // --- Try: catch + roll up (owner 2026-06-18: "catch try e debug(log)"). Every risky
+        // op runs through here: a thrown exception ALWAYS LogErrors (independent of Enabled, so
+        // a real failure can never be silenced) -> lands in BreakCaptureHarness -> rolls up as
+        // a captured ticket, then flow continues with the fallback. The system self-detects;
+        // the owner is NEVER the one to notice a break.
+        public static void Try(string system, string what, System.Action action)
+        {
+            try { action(); }
+            catch (System.Exception e)
+            {
+                Sink.Error($"[Flow:{system}] {Pad()}FAILED at '{what}': {e.GetType().Name}: {e.Message}\n{e.StackTrace}");
+            }
+        }
+
+        /// <summary>Guarded compute: returns <paramref name="fallback"/> and rolls the exception up on throw.</summary>
+        public static T Try<T>(string system, string what, System.Func<T> fn, T fallback = default)
+        {
+            try { return fn(); }
+            catch (System.Exception e)
+            {
+                Sink.Error($"[Flow:{system}] {Pad()}FAILED at '{what}': {e.GetType().Name}: {e.Message}\n{e.StackTrace}");
+                return fallback;
+            }
+        }
+
+        // --- Config-driven selection + runtime reversibility (owner spec 2026-06-18) -----
+        // Configure() is the ONE entry point that decides, from a config/remote source,
+        // whether tracing is ON, which SINK is active (Unity console vs. remote weblog),
+        // its endpoint URL, and the category filters. It is REVERSIBLE at any time with
+        // NO redeploy: call it again with a new TraceConfig (e.g. fetched from the remote
+        // feature-flags service of WO-445) to flip Enabled off, swap back to the Unity
+        // log, or mute a now-proven system. The remote/db source decides the values;
+        // this method just applies them onto the existing toggles.
+        //
+        // WIRING NOTE: a remote flag/config service (WO-445 RemoteFlags) does NOT exist
+        // yet. Until it lands, build a TraceConfig from PlayerPrefs / FeatureFlags /
+        // hardcoded dev values and pass it here. When RemoteFlags lands, have it call
+        // FlowTrace.Configure(TraceConfig.FromRemote(...)) on fetch + on refresh so a
+        // server flip propagates with no rebuild (see TraceConfig below).
+        /// <summary>
+        /// Apply a <see cref="TraceConfig"/>: sets <see cref="Enabled"/>, selects the
+        /// <see cref="Sink"/> (Unity log vs. remote weblog + its URL) and the category
+        /// allow/mute filters from a config/remote source. Fully reversible — call again
+        /// with a different config to flip back at runtime, no redeploy. Never throws.
+        /// </summary>
+        public static void Configure(TraceConfig cfg)
+        {
+            if (cfg == null) return;
+            Try("FlowTrace", "Configure", () =>
+            {
+                Enabled = cfg.Enabled;
+
+                // Sink selection. Web → WebTraceSink (configurable URL); else Unity log.
+                if (cfg.UseWebSink && !string.IsNullOrEmpty(cfg.WebUrl))
+                {
+                    // Reuse one live web sink; just retarget its URL on reconfigure so a
+                    // server-side URL change is picked up without a redeploy.
+                    if (s_webSink == null) s_webSink = new WebTraceSink(cfg.WebUrl);
+                    else s_webSink.SetEndpoint(cfg.WebUrl);
+                    Sink = s_webSink;
+                }
+                else
+                {
+                    // Swap BACK to the Unity console log (reversibility) and flush any
+                    // pending web batch so nothing is lost on the swap-down.
+                    s_webSink?.Flush();
+                    Sink = s_defaultSink;
+                }
+
+                // Category filters (allow-list / mute-set), also reversible.
+                Only(cfg.Only);
+                AllOnMuteApply(cfg.Mute);
+            });
+        }
+        private static WebTraceSink s_webSink;
+
+        // Apply a mute-set fresh: clear prior mutes (so a reconfigure that drops a system
+        // from Mute un-mutes it), then add the new ones. Keeps the allow-list set by Only().
+        private static void AllOnMuteApply(string[] mute)
+        {
+            s_muted.Clear();
+            if (mute != null) Mute(mute);
+        }
+
+        /// <summary>
+        /// Plain trace settings, sourced from config / remote / db (WO-445). It carries
+        /// no behaviour — <see cref="Configure"/> applies it. A remote-flags service builds
+        /// one of these from the server's authoritative values and re-applies it on refresh,
+        /// so trace on/off + log-vs-weblog + filters change with NO rebuild.
+        /// </summary>
+        public sealed class TraceConfig
+        {
+            /// <summary>Master on/off (maps to <see cref="Enabled"/>).</summary>
+            public bool Enabled = true;
+            /// <summary>True → route output to the remote <see cref="WebTraceSink"/>; false → Unity log.</summary>
+            public bool UseWebSink;
+            /// <summary>Remote weblog endpoint. From config/remote — NO hardcoded URL, NO secret.</summary>
+            public string WebUrl;
+            /// <summary>Category allow-list (null/empty = all). Maps to <see cref="Only"/>.</summary>
+            public string[] Only;
+            /// <summary>Category deny-set. Maps to <see cref="Mute"/>.</summary>
+            public string[] Mute;
+        }
+    }
+
+    // =========================================================================
+    //  Trace sinks — the destination FlowTrace output is routed to.
+    // =========================================================================
+
+    /// <summary>
+    /// Destination for FlowTrace output. Implementations decide where a line goes
+    /// (Unity console, a remote weblog, a test buffer, …). Three levels mirror the
+    /// Step/Warn/Fail mapping so a sink can route by severity.
+    /// </summary>
+    public interface ITraceSink
+    {
+        void Info(string line);
+        void Warn(string line);
+        void Error(string line);
+    }
+
+    /// <summary>
+    /// Default sink: the Unity console (Debug.Log / LogWarning / LogError). This is the
+    /// exact pre-existing behaviour — error lines still reach BreakCaptureHarness →
+    /// break-log.jsonl. Zero config; always available as the reversible fallback.
+    /// </summary>
+    public sealed class UnityLogSink : ITraceSink
+    {
+        public void Info(string line)  => Debug.Log(line);
+        public void Warn(string line)  => Debug.LogWarning(line);
+        public void Error(string line) => Debug.LogError(line);
     }
 }
