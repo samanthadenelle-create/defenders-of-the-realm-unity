@@ -39,6 +39,7 @@ using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 using DeNelle.Core.World;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -151,6 +152,7 @@ namespace DeNelle.Village
 
         private void Activate(TribeState t, TribeDef def)
         {
+            using var _ = FlowTrace.Enter("Tribes", $"Activate tribe='{t?.Id}'");
             // Fully-dominated tribes do not respawn.
             if (ClearsUntilGone > 0 && t.ClearCount >= ClearsUntilGone)
             {
@@ -179,8 +181,14 @@ namespace DeNelle.Village
             _activeIds.Add(t.Id);
             t.MembersRemaining = members.Count;   // record what actually rolled this cycle
 
-            Debug.Log($"[TribeManager] Tribe '{t.Id}' ACTIVE — {members.Count} raiders " +
-                      $"(threat {threat}, clearCount {t.ClearCount}).");
+            // U (TGVRU-U): Debug.Log -> FlowTrace so the activation lands in the capture, and
+            // a Warn surfaces a partial spawn (rolled N but fewer materialised — a null Build).
+            if (members.Count < count)
+                FlowTrace.Warn("Tribes",
+                    $"Tribe '{t.Id}' ACTIVE but only {members.Count}/{count} raiders materialised " +
+                    "(some Build returned null — see SpawnRaider Fail lines).");
+            FlowTrace.Step("Tribes",
+                $"Tribe '{t.Id}' ACTIVE — {members.Count} raiders (threat {threat}, clearCount {t.ClearCount}).");
         }
 
         private void Deactivate(TribeState t)
@@ -267,6 +275,7 @@ namespace DeNelle.Village
 
         private Enemy SpawnRaider(string tribeId, int index, Vector3 pos, int threat)
         {
+            using var _ = FlowTrace.Enter("Tribes", $"SpawnRaider tribe='{tribeId}' idx={index}");
             if (NavMesh.SamplePosition(pos, out NavMeshHit hit, 8f, NavMesh.AllAreas))
                 pos = hit.position;
 
@@ -280,7 +289,18 @@ namespace DeNelle.Village
             var def = BuildRaiderDef(tribeId, threat, rosterId);
 
             // One skinned body via the shared EnemyFactory — no parallel spawn code (CLAUDE.md §9).
-            var enemy = EnemyFactory.Build(def, pos, Quaternion.identity, _root);
+            // P0 NRE GUARD (TGVRU-R): Build can return null (def-null / internal throw). The OLD
+            // code dereferenced enemy.gameObject.name immediately — a null NRE'd here and aborted
+            // the WHOLE raid spawn loop (Activate's for-loop), leaving the tribe half-spawned or
+            // empty. Guard the result, Fail-loud, and return null so Activate skips just this raider.
+            var enemy = Guard.Try("Tribes", $"EnemyFactory.Build raider {tribeId}-{index}",
+                () => EnemyFactory.Build(def, pos, Quaternion.identity, _root), null);
+            if (enemy == null || enemy.gameObject == null)
+            {
+                FlowTrace.Fail("Tribes",
+                    $"SpawnRaider: EnemyFactory.Build returned null for tribe '{tribeId}' raider {index} — skipping (raid continues, no NRE-abort).");
+                return null;
+            }
             enemy.gameObject.name = $"Raider ({tribeId}-{index})";
             // March goal = the nearest standing settlement (the claim to raze), falling
             // back to the Heart when no settlement is in range. We DON'T add EnemyBrain:
@@ -299,7 +319,42 @@ namespace DeNelle.Village
             var firstTarget = NearestSettlementTransform(pos);
             if (firstTarget != null) enemy.SetBrainTarget(firstTarget);
 
+            // V (TGVRU-V): prove the committed raider renders + has an agent on the navmesh, so a
+            // "spawned but invisible / stuck-off-mesh" raider self-reports in the capture.
+            VerifySpawnedMob("Tribes", enemy.gameObject, $"{tribeId}-{index}");
+            FlowTrace.Step("Tribes", $"SpawnRaider committed '{enemy.gameObject.name}' at {enemy.gameObject.transform.position}.");
             return enemy;
+        }
+
+        // TGVRU-V (verify): a freshly-built raider can render==false (no enabled mesh) or its
+        // NavMeshAgent can be OFF the baked navmesh — both are "spawned but broken" states that
+        // used to pass silently. Trace the exact counts so a capture splits "invisible" vs
+        // "off-mesh" with zero guessing. Non-fatal (the raider is already committed). Null-safe.
+        private static void VerifySpawnedMob(string system, GameObject go, string label)
+        {
+            if (go == null)
+            {
+                FlowTrace.Warn(system, $"VerifySpawnedMob: '{label}' has a null GameObject — cannot verify render/agent.");
+                return;
+            }
+
+            int enabledRenderers = 0;
+            var renderers = go.GetComponentsInChildren<Renderer>(true);
+            foreach (var r in renderers)
+                if (r != null && r.enabled) enabledRenderers++;
+
+            var agent = go.GetComponentInChildren<NavMeshAgent>();
+            bool hasAgent = agent != null;
+            bool onMesh = hasAgent && agent.isOnNavMesh;
+
+            if (enabledRenderers == 0)
+                FlowTrace.Warn(system, $"VerifySpawnedMob: '{label}' has 0 enabled renderer(s) — spawned but INVISIBLE (check skin build).");
+            if (!hasAgent)
+                FlowTrace.Warn(system, $"VerifySpawnedMob: '{label}' has no NavMeshAgent — it will not path (check EnemyFactory).");
+            else if (!onMesh)
+                FlowTrace.Warn(system, $"VerifySpawnedMob: '{label}' agent is OFF the navmesh at {go.transform.position} — it will idle (point off baked surface).");
+
+            FlowTrace.Step(system, $"VerifySpawnedMob '{label}': enabledRenderers={enabledRenderers} hasAgent={hasAgent} onNavMesh={onMesh}.");
         }
 
         // Threat-scaled stat block (ThreatLevel = danger tier × depth). Deadlier

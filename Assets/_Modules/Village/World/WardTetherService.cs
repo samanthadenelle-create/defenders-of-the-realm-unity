@@ -45,6 +45,7 @@ using UnityEngine.AI;
 using DeNelle.Core;
 using DeNelle.Core.World;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -175,6 +176,13 @@ namespace DeNelle.Village
 
         private WardStone BuildWard(WardStoneDef def, WardStoneState record)
         {
+            using var _ = FlowTrace.Enter("Wards", $"BuildWard id='{def?.Id}'");
+            if (def == null)
+            {
+                FlowTrace.Fail("Wards", "BuildWard: null def — skipping this ward (no NRE-abort of the ward ladder).");
+                return null;
+            }
+
             Vector3 pos = new Vector3(def.Position.x, def.Position.y, def.Position.z);
             // Seat on the navmesh if one exists (so the Keeper can actually reach it).
             if (NavMesh.SamplePosition(pos, out NavMeshHit hit, 6f, NavMesh.AllAreas))
@@ -189,8 +197,19 @@ namespace DeNelle.Village
             // A non-blocking trigger so the Keeper can walk up to it.
             if (go.TryGetComponent(out Collider col)) col.isTrigger = true;
 
+            // GUARD (TGVRU-G): Initialise builds the WardStone's visuals (material/shader/glow). If
+            // it throws (e.g. a missing shader → grey-cube fallback path), the OLD code let the
+            // exception bubble and abort EnsureSeededAndBuilt — every later ward in the ladder was
+            // then never built. Guard it so one bad ward logs + is skipped, the ladder continues.
             var ward = go.AddComponent<WardStone>();
-            ward.Initialise(def, record);
+            if (!Guard.Try("Wards", $"WardStone.Initialise '{def.Id}'", () => ward.Initialise(def, record)))
+            {
+                FlowTrace.Fail("Wards", $"BuildWard: Initialise threw for ward '{def.Id}' — destroying the half-built stone, ladder continues.");
+                Destroy(go);
+                return null;
+            }
+
+            FlowTrace.Step("Wards", $"BuildWard: ward '{def.Id}' built at {go.transform.position} (lit={record != null && record.Lit}).");
             return ward;
         }
 
@@ -384,6 +403,12 @@ namespace DeNelle.Village
         // world spawners (no forked WaveManager). Capsule, NavMesh-seated, region-themed.
         private Enemy SpawnKindleMob(WardStone ward, int index, int threat)
         {
+            using var _ = FlowTrace.Enter("Wards", $"SpawnKindleMob ward='{ward?.Id}' idx={index}");
+            if (ward == null)
+            {
+                FlowTrace.Fail("Wards", "SpawnKindleMob: null ward — skipping this defender (no NRE-abort of the kindle).");
+                return null;
+            }
             Vector3 anchor = ward.transform.position;
             Vector3 want = anchor + new Vector3(Random.Range(-6f, 6f), 0f, Random.Range(-6f, 6f));
             if (NavMesh.SamplePosition(want, out NavMeshHit hit, 8f, NavMesh.AllAreas))
@@ -396,14 +421,60 @@ namespace DeNelle.Village
             var def = BuildKindleDef(ward, rosterId, threat);
 
             // One skinned body via the shared EnemyFactory — no parallel spawn code (CLAUDE.md §9).
-            var enemy = EnemyFactory.Build(def, want, Quaternion.identity, _root);
+            // P0 NRE GUARD (TGVRU-R): Build can return null (def-null / internal throw). The OLD
+            // code dereferenced enemy.gameObject.name immediately — a null NRE'd here and aborted
+            // the WHOLE kindle spawn loop (BeginKindle's for-loop), leaving the relight with no
+            // defenders. Guard the result, Fail-loud, return null so BeginKindle skips just this one.
+            var enemy = Guard.Try("Wards", $"EnemyFactory.Build kindle {ward.Id}-{index}",
+                () => EnemyFactory.Build(def, want, Quaternion.identity, _root), null);
+            if (enemy == null || enemy.gameObject == null)
+            {
+                FlowTrace.Fail("Wards",
+                    $"SpawnKindleMob: EnemyFactory.Build returned null for ward '{ward.Id}' defender {index} — skipping (kindle continues, no NRE-abort).");
+                return null;
+            }
             enemy.gameObject.name = $"KindleDefender ({ward.Id}-{index})";
 
             enemy.Configure($"kindle-{ward.Id}-{index}", def, ResolveHeart());
             // March the kindle mob at the player (the ritual they defend), not the Heart.
             ResolvePlayer();
             if (_player != null) enemy.SetBrainTarget(_player);
+
+            // V (TGVRU-V): prove the committed defender renders + has an agent on the navmesh.
+            VerifySpawnedMob("Wards", enemy.gameObject, $"{ward.Id}-{index}");
+            FlowTrace.Step("Wards", $"SpawnKindleMob committed '{enemy.gameObject.name}' at {enemy.gameObject.transform.position}.");
             return enemy;
+        }
+
+        // TGVRU-V (verify): a freshly-built kindle defender can render==false (no enabled mesh) or
+        // its NavMeshAgent can be OFF the baked navmesh — both "spawned but broken" states that used
+        // to pass silently. Trace the exact counts so a capture splits "invisible" vs "off-mesh".
+        // Non-fatal (the defender is already committed). Null-safe throughout.
+        private static void VerifySpawnedMob(string system, GameObject go, string label)
+        {
+            if (go == null)
+            {
+                FlowTrace.Warn(system, $"VerifySpawnedMob: '{label}' has a null GameObject — cannot verify render/agent.");
+                return;
+            }
+
+            int enabledRenderers = 0;
+            var renderers = go.GetComponentsInChildren<Renderer>(true);
+            foreach (var r in renderers)
+                if (r != null && r.enabled) enabledRenderers++;
+
+            var agent = go.GetComponentInChildren<NavMeshAgent>();
+            bool hasAgent = agent != null;
+            bool onMesh = hasAgent && agent.isOnNavMesh;
+
+            if (enabledRenderers == 0)
+                FlowTrace.Warn(system, $"VerifySpawnedMob: '{label}' has 0 enabled renderer(s) — spawned but INVISIBLE (check skin build).");
+            if (!hasAgent)
+                FlowTrace.Warn(system, $"VerifySpawnedMob: '{label}' has no NavMeshAgent — it will not path (check EnemyFactory).");
+            else if (!onMesh)
+                FlowTrace.Warn(system, $"VerifySpawnedMob: '{label}' agent is OFF the navmesh at {go.transform.position} — it will idle (point off baked surface).");
+
+            FlowTrace.Step(system, $"VerifySpawnedMob '{label}': enabledRenderers={enabledRenderers} hasAgent={hasAgent} onNavMesh={onMesh}.");
         }
 
         private static EnemyDef BuildKindleDef(WardStone ward, string rosterId, int threat)

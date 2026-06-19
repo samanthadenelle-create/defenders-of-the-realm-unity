@@ -25,6 +25,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.World;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -88,7 +89,7 @@ namespace DeNelle.Village
                 if (node != null && node.UseFiniteReserve)
                 {
                     var result = ClaimAt(node);
-                    if (!result.Ok) Debug.Log($"[SettlementPlacer] Cannot claim: {result.Reason}");
+                    if (!result.Ok) FlowTrace.Step("Settlement", $"Click-claim rejected: {result.Reason}");
                 }
             }
         }
@@ -100,7 +101,12 @@ namespace DeNelle.Village
         /// </summary>
         public ClaimResult ClaimAt(MineNode node)
         {
-            if (node == null) return ClaimResult.Fail("no node");
+            using var _ = FlowTrace.Enter("Settlement", $"ClaimAt node='{(node != null ? node.name : "<null>")}'");
+            if (node == null)
+            {
+                FlowTrace.Warn("Settlement", "ClaimAt: null node — claim rejected.");
+                return ClaimResult.Fail("no node");
+            }
             if (!node.UseFiniteReserve) return ClaimResult.Fail("node is not a claimable reserve");
             if (node.IsReserveEmpty) return ClaimResult.Fail("node is mined out");
 
@@ -147,7 +153,15 @@ namespace DeNelle.Village
 
             node.SetWorkerClaim(true);   // mark the node claimed (blocks legacy worker dispatch)
 
-            Debug.Log($"[SettlementPlacer] Claimed '{node.name}' — settlement built, auto-harvesting.");
+            // V (TGVRU-V): prove the committed outpost has a live renderer (a primitive cube can
+            // come back with no enabled Renderer) so an invisible settlement self-reports instead
+            // of leaving the player with a claimed-but-unseen site. Non-fatal — the claim stands.
+            var bodyRenderer = body.GetComponent<Renderer>();
+            if (bodyRenderer == null || !bodyRenderer.enabled)
+                FlowTrace.Warn("Settlement",
+                    $"ClaimAt: settlement body for '{node.name}' has no enabled renderer — outpost may be INVISIBLE.");
+
+            FlowTrace.Step("Settlement", $"ClaimAt: claimed '{node.name}' — settlement built at {go.transform.position}, auto-harvesting.");
             return ClaimResult.Pass(settlement);
         }
 

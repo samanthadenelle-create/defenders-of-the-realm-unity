@@ -24,6 +24,7 @@
 // =============================================================================
 using UnityEngine;
 using DeNelle.Core.World;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -105,14 +106,26 @@ namespace DeNelle.Village
 
         private void BuildVisuals()
         {
+            using var _ = FlowTrace.Enter("Wards", $"WardStone.BuildVisuals id='{Id}'");
             _renderer = GetComponent<Renderer>();
-            if (_renderer != null)
+            if (_renderer == null)
+                FlowTrace.Warn("Wards", $"BuildVisuals: ward '{Id}' has no Renderer — stone will be invisible.");
+            else
             {
+                // G (TGVRU-G): a missing URP/Lit AND Standard shader leaves _mat null, so the cube
+                // keeps Unity's default magenta/grey material instead of the ward tint — the
+                // "null shader -> grey cube" failure. Trace it loud so the run self-reports a
+                // grey ward (the cube still renders; it just won't take the lit/cold colour).
                 Shader sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
                 if (sh != null)
                 {
                     _mat = new Material(sh) { name = "WardStone_" + Id };
                     _renderer.sharedMaterial = _mat;
+                }
+                else
+                {
+                    FlowTrace.Warn("Wards",
+                        $"BuildVisuals: ward '{Id}' found NO Lit/Standard shader — keeping default material (grey cube, no ward tint).");
                 }
             }
 

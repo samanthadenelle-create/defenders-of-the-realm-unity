@@ -35,6 +35,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using DeNelle.Core.World;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -227,6 +228,7 @@ namespace DeNelle.Village
         // needs no art/prefab, harvested with the SAME [F] verb + banking path as any mine.
         private Bloom BuildBloom(Vector3 pos, CrystalGrade grade, int payout)
         {
+            using var _ = FlowTrace.Enter("Crystal", $"BuildBloom grade={grade} payout={payout}");
             if (_root == null) _root = new GameObject("[RareCrystalBlooms]").transform;
 
             var go = new GameObject($"CrystalBloom-{grade}-{_counter++}");
@@ -249,6 +251,19 @@ namespace DeNelle.Village
             node.UseFiniteReserve = false; // legacy [F]-harvest path (player taps it)
             node.InteractRadius   = HarvestRadius;
 
+            // V (TGVRU-V): the crystal silhouette is built by MineNodeVisual (auto-attached by
+            // MineNode). If no renderer ends up live the bloom is INVISIBLE — the player can't see
+            // the "get there before it fades" prize. Warn-loud so it self-reports. Non-fatal — the
+            // node still banks if the player walks onto it. (Visual may build a frame later; a 0
+            // here only flags it as worth a look in the capture.)
+            int liveRenderers = 0;
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                if (r != null && r.enabled) liveRenderers++;
+            if (liveRenderers == 0)
+                FlowTrace.Warn("Crystal",
+                    $"BuildBloom: bloom ({grade}) at {pos} has 0 enabled renderer(s) this frame — may render INVISIBLE (check MineNodeVisual).");
+
+            FlowTrace.Step("Crystal", $"BuildBloom committed ({grade}, ~{payout}+) at {pos}, liveRenderers={liveRenderers}.");
             return new Bloom
             {
                 Node = node,

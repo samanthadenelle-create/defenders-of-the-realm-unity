@@ -12,7 +12,9 @@
 // - Scaling stats applied at spawn time by the hub (distance / threat).
 // =============================================================================
 using UnityEngine;
+using UnityEngine.AI;
 using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.World
 {
@@ -42,7 +44,9 @@ namespace DeNelle.Village.World
             _hp = Mathf.Max(0f, _hp - Mathf.Abs(amount));
             if (_hp <= 0f)
             {
-                Debug.Log($"[OutpostDefender] {Role} fell.");
+                // U (TGVRU-U): death was Debug.Log'd (uncaptured). Route through FlowTrace so a
+                // defender's death lands in the F8 break-log (who fell, where) — previously untraced.
+                FlowTrace.Step("Outpost", $"OutpostDefender {Role} fell at {transform.position} — destroyed.");
                 Destroy(gameObject);
             }
         }
@@ -66,6 +70,15 @@ namespace DeNelle.Village.World
                 Vector3 toPost = (GuardPost - transform.position).normalized;
                 transform.position += toPost * 3.5f * Time.deltaTime;
             }
+
+            // V (TGVRU-V): this defender moves by RAW transform (no NavMeshAgent), so it can walk
+            // off the baked navmesh / through geometry with nothing ever flagging it. Sample the
+            // navmesh under its current position and Throttle-Warn (~1/sec) when it has drifted off
+            // a walkable surface — the "raw-transform move never navmesh-verified" gap, now self-
+            // reporting in the capture. Purely diagnostic; movement is unchanged.
+            if (!NavMesh.SamplePosition(transform.position, out _, 2f, NavMesh.AllAreas))
+                FlowTrace.Throttle("Outpost", $"offmesh-{GetInstanceID()}", 1f,
+                    $"OutpostDefender {Role} is OFF the navmesh at {transform.position} (raw-transform move drifted off the walkable surface).");
 
             // Find hostile (simple broad search — real version would use a team mask / Threat system).
             if (_currentTarget == null || !IsValidTarget(_currentTarget))
@@ -105,8 +118,10 @@ namespace DeNelle.Village.World
             }
             else
             {
-                // Fallback: if it's an Enemy or other, try a generic message or just log.
-                Debug.Log($"[OutpostDefender] {Role} hit {_currentTarget.name} for {Damage}.");
+                // Fallback: target carries no IDamageableStructure — it took no damage. Throttle so
+                // a "hitting something un-damageable" mis-target self-reports without spamming.
+                FlowTrace.Throttle("Outpost", $"nodmg-{GetInstanceID()}", 1f,
+                    $"OutpostDefender {Role} swung at '{_currentTarget.name}' but it has no IDamageableStructure — no damage applied.");
             }
 
             // Healer role occasionally "supports" by giving a tiny resource bump or healing the hub.

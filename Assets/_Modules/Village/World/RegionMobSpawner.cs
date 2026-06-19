@@ -37,6 +37,7 @@ using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 using DeNelle.Core.World;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -240,16 +241,26 @@ namespace DeNelle.Village
             int deficit = EffectiveTarget() - _live.Count;
             if (deficit <= 0) return;
 
+            using var _ = FlowTrace.Enter("RegionMobs", $"TopUpPopulation deficit={deficit} live={_live.Count}");
+
             if (_root == null) _root = new GameObject("[RegionMobs]").transform;
 
             // WO-316: spawn a small FAMILY PACK per top-up rather than one lone mob —
             // a lead (brute/charger), a fast skirmisher DPS, and (room permitting) a
             // caster support, clustered around one anchor so they roam + aggro as a
             // group. Capped by the remaining deficit so the population target holds.
-            if (!TryFindSpawnPoint(playerPos, out Vector3 packPos)) return;
+            if (!TryFindSpawnPoint(playerPos, out Vector3 packPos))
+            {
+                FlowTrace.Warn("RegionMobs", "TopUpPopulation: no NavMesh-valid spawn point in the ring — no pack this tick.");
+                return;
+            }
 
             RegionId region = ZoneManager.GetZone(packPos);
-            if (!RegionSpawnTable.HasRoster(region)) return;   // not an outer region
+            if (!RegionSpawnTable.HasRoster(region))
+            {
+                FlowTrace.Step("RegionMobs", $"TopUpPopulation: {region} has no roster — not an outer region, skipping.");
+                return;   // not an outer region
+            }
 
             float depth = ZoneManager.Depth(packPos);
             int threat  = ZoneManager.ThreatLevel(packPos);
@@ -265,6 +276,7 @@ namespace DeNelle.Village
         // creation path) and only adds the role assignment + clustering on top.
         private void SpawnPack(RegionId region, Vector3 origin, float depth, int threat, int budget)
         {
+            using var _ = FlowTrace.Enter("RegionMobs", $"SpawnPack region={region} budget={budget}");
             // Pack size scales gently with the remaining deficit (2-3), never more
             // than budget so a top-up can't overshoot the population target.
             int packSize = Mathf.Clamp(budget, 1, 3);
@@ -284,7 +296,13 @@ namespace DeNelle.Village
                 if (string.IsNullOrEmpty(enemyId)) continue;
 
                 var mob = SpawnMob(enemyId, region, pos, threat);
-                if (mob == null) continue;
+                if (mob == null || mob.Enemy == null || mob.Enemy.gameObject == null)
+                {
+                    // SpawnMob already Failed-loud on a null Build — just skip the role stamp so a
+                    // null member never NRE's the pack loop (the rest of the pack still spawns).
+                    FlowTrace.Step("RegionMobs", $"SpawnPack: member {i} ('{enemyId}') did not spawn — skipped.");
+                    continue;
+                }
 
                 // Stamp a tactical role so the pack behaves as tank + DPS + support.
                 // EnemyFactory builds a plain body (no brain) — add one for the role.
@@ -354,6 +372,7 @@ namespace DeNelle.Village
 
         private Mob SpawnMob(string enemyId, RegionId region, Vector3 pos, int threat)
         {
+            using var _ = FlowTrace.Enter("RegionMobs", $"SpawnMob id='{enemyId}' region={region}");
             var def = BuildRoamerDef(enemyId, threat);
 
             // Overly-easy welcome (owner 2026-06-02: "the beginning should be overly easy" —
@@ -369,7 +388,18 @@ namespace DeNelle.Village
 
             // One skinned enemy body via the shared EnemyFactory — no parallel spawn code
             // (CLAUDE.md §9). The factory handles layer + collider + skin + animator + agent.
-            var enemy = EnemyFactory.Build(def, pos, Quaternion.identity, _root);
+            // P0 NRE GUARD (TGVRU-R): Build can return null (def-null / internal throw). The
+            // OLD code dereferenced enemy.gameObject immediately — a null result NRE'd here and
+            // aborted the ENTIRE top-up pass (whole pack lost). Guard the result, Fail-loud, and
+            // SKIP this one mob so the rest of the pack still spawns.
+            var enemy = Guard.Try("RegionMobs", $"EnemyFactory.Build {enemyId}",
+                () => EnemyFactory.Build(def, pos, Quaternion.identity, _root), null);
+            if (enemy == null || enemy.gameObject == null)
+            {
+                FlowTrace.Fail("RegionMobs",
+                    $"SpawnMob: EnemyFactory.Build returned null for '{enemyId}' ({region}) — skipping this mob (pack continues, no NRE-abort).");
+                return null;
+            }
             var go = enemy.gameObject;
             go.name = $"RegionMob ({enemyId} · {region})";
 
@@ -386,6 +416,12 @@ namespace DeNelle.Village
             // Red-skull readiness tell — code-built nameplate (no UXML).
             ThreatSkullPlate.Attach(go, () => threat);
 
+            // V (TGVRU-V): prove the committed mob actually renders + has an agent on the
+            // navmesh, so a "spawned but invisible / stuck-off-mesh" mob self-reports in the
+            // capture instead of silently failing. Non-fatal — the mob still joins the pack.
+            VerifySpawnedMob("RegionMobs", go, $"{enemyId}/{region}");
+
+            FlowTrace.Step("RegionMobs", $"SpawnMob committed '{go.name}' at {go.transform.position}.");
             return new Mob
             {
                 Enemy = enemy,
@@ -475,6 +511,42 @@ namespace DeNelle.Village
 
         private static bool IsWoundTied(RegionId region) =>
             region == RegionId.Mirewood || region == RegionId.Ashwood;
+
+        // TGVRU-V (shared verify): a freshly-built enemy can render==false (no enabled mesh)
+        // or its NavMeshAgent can be OFF the baked navmesh (spawned just off-surface) — both
+        // are "spawned but broken" states that used to pass silently. Trace the exact counts so
+        // a capture splits "invisible" vs "off-mesh" with zero guessing. Non-fatal (the mob is
+        // already committed); a Warn rolls up to the F8 break-log. Null-safe throughout.
+        private static void VerifySpawnedMob(string system, GameObject go, string label)
+        {
+            if (go == null)
+            {
+                FlowTrace.Warn(system, $"VerifySpawnedMob: '{label}' has a null GameObject — cannot verify render/agent.");
+                return;
+            }
+
+            int enabledRenderers = 0;
+            var renderers = go.GetComponentsInChildren<Renderer>(true);
+            foreach (var r in renderers)
+                if (r != null && r.enabled) enabledRenderers++;
+
+            var agent = go.GetComponentInChildren<NavMeshAgent>();
+            bool hasAgent = agent != null;
+            bool onMesh = hasAgent && agent.isOnNavMesh;
+
+            if (enabledRenderers == 0)
+                FlowTrace.Warn(system,
+                    $"VerifySpawnedMob: '{label}' has 0 enabled renderer(s) — spawned but INVISIBLE (check skin build).");
+            if (!hasAgent)
+                FlowTrace.Warn(system,
+                    $"VerifySpawnedMob: '{label}' has no NavMeshAgent — it will not path (check EnemyFactory).");
+            else if (!onMesh)
+                FlowTrace.Warn(system,
+                    $"VerifySpawnedMob: '{label}' agent is OFF the navmesh at {go.transform.position} — it will idle (point off baked surface).");
+
+            FlowTrace.Step(system,
+                $"VerifySpawnedMob '{label}': enabledRenderers={enabledRenderers} hasAgent={hasAgent} onNavMesh={onMesh}.");
+        }
 
         private void ResolvePlayer()
         {

@@ -44,6 +44,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using DeNelle.Core.World;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.World
 {
@@ -268,6 +269,13 @@ namespace DeNelle.Village.World
         // =====================================================================
         private void BuildPortal(DungeonDef def, Vector3 pos)
         {
+            using var _ = FlowTrace.Enter("DungeonPortals", $"BuildPortal id='{def?.DungeonId}'");
+            if (def == null)
+            {
+                FlowTrace.Fail("DungeonPortals", "BuildPortal: null def — skipping (no NRE-abort of the placement loop).");
+                return;
+            }
+
             var root = new GameObject($"DungeonWorldPortal_{def.DungeonId}");
             root.transform.SetParent(_root, false);
             root.transform.position = pos;
@@ -277,6 +285,18 @@ namespace DeNelle.Village.World
                 root.transform.rotation = Quaternion.LookRotation(toVillage.normalized);
 
             var renderers = BuildArch(root.transform, PortalHeight, def.AccentColor);
+
+            // V (TGVRU-V): a portal with no live renderer is INVISIBLE — the hero can never find
+            // it (the whole feature is "stumble on a glowing arch"). Count enabled renderers with
+            // a material; Warn-loud if none so an invisible portal self-reports instead of being a
+            // silent "feature does nothing". Non-fatal — the trigger still loads the dungeon if hit.
+            int liveRenderers = 0;
+            if (renderers != null)
+                foreach (var r in renderers)
+                    if (r != null && r.enabled && r.sharedMaterial != null) liveRenderers++;
+            if (liveRenderers == 0)
+                FlowTrace.Warn("DungeonPortals",
+                    $"BuildPortal: '{def.DungeonId}' arch has 0 live renderer(s) at {pos} — portal will be INVISIBLE (null shader/material?).");
 
             // Trigger + kinematic RB so the transform-moved hero collider fires OnTriggerEnter
             // on the portal side (same pattern as DungeonEntranceBootstrap / WO-08 gates).
@@ -309,8 +329,9 @@ namespace DeNelle.Village.World
             ApplyDim(entry, entry.Discovered ? 1f : UndiscoveredDim);
             _portals.Add(entry);
 
-            Debug.Log($"[DungeonWorldPortals] '{def.ResolveName()}' portal at {pos} " +
-                      $"(discovered={entry.Discovered}).");
+            FlowTrace.Step("DungeonPortals",
+                $"BuildPortal: '{def.ResolveName()}' portal committed at {pos} " +
+                $"(discovered={entry.Discovered}, liveRenderers={liveRenderers}).");
         }
 
         // Two posts + a lintel, tinted with the dungeon accent. Returns the renderers so the
@@ -319,7 +340,7 @@ namespace DeNelle.Village.World
         {
             Shader lit = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Sprites/Default");
             if (lit == null)
-                Debug.LogWarning("[DungeonWorldPortals] URP/Lit shader not found — arch will use the fallback material.");
+                FlowTrace.Warn("DungeonPortals", "BuildArch: URP/Lit shader not found — arch will use the fallback material (may render untinted).");
             Material mat = lit != null ? new Material(lit) : null;
             if (mat != null)
             {
