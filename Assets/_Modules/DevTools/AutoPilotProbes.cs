@@ -693,6 +693,14 @@ namespace DeNelle.DevTools
                 bool seamOnMesh = NavMesh.SamplePosition(seamPos, out NavMeshHit hSeam, SeamSampleTol, NavMesh.AllAreas);
 
                 // (b) Reachability from the hero — only meaningful when the seam is on-mesh.
+                //   The seam FIRES on PROXIMITY (within ProximityRadius), NOT on path-completeness.
+                //   On the intentional same-origin DUAL-NAVMESH stack (MainCastle_Hall + OuterWorld),
+                //   CalculatePath routinely returns PathPartial even though the hero physically walks
+                //   to within a metre of the trigger and the proximity fires (the 2026-06-19 bridge bot
+                //   pass proved this: PathPartial, closest 1.0m, radius 12m — and the bot DID cross).
+                //   So reachability = "can the hero get within firing range", measured by how close the
+                //   computed path's last corner lands. PathComplete is a bonus, never a requirement —
+                //   requiring it false-flagged the working bridge on the very first fleet run.
                 bool reachable = false;
                 NavMeshPathStatus status = NavMeshPathStatus.PathInvalid;
                 float approach = float.PositiveInfinity;
@@ -704,8 +712,9 @@ namespace DeNelle.DevTools
                     int corners = path.corners != null ? path.corners.Length : 0;
                     Vector3 last = corners > 0 ? path.corners[corners - 1] : hHero.position;
                     approach = Vector3.Distance(last, seamPos);
-                    reachable = status == NavMeshPathStatus.PathComplete
-                                && approach <= seam.ProximityRadius + SeamReachMargin;
+                    // Reachable when the hero can close to within the proximity radius (the actual
+                    // firing threshold). A PathInvalid with no corners (approach==inf) stays unreachable.
+                    reachable = approach <= seam.ProximityRadius + SeamReachMargin;
                 }
 
                 bool sameScene = string.Equals(seam.gameObject.scene.name, heroScene, StringComparison.Ordinal);
@@ -737,8 +746,9 @@ namespace DeNelle.DevTools
                     FlowTrace.Fail(Tag, $"SEAM-OFF-MESH: '{seam.gameObject.name}' in '{seam.gameObject.scene.name}' at {seamPos} " +
                         $"is not within {SeamSampleTol}m of any baked navmesh — the hero can never walk up to it; the seam can't fire.");
                 else
-                    FlowTrace.Fail(Tag, $"SEAM-UNREACHABLE: '{seam.gameObject.name}' in '{seam.gameObject.scene.name}' — the hero cannot walk to it " +
-                        $"(path={status}, closest {approach:0.0}m vs ProximityRadius {seam.ProximityRadius:0.0}m). Bake gap or blocker between the hero and the seam; the crossing never fires.");
+                    FlowTrace.Fail(Tag, $"SEAM-UNREACHABLE: '{seam.gameObject.name}' in '{seam.gameObject.scene.name}' — the hero cannot get within " +
+                        $"firing range (closest {approach:0.0}m > ProximityRadius {seam.ProximityRadius:0.0}m + {SeamReachMargin:0.0}m, path={status}). " +
+                        "Bake gap or blocker keeps the hero too far from the seam to ever trip its proximity; the crossing never fires.");
             }
         }
     }
