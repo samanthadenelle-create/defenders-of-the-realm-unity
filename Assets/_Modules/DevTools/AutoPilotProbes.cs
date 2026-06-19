@@ -8,7 +8,7 @@
 // [Flow:AutoTest]) so every violation lands in break-log.jsonl via the always-on
 // BreakCaptureHarness and surfaces as an AutoPilot ticket.
 //
-// FOUR PROBES:
+// FIVE PROBES:
 //   1. UNEXPECTED-CROSS  — a raid-destination scene (Garrison*/Outpost*/Village2/
 //                          Raid*) loaded while the bot is in normal town traversal
 //                          (NOT an intentional raid/cross phase). Catches the
@@ -19,9 +19,17 @@
 //                          parent name reads Wall/Palisade/Fortif/Rampart → the
 //                          hero is standing in wall geometry (walk-through-walls).
 //   4. DUAL-NAVMESH /    — >1 additively-loaded scene contributes a NavMesh over the
-//      STRANDED            same XZ region (overlap), AND the hero's NavMeshAgent has
-//                          made no path progress toward any objective for >~20s → a
-//                          possible softlock with no path to an exit.
+//      STRANDED /          same XZ region (overlap); a NavMeshLink whose endpoint is
+//      NAVMESH-LINK        off-mesh or an overlapping additive seam with NO bridging
+//                          link; AND the hero's NavMeshAgent making no path progress
+//                          toward any objective for >~20s → a possible softlock.
+//   5. SEAM-REACHABLE    — every SceneTransitionTrigger must sit ON the baked navmesh
+//                          AND be reachable-on-foot from the hero to within its
+//                          ProximityRadius. A floating / unreachable seam never fires —
+//                          the player can't cross. Runtime generalisation of the
+//                          editor-only CastleGateNavVerify (regression-guards the
+//                          2026-06-19 castle→OuterWorld bridge fix). Cross-scene seams
+//                          (across a warp boundary) are census-only, never failed.
 //
 // GATING: this component is spawned ONLY by AutoPilotDriver (an autopilot-only
 // host). It also self-checks AutoPilotInstaller-style intent is irrelevant — the
@@ -72,6 +80,7 @@ namespace DeNelle.DevTools
         private const float CoplanarInterval   = 5f;     // scan settled floors every 5s
         private const float NavMeshInterval    = 5f;     // dual-navmesh overlap scan
         private const float NavLinkInterval    = 5f;     // navmesh-link connectivity scan
+        private const float SeamReachInterval  = 5f;     // seam reachability scan
         private const float StrandedInterval   = 1f;     // poll path progress 1/sec
         private const float HeroRefreshInterval = 2f;    // re-resolve hero handle
 
@@ -79,6 +88,7 @@ namespace DeNelle.DevTools
         private float _nextCoplanar;
         private float _nextNavMesh;
         private float _nextNavLink;
+        private float _nextSeamReach;
         private float _nextStranded;
         private float _nextHeroRefresh;
 
@@ -116,7 +126,7 @@ namespace DeNelle.DevTools
             if (_armed) return;
             _armed = true;
             SceneManager.sceneLoaded += OnSceneLoaded;
-            FlowTrace.Step(Tag, "AutoPilotProbes ARMED — UNEXPECTED-CROSS, COPLANAR-FLOOR, WALL-CLIP, DUAL-NAVMESH/STRANDED, NAVMESH-LINK active.");
+            FlowTrace.Step(Tag, "AutoPilotProbes ARMED — UNEXPECTED-CROSS, COPLANAR-FLOOR, WALL-CLIP, DUAL-NAVMESH/STRANDED, NAVMESH-LINK, SEAM-REACHABLE active.");
         }
 
         /// <summary>
@@ -208,6 +218,13 @@ namespace DeNelle.DevTools
                 _nextNavLink = now + NavLinkInterval;
                 try { CheckNavMeshLinks(); }
                 catch (Exception ex) { FlowTrace.Warn(Tag, "NAVMESH-LINK check threw: " + ex.Message); }
+            }
+
+            if (now >= _nextSeamReach)
+            {
+                _nextSeamReach = now + SeamReachInterval;
+                try { CheckSeamReachable(); }
+                catch (Exception ex) { FlowTrace.Warn(Tag, "SEAM-REACHABLE check threw: " + ex.Message); }
             }
 
             if (now >= _nextStranded)
@@ -617,6 +634,112 @@ namespace DeNelle.DevTools
             _strandedSince = -1f;
             _strandedReported = false;
             _lastRemainingDist = float.PositiveInfinity;
+        }
+
+        // =====================================================================
+        //  PROBE 5: SEAM-REACHABLE
+        //  Runtime generalisation of the editor-only CastleGateNavVerify. Every
+        //  SceneTransitionTrigger must (a) sit ON the baked navmesh and (b) be
+        //  reachable-on-foot from the hero to within its ProximityRadius. A seam the
+        //  hero can't walk up to never fires — the player is stuck at the crossing.
+        //  This is the class behind the 2026-06-19 castle→OuterWorld bridge fix (a
+        //  trigger floated 1.5m above the deck, read off-mesh, and the deck never
+        //  fused to the courtyard); this oracle regression-guards it every run.
+        //
+        //  FALSE-POSITIVE DISCIPLINE: a seam in a DIFFERENT scene than the hero sits
+        //  legitimately across a warp boundary, so an incomplete path there is NOT a
+        //  defect (census-only). An off-mesh seam, or an unreachable seam WITHIN the
+        //  hero's own scene, is a hard Fail — but only after TWO consecutive scans
+        //  read it bad (SeamStrikesToFail), so a transient first-tick read (hero mid-
+        //  warp, navmesh settling) never files a false ticket.
+        // =====================================================================
+        private const float SeamSampleTol  = 2.0f;   // seam must sit within this of baked navmesh
+        private const float SeamReachMargin = 1.0f;  // path must close to within radius + this
+        private const int   SeamStrikesToFail = 2;   // consecutive bad reads before a Fail fires
+        private bool _seamCensusDone;
+        private readonly Dictionary<string, int> _seamStrikes = new Dictionary<string, int>();
+        private readonly HashSet<string> _seamReported = new HashSet<string>();
+
+        private void CheckSeamReachable()
+        {
+            if (_hero == null) return;
+            Vector3 heroPos = _hero.transform.position;
+            // The hero must be on the navmesh for a path query to mean anything — skip during
+            // warps / lifts (off-mesh) so a transient airborne frame can't read every seam bad.
+            if (!NavMesh.SamplePosition(heroPos, out NavMeshHit hHero, SeamSampleTol + 1f, NavMesh.AllAreas))
+                return;
+
+            var seams = UnityEngine.Object.FindObjectsByType<SceneTransitionTrigger>(
+                FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+
+            if (!_seamCensusDone)
+            {
+                _seamCensusDone = true;
+                FlowTrace.Step(Tag, $"SEAM-REACHABLE census: {(seams != null ? seams.Length : 0)} active " +
+                    $"SceneTransitionTrigger(s) across {SceneManager.sceneCount} loaded scene(s).");
+            }
+            if (seams == null || seams.Length == 0) return;
+
+            string heroScene = _hero.gameObject.scene.name;
+
+            foreach (var seam in seams)
+            {
+                if (seam == null || !seam.isActiveAndEnabled) continue;
+                Vector3 seamPos = seam.transform.position;
+                string id = seam.gameObject.scene.name + ":" + seam.gameObject.name;
+
+                // (a) The seam must sit ON the navmesh. A floating / stranded trigger (the y=1.5
+                //     bridge trigger that read off-mesh on 2026-06-19) can never be walked to.
+                bool seamOnMesh = NavMesh.SamplePosition(seamPos, out NavMeshHit hSeam, SeamSampleTol, NavMesh.AllAreas);
+
+                // (b) Reachability from the hero — only meaningful when the seam is on-mesh.
+                bool reachable = false;
+                NavMeshPathStatus status = NavMeshPathStatus.PathInvalid;
+                float approach = float.PositiveInfinity;
+                if (seamOnMesh)
+                {
+                    var path = new NavMeshPath();
+                    NavMesh.CalculatePath(hHero.position, hSeam.position, NavMesh.AllAreas, path);
+                    status = path.status;
+                    int corners = path.corners != null ? path.corners.Length : 0;
+                    Vector3 last = corners > 0 ? path.corners[corners - 1] : hHero.position;
+                    approach = Vector3.Distance(last, seamPos);
+                    reachable = status == NavMeshPathStatus.PathComplete
+                                && approach <= seam.ProximityRadius + SeamReachMargin;
+                }
+
+                bool sameScene = string.Equals(seam.gameObject.scene.name, heroScene, StringComparison.Ordinal);
+
+                // Classify: what (if anything) is wrong with this seam this tick.
+                //  - off-mesh seam            = defect anywhere
+                //  - on-mesh but unreachable  = defect ONLY within the hero's own scene
+                //                               (cross-scene = warp boundary, expected)
+                string problem = null;
+                if (!seamOnMesh) problem = "offmesh";
+                else if (!reachable && sameScene) problem = "unreach";
+
+                if (problem == null)
+                {
+                    // Good (or a cross-scene warp seam) — clear any accrued strikes.
+                    _seamStrikes.Remove(id);
+                    continue;
+                }
+
+                // Two-strike confirm so a transient first read never files a false ticket.
+                if (_seamReported.Contains(id)) continue;
+                _seamStrikes.TryGetValue(id, out int n);
+                n++;
+                _seamStrikes[id] = n;
+                if (n < SeamStrikesToFail) continue;
+                _seamReported.Add(id);
+
+                if (problem == "offmesh")
+                    FlowTrace.Fail(Tag, $"SEAM-OFF-MESH: '{seam.gameObject.name}' in '{seam.gameObject.scene.name}' at {seamPos} " +
+                        $"is not within {SeamSampleTol}m of any baked navmesh — the hero can never walk up to it; the seam can't fire.");
+                else
+                    FlowTrace.Fail(Tag, $"SEAM-UNREACHABLE: '{seam.gameObject.name}' in '{seam.gameObject.scene.name}' — the hero cannot walk to it " +
+                        $"(path={status}, closest {approach:0.0}m vs ProximityRadius {seam.ProximityRadius:0.0}m). Bake gap or blocker between the hero and the seam; the crossing never fires.");
+            }
         }
     }
 }
