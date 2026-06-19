@@ -35,6 +35,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using DeNelle.Core.Diagnostics;   // TGVRU: instrument the group-spawn pool seam (§12)
 
 namespace DeNelle.Village
 {
@@ -151,7 +152,16 @@ namespace DeNelle.Village
 
                     Enemy enemy = EnemyPool.Get("prefab:" + entry.Prefab.name,
                                                 prefabEnemy, null, pos, rot, enemyRoot);
-                    if (enemy == null) continue;
+                    if (enemy == null)
+                    {
+                        // R(eturn-fallback never silent): the pool gave back no body — this group
+                        // member silently never spawns (the squad is short, the coordinator's count
+                        // is now off). Fail-loud naming the prefab so the gap self-reports.
+                        FlowTrace.Fail("Waves",
+                            $"SpawnGroup: EnemyPool.Get returned null for prefab '{entry.Prefab.name}' " +
+                            $"in group '{group.GroupName}' (wave {waveId}) — member NOT spawned.");
+                        continue;
+                    }
                     var go = enemy.gameObject;
 
                     string instanceId = $"grp-w{waveId}-{entry.Role}-{instanceCounter++}";
@@ -259,7 +269,15 @@ namespace DeNelle.Village
                     // still the fresh-build path inside the pool). Keyed by model id.
                     Enemy enemy = EnemyPool.Get("model:" + EnemyFactory.ModelForEnemy(member.Def),
                                                 null, member.Def, pos, rot, enemyRoot);
-                    if (enemy == null) continue;
+                    if (enemy == null)
+                    {
+                        // R(eturn-fallback never silent): no body for this composed member — the
+                        // role-mix squad is short one unit and the coordinator count drifts. Fail-loud.
+                        FlowTrace.Fail("Waves",
+                            $"SpawnComposedGroup: EnemyPool.Get returned null for def '{member.Def?.Id ?? "<null>"}' " +
+                            $"(model '{EnemyFactory.ModelForEnemy(member.Def)}') in group '{groupLabel}' (wave {waveId}) — member NOT spawned.");
+                        continue;
+                    }
 
                     string instanceId = $"grp-w{waveId}-{member.Role}-{instanceCounter++}";
                     enemy.Configure(instanceId, member.Def, heart);   // REAL stats from the def

@@ -24,6 +24,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using DeNelle.Core.Catalog;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;   // TGVRU: instrument the base-layout spawn seam (§12)
 
 namespace DeNelle.Village
 {
@@ -156,7 +157,17 @@ namespace DeNelle.Village
             {
                 if (Spawn(layout[i], grid) != null) built++;
             }
-            Debug.Log($"[BaseLayoutLoader] Loaded {built}/{layout.Count} placed structure(s) from BaseLayout.");
+            // U + R: a PARTIAL base (built < count) means some of the player's persisted buildings
+            // silently vanished on load — the worst kind of "my base is wrong" bug. Warn (not a
+            // happy Log) when any record failed so the shortfall self-reports; each failing record
+            // already Fail'd in Spawn with its id.
+            if (built < layout.Count)
+                FlowTrace.Warn("BaseLayout",
+                    $"Rebuild: loaded only {built}/{layout.Count} placed structure(s) — " +
+                    $"{layout.Count - built} record(s) FAILED to spawn (see prior FAILED lines for ids).");
+            else
+                FlowTrace.Step("BaseLayout",
+                    $"Rebuild: loaded {built}/{layout.Count} placed structure(s) from BaseLayout.");
         }
 
         /// <summary>
@@ -170,7 +181,10 @@ namespace DeNelle.Village
             var entry = CatalogRegistry.Get(data.itemId);
             if (entry == null)
             {
-                Debug.LogWarning($"[BaseLayoutLoader] BaseLayout id '{data.itemId}' not in registry — skipped.");
+                // U + R: a stale/renamed id drops one of the player's buildings on load. Fail-loud
+                // naming the id (skip-not-abort: the rest of the layout still builds).
+                FlowTrace.Fail("BaseLayout",
+                    $"Spawn: BaseLayout id '{data.itemId}' not in registry — structure skipped (one building lost).");
                 return null;
             }
 
@@ -178,8 +192,21 @@ namespace DeNelle.Village
             Vector3 pos = grid.CellToWorld(cell);
             var rot = Quaternion.Euler(0f, data.yawSteps * 90f + data.yawOffset, 0f);
 
-            var go = StructureFactory.Create(entry, new Pose(pos, rot), Root);
-            if (go == null) return null;
+            GameObject go = null;
+            // G(uard the Build): StructureFactory.Create can throw on a corrupt/missing prefab;
+            // an unguarded throw aborts the whole Rebuild loop (every LATER building is lost).
+            Guard.Try("BaseLayout", $"StructureFactory.Create '{data.itemId}'",
+                () => go = StructureFactory.Create(entry, new Pose(pos, rot), Root));
+            if (go == null)
+            {
+                // THE WORST SEAM (was a fully-silent `if (go == null) return null;`): the factory
+                // produced no body for a VALID catalog entry — the player's building vanishes with
+                // zero diagnostics. Fail-loud naming the entry id so the dead build self-reports.
+                FlowTrace.Fail("BaseLayout",
+                    $"Spawn: StructureFactory.Create returned null for entry '{data.itemId}' at cell ({cell.x},{cell.y}) — " +
+                    "structure NOT built (one building lost; check the entry's prefabPath).");
+                return null;
+            }
 
             // FIX (footprint from CORRECTED bounds) — measure the UPRIGHT, OrientationFix-
             // applied mesh so the footprint matches what the ghost showed (a lying-down

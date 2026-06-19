@@ -166,7 +166,16 @@ namespace DeNelle.Village
                     // handed out where an orc/troll was asked for.
                     Enemy enemy = EnemyPool.Get("model:" + EnemyFactory.ModelForEnemy(def),
                                                 null, def, pos, rot, enemyRoot);
-                    if (enemy == null) continue;
+                    if (enemy == null)
+                    {
+                        // R(eturn-fallback never silent): the pool gave back no body — this slot's
+                        // enemy silently never spawns, so the smart wave is short one unit. Warn
+                        // naming the def/model so the gap self-reports (skip-not-abort: rest spawn).
+                        FlowTrace.Warn("Enemy",
+                            $"SpawnWave: EnemyPool.Get returned null for def '{def?.Id ?? "<null>"}' " +
+                            $"(model '{slotModel}') gate '{gate.SpawnId}' wave {waveId} — slot enemy NOT spawned.");
+                        continue;
+                    }
 
                     // ROOT-CAUSE TRACE: the actual GameObject that landed, once per model.
                     FlowTrace.Once("Enemy", $"first-spawn-{slotModel}",

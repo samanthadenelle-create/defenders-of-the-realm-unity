@@ -113,13 +113,28 @@ namespace DeNelle.Village
         // Built under this (DontDestroyOnLoad) pool so bodies survive scene loads.
         private GameObject CreateNew(GameObject prefab, bool prepared)
         {
-            var go = Object.Instantiate(prefab, transform);
-            go.transform.localPosition = Vector3.zero;
-            go.transform.localRotation = Quaternion.identity;
+            // G(uard the Instantiate): mirrors the 3 sibling pools (MoverProjectilePool /
+            // ProjectilePool). The Instantiate + prepare-fixup can throw on a corrupt prefab; a
+            // half-built body returned to the queue NREs on the next lease. Build under Try and
+            // Fail-loud on null so a missing burst self-reports instead of silently doing nothing.
+            GameObject go = null;
+            FlowTrace.Try("ImpactFX", $"CreateNew '{prefab.name}'", () =>
+            {
+                go = Object.Instantiate(prefab, transform);
+                go.transform.localPosition = Vector3.zero;
+                go.transform.localRotation = Quaternion.identity;
 
-            // Catalog impact prefabs ship demo physics/scripts + built-in particle shaders;
-            // strip + URP-remap once. A self-contained ProjectileMover.ImpactFX is left as-is.
-            if (!prepared) ProjectileVFXCatalog.PreparePooledInstance(go);
+                // Catalog impact prefabs ship demo physics/scripts + built-in particle shaders;
+                // strip + URP-remap once. A self-contained ProjectileMover.ImpactFX is left as-is.
+                if (!prepared) ProjectileVFXCatalog.PreparePooledInstance(go);
+            });
+
+            if (go == null)
+            {
+                FlowTrace.Fail("ImpactFX",
+                    $"CreateNew('{prefab.name}') returned null — impact body failed to build (see prior FAILED line).");
+                return null;
+            }
 
             _sourceOf[go] = prefab;
             go.SetActive(false);

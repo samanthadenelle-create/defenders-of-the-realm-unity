@@ -1256,13 +1256,17 @@ namespace DeNelle.Village
                 _apexBossPrefab = Resources.Load<DragonBoss>("Enemies/Boss_Dragon");
                 if (_apexBossPrefab == null)
                 {
-                    Debug.LogError(
-                        "[WaveManager] Apex wave has no _apexBossPrefab AND no " +
+                    // U(pgrade Debug->FlowTrace.Fail): the apex wave has no boss to spawn — the
+                    // wave's headline threat silently never appears. Fail-loud so a capture knows
+                    // the dragon was asked for and the prefab couldn't be resolved.
+                    FlowTrace.Fail("Waves",
+                        "SpawnApexBoss: Apex wave has no _apexBossPrefab AND no " +
                         "Resources/Enemies/Boss_Dragon fallback — no dragon will spawn.");
                     return;
                 }
-                Debug.Log("[WaveManager] _apexBossPrefab was null (stale scene) — using the " +
-                          "Resources/Enemies/Boss_Dragon fallback so the apex dragon flies.");
+                FlowTrace.Warn("Waves",
+                    "SpawnApexBoss: _apexBossPrefab was null (stale scene) — using the " +
+                    "Resources/Enemies/Boss_Dragon fallback so the apex dragon flies.");
             }
 
             // Spawn the dragon at cruise height above the Heart so it begins its
@@ -1271,7 +1275,21 @@ namespace DeNelle.Village
             Vector3 spawnPos = (heartT != null ? heartT.position : transform.position)
                                + new Vector3(0f, 22f, 0f);
 
-            DragonBoss dragon = Instantiate(_apexBossPrefab, spawnPos, Quaternion.identity, _enemyRoot);
+            // G(uard the Instantiate): the prefab instantiation can throw on a corrupt/missing
+            // asset; an unguarded throw here aborts the whole wave-start coroutine (every later
+            // batch is lost). Build under Guard.Try, then NULL-CHECK the result before any deref.
+            DragonBoss dragon = null;
+            Guard.Try("Waves", "instantiate apex dragon",
+                () => dragon = Instantiate(_apexBossPrefab, spawnPos, Quaternion.identity, _enemyRoot));
+            if (dragon == null)
+            {
+                // R(eturn-fallback never silent): no boss body — the wave continues (its batches
+                // still clear) but the apex threat is missing. Fail-loud so it self-reports.
+                FlowTrace.Fail("Waves",
+                    $"SpawnApexBoss: Instantiate returned null for the apex dragon (wave {_currentWaveId}) — " +
+                    "no boss this wave (batches still run so the loop never stalls).");
+                return;
+            }
 
             string bossId = !string.IsNullOrEmpty(boss.Id)
                 ? boss.Id
@@ -1282,8 +1300,8 @@ namespace DeNelle.Village
             _liveApexBoss = dragon;
             OnApexBossSpawned.Invoke(dragon);
 
-            Debug.Log(
-                $"[WaveManager] Apex wave {_currentWaveId} — released flying boss '{bossId}' " +
+            FlowTrace.Step("Waves",
+                $"SpawnApexBoss: Apex wave {_currentWaveId} — released flying boss '{bossId}' " +
                 $"(maxHp {(boss.Hp > 0f ? boss.Hp.ToString() : "prefab default")}).");
         }
 
@@ -1297,16 +1315,19 @@ namespace DeNelle.Village
             EnemyDef def = _enemyCatalog.Find(batch.Type);
             if (def == null)
             {
-                Debug.LogError($"[WaveManager] Wave batch references unknown enemy '{batch.Type}'.");
+                // U + R: an unknown enemy type means this WHOLE batch never spawns — silent under
+                // a bare LogError. Fail-loud so the missing batch self-reports in a capture.
+                FlowTrace.Fail("Waves",
+                    $"SpawnBatch: wave batch references unknown enemy '{batch.Type}' — batch skipped (0 spawned).");
                 return;
             }
 
             WaveSpawnPoint point = FindSpawnPoint(batch.SpawnPoint);
             if (point == null)
             {
-                Debug.LogError(
-                    $"[WaveManager] No WaveSpawnPoint '{batch.SpawnPoint}' in the scene — " +
-                    "batch skipped. Place the spawn markers (see docs/port-notes/week4-waves.md).");
+                FlowTrace.Fail("Waves",
+                    $"SpawnBatch: no WaveSpawnPoint '{batch.SpawnPoint}' in the scene — " +
+                    "batch skipped (0 spawned). Place the spawn markers (see docs/port-notes/week4-waves.md).");
                 return;
             }
 
@@ -1389,7 +1410,24 @@ namespace DeNelle.Village
             bool useFactory = !string.IsNullOrEmpty(model);
             string poolKey = useFactory ? "model:" + model : "prefab:" + _enemyPrefab.name;
             Enemy enemy = EnemyPool.Get(poolKey, useFactory ? null : _enemyPrefab, def, pos, rot, _enemyRoot);
-            if (enemy == null) return;
+            if (enemy == null)
+            {
+                // R(eturn-fallback never silent): the pool couldn't lease/build a body for this
+                // def — the wave is now SHORT one enemy and the loop's clear-count can never be
+                // met (a silent stall). Fail-loud naming the def + pool key so a capture pinpoints
+                // which spawn died instead of a blank "enemy never appeared".
+                FlowTrace.Fail("Waves",
+                    $"SpawnOne: EnemyPool.Get returned null for def '{def?.Id ?? "<null>"}' (poolKey='{poolKey}', " +
+                    $"useFactory={useFactory}, model='{model}') — enemy NOT spawned; wave is short one body.");
+                return;
+            }
+
+            // V(erify the spawned enemy actually RENDERS + is ON the NavMesh): a leased body with
+            // no enabled renderer is an invisible enemy; an off-mesh NavMeshAgent never moves
+            // (isOnNavMesh==false) and so never reaches the Heart — the wave then stalls with a
+            // live-but-frozen enemy. Both are Warn (skip-not-abort: the enemy still counts toward
+            // the wave + can still be configured) so a capture splits "invisible" vs "stranded".
+            VerifySpawnedEnemy(enemy, def, pos);
 
             // The hero/pet target sweeps find enemies via GetComponentInParent<IDamageable>,
             // which resolves to EnemyDamageable. The placeholder capsule (and some prefabs)
@@ -1415,6 +1453,40 @@ namespace DeNelle.Village
             enemy.Died += HandleEnemyDied;
             enemy.ReachedHeart += HandleEnemyReachedHeart;
             _liveEnemies.Add(enemy);
+        }
+
+        /// <summary>
+        /// V(erify) a just-spawned wave enemy can actually be SEEN and can MOVE: it must carry
+        /// at least one enabled Renderer (else it's invisible) and, if it drives a NavMeshAgent,
+        /// that agent must be on the NavMesh (else it's stranded and never reaches the Heart —
+        /// the wave silently stalls). Anomalies are Warn'd (skip-not-abort) so a capture pinpoints
+        /// the broken spawn; the enemy is left live (it still counts toward the wave).
+        /// </summary>
+        private void VerifySpawnedEnemy(Enemy enemy, EnemyDef def, Vector3 pos)
+        {
+            if (enemy == null) return;
+
+            int total = 0, enabledR = 0;
+            var renderers = enemy.GetComponentsInChildren<Renderer>(true);
+            if (renderers != null)
+            {
+                foreach (var r in renderers)
+                {
+                    if (r == null) continue;
+                    total++;
+                    if (r.enabled) enabledR++;
+                }
+            }
+            if (enabledR == 0)
+                FlowTrace.Warn("Waves",
+                    $"VerifySpawnedEnemy: enemy '{def?.Id ?? "<null>"}' on '{enemy.gameObject.name}' has " +
+                    $"NO enabled Renderer ({total} found) — it will spawn INVISIBLE.");
+
+            var agent = enemy.GetComponentInChildren<UnityEngine.AI.NavMeshAgent>();
+            if (agent != null && agent.enabled && !agent.isOnNavMesh)
+                FlowTrace.Warn("Waves",
+                    $"VerifySpawnedEnemy: enemy '{def?.Id ?? "<null>"}' on '{enemy.gameObject.name}' is OFF the NavMesh " +
+                    $"at {pos} (agent.isOnNavMesh==false) — it will NOT move toward the Heart; wave may stall.");
         }
 
         /// <summary>

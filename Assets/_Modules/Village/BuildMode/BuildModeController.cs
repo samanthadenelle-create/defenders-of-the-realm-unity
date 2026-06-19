@@ -25,6 +25,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Catalog;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;   // TGVRU: instrument the place-spawn seam (§12)
 
 namespace DeNelle.Village
 {
@@ -730,9 +731,23 @@ namespace DeNelle.Village
             var ps = loader.Spawn(data, _grid);
             if (ps == null)
             {
-                Debug.LogWarning($"[BuildMode] Placement of '{_armed.id}' failed to spawn — not charged.");
+                // U + R: the placement produced no structure — the player tapped to build and
+                // nothing appeared. Fail-loud (not a swallowed Warn) so the dead placement seam
+                // self-reports the entry id; we correctly DON'T charge.
+                FlowTrace.Fail("BuildMode",
+                    $"Place: BaseLayoutLoader.Spawn returned null for '{_armed.id}' at cell ({cell.x},{cell.y}) — " +
+                    "structure NOT placed, player NOT charged.");
                 return;
             }
+
+            // V(erify the placed structure renders): a spawned-but-invisible structure reads as a
+            // failed build to the player even though we charged + occupied the grid. Warn (skip-not-
+            // abort: the placement is committed) if it carries no enabled Renderer, so a capture
+            // splits "didn't spawn" (the Fail above) from "spawned invisible".
+            if (ps.GetComponentInChildren<Renderer>(true) == null)
+                FlowTrace.Warn("BuildMode",
+                    $"Place: placed structure '{_armed.id}' at cell ({cell.x},{cell.y}) has NO Renderer — " +
+                    "it will be INVISIBLE (placement committed; check the StructureFactory prefab).");
 
             // Charge ONLY AFTER the committed valid placement (WO-131): the persisted
             // multi-resource ledger (EconomyService → GameState-backed Crystals/Food +
