@@ -31,6 +31,7 @@ indexed separately in `../PROJECT_INDEX.md`.
 - `ANIMATION_PIPELINE.md` — **canonical animation method** (Shared + per-type, Humanoid retarget; all current/future models)
 - `unity-decisions.md`, `UNITY_BEST_PRACTICES_AUDIT.md`
 - `INSTRUMENTATION_STANDARD.md` — how new code is written observable-first (FlowTrace/Guard/regression authoring standard; the *method* that operationalizes `CLAUDE.md §12`)
+- `DEBUGGER_TOOLKIT_DESIGN.md` — the debugger/diagnostics toolkit as it ACTUALLY exists (FlowTrace/Guard/BreakCaptureHarness + the AutoPilotProbes fleet oracles + TGVRU); reconciled 2026-06-19, supersedes the old DebugProbe/hotkey design
 
 ## Game design specs
 
