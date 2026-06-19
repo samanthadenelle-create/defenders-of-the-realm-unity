@@ -159,6 +159,20 @@ namespace DeNelle.Village
         private bool _telegraphing;   // DEF-48: true during wind-up — blocks double-trigger
         private IDamageableStructure _currentTarget;
 
+        // ── Smooth target/attack facing (anti-snap) ──────────────────────────
+        // The old target-facing did `transform.rotation = LookRotation(toTarget)`
+        // ONCE per shot/attack — an instant snap that read as the Wights jerking
+        // left/right. We instead record a desired (Y-flattened) facing direction
+        // here and slerp the root toward it every frame in TickFacing(), exactly
+        // mirroring the path-facing slerp (~691). Upright/Y-only is preserved by
+        // flattening the direction before building the LookRotation, so the enemy
+        // never tips. Turn rate is tunable: a Slerp factor that reads natural for
+        // a ground unit pivoting to face. (Velocity path-facing still drives while
+        // moving; this fills in when the agent is stopped to attack.)
+        private bool _hasFaceTarget;
+        private Vector3 _faceTargetDir = Vector3.forward;
+        private const float FaceTurnSlerp = 9f; // deg-rate feel ~matches 691's 10f
+
         private ActorAnimator _actor; // guarded driver (Core) for Speed/Attack/Hit/Dead on the visual child controller
 
         // ── DEF-21 / DEF-72: EnemyBrain nav-target override ──────────────────
@@ -609,7 +623,59 @@ namespace DeNelle.Village
 
             TickContactAttack();
             DriveNav();
+            TickFacing();
             DriveAnimator();
+        }
+
+        // ---------------------------------------------------------------------
+        // Facing — smooth pivot toward a requested target direction (anti-snap)
+        // ---------------------------------------------------------------------
+
+        /// <summary>
+        /// Records a desired facing direction for the smooth pivot. The vector is
+        /// Y-flattened so the enemy turns upright only (never tips). Replaces the
+        /// old instant <c>transform.rotation = LookRotation(...)</c> snap used by
+        /// the target/attack facing — call this instead; the actual rotation is
+        /// integrated frame-by-frame in <see cref="TickFacing"/>.
+        /// </summary>
+        private void RequestFacing(Vector3 worldDir)
+        {
+            worldDir.y = 0f;
+            if (worldDir.sqrMagnitude <= 0.0001f) return;
+            _faceTargetDir = worldDir.normalized;
+            _hasFaceTarget = true;
+        }
+
+        /// <summary>
+        /// Slerps the root toward the requested facing direction each frame, at a
+        /// natural ground-unit turn rate. Only drives when the agent is effectively
+        /// stopped — while moving, the velocity path-facing (DriveNav, ~707) owns
+        /// rotation and following travel is correct. Y-only/upright is guaranteed
+        /// because <see cref="RequestFacing"/> flattens the direction. Observable via
+        /// a throttled FlowTrace (~1/sec).
+        /// </summary>
+        private void TickFacing()
+        {
+            if (!_hasFaceTarget || _dead) return;
+
+            // While the agent is genuinely moving, velocity-facing drives — defer.
+            if (_agent != null && _agent.isOnNavMesh)
+            {
+                Vector3 v = _agent.velocity; v.y = 0f;
+                if (v.sqrMagnitude > 0.1f * 0.1f) return;
+            }
+
+            Quaternion face = Quaternion.LookRotation(_faceTargetDir, Vector3.up);
+            transform.rotation = Quaternion.Slerp(
+                transform.rotation, face, FaceTurnSlerp * Time.deltaTime);
+
+            float deg = Quaternion.Angle(transform.rotation, face);
+            DeNelle.Core.Diagnostics.FlowTrace.Throttle(
+                "EnemyFacing", $"turn-{_enemyId}", 1f,
+                $"smooth-pivot id={_enemyId} remaining={deg:0.0}deg rate={FaceTurnSlerp}");
+
+            // Settled — stop re-slerping a tiny residual (avoids endless micro-turn).
+            if (deg < 0.5f) _hasFaceTarget = false;
         }
 
         // ---------------------------------------------------------------------
@@ -989,6 +1055,15 @@ namespace DeNelle.Village
         private void ExecuteContactAttack()
         {
             if (_currentTarget == null || !_currentTarget.IsAlive) return;
+
+            // Smooth pivot to face the struck target so the melee read is correct
+            // (anti-snap: request the facing; TickFacing slerps over frames). The
+            // contact path runs while the agent is stopped, so velocity-facing is
+            // silent and this is the only facing driver — but it turns, never snaps.
+            var targetMb = _currentTarget as MonoBehaviour;
+            if (targetMb != null)
+                RequestFacing(targetMb.transform.position - transform.position);
+
             _currentTarget.ApplyContactDamage(_contactDamage);
             if (_animator != null && _hasAttackParam) _animator.SetTrigger(AnimAttack);
             PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
@@ -1017,9 +1092,11 @@ namespace DeNelle.Village
             structure.ApplyContactDamage(damage);
 
             // Face the target so the shot reads, then play the attack pose (null-safe).
+            // Smooth pivot (anti-snap): request the facing; TickFacing slerps the root
+            // toward it over frames instead of the old instant LookRotation snap.
             Vector3 toTarget = target.position - transform.position; toTarget.y = 0f;
             if (toTarget.sqrMagnitude > 0.001f)
-                transform.rotation = Quaternion.LookRotation(toTarget);
+                RequestFacing(toTarget);
             if (_animator != null && _hasAttackParam) _animator.SetTrigger(AnimAttack);
             PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
             return true;

@@ -28,6 +28,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -109,28 +110,32 @@ namespace DeNelle.Village
             if (_bow != null) return;
             if (_animator == null) return;
 
+            using var _ = FlowTrace.Enter("Equip", $"HeroBowAttachment.TryAttach on '{name}'");
+
             if (!_animator.isHuman)
             {
-                Debug.LogWarning("[HeroBowAttachment] Hero Animator is not Humanoid — " +
-                                 "cannot resolve the LeftHand bone for the bow. Skipping (cosmetic only).");
-                enabled = false;
+                // Not Humanoid yet (rig still rebinding) OR a generic avatar. Update()'s retry
+                // re-calls this; only the retry-exhausted state is a real miss. NOT a hard fail.
+                FlowTrace.Warn("Equip", "bow: Animator not Humanoid yet — will retry (cosmetic only)");
                 return;
             }
 
-            Transform leftHand = _animator.GetBoneTransform(HumanBodyBones.LeftHand);
+            Transform leftHand = FlowTrace.Try("Equip", "GetBoneTransform(LeftHand)",
+                () => _animator.GetBoneTransform(HumanBodyBones.LeftHand), null);
             if (leftHand == null)
             {
-                Debug.LogWarning("[HeroBowAttachment] Humanoid rig has no LeftHand bone mapped — " +
-                                 "bow not attached (cosmetic only, no crash).");
+                FlowTrace.Fail("Equip", $"bow: Humanoid rig on '{name}' has NO LeftHand bone — " +
+                    "bow NOT attached (this is the null-bone cause if it fires).");
                 enabled = false;
                 return;
             }
+            FlowTrace.Step("Equip", $"bow: LeftHand bone resolved -> '{leftHand.name}'");
 
             GameObject prop = LoadBowPrefab();
-            if (prop == null) prop = BuildProceduralBow();
+            if (prop == null) { FlowTrace.Warn("Equip", "bow: Resources prefab absent -> procedural fallback"); prop = BuildProceduralBow(); }
             if (prop == null)
             {
-                Debug.LogWarning("[HeroBowAttachment] Could not load or build a bow prop — none attached.");
+                FlowTrace.Fail("Equip", "bow: could not load OR build a bow prop — none attached.");
                 enabled = false;
                 return;
             }
@@ -150,8 +155,8 @@ namespace DeNelle.Village
             bowRoot.transform.localRotation = Quaternion.Euler(GripLocalEuler);
 
             _bow = bowRoot;
-            Debug.Log("[HeroBowAttachment] Bow attached + auto-oriented (long axis vertical, narrow X, " +
-                      "grip-centred) to LeftHand bone '" + leftHand.name + "'.");
+            FlowTrace.Step("Equip", $"bow ATTACHED + auto-oriented to LeftHand '{leftHand.name}' " +
+                $"(pos={GripLocalPosition} euler={GripLocalEuler})");
             enabled = false;
         }
 

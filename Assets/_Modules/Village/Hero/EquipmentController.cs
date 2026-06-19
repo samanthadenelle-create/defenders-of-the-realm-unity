@@ -321,15 +321,60 @@ namespace DeNelle.Village
 
         private void OnEnable()
         {
-            if (_loadout == null) _loadout = GetComponent<GearLoadout>();
-            if (_loadout != null) _loadout.OnGearChanged += HandleGearChanged;
+            // ORDER-INDEPENDENT SUBSCRIBE (BUG 1 fix): on the COMPANION body, BuildPlaceholder
+            // adds the EquipmentController BEFORE the GearLoadout (the hero swapper does the
+            // reverse). If we only ever subscribed here, a controller added first would resolve
+            // _loadout == null, NEVER subscribe, and silently miss the BindOwnerClass->Refresh->
+            // OnGearChanged that carries the companion's bow — so its weapon never attached.
+            // EnsureLoadoutSubscribed re-resolves + (re)subscribes idempotently, and Update()
+            // below keeps retrying until the loadout (and the Humanoid rig) come online.
+            EnsureLoadoutSubscribed();
             // Auto-read the equipped weapon on enable (the same data the cube path uses).
             EquipBestForHero();
         }
 
+        // Idempotent: resolve the GearLoadout (it may be added AFTER this controller on the
+        // companion) and subscribe exactly once. Returns true when subscribed to a live loadout.
+        private bool _subscribed;
+        private bool EnsureLoadoutSubscribed()
+        {
+            if (_loadout == null) _loadout = GetComponent<GearLoadout>();
+            if (_loadout != null && !_subscribed)
+            {
+                _loadout.OnGearChanged += HandleGearChanged;
+                _subscribed = true;
+                FlowTrace.Step("Equip", $"subscribed to GearLoadout.OnGearChanged on '{name}'");
+            }
+            return _subscribed;
+        }
+
+        // RIG-READINESS RETRY (BUG 1 fix): the companion's Animator finishes Humanoid Rebind a
+        // few frames AFTER BuildPlaceholder fires BindOwnerClass, so the first EquipBestForHero
+        // sees !isHuman / null hand bones and skips (exactly why the archer's bow never showed).
+        // Mirror HeroBowAttachment's short retry: poll until the loadout is subscribed AND the
+        // weapon prop is up, then stop. Cheap, self-terminating; off once equipped.
+        private int _attachRetries;
+        private void LateAttachRetry()
+        {
+            if (_attachRetries > 180) return;            // ~3s @60fps then give up quietly
+            bool nowSubscribed = EnsureLoadoutSubscribed();
+            CacheRig();
+            bool rigReady = _animator != null && _animator.isHuman;
+            bool needWeapon = _loadout != null && _loadout.EquippedWeapon != null && _currentWeaponProp == null;
+            bool needOffHand = _loadout != null && _loadout.EquippedOffHand != null && _currentOffHandProp == null;
+            if (nowSubscribed && rigReady && (needWeapon || needOffHand))
+            {
+                FlowTrace.Step("Equip", $"LateAttachRetry firing on '{name}' " +
+                    $"(rigReady={rigReady} needWeapon={needWeapon} needOffHand={needOffHand} retry={_attachRetries})");
+                EquipBestForHero();
+            }
+            _attachRetries++;
+        }
+
         private void OnDisable()
         {
-            if (_loadout != null) _loadout.OnGearChanged -= HandleGearChanged;
+            if (_loadout != null && _subscribed) _loadout.OnGearChanged -= HandleGearChanged;
+            _subscribed = false;
             // Release any open Addressables weapon handle so a Blink prefab never leaks
             // when the hero is disabled/destroyed (the load may even still be in flight).
             ReleaseWeaponHandle();
@@ -383,10 +428,16 @@ namespace DeNelle.Village
         {
             if (string.IsNullOrEmpty(weaponId) && def != null) weaponId = def.id;
 
+            string ownerName = name;
+            using var _ = FlowTrace.Enter("Equip", $"attach '{weaponId ?? "<null>"}' to '{ownerName}'");
+
             // Idempotent: same weapon already shown -> nothing to do.
             if (string.Equals(_currentWeaponId, weaponId, System.StringComparison.OrdinalIgnoreCase)
                 && _currentWeaponProp != null)
+            {
+                FlowTrace.Step("Equip", $"idempotent — '{weaponId}' already shown; no-op");
                 return;
+            }
 
             // New equip request — invalidate any in-flight async load + drop the old prop/handle.
             _equipGeneration++;
@@ -394,47 +445,60 @@ namespace DeNelle.Village
             ReleaseWeaponHandle();
             _currentWeaponId = weaponId;
 
-            if (string.IsNullOrEmpty(weaponId)) return; // unequip
+            if (string.IsNullOrEmpty(weaponId)) { FlowTrace.Step("Equip", "empty id -> unequip"); return; } // unequip
 
             WeaponVisual vis = Resolve(weaponId);
-            if (vis == null) return;
+            if (vis == null) { FlowTrace.Fail("Equip", $"Resolve('{weaponId}') returned null — nothing to attach"); return; }
+            FlowTrace.Step("Equip", $"resolved vis: mesh='{vis.mesh}' kind={vis.kind} leftHand={vis.leftHand} native={vis.native}");
 
             // The ranger's held bow is HeroBowAttachment's job — skip here to avoid two bows.
+            // NOTE: this only applies to the HERO (which carries HeroBowAttachment). A COMPANION
+            // archer has NO HeroBowAttachment, so _deferBowToBowAttachment is false and its bow is
+            // attached HERE — that is the path BUG 1 needed working (its bow now seats like the hero's).
             if (_deferBowToBowAttachment && vis.mesh != null && vis.mesh.StartsWith("bow"))
+            {
+                FlowTrace.Step("Equip", "bow deferred to HeroBowAttachment (hero owns the held bow) -> skip");
                 return;
+            }
 
             CacheRig();
             if (_animator == null || !_animator.isHuman)
             {
-                // Generic/invalid avatar: the hand bones won't resolve. Match the existing
-                // applier's choice — skip rather than dump geometry on the root.
+                // Generic/invalid avatar OR the Humanoid rig hasn't finished Rebind yet (companion
+                // attach-before-rebind). Skip now; Update()'s LateAttachRetry re-fires once the rig
+                // reports Humanoid (mirrors HeroBowAttachment's retry). NOT a hard fail.
+                FlowTrace.Warn("Equip", $"rig not Humanoid yet on '{ownerName}' " +
+                    $"(animator={(_animator != null ? "present,!isHuman" : "null")}) — deferring to LateAttachRetry");
                 return;
             }
 
-            Transform hand = _animator.GetBoneTransform(
-                vis.leftHand ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand);
+            HumanBodyBones boneId = vis.leftHand ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand;
+            Transform hand = FlowTrace.Try("Equip", $"GetBoneTransform({boneId})",
+                () => _animator.GetBoneTransform(boneId), null);
             if (hand == null)
             {
-                Debug.LogWarning($"[EquipmentController] Humanoid rig missing " +
-                                 $"{(vis.leftHand ? "LeftHand" : "RightHand")} bone — " +
-                                 $"weapon '{weaponId}' not attached (cosmetic only).");
+                // LOUD: a Humanoid rig with a missing hand bone is exactly why the companion bow
+                // would not show. Fail-level so it rolls up in the capture, not a quiet warning.
+                FlowTrace.Fail("Equip", $"Humanoid rig on '{ownerName}' has NO {boneId} bone — " +
+                    $"weapon '{weaponId}' NOT attached (this is the null-bone BUG 1 cause if it fires).");
                 return;
             }
+            FlowTrace.Step("Equip", $"hand bone resolved: {boneId} -> '{hand.name}'");
 
             // ── DATA-DRIVEN PREFAB RESOLUTION (WO-Item, Blink Addressables) ───────────
             // If the equipped def loads via Addressables (Blink gear: prefabPath is an
             // address like "gear/weapon/Sword1h_01"), load it async and attach on completion.
-            // Otherwise the EXISTING hardcoded Tripo/Resources map runs unchanged (byte-
-            // identical for the current ids). A Blink prefab is authored grip-at-origin +
-            // oriented → treat it as NATIVE (trust its pivot; skip the bounds/hilt reverse-engineer).
+            // Otherwise the EXISTING hardcoded Tripo/Resources map runs unchanged.
             if (LoadsViaAddressable(def))
             {
+                FlowTrace.Step("Equip", $"branch: ADDRESSABLE ('{def.prefabPath}')");
                 BeginAddressableEquip(def, vis, hand, weaponId, _equipGeneration);
                 return;
             }
 
+            FlowTrace.Step("Equip", $"branch: RESOURCES map (mesh='{vis.mesh}')");
             GameObject prop = LoadWeaponMesh(vis.mesh) ?? BuildFallbackPrimitive(vis);
-            if (prop == null) return;
+            if (prop == null) { FlowTrace.Fail("Equip", $"prop load+fallback both null for mesh '{vis.mesh}'"); return; }
 
             AttachLoadedProp(prop, vis, hand, weaponId);
         }
@@ -531,32 +595,44 @@ namespace DeNelle.Village
         // parents to the hand, and computes the rig-aware base grip rotation + hold pose.
         private void AttachLoadedProp(GameObject prop, WeaponVisual vis, Transform hand, string weaponId)
         {
+            using var _ = FlowTrace.Enter("Equip", $"AttachLoadedProp '{weaponId}' -> '{hand.name}' (native={vis.native} kind={vis.kind})");
             prop.name = PropName;
             // Cosmetic only — strip physics/colliders a prefab might carry.
             foreach (var c in prop.GetComponentsInChildren<Collider>(true)) if (c != null) Destroy(c);
             foreach (var rb in prop.GetComponentsInChildren<Rigidbody>(true)) if (rb != null) Destroy(rb);
 
-            // Seat via a grip root. NATIVE props (e.g. Blink) are authored grip-at-origin with a
-            // correct orientation — trust them: SeatNative scales to length but does NOT re-centre,
-            // so the grip stays at the hand (the handle, not mid-blade). NON-native props (legacy
-            // Tripo/KayKit) go through bounds-normalize + hilt-inference that reverse-engineers a grip.
+            // Seat via a grip root.
+            //  • BUG 2 FIX: a MELEE weapon NEVER trusts a "native" pivot. The Blink/Tripo sword
+            //    prefabs are tagged native (grip-at-origin), but their authored pivot is NOT actually
+            //    at the handle — so SeatNative left the hilt floating and the blade clipped the fist.
+            //    Per §4 (derive the grip from mesh bounds + name, do NOT trust a wrong pivot), every
+            //    melee weapon now runs the SAME proven KayKit path: NormalizeInto (bounds-orient,
+            //    longest->+Y) -> SeatByHandle (re-seat the HANDLE end at the origin) -> the rig-hand-
+            //    axis rotation (ComputeMeleeGripRotation, applied below). The hilt sits in the palm.
+            //  • NON-melee native props (none reach here today — bow/shield use their own paths) keep
+            //    SeatNative (trust the authored grip-at-origin). The `native` flag now only gates
+            //    NON-melee seating.
             var gripRoot = new GameObject(PropName);
-            if (vis.native)
+            bool meleeSeat = IsMelee(vis.kind);
+            if (vis.native && !meleeSeat)
             {
+                FlowTrace.Step("Equip", "seat: NATIVE (trust authored grip-at-origin, scale-only)");
                 SeatNative(prop, gripRoot.transform, vis.heldLength);
             }
             else
             {
+                if (vis.native && meleeSeat)
+                    FlowTrace.Step("Equip", "seat: MELEE override — native pivot NOT trusted (BUG 2 §4 derive)");
+                else
+                    FlowTrace.Step("Equip", "seat: NormalizeInto + (melee) SeatByHandle (derive grip from bounds)");
                 NormalizeInto(prop, gripRoot.transform, vis.heldLength);
                 // GRIP-POINT INFERENCE (WO-435 — generalized to ALL melee): NormalizeInto centres
                 // by BOUNDS (mid-shaft / mid-blade), not the grip. SeatByHandle re-seats so the
                 // HANDLE (the narrow end below the head/crossguard) sits at the origin and the
-                // head/blade points +Y. This was sword/dagger-only before; staff/axe/hammer/wand
-                // now run the SAME handle-from-geometry pass instead of relying on the bounds
-                // centre + a hand-typed Y nudge. The width-spike profile finds a staff's grip
-                // (or falls back to the narrower-tipped pommel end) exactly as it does for a sword.
-                if (IsMelee(vis.kind))
-                    SeatByHandle(prop, gripRoot.transform);
+                // head/blade points +Y. The width-spike profile finds a staff's grip (or falls back
+                // to the narrower-tipped pommel end) exactly as it does for a sword.
+                if (meleeSeat)
+                    FlowTrace.Try("Equip", "SeatByHandle", () => SeatByHandle(prop, gripRoot.transform));
             }
 
             gripRoot.transform.SetParent(hand, false);
@@ -580,14 +656,17 @@ namespace DeNelle.Village
             //    inherited the bone's local axes and read sideways across the body — this is the fix.
             //  • Bow/shield: keep the proven per-weapon gripEuler (already seated correctly by
             //    their own NormalizeInto + preset euler).
-            // NATIVE props trust their authored orientation → use the per-archetype gripEuler preset
-            // directly (tune that one value on playtest). Only the legacy normalize path needs the
-            // hand-axis-derived rotation.
-            if (!vis.native && IsMelee(vis.kind))
+            // BUG 2 FIX: ALL melee (native Blink swords included) now use the rig-hand-axis rotation,
+            // because melee is seated via the derived NormalizeInto+SeatByHandle path above (its
+            // primary axis is prop-local +Y) — NOT the authored native frame. Only NON-melee native
+            // props use their preset gripEuler directly.
+            if (IsMelee(vis.kind))
                 _baseGripRot = ComputeMeleeGripRotation(vis.kind);
             else
                 _baseGripRot = Quaternion.Euler(_baseGripEuler);
 
+            FlowTrace.Step("Equip", $"attached '{weaponId}' on '{name}': gripPos={vis.gripPos} " +
+                $"baseEuler={_baseGripRot.eulerAngles} kind={vis.kind} native={vis.native}");
             ApplyHoldPose();
         }
 
@@ -812,20 +891,28 @@ namespace DeNelle.Village
             if (vis == null || vis.kind != WeaponClass.Shield)
                 vis = Shield(vis != null && !string.IsNullOrEmpty(vis.mesh) ? vis.mesh : "shield_A");
 
-            CacheRig();
-            if (_animator == null || !_animator.isHuman) return;
+            using var _ = FlowTrace.Enter("Equip", $"attach off-hand '{id}' to '{name}'");
 
-            Transform hand = _animator.GetBoneTransform(HumanBodyBones.LeftHand);
+            CacheRig();
+            if (_animator == null || !_animator.isHuman)
+            {
+                FlowTrace.Warn("Equip", $"off-hand: rig not Humanoid yet on '{name}' — deferring to LateAttachRetry");
+                return;
+            }
+
+            Transform hand = FlowTrace.Try("Equip", "GetBoneTransform(LeftHand)",
+                () => _animator.GetBoneTransform(HumanBodyBones.LeftHand), null);
             if (hand == null)
             {
-                Debug.LogWarning("[EquipmentController] Humanoid rig missing LeftHand bone — " +
-                                 $"off-hand '{id}' not attached (cosmetic only).");
+                FlowTrace.Fail("Equip", $"Humanoid rig on '{name}' has NO LeftHand bone — " +
+                    $"off-hand '{id}' NOT attached.");
                 return;
             }
 
             GameObject prop = LoadWeaponMesh(vis.mesh) ?? BuildFallbackPrimitive(vis);
-            if (prop == null) return;
+            if (prop == null) { FlowTrace.Fail("Equip", $"off-hand prop null for mesh '{vis.mesh}'"); return; }
 
+            FlowTrace.Step("Equip", $"off-hand seated: id='{id}' mesh='{vis.mesh}' hand='{hand.name}'");
             AttachOffHandProp(prop, vis, hand, id);
         }
 
@@ -885,6 +972,10 @@ namespace DeNelle.Village
         // re-applies on a state change.
         private void Update()
         {
+            // BUG 1: keep retrying the equip until the loadout subscribed + the Humanoid rig is
+            // ready and the weapon/off-hand prop is actually up (companion attach-after-rebind).
+            LateAttachRetry();
+
             if (_combatExplicit || _gripRoot == null) return;
             if (_waveManager == null) _waveManager = Object.FindObjectOfType<WaveManager>();
             bool active = _waveManager != null &&

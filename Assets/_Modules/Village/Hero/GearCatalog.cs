@@ -173,6 +173,11 @@ namespace DeNelle.Village
         public string prefabPath;
         public string iconPath;
 
+        // WO-Item (Addressables): HOW prefabPath loads (mirrors WeaponDef.loadVia). The Blink
+        // generator stamps "addressable" on every Blink armor row (prefabPath = a "gear/armor/.."
+        // Addressables key); null/"resources" => a Resources path. HeroArmorVisual reads this.
+        public string loadVia;
+
         // WO-Item-1: OPTIONAL explicit capability override from JSON (null when absent).
         public ItemCapability? capabilities;
 

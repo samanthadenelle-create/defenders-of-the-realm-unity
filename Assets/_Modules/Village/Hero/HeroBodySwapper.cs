@@ -213,6 +213,15 @@ namespace DeNelle.Village
             equipLoadout.Refresh();
             if (GetComponent<EquipmentController>() == null)
                 gameObject.AddComponent<EquipmentController>();
+            // ARMOR RENDER (HeroArmorVisual): show EQUIPPED Blink armor on the BODY by swapping
+            // in the full-body armored skinned-mesh and humanoid-retargeting it to THIS hero's
+            // animator (hiding the base "HeroBody" while armored, restoring it on unequip). It
+            // subscribes to GearLoadout.OnGearChanged and reflects the current EquippedArmor on
+            // enable, so the body lights up the moment armor is equipped. Added on the same root
+            // as GearLoadout/EquipmentController; [DisallowMultipleComponent] guards a re-run.
+            // (The Mage/default body skips the swap above and is registered by HeroControlEnsurer.)
+            if (GetComponent<HeroArmorVisual>() == null)
+                gameObject.AddComponent<HeroArmorVisual>();
 
             if (controller != null)
             {

@@ -466,6 +466,13 @@ namespace DeNelle.Village
                 go.AddComponent<EquipmentController>();
                 var loadout = go.AddComponent<GearLoadout>();
                 loadout.BindOwnerClass(hero.ToString().ToLowerInvariant());
+                // ARMOR RENDER (HeroArmorVisual): show the companion's EQUIPPED Blink armor on its
+                // body — swap in the full-body armored skinned-mesh + humanoid-retarget it to the
+                // companion's animator, hiding the base body while armored (restored on unequip).
+                // Added LAST (after GearLoadout exists + BindOwnerClass ran) so its OnEnable resolves
+                // a live GearLoadout, subscribes to OnGearChanged, and immediately reflects the
+                // already-equipped armor. Self-guards: no humanoid body => keeps the base (no naked).
+                go.AddComponent<HeroArmorVisual>();
             }
             return go;
         }
