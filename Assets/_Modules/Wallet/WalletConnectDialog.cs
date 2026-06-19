@@ -23,6 +23,7 @@ using System;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UIElements;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Wallet
 {
@@ -110,14 +111,27 @@ namespace DeNelle.Wallet
 
         private void BindElements()
         {
+            using var _ = FlowTrace.Enter("WalletUI", "BindElements");
             var root = _document != null ? _document.rootVisualElement : null;
-            if (root == null) return;
+            if (root == null)
+            {
+                // Headless is a supported mode (the plain Connect()/Disconnect() API still works), so
+                // this is a Warn, not a Fail — but surface it so a "button does nothing" report has a trace.
+                FlowTrace.Warn("WalletUI", "BindElements: UIDocument root is null — dialog runs headless (no buttons bound).");
+                return;
+            }
 
             _connectButton = root.Q<Button>(ConnectButtonName);
             _disconnectButton = root.Q<Button>(DisconnectButtonName);
             _addressLabel = root.Q<Label>(AddressLabelName);
             _statusLabel = root.Q<Label>(StatusLabelName);
             _networkBadge = root.Q<Label>(NetworkBadgeName);
+
+            // V/U: a null Connect button means the player literally cannot start a connect from this UI —
+            // surface it (was a silent null). Other elements are display-only; Warn so a capture pinpoints.
+            if (_connectButton == null) FlowTrace.Warn("WalletUI", $"BindElements: connect button '{ConnectButtonName}' not found — player cannot connect from this dialog.");
+            if (_disconnectButton == null) FlowTrace.Warn("WalletUI", $"BindElements: disconnect button '{DisconnectButtonName}' not found.");
+            if (_statusLabel == null) FlowTrace.Warn("WalletUI", $"BindElements: status label '{StatusLabelName}' not found — connection state will be invisible.");
 
             if (_connectButton != null) _connectButton.clicked += OnConnectClicked;
             if (_disconnectButton != null) _disconnectButton.clicked += OnDisconnectClicked;
@@ -143,12 +157,24 @@ namespace DeNelle.Wallet
         /// </summary>
         public async UniTask<WalletAccount> Connect()
         {
-            if (_wallet == null) return default;
+            using var _ = FlowTrace.Enter("WalletUI", "Connect");
+            if (_wallet == null)
+            {
+                FlowTrace.Fail("WalletUI", "Connect: no WalletService — cannot connect.");
+                return default;
+            }
             if (_wallet.IsConnected) return _wallet.Account;
 
             var account = await _wallet.Connect();
             if (account.IsValid)
+            {
+                FlowTrace.Step("WalletUI", $"Connect OK — {account.ShortAddress}.");
                 Connected?.Invoke(account);
+            }
+            else
+            {
+                FlowTrace.Warn("WalletUI", "Connect: account invalid — cancelled/failed; dialog stays disconnected.");
+            }
             RefreshUi();
             return account;
         }
@@ -156,7 +182,12 @@ namespace DeNelle.Wallet
         /// <summary>Disconnects the current wallet.</summary>
         public async UniTask Disconnect()
         {
-            if (_wallet == null) return;
+            using var _ = FlowTrace.Enter("WalletUI", "Disconnect");
+            if (_wallet == null)
+            {
+                FlowTrace.Warn("WalletUI", "Disconnect: no WalletService — nothing to disconnect.");
+                return;
+            }
             await _wallet.Disconnect();
             Disconnected?.Invoke();
             RefreshUi();
@@ -170,7 +201,11 @@ namespace DeNelle.Wallet
 
         private void RefreshUi()
         {
-            if (_wallet == null) return;
+            if (_wallet == null)
+            {
+                FlowTrace.Warn("WalletUI", "RefreshUi: no WalletService — UI not refreshed.");
+                return;
+            }
 
             var status = _wallet.Status;
             var connected = status == WalletStatus.Connected;

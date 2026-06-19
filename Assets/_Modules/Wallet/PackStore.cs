@@ -25,6 +25,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Wallet
 {
@@ -120,8 +121,15 @@ namespace DeNelle.Wallet
         // -----------------------------------------------------------------
         private void BindElements()
         {
+            using var _ = FlowTrace.Enter("Store", "BindElements (code-built scaffold)");
             var root = _document != null ? _document.rootVisualElement : null;
-            if (root == null) return;
+            if (root == null)
+            {
+                // No UIDocument root -> the whole store cannot draw and Render() will bail. This is a
+                // blank-screen / soft-lock risk; surface it loudly so it self-reports, never silent.
+                FlowTrace.Fail("Store", "BindElements: UIDocument rootVisualElement is null — store cannot build, player would see a blank/soft-locked panel.");
+                return;
+            }
 
             // 1) Wipe any blank/garbage UXML content.
             root.Clear();
@@ -216,6 +224,16 @@ namespace DeNelle.Wallet
             covenant.style.unityFontStyleAndWeight = FontStyle.Italic;
             covenant.style.unityTextAlign = TextAnchor.MiddleCenter;
             panel.Add(covenant);
+
+            // VERIFY the scaffold actually built — the card list container is what Render() fills, and
+            // the status banner is the only purchase-feedback surface. If either is null the store would
+            // silently render nothing / give no purchase feedback; Fail loudly so it self-reports.
+            if (_packList == null)
+                FlowTrace.Fail("Store", "BindElements: _packList container is null after build — cards cannot render (blank store).");
+            else if (_statusBanner == null)
+                FlowTrace.Warn("Store", "BindElements: _statusBanner is null after build — purchase status/errors will have no on-screen surface.");
+            else
+                FlowTrace.Step("Store", "BindElements: scaffold built — pack list + status banner ready.");
         }
 
         /// <summary>
@@ -307,7 +325,12 @@ namespace DeNelle.Wallet
         /// <summary>Rebuilds every pack card from the canonical catalogue.</summary>
         public void Render()
         {
-            if (_packList == null) return;
+            using var _ = FlowTrace.Enter("Store", "Render");
+            if (_packList == null)
+            {
+                FlowTrace.Fail("Store", "Render: _packList is null — no cards can be drawn (store would appear empty). Did BindElements run/succeed?");
+                return;
+            }
             _packList.Clear();
 
             // Transparency: show the public Rewards Distributor address
@@ -318,21 +341,47 @@ namespace DeNelle.Wallet
             if (_disclaimerLabel != null)
                 _disclaimerLabel.text = PackCatalog.CurrencyDisclaimer;
 
+            int built = 0;
             foreach (var pack in PackCatalog.Packs)
             {
                 if (pack == null) continue;
-                _packList.Add(BuildPackCard(pack));
+                var card = BuildPackCard(pack);
+                if (card == null)
+                {
+                    // BuildPackCard guarded out -> this pack has no card. Skip, don't blank the row.
+                    FlowTrace.Warn("Store", $"Render: BuildPackCard returned null for pack '{pack.Sku}' — card skipped.");
+                    continue;
+                }
+                _packList.Add(card);
+                built++;
             }
+
+            // R: never a silently blank store. If the catalogue had packs but nothing built, the
+            // player sees an empty store — surface it loudly.
+            if (built == 0)
+                FlowTrace.Fail("Store", "Render: built 0 pack cards — store is EMPTY (no packs in catalogue or all cards failed).");
+            else
+                FlowTrace.Step("Store", $"Render: built {built} pack card(s).");
         }
 
         private VisualElement BuildPackCard(PackDef pack)
         {
-            // WO2: analytics — player saw this bundle.
-            DeNelle.Core.Analytics.EventTracker.Track("bundle_viewed", new
+            if (pack == null)
             {
-                bundleId   = pack.Sku,
-                bundleName = pack.Name,
-                founderOnly = pack.FounderOnly,
+                FlowTrace.Fail("Store", "BuildPackCard: pack is null — cannot build a card.");
+                return null;
+            }
+
+            // WO2: analytics — player saw this bundle. Guarded: an analytics throw must never blank
+            // the whole card (the player still needs to see + buy the pack).
+            FlowTrace.Try("Store", $"track bundle_viewed '{pack.Sku}'", () =>
+            {
+                DeNelle.Core.Analytics.EventTracker.Track("bundle_viewed", new
+                {
+                    bundleId   = pack.Sku,
+                    bundleName = pack.Name,
+                    founderOnly = pack.FounderOnly,
+                });
             });
 
             var card = new VisualElement { name = $"pack-{pack.Sku}" };
@@ -489,8 +538,13 @@ namespace DeNelle.Wallet
         /// </summary>
         public async UniTask<PaymentResult> Purchase(PackDef pack, CurrencyKind currency)
         {
+            using var _ = FlowTrace.Enter("Store", $"Purchase pack='{pack?.Sku ?? "<null>"}' {currency}");
+
             if (pack == null)
+            {
+                FlowTrace.Fail("Store", "Purchase: pack is null — aborted.");
                 return PaymentResult.Failure(string.Empty, currency, "Pack is null.");
+            }
 
             if (_purchaseInFlight)
             {
@@ -515,6 +569,7 @@ namespace DeNelle.Wallet
                     var account = await _wallet.Connect();
                     if (!account.IsValid)
                     {
+                        FlowTrace.Warn("Store", $"Purchase '{pack.Sku}': wallet connect cancelled/failed — aborted (player NOT charged).");
                         SetStatus("Wallet connection cancelled.");
                         return PaymentResult.Failure(pack.Sku, currency, "Wallet not connected.");
                     }
@@ -525,7 +580,10 @@ namespace DeNelle.Wallet
 
                 if (result.Ok)
                 {
+                    // Payment confirmed -> the player IS charged. ApplyPackContents MUST land the
+                    // entitlement; it self-reports if GameState is unavailable (paid-for content lost).
                     ApplyPackContents(pack);
+                    FlowTrace.Step("Store", $"Purchase '{pack.Sku}' confirmed — tx {result.TxSignature}, contents applied.");
                     SetStatus($"{pack.Name} unlocked — tx {Shorten(result.TxSignature)}.");
                     PackPurchased?.Invoke(pack, result);
 
@@ -540,13 +598,15 @@ namespace DeNelle.Wallet
                 }
                 else
                 {
+                    FlowTrace.Fail("Store", $"Purchase '{pack.Sku}' ({currency}) FAILED: {result.Error}");
                     SetStatus($"Purchase failed — {result.Error}");
                 }
                 return result;
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[PackStore] Purchase of '{pack.Sku}' failed: {ex.Message}");
+                FlowTrace.Fail("Store",
+                    $"Purchase '{pack.Sku}' ({currency}) THREW: {ex.GetType().Name}: {ex.Message} — outcome indeterminate; if a charge settled the entitlement may be lost.");
                 SetStatus($"Purchase failed — {ex.Message}");
                 return PaymentResult.Failure(pack.Sku, currency, ex.Message);
             }
@@ -565,10 +625,15 @@ namespace DeNelle.Wallet
         /// </summary>
         private void ApplyPackContents(PackDef pack)
         {
+            using var _ = FlowTrace.Enter("Store", $"ApplyPackContents '{pack?.Sku ?? "<null>"}'");
             var service = GameStateService.Instance;
             if (service == null || service.State == null)
             {
-                Debug.LogWarning("[PackStore] No GameStateService — pack contents not applied (devnet test run).");
+                // The payment already confirmed by the time we reach here — no GameState = the player
+                // paid and the entitlement is LOST. Fail loudly (was a swallowed LogWarning).
+                FlowTrace.Fail("Store",
+                    $"ApplyPackContents: no GameStateService/State — pack '{pack?.Sku ?? "<null>"}' contents NOT applied. " +
+                    "If this followed a confirmed payment, the player is CHARGED with NO entitlement.");
                 return;
             }
 
@@ -595,8 +660,17 @@ namespace DeNelle.Wallet
             // token tray yet; they are flagged for the Week-8 inventory pass.
             // (Recording the pack SKU above is enough for the entitlement check.)
 
+            // VERIFY the entitlement actually landed before persisting — the SKU must now be owned, or
+            // the paid-for grant silently failed. This is the proof the entitlement took.
+            bool owned = state.OwnedItemIds != null && state.OwnedItemIds.Contains(pack.Sku);
+            if (!owned)
+                FlowTrace.Fail("Store",
+                    $"ApplyPackContents: pack '{pack.Sku}' NOT recorded as owned after grant — entitlement did NOT take (player may be charged with nothing to show).");
+            else
+                FlowTrace.Step("Store", $"ApplyPackContents: pack '{pack.Sku}' recorded owned + economy applied.");
+
             // Persist through the service so the save round-trips.
-            service.Save();
+            FlowTrace.Try("Store", $"save after granting '{pack.Sku}'", () => service.Save());
         }
 
         private static void RecordOwned(List<string> owned, string sku)
@@ -617,7 +691,7 @@ namespace DeNelle.Wallet
         private void SetStatus(string message)
         {
             if (_statusBanner != null) _statusBanner.text = message;
-            else Debug.Log($"[PackStore] {message}");
+            else FlowTrace.Warn("Store", $"SetStatus (no banner element): {message}");
         }
 
         private static string Shorten(string signature)

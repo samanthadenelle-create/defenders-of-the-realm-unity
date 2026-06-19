@@ -30,6 +30,7 @@
 using System;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Wallet
 {
@@ -98,13 +99,18 @@ namespace DeNelle.Wallet
         /// </summary>
         public async UniTask ConnectWallet()
         {
-            if (_wallet == null) return;
+            using var _ = FlowTrace.Enter("CryptoPay", "ConnectWallet");
+            if (_wallet == null)
+            {
+                FlowTrace.Fail("CryptoPay", "ConnectWallet: no WalletService — cannot connect.");
+                return;
+            }
 
             var account = await _wallet.Connect();
             if (account.IsValid)
-                Debug.Log($"[CryptoPaymentManager] Wallet connected: {account.Address}");
+                FlowTrace.Step("CryptoPay", $"Wallet connected: {account.Address}");
             else
-                Debug.LogWarning("[CryptoPaymentManager] Wallet connection cancelled or failed.");
+                FlowTrace.Warn("CryptoPay", "Wallet connection cancelled or failed.");
         }
 
         // ── Payment entry points ──────────────────────────────────────────────
@@ -133,7 +139,7 @@ namespace DeNelle.Wallet
             bool ok = await SendFlatPayment(CurrencyKind.Skr, skrAmount, finalAether, "skr-aether");
 
             if (ok)
-                Debug.Log($"[CryptoPaymentManager] SKR payment → {finalAether} Glimmer granted (with bonus).");
+                FlowTrace.Step("CryptoPay", $"SKR payment -> {finalAether} Glimmer granted (with bonus).");
 
             return ok;
         }
@@ -153,13 +159,25 @@ namespace DeNelle.Wallet
         private async UniTask<bool> SendFlatPayment(
             CurrencyKind currency, double amount, int glimmerReward, string txId)
         {
-            if (_wallet == null) return false;
+            using var _ = FlowTrace.Enter("CryptoPay",
+                $"SendFlatPayment {currency} amount={amount} reward={glimmerReward} tx='{txId}'");
+
+            if (_wallet == null)
+            {
+                FlowTrace.Fail("CryptoPay", $"SendFlatPayment: no WalletService — payment aborted ({currency}).");
+                return false;
+            }
 
             // Ensure wallet is connected before attempting payment.
             if (!_wallet.IsConnected)
             {
                 await ConnectWallet();
-                if (!_wallet.IsConnected) return false;
+                if (!_wallet.IsConnected)
+                {
+                    FlowTrace.Warn("CryptoPay",
+                        $"SendFlatPayment: wallet still not connected after connect attempt — payment aborted ({currency}). Player NOT charged.");
+                    return false;
+                }
             }
 
             PaymentResult result;
@@ -169,28 +187,55 @@ namespace DeNelle.Wallet
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[CryptoPaymentManager] Payment exception ({currency}): {ex.Message}");
+                // Threw mid-transfer: we do NOT know if the chain debited. Surface loudly so the
+                // break-log carries the exception — a possible charge with no grant must self-report.
+                FlowTrace.Fail("CryptoPay",
+                    $"SendFlatPayment: PayFlat THREW ({currency}, tx='{txId}'): {ex.GetType().Name}: {ex.Message} — " +
+                    "payment indeterminate, no Glimmer granted.");
                 return false;
             }
 
             if (!result.Ok)
             {
-                Debug.LogWarning($"[CryptoPaymentManager] Payment failed ({currency}): {result.Error}");
+                FlowTrace.Warn("CryptoPay",
+                    $"SendFlatPayment: payment failed ({currency}, tx='{txId}'): {result.Error} — no Glimmer granted (player NOT charged on a clean failure).");
                 return false;
             }
 
-            // Grant Glimmer (the branch's soft currency — analogous to Aether Shards).
-            GrantGlimmer(glimmerReward, currency);
+            // CRITICAL ENTITLEMENT GAP: the payment CONFIRMED — the player IS charged from here on.
+            // The grant MUST take, or the player paid for nothing. GrantGlimmer self-verifies the
+            // balance moved and Fails loudly (-> break-log) if the reflected grant didn't land, so a
+            // lost entitlement is never silent.
+            bool granted = GrantGlimmer(glimmerReward, currency, txId);
+            if (!granted)
+            {
+                // Payment took but entitlement did NOT — the worst case. Already Fail-logged inside
+                // GrantGlimmer with the tx signature; re-state it here at the flow level so the
+                // capture clearly pairs the confirmed tx with the lost grant.
+                FlowTrace.Fail("CryptoPay",
+                    $"SendFlatPayment: payment CONFIRMED (tx: {result.TxSignature}, {currency}) but the " +
+                    $"{glimmerReward}-Glimmer grant did NOT take — PLAYER CHARGED, ENTITLEMENT LOST. Needs reconciliation.");
+                // Still return true: the transaction settled on-chain; the caller must not retry the
+                // charge. The Fail above is the signal for support/reconciliation, not a re-charge.
+                return true;
+            }
 
-            Debug.Log($"[CryptoPaymentManager] Payment confirmed → {glimmerReward} Glimmer granted " +
-                $"({currency}, tx: {result.TxSignature}).");
+            FlowTrace.Step("CryptoPay",
+                $"Payment confirmed -> {glimmerReward} Glimmer granted ({currency}, tx: {result.TxSignature}).");
             return true;
         }
 
         // ── Glimmer grant ─────────────────────────────────────────────────────
 
-        private static void GrantGlimmer(int amount, CurrencyKind fromCurrency)
+        // Grant the purchased Glimmer and VERIFY it actually landed. Returns true ONLY when the
+        // reflected TryAddGlimmer ran AND the player's balance moved by the expected amount. Any
+        // failure (service missing, method missing, invoke threw, returned false, or balance did NOT
+        // change) Fails loudly via FlowTrace -> break-log, because by the time this is called the
+        // player has ALREADY been charged: a silent failure here = a lost, paid-for entitlement.
+        private static bool GrantGlimmer(int amount, CurrencyKind fromCurrency, string txId)
         {
+            using var _ = FlowTrace.Enter("CryptoPay", $"GrantGlimmer +{amount} via {fromCurrency} (tx='{txId}')");
+
             // DeNelle.Wallet cannot reference DeNelle.Cosmetics (Cosmetics already
             // references Wallet → circular asmdef), so resolve GlimmerCurrencyService
             // and call TryAddGlimmer(int) by reflection — same cross-assembly bridge
@@ -201,15 +246,84 @@ namespace DeNelle.Wallet
                 t = asm.GetType("DeNelle.Cosmetics.GlimmerCurrencyService");
                 if (t != null) break;
             }
-            var svc = t?.GetProperty("Instance",
+            if (t == null)
+            {
+                FlowTrace.Fail("CryptoPay",
+                    $"GrantGlimmer: GlimmerCurrencyService TYPE not found — {amount} paid-for Glimmer LOST " +
+                    $"(charged via {fromCurrency}, tx='{txId}').");
+                return false;
+            }
+
+            var svc = t.GetProperty("Instance",
                 System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public)?.GetValue(null);
             if (svc == null)
             {
-                Debug.LogWarning("[CryptoPaymentManager] GlimmerCurrencyService unavailable — Glimmer not granted.");
-                return;
+                FlowTrace.Fail("CryptoPay",
+                    $"GrantGlimmer: GlimmerCurrencyService.Instance is null (service not in scene) — {amount} paid-for " +
+                    $"Glimmer LOST (charged via {fromCurrency}, tx='{txId}').");
+                return false;
             }
-            t.GetMethod("TryAddGlimmer", new[] { typeof(int) })?.Invoke(svc, new object[] { amount });
-            Debug.Log($"[CryptoPaymentManager] +{amount} Glimmer via {fromCurrency}.");
+
+            // Read the balance BEFORE so we can PROVE the grant moved it. The public 'Glimmer' int
+            // property is the verifiable balance.
+            var balanceProp = t.GetProperty("Glimmer",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+            int before = (balanceProp != null && balanceProp.GetValue(svc) is int b) ? b : int.MinValue;
+
+            var addMethod = t.GetMethod("TryAddGlimmer", new[] { typeof(int) });
+            if (addMethod == null)
+            {
+                FlowTrace.Fail("CryptoPay",
+                    $"GrantGlimmer: TryAddGlimmer(int) method not found on GlimmerCurrencyService — {amount} paid-for " +
+                    $"Glimmer LOST (charged via {fromCurrency}, tx='{txId}').");
+                return false;
+            }
+
+            object invokeResult;
+            try
+            {
+                invokeResult = addMethod.Invoke(svc, new object[] { amount });
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("CryptoPay",
+                    $"GrantGlimmer: TryAddGlimmer THREW for +{amount} ({fromCurrency}, tx='{txId}'): " +
+                    $"{ex.GetType().Name}: {ex.Message} — paid-for Glimmer LOST.");
+                return false;
+            }
+
+            // TryAddGlimmer returns bool — false means the service itself rejected the grant.
+            if (invokeResult is bool ok && !ok)
+            {
+                FlowTrace.Fail("CryptoPay",
+                    $"GrantGlimmer: TryAddGlimmer RETURNED FALSE for +{amount} ({fromCurrency}, tx='{txId}') — " +
+                    "grant rejected, paid-for Glimmer LOST.");
+                return false;
+            }
+
+            // VERIFY the balance actually moved by the expected amount. This is the real proof the
+            // entitlement took — a true-returning invoke whose balance didn't change is still a loss.
+            if (before != int.MinValue && balanceProp != null)
+            {
+                int after = (balanceProp.GetValue(svc) is int a) ? a : int.MinValue;
+                if (after == int.MinValue || after - before != amount)
+                {
+                    FlowTrace.Fail("CryptoPay",
+                        $"GrantGlimmer: balance did NOT move by +{amount} ({fromCurrency}, tx='{txId}'): " +
+                        $"before={before} after={after} (delta={after - before}) — entitlement NOT applied, paid-for Glimmer LOST.");
+                    return false;
+                }
+                FlowTrace.Step("CryptoPay",
+                    $"GrantGlimmer verified: +{amount} via {fromCurrency} (balance {before} -> {after}, tx='{txId}').");
+            }
+            else
+            {
+                // Could not read the balance to verify the delta — the grant invoke succeeded but we
+                // cannot PROVE it landed. Warn (not Fail): the bool said ok, but flag the blind spot.
+                FlowTrace.Warn("CryptoPay",
+                    $"GrantGlimmer: +{amount} via {fromCurrency} invoked OK but balance was unreadable for verify (tx='{txId}') — grant assumed applied.");
+            }
+            return true;
         }
 
         // ── StakingBonusManager (WO-76) optional hook ─────────────────────────
@@ -243,7 +357,7 @@ namespace DeNelle.Wallet
             }
             catch (Exception ex)
             {
-                Debug.LogWarning("[CryptoPaymentManager] StakingBonusManager invoke failed: " + ex.Message);
+                FlowTrace.Warn("CryptoPay", "StakingBonusManager invoke failed (bonus skipped): " + ex.Message);
             }
             return amount;
         }

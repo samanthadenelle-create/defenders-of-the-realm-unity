@@ -13,6 +13,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using DeNelle.Core.Web3;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -120,8 +121,13 @@ namespace DeNelle.Web3
 
         private void BindElements()
         {
+            using var _ = FlowTrace.Enter("Swap", "BindElements");
             var root = _document != null ? _document.rootVisualElement : null;
-            if (root == null) return;
+            if (root == null)
+            {
+                FlowTrace.Warn("Swap", "BindElements: UIDocument root is null — swap panel not bindable yet (may rebind when shown).");
+                return;
+            }
 
             _overlay = root.Q<VisualElement>(OverlayName);
             _closeBtn = root.Q<Button>(CloseBtnName);
@@ -132,6 +138,13 @@ namespace DeNelle.Web3
             _networkFee = root.Q<Label>(NetworkFeeName);
             _status = root.Q<Label>(StatusName);
             _confirmBtn = root.Q<Button>(ConfirmBtnName);
+
+            // V: verify the interactive elements bound. A null confirm button / input means the swap
+            // is unusable; a null status label means swap errors have no on-screen surface. Warn per
+            // missing element so a capture pinpoints exactly which UXML name didn't resolve.
+            if (_confirmBtn == null) FlowTrace.Warn("Swap", $"BindElements: confirm button '{ConfirmBtnName}' not found — swap cannot be confirmed.");
+            if (_inputAmount == null) FlowTrace.Warn("Swap", $"BindElements: input field '{InputAmountName}' not found — no amount entry.");
+            if (_status == null) FlowTrace.Warn("Swap", $"BindElements: status label '{StatusName}' not found — swap status/errors will be invisible.");
 
             if (_closeBtn != null) _closeBtn.clicked += OnCloseTapped;
             if (_confirmBtn != null) _confirmBtn.clicked += OnConfirmTapped;
@@ -150,6 +163,8 @@ namespace DeNelle.Web3
             }
 
             _bound = _overlay != null || _confirmBtn != null || _inputAmount != null;
+            if (_bound) FlowTrace.Step("Swap", "BindElements: swap panel bound.");
+            else FlowTrace.Fail("Swap", "BindElements: NO swap element resolved — panel did not build (player sees nothing / cannot swap).");
         }
 
         private void UnbindElements()
@@ -212,6 +227,7 @@ namespace DeNelle.Web3
 
             if (quote == null)
             {
+                FlowTrace.Warn("Swap", $"DebounceQuote: GetQuoteAsync returned null for {_currentInput} USDC — rate unavailable.");
                 SetStatus("Could not fetch rate. Check connection.", isError: true);
                 return;
             }
@@ -270,11 +286,18 @@ namespace DeNelle.Web3
 
         private async void OnConfirmTapped()
         {
-            if (_latestQuote == null || _quoteLoading) return;
+            using var _ = FlowTrace.Enter("Swap", "OnConfirmTapped");
+
+            if (_latestQuote == null || _quoteLoading)
+            {
+                FlowTrace.Warn("Swap", $"OnConfirmTapped: ignored — quote {(_latestQuote == null ? "null" : "present")}, loading={_quoteLoading}.");
+                return;
+            }
 
             string walletKey = _service.ConnectedWalletKey;
             if (string.IsNullOrEmpty(walletKey))
             {
+                FlowTrace.Warn("Swap", "OnConfirmTapped: no connected wallet — swap blocked (player NOT charged).");
                 SetStatus("Connect your wallet to swap.", isError: true);
                 return;
             }
@@ -282,11 +305,31 @@ namespace DeNelle.Web3
             SetConfirmEnabled(false);
             SetStatus("Sending to wallet for approval…", isError: false);
 
-            bool ok = await _service.ExecuteSwapAsync(_latestQuote, walletKey);
-            if (!ok)
+            bool ok;
+            try
             {
+                ok = await _service.ExecuteSwapAsync(_latestQuote, walletKey);
+            }
+            catch (Exception ex)
+            {
+                // async void: an unhandled throw here would otherwise crash the frame silently. Catch,
+                // Fail loudly (outcome indeterminate = possible partial/charged swap), and re-enable.
+                FlowTrace.Fail("Swap",
+                    $"OnConfirmTapped: ExecuteSwapAsync THREW: {ex.GetType().Name}: {ex.Message} — swap outcome indeterminate.");
                 SetStatus("Swap failed. Please try again.", isError: true);
                 SetConfirmEnabled(true);
+                return;
+            }
+
+            if (!ok)
+            {
+                FlowTrace.Fail("Swap", "OnConfirmTapped: ExecuteSwapAsync returned FALSE — swap failed.");
+                SetStatus("Swap failed. Please try again.", isError: true);
+                SetConfirmEnabled(true);
+            }
+            else
+            {
+                FlowTrace.Step("Swap", "OnConfirmTapped: swap executed OK.");
             }
         }
     }
