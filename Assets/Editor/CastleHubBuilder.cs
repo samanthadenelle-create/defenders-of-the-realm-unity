@@ -2009,8 +2009,11 @@ namespace DeNelle.Editor
                 return;
             }
 
-            // Move the trigger host to the bridge far end (world (gateX,1.5,-63)).
-            marker.transform.position = new Vector3(gateX, 1.5f, -63f);
+            // Seat the trigger host ON the bridge deck at its far end (world (gateX,0.5,-63)) — NOT
+            // floating 1.5m overhead. Proximity (6m) fires either way, but the strict spawn->trigger
+            // CalculatePath verify (and a clean navmesh-edge sample) only pass when the trigger projects
+            // straight down onto a real walkable edge. Deck-seated reconciles gameplay + the verify.
+            marker.transform.position = new Vector3(gateX, 0.5f, -63f);
 
             var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
             if (transType == null)
@@ -2035,11 +2038,11 @@ namespace DeNelle.Editor
             if (bridgeLinkWalkable)
             {
                 transType.GetField("targetPosition")?.SetValue(comp, new Vector3(gateX, 0.5f, -66f));
-                Log("BRIDGE-SEAM: exit seam relocated to bridge far end (" + gateX + ",1.5,-63); WarpTo same-spot (" + gateX + ",0.5,-66) → no jump.");
+                Log("BRIDGE-SEAM: exit seam relocated to bridge far end (" + gateX + ",0.5,-63), deck-seated; WarpTo same-spot (" + gateX + ",0.5,-66) → no jump.");
             }
             else
             {
-                Log("BRIDGE-SEAM: exit seam relocated to bridge far end (" + gateX + ",1.5,-63); masked-warp target left intact (BridgeLinkWalkable=false).");
+                Log("BRIDGE-SEAM: exit seam relocated to bridge far end (" + gateX + ",0.5,-63), deck-seated; masked-warp target left intact (BridgeLinkWalkable=false).");
             }
         }
 
