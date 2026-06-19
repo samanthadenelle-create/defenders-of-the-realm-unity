@@ -169,29 +169,44 @@ namespace DeNelle.Village
         {
             using var _ = FlowTrace.Enter("HeroBody", $"BuildLegacyResourcesBody slug={slug}");
 
-            var prefab = Resources.Load<GameObject>("Heroes/" + slug);
+            // §12: the Resources.Load + Skin were un-Guarded (unlike the Blink path) and a null
+            // body bailed SILENTLY — the playable hero went bodyless with no self-report. Guard both
+            // and Fail-loud on null so a run pinpoints WHICH step left the hero without a body.
+            GameObject prefab = null;
+            Guard.Try("HeroBody", $"Resources.Load Heroes/{slug}", () =>
+            {
+                prefab = Resources.Load<GameObject>("Heroes/" + slug);
+            });
             if (prefab == null)
             {
-                Debug.LogError(
-                    "[HeroBodySwapper] DEF-229 — Blink base unavailable AND Resources/Heroes/" + slug +
+                FlowTrace.Fail("HeroBody",
+                    "DEF-229 — Blink base unavailable AND Resources/Heroes/" + slug +
                     ".fbx is MISSING. The hero is left bodyless. Mark the Blink base Addressable " +
                     "(Defenders → Catalog → Mark Blink Gear Addressable) or import the legacy FBX.");
-                FlowTrace.Fail("HeroBody", $"No Blink base and no Resources/Heroes/{slug} body — hero bodyless.");
                 return;
             }
 
             float targetH = (cls == HeroClass.Knight) ? TargetHeightMeters * 1.0286f : TargetHeightMeters;
             // WO-326: -90f is the proven legacy forward-yaw for the Tripo/AccuRIG FBXs.
             float forwardYaw = -90f;
-            var body = VisualFactory.Skin(transform, prefab, new SkinOptions
+            GameObject body = null;
+            Guard.Try("HeroBody", "VisualFactory.Skin (legacy Resources)", () =>
             {
-                FitHeight = targetH,
-                StripColliders = true,
-                SeatOnGround = true,
-                FixTripoMaterials = false,
-                LocalRotation = Quaternion.Euler(0f, forwardYaw, 0f),
+                body = VisualFactory.Skin(transform, prefab, new SkinOptions
+                {
+                    FitHeight = targetH,
+                    StripColliders = true,
+                    SeatOnGround = true,
+                    FixTripoMaterials = false,
+                    LocalRotation = Quaternion.Euler(0f, forwardYaw, 0f),
+                });
             });
-            if (body == null) return;
+            if (body == null)
+            {
+                FlowTrace.Fail("HeroBody",
+                    $"VisualFactory.Skin returned null for legacy Resources/Heroes/{slug} — hero left bodyless.");
+                return;
+            }
             body.name = "HeroBody";
 
             WireHeroBody(body, cls, slug, controllerSnapshot, isBlink: false);
@@ -251,11 +266,41 @@ namespace DeNelle.Village
             // VisualFactory.Skin (it instantiates the prefab root), so the live Animator normally
             // has a valid avatar here. Self-report if it does NOT, so a run pinpoints the
             // missing-avatar case (the "sliding statue") instead of silently posing the T-pose.
-            if (anim.avatar == null || !anim.avatar.isValid)
+            // GOLD STANDARD (mirror HeroArmorVisual.RetargetToBaseAnimator / VerifyArmorRendersNow):
+            // the armor OVERLAY self-protects against a no-avatar / no-controller body, but the BASE
+            // body it sits on did NOT — it Warn'd then BOUND ANYWAY onto a guaranteed-T-pose rig. A
+            // Humanoid clip can ONLY pose through a valid avatar; with NO avatar OR no controller the
+            // playable hero ships as a sliding statue. Treat that as a hard FAIL (not a warn-proceed):
+            // self-report loudly, then trigger the legacy Resources fallback (a different body whose
+            // own avatar may be valid) ONLY on the Blink path — never bind a known-T-pose rig silently.
+            bool avatarOk = anim.avatar != null && anim.avatar.isValid;
+            if (!avatarOk || controller == null)
             {
-                FlowTrace.Warn("HeroBody",
-                    $"body '{body.name}' Animator has no valid Humanoid avatar after Skin (isBlink={isBlink}) — " +
-                    "humanoid clips will hold the bind/T-pose (sliding-statue risk). Check the prefab's avatar.");
+                FlowTrace.Fail("HeroBody",
+                    $"body '{body.name}' is un-animatable after Skin (isBlink={isBlink}): " +
+                    $"avatarValid={avatarOk}, controller={(controller != null ? controller.name : "<null>")} — " +
+                    "a humanoid clip would hold the bind/T-pose (the playable-hero sliding-statue ship path).");
+
+                if (isBlink && avatarOk == false)
+                {
+                    // The Blink base resolved but carries no valid Humanoid avatar — fall back to the
+                    // legacy Resources/Heroes body, whose own generated avatar may bind cleanly. Tear
+                    // down the half-built Blink body + release its handle first (no two bodies, no leak).
+                    FlowTrace.Warn("HeroBody",
+                        "Blink base has no valid avatar — falling back to the legacy Resources body (no T-pose ship).");
+                    if (body != null) Destroy(body);
+                    ReleaseBaseBodyHandle();
+                    BuildLegacyResourcesBody(cls, slug, controllerSnapshot);
+                    return;
+                }
+                // Legacy path (or Blink with a valid avatar but no controller): we have no second body
+                // to fall back to. Do NOT silently bind a guaranteed-T-pose. Self-report has fired
+                // above; continue only far enough to bind whatever controller exists so a later
+                // HeroAnimatorSetup re-run can recover — the deferred verify below still self-reports.
+                if (controller == null)
+                    FlowTrace.Fail("HeroBody",
+                        "No controller at Resources/Heroes/" + slug + ".controller — run " +
+                        "Defenders → Animation → Setup " + slug + " Animator. Hero will not animate.");
             }
 
             // DEF-232 (facing) self-correct — replaces the hard-coded -90° guess above for any body
@@ -265,13 +310,6 @@ namespace DeNelle.Village
             if (controller != null)
             {
                 anim.runtimeAnimatorController = controller;
-            }
-            else
-            {
-                Debug.LogWarning(
-                    "[HeroBodySwapper] No controller at Resources/Heroes/" + slug +
-                    ".controller — run Defenders → Animation → Setup " + slug +
-                    " Animator. Hero will not animate.");
             }
             // applyRootMotion=false: the Walk clip's baked root curves would fight
             // HeroLocomotion's Slerp on the parent and the hero would never appear
@@ -289,6 +327,14 @@ namespace DeNelle.Village
             // Rebind reconnects bone references after the FBX instantiate finishes,
             // else the new mesh T-poses for ~10 frames after a swap.
             anim.Rebind();
+
+            // DEFERRED POSE-VERIFY (gold standard: mirror HeroArmorVisual.VerifyPoseThenMaybeRollback):
+            // a bound avatar + controller can STILL freeze the playable hero in bind/T-pose if the
+            // controller drives no clip for THIS rig. The animator hasn't evaluated yet this frame, so
+            // watch the next several frames; if the rig never animates, FlowTrace.Fail so the run
+            // self-reports the "playable hero T-pose" — the owner must never be the one to notice.
+            if (isActiveAndEnabled && anim != null)
+                StartCoroutine(VerifyHeroPoseThenReport(anim, body != null ? body.name : "<null>", isBlink));
 
             // EquipmentController — activates the real KayKit weapon-mesh equip on the
             // swapped hero. It lives on the hero ROOT (same object as GearLoadout): its
@@ -363,23 +409,40 @@ namespace DeNelle.Village
                 if (mb == null) continue;
                 string n = mb.GetType().Name;
                 if (n != "HeroLocomotion" && n != "HeroAbilities") continue;
-                var f = mb.GetType().GetField("_animator",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (f != null) { f.SetValue(mb, anim); recached++; }
+                // §12: the reflection writes were un-Guarded (Debug.Log only). A throw here
+                // (renamed field / signature drift) would have left HeroLocomotion/HeroAbilities
+                // pointing at the DESTROYED placeholder animator — the hero would never animate,
+                // silently. Guard each so one bad component logs + is skipped, never aborts the wire.
+                MonoBehaviour mbLocal = mb;
+                Guard.Try("HeroBody", $"recache _animator on {n}", () =>
+                {
+                    var f = mbLocal.GetType().GetField("_animator",
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    if (f != null) { f.SetValue(mbLocal, anim); recached++; }
+                });
                 // WO-36: bind the hero class on HeroAbilities so a Knight/Ranger
                 // casts its OWN abilities.json loadout. The field defaulted to
                 // "mage" and was never reassigned, so every class fired the Mage
                 // kit. slug is "Knight"/"Ranger"/"Mage"; SetHeroClass lower-cases it.
                 if (n == "HeroAbilities")
-                    mb.GetType().GetMethod("SetHeroClass",
-                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
-                      ?.Invoke(mb, new object[] { abilitySlug });
+                    Guard.Try("HeroBody", "HeroAbilities.SetHeroClass", () =>
+                        mbLocal.GetType().GetMethod("SetHeroClass",
+                            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+                          ?.Invoke(mbLocal, new object[] { abilitySlug }));
             }
-            Debug.Log($"[HeroBodySwapper] Animator wired: controller=" +
-                      $"{(anim.runtimeAnimatorController != null ? anim.runtimeAnimatorController.name : "NULL")}, " +
-                      $"avatar={(anim.avatar != null ? anim.avatar.name : "none")}, " +
-                      $"clips={anim.runtimeAnimatorController?.animationClips?.Length ?? 0}, " +
-                      $"re-cached {recached} component(s) (HeroLocomotion/HeroAbilities).");
+            // §12 self-report: recached==0 means NEITHER HeroLocomotion nor HeroAbilities got the
+            // live animator — their fields still point at the destroyed placeholder, so the hero
+            // cannot animate. That is a hard FAIL the run must surface, not a quiet Debug.Log.
+            if (recached == 0)
+                FlowTrace.Fail("HeroBody",
+                    "Animator re-cache wrote 0 components — neither HeroLocomotion nor HeroAbilities " +
+                    "received the live animator (renamed _animator field?); the hero will not animate.");
+            FlowTrace.Step("HeroBody",
+                "Animator wired: controller=" +
+                $"{(anim.runtimeAnimatorController != null ? anim.runtimeAnimatorController.name : "NULL")}, " +
+                $"avatar={(anim.avatar != null ? anim.avatar.name : "none")}, " +
+                $"clips={anim.runtimeAnimatorController?.animationClips?.Length ?? 0}, " +
+                $"re-cached {recached} component(s) (HeroLocomotion/HeroAbilities).");
             // Owner 2026-05-20: Tripo's Send To Unity feature extracted the
             // Knight basecolor PNG. Copied into Resources/Textures/Knight.png
             // so the runtime can apply the real texture rather than the
@@ -605,6 +668,44 @@ namespace DeNelle.Village
         /// Every access is name/param guarded — a controller missing a param or the state is a
         /// safe no-op. Leaves the Walk/Cast/combat transitions intact (they fire from gameplay).
         /// </summary>
+        /// <summary>
+        /// DEFERRED pose-verify for the PLAYABLE BASE BODY (gold standard: mirrors
+        /// HeroArmorVisual.VerifyPoseThenMaybeRollback). Over the next several frames confirm the
+        /// hero rig is actually PLAYING a clip on layer 0 (GetCurrentAnimatorClipInfoCount(0) > 0),
+        /// i.e. NOT frozen in the bind/T-pose. The armor overlay self-protects + rolls back; the base
+        /// body has no second overlay to swap to, so here we cannot roll back — instead we FAIL LOUD
+        /// (FlowTrace.Fail → break-log) so the run self-reports the "playable hero T-pose" and the
+        /// owner is never the one to notice. Robust against a transient first-frame 0 (only reports
+        /// when NOTHING ever drives the rig within the window).
+        /// </summary>
+        private System.Collections.IEnumerator VerifyHeroPoseThenReport(Animator anim, string bodyName, bool isBlink)
+        {
+            const int MaxPoseFrames = 6;
+            bool everPlayed = false;
+            int lastCount = -1;
+            for (int i = 0; i < MaxPoseFrames; i++)
+            {
+                yield return null;
+                if (this == null || anim == null) yield break;
+                if (anim.isActiveAndEnabled && anim.runtimeAnimatorController != null)
+                {
+                    lastCount = anim.GetCurrentAnimatorClipInfoCount(0);
+                    if (lastCount > 0) { everPlayed = true; break; }
+                }
+            }
+
+            FlowTrace.Step("HeroBody",
+                $"VerifyHeroPose body='{bodyName}' isBlink={isBlink}: everPlayed={everPlayed} " +
+                $"lastClipCount={lastCount} (>=1 means an animation drives the rig; otherwise frozen T-pose).");
+
+            if (!everPlayed)
+                FlowTrace.Fail("HeroBody",
+                    $"PLAYABLE HERO T-POSE: body '{bodyName}' (isBlink={isBlink}) never animated within " +
+                    $"{MaxPoseFrames} frames (lastClipCount={lastCount}) — the controller drives no clip for " +
+                    "this rig (missing/invalid avatar, no Locomotion state, or wrong controller). The hero " +
+                    "ships as a sliding statue. Re-run Defenders → Animation → Setup <Class> Animator / verify the rig's avatar.");
+        }
+
         private static void DriveIdlePose(Animator anim)
         {
             if (anim == null || anim.runtimeAnimatorController == null) return;
