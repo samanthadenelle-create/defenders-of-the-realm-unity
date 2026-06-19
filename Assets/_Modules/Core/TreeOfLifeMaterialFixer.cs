@@ -571,30 +571,6 @@ namespace DeNelle.Core
             Texture tex = null;
             if (src.HasProperty("_MainTex")) tex = src.GetTexture("_MainTex");
             if (tex == null && src.HasProperty("_BaseMap")) tex = src.GetTexture("_BaseMap");
-
-            // BUILD-ONLY GREY FIX (chaos-fleet 2026-06-19, 12/12 repro). The centrepiece FBX
-            // Assets/Art/Tree_Of_Life.fbx imports with an EXTERNAL material + EMPTY remap and no
-            // .mat on disk (the Tripo postprocessor doesn't watch Assets/Art/), so its source
-            // material carries NO texture. The old path then fell straight to the TEXTURELESS
-            // FoliageMat() -> the Tree of Life rendered grey IN THE BUILD (fine in the editor via
-            // the import-time material description, which is why a playtest never caught it; the
-            // build does not get that binding). The real diffuse ships under Resources, so load it
-            // (DiffuseResourcePath -> Resources/Structures/TreeofLife_basecolor) and render TEXTURED
-            // instead of a flat green tint. Makes the fixer self-sufficient: the centrepiece can no
-            // longer go grey regardless of the FBX import state.
-            if (tex == null)
-            {
-                tex = Resources.Load<Texture2D>(DiffuseResourcePath);
-                if (tex != null)
-                    FlowTrace.Step("TreeOfLifeFix",
-                        $"source material had no texture -> loaded the real diffuse from Resources " +
-                        $"('{DiffuseResourcePath}') so the centrepiece renders textured, not grey.");
-                else
-                    FlowTrace.Warn("TreeOfLifeFix",
-                        $"source material had no texture AND Resources diffuse '{DiffuseResourcePath}' " +
-                        "did not load -> falling back to the flat foliage tint (green, not grey).");
-            }
-
             Color col = src.HasProperty("_Color") ? src.GetColor("_Color")
                       : src.HasProperty("_BaseColor") ? src.GetColor("_BaseColor")
                       : Color.white;
