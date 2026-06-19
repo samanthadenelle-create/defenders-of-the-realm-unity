@@ -127,6 +127,19 @@ namespace DeNelle.Village
                 skinOpts.FixTripoMaterials = true;
             }
             var vis = VisualFactory.Skin(go.transform, "Enemies/" + model, skinOpts);
+            // RENDER-VERIFY (owner directive 2026-06-19, TGVRU on the enemy choke point —
+            // mirrors HeroArmorVisual.VerifyArmorRendersNow): VisualFactory.Skin returning
+            // non-null only means "an object was instantiated", NOT that it actually RENDERS.
+            // A grey/magenta/empty body (no enabled renderer, or a renderer with no sharedMesh)
+            // would pass the old null-check and ship as a "real mesh, not capsule" — an
+            // invisible-but-hittable enemy. PROVE the skinned body can render before we accept
+            // it; on fail, FlowTrace.Fail + DROP it and fall through to the tinted-capsule path
+            // so the spawner always ships a VISIBLE hittable body, never a ghost.
+            if (vis != null && !VerifyVisualRenders(vis, model, def))
+            {
+                Object.Destroy(vis);
+                vis = null;
+            }
             if (vis != null)
             {
                 // ROOT-CAUSE TRACE: the model mesh actually loaded + skinned. If this
@@ -147,11 +160,12 @@ namespace DeNelle.Village
             }
             else
             {
-                // ROOT-CAUSE TRACE (MOST IMPORTANT): the model failed to load/skin, so
-                // this body becomes a tinted capsule — silent variety loss. If many
-                // families hit this, every enemy looks the same despite varied ids.
+                // ROOT-CAUSE TRACE (MOST IMPORTANT): the model failed to load/skin OR loaded
+                // but did not render (render-verify above dropped it), so this body becomes a
+                // tinted capsule — silent variety loss. If many families hit this, every enemy
+                // looks the same despite varied ids.
                 FlowTrace.Warn("Enemy",
-                    $"model '{model}' (id '{(def != null ? def.Id : "?")}') had NO loadable mesh at " +
+                    $"model '{model}' (id '{(def != null ? def.Id : "?")}') had NO renderable mesh at " +
                     $"'Enemies/{model}' — FALLBACK to tinted capsule (no family silhouette)");
                 var cap = GameObject.CreatePrimitive(PrimitiveType.Capsule);
                 if (cap.TryGetComponent(out Collider cc)) Object.Destroy(cc);
@@ -169,6 +183,22 @@ namespace DeNelle.Village
             agent.agentTypeID = 0;
             agent.radius = 0.4f;
             agent.height = 1.8f;
+
+            // AGENT ON-MESH VERIFY (TGVRU, owner 2026-06-19): a NavMeshAgent that AddComponent's
+            // onto a point just off the baked surface lands with isOnNavMesh==false and then NEVER
+            // paths — the "idle, never chases" class of bug. We already SamplePosition-snapped the
+            // spawn at the top, but a snap can still miss (no mesh within 6m) or the agent can wake
+            // a hair off-mesh. Self-report it here so a capture splits "spawned but won't chase"
+            // from "AI logic broke" with zero guessing. Warn (not Fail): Enemy.cs already degrades
+            // to holding position, so the enemy still spawns — this is the diagnosable signal.
+            if (!agent.isOnNavMesh)
+            {
+                FlowTrace.Warn("Enemy",
+                    $"NavMeshAgent for '{(def != null ? def.Id : "enemy")}' (model '{model}') spawned " +
+                    $"OFF the navmesh at {go.transform.position} (isOnNavMesh=false) — it will idle and " +
+                    "never chase. Check the spawn point / bake (snap missed or agent woke off-surface).");
+            }
+
             var enemy = go.AddComponent<Enemy>();                          // RequireComponent pulls EnemyDamageable
             if (go.GetComponent<EnemyDamageable>() == null)
                 go.AddComponent<EnemyDamageable>();
@@ -296,6 +326,45 @@ namespace DeNelle.Village
             float feetOffset = b.min.y - root.position.y;   // negative when feet are below the root
             if (feetOffset < 0f)
                 vis.transform.localPosition -= new Vector3(0f, feetOffset, 0f);
+        }
+
+        // RENDER-VERIFY (TGVRU, mirrors HeroArmorVisual.VerifyArmorRendersNow): a freshly-skinned
+        // enemy visual MUST carry >=1 ENABLED renderer that has a real mesh (sharedMesh on a
+        // SkinnedMeshRenderer, or a MeshFilter.sharedMesh on a static MeshRenderer). VisualFactory.Skin
+        // returning an object proves nothing renders — an empty/grey/magenta body passes the null-check
+        // and ships invisible-but-hittable. Traces the exact counts so a capture pinpoints "no enabled
+        // renderer" vs "no mesh" with zero guessing. Returns false => caller drops it to the tinted capsule.
+        private static bool VerifyVisualRenders(GameObject vis, string model, EnemyDef def)
+        {
+            if (vis == null) return false;
+            string id = def != null ? def.Id : "?";
+
+            int total = 0, enabledWithMesh = 0;
+            var renderers = vis.GetComponentsInChildren<Renderer>(true);
+            foreach (var r in renderers)
+            {
+                if (r == null) continue;
+                total++;
+                if (!r.enabled) continue;
+                bool hasMesh = false;
+                if (r is SkinnedMeshRenderer smr) hasMesh = smr.sharedMesh != null;
+                else if (r.TryGetComponent(out MeshFilter mf)) hasMesh = mf.sharedMesh != null;
+                if (hasMesh) enabledWithMesh++;
+            }
+
+            bool renders = enabledWithMesh > 0;
+            FlowTrace.Step("Enemy",
+                $"VerifyVisualRenders model='{model}' id='{id}': renderers total={total} enabledWithMesh={enabledWithMesh} => renders={renders}");
+
+            if (!renders)
+            {
+                FlowTrace.Fail("Enemy",
+                    $"VerifyVisualRenders FAILED for model '{model}' (id '{id}'): skinned object loaded but " +
+                    $"NO enabled renderer carries a mesh (total={total}) — would ship an invisible-but-hittable " +
+                    "enemy. Dropping to the tinted-capsule fallback so the body is visible.");
+                return false;
+            }
+            return true;
         }
 
         private static void TintCapsule(Renderer mr)

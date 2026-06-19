@@ -33,6 +33,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Diagnostics; // TGVRU: root-cause FlowTrace on the pooled enemy-acquire path
 
 namespace DeNelle.Village
 {
@@ -97,22 +98,40 @@ namespace DeNelle.Village
                                   Vector3 pos, Quaternion rot, Transform parent)
         {
             string poolKey = string.IsNullOrEmpty(key) ? "_default" : key;
+            using var _ = FlowTrace.Enter("EnemyPool",
+                $"Get key='{poolKey}' src={(prefab != null ? "prefab" : "factory")} pos={pos}");
 
             Enemy enemy = null;
+            int queued = 0;
             if (_pools.TryGetValue(poolKey, out var queue))
             {
+                queued = queue.Count;
                 // Skip any destroyed entries (scene-unload NRE guard, per ProjectilePool).
                 while (enemy == null && queue.Count > 0) enemy = queue.Dequeue();
             }
 
             if (enemy == null)
             {
+                FlowTrace.Step("EnemyPool",
+                    $"Get key='{poolKey}': pool empty (had {queued} stale) — building fresh body.");
+
                 // Pool drained / first use for this key — build a fresh body. Stamp
                 // the key so Release routes it back to the same queue on death.
                 enemy = prefab != null
                     ? Instantiate(prefab, pos, rot, parent)
                     : EnemyFactory.Build(def, pos, rot, parent);
-                if (enemy == null) return null;
+                if (enemy == null)
+                {
+                    // SILENT NO-SPAWN GUARD (TGVRU, owner 2026-06-19): a null build here used to
+                    // return null with NO trace, so a wave/roam/garrison spawn just... didn't, and
+                    // the break-log was blind to it. Fail-loud so a capture pinpoints THIS as the
+                    // dead step (missing prefab / factory build threw) instead of a guessed-at
+                    // "enemies aren't spawning".
+                    FlowTrace.Fail("EnemyPool",
+                        $"Get key='{poolKey}' FAILED: {(prefab != null ? "Instantiate(prefab)" : "EnemyFactory.Build")} " +
+                        $"returned null (def='{(def != null ? def.Id : "null")}') — NO enemy spawned (silent no-spawn).");
+                    return null;
+                }
 
                 // Some prefab/placeholder bodies don't carry the damageable adapter;
                 // the factory always does. Guarantee it so the hero can hit a reused
@@ -121,8 +140,13 @@ namespace DeNelle.Village
                     enemy.gameObject.AddComponent<EnemyDamageable>();
 
                 enemy.SetPoolKey(poolKey);
+                FlowTrace.Step("EnemyPool",
+                    $"Get key='{poolKey}': built fresh body '{enemy.name}' (active={enemy.gameObject.activeSelf}).");
                 return enemy;
             }
+
+            FlowTrace.Step("EnemyPool",
+                $"Get key='{poolKey}': reusing pooled body '{enemy.name}' ({queued} were queued).");
 
             // Reused body — re-home, re-place and re-arm it for a fresh spawn.
             Transform t = enemy.transform;
@@ -133,6 +157,19 @@ namespace DeNelle.Village
             // The reset contract (HP / dead flag / animator / agent warp / events /
             // registry / AI state / ledger) lives on Enemy — it owns the private state.
             enemy.PrepareForReuse(pos, rot);
+
+            // RESET-VERIFY (TGVRU): a pooled body that hands back inactive or still flagged
+            // dead is the classic pooling bug (untargetable / invisible spawn). PrepareForReuse
+            // owns the reset; PROVE it took here so a capture self-reports a broken reuse instead
+            // of an enemy that silently never appears. Warn (not Fail): the body still exists, so
+            // this is the diagnosable signal, not a hard stop.
+            if (!enemy.gameObject.activeSelf || enemy.IsDead)
+            {
+                FlowTrace.Warn("EnemyPool",
+                    $"Get key='{poolKey}': reused body '{enemy.name}' did NOT reset clean — " +
+                    $"active={enemy.gameObject.activeSelf} IsDead={enemy.IsDead} (expected active=true, IsDead=false). " +
+                    "PrepareForReuse left it half-reset — would spawn an inactive/dead enemy.");
+            }
             return enemy;
         }
 
@@ -155,6 +192,10 @@ namespace DeNelle.Village
 
         private void ReleaseInternal(Enemy enemy)
         {
+            string poolKey = enemy.PoolKey;
+            if (string.IsNullOrEmpty(poolKey)) poolKey = "_default";
+            using var _ = FlowTrace.Enter("EnemyPool", $"Return key='{poolKey}' body='{enemy.name}'");
+
             // Enemy.Die already invoked ResetForPool (events/registry/ledger/coroutines
             // dropped) before calling us. Deactivate + re-home under this DDOL root so
             // the dormant body survives scene loads and can't tick / be hit / be found.
@@ -162,16 +203,22 @@ namespace DeNelle.Village
             if (enemy.transform.parent != transform)
                 enemy.transform.SetParent(transform, false);
 
-            string poolKey = enemy.PoolKey;
-            if (string.IsNullOrEmpty(poolKey)) poolKey = "_default";
-
             if (!_pools.TryGetValue(poolKey, out var queue))
             {
                 queue = new Queue<Enemy>();
                 _pools[poolKey] = queue;
             }
             // Guard against a double-release leaving the same body twice in the queue.
-            if (!queue.Contains(enemy)) queue.Enqueue(enemy);
+            if (!queue.Contains(enemy))
+            {
+                queue.Enqueue(enemy);
+                FlowTrace.Step("EnemyPool", $"Return key='{poolKey}': body returned to pool (now {queue.Count} dormant).");
+            }
+            else
+            {
+                FlowTrace.Warn("EnemyPool",
+                    $"Return key='{poolKey}': body '{enemy.name}' already in the pool — double-release ignored ({queue.Count} dormant).");
+            }
         }
     }
 }

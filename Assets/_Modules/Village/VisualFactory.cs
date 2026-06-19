@@ -23,6 +23,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -66,12 +67,22 @@ namespace DeNelle.Village
         /// under <paramref name="host"/>. Returns null (caller falls back) if absent.</summary>
         public static GameObject Skin(Transform host, string resourcesPath, SkinOptions opts)
         {
-            var prefab = Resources.Load<GameObject>(resourcesPath);
+            using var _ = FlowTrace.Enter("VisualFactory", $"Skin('{resourcesPath}')");
+
+            GameObject prefab = null;
+            FlowTrace.Try("VisualFactory", $"Resources.Load '{resourcesPath}'",
+                () => prefab = Resources.Load<GameObject>(resourcesPath));
+
             if (prefab == null)
             {
-                Debug.LogWarning("[VisualFactory] model not found in Resources: " + resourcesPath);
+                // §12: a missing model is a hard miss the caller falls back on — promote from a
+                // swallowed Debug.LogWarning to FlowTrace.Fail so it rolls up to the break-log
+                // (error severity) and a headless capture pinpoints the unresolved Resources path.
+                FlowTrace.Fail("VisualFactory",
+                    $"model not found in Resources: '{resourcesPath}' — returning null (caller falls back).");
                 return null;
             }
+            FlowTrace.Step("VisualFactory", $"resolved Resources model '{resourcesPath}' -> '{prefab.name}'.");
             return Skin(host, prefab, opts);
         }
 
@@ -79,9 +90,26 @@ namespace DeNelle.Village
         /// and applies the skin options.</summary>
         public static GameObject Skin(Transform host, GameObject prefab, SkinOptions opts)
         {
-            if (prefab == null) return null;
+            if (prefab == null)
+            {
+                FlowTrace.Fail("VisualFactory", "Skin called with a null prefab — returning null (caller falls back).");
+                return null;
+            }
 
-            var go = Object.Instantiate(prefab, host);
+            using var _ = FlowTrace.Enter("VisualFactory", $"Skin(prefab='{prefab.name}')");
+
+            // Guard the Instantiate: a broken/aborted prefab clone returns null rather than NRE'ing
+            // every caller. Treated as a miss (Fail + null) so callers fall back, never get half-built.
+            GameObject go = null;
+            FlowTrace.Try("VisualFactory", $"Instantiate '{prefab.name}'",
+                () => go = Object.Instantiate(prefab, host));
+            if (go == null)
+            {
+                FlowTrace.Fail("VisualFactory",
+                    $"Instantiate returned null for prefab '{prefab.name}' — returning null (caller falls back).");
+                return null;
+            }
+
             go.transform.localPosition = Vector3.zero;
             // DEF-232: apply the caller's orientation BEFORE Fit/SeatOnGround so the body is
             // measured + centred in its FINAL facing. A post-Skin rotation (the old pattern)
@@ -90,20 +118,85 @@ namespace DeNelle.Village
             go.transform.localRotation = opts.LocalRotation ?? Quaternion.identity;
 
             if (opts.StripColliders)
-                foreach (var c in go.GetComponentsInChildren<Collider>()) Object.Destroy(c);
+                FlowTrace.Try("VisualFactory", "strip colliders",
+                    () => { foreach (var c in go.GetComponentsInChildren<Collider>()) Object.Destroy(c); });
 
-            if (opts.FixTripoMaterials) TryAddTripoFixer(go);
+            if (opts.FixTripoMaterials)
+                FlowTrace.Try("VisualFactory", "add Tripo material fixer", () => TryAddTripoFixer(go));
 
-            if (opts.FitLargest > 0f)     Fit(go, opts.FitLargest, largest: true);
-            else if (opts.FitHeight > 0f) Fit(go, opts.FitHeight,  largest: false);
+            FlowTrace.Try("VisualFactory", "fit + seat", () =>
+            {
+                if (opts.FitLargest > 0f)     Fit(go, opts.FitLargest, largest: true);
+                else if (opts.FitHeight > 0f) Fit(go, opts.FitHeight,  largest: false);
 
-            // SeatOnGround centres the (now correctly-oriented) bounds over the host's x/z and
-            // drops the bounds-base to the host's y — so the visible mesh sits dead-centre over
-            // the hero ROOT, the transform the camera follows and HeroLocomotion drives.
-            if (opts.SeatOnGround)
-                SeatOnGround(go, host != null ? host.position : go.transform.position);
+                // SeatOnGround centres the (now correctly-oriented) bounds over the host's x/z and
+                // drops the bounds-base to the host's y — so the visible mesh sits dead-centre over
+                // the hero ROOT, the transform the camera follows and HeroLocomotion drives.
+                if (opts.SeatOnGround)
+                    SeatOnGround(go, host != null ? host.position : go.transform.position);
+            });
+
+            // RENDER-VERIFY (owner directive 2026-06-19: "anything that renders can be broken — check
+            // render==true and roll back the error"). This is the #1 shared choke point — every
+            // enemy/troop/structure/prop/animal/companion body skins through here. A prefab that loads
+            // but renders nothing (no enabled renderer, missing mesh, degenerate bounds) reads as a
+            // grey/empty body to the player. PROVE it can render before handing it back; a broken build
+            // logs Fail (rolls up to break-log) and is destroyed + treated as a MISS (return null) so
+            // the caller falls back — we never hand back a render-broken-but-non-null body silently.
+            if (!VerifyRenders(go, prefab.name))
+            {
+                Object.Destroy(go);
+                return null;
+            }
 
             return go;
+        }
+
+        // RENDER-VERIFY: the instantiated body MUST carry >=1 ENABLED Renderer (SkinnedMeshRenderer or
+        // MeshRenderer) with a non-null shared mesh AND non-degenerate world bounds. Traces the exact
+        // counts so a headless capture splits "no enabled renderer" vs "missing mesh" vs "degenerate
+        // bounds" with zero guessing. Returns false => caller (Skin) treats the build as a miss.
+        private static bool VerifyRenders(GameObject go, string what)
+        {
+            if (go == null)
+            {
+                FlowTrace.Fail("VisualFactory", $"VerifyRenders: skinned '{what}' instance is null.");
+                return false;
+            }
+
+            var rends = go.GetComponentsInChildren<Renderer>(true);
+            int total = 0, enabled = 0, withMesh = 0;
+            foreach (var r in rends)
+            {
+                if (r == null) continue;
+                total++;
+                bool on = r.enabled && r.gameObject.activeInHierarchy;
+                bool hasMesh = false;
+                if (r is SkinnedMeshRenderer smr) hasMesh = smr.sharedMesh != null;
+                else
+                {
+                    var mf = r.GetComponent<MeshFilter>();
+                    hasMesh = mf != null && mf.sharedMesh != null;
+                }
+                if (on) enabled++;
+                if (on && hasMesh) withMesh++;
+            }
+
+            bool boundsOk = TryBounds(go, out Bounds b) && b.size.sqrMagnitude > 1e-8f;
+            bool renders = enabled > 0 && withMesh > 0 && boundsOk;
+
+            FlowTrace.Step("VisualFactory",
+                $"skinned '{what}' on '{go.name}': renderers={total} enabled={enabled} withMesh={withMesh} " +
+                $"boundsSize={(boundsOk ? b.size.ToString("F2") : "<degenerate>")} => renders={renders}");
+
+            if (!renders)
+            {
+                FlowTrace.Fail("VisualFactory",
+                    $"VerifyRenders FAILED for skinned '{what}' on '{go.name}': renderers={total} enabled={enabled} " +
+                    $"withMesh={withMesh} boundsOk={boundsOk} — treating as a MISS (destroy + return null; caller falls back).");
+                return false;
+            }
+            return true;
         }
 
         // ── Geometry helpers ─────────────────────────────────────────────────
