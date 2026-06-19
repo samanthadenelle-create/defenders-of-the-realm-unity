@@ -35,6 +35,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.SceneManagement;
+using DeNelle.Core.Diagnostics;   // TGVRU — FlowTrace/Guard on the garrison spawn path
 // EnemyDef / Enemy / EnemyFactory all live in the parent namespace DeNelle.Village,
 // visible here because DeNelle.Village.World.Camps nests under it (same as EnemyOutpost).
 
@@ -170,6 +171,7 @@ namespace DeNelle.Village.World.Camps
         /// </summary>
         public void SpawnInitialGuards()
         {
+            using var _ = FlowTrace.Enter("Garrison", $"SpawnInitialGuards '{name}'");
             _garrisonRoot = new GameObject("[Garrison]").transform;
             _garrisonRoot.SetParent(transform, false);
             _garrisonRoot.localPosition = Vector3.zero;
@@ -177,33 +179,40 @@ namespace DeNelle.Village.World.Camps
             var points = ResolveSpawnPoints();
             if (points.Count == 0)
             {
-                Debug.LogWarning($"[GarrisonController] {name} has no spawn points — no garrison spawned.");
+                // R/U — was a silent LogWarning. A garrison with no spawn points spawns no
+                // defenders (the raid auto-clears); self-report so an empty garrison is loud.
+                FlowTrace.Fail("Garrison", $"{name} has no spawn points — no garrison spawned (raid will auto-clear).");
                 return;
             }
 
             // Deterministic level-roller so a given garrison reads the same every load.
             _levelRng = new System.Random((name != null ? name.GetHashCode() : 0) ^ 0x5EED);
 
-            for (int i = 0; i < points.Count; i++)
+            // G — Guard.TryEach over the spawn indices so one bad spawn point logs + is skipped,
+            // never aborting the whole garrison (which would leave the raid un-clearable).
+            var indices = new List<int>(points.Count);
+            for (int i = 0; i < points.Count; i++) indices.Add(i);
+            Guard.TryEach("Garrison", $"{name} spawn guard", indices, i =>
             {
                 Transform sp = points[i];
-                if (sp == null) continue;
+                if (sp == null) return;
 
                 // A defender is a TROLL by default; every 3rd is the lighter, faster
                 // "Stonebelly" variant for silhouette variety (still the Troll family/model).
                 bool stonebelly = (i % 3) == 2;
                 SpawnOne(sp.position, sp.rotation, stonebelly, i);
-            }
+            });
 
             if (_aliveCount == 0)
             {
-                Debug.LogWarning($"[GarrisonController] {name} spawned 0 living defenders " +
-                                 "(no navmesh under the spawn points? prefabs null?) — treating as cleared.");
+                // R — spawned nothing: self-report (loud) instead of a silent auto-clear.
+                FlowTrace.Fail("Garrison", $"{name} spawned 0 living defenders " +
+                               "(no navmesh under the spawn points? prefabs null?) — treating as cleared.");
                 MarkCleared();
             }
             else
             {
-                Debug.Log($"[GarrisonController] {name} garrison spawned: {_aliveCount} defender(s) " +
+                FlowTrace.Step("Garrison", $"{name} garrison spawned: {_aliveCount} defender(s) " +
                           $"across {points.Count} spawn point(s), threat {threatLevel}.");
             }
         }
@@ -250,12 +259,17 @@ namespace DeNelle.Village.World.Camps
                     {
                         var a = MakeAnchor($"GuardAnchor-{index}", pos);
                         e.SetBrainTarget(a);
+                        // V — verify the authored-prefab defender RENDERS, else the hero fights
+                        // an invisible garrison member.
+                        VerifyGuardRenders(e, $"prefab-guard-{index} ({prefab.name})", pos);
                         Track(e);
                     }
                     else
                     {
-                        Debug.LogWarning($"[GarrisonController] enemyPrefab '{prefab.name}' has no Enemy component — " +
-                                         "spawned as scenery, not counted in the garrison.");
+                        // R/U — was a silent LogWarning. A prefab with no Enemy is spawned as
+                        // scenery and never counts toward the clear — self-report.
+                        FlowTrace.Warn("Garrison", $"enemyPrefab '{prefab.name}' has no Enemy component — " +
+                                       "spawned as scenery, not counted in the garrison.");
                     }
                     return;
                 }
@@ -276,7 +290,9 @@ namespace DeNelle.Village.World.Camps
             var enemy = EnemyFactory.Build(def, pos, rot, _garrisonRoot);
             if (enemy == null)
             {
-                Debug.LogWarning($"[GarrisonController] EnemyFactory returned null for '{def.Id}' at {pos} — skipped.");
+                // R/U — was a silent LogWarning. A null factory return shrinks the garrison;
+                // self-report so a missing defender is loud.
+                FlowTrace.Fail("Garrison", $"EnemyFactory returned null for '{def.Id}' at {pos} — defender NOT spawned.");
                 return;
             }
             enemy.gameObject.name = $"GarrisonGuard ({def.Id}-Lv{level}-{index})";
@@ -285,7 +301,33 @@ namespace DeNelle.Village.World.Camps
             enemy.Configure($"garrison-{def.Id}-{index}", def, anchor);
             enemy.SetBrainTarget(anchor);   // HOLD the garrison; hero aggro still pulls them in
 
+            // V — the defender must RENDER, else the hero fights an invisible garrison member.
+            VerifyGuardRenders(enemy, $"guard-{index} ({def.Id})", pos);
+
             Track(enemy);
+        }
+
+        // V — confirm a spawned garrison defender actually RENDERS (>=1 enabled renderer carrying a
+        // mesh), else the hero fights an invisible defender. Mirrors CampGuards.VerifyGuardRenders:
+        // a Warn that self-reports to the break-log; the defender stays in the garrison either way
+        // (a hittable-but-invisible defender is still clearable; removing it could deadlock the raid).
+        private void VerifyGuardRenders(Enemy enemy, string what, Vector3 pos)
+        {
+            if (enemy == null) return;
+            var go = enemy.gameObject;
+            int enabledWithMesh = 0;
+            foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                if (smr != null && smr.enabled && smr.sharedMesh != null) enabledWithMesh++;
+            foreach (var mr in go.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (mr == null || !mr.enabled) continue;
+                var mf = mr.GetComponent<MeshFilter>();
+                if (mf != null && mf.sharedMesh != null) enabledWithMesh++;
+            }
+            if (enabledWithMesh == 0)
+                FlowTrace.Warn("Garrison",
+                    $"INVISIBLE DEFENDER: {name} {what} at {pos} has 0 enabled renderers with a mesh — " +
+                    "hero would fight an unseen garrison defender (EnemyFactory fallback should have tinted a capsule).");
         }
 
         private void Track(Enemy e)

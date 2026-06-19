@@ -29,6 +29,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.World;
+using DeNelle.Core.Diagnostics;   // TGVRU — FlowTrace/Guard on the camp spawn fan-out
 
 namespace DeNelle.Village.World.Camps
 {
@@ -125,35 +126,51 @@ namespace DeNelle.Village.World.Camps
         /// </summary>
         public static void SpawnNow()
         {
-            if (!Enabled) return;
-            if (_spawned) return;
+            // T — entry/branch trace so a capture sees WHY no camps spawned (disabled / already
+            // spawned / not in the outer world) vs. a per-anchor build that threw.
+            using var _ = FlowTrace.Enter("Camp", "CampSystem.SpawnNow");
+            if (!Enabled) { FlowTrace.Step("Camp", "SpawnNow: feature disabled — no camps."); return; }
+            if (_spawned) { FlowTrace.Step("Camp", "SpawnNow: already spawned — no-op."); return; }
 
             if (!InOuterWorld())
             {
                 // Not in the world scene yet - re-bootstrap will fire on the next
                 // scene load. (Subscribe-free wait; no per-frame polling.)
+                FlowTrace.Step("Camp", "SpawnNow: not in OuterWorld yet — deferring to next scene load.");
                 return;
             }
 
             var host = new GameObject("CampSystem (camps)");
             Object.DontDestroyOnLoad(host);
 
+            // G — guard EACH anchor independently so one bad camp build logs + is skipped, never
+            // aborting the whole fan-out (which would leave the world with NO camps on a single fault).
             for (int i = 0; i < CampAnchors.Length; i++)
             {
-                Vector3 anchor = CampAnchors[i];
-                RegionId region = ZoneManager.GetZone(anchor);
-                int threat = ZoneManager.ThreatLevel(anchor);
+                int idx = i;
+                Guard.Try("Camp", $"spawn camp at anchor {idx}", () =>
+                {
+                    Vector3 anchor = CampAnchors[idx];
+                    RegionId region = ZoneManager.GetZone(anchor);
+                    int threat = ZoneManager.ThreatLevel(anchor);
 
-                var go = new GameObject($"Camp_{region}");
-                go.transform.SetParent(host.transform, false);
-                go.transform.position = anchor;
+                    var go = new GameObject($"Camp_{region}");
+                    go.transform.SetParent(host.transform, false);
+                    go.transform.position = anchor;
 
-                var camp = go.AddComponent<ClaimableCamp>();
-                camp.Configure(region, threat, DefaultKillsRequired, DefaultCampRadius);
-                _camps.Add(camp);
+                    var camp = go.AddComponent<ClaimableCamp>();
+                    camp.Configure(region, threat, DefaultKillsRequired, DefaultCampRadius);
+                    _camps.Add(camp);
+                });
             }
 
             _spawned = true;
+            // R — fan-out completed but produced NOTHING: self-report rather than silently
+            // shipping a campless world (every anchor build threw).
+            if (_camps.Count == 0)
+                FlowTrace.Fail("Camp", "SpawnNow: 0 camps spawned across the outer world — every anchor build failed.");
+            else
+                FlowTrace.Step("Camp", $"SpawnNow: spawned {_camps.Count} claimable camp(s) across the outer world (feature ENABLED).");
             Debug.Log($"[CampSystem] Spawned {_camps.Count} claimable camps across the outer world (feature ENABLED).");
         }
 

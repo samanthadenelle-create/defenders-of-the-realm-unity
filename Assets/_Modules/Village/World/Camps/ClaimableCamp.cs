@@ -25,6 +25,7 @@ using System.Text;
 using UnityEngine;
 using DeNelle.Core.World;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;   // TGVRU — FlowTrace/Guard on the camp build/fortify/harvest path
 using DeNelle.Village.World;
 
 namespace DeNelle.Village.World.Camps
@@ -133,20 +134,28 @@ namespace DeNelle.Village.World.Camps
 
         private void SpawnQuaterniusEnemyCamp()
         {
+            using var _ = FlowTrace.Enter("Camp", $"{CampId} SpawnQuaterniusEnemyCamp");
             // Demo spawn; real load Quaternius enemy/medieval props.
+            int built = 0;
             for (int i = 0; i < 3; i++)
             {
-                var p = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                p.name = "QuaterniusEnemyProp";
-                p.transform.SetParent(transform, false);
-                p.transform.localPosition = new Vector3(i * 5 - 5, 1, 3);
-                p.transform.localScale = Vector3.one * 3f;
+                int idx = i;
+                // G — guard each prop so one bad CreatePrimitive logs + is skipped, never aborting.
+                if (Guard.Try("Camp", $"{CampId} enemy prop {idx}", () =>
+                {
+                    var p = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    p.name = "QuaterniusEnemyProp";
+                    p.transform.SetParent(transform, false);
+                    p.transform.localPosition = new Vector3(idx * 5 - 5, 1, 3);
+                    p.transform.localScale = Vector3.one * 3f;
+                })) built++;
             }
-            Debug.Log("[ClaimableCamp] WO-111 enemy outpost props (Quaternius).");
+            FlowTrace.Step("Camp", $"{CampId} enemy outpost props (Quaternius): built {built}/3.");
         }
 
         private void Start()
         {
+            using var _ = FlowTrace.Enter("Camp", $"{CampId} Start (stage={Stage})");
             // Build the simple code-built visual tell (campfire/banner primitives).
             _visual = gameObject.AddComponent<CampVisual>();
             _visual.Init(this);
@@ -308,8 +317,17 @@ namespace DeNelle.Village.World.Camps
         /// <summary>Build (or replace) the outpost of the given type on this camp.</summary>
         public Outpost BuildOutpost(OutpostType type)
         {
-            if (Stage != CampStage.Claimed) return null;
-            if (type == OutpostType.None) return null;
+            using var _ = FlowTrace.Enter("Camp", $"{CampId} BuildOutpost type={type}");
+            if (Stage != CampStage.Claimed)
+            {
+                FlowTrace.Step("Camp", $"{CampId} BuildOutpost: not Claimed (stage={Stage}) — no-op.");
+                return null;
+            }
+            if (type == OutpostType.None)
+            {
+                FlowTrace.Step("Camp", $"{CampId} BuildOutpost: type None — no-op.");
+                return null;
+            }
 
             if (_outpost != null)
             {
@@ -342,7 +360,7 @@ namespace DeNelle.Village.World.Camps
             PlayerPrefs.SetString(PrefClaimedKey + CampId, ((int)type).ToString());
             PlayerPrefs.Save();
 
-            Debug.Log($"[ClaimableCamp] {CampId} built a {type} outpost - auto-harvest online.");
+            FlowTrace.Step("Camp", $"{CampId} built a {type} outpost — auto-harvest online.");
 
             // DESIGN PIVOT (owner 2026-06-16): the STAGE-4 DEFEND counterattack is RETIRED.
             // It silently auto-resolved when no attackers spawned (NavMesh missing at camp
@@ -366,13 +384,34 @@ namespace DeNelle.Village.World.Camps
         // on restore we pass persist:false and reuse the deserialized recipe.
         private void BuildFortification(Transform outpostRoot, OutpostTier tier, bool persist)
         {
-            if (outpostRoot == null) return;
+            using var _ = FlowTrace.Enter("Camp", $"{CampId} BuildFortification tier={tier}");
+            if (outpostRoot == null)
+            {
+                FlowTrace.Fail("Camp", $"{CampId} BuildFortification: null outpost root — no fortification built.");
+                return;
+            }
+
+            // G — recipe generation is pure data but still guarded so a degenerate dimension can't
+            // throw and abort the whole build. A null/empty recipe self-reports below.
+            if (_recipe == null || _recipe.Count == 0)
+                Guard.Try("Camp", $"{CampId} generate fortification recipe", () =>
+                    _recipe = OutpostFoundationGenerator.GenerateSquareWalledBaseRecipe(
+                        FortGridWidth, FortGridDepth, tier, FortWallRings));
 
             if (_recipe == null || _recipe.Count == 0)
-                _recipe = OutpostFoundationGenerator.GenerateSquareWalledBaseRecipe(
-                    FortGridWidth, FortGridDepth, tier, FortWallRings);
+            {
+                // R — no recipe -> no walls/towers/gate. Self-report rather than a silent empty fort
+                // (the camp would have a navmesh-free, wall-free claimed base).
+                FlowTrace.Fail("Camp", $"{CampId} BuildFortification: empty recipe — no fortification pieces realized.");
+                return;
+            }
 
-            OutpostFoundationGenerator.Realize(_recipe, outpostRoot, ~0);
+            // Realize routes through OutpostFoundationGenerator (already TGVRU-instrumented: it
+            // render-verifies + logs each carving footprint, the invisible-blocker self-report).
+            Guard.Try("Camp", $"{CampId} realize fortification ({_recipe.Count} pieces)",
+                () => OutpostFoundationGenerator.Realize(_recipe, outpostRoot, ~0));
+
+            FlowTrace.Step("Camp", $"{CampId} BuildFortification: realized {_recipe.Count} fortification piece(s) (persist={persist}).");
 
             if (persist)
             {
@@ -465,7 +504,8 @@ namespace DeNelle.Village.World.Camps
 
         private void SpawnHarvestNodes()
         {
-            if (_nodesSpawned) return;
+            using var _ = FlowTrace.Enter("Camp", $"{CampId} SpawnHarvestNodes");
+            if (_nodesSpawned) { FlowTrace.Step("Camp", $"{CampId} SpawnHarvestNodes: already planted — no-op."); return; }
             _nodesSpawned = true;
 
             // Courtyard centre in LOCAL fort coords: the recipe lays cells 0..n-1 out
@@ -481,27 +521,61 @@ namespace DeNelle.Village.World.Camps
                 centre + new Vector3(-1.6f, 0f, -1.6f),
             };
 
+            int planted = 0;
             for (int i = 0; i < CampNodeResources.Length; i++)
             {
-                var go = new GameObject($"HarvestNode_{CampNodeResources[i]}_{Region}");
-                // Inactive BEFORE AddComponent so MineNode.Awake/Start read the configured
-                // fields (Resource etc.) instead of the defaults — then activate to run them.
-                go.SetActive(false);
-                go.transform.SetParent(transform, false);
-                go.transform.localPosition = spots[i];
+                int idx = i;
+                // G — guard each node so one bad MineNode spawn logs + is skipped, never aborting
+                // the whole harvest base (which would leave the claimed camp income-less).
+                if (Guard.Try("Camp", $"{CampId} plant harvest node {CampNodeResources[idx]}", () =>
+                {
+                    var go = new GameObject($"HarvestNode_{CampNodeResources[idx]}_{Region}");
+                    // Inactive BEFORE AddComponent so MineNode.Awake/Start read the configured
+                    // fields (Resource etc.) instead of the defaults — then activate to run them.
+                    go.SetActive(false);
+                    go.transform.SetParent(transform, false);
+                    go.transform.localPosition = spots[idx];
 
-                var node = go.AddComponent<MineNode>();
-                node.Resource         = CampNodeResources[i];
-                node.UseFiniteReserve = false;   // renewable base income
-                node.AutoBuildVisual  = true;    // shows the lightweight Harvest/<type> model
-                node.YieldPerExtract  = 5;
-                node.ExtractCooldown  = 8f;
-                node.TotalExtracts    = 0;        // 0 = infinite — a permanent base resource
-                node.RespawnSeconds   = 0f;
+                    var node = go.AddComponent<MineNode>();
+                    node.Resource         = CampNodeResources[idx];
+                    node.UseFiniteReserve = false;   // renewable base income
+                    node.AutoBuildVisual  = true;    // shows the lightweight Harvest/<type> model
+                    node.YieldPerExtract  = 5;
+                    node.ExtractCooldown  = 8f;
+                    node.TotalExtracts    = 0;        // 0 = infinite — a permanent base resource
+                    node.RespawnSeconds   = 0f;
 
-                go.SetActive(true);
+                    go.SetActive(true);
+
+                    // V — the node must RENDER, else the hero can't see a resource to harvest
+                    // (the invisible-marker class). AutoBuildVisual builds it active-side; a Warn
+                    // self-reports if it produced no enabled renderer with a mesh.
+                    VerifyNodeRenders(go, $"node {CampNodeResources[idx]}", spots[idx]);
+                })) planted++;
             }
-            Debug.Log($"[ClaimableCamp] {CampId} planted {CampNodeResources.Length} direct-harvest nodes in the courtyard.");
+            FlowTrace.Step("Camp", $"{CampId} planted {planted}/{CampNodeResources.Length} direct-harvest node(s) in the courtyard.");
+        }
+
+        // V — confirm a planted harvest node actually RENDERS (>=1 enabled renderer carrying a mesh),
+        // else the hero sees no resource to harvest at a courtyard node. A Warn self-report to the
+        // break-log; the node still functions (harvestable) either way.
+        private void VerifyNodeRenders(GameObject go, string what, Vector3 localPos)
+        {
+            if (go == null) return;
+            int enabledWithMesh = 0;
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null || !r.enabled || !r.gameObject.activeInHierarchy) continue;
+                bool hasMesh = r.sharedMaterial != null;
+                var mf = r.GetComponent<MeshFilter>();
+                if (mf != null && mf.sharedMesh == null) hasMesh = false;
+                if (r is SkinnedMeshRenderer smr && smr.sharedMesh == null) hasMesh = false;
+                if (hasMesh) enabledWithMesh++;
+            }
+            if (enabledWithMesh == 0)
+                FlowTrace.Warn("Camp",
+                    $"INVISIBLE HARVEST NODE: {CampId} {what} at local {localPos} has 0 enabled renderers " +
+                    "with a mesh — hero sees no resource to harvest (AutoBuildVisual produced nothing visible).");
         }
 
         // RETIRED (design pivot 2026-06-16) — no longer called. Kept so the counterattack

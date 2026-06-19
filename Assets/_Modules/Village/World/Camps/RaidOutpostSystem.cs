@@ -22,6 +22,7 @@
 // =============================================================================
 using UnityEngine;
 using DeNelle.Core.World;
+using DeNelle.Core.Diagnostics;   // TGVRU — FlowTrace/Guard on the cardinal-outpost realize loop
 
 namespace DeNelle.Village.World.Camps
 {
@@ -175,33 +176,52 @@ namespace DeNelle.Village.World.Camps
         // the other three.
         private static void RealizeOutpost()
         {
-            if (!InOuterWorld()) return;   // left the world during the delay
+            // T — entry/branch trace so a capture sees whether the delayed realize fired at all,
+            // and which anchors actually built vs. threw.
+            using var _ = FlowTrace.Enter("Outpost", "RaidOutpostSystem.RealizeOutpost");
+            if (!InOuterWorld()) { FlowTrace.Step("Outpost", "RealizeOutpost: left OuterWorld during the delay — skipped."); return; }
 
             var host = new GameObject("RaidOutpostSystem (outposts)");
             Object.DontDestroyOnLoad(host);
 
+            int built = 0;
             for (int i = 0; i < OutpostAnchors.Length; i++)
             {
                 if (_realized[i]) continue;   // per-anchor guard: never double-build anchor i
                 _realized[i] = true;
 
-                CardinalOutpost cardinal = OutpostAnchors[i];
-                Vector3 anchor = cardinal.Anchor;
+                int idx = i;
+                // G — guard EACH cardinal independently so one anchor failing never blocks the
+                // other three (the loop's own design intent, now fault-isolated + self-reporting).
+                bool ok = Guard.Try("Outpost", $"realize cardinal outpost {OutpostAnchors[idx].IdSuffix}", () =>
+                {
+                    CardinalOutpost cardinal = OutpostAnchors[idx];
+                    Vector3 anchor = cardinal.Anchor;
 
-                RegionId region = ZoneManager.GetZone(anchor);
-                int threat = ZoneManager.ThreatLevel(anchor);
+                    RegionId region = ZoneManager.GetZone(anchor);
+                    int threat = ZoneManager.ThreatLevel(anchor);
 
-                var go = new GameObject($"EnemyOutpost_{region}_{cardinal.IdSuffix}");
-                go.transform.SetParent(host.transform, false);
-                go.transform.position = anchor;
+                    var go = new GameObject($"EnemyOutpost_{region}_{cardinal.IdSuffix}");
+                    go.transform.SetParent(host.transform, false);
+                    go.transform.position = anchor;
 
-                var outpost = go.AddComponent<EnemyOutpost>();
-                outpost.Configure(region, threat, cardinal.IdSuffix);
-                _outposts[i] = outpost;
+                    var outpost = go.AddComponent<EnemyOutpost>();
+                    outpost.Configure(region, threat, cardinal.IdSuffix);
+                    _outposts[idx] = outpost;
 
-                Debug.Log($"[RaidOutpostSystem] Spawned cardinal outpost {cardinal.IdSuffix} at {anchor} ({region}, threat {threat}) - walk out the {cardinal.IdSuffix} gate to raid it.");
+                    FlowTrace.Step("Outpost",
+                        $"Spawned cardinal outpost {cardinal.IdSuffix} at {anchor} ({region}, threat {threat}) — walk out the {cardinal.IdSuffix} gate to raid it.");
+                    Debug.Log($"[RaidOutpostSystem] Spawned cardinal outpost {cardinal.IdSuffix} at {anchor} ({region}, threat {threat}) - walk out the {cardinal.IdSuffix} gate to raid it.");
+                });
+                if (ok) built++;
             }
 
+            // R — realize completed but built NOTHING: self-report rather than silently shipping a
+            // world with no raid targets (every anchor threw).
+            if (built == 0)
+                FlowTrace.Fail("Outpost", $"RealizeOutpost: 0 of {OutpostAnchors.Length} cardinal outposts realized — every anchor build failed.");
+            else
+                FlowTrace.Step("Outpost", $"RealizeOutpost: realized {built}/{OutpostAnchors.Length} cardinal enemy outpost(s) (one per gate exit).");
             Debug.Log($"[RaidOutpostSystem] {OutpostAnchors.Length} cardinal enemy outposts realized (one per gate exit).");
         }
 

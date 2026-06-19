@@ -33,6 +33,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using DeNelle.Core.Diagnostics;   // TGVRU — FlowTrace/Guard on the boss + guard spawn path
 // EnemyDef / Enemy / EnemyFactory / EnemyBrain / EnemyRole all live in the parent
 // namespace DeNelle.Village, visible here (DeNelle.Village.World.Camps nests under it).
 
@@ -177,13 +178,14 @@ namespace DeNelle.Village.World.Camps
 
             if (_aliveCount == 0)
             {
-                Debug.LogWarning($"[RaidGarrisonSpawner] '{configId}' spawned 0 living defenders " +
-                                 "(no navmesh under the base? empty composition?) — treating as cleared.");
+                // R — spawned nothing: self-report (loud) instead of a silent auto-clear.
+                FlowTrace.Fail("Garrison", $"'{configId}' spawned 0 living defenders " +
+                               "(no navmesh under the base? empty composition?) — treating as cleared.");
                 MarkCleared();
             }
             else
             {
-                Debug.Log($"[RaidGarrisonSpawner] '{configId}' garrison spawned: {_aliveCount} defender(s), " +
+                FlowTrace.Step("Garrison", $"'{configId}' garrison spawned: {_aliveCount} defender(s), " +
                           $"enemyLevel {enemyLevel} (player {playerLevel}), difficulty x{difficulty:F2}, ring {ring:F1}m.");
             }
         }
@@ -251,7 +253,9 @@ namespace DeNelle.Village.World.Camps
             var boss = EnemyFactory.Build(def, pos, Quaternion.identity, _garrisonRoot);
             if (boss == null)
             {
-                Debug.LogWarning($"[RaidGarrisonSpawner] EnemyFactory returned null for boss '{bossId}' — skipped.");
+                // R/U — was a silent LogWarning. A null boss leaves the keep undefended at its
+                // centre; self-report so the missing boss is loud.
+                FlowTrace.Fail("Garrison", $"'{configId}' SpawnBoss: EnemyFactory returned null for boss '{bossId}' at {pos} — boss NOT spawned.");
                 return;
             }
             boss.gameObject.name = $"RaidBoss ({def.Id}-Lv{enemyLevel})";
@@ -259,6 +263,9 @@ namespace DeNelle.Village.World.Camps
             var anchor = MakeAnchor("BossAnchor", pos);
             boss.Configure($"raidboss-{configId}", def, anchor);
             boss.SetBrainTarget(anchor);   // HOLD the keep; hero aggro still pulls it in
+
+            // V — the boss must RENDER, else the hero fights an invisible keep defender.
+            VerifyGuardRenders(boss, $"boss ({def.Id})", pos);
 
             // MiniBoss brain (tougher, holds the keep) — mirrors EnemyOutpost.SpawnBoss.
             var brain = boss.gameObject.GetComponent<EnemyBrain>();
@@ -286,7 +293,8 @@ namespace DeNelle.Village.World.Camps
             var guard = EnemyFactory.Build(def, pos, Quaternion.identity, _garrisonRoot);
             if (guard == null)
             {
-                Debug.LogWarning($"[RaidGarrisonSpawner] EnemyFactory returned null for '{enemyId}' at {pos} — skipped.");
+                // R/U — was a silent LogWarning. A null guard shrinks the garrison; self-report.
+                FlowTrace.Fail("Garrison", $"'{configId}' SpawnGuard[{index}]: EnemyFactory returned null for '{enemyId}' at {pos} — guard NOT spawned.");
                 return;
             }
             guard.gameObject.name = $"RaidGuard ({def.Id}-Lv{enemyLevel}-{index})";
@@ -295,7 +303,33 @@ namespace DeNelle.Village.World.Camps
             guard.Configure($"raidguard-{configId}-{index}", def, anchor);
             guard.SetBrainTarget(anchor);   // HOLD the garrison; hero aggro still pulls them in
 
+            // V — the guard must RENDER, else the hero fights an invisible garrison defender.
+            VerifyGuardRenders(guard, $"guard-{index} ({def.Id})", pos);
+
             Track(guard);
+        }
+
+        // V — confirm a spawned defender actually RENDERS (>=1 enabled renderer carrying a mesh),
+        // else the hero fights an invisible garrison member. Mirrors CampGuards.VerifyGuardRenders:
+        // a Warn that self-reports to the break-log; the defender stays in the garrison either way
+        // (a hittable-but-invisible defender is still clearable; removing it could deadlock the raid).
+        private void VerifyGuardRenders(Enemy enemy, string what, Vector3 pos)
+        {
+            if (enemy == null) return;
+            var go = enemy.gameObject;
+            int enabledWithMesh = 0;
+            foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                if (smr != null && smr.enabled && smr.sharedMesh != null) enabledWithMesh++;
+            foreach (var mr in go.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (mr == null || !mr.enabled) continue;
+                var mf = mr.GetComponent<MeshFilter>();
+                if (mf != null && mf.sharedMesh != null) enabledWithMesh++;
+            }
+            if (enabledWithMesh == 0)
+                FlowTrace.Warn("Garrison",
+                    $"INVISIBLE DEFENDER: '{configId}' {what} at {pos} has 0 enabled renderers with a mesh — " +
+                    "hero would fight an unseen garrison defender (EnemyFactory fallback should have tinted a capsule).");
         }
 
         // Fold the config's difficultyMultiplier into HP + contact damage (the ONE place

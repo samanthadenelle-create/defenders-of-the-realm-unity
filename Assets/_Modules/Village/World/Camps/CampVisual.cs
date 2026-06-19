@@ -8,8 +8,13 @@
 // NO prefab hard-dependency; if a polyperfect prop were swapped in later, a
 // missing prefab would LogWarning (never error) per CLAUDE.md.
 // ASCII-only. Canon: village is Elarion.
+//
+// INSTRUMENTED per CLAUDE.md §12 (TGVRU): the campfire/banner primitive build is
+// Guard'd; a SILENT-ABSENT visual (build threw, or a renderer never resolved) now
+// self-reports via FlowTrace.Warn instead of leaving the camp with no on-screen tell.
 // =============================================================================
 using UnityEngine;
+using DeNelle.Core.Diagnostics;   // TGVRU — FlowTrace/Guard on the camp visual build
 
 namespace DeNelle.Village.World.Camps
 {
@@ -34,7 +39,9 @@ namespace DeNelle.Village.World.Camps
 
         private void BuildPrimitives()
         {
-            try
+            // G — guard the primitive build so a throw logs (never silently swallows) and the
+            // camp's stage tell can self-report if it never appeared.
+            Guard.Try("Camp", "build camp visual primitives", () =>
             {
                 // Campfire (low disc).
                 var fire = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
@@ -55,11 +62,17 @@ namespace DeNelle.Village.World.Camps
                 pole.transform.localPosition = new Vector3(1.6f, 1.0f, 0f);
                 _bannerRenderer = pole.GetComponent<Renderer>();
                 ApplyShader(_bannerRenderer);
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogWarning($"[CampVisual] primitive build skipped: {ex.Message}");
-            }
+            });
+
+            // V — a camp with NO renderer (build threw, or a primitive carried no Renderer) has no
+            // on-screen tell of its Hostile/Cleared/Claimed stage. Self-report instead of a silent
+            // blank — the owner's invisible-marker class. The camp logic still works; this is the
+            // smoking gun for "the camp is there but I see nothing".
+            if (_fireRenderer == null || _bannerRenderer == null)
+                FlowTrace.Warn("Camp",
+                    $"INVISIBLE CAMP TELL: '{name}' built no campfire/banner renderer " +
+                    $"(fire={(_fireRenderer != null)}, banner={(_bannerRenderer != null)}) — " +
+                    "camp stage has no visible marker (primitive build threw or carried no Renderer).");
         }
 
         public void SetStage(CampStage stage)

@@ -21,6 +21,7 @@
 using UnityEngine;
 using DeNelle.Core.Combat;
 using DeNelle.Core.World;
+using DeNelle.Core.Diagnostics;   // TGVRU — FlowTrace/Guard on the outpost visual build
 
 namespace DeNelle.Village.World.Camps
 {
@@ -173,7 +174,10 @@ namespace DeNelle.Village.World.Camps
         // -- Code-built primitive visual (no prefab hard-dependency) ----------
         private void BuildVisual()
         {
-            try
+            // G — guard the primitive build; a throw here previously caught-WITHOUT-Fail (a silent
+            // LogWarning that never reached the break-log). Route through Guard.Try so a thrown
+            // visual self-reports loudly, then V-verify the outpost actually rendered.
+            bool ok = Guard.Try("Outpost", $"build {Type} outpost visual", () =>
             {
                 Color tint = Type switch
                 {
@@ -199,11 +203,45 @@ namespace DeNelle.Village.World.Camps
                 cap.transform.localScale = new Vector3(1.4f, 0.4f, 1.4f);
                 cap.transform.localPosition = new Vector3(0f, 2.9f, 0f);
                 Paint(cap, tint * 1.2f);
-            }
-            catch (System.Exception ex)
+            });
+
+            if (!ok)
             {
-                Debug.LogWarning($"[Outpost] visual build skipped: {ex.Message}");
+                // R/U — was a silent catch->LogWarning. Fail-loud: a damageable outpost with no
+                // visible post/cap is the invisible-blocker class (an unseen, hittable structure).
+                FlowTrace.Fail("Outpost",
+                    $"BuildVisual: {Type} outpost in {Region} threw building its post/cap primitive — " +
+                    "outpost may be hittable but invisible.");
+                return;
             }
+
+            VerifyOutpostRenders();
+        }
+
+        // V — confirm the built outpost actually RENDERS (>=1 enabled renderer carrying a mesh).
+        // A damageable IDamageableStructure with no visible mesh is the owner's invisible-blocker /
+        // grey-foundation class: the hero can hit/raze it with NOTHING on screen. Belt-and-braces —
+        // a Fail self-report to the break-log; the outpost stays (still damageable/harvesting).
+        private void VerifyOutpostRenders()
+        {
+            int enabledWithMesh = 0;
+            foreach (var r in GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null || !r.enabled || !r.gameObject.activeInHierarchy) continue;
+                bool hasMesh = r.sharedMaterial != null;
+                var mf = r.GetComponent<MeshFilter>();
+                if (mf != null && mf.sharedMesh == null) hasMesh = false;
+                if (r is SkinnedMeshRenderer smr && smr.sharedMesh == null) hasMesh = false;
+                if (hasMesh) enabledWithMesh++;
+            }
+
+            if (enabledWithMesh == 0)
+                FlowTrace.Fail("Outpost",
+                    $"INVISIBLE OUTPOST: {Type} outpost in {Region} at {transform.position} has 0 enabled " +
+                    "renderers with a mesh — a damageable structure the hero can raze with nothing on screen.");
+            else
+                FlowTrace.Step("Outpost",
+                    $"{Type} outpost in {Region} renders ({enabledWithMesh} enabled renderer(s) with a mesh).");
         }
 
         private static void StripCollider(GameObject go)
