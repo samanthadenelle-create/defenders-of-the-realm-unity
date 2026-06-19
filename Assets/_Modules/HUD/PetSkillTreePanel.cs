@@ -743,7 +743,7 @@ namespace DeNelle.HUD
                 foreach (var v in en) if (v is string s) list.Add(s);
                 return list;
             }
-            catch { return null; }
+            catch (Exception e) { FlowTrace.Warn("PetSkillTree", $"ExtractStringList('{field}') reflected read threw: {e.GetType().Name}: {e.Message}"); return null; }
         }
     }
 }

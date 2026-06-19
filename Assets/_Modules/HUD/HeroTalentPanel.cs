@@ -582,7 +582,7 @@ namespace DeNelle.HUD
         {
             if (s_serviceInstance == null) return null;
             try { return s_serviceInstance.GetValue(null, null); }
-            catch { return null; }
+            catch (Exception e) { FlowTrace.Warn("HeroTalent", $"GetServiceInstance reflected get threw: {e.GetType().Name}: {e.Message}"); return null; }
         }
 
         private int GetWisdom()
@@ -590,7 +590,7 @@ namespace DeNelle.HUD
             var svc = GetServiceInstance();
             if (svc == null || s_wisdomProp == null) return 0;
             try { return (int)s_wisdomProp.GetValue(svc, null); }
-            catch { return 0; }
+            catch (Exception e) { FlowTrace.Warn("HeroTalent", $"GetWisdom reflected get threw: {e.GetType().Name}: {e.Message}"); return 0; }
         }
 
         private HashSet<string> GetUnlockedSet()
@@ -606,8 +606,9 @@ namespace DeNelle.HUD
                         if (o is string s) set.Add(s);
                 return set;
             }
-            catch
+            catch (Exception e)
             {
+                FlowTrace.Warn("HeroTalent", $"GetUnlockedSet reflected read threw: {e.GetType().Name}: {e.Message}");
                 return new HashSet<string>();
             }
         }
@@ -620,8 +621,9 @@ namespace DeNelle.HUD
                 return (bool)s_canUnlockMethod.Invoke(null,
                     new object[] { nodeId, wisdom, unlocked });
             }
-            catch
+            catch (Exception e)
             {
+                FlowTrace.Warn("HeroTalent", $"CanUnlock('{nodeId}') reflected call threw: {e.GetType().Name}: {e.Message}");
                 return false;
             }
         }
@@ -630,7 +632,7 @@ namespace DeNelle.HUD
         {
             if (s_getTree == null) return null;
             try { return s_getTree.Invoke(null, new object[] { heroSlug }); }
-            catch { return null; }
+            catch (Exception e) { FlowTrace.Warn("HeroTalent", $"GetTree('{heroSlug}') reflected call threw: {e.GetType().Name}: {e.Message}"); return null; }
         }
 
         // -- Tiny reflection helpers on the value DTOs --------------------------

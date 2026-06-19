@@ -17,6 +17,7 @@
 
 using UnityEngine;
 using DeNelle.AI;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -63,7 +64,7 @@ namespace DeNelle.Village
         private static Transform TryFindByTag(string tag)
         {
             try { var go = GameObject.FindWithTag(tag); return go != null ? go.transform : null; }
-            catch { return null; }
+            catch (System.Exception e) { FlowTrace.Warn("EnemyBT", $"TryFindByTag('{tag}') threw (tag likely undefined): {e.GetType().Name}: {e.Message}"); return null; }
         }
 
         /// <summary>WO-450: resolve the hero by component (every hero variant carries

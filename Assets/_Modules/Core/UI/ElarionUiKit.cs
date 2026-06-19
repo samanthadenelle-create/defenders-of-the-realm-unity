@@ -34,6 +34,7 @@ using System;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Core.UI
 {
@@ -359,7 +360,7 @@ namespace DeNelle.Core.UI
                     if (frame == null) frame = Resources.Load<Sprite>("Tech hud elements/Sprites/GreenUielements/Shield/Shield 1");
                 }
             }
-            catch { /* safe - pack may be partial on fresh clone */ }
+            catch (Exception e) { FlowTrace.Warn("ElarionUiKit", $"TechGearSocket frame Resources.Load threw (pack may be partial on fresh clone — degrading to committed frame): {e.GetType().Name}: {e.Message}"); }
 
             // Clean-build fallback: the "Tech hud elements" pack is gitignored — only the committed
             // RpgUi slice ships. Degrade to the committed grid-plate frame so the socket keeps a

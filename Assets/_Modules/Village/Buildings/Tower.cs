@@ -388,7 +388,7 @@ namespace DeNelle.Village
             int towerLayer = LayerMask.NameToLayer("Tower");
             if (towerLayer < 0) towerLayer = LayerMask.NameToLayer("Building");
             if (towerLayer >= 0) gameObject.layer = towerLayer;
-            try { gameObject.tag = "Tower"; } catch { /* tag undefined in project — keep default */ }
+            try { gameObject.tag = "Tower"; } catch (Exception e) { FlowTrace.Warn("Tower", $"tag set to 'Tower' failed (tag undefined in project, keeping default): {e.GetType().Name}: {e.Message}"); }
 
             float height = 4.5f, radius = 0.9f;
             if (_currentVisual != null)

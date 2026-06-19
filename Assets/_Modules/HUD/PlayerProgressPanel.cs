@@ -16,6 +16,7 @@
 using UnityEngine;
 using UnityEngine.UIElements;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.HUD
 {
@@ -145,7 +146,7 @@ namespace DeNelle.HUD
         private static GameObject SafeFindWithTag(string tag)
         {
             try { return GameObject.FindWithTag(tag); }
-            catch (UnityEngine.UnityException) { return null; }
+            catch (UnityEngine.UnityException e) { FlowTrace.Warn("PlayerProgress", $"SafeFindWithTag('{tag}') threw (tag likely undefined): {e.GetType().Name}: {e.Message}"); return null; }
         }
 
         private static int GetInt(System.Type type, object obj, string propName, int fallback)
@@ -155,7 +156,7 @@ namespace DeNelle.HUD
                 var p = type.GetProperty(propName);
                 return p != null ? (int)p.GetValue(obj) : fallback;
             }
-            catch { return fallback; }
+            catch (System.Exception e) { FlowTrace.Warn("PlayerProgress", $"GetInt('{propName}') reflected read threw: {e.GetType().Name}: {e.Message}"); return fallback; }
         }
 
         private static float GetFloat(System.Type type, object obj, string propName, float fallback)
@@ -165,7 +166,7 @@ namespace DeNelle.HUD
                 var p = type.GetProperty(propName);
                 return p != null ? (float)p.GetValue(obj) : fallback;
             }
-            catch { return fallback; }
+            catch (System.Exception e) { FlowTrace.Warn("PlayerProgress", $"GetFloat('{propName}') reflected read threw: {e.GetType().Name}: {e.Message}"); return fallback; }
         }
 
         // ── IMGUI fallback ────────────────────────────────────────────────────

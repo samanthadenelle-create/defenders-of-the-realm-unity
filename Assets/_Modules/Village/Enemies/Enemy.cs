@@ -1642,7 +1642,7 @@ namespace DeNelle.Village
                 if (instance == null) return;
                 _glimmerTryAdd.Invoke(instance, new object[] { amount });
             }
-            catch { /* cosmetic reward is best-effort; never break the kill path */ }
+            catch (Exception e) { DeNelle.Core.Diagnostics.FlowTrace.Warn("Enemy", $"TryAwardGlimmer({amount}) reflected reward threw (best-effort, kill path unaffected): {e.GetType().Name}: {e.Message}"); }
         }
 
         /// <summary>

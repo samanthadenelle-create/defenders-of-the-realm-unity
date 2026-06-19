@@ -188,35 +188,35 @@ namespace DeNelle.HUD
         private object ResolveServiceInstance()
         {
             try { return s_instanceProp?.GetValue(null); }
-            catch { return null; }
+            catch (Exception e) { FlowTrace.Warn("CosmeticShop", $"ResolveServiceInstance reflected get threw: {e.GetType().Name}: {e.Message}"); return null; }
         }
 
         private int CurrentGlimmer()
         {
             if (_serviceInstance == null || s_glimmerProp == null) return 0;
             try { return (int)s_glimmerProp.GetValue(_serviceInstance); }
-            catch { return 0; }
+            catch (Exception e) { FlowTrace.Warn("CosmeticShop", $"CurrentGlimmer reflected get threw: {e.GetType().Name}: {e.Message}"); return 0; }
         }
 
         private bool OwnsId(string id)
         {
             if (_serviceInstance == null || s_ownsMethod == null) return false;
             try { return (bool)s_ownsMethod.Invoke(_serviceInstance, new object[] { id }); }
-            catch { return false; }
+            catch (Exception e) { FlowTrace.Warn("CosmeticShop", $"OwnsId('{id}') reflected call threw: {e.GetType().Name}: {e.Message}"); return false; }
         }
 
         private string EquippedFor(string category)
         {
             if (_serviceInstance == null || s_equippedForMethod == null) return null;
             try { return s_equippedForMethod.Invoke(_serviceInstance, new object[] { category }) as string; }
-            catch { return null; }
+            catch (Exception e) { FlowTrace.Warn("CosmeticShop", $"EquippedFor('{category}') reflected call threw: {e.GetType().Name}: {e.Message}"); return null; }
         }
 
         private bool TryPurchase(string id)
         {
             if (_serviceInstance == null || s_tryPurchaseMethod == null) return false;
             try { return (bool)s_tryPurchaseMethod.Invoke(_serviceInstance, new object[] { id }); }
-            catch { return false; }
+            catch (Exception e) { FlowTrace.Warn("CosmeticShop", $"TryPurchase('{id}') reflected call threw: {e.GetType().Name}: {e.Message}"); return false; }
         }
 
         private void EquipId(string id)
@@ -234,7 +234,7 @@ namespace DeNelle.HUD
             if (s_byCategoryMethod == null) yield break;
             object result;
             try { result = s_byCategoryMethod.Invoke(null, new object[] { category }); }
-            catch { yield break; }
+            catch (Exception e) { FlowTrace.Warn("CosmeticShop", $"CatalogByCategory('{category}') reflected call threw: {e.GetType().Name}: {e.Message}"); yield break; }
             if (result is IEnumerable seq)
                 foreach (var item in seq) yield return item;
         }
@@ -618,7 +618,7 @@ namespace DeNelle.HUD
         private static int SafeInt(object value)
         {
             if (value == null) return 0;
-            try { return Convert.ToInt32(value); } catch { return 0; }
+            try { return Convert.ToInt32(value); } catch (Exception e) { FlowTrace.Warn("CosmeticShop", $"SafeInt convert threw: {e.GetType().Name}: {e.Message}"); return 0; }
         }
 
         private static Color SafeColor(object value)

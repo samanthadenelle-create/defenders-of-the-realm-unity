@@ -31,6 +31,7 @@ using System;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Core
 {
@@ -273,7 +274,7 @@ namespace DeNelle.Core
             {
                 GameObject hero = null;
                 try { hero = GameObject.FindWithTag("Player"); }
-                catch { hero = null; }
+                catch (Exception e) { FlowTrace.Warn("SceneRouter", $"RestoreReturnPoint FindWithTag('Player') threw (tag may be undefined): {e.GetType().Name}: {e.Message}"); hero = null; }
 
                 var loco = (hero != null) ? FindHeroLocomotionOn(hero) : FindHeroLocomotion();
                 if (loco == null)
@@ -322,7 +323,7 @@ namespace DeNelle.Core
                 var found = UnityEngine.Object.FindFirstObjectByType(t);
                 return found as MonoBehaviour;
             }
-            catch { return null; }
+            catch (Exception e) { FlowTrace.Warn("SceneRouter", $"FindHeroLocomotion reflected lookup threw: {e.GetType().Name}: {e.Message}"); return null; }
         }
 
         /// <summary>RETURN-POINT helper: the HeroLocomotion on a specific hero GameObject (or null).</summary>
@@ -334,7 +335,7 @@ namespace DeNelle.Core
                 if (t == null) return null;
                 return go.GetComponent(t) as MonoBehaviour;
             }
-            catch { return null; }
+            catch (Exception e) { FlowTrace.Warn("SceneRouter", $"FindHeroLocomotionOn reflected GetComponent threw: {e.GetType().Name}: {e.Message}"); return null; }
         }
 
         // =====================================================================
@@ -531,7 +532,7 @@ namespace DeNelle.Core
             {
                 GameObject hero = null;
                 try { hero = GameObject.FindWithTag("Player"); }
-                catch { hero = null; } // "Player" tag may be undefined in some scenes
+                catch (Exception e) { FlowTrace.Warn("SceneRouter", $"StashReturnPoint FindWithTag('Player') threw (tag may be undefined in some scenes): {e.GetType().Name}: {e.Message}"); hero = null; }
 
                 if (hero == null)
                 {

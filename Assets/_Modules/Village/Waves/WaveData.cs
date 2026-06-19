@@ -25,6 +25,7 @@ using Cysharp.Threading.Tasks;
 using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.Networking;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -451,14 +452,14 @@ namespace DeNelle.Village
                     if (!File.Exists(fullPath)) return null;
                     return await File.ReadAllTextAsync(fullPath);
                 }
-                catch { return null; }
+                catch (Exception e) { FlowTrace.Warn("WaveData", $"ReadTextAsync('{relativePath}') file read threw: {e.GetType().Name}: {e.Message}"); return null; }
             }
 
             using var req = UnityWebRequest.Get(fullPath);
             await req.SendWebRequest();
             if (req.result != UnityWebRequest.Result.Success)
             {
-                Debug.LogError($"[WaveDataLoader] UnityWebRequest failed: {req.error}");
+                FlowTrace.Fail("WaveData", $"ReadTextAsync('{relativePath}') UnityWebRequest failed: {req.error}");
                 return null;
             }
             return req.downloadHandler.text;

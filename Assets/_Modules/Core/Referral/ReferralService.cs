@@ -32,6 +32,7 @@ using System;
 using System.Text;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core.Analytics;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using Newtonsoft.Json;
 using UnityEngine;
@@ -128,7 +129,7 @@ namespace DeNelle.Core.Referral
 
             GenerateResponse resp;
             try { resp = JsonConvert.DeserializeObject<GenerateResponse>(req.downloadHandler.text); }
-            catch { return; }
+            catch (Exception e) { FlowTrace.Warn("Referral", $"Generate response deserialize threw: {e.GetType().Name}: {e.Message}"); return; }
 
             if (resp == null || !resp.Success) return;
 
@@ -216,7 +217,7 @@ namespace DeNelle.Core.Referral
 
             ClaimResponse resp;
             try { resp = JsonConvert.DeserializeObject<ClaimResponse>(req.downloadHandler.text); }
-            catch { OnClaimFailed?.Invoke("Unexpected server response."); return; }
+            catch (Exception e) { FlowTrace.Warn("Referral", $"Claim response deserialize threw: {e.GetType().Name}: {e.Message}"); OnClaimFailed?.Invoke("Unexpected server response."); return; }
 
             if (resp == null || !resp.Success)
             {
