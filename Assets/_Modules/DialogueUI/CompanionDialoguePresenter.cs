@@ -372,6 +372,19 @@ namespace DeNelle.DialogueUI
                     ElarionUiKit.ApplyRounded(bg);   // rounded 9-slice (flat quad if WebGL build failed)
                     AddParchmentInterior(container.gameObject, parchment);
                 }
+                else
+                {
+                    // TGVRU U: Container present but no Image -> the light-parchment reskin is skipped
+                    // and the box reads as the default DARK ClassicRPG plate. Warn (don't blank).
+                    FlowTrace.Warn("UI", "ReskinToLightParchmentOnce: 'Container' has no Image — " +
+                        "box stays dark (reskin skipped).");
+                }
+            }
+            else
+            {
+                // TGVRU U: a renamed/missing 'Container' silently leaves the whole box dark. Surface it.
+                FlowTrace.Warn("UI", "ReskinToLightParchmentOnce: 'Container' child not found — " +
+                    "dialogue box stays dark (prefab hierarchy changed?).");
             }
 
             // 2) Dark ink on the body + option line text (readable on light parchment).
@@ -425,7 +438,13 @@ namespace DeNelle.DialogueUI
                         : (object)VerticalAlignmentTop;
                     vaProp.SetValue(tmp, topValue);
                 }
-                catch { /* unknown TMP build: skip */ }
+                catch (System.Exception ex)
+                {
+                    // TGVRU U: no silent catch. A reflection miss here means the body line keeps the
+                    // overflow-causing Middle alignment — Warn so the layout defect is traceable.
+                    FlowTrace.Warn("UI", $"ApplyBodyTextTopAlignAutoSize: setting verticalAlignment=Top threw " +
+                        $"{ex.GetType().Name}: {ex.Message} (unknown TMP build) — body text keeps default alignment.");
+                }
             }
 
             // enableAutoSizing = true.
@@ -490,15 +509,32 @@ namespace DeNelle.DialogueUI
 
             // Anchor the banner over the box backboard so it reads as the box's title.
             Transform container = FindDescendant(transform, "Container");
-            if (container == null) return;
+            if (container == null)
+            {
+                // TGVRU U: a renamed/missing prefab child silently dropped the speaker name banner.
+                // Warn so a "no name banner" symptom traces to the exact missing child, not guesswork.
+                FlowTrace.Warn("UI", "BuildNameBannerOnce: 'Container' child not found on the dialogue box — " +
+                    "no speaker name banner (prefab hierarchy changed?).");
+                return;
+            }
 
             // Source the font/material/component type from the existing body line text.
             Transform lineTextT = null;
             Transform line = FindDescendant(transform, "Line");
             if (line != null) lineTextT = FindDescendant(line, "Text");
-            if (lineTextT == null) return;
+            if (lineTextT == null)
+            {
+                FlowTrace.Warn("UI", "BuildNameBannerOnce: 'Line'/'Text' child not found — cannot source the " +
+                    "build-safe TMP font; no speaker name banner.");
+                return;
+            }
             var srcGraphic = lineTextT.GetComponent<Graphic>();
-            if (srcGraphic == null) return;
+            if (srcGraphic == null)
+            {
+                FlowTrace.Warn("UI", "BuildNameBannerOnce: line 'Text' has no Graphic/TMP component — " +
+                    "no speaker name banner.");
+                return;
+            }
 
             // Gilt frame plate (top-left of the box, overlapping its top edge).
             _bannerRoot = new GameObject("SpeakerBanner", typeof(Image));

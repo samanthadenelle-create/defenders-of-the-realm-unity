@@ -84,8 +84,8 @@ namespace DeNelle.Village
 
             if (!NodeExists(runner, node))
             {
-                Debug.LogError($"[DialogueService] Node '{node}' is not in the compiled Yarn program " +
-                               "(check the spelling and that its .yarn file is in DefendersDialogue.yarnproject).");
+                FlowTrace.Fail("UI", $"DialogueService.Play: node '{node}' is NOT in the compiled Yarn program " +
+                               "(check spelling + that its .yarn is in DefendersDialogue.yarnproject) — conversation blank.");
                 return false;
             }
 
@@ -102,12 +102,18 @@ namespace DeNelle.Village
             }
             catch (System.Exception ex)
             {
-                Debug.LogError($"[DialogueService] StartDialogue('{node}') threw — dialogue skipped so " +
-                               "the village still loads (WebGL crash-guard). " + ex);
+                FlowTrace.Fail("UI", $"DialogueService.Play: StartDialogue('{node}') threw {ex.GetType().Name}: {ex.Message} — " +
+                               "dialogue skipped so the village still loads (WebGL crash-guard).");
                 return false;
             }
             Debug.Log($"[DialogueService] Playing '{node}'.");
             FlowTrace.Step("UI", $"Yarn dialogue started via DialogueService.Play('{node}')");
+            // VERIFY (TGVRU): the runner accepted the node and is actually running a conversation now.
+            // StartDialogue runs its synchronous prologue inline; if it silently bailed (no line/menu
+            // rendered) IsDialogueRunning stays false — the "blank conversation" class. Self-report it.
+            if (!runner.IsDialogueRunning)
+                FlowTrace.Warn("UI", $"DialogueService.Play('{node}'): StartDialogue returned but no dialogue is running " +
+                                "(no line/menu rendered) — conversation may read blank.");
             return true;
         }
 
@@ -229,7 +235,7 @@ namespace DeNelle.Village
                 node = "StructureMenu";
             if (!NodeExists(runner, node))
             {
-                Debug.LogError($"[DialogueService] '{node}' node missing — building hook can't open.");
+                FlowTrace.Fail("UI", $"DialogueService.PlayStructure: node '{node}' missing — building hook can't open (blank).");
                 return false;
             }
 
@@ -262,12 +268,17 @@ namespace DeNelle.Village
             }
             catch (System.Exception ex)
             {
-                Debug.LogError($"[DialogueService] StartDialogue('{node}') threw for structure " +
-                               $"'{structureId}' — dialogue skipped (WebGL crash-guard). " + ex);
+                FlowTrace.Fail("UI", $"DialogueService.PlayStructure: StartDialogue('{node}') threw for structure " +
+                               $"'{structureId}' — {ex.GetType().Name}: {ex.Message} — dialogue skipped (WebGL crash-guard).");
                 return false;
             }
             Debug.Log($"[DialogueService] Structure '{structureId}' → node '{node}' ('{displayName}').");
             FlowTrace.Step("UI", $"Yarn dialogue started via DialogueService.PlayStructure('{structureId}' → node '{node}')");
+            // VERIFY (TGVRU): confirm the structure conversation is actually running (not a silent
+            // inline-bail that leaves the building menu blank).
+            if (!runner.IsDialogueRunning)
+                FlowTrace.Warn("UI", $"DialogueService.PlayStructure('{structureId}' → '{node}'): no dialogue running after " +
+                                "StartDialogue (no line/menu rendered) — building menu may read blank.");
             return true;
         }
 

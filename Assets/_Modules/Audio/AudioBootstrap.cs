@@ -28,6 +28,7 @@
 
 using UnityEngine;
 using UnityEngine.Audio;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Audio
 {
@@ -149,7 +150,13 @@ namespace DeNelle.Audio
                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
                 setMuted?.Invoke(instance, new object[] { false });
             }
-            catch { /* best-effort; not fatal */ }
+            catch (System.Exception ex)
+            {
+                // TGVRU U: no silent catch. The unmute migration is best-effort (not fatal), but a
+                // throw here means the install stayed muted — surface it instead of swallowing.
+                FlowTrace.Warn("Audio", $"UnmuteOnce: SetMuted(false) migration threw {ex.GetType().Name}: {ex.Message} " +
+                    "(best-effort; install may stay muted).");
+            }
             finally
             {
                 PlayerPrefs.SetInt(UnmuteMigrationKey, 1);
@@ -160,7 +167,16 @@ namespace DeNelle.Audio
         private static void TryAssignClip(AudioService service, MusicTrack track, string resourceName)
         {
             var clip = Resources.Load<AudioClip>(resourceName);
-            if (clip != null) service.SetMusicClip(track, clip);
+            // TGVRU V: a clip-resolve MISS was COMPLETELY SILENT — all ~14 music clips could fail to
+            // wire with zero signal (the "silent clip" class). Warn on a null so a run self-reports
+            // WHICH track has no audio, instead of just playing silence.
+            if (clip == null)
+            {
+                FlowTrace.Warn("Audio", $"TryAssignClip: Resources.Load<AudioClip>('{resourceName}') returned null " +
+                    $"for track '{track}' — that track will be SILENT (clip missing/misnamed under Resources).");
+                return;
+            }
+            service.SetMusicClip(track, clip);
         }
 
         /// <summary>
@@ -171,7 +187,16 @@ namespace DeNelle.Audio
         private static void TryAddClip(AudioService service, MusicTrack track, string resourceName)
         {
             var clip = Resources.Load<AudioClip>(resourceName);
-            if (clip != null) service.AddMusicClip(track, clip);
+            // TGVRU V: an extra pooled clip going missing was silent. These are optional rotation
+            // extras (the pool still works on whatever landed), so this is a Warn, not a Fail —
+            // but it must self-report so a thin/missing rotation is visible, not invisible.
+            if (clip == null)
+            {
+                FlowTrace.Warn("Audio", $"TryAddClip: Resources.Load<AudioClip>('{resourceName}') returned null " +
+                    $"for pooled track '{track}' — extra skipped (rotation runs on remaining clips).");
+                return;
+            }
+            service.AddMusicClip(track, clip);
         }
     }
 }

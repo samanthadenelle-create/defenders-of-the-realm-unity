@@ -900,13 +900,31 @@ namespace DeNelle.Village
                     yield break;   // PartyShop opened — do NOT also open the legacy ShopPanel.
             }
 
-            var panel = FindObjectOfType<DeNelle.Village.Hero.ShopPanel>();
-            if (panel == null)
-                panel = new GameObject("ShopPanelHost").AddComponent<DeNelle.Village.Hero.ShopPanel>();
-            // FIX B: pass the storefront's own sign LABEL (seeded by PlayStructure) so the panel
-            // header reads the vendor's display name, not just the id-derived title — prevents the
-            // "wrong storefront title" class of bug. Null/empty label safely falls back to the id.
-            panel.Open(vendor, DialogueService.CurrentStructureName);
+            // TGVRU GUARD (P0): a throw inside an ASYNC Yarn verb escapes into the runner's
+            // post-command Continue and blanks the conversation ("No node has been selected").
+            // Wrap find-or-spawn + Open so a panel fault FlowTrace.Fails and is contained — the
+            // node's <<stop>> still ends the dialogue cleanly; we never blank it.
+            try
+            {
+                var panel = FindObjectOfType<DeNelle.Village.Hero.ShopPanel>();
+                if (panel == null)
+                    panel = new GameObject("ShopPanelHost").AddComponent<DeNelle.Village.Hero.ShopPanel>();
+                // FIX B: pass the storefront's own sign LABEL (seeded by PlayStructure) so the panel
+                // header reads the vendor's display name, not just the id-derived title — prevents the
+                // "wrong storefront title" class of bug. Null/empty label safely falls back to the id.
+                panel.Open(vendor, DialogueService.CurrentStructureName);
+                // VERIFY: the panel host exists + is active after Open — a silent no-op (null host /
+                // inactive) means the player tapped a vendor and got nothing. Self-report, don't blank.
+                if (panel == null || !panel.gameObject.activeInHierarchy)
+                    FlowTrace.Warn("UI", $"OpenShop '{vendor}': ShopPanel did not surface (host null or inactive after Open).");
+                else
+                    FlowTrace.Step("UI", $"OpenShop '{vendor}': ShopPanel opened.");
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("UI", $"OpenShop '{vendor}' threw {ex.GetType().Name}: {ex.Message} — " +
+                    "panel skipped; conversation NOT blanked (node <<stop>> ends it).");
+            }
             // PERMANENT FIX (YarnSpinner-documented; memory yarn-no-node-stop-after-panel-command):
             // open the panel and RETURN. Do NOT call DialogueService.Stop() here — calling the runner's
             // Stop() from INSIDE an awaited command races its post-command Dialogue.Continue() and throws
@@ -922,11 +940,24 @@ namespace DeNelle.Village
         {
             if (PanelOpenBlockedByBattle("OpenUpgrade")) yield break;
             Debug.Log($"[DialogueCommandBridge] OpenUpgrade: {stationType}");
-            var panel = FindObjectOfType<DeNelle.Village.Buildings.Progression.BuildingUpgradePanel>();
-            if (panel == null)
-                panel = new GameObject("BuildingUpgradePanelHost").AddComponent<DeNelle.Village.Buildings.Progression.BuildingUpgradePanel>();
-            if (!string.IsNullOrEmpty(stationType)) panel.OpenFocused(stationType);
-            else panel.Open();
+            // TGVRU GUARD (P0): contain a panel throw so it can't blank the conversation.
+            try
+            {
+                var panel = FindObjectOfType<DeNelle.Village.Buildings.Progression.BuildingUpgradePanel>();
+                if (panel == null)
+                    panel = new GameObject("BuildingUpgradePanelHost").AddComponent<DeNelle.Village.Buildings.Progression.BuildingUpgradePanel>();
+                if (!string.IsNullOrEmpty(stationType)) panel.OpenFocused(stationType);
+                else panel.Open();
+                if (panel == null || !panel.gameObject.activeInHierarchy)
+                    FlowTrace.Warn("UI", $"OpenUpgrade '{stationType}': panel did not surface (host null or inactive).");
+                else
+                    FlowTrace.Step("UI", $"OpenUpgrade '{stationType}': panel opened.");
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("UI", $"OpenUpgrade '{stationType}' threw {ex.GetType().Name}: {ex.Message} — " +
+                    "panel skipped; conversation NOT blanked (node <<stop>> ends it).");
+            }
             yield return null;   // panel opens; the node's <<stop>> ends the dialogue (no Stop() here)
         }
 
@@ -934,10 +965,23 @@ namespace DeNelle.Village
         {
             if (PanelOpenBlockedByBattle("OpenCraft")) yield break;
             Debug.Log($"[DialogueCommandBridge] OpenCraft: {context}");
-            var panel = FindObjectOfType<DeNelle.Village.Crafting.VillageCraftingPanel>();
-            if (panel == null)
-                panel = new GameObject("VillageCraftingPanelHost").AddComponent<DeNelle.Village.Crafting.VillageCraftingPanel>();
-            panel.Open();
+            // TGVRU GUARD (P0): contain a panel throw so it can't blank the conversation.
+            try
+            {
+                var panel = FindObjectOfType<DeNelle.Village.Crafting.VillageCraftingPanel>();
+                if (panel == null)
+                    panel = new GameObject("VillageCraftingPanelHost").AddComponent<DeNelle.Village.Crafting.VillageCraftingPanel>();
+                panel.Open();
+                if (panel == null || !panel.gameObject.activeInHierarchy)
+                    FlowTrace.Warn("UI", $"OpenCraft '{context}': panel did not surface (host null or inactive).");
+                else
+                    FlowTrace.Step("UI", $"OpenCraft '{context}': panel opened.");
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("UI", $"OpenCraft '{context}' threw {ex.GetType().Name}: {ex.Message} — " +
+                    "panel skipped; conversation NOT blanked (node <<stop>> ends it).");
+            }
             yield return null;   // panel opens; the node's <<stop>> ends the dialogue (no Stop() here)
         }
 
@@ -945,10 +989,23 @@ namespace DeNelle.Village
         {
             if (PanelOpenBlockedByBattle("OpenEquip")) yield break;
             Debug.Log("[DialogueCommandBridge] OpenEquip");
-            var panel = FindObjectOfType<DeNelle.Village.Hero.EquipmentPanel>();
-            if (panel == null)
-                panel = new GameObject("EquipmentPanelHost").AddComponent<DeNelle.Village.Hero.EquipmentPanel>();
-            panel.Open();
+            // TGVRU GUARD (P0): contain a panel throw so it can't blank the conversation.
+            try
+            {
+                var panel = FindObjectOfType<DeNelle.Village.Hero.EquipmentPanel>();
+                if (panel == null)
+                    panel = new GameObject("EquipmentPanelHost").AddComponent<DeNelle.Village.Hero.EquipmentPanel>();
+                panel.Open();
+                if (panel == null || !panel.gameObject.activeInHierarchy)
+                    FlowTrace.Warn("UI", "OpenEquip: panel did not surface (host null or inactive).");
+                else
+                    FlowTrace.Step("UI", "OpenEquip: panel opened.");
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("UI", $"OpenEquip threw {ex.GetType().Name}: {ex.Message} — " +
+                    "panel skipped; conversation NOT blanked (node <<stop>> ends it).");
+            }
             yield return null;   // panel opens; the node's <<stop>> ends the dialogue (no Stop() here)
         }
 
@@ -956,10 +1013,23 @@ namespace DeNelle.Village
         {
             if (PanelOpenBlockedByBattle("OpenArena")) yield break;
             Debug.Log("[DialogueCommandBridge] OpenArena");
-            var panel = FindObjectOfType<DeNelle.Village.Arena.ArenaPanel>();
-            if (panel == null)
-                panel = new GameObject("ArenaPanelHost").AddComponent<DeNelle.Village.Arena.ArenaPanel>();
-            panel.Open();
+            // TGVRU GUARD (P0): contain a panel throw so it can't blank the conversation.
+            try
+            {
+                var panel = FindObjectOfType<DeNelle.Village.Arena.ArenaPanel>();
+                if (panel == null)
+                    panel = new GameObject("ArenaPanelHost").AddComponent<DeNelle.Village.Arena.ArenaPanel>();
+                panel.Open();
+                if (panel == null || !panel.gameObject.activeInHierarchy)
+                    FlowTrace.Warn("UI", "OpenArena: panel did not surface (host null or inactive).");
+                else
+                    FlowTrace.Step("UI", "OpenArena: panel opened.");
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("UI", $"OpenArena threw {ex.GetType().Name}: {ex.Message} — " +
+                    "panel skipped; conversation NOT blanked (node <<stop>> ends it).");
+            }
             yield return null;   // panel opens; the node's <<stop>> ends the dialogue (no Stop() here)
         }
 
@@ -975,10 +1045,25 @@ namespace DeNelle.Village
         {
             if (PanelOpenBlockedByBattle("OpenRumorBoard")) return;
             Debug.Log("[DialogueCommandBridge] OpenRumorBoard");
-            var panel = FindObjectOfType<DeNelle.Village.Hero.RumorBoardPanel>();
-            if (panel == null)
-                panel = new GameObject("RumorBoardPanelHost").AddComponent<DeNelle.Village.Hero.RumorBoardPanel>();
-            panel.Open();
+            // TGVRU GUARD (P0): shared by the async CmdOpenRumorBoard verb AND the node-start hook
+            // (OnNodeStartedOpenPanels). A throw on either path would blank Brom's rumor conversation;
+            // contain it so the panel fault self-reports and the dialogue is never left node-less.
+            try
+            {
+                var panel = FindObjectOfType<DeNelle.Village.Hero.RumorBoardPanel>();
+                if (panel == null)
+                    panel = new GameObject("RumorBoardPanelHost").AddComponent<DeNelle.Village.Hero.RumorBoardPanel>();
+                panel.Open();
+                if (panel == null || !panel.gameObject.activeInHierarchy)
+                    FlowTrace.Warn("UI", "OpenRumorBoard: panel did not surface (host null or inactive).");
+                else
+                    FlowTrace.Step("UI", "OpenRumorBoard: panel opened.");
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("UI", $"OpenRumorBoard threw {ex.GetType().Name}: {ex.Message} — " +
+                    "panel skipped; conversation NOT blanked.");
+            }
         }
 
         // WO-438: node-start hook (registered on _runner.onNodeStart). Opens the rumor

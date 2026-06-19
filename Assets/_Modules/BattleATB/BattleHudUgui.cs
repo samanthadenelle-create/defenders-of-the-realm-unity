@@ -4,6 +4,7 @@ using System.Linq;
 using DeNelle.BattleATB.Engine;
 using DeNelle.BattleATB.State;
 using DeNelle.Core.UI;   // ElarionUiKit / ElarionUi / RpgUiCatalog — the SHARED presentation layer
+using DeNelle.Core.Diagnostics;   // FlowTrace — TGVRU instrumentation
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -442,6 +443,13 @@ namespace DeNelle.BattleATB
             // Dynamic skills from current active member (use engine defs / catalog for the hero class)
             var abilities = GetAbilitiesForActiveHero();
             HeroClass? activeClass = GetActiveHeroClass();
+            // TGVRU V: an empty ability list builds a Skills submenu with ZERO buttons — the player
+            // taps Skills and gets a blank panel with no way out. Self-report which active unit had
+            // no abilities so it's a known data gap, not an invisible dead-end.
+            if (abilities == null || abilities.Count == 0)
+                FlowTrace.Warn("UI", $"ShowSkillsSubmenu: 0 abilities for active unit " +
+                    $"'{(_lastState != null ? _lastState.ActiveUnitId : "<no state>")}' (class={(activeClass?.ToString() ?? "<none>")}) " +
+                    "— Skills submenu opens EMPTY.");
             foreach (var ab in abilities)
             {
                 // Real per-class ability icon (best-effort by slot); null → text-only fallback.
@@ -526,6 +534,14 @@ namespace DeNelle.BattleATB
                 slot.Root.transform.SetParent(_partyPanel.transform, false);
                 _partySlots.Add(slot);
             }
+
+            // TGVRU V: the party frame must have its 4 slot widgets built or Render() has nothing
+            // to fill — a "blank party panel". Assert the count + trace it so a build miss is loud.
+            if (_partySlots.Count != 4)
+                FlowTrace.Warn("UI", $"CreatePartyPanel: built {_partySlots.Count} party slot(s), expected 4 " +
+                    "— party panel will render incomplete/blank.");
+            else
+                FlowTrace.Step("UI", "CreatePartyPanel: 4 party slots built.");
         }
 
         /// <summary>One party slot, built from the shared kit: a dark-glass card carrying a
@@ -676,6 +692,11 @@ namespace DeNelle.BattleATB
             if (_waveText) _waveText.text = "WAVE " + Mathf.Max(1, state.Wave);
 
             // Party slots (first 4 party members)
+            // TGVRU V: if the slot widgets were never built, the loop below silently fills nothing —
+            // the party panel reads blank. Self-report once so a missing CreatePartyPanel is visible.
+            if (_partySlots == null || _partySlots.Count == 0)
+                FlowTrace.Once("UI", "battlehud-no-party-slots",
+                    "Render: no party slots built (CreatePartyPanel did not run) — party panel renders blank.");
             int idx = 0;
             foreach (var u in state.Units.Where(u => u.Side == Side.Party))
             {
