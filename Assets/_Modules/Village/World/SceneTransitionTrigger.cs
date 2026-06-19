@@ -80,6 +80,29 @@ namespace DeNelle.Village
         private static int s_collectFrame = -1;
         private float _curDist = float.MaxValue;
 
+        // ROOT-CAUSE FIX (owner directive 2026-06-18, core-loop blocker): the prompt
+        // shows but no tap ever crosses. The Request() that drives the shared
+        // MobileInteractButton USED to be issued from this component's LateUpdate().
+        // But MobileInteractButton renders the visible button + runs the tap hit-test
+        // in ITS Update(), and resets `_requestedThisFrame` in ITS LateUpdate(). Unity
+        // runs ALL Update()s before ANY LateUpdate(), so a Request() raised in our
+        // LateUpdate() arrives AFTER MobileInteractButton.Update() already ran (button
+        // stays SetActive(false), no hit-test) and is then cleared by its LateUpdate()
+        // before the next frame's render — so the on-screen button NEVER becomes
+        // visible/tappable. (AutoPilot still crossed because InvokeActive()/IsActive
+        // read the request state DIRECTLY, not the rendered button — masking the bug.)
+        //
+        // Every other working caller (BuildingInteractable, DungeonPortal, MineNode,
+        // ArenaHeraldSpawner, ...) issues Request() from its OWN Update(). We now do the
+        // same: the prompt + Request live in Update(). To keep the "single nearest
+        // in-range seam owns the prompt" guard order-independent without depending on
+        // LateUpdate, each seam resolves the nearest using the list COMPLETED during the
+        // PREVIOUS frame (every seam's _curDist is fully populated by frame end). On the
+        // very first in-range frame the list may be a frame stale; that only delays the
+        // prompt by one frame, never produces a wrong/duplicate prompt.
+        private static readonly System.Collections.Generic.List<SceneTransitionTrigger> s_prevFrameInRange =
+            new System.Collections.Generic.List<SceneTransitionTrigger>();
+
         // Effective radius: confirm-to-cross is unconditional, so the seam always reaches to
         // ConfirmMinRadius — the prompt appears at the navmesh edge where the hero stalls and
         // he WARPS across (he need not touch the marker). There is no longer an auto-cross mode
@@ -154,14 +177,19 @@ namespace DeNelle.Village
 
             bool inRange = (_hero.position - transform.position).sqrMagnitude <= EffRadius * EffRadius;
 
-            // CONFIRM-TO-CROSS (unconditional): NEVER auto-teleport. We only REGISTER in-range
-            // interest here; the actual prompt + confirmed cross are resolved in LateUpdate for
-            // the single NEAREST in-range seam (so overlapping wide gate spheres never flicker
-            // two prompts or double-fire Cross). The shared frame list is reset on the first
-            // seam to touch it each frame.
+            // CONFIRM-TO-CROSS (unconditional): NEVER auto-teleport. We REGISTER in-range
+            // interest here and then resolve the prompt + Request for the single NEAREST
+            // in-range seam — all WITHIN Update() (see ResolvePromptAndRequest + the
+            // root-cause note above) so overlapping wide gate spheres never flicker two
+            // prompts or double-fire Cross.
+            // On the FIRST seam to touch the list this frame, roll the now-complete list
+            // built last frame into s_prevFrameInRange (the snapshot the nearest-seam
+            // decision reads), then clear the live list to start collecting this frame.
             if (Time.frameCount != s_collectFrame)
             {
                 s_collectFrame = Time.frameCount;
+                s_prevFrameInRange.Clear();
+                s_prevFrameInRange.AddRange(s_inRangeConfirm);
                 s_inRangeConfirm.Clear();
             }
             if (inRange)
@@ -173,38 +201,52 @@ namespace DeNelle.Village
                 _curDist = dist;
                 if (!s_inRangeConfirm.Contains(this)) s_inRangeConfirm.Add(this);
             }
-            else if (_promptShown)
+            else
             {
-                // Left range — drop the prompt immediately (don't wait for LateUpdate).
-                MobileInteractButton.Release(this);
-                _promptShown = false;
+                _curDist = float.MaxValue;
+                if (_promptShown)
+                {
+                    // Left range — drop the prompt immediately.
+                    MobileInteractButton.Release(this);
+                    _promptShown = false;
+                }
             }
+
+            // CONFIRM-mode prompt + Request, resolved to the single NEAREST in-range
+            // confirm seam — issued HERE in Update() (NOT LateUpdate) so the shared
+            // MobileInteractButton, which renders the visible button + runs its tap
+            // hit-test in its own Update(), actually SEES the request this frame and
+            // shows a real, tappable on-screen button. (See the root-cause note above.)
+            ResolvePromptAndRequest();
         }
 
-        // CONFIRM-mode prompt + cross, resolved to the single NEAREST in-range confirm seam.
-        // Runs after every Update() has populated s_inRangeConfirm this frame, so the "who is
-        // nearest" decision sees all seams and is order-independent. This is the guard that
-        // stops the wide confirm radius from flickering two prompts / double-firing Cross when
-        // the hero stands inside more than one gate sphere.
-        private void LateUpdate()
+        // Resolve the single nearest in-range confirm seam and, if that is THIS seam,
+        // keep the shared "Travel to <dest>" button requested every frame so it stays
+        // visible + tappable. Order-independent: it reads the PREVIOUS frame's completed
+        // in-range list (s_prevFrameInRange), so it does not matter which seam's Update()
+        // runs first this frame. Called once per seam per frame from Update().
+        private void ResolvePromptAndRequest()
         {
             if (_fired) return;
 
             // Not in range this frame → ensure our prompt is down.
-            if (!s_inRangeConfirm.Contains(this))
+            if (_curDist == float.MaxValue)
             {
                 if (_promptShown) { MobileInteractButton.Release(this); _promptShown = false; }
                 return;
             }
 
-            // Find the nearest in-range confirm seam this frame.
+            // Find the nearest in-range confirm seam (from last frame's complete snapshot;
+            // falls back to the live list on the very first frame before a snapshot exists).
+            var pool = s_prevFrameInRange.Contains(this) ? s_prevFrameInRange : s_inRangeConfirm;
             SceneTransitionTrigger nearest = null;
             float best = float.MaxValue;
-            for (int i = 0; i < s_inRangeConfirm.Count; i++)
+            for (int i = 0; i < pool.Count; i++)
             {
-                var t = s_inRangeConfirm[i];
+                var t = pool[i];
                 if (t != null && t._curDist < best) { best = t._curDist; nearest = t; }
             }
+            if (nearest == null) nearest = this; // only seam in range
 
             // Not the winner → yield the shared prompt to the nearer seam.
             if (nearest != this)
@@ -217,16 +259,16 @@ namespace DeNelle.Village
             string dest = FriendlyDestinationName();
             if (!_promptShown)
             {
-                FlowTrace.Step("Seam", $"prompt shown for '{name}' -> 'Travel to {dest}' ({_curDist:F1}m, radius {EffRadius}m)");
+                FlowTrace.Step("Seam", $"prompt built for '{name}' -> 'Travel to {dest}' ({_curDist:F1}m, radius {EffRadius}m) [Update path]");
                 Debug.Log($"[SeamTrace] '{name}' NEAREST in-range ({_curDist:F1}m, radius {EffRadius}m) -> showing CONFIRM prompt for '{dest}'.");
-                // STATE MUTATION: mark the prompt up so we don't re-log / re-request every frame.
+                // STATE MUTATION: mark the prompt up so we don't re-log every frame.
                 _promptShown = true;
             }
-            // Mobile-first: the confirmed crossing fires through the shared on-screen
-            // Interact button (requested above). The desktop F-key trigger was removed.
-            // The tap callback is wrapped so the log PROVES the cross came from a TAP — never
-            // from proximity. Cross() is reached through NO other path; if it ever fires without
-            // this "TAP ->" line preceding it, an auto-cross has leaked back in (impossible state).
+
+            // Re-issue the request EVERY frame (the shared button clears its claim each
+            // LateUpdate, so a one-shot Request would vanish next frame). Issued from
+            // Update() so MobileInteractButton.Update() renders + hit-tests it this frame.
+            // The tap callback is wrapped so the log PROVES the cross came from a TAP.
             MobileInteractButton.Request(this, $"Travel to {dest}", () =>
             {
                 FlowTrace.Step("Seam", $"TAP -> Cross '{name}' (confirmed by player, dest '{dest}')");
@@ -235,6 +277,28 @@ namespace DeNelle.Village
                 Cross(_hero);
             });
         }
+
+        // LateUpdate confirms the shared button actually RENDERED visible this frame for
+        // our request — the proof point the old LateUpdate-Request path could never emit
+        // (the button never became visible). MobileInteractButton.Update() has run by now
+        // (Update precedes LateUpdate), so IsShowingFor(this) is true ONLY if a real,
+        // tappable on-screen button is up for this seam. Emitted once per prompt session.
+        private void LateUpdate()
+        {
+            if (_fired) return;
+            if (_promptShown && !_buttonShownProven && MobileInteractButton.IsShowingFor(this))
+            {
+                _buttonShownProven = true;
+                FlowTrace.Step("Seam",
+                    $"button-shown: on-screen 'Travel' button VISIBLE + tappable for '{name}' (MobileInteractButton.IsShowingFor)");
+            }
+            else if (!_promptShown)
+            {
+                _buttonShownProven = false; // re-arm the proof for the next prompt session
+            }
+        }
+
+        private bool _buttonShownProven;
 
         // OnTriggerEnter is intentionally a NO-OP for crossing: confirm-to-cross is now
         // unconditional, so trigger-enter must NOT auto-cross either. The player always has to

@@ -13,15 +13,18 @@ namespace DeNelle.Core
     /// uses the default below.
     ///
     /// Status set by the 2026-06-16 demo-readiness audit:
-    ///   RAID  = OFF — entry + combat work, but victory/return is NOT built (RaidGarrisonSpawner
-    ///           .OnCleared has no subscriber, no RaidScorer, hero spawns as a capsule) → a cleared
-    ///           raid soft-locks. Unflag once the victory + return + real-hero flow lands.
+    ///   RAID  = ON  — the core loop is closed: RaidVictoryController now subscribes to
+    ///           RaidGarrisonSpawner.OnCleared and runs victory -> CLAIM (RaidClaimService +
+    ///           SceneOwnership flip player-owned) -> NEXT COMPANION (AddToParty) -> RETURN
+    ///           (victory banner + GoCastle, with an auto-return safety timer), so a cleared
+    ///           raid no longer soft-locks. The full WO-431 star-scoring/reward SCREEN and the
+    ///           WO-441 Phase-C auto-harvest outpost are follow-ups layered on this spine.
     ///   ARENA = ON  — full loop verified (enter→fight→win/lose→reward→return); SKR wallet is an
     ///           intentional client-side MVP stub. Demo-ready.
     /// </summary>
     public static class FeatureFlags
     {
-        public static bool Raid  => Get("raid",  defaultOn: false);
+        public static bool Raid  => Get("raid",  defaultOn: true);
         public static bool Arena => Get("arena", defaultOn: true);
 
         /// <summary>When ON, our decorative CHROME (gilt inner-rim / bottom rule / header shadow+rule /

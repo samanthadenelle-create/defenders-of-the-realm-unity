@@ -104,6 +104,14 @@ namespace DeNelle.Village
         // stoppingDistance to this melee value so the enemy closes INSIDE the hero's engage
         // ring; it is restored to _heartArrivalRadius the moment the chase ends.
         private const float HeroChaseStoppingDistance = 1.1f;
+        // CORE-LOOP RCA (EnemyAggro 2026-06-18): a brain-driven enemy whose Rush path to the
+        // hero went PARTIAL steers to the last reachable corner (a few metres short of the
+        // hero), so the override no longer sits exactly on the hero. We still treat it as a
+        // hero-chase — and keep the tight stoppingDistance so it enters the 1.5 m damage ring
+        // — whenever the ENEMY ITSELF is within this radius of the hero and its destination
+        // points hero-ward. Generous enough to cover the partial-path standoff, tight enough
+        // not to mis-fire on a far-off siege march.
+        private const float HeroChaseProximity = 4f;
         private bool _stopTightenedForHero;   // tracks which stoppingDistance is currently applied
 
         [Header("Hero aggro (DEF-224)")]
@@ -790,14 +798,35 @@ namespace DeNelle.Village
             {
                 destPos = _brainPositionOverride.Value;
                 // A LIVE EnemyBrain steers here (provoke/taunt/role-on-hero). Detect a
-                // hero chase so we still close to melee range: the override sits on/near
-                // the hero's current position. ResolveHeroTransform is throttled (≈1/sec).
+                // hero chase so we still close to melee range and keep the TIGHT
+                // stoppingDistance (HeroChaseStoppingDistance) — otherwise the agent
+                // parks at the 2.5 m siege radius, a metre OUTSIDE HeroHealth's 1.5 m
+                // contact ring, and never lands a hit (the "enemies won't engage" RCA,
+                // EnemyAggro 2026-06-18). ResolveHeroTransform is throttled (≈1/sec).
                 ResolveHeroTransform();
                 if (_heroTransform != null)
                 {
-                    float toHeroSqr = Vector3.ProjectOnPlane(
-                        _heroTransform.position - destPos, Vector3.up).sqrMagnitude;
-                    chasingHero = toHeroSqr <= 1.5f * 1.5f;
+                    // (a) the override sits ON the hero (brain Rush — complete path), OR
+                    // (b) the ENEMY itself is near the hero AND the override points
+                    //     hero-ward (brain Rush whose path went PARTIAL now steers to the
+                    //     last reachable corner short of the hero — EnemyBrain.TryGetPartial-
+                    //     Approach). Either way we are converging on the hero and must hold
+                    //     the melee stopping distance to enter the damage ring.
+                    Vector3 heroPlanar = Vector3.ProjectOnPlane(
+                        _heroTransform.position - destPos, Vector3.up);
+                    bool overrideOnHero = heroPlanar.sqrMagnitude <= 1.5f * 1.5f;
+
+                    Vector3 selfToHero = Vector3.ProjectOnPlane(
+                        _heroTransform.position - transform.position, Vector3.up);
+                    Vector3 selfToDest = Vector3.ProjectOnPlane(
+                        destPos - transform.position, Vector3.up);
+                    bool nearHero = selfToHero.sqrMagnitude <= HeroChaseProximity * HeroChaseProximity;
+                    bool destHeroward =
+                        selfToHero.sqrMagnitude < 0.01f ||
+                        selfToDest.sqrMagnitude < 0.01f ||
+                        Vector3.Dot(selfToHero.normalized, selfToDest.normalized) > 0.5f;
+
+                    chasingHero = overrideOnHero || (nearHero && destHeroward);
                 }
             }
             else if (TryGetHeroAggroDestination(out Vector3 heroDest))

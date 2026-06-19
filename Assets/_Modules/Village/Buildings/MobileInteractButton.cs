@@ -34,6 +34,14 @@ namespace DeNelle.Village
     /// <see cref="Request(object,string,Action)"/> every frame they are in range;
     /// the latest request that frame is what the button shows + fires on tap.
     /// </summary>
+    // Execution order: run AFTER all proximity requesters' Update()/LateUpdate() (which
+    // are default order 0). Requesters call Request() in their Update(); this component's
+    // Update() must render + hit-test the button AFTER those requests land, and its
+    // LateUpdate() must reset the per-frame claim AFTER every requester's LateUpdate has
+    // run. The seam (SceneTransitionTrigger) confirms the button rendered in ITS LateUpdate
+    // (IsShowingFor), which only reads true if this reset hasn't fired yet — guaranteed by
+    // the later order. (Core-loop seam-travel fix, owner directive 2026-06-18.)
+    [DefaultExecutionOrder(100)]
     [DisallowMultipleComponent]
     public sealed class MobileInteractButton : MonoBehaviour
     {

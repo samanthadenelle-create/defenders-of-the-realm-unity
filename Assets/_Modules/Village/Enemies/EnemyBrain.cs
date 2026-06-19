@@ -638,9 +638,28 @@ namespace DeNelle.Village
 
                         if (!_rushPathValid)
                         {
-                            Debug.LogWarning(
-                                $"[EnemyBrain] {name}: No complete NavMesh path to target '{target.name}' — holding.", this);
-                            return null;
+                            // CORE-LOOP RCA (EnemyAggro, 2026-06-18): the old behaviour HARD-HELD
+                            // here (returned null → enemy freezes at range). The headless capture
+                            // showed 14,207 "No complete NavMesh path — holding" lines: brain-driven
+                            // raid/region enemies stalling out of reach of the hero instead of
+                            // closing, so a base can never be cleared. A PartialPath to a MOVING
+                            // hero (who can stand a hair off the baked mesh, or behind a thin
+                            // unbaked seam) still has a reachable last corner that gets the enemy
+                            // ADJACENT — inside HeroHealth's 1.5 m contact ring. So instead of
+                            // freezing we STEER to the path's last reachable corner and keep
+                            // closing; we only truly hold when even a partial path is empty
+                            // (genuinely walled off). Structures don't move, so this also lets a
+                            // siege enemy creep to the nearest reachable point of a half-blocked
+                            // wall rather than stand idle.
+                            Vector3 approach;
+                            bool haveApproach = TryGetPartialApproach(target.position, out approach);
+                            DeNelle.Core.Diagnostics.FlowTrace.Throttle(
+                                "EnemyAggro", $"partial-{name}", 2f,
+                                $"{name}: no COMPLETE path to '{target.name}' — " +
+                                (haveApproach
+                                    ? $"steering to last reachable corner {approach} (was: hold)."
+                                    : "no partial corner either — holding (walled off)."));
+                            return haveApproach ? approach : (Vector3?)null;
                         }
                     }
                     return target.position;
@@ -741,6 +760,35 @@ namespace DeNelle.Village
                 _atRallyPoint = true;
 
             return SampleOnNavMesh(rally);
+        }
+
+        /// <summary>
+        /// CORE-LOOP RCA (EnemyAggro): returns the last reachable corner of a
+        /// PARTIAL NavMesh path toward <paramref name="dest"/> so a brain-driven
+        /// enemy keeps CLOSING on a hero/structure it cannot completely path to,
+        /// instead of freezing out of reach (the "enemies won't engage" blocker).
+        /// Recomputes the path into the pooled <see cref="_rushPath"/> (the cached
+        /// one may be stale by up to TargetEvalInterval, and a frozen enemy must
+        /// re-aim now). Returns false only when there is no reachable corner at all
+        /// (genuinely walled off) — the caller then holds. Null-safe / no alloc.
+        /// </summary>
+        private bool TryGetPartialApproach(Vector3 dest, out Vector3 approach)
+        {
+            approach = default;
+            if (_navAgent == null || !_navAgent.isOnNavMesh) return false;
+            if (_rushPath == null) _rushPath = new NavMeshPath();
+
+            // CalculatePath fills corners even for a Partial result; the LAST corner
+            // is the closest reachable point toward the destination.
+            if (!_navAgent.CalculatePath(dest, _rushPath)) return false;
+            var corners = _rushPath.corners;
+            if (corners == null || corners.Length == 0) return false;
+
+            Vector3 last = corners[corners.Length - 1];
+            // Reject a degenerate "corner" that is essentially our own feet (no progress).
+            if ((last - transform.position).sqrMagnitude < 0.25f) return false;
+            approach = last;
+            return true;
         }
 
         /// <summary>
