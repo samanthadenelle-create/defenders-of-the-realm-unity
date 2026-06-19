@@ -1129,6 +1129,22 @@ namespace DeNelle.Editor
                     Object.DestroyImmediate(t.gameObject);
             }
 
+            // WO-468 (owner 2026-06-19): outposts are reached by WALKING — the in-town castle->outpost
+            // fast-travel seams must NOT exist while ff.outposttravel is OFF (a [SeamTrace] caught the
+            // OutpostConnector_* triggers active 16-41m from the hero INSIDE MainCastle_Hall — "should
+            // not see in town"). The travel PROMPT is already gated (SceneTransitionTrigger.IsTravelGated),
+            // but the trigger GameObjects still sat baked in the scene; removing them at the source keeps
+            // a re-bake from re-introducing them. We just stripped any priors above; when the flag is OFF
+            // we stop here so NONE are placed. Flip ff.outposttravel ON to restore the three connectors.
+            if (!DeNelle.Core.FeatureFlags.OutpostTravel)
+            {
+                FlowTrace.Step("Seam",
+                    "WireOutpostConnectors: ff.outposttravel OFF — in-town outpost connectors SKIPPED (WO-453 walk-to). " +
+                    "Any prior OutpostConnector_* were stripped above; scene leaves none.");
+                Log("WireOutpostConnectors: ff.outposttravel OFF — no in-town outpost seams placed (reached by walking, WO-453).");
+                return;
+            }
+
             // The SceneTransitionTrigger lives in DeNelle.Village — the Editor asmdef cannot
             // reference it, so resolve via reflection (same as WireOuterWorldConnection).
             var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
@@ -2010,6 +2026,139 @@ namespace DeNelle.Editor
 
             Selection.activeGameObject = seamRoot;
             FlowTrace.Step("BridgeSeam", "AddCastleBridgeSeam: done.");
+        }
+
+        // =====================================================================
+        //  REMOVE CASTLE BRIDGE SEAM (WO-468 cleanup) — the INVERSE of AddCastleBridgeSeam.
+        // -----------------------------------------------------------------------------
+        //  Two playtest flags fixed here:
+        //   1. The ugly misplaced "bridge tile" the player saw leaving the castle — the whole
+        //      CastleBridgeSeam subtree (Bridge_Deck_Visual / Floor_Bridge_Nav / the relocated
+        //      WorldGate_ConnectToOuterWorld_Marker) is destroyed.
+        //   2. The legacy in-town OutpostConnector_* seams ([SeamTrace] caught them active
+        //      16-41m from the hero INSIDE MainCastle_Hall) — stripped (WO-453: outposts are
+        //      reached by walking; ff.outposttravel is OFF).
+        //
+        //  Then the CLEAN exit seam is RESTORED to the recipe south gate by reusing
+        //  EnsureExitSeamAtRecipeGate (rebuilds the marker + SceneTransitionTrigger with the
+        //  proven field wiring: targetSceneName="OuterWorld", targetPosition=(0,0.5,-12),
+        //  loadAdditive=true, radius 12, requireConfirm=false) — we do NOT duplicate that
+        //  field-wiring logic, we call it. Re-bake + persist + save, then verify LOUD.
+        //
+        //  ADD/EDIT-ONLY: opens MainCastle_Hall Single (NEVER BuildCastleHub — the hand-dialed
+        //  castle offsets must be preserved). Idempotent: a no-op (clean restore) if the bridge
+        //  seam + connectors are already gone.
+        //  Mirrors AddCastleBridgeSeam's structure/idioms so it reads as its inverse.
+        // =====================================================================
+        [MenuItem("Defenders/World/Remove Castle Bridge Seam")]
+        public static void RemoveCastleBridgeSeam()
+        {
+            FlowTrace.Step("BridgeSeam", "RemoveCastleBridgeSeam: begin — INVERSE of AddCastleBridgeSeam (restore clean exit seam).");
+
+            const string scenePath = "Assets/Scenes/MainCastle_Hall.unity";
+            var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single); // NEVER BuildCastleHub
+            Log("REMOVE-BRIDGE-SEAM: opened " + scenePath + " (no regen — hand-dialed offsets preserved).");
+
+            var root = GameObject.Find(RootName);
+            if (root == null)
+            {
+                FlowTrace.Fail("BridgeSeam", "CastleHubRoot not found — cannot restore the exit seam. Scene may be empty/unbuilt.");
+                Err("REMOVE-BRIDGE-SEAM: " + RootName + " not found — aborting (ADD/EDIT-ONLY requires an existing hub).");
+                return;
+            }
+
+            // --- 1. Destroy the entire CastleBridgeSeam subtree (idempotent). ---
+            Guard.Try("BridgeSeam", "destroy CastleBridgeSeam subtree", () =>
+            {
+                var priorSeam = GameObject.Find(BridgeSeamRootName);
+                if (priorSeam != null)
+                {
+                    Object.DestroyImmediate(priorSeam);
+                    Log("REMOVE-BRIDGE-SEAM: destroyed " + BridgeSeamRootName + " subtree (Bridge_Deck_Visual / Floor_Bridge_Nav / relocated marker).");
+                    FlowTrace.Step("BridgeSeam", "CastleBridgeSeam subtree destroyed — the misplaced bridge tile is gone.");
+                }
+                else
+                {
+                    FlowTrace.Step("BridgeSeam", "no CastleBridgeSeam subtree present — already clean (idempotent).");
+                    Log("REMOVE-BRIDGE-SEAM: no " + BridgeSeamRootName + " subtree to remove (idempotent).");
+                }
+            });
+
+            // --- 2. Strip the legacy in-town OutpostConnector_* seams (WO-453 walk-to). ---
+            RemoveInTownOutpostConnectors(root.transform);
+
+            // --- 3. Restore the clean exit seam at the recipe south gate (reuse the proven helper). ---
+            // EnsureExitSeamAtRecipeGate rebuilds WorldGate_ConnectToOuterWorld_Marker + its
+            // SceneTransitionTrigger with the proven field wiring (targetSceneName="OuterWorld",
+            // targetPosition=(0,0.5,-12), loadAdditive=true). It also clears any prior marker/trigger
+            // first, so any marker the bridge relocated is replaced cleanly. We do NOT re-wire fields here.
+            Guard.Try("BridgeSeam", "restore clean exit seam at recipe gate", () =>
+            {
+                EnsureExitSeamAtRecipeGate();
+                FlowTrace.Step("BridgeSeam",
+                    "exit seam restored at recipe south gate (target OuterWorld (0,0.5,-12), additive) via EnsureExitSeamAtRecipeGate.");
+            });
+
+            // --- 4. Rebuild the nav floor (drop Floor_Bridge_Nav from the bake set), bake + persist. ---
+            Guard.Try("BridgeSeam", "rebuild nav floor + bake + persist", () =>
+            {
+                BuildNavMeshFloor(root.transform);
+                Log("REMOVE-BRIDGE-SEAM: nav floor rebuilt (bridge deck nav no longer collected).");
+                BakeAllCastleSurfacesAndPersist("REMOVE-BRIDGE-SEAM");
+            });
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            AssetDatabase.SaveAssets();
+            Log("REMOVE-BRIDGE-SEAM: saved scene + assets.");
+
+            // --- 5. Verify LOUD: the restored exit seam path completes (GATE_NAV_OK / FAIL). ---
+            bool seamOk = CastleGateNavVerify.VerifyOpenScene(out string detail);
+            Log("REMOVE-BRIDGE-SEAM: gate-nav verify -> " + (seamOk ? "GATE_NAV_OK" : "GATE_NAV_FAIL") + " :: " + detail);
+            if (!seamOk)
+                FlowTrace.Fail("BridgeSeam",
+                    "VerifyOpenScene reports the restored exit seam is NOT exitable :: " + detail +
+                    " (the south-gate seam must reach the courtyard navmesh after the bridge removal).");
+            else
+                FlowTrace.Step("BridgeSeam", "GATE_NAV_OK — restored south-gate exit seam is reachable.");
+
+            FlowTrace.Step("BridgeSeam", "RemoveCastleBridgeSeam: done.");
+        }
+
+        // Strip every in-town OutpostConnector_* seam from the castle (WO-468 / WO-453). These were
+        // baked by WireOutpostConnectors as castle->garrison fast-travel triggers; with ff.outposttravel
+        // OFF the player reaches an outpost by WALKING, so the in-town connectors must not exist (a
+        // [SeamTrace] caught them active 16-41m from the hero inside MainCastle_Hall). Scans the WHOLE
+        // scene (not just under root) so a connector parented elsewhere is still caught. Idempotent +
+        // null-safe; logs each removal. (WireOutpostConnectors is now also gated OFF behind the flag,
+        // so a re-bake will not re-introduce them.)
+        private static void RemoveInTownOutpostConnectors(Transform root)
+        {
+            Guard.Try("Seam", "strip in-town OutpostConnector_* seams", () =>
+            {
+                int removed = 0;
+                // Snapshot first (we DestroyImmediate while iterating). Whole-scene sweep.
+                var toRemove = new List<GameObject>();
+                foreach (var t in CollectAllTransforms())
+                {
+                    if (t == null) continue;
+                    if (t.name != null && t.name.StartsWith("OutpostConnector_"))
+                        toRemove.Add(t.gameObject);
+                }
+                foreach (var go in toRemove)
+                {
+                    if (go == null) continue;
+                    string n = go.name;
+                    Vector3 p = go.transform.position;
+                    Object.DestroyImmediate(go);
+                    removed++;
+                    FlowTrace.Step("Seam", "removed in-town outpost connector '" + n + "' @ " + p + " (WO-453 walk-to; ff.outposttravel OFF).");
+                }
+                if (removed > 0)
+                    Log("REMOVE-BRIDGE-SEAM: stripped " + removed + " in-town OutpostConnector_* seam(s) — outposts reached by walking (WO-453).");
+                else
+                    Log("REMOVE-BRIDGE-SEAM: no in-town OutpostConnector_* seams present (idempotent).");
+            });
         }
 
         // Relocate the exit SceneTransitionTrigger to the bridge FAR end and (when the link is

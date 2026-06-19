@@ -38,6 +38,11 @@ namespace DeNelle.Village
                  "too early before you reach the gate.")]
         public float ProximityRadius = 6f;
 
+        [Tooltip("Optional narrative prompt label. When non-empty it REPLACES the default " +
+                 "'Travel to <destination>' text (e.g. 'Enter the enemy stronghold' on a story portal). " +
+                 "Empty = the default friendly-destination label.")]
+        public string promptOverride = "";
+
         // CONFIRM-TO-CROSS is now the ONLY behaviour (owner directive 2026-06-18, root-cause
         // fix). The serialized field is RETAINED only so the baked scene components keep
         // deserializing without a missing-field warning — it is NO LONGER read by the runtime.
@@ -290,10 +295,13 @@ namespace DeNelle.Village
 
             // We are the nearest in-range seam: own the prompt + the confirmed cross.
             string dest = FriendlyDestinationName();
+            // A story portal can override the label with its own narrative line
+            // (e.g. "Enter the enemy stronghold"); else use the default "Travel to <dest>".
+            string label = string.IsNullOrEmpty(promptOverride) ? $"Travel to {dest}" : promptOverride;
             if (!_promptShown)
             {
-                FlowTrace.Step("Seam", $"prompt built for '{name}' -> 'Travel to {dest}' ({_curDist:F1}m, radius {EffRadius}m) [Update path]");
-                Debug.Log($"[SeamTrace] '{name}' NEAREST in-range ({_curDist:F1}m, radius {EffRadius}m) -> showing CONFIRM prompt for '{dest}'.");
+                FlowTrace.Step("Seam", $"prompt built for '{name}' -> '{label}' ({_curDist:F1}m, radius {EffRadius}m) [Update path]");
+                Debug.Log($"[SeamTrace] '{name}' NEAREST in-range ({_curDist:F1}m, radius {EffRadius}m) -> showing CONFIRM prompt '{label}'.");
                 // STATE MUTATION: mark the prompt up so we don't re-log every frame.
                 _promptShown = true;
             }
@@ -302,7 +310,7 @@ namespace DeNelle.Village
             // LateUpdate, so a one-shot Request would vanish next frame). Issued from
             // Update() so MobileInteractButton.Update() renders + hit-tests it this frame.
             // The tap callback is wrapped so the log PROVES the cross came from a TAP.
-            MobileInteractButton.Request(this, $"Travel to {dest}", () =>
+            MobileInteractButton.Request(this, label, () =>
             {
                 FlowTrace.Step("Seam", $"TAP -> Cross '{name}' (confirmed by player, dest '{dest}')");
                 // STATE MUTATION: mark this cross as tap-initiated so Cross()'s assertion passes.

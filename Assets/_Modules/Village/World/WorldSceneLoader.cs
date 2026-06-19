@@ -111,10 +111,11 @@ namespace DeNelle.Village
                         var fill = new float[ah, aw, layers];
                         for (int z = 0; z < ah; z++)
                         {
-                            float worldZ = (ah <= 1) ? 0f : (z / (float)(ah - 1)) * 300f - 150f;
+                            // WO-468 Phase 1: terrain enlarged 300 -> 1000 (edge ±500).
+                            float worldZ = (ah <= 1) ? 0f : (z / (float)(ah - 1)) * 1000f - 500f;
                             for (int x = 0; x < aw; x++)
                             {
-                                float worldX = (aw <= 1) ? 0f : (x / (float)(aw - 1)) * 300f - 150f;
+                                float worldX = (aw <= 1) ? 0f : (x / (float)(aw - 1)) * 1000f - 500f;
                                 float wGrass = Mathf.Max(0f, worldX);    // east  -> Goldfields
                                 float wStone = Mathf.Max(0f, -worldX);   // west  -> Stoneback
                                 float wDead  = Mathf.Max(0f, worldZ);    // north -> Ashwood

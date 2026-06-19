@@ -1,15 +1,16 @@
 // =============================================================================
 // OuterWorldBoundaryInjector — runtime world-boundary wall for OuterWorld.
 // -----------------------------------------------------------------------------
-// SYMPTOM: The OuterWorld terrain is 300x300 m centred at origin (edge at ±150).
-// There is NO world-boundary collider, so the hero walks off the edge into the
-// void. A boundary builder was specced in WORK_ORDER_33 but never implemented.
+// SYMPTOM: The OuterWorld terrain is 1000x1000 m centred at origin (edge at ±500;
+// WO-468 Phase 1 enlarged it from 300x300). There is NO world-boundary collider,
+// so the hero walks off the edge into the void. A boundary builder was specced in
+// WORK_ORDER_33 but never implemented.
 //
 // WHAT THIS DOES (asset-independent, always lands):
 //   On every scene load (and once at app start) — when OuterWorld is LOADED
 //   (it loads ADDITIVELY over MainCastle_Hall and is NEVER the active scene, so
 //   we must gate on isLoaded, not GetActiveScene) — inject an invisible perimeter
-//   of 4 BoxColliders just inside the ±150 edge (at ±142) to wall the play area.
+//   of 4 BoxColliders just inside the ±500 edge (at ±485) to wall the play area.
 //   The colliders are 20 m tall and 2 m thick, forming a closed ring the hero
 //   cannot cross, parented into the OuterWorld scene so they unload with it.
 //
@@ -82,17 +83,20 @@ namespace DeNelle.Village.World
 
             var parent = new GameObject(BoundaryName);
 
-            // 4 perimeter walls just inside ±150 (at ±142). 20 m tall, 2 m thick.
-            AddWall(parent.transform, "North", new Vector3(0f, 10f, 142f), new Vector3(288f, 20f, 2f));
-            AddWall(parent.transform, "South", new Vector3(0f, 10f, -142f), new Vector3(288f, 20f, 2f));
-            AddWall(parent.transform, "East", new Vector3(142f, 10f, 0f), new Vector3(2f, 20f, 288f));
-            AddWall(parent.transform, "West", new Vector3(-142f, 10f, 0f), new Vector3(2f, 20f, 288f));
+            // WO-468 Phase 1: terrain enlarged to 1000x1000 (edge at ±500). The ring
+            // moves out to ±485 (just inside the edge) so the player can reach the
+            // cave/portal at z=-470 but cannot walk off the terrain. 20 m tall,
+            // 2 m thick; the long span is 970 m to match the ±485 corners.
+            AddWall(parent.transform, "North", new Vector3(0f, 10f, 485f), new Vector3(970f, 20f, 2f));
+            AddWall(parent.transform, "South", new Vector3(0f, 10f, -485f), new Vector3(970f, 20f, 2f));
+            AddWall(parent.transform, "East", new Vector3(485f, 10f, 0f), new Vector3(2f, 20f, 970f));
+            AddWall(parent.transform, "West", new Vector3(-485f, 10f, 0f), new Vector3(2f, 20f, 970f));
 
             // A new GameObject lands in the ACTIVE scene (MainCastle_Hall) by default;
             // move the ring into OuterWorld so it unloads/reloads with that scene.
             SceneManager.MoveGameObjectToScene(parent, ow);
 
-            Debug.Log("[OuterWorldBoundary] 4 edge colliders injected at ±142 (OuterWorld, additively loaded).");
+            Debug.Log("[OuterWorldBoundary] 4 edge colliders injected at ±485 (OuterWorld 1000x1000, additively loaded).");
         }
 
         // Create one invisible wall: a GameObject with ONLY a BoxCollider (no MeshRenderer).

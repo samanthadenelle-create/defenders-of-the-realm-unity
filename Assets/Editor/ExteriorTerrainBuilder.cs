@@ -99,7 +99,22 @@ namespace DeNelle.Editor
         // ~300x240u, but the seam-flattening plateau only needs to cover the
         // wall footprint; the terrain is centred on the village origin so it
         // extends ~equal distance beyond every wall.
-        private const float TerrainSizeXZ = 300f;
+        // WO-468 Phase 1: enlarged from 300 -> 1000 so the player walks a real
+        // distance south from the castle to a cave/portal at the far end. Terrain
+        // stays ORIGIN-CENTERED (Phase 2 offsets the origin, not this pass). Every
+        // height/splat/scatter computation below derives from this constant, so the
+        // heightmap, splatmaps, paths and tree/rock scatter re-fit automatically.
+        private const float TerrainSizeXZ = 1000f;
+
+        // ── Cave path corridor (WO-468 Phase 1) ──────────────────────────────
+        // A clean, LEVEL road runs due south (x≈0) from the castle approach at
+        // z=-12 to the cave/portal mouth at z=CavePathEndZ. The corridor is held
+        // flat at the village baseline (Y≈0) and kept clear of trees/rocks.
+        private const float CavePathEndZ = -470f;       // cave/portal world Z (x≈0, y≈0)
+        private const float CavePathStartZ = -12f;      // player arrives from the castle here
+        private const float CavePathHalfWidth = 6f;     // painted mud road half-width (world units)
+        private const float CavePathFlattenHalf = 10f;  // corridor flattened to Y≈0 within |x|<this
+        private const float CavePathFlattenFalloff = 8f; // soft blend band beyond the flatten half
 
         // Vertical span of the heightmap. North rises to +30, South sinks to
         // -15; we give a little headroom so the heightmap (which is normalised
@@ -138,7 +153,9 @@ namespace DeNelle.Editor
         private const float SeamFalloff = 20f;         // blend band width beyond the wall
 
         // ── Tree budget (§9.6) ───────────────────────────────────────────────
-        private const int TreeTargetCount = 320;       // within the 200-400 budget
+        // WO-468 Phase 1: bumped 320 -> 1000 so the ~11x-larger terrain isn't
+        // sparse. The path-corridor reject (below) keeps the cave road clear.
+        private const int TreeTargetCount = 1000;
 
         // ── Splat layer indices ──────────────────────────────────────────────
         private const int LayerGrass = 0;
@@ -311,9 +328,12 @@ namespace DeNelle.Editor
                     float biomeY = SampleBiomeHeight(worldX, worldZ);
 
                     // Seam blend: hold the village footprint flat at Y=0 and
-                    // fade the biome elevation in across the falloff band.
-                    float seam = SeamWeight(worldX, worldZ); // 1 inside walls, 0 far out
-                    float elevatedY = Mathf.Lerp(biomeY, 0f, seam);
+                    // fade the biome elevation in across the falloff band. The
+                    // cave-path corridor (WO-468) also holds Y≈0 so the walk south
+                    // is LEVEL — combine the two flatten weights (max).
+                    float flat = Mathf.Max(SeamWeight(worldX, worldZ),
+                                           CorridorWeight(worldX, worldZ));
+                    float elevatedY = Mathf.Lerp(biomeY, 0f, flat);
 
                     // Normalise back to 0..1 heightmap space.
                     heights[z, x] = Mathf.Clamp01(baseLevel01 + elevatedY / TerrainHeight);
@@ -444,8 +464,41 @@ namespace DeNelle.Editor
         private static float WorldHeightAt(float worldX, float worldZ)
         {
             float biomeY = SampleBiomeHeight(worldX, worldZ);
-            float seam = SeamWeight(worldX, worldZ);
-            return Mathf.Lerp(biomeY, 0f, seam);
+            // Mirror CreateTerrainData: flatten by the village seam OR the cave
+            // corridor (WO-468), whichever holds the ground flatter here.
+            float flat = Mathf.Max(SeamWeight(worldX, worldZ),
+                                   CorridorWeight(worldX, worldZ));
+            return Mathf.Lerp(biomeY, 0f, flat);
+        }
+
+        /// <summary>
+        /// Flatten weight (0..1) for the cave-path corridor (WO-468): 1.0 within
+        /// <see cref="CavePathFlattenHalf"/> of the road line (x≈0, z in
+        /// [CavePathEndZ, CavePathStartZ]) so the terrain is held flat at Y≈0,
+        /// smoothly falling to 0 across <see cref="CavePathFlattenFalloff"/>.
+        /// Mirrors <see cref="SeamWeight"/>'s smoothstep falloff so the corridor
+        /// blends seamlessly into the surrounding biome.
+        /// </summary>
+        private static float CorridorWeight(float worldX, float worldZ)
+        {
+            float dist = DistanceToCavePath(worldX, worldZ);
+            if (dist <= CavePathFlattenHalf) return 1f;
+            if (dist >= CavePathFlattenHalf + CavePathFlattenFalloff) return 0f;
+            float t = (dist - CavePathFlattenHalf) / CavePathFlattenFalloff;
+            return 1f - (t * t * (3f - 2f * t));
+        }
+
+        /// <summary>
+        /// Shortest distance (world units) from an XZ point to the cave-path line
+        /// segment — a vertical road at x≈0 spanning z in [CavePathEndZ,
+        /// CavePathStartZ]. Used by the corridor flatten + the tree/rock reject.
+        /// </summary>
+        private static float DistanceToCavePath(float worldX, float worldZ)
+        {
+            float zClamped = Mathf.Clamp(worldZ, CavePathEndZ, CavePathStartZ);
+            float dz = worldZ - zClamped;
+            float dx = worldX; // path runs at x = 0
+            return Mathf.Sqrt(dx * dx + dz * dz);
         }
 
         // =====================================================================
@@ -606,6 +659,18 @@ namespace DeNelle.Editor
             foreach (var pts in paths)
                 PaintPolylineToMud(splat, res, pts, pathHalfWidth);
 
+            // WO-468: the CAVE ROAD — a clean, straight, wider road running due
+            // south (x=0) from the castle approach (z=CavePathStartZ) to the cave
+            // mouth (z=CavePathEndZ). Wider than the narrative footpaths so it
+            // reads as the main route. The corridor flatten + tree reject keep it
+            // level and clear.
+            var caveRoad = new[]
+            {
+                V(0f, CavePathStartZ),
+                V(0f, CavePathEndZ),
+            };
+            PaintPolylineToMud(splat, res, caveRoad, CavePathHalfWidth);
+
             td.SetAlphamaps(0, 0, splat);
         }
 
@@ -759,6 +824,11 @@ namespace DeNelle.Editor
                 // Never plant inside the village footprint or its blend band.
                 if (SeamWeight(worldX, worldZ) > 0.05f) continue;
 
+                // WO-468: keep the cave road CLEAR. Reject any candidate within
+                // the flattened corridor + a margin so trees never block the road.
+                if (DistanceToCavePath(worldX, worldZ) <
+                    CavePathFlattenHalf + CavePathFlattenFalloff + 3f) continue;
+
                 float y = WorldHeightAt(worldX, worldZ);
                 float slope = SteepnessAt(worldX, worldZ);
                 if (slope > 0.55f) continue;                 // too steep -- bare rock
@@ -886,6 +956,9 @@ namespace DeNelle.Editor
                 float worldX = ((float)_rng.NextDouble() - 0.5f) * TerrainSizeXZ;
                 float worldZ = ((float)_rng.NextDouble() - 0.5f) * TerrainSizeXZ;
                 if (SeamWeight(worldX, worldZ) > 0.05f) continue;
+                // WO-468: keep the cave road clear of boulders too (matches PaintTrees).
+                if (DistanceToCavePath(worldX, worldZ) <
+                    CavePathFlattenHalf + CavePathFlattenFalloff + 3f) continue;
 
                 float y = WorldHeightAt(worldX, worldZ);
                 float slope = SteepnessAt(worldX, worldZ);
