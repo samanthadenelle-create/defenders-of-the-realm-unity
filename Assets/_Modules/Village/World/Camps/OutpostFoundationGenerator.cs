@@ -39,6 +39,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using DeNelle.Core.Catalog;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;   // TGVRU — FlowTrace/Guard: invisible carving-blocker self-reports its footprint
 
 namespace DeNelle.Village.World.Camps
 {
@@ -286,7 +287,9 @@ namespace DeNelle.Village.World.Camps
             var entry = CatalogRegistry.Get(rec.itemId);
             if (entry == null)
             {
-                Debug.LogWarning($"[OutpostFoundationGenerator] recipe id '{rec.itemId}' not in registry — skipped.");
+                // R/U — was a silent LogWarning; route through FlowTrace.Warn so a missing
+                // catalog id self-reports (no piece, but the navmesh stays uncarved here).
+                FlowTrace.Warn("Outpost", $"RealizePiece: recipe id '{rec.itemId}' not in registry — skipped (no piece, no carve).");
                 return false;
             }
 
@@ -297,14 +300,69 @@ namespace DeNelle.Village.World.Camps
             Quaternion worldRot = root.rotation *
                                   Quaternion.Euler(0f, rec.yawSteps * 90f + rec.yawOffset, 0f);
 
-            var go = StructureFactory.Create(entry, new Pose(worldPos, worldRot), root);
-            if (go == null) return false;
+            // G — Create can throw (pack-missing / catalog-prefab fault); guard it so one
+            // bad piece logs + is skipped, never aborting the whole fortification loop.
+            GameObject go = Guard.Try("Outpost", $"StructureFactory.Create '{rec.itemId}'",
+                () => StructureFactory.Create(entry, new Pose(worldPos, worldRot), root), fallback: null);
+            if (go == null)
+            {
+                FlowTrace.Fail("Outpost",
+                    $"RealizePiece: StructureFactory.Create returned null for '{rec.itemId}' at cell ({rec.cellX},{rec.cellZ}) — piece not built (no carve).");
+                return false;
+            }
+
+            // V — VERIFY the piece RENDERS. This is the owner's invisible-blocker class:
+            // a carving NavMeshObstacle on a grey/unrendered foundation reads as a wall the
+            // hero can't cross with NOTHING visible. Prove >=1 enabled renderer with a mesh
+            // BEFORE we carve, so an unrendered carve self-reports LOUDLY (footprint logged below).
+            bool renders = VerifyPieceRenders(go, rec.itemId, worldPos);
 
             // Carve the navmesh per piece (no full rebake), measuring the UPRIGHT
             // footprint so the blocker matches the placed mesh.
             float footprintM = StructureFactory.MeasureUprightFootprintMetres(entry);
-            AddFootprintBlocker(go, footprintM);
+            AddFootprintBlocker(go, footprintM, rec.itemId, worldPos, renders);
             return true;
+        }
+
+        // V — does this realized piece actually RENDER? A foundation/fort piece with a
+        // carving NavMeshObstacle but no visible mesh is the owner's "invisible SW blocker /
+        // grey foundation" bug: the hero is blocked by nothing on screen. Returns true when
+        // >=1 ENABLED Renderer carries geometry. Traces the exact counts so a capture splits
+        // "no renderer" vs "renderer disabled" vs "no mesh/material".
+        private static bool VerifyPieceRenders(GameObject go, string itemId, Vector3 worldPos)
+        {
+            if (go == null) return false;
+
+            int total = 0, enabledR = 0, withGeom = 0;
+            var renderers = go.GetComponentsInChildren<Renderer>(true);
+            foreach (var r in renderers)
+            {
+                if (r == null) continue;
+                total++;
+                if (r.enabled && r.gameObject.activeInHierarchy) enabledR++;
+
+                bool hasGeom = r.sharedMaterial != null;
+                var mf = r.GetComponent<MeshFilter>();
+                if (mf != null && mf.sharedMesh == null) hasGeom = false;       // mesh renderer with no mesh
+                if (r is SkinnedMeshRenderer smr && smr.sharedMesh == null) hasGeom = false;
+                if (hasGeom) withGeom++;
+            }
+
+            bool renders = enabledR > 0 && withGeom > 0;
+            if (!renders)
+            {
+                // R/U — LOUD self-report: this piece is the invisible-blocker risk. FlowTrace.Fail
+                // so it lands in the F8 break-log; the carve footprint is also logged in AddFootprintBlocker.
+                FlowTrace.Fail("Outpost",
+                    $"INVISIBLE-BLOCKER RISK: fort piece '{itemId}' at {worldPos} carves the navmesh but does NOT render " +
+                    $"(renderers total={total} enabled={enabledR} withGeom={withGeom}) — grey/unrendered foundation blocks the hero with nothing on screen.");
+            }
+            else
+            {
+                FlowTrace.Step("Outpost",
+                    $"Fort piece '{itemId}' at {worldPos} renders (renderers total={total} enabled={enabledR} withGeom={withGeom}).");
+            }
+            return renders;
         }
 
         // =====================================================================
@@ -330,7 +388,8 @@ namespace DeNelle.Village.World.Camps
         // Mirror of BaseLayoutLoader.AddFootprintBlocker: a box covering the upright
         // footprint + a carving NavMeshObstacle (no per-place rebake). One piece each;
         // we never call a full rebuild.
-        private static void AddFootprintBlocker(GameObject go, float footprintMetres)
+        private static void AddFootprintBlocker(GameObject go, float footprintMetres,
+                                                string itemId, Vector3 worldPos, bool renders)
         {
             float s = Mathf.Max(1f, footprintMetres);
 
@@ -345,6 +404,16 @@ namespace DeNelle.Village.World.Camps
             obstacle.size = new Vector3(s, 4f, s);
             obstacle.center = new Vector3(0f, 2f, 0f);
             obstacle.carving = true;   // carve the baked mesh, no full rebake
+
+            // V — LOG the carve FOOTPRINT (size/center/carving) at every piece so an
+            // invisible blocker self-reports its exact obstacle geometry. When the piece does
+            // NOT render (renders==false) this is the smoking gun: a Fail-level carve footprint
+            // with no visible mesh == the owner's "invisible SW blocker / grey foundation".
+            string fp = $"footprint '{itemId}' at {worldPos}: carve size={obstacle.size} center={obstacle.center} carving={obstacle.carving}";
+            if (renders)
+                FlowTrace.Step("Outpost", $"AddFootprintBlocker {fp} (piece renders).");
+            else
+                FlowTrace.Fail("Outpost", $"AddFootprintBlocker {fp} — UNRENDERED carve (invisible blocker self-report).");
         }
     }
 }

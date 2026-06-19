@@ -317,6 +317,7 @@ namespace DeNelle.Village.World.Camps
 
         private void SpawnDefenders()
         {
+            using var _ = FlowTrace.Enter("Raid", $"{OutpostId} SpawnDefenders (arena)");
             var placed = GameStateService.Instance?.State?.ArenaDefense;
             if (placed == null || placed.Count == 0) return;   // no defense placed -> no-op
 
@@ -328,7 +329,8 @@ namespace DeNelle.Village.World.Camps
                 var def = ArenaDefenseCatalog.Get(rec.itemId);
                 if (def == null)
                 {
-                    Debug.LogWarning($"[EnemyOutpost] Arena defender id '{rec.itemId}' not in catalog - skipped.");
+                    // R/U — route through FlowTrace.Warn so a missing catalog id self-reports.
+                    FlowTrace.Warn("Raid", $"{OutpostId} Arena defender id '{rec.itemId}' not in catalog - skipped.");
                     continue;
                 }
 
@@ -361,12 +363,31 @@ namespace DeNelle.Village.World.Camps
                         Debug.LogWarning($"[EnemyOutpost] structure entry '{StructEntryBallista}' not in registry - '{rec.itemId}' skipped.");
                         continue;
                     }
-                    var go = StructureFactory.Create(entry, new Pose(worldPos, worldRot), transform);
-                    if (go != null) structures++;
+                    var go = Guard.Try("Raid", $"{OutpostId} create defender structure '{rec.itemId}'",
+                        () => StructureFactory.Create(entry, new Pose(worldPos, worldRot), transform), fallback: null);
+                    if (go != null) { structures++; VerifyStructureRenders(go, rec.itemId, worldPos); }
                 }
             }
 
-            Debug.Log($"[EnemyOutpost] Spawned {units + structures} defenders ({units} units, {structures} structures).");
+            FlowTrace.Step("Raid", $"{OutpostId} spawned {units + structures} defenders ({units} units, {structures} structures).");
+        }
+
+        // V — a placed FRIENDLY defender structure must RENDER; otherwise a Ballista that
+        // shoots the raider is invisible. Self-reports the renderer counts.
+        private static void VerifyStructureRenders(GameObject go, string itemId, Vector3 pos)
+        {
+            if (go == null) return;
+            int total = 0, enabledR = 0, withGeom = 0;
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                total++;
+                if (r.enabled && r.gameObject.activeInHierarchy) enabledR++;
+                if (r.sharedMaterial != null) withGeom++;
+            }
+            if (enabledR == 0 || withGeom == 0)
+                FlowTrace.Fail("Raid",
+                    $"INVISIBLE DEFENDER STRUCTURE: '{itemId}' at {pos} spawned but does NOT render (renderers total={total} enabled={enabledR} withGeom={withGeom}).");
         }
 
         // =====================================================================
@@ -413,7 +434,7 @@ namespace DeNelle.Village.World.Camps
                     // Treat it as a FAILED spawn: log an error and signal the Arena to end
                     // the raid as a NON-win (no purse). The Arena owns this outpost's
                     // lifetime + result.
-                    Debug.LogError($"[EnemyOutpost] ARENA garrison FAILED to spawn for {OutpostId} " +
+                    FlowTrace.Fail("Raid", $"{OutpostId} ARENA garrison FAILED to spawn " +
                                    "(no NavMesh under the raid anchor?) - aborting raid as a NON-win, NOT an auto-win.");
                     OnArenaSpawnFailed?.Invoke(this);
                     yield break;
@@ -421,18 +442,34 @@ namespace DeNelle.Village.World.Camps
 
                 // OPEN WORLD: treat as cleared so the raid loop never deadlocks waiting on
                 // defenders that never existed (legit anti-deadlock — keep unchanged).
-                Debug.LogWarning($"[EnemyOutpost] no garrison spawned for {Region} outpost - auto-clearing.");
+                FlowTrace.Warn("Raid", $"{OutpostId} no garrison spawned for {Region} outpost - auto-clearing (anti-deadlock).");
                 Clear();
             }
         }
 
         private void SpawnBoss()
         {
-            Vector3 pos = SnapToNav(transform.position);
+            Vector3 want = transform.position;
+            Vector3 pos = SnapToNav(want);
+
+            // T/R — the boss anchors the outpost. If SnapToNav found no navmesh (pos == want
+            // unchanged AND no mesh under it) the boss may stand OFF-mesh and never path/aggro.
+            // Warn loudly so an off-mesh spawn never silently makes the outpost un-clearable.
+            VerifyOnNavMesh("boss", want, pos);
+
             var def = BuildBossDef(ThreatLevel);
 
-            var boss = EnemyFactory.Build(def, pos, Quaternion.identity, _garrisonRoot);
-            if (boss == null) return;
+            // G — EnemyFactory.Build can throw (pack/model fault); guard it so a boss fault
+            // logs + skips instead of aborting the whole garrison realize coroutine.
+            Enemy boss = Guard.Try("Raid", $"{OutpostId} build boss",
+                () => EnemyFactory.Build(def, pos, Quaternion.identity, _garrisonRoot), fallback: null);
+            if (boss == null)
+            {
+                // R/U — was a SILENT null-return; now self-reports. A bossless outpost still
+                // clears on its guards, but a never-spawned boss should never be invisible.
+                FlowTrace.Fail("Raid", $"{OutpostId} SpawnBoss: EnemyFactory returned null at {pos} — outpost has NO boss.");
+                return;
+            }
             boss.gameObject.name = $"OutpostBoss ({Region})";
 
             var anchor = MakeAnchor("BossAnchor", pos);
@@ -444,6 +481,9 @@ namespace DeNelle.Village.World.Camps
             if (brain == null) brain = boss.gameObject.AddComponent<EnemyBrain>();
             brain.Role = EnemyRole.MiniBoss;
 
+            // V — the boss must RENDER + be hittable, else the hero faces an invisible defender.
+            VerifyEnemyRenders(boss, "boss", pos);
+
             Track(boss);
         }
 
@@ -454,6 +494,7 @@ namespace DeNelle.Village.World.Camps
             Vector3 want = transform.position +
                            new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * (GarrisonRing * 0.7f);
             Vector3 pos = SnapToNav(want);
+            VerifyOnNavMesh($"guard-{index}", want, pos);
 
             float depth = ZoneManager.Depth(transform.position);
             string enemyId = RegionSpawnTable.HasRoster(Region)
@@ -463,15 +504,55 @@ namespace DeNelle.Village.World.Camps
 
             var def = BuildGuardDef(enemyId, ThreatLevel);
 
-            var guard = EnemyFactory.Build(def, pos, Quaternion.identity, _garrisonRoot);
-            if (guard == null) return;
+            Enemy guard = Guard.Try("Raid", $"{OutpostId} build guard '{enemyId}'",
+                () => EnemyFactory.Build(def, pos, Quaternion.identity, _garrisonRoot), fallback: null);
+            if (guard == null)
+            {
+                // R/U — was a SILENT null-return. A missing guard shrinks the garrison; report it.
+                FlowTrace.Fail("Raid", $"{OutpostId} SpawnGuard[{index}]: EnemyFactory returned null for '{enemyId}' at {pos} — guard NOT spawned.");
+                return;
+            }
             guard.gameObject.name = $"OutpostGuard ({enemyId} - {Region})";
 
             var anchor = MakeAnchor($"GuardAnchor-{index}", pos);
             guard.Configure($"raidguard-{Region}-{index}", def, anchor);
             guard.SetBrainTarget(anchor);
 
+            // V — the guard must RENDER, else the hero fights an invisible enemy.
+            VerifyEnemyRenders(guard, $"guard-{index} ({enemyId})", pos);
+
             Track(guard);
+        }
+
+        // V — verify a spawned enemy actually RENDERS (>=1 enabled renderer carrying geometry),
+        // so an invisible garrison member self-reports rather than leaving the hero swinging at
+        // nothing. Traces the renderer counts for a capture-driven split (no renderer / no mesh).
+        private static void VerifyEnemyRenders(Enemy e, string label, Vector3 pos)
+        {
+            if (e == null) return;
+            int total = 0, enabledR = 0, withGeom = 0;
+            foreach (var r in e.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                total++;
+                if (r.enabled && r.gameObject.activeInHierarchy) enabledR++;
+                if (r.sharedMaterial != null) withGeom++;
+            }
+            if (enabledR == 0 || withGeom == 0)
+                FlowTrace.Fail("Raid",
+                    $"INVISIBLE ENEMY: outpost {label} at {pos} spawned but does NOT render (renderers total={total} enabled={enabledR} withGeom={withGeom}).");
+            else
+                FlowTrace.Step("Raid", $"Outpost {label} at {pos} renders (renderers={total} enabled={enabledR}).");
+        }
+
+        // R — verify the snap landed ON the navmesh. SnapToNav returns the WANT position
+        // unchanged when no navmesh is within range, so a defender can spawn off-mesh and never
+        // path/aggro — an effectively-broken garrison. Warn loudly when the snap was a no-op.
+        private static void VerifyOnNavMesh(string label, Vector3 want, Vector3 snapped)
+        {
+            if (NavMesh.SamplePosition(snapped, out _, 1.0f, NavMesh.AllAreas)) return;
+            FlowTrace.Warn("Raid",
+                $"OFF-MESH SPAWN: outpost {label} snapped to {snapped} (wanted {want}) but no navmesh within 1m — defender may never path/aggro.");
         }
 
         private void Track(Enemy e)

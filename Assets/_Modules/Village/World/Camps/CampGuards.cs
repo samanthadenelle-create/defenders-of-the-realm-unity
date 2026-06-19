@@ -22,6 +22,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using DeNelle.Core.World;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;   // TGVRU — FlowTrace/Guard on the guard spawn path
 
 namespace DeNelle.Village.World.Camps
 {
@@ -66,14 +67,19 @@ namespace DeNelle.Village.World.Camps
             _root.localPosition = Vector3.zero;
 
             int count = BaseGuardCount + Mathf.Clamp(_threat / 2, 0, 3);  // 3..6 by tier
+            // G — guard EACH spawn independently so one bad guard logs + is skipped, never
+            // aborting the pack (which would leave the camp un-clearable on a single fault).
             for (int i = 0; i < count; i++)
-                SpawnOneGuard(i, count);
+            {
+                int idx = i;
+                Guard.Try("Camp", $"{_region} spawn guard {idx}", () => SpawnOneGuard(idx, count));
+            }
 
             if (_aliveCount == 0)
             {
                 // Nothing could spawn (no NavMesh / no roster) - treat as cleared so
                 // the camp loop never deadlocks waiting on guards that never existed.
-                Debug.LogWarning($"[CampGuards] no guards spawned for {_region} camp - auto-clearing.");
+                FlowTrace.Warn("Camp", $"{_region} camp: no guards spawned - auto-clearing (anti-deadlock).");
                 RaiseClearedOnce();
             }
         }
@@ -86,8 +92,12 @@ namespace DeNelle.Village.World.Camps
             float ang = (count > 0 ? (index / (float)count) : 0f) * Mathf.PI * 2f;
             Vector3 want = campCentre + new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * (GuardTether * 0.6f);
             Vector3 pos = want;
-            if (NavMesh.SamplePosition(want, out NavMeshHit hit, GuardTether + 4f, NavMesh.AllAreas))
-                pos = hit.position;
+            bool snapped = NavMesh.SamplePosition(want, out NavMeshHit hit, GuardTether + 4f, NavMesh.AllAreas);
+            if (snapped) pos = hit.position;
+            else
+                // R — no navmesh under the tether ring; the guard may stand off-mesh and never
+                // path/aggro. Self-report so an un-clearable camp never fails silently.
+                FlowTrace.Warn("Camp", $"OFF-MESH SPAWN: {_region} camp guard {index} found no navmesh near {want} — may never path/aggro.");
 
             // Region-appropriate enemy id (falls back to a sensible default off-roster).
             float depth = ZoneManager.Depth(campCentre);
@@ -99,8 +109,16 @@ namespace DeNelle.Village.World.Camps
             var def = BuildGuardDef(enemyId, _threat);
 
             var enemy = EnemyFactory.Build(def, pos, Quaternion.identity, _root);
-            if (enemy == null) return;
+            if (enemy == null)
+            {
+                // R/U — was a SILENT null-return. A missing guard shrinks the pack; report it.
+                FlowTrace.Fail("Camp", $"{_region} SpawnOneGuard[{index}]: EnemyFactory returned null for '{enemyId}' at {pos} — guard NOT spawned.");
+                return;
+            }
             enemy.gameObject.name = $"CampGuard ({enemyId} - {_region})";
+
+            // V — the guard must RENDER, else the hero fights an invisible camp defender.
+            VerifyGuardRenders(enemy, $"guard-{index} ({enemyId})", pos);
 
             // A tight tether anchor at the camp so the guard holds the camp instead of
             // marching the Heart. Enemy.SetBrainTarget(anchor) overrides the Heart-march;
@@ -115,6 +133,30 @@ namespace DeNelle.Village.World.Camps
             enemy.Died += HandleGuardDied;
             _guards.Add(enemy);
             _aliveCount++;
+        }
+
+        // V — confirm a spawned guard actually RENDERS (>=1 enabled renderer carrying a mesh),
+        // else the hero fights an invisible camp defender. EnemyFactory already render-verifies +
+        // falls back to a tinted capsule (Wave-0), so this is belt-and-braces: a Warn that
+        // self-reports to the break-log; the guard stays in the pack either way (a hittable but
+        // invisible defender is still clearable, and removing it could deadlock the camp).
+        private void VerifyGuardRenders(Enemy enemy, string what, Vector3 pos)
+        {
+            if (enemy == null) return;
+            var go = enemy.gameObject;
+            int enabledWithMesh = 0;
+            foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                if (smr != null && smr.enabled && smr.sharedMesh != null) enabledWithMesh++;
+            foreach (var mr in go.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (mr == null || !mr.enabled) continue;
+                var mf = mr.GetComponent<MeshFilter>();
+                if (mf != null && mf.sharedMesh != null) enabledWithMesh++;
+            }
+            if (enabledWithMesh == 0)
+                FlowTrace.Warn("Camp",
+                    $"INVISIBLE GUARD: {_region} {what} at {pos} has 0 enabled renderers with a mesh — " +
+                    "hero would fight an unseen defender (EnemyFactory fallback should have tinted a capsule).");
         }
 
         private void HandleGuardDied(Enemy enemy)
