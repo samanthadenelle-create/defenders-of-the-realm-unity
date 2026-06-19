@@ -321,11 +321,119 @@ namespace DeNelle.Village
 
             _armorInstance = instance;
 
-            // Only NOW (the armored body is in hand + animating) hide the base body.
+            // RENDER-VERIFY (owner directive 2026-06-19: "anything that renders can be broken —
+            // check render==true and roll back the error"). retarget==true + a valid avatar can
+            // STILL leave armor-only-in-T-pose if no skinned mesh is enabled or the controller
+            // drives nothing (the companion symptom). PROVE the armored body can render a posed
+            // character BEFORE we hide the base. If it can't, ROLL BACK and keep the base body —
+            // the failure self-reports (Fail -> break-log) and never reaches the player as broken.
+            if (!VerifyArmorRendersNow(instance, armor.id))
+            {
+                RollbackArmor(instance, $"render-verify failed for armor '{armor.id}' (no visible skinned mesh or no bound animator)");
+                return;
+            }
+
+            // Armor proven renderable -> now safe to hide the base body.
             HideBaseBody(baseBody);
 
             FlowTrace.Step("ArmorVisual",
                 $"BuildArmorBody: armored body '{armor.id}' shown (address='{address}'), base body hidden.");
+
+            // DEFERRED pose-verify: the animator hasn't evaluated yet this frame. A bound animator
+            // whose controller has NO clip for this rig leaves the body frozen in bind/T-pose —
+            // the owner-reported "companion is just armor in a T-pose". Watch the next few frames;
+            // if nothing ever drives the rig, ROLL BACK to the base body.
+            if (isActiveAndEnabled)
+                StartCoroutine(VerifyPoseThenMaybeRollback(instance, armor.id, _equipGeneration));
+        }
+
+        // RENDER-VERIFY (synchronous, no camera/scene dependency): the armored instance MUST have
+        // >=1 ENABLED SkinnedMeshRenderer carrying a sharedMesh AND a bound humanoid animator
+        // (runtimeAnimatorController + valid avatar). Traces the exact counts so a capture splits
+        // "no visible mesh" vs "no animator binding" with zero guessing. Returns false => caller rolls back.
+        private bool VerifyArmorRendersNow(GameObject instance, string armorId)
+        {
+            if (instance == null)
+            {
+                FlowTrace.Fail("ArmorVisual", $"VerifyArmorRenders: armor '{armorId}' instance is null.");
+                return false;
+            }
+
+            int total = 0, enabledSkin = 0, withMesh = 0;
+            var skins = instance.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            foreach (var r in skins)
+            {
+                if (r == null) continue;
+                total++;
+                if (r.enabled) enabledSkin++;
+                if (r.sharedMesh != null) withMesh++;
+            }
+
+            var anim = instance.GetComponentInChildren<Animator>();
+            string ctrl = (anim != null && anim.runtimeAnimatorController != null) ? anim.runtimeAnimatorController.name : "<null>";
+            bool avatarOk = anim != null && anim.avatar != null && anim.avatar.isValid;
+            bool animBound = anim != null && anim.runtimeAnimatorController != null && avatarOk;
+            bool renders = enabledSkin > 0 && withMesh > 0;
+
+            FlowTrace.Step("ArmorVisual",
+                $"VerifyArmorRenders armor='{armorId}' on '{name}': skinned total={total} enabled={enabledSkin} withMesh={withMesh}; " +
+                $"animator='{(anim == null ? "<none>" : anim.name)}' controller='{ctrl}' avatarValid={avatarOk} => renders={renders} animBound={animBound}");
+
+            if (!renders || !animBound)
+            {
+                FlowTrace.Fail("ArmorVisual",
+                    $"VerifyArmorRenders FAILED armor='{armorId}' on '{name}': renders={renders} (enabledSkin={enabledSkin}, withMesh={withMesh}) " +
+                    $"animBound={animBound} (controller='{ctrl}', avatarValid={avatarOk}).");
+                return false;
+            }
+            return true;
+        }
+
+        // ROLL BACK a half-built armor: drop the armored instance, RE-SHOW the base body (never a
+        // hidden base + broken armor), release the handle. The base body is the never-naked fallback.
+        // Control-flow safety — always runs (not behind the FlowTrace toggle).
+        private void RollbackArmor(GameObject instance, string reason)
+        {
+            FlowTrace.Fail("ArmorVisual", $"RollbackArmor on '{name}': {reason} — restoring base body, dropping armor.");
+            if (_armorInstance == instance) _armorInstance = null;
+            if (instance != null) Destroy(instance);
+            RestoreBaseBody();
+            ReleaseArmorHandle();
+        }
+
+        // DEFERRED pose-verify: over the next few frames confirm the armored body is actually
+        // PLAYING a clip (layer-0 clipCount > 0), not frozen in the bind/T-pose. Only rolls back
+        // if NOTHING ever drives the rig within the window (robust against a transient 0 during a
+        // first-frame transition). A rollback shows the base body (never-naked), never an invisible hero.
+        private IEnumerator VerifyPoseThenMaybeRollback(GameObject instance, string armorId, int generation)
+        {
+            const int MaxPoseFrames = 6;
+            bool everPlayed = false;
+            int lastCount = -1;
+            for (int i = 0; i < MaxPoseFrames; i++)
+            {
+                yield return null;
+                // Superseded by a newer swap / unequip / disable — that owner handles it now.
+                if (generation != _equipGeneration || instance == null || _armorInstance != instance)
+                    yield break;
+
+                var anim = instance.GetComponentInChildren<Animator>();
+                if (anim != null && anim.isActiveAndEnabled && anim.runtimeAnimatorController != null)
+                {
+                    lastCount = anim.GetCurrentAnimatorClipInfoCount(0);
+                    if (lastCount > 0) { everPlayed = true; break; }
+                }
+            }
+
+            FlowTrace.Step("ArmorVisual",
+                $"VerifyPose armor='{armorId}' on '{name}': everPlayed={everPlayed} lastClipCount={lastCount} " +
+                "(>=1 means an animation drives the rig; otherwise frozen T-pose).");
+
+            if (!everPlayed)
+            {
+                RollbackArmor(instance,
+                    $"deferred pose-verify: armored body never animated (T-pose, lastClipCount={lastCount}) — controller drives no clip for this rig");
+            }
         }
 
         // BUG 1: cache a swap whose Blink body resolved before a base body existed, and start a
