@@ -21,6 +21,7 @@ using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Core.UI
 {
@@ -102,7 +103,12 @@ namespace DeNelle.Core.UI
             }
             if (_handles.TryGetValue(address, out var handle))
             {
-                Addressables.Release(handle);
+                // GUARD (WO-465): a release on an already-invalid handle throws — never let a teardown
+                // throw out of Release. Self-report instead of crashing the caller.
+                Guard.Try("UI", $"AddressableUIManager.Release '{address}'", () =>
+                {
+                    if (handle.IsValid()) Addressables.Release(handle);
+                });
                 _handles.Remove(address);
             }
         }
@@ -114,8 +120,16 @@ namespace DeNelle.Core.UI
                 if (go != null) Destroy(go);
             _instances.Clear();
 
+            // GUARD each release independently (WO-465) so one invalid handle can't abort the rest
+            // of the teardown and leak the others.
             foreach (var h in _handles.Values)
-                Addressables.Release(h);
+            {
+                var handle = h;
+                Guard.Try("UI", "AddressableUIManager.ReleaseAll handle", () =>
+                {
+                    if (handle.IsValid()) Addressables.Release(handle);
+                });
+            }
             _handles.Clear();
         }
 
@@ -138,6 +152,10 @@ namespace DeNelle.Core.UI
 
         private async UniTask<GameObject> LoadAndInstantiate(string address, Transform parent)
         {
+            using var _ = FlowTrace.Enter("UI", $"AddressableUIManager.LoadAndInstantiate '{address}'");
+
+            // GUARD the load (WO-465): a throwing/failed load self-reports via FlowTrace.Fail rather
+            // than a Debug.LogError the harness never captures — so a missing UI address is pinpointed.
             AsyncOperationHandle<GameObject> handle;
             try
             {
@@ -146,25 +164,81 @@ namespace DeNelle.Core.UI
             }
             catch (System.Exception ex)
             {
-                Debug.LogError($"[AddressableUIManager] Failed to load '{address}': {ex.Message}");
+                FlowTrace.Fail("UI",
+                    $"AddressableUIManager: load THREW for '{address}': {ex.GetType().Name}: {ex.Message} — returning null.");
                 return null;
             }
 
-            if (handle.Status != AsyncOperationStatus.Succeeded)
+            if (handle.Status != AsyncOperationStatus.Succeeded || handle.Result == null)
             {
-                Debug.LogError($"[AddressableUIManager] Load failed for '{address}'.");
-                Addressables.Release(handle);
+                FlowTrace.Fail("UI",
+                    $"AddressableUIManager: load FAILED for '{address}' (status={handle.Status}, result={(handle.Result == null ? "<null>" : "ok")}) — returning null.");
+                if (handle.IsValid()) Addressables.Release(handle);
                 return null;
             }
 
-            var go = Instantiate(handle.Result, parent);
-            go.name = handle.Result.name;
+            GameObject go = null;
+            FlowTrace.Try("UI", $"instantiate UI '{address}'", () =>
+            {
+                go = Instantiate(handle.Result, parent);
+                go.name = handle.Result.name;
+            });
+            if (go == null)
+            {
+                // Instantiate threw / produced nothing — release the handle and report; do NOT
+                // cache a null instance (a blank entry would masquerade as a loaded UI).
+                FlowTrace.Fail("UI",
+                    $"AddressableUIManager: Instantiate returned null for '{address}' — returning null, releasing handle.");
+                if (handle.IsValid()) Addressables.Release(handle);
+                return null;
+            }
 
             _handles[address]   = handle;
             _instances[address] = go;
 
-            Debug.Log($"[AddressableUIManager] Loaded '{address}'.");
+            // VISIBILITY VERIFY (WO-465 invisible-scrim class): a loaded+instantiated UI can STILL
+            // render nothing — inactive root, or no usable draw surface (no UIDocument+PanelSettings
+            // for UI Toolkit, and no Canvas for uGUI). "Instantiated" != "visible". Verify the root is
+            // active in the hierarchy AND carries a usable surface; Fail-loud (the instance is kept so
+            // the caller's own fallback decides, but the run self-reports the blank UI).
+            VerifyInstantiatedRenders(go, address);
+
+            FlowTrace.Step("UI", $"AddressableUIManager: loaded + instantiated '{address}'.");
             return go;
+        }
+
+        // Post-instantiate visibility verify (WO-465). A UI root must be active AND have a usable
+        // draw surface: either a UI Toolkit UIDocument bound to a PanelSettings, or a uGUI Canvas.
+        // No usable surface / inactive root => FlowTrace.Fail so a blank UI self-reports instead of
+        // silently rendering nothing (the owner's empty-store / blocked-button symptoms).
+        private static void VerifyInstantiatedRenders(GameObject go, string address)
+        {
+            if (go == null)
+            {
+                FlowTrace.Fail("UI", $"AddressableUIManager: '{address}' instance is null at verify.");
+                return;
+            }
+
+            bool active = go.activeInHierarchy;
+
+            var doc = go.GetComponentInChildren<UnityEngine.UIElements.UIDocument>(true);
+            bool docOk = doc != null && doc.panelSettings != null;
+
+            var canvas = go.GetComponentInChildren<Canvas>(true);
+            bool canvasOk = canvas != null;
+
+            bool hasSurface = docOk || canvasOk;
+
+            FlowTrace.Step("UI",
+                $"AddressableUIManager verify '{address}': active={active} uiDocument={(doc == null ? "<none>" : "ok")} " +
+                $"panelSettings={(docOk ? "ok" : "<missing>")} canvas={(canvasOk ? "ok" : "<none>")} => hasSurface={hasSurface}");
+
+            if (!active || !hasSurface)
+            {
+                FlowTrace.Fail("UI",
+                    $"AddressableUIManager: '{address}' instantiated but NOT visible (active={active}, hasSurface={hasSurface}) " +
+                    "— blank UI with no usable PanelSettings/Canvas (WO-465 invisible-scrim class).");
+            }
         }
     }
 }

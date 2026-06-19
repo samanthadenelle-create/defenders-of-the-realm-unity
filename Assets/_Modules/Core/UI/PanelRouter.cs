@@ -24,6 +24,7 @@
 
 using System;
 using System.Collections.Generic;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Core.UI
 {
@@ -133,17 +134,39 @@ namespace DeNelle.Core.UI
         {
             if (!_openers.TryGetValue(id, out var open) || open == null)
                 return false;
-            try
+
+            // GUARD the open (WO-465): a throwing opener never returns a false "true". FlowTrace.Fail
+            // on a throw so the route self-reports instead of swallowing into a Debug.LogWarning.
+            bool ran = Guard.Try("UI", "PanelRouter.Open '" + id + "'", () => open.Invoke());
+            if (!ran)
             {
-                open.Invoke();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                UnityEngine.Debug.LogWarning(
-                    "[PanelRouter] opening '" + id + "' threw: " + ex.Message);
+                FlowTrace.Fail("UI", "PanelRouter: opening '" + id + "' threw — panel did NOT open.");
                 return false;
             }
+
+            // VISIBILITY VERIFY: the opener ran without throwing, but "didn't throw" != "rendered".
+            // The registered open routes through PanelManager (the modal arbiter), so a successful
+            // open MUST leave a panel recorded open. If nothing is open afterwards the panel failed
+            // to become visible (the WO-465 invisible-scrim class) — Fail-loud and return false so the
+            // caller can show a fallback instead of believing a blank panel opened.
+            return VerifyOpenedVisible(id);
+        }
+
+        // Shared post-open visibility verify (WO-465). Returns true when a panel is actually recorded
+        // open by the modal arbiter; FlowTrace.Fail + false when the open silently produced nothing.
+        private static bool VerifyOpenedVisible(PanelId id)
+        {
+            bool anyOpen = PanelManager.AnyOpen;
+            if (!anyOpen)
+            {
+                FlowTrace.Fail("UI",
+                    "PanelRouter: '" + id + "' open action ran but NO panel is recorded open afterwards " +
+                    "— panel failed to become visible (WO-465 invisible-scrim class).");
+                return false;
+            }
+            FlowTrace.Step("UI",
+                "PanelRouter: '" + id + "' opened and verified visible (open panel='" + PanelManager.OpenPanelName + "').");
+            return true;
         }
 
         /// <summary>
@@ -158,17 +181,16 @@ namespace DeNelle.Core.UI
         {
             if (_contextOpeners.TryGetValue(id, out var openCtx) && openCtx != null)
             {
-                try
+                // GUARD the context open (WO-465) — a throwing opener self-reports via FlowTrace.Fail
+                // and returns false rather than swallowing into a Debug.LogWarning + claiming nothing.
+                bool ran = Guard.Try("UI", "PanelRouter.Open(ctx) '" + id + "'", () => openCtx.Invoke(context));
+                if (!ran)
                 {
-                    openCtx.Invoke(context);
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    UnityEngine.Debug.LogWarning(
-                        "[PanelRouter] context-opening '" + id + "' threw: " + ex.Message);
+                    FlowTrace.Fail("UI", "PanelRouter: context-opening '" + id + "' threw — panel did NOT open.");
                     return false;
                 }
+                // VISIBILITY VERIFY: same as the plain Open — "didn't throw" != "rendered".
+                return VerifyOpenedVisible(id);
             }
             // No context-aware opener — fall back to the plain open (ignores context).
             return Open(id);

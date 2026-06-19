@@ -42,6 +42,7 @@
 
 using System.Collections;
 using DeNelle.Core;
+using DeNelle.Core.Diagnostics;   // TGVRU §12 — FlowTrace/Guard: a dropped HUD push self-reports, never silent
 using DeNelle.Core.HUD;
 using DeNelle.Core.UI;   // shared ElarionUiKit — ONE visual language with the inventory
 using UnityEngine;
@@ -252,6 +253,9 @@ namespace DeNelle.HUD
 
         private bool _combatHudVisible = true;
         private bool _built;
+        // TGVRU: latched true if Build threw (HUD is partial) — lets every Set* push tell a
+        // single missing element apart from a whole-HUD build failure when it self-reports.
+        private bool _hudBuildFailed;
 
         // ── WO-339: TOWN-HUD widgets ──────────────────────────────────────────
         // Top-left WAVE MANAGEMENT cluster.
@@ -484,7 +488,8 @@ namespace DeNelle.HUD
             try { subs = Resources.LoadAll<Sprite>(HudIconSheet); }
             catch (System.Exception e)
             {
-                Debug.LogWarning("[VillageHudController] HUD-icon load failed for " + HudIconSheet + ": " + e.Message);
+                FlowTrace.Warn("HUD", "HUD-icon load failed for " + HudIconSheet + ": " + e.Message +
+                    " — falling back to code-drawn glyphs.");
             }
             if (subs != null)
                 for (int i = 0; i < subs.Length; i++)
@@ -493,8 +498,9 @@ namespace DeNelle.HUD
                     if (sp != null && !string.IsNullOrEmpty(sp.name)) _hudIcons[sp.name] = sp;
                 }
             if (_hudIcons.Count == 0)
-                Debug.Log("[VillageHudController] no HUD-widget sprites under Resources/HudIcons — " +
-                          "run Defenders/Art/Slice HUD Icons. Falling back to code-drawn glyphs.");
+                FlowTrace.Once("HUD", "no-hud-icons",
+                    "no HUD-widget sprites under Resources/HudIcons — run Defenders/Art/Slice HUD Icons. " +
+                    "Falling back to code-drawn glyphs.");
         }
 
         /// <summary>
@@ -609,17 +615,72 @@ namespace DeNelle.HUD
         {
             // WO-334: never let a build-time exception blank the HUD or halt the
             // player. If Build throws, log it and keep whatever was constructed.
+            // TGVRU (§12): the build is GUARDED so a single element throwing self-reports
+            // (FlowTrace.Fail -> break-log) instead of shipping a silently-partial HUD via
+            // a Debug-only line. _hudBuildFailed latches so every later Set* push can tell
+            // a missing element apart from "the whole HUD failed to build".
+            using var _ = FlowTrace.Enter("HUD", "VillageHudController.Start");
             try
             {
                 Build();
                 ApplyResponsiveLayout(force: true);
                 ApplyContext(force: true);
-                Debug.Log("[VillageHudController] WO-334 sleek/minimal context-aware HUD active.");
+                FlowTrace.Step("HUD", "WO-334 sleek/minimal context-aware HUD built + active.");
             }
             catch (System.Exception e)
             {
-                Debug.LogError("[VillageHudController] HUD build failed (HUD may be partial): " + e);
+                // ROLLBACK SIGNAL: the HUD is now partial — Fail-loud so a run self-reports
+                // it (and the per-setter Once-Fails below can name it as the root cause), and
+                // verify what (if anything) actually came up so the capture splits
+                // "nothing built" from "built but one cluster threw".
+                _hudBuildFailed = true;
+                FlowTrace.Fail("HUD",
+                    $"HUD BUILD FAILED (HUD is PARTIAL — Village->HUD pushes may drop): {e.GetType().Name}: {e.Message}\n{e.StackTrace}");
+                VerifyHudBuilt();
             }
+        }
+
+        // TGVRU verify (mirrors HeroArmorVisual.VerifyArmorRendersNow): after a build attempt,
+        // prove which top-level clusters actually came up so a capture pinpoints the dead one
+        // instead of guessing. A null core element on a NON-failed build is itself a Warn-once
+        // (the cluster's builder silently produced nothing).
+        private void VerifyHudBuilt()
+        {
+            int present = 0, missing = 0;
+            void Check(string what, object element)
+            {
+                bool ok = !(element is null) && !(element is Object o && o == null);
+                if (ok) present++;
+                else
+                {
+                    missing++;
+                    FlowTrace.Once("HUD", "build-missing:" + what,
+                        $"VerifyHudBuilt: HUD element '{what}' is null after build — " +
+                        (_hudBuildFailed ? "build threw (HUD partial)." : "its builder produced nothing; pushes to it will drop."));
+                }
+            }
+            Check("hudCanvas", _hudCanvas);
+            Check("rootGroup", _rootGroup);
+            Check("castleFill", _castleFill);
+            Check("waveText", _waveText);
+            Check("hpFill", _hpFill);
+            Check("manaFill", _manaFill);
+            Check("skillBar", _skillBar);
+            Check("partyFrame", _partyFrame);
+            Check("resourceTexts", _resourceTexts);
+            FlowTrace.Step("HUD", $"VerifyHudBuilt: {present} present, {missing} missing (buildFailed={_hudBuildFailed}).");
+        }
+
+        // TGVRU: a setter writing to a HUD element that may be null (HUD didn't build, or the
+        // owning cluster's builder produced nothing) routes through here so a DROPPED Village->HUD
+        // push self-reports ONCE per setter (keyed by name) instead of vanishing silently. Returns
+        // true when the target is missing (caller has already no-op'd). Per-frame-safe via Once.
+        private bool ReportMissingTarget(string setter, string element)
+        {
+            FlowTrace.Once("HUD", "drop:" + setter,
+                $"{setter}: target '{element}' is null — Village->HUD push DROPPED " +
+                (_hudBuildFailed ? "(HUD build failed — partial)." : "(element didn't build / cluster gated off)."));
+            return true;
         }
 
         private void Update()
@@ -686,7 +747,15 @@ namespace DeNelle.HUD
                         float toNext = (float)_xpToNextProp.GetValue(_heroProg);
                         _xpFraction = toNext > 0f ? Mathf.Clamp01(xp / toNext) : 0f;
                     }
-                    catch { /* hero swapped out mid-poll — re-resolve next tick */ _heroProg = null; }
+                    catch (System.Exception e)
+                    {
+                        // TGVRU: no silent catch (§12). Usually a benign mid-poll hero swap, but
+                        // a reflection/type mismatch would also land here and silently freeze the
+                        // XP line — Warn so a real binding break self-reports. Throttled (hot poll).
+                        FlowTrace.Throttle("HUD", "xpline-read", 2f,
+                            $"UpdateHeroXpLine: HeroProgression read threw ({e.GetType().Name}: {e.Message}) — re-resolving next tick.");
+                        _heroProg = null;
+                    }
                 }
             }
 
@@ -773,7 +842,15 @@ namespace DeNelle.HUD
                     _townWaveActive = false;
                 }
             }
-            catch { _waveMgr = null; /* manager torn down across a reload — re-resolve next tick */ }
+            catch (System.Exception e)
+            {
+                // TGVRU: no silent catch (§12). Normally a reload tearing the manager down, but a
+                // reflection/enum-shape mismatch would also land here and silently kill the town
+                // timer — Warn so a real binding break self-reports. Throttled (hot poll).
+                FlowTrace.Throttle("HUD", "wavetimer-read", 2f,
+                    $"PollWaveTimer: WaveManager read threw ({e.GetType().Name}: {e.Message}) — re-resolving next tick.");
+                _waveMgr = null;
+            }
         }
 
         private void ResolveWaveMgrIfNeeded()
@@ -1329,7 +1406,7 @@ namespace DeNelle.HUD
             BuildIconButton(_townActionPanel, new Vector2(0.58f, 0.29f), new Vector2(0.98f, 0.71f),
                 IconInventory, "I", () =>
                 {
-                    Debug.Log("[VillageHudController] BAG tapped → raising InventoryRequested (instance + static).");
+                    FlowTrace.Step("HUD", "BAG tapped -> raising InventoryRequested (instance + static).");
                     InventoryRequested?.Invoke();        // legacy per-instance event (Village bridge self-heal)
                     RaiseInventoryRequested();           // instance-independent static bridge (never goes stale)
                 });
@@ -1451,6 +1528,11 @@ namespace DeNelle.HUD
                 new Vector2(0.11f, 0.06f), new Vector2(0.99f, 0.58f), withValue: true);
             _castleFill = bar.fill;
             _castleText = (TextMeshProUGUI)bar.valueLabel;
+            // TGVRU: the kit returned no fill -> SetHeartHp can't drive the Heart objective bar.
+            // Warn-once so a "Heart HP never moves" self-reports instead of a silent dead bar.
+            if (_castleFill == null)
+                FlowTrace.Once("HUD", "build-castle-fill-null",
+                    "BuildCastleBanner: ElarionUiKit.Bar(Castle) returned a null fill — Heart HP bar will not render.");
             if (_castleText != null) _castleText.text = "Heart of Elarion — 100%";
         }
 
@@ -1516,6 +1598,12 @@ namespace DeNelle.HUD
             var frameSprite = WidgetSprite("player_frame_bg");   // dark-stone P1 frame (ring + banner + tracks)
             var hpSprite    = WidgetSprite("player_hp_fill");    // red HP fill
             var mpSprite    = WidgetSprite("player_mp_fill");    // blue MP fill
+            // TGVRU: party-frame art is the glyph-fallback class — a null sprite means the row
+            // reads as a procedural dark-glass panel (the inline else-branch handles the look).
+            // Warn-once so "blank/un-arted party frame" self-reports (pack not imported / typo'd key).
+            if (frameSprite == null)
+                FlowTrace.Once("HUD", "build-party-frame-sprite-null",
+                    "BuildPartyFrames: 'player_frame_bg' sprite null — party rows use the procedural fallback frame.");
 
             _partyStack = NewRect("PartyStack", parent, new Vector2(0f, 1f), new Vector2(0f, 1f));
             AnchorTopLeft(_partyStack, x: 10f, y: 10f, width: 268f,
@@ -2409,7 +2497,8 @@ namespace DeNelle.HUD
         /// </summary>
         private void RefreshCombatWaveHeadline()
         {
-            if (_waveText == null) return;
+            // TGVRU: a null headline means SetWave/SetWaveProgress can't surface the wave number.
+            if (_waveText == null) { ReportMissingTarget("SetWave/RefreshCombatWaveHeadline", "_waveText"); return; }
             _waveText.text = _townWaveMax > 0
                 ? "WAVE " + _lastWaveNumber + "/" + _townWaveMax
                 : "WAVE " + _lastWaveNumber;
@@ -2441,6 +2530,10 @@ namespace DeNelle.HUD
         {
             if (maxHp <= 0f) return;
             float pct = Mathf.Clamp01(current / maxHp);
+            // TGVRU: combat Heart bar + town Heart text are both optional targets; a null on the
+            // PRIMARY (combat fill) means the objective bar silently never updates — self-report once.
+            if (_castleFill == null && _townHeartText == null)
+                ReportMissingTarget("SetHeartHp", "_castleFill/_townHeartText");
             if (_castleFill != null) _castleFill.fillAmount = pct;
             if (_castleText != null) _castleText.text = "Heart of Elarion — " + Mathf.RoundToInt(pct * 100f) + "%";
             // MOCKUP ALIGN: a healthy Heart reads GREEN (the objective-bar fill colour in
@@ -2554,7 +2647,7 @@ namespace DeNelle.HUD
 
         public void ShowRepairPrompt(string wallLabel, float damagePercent)
         {
-            if (_repairPanel == null) return;
+            if (_repairPanel == null) { ReportMissingTarget("ShowRepairPrompt", "_repairPanel"); return; }
             if (_repairLabel != null)
                 _repairLabel.text = string.Format("Repair {0}? ({1}% damaged)", wallLabel, Mathf.RoundToInt(damagePercent * 100f));
             _repairPanel.SetActive(true);
@@ -2764,7 +2857,7 @@ namespace DeNelle.HUD
 
         public void SetComboCount(int count)
         {
-            if (_comboText == null) return;
+            if (_comboText == null) { ReportMissingTarget("SetComboCount", "_comboText"); return; }
             if (count <= 1)
             {
                 _comboText.text = "";
@@ -2778,7 +2871,7 @@ namespace DeNelle.HUD
 
         public void SetKillStreak(int streak)
         {
-            if (_streakText == null) return;
+            if (_streakText == null) { ReportMissingTarget("SetKillStreak", "_streakText"); return; }
             if (streak <= 1)
             {
                 _streakText.text = "";
@@ -2798,7 +2891,7 @@ namespace DeNelle.HUD
 
         public void SetEnemyCount(int live, int total)
         {
-            if (_enemyCountText == null) return;
+            if (_enemyCountText == null) { ReportMissingTarget("SetEnemyCount", "_enemyCountText"); return; }
             if (total <= 0)
             {
                 _enemyCountText.text = "";
@@ -2817,6 +2910,8 @@ namespace DeNelle.HUD
         /// <summary>Live mana bar — pushed every frame by HeroAbilitiesHudBridge.</summary>
         public void SetMana(float current, float max)
         {
+            if (_manaFill == null && _manaText == null)
+                ReportMissingTarget("SetMana", "_manaFill/_manaText");
             if (_manaFill != null) _manaFill.fillAmount = max > 0f ? Mathf.Clamp01(current / max) : 0f;
             if (_manaText != null) _manaText.text = Mathf.RoundToInt(current) + "/" + Mathf.RoundToInt(max);
         }
@@ -2826,6 +2921,8 @@ namespace DeNelle.HUD
         {
             _hpCurrent = current;
             _hpMax = max > 0f ? max : 1f;
+            if (_hpFill == null && _hpText == null)
+                ReportMissingTarget("SetHeroHp", "_hpFill/_hpText");
             if (_hpFill != null) _hpFill.fillAmount = Mathf.Clamp01(_hpCurrent / _hpMax);
             if (_hpText != null) _hpText.text = Mathf.RoundToInt(current) + "/" + Mathf.RoundToInt(max);
             // Re-resolve the hero name/portrait once the class loads (in case it wasn't ready at build).
@@ -2837,7 +2934,8 @@ namespace DeNelle.HUD
         /// <summary>Per-slot cooldown sweep (radial drains as the ability returns).</summary>
         public void SetAbilityCooldown(int slot, float remaining, float total)
         {
-            if (_slotCooldown == null || slot < 0 || slot >= _slotCooldown.Length || _slotCooldown[slot] == null) return;
+            if (_slotCooldown == null || slot < 0 || slot >= _slotCooldown.Length || _slotCooldown[slot] == null)
+            { ReportMissingTarget("SetAbilityCooldown", "_slotCooldown[" + slot + "]"); return; }
             float fill = total > 0f ? Mathf.Clamp01(remaining / total) : 0f;
             _slotCooldown[slot].fillAmount = fill;
             if (_slotCdFill != null) _slotCdFill[slot] = fill;
@@ -2861,6 +2959,12 @@ namespace DeNelle.HUD
         public void SetAbilitySlot(int slot, string key, string glyph, string name, string description, string accentHex)
         {
             if (slot < 0 || slot >= AbilitySlotCount) return;
+            // TGVRU: the skill bar didn't build (or this slot's cells are null) -> the whole
+            // ability content push silently drops. Self-report once when no per-slot cell exists.
+            if ((_slotKey == null || _slotKey[slot] == null)
+                && (_slotName == null || _slotName[slot] == null)
+                && (_slotGlyph == null || _slotGlyph[slot] == null))
+                ReportMissingTarget("SetAbilitySlot", "_slotKey/_slotName/_slotGlyph[" + slot + "]");
             if (_slotKey != null && _slotKey[slot] != null && !string.IsNullOrEmpty(key)) _slotKey[slot].text = key;
             if (_slotGlyph != null && _slotGlyph[slot] != null) _slotGlyph[slot].text = string.IsNullOrEmpty(glyph) ? "?" : glyph;
             // Real ability art (by hero class + slot) wins over the glyph when present.
@@ -2912,7 +3016,8 @@ namespace DeNelle.HUD
         /// <summary>Party-frame setter (slot 0 = hero). Pushed by a Village-side bridge.</summary>
         public void SetPartyMember(int slot, string name, float current, float max)
         {
-            if (_partyFrame == null || slot < 0 || slot >= _partyFrame.Length) return;
+            if (_partyFrame == null || slot < 0 || slot >= _partyFrame.Length)
+            { ReportMissingTarget("SetPartyMember", "_partyFrame[" + slot + "]"); return; }
             if (_partyFrame[slot] != null) _partyFrame[slot].SetActive(true);
             if (_partyName != null && _partyName[slot] != null && !string.IsNullOrEmpty(name)) _partyName[slot].text = name;
             // T-035: bind the companion portrait from the roster name (slot 0 = hero is

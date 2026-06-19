@@ -136,6 +136,32 @@ namespace DeNelle.Core.UI
             }
 
             OpenStateChanged?.Invoke();
+
+            // VISIBILITY VERIFY (WO-465 invisible-scrim class): we have RECORDED this panel as
+            // the open one, but recording != rendered. The handle already carries an IsOpen probe
+            // the manager never used here — ask it now. If the panel that just "opened" reports it
+            // is NOT actually open/visible, that is the bug (a blank panel masquerading as open:
+            // the owner's blocked Done-button + empty-store symptoms). Self-report via FlowTrace.Fail
+            // so a run pinpoints the dead panel instead of the owner discovering an invisible scrim.
+            // The probe is the CALLER's code — guard it so a throwing probe never breaks the arbiter.
+            if (handle.IsOpen != null)
+            {
+                bool reportedOpen = false;
+                bool probeRan = Guard.Try("UI", "PanelManager.NotifyOpened isOpen-verify '" + handle.Name + "'",
+                    () => { reportedOpen = handle.IsOpen(); });
+                if (probeRan && !reportedOpen)
+                {
+                    FlowTrace.Fail("UI",
+                        "PanelManager: '" + handle.Name + "' recorded as OPEN but its IsOpen probe reports NOT open " +
+                        "— blank/failed panel masquerading as open (WO-465 invisible-scrim class).");
+                }
+                else if (probeRan)
+                {
+                    FlowTrace.Step("UI",
+                        "PanelManager: '" + handle.Name + "' opened and verified visible (IsOpen=true).");
+                }
+            }
+
             return true;
         }
 
