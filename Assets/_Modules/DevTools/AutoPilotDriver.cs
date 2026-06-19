@@ -1045,14 +1045,29 @@ namespace DeNelle.DevTools
             }
 
             WavePhase before = wm.Phase;
+
+            // PROBE-FLAKE FIX (overnight cycle 2, RCA-confirmed): an earlier phase's
+            // ClickableActuator pass clicks the "Defend!" button, so the wave may ALREADY
+            // be running (Countdown/Active) before TriggerWave runs. ForceSpawnNextWaveNow
+            // is a deliberate no-op while Active, so the old `Phase != before` poll could
+            // never trip and hung 30s — the intermittent 5/12 "TriggerWave timeout". An
+            // already-running wave IS success; only a wave stuck at Idle is a real failure.
+            if (before != WavePhase.Idle)
+            {
+                FlowTrace.Step("Auto", $"TriggerWave: wave already running (phase '{before}') — N/A, skipping.");
+                _lastDetail = $"already running ({before})";
+                yield break;
+            }
+
             FlowTrace.Step("Auto", $"TriggerWave: forcing next wave (phase before='{before}').");
-            wm.ForceSpawnNextWaveNow();   // immediate spawn (skip countdown) — fixes the TriggerWave timeout from Idle
+            wm.ForceSpawnNextWaveNow();   // immediate spawn (skip countdown) — only reached from Idle
 
             float t0 = Time.realtimeSinceStartup;
             bool advanced = false;
             while (Time.realtimeSinceStartup - t0 < WaveTimeout)
             {
-                if (wm.Phase != before) { advanced = true; break; }
+                // Success = the wave is now running, regardless of an intermediate Countdown.
+                if (wm.Phase == WavePhase.Active || wm.Phase != before) { advanced = true; break; }
                 yield return null;
             }
 
