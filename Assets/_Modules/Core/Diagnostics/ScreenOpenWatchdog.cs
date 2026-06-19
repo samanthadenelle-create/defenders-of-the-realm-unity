@@ -96,13 +96,19 @@ namespace DeNelle.Core.Diagnostics
             FlowTrace.Step("ScreenOpen", $"panel '{now}' opened");
 
             // Heuristic: a key went down this frame and no pointer was pressed — the
-            // open looks keyboard-driven rather than an on-screen UI-button tap.
-            // (UI Toolkit button clicks are pointer events, so a real tap has a
-            // pointer down and is NOT flagged.) Cheap hint, not proof.
+            // open *looks* keyboard-driven rather than an on-screen UI-button tap.
+            // DOWNGRADED Fail -> Warn (2026-06-19): a panel routinely opens the frame
+            // after a keypress through a LEGITIMATE code path — e.g. advancing Yarn
+            // dialogue with a key, then a vendor <<OpenShop>> command routes the panel
+            // via PanelRouter (observed: 'Party Shop' from DialogueCommandBridge.CmdOpenShop).
+            // Stray hotkeys are already editor-gated, so an error-level Fail here
+            // false-flags those legit opens as bugs in the break-capture. Warn keeps the
+            // signal (still queryable) without polluting the capture as a hard failure.
             if (s_keyDownThisFrame && !s_pointerDownThisFrame)
             {
-                FlowTrace.Fail("ScreenOpen",
-                    $"panel '{now}' opened with no UI trigger — possible stray hotkey");
+                FlowTrace.Warn("ScreenOpen",
+                    $"panel '{now}' opened the frame after a key press with no pointer — " +
+                    "likely a dialogue/command-routed open, not a stray hotkey (heuristic hint).");
             }
         }
 
