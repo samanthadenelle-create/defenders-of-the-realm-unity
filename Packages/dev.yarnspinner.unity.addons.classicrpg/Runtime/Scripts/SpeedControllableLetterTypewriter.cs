@@ -93,8 +93,26 @@ namespace Yarn.Unity.Addons.ClassicRPG
                     markupHandler.OnLineDisplayBegin(line, TextElement);
                 }
 
-                // Get the count of visible characters from TextMesh to exclude markup characters
-                var visibleCharacterCount = TextElement.GetTextInfo(line.Text).characterCount;
+                // Get the count of visible characters from TextMesh to exclude markup characters.
+                // FONT-SAFE GUARD (DeNelle 2026-06-19): on a build where TextElement.font is unresolved,
+                // GetTextInfo -> GenerateTextMesh throws an NRE deep in TMP and aborts the ENTIRE dialogue
+                // line (the chaos fleet caught this 7/8 runs via this exact typewriter path). Ensure a font
+                // first, then guard the call so a bad generation degrades to a raw character estimate
+                // instead of crashing dialogue. Never NRE, never silently swallow.
+                int visibleCharacterCount;
+                try
+                {
+                    if (TextElement.font == null)
+                        TextElement.font = TMPro.TMP_Settings.defaultFontAsset
+                            ?? UnityEngine.Resources.Load<TMPro.TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+                    visibleCharacterCount = TextElement.GetTextInfo(line.Text).characterCount;
+                }
+                catch (System.Exception ex)
+                {
+                    visibleCharacterCount = line.Text != null ? line.Text.Length : 0;
+                    Debug.LogWarning($"[Typewriter] GetTextInfo failed (TextElement.font unresolved in build?) — " +
+                        $"falling back to raw length {visibleCharacterCount} so dialogue still runs: {ex.Message}");
+                }
 
                 // Start with a full time budget so that we immediately show the first character
                 double accumulatedDelay = GetCurrentSecondsPerCharacter();
