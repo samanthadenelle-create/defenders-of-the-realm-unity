@@ -19,6 +19,7 @@
 
 using UnityEngine;
 using DeNelle.Core.Data;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Village.UI;
 
 namespace DeNelle.Village
@@ -78,10 +79,25 @@ namespace DeNelle.Village
             if (_complete) return;
             _complete = true;
 
+            using var _ = FlowTrace.Enter("TowerConstruction",
+                $"CompleteConstruction (reveal '{(_data != null ? _data.towerName : name)}')");
+
             // Show ONLY the final tower visual (CP1 Issue 10). In the runtime path
             // there is no baked visual, so Initialize() builds + reveals it now.
             if (_finalTowerVisual != null) _finalTowerVisual.SetActive(true);
-            if (_tower != null && _tower.Data == null && _data != null) _tower.Initialize(_data);
+            if (_tower != null && _tower.Data == null && _data != null)
+            {
+                // Guard the reveal: Tower.Initialize builds the visual + combat. A throw here
+                // must NOT leave the site stuck as scaffolding forever — log + still tear the
+                // dressing down below so the build at least completes.
+                Guard.Try("TowerConstruction", "reveal tower via Tower.Initialize",
+                    () => _tower.Initialize(_data));
+            }
+            else if (_tower == null)
+            {
+                FlowTrace.Fail("TowerConstruction",
+                    $"CompleteConstruction: no Tower component on '{name}' — finished build has no tower to reveal.");
+            }
             var audio = FindAnyObjectByType<TowerAudioController>();
             if (audio != null) audio.PlayBuildComplete();
 
@@ -94,12 +110,28 @@ namespace DeNelle.Village
 
         private void BuildScaffolding()
         {
+            using var _ = FlowTrace.Enter("TowerConstruction", "BuildScaffolding");
+
             if (_data != null && _data.scaffoldingPrefab != null)
             {
-                _scaffolding = Instantiate(_data.scaffoldingPrefab, transform);
-                _scaffolding.transform.localPosition = Vector3.zero;
-                _scaffolding.transform.localRotation = Quaternion.identity;
-                return;
+                // Guard the authored-prefab spawn: a throw must fall through to the procedural
+                // placeholder so the build site is NEVER left with no visible scaffolding.
+                bool ok = Guard.Try("TowerConstruction", "instantiate scaffolding prefab", () =>
+                {
+                    _scaffolding = Instantiate(_data.scaffoldingPrefab, transform);
+                    _scaffolding.transform.localPosition = Vector3.zero;
+                    _scaffolding.transform.localRotation = Quaternion.identity;
+                });
+                // RENDER-VERIFY: an authored scaffolding that instantiated but renders nothing
+                // reads as "no scaffolding" — roll back to the placeholder so the site is visible.
+                if (ok && _scaffolding != null && ScaffoldingRenders(_scaffolding))
+                {
+                    FlowTrace.Step("TowerConstruction", "scaffolding: authored prefab spawned + render-verified.");
+                    return;
+                }
+                FlowTrace.Fail("TowerConstruction",
+                    "BuildScaffolding: authored prefab failed to spawn/render — building procedural placeholder (visible site).");
+                if (_scaffolding != null) { Destroy(_scaffolding); _scaffolding = null; }
             }
 
             // Code placeholder: a low wooden-brown base frame so the site reads as
@@ -126,14 +158,41 @@ namespace DeNelle.Village
             }
         }
 
+        // RENDER-VERIFY (TGVRU "V"): the scaffolding must carry >=1 enabled Renderer with a
+        // mesh, else the build site reads empty. Returns false => caller rolls back to placeholder.
+        private static bool ScaffoldingRenders(GameObject scaffolding)
+        {
+            if (scaffolding == null) return false;
+            int enabled = 0, withMesh = 0;
+            foreach (var r in scaffolding.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                if (r.enabled) enabled++;
+                var mf = r.GetComponent<MeshFilter>();
+                if (r is SkinnedMeshRenderer smr) { if (smr.sharedMesh != null) withMesh++; }
+                else if (mf != null && mf.sharedMesh != null) withMesh++;
+            }
+            return enabled > 0 && withMesh > 0;
+        }
+
         private void StartWorkerVfx()
         {
+            using var _ = FlowTrace.Enter("TowerConstruction", "StartWorkerVfx");
+
             if (_data != null && _data.workerHammerVFX != null)
             {
-                _workerVfx = Instantiate(_data.workerHammerVFX, transform);
-                _workerVfx.transform.localPosition = new Vector3(0f, 0.5f, 0f);
-                _workerVfx.Play();
-                return;
+                // Guard the authored VFX spawn: a throw falls through to the code dust puff so the
+                // site always reads ACTIVE (never silently no-VFX). On success keep it.
+                bool ok = Guard.Try("TowerConstruction", "instantiate worker VFX prefab", () =>
+                {
+                    _workerVfx = Instantiate(_data.workerHammerVFX, transform);
+                    _workerVfx.transform.localPosition = new Vector3(0f, 0.5f, 0f);
+                    _workerVfx.Play();
+                });
+                if (ok && _workerVfx != null) return;
+                FlowTrace.Warn("TowerConstruction",
+                    "StartWorkerVfx: authored VFX failed to spawn — falling back to code dust puff (active site).");
+                if (_workerVfx != null) { Destroy(_workerVfx.gameObject); _workerVfx = null; }
             }
 
             // Code fallback: a small warm dust puff so the build site reads as

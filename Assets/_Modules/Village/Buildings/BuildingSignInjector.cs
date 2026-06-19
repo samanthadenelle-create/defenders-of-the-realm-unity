@@ -11,6 +11,7 @@
 
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -50,16 +51,37 @@ namespace DeNelle.Village
 
         private static void Inject()
         {
+            using var _ = FlowTrace.Enter("BuildingSign", "Inject (sign every Building)");
+
             var buildings = FindObjectsByType<Building>(FindObjectsSortMode.None);
-            foreach (var b in buildings)
+            if (buildings == null || buildings.Length == 0)
             {
-                if (b == null) continue;
-                if (b.GetComponentInChildren<BuildingSign>() != null) continue;   // already signed
-                string label = b.DisplayLabel;
-                if (string.IsNullOrEmpty(label)) continue;
-                var sign = b.gameObject.AddComponent<BuildingSign>();
-                sign?.Configure(label);
+                FlowTrace.Warn("BuildingSign", "Inject: found 0 Building(s) to sign — none signed this pass.");
+                return;
             }
+
+            int signed = 0, skippedNoLabel = 0;
+            // Guard EACH building independently: one bad object (a thrown AddComponent/Configure)
+            // is logged + skipped, never aborts signing the rest — a half-signed village would
+            // read as "some buildings have no nameplate".
+            Guard.TryEach("BuildingSign", "sign building", buildings, b =>
+            {
+                if (b == null) return;
+                if (b.GetComponentInChildren<BuildingSign>() != null) return;   // already signed
+                string label = b.DisplayLabel;
+                if (string.IsNullOrEmpty(label)) { skippedNoLabel++; return; }
+                var sign = b.gameObject.AddComponent<BuildingSign>();
+                if (sign == null)
+                {
+                    FlowTrace.Fail("BuildingSign", $"Inject: AddComponent<BuildingSign> returned null on '{b.name}' — no nameplate.");
+                    return;
+                }
+                sign.Configure(label);
+                signed++;
+            });
+
+            FlowTrace.Step("BuildingSign",
+                $"Inject: signed {signed} building(s) ({buildings.Length} found, {skippedNoLabel} had no DisplayLabel).");
         }
     }
 }

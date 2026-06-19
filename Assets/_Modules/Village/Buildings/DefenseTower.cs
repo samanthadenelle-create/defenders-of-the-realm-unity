@@ -12,6 +12,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -159,22 +160,31 @@ namespace DeNelle.Village
         /// </summary>
         private void FireAtParty(IDamageableStructure target, Vector3 targetPos)
         {
+            using var _ = FlowTrace.Enter("DefenseTower", "FireAtParty (EnemyOwned)");
             Vector3 muzzle = transform.position + Vector3.up * 2f;
 
-            var bolt = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            bolt.name = "Bolt";
-            bolt.transform.localScale = Vector3.one * 0.4f;
-            var col = bolt.GetComponent<Collider>(); if (col != null) Destroy(col);
-            var sh = Shader.Find("Universal Render Pipeline/Lit");
-            if (sh != null)
+            // GUARD the bolt spawn: a thrown CreatePrimitive/material step must NOT abort the
+            // shot (and orphan a half-built bolt). On failure we still apply damage below so the
+            // turret stays functional — never silently dead.
+            GameObject bolt = null;
+            Guard.Try("DefenseTower", "spawn party bolt", () =>
             {
-                var m = new Material(sh);
-                if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", BoltColor);
-                if (m.HasProperty("_EmissionColor")) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", BoltColor * 2f); }
-                var r = bolt.GetComponent<Renderer>(); if (r != null) r.sharedMaterial = m;
-            }
-            bolt.transform.position = muzzle;
-            bolt.AddComponent<ProjectileMover>().Launch(targetPos + Vector3.up * 1f, 40f, CanHitAir ? 0.1f : 0.35f);
+                bolt = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                bolt.name = "Bolt";
+                bolt.transform.localScale = Vector3.one * 0.4f;
+                var col = bolt.GetComponent<Collider>(); if (col != null) Destroy(col);
+                var sh = Shader.Find("Universal Render Pipeline/Lit");
+                if (sh != null)
+                {
+                    var m = new Material(sh);
+                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", BoltColor);
+                    if (m.HasProperty("_EmissionColor")) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", BoltColor * 2f); }
+                    var r = bolt.GetComponent<Renderer>(); if (r != null) r.sharedMaterial = m;
+                }
+                bolt.transform.position = muzzle;
+                bolt.AddComponent<ProjectileMover>().Launch(targetPos + Vector3.up * 1f, 40f, CanHitAir ? 0.1f : 0.35f);
+            });
+            VerifyBoltRenders(bolt, "party");
 
             VFXManager.Play(MuzzleVfxFor(Element), muzzle);
 
@@ -247,22 +257,34 @@ namespace DeNelle.Village
 
         private void Fire(IDamageable target)
         {
+            // Hot loop (towers fire often): Throttle the entry trace to ~1/sec so it pinpoints
+            // a live-firing tower without flooding the break-log.
+            FlowTrace.Throttle("DefenseTower", $"fire:{GetInstanceID()}", 1f,
+                $"Fire on '{(target as MonoBehaviour)?.name ?? "<target>"}' (dmg={EffectiveDamage:0.#}, element={Element}).");
             Vector3 muzzle = transform.position + Vector3.up * 2f;
 
-            var bolt = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            bolt.name = "Bolt";
-            bolt.transform.localScale = Vector3.one * 0.4f;
-            var col = bolt.GetComponent<Collider>(); if (col != null) Destroy(col);
-            var sh = Shader.Find("Universal Render Pipeline/Lit");
-            if (sh != null)
+            // GUARD the bolt spawn: a thrown CreatePrimitive/material step must NOT abort the
+            // shot (and orphan a half-built bolt). Damage still lands below — the tower never
+            // silently stops firing because one bolt's visual threw.
+            GameObject bolt = null;
+            Guard.Try("DefenseTower", "spawn bolt", () =>
             {
-                var m = new Material(sh);
-                if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", BoltColor);
-                if (m.HasProperty("_EmissionColor")) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", BoltColor * 2f); }
-                var r = bolt.GetComponent<Renderer>(); if (r != null) r.sharedMaterial = m;
-            }
-            bolt.transform.position = muzzle;
-            bolt.AddComponent<ProjectileMover>().Launch(target.WorldPosition + Vector3.up * 1f, 40f, CanHitAir ? 0.1f : 0.35f);
+                bolt = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                bolt.name = "Bolt";
+                bolt.transform.localScale = Vector3.one * 0.4f;
+                var col = bolt.GetComponent<Collider>(); if (col != null) Destroy(col);
+                var sh = Shader.Find("Universal Render Pipeline/Lit");
+                if (sh != null)
+                {
+                    var m = new Material(sh);
+                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", BoltColor);
+                    if (m.HasProperty("_EmissionColor")) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", BoltColor * 2f); }
+                    var r = bolt.GetComponent<Renderer>(); if (r != null) r.sharedMaterial = m;
+                }
+                bolt.transform.position = muzzle;
+                bolt.AddComponent<ProjectileMover>().Launch(target.WorldPosition + Vector3.up * 1f, 40f, CanHitAir ? 0.1f : 0.35f);
+            });
+            VerifyBoltRenders(bolt, "hostile");
 
             // ── Muzzle flash ──────────────────────────────────────────────────
             // Brief pooled burst at the fire point each shot. Reuses the shared
@@ -272,6 +294,35 @@ namespace DeNelle.Village
             VFXManager.Play(MuzzleVfxFor(Element), muzzle);
 
             target.TakeDamage(EffectiveDamage, Element);   // hitscan damage on fire (WO-430: + Arcane Tower damage perk)
+        }
+
+        // RENDER-VERIFY (TGVRU "V"; mirrors Tower.VerifyVisualRendersNow): a spawned bolt MUST
+        // carry >=1 ENABLED Renderer with a sharedMesh, else it's an invisible projectile (the
+        // "tower fires but nothing visible" symptom). Throttled (hot loop) + Fail-loud on a miss
+        // so a capture self-reports a dud bolt; the shot's damage already landed regardless.
+        private void VerifyBoltRenders(GameObject bolt, string kind)
+        {
+            if (bolt == null)
+            {
+                FlowTrace.Fail("DefenseTower", $"VerifyBolt ({kind}): bolt is null — spawn threw; no visible projectile (damage still applied).");
+                return;
+            }
+            int enabled = 0, withMesh = 0;
+            foreach (var r in bolt.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                if (r.enabled) enabled++;
+                var mf = r.GetComponent<MeshFilter>();
+                if (mf != null && mf.sharedMesh != null) withMesh++;
+            }
+            if (enabled == 0 || withMesh == 0)
+            {
+                FlowTrace.Fail("DefenseTower",
+                    $"VerifyBolt ({kind}) FAILED on '{bolt.name}': enabledRenderers={enabled} withMesh={withMesh} — invisible bolt.");
+                return;
+            }
+            FlowTrace.Throttle("DefenseTower", $"boltok:{GetInstanceID()}", 1f,
+                $"VerifyBolt ({kind}) ok: enabledRenderers={enabled} withMesh={withMesh}.");
         }
 
         /// <summary>Maps the tower's damage element to its tower-bolt muzzle VFXType.</summary>
@@ -336,6 +387,7 @@ namespace DeNelle.Village
         {
             if (_aimBeam != null) return;
 
+            using var _ = FlowTrace.Enter("DefenseTower", "EnsureAimBeam (build lock-on LineRenderer)");
             var beamGo = new GameObject("AimBeam");
             beamGo.transform.SetParent(transform, false);
             _aimBeam = beamGo.AddComponent<LineRenderer>();

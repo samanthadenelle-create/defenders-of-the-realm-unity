@@ -24,6 +24,7 @@
 
 using System;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -288,42 +289,67 @@ namespace DeNelle.Village
         // =====================================================================
         private void BuildCanvas()
         {
-            var go = new GameObject("InteractCanvas");
-            go.transform.SetParent(transform, false);
-            _canvas = go.AddComponent<Canvas>();
-            _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            _canvas.sortingOrder = 30050; // above the camp prompt (30000)
-            var scaler = go.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1280f, 720f);
+            // MOBILE'S ONLY INTERACT PATH: if this canvas/button fails to build, a phone player
+            // can engage NOTHING (no keyboard for [F]). Guard the whole construction so a throw
+            // is logged (never silently swallowed), then VERIFY the canvas + button + label all
+            // exist and Fail-loud if any is missing — a capture self-reports a dead touch path.
+            using var _ = FlowTrace.Enter("MobileInteract", "BuildCanvas (mobile's only interact button)");
 
-            var btnGo = new GameObject("InteractButton");
-            btnGo.transform.SetParent(_canvas.transform, false);
-            var img = btnGo.AddComponent<Image>();
-            img.color = new Color(0.16f, 0.10f, 0.30f, 0.94f);   // village-violet
-            _btnRect = img.rectTransform;
-            // Bottom-centre, thumb-reachable, clear of the virtual joystick (left)
-            // and the action buttons (right).
-            _btnRect.anchorMin = new Vector2(0.5f, 0f);
-            _btnRect.anchorMax = new Vector2(0.5f, 0f);
-            _btnRect.pivot = new Vector2(0.5f, 0f);
-            _btnRect.anchoredPosition = new Vector2(0f, 130f);
-            _btnRect.sizeDelta = new Vector2(320f, 76f);
+            bool ok = Guard.Try("MobileInteract", "build interact canvas", () =>
+            {
+                var go = new GameObject("InteractCanvas");
+                go.transform.SetParent(transform, false);
+                _canvas = go.AddComponent<Canvas>();
+                _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                _canvas.sortingOrder = 30050; // above the camp prompt (30000)
+                var scaler = go.AddComponent<CanvasScaler>();
+                scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                scaler.referenceResolution = new Vector2(1280f, 720f);
 
-            var lblGo = new GameObject("Label");
-            lblGo.transform.SetParent(btnGo.transform, false);
-            _label = lblGo.AddComponent<Text>();
-            _label.font = BuiltinFont();
-            _label.alignment = TextAnchor.MiddleCenter;
-            _label.color = new Color(0.97f, 0.93f, 1.00f);
-            _label.fontSize = 26;
-            _label.fontStyle = FontStyle.Bold;
-            _label.text = "Interact";
-            var lrt = _label.rectTransform;
-            lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
-            lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;
+                var btnGo = new GameObject("InteractButton");
+                btnGo.transform.SetParent(_canvas.transform, false);
+                var img = btnGo.AddComponent<Image>();
+                img.color = new Color(0.16f, 0.10f, 0.30f, 0.94f);   // village-violet
+                _btnRect = img.rectTransform;
+                // Bottom-centre, thumb-reachable, clear of the virtual joystick (left)
+                // and the action buttons (right).
+                _btnRect.anchorMin = new Vector2(0.5f, 0f);
+                _btnRect.anchorMax = new Vector2(0.5f, 0f);
+                _btnRect.pivot = new Vector2(0.5f, 0f);
+                _btnRect.anchoredPosition = new Vector2(0f, 130f);
+                _btnRect.sizeDelta = new Vector2(320f, 76f);
 
-            _btnRect.gameObject.SetActive(false);
+                var lblGo = new GameObject("Label");
+                lblGo.transform.SetParent(btnGo.transform, false);
+                _label = lblGo.AddComponent<Text>();
+                _label.font = BuiltinFont();
+                _label.alignment = TextAnchor.MiddleCenter;
+                _label.color = new Color(0.97f, 0.93f, 1.00f);
+                _label.fontSize = 26;
+                _label.fontStyle = FontStyle.Bold;
+                _label.text = "Interact";
+                var lrt = _label.rectTransform;
+                lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
+                lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;
+
+                _btnRect.gameObject.SetActive(false);
+            });
+
+            // VERIFY the touch path is live. _canvas + _btnRect + _label must ALL exist, the
+            // button must carry an enabled Image (else taps render nothing), and the font must be
+            // bound (else the label is blank). Any miss = a broken-but-invisible interact button.
+            var btnImg = _btnRect != null ? _btnRect.GetComponent<Image>() : null;
+            bool canvasOk = _canvas != null;
+            bool buttonOk = _btnRect != null && btnImg != null && btnImg.enabled;
+            bool labelOk  = _label != null && _label.font != null;
+            if (!ok || !canvasOk || !buttonOk || !labelOk)
+            {
+                FlowTrace.Fail("MobileInteract",
+                    $"BuildCanvas FAILED: built={ok} canvas={canvasOk} button={buttonOk} label={labelOk} — " +
+                    "mobile interact button is broken/invisible; phone players cannot interact.");
+                return;
+            }
+            FlowTrace.Step("MobileInteract", "BuildCanvas: canvas + button + label built and verified (touch path live).");
         }
 
         private static Font BuiltinFont() =>

@@ -27,6 +27,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -144,6 +145,10 @@ namespace DeNelle.Village
         /// </summary>
         private void FireBlast(IDamageable primary)
         {
+            // Hot loop (slow-firing, but still per-shot): Throttle entry so a live tower is
+            // pinpointed in a capture without flooding the break-log.
+            FlowTrace.Throttle("ArcaneTower", $"blast:{GetInstanceID()}", 1f,
+                $"FireBlast (radius={AoeRadius}, dmg={EffectiveDamage:0.#}, slow={SlowSeconds}s).");
             Vector3 muzzle  = transform.position + Vector3.up * 2.5f;
             Vector3 impact  = primary.WorldPosition;
 
@@ -154,15 +159,18 @@ namespace DeNelle.Village
             float aoeSq = AoeRadius * AoeRadius;
             float splash = Mathf.Clamp01(SplashDamageFraction);
 
-            // The scan list was refreshed in Update; reuse it for the splash sweep
-            // so we don't pay a second FindObjectsByType this frame.
-            for (int i = 0; i < _hostiles.Count; i++)
+            // The scan list was refreshed in Update; reuse it for the splash sweep so we don't
+            // pay a second FindObjectsByType this frame. GUARD EACH victim independently: one
+            // bad enemy (a destroyed body mid-iteration, a thrown TakeDamage/ApplyStatus) is
+            // logged + skipped, never aborting the splash for the rest of the cluster (a silent
+            // half-applied blast would read as "the AoE didn't hit everyone").
+            int affected = 0;
+            Guard.TryEach("ArcaneTower", "apply blast to enemy", _hostiles, d =>
             {
-                var d = _hostiles[i];
-                if (d == null || !d.IsAlive) continue;
+                if (d == null || !d.IsAlive) return;
 
                 bool isPrimary = ReferenceEquals(d, primary);
-                if (!isPrimary && (d.WorldPosition - impact).sqrMagnitude > aoeSq) continue;
+                if (!isPrimary && (d.WorldPosition - impact).sqrMagnitude > aoeSq) return;
 
                 float ed  = EffectiveDamage;   // WO-430 — Arcane Tower damage perk
                 float dmg = isPrimary ? ed : ed * splash;
@@ -170,6 +178,16 @@ namespace DeNelle.Village
 
                 if (SlowSeconds > 0f)
                     d.ApplyStatus(StatusEffect.Slow, SlowSeconds);
+                affected++;
+            });
+
+            if (affected == 0)
+            {
+                // The primary resolved but nothing took the blast — the cluster vanished between
+                // Acquire and detonation, or every victim was already dead. Self-report (not a
+                // hard fail): the shot fired but landed on no one.
+                FlowTrace.Warn("ArcaneTower",
+                    $"FireBlast: 0 enemies affected (primary='{(primary as MonoBehaviour)?.name ?? "<primary>"}') — cluster gone/all dead at detonation.");
             }
         }
 
