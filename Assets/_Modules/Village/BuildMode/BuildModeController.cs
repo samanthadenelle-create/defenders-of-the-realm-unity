@@ -1559,11 +1559,15 @@ namespace DeNelle.Village
             _palette.OnExitRequested += Exit;
             _palette.OnOrientRequested += OpenOrientEditorForArmed;
 
-            // WO-352 — a card tap opens the Structure Info Preview first; arming is
-            // deferred to the panel's "Place" button (OnPlaceRequested). Subscribing
-            // OnCardTapped switches BuildPaletteUI from immediate-arm to preview-first.
-            EnsureInfoPanel();
-            _palette.OnCardTapped += OnPaletteCardTapped;
+            // WO-352 preview (tap card -> Structure Info Preview -> "Place" -> arm) is
+            // DISABLED 2026-06-19 (owner playtest): its UIToolkit panel adopted a bad/null
+            // PanelSettings and laid an invisible scrim over the screen, blocking BOTH the
+            // placement ghost (no green area on select) AND the palette Done button (couldn't
+            // exit build mode). Revert to IMMEDIATE-ARM: with NO OnCardTapped subscriber,
+            // BuildPaletteUI.BuildCard arms the entry on tap and raises OnEntrySelected -> Arm,
+            // so the green ghost shows on select and Done fires. Re-enable the preview
+            // (EnsureInfoPanel + OnCardTapped) once its PanelSettings resolution is fixed
+            // (same UIToolkit-panel-render class as WO-465).
         }
 
         /// <summary>Lazily create the WO-352 Structure Info Preview panel (one per session).</summary>
