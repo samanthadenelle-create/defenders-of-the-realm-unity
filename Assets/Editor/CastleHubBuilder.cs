@@ -2026,11 +2026,12 @@ namespace DeNelle.Editor
                 return;
             }
 
-            // Seat the trigger host ON the bridge deck at its far end (world (gateX,0.5,-63)) — NOT
-            // floating 1.5m overhead. Proximity (6m) fires either way, but the strict spawn->trigger
-            // CalculatePath verify (and a clean navmesh-edge sample) only pass when the trigger projects
-            // straight down onto a real walkable edge. Deck-seated reconciles gameplay + the verify.
-            marker.transform.position = new Vector3(gateX, 0.5f, -63f);
+            // Seat the trigger host EXACTLY on the proven-walkable deck point (world (gateX,0,-63)).
+            // The PATH-COMPLETE assert proves courtyard->(gateX,0,-63) is a complete walkable route at
+            // deck-navmesh level (y≈0.06). A y=0.5 host floated above that mesh so the verify's tight
+            // 1.0m sample missed at the far edge. y=0 puts the trigger on the navmesh the hero walks —
+            // proximity (6m+) still fires, and the strict spawn->trigger CalculatePath now resolves.
+            marker.transform.position = new Vector3(gateX, 0f, -63f);
 
             var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
             if (transType == null)
@@ -2055,11 +2056,11 @@ namespace DeNelle.Editor
             if (bridgeLinkWalkable)
             {
                 transType.GetField("targetPosition")?.SetValue(comp, new Vector3(gateX, 0.5f, -66f));
-                Log("BRIDGE-SEAM: exit seam relocated to bridge far end (" + gateX + ",0.5,-63), deck-seated; WarpTo same-spot (" + gateX + ",0.5,-66) → no jump.");
+                Log("BRIDGE-SEAM: exit seam relocated to bridge far end (" + gateX + ",0,-63), deck-seated; WarpTo same-spot (" + gateX + ",0.5,-66) → no jump.");
             }
             else
             {
-                Log("BRIDGE-SEAM: exit seam relocated to bridge far end (" + gateX + ",0.5,-63), deck-seated; masked-warp target left intact (BridgeLinkWalkable=false).");
+                Log("BRIDGE-SEAM: exit seam relocated to bridge far end (" + gateX + ",0,-63), deck-seated; masked-warp target left intact (BridgeLinkWalkable=false).");
             }
         }
 
