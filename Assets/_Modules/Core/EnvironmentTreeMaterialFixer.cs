@@ -46,6 +46,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Core
 {
@@ -78,12 +79,16 @@ namespace DeNelle.Core
         }
 
         // WO-331: never let a tree fix throw out of a sceneLoaded handler (would halt WebGL).
+        // U/T: route the catch through FlowTrace.Fail so a thrown tree fix lands in the break-log
+        // (a swallowed exception here would otherwise silently leave white/magenta trees).
         private static void SafeFixAllTrees()
         {
             try { FixAllTrees(); }
             catch (System.Exception e)
             {
-                Debug.LogWarning("[EnvironmentTreeMaterialFixer] tree fix threw (non-fatal): " + e);
+                FlowTrace.Fail("EnvTreeFix",
+                    "tree fix threw (non-fatal, trees may stay white/grey): " +
+                    e.GetType().Name + ": " + e.Message + "\n" + e.StackTrace);
             }
         }
 
@@ -94,6 +99,8 @@ namespace DeNelle.Core
         /// </summary>
         public static void FixAllTrees()
         {
+            using var _t = FlowTrace.Enter("EnvTreeFix", "FixAllTrees");
+
             var all = Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
             if (all == null || all.Length == 0) return;
 
@@ -101,17 +108,22 @@ namespace DeNelle.Core
             // whole forest matches (cheapest + best-looking fix, zero asset deps).
             Material sharedGood = FindGoodTreeMaterial(all);
 
+            // V: counters captured for the post-pass URP verify + the summary roll-up.
             int fixedSlots = 0;
             int treeRenderers = 0;
             int viaSibling = 0, viaUrpConvert = 0, viaTint = 0;
+            var touched = new System.Collections.Generic.List<Renderer>();
 
-            foreach (var r in all)
+            // G: guard EACH tree renderer independently — one bad tree (e.g. a destroyed/odd
+            // renderer or a shader op that throws) logs via [Flow:EnvTreeFix] -> break-log and is
+            // skipped, never aborting the rest of the forest (the whole point of TryEach here).
+            Guard.TryEach("EnvTreeFix", "fix tree renderer", all, r =>
             {
-                if (r == null) continue;
-                if (!IsTreeRenderer(r.transform)) continue;
+                if (r == null) return;
+                if (!IsTreeRenderer(r.transform)) return;
                 // The canonical Tree of Life is owned by TreeOfLifeMaterialFixer — skip it
                 // so the two fixers never fight over the centrepiece.
-                if (IsCanonicalCentrepiece(r.transform)) continue;
+                if (IsCanonicalCentrepiece(r.transform)) return;
                 treeRenderers++;
 
                 var mats = r.sharedMaterials;
@@ -120,8 +132,9 @@ namespace DeNelle.Core
                     var m = sharedGood ?? TintMatFor(r.name);
                     r.sharedMaterial = m;
                     fixedSlots++;
+                    touched.Add(r);
                     if (sharedGood != null) viaSibling++; else viaTint++;
-                    continue;
+                    return;
                 }
 
                 bool changed = false;
@@ -138,17 +151,53 @@ namespace DeNelle.Core
                     changed = true;
                     fixedSlots++;
                 }
-                if (changed) r.sharedMaterials = mats;
-            }
+                if (changed) { r.sharedMaterials = mats; touched.Add(r); }
+            });
+
+            // V: VERIFY every tree slot we touched ended on a URP shader (not Standard/Legacy/error)
+            // and is no longer a flat-white untextured slot — otherwise the repair silently failed.
+            VerifyTreesFixed(touched);
 
             if (fixedSlots > 0)
-                Debug.Log("[EnvironmentTreeMaterialFixer] WO-332 — fixed " + fixedSlots +
+                FlowTrace.Step("EnvTreeFix", "WO-332 — fixed " + fixedSlots +
                           " white/grey tree slot(s) across " + treeRenderers + " tree renderer(s) " +
                           "(sibling=" + viaSibling + ", urp-convert=" + viaUrpConvert +
                           ", tint=" + viaTint + "). (Full pack fix: Defenders/Art/Fix Polyperfect URP Materials.)");
             else if (treeRenderers > 0)
-                Debug.Log("[EnvironmentTreeMaterialFixer] WO-332 — scanned " + treeRenderers +
+                FlowTrace.Step("EnvTreeFix", "WO-332 — scanned " + treeRenderers +
                           " tree renderer(s); all already had good URP materials (no fix needed).");
+        }
+
+        // V (TGVRU): after the repair pass, assert every tree slot we replaced is now on a URP
+        // shader AND no longer reads as a flat-white untextured surface (the WO-332 symptom). A
+        // slot still failing SlotNeedsFix() means the chosen replacement (sibling/convert/tint)
+        // did not actually resolve to a good material — FlowTrace.Fail so the run self-reports a
+        // still-white tree instead of leaving the owner to spot it. The tint fallback always lands
+        // (R: never silently white), so a fail here flags a real shader/material resolution gap.
+        private static void VerifyTreesFixed(System.Collections.Generic.List<Renderer> touched)
+        {
+            if (touched == null || touched.Count == 0) return;
+            int slots = 0, stillBad = 0;
+            foreach (var r in touched)
+            {
+                if (r == null) continue;
+                var mats = r.sharedMaterials;
+                if (mats == null) continue;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    slots++;
+                    if (!SlotNeedsFix(mats[i])) continue;   // good URP, textured-or-tinted — pass
+                    stillBad++;
+                    string sn = (mats[i] != null && mats[i].shader != null) ? mats[i].shader.name : "<null>";
+                    FlowTrace.Fail("EnvTreeFix",
+                        "VERIFY FAILED on tree renderer '" + r.name + "' slot " + i + ": shader='" + sn +
+                        "' still reads white/grey/non-URP after the fix — replacement material did not resolve " +
+                        "(URP/Lit shader missing in build?). Tree may still render white.");
+                }
+            }
+            if (stillBad == 0)
+                FlowTrace.Step("EnvTreeFix",
+                    "VERIFY OK — all " + slots + " repaired tree slot(s) now on a good URP material (no white/grey).");
         }
 
         // A good (URP, textured, non-default) material some tree in the scene already
@@ -304,7 +353,12 @@ namespace DeNelle.Core
             Shader lit = LitShader();
             if (lit == null)
             {
-                Debug.LogWarning("[EnvironmentTreeMaterialFixer] no URP/Lit shader; cannot fix tree.");
+                // T/V: no URP/Lit (or even Standard) shader resolves — the LAST-RESORT tint can't be
+                // built, so this tree stays white/magenta. Hard fail to the break-log (the fixer's
+                // own shader is missing = every tree it touches is broken).
+                FlowTrace.Fail("EnvTreeFix",
+                    "no URP/Lit (or Standard) shader found — cannot build the tint fallback; tree stays white/magenta. " +
+                    "URP pipeline asset missing or shaders stripped from the build.");
                 return null;
             }
             var m = new Material(lit) { name = "EnvTree (runtime tint)" };

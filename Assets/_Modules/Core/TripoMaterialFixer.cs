@@ -20,6 +20,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Core
 {
@@ -89,26 +90,46 @@ namespace DeNelle.Core
             if (_ran) return;
             _ran = true;
 
+            using var _t = FlowTrace.Enter("TripoMatFix", $"Run on '{gameObject.name}'");
+
             Shader lit = Shader.Find("Universal Render Pipeline/Lit");
             if (lit == null)
             {
-                Debug.LogWarning("[TripoMaterialFixer] URP/Lit shader not found — skipping.");
+                // V/T: the fixer failing to find its target shader = magenta/error everywhere it
+                // is attached (heroes/pets/buildings). This is a HARD fail, not a warn — roll it
+                // up to the break-log so a run self-reports the entire fixer was a no-op.
+                FlowTrace.Fail("TripoMatFix",
+                    $"URP/Lit shader NOT FOUND — TripoMaterialFixer on '{gameObject.name}' cannot rebuild any " +
+                    "material; every mesh it covers stays on its (likely Phong/error) source shader = magenta/pink. " +
+                    "URP pipeline asset missing or shader stripped from the build.");
                 return;
             }
 
             Texture2D fallbackTex = null;
             if (!string.IsNullOrEmpty(_fallbackTextureName))
                 fallbackTex = Resources.Load<Texture2D>(_fallbackTextureName);
-            Debug.Log($"[TripoMaterialFixer] {gameObject.name}: fallbackPath='{_fallbackTextureName}', loaded={fallbackTex != null}, tintActive={_hasFallbackTint}");
+            if (!string.IsNullOrEmpty(_fallbackTextureName) && fallbackTex == null)
+                FlowTrace.Warn("TripoMatFix",
+                    $"'{gameObject.name}': fallback texture '{_fallbackTextureName}' did not load from Resources — " +
+                    "rebuilt materials will fall back to tint/source only.");
+            FlowTrace.Step("TripoMatFix",
+                $"{gameObject.name}: fallbackPath='{_fallbackTextureName}', loaded={fallbackTex != null}, tintActive={_hasFallbackTint}");
 
+            int renderers = 0, slotsRebuilt = 0;
             foreach (var r in GetComponentsInChildren<Renderer>(true))
             {
                 if (r == null) continue;
                 var mats = r.sharedMaterials;
                 if (mats == null) continue;
-                for (int i = 0; i < mats.Length; i++)
+                renderers++;
+                // G: guard the per-material loop so ONE bad source material logs + is skipped,
+                // never aborting the rebuild of the rest of this renderer's slots (Guard.TryEach
+                // LogErrors the bad index via [Flow:TripoMatFix] -> break-log, then carries on).
+                var rr = r;
+                var matsRef = mats;
+                Guard.TryEach("TripoMatFix", $"rebuild slots on '{rr.name}'", System.Linq.Enumerable.Range(0, matsRef.Length), i =>
                 {
-                    var src = mats[i];
+                    var src = matsRef[i];
                     // WO-34 (2026-05-25): ALWAYS rebuild — do NOT skip already-URP
                     // materials. The Tripo importer extracts materials AS URP, but
                     // those extracted URP mats render washed-out/grey (buildings
@@ -185,10 +206,56 @@ namespace DeNelle.Core
                     }
                     if (newMat.HasProperty("_Smoothness")) newMat.SetFloat("_Smoothness", _smoothness);
                     if (newMat.HasProperty("_Metallic"))   newMat.SetFloat("_Metallic", _metallic);
-                    mats[i] = newMat;
-                }
-                r.sharedMaterials = mats;
+                    matsRef[i] = newMat;
+                    slotsRebuilt++;
+                });
+                r.sharedMaterials = matsRef;
             }
+
+            FlowTrace.Step("TripoMatFix",
+                $"{gameObject.name}: rebuilt {slotsRebuilt} slot(s) across {renderers} renderer(s).");
+
+            // V: post-rebuild VERIFY — every renderer this fixer covers must now be on a URP/Lit
+            // shader (the result of `new Material(lit)`), NOT a Hidden/InternalError/Standard/legacy
+            // shader (the exact magenta/pink/grey symptom). If ANY slot is still on a non-URP/error
+            // shader, the rebuild did not take for it — FlowTrace.Fail so the run self-reports
+            // instead of leaving the owner to spot magenta on a model.
+            VerifyAllRenderersUrp();
+        }
+
+        // V (TGVRU): assert every renderer slot under this fixer ended on a URP shader after Run().
+        // A slot still on Hidden/InternalErrorShader (magenta), Standard/Legacy (grey/pink under URP),
+        // or a null shader means the rebuild silently failed for it — roll it up to the break-log.
+        // Pure read-only inspection; always runs (control-flow safety, not behind a render check).
+        private void VerifyAllRenderersUrp()
+        {
+            int checkedSlots = 0, broken = 0;
+            foreach (var r in GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                var mats = r.sharedMaterials;
+                if (mats == null) continue;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    var m = mats[i];
+                    checkedSlots++;
+                    string sn = (m != null && m.shader != null) ? m.shader.name : null;
+                    bool isUrp = !string.IsNullOrEmpty(sn) &&
+                                 (sn.StartsWith("Universal Render Pipeline/") || sn.StartsWith("URP/"));
+                    bool isError = !string.IsNullOrEmpty(sn) &&
+                                   (sn.Contains("InternalErrorShader") || sn.Contains("Hidden/"));
+                    if (isUrp && !isError) continue;
+
+                    broken++;
+                    FlowTrace.Fail("TripoMatFix",
+                        $"VERIFY FAILED on '{gameObject.name}' renderer '{r.name}' slot {i}: shader='{sn ?? "<null>"}' " +
+                        "is NOT a URP shader after rebuild (magenta/pink/grey risk) — the URP/Lit rebuild did not take " +
+                        "for this slot. Mesh will render as the error/legacy fallback.");
+                }
+            }
+            if (broken == 0)
+                FlowTrace.Step("TripoMatFix",
+                    $"{gameObject.name}: VERIFY OK — all {checkedSlots} slot(s) on a URP shader (no magenta/error).");
         }
     }
 }

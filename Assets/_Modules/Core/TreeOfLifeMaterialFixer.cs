@@ -46,6 +46,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Core
 {
@@ -108,7 +109,9 @@ namespace DeNelle.Core
             try { EnsureCentrepiece(); } // also run for the scene already active at app start
             catch (System.Exception e)
             {
-                Debug.LogWarning("[TreeOfLifeMaterialFixer] centrepiece fix threw at init (non-fatal): " + e);
+                FlowTrace.Fail("TreeOfLifeFix",
+                    "centrepiece fix threw at init (non-fatal, tree may be missing/grey): " +
+                    e.GetType().Name + ": " + e.Message + "\n" + e.StackTrace);
             }
         }
 
@@ -127,7 +130,9 @@ namespace DeNelle.Core
             }
             catch (System.Exception e)
             {
-                Debug.LogWarning("[TreeOfLifeMaterialFixer] centrepiece fix threw (non-fatal): " + e);
+                FlowTrace.Fail("TreeOfLifeFix",
+                    "centrepiece fix threw on scene load (non-fatal, tree may be missing/grey): " +
+                    e.GetType().Name + ": " + e.Message + "\n" + e.StackTrace);
             }
         }
 
@@ -190,8 +195,9 @@ namespace DeNelle.Core
             GameObject src = Resources.Load<GameObject>(TreeResourcePath);
             if (src == null)
             {
-                Debug.LogWarning("[TreeOfLifeMaterialFixer] WebGL spawn-guard — no Tree-of-Life " +
-                                 "at Resources/" + TreeResourcePath + "; centre plaza will be empty.");
+                FlowTrace.Fail("TreeOfLifeFix",
+                    "WebGL spawn-guard — no Tree-of-Life at Resources/" + TreeResourcePath +
+                    "; centre plaza will be EMPTY (baked centrepiece did not resolve and the Resources fallback is missing).");
                 return null;
             }
 
@@ -445,6 +451,8 @@ namespace DeNelle.Core
         {
             if (treeRoot == null) return;
 
+            using var _t = FlowTrace.Enter("TreeOfLifeFix", "Apply on '" + treeRoot.name + "'");
+
             // The lightweight Tripo tree (owner 2026-06-17) ships its OWN texture in its FBX
             // folder, so the model's embedded material is authoritative. Do NOT force the old
             // external TreeofLife_basecolor, and do NOT borrow a sibling tree's material — both
@@ -457,9 +465,16 @@ namespace DeNelle.Core
 
             int fixedSlots = 0;
             string source = "none";
-            foreach (var r in treeRoot.GetComponentsInChildren<Renderer>(true))
+            var touched = new System.Collections.Generic.List<Renderer>();
+
+            // G: guard EACH renderer of the tree independently — one bad slot/shader op logs via
+            // [Flow:TreeOfLifeFix] -> break-log and is skipped, never aborting the rest of the tree
+            // (so a single bad mesh can't leave the whole centrepiece grey). T: a thrown op here is
+            // caught by Guard, not swallowed silently.
+            var rends = treeRoot.GetComponentsInChildren<Renderer>(true);
+            Guard.TryEach("TreeOfLifeFix", "fix tree slot", rends, r =>
             {
-                if (r == null) continue;
+                if (r == null) return;
                 var mats = r.sharedMaterials;
 
                 if (mats == null || mats.Length == 0)
@@ -467,8 +482,9 @@ namespace DeNelle.Core
                     Material m = overrideMat ?? siblingMat ?? FoliageMat();
                     r.sharedMaterial = m;
                     fixedSlots++;
+                    touched.Add(r);
                     source = overrideMat != null ? "override" : (siblingMat != null ? "sibling" : "tint");
-                    continue;
+                    return;
                 }
 
                 bool changed = false;
@@ -486,12 +502,49 @@ namespace DeNelle.Core
                     changed = true;
                     fixedSlots++;
                 }
-                if (changed) r.sharedMaterials = mats;
-            }
+                if (changed) { r.sharedMaterials = mats; touched.Add(r); }
+            });
 
-            Debug.Log("[TreeOfLifeMaterialFixer] DEF-267 — fixed " + fixedSlots +
+            // V: VERIFY the centrepiece is no longer grey/default/non-URP after the fix. The Tree of
+            // Life is the most-watched mesh in the village — a still-grey trunk here is the exact
+            // DEF-267 symptom. Any slot still failing SlotNeedsFix means the chosen replacement did
+            // not resolve — FlowTrace.Fail so the run self-reports instead of shipping a grey tree.
+            VerifyTreeFixed(touched);
+
+            FlowTrace.Step("TreeOfLifeFix", "DEF-267 — fixed " + fixedSlots +
                       " grey/default slot(s) on '" + treeRoot.name + "' via " + source +
                       ". (Full pack fix: Defenders/Art/Fix Polyperfect URP Materials.)");
+        }
+
+        // V (TGVRU): assert every slot we touched on the Tree of Life ended on a good, non-grey
+        // material (URP + textured, or a deliberate tint). A slot still failing SlotNeedsFix means
+        // the replacement (override/sibling/convert/tint) did not resolve — roll it up to the
+        // break-log. The FoliageMat tint always lands (R: never silently grey), so a fail here flags
+        // a real shader/material resolution gap, not a missing-texture cosmetic.
+        private static void VerifyTreeFixed(System.Collections.Generic.List<Renderer> touched)
+        {
+            if (touched == null || touched.Count == 0) return;
+            int slots = 0, stillBad = 0;
+            foreach (var r in touched)
+            {
+                if (r == null) continue;
+                var mats = r.sharedMaterials;
+                if (mats == null) continue;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    slots++;
+                    if (!SlotNeedsFix(mats[i])) continue;   // good — pass
+                    stillBad++;
+                    string sn = (mats[i] != null && mats[i].shader != null) ? mats[i].shader.name : "<null>";
+                    FlowTrace.Fail("TreeOfLifeFix",
+                        "VERIFY FAILED on Tree-of-Life renderer '" + r.name + "' slot " + i + ": shader='" + sn +
+                        "' still reads grey/default/non-URP after the fix — replacement material did not resolve " +
+                        "(URP/Lit shader missing in build?). Centrepiece may still render grey.");
+                }
+            }
+            if (stillBad == 0)
+                FlowTrace.Step("TreeOfLifeFix",
+                    "VERIFY OK — all " + slots + " repaired Tree-of-Life slot(s) now on a good material (not grey).");
         }
 
         // A non-grey, textured material another tree in the scene already uses.
@@ -541,7 +594,12 @@ namespace DeNelle.Core
             Shader lit = LitShader();
             if (lit == null)
             {
-                Debug.LogWarning("[TreeOfLifeMaterialFixer] DEF-267 — no URP/Lit shader; cannot fix tree.");
+                // T/V: no URP/Lit (or Standard) shader resolves — the LAST-RESORT foliage tint can't
+                // be built, so the centrepiece stays grey/magenta. Hard fail to the break-log (the
+                // fixer's own shader is missing = the Tree of Life is broken).
+                FlowTrace.Fail("TreeOfLifeFix",
+                    "DEF-267 — no URP/Lit (or Standard) shader found; cannot build the foliage-tint fallback. " +
+                    "Tree of Life stays grey/magenta (URP pipeline asset missing or shaders stripped).");
                 return null;
             }
             var m = new Material(lit) { name = "TreeOfLife (runtime foliage)" };
