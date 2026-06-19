@@ -60,7 +60,11 @@ namespace DeNelle.Core.DevOverlay
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.F12))
+            // PLAYER-BUILD SAFETY: the F12 toggle is gated behind the global
+            // DevHotkeys kill-switch (default OFF) so a key press can never reveal
+            // this overlay in the shipped .exe OR the editor unless a dev opts in
+            // (PlayerPrefs ff.devhotkeys=1).
+            if (DeNelle.Core.FeatureFlags.DevHotkeys && Input.GetKeyDown(KeyCode.F12))
                 gameObject.SetActive(!gameObject.activeSelf);
         }
 

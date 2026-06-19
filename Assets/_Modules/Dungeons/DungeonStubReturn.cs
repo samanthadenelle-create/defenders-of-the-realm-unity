@@ -44,26 +44,7 @@ namespace DeNelle.Dungeons
             }
         }
 
-        // Fallback — pressing F while standing near the pad also works, so
-        // owner can return even if the trigger detection misses on stub
-        // placeholders.
-        private float _proxCheck;
-        private void Update()
-        {
-            if (_firing) return;
-            _proxCheck += Time.deltaTime;
-            if (_proxCheck < 0.25f) return;
-            _proxCheck = 0f;
-
-            if (!Input.GetKey(KeyCode.F)) return;
-            var hero = GameObject.Find("DungeonHeroPlaceholder");
-            if (hero == null) return;
-            if (Vector3.Distance(hero.transform.position, transform.position) <= 3f)
-            {
-                _firing = true;
-                Debug.Log("[DungeonStubReturn] F key on exit pad — returning to village.");
-                SceneRouter.GoVillage();
-            }
-        }
+        // The 'F' force-return key was REMOVED — the OnTriggerEnter proximity path
+        // is the sole return mechanism (touching the exit pad sends the player home).
     }
 }

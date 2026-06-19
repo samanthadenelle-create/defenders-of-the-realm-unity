@@ -131,6 +131,12 @@ namespace DeNelle.HUD
             // Debug chord: Ctrl + Shift + A → toggle overlay. Survives the
             // pre-wallet build state. Uses legacy Input Manager since the HUD
             // asmdef doesn't reference Unity.InputSystem.
+            // PLAYER-BUILD SAFETY: the admin chord is gated behind the global
+            // DevHotkeys kill-switch (default OFF) so it can never pop the owner-only
+            // admin overlay in the shipped .exe OR the editor unless a dev opts in
+            // (PlayerPrefs ff.devhotkeys=1). The Help menu's "Dev tools" button
+            // (AdminOverlay.Open) remains the always-available entry.
+            if (!DeNelle.Core.FeatureFlags.DevHotkeys) return;
             if (Input.GetKeyDown(KeyCode.A) &&
                 (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) &&
                 (Input.GetKey(KeyCode.LeftShift)   || Input.GetKey(KeyCode.RightShift)))

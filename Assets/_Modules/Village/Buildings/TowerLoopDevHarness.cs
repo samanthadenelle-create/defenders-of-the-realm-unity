@@ -51,6 +51,12 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // PLAYER-BUILD SAFETY: gated behind the global DevHotkeys kill-switch
+            // (default OFF) so B/J/K/N/U are dead in the editor too — not just the
+            // shipped build (the whole file is already compiled out of release via
+            // the #if above). A dev opts in with PlayerPrefs ff.devhotkeys=1.
+            if (!DeNelle.Core.FeatureFlags.DevHotkeys) return;
+
             if (Input.GetKeyDown(KeyCode.B))
             {
                 // FIX (build menu not showing) — B used to arm the OLD single-tower

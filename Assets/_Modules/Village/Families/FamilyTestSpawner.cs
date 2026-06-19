@@ -79,6 +79,11 @@ namespace DeNelle.Village
         private void Update()
         {
             if (SceneManager.GetActiveScene().name != TargetScene) return;
+            // PLAYER-BUILD SAFETY: the 'K' spawn / 'L' cycle hotkeys are gated behind
+            // the global DevHotkeys kill-switch (default OFF) so they can never spawn
+            // a test family in the shipped .exe OR the editor unless a dev opts in
+            // (PlayerPrefs ff.devhotkeys=1).
+            if (!DeNelle.Core.FeatureFlags.DevHotkeys) return;
             if (Input.GetKeyDown(SpawnKey)) SpawnFamily();
             if (Input.GetKeyDown(CycleKey)) CycleShape();
         }

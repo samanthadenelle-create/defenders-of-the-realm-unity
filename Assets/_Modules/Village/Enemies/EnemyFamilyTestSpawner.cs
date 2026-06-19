@@ -83,6 +83,11 @@ namespace DeNelle.Village
         private void Update()
         {
             if (SceneManager.GetActiveScene().name != TargetScene) return;
+            // PLAYER-BUILD SAFETY: the 'J' spawn hotkey is gated behind the global
+            // DevHotkeys kill-switch (default OFF) so it can never spawn a test enemy
+            // pack in the shipped .exe OR the editor unless a dev opts in
+            // (PlayerPrefs ff.devhotkeys=1).
+            if (!DeNelle.Core.FeatureFlags.DevHotkeys) return;
             if (Input.GetKeyDown(SpawnKey)) SpawnTestPack();
         }
 

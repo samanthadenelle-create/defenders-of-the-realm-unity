@@ -226,7 +226,12 @@ namespace DeNelle.DevTools
         {
             // Hotkey toggle. Input.GetKeyDown is fine for a dev tool — no need to
             // route a dev console through the Input System action maps.
-            if (Input.GetKeyDown(_toggleKey))
+            // PLAYER-BUILD SAFETY: the F1 toggle is gated behind the global
+            // DevHotkeys kill-switch (default OFF) so a key press can never pop the
+            // dev console in the shipped .exe OR the editor unless a dev opts in
+            // (PlayerPrefs ff.devhotkeys=1). The on-screen "DEV" corner chip remains
+            // the always-available entry.
+            if (DeNelle.Core.FeatureFlags.DevHotkeys && Input.GetKeyDown(_toggleKey))
                 SetOpen(!_isOpen);
 
             // Smooth FPS every frame (unscaled so it reads true during slow-mo).

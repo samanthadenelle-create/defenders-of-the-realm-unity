@@ -59,6 +59,16 @@ namespace DeNelle.Core
         /// ON (legacy ShopPanel path when OFF), so the two never double-open.</summary>
         public static bool PartyShop => Get("partyshop", defaultOn: true);
 
+        /// <summary>Global runtime kill-switch for ALL dev keyboard hotkeys (DevPanel F1, DebugCanvas
+        /// F12, AdminOverlay Ctrl+Shift+A, the test spawners J/K/L, the tower dev harness B/J/K/N/U,
+        /// the jukebox J open, etc.). Default OFF — so every dev hotkey is DEAD everywhere (editor AND
+        /// build) unless a developer explicitly opts in by setting PlayerPrefs "ff.devhotkeys" = 1.
+        /// This is the single gate the dev hotkeys check at the top of their key-read; it replaces the
+        /// old <c>#if UNITY_EDITOR</c> wraps that left the keys live in the editor (where the owner
+        /// tests). Movement (WASD/arrows), weapon skills/spells, F8 capture and F9 are NOT dev hotkeys
+        /// and are unaffected by this flag.</summary>
+        public static bool DevHotkeys => Get("devhotkeys", defaultOn: false);
+
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
         {

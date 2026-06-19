@@ -80,13 +80,15 @@ namespace DeNelle.Audio
 
         private void Update()
         {
-            // WO-437: the global 'J' open is gated to the editor only (and blocked during
-            // battle) so it no longer spams the "13 windows" in a build. ESC-close stays
-            // (only acts when this panel is already open; it does not steal the key globally).
-#if UNITY_EDITOR
-            if (Input.GetKeyDown(ToggleKey) && !DeNelle.Core.Combat.BattleLock.IsInBattle())
+            // WO-437: the global 'J' open is gated behind the global DevHotkeys
+            // kill-switch (default OFF) — and blocked during battle — so it no longer
+            // spams the "13 windows" in a build and is dead in the editor too unless a
+            // dev opts in (PlayerPrefs ff.devhotkeys=1). ESC-close stays (only acts
+            // when this panel is already open; it does not steal the key globally).
+            if (DeNelle.Core.FeatureFlags.DevHotkeys
+                && Input.GetKeyDown(ToggleKey)
+                && !DeNelle.Core.Combat.BattleLock.IsInBattle())
                 SetOpen(!_open);
-#endif
 
             // Escape closes when open (does not steal the key globally).
             if (_open && Input.GetKeyDown(KeyCode.Escape))

@@ -47,10 +47,6 @@ namespace DeNelle.Dungeons
         private static readonly Color Gold = new Color(1f, 0.812f, 0.420f);     // #ffcf6b
 
         [Header("Interaction")]
-        [Tooltip("Key that opens the crafting panel while the Keeper is in range. " +
-                 "Legacy Input Manager (UnityEngine.Input) — project mandate.")]
-        [SerializeField] private KeyCode _interactKey = KeyCode.E;
-
         [Tooltip("Optional world-space prompt object shown while the Keeper is in range.")]
         [SerializeField] private GameObject _interactPrompt;
 
@@ -172,10 +168,9 @@ namespace DeNelle.Dungeons
             AnimateShard();
             UpdateProximity();
 
-            // The interact key opens the panel while in range (legacy Input
-            // Manager — UnityEngine.Input, never the new Input System).
-            if (InRange && !IsPanelOpen && Input.GetKeyDown(_interactKey))
-                Interact();
+            // The keyboard interact key was REMOVED — the on-screen touch /
+            // MobileInteractButton path (Interact(), called while InRange) is the
+            // sole entry point for opening the crafting panel.
         }
 
         /// <summary>

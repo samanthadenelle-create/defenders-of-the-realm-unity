@@ -26,6 +26,12 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // This is a DEV action (force-empower towers) that happens to share the F8
+            // key — it is NOT the F8 capture (BreakCaptureHarness owns that and is
+            // untouched). Gate the DEV action behind the global DevHotkeys kill-switch
+            // (default OFF) so it's dead in the editor too; a dev opts in with
+            // PlayerPrefs ff.devhotkeys=1. F8 still triggers BreakCaptureHarness capture.
+            if (!DeNelle.Core.FeatureFlags.DevHotkeys) return;
             if (!Input.GetKeyDown(KeyCode.F8)) return;
 
             var towers = FindObjectsByType<Tower>(FindObjectsSortMode.None);

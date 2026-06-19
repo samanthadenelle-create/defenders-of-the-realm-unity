@@ -115,9 +115,12 @@ namespace DeNelle.Dungeons
                 return;
             }
 
-            // F-key fallback mirrors DungeonStubReturn so the owner can force it.
-            if (inside || (Input.GetKey(KeyCode.F) && sqr <= (_triggerRadius + 1f) * (_triggerRadius + 1f)))
+            // The 'F' force-key was REMOVED — the proximity path is the sole entry:
+            // the encounter fires the moment the (armed) hero is inside the radius.
+            if (inside)
+            {
                 Fire();
+            }
         }
 
         private void Fire()
