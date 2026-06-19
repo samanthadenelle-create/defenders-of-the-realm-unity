@@ -37,6 +37,7 @@
 using System;
 using System.Collections.Generic;
 using DeNelle.Core.UI.Mvvm;
+using DeNelle.Core.Catalog;       // ShoppableCraftable (the craftable row payload from the resolver)
 using DeNelle.Village.Crafting;   // VillageInventory (for the buy -> add path through the store seam)
 
 namespace DeNelle.Village.Hero
@@ -97,8 +98,9 @@ namespace DeNelle.Village.Hero
     public sealed class PartyShopVM : IPanelViewModel, IDisposable
     {
         // ── Icon role keys (ItemVM.IconRole) — the View maps these to the real sprite source ──
-        public const string IconRoleWeapon = "weapon";
-        public const string IconRoleArmor  = "armor";
+        public const string IconRoleWeapon    = "weapon";
+        public const string IconRoleArmor     = "armor";
+        public const string IconRoleCraftable = "craftable";
 
         private readonly string _vendorContext;
         private readonly string _displayName;
@@ -346,46 +348,51 @@ namespace DeNelle.Village.Hero
             // §12: guard the catalog read so a parse/IO failure logs + is skipped instead of throwing.
             DeNelle.Core.Diagnostics.Guard.Try("PartyShop", "reload gear catalog", () => GearCatalog.Reload());
 
-            int weaponCount = 0, armorCount = 0;
+            // RECONCILED FILTER: ask the ONE shoppable resolver what this vendor offers the selected
+            // member (ShopCatalog.Shoppable folds VendorStockContract kinds + WeaponFitsClass/
+            // ArmorFitsClass + level into a single list, and surfaces craftables when the vendor
+            // allows GearKind.Craftable). Note: _storeKinds is the gear-narrowed mask the VM applies
+            // for SELL; for BUY we pass the raw vendor context so the resolver can also yield craftables.
+            var shoppable = ShopCatalog.Shoppable(_vendorContext, job, level);
 
-            if ((_storeKinds & GearKind.Weapon) != 0)
+            foreach (var entry in shoppable)
             {
-                foreach (var w in GearCatalog.AllWeapons())
+                switch (entry.Kind)
                 {
-                    if (w == null) continue;
-                    // Filter FOR the selected member: class fit + level requirement.
-                    if (!string.IsNullOrEmpty(job) && !GearCatalog.WeaponFitsClass(w, job)) continue;
-                    if (!MeetsLevel(w.req, level)) continue;
+                    case ShoppableKind.Weapon:
+                    {
+                        var w = GearCatalog.FindWeapon(entry.Id);
+                        if (w == null) continue;
+                        bool owned = _store.OwnedQuantity(w.id) > 0;
+                        bool equipped = member != null && member.EquippedWeapon != null &&
+                                        string.Equals(member.EquippedWeapon.id, w.id, StringComparison.OrdinalIgnoreCase);
+                        var cost = GearCatalog.GetBuyCost(w);
+                        bool affordable = owned || _economy == null || _economy.CanAfford(cost);
 
-                    bool owned = _store.OwnedQuantity(w.id) > 0;
-                    bool equipped = member != null && member.EquippedWeapon != null &&
-                                    string.Equals(member.EquippedWeapon.id, w.id, StringComparison.OrdinalIgnoreCase);
-                    var cost = GearCatalog.GetBuyCost(w);
-                    bool affordable = owned || _economy == null || _economy.CanAfford(cost);
+                        AddBuyWeaponRow(w, cost, owned, equipped, affordable);
+                        _currentStock.Add((w.id, GearKind.Weapon));
+                        break;
+                    }
+                    case ShoppableKind.Armor:
+                    {
+                        var a = GearCatalog.FindArmor(entry.Id);
+                        if (a == null) continue;
+                        bool owned = _store.OwnedQuantity(a.id) > 0;
+                        bool equipped = member != null && member.EquippedArmor != null &&
+                                        string.Equals(member.EquippedArmor.id, a.id, StringComparison.OrdinalIgnoreCase);
+                        var cost = GearCatalog.GetBuyCost(a);
+                        bool affordable = owned || _economy == null || _economy.CanAfford(cost);
 
-                    AddBuyWeaponRow(w, cost, owned, equipped, affordable);
-                    _currentStock.Add((w.id, GearKind.Weapon));
-                    weaponCount++;
-                }
-            }
-
-            if ((_storeKinds & GearKind.Armor) != 0)
-            {
-                foreach (var a in GearCatalog.AllArmors())
-                {
-                    if (a == null) continue;
-                    if (!GearCatalog.ArmorFitsClass(a, job)) continue;
-                    if (!MeetsLevel(a.req, level)) continue;
-
-                    bool owned = _store.OwnedQuantity(a.id) > 0;
-                    bool equipped = member != null && member.EquippedArmor != null &&
-                                    string.Equals(member.EquippedArmor.id, a.id, StringComparison.OrdinalIgnoreCase);
-                    var cost = GearCatalog.GetBuyCost(a);
-                    bool affordable = owned || _economy == null || _economy.CanAfford(cost);
-
-                    AddBuyArmorRow(a, cost, owned, equipped, affordable);
-                    _currentStock.Add((a.id, GearKind.Armor));
-                    armorCount++;
+                        AddBuyArmorRow(a, cost, owned, equipped, affordable);
+                        _currentStock.Add((a.id, GearKind.Armor));
+                        break;
+                    }
+                    case ShoppableKind.Craftable:
+                    {
+                        AddBuyCraftableRow(entry.Craftable);
+                        _currentStock.Add((entry.Id, GearKind.Craftable));
+                        break;
+                    }
                 }
             }
 
@@ -440,6 +447,26 @@ namespace DeNelle.Village.Hero
 
             _items.Add(new ItemVM(id, name, IconRoleArmor, id, owned ? 0 : cost.Coins, "gold",
                 affordable, a.rarity, equipped: equipped, locked: false));
+        }
+
+        // ── BUY — a CRAFTABLE recipe row (crafting-as-shoppable). Surfaced when the vendor's
+        // contract allows GearKind.Craftable. The recipe is crafted at the forge/pedestal (not
+        // bought for gold), so the row's action explains where — it never spends or equips. ──
+        private void AddBuyCraftableRow(ShoppableCraftable c)
+        {
+            if (string.IsNullOrEmpty(c.Id)) return;
+            string id = c.Id;
+            string name = string.IsNullOrEmpty(c.DisplayName) ? c.Id : c.DisplayName;
+
+            _rowDetails[id] = new PartyShopDetail(
+                string.IsNullOrEmpty(c.ResultGlyph) ? "Craftable" : c.ResultGlyph + "  Craftable",
+                "", c.Description ?? "", null, IconRoleCraftable, id);
+
+            _rowActions[id] = () => { Status = "Craft " + name + " at the crafting station."; };
+
+            // Price 0 (crafted, not purchased); affordable=true so the row is never greyed out.
+            _items.Add(new ItemVM(id, name, IconRoleCraftable, id, 0, "craft",
+                true, null, equipped: false, locked: false));
         }
 
         // ── SELL — owned gear (any kind the shop type accepts), credits coins, same screen ──
@@ -649,8 +676,6 @@ namespace DeNelle.Village.Hero
             if (c.Crystals > 0) parts.Add(c.Crystals + "C");
             return parts.Count == 0 ? "Free" : string.Join(" ", parts);
         }
-
-        private static bool MeetsLevel(GearReq req, int level) => req == null || level >= req.level;
 
         private static string Cap(string s)
         {

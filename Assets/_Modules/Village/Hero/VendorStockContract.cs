@@ -30,10 +30,14 @@ namespace DeNelle.Village
     [Flags]
     public enum GearKind
     {
-        None   = 0,
-        Weapon = 1,
-        Armor  = 2,
-        Potion = 4,
+        None      = 0,
+        Weapon    = 1,
+        Armor     = 2,
+        Potion    = 4,
+        // CRAFTING as shoppable (capability-unify pass): a crafting/forge-craft vendor offers
+        // CRAFTABLE RECIPES rather than finished gear. Additive flag — existing bitmask consumers
+        // (ShopVM/AutoPilot/PartyShopVM) test Weapon/Armor/Potion explicitly, so they ignore this.
+        Craftable = 8,
     }
 
     /// <summary>
@@ -82,6 +86,14 @@ namespace DeNelle.Village
             if (ctx.Contains("armor") || ctx.Contains("armory") || ctx.Contains("armorer") ||
                 ctx.Contains("blacksmith"))
                 return GearKind.Armor;
+
+            // Crafting / forge-craft stations — offer CRAFTABLE RECIPES, not finished gear.
+            // Tested BEFORE the weapon block so "forge-craft"/"forgecraft"/"craft-forge" resolve to
+            // Craftable and never match the weapon block's "forge" substring. A plain "forge" (no
+            // "craft") still falls through to Weapon below — the smithy sells weapons, the crafting
+            // station crafts. ("workbench"/"workshop" are the diegetic crafting verbs.)
+            if (ctx.Contains("craft") || ctx.Contains("workbench") || ctx.Contains("workshop"))
+                return GearKind.Craftable;
 
             // Weapon specialists — the FORGE (and a plain "smith"). "blacksmith" is already
             // resolved to Armor above, so it never reaches here despite the "smith" substring.
