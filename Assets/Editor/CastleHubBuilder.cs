@@ -1859,13 +1859,15 @@ namespace DeNelle.Editor
         [MenuItem("Defenders/World/Add Castle Bridge Seam")]
         public static void AddCastleBridgeSeam()
         {
-            // FALLBACK FLAG (spec §g): true = build the real NavMeshLink crossing AND land the
-            // post-fade WarpTo on the hero's own spot (no jump). If the path-complete assert below
-            // fails on the gate-overlap ambiguity, flip to false: that keeps the visual bridge +
-            // the far-end relocated trigger but leaves the masked warp (MINIMAL) — i.e. it skips the
-            // NavMeshLink and uses the legacy near-origin warp target instead of the same-spot one.
-            // The visual bridge + trigger relocation happen REGARDLESS of this flag.
-            const bool BridgeLinkWalkable = true;
+            // ARCHITECTURE (proven by the 2026-06-19 bake data): a cross-scene NavMeshLink CANNOT
+            // work here. MainCastle_Hall and OuterWorld are two scenes baked at the SAME origin; in
+            // this single-scene batch bake OuterWorld is not loaded, so the link's far endpoint has no
+            // navmesh to attach to — it dangles. Per the world-architecture canon (stacked regions,
+            // diegetic gates), the crossing into OuterWorld is a MASKED WARP, not a continuous walk.
+            // So BridgeLinkWalkable=false: we do NOT build the dangling link. What we DO build is a
+            // CONTINUOUS walkable deck from the south gate out to the far-end trigger (one fused castle
+            // navmesh — the player genuinely walks the bridge), then the trigger masked-warps across.
+            const bool BridgeLinkWalkable = false;
 
             FlowTrace.Step("BridgeSeam", "AddCastleBridgeSeam: begin — ADD-ONLY bridge crossing.");
 
@@ -1924,10 +1926,21 @@ namespace DeNelle.Editor
             }
 
             // --- 2. Walkable deck nav plane (invisible, forced walkable). Clone CreateInvisibleFloor. ---
-            // localScale ~(0.7,1,1.6) → a Unity plane (10×10m @ scale 1) becomes ~7m × ~16m, matching the deck.
+            // CRITICAL FIX (2026-06-19): the deck must be CONTINUOUS from the south gate out to the
+            // far-end trigger so it FUSES with the courtyard navmesh on bake — a deck floating only at
+            // z=-61 left a ~13m void to the gate (z≈-40.6) and never connected (trigger read off-mesh,
+            // GATE_NAV_FAIL). Span the gate→far-end strip: centre z = midpoint, length covers gate to
+            // the trigger with overlap into the courtyard so the bake welds them into ONE surface.
+            float gateZ      = ReadSouthGatePos().z;           // recipe Gate_South z ≈ -40.6
+            const float farEndZ = -63.0f;                       // walkable deck far end (trigger sits here)
+            float deckCentreZ = (gateZ + farEndZ) * 0.5f;       // ≈ -51.8
+            float deckLenZ    = Mathf.Abs(farEndZ - gateZ) + 6f; // +6m overlap into the courtyard for the weld
+            // Unity plane is 10×10m @ scale 1 → scale.z = lenZ/10, scale.x = width(7m)/10 = 0.7.
             CreateInvisibleFloor(seamRoot.transform, "Floor_Bridge_Nav",
-                new Vector3(gateX, 0f, deckZ), new Vector3(0.7f, 1f, 1.6f));
-            Log("BRIDGE-SEAM: walkable nav deck Floor_Bridge_Nav placed at " + deckPos + ".");
+                new Vector3(gateX, 0f, deckCentreZ), new Vector3(0.7f, 1f, deckLenZ / 10f));
+            Log("BRIDGE-SEAM: CONTINUOUS walkable deck Floor_Bridge_Nav centre=(" + gateX + ",0," +
+                deckCentreZ.ToString("F1") + ") len≈" + deckLenZ.ToString("F1") + "m (gate " + gateZ.ToString("F1") +
+                " → far end " + farEndZ + ") — welds to courtyard.");
 
             // --- 3. The DIRECT NavMeshLink crossing (the real seam). Built only when walkable. ---
             if (BridgeLinkWalkable)
@@ -1966,29 +1979,33 @@ namespace DeNelle.Editor
             if (!seamOk)
                 FlowTrace.Fail("BridgeSeam", "VerifyOpenScene reports the exit seam is NOT exitable :: " + detail);
 
-            // Assert the link actually bridges: a path from a courtyard point to the bridge far end
-            // must be PathComplete. SamplePosition first (tight tolerance) so a false-green snap can't lie.
+            // HONEST walkable-approach assert: the hero must be able to WALK from a courtyard point to
+            // the far-end trigger ON the castle deck. Target the trigger (z=-63), NOT z=-66 — the old
+            // -66 target snapped onto OuterWorld's same-origin stacked navmesh and FALSE-GREENED a
+            // "walkable" crossing that did not exist. Tight end tolerance (1.0m) so a snap can't lie:
+            // the trigger must sit on genuinely-connected castle navmesh for this to pass.
             var courtyard = new Vector3(0f, 0f, 0f);
-            var bridgeEnd = new Vector3(gateX, 0f, -66f);
+            var deckTrigger = new Vector3(gateX, 0f, -63f);
             bool sStart = NavMesh.SamplePosition(courtyard, out NavMeshHit hStart, 5f, NavMesh.AllAreas);
-            bool sEnd   = NavMesh.SamplePosition(bridgeEnd, out NavMeshHit hEnd, 2f, NavMesh.AllAreas);
+            bool sEnd   = NavMesh.SamplePosition(deckTrigger, out NavMeshHit hEnd, 1f, NavMesh.AllAreas);
             if (sStart && sEnd)
             {
                 var path = new NavMeshPath();
                 NavMesh.CalculatePath(hStart.position, hEnd.position, NavMesh.AllAreas, path);
                 if (path.status == NavMeshPathStatus.PathComplete)
                     FlowTrace.Step("BridgeSeam",
-                        "PATH-COMPLETE courtyard(0,0,0) -> bridgeEnd(" + gateX + ",0,-66) — the NavMeshLink bridges. Crossing is walkable.");
+                        "PATH-COMPLETE courtyard(0,0,0) -> deckTrigger(" + gateX + ",0,-63) — the continuous deck welds to the " +
+                        "courtyard; the hero walks the bridge to the trigger, then masked-warps to OuterWorld. Approach is walkable.");
                 else
                     FlowTrace.Fail("BridgeSeam",
-                        "courtyard -> bridgeEnd path is " + path.status + " — the NavMeshLink did NOT connect (overlap ambiguity?). " +
-                        "If this persists, flip BridgeLinkWalkable=false to ship the visual bridge + far-end trigger over the masked warp.");
+                        "courtyard -> deckTrigger path is " + path.status + " — the bridge deck did NOT weld to the courtyard " +
+                        "navmesh (gap between the south gate and the deck). FIX: widen the deck overlap into the courtyard so the bake fuses them.");
             }
             else
             {
                 FlowTrace.Fail("BridgeSeam",
-                    "could not sample courtyard(onMesh=" + sStart + ") or bridgeEnd(onMesh=" + sEnd + ") onto the navmesh — " +
-                    "bridge deck did not bake walkable (overlap ambiguity?).");
+                    "could not sample courtyard(onMesh=" + sStart + ") or deckTrigger(onMesh=" + sEnd + ") onto the navmesh — " +
+                    "the bridge deck did not bake walkable (check Floor_Bridge_Nav is in the NavMeshSurface collect bounds).");
             }
 
             Selection.activeGameObject = seamRoot;
