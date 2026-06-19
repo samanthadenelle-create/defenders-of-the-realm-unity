@@ -48,7 +48,10 @@ namespace DeNelle.Village.World.Camps
         // Routed through the central FeatureFlags gate: raid is OFF until victory/return is built
         // (2026-06-16 demo audit — a cleared raid currently soft-locks). Flip via FeatureFlags /
         // PlayerPrefs "ff.raid", not here, so every raid entry point gates from one switch.
-        private static bool _enabled = DeNelle.Core.FeatureFlags.Raid;
+        // WO-449: ALSO gated on RaidContinuousWalk — the walk-to OuterWorld outpost only exists in
+        // the continuous-walk loop. When raidwalk is OFF the legacy RaidSelectionScreen->Deploy->GoRaid
+        // teleport path owns the raid, so this open-world outpost must NOT spawn (else both loops live).
+        private static bool _enabled = DeNelle.Core.FeatureFlags.Raid && DeNelle.Core.FeatureFlags.RaidContinuousWalk;
 
         /// <summary>Master switch. When false the whole raid loop is inert: no
         /// outpost, no garrison, no fortification. Set BEFORE the world scene loads

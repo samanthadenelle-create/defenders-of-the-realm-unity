@@ -50,6 +50,8 @@ using DeNelle.Core.UI;
 using DeNelle.Village;
 using DeNelle.Village.Hero;
 using DeNelle.Village.Crafting;
+using DeNelle.Village.World.Camps;   // EnemyOutpost / RaidOutpostSystem — WO-449 walk-to phase
+// Enemy (WO-449 combat-on-approach assertion) resolves via `using DeNelle.Village;` above.
 
 namespace DeNelle.DevTools
 {
@@ -76,6 +78,12 @@ namespace DeNelle.DevTools
         private const float SettleSeconds        = 0.4f;  // brief pause after an open/close
         private const float BootTimeout          = 30f;   // load MainCastle_Hall + settle
         private const float ResolveHeroTimeout   = 15f;   // hero may spawn after scene load
+        private const float OuterWalkTimeout     = 60f;   // WO-449: poll outpost realize (~10s) + walk ~70m + engage
+
+        // WO-449 ANTI-WARP: the continuous-walk loop must NEVER teleport. A single-frame
+        // hero displacement beyond this many metres is a WARP (the bug this phase guards),
+        // not a walk — the hero's NavMesh walk moves far less than this per frame.
+        private const float WalkMaxStepMeters = 3f;
 
         // The gameplay scene the bot must be in before it can drive. Loading it
         // single-mode triggers WorldSceneLoader's additive OuterWorld load.
@@ -195,6 +203,12 @@ namespace DeNelle.DevTools
                 _probes?.SetIntentionalCrossPhase(true);
                 yield return RunPhase("AttemptExitCastle", AttemptExitCastle());
                 _probes?.SetIntentionalCrossPhase(false);
+
+                // WO-449: the continuous-walk raid loop — walk to a live OuterWorld outpost and
+                // prove combat triggers ON FOOT (no teleport). This phase loads NO scene, so the
+                // UNEXPECTED-CROSS probe stays ARMED (NOT marked intentional): a re-introduced
+                // raid/outpost teleport would trip AutoPilotProbes' scene-load Fail.
+                yield return RunPhase("WalkToOuterWorldOutpost", WalkToOuterWorldOutpost());
             }
 
             FlowTrace.Step("Auto", "AutoPilot complete");
@@ -319,6 +333,7 @@ namespace DeNelle.DevTools
                 case "AttemptExitCastle": return ExitTimeout;
                 case "BootToGameplay":    return BootTimeout;
                 case "ResolveHero":       return ResolveHeroTimeout;
+                case "WalkToOuterWorldOutpost": return OuterWalkTimeout;
                 default:                  return 30f;
             }
         }
@@ -1193,6 +1208,207 @@ namespace DeNelle.DevTools
                     $"(radius {radius:0.0}m), tapped the 'Travel to {targetScene}' prompt, but no warp to target {warpTarget} within {ExitTimeout:0}s.");
                 _lastDetail = $"tapped but no cross (reached {closestToGate:0.0}m / radius {radius:0.0}m, no warp)";
             }
+        }
+
+        // =====================================================================
+        //  PHASE: WalkToOuterWorldOutpost  (WO-449 + WO-452 seeded chaos)
+        //  The continuous-walk raid loop, asserted end-to-end: resolve a live
+        //  OuterWorld EnemyOutpost (RaidOutpostSystem.Outposts), WALK to it via the
+        //  same SetAutoWalk seam WalkToEachGate uses, and prove BOTH oracles:
+        //    (a) ANTI-WARP: no single-frame jump > WalkMaxStepMeters (the assertion
+        //        that would have caught the old teleport), and
+        //    (b) COMBAT-ON-APPROACH: the hero reaches the outpost ON FOOT and a
+        //        garrison Enemy is alive + within engage range on arrival.
+        //  This phase LOADS NO SCENE — the UNEXPECTED-CROSS probe is left armed, so a
+        //  re-introduced raid teleport trips AutoPilotProbes' scene-load Fail.
+        //
+        //  SEEDED CHAOS (WO-452): a per-phase seed ("autopilot.seed" env/PlayerPrefs,
+        //  else the run seed) drives WHICH outpost is targeted + jittered pause/dash
+        //  beats along the walk. Chaos changes the PATH only — the anti-warp +
+        //  combat-on-approach oracles ALWAYS run, never weakened by the random route.
+        // =====================================================================
+        private IEnumerator WalkToOuterWorldOutpost()
+        {
+            // ── Seed source: env var / PlayerPrefs "autopilot.seed", else the run seed. ──
+            int seed = _seed;
+            try
+            {
+                string env = Environment.GetEnvironmentVariable("autopilot.seed");
+                if (!string.IsNullOrEmpty(env) && int.TryParse(env, out int es)) seed = es;
+                else if (PlayerPrefs.HasKey("autopilot.seed")) seed = PlayerPrefs.GetInt("autopilot.seed");
+            }
+            catch { /* env read is best-effort; fall back to the run seed */ }
+            var rng = new System.Random(seed);
+            FlowTrace.Step("Auto", $"WalkToOuterWorldOutpost seed={seed}");
+
+            if (_hero == null)
+            {
+                FlowTrace.Warn("Auto", "WalkToOuterWorldOutpost: no hero — skipping.");
+                _lastDetail = "no hero — skipped";
+                yield break;
+            }
+
+            // (a) Resolve a realized outpost — they materialise ~10s after the OuterWorld
+            // additive load (RaidOutpostSystem.SpawnDelaySeconds), so poll up to ~12s.
+            EnemyOutpost outpost = null;
+            float tPoll = Time.realtimeSinceStartup;
+            while (Time.realtimeSinceStartup - tPoll < 12f && outpost == null)
+            {
+                var live = new List<EnemyOutpost>();
+                var arr = RaidOutpostSystem.Outposts;   // entries null until realized
+                if (arr != null)
+                    for (int i = 0; i < arr.Length; i++)
+                        if (arr[i] != null) live.Add(arr[i]);
+                if (live.Count > 0)
+                {
+                    // Chaos: target a RANDOM available outpost (oracles are outpost-agnostic).
+                    outpost = live[rng.Next(live.Count)];
+                    break;
+                }
+                yield return Wait(0.5f);
+            }
+
+            if (outpost == null)
+            {
+                // Not ticket-worthy on its own: the walk loop may be flag-off (RaidContinuousWalk)
+                // or the outpost simply never realized in this scene. Warn + skip cleanly.
+                FlowTrace.Warn("Auto", "WalkToOuterWorldOutpost: no realized EnemyOutpost found within ~12s " +
+                    "(continuous-walk flag off, or not in OuterWorld) — skipping.");
+                _lastDetail = "no outpost realized — skipped";
+                yield break;
+            }
+
+            Transform target = outpost.transform;
+            float engageRange = EnemyOutpost.GarrisonRing + 2f;   // "reached on foot" proximity
+            Vector3 heroStart = _hero.transform.position;
+            FlowTrace.Step("Auto", $"WalkToOuterWorldOutpost: walking to '{outpost.OutpostId}' at {target.position} " +
+                $"(engageRange={engageRange:0.0}m, heroStart={heroStart}).");
+
+            _hero.SetAutoWalk(target);
+
+            // Walk + assert. prev tracks the previous frame's position for the anti-warp test.
+            Vector3 prev = _hero.transform.position;
+            float t0 = Time.realtimeSinceStartup;
+            bool reachedOnFoot = false;
+            int nextJitterBeat = 2 + rng.Next(3);   // first pause/dash beat after a few frames
+            int frame = 0;
+
+            while (Time.realtimeSinceStartup - t0 < OuterWalkTimeout)
+            {
+                if (_hero == null) break;
+                Vector3 pos = _hero.transform.position;
+
+                // ── (b/anti-warp) ORACLE: a single-frame jump > WalkMaxStepMeters is a WARP. ──
+                float d = Vector3.Distance(pos, prev);
+                if (d > WalkMaxStepMeters)
+                {
+                    FlowTrace.Fail("Auto", $"hero WARPED instead of walked: single-frame jump {d:0.0}m " +
+                        "(continuous-walk loop must never teleport).");
+                    _hero.ClearAutoWalk();
+                    _lastDetail = $"WARP detected ({d:0.0}m single-frame jump)";
+                    yield break;   // end the phase FAILED
+                }
+                prev = pos;
+
+                // Reached the outpost ON FOOT?
+                if (HorizontalDistance(pos, target.position) <= engageRange)
+                {
+                    reachedOnFoot = true;
+                    break;
+                }
+
+                // ── CHAOS: jittered pause/dash beats. Occasionally drop auto-walk for a few
+                // frames (a "pause"), then re-issue it (a "dash" resumes the route). This varies
+                // the PATH/timing only; the oracles above run every frame regardless. No per-frame
+                // allocation — just counters + the existing SetAutoWalk/ClearAutoWalk seam.
+                if (frame >= nextJitterBeat)
+                {
+                    _hero.ClearAutoWalk();
+                    int pauseFrames = 1 + rng.Next(4);
+                    for (int p = 0; p < pauseFrames; p++)
+                    {
+                        if (_hero == null) break;
+                        // Anti-warp still armed during the pause (the hero should be ~still).
+                        Vector3 pp = _hero.transform.position;
+                        float dp = Vector3.Distance(pp, prev);
+                        if (dp > WalkMaxStepMeters)
+                        {
+                            FlowTrace.Fail("Auto", $"hero WARPED during chaos-pause: single-frame jump {dp:0.0}m " +
+                                "(continuous-walk loop must never teleport).");
+                            _lastDetail = $"WARP detected during pause ({dp:0.0}m)";
+                            yield break;
+                        }
+                        prev = pp;
+                        yield return null;
+                    }
+                    if (_hero == null) break;
+                    _hero.SetAutoWalk(target);   // resume the route
+                    nextJitterBeat = frame + 4 + rng.Next(6);
+                }
+
+                frame++;
+                yield return null;
+            }
+            if (_hero != null) _hero.ClearAutoWalk();
+
+            if (!reachedOnFoot)
+            {
+                FlowTrace.Fail("Auto", $"WalkToOuterWorldOutpost: hero never reached outpost '{outpost.OutpostId}' on foot " +
+                    $"within {OuterWalkTimeout:0}s (closest approach failed; navmesh edge / blocked).");
+                _lastDetail = "did not reach outpost on foot";
+                yield break;
+            }
+
+            // ── (b) COMBAT-ON-APPROACH ORACLE: reached on foot — is the garrison engaging? ──
+            // Give the aggro a moment to pull a defender into engage range, then assert at least
+            // one garrison Enemy is alive within range. (The outpost may auto-clear if it spawned
+            // empty — that is its own legit anti-deadlock; treat an already-cleared outpost as
+            // "nothing to engage" and report it, not a hard combat failure.)
+            bool engaged = false;
+            float tEngage = Time.realtimeSinceStartup;
+            while (Time.realtimeSinceStartup - tEngage < 6f && !engaged)
+            {
+                if (outpost == null || _hero == null) break;
+                if (outpost.Cleared) break;   // garrison gone (cleared/auto-cleared)
+                engaged = AnyGarrisonEngaging(outpost, _hero.transform.position, engageRange + 6f);
+                if (engaged) break;
+                yield return null;
+            }
+
+            if (engaged)
+            {
+                FlowTrace.Step("Auto", $"WalkToOuterWorldOutpost: PASS — reached '{outpost.OutpostId}' ON FOOT (no warp) " +
+                    "and a garrison defender engaged on approach.");
+                _lastDetail = "reached on foot + garrison engaged";
+            }
+            else if (outpost != null && outpost.Cleared)
+            {
+                FlowTrace.Warn("Auto", $"WalkToOuterWorldOutpost: reached '{outpost.OutpostId}' on foot but it was already CLEARED " +
+                    "(empty/auto-cleared garrison) — nothing to engage.");
+                _lastDetail = "reached on foot; outpost already cleared";
+            }
+            else
+            {
+                FlowTrace.Fail("Auto", "reached outpost on foot but garrison never engaged on approach");
+                _lastDetail = "reached on foot but no engage";
+            }
+        }
+
+        // True if any living garrison Enemy under the outpost is within engageRange of the hero
+        // (the "combat on approach" signal). Cheap GetComponentsInChildren over the outpost root
+        // only (the garrison is parented under it), run a handful of times, not per frame.
+        private static bool AnyGarrisonEngaging(EnemyOutpost outpost, Vector3 heroPos, float engageRange)
+        {
+            if (outpost == null) return false;
+            var enemies = outpost.GetComponentsInChildren<Enemy>(includeInactive: false);
+            if (enemies == null) return false;
+            float r2 = engageRange * engageRange;
+            foreach (var e in enemies)
+            {
+                if (e == null || !e.IsAlive) continue;
+                if ((e.transform.position - heroPos).sqrMagnitude <= r2) return true;
+            }
+            return false;
         }
 
         // =====================================================================

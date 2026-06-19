@@ -27,6 +27,16 @@ namespace DeNelle.Core
         public static bool Raid  => Get("raid",  defaultOn: true);
         public static bool Arena => Get("arena", defaultOn: true);
 
+        /// <summary>WO-449 — when ON, the raid loop IS the continuous distance-gated WALK: the raid
+        /// target is a live EnemyOutpost spawned in the OuterWorld (~70m out a gate), the hero walks
+        /// to it on one continuous NavMesh, combat triggers on approach (Enemy hero-aggro), and clearing
+        /// it claims the base + grants the next companion IN PLACE — there is NO DEPLOY screen and NO
+        /// teleport (the hero never leaves the open world). When OFF, the legacy
+        /// RaidSelectionScreen -> RaidDeployScreen -> SceneRouter.GoRaid teleport path is restored
+        /// verbatim (the raid icon opens the selection screen; RaidOutpostSystem does not spawn the
+        /// walk-to outpost). Default ON. PlayerPrefs "ff.raidwalk".</summary>
+        public static bool RaidContinuousWalk => Get("raidwalk", defaultOn: true);
+
         /// <summary>When ON, our decorative CHROME (gilt inner-rim / bottom rule / header shadow+rule /
         /// niche backings + per-panel solid fills + glows) does NOT render, so the Blink "Obsidian" panel
         /// sprite + functional content (text/rows/grid/buttons) show clean. Content/structure and the

@@ -134,6 +134,18 @@ namespace DeNelle.Village.Hero
                 FlowTrace.Step("Raid", "raid icon fired but RAID is feature-flagged OFF (victory/return not built) — ignored.");
                 return;
             }
+
+            // WO-449 — continuous-walk loop: the raid target is a LIVE outpost out in the OuterWorld
+            // (RaidOutpostSystem spawns it ~70m past each gate). There is NO selection/deploy screen
+            // and NO teleport — the player just walks out a gate to it and combat starts on approach.
+            // So the raid icon is a deliberate no-op here (a nudge, not a portal). Flip ff.raidwalk OFF
+            // to restore the legacy RaidSelectionScreen->Deploy->GoRaid teleport path below verbatim.
+            if (DeNelle.Core.FeatureFlags.RaidContinuousWalk)
+            {
+                FlowTrace.Step("Raid", "continuous-walk mode: raid icon no-op; walk out a gate to the outpost (~70m).");
+                return;
+            }
+
             FlowTrace.Step("Raid", "raid icon fired — opening RaidSelectionScreen.");
             RaidSelectionScreen.Open();
         }

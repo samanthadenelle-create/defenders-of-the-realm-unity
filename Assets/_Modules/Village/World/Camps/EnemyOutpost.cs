@@ -39,6 +39,7 @@ using UnityEngine.AI;
 using DeNelle.Core.World;
 using DeNelle.Core.State;
 using DeNelle.Core.Quests;
+using DeNelle.Core.Diagnostics;   // FlowTrace — WO-449 garrison-live verification marker
 using DeNelle.Core.Catalog;     // CatalogRegistry — Arena defender STRUCTURES (WO-389)
 using DeNelle.Village.Arena;    // ArenaDefenseCatalog / ArenaDefenseDef (WO-389)
 
@@ -257,6 +258,12 @@ namespace DeNelle.Village.World.Camps
                 // trigger is idempotent + session-guarded (Echo persists once summoned),
                 // and is open-world only (the Arena suppresses the open-world beats).
                 EchoAutoDeployTrigger.Attach(gameObject, GarrisonRing + 6f);
+
+                // WO-449 — continuous-walk verification marker (no behavior change): the garrison is
+                // now LIVE at this anchor; combat begins when the hero walks within ~aggro range. This
+                // line lets the headless trace confirm the walk-to outpost actually materialised + is
+                // garrisoned (i.e. the hero has something to fight on approach), not just scheduled.
+                FlowTrace.Step("Raid", $"{OutpostId} garrison live at {transform.position} — combat begins when the hero approaches (~{GarrisonRing + 6}m).");
             }
         }
 
