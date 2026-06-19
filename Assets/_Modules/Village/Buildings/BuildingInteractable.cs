@@ -163,35 +163,9 @@ namespace DeNelle.Village
             if (inRange && !buttonActive && _promptGo == null) ShowPrompt();
             else if ((!inRange || buttonActive) && _promptGo != null) HidePrompt();
 
-            // DEF-213: F is a SINGLE global key that every BuildingInteractable polls.
-            // Only the building NEAREST the hero (and only when no modal is already
-            // open) acts on the press, so two buildings with overlapping radii can't
-            // both open a panel on one keystroke. The shared touch button already
-            // routes to exactly one owner per frame, so this guard is desktop-F only.
-            if (inRange && !PanelManager.AnyOpen && Input.GetKeyDown(KeyCode.F) && IsNearestInRange())
-            {
-                Debug.Log($"[BuildingInteractable] F pressed nearest to {_building.Type} — invoking Interact.");
-                Interact();
-            }
-        }
-
-        /// <summary>
-        /// True when THIS building is the closest in-range BuildingInteractable to the
-        /// hero. Resolves the multi-fire on a shared F key when proximity radii overlap.
-        /// </summary>
-        private bool IsNearestInRange()
-        {
-            if (_hero == null) return false;
-            float myDistSqr = (_hero.position - transform.position).sqrMagnitude;
-            foreach (var other in UnityEngine.Object.FindObjectsByType<BuildingInteractable>(
-                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
-            {
-                if (other == null || other == this) continue;
-                float otherDistSqr = (_hero.position - other.transform.position).sqrMagnitude;
-                if (otherDistSqr > ActivateRadius * ActivateRadius) continue; // not in range
-                if (otherDistSqr < myDistSqr) return false;                    // someone closer
-            }
-            return true;
+            // Mobile-first: interaction fires through the shared on-screen Interact
+            // button (requested above while in range). The desktop F-key trigger was
+            // removed — Interact() stays reached by the touch button / HUD path.
         }
 
         private void OnDisable()

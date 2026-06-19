@@ -29,6 +29,7 @@ using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core.Analytics;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using DeNelle.Core.Data;
 using Newtonsoft.Json;
@@ -162,42 +163,100 @@ namespace DeNelle.Village
             TowerData              toData,
             DeNelle.Wallet.CurrencyKind currency)
         {
+            using var _swapScope = FlowTrace.Enter("TowerSwap",
+                $"ExecuteSwap from='{(fromTower != null && fromTower.Data != null ? fromTower.Data.towerName : "<null>")}' " +
+                $"to='{(toData != null ? toData.towerName : "<null>")}' ccy={currency}");
+
+            // §12 / R: guard the target up front so a null tower/menu can't NRE mid-payment.
+            if (fromTower == null || toData == null || _menu == null)
+            {
+                FlowTrace.Fail("TowerSwap",
+                    $"ExecuteSwap: missing arg (fromTower={(fromTower == null ? "null" : "ok")}, " +
+                    $"toData={(toData == null ? "null" : "ok")}, menu={(_menu == null ? "null" : "ok")}) — aborting swap.");
+                _menu?.SetLoading(false);
+                _menu?.ShowError("Swap unavailable right now.");
+                return;
+            }
+
             // Re-validate (menu may have been open for a while).
             GetSwapState(fromTower, out bool onCooldown, out _, out bool waveLimitHit);
 
-            if (onCooldown)       { _menu.ShowError("This tower is still cooling down."); return; }
-            if (waveLimitHit)     { _menu.ShowError($"Max {MaxSwapsPerWave} swaps per wave reached."); return; }
-            if (_wallet == null)  { _menu.ShowError("Wallet not connected."); return; }
-            if (!_wallet.IsConnected) { _menu.ShowError("Connect your wallet first."); return; }
+            if (onCooldown)       { FlowTrace.Step("TowerSwap", "rejected: on cooldown."); _menu.ShowError("This tower is still cooling down."); return; }
+            if (waveLimitHit)     { FlowTrace.Step("TowerSwap", "rejected: wave limit."); _menu.ShowError($"Max {MaxSwapsPerWave} swaps per wave reached."); return; }
+            if (_wallet == null)  { FlowTrace.Warn("TowerSwap", "rejected: wallet not wired."); _menu.ShowError("Wallet not connected."); return; }
+            if (!_wallet.IsConnected) { FlowTrace.Step("TowerSwap", "rejected: wallet not connected."); _menu.ShowError("Connect your wallet first."); return; }
 
-            // Balance check — fetch live.
+            // Balance check — fetch live. GUARDED: a thrown GetBalance (network/SDK) must not
+            // escape the UniTaskVoid unlogged + leave the menu stuck on the loading spinner.
             _menu.SetLoading(true, "Checking balance…");
-            var balance = await _wallet.GetBalance();
+            DeNelle.Wallet.WalletBalance balance;
+            try
+            {
+                balance = await _wallet.GetBalance();
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("TowerSwap",
+                    $"GetBalance threw: {ex.GetType().Name}: {ex.Message} — aborting swap, no charge, menu reset.");
+                _menu.SetLoading(false);
+                _menu.ShowError("Could not read wallet balance.");
+                return;
+            }
             double available = currency == DeNelle.Wallet.CurrencyKind.Usdc ? balance.Usdc : balance.Skr;
             if (available < SwapCostUsdc)
             {
+                FlowTrace.Step("TowerSwap", $"rejected: insufficient balance ({available:F2} < {SwapCostUsdc}).");
                 _menu.SetLoading(false);
                 _menu.ShowError($"Insufficient balance ({available:F2} available, {SwapCostUsdc} required).");
                 return;
             }
 
-            // Payment.
+            // Payment. GUARDED: a thrown PayFlat must not silently strand the swap mid-charge.
             _menu.SetLoading(true, "Awaiting wallet confirmation…");
             string txId = $"tower_swap_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
-            var result = await _wallet.PayFlat(txId, currency, SwapCostUsdc);
+            DeNelle.Wallet.PaymentResult result;
+            try
+            {
+                result = await _wallet.PayFlat(txId, currency, SwapCostUsdc);
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("TowerSwap",
+                    $"PayFlat threw for tx '{txId}': {ex.GetType().Name}: {ex.Message} — swap NOT applied, menu reset.");
+                _menu.SetLoading(false);
+                _menu.ShowError("Payment failed. Please try again.");
+                return;
+            }
 
             if (!result.Ok)
             {
+                FlowTrace.Warn("TowerSwap", $"payment declined: {result.Error}");
                 _menu.SetLoading(false);
                 _menu.ShowError($"Transaction failed: {result.Error}");
                 return;
             }
 
-            // Apply swap.
+            // Apply swap. The player HAS PAID — the swap MUST land or be reported. Guard the
+            // SwapToType call (a throw here = paid-but-no-swap) and VERIFY the tower actually
+            // changed type afterward, so a silent no-op self-reports instead of charging for nothing.
             string fromName = fromTower.Data != null ? fromTower.Data.towerName : "Unknown";
             int waveId = _waveManager != null ? _waveManager.CurrentWaveId : 0;
 
-            fromTower.SwapToType(toData);
+            bool applied = Guard.Try("TowerSwap", $"SwapToType '{fromName}' -> '{toData.towerName}'",
+                () => fromTower.SwapToType(toData));
+
+            // VERIFY: after a successful payment the tower's Data should now be the target type.
+            bool swapVerified = applied && fromTower != null && fromTower.Data == toData;
+            if (!swapVerified)
+            {
+                FlowTrace.Fail("TowerSwap",
+                    $"Swap NOT verified after PAID tx '{result.TxSignature}': applied={applied}, " +
+                    $"tower.Data='{(fromTower != null && fromTower.Data != null ? fromTower.Data.towerName : "<null>")}' " +
+                    $"(expected '{toData.towerName}'). Player charged but tower may be unchanged.");
+                _menu.SetLoading(false);
+                _menu.ShowError("Swap could not be applied — contact support if you were charged.");
+                return;
+            }
 
             // Record cooldown + wave count.
             _cooldowns[fromTower.GetInstanceID()] = Time.realtimeSinceStartup + CooldownSeconds;
@@ -211,6 +270,7 @@ namespace DeNelle.Village
 
             _menu.SetLoading(false);
             _menu.ShowSuccess($"Swapped to {toData.towerName}!");
+            FlowTrace.Step("TowerSwap", $"swap VERIFIED: '{fromName}' -> '{toData.towerName}' (tx '{result.TxSignature}').");
 
             // Analytics.
             EventTracker.Track("tower_swap_completed", new

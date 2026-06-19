@@ -33,6 +33,7 @@ using System.Reflection;
 using UnityEngine;
 using DeNelle.Core.Combat;
 using DeNelle.Core.Data;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -179,18 +180,21 @@ namespace DeNelle.Village
             if (data.upgradeUIPrefab != null)
             {
                 if (_activeUpgradeUI != null) Destroy(_activeUpgradeUI);
-                _activeUpgradeUI = Instantiate(
-                    data.upgradeUIPrefab,
-                    transform.position + Vector3.up * 4f,
-                    Quaternion.identity,
-                    transform
-                );
-                var btn = _activeUpgradeUI.GetComponentInChildren<UnityEngine.UI.Button>();
-                if (btn != null)
+                Guard.Try("Tower", "instantiate upgrade UI", () =>
                 {
-                    btn.onClick.RemoveAllListeners();
-                    btn.onClick.AddListener(() => Upgrade());
-                }
+                    _activeUpgradeUI = Instantiate(
+                        data.upgradeUIPrefab,
+                        transform.position + Vector3.up * 4f,
+                        Quaternion.identity,
+                        transform
+                    );
+                    var btn = _activeUpgradeUI.GetComponentInChildren<UnityEngine.UI.Button>();
+                    if (btn != null)
+                    {
+                        btn.onClick.RemoveAllListeners();
+                        btn.onClick.AddListener(() => Upgrade());
+                    }
+                });
             }
         }
 
@@ -248,14 +252,16 @@ namespace DeNelle.Village
         /// </summary>
         private void ApplyVisualForLevel(int level)
         {
+            using var _ = FlowTrace.Enter("Tower", $"ApplyVisualForLevel L{level} ('{(_data != null ? _data.towerName : name)}')");
+
             if (_data == null)
             {
-                Debug.LogError("[Tower] ApplyVisualForLevel called before Initialize.");
+                FlowTrace.Fail("Tower", "ApplyVisualForLevel called before Initialize — no visual spawned.");
                 return;
             }
             if (_data.upgrades == null || level < 1 || level > _data.upgrades.Length)
             {
-                Debug.LogError($"[Tower] Invalid level {level} for {_data.towerName}");
+                FlowTrace.Fail("Tower", $"ApplyVisualForLevel: invalid level {level} for '{_data.towerName}' — no visual spawned.");
                 return;
             }
 
@@ -265,24 +271,51 @@ namespace DeNelle.Village
             TowerUpgrade upgrade = _data.upgrades[level - 1];
             if (upgrade != null && upgrade.visualPrefab != null)
             {
-                _currentVisual = Instantiate(upgrade.visualPrefab, transform);
-                _currentVisual.transform.localPosition = Vector3.zero;
-                _currentVisual.transform.localRotation = Quaternion.identity;
-                // DEF-134: BlastTower.fbx ships with EMBEDDED (non-URP) materials
-                // (materialLocation=1) which render as untextured gray/magenta cubes
-                // under URP in the player build — the "floating untextured tower"
-                // owner reported. Retarget every renderer to a real URP/Lit material
-                // (mirrors PatriciaLightController.RetargetMaterialsToUrp / the Tripo
-                // fixer) so the placed tower always reads as solid stone, not raw cubes.
-                RetargetMaterialsToUrp(_currentVisual);
-                // Authored tower models (BlastTower.fbx) import at a tiny native
-                // scale -> the placed tower read ~10x too small. Normalize to a
-                // sensible world height from renderer bounds (grows per level).
-                NormalizeVisualHeight(_currentVisual, 4.5f + (level - 1) * 0.6f);
+                // Guard the authored-model spawn: a thrown Instantiate/retarget/normalize
+                // step must NOT leave the tower visual-less. On any failure we roll back to
+                // the procedural placeholder (the never-invisible-tower fallback).
+                GameObject spawned = null;
+                bool ok = Guard.Try("Tower", $"instantiate authored tower visual L{level}", () =>
+                {
+                    spawned = Instantiate(upgrade.visualPrefab, transform);
+                    spawned.transform.localPosition = Vector3.zero;
+                    spawned.transform.localRotation = Quaternion.identity;
+                    // DEF-134: BlastTower.fbx ships with EMBEDDED (non-URP) materials
+                    // (materialLocation=1) which render as untextured gray/magenta cubes
+                    // under URP in the player build — the "floating untextured tower"
+                    // owner reported. Retarget every renderer to a real URP/Lit material
+                    // (mirrors PatriciaLightController.RetargetMaterialsToUrp / the Tripo
+                    // fixer) so the placed tower always reads as solid stone, not raw cubes.
+                    RetargetMaterialsToUrp(spawned);
+                    // Authored tower models (BlastTower.fbx) import at a tiny native
+                    // scale -> the placed tower read ~10x too small. Normalize to a
+                    // sensible world height from renderer bounds (grows per level).
+                    NormalizeVisualHeight(spawned, 4.5f + (level - 1) * 0.6f);
+                });
+
+                // RENDER-VERIFY (owner directive 2026-06-19, mirror VerifyArmorRendersNow):
+                // an authored model that instantiated but carries no enabled renderer with a
+                // mesh is the "floating untextured / invisible tower" symptom. PROVE it renders
+                // before we keep it; otherwise drop it and fall back to the procedural placeholder
+                // so the tower is NEVER silently broken/invisible.
+                if (!ok || spawned == null || !VerifyVisualRendersNow(spawned, level))
+                {
+                    FlowTrace.Fail("Tower",
+                        $"ApplyVisualForLevel L{level} ('{_data.towerName}'): authored visual failed to spawn/render — " +
+                        "rolling back to procedural placeholder (no invisible tower).");
+                    if (spawned != null) Destroy(spawned);
+                    _currentVisual = BuildPlaceholderVisual(level);
+                }
+                else
+                {
+                    _currentVisual = spawned;
+                    FlowTrace.Step("Tower", $"ApplyVisualForLevel L{level}: authored visual spawned + render-verified.");
+                }
             }
             else
             {
                 _currentVisual = BuildPlaceholderVisual(level);
+                FlowTrace.Step("Tower", $"ApplyVisualForLevel L{level}: no authored prefab — built procedural placeholder.");
             }
 
             EnsureBodyCollider();
@@ -290,6 +323,56 @@ namespace DeNelle.Village
             // Coverage ring so the player reads this tower's attack range + places/upgrades
             // correctly. Reads CurrentRange live (grows with level); faint so it never clutters.
             if (GetComponent<TowerRangeRing>() == null) gameObject.AddComponent<TowerRangeRing>();
+        }
+
+        /// <summary>
+        /// RENDER-VERIFY (synchronous, no camera/scene dependency — mirrors
+        /// HeroArmorVisual.VerifyArmorRendersNow): the spawned tower visual MUST carry
+        /// >=1 ENABLED Renderer with a non-null mesh. A model that instantiated but renders
+        /// nothing is the "floating untextured / invisible tower" (TGVRU) symptom. Traces the
+        /// exact counts so a capture splits "no enabled renderer" vs "no mesh" with zero
+        /// guessing. Returns false => caller rolls back to the procedural placeholder.
+        /// </summary>
+        private static bool VerifyVisualRendersNow(GameObject visual, int level)
+        {
+            if (visual == null)
+            {
+                FlowTrace.Fail("Tower", $"VerifyVisualRenders: L{level} visual is null.");
+                return false;
+            }
+
+            int total = 0, enabled = 0, withMesh = 0;
+            foreach (var r in visual.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                total++;
+                if (r.enabled) enabled++;
+
+                Mesh mesh = null;
+                if (r is SkinnedMeshRenderer smr) mesh = smr.sharedMesh;
+                else
+                {
+                    var mf = r.GetComponent<MeshFilter>();
+                    if (mf != null) mesh = mf.sharedMesh;
+                }
+                // ParticleSystem / LineRenderer etc. carry no MeshFilter but still draw —
+                // count them as "renders" so a legitimately mesh-less visual isn't rejected.
+                bool drawsWithoutMesh = !(r is MeshRenderer) && !(r is SkinnedMeshRenderer);
+                if (mesh != null || drawsWithoutMesh) withMesh++;
+            }
+
+            bool renders = enabled > 0 && withMesh > 0;
+            FlowTrace.Step("Tower",
+                $"VerifyVisualRenders L{level} on '{visual.name}': renderers total={total} enabled={enabled} withMesh={withMesh} => renders={renders}");
+
+            if (!renders)
+            {
+                FlowTrace.Fail("Tower",
+                    $"VerifyVisualRenders FAILED L{level} on '{visual.name}': renders={renders} " +
+                    $"(total={total}, enabled={enabled}, withMesh={withMesh}) — no visible mesh.");
+                return false;
+            }
+            return true;
         }
 
         /// <summary>
@@ -366,13 +449,20 @@ namespace DeNelle.Village
             Shader lit = Shader.Find("Universal Render Pipeline/Lit")
                       ?? Shader.Find("Universal Render Pipeline/Simple Lit")
                       ?? Shader.Find("Standard");
-            if (lit == null) return;
-
-            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            if (lit == null)
             {
-                if (r == null) continue;
+                FlowTrace.Warn("Tower", "RetargetMaterialsToUrp: no URP/Lit/Standard shader found — leaving authored materials (may render untextured).");
+                return;
+            }
+
+            // Guard EACH renderer independently: one bad material slot logs + is skipped,
+            // never aborts the retarget of the rest (mirrors Guard.TryEach per-item discipline).
+            Guard.TryEach("Tower", "retarget renderer to URP",
+                go.GetComponentsInChildren<Renderer>(true), r =>
+            {
+                if (r == null) return;
                 var mats = r.sharedMaterials;
-                if (mats == null) continue;
+                if (mats == null) return;
                 for (int i = 0; i < mats.Length; i++)
                 {
                     var src = mats[i];
@@ -413,7 +503,7 @@ namespace DeNelle.Village
                     mats[i] = m;
                 }
                 r.sharedMaterials = mats;
-            }
+            });
         }
 
         // ── Empowerment — public API ───────────────────────────────────────────
@@ -505,13 +595,18 @@ namespace DeNelle.Village
             var emp = _data?.empowerment;
             if (emp == null) return;
 
-            // One-shot nova burst — world-parented, auto-destroyed.
+            // One-shot nova burst — world-parented, auto-destroyed. Guarded so a bad
+            // prefab logs + falls back to the code burst, never throws out of empowerment.
             if (emp.empowerNovaPrefab != null)
             {
-                var nova = Instantiate(emp.empowerNovaPrefab,
-                    transform.position + Vector3.up * 1.5f, Quaternion.identity);
-                nova.transform.SetParent(null, true);
-                Destroy(nova, 4f);
+                bool ok = Guard.Try("Tower", "instantiate empower nova", () =>
+                {
+                    var nova = Instantiate(emp.empowerNovaPrefab,
+                        transform.position + Vector3.up * 1.5f, Quaternion.identity);
+                    nova.transform.SetParent(null, true);
+                    Destroy(nova, 4f);
+                });
+                if (!ok) BuildCodeBurst(transform.position + Vector3.up * 2.0f);
             }
             else
             {
@@ -522,9 +617,13 @@ namespace DeNelle.Village
             // Persistent aura loop — child of the tower, lasts until tower is destroyed.
             if (emp.empowerAuraPrefab != null)
             {
-                var aura = Instantiate(emp.empowerAuraPrefab,
-                    transform.position + Vector3.up * 1.5f, Quaternion.identity, transform);
-                aura.name = "EmpowerAura";
+                bool ok = Guard.Try("Tower", "instantiate empower aura", () =>
+                {
+                    var aura = Instantiate(emp.empowerAuraPrefab,
+                        transform.position + Vector3.up * 1.5f, Quaternion.identity, transform);
+                    aura.name = "EmpowerAura";
+                });
+                if (!ok) BuildCodeAura(emp.ability);
             }
             else
             {
@@ -680,11 +779,15 @@ namespace DeNelle.Village
             // --- One-shot burst: world-parented, destroyed after its clip ---------
             if (_upgradeBurstPrefab != null)
             {
-                var burst = Instantiate(_upgradeBurstPrefab, burstPos, Quaternion.identity);
-                burst.transform.SetParent(null, true);   // parent to WORLD, not the tower
-                burst.Play();
-                float life = burst.main.duration + burst.main.startLifetime.constantMax;
-                Destroy(burst.gameObject, life);
+                bool ok = Guard.Try("Tower", "instantiate upgrade burst", () =>
+                {
+                    var burst = Instantiate(_upgradeBurstPrefab, burstPos, Quaternion.identity);
+                    burst.transform.SetParent(null, true);   // parent to WORLD, not the tower
+                    burst.Play();
+                    float life = burst.main.duration + burst.main.startLifetime.constantMax;
+                    Destroy(burst.gameObject, life);
+                });
+                if (!ok) BuildCodeBurst(burstPos);   // fall back to the code burst on a bad prefab
             }
             else
             {
@@ -695,11 +798,14 @@ namespace DeNelle.Village
             if (_activeGlow != null) Destroy(_activeGlow.gameObject);
             if (_levelUpGlowPrefab != null)
             {
-                _activeGlow = Instantiate(
-                    _levelUpGlowPrefab,
-                    transform.position + Vector3.up * 1.5f,
-                    Quaternion.identity,
-                    transform);
+                Guard.Try("Tower", "instantiate level-up glow", () =>
+                {
+                    _activeGlow = Instantiate(
+                        _levelUpGlowPrefab,
+                        transform.position + Vector3.up * 1.5f,
+                        Quaternion.identity,
+                        transform);
+                });
             }
 
             // --- Screen shake via null-safe reflection helper ---------------------
@@ -853,7 +959,11 @@ namespace DeNelle.Village
                 if (target == null || shake == null) return;
                 shake.Invoke(target, new object[] { intensity, duration });
             }
-            catch { /* shake is best-effort feedback only */ }
+            catch (Exception e)
+            {
+                // Shake is best-effort feedback, but no silent failure (§12) — self-report.
+                FlowTrace.Warn("Tower", $"CameraShakeBridge.Shake failed: {e.GetType().Name}: {e.Message} — shake skipped (cosmetic only).");
+            }
         }
 
         private static Component FindShakeTarget(out MethodInfo shake)

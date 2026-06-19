@@ -20,6 +20,7 @@ using System.Collections;
 using UnityEngine;
 using DeNelle.Core.Combat;
 using DeNelle.Core.Data;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -233,7 +234,14 @@ namespace DeNelle.Village
 
         private void FireAt(IDamageable target, IDamageable trueAimSecondary = null)
         {
-            if (ProjectilePool.Instance == null) return;
+            if (ProjectilePool.Instance == null)
+            {
+                // A tower that can't fire must SELF-REPORT (§12) — not silently no-op.
+                // Throttled: this is on the fire tick, once/sec is enough to surface it.
+                FlowTrace.Throttle("TowerCombat", "no-pool-fireat", 1f,
+                    $"FireAt: ProjectilePool.Instance is null on '{(_tower != null && _tower.Data != null ? _tower.Data.towerName : name)}' — tower cannot fire (no projectile spawned).");
+                return;
+            }
 
             float damage  = _tower != null && _tower.CurrentDamage > 0f ? _tower.CurrentDamage : _fallbackDamage;
             int   level   = _tower != null ? _tower.CurrentLevel : 1;
@@ -290,8 +298,24 @@ namespace DeNelle.Village
 
         private void FireSingleProjectile(IDamageable target, float damage, DamageElement element, Vector3 firePos)
         {
-            if (ProjectilePool.Instance == null) return;
+            if (ProjectilePool.Instance == null)
+            {
+                FlowTrace.Throttle("TowerCombat", "no-pool-single", 1f,
+                    $"FireSingleProjectile: ProjectilePool.Instance is null on '{(_tower != null && _tower.Data != null ? _tower.Data.towerName : name)}' — no bolt spawned.");
+                return;
+            }
+
             var proj = ProjectilePool.Instance.GetProjectile();
+            // POOL-GET reset-verify (mirror VerifyArmorRendersNow): a pooled projectile that
+            // comes back null, or with no enabled renderer/mesh, fires SILENTLY (the "no-fire /
+            // invisible bolt" symptom). Self-report and bail rather than spawn an invisible shot.
+            if (proj == null)
+            {
+                FlowTrace.Throttle("TowerCombat", "pool-null-proj", 1f,
+                    $"FireSingleProjectile: pool returned a null projectile on '{name}' — no bolt fired.");
+                return;
+            }
+
             proj.transform.position = firePos;
 
             // DEF-PROJ: the projectile's ART look. When the shot carries an element
@@ -305,6 +329,48 @@ namespace DeNelle.Village
                 : ProjectileArtCatalog.ElementForTowerName(_tower != null && _tower.Data != null ? _tower.Data.towerName : name);
 
             proj.Initialize(target, damage, element, visual);
+
+            // RESET-VERIFY (post-Initialize, mirror VerifyArmorRendersNow): a pooled projectile
+            // re-issued from the pool can come back with its renderer disabled / mesh stripped from
+            // a prior life — it would fly INVISIBLE (the silent "no-fire" symptom). Prove it carries
+            // a live renderer with a mesh; if not, self-report (throttled) so a dead pool surfaces.
+            VerifyProjectileRenders(proj.gameObject);
+        }
+
+        // RENDER-VERIFY for a pooled projectile (TGVRU): >=1 ENABLED Renderer carrying a mesh
+        // (MeshRenderer/SkinnedMeshRenderer with a sharedMesh, or a SpriteRenderer/Trail/Line/
+        // ParticleSystem that draws meshlessly). A bolt that renders nothing is the invisible-fire
+        // symptom — log it (throttled, hot loop) rather than fire a ghost shot. Never throws.
+        private void VerifyProjectileRenders(GameObject proj)
+        {
+            if (proj == null) return;
+
+            int total = 0, enabled = 0, withMesh = 0;
+            foreach (var r in proj.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                total++;
+                if (r.enabled) enabled++;
+
+                Mesh mesh = null;
+                if (r is SkinnedMeshRenderer smr) mesh = smr.sharedMesh;
+                else if (r is MeshRenderer)
+                {
+                    var mf = r.GetComponent<MeshFilter>();
+                    if (mf != null) mesh = mf.sharedMesh;
+                }
+                // Sprite/Line/Trail/Particle renderers draw without a MeshFilter mesh — count them.
+                bool drawsWithoutMesh = !(r is MeshRenderer) && !(r is SkinnedMeshRenderer);
+                if (mesh != null || drawsWithoutMesh) withMesh++;
+            }
+
+            bool renders = enabled > 0 && withMesh > 0;
+            if (!renders)
+            {
+                FlowTrace.Throttle("TowerCombat", "proj-no-render", 1f,
+                    $"VerifyProjectileRenders: pooled bolt on '{name}' has no visible renderer " +
+                    $"(total={total}, enabled={enabled}, withMesh={withMesh}) — bolt fires INVISIBLE.");
+            }
         }
 
         private static DamageElement AbilityToElement(EmpowermentAbility ability) =>

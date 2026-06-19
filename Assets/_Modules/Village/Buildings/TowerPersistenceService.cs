@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using DeNelle.Core.Data;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -79,31 +80,82 @@ namespace DeNelle.Village
         // Re-read the live towers into records (captures placements/upgrades/razes).
         private void Snapshot()
         {
+            using var _ = FlowTrace.Enter("TowerPersist", "Snapshot");
             var towers = FindObjectsByType<Tower>(FindObjectsSortMode.None);
             _records.Clear();
+            int kept = 0, skippedNull = 0;
             for (int i = 0; i < towers.Length; i++)
             {
                 var t = towers[i];
-                if (t == null || t.Data == null) continue;
+                if (t == null) continue;
+                if (t.Data == null)
+                {
+                    // §12: a live tower with no Data can't be persisted — if we silently
+                    // skipped it the player's placed tower would vanish on re-entry with no
+                    // trace. Warn (don't blank) so a "tower disappeared" report self-reports.
+                    skippedNull++;
+                    FlowTrace.Warn("TowerPersist",
+                        $"Snapshot: tower '{t.name}' has null Data — NOT persisted (will not survive scene reload).");
+                    continue;
+                }
                 _records.Add(new Rec { Data = t.Data, Pos = t.transform.position, Level = t.CurrentLevel });
+                kept++;
             }
+            FlowTrace.Throttle("TowerPersist", "snapshot-result", 5f,
+                $"Snapshot: {kept} tower(s) recorded, {skippedNull} skipped (null Data) of {towers.Length} found.");
         }
 
         // Rebuild persisted towers on Village re-entry (instant — no construction).
         private void Restore()
         {
-            if (_records.Count == 0) return;
-            if (FindObjectsByType<Tower>(FindObjectsSortMode.None).Length > 0) return;   // already present
-
-            foreach (var rec in _records)
+            using var _ = FlowTrace.Enter("TowerPersist", "Restore");
+            if (_records.Count == 0)
             {
-                if (rec.Data == null) continue;
+                FlowTrace.Step("TowerPersist", "Restore: no records to restore (clean slate).");
+                return;
+            }
+            if (FindObjectsByType<Tower>(FindObjectsSortMode.None).Length > 0)
+            {
+                FlowTrace.Step("TowerPersist", "Restore: towers already present in scene — skipping rebuild.");
+                return;   // already present
+            }
+
+            // §12: rebuild EACH record under its own Guard so ONE bad record (a destroyed
+            // Data asset, an Initialize/Upgrade that throws) is logged + skipped, never
+            // aborting the loop and losing EVERY other tower (the audit gap). The base
+            // contract: a single corrupt record costs at most that one tower, not all.
+            int restored = 0, nullData = 0;
+            int index = 0;
+            var result = Guard.TryEach("TowerPersist", "restore tower", _records, rec =>
+            {
+                index++;
+                if (rec.Data == null)
+                {
+                    nullData++;
+                    FlowTrace.Warn("TowerPersist",
+                        $"Restore: record #{index} has null Data — skipped (one lost tower, rest preserved).");
+                    return;
+                }
                 var go = new GameObject($"Tower_{rec.Data.towerName}");
                 go.transform.position = rec.Pos;
                 var t = go.AddComponent<Tower>();
                 t.Initialize(rec.Data);                                 // build at level 1 (instant)
                 for (int lv = 1; lv < rec.Level; lv++) t.Upgrade();     // restore upgrade level
-            }
+                restored++;
+            });
+
+            // VERIFY the result: we held N records but rebuilt fewer (or zero) — self-report
+            // so a "my towers didn't come back" report maps straight to the dropped records.
+            // result.failed = records whose Initialize/Upgrade THREW (Guard caught + skipped);
+            // nullData = records dropped for a null Data. The rest restored cleanly.
+            if (restored == 0)
+                FlowTrace.Fail("TowerPersist",
+                    $"Restore: rebuilt 0 of {_records.Count} persisted tower(s) — all records failed/empty " +
+                    $"(threw={result.failed}, nullData={nullData}). Towers lost on re-entry.");
+            else
+                FlowTrace.Step("TowerPersist",
+                    $"Restore: rebuilt {restored} of {_records.Count} persisted tower(s) " +
+                    $"(skipped threw={result.failed}, nullData={nullData}).");
         }
     }
 }

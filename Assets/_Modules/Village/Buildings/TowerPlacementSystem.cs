@@ -24,6 +24,7 @@
 using System;
 using UnityEngine;
 using DeNelle.Core.Data;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Progression;
 using DeNelle.Core.State;
 
@@ -293,7 +294,12 @@ namespace DeNelle.Village
         /// <summary>Spend the cost (unless prepaid) and hand the build to the construction queue (DEF-76).</summary>
         private void PlaceTower(Vector3 pos)
         {
-            if (_selectedTower == null) return;
+            using var _ = FlowTrace.Enter("TowerPlace", $"PlaceTower pos={pos} tower='{_selectedTower?.towerName ?? "<null>"}'");
+            if (_selectedTower == null)
+            {
+                FlowTrace.Fail("TowerPlace", "PlaceTower: _selectedTower is null — nothing to place (build dropped).");
+                return;
+            }
 
             // WO-131 — crystal spend routes through the single source of truth:
             // GameState.Resources.Crystals (the store the HUD + BuildMenu display).
@@ -317,8 +323,23 @@ namespace DeNelle.Village
             // buildTime (scaffolding + worker VFX + progress bar) and calls
             // Tower.Initialize on completion. The queue self-bootstraps, so Instance
             // is non-null at runtime; guard anyway.
-            if (TowerConstructionQueue.Instance != null)
-                TowerConstructionQueue.Instance.AddToQueue(_selectedTower, pos);
+            // §12 / VERIFY: the construction queue self-bootstraps so Instance should be
+            // non-null at runtime. If it IS null, the placed tower is SILENTLY LOST (the
+            // crystals were spent / prepaid but no tower is ever queued or built — the audit
+            // gap). FAIL loudly so a "paid but no tower appeared" report self-reports here.
+            var queue = TowerConstructionQueue.Instance;
+            if (queue != null)
+            {
+                queue.AddToQueue(_selectedTower, pos);
+                FlowTrace.Step("TowerPlace",
+                    $"PlaceTower: queued '{_selectedTower.towerName}' (pending={queue.PendingCount}, building={queue.IsBuilding}).");
+            }
+            else
+            {
+                FlowTrace.Fail("TowerPlace",
+                    $"PlaceTower: TowerConstructionQueue.Instance is NULL — tower '{_selectedTower.towerName}' " +
+                    "was NOT queued (cost spent, no tower will build). Construction queue bootstrap did not run.");
+            }
 
             // DEF-183: tower-place confirm "thunk" (via CoreServices.Audio, guarded).
             GameSfx.PlayTowerPlace();

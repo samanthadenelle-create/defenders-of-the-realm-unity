@@ -30,6 +30,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Data;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -81,21 +82,42 @@ namespace DeNelle.Village
 
         private IEnumerator BuildTowerRoutine(TowerQueueItem item)
         {
-            // try/finally (no catch) is legal around `yield return`; the finally is
-            // the deadlock guard demanded by CP1 Issue 5.
+            // §12: a `catch` cannot wrap a `yield return` in C#, so the original try/finally
+            // had NO catch — an exception during GameObject/Tower/TowerConstruction creation
+            // propagated out of the coroutine UNLOGGED (the audit gap). We now GUARD the risky
+            // (non-yielding) construction step in Guard.Try (catch -> Fail, never silent), then
+            // yield OUTSIDE the try, and keep the try/finally only as the deadlock guard.
             try
             {
-                var towerObj = new GameObject($"Tower_{item.Data.towerName}");
-                towerObj.transform.position = item.Position;
+                TowerConstruction construction = null;
+                bool built = Guard.Try("TowerQueue", $"build tower '{item.Data?.towerName ?? "<null>"}'", () =>
+                {
+                    var towerObj = new GameObject($"Tower_{item.Data.towerName}");
+                    towerObj.transform.position = item.Position;
 
-                // Tower is added but NOT Initialized here — TowerConstruction reveals
-                // it (calls Initialize) on completion (see header reconciliation).
-                towerObj.AddComponent<Tower>();
-                var construction = towerObj.AddComponent<TowerConstruction>();
-                construction.StartConstruction(item.Data);
+                    // Tower is added but NOT Initialized here — TowerConstruction reveals
+                    // it (calls Initialize) on completion (see header reconciliation).
+                    towerObj.AddComponent<Tower>();
+                    construction = towerObj.AddComponent<TowerConstruction>();
+                    construction.StartConstruction(item.Data);
+                });
 
-                // Hold the queue until this build finishes (or the object is gone).
-                yield return new WaitUntil(() => construction == null || construction.IsComplete);
+                // VERIFY: if the build threw (Guard caught + logged it) there is no
+                // construction to wait on — fall straight through to the finally so the
+                // queue drains the next item instead of WaitUntil-ing on a null forever.
+                if (!built || construction == null)
+                {
+                    FlowTrace.Fail("TowerQueue",
+                        $"BuildTowerRoutine: construction not created for '{item.Data?.towerName ?? "<null>"}' " +
+                        "(threw or null) — skipping to next queued build, queue not deadlocked.");
+                }
+                else
+                {
+                    // Hold the queue until this build finishes (or the object is gone). This
+                    // yield is OUTSIDE any catch — legal — and the local 'construction' is
+                    // captured by the lambda so its WaitUntil sees the live instance.
+                    yield return new WaitUntil(() => construction == null || construction.IsComplete);
+                }
             }
             finally
             {
