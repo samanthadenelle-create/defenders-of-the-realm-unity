@@ -24,6 +24,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;   // TGVRU: instrument the impact-FX pool flow (§12)
 
 namespace DeNelle.Village
 {
@@ -68,10 +69,20 @@ namespace DeNelle.Village
         public void Play(GameObject prefab, Vector3 position, Quaternion rotation,
                          float lifetime = -1f, bool prepared = true)
         {
-            if (prefab == null) return;
+            if (prefab == null)
+            {
+                FlowTrace.Warn("ImpactFX", "Play: null prefab — no impact burst (caller passed no source FX).");
+                return;
+            }
 
             var body = Acquire(prefab, prepared);
-            if (body == null) return;
+            // R(eturn-fallback never silent): Acquire couldn't build/lease a body — the impact shows
+            // nothing. Fail-loud so a missing burst self-reports instead of silently swallowing.
+            if (body == null)
+            {
+                FlowTrace.Fail("ImpactFX", $"Play: Acquire returned no body for '{prefab.name}' — impact burst will NOT show (see prior FAILED line).");
+                return;
+            }
 
             var t = body.transform;
             t.SetParent(null, false);

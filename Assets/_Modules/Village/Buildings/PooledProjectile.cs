@@ -19,6 +19,7 @@
 
 using UnityEngine;
 using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics;   // TGVRU: instrument the projectile flow (§12)
 
 namespace DeNelle.Village
 {
@@ -52,10 +53,17 @@ namespace DeNelle.Village
         /// <paramref name="visualElement"/> picks the projectile/impact sprite.</summary>
         public void Initialize(IDamageable target, float damage, DamageElement damageElement, DamageElement visualElement)
         {
+            using var _ = FlowTrace.Enter("Projectile", $"Initialize dmg={damage:F0} elem={damageElement} target={(target == null ? "<null>" : "set")}");
+
             _target = target;
             _damage = damage;
             _element = damageElement;
             _timer = 0f;
+
+            // R(fallback never silent): a null target means this bolt has nothing to home/hit — it
+            // will expire on lifetime. Warn so a fire path that armed with no target is visible.
+            if (target == null)
+                FlowTrace.Warn("Projectile", "Initialize: null target — bolt has no enemy to hit, will expire on lifetime.");
 
             if (target != null)
             {
@@ -65,8 +73,18 @@ namespace DeNelle.Village
 
             // VISUAL: spawn the element-matched particle FX body, oriented along travel
             // (the FX rides this transform, which Update keeps facing the flight dir).
+            // G(uard): the catalog reskin can throw (bad shader / prefab); a thrown reskin must
+            // not abort the whole fire path. On throw we keep the prior body (or null) and Warn.
             _visualElement = visualElement;
-            _vfxBody = ProjectileVFXCatalog.ReskinFlying(_vfxBody, transform, visualElement);
+            _vfxBody = FlowTrace.Try("Projectile", "ReskinFlying visual",
+                () => ProjectileVFXCatalog.ReskinFlying(_vfxBody, transform, visualElement), _vfxBody);
+
+            // V(erify the visual was built): no FX body => an INVISIBLE projectile (the class of bug
+            // this gate targets). Once-log it so a capture pinpoints a silent visual miss vs a render
+            // problem elsewhere — never a silent invisible bolt.
+            if (_vfxBody == null)
+                FlowTrace.Once("Projectile", $"no-vfx:{visualElement}",
+                    $"Initialize: ReskinFlying returned no FX body for element={visualElement} — bolt will fly INVISIBLE. Check ProjectileVFXCatalog.");
         }
 
         private void Update()
@@ -128,7 +146,15 @@ namespace DeNelle.Village
 
             _target = null;
             if (ProjectilePool.Instance != null) ProjectilePool.Instance.ReturnToPool(this);
-            else gameObject.SetActive(false);
+            else
+            {
+                // R(eturn-fallback never silent): no live pool to return to (scene unloaded / pool
+                // destroyed). We disable the body so it stops flying, but Warn so a pool-lifecycle gap
+                // surfaces instead of silently orphaning the projectile outside the pool.
+                FlowTrace.Once("Projectile", "return-no-pool",
+                    "Return: ProjectilePool.Instance is null — disabling body in place (orphaned outside the pool). Pool may have been destroyed.");
+                gameObject.SetActive(false);
+            }
         }
     }
 }

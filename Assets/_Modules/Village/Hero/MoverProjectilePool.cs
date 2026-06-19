@@ -37,6 +37,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Combat;   // DamageElement
+using DeNelle.Core.Diagnostics;   // TGVRU: instrument the mover-pool flow (§12)
 
 namespace DeNelle.Village
 {
@@ -93,15 +94,23 @@ namespace DeNelle.Village
         // loads instead of being destroyed under the unloading scene (the WO-82 trap).
         private ProjectileMover CreateNew(ProjectileBodyKind kind)
         {
-            var go = new GameObject("HeroProjectile_" + kind);
-            go.transform.SetParent(transform, false);
+            // G(uard): the GameObject + visual build + AddComponent can throw; a half-built body
+            // returned to a queue NREs on the next lease. Build under Try and Fail-loud on null.
+            ProjectileMover mover = null;
+            FlowTrace.Try("MoverPool", $"CreateNew {kind}", () =>
+            {
+                var go = new GameObject("HeroProjectile_" + kind);
+                go.transform.SetParent(transform, false);
 
-            // Build the body's visual ONCE; it persists and replays per lease.
-            ProjectileBodyVisual.Build(go, kind);
+                // Build the body's visual ONCE; it persists and replays per lease.
+                ProjectileBodyVisual.Build(go, kind);
 
-            var mover = go.AddComponent<ProjectileMover>();
-            mover.BindToPool(this, kind);
-            go.SetActive(false);
+                mover = go.AddComponent<ProjectileMover>();
+                mover.BindToPool(this, kind);
+                go.SetActive(false);
+            });
+            if (mover == null)
+                FlowTrace.Fail("MoverPool", $"CreateNew({kind}) returned null — body failed to build (see prior FAILED line).");
             return mover;
         }
 
@@ -113,8 +122,17 @@ namespace DeNelle.Village
             var q = QueueFor(kind);
 
             ProjectileMover mover = null;
+            bool expanded = false;
             while (mover == null && q.Count > 0) mover = q.Dequeue();   // skip dead refs
-            if (mover == null) mover = CreateNew(kind);
+            if (mover == null) { mover = CreateNew(kind); expanded = true; }
+
+            // R(eturn-fallback never silent): an expansion that failed to build a body would NRE on
+            // the transform deref below — Fail-loud and bail so the fire path degrades, not crashes.
+            if (mover == null)
+            {
+                FlowTrace.Fail("MoverPool", $"Acquire({kind}): no body available (queue drained AND CreateNew failed) — returning null.");
+                return null;
+            }
 
             var t = mover.transform;
             t.SetParent(null, false);          // detach so world travel isn't pool-relative
@@ -123,17 +141,37 @@ namespace DeNelle.Village
 
             mover.ResetForLease();             // clears trail + launched state, replays FX
             mover.gameObject.SetActive(true);
+
+            // V(erify the leased body can render): a pooled mover must carry a built visual (renderer
+            // or particle FX) once active, else it flies invisible. Throttled — hero volleys lease fast.
+            bool hasRenderer = mover.GetComponentInChildren<Renderer>(true) != null
+                            || mover.GetComponentInChildren<ParticleSystem>(true) != null;
+            FlowTrace.Throttle("MoverPool", "lease", 1f,
+                $"Acquire {kind} leased (expanded={expanded}, queueLeft={q.Count}, hasRenderer={hasRenderer}).");
+            if (!hasRenderer)
+                FlowTrace.Once("MoverPool", $"lease-no-renderer:{kind}",
+                    $"Acquire {kind}: leased body has NO Renderer/ParticleSystem — projectile will fly INVISIBLE (visual build missed). See ProjectileBodyVisual.Build.");
             return mover;
         }
 
         /// <summary>Return a spent body to its kind queue (deactivated + re-homed).</summary>
         public void Release(ProjectileMover mover, ProjectileBodyKind kind)
         {
-            if (mover == null) return;
+            if (mover == null)
+            {
+                FlowTrace.Warn("MoverPool", $"Release({kind}): null mover — ignored (a spent body went missing before return).");
+                return;
+            }
             mover.gameObject.SetActive(false);
             var t = mover.transform;
             if (t.parent != transform) t.SetParent(transform, false);
+
+            // V(erify teardown): a returned body MUST be deactivated, or a re-lease hands back a live one.
+            if (mover.gameObject.activeSelf)
+                FlowTrace.Warn("MoverPool", $"Release({kind}): body still active after SetActive(false) — would re-lease live.");
+
             QueueFor(kind).Enqueue(mover);
+            FlowTrace.Throttle("MoverPool", "release", 1f, $"Release {kind}: body re-homed (queueSize={QueueFor(kind).Count}).");
         }
     }
 
@@ -144,22 +182,42 @@ namespace DeNelle.Village
     {
         public static void Build(GameObject host, ProjectileBodyKind kind)
         {
+            using var _ = FlowTrace.Enter("MoverPool", $"BuildBodyVisual {kind}");
+            if (host == null)
+            {
+                FlowTrace.Fail("MoverPool", $"BuildBodyVisual {kind}: null host — cannot build a visual.");
+                return;
+            }
+
             switch (kind)
             {
                 case ProjectileBodyKind.RangerArrowVfx:
                     // Storm-bolt particle FX for the physical arrow (cleaned, URP-safe).
-                    ProjectileVFXCatalog.SpawnFlying(host.transform, DamageElement.None);
+                    FlowTrace.Try("MoverPool", $"SpawnFlying {kind}",
+                        () => ProjectileVFXCatalog.SpawnFlying(host.transform, DamageElement.None));
                     break;
                 case ProjectileBodyKind.MageOrbVfx:
-                    ProjectileVFXCatalog.SpawnFlying(host.transform, DamageElement.Aether);
+                    FlowTrace.Try("MoverPool", $"SpawnFlying {kind}",
+                        () => ProjectileVFXCatalog.SpawnFlying(host.transform, DamageElement.Aether));
                     break;
                 case ProjectileBodyKind.PlaceholderArrow:
-                    BuildPlaceholderArrow(host);
+                    FlowTrace.Try("MoverPool", $"BuildPlaceholder {kind}", () => BuildPlaceholderArrow(host));
                     break;
                 case ProjectileBodyKind.PlaceholderOrb:
-                    BuildPlaceholderOrb(host);
+                    FlowTrace.Try("MoverPool", $"BuildPlaceholder {kind}", () => BuildPlaceholderOrb(host));
                     break;
             }
+
+            // V(erify the body was actually built): if every shader/FX path missed, the host carries no
+            // Renderer and no ParticleSystem — the INVISIBLE-projectile class of bug. Fail-loud so a
+            // capture pinpoints WHICH kind built nothing, instead of a silent invisible body.
+            bool built = host.GetComponentInChildren<Renderer>(true) != null
+                      || host.GetComponentInChildren<ParticleSystem>(true) != null;
+            if (!built)
+                FlowTrace.Fail("MoverPool",
+                    $"BuildBodyVisual {kind}: host has NO Renderer/ParticleSystem after build — projectile will be INVISIBLE (all shaders/FX missed). Check ProjectileVFXCatalog + URP shaders.");
+            else
+                FlowTrace.Step("MoverPool", $"BuildBodyVisual {kind}: visual built (renderer/particles present).");
         }
 
         private static void BuildPlaceholderArrow(GameObject host)

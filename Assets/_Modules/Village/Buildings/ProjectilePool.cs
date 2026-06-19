@@ -16,6 +16,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;   // TGVRU: instrument the pool flow (§12)
 
 namespace DeNelle.Village
 {
@@ -51,10 +52,19 @@ namespace DeNelle.Village
         // scene loads instead of being destroyed under the unloading scene.
         private PooledProjectile CreateNew()
         {
-            var go = new GameObject("Projectile");
-            go.transform.SetParent(transform, false);
-            var proj = go.AddComponent<PooledProjectile>();   // builds its own visual in Awake
-            go.SetActive(false);
+            // G(uard): the GameObject build + AddComponent can throw (out-of-memory, a
+            // PooledProjectile.Awake that throws). A null here would NRE the next GetProjectile,
+            // so we Fail-loud + return null and let the caller decide — never a silent half-built body.
+            PooledProjectile proj = null;
+            FlowTrace.Try("ProjPool", "CreateNew projectile", () =>
+            {
+                var go = new GameObject("Projectile");
+                go.transform.SetParent(transform, false);
+                proj = go.AddComponent<PooledProjectile>();   // builds its own visual in Awake
+                go.SetActive(false);
+            });
+            if (proj == null)
+                FlowTrace.Fail("ProjPool", "CreateNew returned null — projectile body failed to build (see prior FAILED line).");
             return proj;
         }
 
@@ -63,18 +73,50 @@ namespace DeNelle.Village
         {
             PooledProjectile proj = null;
             while (proj == null && _pool.Count > 0) proj = _pool.Dequeue();   // skip dead refs
+            bool expanded = proj == null;
             if (proj == null) proj = CreateNew();
+
+            // R(eturn-fallback never silent): an empty/expansion-failed pool that yields no body
+            // would NRE on SetActive — Fail-loud and bail instead of crashing the caller.
+            if (proj == null)
+            {
+                FlowTrace.Fail("ProjPool", "GetProjectile: no body available (pool drained AND CreateNew failed) — returning null.");
+                return null;
+            }
+
             proj.gameObject.SetActive(true);
+
+            // V(erify the leased body actually reset + can render): a pooled body must carry a live
+            // PooledProjectile and a renderable visual once active, else it flies invisible (the
+            // invisible-projectile class). Throttled — towers lease many per second; the trend is enough.
+            bool hasRenderer = proj.GetComponentInChildren<Renderer>(true) != null
+                            || proj.GetComponentInChildren<ParticleSystem>(true) != null;
+            FlowTrace.Throttle("ProjPool", "lease", 1f,
+                $"GetProjectile leased (expanded={expanded}, poolLeft={_pool.Count}, hasRenderer={hasRenderer}).");
+            if (!hasRenderer)
+                FlowTrace.Once("ProjPool", "lease-no-renderer",
+                    "GetProjectile: leased body has NO Renderer/ParticleSystem yet — visual is built per-shot in Initialize (expected pre-arm), flag if it stays invisible after firing.");
             return proj;
         }
 
         /// <summary>Return a spent projectile to the pool (deactivated + re-homed).</summary>
         public void ReturnToPool(PooledProjectile proj)
         {
-            if (proj == null) return;
+            if (proj == null)
+            {
+                FlowTrace.Warn("ProjPool", "ReturnToPool: null projectile — ignored (a spent body went missing before return).");
+                return;
+            }
             proj.gameObject.SetActive(false);
             if (proj.transform.parent != transform) proj.transform.SetParent(transform, false);
+
+            // V(erify teardown): a returned body MUST be deactivated + re-homed under the pool, or a
+            // re-lease hands back a live/stray-parented projectile. Trace the teardown so a leak shows.
+            if (proj.gameObject.activeSelf)
+                FlowTrace.Warn("ProjPool", "ReturnToPool: body still active after SetActive(false) — would re-lease live.");
+
             _pool.Enqueue(proj);
+            FlowTrace.Throttle("ProjPool", "return", 1f, $"ReturnToPool: body re-homed (poolSize={_pool.Count}).");
         }
     }
 }
