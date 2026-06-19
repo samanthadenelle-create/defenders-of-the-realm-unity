@@ -131,9 +131,9 @@ namespace DeNelle.Village
             // redundant world-space bubble while it is showing.
             if (_promptGo != null && MobileInteractButton.IsActive) HidePrompt();
 
-            // F-key check every frame so no keypress is ever dropped.
-            if (_isInRange && Input.GetKeyDown(KeyCode.F))
-                EnterDungeon();
+            // Mobile-first: entering fires through the shared on-screen Interact button
+            // (requested above) or by walking into the portal trigger (OnTriggerEnter).
+            // The desktop F-key trigger was removed.
         }
 
         private void OnDisable()

@@ -132,12 +132,8 @@ namespace DeNelle.Village
                 else
                     MobileInteractButton.Release(this);
 
-                if (_awaitingSimpleConfirm && Input.GetKeyDown(KeyCode.F))
-                {
-                    ConfirmSimpleUpgrade();
-                    return;
-                }
-                if (Input.GetKeyDown(KeyCode.Escape)) CloseUpgradeUI();
+                // Mobile-first: confirm via the shared "Confirm Upgrade" button; the
+                // upgrade panel's own ✕ Close button dismisses. Keyboard F/Escape removed.
                 return;
             }
 
@@ -166,8 +162,8 @@ namespace DeNelle.Village
             // confirm-upgrade bubble lives in the _uiOpen branch above and is untouched.)
             if (_promptGo != null && MobileInteractButton.IsActive) HidePrompt();
 
-            if (_isInRange && Input.GetKeyDown(KeyCode.F))
-                OpenUpgradeUI();
+            // Mobile-first: opening the upgrade UI fires through the shared "Upgrade
+            // Crystal Mine" button (requested above). The desktop F-key trigger was removed.
         }
 
         /// <summary>Spends coins + applies the simple-mode upgrade, then closes the prompt.

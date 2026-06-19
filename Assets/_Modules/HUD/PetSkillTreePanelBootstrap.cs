@@ -1,12 +1,11 @@
 // =============================================================================
 // PetSkillTreePanelBootstrap — auto-spawns a PetSkillTreePanel in any scene
-// that has a hero present, and watches for the P key each frame to toggle it.
-// Mirrors DailyQuestHudBootstrap so the panel only shows up in the actual play
-// scenes (Village, Dungeon) — Title / HeroSelect skip.
+// that has a hero present. Mirrors DailyQuestHudBootstrap so the panel only
+// shows up in the actual play scenes (Village, Dungeon) — Title / HeroSelect skip.
 // -----------------------------------------------------------------------------
-// Key choice 2026-05-20: P is unused elsewhere in the project (verified via
-// grep over KeyCode.P). Lives on a hidden driver MonoBehaviour so legacy
-// Input.GetKeyDown can be polled without leaking into static state.
+// Mobile-first (WO-437): the legacy 'P' toggle hotkey is REMOVED. Pet Skills
+// opens via its world interactable (Pet House -> PanelRouter.Open(PanelId.
+// PetSkillTree)); ESC is owned centrally by PauseController.
 // =============================================================================
 
 using UnityEngine;

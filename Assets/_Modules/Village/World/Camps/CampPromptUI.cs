@@ -83,12 +83,11 @@ namespace DeNelle.Village.World.Camps
 
             ShowPrompt(near);
 
-            // Claim on [E] or a tap on the prompt button.
-            bool key = Input.GetKeyDown(KeyCode.E);
+            // Mobile-first: claim on a tap on the prompt button. The [E] key trigger was removed.
             bool tapHit = TryGetTap(out Vector2 tap) && _promptRect != null &&
                           RectTransformUtility.RectangleContainsScreenPoint(_promptRect, tap, null);
 
-            if (key || tapHit)
+            if (tapHit)
             {
                 near.Claim();
                 HidePrompt();
@@ -157,7 +156,7 @@ namespace DeNelle.Village.World.Camps
             _promptRect.gameObject.SetActive(true);
             _promptRect.position = new Vector3(sp.x, sp.y, 0f);
             if (_promptLabel != null)
-                _promptLabel.text = "[ Tap / E ]  Claim Camp";
+                _promptLabel.text = "[ Tap ]  Claim Camp";
         }
 
         private void HidePrompt()
@@ -227,7 +226,7 @@ namespace DeNelle.Village.World.Camps
             _promptLabel.color = Color.white;
             _promptLabel.fontSize = 24;
             _promptLabel.fontStyle = FontStyle.Bold;
-            _promptLabel.text = "[ Tap / E ]  Claim Camp";
+            _promptLabel.text = "[ Tap ]  Claim Camp";
             var lrt = _promptLabel.rectTransform;
             lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
             lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;

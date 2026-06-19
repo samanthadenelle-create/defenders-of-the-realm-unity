@@ -20,7 +20,6 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using DeNelle.Core;
 using DeNelle.Core.UI;
@@ -114,16 +113,13 @@ namespace DeNelle.Village
             }
             if (!_shown) return;
 
-            // Key prompts (new Input System + legacy fallback). Runs at timeScale 0.
-            var kb = Keyboard.current;
-            bool retry = (kb != null && kb.rKey.wasPressedThisFrame)      || Input.GetKeyDown(KeyCode.R);
-            bool exit  = (kb != null && kb.escapeKey.wasPressedThisFrame)  || Input.GetKeyDown(KeyCode.Escape);
-
             // Mobile/touch: poll the pointer against the button rects (owner 2026-06-02:
             // "stuck at the dead screen, i dont have an esc or b button"). uGUI buttons
             // need an EventSystem the build doesn't have, so we hit-test manually — the
-            // same EventSystem-free approach as VirtualJoystick.
-            if (!retry && !exit && TryGetTap(out Vector2 tap))
+            // same EventSystem-free approach as VirtualJoystick. Retry/Exit are reached
+            // by the on-screen TRY AGAIN / LEAVE tap buttons (no keyboard prompts).
+            bool retry = false, exit = false;
+            if (TryGetTap(out Vector2 tap))
             {
                 if (_retryBtn != null && RectTransformUtility.RectangleContainsScreenPoint(_retryBtn, tap, null)) retry = true;
                 else if (_exitBtn != null && RectTransformUtility.RectangleContainsScreenPoint(_exitBtn, tap, null)) exit = true;
@@ -249,7 +245,7 @@ namespace DeNelle.Village
                                0.08f, 0.92f);
 
             // Prompt hint — muted parchment under the body.
-            ElarionUiKit.Label(cardT, "Tap a button below  —  or press [ R ] / [ Esc ]",
+            ElarionUiKit.Label(cardT, "Tap a button below",
                                0.30f, 0.40f, ElarionUi.ParchmentDim,
                                ElarionUi.FontLabel, TextAlignmentOptions.Center,
                                0.08f, 0.92f);

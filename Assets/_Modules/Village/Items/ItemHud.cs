@@ -82,9 +82,6 @@ namespace DeNelle.Village.Items
 
             RefreshUseLabels();
 
-            // Keybind: [Q] quick-uses the first owned, fight-usable consumable.
-            if (Input.GetKeyDown(KeyCode.Q)) QuickUse();
-
             // Tap routing.
             if (!TryGetTap(out Vector2 tap)) return;
 
@@ -138,17 +135,6 @@ namespace DeNelle.Village.Items
             {
                 _nextUseTime = Time.unscaledTime + UseCooldown;
                 RefreshUseLabels();
-            }
-        }
-
-        /// <summary>Use the first owned consumable that is usable mid-fight ([Q] keybind).</summary>
-        private void QuickUse()
-        {
-            var owned = ItemInventory.OwnedConsumables();
-            foreach (var kv in owned)
-            {
-                var def = ConsumableCatalog.Find(kv.Key);
-                if (def != null && def.UsableInFight) { TryUse(kv.Key); return; }
             }
         }
 

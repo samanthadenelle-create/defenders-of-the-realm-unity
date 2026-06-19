@@ -366,12 +366,8 @@ namespace DeNelle.Village
             else
                 MobileInteractButton.Release(this);
 
-            if (inRange && _cooldown <= 0f &&
-                (UnityEngine.Input.GetKeyDown(KeyCode.F) ||
-                 (Keyboard_FPressed())))
-            {
-                Extract();
-            }
+            // Mobile-first: extraction fires through the shared on-screen Interact
+            // button (requested above). The desktop F-key trigger was removed.
         }
 
         // WO-325 — manual harvest verb for finite-reserve nodes. Mirrors the legacy
@@ -410,12 +406,8 @@ namespace DeNelle.Village
             else
                 MobileInteractButton.Release(this);
 
-            if (inRange && _cooldown <= 0f &&
-                (UnityEngine.Input.GetKeyDown(KeyCode.F) ||
-                 (Keyboard_FPressed())))
-            {
-                ExtractReserve();
-            }
+            // Mobile-first: the reserve harvest fires through the shared on-screen
+            // Interact button (requested above). The desktop F-key trigger was removed.
         }
 
         // WO-325 — one manual tap on a finite-reserve node: drain EffectiveYield from
@@ -436,10 +428,6 @@ namespace DeNelle.Village
         {
             MobileInteractButton.Release(this);
         }
-
-        // New Input System safe-check without a hard dependency: fall back to legacy
-        // Input above; this returns false if the new system isn't the active path.
-        private static bool Keyboard_FPressed() => false;
 
         private void Extract()
         {

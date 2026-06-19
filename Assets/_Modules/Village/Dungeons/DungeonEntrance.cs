@@ -7,7 +7,6 @@
 
 using DeNelle.Core;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace DeNelle.Village
 {
@@ -130,11 +129,8 @@ namespace DeNelle.Village
             if (_prompt != null)
                 _prompt.gameObject.SetActive(!MobileInteractButton.IsActive);
 
-            bool fPressed =
-                (Keyboard.current != null && Keyboard.current.fKey.wasPressedThisFrame) ||
-                UnityEngine.Input.GetKeyDown(KeyCode.F);
-
-            if (fPressed) EnterDungeon();
+            // Mobile-first: entering fires through the shared on-screen Interact button
+            // (requested above). The desktop F-key trigger was removed.
         }
 
         private void OnDisable()
@@ -158,7 +154,7 @@ namespace DeNelle.Village
         private void ShowPrompt(bool show)
         {
             if (_prompt == null) return;
-            _prompt.text = show ? $"Tap / Press F — {_def?.ResolveName()}" : string.Empty;
+            _prompt.text = show ? $"Tap — {_def?.ResolveName()}" : string.Empty;
             _prompt.gameObject.SetActive(show);
         }
     }

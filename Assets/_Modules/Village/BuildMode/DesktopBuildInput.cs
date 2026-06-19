@@ -7,7 +7,7 @@
 //   ScreenPoint   = Mouse.current.position
 //   PlaceOrSelect = Mouse.current.leftButton.wasPressedThisFrame   (left-click)
 //   Cancel        = right-click || Escape
-//   Rotate        = R key
+//   Rotate        = (removed — mobile-first; use the touch Rotate button)
 //
 // WHY NOT legacy Input.*: this project runs the Input System package with the
 // legacy Input Manager DISABLED, so Input.GetMouseButtonDown(0) / Input.mousePosition
@@ -41,7 +41,8 @@ namespace DeNelle.Village
             (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame) ||
             (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame);
 
-        public bool Rotate =>
-            Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame;
+        // Mobile-first: the R-key rotate trigger is removed. Rotate is reached by the
+        // on-screen Rotate button in LeanTouchBuildDriver (the touch IBuildInput impl).
+        public bool Rotate => false;
     }
 }
