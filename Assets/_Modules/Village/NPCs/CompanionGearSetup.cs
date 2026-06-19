@@ -35,6 +35,7 @@
 
 using System;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -105,34 +106,80 @@ namespace DeNelle.Village
         /// </summary>
         public static GearGrant Apply(HeroClass heroClass)
         {
+            using var _ = FlowTrace.Enter("CompanionGear", $"Apply class={heroClass}");
             GearGrant grant = GrantFor(heroClass);
             try
             {
                 GearLoadout loadout = ResolveLoadout();
                 if (loadout != null)
                 {
-                    // Manual equip = a story grant: updates stats AND re-applies the
-                    // visual (sword on hand / staff / bow via HeroBowAttachment, armor
-                    // accents) through GearVisualApplier — the model updates.
-                    loadout.EquipArmorById(grant.ArmorId);
-                    loadout.EquipWeaponById(grant.WeaponId);
+                    FlowTrace.Step("CompanionGear",
+                        $"resolved GearLoadout on '{loadout.name}' — equipping armor='{grant.ArmorId}' weapon='{grant.WeaponId}'.");
+
+                    // G (§12): each equip is GUARDED SEPARATELY. The owner symptom was
+                    // EquipWeapon throwing AFTER EquipArmor succeeded under ONE coarse
+                    // try/catch — leaving the companion ARMOR-ONLY with the failure silently
+                    // swallowed. Isolating each equip means a weapon failure never discards
+                    // the armor result (and vice-versa), and each is Fail-rolled-up on throw.
+                    bool armorOk = false, weaponOk = false;
+                    FlowTrace.Try("CompanionGear", $"EquipArmorById '{grant.ArmorId}'", () =>
+                    {
+                        loadout.EquipArmorById(grant.ArmorId);
+                        armorOk = true;
+                    });
+                    FlowTrace.Try("CompanionGear", $"EquipWeaponById '{grant.WeaponId}'", () =>
+                    {
+                        loadout.EquipWeaponById(grant.WeaponId);
+                        weaponOk = true;
+                    });
+
+                    // V (§12): VERIFY the equip actually TOOK. EquipById can return without
+                    // throwing yet leave the slot null (id not in catalog / level-gated /
+                    // resolve miss) — the exact "armor-only" symptom. Read the slots back and
+                    // Fail-loud on any miss so a capture pinpoints which piece never landed,
+                    // rather than the companion silently rendering half-equipped.
+                    bool armorTook  = loadout.EquippedArmor  != null;
+                    bool weaponTook = loadout.EquippedWeapon != null;
+                    FlowTrace.Step("CompanionGear",
+                        $"equip verify: armorCall={armorOk} armorSlot={armorTook} " +
+                        $"weaponCall={weaponOk} weaponSlot={weaponTook} " +
+                        $"(EquippedArmor='{loadout.EquippedArmor?.id ?? "<null>"}', EquippedWeapon='{loadout.EquippedWeapon?.id ?? "<null>"}').");
+
+                    if (!armorTook)
+                        FlowTrace.Fail("CompanionGear",
+                            $"armor '{grant.ArmorId}' did NOT take (EquippedArmor null after EquipArmorById call={armorOk}) — companion may render without armor.");
+                    if (!weaponTook)
+                        FlowTrace.Fail("CompanionGear",
+                            $"weapon '{grant.WeaponId}' did NOT take (EquippedWeapon null after EquipWeaponById call={weaponOk}) — companion may be left ARMOR-ONLY (the owner symptom).");
+
+                    // R (§12): the equip pieces that DID land stay — we never roll the whole
+                    // grant back on a single-slot miss (a half-grant beats no grant). The
+                    // flourish still plays so the beat reads as an event regardless.
 
                     // A small flourish on the hero so the change reads as an event.
                     Vector3 at = loadout.transform.position + Vector3.up * 1.2f;
-                    try { VFXManager.Play(VFXType.Impact_Heal, at); } catch { /* VFX optional */ }
-                    try { GameSfx.PlayBuildingUpgrade(); } catch { /* SFX optional */ }
+                    FlowTrace.Try("CompanionGear", "play gear-up VFX", () => VFXManager.Play(VFXType.Impact_Heal, at));
+                    FlowTrace.Try("CompanionGear", "play gear-up SFX", () => GameSfx.PlayBuildingUpgrade());
                 }
                 else
                 {
-                    Debug.LogWarning("[CompanionGearSetup] No hero GearLoadout found — skipping equip (toast still shown).");
+                    // U (§12): was Debug.LogWarning (doesn't roll up). No hero loadout = the
+                    // grant can't equip at all — a Fail so a capture flags it.
+                    FlowTrace.Fail("CompanionGear",
+                        "no hero GearLoadout found (ResolveLoadout returned null) — skipping equip (toast still shown).");
                 }
 
                 // "+Iron Plate Armor" style HUD popup (armor is the headline piece).
-                GearGrantToast.Show(grant.ArmorLabel, grant.WeaponLabel);
+                FlowTrace.Try("CompanionGear", "show gear-grant toast",
+                    () => GearGrantToast.Show(grant.ArmorLabel, grant.WeaponLabel));
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[CompanionGearSetup] Gear-up error (continuing): {ex.Message}");
+                // U (§12): the coarse catch was a Debug.LogWarning swallow (§12-forbidden — it
+                // never rolls up to the break-log). Promote to FlowTrace.Fail so any escape
+                // from the guarded steps above self-reports loud, with the type + stack tail.
+                FlowTrace.Fail("CompanionGear",
+                    $"Apply threw past the per-step guards: {ex.GetType().Name}: {ex.Message}");
             }
             return grant;
         }
@@ -144,16 +191,34 @@ namespace DeNelle.Village
         /// </summary>
         private static GearLoadout ResolveLoadout()
         {
+            using var _ = FlowTrace.Enter("CompanionGear", "ResolveLoadout");
             var player = GameObject.FindWithTag("Player");
             if (player != null)
             {
                 var root = player.transform.root != null ? player.transform.root.gameObject : player;
                 var lo = root.GetComponentInChildren<GearLoadout>();
-                if (lo == null) lo = root.AddComponent<GearLoadout>();
+                if (lo == null)
+                {
+                    // G (§12): lazily add the loadout (same as HeroAbilities). Guarded so a
+                    // failed AddComponent self-reports instead of throwing into the caller's
+                    // catch unnamed; lo stays null -> caller Fails on the null loadout.
+                    FlowTrace.Try("CompanionGear", "AddComponent<GearLoadout>",
+                        () => lo = root.AddComponent<GearLoadout>());
+                    FlowTrace.Step("CompanionGear",
+                        $"no GearLoadout on '{root.name}' — lazily added (result={(lo != null ? "ok" : "<null>")}).");
+                }
+                else
+                {
+                    FlowTrace.Step("CompanionGear", $"found existing GearLoadout on '{lo.name}'.");
+                }
                 return lo;
             }
 
-            return UnityEngine.Object.FindObjectOfType<GearLoadout>();
+            var fallback = UnityEngine.Object.FindObjectOfType<GearLoadout>();
+            if (fallback == null)
+                FlowTrace.Warn("CompanionGear",
+                    "no 'Player'-tagged hero and no GearLoadout anywhere in the scene — equip will be skipped.");
+            return fallback;
         }
     }
 }

@@ -50,6 +50,7 @@
 using DeNelle.Core;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.SceneManagement;
@@ -179,17 +180,40 @@ namespace DeNelle.Village
 
         private GameObject SpawnBody(Vector3 pos, Quaternion rot, Transform parent)
         {
-            var prefab = Resources.Load<GameObject>(IntroducerBody)
-                         ?? Resources.Load<GameObject>(FallbackBody)
-                         ?? Resources.Load<GameObject>(FallbackBody2);
-            if (prefab == null)
+            using var _ = FlowTrace.Enter("CompanionIntro", "SpawnBody");
+
+            // G (§12): each Resources.Load is GUARDED so a throwing/missing prefab logs
+            // and we cleanly fall through to the next fallback / capsule, never blanking
+            // the introducer NPC. T: trace which body source actually resolved.
+            GameObject prefab = null;
+            string usedKey = null;
+            foreach (var key in new[] { IntroducerBody, FallbackBody, FallbackBody2 })
             {
-                Debug.LogWarning("[CastleCompanionIntroducer] no People-pack body found " +
-                                 "(Models may be gitignored on a fresh clone) — capsule placeholder used.");
-                return SpawnPlaceholder(pos, rot, parent);
+                FlowTrace.Try("CompanionIntro", $"Resources.Load '{key}'",
+                    () => { if (prefab == null) prefab = Resources.Load<GameObject>(key); });
+                if (prefab != null) { usedKey = key; break; }
             }
 
-            var go = Instantiate(prefab, pos, rot, parent);
+            if (prefab == null)
+            {
+                // R (§12): safe fallback — the capsule placeholder keeps the NPC present.
+                // U: was Debug.LogWarning; Warn rolls up (expected on a gitignored-Models clone).
+                FlowTrace.Warn("CompanionIntro",
+                    "no People-pack body found (Models may be gitignored on a fresh clone) — capsule placeholder used.");
+                return SpawnPlaceholder(pos, rot, parent);
+            }
+            FlowTrace.Step("CompanionIntro", $"resolved introducer body from '{usedKey}'.");
+
+            GameObject go = null;
+            FlowTrace.Try("CompanionIntro", "Instantiate introducer body",
+                () => go = Instantiate(prefab, pos, rot, parent));
+            if (go == null)
+            {
+                // R: Instantiate failed/threw — keep the NPC present via the capsule.
+                FlowTrace.Fail("CompanionIntro",
+                    $"Instantiate returned null for body '{usedKey}' — falling back to capsule placeholder.");
+                return SpawnPlaceholder(pos, rot, parent);
+            }
             go.name = "CompanionIntroducer";
 
             NormalizeToHeroHeight(go);
@@ -206,7 +230,41 @@ namespace DeNelle.Village
             var agent = go.GetComponent<NavMeshAgent>();
             if (agent != null) agent.enabled = false;
 
+            // V (§12): VERIFY the spawned body actually has an ENABLED renderer — a prefab
+            // can instantiate yet present no visible mesh (stripped/disabled renderers), which
+            // would leave an invisible-but-interactable introducer. Fail-loud so a capture
+            // pinpoints "spawned but invisible" rather than the owner finding a ghost NPC.
+            VerifyBodyRenders(go, usedKey);
+
             return go;
+        }
+
+        // Render-verify: the introducer body must carry >=1 ENABLED Renderer. Traces the
+        // counts so a capture splits "no renderer" vs "all disabled" with no guessing.
+        private static void VerifyBodyRenders(GameObject go, string sourceKey)
+        {
+            if (go == null)
+            {
+                FlowTrace.Fail("CompanionIntro", "VerifyBodyRenders: body is null.");
+                return;
+            }
+            var rends = go.GetComponentsInChildren<Renderer>(true);
+            int total = 0, enabled = 0;
+            foreach (var r in rends)
+            {
+                if (r == null) continue;
+                total++;
+                if (r.enabled) enabled++;
+            }
+            if (enabled <= 0)
+            {
+                FlowTrace.Fail("CompanionIntro",
+                    $"VerifyBodyRenders: introducer body from '{sourceKey}' has NO enabled renderer " +
+                    $"(total={total}, enabled={enabled}) — NPC will be invisible.");
+                return;
+            }
+            FlowTrace.Step("CompanionIntro",
+                $"VerifyBodyRenders: introducer body OK from '{sourceKey}' (renderers total={total}, enabled={enabled}).");
         }
 
         private GameObject SpawnPlaceholder(Vector3 pos, Quaternion rot, Transform parent)
@@ -223,8 +281,29 @@ namespace DeNelle.Village
 
         private void AttachInteraction(GameObject body, Transform hero)
         {
-            var interact = body.AddComponent<CompanionIntroducerInteractable>();
+            using var _ = FlowTrace.Enter("CompanionIntro", "AttachInteraction");
+
+            // null-guard the body: SpawnBody never returns null today (capsule fallback), but
+            // a null body would NRE on AddComponent and leave a SILENT non-interactable NPC.
+            if (body == null)
+            {
+                FlowTrace.Fail("CompanionIntro",
+                    "AttachInteraction: body is null — no Talk interaction attached (introducer un-talkable).");
+                return;
+            }
+
+            // G (§12): guard the AddComponent so a failure self-reports rather than throwing.
+            CompanionIntroducerInteractable interact = null;
+            FlowTrace.Try("CompanionIntro", "AddComponent<CompanionIntroducerInteractable>",
+                () => interact = body.AddComponent<CompanionIntroducerInteractable>());
+            if (interact == null)
+            {
+                FlowTrace.Fail("CompanionIntro",
+                    $"AttachInteraction: AddComponent failed on '{body.name}' — introducer has no Talk interaction.");
+                return;
+            }
             interact.Configure(IntroNode, "Stranger", hero, OnIntroPlayed);
+            FlowTrace.Step("CompanionIntro", $"attached Talk interaction to '{body.name}' (node='{IntroNode}').");
         }
 
         /// <summary>Called once the intro Yarn node has been launched — persist the one-shot
@@ -352,7 +431,9 @@ namespace DeNelle.Village
                 TalkPromptRegistry.Register(transform, Interact);
                 // Owner 2026-06-12: AUTO-start the meeting on close approach (no Talk press) —
                 // the Talk prompt still shows at ActivateRadius; within AutoFireRadius it fires.
-                if (!PanelManager.AnyOpen && (Input.GetKeyDown(KeyCode.F) || distSqr <= AutoFireRadius * AutoFireRadius))
+                // Mobile-first: the HUD TALK button (via TalkPromptRegistry above) is the
+                // canonical manual trigger; the desktop F-key trigger was removed.
+                if (!PanelManager.AnyOpen && distSqr <= AutoFireRadius * AutoFireRadius)
                     Interact();
             }
             else

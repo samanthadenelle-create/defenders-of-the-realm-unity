@@ -178,18 +178,31 @@ namespace DeNelle.Village
                 if (SpawnVendor(t, role, hero, holder.transform)) placed++;
             }
 
+            // U: placed==0 means no storefront got a vendor (markers missing or every spawn failed) —
+            // Fail-loud to the break-log; a healthy run Steps the count.
+            if (placed == 0)
+                FlowTrace.Fail("Village",
+                    "CastleVendorNpcInjector: placed 0 static vendor NPCs — no storefront marker spawned a body.");
+            else
+                FlowTrace.Step("Village",
+                    $"CastleVendorNpcInjector: placed {placed} static vendor NPCs at castle storefronts.");
             Debug.Log($"[CastleVendorNpcInjector] placed {placed} static vendor NPCs at castle storefronts.");
         }
 
         /// <summary>Spawns ONE static NPC at the marker and attaches the interaction.</summary>
         private bool SpawnVendor(Transform marker, string role, Transform hero, Transform parent)
         {
+            using var _ = FlowTrace.Enter("Village", $"CastleVendorNpcInjector.SpawnVendor role='{role}'");
             Vendor v = VendorFor(role);
 
             var prefab = Resources.Load<GameObject>(v.BodyRes)
                          ?? Resources.Load<GameObject>(BodyMerchant);
             if (prefab == null)
             {
+                // T/U: load-miss — fall back to a placeholder so the storefront still gets a working
+                // vendor, and self-report (Warn -> break-log instead of a swallowed LogWarning).
+                FlowTrace.Warn("Village",
+                    $"CastleVendorNpcInjector: no body prefab for role '{role}' (missing Resources/{v.BodyRes}) — placeholder used.");
                 Debug.LogWarning($"[CastleVendorNpcInjector] no body prefab for role '{role}' (missing Resources/{v.BodyRes}) — placeholder used.");
                 return SpawnPlaceholder(marker, role, v, hero, parent);
             }
@@ -204,8 +217,30 @@ namespace DeNelle.Village
             // (+Z local of the building front offset) already points away from the building.
             Quaternion rot = marker.rotation;
 
-            var go = Instantiate(prefab, pos, rot, parent);
+            GameObject go = null;
+            Guard.Try("Village", $"instantiate vendor body role='{role}'", () =>
+            {
+                go = Instantiate(prefab, pos, rot, parent);
+            });
+            if (go == null)
+            {
+                // G/R: Instantiate returned/threw null — fall back to a placeholder so the storefront
+                // is never left vendorless, and self-report.
+                FlowTrace.Fail("Village",
+                    $"CastleVendorNpcInjector: Instantiate returned null for role '{role}' ('{v.BodyRes}') — placeholder used.");
+                return SpawnPlaceholder(marker, role, v, hero, parent);
+            }
             go.name = $"CastleVendor_{role}";
+
+            // V (render-verify): a body with no enabled mesh reads as an invisible vendor. Prove it
+            // renders; on failure drop it and fall back to the placeholder (never an invisible vendor).
+            if (!VerifyNpcRenders(go, v.BodyRes))
+            {
+                FlowTrace.Fail("Village",
+                    $"CastleVendorNpcInjector: vendor body role='{role}' ('{v.BodyRes}') has no visible mesh — dropping, placeholder used.");
+                Destroy(go);
+                return SpawnPlaceholder(marker, role, v, hero, parent);
+            }
 
             NormalizeToHeroHeight(go);
             // T-033 ("NPCs floating"): scaling about a non-feet pivot lifts the model's
@@ -258,16 +293,45 @@ namespace DeNelle.Village
 
         private void AttachInteraction(GameObject body, Vendor v, Transform hero)
         {
-            var interact = body.AddComponent<CastleNpcInteractable>();
-            interact.Configure(v.StructureId, v.Label, hero);
-            BuildingInteractable.MarkNpcCovered(v.StructureId);   // the matching building defers its prompt — NPC owns the talk
+            // G: a throw while wiring the interaction would otherwise spawn a mute, uninteractable
+            // vendor with no log. Guard it so the failure self-reports (Fail -> break-log) and is skipped.
+            Guard.Try("Village", $"attach vendor interaction '{v.StructureId}'", () =>
+            {
+                var interact = body.AddComponent<CastleNpcInteractable>();
+                interact.Configure(v.StructureId, v.Label, hero);
+                BuildingInteractable.MarkNpcCovered(v.StructureId);   // the matching building defers its prompt — NPC owns the talk
 
-            // T-034: an always-visible type sign floats above the vendor so the player
-            // can tell a shop from an upgrade from a talk NPC from a distance. The body
-            // is rescaled to hero height, so place the sign in the body's LOCAL space at
-            // a height that clears the head regardless of the (already-applied) scale.
-            float localHeadClear = SignHeightAboveHead(body);
-            InteractableSign.ForStructureId(body, v.StructureId, localHeadClear);
+                // T-034: an always-visible type sign floats above the vendor so the player
+                // can tell a shop from an upgrade from a talk NPC from a distance. The body
+                // is rescaled to hero height, so place the sign in the body's LOCAL space at
+                // a height that clears the head regardless of the (already-applied) scale.
+                float localHeadClear = SignHeightAboveHead(body);
+                InteractableSign.ForStructureId(body, v.StructureId, localHeadClear);
+            });
+        }
+
+        // V (render-verify): the spawned body must carry >=1 ENABLED Renderer with an actual mesh.
+        // Traces the counts so a capture splits "no mesh" from a real spawn. Returns false => caller
+        // drops it + uses a placeholder (never an invisible vendor).
+        private static bool VerifyNpcRenders(GameObject go, string res)
+        {
+            if (go == null) return false;
+            int total = 0, enabledWithMesh = 0;
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                total++;
+                if (!r.enabled) continue;
+                bool hasMesh =
+                    (r is SkinnedMeshRenderer smr && smr.sharedMesh != null) ||
+                    (r.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null);
+                if (hasMesh) enabledWithMesh++;
+            }
+            bool ok = enabledWithMesh > 0;
+            if (!ok)
+                FlowTrace.Warn("Village",
+                    $"VerifyNpcRenders '{res}': {total} renderer(s), {enabledWithMesh} enabled-with-mesh — reads invisible.");
+            return ok;
         }
 
         /// <summary>
@@ -394,9 +458,8 @@ namespace DeNelle.Village
                 TalkPromptRegistry.Deregister(transform);
             }
 
-            // Desktop [F]: only the NEAREST in-range NPC acts, and only when no modal is open.
-            if (inRange && !PanelManager.AnyOpen && Input.GetKeyDown(KeyCode.F) && IsNearestInRange())
-                Interact();
+            // Mobile-first: the HUD TALK button (via TalkPromptRegistry above) is the
+            // canonical trigger. The desktop F-key trigger was removed.
         }
 
         private void Interact()
@@ -413,22 +476,6 @@ namespace DeNelle.Village
                 _openedStructure = true;
                 Debug.Log($"[CastleNpcInteractable] {_label} -> structure dialogue '{_structureId}'.");
             }
-        }
-
-        /// <summary>True when this NPC is the closest in-range CastleNpcInteractable (shared-F arbitration).</summary>
-        private bool IsNearestInRange()
-        {
-            if (_hero == null) return false;
-            float myDistSqr = (_hero.position - transform.position).sqrMagnitude;
-            foreach (var other in FindObjectsByType<CastleNpcInteractable>(
-                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
-            {
-                if (other == null || other == this) continue;
-                float otherDistSqr = (_hero.position - other.transform.position).sqrMagnitude;
-                if (otherDistSqr > ActivateRadius * ActivateRadius) continue;
-                if (otherDistSqr < myDistSqr) return false;
-            }
-            return true;
         }
 
         private void ResolveHero()

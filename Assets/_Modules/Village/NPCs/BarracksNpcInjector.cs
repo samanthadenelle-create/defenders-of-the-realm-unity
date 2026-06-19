@@ -24,6 +24,7 @@
 //   to that node, mirroring the pet-house branch). No reflection, no cross-asmdef ref.
 // =============================================================================
 
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.SceneManagement;
@@ -86,6 +87,8 @@ namespace DeNelle.Village
 
         private void Inject()
         {
+            using var _ = FlowTrace.Enter("Village", "BarracksNpcInjector.Inject");
+
             // Idempotent: nuke any prior runtime holder so a re-load doesn't double-spawn.
             var prior = GameObject.Find(HolderName);
             if (prior != null) Destroy(prior);
@@ -93,6 +96,9 @@ namespace DeNelle.Village
             var barracks = GameObject.Find(BarracksRootName);
             if (barracks == null)
             {
+                // Expected when the polyperfect pack isn't imported — Warn (not Fail), still self-reports.
+                FlowTrace.Warn("Village",
+                    "BarracksNpcInjector: no 'CastleBarracks' in scene — drillmaster not placed (barracks prefab missing / pack not imported).");
                 Debug.Log("[BarracksNpcInjector] no 'CastleBarracks' in scene — drillmaster not placed " +
                           "(barracks prefab may be missing; polyperfect pack not imported).");
                 return;
@@ -102,13 +108,21 @@ namespace DeNelle.Village
             Transform hero = ResolveHero();
 
             if (SpawnDrillmaster(barracks.transform, hero, holder.transform))
+            {
+                FlowTrace.Step("Village", "BarracksNpcInjector: placed the drillmaster NPC at the Barracks.");
                 Debug.Log("[BarracksNpcInjector] placed the drillmaster NPC at the Barracks.");
+            }
             else
+            {
+                FlowTrace.Fail("Village", "BarracksNpcInjector: failed to place the drillmaster NPC.");
                 Debug.LogWarning("[BarracksNpcInjector] failed to place the drillmaster NPC.");
+            }
         }
 
         private bool SpawnDrillmaster(Transform barracks, Transform hero, Transform parent)
         {
+            using var _ = FlowTrace.Enter("Village", "BarracksNpcInjector.SpawnDrillmaster");
+
             // Stand in front of the building (its forward points toward castle centre /
             // the plaza where the hero approaches). Snap onto the navmesh if it's near.
             Vector3 pos = barracks.position + barracks.forward * FrontOffset;
@@ -122,12 +136,37 @@ namespace DeNelle.Village
                          ?? Resources.Load<GameObject>(BodyFallback);
             if (prefab == null)
             {
+                // T/U: load-miss — fall back to a placeholder so the barracks still gets a drillmaster,
+                // and self-report (Warn -> break-log).
+                FlowTrace.Warn("Village",
+                    $"BarracksNpcInjector: no body prefab (missing Resources/{BodyDrillmaster}) — placeholder used.");
                 Debug.LogWarning($"[BarracksNpcInjector] no body prefab (missing Resources/{BodyDrillmaster}) — placeholder used.");
                 return SpawnPlaceholder(pos, rot, hero, parent);
             }
 
-            var go = Instantiate(prefab, pos, rot, parent);
+            GameObject go = null;
+            Guard.Try("Village", "instantiate drillmaster body", () =>
+            {
+                go = Instantiate(prefab, pos, rot, parent);
+            });
+            if (go == null)
+            {
+                // G/R: Instantiate returned/threw null — fall back to a placeholder, self-report.
+                FlowTrace.Fail("Village",
+                    $"BarracksNpcInjector: Instantiate returned null for '{BodyDrillmaster}' — placeholder used.");
+                return SpawnPlaceholder(pos, rot, hero, parent);
+            }
             go.name = "BarracksDrillmaster";
+
+            // V (render-verify): a body with no enabled mesh reads as an invisible drillmaster. Prove
+            // it renders; on failure drop it and fall back to the placeholder.
+            if (!VerifyNpcRenders(go, BodyDrillmaster))
+            {
+                FlowTrace.Fail("Village",
+                    $"BarracksNpcInjector: drillmaster body '{BodyDrillmaster}' has no visible mesh — dropping, placeholder used.");
+                Destroy(go);
+                return SpawnPlaceholder(pos, rot, hero, parent);
+            }
 
             NormalizeToHeroHeight(go);
             NpcGroundSeat.Seat(go, pos.y);
@@ -164,13 +203,42 @@ namespace DeNelle.Village
 
         private void AttachInteraction(GameObject body, Transform hero)
         {
-            var interact = body.AddComponent<CastleNpcInteractable>();
-            interact.Configure(StructureId, Label, hero);
-            BuildingInteractable.MarkNpcCovered(StructureId);   // the building defers — NPC owns the talk
+            // G: a throw while wiring the interaction would otherwise spawn a mute, uninteractable
+            // drillmaster with no log. Guard it so the failure self-reports (Fail -> break-log).
+            Guard.Try("Village", $"attach barracks interaction '{StructureId}'", () =>
+            {
+                var interact = body.AddComponent<CastleNpcInteractable>();
+                interact.Configure(StructureId, Label, hero);
+                BuildingInteractable.MarkNpcCovered(StructureId);   // the building defers — NPC owns the talk
 
-            // Always-visible type sign above the drillmaster (same as the vendor NPCs).
-            float localHeadClear = SignHeightAboveHead(body);
-            InteractableSign.ForStructureId(body, StructureId, localHeadClear);
+                // Always-visible type sign above the drillmaster (same as the vendor NPCs).
+                float localHeadClear = SignHeightAboveHead(body);
+                InteractableSign.ForStructureId(body, StructureId, localHeadClear);
+            });
+        }
+
+        // V (render-verify): the spawned body must carry >=1 ENABLED Renderer with an actual mesh.
+        // Traces the counts so a capture splits "no mesh" from a real spawn. Returns false => caller
+        // drops it + uses a placeholder (never an invisible drillmaster).
+        private static bool VerifyNpcRenders(GameObject go, string res)
+        {
+            if (go == null) return false;
+            int total = 0, enabledWithMesh = 0;
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                total++;
+                if (!r.enabled) continue;
+                bool hasMesh =
+                    (r is SkinnedMeshRenderer smr && smr.sharedMesh != null) ||
+                    (r.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null);
+                if (hasMesh) enabledWithMesh++;
+            }
+            bool ok = enabledWithMesh > 0;
+            if (!ok)
+                FlowTrace.Warn("Village",
+                    $"VerifyNpcRenders '{res}': {total} renderer(s), {enabledWithMesh} enabled-with-mesh — reads invisible.");
+            return ok;
         }
 
         private static float SignHeightAboveHead(GameObject body)

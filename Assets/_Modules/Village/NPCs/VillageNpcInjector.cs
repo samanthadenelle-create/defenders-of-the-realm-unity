@@ -16,6 +16,7 @@
 // per scene load; runs only in the "Village" scene.
 // =============================================================================
 
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.SceneManagement;
@@ -85,6 +86,8 @@ namespace DeNelle.Village
 
         private void Inject()
         {
+            using var _ = FlowTrace.Enter("Village", "VillageNpcInjector.Inject");
+
             // Remove the baked placeholder townsfolk (capture the parent root + count).
             var existing = FindObjectsByType<AmbientNPC>(FindObjectsSortMode.None);
             Transform root = null;
@@ -108,20 +111,49 @@ namespace DeNelle.Village
             int placed = 0;
             foreach (var def in Defs)
             {
-                var prefab = Resources.Load<GameObject>(def.Res);
-                if (prefab == null)
-                {
-                    Debug.LogWarning($"[VillageNpcInjector] missing Resources/{def.Res} - skipped.");
-                    continue;
-                }
-
                 // Snap onto the baked NavMesh so wanderers can path (idlers unaffected).
                 Vector3 pos = def.Pos;
                 if (NavMesh.SamplePosition(def.Pos, out var hit, 6f, NavMesh.AllAreas))
                     pos = hit.position;
 
-                var go = Instantiate(prefab, pos, Quaternion.identity, root);
+                var prefab = Resources.Load<GameObject>(def.Res);
+                if (prefab == null)
+                {
+                    // R (never silently vanish): a missing body prefab USED to `continue` with no
+                    // placeholder — the townsfolk simply disappeared. Now we drop a placeholder body
+                    // so the slot is always filled, and self-report the load-miss (Warn -> break-log).
+                    FlowTrace.Warn("Village",
+                        $"VillageNpcInjector: missing Resources/{def.Res} — placeholder townsfolk used (Models gitignored on a fresh clone?).");
+                    if (SpawnPlaceholder(def, pos, root)) placed++;
+                    continue;
+                }
+
+                GameObject go = null;
+                Guard.Try("Village", $"instantiate townsfolk '{def.Res}'", () =>
+                {
+                    go = Instantiate(prefab, pos, Quaternion.identity, root);
+                });
+                if (go == null)
+                {
+                    // Instantiate returned/threw null — fall back to a placeholder so the slot is
+                    // never left empty, and self-report.
+                    FlowTrace.Fail("Village",
+                        $"VillageNpcInjector: Instantiate returned null for '{def.Res}' — placeholder townsfolk used.");
+                    if (SpawnPlaceholder(def, pos, root)) placed++;
+                    continue;
+                }
                 go.name = prefab.name;
+
+                // V (render-verify): a body that instantiates with no enabled mesh renderer reads as
+                // an invisible NPC. Prove it renders; on failure drop it and fall back to a placeholder.
+                if (!VerifyNpcRenders(go, def.Res))
+                {
+                    FlowTrace.Fail("Village",
+                        $"VillageNpcInjector: townsfolk '{def.Res}' has no visible mesh — dropping, placeholder used.");
+                    Destroy(go);
+                    if (SpawnPlaceholder(def, pos, root)) placed++;
+                    continue;
+                }
 
                 // WO-53 (perf): off-screen animator culling on the spawned townsfolk
                 // Animator. CullUpdateTransforms keeps the state machine running while
@@ -167,7 +199,69 @@ namespace DeNelle.Village
                 }
                 placed++;
             }
+
+            // U: placed==0 is a hard anomaly (every townsfolk slot vanished) — Fail-loud to the
+            // break-log; a healthy run Steps the count.
+            if (placed == 0)
+                FlowTrace.Fail("Village",
+                    $"VillageNpcInjector: placed 0 townsfolk (removed {existing.Length} placeholders) — all {Defs.Length} slots empty.");
+            else
+                FlowTrace.Step("Village",
+                    $"VillageNpcInjector: placed {placed}/{Defs.Length} People-pack NPCs (removed {existing.Length} placeholders).");
             Debug.Log($"[VillageNpcInjector] placed {placed} People-pack NPCs (removed {existing.Length} placeholders).");
+        }
+
+        // Minimal capsule fallback so a missing/broken body never leaves a townsfolk slot EMPTY
+        // (the slot used to silently vanish). Carries the same AmbientNPC archetype so the
+        // placeholder still chatters/idles like the real body. Idempotent per Inject.
+        private bool SpawnPlaceholder(Def def, Vector3 pos, Transform root)
+        {
+            GameObject go = null;
+            Guard.Try("Village", $"placeholder townsfolk '{def.Res}'", () =>
+            {
+                go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                go.name = $"Townsfolk_{def.Arch}_Placeholder";
+                go.transform.SetParent(root, false);
+                go.transform.position = pos + Vector3.up * 1f;
+
+                // Proximity chatter is distance-based; don't let the capsule block the hero.
+                var col = go.GetComponent<Collider>();
+                if (col != null) col.isTrigger = true;
+
+                var npc = go.AddComponent<AmbientNPC>();
+                npc.Configure(def.Arch, def.Wander, pos);
+            });
+            if (go == null)
+            {
+                FlowTrace.Fail("Village", $"VillageNpcInjector: placeholder build failed for '{def.Res}'.");
+                return false;
+            }
+            FlowTrace.Step("Village", $"VillageNpcInjector: placeholder townsfolk placed for '{def.Res}'.");
+            return true;
+        }
+
+        // V (render-verify): the spawned body must carry >=1 ENABLED Renderer with an actual mesh
+        // (SkinnedMeshRenderer.sharedMesh or MeshFilter.sharedMesh). Traces the counts so a capture
+        // splits "no mesh" from a real spawn. Returns false => caller drops it + uses a placeholder.
+        private static bool VerifyNpcRenders(GameObject go, string res)
+        {
+            if (go == null) return false;
+            int total = 0, enabledWithMesh = 0;
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                total++;
+                if (!r.enabled) continue;
+                bool hasMesh =
+                    (r is SkinnedMeshRenderer smr && smr.sharedMesh != null) ||
+                    (r.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null);
+                if (hasMesh) enabledWithMesh++;
+            }
+            bool ok = enabledWithMesh > 0;
+            if (!ok)
+                FlowTrace.Warn("Village",
+                    $"VerifyNpcRenders '{res}': {total} renderer(s), {enabledWithMesh} enabled-with-mesh — reads invisible.");
+            return ok;
         }
 
         // Name-based Keeper lookup (matches AmbientNPC's own fallback: the village

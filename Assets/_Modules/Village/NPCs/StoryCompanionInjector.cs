@@ -221,23 +221,104 @@ namespace DeNelle.Village
             if (NavMesh.SamplePosition(basePos, out var hit, 6f, NavMesh.AllAreas))
                 basePos = hit.position;
 
+            using var _ = FlowTrace.Enter("Roster", $"SpawnOne cls={cls}");
+
             var go = BuildPlaceholder(cls, basePos);
+            if (go == null)
+            {
+                FlowTrace.Fail("Roster", $"SpawnOne: BuildPlaceholder returned null for {cls} — no companion spawned.");
+                return;
+            }
+
+            // RENDER-VERIFY the built BODY before we store it as the live companion. BuildPlaceholder
+            // already falls back to the capsule on a broken skinned mesh, so a body that STILL fails
+            // here means even the capsule placeholder is broken — Fail-loud and drop the half-built go
+            // (never store a broken/T-pose body as the companion the player follows).
+            if (!VerifyCompanionVisible(go, cls))
+            {
+                FlowTrace.Fail("Roster",
+                    $"SpawnOne: companion body for {cls} failed render-verify (even after capsule fallback) — dropping half-built object.");
+                Object.Destroy(go);
+                return;
+            }
 
             var comp = go.GetComponent<StoryCompanion>();
-            if (comp != null)
+            if (comp == null)
+            {
+                FlowTrace.Fail("Roster", $"SpawnOne: built body for {cls} has no StoryCompanion driver — dropping (cannot drive it).");
+                Object.Destroy(go);
+                return;
+            }
+
+            // TGVRU-G: guard Configure + the bubble/hero wiring — a throw must not leave a half-wired
+            // companion stored in the dictionary (it would never follow/fight and never self-report).
+            bool configured = Guard.Try("Roster", $"configure companion {cls}", () =>
             {
                 comp.Configure(cls);                                   // before Start()
                 var bubble = go.GetComponentInChildren<TownsfolkBubble>();
                 if (bubble != null) comp.SetBubble(bubble);
                 if (heroT != null) comp.SetHero(heroT);
-                _companions[cls] = comp;
+            });
+            if (!configured)
+            {
+                FlowTrace.Fail("Roster", $"SpawnOne: Configure threw for {cls} — dropping the half-built companion.");
+                Object.Destroy(go);
+                return;
             }
+            _companions[cls] = comp;
+
+            // DEFERRED pose-verify (mirror HeroArmorVisual.VerifyPoseThenMaybeRollback): the animator
+            // hasn't evaluated yet this frame. A bound animator whose controller drives NO clip for
+            // this rig leaves the body frozen in the bind/T-pose — the owner-reported "companion just
+            // armor in a T-pose". Watch the next few frames and self-report (FlowTrace.Fail) if nothing
+            // ever drives the rig, so a T-pose companion is captured in the break-log rather than silent.
+            if (isActiveAndEnabled)
+                StartCoroutine(VerifyCompanionPose(cls, go));
 
             FlowTrace.Step("Roster", $"INSTANTIATED companion {CompanionDialogue.NameFor(cls)} ({cls}) " +
                 $"(instanceCount now {_companions.Count}) go={(go != null ? go.name : "null")}");
 
             Debug.Log($"[StoryCompanionInjector] spawned {CompanionDialogue.NameFor(cls)} " +
                       $"({cls}) into the party" + (heroT != null ? "." : " (no hero found yet — will resolve)."));
+        }
+
+        // DEFERRED pose-verify: over the next few frames confirm the spawned companion body is
+        // actually PLAYING a clip (layer-0 clipCount > 0), not frozen in the bind/T-pose. This is
+        // diagnostic-only (mirrors HeroArmorVisual but does NOT roll back — the companion has no
+        // base-body to restore; the capsule fallback already happened in BuildPlaceholder). A T-pose
+        // here self-reports to the break-log so the owner's symptom is captured, not silent.
+        private System.Collections.IEnumerator VerifyCompanionPose(HeroClass cls, GameObject body)
+        {
+            const int MaxPoseFrames = 6;
+            bool everPlayed = false;
+            int lastCount = -1;
+            for (int i = 0; i < MaxPoseFrames; i++)
+            {
+                yield return null;
+                // Superseded: the body was despawned/replaced (roster change) — that owner handles it.
+                if (body == null) yield break;
+                if (!_companions.TryGetValue(cls, out var live) || live == null || live.gameObject != body)
+                    yield break;
+
+                var anim = body.GetComponentInChildren<Animator>();
+                if (anim != null && anim.isActiveAndEnabled && anim.runtimeAnimatorController != null)
+                {
+                    lastCount = anim.GetCurrentAnimatorClipInfoCount(0);
+                    if (lastCount > 0) { everPlayed = true; break; }
+                }
+            }
+
+            if (everPlayed)
+            {
+                FlowTrace.Step("Roster",
+                    $"VerifyCompanionPose {cls}: animated OK (lastClipCount={lastCount}) — not a T-pose.");
+            }
+            else
+            {
+                FlowTrace.Fail("Roster",
+                    $"VerifyCompanionPose {cls}: companion body NEVER animated within {MaxPoseFrames} frames " +
+                    $"(lastClipCount={lastCount}) — controller drives no clip for this rig (FROZEN T-POSE symptom).");
+            }
         }
 
         /// <summary>
@@ -279,12 +360,36 @@ namespace DeNelle.Village
         /// </summary>
         internal static GameObject SpawnDefender(HeroClass cls, Vector3 worldPos, Transform parent)
         {
+            using var _ = FlowTrace.Enter("Roster", $"SpawnDefender cls={cls}");
+
             var go = BuildPlaceholder(cls, worldPos);
-            if (go == null) return null;
+            if (go == null)
+            {
+                FlowTrace.Fail("Roster", $"SpawnDefender: BuildPlaceholder returned null for {cls} — no defender spawned.");
+                return null;
+            }
             if (parent != null) go.transform.SetParent(parent, true);
 
+            // RENDER-VERIFY before handing back: a broken/T-pose defender body must not reach the
+            // Arena. BuildPlaceholder already falls back to the capsule on a broken mesh; a failure
+            // here means even that is broken — Fail-loud and drop it (return null = no broken unit).
+            if (!VerifyCompanionVisible(go, cls))
+            {
+                FlowTrace.Fail("Roster", $"SpawnDefender: defender body for {cls} failed render-verify — dropping it.");
+                Object.Destroy(go);
+                return null;
+            }
+
             var comp = go.GetComponent<StoryCompanion>();
-            if (comp != null)
+            if (comp == null)
+            {
+                FlowTrace.Fail("Roster", $"SpawnDefender: defender body for {cls} has no StoryCompanion driver — dropping it.");
+                Object.Destroy(go);
+                return null;
+            }
+
+            // TGVRU-G: guard the configure + guard-post wiring — a throw must not return a half-built defender.
+            bool ok = Guard.Try("Roster", $"configure defender {cls}", () =>
             {
                 comp.Configure(cls);   // before Start(): drives the name + class kit
 
@@ -298,6 +403,12 @@ namespace DeNelle.Village
                 post.SetParent(parent != null ? parent : go.transform, true);
                 post.position = worldPos;
                 comp.SetHero(post);
+            });
+            if (!ok)
+            {
+                FlowTrace.Fail("Roster", $"SpawnDefender: configure threw for {cls} — dropping the half-built defender.");
+                Object.Destroy(go);
+                return null;
             }
             return go;
         }
@@ -319,17 +430,44 @@ namespace DeNelle.Village
         /// </summary>
         internal static GameObject SpawnAttacker(HeroClass cls, Vector3 worldPos, Transform captain)
         {
+            using var _ = FlowTrace.Enter("Roster", $"SpawnAttacker cls={cls}");
+
             var go = BuildPlaceholder(cls, worldPos);
-            if (go == null) return null;
+            if (go == null)
+            {
+                FlowTrace.Fail("Roster", $"SpawnAttacker: BuildPlaceholder returned null for {cls} — no attacker spawned.");
+                return null;
+            }
+
+            // RENDER-VERIFY before handing back — never send a broken/T-pose attacker into the raid.
+            if (!VerifyCompanionVisible(go, cls))
+            {
+                FlowTrace.Fail("Roster", $"SpawnAttacker: attacker body for {cls} failed render-verify — dropping it.");
+                Object.Destroy(go);
+                return null;
+            }
 
             var comp = go.GetComponent<StoryCompanion>();
-            if (comp != null)
+            if (comp == null)
+            {
+                FlowTrace.Fail("Roster", $"SpawnAttacker: attacker body for {cls} has no StoryCompanion driver — dropping it.");
+                Object.Destroy(go);
+                return null;
+            }
+
+            bool ok = Guard.Try("Roster", $"configure attacker {cls}", () =>
             {
                 comp.Configure(cls);            // before Start(): name + class kit
                 // HERO-LEASH to the Captain (the player hero) — the unit FOLLOWS the
                 // Captain and fights the hostile garrison near them. Non-null SetHero
                 // skips the name-based auto-resolve. No bubble = silent.
                 if (captain != null) comp.SetHero(captain);
+            });
+            if (!ok)
+            {
+                FlowTrace.Fail("Roster", $"SpawnAttacker: configure threw for {cls} — dropping the half-built attacker.");
+                Object.Destroy(go);
+                return null;
             }
             return go;
         }
@@ -344,6 +482,8 @@ namespace DeNelle.Village
         /// </summary>
         private static GameObject BuildPlaceholder(HeroClass hero, Vector3 pos)
         {
+            using var _ = FlowTrace.Enter("Roster", $"BuildPlaceholder cls={hero}");
+
             var go = new GameObject("StoryCompanion (" + hero + ")");
             go.transform.position = pos;
             // Ignore Raycast (layer 2) — keeps it clear of gameplay raycasts; we
@@ -359,14 +499,22 @@ namespace DeNelle.Village
             // (mirrors HeroBodySwapper). Pass it as LocalRotation so Skin orients the body
             // BEFORE fitting/seating (the post-Skin rotate pattern offset the mesh on the
             // seated hero); the companion faces its travel direction and stays centred.
-            var vis = VisualFactory.Skin(go.transform, "Heroes/" + slug,
-                new SkinOptions
-                {
-                    FitHeight = 1.8f,
-                    StripColliders = true,
-                    FixTripoMaterials = true,
-                    LocalRotation = Quaternion.Euler(0f, -90f, 0f),
-                });
+            //
+            // GUARD (TGVRU): Skin can throw on a bad/half-imported FBX. A throw must NOT abort
+            // the whole build (which would leave a bodyless go) — catch it (FlowTrace.Fail, no
+            // silent swallow) and fall through to the tinted-capsule placeholder below.
+            GameObject vis = null;
+            Guard.Try("Roster", $"VisualFactory.Skin Heroes/{slug}", () =>
+            {
+                vis = VisualFactory.Skin(go.transform, "Heroes/" + slug,
+                    new SkinOptions
+                    {
+                        FitHeight = 1.8f,
+                        StripColliders = true,
+                        FixTripoMaterials = true,
+                        LocalRotation = Quaternion.Euler(0f, -90f, 0f),
+                    });
+            });
             if (vis != null)
             {
                 // DEF-275 BLUE-ORB / STRAY-LIGHT FIX: the hero FBXs at Resources/Heroes/*
@@ -386,8 +534,18 @@ namespace DeNelle.Village
                 // GetComponent returns a Unity fake-null on miss, so `??` does NOT fall
                 // through (it would assign the fake-null and the next access throws).
                 if (!vis.TryGetComponent(out Animator anim)) anim = vis.AddComponent<Animator>();
-                var ctrl = Resources.Load<RuntimeAnimatorController>("Heroes/" + slug);
+                // CONTROLLER LOAD (TGVRU-G): guard the Resources.Load — a missing controller
+                // leaves the body in a permanent T-pose (the owner's "just armor in a T-pose"
+                // symptom). Fail-loud (no silent miss) so the render-verify below catches it and
+                // rolls back to the animated-capsule rather than shipping a frozen body.
+                RuntimeAnimatorController ctrl = null;
+                Guard.Try("Roster", $"load controller Heroes/{slug}", () =>
+                {
+                    ctrl = Resources.Load<RuntimeAnimatorController>("Heroes/" + slug);
+                });
                 if (ctrl != null) anim.runtimeAnimatorController = ctrl;   // idle/walk, not a T-pose
+                else FlowTrace.Fail("Roster",
+                    $"BuildPlaceholder: no animator controller at 'Heroes/{slug}' for {hero} — body would T-pose; render-verify will fall back to the capsule.");
                 // WO-53 (perf): off-screen animator culling. BuildPlaceholder is the SINGLE
                 // body-build path for every companion (party companions + Arena defenders +
                 // Arena attackers), so culling here covers all of them. CullUpdateTransforms
@@ -405,10 +563,26 @@ namespace DeNelle.Village
                 // flat blue/grey blob — the OTHER half of the "blue orb". Bind the same
                 // per-class diffuse the player hero uses so the companion reads as a person.
                 BindClassDiffuse(vis, hero);
+
+                // RENDER-VERIFY (TGVRU-V/R, owner 2026-06-19 "companion just armor in a T-pose"):
+                // a mesh that loads (vis != null) can STILL be broken — no enabled SkinnedMeshRenderer,
+                // no sharedMesh, or no bound animator (no controller / invalid avatar) → it renders as
+                // armor-only / a frozen T-pose. PROVE the body can actually render a posed character
+                // BEFORE we keep it. On failure: Fail-loud, DESTROY the broken mesh, and fall back to
+                // the tinted-capsule placeholder (rollback on render-failure, not just on a null mesh).
+                if (!VerifyBodyRendersNow(vis, hero))
+                {
+                    FlowTrace.Fail("Roster",
+                        $"BuildPlaceholder: skinned body for {hero} failed render-verify — destroying it and using the tinted-capsule placeholder (no broken/T-pose body).");
+                    Object.Destroy(vis);
+                    vis = null;
+                }
             }
-            else
+
+            if (vis == null)
             {
-                // Fallback — the original tinted-capsule placeholder.
+                // Fallback — the original tinted-capsule placeholder. Reached when the mesh was
+                // missing (Skin returned/threw null) OR loaded-but-broken (render-verify failed).
                 var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
                 body.name = "Body";
                 var col = body.GetComponent<Collider>();
@@ -475,6 +649,90 @@ namespace DeNelle.Village
                 go.AddComponent<HeroArmorVisual>();
             }
             return go;
+        }
+
+        /// <summary>
+        /// RENDER-VERIFY (TGVRU-V, mirrors HeroArmorVisual.VerifyArmorRendersNow). A skinned
+        /// body that loaded (vis != null) can STILL be broken: no ENABLED SkinnedMeshRenderer,
+        /// no sharedMesh, OR no bound humanoid animator (no controller / invalid avatar) — any
+        /// of which renders as armor-only or a frozen T-pose (the owner's reported symptom).
+        /// Returns true only when the body has &gt;=1 enabled SkinnedMeshRenderer carrying a
+        /// sharedMesh AND a bound animator (controller + valid avatar). Traces the exact counts
+        /// so a capture splits "no visible mesh" vs "no animator binding" with zero guessing.
+        /// False => caller destroys the body and falls back to the tinted-capsule placeholder.
+        /// </summary>
+        private static bool VerifyBodyRendersNow(GameObject body, HeroClass hero)
+        {
+            if (body == null)
+            {
+                FlowTrace.Fail("Roster", $"VerifyBodyRenders: body for {hero} is null.");
+                return false;
+            }
+
+            int total = 0, enabledSkin = 0, withMesh = 0;
+            foreach (var r in body.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                if (r == null) continue;
+                total++;
+                if (r.enabled) enabledSkin++;
+                if (r.sharedMesh != null) withMesh++;
+            }
+
+            var anim = body.GetComponentInChildren<Animator>();
+            string ctrl = (anim != null && anim.runtimeAnimatorController != null) ? anim.runtimeAnimatorController.name : "<null>";
+            bool avatarOk = anim != null && anim.avatar != null && anim.avatar.isValid;
+            bool animBound = anim != null && anim.runtimeAnimatorController != null && avatarOk;
+            bool renders = enabledSkin > 0 && withMesh > 0;
+
+            FlowTrace.Step("Roster",
+                $"VerifyBodyRenders {hero} on '{body.name}': skinned total={total} enabled={enabledSkin} withMesh={withMesh}; " +
+                $"animator='{(anim == null ? "<none>" : anim.name)}' controller='{ctrl}' avatarValid={avatarOk} => renders={renders} animBound={animBound}");
+
+            if (!renders || !animBound)
+            {
+                FlowTrace.Fail("Roster",
+                    $"VerifyBodyRenders FAILED {hero} on '{body.name}': renders={renders} (enabledSkin={enabledSkin}, withMesh={withMesh}) " +
+                    $"animBound={animBound} (controller='{ctrl}', avatarValid={avatarOk}).");
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// SPAWN-SITE render gate (TGVRU-V/R): confirms the FINISHED companion object has SOMETHING
+        /// visible — either a verified skinned body (preferred) OR the tinted-capsule placeholder
+        /// (a plain MeshRenderer carrying a mesh). BuildPlaceholder already rolls a broken skinned
+        /// mesh back to the capsule, so this gate only fails when EVEN the capsule is absent/broken
+        /// (a genuinely invisible companion) — in which case the caller drops the object. This keeps
+        /// the never-invisible contract: the capsule is an ACCEPTED fallback, not a verify failure.
+        /// </summary>
+        private static bool VerifyCompanionVisible(GameObject body, HeroClass hero)
+        {
+            if (body == null)
+            {
+                FlowTrace.Fail("Roster", $"VerifyCompanionVisible: body for {hero} is null.");
+                return false;
+            }
+
+            // A fully-verified skinned body (preferred outcome).
+            if (VerifyBodyRendersNow(body, hero)) return true;
+
+            // Capsule fallback: any enabled MeshRenderer with a sharedMesh reads as the placeholder.
+            foreach (var mr in body.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (mr == null || !mr.enabled) continue;
+                var mf = mr.GetComponent<MeshFilter>();
+                if (mf != null && mf.sharedMesh != null)
+                {
+                    FlowTrace.Step("Roster",
+                        $"VerifyCompanionVisible {hero} on '{body.name}': skinned body not present/valid; capsule placeholder accepted (MeshRenderer '{mr.name}').");
+                    return true;
+                }
+            }
+
+            FlowTrace.Fail("Roster",
+                $"VerifyCompanionVisible FAILED {hero} on '{body.name}': no valid skinned body AND no capsule placeholder mesh — companion would be invisible.");
+            return false;
         }
 
         /// <summary>Tints the placeholder body with the companion's signature hue.</summary>
@@ -570,14 +828,18 @@ namespace DeNelle.Village
                 HeroClass.Cleric => "Heroes/Textures/Cleric_basecolor",
                 _                => null,
             };
-            Texture2D tex = string.IsNullOrEmpty(texPath) ? null : Resources.Load<Texture2D>(texPath);
+            Texture2D tex = null;
+            if (!string.IsNullOrEmpty(texPath))
+                Guard.Try("Roster", $"load diffuse {texPath}", () => tex = Resources.Load<Texture2D>(texPath));
             Color tint = TintFor(hero);
 
-            foreach (var r in vis.GetComponentsInChildren<Renderer>(true))
+            // TGVRU-G: Guard.TryEach over the renderers — one bad material/renderer logs (via
+            // FlowTrace.Fail) and is SKIPPED, it must not abort binding the rest of the body.
+            Guard.TryEach("Roster", "bind class diffuse", vis.GetComponentsInChildren<Renderer>(true), r =>
             {
-                if (r == null) continue;
+                if (r == null) return;
                 var mats = r.sharedMaterials;
-                if (mats == null) continue;
+                if (mats == null) return;
                 for (int i = 0; i < mats.Length; i++)
                 {
                     var m = mats[i];
@@ -612,7 +874,7 @@ namespace DeNelle.Village
                     }
                 }
                 r.sharedMaterials = mats;
-            }
+            });
         }
 
         // ── Resolution ───────────────────────────────────────────────────────
