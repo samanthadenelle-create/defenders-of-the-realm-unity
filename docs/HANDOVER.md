@@ -1,9 +1,107 @@
 # HANDOVER — the one sheet a new session reads to be productive now
 
-> **Read order for a new session:** this sheet → `docs/MASTER_CATALOG.md` (mandatory, be the SME) →
-> `docs/ARCHITECTURE.md` (the architecture hub) → the relevant `docs/MASTER_CATALOG/<area>.md` for
-> what you're about to touch. This sheet is the *operator's manual*; those are the depth. The code
-> wins on truth — comments lie (the catalog is verified from source).
+> **Read order for a new session:** ★ the SESSION HANDOVER block immediately below (2026-06-19) →
+> this sheet → `docs/MASTER_CATALOG.md` (mandatory, be the SME) → `docs/ARCHITECTURE.md` (the
+> architecture hub) → the relevant `docs/MASTER_CATALOG/<area>.md` for what you're about to touch.
+> **ALSO MANDATORY before any work:** read `OVERNIGHT_AUTOPILOT_LOG.md` (the overnight run's full
+> ledger + open findings) and the auto-memory index `MEMORY.md` (esp.
+> `world-architecture-gated-regions-playable-connectors.md` and
+> `autopilot-chaos-not-one-scripted-path.md`). The code wins on truth — comments lie.
+
+---
+
+## ★★ SESSION HANDOVER — 2026-06-19 (READ FIRST, owner rebooting to apply an OS/audio patch) ★★
+
+**WHERE WE ARE:** A long session (architecture + core-loop fixes + an overnight autopilot run).
+Owner is rebooting her PC (an OS/audio patch — her machine audio, NOT a game bug; she has working
+Realtek endpoints, it was a default-output-device thing). When she's back she will do a **manual
+playthrough to validate before we push.** NOTHING below is pushed.
+
+**⛔ DO NOT PUSH** until the owner confirms her playthrough passes. 6 local commits await review:
+
+| Commit | What | Verified? |
+|---|---|---|
+| `10282535` | core-loop: enemies fight (partial-path + chase fix) + clear→claim→companion + **interim** travel-tap | enemies/claim: logic-only; travel-tap is TEMPORARY |
+| `fd9314af` | WO-449 "continuous walk" loop | ⚠️ **built on a FALSE premise — see below; NOT working** |
+| `62a8bb88` | Blink rig migration (armor on the playable hero body) | compile-clean, **NOT felt-verified** |
+| `3a3e4aeb` | armor fix (bodyless-hero swap + re-entrant Addressables release) | ✅ verified resolved (overnight) |
+| `721da6c5` | autopilot stale-log wipe (harness truth fix) | ✅ verified |
+| `14a70111` | TriggerWave probe-flake fix | ✅ verified resolved (overnight) |
+
+**THE BIG CORRECTION (do not re-trip on this):** the WO-449 walk loop (`fd9314af`) was built on the
+premise "OuterWorld is one continuous NavMesh you walk freely." **The overnight autopilot FALSIFIED
+that.** Reality (RCA-confirmed, in `OVERNIGHT_AUTOPILOT_LOG.md`): MainCastle_Hall and OuterWorld are
+baked **STACKED at the same origin** (the DUAL-NAVMESH error, 12/12 every run), and the castle→
+OuterWorld crossing is a **WARP by design** (`SceneTransitionTrigger` disables→warps→re-enables the
+agent). So a continuous castle→outpost walk **is not possible in the current layout**; the warp lands
+the hero in the overlap (0,0.5,-12), far from the ±70 outpost anchors, and the outpost never realizes
+headless → **zero outpost/combat/walk coverage**. This is the **WO-453** cluster. DO NOT auto-"fix"
+the dual-navmesh/gate-island/warp — it's owner-led world-architecture work.
+
+**WO-453 = THE NEXT BIG THING (design ratified, spec not yet written).** Full canon in memory
+`world-architecture-gated-regions-playable-connectors.md`. In one breath: the world is **HYBRID
+GATED REGIONS** — 2–4 navmesh-stitched low-poly scenes per region, sized by a **measured** memory/
+frame budget (not a scene count), **seamless WITHIN** a region, with **NATURAL/DIEGETIC gates BETWEEN**
+regions that are usually **playable connectors** (cave/tunnel/gatehouse) doubling as load-mask +
+spatial bridge + content. Mobile-first consensus (even Genshin gates between regions). A **danger
+gradient** soft-gates (tougher enemies toward the outward gate; "get stronger before venturing
+further"). Loss = **Elden-Ring drop & recover**: die → drop unbanked XP/currency + unequipped loot
+(NEVER equipped gear; keep claims), compass marker to the cache, recover before a 2nd death OR **pay
+tribute** (Echo retrieves it; can't afford → harvest locally or risk the run; big cache = 2 Echoes).
+Mobile guards: an interruption must not count as the 2nd death; respawn distance scaled, not a trudge.
+**Owner's locked picks for Region 1:** gatehouse/portcullis gate · **wooded** first region · death =
+harsh-but-recoverable (Elden-Ring style). FIRST STEP when resumed: write `WORK_ORDER_453` for Region 1
+(prove ONE seam: castle→connector→wooded region→walk to a visible, guarded outpost, with a perf-budget
+probe + chaos-fleet oracles), then replicate the convention per region. NOT a blind build — confirm
+the seam approach matches the canon, then go.
+
+**OPEN, DEFERRED TO OWNER (not blind-patched):** the dialogue `Stop()`-race (`No node has been
+selected` + TMPro NRE, intermittent). Full RCA + two fix options in `OVERNIGHT_AUTOPILOT_LOG.md`
+ledger. Yarn content is correct; the real fix touches the Yarn runner lifecycle → owner decides.
+
+**THE OVERNIGHT AUTOPILOT RUN (done, terminated 06:46):** 13 cycles, 168 bot runs, fire-and-dormant
+via a session cron (now deleted). It found+fixed 3 things (the 2 verified ✅ above + the harness wipe),
+verified the armor fix, deferred the dialogue race, and proved a STABLE hub baseline. Coverage is
+HUB-ONLY (WO-453 blocks the rest). The chaos design (seeded per-bot, fixed oracles) is canon —
+`autopilot-chaos-not-one-scripted-path.md`. The loop self-validated cycle 1 by hand and caught a
+harness bug (stale appended logs faking "fixed bugs reappearing") — the lesson: **validate the
+harness before trusting its metrics.**
+
+**HOW WE WORKED THIS SESSION (the behaviors that earned trust — keep doing them):**
+- **Instrument, don't guess** (§12). When the walk/armor "didn't work," we traced + RCA'd from real
+  capture data, not hypotheses. We split "shows nothing" into data-empty vs built-but-invisible vs
+  threw-and-skipped *before* touching code.
+- **Validate before claiming; verify before pushing.** The autopilot caught that the armor fix only
+  *looked* unresolved (stale logs) and that the walk premise was wrong — before the owner wasted time.
+- **RCA-gate every fix; defer the deep/risky.** Not everything gets an autonomous fix — the dialogue
+  runner-lifecycle change was deferred rather than blind-edited at 1am.
+- **Deliver complete + verified, not piecemeal** (memory `deliver-complete-verified-not-piecemeal`).
+  "Rather be right than ran many times." Confirm the felt bug is gone before reporting done.
+- **Read the embedded canon FIRST** (memory `read-embedded-canon-first-or-owner-pays`) — don't
+  re-derive what's already in the catalog/docs/memories; the owner pays for rework.
+- **Structural/creative forks are the owner's call** — name them explicitly (we used AskUserQuestion
+  for the walk approach, rig migration, region fiction). When we guessed a structural direction
+  without confirming (the original Travel-button), it was wrong and cost a redo.
+
+**RESUME POINT (do this in order):**
+1. Owner reboots → does her playthrough against the validation list (below in this block / I gave it
+   in chat). She'll **F8-capture** any failure.
+2. For each failure: RCA from the F8 break-log + screenshot (`break-log.jsonl`), fix, gate, commit by
+   explicit path. **Push only the items she confirms pass.**
+3. Then start **WO-453 Region 1** (write the spec first; confirm the seam approach vs canon; build the
+   one proven seam + perf probe + oracle; replicate).
+
+**THE VALIDATION LIST (what the owner is checking — test in the EDITOR, not the exe: Play mode
+resolves Addressables via the asset DB so the Blink body/armor load without a content build):**
+- ✅ **Hotkeys stripped** — only WASD/arrows, weapon skills, F8, F9 do anything (F1/F12/J/K/L/etc.
+  dead). F9 green overlay is EXPECTED.
+- ✅ **Armor on the playable hero** — where the hero is the real Blink body, it wears its class set
+  (Knight=Centurion, Ranger=BeastHunter, Mage=Dragonic): no T-pose, not naked, not a personless
+  mannequin; weapon+bow in the hands. *If the hub/start hero looks like the old placeholder, that's
+  expected* — the Blink body builds in the gameplay context (HeroBodySwapper), not the hub.
+- ✅ **Enemies fight** — they detect, chase, and land hits (no freezing at range, no parking ~1m short).
+- ✅ **Reach a base via the interim Travel tap → clear → next companion joins + returned.**
+- ⛔ **NOT yet (don't log as regressions):** the natural distance-gated walk / "see it coming" — WO-453.
 
 ---
 
