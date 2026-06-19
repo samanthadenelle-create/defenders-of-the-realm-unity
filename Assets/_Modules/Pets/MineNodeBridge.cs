@@ -29,6 +29,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Pets
 {
@@ -70,7 +71,11 @@ namespace DeNelle.Pets
             {
                 if (!IsValid || MineNodeBridge.IsDepletedProp == null) return true;
                 try { return (bool)MineNodeBridge.IsDepletedProp.GetValue(_component); }
-                catch { return true; }
+                catch (System.Exception e)
+                {
+                    FlowTrace.Warn("Pets", $"MineNode IsDepleted read failed: {e.GetType().Name}: {e.Message}");
+                    return true;
+                }
             }
         }
 
@@ -81,7 +86,11 @@ namespace DeNelle.Pets
             {
                 if (!IsValid || MineNodeBridge.IsClaimedProp == null) return false;
                 try { return (bool)MineNodeBridge.IsClaimedProp.GetValue(_component); }
-                catch { return false; }
+                catch (System.Exception e)
+                {
+                    FlowTrace.Warn("Pets", $"MineNode IsClaimed read failed: {e.GetType().Name}: {e.Message}");
+                    return false;
+                }
             }
         }
 

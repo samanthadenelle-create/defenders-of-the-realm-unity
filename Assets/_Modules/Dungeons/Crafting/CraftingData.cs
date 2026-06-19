@@ -27,6 +27,7 @@ using Cysharp.Threading.Tasks;
 using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.Networking;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Dungeons
 {
@@ -260,7 +261,11 @@ namespace DeNelle.Dungeons
                     if (!File.Exists(fullPath)) return null;
                     return await File.ReadAllTextAsync(fullPath);
                 }
-                catch { return null; }
+                catch (System.Exception e)
+                {
+                    FlowTrace.Warn("Crafting", $"StreamingAssets read failed: {e.GetType().Name}: {e.Message}");
+                    return null;
+                }
             }
 
             using var req = UnityWebRequest.Get(fullPath);

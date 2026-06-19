@@ -24,6 +24,7 @@
 
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.HUD
 {
@@ -104,7 +105,11 @@ namespace DeNelle.HUD
         private static GameObject SafeFindWithTag(string tag)
         {
             try { return GameObject.FindWithTag(tag); }
-            catch (UnityEngine.UnityException) { return null; }
+            catch (UnityEngine.UnityException e)
+            {
+                FlowTrace.Warn("HUD", $"FindWithTag('{tag}') failed: {e.GetType().Name}: {e.Message}");
+                return null;
+            }
         }
 
         // Hook the hero's HeroProgression by name via reflection. The hero can
@@ -226,7 +231,11 @@ namespace DeNelle.HUD
 
             Vector3 world;
             try { world = (Vector3)_worldPosProp.GetValue(_prog); }
-            catch { return new Vector2(topCenterX, topCenterY); }
+            catch (System.Exception e)
+            {
+                FlowTrace.Warn("HUD", $"hero world-pos read failed: {e.GetType().Name}: {e.Message}");
+                return new Vector2(topCenterX, topCenterY);
+            }
 
             Vector3 sp = cam.WorldToScreenPoint(world);
             if (sp.z <= 0f)   // behind the camera — fall back to top-center

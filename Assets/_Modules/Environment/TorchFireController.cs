@@ -11,6 +11,7 @@
 
 using System.Collections;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 /// <summary>
 /// Drives dynamic fire VFX + warm point light on a torch, brazier, or lantern.
@@ -125,7 +126,11 @@ public class TorchFireController : MonoBehaviour
     {
         if (c == null) return false;
         try { return c.CompareTag(tag); }
-        catch (UnityEngine.UnityException) { return false; }
+        catch (UnityEngine.UnityException e)
+        {
+            FlowTrace.Warn("Environment", $"CompareTag('{tag}') failed: {e.GetType().Name}: {e.Message}");
+            return false;
+        }
     }
 
     // ── Editor helpers ────────────────────────────────────────────────────────

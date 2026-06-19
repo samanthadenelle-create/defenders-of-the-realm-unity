@@ -27,6 +27,7 @@
 using System;
 using System.Reflection;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Pets
 {
@@ -225,8 +226,9 @@ namespace DeNelle.Pets
                 var found = UnityEngine.Object.FindObjectOfType(s_heroType) as Component;
                 return found != null ? found.transform : null;
             }
-            catch
+            catch (System.Exception e)
             {
+                FlowTrace.Warn("Pets", $"ResolveHeroTransform failed: {e.GetType().Name}: {e.Message}");
                 return null;
             }
         }

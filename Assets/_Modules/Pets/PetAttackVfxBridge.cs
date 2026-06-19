@@ -7,6 +7,7 @@
 using System;
 using System.Reflection;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Pets
 {
@@ -34,7 +35,11 @@ namespace DeNelle.Pets
                 var eff = asm.GetType("DeNelle.Village.AbilityEffect", false);
                 if (kit == null || eff == null) continue;
                 s_spawn = kit.GetMethod("SpawnAbilityVfx", BindingFlags.Public | BindingFlags.Static);
-                try { s_strikeKind = Enum.Parse(eff, "Strike"); } catch { }
+                try { s_strikeKind = Enum.Parse(eff, "Strike"); }
+                catch (System.Exception e)
+                {
+                    FlowTrace.Warn("Pets", $"AbilityEffect Strike enum parse failed: {e.GetType().Name}: {e.Message}");
+                }
                 break;
             }
         }
