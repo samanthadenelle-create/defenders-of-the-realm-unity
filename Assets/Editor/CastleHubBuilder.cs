@@ -4,7 +4,9 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.AI;
+using Unity.AI.Navigation;          // NavMeshLink (direct) — DeNelle.Editor asmdef references this (EnemyStrongholdBuilder proves it compiles)
 using UnityEngine.SceneManagement;
+using DeNelle.Core.Diagnostics;     // FlowTrace / Guard — TGVRU (CLAUDE.md §12), same as EnemyStrongholdBuilder
 
 namespace DeNelle.Editor
 {
@@ -1658,6 +1660,13 @@ namespace DeNelle.Editor
             // 4. PROVE spawn->gate reachability (behavioral, post-bake).
             bool ok = CastleGateNavVerify.VerifyOpenScene(out string detail);
             Log("REWIRE-REBAKE: gate-nav verify -> " + (ok ? "GATE_NAV_OK" : "GATE_NAV_FAIL") + " :: " + detail);
+
+            // 5. BRIDGE SEAM — add the real walkable castle↔OuterWorld crossing (replaces the dead
+            //    reflection warp). AddCastleBridgeSeam re-opens MainCastle_Hall, drops the
+            //    CastleBridgeSeam subtree (ADD-ONLY — no regen), relocates the exit trigger to the
+            //    bridge far end, then re-bakes + saves + verifies. Folded here so the existing
+            //    rewire path always leaves the bridge wired.
+            AddCastleBridgeSeam();
         }
 
         // Shared bake: configure every NavMeshSurface to Physics Colliders / All, BuildNavMesh,
@@ -1819,6 +1828,261 @@ namespace DeNelle.Editor
                 all.AddRange(root.GetComponentsInChildren<Transform>(true));
             }
             return all;
+        }
+
+        // =====================================================================
+        //  CASTLE BRIDGE SEAM (WO bridge) — a REAL walkable crossing from the castle
+        //  south gate out to OuterWorld, replacing the broken/masked warp.
+        // -----------------------------------------------------------------------------
+        //  ADD-ONLY: this NEVER calls BuildCastleHub / regenerates MainCastle_Hall (the
+        //  owner's hand-dialed wall/structure/Heart/hero-spawn/recipe offsets must survive).
+        //  It opens the saved scene, drops a CastleBridgeSeam subtree under CastleHubRoot,
+        //  and bakes — nothing else is touched.
+        //
+        //  Pieces (all under a CastleBridgeSeam host @ origin so local == world):
+        //   • Bridge_Deck_Visual  — polyperfect stone bridge prefab at (gateX,0,-61.3)
+        //   • Floor_Bridge_Nav     — invisible forced-walkable plane spanning the deck
+        //   • NavLink_CastleBridge — DIRECT Unity.AI.Navigation.NavMeshLink (the real seam
+        //     crossing), mirroring EnemyStrongholdBuilder.BuildNavLink verbatim (UpdateLink()
+        //     + Guard.Try + loud FlowTrace.Fail). start=(gateX,0,-57) end=(gateX,0,-65) w=7.
+        //  The exit SceneTransitionTrigger is RELOCATED to the FAR end of the bridge so the
+        //  fade-to-OuterWorld fires after the hero has walked the crossing; targetPosition is
+        //  set to the SAME spot the hero already stands (gateX,0.5,-66) so the post-fade
+        //  WarpTo lands where they are → no visible jump.
+        //
+        //  WHY the direct link supersedes WireOuterWorldConnection's reflection block (~1005):
+        //  that block writes m_StartPoint/m_EndPoint via SerializedObject and never calls
+        //  UpdateLink(), so the link's runtime nav geometry was never built — a dead no-op.
+        // =====================================================================
+        private const string BridgeSeamRootName = "CastleBridgeSeam";
+
+        [MenuItem("Defenders/World/Add Castle Bridge Seam")]
+        public static void AddCastleBridgeSeam()
+        {
+            // FALLBACK FLAG (spec §g): true = build the real NavMeshLink crossing AND land the
+            // post-fade WarpTo on the hero's own spot (no jump). If the path-complete assert below
+            // fails on the gate-overlap ambiguity, flip to false: that keeps the visual bridge +
+            // the far-end relocated trigger but leaves the masked warp (MINIMAL) — i.e. it skips the
+            // NavMeshLink and uses the legacy near-origin warp target instead of the same-spot one.
+            // The visual bridge + trigger relocation happen REGARDLESS of this flag.
+            const bool BridgeLinkWalkable = true;
+
+            FlowTrace.Step("BridgeSeam", "AddCastleBridgeSeam: begin — ADD-ONLY bridge crossing.");
+
+            const string scenePath = "Assets/Scenes/MainCastle_Hall.unity";
+            var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single); // NEVER BuildCastleHub
+            Log("BRIDGE-SEAM: opened " + scenePath + " (no regen — hand-dialed offsets preserved).");
+
+            var root = GameObject.Find(RootName);
+            if (root == null)
+            {
+                FlowTrace.Fail("BridgeSeam", "CastleHubRoot not found — cannot add bridge seam. Scene may be empty/unbuilt.");
+                Err("BRIDGE-SEAM: " + RootName + " not found — aborting (ADD-ONLY requires an existing hub).");
+                return;
+            }
+
+            // Idempotent: destroy any prior CastleBridgeSeam subtree so a re-run leaves exactly one.
+            var priorSeam = GameObject.Find(BridgeSeamRootName);
+            if (priorSeam != null) { Object.DestroyImmediate(priorSeam); Log("BRIDGE-SEAM: removed prior " + BridgeSeamRootName + " subtree."); }
+
+            var seamRoot = new GameObject(BridgeSeamRootName);
+            seamRoot.transform.SetParent(root.transform, false);
+            seamRoot.transform.position = Vector3.zero; // host at origin → endpoint local == world
+
+            float gateX = ReadSouthGatePos().x;        // recipe Gate_South x ≈ -4.37
+            const float deckZ = -61.3f;                 // bridge centre, just outside the south gate
+
+            // --- 1. Visual bridge deck (polyperfect stone bridge). Skip-safe on a missing pack. ---
+            const string bridgePrefabPath =
+                "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Medieval_M/Bridge_Medieval_Stone.prefab";
+            var bridgePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(bridgePrefabPath);
+            var deckPos = new Vector3(gateX, 0f, deckZ);
+            if (bridgePrefab != null)
+            {
+                var deck = (GameObject)PrefabUtility.InstantiatePrefab(bridgePrefab, seamRoot.transform);
+                deck.name = "Bridge_Deck_Visual";
+                deck.transform.position = deckPos;
+                MarkStatic(deck);
+                Log("BRIDGE-SEAM: visual bridge placed at " + deckPos + ".");
+            }
+            else
+            {
+                Debug.LogWarning("[CastleHubBuilder] Bridge prefab not found (" + bridgePrefabPath +
+                                 ") — pack may not be imported. Falling back to a tinted primitive deck.");
+                var deck = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                deck.name = "Bridge_Deck_Visual";
+                deck.transform.SetParent(seamRoot.transform, false);
+                deck.transform.position = deckPos;
+                deck.transform.localScale = new Vector3(7f, 0.4f, 16f); // ~7m wide × ~16m long deck
+                var dr = deck.GetComponent<MeshRenderer>();
+                if (dr != null)
+                {
+                    var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                    if (shader != null) dr.sharedMaterial = new Material(shader) { color = new Color(0.40f, 0.37f, 0.33f) };
+                }
+                MarkStatic(deck);
+            }
+
+            // --- 2. Walkable deck nav plane (invisible, forced walkable). Clone CreateInvisibleFloor. ---
+            // localScale ~(0.7,1,1.6) → a Unity plane (10×10m @ scale 1) becomes ~7m × ~16m, matching the deck.
+            CreateInvisibleFloor(seamRoot.transform, "Floor_Bridge_Nav",
+                new Vector3(gateX, 0f, deckZ), new Vector3(0.7f, 1f, 1.6f));
+            Log("BRIDGE-SEAM: walkable nav deck Floor_Bridge_Nav placed at " + deckPos + ".");
+
+            // --- 3. The DIRECT NavMeshLink crossing (the real seam). Built only when walkable. ---
+            if (BridgeLinkWalkable)
+            {
+                BuildBridgeNavLink(seamRoot.transform, "NavLink_CastleBridge",
+                    new Vector3(gateX, 0f, -57.0f),   // start: courtyard side of the gate
+                    new Vector3(gateX, 0f, -65.0f),   // end: out on the bridge far end
+                    7f);
+            }
+            else
+            {
+                FlowTrace.Warn("BridgeSeam",
+                    "BridgeLinkWalkable=false — NavMeshLink SKIPPED (MINIMAL fallback: visual bridge + far-end trigger + masked warp).");
+            }
+
+            // --- 4. Exit seam: re-wire via the existing helper, then RELOCATE to the bridge far end. ---
+            // EnsureExitSeamAtRecipeGate rebuilds the marker + SceneTransitionTrigger with the existing
+            // (proven) reflection-field wiring. We then nudge ONLY position + targetPosition via the
+            // SAME SerializedObject/reflection approach so we never break that field wiring.
+            EnsureExitSeamAtRecipeGate();
+            RelocateExitSeamToBridge(gateX, BridgeLinkWalkable);
+
+            // --- 5. Rebuild the nav floor so Floor_Bridge_Nav is collected, then bake + persist + save. ---
+            BuildNavMeshFloor(root.transform);
+            Log("BRIDGE-SEAM: nav floor rebuilt (Floor_Bridge_Nav collected into the bake set).");
+            BakeAllCastleSurfacesAndPersist("BRIDGE-SEAM");
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            AssetDatabase.SaveAssets();
+            Log("BRIDGE-SEAM: saved scene + assets.");
+
+            // --- 6. Verify LOUD: the wired exit seam path AND the courtyard→bridge-end path complete. ---
+            bool seamOk = CastleGateNavVerify.VerifyOpenScene(out string detail);
+            Log("BRIDGE-SEAM: gate-nav verify -> " + (seamOk ? "GATE_NAV_OK" : "GATE_NAV_FAIL") + " :: " + detail);
+            if (!seamOk)
+                FlowTrace.Fail("BridgeSeam", "VerifyOpenScene reports the exit seam is NOT exitable :: " + detail);
+
+            // Assert the link actually bridges: a path from a courtyard point to the bridge far end
+            // must be PathComplete. SamplePosition first (tight tolerance) so a false-green snap can't lie.
+            var courtyard = new Vector3(0f, 0f, 0f);
+            var bridgeEnd = new Vector3(gateX, 0f, -66f);
+            bool sStart = NavMesh.SamplePosition(courtyard, out NavMeshHit hStart, 5f, NavMesh.AllAreas);
+            bool sEnd   = NavMesh.SamplePosition(bridgeEnd, out NavMeshHit hEnd, 2f, NavMesh.AllAreas);
+            if (sStart && sEnd)
+            {
+                var path = new NavMeshPath();
+                NavMesh.CalculatePath(hStart.position, hEnd.position, NavMesh.AllAreas, path);
+                if (path.status == NavMeshPathStatus.PathComplete)
+                    FlowTrace.Step("BridgeSeam",
+                        "PATH-COMPLETE courtyard(0,0,0) -> bridgeEnd(" + gateX + ",0,-66) — the NavMeshLink bridges. Crossing is walkable.");
+                else
+                    FlowTrace.Fail("BridgeSeam",
+                        "courtyard -> bridgeEnd path is " + path.status + " — the NavMeshLink did NOT connect (overlap ambiguity?). " +
+                        "If this persists, flip BridgeLinkWalkable=false to ship the visual bridge + far-end trigger over the masked warp.");
+            }
+            else
+            {
+                FlowTrace.Fail("BridgeSeam",
+                    "could not sample courtyard(onMesh=" + sStart + ") or bridgeEnd(onMesh=" + sEnd + ") onto the navmesh — " +
+                    "bridge deck did not bake walkable (overlap ambiguity?).");
+            }
+
+            Selection.activeGameObject = seamRoot;
+            FlowTrace.Step("BridgeSeam", "AddCastleBridgeSeam: done.");
+        }
+
+        // Relocate the exit SceneTransitionTrigger to the bridge FAR end and (when the link is
+        // walkable) land its post-fade WarpTo on the SAME spot the hero already stands → no jump.
+        // Uses the SAME SerializedObject/reflection-field approach the existing seam code uses so the
+        // proven field wiring (targetSceneName / loadAdditive / requireConfirm / ProximityRadius) is
+        // preserved; we only adjust transform position + targetPosition here.
+        private static void RelocateExitSeamToBridge(float gateX, bool bridgeLinkWalkable)
+        {
+            var marker = GameObject.Find("WorldGate_ConnectToOuterWorld_Marker");
+            if (marker == null)
+            {
+                FlowTrace.Warn("BridgeSeam", "exit-seam marker not found after EnsureExitSeamAtRecipeGate — relocation skipped.");
+                return;
+            }
+
+            // Move the trigger host to the bridge far end (world (gateX,1.5,-63)).
+            marker.transform.position = new Vector3(gateX, 1.5f, -63f);
+
+            var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
+            if (transType == null)
+            {
+                FlowTrace.Warn("BridgeSeam", "SceneTransitionTrigger type not found — targetPosition not re-pointed.");
+                return;
+            }
+            var comp = marker.GetComponent(transType);
+            if (comp == null)
+            {
+                FlowTrace.Warn("BridgeSeam", "no SceneTransitionTrigger on the marker — targetPosition not re-pointed.");
+                return;
+            }
+
+            // Keep the destination scene additive (mirror the existing wiring).
+            transType.GetField("targetSceneName")?.SetValue(comp, "OuterWorld");
+            transType.GetField("loadAdditive")?.SetValue(comp, true);
+
+            // When the link bridges, land the WarpTo where the hero already is (gateX,0.5,-66) so the
+            // post-fade reposition is invisible. When falling back (no link), leave the existing near-
+            // origin masked-warp target untouched (MINIMAL) — only the trigger MOVED.
+            if (bridgeLinkWalkable)
+            {
+                transType.GetField("targetPosition")?.SetValue(comp, new Vector3(gateX, 0.5f, -66f));
+                Log("BRIDGE-SEAM: exit seam relocated to bridge far end (" + gateX + ",1.5,-63); WarpTo same-spot (" + gateX + ",0.5,-66) → no jump.");
+            }
+            else
+            {
+                Log("BRIDGE-SEAM: exit seam relocated to bridge far end (" + gateX + ",1.5,-63); masked-warp target left intact (BridgeLinkWalkable=false).");
+            }
+        }
+
+        // DIRECT NavMeshLink for the bridge crossing — copied verbatim from
+        // EnemyStrongholdBuilder.BuildNavLink (UpdateLink() + Guard.Try + loud FlowTrace.Fail).
+        // Uses Unity.AI.Navigation.NavMeshLink DIRECTLY (the DeNelle.Editor asmdef references the
+        // package; EnemyStrongholdBuilder proves it resolves). LOUD FAIL on any miss — no silent link.
+        private static void BuildBridgeNavLink(Transform parent, string name, Vector3 worldStart,
+            Vector3 worldEnd, float width)
+        {
+            bool ok = Guard.Try("BridgeSeam", $"add NavMeshLink '{name}'", () =>
+            {
+                var host = new GameObject(name);
+                host.transform.SetParent(parent, false);
+                host.transform.position = Vector3.zero;   // endpoints below are absolute (link space == host local @ origin)
+
+                var link = host.AddComponent<NavMeshLink>();
+                if (link == null)
+                    throw new System.Exception("AddComponent<NavMeshLink> returned null.");
+
+                link.startPoint    = worldStart;
+                link.endPoint      = worldEnd;
+                link.width         = width;
+                link.bidirectional = true;
+                link.area          = 0;          // Walkable
+                link.UpdateLink();
+                FlowTrace.Step("BridgeSeam",
+                    $"NavMeshLink '{name}' start={worldStart} end={worldEnd} width={width} — castle↔OuterWorld seam bridged.");
+            });
+
+            if (!ok)
+                FlowTrace.Fail("BridgeSeam",
+                    $"NavMeshLink '{name}' FAILED to create — the bridge crossing ({worldStart} -> {worldEnd}) " +
+                    "will NOT be pathable. (Unity.AI.Navigation must resolve; do NOT ship this silently.)");
+        }
+
+        // Mark a GameObject NavigationStatic + batching/occlusion static so the bake collects it
+        // (mirrors EnemyStrongholdBuilder.MarkStatic — this file had no such helper).
+        private static void MarkStatic(GameObject go)
+        {
+            GameObjectUtility.SetStaticEditorFlags(go,
+                StaticEditorFlags.NavigationStatic | StaticEditorFlags.BatchingStatic |
+                StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic);
         }
 
         // Place the OuterWorld exit seam ONTO the recipe south gate opening so the hero reaches
