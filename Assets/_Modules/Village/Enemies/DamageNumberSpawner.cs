@@ -92,7 +92,15 @@ namespace DeNelle.Village
             // Guard the camera up front — no point building a billboard with
             // nothing to face. Cheap early-out for any off-screen / no-camera frame.
             Camera cam = Camera.main;
-            if (cam == null) return null;
+            if (cam == null)
+            {
+                // §12 entry trace: a missing Camera.main makes EVERY damage number silently
+                // skip — the player sees zero combat numbers. Once-report so a no-camera frame
+                // self-detects instead of reading as "numbers feature broken".
+                FlowTrace.Once("Feedback", "dmg-nocam",
+                    "Spawn: Camera.main is null — damage numbers will not appear this frame.");
+                return null;
+            }
 
             // POOLED: reuse a dormant number (GameObject + TextMesh + material) instead
             // of new GameObject / AddComponent / Destroy per hit. In a busy wave this is
@@ -133,8 +141,16 @@ namespace DeNelle.Village
         {
             if (string.IsNullOrEmpty(label)) return null;
             Camera cam = Camera.main;
-            if (cam == null) return null;
+            if (cam == null)
+            {
+                // §12 entry trace: no camera => the level-up / status label silently never shows.
+                FlowTrace.Once("Feedback", "label-nocam",
+                    $"SpawnLabel('{label}'): Camera.main is null — text label will not appear.");
+                return null;
+            }
 
+            // §12 entry trace: confirm the label layer fired (Throttled — bursts on level-up).
+            FlowTrace.Throttle("Feedback", "label", 1f, $"text label spawned '{label}'");
             var n = Acquire(worldPos);
             n.BuildLabel(label, color, scale, cam);
             return n;

@@ -30,6 +30,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;   // §12 TGVRU: trace the spell-VFX delegation
 
 namespace DeNelle.Village
 {
@@ -69,7 +70,14 @@ namespace DeNelle.Village
         /// <summary>Element-first cast flash (use when no AbilityDef is on hand).</summary>
         public static void PlayCast(SpellElement element, Vector3 position)
         {
-            VFXManager.Play(CastTypeFor(element), position + Vector3.up * 1.2f);
+            var type = CastTypeFor(element);
+            // U §12: VFXManager.Play null-guards Instance internally, so a null manager makes the
+            // cast flash SILENTLY no-op (spell looks like it does nothing). Trace the delegation
+            // (Throttled — combat hot path) and Once-report a missing manager so it self-detects.
+            WarnIfNoManager("PlayCast", type);
+            FlowTrace.Throttle("SpellVfx", $"cast:{element}", 1f,
+                $"PlayCast element={element} -> {type} at {position}.");
+            VFXManager.Play(type, position + Vector3.up * 1.2f);
         }
 
         /// <summary>
@@ -79,13 +87,21 @@ namespace DeNelle.Village
         public static void PlayImpact(AbilityEffect effect, string heroClass, Color accent, Vector3 position)
         {
             var element = ResolveElement(effect, heroClass, accent);
-            VFXManager.Play(ImpactTypeFor(element, effect), position);
+            var type = ImpactTypeFor(element, effect);
+            WarnIfNoManager("PlayImpact", type);
+            FlowTrace.Throttle("SpellVfx", $"impact:{element}", 1f,
+                $"PlayImpact effect={effect} element={element} -> {type} at {position}.");
+            VFXManager.Play(type, position);
         }
 
         /// <summary>Element-first impact burst.</summary>
         public static void PlayImpact(SpellElement element, Vector3 position)
         {
-            VFXManager.Play(ImpactTypeFor(element, AbilityEffect.Strike), position);
+            var type = ImpactTypeFor(element, AbilityEffect.Strike);
+            WarnIfNoManager("PlayImpact", type);
+            FlowTrace.Throttle("SpellVfx", $"impact:{element}", 1f,
+                $"PlayImpact element={element} -> {type} at {position}.");
+            VFXManager.Play(type, position);
         }
 
         /// <summary>
@@ -95,9 +111,43 @@ namespace DeNelle.Village
         /// </summary>
         public static VFXHandle PlayProjectile(AbilityEffect effect, string heroClass, Color accent, Transform projectile)
         {
-            if (projectile == null) return null;
+            if (projectile == null)
+            {
+                FlowTrace.Warn("SpellVfx", "PlayProjectile: null projectile transform — no trail attached.");
+                return null;
+            }
             var element = ResolveElement(effect, heroClass, accent);
-            return VFXManager.Instance?.PlayProjectile(ProjectileTypeFor(element, heroClass), projectile);
+            var type = ProjectileTypeFor(element, heroClass);
+
+            // U §12: the Instance?. short-circuit returns null SILENTLY when no VFXManager exists —
+            // the projectile then flies with NO trail and the caller can't tell why. Trace it.
+            if (VFXManager.Instance == null)
+            {
+                FlowTrace.Once("SpellVfx", "proj-nomanager",
+                    $"PlayProjectile: VFXManager.Instance is null — projectile trail '{type}' will not appear.");
+                return null;
+            }
+
+            FlowTrace.Throttle("SpellVfx", $"proj:{element}", 1f,
+                $"PlayProjectile element={element} class={heroClass} -> {type}.");
+            var handle = VFXManager.Instance.PlayProjectile(type, projectile);
+            // R §12: a null handle = PlayProjectile fell through (loop-cap hit, or no catalog prefab
+            // AND procedural-loop build failed) — projectile is SILENTLY trail-less. Self-report.
+            if (handle == null)
+                FlowTrace.Warn("SpellVfx",
+                    $"PlayProjectile: PlayProjectile('{type}') returned a NULL handle — " +
+                    "no trail (loop-cap hit or missing catalog prefab + failed procedural fallback).");
+            return handle;
+        }
+
+        // §12 U helper: VFXManager.Play() swallows a null Instance internally (null-safe), so a
+        // missing manager makes a cast/impact SILENTLY do nothing. Once-report per system so that
+        // "the spell looks like it does nothing" surfaces in the break-log with the exact VFXType.
+        private static void WarnIfNoManager(string where, VFXType type)
+        {
+            if (VFXManager.Instance == null)
+                FlowTrace.Once("SpellVfx", "nomanager",
+                    $"{where}: VFXManager.Instance is null — '{type}' will not appear (no VFXManager in scene).");
         }
 
         // ── Element resolution ────────────────────────────────────────────────

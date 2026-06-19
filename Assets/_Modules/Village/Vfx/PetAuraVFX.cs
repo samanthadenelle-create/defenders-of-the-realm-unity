@@ -15,6 +15,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;   // §12 TGVRU: trace the pet-aura flow
 
 namespace DeNelle.Village
 {
@@ -65,10 +66,18 @@ namespace DeNelle.Village
 
         private void SpawnAura(int level)
         {
+            using var _ = FlowTrace.Enter("PetAura", $"SpawnAura level={level} on '{name}'");
             _activeLevel = level;
             _petLevel    = level;
 
-            if (VFXManager.Instance == null) return;
+            // U §12: a null VFXManager means the pet aura SILENTLY never appears. Once-report so a
+            // scene with no VFXManager self-detects instead of the pet just looking auraless.
+            if (VFXManager.Instance == null)
+            {
+                FlowTrace.Once("PetAura", $"nomanager:{name}",
+                    $"SpawnAura '{name}': VFXManager.Instance is null — pet aura (level {level}) will not appear.");
+                return;
+            }
 
             // Create a pivot child at the desired offset so the aura position
             // is adjustable without moving the pet itself.
@@ -78,8 +87,23 @@ namespace DeNelle.Village
 
             _handle = VFXManager.Instance.PlayPetAura(this, level);
 
-            // Re-parent the aura to the pivot so it follows offset correctly.
-            _handle?.SetParent(pivot.transform, worldPositionStays: false);
+            // R §12: a null handle = PlayPetAura fell through (loop-cap hit, or the catalog prefab
+            // for this aura level is missing AND the procedural loop failed) — the pet is SILENTLY
+            // auraless. Trace it AND tear down the now-orphaned pivot so we don't leak an empty
+            // "[AuraPivot]" per failed spawn.
+            if (_handle != null)
+            {
+                // Re-parent the aura to the pivot so it follows offset correctly.
+                _handle.SetParent(pivot.transform, worldPositionStays: false);
+                FlowTrace.Step("PetAura", $"SpawnAura '{name}': aura level {level} started + re-parented to pivot.");
+            }
+            else
+            {
+                FlowTrace.Warn("PetAura",
+                    $"SpawnAura '{name}': PlayPetAura(level {level}) returned a NULL handle — " +
+                    "aura did not start (loop-cap hit or missing catalog prefab + failed procedural fallback); pet is auraless.");
+                Destroy(pivot);
+            }
         }
     }
 }
