@@ -64,6 +64,31 @@
         "torch", "bones", "altar"
       ],
       "element": "ice"
+    },
+    {
+      "id": "village2_stronghold",
+      "kind": "stronghold",
+      "size": "large",
+      "theme": "ruined",
+      "lighting": "stronghold",
+      "enemies": ["orc-berserker", "orc-shaman", "troll", "hollow-warrior"],
+      "levelRange": [8, 14],
+      "threat": 3,
+      "boss": null,
+      "layout": {
+        "courtyard":   { "size": 14, "walls": "stone", "gate": "main", "towers": 4 },
+        "chokepoint":  { "width": 2, "traps": ["spike", "arrow"] },
+        "keep":        { "raised": true, "platformHeight": 1.5, "stairs": true, "navlink": true },
+        "bossChamber": { "enabled": true, "raised": true, "navlink": true, "altar": true }
+      },
+      "traps":       { "max": 8, "courtyard": true, "chokepoint": true },
+      "destruction": { "wallDamageChance": 0.3, "level": 1 },
+      "props": [
+        "wall_stone", "gate", "watchtower", "stone_tower", "stairs",
+        "torch", "banner", "barrel", "crate", "chest_gold",
+        "rubble", "spikes", "bones"
+      ],
+      "element": null
     }
   ]
 }
