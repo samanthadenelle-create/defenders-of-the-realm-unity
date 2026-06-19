@@ -40,6 +40,7 @@
 //   the primitive fallback renders.
 // =============================================================================
 
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
@@ -552,11 +553,16 @@ namespace DeNelle.Village
                 // we never attach a ghost prop from an out-of-date request.
                 if (generation != _equipGeneration)
                 {
-                    if (op.IsValid()) Addressables.Release(op);
+                    // BUG 2 FIX: do NOT call Addressables.Release(op) synchronously here — we are
+                    // INSIDE the SDK's OnHandleCompleted dispatch over this same handle. A re-entrant
+                    // Release invalidates the handle the SDK is still reading (handle.Status), which
+                    // throws "Attempting to use an invalid operation handle". Defer to the next frame.
+                    if (_weaponHandle.Equals(op)) { _weaponHandle = default; _weaponHandleOpen = false; }
+                    DeferRelease(op);
                     return;
                 }
 
-                if (op.Status != AsyncOperationStatus.Succeeded || op.Result == null)
+                if (!op.IsValid() || op.Status != AsyncOperationStatus.Succeeded || op.Result == null)
                 {
                     FlowTrace.Warn("Gear", $"Addressable load FAILED for '{address}' " +
                         $"(status={op.Status}) — falling back to Resources map (hero stays armed).");
@@ -679,6 +685,26 @@ namespace DeNelle.Village
             if (_weaponHandle.IsValid())
                 Addressables.Release(_weaponHandle);
             _weaponHandle = default;
+        }
+
+        // BUG 2: release a handle ONE FRAME LATER, off the SDK's OnHandleCompleted dispatch. Calling
+        // Addressables.Release(op) synchronously inside the Completed delegate is re-entrant — the SDK
+        // is still mid-dispatch over that handle and then reads handle.Status on an already-released
+        // (invalid) handle. Deferring a frame lets the dispatch finish before we free it.
+        private void DeferRelease(AsyncOperationHandle<GameObject> op)
+        {
+            if (!isActiveAndEnabled)
+            {
+                if (op.IsValid()) Addressables.Release(op);
+                return;
+            }
+            StartCoroutine(ReleaseNextFrame(op));
+        }
+
+        private static IEnumerator ReleaseNextFrame(AsyncOperationHandle<GameObject> op)
+        {
+            yield return null;
+            if (op.IsValid()) Addressables.Release(op);
         }
 
         // ── SWORD GRIP-POINT INFERENCE ───────────────────────────────────────────────

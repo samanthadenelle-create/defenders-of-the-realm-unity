@@ -39,6 +39,7 @@
 // =============================================================================
 
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
@@ -84,6 +85,18 @@ namespace DeNelle.Village
         // rejected so we never attach a ghost body from an out-of-date request.
         private int _equipGeneration;
 
+        // BUG 1: when the Blink body resolves before a base body exists (e.g. Village async
+        // HeroBodySwapper still building, OR the hub baked placeholder which never gets a
+        // 'HeroBody'), we cache the pending swap and re-attempt for a BOUNDED window as the body
+        // may still arrive. Past the window with no body, we release the handle and keep the
+        // existing base body shown (never-naked) — on a bodyless hub hero this is EXPECTED.
+        private const int MaxBodyWaitFrames = 120;   // ~2s at 60fps — mirrors HeroBowAttachment
+        private GameObject _pendingPrefab;
+        private ArmorDef   _pendingArmor;
+        private string     _pendingAddress;
+        private int        _pendingGeneration;
+        private Coroutine  _bodyWaitRoutine;
+
         private void OnEnable()
         {
             if (_loadout == null) _loadout = GetComponent<GearLoadout>();
@@ -98,6 +111,7 @@ namespace DeNelle.Village
             // Tear the armored body down and restore the base body so a disabled/destroyed
             // hero is never left in a half-swapped (or invisible) state, and the handle frees.
             _equipGeneration++;
+            ClearPendingSwap();
             RestoreBaseBody();
             DestroyArmorInstance();
             ReleaseArmorHandle();
@@ -131,6 +145,7 @@ namespace DeNelle.Village
 
             // Any new request invalidates an in-flight async load and drops the old instance.
             _equipGeneration++;
+            ClearPendingSwap();   // a queued body-wait from a prior request no longer applies
             _currentArmorId = id;
 
             // A non-Blink armor (the cloth default) or an unequip: restore the base body and
@@ -197,13 +212,18 @@ namespace DeNelle.Village
                 if (generation != _equipGeneration)
                 {
                     FlowTrace.Step("ArmorVisual",
-                        $"Stale armor load for '{address}' (gen {generation} != {_equipGeneration}) — released.");
-                    if (op.IsValid()) Addressables.Release(op);
+                        $"Stale armor load for '{address}' (gen {generation} != {_equipGeneration}) — deferring release.");
+                    // BUG 2 FIX: do NOT call Addressables.Release(op) synchronously here — we are
+                    // INSIDE the SDK's OnHandleCompleted dispatch over this same handle. A re-entrant
+                    // Release invalidates the handle the SDK is still reading (handle.Status), which
+                    // throws "Attempting to use an invalid operation handle". Defer the release to the
+                    // next frame so the SDK finishes its dispatch first.
                     if (_armorHandle.Equals(op)) { _armorHandle = default; _armorHandleOpen = false; }
+                    DeferRelease(op);
                     return;
                 }
 
-                if (op.Status != AsyncOperationStatus.Succeeded || op.Result == null)
+                if (!op.IsValid() || op.Status != AsyncOperationStatus.Succeeded || op.Result == null)
                 {
                     FlowTrace.Fail("ArmorVisual",
                         $"Addressable armor load FAILED for '{address}' (status={op.Status}) — " +
@@ -227,11 +247,17 @@ namespace DeNelle.Village
             Transform baseBody = ResolveBaseBody();
             if (baseBody == null)
             {
-                // No base body to mirror/seat against — abort the swap rather than risk a
-                // floating/mis-placed armored body. (Base body absent => nothing to hide; the
-                // hero is whatever else is on the root, never made worse.)
-                FlowTrace.Fail("ArmorVisual",
-                    $"BuildArmorBody: no '{BodyChildName}' child to seat/retarget against — armor '{armor.id}' skipped.");
+                // BUG 1: no Blink base body to seat/retarget against YET. Two cases:
+                //   • Village: HeroBodySwapper's async body build is still in flight — the body
+                //     will appear shortly. Cache the pending swap + re-attempt for a bounded window.
+                //   • Hub (MainCastle_Hall): HeroBodySwapper never runs, so the baked placeholder
+                //     hero has no 'HeroBody' and never will. The bounded poll expires quietly, we
+                //     release the handle, and keep the placeholder body shown (never-naked). This is
+                //     EXPECTED on a bodyless hero — downgrade from Fail to a single Warn/Once.
+                CachePendingSwap(prefab, armor, address);
+                FlowTrace.Once("ArmorVisual", $"armorbody-wait:{armor.id}",
+                    $"BuildArmorBody: no '{BodyChildName}' base body yet for armor '{armor.id}' — " +
+                    "waiting (bounded) for an async Blink body; will keep base body if none arrives.");
                 return;
             }
 
@@ -300,6 +326,65 @@ namespace DeNelle.Village
 
             FlowTrace.Step("ArmorVisual",
                 $"BuildArmorBody: armored body '{armor.id}' shown (address='{address}'), base body hidden.");
+        }
+
+        // BUG 1: cache a swap whose Blink body resolved before a base body existed, and start a
+        // BOUNDED frame poll waiting for the base body (Village async build). On a hub bodyless
+        // hero the poll simply expires and we keep the base body — no naked hero, no error spam.
+        private void CachePendingSwap(GameObject prefab, ArmorDef armor, string address)
+        {
+            _pendingPrefab     = prefab;
+            _pendingArmor      = armor;
+            _pendingAddress    = address;
+            _pendingGeneration = _equipGeneration;
+            if (_bodyWaitRoutine == null && isActiveAndEnabled)
+                _bodyWaitRoutine = StartCoroutine(WaitForBaseBodyThenBuild());
+        }
+
+        private void ClearPendingSwap()
+        {
+            _pendingPrefab  = null;
+            _pendingArmor   = null;
+            _pendingAddress = null;
+            if (_bodyWaitRoutine != null) { StopCoroutine(_bodyWaitRoutine); _bodyWaitRoutine = null; }
+        }
+
+        private IEnumerator WaitForBaseBodyThenBuild()
+        {
+            for (int frame = 0; frame < MaxBodyWaitFrames; frame++)
+            {
+                yield return null;
+
+                // Superseded: a newer equip (or unequip/disable) bumped the generation. Drop the
+                // pending swap; that newer request (or OnDisable) owns the handle/base body now.
+                if (_pendingArmor == null || _pendingGeneration != _equipGeneration)
+                {
+                    _bodyWaitRoutine = null;
+                    yield break;
+                }
+
+                if (ResolveBaseBody() != null)
+                {
+                    // The async Blink base body arrived — finish the swap we deferred.
+                    GameObject prefab = _pendingPrefab;
+                    ArmorDef   armor  = _pendingArmor;
+                    string     addr   = _pendingAddress;
+                    _bodyWaitRoutine = null;
+                    _pendingPrefab = null; _pendingArmor = null; _pendingAddress = null;
+                    BuildArmorBody(prefab, armor, addr);
+                    yield break;
+                }
+            }
+
+            // Bounded window expired with no base body — the hub bodyless-placeholder case. Release
+            // the addressable handle and keep whatever body is already shown (never-naked contract).
+            _bodyWaitRoutine = null;
+            ArmorDef pending = _pendingArmor;
+            _pendingPrefab = null; _pendingArmor = null; _pendingAddress = null;
+            ReleaseArmorHandle();
+            FlowTrace.Once("ArmorVisual", $"armorbody-nobody:{pending?.id ?? "<null>"}",
+                $"BuildArmorBody: no '{BodyChildName}' base body appeared for armor '{pending?.id ?? "<null>"}' " +
+                "within the wait window — bodyless hero (expected in the hub); kept existing body, released handle.");
         }
 
         // Copy the base body's controller + avatar onto the armored instance's Animator so it
@@ -457,6 +542,29 @@ namespace DeNelle.Village
             if (_armorHandle.IsValid())
                 Addressables.Release(_armorHandle);
             _armorHandle = default;
+        }
+
+        // BUG 2: release a handle ONE FRAME LATER, off the SDK's OnHandleCompleted dispatch. Calling
+        // Addressables.Release(op) synchronously inside the Completed delegate is re-entrant — the SDK
+        // is still mid-dispatch over that handle and then reads handle.Status on an already-released
+        // (invalid) handle. Deferring a frame lets the dispatch finish before we free it. Guarded by
+        // IsValid() at release-time in case something else already released it.
+        private void DeferRelease(AsyncOperationHandle<GameObject> op)
+        {
+            // Can't StartCoroutine on a disabled/destroyed component — release directly in that case
+            // (we are no longer inside the original Completed dispatch by the time OnDisable runs).
+            if (!isActiveAndEnabled)
+            {
+                if (op.IsValid()) Addressables.Release(op);
+                return;
+            }
+            StartCoroutine(ReleaseNextFrame(op));
+        }
+
+        private static IEnumerator ReleaseNextFrame(AsyncOperationHandle<GameObject> op)
+        {
+            yield return null;
+            if (op.IsValid()) Addressables.Release(op);
         }
 
         // ── Helpers ──────────────────────────────────────────────────────────────────
