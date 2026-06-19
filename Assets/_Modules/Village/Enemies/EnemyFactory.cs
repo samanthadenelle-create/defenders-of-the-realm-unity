@@ -76,18 +76,13 @@ namespace DeNelle.Village
                 $"EnemyFactory.Build: id='{(def != null ? def.Id : "null")}' " +
                 $"-> model '{model}'{(modelOverride != null ? " (OVERRIDE)" : "")} loading 'Enemies/{model}'");
 
-            // WIGHT 4x (owner 2026-06-13): the AccuRIG'd wight fits noticeably small for a
-            // looming demon. Scale its FIT HEIGHT (visual, via SkinOptions.Enemy(height) below)
-            // AND its trigger capsule up ~4x so the hitbox matches the bigger body. The
-            // NavMeshAgent footprint stays standard (root unit-scale) so it still paths normally.
-            if (model == "Demon")
-            {
-                const float wightScale = 4f;
-                height     *= wightScale;
-                col.radius *= wightScale;
-                col.height *= wightScale;
-                col.center *= wightScale;
-            }
+            // SIZE IS DATA-DRIVEN (owner 2026-06-19, WO-468): the old `model == "Demon"` 4x block
+            // was authored for one small AccuRIG wight, but the "Demon" model is SHARED by
+            // tiefling-cultist + demon (see ModelForEnemy), so the 4x rendered a 1.9m cultist at
+            // ~7.6m — the "enemies way too large" the owner flagged in playtest. VisualFactory.Fit
+            // already normalises every enemy to exactly def.Height, so a looming demon's size belongs
+            // in its EnemyDef.Height (data), NOT a code multiplier keyed off the shared model name.
+            // Removed: enemies now render at their authored height (~1.8m vs the 1.75m hero).
 
             // WO-315: rig-forward correction. The +X-forward Tripo/People families (the
             // Orc Warband — same export convention as the heroes, which use -90f) need a
