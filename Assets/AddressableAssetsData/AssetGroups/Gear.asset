@@ -1195,6 +1195,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9313f23c42662f44699cbdfec67ddf5d
+    m_Address: hero/base/HumanMale
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9314028ad52a8b041ad85519b1f6228d
     m_Address: gear/weapon/Claws1h_08
     m_ReadOnly: 0

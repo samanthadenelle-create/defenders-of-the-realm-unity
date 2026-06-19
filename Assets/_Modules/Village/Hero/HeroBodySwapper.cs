@@ -16,7 +16,10 @@
 
 using DeNelle.Core.Combat; // ActorAnimator for post-swap battle ready / full anim drive (Village + World)
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;          // FlowTrace / Guard — §12 instrument the async body-build
 using UnityEngine;
+using UnityEngine.AddressableAssets;      // Blink base body lives OUTSIDE Resources (gitignored) → Addressables
+using UnityEngine.ResourceManagement.AsyncOperations;
 
 namespace DeNelle.Village
 {
@@ -34,33 +37,26 @@ namespace DeNelle.Village
         private ActorAnimator _heroActor;
         private Yarn.Unity.DialogueRunner _dialogueRunner;
 
+        // Blink LowPoly base body address (set on the prefab by BlinkAddressableMarker.MarkBlinkGear).
+        // The gitignored base body lives OUTSIDE Resources, so it loads via Addressables — NOT
+        // Resources.Load. Every class shares this one rig; the class only picks the DEFAULT armor.
+        private const string BlinkBaseBodyAddress = "hero/base/HumanMale";
+
+        // The async base-body load handle — ONE owner (this component); released on OnDestroy so the
+        // Blink base prefab never leaks. Open-flag guards a double-release.
+        private AsyncOperationHandle<GameObject> _baseBodyHandle;
+        private bool _baseBodyHandleOpen;
+
         private void Start()
         {
+            using var _ = FlowTrace.Enter("HeroBody", "Start (Blink base body)");
+
             HeroClass cls = ResolveHeroClass();
-            string slug = SlugFor(cls);
-            if (slug == null) return;             // Mage = default body, no swap.
+            string slug = SlugFor(cls) ?? "Mage"; // Mage maps to null in SlugFor → controller/abilities default
 
-            var prefab = Resources.Load<GameObject>("Heroes/" + slug);
-            if (prefab == null)
-            {
-                // DEF-229 loud-failure guard: a chosen class with NO body asset must shout, not
-                // silently leave the baked placeholder (the "wrong/old hero" symptom). The owner
-                // sees the PLACEHOLDER (Wizard), reads it as "the wrong model spawned", and the
-                // root cause (a missing/mis-named Resources/Heroes/<slug>.fbx) stays hidden. Error
-                // names the exact class → slug → expected path so it is actionable at a glance.
-                Debug.LogError(
-                    "[HeroBodySwapper] DEF-229 — chosen hero " + cls + " maps to slug '" + slug +
-                    "' but Resources/Heroes/" + slug + ".fbx is MISSING. The placeholder body is " +
-                    "being kept, which reads in-game as 'the wrong/old hero spawned'. Import the " +
-                    "matching Humanoid FBX to Resources/Heroes/" + slug + ".fbx (animationType=3).");
-                return;
-            }
-
-            // Remove the old body if one exists, but FIRST snapshot the
-            // Animator's runtimeAnimatorController so the new body keeps the
-            // Walk / Cast states. Tripo FBXs import without an Animator on
-            // some configs — when null we still try to assign the controller
-            // to a freshly-added Animator on the new body root.
+            // Remove the old (baked placeholder) body FIRST and snapshot its controller as a
+            // last-ditch fallback. The Blink base loads async, so we destroy the placeholder now
+            // and the new body appears a frame later (the hero root + camera persist).
             RuntimeAnimatorController controllerSnapshot = null;
             var old = transform.Find("HeroBody");
             if (old != null)
@@ -70,32 +66,122 @@ namespace DeNelle.Village
                 Destroy(old.gameObject);
             }
 
-            // DEF-221: build the body through the ONE shared factory — the same
-            // VisualFactory.Skin path the companion (StoryCompanionInjector) and every
-            // enemy (EnemyFactory) already use — instead of the bespoke load/instantiate/
-            // fit/seat/strip block the hero was the LAST holdout for. Skin handles
-            // Instantiate + FitHeight + SeatOnGround (feet at the root, supersedes the
-            // old NormalizeHeight) + StripColliders. Hero-specific wiring (forward yaw,
-            // animator, ability kit, class texture/tint) layers on top below.
-            // Knight stands slightly taller (~1.80m) than the 1.75m human baseline (was 20% on old 2m).
-            // The hero keeps its OWN material pass (RetargetMaterialsToUrp + ApplyExtractedTexture
-            // + ApplyClassTint), so the factory's Tripo fix stays OFF (no double-process).
+            FlowTrace.Step("HeroBody", $"class={cls} slug={slug} — kicking Blink base load '{BlinkBaseBodyAddress}'.");
+            BeginBlinkBaseLoad(cls, slug, controllerSnapshot);
+        }
+
+        // Kick off the async Addressables load of the Blink LowPoly base body. GUARDED (§12, no
+        // silent failure): a throw or a failed handle logs via FlowTrace.Fail and falls back to the
+        // legacy Resources/Heroes body so the hero is NEVER left bodyless.
+        private void BeginBlinkBaseLoad(HeroClass cls, string slug, RuntimeAnimatorController controllerSnapshot)
+        {
+            AsyncOperationHandle<GameObject> handle;
+            try
+            {
+                handle = Addressables.LoadAssetAsync<GameObject>(BlinkBaseBodyAddress);
+            }
+            catch (System.Exception ex)
+            {
+                FlowTrace.Fail("HeroBody",
+                    $"Blink base load threw for '{BlinkBaseBodyAddress}': {ex.GetType().Name}: {ex.Message} — " +
+                    "falling back to legacy Resources/Heroes body (no bodyless hero).");
+                BuildLegacyResourcesBody(cls, slug, controllerSnapshot);
+                return;
+            }
+
+            _baseBodyHandle = handle;
+            _baseBodyHandleOpen = true;
+
+            handle.Completed += op =>
+            {
+                if (this == null) return; // destroyed mid-load
+                if (op.Status != AsyncOperationStatus.Succeeded || op.Result == null)
+                {
+                    FlowTrace.Fail("HeroBody",
+                        $"Blink base load FAILED for '{BlinkBaseBodyAddress}' (status={op.Status}) — " +
+                        "falling back to legacy Resources/Heroes body (no bodyless hero).");
+                    ReleaseBaseBodyHandle();
+                    BuildLegacyResourcesBody(cls, slug, controllerSnapshot);
+                    return;
+                }
+
+                // CRITICAL async-ordering (the "sliding statue / null animator" class): ALL post-load
+                // wiring runs INSIDE this callback, never synchronously after the async kickoff.
+                BuildBlinkHeroBody(op.Result, cls, slug, controllerSnapshot);
+            };
+        }
+
+        private void ReleaseBaseBodyHandle()
+        {
+            if (!_baseBodyHandleOpen) return;
+            _baseBodyHandleOpen = false;
+            if (_baseBodyHandle.IsValid()) Addressables.Release(_baseBodyHandle);
+            _baseBodyHandle = default;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────────────
+        // BLINK PATH: build the playable hero body from the Blink LowPoly base prefab, then run
+        // the full post-load wiring. Blink ships CLEAN URP materials + a CLEAN bind pose, so the
+        // Tripo/CC5 workarounds (RetargetMaterialsToUrp, ApplyExtractedTexture, ApplyFlatSteelStopgap,
+        // ApplyClassTint, the embedded camera/listener strip, PlantFeetOnGround's CC5 sole nudge) are
+        // BYPASSED — those methods stay in the file (dead for Blink, reachable for the legacy path).
+        // ─────────────────────────────────────────────────────────────────────────────
+        private void BuildBlinkHeroBody(GameObject prefab, HeroClass cls, string slug,
+                                        RuntimeAnimatorController controllerSnapshot)
+        {
+            using var _ = FlowTrace.Enter("HeroBody", $"BuildBlinkHeroBody class={cls}");
+
+            // Build through the ONE shared factory (same path the companion + enemies use). Blink
+            // ships a clean bind pose, so FixTripoMaterials stays OFF and we do NOT apply a forward
+            // yaw guess — the Blink rig exports facing +Z already; AlignBodyFacingToRoot below
+            // self-corrects from the skeleton if any residual remains (no hard-coded -90° hack).
             float targetH = (cls == HeroClass.Knight) ? TargetHeightMeters * 1.0286f : TargetHeightMeters;
-            // FORWARD CORRECTION (WO-174): every hero body imports facing +X; rotate the
-            // authored +X onto the root's +Z so facing == heading (no moonwalk).
-            // DEF-232: pass the yaw to Skin as LocalRotation so it is applied BEFORE the
-            // fit/seat pass. The OLD code rotated the body AFTER Skin had already centred the
-            // (off-pivot) bounds over the root at identity — so the -90° swung the mesh to the
-            // side of the root. The camera follows the ROOT, so the body appeared offset to her
-            // right and "pivoted in place" instead of translating. Rotating first, then seating,
-            // centres the visible body dead-on over the root the camera follows.
-            // FORWARD-YAW for current Tripo + AccuRIG pipeline (all classes re-rigged 2026-06-06).
-            // The meshes export facing +X; +90f (or -90f — trial both) rotates the authored
-            // forward onto the locomotion root's +Z so that when HeroLocomotion does
-            // LookRotation(velocity) the visual faces the travel direction (no sidestep/moonwalk).
-            // WO-326: -90f is the proven value — the companion path skins the SAME
-            // Resources/Heroes FBXs with -90f (StoryCompanionInjector.cs:160) and reads
-            // correct. +90f put the hero ~90 degrees right of travel.
+            GameObject body = null;
+            Guard.Try("HeroBody", "VisualFactory.Skin (Blink base)", () =>
+            {
+                body = VisualFactory.Skin(transform, prefab, new SkinOptions
+                {
+                    FitHeight = targetH,
+                    StripColliders = true,
+                    SeatOnGround = true,
+                    FixTripoMaterials = false,
+                });
+            });
+            if (body == null)
+            {
+                FlowTrace.Fail("HeroBody",
+                    "VisualFactory.Skin returned null for the Blink base — falling back to legacy Resources body.");
+                ReleaseBaseBodyHandle();
+                BuildLegacyResourcesBody(cls, slug, controllerSnapshot);
+                return;
+            }
+            body.name = "HeroBody"; // EquipmentController.CacheRig finds it by transform.Find("HeroBody")
+            FlowTrace.Step("HeroBody", "Blink base body skinned + named 'HeroBody'.");
+
+            WireHeroBody(body, cls, slug, controllerSnapshot, isBlink: true);
+        }
+
+        // LEGACY FALLBACK: the pre-Blink Resources/Heroes/<slug>.fbx body, kept so a missing Blink
+        // pack (gitignored / not yet marked Addressable) never leaves the hero bodyless. Runs the
+        // full Tripo/CC5 material + facing pipeline as before.
+        private void BuildLegacyResourcesBody(HeroClass cls, string slug,
+                                              RuntimeAnimatorController controllerSnapshot)
+        {
+            using var _ = FlowTrace.Enter("HeroBody", $"BuildLegacyResourcesBody slug={slug}");
+
+            var prefab = Resources.Load<GameObject>("Heroes/" + slug);
+            if (prefab == null)
+            {
+                Debug.LogError(
+                    "[HeroBodySwapper] DEF-229 — Blink base unavailable AND Resources/Heroes/" + slug +
+                    ".fbx is MISSING. The hero is left bodyless. Mark the Blink base Addressable " +
+                    "(Defenders → Catalog → Mark Blink Gear Addressable) or import the legacy FBX.");
+                FlowTrace.Fail("HeroBody", $"No Blink base and no Resources/Heroes/{slug} body — hero bodyless.");
+                return;
+            }
+
+            float targetH = (cls == HeroClass.Knight) ? TargetHeightMeters * 1.0286f : TargetHeightMeters;
+            // WO-326: -90f is the proven legacy forward-yaw for the Tripo/AccuRIG FBXs.
             float forwardYaw = -90f;
             var body = VisualFactory.Skin(transform, prefab, new SkinOptions
             {
@@ -108,6 +194,14 @@ namespace DeNelle.Village
             if (body == null) return;
             body.name = "HeroBody";
 
+            WireHeroBody(body, cls, slug, controllerSnapshot, isBlink: false);
+        }
+
+        // Shared post-load wiring for BOTH the Blink and legacy body. On the Blink path the
+        // Tripo/CC5 material + embedded-strip + sole-nudge steps are skipped (clean assets).
+        private void WireHeroBody(GameObject body, HeroClass cls, string slug,
+                                  RuntimeAnimatorController controllerSnapshot, bool isBlink)
+        {
             // DEF-232 spawn-time validation: the camera (SmartMobileCamera) follows the hero
             // ROOT by tag; HeroLocomotion drives that same root. The visible body must sit
             // centred over the root (no horizontal offset) or the camera frames empty space
@@ -115,25 +209,23 @@ namespace DeNelle.Village
             // caught at the source instead of re-surfacing as a "camera stays to her right" bug.
             ValidateBodyCentredOverRoot(body);
 
-            // DEF-235: plant the feet on the ground. VisualFactory.SeatOnGround drops the body
-            // so its RENDER-BOUNDS base (b.min.y) sits at the root's y. For the CC5/AccuRIG hero
-            // bodies the lowest *visible* skinned vertex (the soles) sits ABOVE that bounds base
-            // — bind-pose padding leaves the renderer-bounds floor a few cm below the real feet —
-            // so the hero reads as "floating a tiny bit". Measure the TRUE lowest posed vertex in
-            // world space and nudge the body DOWN by exactly that gap so the soles touch root.y.
-            // Y-only (orthogonal to DEF-232's XZ centring) and hero-scoped (does NOT touch the
-            // global VisualFactory.SeatOnGround, which enemies/structures rely on).
-            PlantFeetOnGround(body);
-
+            // DEF-235: plant the feet on the ground (LEGACY ONLY). The CC5/AccuRIG bodies float a
+            // few cm because their SkinnedMeshRenderer bounds carry bind-pose padding. Blink ships a
+            // clean bind pose seated by VisualFactory.SeatOnGround, so the CC5 sole nudge is BYPASSED.
             StripRigidbodies(body);
-            // Tripo FBXs embed a CAMERA / AudioListener; left in, the hero body's camera
-            // fights the VillageCamera (runtime camera-soup, 2026-05-25). Strip both so
-            // only the hero's follow camera drives the display.
-            foreach (var cam in body.GetComponentsInChildren<Camera>(true))
-                if (cam != null) Destroy(cam);
-            foreach (var al in body.GetComponentsInChildren<AudioListener>(true))
-                if (al != null) Destroy(al);
-            RetargetMaterialsToUrp(body);
+            if (!isBlink)
+            {
+                PlantFeetOnGround(body);
+                // Tripo FBXs embed a CAMERA / AudioListener; strip both so only the hero's follow
+                // camera drives the display. Blink prefabs are clean — no embedded artifacts.
+                foreach (var cam in body.GetComponentsInChildren<Camera>(true))
+                    if (cam != null) Destroy(cam);
+                foreach (var al in body.GetComponentsInChildren<AudioListener>(true))
+                    if (al != null) Destroy(al);
+                // Tripo/CC5 materials are Phong/Lambert/null → retarget to URP. Blink ships clean
+                // URP materials already, so this pass is BYPASSED (no double-process).
+                RetargetMaterialsToUrp(body);
+            }
             // Owner 2026-05-25 "the rig exists, the animation exists" — wire the
             // REAL Walk/Cast animation. The per-class controller is generated by
             // HeroAnimatorSetup (Defenders → Animation → Setup <Class> Animator),
@@ -152,21 +244,18 @@ namespace DeNelle.Village
 
             var anim = body.GetComponentInChildren<Animator>();
             if (anim == null) anim = body.AddComponent<Animator>();
-            // CRITICAL (WO-174 "no walk / statue"): the per-class controllers are
-            // built from HUMANOID Mixamo/iClone clips (HeroAnimatorFactory). A
-            // Humanoid clip can ONLY pose the rig through an Avatar — with no
-            // Avatar the Animator stays frozen in its bind/T-pose no matter what
-            // Speed we feed it (the "sliding statue"). The FBX prefab's root
-            // Animator normally carries its generated Humanoid avatar; but Tripo
-            // exports sometimes instantiate WITHOUT an Animator (then AddComponent
-            // above yields an avatar-less one), or with the avatar dropped. Pull
-            // the avatar off the source FBX prefab and assign it whenever the
-            // live Animator is missing one, so retarget always binds.
+            // CRITICAL (WO-174 "no walk / statue"): the per-class controllers are built from
+            // HUMANOID Mixamo/iClone clips (HeroAnimatorFactory). A Humanoid clip can ONLY pose the
+            // rig through an Avatar — with NO avatar the Animator freezes in its bind/T-pose. The
+            // Blink base body (and the legacy FBX) carry their generated Humanoid avatar through
+            // VisualFactory.Skin (it instantiates the prefab root), so the live Animator normally
+            // has a valid avatar here. Self-report if it does NOT, so a run pinpoints the
+            // missing-avatar case (the "sliding statue") instead of silently posing the T-pose.
             if (anim.avatar == null || !anim.avatar.isValid)
             {
-                var prefabAnim = prefab.GetComponentInChildren<Animator>();
-                if (prefabAnim != null && prefabAnim.avatar != null && prefabAnim.avatar.isValid)
-                    anim.avatar = prefabAnim.avatar;
+                FlowTrace.Warn("HeroBody",
+                    $"body '{body.name}' Animator has no valid Humanoid avatar after Skin (isBlink={isBlink}) — " +
+                    "humanoid clips will hold the bind/T-pose (sliding-statue risk). Check the prefab's avatar.");
             }
 
             // DEF-232 (facing) self-correct — replaces the hard-coded -90° guess above for any body
@@ -306,24 +395,25 @@ namespace DeNelle.Village
             //   basecolor fails to load, so the Knight degrades to solid steel rather than the
             //   cyan/grey/null-slot fallback. ApplyExtractedTexture returns false when no diffuse
             //   was bound (load failed / no texPath).
-            bool textured = ApplyExtractedTexture(body, cls);
-            if (cls == HeroClass.Knight)
+            // TEXTURE / TINT (LEGACY ONLY): the Tripo/CC5 bodies need a runtime material pass
+            // (ApplyExtractedTexture → flat-steel/class-tint fallback). Blink bodies ship clean URP
+            // materials + their own basecolor, so this whole block is BYPASSED — the Blink hero is
+            // textured by its prefab. The methods stay in the file for the legacy path.
+            if (!isBlink)
             {
-                // WO (2026-06-10) KNIGHT BODY SWAP → human_tank:
-                //   The Knight body is now the clean, textured human_tank model and its OWN
-                //   UV-matched basecolor (HeroTank_Diffuse) binds via ApplyExtractedTexture.
-                //   Route the Knight through that real texture instead of forcing flat steel.
-                //   Keep flat steel ONLY as the load-failed fallback so the Knight degrades to
-                //   solid armour grey (not a cyan/null-slot error shape) if the diffuse ever fails
-                //   to load — ApplyExtractedTexture returns false when no diffuse was bound.
-                if (!textured)
-                    ApplyFlatSteelStopgap(body);
-            }
-            else
-            {
-                // Safety net: if Tripo's embedded textures didn't extract, paint
-                // the body with a class tint so the mesh isn't solid white.
-                ApplyClassTint(body, cls);
+                bool textured = ApplyExtractedTexture(body, cls);
+                if (cls == HeroClass.Knight)
+                {
+                    // Knight: real human_tank basecolor binds via ApplyExtractedTexture; flat steel
+                    // is the load-failed fallback only (degrades to solid armour grey, not cyan).
+                    if (!textured)
+                        ApplyFlatSteelStopgap(body);
+                }
+                else
+                {
+                    // Safety net: untextured legacy body gets a class tint so it isn't solid white.
+                    ApplyClassTint(body, cls);
+                }
             }
             // DEF: the Ranger/Archer fires arrows via the projectile system but held
             // NOTHING — give him a visible bow. Bow goes in the LEFT (off/bow) hand
@@ -343,6 +433,17 @@ namespace DeNelle.Village
             // proportional to ~1.8m hero (see GearVisualApplier for exact values).
             if (!TryGetComponent(out GearLoadout loadout)) loadout = gameObject.AddComponent<GearLoadout>();
             loadout.Refresh();
+
+            // CLASS DEFAULT ARMOR (owner pick 2026-06-18): the hero spawns already WEARING the
+            // picked Blink set so HeroArmorVisual swaps it onto the playable body at spawn — Knight=
+            // Centurion, Ranger=BeastHunter, Mage=Dragonic. It is just the LEVEL-1 default: seeded
+            // only when the player has NOT already chosen armor for this class (the per-class equip
+            // PlayerPrefs key is absent), so a later manual equip is never overridden on respawn.
+            // EquipArmorById persists the choice + fires OnGearChanged (HeroArmorVisual reacts), and
+            // intentionally bypasses the weight-class gate (Dragonic is heavy but the Mage default) —
+            // this is the owner's explicit cosmetic default, not an auto-best pick.
+            SeedClassDefaultArmor(loadout, cls);
+
             GearVisualApplier.Apply(body.transform, loadout);
 
             // Ensure the guarded ActorAnimator is on the hero root (finds the Animator on the
@@ -374,8 +475,60 @@ namespace DeNelle.Village
             // a story line is on screen.
             HookDialogueIdle();
 
-            Debug.Log("[HeroBodySwapper] Swapped hero body to " + slug + ".fbx");
+            FlowTrace.Step("HeroBody",
+                $"Hero body wired complete: class={cls} slug={slug} isBlink={isBlink} body='{body.name}'.");
+            Debug.Log($"[HeroBodySwapper] Hero body ready ({(isBlink ? "Blink base" : "legacy " + slug + ".fbx")}).");
         }
+
+        /// <summary>
+        /// Seed the per-class DEFAULT Blink armor so the hero spawns wearing it (Knight=Centurion,
+        /// Ranger=BeastHunter, Mage=Dragonic, Cleric=Centurion). Only applied when the player has NOT
+        /// already chosen armor for this class (the GearLoadout per-class equip PlayerPrefs key is
+        /// absent) — so a manual equip from the equip UI is never overridden on respawn. Delegates to
+        /// GearLoadout.EquipArmorById (persists + fires OnGearChanged for HeroArmorVisual). It is the
+        /// LEVEL-1 default only; the player can change armor at any time.
+        /// </summary>
+        private static void SeedClassDefaultArmor(GearLoadout loadout, HeroClass cls)
+        {
+            if (loadout == null) return;
+
+            string armorId = DefaultArmorIdFor(cls);
+            if (string.IsNullOrEmpty(armorId)) return;
+
+            // Mirror GearLoadout's per-class persistence key (stable contract): if the player has
+            // already interacted with this class's armor slot (any value, incl. the none-sentinel),
+            // leave their choice alone. Absent key => first spawn => seed the owner's default.
+            // Use the SAME job string GearLoadout persists under (HeroAbilities.HeroClass — which
+            // routes Cleric→"mage"); fall back to the enum name when no HeroAbilities is present.
+            var abilities = loadout.GetComponent<HeroAbilities>();
+            string jobKey = abilities != null && !string.IsNullOrEmpty(abilities.HeroClass)
+                ? abilities.HeroClass.ToLowerInvariant()
+                : ClassKey(cls);
+            string key = "dotr-equip-armor-" + jobKey;
+            if (PlayerPrefs.HasKey(key))
+            {
+                FlowTrace.Step("HeroBody",
+                    $"SeedClassDefaultArmor: '{key}' already set — keeping the player's armor choice (no reseed).");
+                return;
+            }
+
+            FlowTrace.Step("HeroBody", $"SeedClassDefaultArmor: equipping default '{armorId}' for {cls}.");
+            Guard.Try("HeroBody", $"equip default armor '{armorId}'", () => loadout.EquipArmorById(armorId));
+        }
+
+        /// <summary>The owner-picked DEFAULT Blink armor catalog id per class (cosmetic level-1 look).
+        /// Ids match Assets/Resources/Data/Canonical/armor.json (Blink rows, loadVia="addressable").</summary>
+        private static string DefaultArmorIdFor(HeroClass cls) => cls switch
+        {
+            HeroClass.Knight => "blink_armor_centurion",    // gear/armor/Centurion_Male
+            HeroClass.Ranger => "blink_armor_beasthunter",  // gear/armor/BeastHunter_Male
+            HeroClass.Mage   => "blink_armor_dragonic",     // gear/armor/Dragonic_Male
+            HeroClass.Cleric => "blink_armor_centurion",    // heavy default (shares the Knight plate)
+            _                => null,
+        };
+
+        // Lower-cased class key matching GearLoadout.PrefJobKey() (HeroAbilities.HeroClass lower-cased).
+        private static string ClassKey(HeroClass cls) => cls.ToString().ToLowerInvariant();
 
         /// <summary>
         /// WO-376: subscribe to the shared Yarn runner's start/complete events so the hero
@@ -438,6 +591,8 @@ namespace DeNelle.Village
                 if (_dialogueRunner.onDialogueStart != null)    _dialogueRunner.onDialogueStart.RemoveListener(OnDialogueIdle);
                 if (_dialogueRunner.onDialogueComplete != null) _dialogueRunner.onDialogueComplete.RemoveListener(OnDialogueIdle);
             }
+            // Release the Blink base-body Addressables handle (ONE owner) so the prefab never leaks.
+            ReleaseBaseBodyHandle();
         }
 
         /// <summary>

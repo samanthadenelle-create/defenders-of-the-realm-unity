@@ -312,18 +312,27 @@ namespace DeNelle.Village
             Animator anim = instance.GetComponentInChildren<Animator>();
             if (anim == null) anim = instance.AddComponent<Animator>();
 
-            // The instance must carry (or inherit) a VALID Humanoid avatar to play humanoid
-            // clips. Prefer its own; else borrow the prefab/base avatar. With NO valid avatar a
-            // humanoid clip can only hold the bind/T-pose — bail so we don't show a static body.
+            // BLINK MIGRATION (no avatar borrow): the base body is now the Blink LowPoly human rig
+            // and the armored set is a full-body skinned mesh on the SAME skeleton, so the armored
+            // instance ships its OWN valid Humanoid avatar that matches the base 1:1 — it retargets
+            // the hero's clips natively with no borrow. Prefer the instance's own avatar; only when
+            // it is somehow missing/invalid do we fall back to the base avatar (a true match on the
+            // shared rig, not a cross-rig hack). With NO valid avatar at all a humanoid clip can only
+            // hold the bind/T-pose — bail so we never show a static body.
             if (anim.avatar == null || !anim.avatar.isValid)
             {
                 if (baseAnim.avatar != null && baseAnim.avatar.isValid)
                 {
-                    // Blink armor + base body share ONE rig (docs/BLINK_NOTES.md), so the base
-                    // body's avatar validly retargets the armored mesh.
+                    // Same rig (docs/BLINK_NOTES.md) → the base avatar IS the armored body's avatar.
                     anim.avatar = baseAnim.avatar;
-                    FlowTrace.Step("ArmorVisual", $"borrowed base avatar '{anim.avatar.name}' for armor '{armorId}'.");
+                    FlowTrace.Step("ArmorVisual",
+                        $"armor '{armorId}' had no own avatar — assigned the shared-rig base avatar '{anim.avatar.name}' (true match).");
                 }
+            }
+            else
+            {
+                FlowTrace.Step("ArmorVisual",
+                    $"armor '{armorId}' uses its OWN Humanoid avatar '{anim.avatar.name}' (native retarget — no borrow).");
             }
 
             if (anim.avatar == null || !anim.avatar.isValid)
@@ -361,7 +370,22 @@ namespace DeNelle.Village
                 if (r.enabled) { r.enabled = false; hidden++; }
             }
             _hiddenBaseRenderers = renderers;
-            FlowTrace.Step("ArmorVisual", $"HideBaseBody: disabled {hidden} base SkinnedMeshRenderer(s).");
+            if (hidden == 0)
+            {
+                // SELF-REPORT (Blink migration): with the real Blink base body, HideBaseBody should
+                // disable >=1 SkinnedMeshRenderer (the Starter_* body meshes). Disabling 0 means the
+                // resolved base body carries no enabled SkinnedMeshRenderer (wrong transform resolved,
+                // or the base body was already hidden / is a non-skinned placeholder) — the old
+                // "disabled 0" symptom. Warn so a run pinpoints it instead of a silently-still-naked hero.
+                FlowTrace.Warn("ArmorVisual",
+                    $"HideBaseBody: disabled 0 base SkinnedMeshRenderer(s) on '{baseBody.name}' " +
+                    $"({renderers?.Length ?? 0} found) — base body may be wrong/already-hidden. " +
+                    "Armored body still shown over it.");
+            }
+            else
+            {
+                FlowTrace.Step("ArmorVisual", $"HideBaseBody: disabled {hidden} base SkinnedMeshRenderer(s).");
+            }
         }
 
         // Re-enable the base body's renderers we previously hid (re-resolving live ones if the

@@ -50,6 +50,17 @@ namespace DeNelle.Editor.Catalog
         internal const string ArmorRoot =
             "Assets/Blink/Art/Characters/LowPoly/Humans_LowPoly/ArmorPacks/Prefabs";
 
+        // The Blink LowPoly BASE human body (Humanoid avatar; carries the Starter_* body
+        // SkinnedMeshRenderers). This is the PLAYABLE hero rig: the 25 armor sets are full-body
+        // SkinnedMeshRenderer prefabs on this SAME skeleton, so the hero retargets natively and
+        // Blink armor renders on the real playable body (no avatar borrow / T-pose). Gitignored +
+        // OUTSIDE Resources → must be loaded via Addressables. HeroBodySwapper loads it at
+        // BaseBodyAddress. (Asset path verified on-disk 2026-06-18.)
+        internal const string BaseBodyAssetPath =
+            "Assets/Blink/Art/Characters/LowPoly/Humans_LowPoly/Prefabs_Humans/HumanMale_Character.prefab";
+        // Stable Addressable address for the base body (mirrors the gear scheme).
+        internal const string BaseBodyAddress = "hero/base/HumanMale";
+
         // The single Addressables group every Blink gear asset is filed under.
         internal const string GearGroup = "Gear";
 
@@ -77,7 +88,11 @@ namespace DeNelle.Editor.Catalog
                 return;
             }
 
-            int weapons = 0, armor = 0, skipped = 0;
+            int weapons = 0, armor = 0, baseBody = 0, skipped = 0;
+
+            // ── Base body: the playable Blink LowPoly human rig (one entry) ──
+            if (MarkBaseBody(settings, group)) baseBody++;
+            else skipped++;
 
             // ── Weapons: every prefab under the category subfolders ──
             foreach (var (guid, address) in EnumerateWeaponPrefabs())
@@ -97,8 +112,25 @@ namespace DeNelle.Editor.Catalog
                               null, true, true);
             AssetDatabase.SaveAssets();
 
-            Debug.Log($"[BlinkAddressableMarker] Marked {weapons} weapon + {armor} armor-set " +
-                      $"prefabs Addressable in group '{GearGroup}' ({skipped} already addressed/skipped).");
+            Debug.Log($"[BlinkAddressableMarker] Marked {weapons} weapon + {armor} armor-set + " +
+                      $"{baseBody} base-body prefab(s) Addressable in group '{GearGroup}' " +
+                      $"({skipped} already addressed/skipped).");
+        }
+
+        /// <summary>Mark the Blink LowPoly BASE human body Addressable at <see cref="BaseBodyAddress"/>
+        /// (the playable hero rig). Idempotent (already at the address => no churn) + guarded for the
+        /// gitignored-absent case (LogWarning + return false). Does NOT touch the 25 armor entries.</summary>
+        private static bool MarkBaseBody(AddressableAssetSettings settings, AddressableAssetGroup group)
+        {
+            string guid = AssetDatabase.AssetPathToGUID(BaseBodyAssetPath);
+            if (string.IsNullOrEmpty(guid))
+            {
+                Debug.LogWarning($"[BlinkAddressableMarker] base body '{BaseBodyAssetPath}' not found " +
+                                 "(gitignored Blink pack absent?) — base body NOT marked. The hero body-swap " +
+                                 "will fall back to the legacy Resources/Heroes path.");
+                return false;
+            }
+            return MarkEntry(settings, group, guid, BaseBodyAddress);
         }
 
         // =====================================================================
