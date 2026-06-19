@@ -18,6 +18,7 @@
 
 using System;
 using System.Collections.Generic;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 
 namespace DeNelle.Core.State
@@ -200,8 +201,12 @@ namespace DeNelle.Core.State
                     bd.Remove("gate-0");
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                // §12 TGVRU: was a SILENT catch. R (drop the orphan gate-0 → south gate
+                // loads at 0 damage) is kept, but a failed migration step must be LOUD —
+                // silently losing data is the worst case.
+                FlowTrace.Warn("Save", $"v7→v8 gate-id migration FAILED — dropping orphan gate-0 (south gate loads at 0 damage). {ex.GetType().Name}: {ex.Message}");
                 bd.Remove("gate-0");
             }
             return s;
@@ -231,8 +236,12 @@ namespace DeNelle.Core.State
                             raw, SaveSchema.JsonSettings);
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                // §12 TGVRU: was a SILENT catch. R (legacy=null → fall back to per-field
+                // defaults below) is kept, but a failed legacy-settings parse must report
+                // so a silently-lost audio/difficulty preference reaches the break-log.
+                FlowTrace.Warn("Save", $"v8→v9 legacy-settings parse FAILED — audio/difficulty prefs fall back to defaults. {ex.GetType().Name}: {ex.Message}");
                 legacy = null;
             }
 
@@ -248,9 +257,12 @@ namespace DeNelle.Core.State
                 if (PlayerPrefs.HasKey(SaveSchema.LegacySettingsKey))
                     PlayerPrefs.DeleteKey(SaveSchema.LegacySettingsKey);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // ignore — the legacy key is now ignored regardless.
+                // §12 TGVRU: was a silent ignore. The legacy key is ignored regardless,
+                // so this is non-fatal — but report it (a failed PlayerPrefs delete can
+                // signal a deeper prefs corruption worth seeing in the break-log).
+                FlowTrace.Warn("Save", $"v8→v9 legacy-settings key delete FAILED (non-fatal — key is ignored regardless). {ex.GetType().Name}: {ex.Message}");
             }
             return s;
         }

@@ -19,6 +19,7 @@
 // =============================================================================
 
 using System.IO;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 
 namespace DeNelle.Core
@@ -51,7 +52,14 @@ namespace DeNelle.Core
                 if (File.Exists(full))
                     return File.ReadAllText(full);
             }
-            catch { /* no filesystem (WebGL) — Resources was the only valid path */ }
+            catch (System.Exception ex)
+            {
+                // §12 TGVRU: was an EMPTY catch. On WebGL this is the expected no-filesystem
+                // path (Resources is the only valid source there) — so it is a Warn, not a Fail.
+                // But a REAL desktop read failure (locked/permission/corrupt file) used to be
+                // swallowed here, producing the "catalog empty" class silently. Now it reports.
+                FlowTrace.Warn("Catalog", $"StreamingAssets read of '{relativePath}' failed (expected on WebGL; a real desktop failure here = an empty catalog). {ex.GetType().Name}: {ex.Message}");
+            }
 
             return null;
         }

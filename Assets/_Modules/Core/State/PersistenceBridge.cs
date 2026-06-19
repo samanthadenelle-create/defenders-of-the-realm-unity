@@ -38,6 +38,7 @@
 using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.SceneManagement;
@@ -165,11 +166,27 @@ namespace DeNelle.Core.State
 
         private void WireWaveManager()
         {
+            // §12 TGVRU: this reflection lookup is the GAP-1 seam (wave-clear → backend
+            // sync). A null Type or a renamed/removed OnWaveCleared member would SILENTLY
+            // no-op — severing wave-clear persistence with zero trace. A missing TYPE in a
+            // build that should carry DeNelle.Village is a hard Fail; a missing MEMBER on a
+            // present Type means the event was renamed/removed = the seam is severed = Fail.
             var wmType = Type.GetType("DeNelle.Village.WaveManager, DeNelle.Village");
-            if (wmType == null) return;
+            if (wmType == null)
+            {
+                // Expected in a Core-only / no-Village context, but if DeNelle.Village
+                // SHOULD be loaded this is the renamed-assembly/class signature.
+                FlowTrace.Warn("Save", "WireWaveManager: DeNelle.Village.WaveManager type not found " +
+                    "(expected if Village isn't loaded; a renamed assembly/class severs wave-clear sync).");
+                return;
+            }
 
             var found = FindObjectsByType(wmType, FindObjectsSortMode.None);
-            if (found == null || found.Length == 0) return;
+            if (found == null || found.Length == 0)
+            {
+                // Normal — most scenes have no WaveManager. Not a failure.
+                return;
+            }
             _waveManager = found[0];
 
             // OnWaveCleared is a public UnityEvent<int> (field, or property fallback).
@@ -177,11 +194,27 @@ namespace DeNelle.Core.State
             _waveClearedEvent = field != null
                 ? field.GetValue(_waveManager)
                 : wmType.GetProperty("OnWaveCleared")?.GetValue(_waveManager);
-            if (_waveClearedEvent == null) { _waveManager = null; return; }
+            if (_waveClearedEvent == null)
+            {
+                FlowTrace.Fail("Save", "WireWaveManager: WaveManager found but its OnWaveCleared member " +
+                    "resolved NULL (renamed/removed field+property) — wave-clear → backend sync is SEVERED.");
+                _waveManager = null;
+                return;
+            }
 
             _waveClearedHandler = OnWaveCleared;
-            _waveClearedEvent.GetType().GetMethod("AddListener")
-                ?.Invoke(_waveClearedEvent, new object[] { _waveClearedHandler });
+            var addListener = _waveClearedEvent.GetType().GetMethod("AddListener");
+            if (addListener == null)
+            {
+                FlowTrace.Fail("Save", "WireWaveManager: OnWaveCleared event has no AddListener method " +
+                    "(unexpected UnityEvent shape) — wave-clear → backend sync is SEVERED.");
+                _waveManager = null;
+                _waveClearedEvent = null;
+                _waveClearedHandler = null;
+                return;
+            }
+            addListener.Invoke(_waveClearedEvent, new object[] { _waveClearedHandler });
+            FlowTrace.Step("Save", "WireWaveManager: subscribed to WaveManager.OnWaveCleared (wave-clear → backend sync live).");
         }
 
         private void UnsubscribeWaveManager()

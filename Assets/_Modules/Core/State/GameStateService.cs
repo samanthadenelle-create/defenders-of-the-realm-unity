@@ -160,8 +160,16 @@ namespace DeNelle.Core.State
         /// </summary>
         public bool Load()
         {
+            // §12 TGVRU: ride the load thread top-to-bottom so a player-device save
+            // problem (corrupt JSON, missing payload, migration reject, schema fail)
+            // self-reports to the break-log instead of silently snapping back to a
+            // fresh game. R (safe-default) is unchanged — every reject still keeps
+            // fresh state and re-raises StateReplaced; the rejects are now LOUD.
+            using var _t = FlowTrace.Enter("Save", "Load (PlayerPrefs -> migrate -> validate -> apply)");
+
             if (!PlayerPrefs.HasKey(SaveSchema.PlayerPrefsKey))
             {
+                FlowTrace.Step("Save", "no save key present — brand-new game, fresh SO defaults stand.");
                 StateReplaced.Invoke();
                 return false; // brand-new game — fresh SO defaults stand.
             }
@@ -169,6 +177,7 @@ namespace DeNelle.Core.State
             var json = PlayerPrefs.GetString(SaveSchema.PlayerPrefsKey);
             if (string.IsNullOrEmpty(json))
             {
+                FlowTrace.Warn("Save", "save key present but value is EMPTY — keeping fresh state.");
                 StateReplaced.Invoke();
                 return false;
             }
@@ -180,13 +189,13 @@ namespace DeNelle.Core.State
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[GameStateService] Save parse failed — keeping fresh state. {ex.Message}");
+                FlowTrace.Fail("Save", $"Save parse FAILED (corrupt JSON) — keeping fresh state. {ex.GetType().Name}: {ex.Message}");
                 StateReplaced.Invoke();
                 return false;
             }
             if (file == null || file.State == null)
             {
-                Debug.LogError("[GameStateService] Save envelope missing its state payload — keeping fresh state.");
+                FlowTrace.Fail("Save", "Save envelope missing its state payload (file or file.State null) — keeping fresh state.");
                 StateReplaced.Invoke();
                 return false;
             }
@@ -195,7 +204,7 @@ namespace DeNelle.Core.State
             var migration = SaveMigrator.MigrateForImport(file.State, file.StoreVersion);
             if (!migration.Ok)
             {
-                Debug.LogError($"[GameStateService] Save migration rejected — keeping fresh state. {migration.Reason}");
+                FlowTrace.Fail("Save", $"Save migration REJECTED (storeVersion={file.StoreVersion}) — keeping fresh state. {migration.Reason}");
                 StateReplaced.Invoke();
                 return false;
             }
@@ -203,13 +212,15 @@ namespace DeNelle.Core.State
             var validation = SaveSchema.Validate(migration.Data);
             if (!validation.Ok)
             {
-                Debug.LogError($"[GameStateService] {validation.Message}");
+                FlowTrace.Fail("Save", $"Save schema validation FAILED — keeping fresh state. {validation.Message}");
                 StateReplaced.Invoke();
                 return false;
             }
 
+            // V (verify): the validated payload applied — the load produced live state.
             ApplyPersisted(validation.Data);
             _state.SchemaVersion = SaveSchema.CurrentVersion;
+            FlowTrace.Step("Save", $"Load OK — applied save (storeVersion={file.StoreVersion} -> schema v{SaveSchema.CurrentVersion}).");
             StateReplaced.Invoke();
             return true;
         }
@@ -245,7 +256,9 @@ namespace DeNelle.Core.State
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[GameStateService] Save failed. {ex.Message}");
+                // §12 TGVRU: a local PlayerPrefs write failure is a player-device save
+                // problem — route it to the break-log, not just the console.
+                FlowTrace.Fail("Save", $"local Save FAILED (PlayerPrefs write) — progress not persisted this frame. {ex.GetType().Name}: {ex.Message}");
             }
         }
 
@@ -1239,8 +1252,12 @@ namespace DeNelle.Core.State
                 return JsonConvert.DeserializeObject<List<SyncDeltaPayload>>(
                     raw, SaveSchema.JsonSettings) ?? new List<SyncDeltaPayload>();
             }
-            catch
+            catch (Exception ex)
             {
+                // §12 TGVRU: was a SILENT catch — a corrupt offline-sync queue would
+                // drop every queued delta with no trace. R (empty queue) is kept, but
+                // now it reports so a lost-sync class of bug reaches the break-log.
+                FlowTrace.Fail("Save", $"offline sync queue parse FAILED — dropping corrupt queue. {ex.GetType().Name}: {ex.Message}");
                 return new List<SyncDeltaPayload>();
             }
         }
