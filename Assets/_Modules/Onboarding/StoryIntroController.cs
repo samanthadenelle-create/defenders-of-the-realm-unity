@@ -29,6 +29,7 @@ using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -114,10 +115,12 @@ namespace DeNelle.Onboarding
         /// </summary>
         public async UniTask Play()
         {
-            if (HasFinished) return;
+            using var _ = FlowTrace.Enter("Onboarding", "StoryIntroController.Play (cold-open cinematic)");
+            if (HasFinished) { FlowTrace.Step("Onboarding", "StoryIntro.Play: already finished — no-op."); return; }
 
             if (!ShouldAutoPlay)
             {
+                FlowTrace.Step("Onboarding", "StoryIntro.Play: ShouldAutoPlay=false (returning player) — completing immediately, no cinematic.");
                 HideImmediate();
                 Complete();
                 return;
@@ -175,6 +178,11 @@ namespace DeNelle.Onboarding
                         var tex = Resources.Load<Texture2D>($"Intro/intro-{beat.ImageId}");
                         if (tex != null)
                             _imagePanel.style.backgroundImage = new StyleBackground(tex);
+                        else
+                            // R/U: a missing beat image was silently skipped — the text still
+                            // shows (never blank), but self-report it so a missing asset surfaces.
+                            FlowTrace.Warn("Onboarding",
+                                $"StoryIntro.Play: Resources/Intro/intro-{beat.ImageId} not found — beat plays text-only (no image).");
                         // Owner direction 2026-05-20: place images on the
                         // perimeter so they don't crowd the text. Deterministic
                         // per ImageId — same beat always lands in the same

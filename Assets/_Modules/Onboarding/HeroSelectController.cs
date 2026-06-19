@@ -47,6 +47,7 @@
 // =============================================================================
 
 using DeNelle.Core;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
 using UnityEngine;
@@ -189,10 +190,13 @@ namespace DeNelle.Onboarding
         /// </summary>
         private void BuildScreen()
         {
+            using var _ = FlowTrace.Enter("Onboarding", "HeroSelectController.BuildScreen");
             _root = _document != null ? _document.rootVisualElement : null;
             if (_root == null)
             {
-                Debug.LogWarning("[HeroSelectController] No UIDocument root — hero-select will not display.");
+                // P0 — no root means the hero-select renders NOTHING (a blank screen the
+                // player can't pass). Fail-loud to the break-log rather than a quiet warn.
+                FlowTrace.Fail("Onboarding", "BuildScreen: NO UIDocument root — hero-select will NOT display (BLANK SCREEN).");
                 return;
             }
 
@@ -225,6 +229,22 @@ namespace DeNelle.Onboarding
             // Run the orientation re-flow + self-assert once now in case the
             // panel already has its geometry (so we never wait a frame to verify).
             ReflowForSize(_root.resolvedStyle.width, _root.resolvedStyle.height);
+
+            // V — prove the screen built: root has children AND the four cards exist.
+            // A built-but-empty hero-select is a dead-end screen, so a zero count Fails.
+            int rootChildren = _root.childCount;
+            int cardCount = _cardRow != null ? _cardRow.childCount : 0;
+            if (rootChildren == 0 || cardCount == 0)
+            {
+                FlowTrace.Fail("Onboarding",
+                    $"BuildScreen VERIFY FAILED — rootChildren={rootChildren} cards={cardCount}. " +
+                    "Hero-select built but EMPTY (blank/dead-end screen).");
+            }
+            else
+            {
+                FlowTrace.Step("Onboarding",
+                    $"BuildScreen VERIFY ok — rootChildren={rootChildren} cards={cardCount}.");
+            }
         }
 
         // ── Full screen: roster panel ───────────────────────────────────────
@@ -674,24 +694,27 @@ namespace DeNelle.Onboarding
             int actual = _cardRow != null ? _cardRow.childCount : 0;
             if (actual != expected)
             {
-                Debug.LogError($"[HeroSelectController] PANEL ASSERT FAILED — expected {expected} " +
-                               $"hero panels, found {actual}. The hero row is not evenly built.");
+                // Wrong card count = a broken/empty roster — roll up as a hard failure.
+                FlowTrace.Fail("Onboarding",
+                    $"VerifyFourPanelsEven: PANEL ASSERT FAILED — expected {expected} hero panels, found {actual}. " +
+                    "The hero row is not evenly built.");
                 return;
             }
             for (int i = 0; i < _cards.Length; i++)
             {
                 if (_cards[i] == null)
                 {
-                    Debug.LogError($"[HeroSelectController] PANEL ASSERT FAILED — hero panel {i} is null.");
+                    FlowTrace.Fail("Onboarding", $"VerifyFourPanelsEven: PANEL ASSERT FAILED — hero panel {i} is null.");
                     return;
                 }
                 // Even distribution contract: every panel must flex-grow equally
                 // and must NOT carry a fixed pixel width (which would break the
-                // responsive re-flow in the other orientation).
+                // responsive re-flow in the other orientation). A no-flex panel still
+                // renders (visible, just uneven) — Warn rather than Fail.
                 if (_cards[i].resolvedStyle.flexGrow <= 0f)
                 {
-                    Debug.LogError($"[HeroSelectController] PANEL ASSERT FAILED — hero panel {i} " +
-                                   "has no flex-grow; the row will not distribute evenly.");
+                    FlowTrace.Warn("Onboarding",
+                        $"VerifyFourPanelsEven: hero panel {i} has no flex-grow; the row will not distribute evenly.");
                     return;
                 }
             }
@@ -818,8 +841,7 @@ namespace DeNelle.Onboarding
             }
             else
             {
-                Debug.LogWarning("[HeroSelectController] No GameStateService — the hero choice " +
-                                 "was NOT persisted. Routing onward anyway.");
+                FlowTrace.Warn("Onboarding", "PersistHero: No GameStateService — the hero choice was NOT persisted. Routing onward anyway.");
             }
         }
 

@@ -35,6 +35,7 @@
 // =============================================================================
 
 using DeNelle.Core;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
 using UnityEngine;
@@ -187,10 +188,12 @@ namespace DeNelle.Onboarding
 
         private void BindElements()
         {
+            using var _ = FlowTrace.Enter("Onboarding", "PetSelectController.BindElements");
             var rootDoc = _document != null ? _document.rootVisualElement : null;
             if (rootDoc == null)
             {
-                Debug.LogWarning("[PetSelectController] No UIDocument root — pet-select will not display.");
+                // P0 — no root means the pet-select renders NOTHING. Fail-loud.
+                FlowTrace.Fail("Onboarding", "BindElements: NO UIDocument root — pet-select will NOT display (BLANK SCREEN).");
                 return;
             }
 
@@ -292,7 +295,7 @@ namespace DeNelle.Onboarding
             var rootDoc = _document != null ? _document.rootVisualElement : null;
             if (rootDoc == null)
             {
-                Debug.LogWarning("[PetSelectController] No UIDocument root — already-chosen state will not display.");
+                FlowTrace.Fail("Onboarding", "BindAlreadyChosen: NO UIDocument root — already-chosen state will NOT display (BLANK SCREEN).");
                 return;
             }
 
@@ -371,8 +374,13 @@ namespace DeNelle.Onboarding
 
             if (pets.Count == 0)
             {
-                Debug.LogError("[PetSelectController] No starter pets loaded from pets.json — " +
-                               "the pet-select screen has nothing to show.");
+                // R — never a blank screen. The catalog came up empty (pets.json missing /
+                // failed to parse), so build a VISIBLE fallback card with a Continue path
+                // rather than leaving the player on an empty pet-select they can't pass.
+                FlowTrace.Fail("Onboarding",
+                    "BuildCards: NO starter pets loaded from pets.json — pet-select has nothing to show. " +
+                    "Rendering a visible fallback card so the screen is never blank/dead-ended.");
+                _cardRow.Add(BuildEmptyFallbackCard());
                 return;
             }
 
@@ -382,6 +390,65 @@ namespace DeNelle.Onboarding
                 _cardRow.Add(card);
                 _cards[i] = card;
             }
+
+            FlowTrace.Step("Onboarding", $"BuildCards: built {pets.Count} starter-pet card(s).");
+        }
+
+        /// <summary>
+        /// R (never-blank): a visible fallback card shown when the pets.json catalog is
+        /// empty. Explains the situation and offers a Continue button into town (the Echo
+        /// Hollow is the real bonding surface anyway) — so an empty catalog never leaves
+        /// the player on a dead, blank pet-select. Built in code, inline-styled.
+        /// </summary>
+        private VisualElement BuildEmptyFallbackCard()
+        {
+            var card = new VisualElement { name = "pet-card-fallback" };
+            card.style.width = 360;
+            card.style.marginLeft = 10; card.style.marginRight = 10;
+            SetBorderRadius(card, 14);
+            SetBorderWidth(card, 2);
+            SetBorderColor(card, CardBorder);
+            card.style.backgroundColor = CardBg;
+            card.style.flexDirection = FlexDirection.Column;
+            card.style.alignItems = Align.Center;
+            card.style.paddingTop = 28; card.style.paddingBottom = 28;
+            card.style.paddingLeft = 22; card.style.paddingRight = 22;
+
+            var heading = new Label("Your Warden awaits in town");
+            heading.style.fontSize = 20;
+            heading.style.unityFontStyleAndWeight = FontStyle.Bold;
+            heading.style.color = TitleText;
+            heading.style.unityTextAlign = TextAnchor.MiddleCenter;
+            card.Add(heading);
+
+            var blurb = new Label("Visit the Echo Hollow in Elarion to bond your first companion.");
+            blurb.style.marginTop = 10;
+            blurb.style.fontSize = 13;
+            blurb.style.color = BlurbText;
+            blurb.style.unityTextAlign = TextAnchor.MiddleCenter;
+            blurb.style.whiteSpace = WhiteSpace.Normal;
+            blurb.style.maxWidth = 320;
+            card.Add(blurb);
+
+            var go = new Button { name = "pet-fallback-continue", text = "Continue" };
+            go.style.marginTop = 22;
+            go.style.minWidth = 180;
+            go.style.height = 48;
+            go.style.fontSize = 15;
+            go.style.unityFontStyleAndWeight = FontStyle.Bold;
+            go.style.backgroundColor = Amber;
+            go.style.color = ConfirmText;
+            SetBorderRadius(go, 12);
+            SetBorderWidth(go, 0);
+            go.clicked += () =>
+            {
+                if (_advancing) return;
+                _advancing = true;
+                SceneRouter.GoCastle();
+            };
+            card.Add(go);
+
+            return card;
         }
 
         /// <summary>

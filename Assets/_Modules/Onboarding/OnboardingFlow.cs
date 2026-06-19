@@ -51,6 +51,7 @@
 using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.Events;
@@ -236,10 +237,13 @@ namespace DeNelle.Onboarding
 
         private void BindElements()
         {
+            using var _ = FlowTrace.Enter("Onboarding", "OnboardingFlow.BindElements");
             _root = _document != null ? _document.rootVisualElement : null;
             if (_root == null)
             {
-                Debug.LogWarning("[OnboardingFlow] No UIDocument root — tutorial overlay will not display.");
+                // No root means the coach-marks render nothing — the first-run teaching is
+                // invisible. Fail-loud so it surfaces in the break-log.
+                FlowTrace.Fail("Onboarding", "BindElements: NO UIDocument root — tutorial overlay will NOT display (invisible FTUE).");
                 return;
             }
 
@@ -271,6 +275,16 @@ namespace DeNelle.Onboarding
                 _body = _root.Q<Label>(BodyName);
                 _skipButton = _root.Q<Button>(SkipButtonName);
                 _nextButton = _root.Q<Button>(NextButtonName);
+            }
+
+            // V — after the (UXML or code-built) overlay, the core coach-mark controls MUST
+            // resolve, or the tutorial is on-screen but un-advanceable. Fail-loud if not.
+            if (_caption == null || _body == null || _nextButton == null || _skipButton == null)
+            {
+                FlowTrace.Fail("Onboarding",
+                    $"BindElements VERIFY FAILED — coach-mark elements unresolved after code-build " +
+                    $"(caption={( _caption != null)} body={(_body != null)} next={(_nextButton != null)} skip={(_skipButton != null)}). " +
+                    "Tutorial may render but cannot be advanced.");
             }
 
             if (_skipButton != null)
@@ -401,8 +415,9 @@ namespace DeNelle.Onboarding
             next.style.minWidth = 160;
             foot.Add(next);
 
-            Debug.Log("[OnboardingFlow] TutorialOverlay.uxml had no coach-mark elements " +
-                      "(UXML does not render in builds) — built the overlay in code.");
+            FlowTrace.Warn("Onboarding",
+                "BuildOverlayInCode: TutorialOverlay.uxml had no coach-mark elements " +
+                "(UXML does not render in builds) — built the overlay in code (fallback path).");
         }
 
         // =====================================================================
@@ -465,7 +480,8 @@ namespace DeNelle.Onboarding
         /// </summary>
         public void Run()
         {
-            if (_running) return;
+            using var _ = FlowTrace.Enter("Onboarding", "OnboardingFlow.Run");
+            if (_running) { FlowTrace.Step("Onboarding", "Run: already running — no-op."); return; }
             if (!_bound) BindElements();
 
             _running = true;
@@ -475,6 +491,13 @@ namespace DeNelle.Onboarding
             SetOverlayVisible(true);
             ShowBeat(_beatIndex);
             FadeOverlay(0f, 1f).Forget();
+
+            // V — the flow advanced to beat 1 with a bound body label. If the body is
+            // null the coach-marks are up but show no copy — surface it.
+            if (_body == null)
+                FlowTrace.Fail("Onboarding", "Run: tutorial started but body label is null — coach-marks will show no copy.");
+            else
+                FlowTrace.Step("Onboarding", $"Run: tutorial started at beat 1/{Beats.Length}.");
         }
 
         /// <summary>Renders one beat into the coach-mark card.</summary>
@@ -591,7 +614,8 @@ namespace DeNelle.Onboarding
         /// </summary>
         private void Finish(bool completed)
         {
-            if (!_running) return;
+            using var _ = FlowTrace.Enter("Onboarding", $"OnboardingFlow.Finish (completed={completed})");
+            if (!_running) { FlowTrace.Step("Onboarding", "Finish: not running — no-op."); return; }
             _running = false;
             HasFinished = true;
 
@@ -605,11 +629,19 @@ namespace DeNelle.Onboarding
             if (svc != null)
             {
                 svc.FinishOnboarding();
+                // V — confirm the flag actually flipped; if not, the cold open replays
+                // every launch (the P0-11 bug). Fail-loud so a stuck flag self-reports.
+                bool onboarded = svc.State != null && svc.State.Onboarded;
+                if (onboarded)
+                    FlowTrace.Step("Onboarding", "Finish: FinishOnboarding ran — Onboarded=true persisted (cold-open replay fixed).");
+                else
+                    FlowTrace.Fail("Onboarding",
+                        "Finish: FinishOnboarding ran but State.Onboarded is STILL false — the flag did not flip; cold open will replay.");
             }
             else
             {
-                Debug.LogWarning("[OnboardingFlow] No GameStateService — Onboarded was NOT persisted. " +
-                                 "The tutorial / cold open may replay next launch.");
+                FlowTrace.Warn("Onboarding",
+                    "Finish: No GameStateService — Onboarded was NOT persisted. The tutorial / cold open may replay next launch.");
             }
 
             // A completed run flows straight into Wave 1; a skip just closes.

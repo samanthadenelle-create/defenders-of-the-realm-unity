@@ -46,6 +46,7 @@
 
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
 using UnityEngine;
@@ -229,7 +230,7 @@ namespace DeNelle.Onboarding
             }
             catch (System.Exception e)
             {
-                Debug.LogWarning($"[TitleController] WO-335 overlay neutralise skipped: {e.Message}");
+                FlowTrace.Warn("Onboarding", $"WO-335 overlay neutralise skipped: {e.GetType().Name}: {e.Message}");
             }
         }
 
@@ -368,7 +369,7 @@ namespace DeNelle.Onboarding
             // independent of any UniTask await. Runs once (BuildTitleScreen sets _titleBuilt).
             if (!_titleBuilt && !_splashActive && Time.unscaledTime - _arrivalStart > MaxIntroSeconds)
             {
-                Debug.LogWarning("[TitleController] DEF-253 watchdog tripped — force-advancing past the intro to the title/hero-select.");
+                FlowTrace.Warn("Onboarding", "DEF-253 watchdog tripped — force-advancing past the intro to the title/hero-select (never-stuck fallback).");
                 if (_storyIntro != null) _storyIntro.ForceHide();
                 BuildTitleScreen();
                 SetTitleVisible(true);
@@ -385,7 +386,7 @@ namespace DeNelle.Onboarding
                 if (liveRoot != null && liveRoot.childCount == 0)
                 {
                     _reassertCount++;
-                    Debug.LogWarning($"[TitleController] Root orphaned (childCount=0) — rebuilding {(_splashActive ? "splash" : "title")} (#{_reassertCount}).");
+                    FlowTrace.Warn("Onboarding", $"Root orphaned (childCount=0) — rebuilding {(_splashActive ? "splash" : "title")} (#{_reassertCount}) so the screen is never left blank.");
                     if (_splashActive) BuildSplashInto(liveRoot);
                     else { _titleBuilt = false; BuildTitleScreen(); }
                     SetTitleVisible(true);
@@ -520,15 +521,25 @@ namespace DeNelle.Onboarding
         /// </summary>
         private void BuildTitleScreen()
         {
-            if (_titleBuilt) return;   // build once — RunArrival or the DEF-253 watchdog, whichever first
+            using var _ = FlowTrace.Enter("Onboarding", "TitleController.BuildTitleScreen");
+            if (_titleBuilt) { FlowTrace.Step("Onboarding", "BuildTitleScreen: already built — no-op."); return; }   // build once — RunArrival or the DEF-253 watchdog, whichever first
             if (_titleDocument == null)
             {
-                Debug.LogError("[TitleController] No title UIDocument assigned — cannot build the title screen.");
+                // P0 — blank title is the worst first impression. Fail-loud to the break-log.
+                FlowTrace.Fail("Onboarding", "BuildTitleScreen: NO title UIDocument assigned — cannot build the title/hero-select. BLANK FIRST IMPRESSION.");
                 return;
             }
 
             _root = _titleDocument.rootVisualElement;
-            if (_root == null) return;
+            if (_root == null)
+            {
+                // P0 — the document exists but its root is null this frame (UIDocument not
+                // attached / rebuilding). A silent return here leaves the player on a BLANK
+                // title — the worst first impression. Fail-loud; the Update reassert/watchdog
+                // will rebuild once the live root resolves (never-blank fallback path).
+                FlowTrace.Fail("Onboarding", "BuildTitleScreen: title UIDocument.rootVisualElement is NULL — cannot build yet. BLANK title risk; awaiting reassert/watchdog rebuild.");
+                return;
+            }
 
             // We own the tree now — wipe whatever the UXML did (or didn't) build.
             _root.Clear();
@@ -570,8 +581,22 @@ namespace DeNelle.Onboarding
             // Verify now in case geometry already resolved (don't wait a frame).
             ReflowForSize(_root.resolvedStyle.width, _root.resolvedStyle.height);
 
-            Debug.Log($"[TitleController] DIAG: code-built landing rootChildren={_root.childCount} " +
-                      $"cards={(_cardRow != null ? _cardRow.childCount : 0)}");
+            // V — prove the screen actually built: root has children AND the card row
+            // carries cards. A built-but-empty title is a blank first impression, so a
+            // zero on either count Fails to the break-log (split data-empty vs. invisible).
+            int rootChildren = _root.childCount;
+            int cardCount = _cardRow != null ? _cardRow.childCount : 0;
+            if (rootChildren == 0 || cardCount == 0)
+            {
+                FlowTrace.Fail("Onboarding",
+                    $"BuildTitleScreen VERIFY FAILED — rootChildren={rootChildren} cards={cardCount}. " +
+                    "Title built but EMPTY (blank first impression). VerifyFourCardsEven self-heal will retry.");
+            }
+            else
+            {
+                FlowTrace.Step("Onboarding",
+                    $"BuildTitleScreen VERIFY ok — rootChildren={rootChildren} cards={cardCount}.");
+            }
         }
 
         // ── Top half: dragon banner ─────────────────────────────────────────
@@ -695,8 +720,9 @@ namespace DeNelle.Onboarding
             if (HeroCatalog.Heroes == null || HeroCatalog.Heroes.Length != 4)
             {
                 int count = HeroCatalog.Heroes != null ? HeroCatalog.Heroes.Length : 0;
-                Debug.LogError($"[TitleController] HERO ROSTER BROKEN — expected 4 heroes, " +
-                               $"HeroCatalog.Heroes has {count}. The hero-select row will be wrong.");
+                FlowTrace.Fail("Onboarding",
+                    $"BuildCards: HERO ROSTER BROKEN — expected 4 heroes, HeroCatalog.Heroes has {count}. " +
+                    "The hero-select row will be wrong. Building whatever exists (graceful degrade).");
             }
 
             _cardRow.Clear();
@@ -854,7 +880,10 @@ namespace DeNelle.Onboarding
                 return;
             }
 
-            // No art on disk — element-coloured glyph fallback.
+            // No art on disk — element-coloured glyph fallback (R: never a blank slot).
+            // Warn so a missing portrait self-reports without breaking the card.
+            FlowTrace.Warn("Onboarding",
+                $"FramePortrait: no Resources/HeroPortraits/{slug} sprite or texture — using '{info.Glyph}' glyph fallback (card still renders).");
             var glyph = new Label(info.Glyph);
             glyph.style.fontSize = 44f;
             glyph.style.unityFontStyleAndWeight = FontStyle.Bold;
