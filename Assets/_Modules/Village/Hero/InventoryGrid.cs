@@ -11,6 +11,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
 using DeNelle.Core.UI.Mvvm;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Village.Hero;
 using DeNelle.Village.Items;
 
@@ -70,19 +71,30 @@ namespace DeNelle.Village
         // here — they live behind the VM. Selection highlight is driven by vm.SelectedId.
         private void BuildCellsFromVM(Transform content)
         {
-            if (_vm == null) { BuildEmptyNote(content, "No inventory."); return; }
+            using var _ = FlowTrace.Enter("Inventory", $"BuildCellsFromVM tab={_vm?.ActiveTab}");
+            if (_vm == null)
+            {
+                FlowTrace.Warn("Inventory", "BuildCellsFromVM: no bound VM — showing empty note (data-empty).");
+                BuildEmptyNote(content, "No inventory.");
+                return;
+            }
 
             var slots = _vm.Slots;
             if (slots == null || slots.Count == 0)
             {
+                FlowTrace.Warn("Inventory",
+                    $"BuildCellsFromVM: tab {_vm.ActiveTab} has NO owned slots — showing empty note (data-empty).");
                 BuildEmptyNote(content, EmptyTabNote(_vm.ActiveTab));
                 return;
             }
 
             string selId = _vm.SelectedId;
             bool isConsumables = _vm.ActiveTab == InventoryTabKind.Consumables;
+            int wantCount = slots.Count;
 
-            foreach (var item in slots)
+            // Guard EACH cell so one bad ItemVM is logged + skipped, never aborting the whole grid
+            // (the "blank inventory tab" class, WO-412/406).
+            var (built, failed) = Guard.TryEach("Inventory", "build inventory cell", slots, item =>
             {
                 var it = item;   // capture for the closure
                 Sprite iconSp = ResolveItemIcon(it.IconRole, it.IconName);
@@ -99,6 +111,19 @@ namespace DeNelle.Village
                                   if (isConsumables) _vm.Use();
                                   else _vm.Equip();
                               });
+            });
+
+            // STOCKED-N COMMIT SEAM: cells offered vs built — splits data-empty from built-but-broken.
+            FlowTrace.Step("Inventory",
+                $"Inventory stocked {built} cell(s) (wanted {wantCount}, failed {failed}).");
+
+            // VERIFY built>0: every cell failed to build (wanted>0, built==0) is built-but-broken,
+            // NOT an empty tab — show the visible empty note instead of a blank grid, and Fail-loud.
+            if (built == 0)
+            {
+                FlowTrace.Fail("Inventory",
+                    $"Inventory had {wantCount} owned slot(s) but built 0 cells ({failed} failed) — showing empty note (built-but-broken, NOT data-empty).");
+                BuildEmptyNote(content, EmptyTabNote(_vm.ActiveTab));
             }
         }
 
@@ -180,7 +205,12 @@ namespace DeNelle.Village
                 else
                     techCellFrame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P1/fill.png");
                 if (techCellFrame == null) techCellFrame = Resources.Load<Sprite>("Tech hud elements/Sprites/Menu Bars/Menu Bar 1");
-            } catch { }
+            } catch (System.Exception ex) {
+                // No silent failure (§12): a Tech-pack load that throws falls back to the committed
+                // RpgUi plate below — but it must be logged, never swallowed blind.
+                FlowTrace.Warn("Inventory",
+                    $"BuildGearCell: Tech cell-frame load threw ({ex.GetType().Name}: {ex.Message}) — using RpgUi plate fallback.");
+            }
             // Clean-build fallback (Tech pack gitignored): committed RpgUi grid plate frame.
             if (techCellFrame == null) techCellFrame = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelGrid);
             if (techCellFrame != null) { fimg.sprite = techCellFrame; fimg.type = Image.Type.Sliced; fimg.color = frameCol; }

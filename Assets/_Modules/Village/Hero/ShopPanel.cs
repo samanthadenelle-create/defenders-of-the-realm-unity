@@ -22,6 +22,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
 using DeNelle.Core.UI.Mvvm;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.Hero
 {
@@ -132,20 +133,72 @@ namespace DeNelle.Village.Hero
 
         private void RebuildList()
         {
+            using var _ = FlowTrace.Enter("Store", $"ShopPanel.RebuildList mode={_vm.Mode}");
             ClearContent();
             _rowPlates.Clear();
 
             // EQUIP shows the "Current:" header line as row 0 (mirrors the old ShowEquip layout).
             int extra = _vm.Mode == ShopMode.Equip ? 1 : 0;
-            var listRoot = BuildScrollContent(_vm.Items.Count + extra);
+            int wantCount = _vm.Items.Count;
+            var listRoot = BuildScrollContent(wantCount + extra);
 
             if (_vm.Mode == ShopMode.Equip)
                 CreateLabelRow(listRoot, _vm.EquipCurrentLine());
 
-            foreach (var item in _vm.Items)
-                CreateRow(listRoot, item);
+            // Build EACH row guarded so one bad ItemVM is logged + skipped — never aborts the
+            // whole list (the "blank BUY tab because item #3 threw" class, WO-412/406).
+            var (built, failed) = Guard.TryEach("Store", "build shop row", _vm.Items,
+                item => CreateRow(listRoot, item));
+
+            // STOCKED-N COMMIT SEAM (the data-empty vs built-but-invisible split): how many rows
+            // the VM offered vs how many actually built. 0 wanted => genuinely data-empty; wanted
+            // but 0 built => every row threw (built-but-broken), not an empty store.
+            FlowTrace.Step("Store",
+                $"ShopPanel stocked {built} row(s) (wanted {wantCount}, failed {failed}, extra {extra}).");
+
+            // VERIFY rows>0: a genuinely empty list (or a list that fully failed to build) shows a
+            // VISIBLE empty-state row instead of a blank panel — never a silent empty screen.
+            if (built == 0 && extra == 0)
+            {
+                if (wantCount == 0)
+                    FlowTrace.Warn("Store",
+                        $"ShopPanel has NO items for mode {_vm.Mode} (filter={_vm.BuyFilter}) — showing empty-state row (data-empty).");
+                else
+                    FlowTrace.Fail("Store",
+                        $"ShopPanel had {wantCount} item(s) but built 0 rows ({failed} failed) — showing empty-state row (built-but-broken, NOT data-empty).");
+                CreateEmptyStateRow(listRoot, EmptyShopNote());
+            }
 
             FinalizeScroll();
+        }
+
+        // The visible empty-state copy per mode/filter — the never-blank fallback.
+        private string EmptyShopNote()
+        {
+            if (_vm == null) return "Nothing available.";
+            switch (_vm.Mode)
+            {
+                case ShopMode.Sell:  return "Nothing to sell.";
+                case ShopMode.Equip: return "No gear to equip.";
+                default:             return "No wares in stock.";
+            }
+        }
+
+        // A single visible row carrying the empty-state copy (mirrors CreateLabelRow's layout so
+        // it sits in the scroll list, not a blank panel). Presentation-only, no restyle.
+        private void CreateEmptyStateRow(Transform parent, string msg)
+        {
+            var go = new GameObject("EmptyStateRow", typeof(TMPro.TextMeshProUGUI), typeof(LayoutElement));
+            go.transform.SetParent(parent, false);
+            var le = go.GetComponent<LayoutElement>();
+            le.preferredHeight = RowHeightPx;
+            le.minHeight = RowHeightPx;
+            var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+            t.text = msg;
+            t.fontSize = ElarionUi.FontLabel;
+            t.color = ElarionUi.ParchmentDim;
+            t.alignment = TMPro.TextAlignmentOptions.Center;
+            t.raycastTarget = false;
         }
 
         private void RenderDetails()
@@ -198,6 +251,10 @@ namespace DeNelle.Village.Hero
                     return s != null ? s : ItemIconCatalog.ForConsumable(id, id);
                 }
             }
+            // Terminal null: an unrecognised icon role resolves to NO sprite (the details icon
+            // simply hides). Log it so a missing-glyph never goes silent (built-but-invisible icon).
+            FlowTrace.Warn("Store",
+                $"ShopPanel.ResolveIcon: no sprite for role='{role ?? "<null>"}' id='{id ?? "<null>"}' — icon hidden.");
             return null;
         }
 

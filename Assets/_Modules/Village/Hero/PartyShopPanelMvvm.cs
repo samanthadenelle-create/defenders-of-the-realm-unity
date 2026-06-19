@@ -28,6 +28,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
 using DeNelle.Core.UI.Mvvm;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Village.Crafting;
 
 namespace DeNelle.Village.Hero
@@ -406,13 +407,51 @@ namespace DeNelle.Village.Hero
 
         private void RebuildList()
         {
+            using var _ = FlowTrace.Enter("Store", $"PartyShop.RebuildList tab={_vm.Tab}");
             ClearContent();
             _rowPlates.Clear();
 
+            int wantCount = _vm.Items.Count;
             var listRoot = BuildScrollContent();
-            foreach (var item in _vm.Items)
-                CreateRow(listRoot, item);
+
+            // Guard EACH row so one bad ItemVM is logged + skipped, never aborting the whole list
+            // (the "blank party-shop tab" class, WO-412/406).
+            var (built, failed) = Guard.TryEach("Store", "build party-shop row", _vm.Items,
+                item => CreateRow(listRoot, item));
+
+            // STOCKED-N COMMIT SEAM: rows offered vs built — splits data-empty from built-but-broken.
+            FlowTrace.Step("Store",
+                $"PartyShop stocked {built} row(s) (wanted {wantCount}, failed {failed}).");
+
+            // VERIFY rows>0: show a VISIBLE empty-state row instead of a blank panel.
+            if (built == 0)
+            {
+                if (wantCount == 0)
+                    FlowTrace.Warn("Store",
+                        $"PartyShop has NO items for tab {_vm.Tab} — showing empty-state row (data-empty).");
+                else
+                    FlowTrace.Fail("Store",
+                        $"PartyShop had {wantCount} item(s) but built 0 rows ({failed} failed) — showing empty-state row (built-but-broken).");
+                CreateEmptyStateRow(listRoot, _vm.Tab == PartyShopTab.Sell ? "Nothing to sell." : "No wares in stock.");
+            }
+
             FinalizeScroll();
+        }
+
+        // A single visible row carrying the empty-state copy — the never-blank fallback.
+        private void CreateEmptyStateRow(Transform parent, string msg)
+        {
+            var go = new GameObject("EmptyStateRow", typeof(TMPro.TextMeshProUGUI), typeof(LayoutElement));
+            go.transform.SetParent(parent, false);
+            var le = go.GetComponent<LayoutElement>();
+            le.preferredHeight = RowHeightPx;
+            le.minHeight = RowHeightPx;
+            var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+            t.text = msg;
+            t.fontSize = ElarionUi.FontLabel;
+            t.color = ElarionUi.ParchmentDim;
+            t.alignment = TMPro.TextAlignmentOptions.Center;
+            t.raycastTarget = false;
         }
 
         private void HighlightSelectedRow()

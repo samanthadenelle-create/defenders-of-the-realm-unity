@@ -32,6 +32,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
 using DeNelle.Core.UI.Mvvm;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Village;
 using DeNelle.Village.Crafting;
 
@@ -403,6 +404,7 @@ namespace DeNelle.Village.Hero
         // ── List build ───────────────────────────────────────────────────────────
         private void RebuildList()
         {
+            using var _ = FlowTrace.Enter("Equip", $"EquipmentPanel.RebuildList slot={_vm?.SelectedSlotKey}");
             // Tear down any previous list inside the content host.
             _scrollContent = null;
             if (_listContentArea != null)
@@ -415,10 +417,47 @@ namespace DeNelle.Village.Hero
             }
 
             var listRoot = BuildScrollContent();
-            if (_vm != null)
-                foreach (var item in _vm.CompatibleItems) CreateGearRow(listRoot, item);
+            int wantCount = _vm != null ? _vm.CompatibleItems.Count : 0;
+
+            // Guard EACH gear row so one bad ItemVM is logged + skipped, never aborting the list.
+            var (built, failed) = _vm != null
+                ? Guard.TryEach("Equip", "build gear row", _vm.CompatibleItems,
+                    item => CreateGearRow(listRoot, item))
+                : (0, 0);
+
+            // STOCKED-N COMMIT SEAM: rows offered vs built — data-empty vs built-but-broken.
+            FlowTrace.Step("Equip",
+                $"EquipmentPanel stocked {built} gear row(s) (wanted {wantCount}, failed {failed}).");
+
+            // VERIFY rows>0: show a VISIBLE empty-state row instead of a blank gear list.
+            if (built == 0)
+            {
+                if (wantCount == 0)
+                    FlowTrace.Warn("Equip",
+                        $"EquipmentPanel has NO compatible items for slot {_vm?.SelectedSlotKey} — showing empty-state row (data-empty).");
+                else
+                    FlowTrace.Fail("Equip",
+                        $"EquipmentPanel had {wantCount} item(s) but built 0 rows ({failed} failed) — showing empty-state row (built-but-broken).");
+                CreateEmptyStateRow(listRoot, "No gear available for this slot.");
+            }
 
             FinalizeScroll();
+        }
+
+        // A single visible row carrying the empty-state copy — the never-blank fallback.
+        private void CreateEmptyStateRow(Transform parent, string msg)
+        {
+            var go = new GameObject("EmptyStateRow", typeof(TMPro.TextMeshProUGUI), typeof(LayoutElement));
+            go.transform.SetParent(parent, false);
+            var le = go.GetComponent<LayoutElement>();
+            le.preferredHeight = RowHeightPx;
+            le.minHeight = RowHeightPx;
+            var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+            t.text = msg;
+            t.fontSize = ElarionUi.FontLabel;
+            t.color = ElarionUi.ParchmentDim;
+            t.alignment = TMPro.TextAlignmentOptions.Center;
+            t.raycastTarget = false;
         }
 
         // Build the masked, vertically-scrolling content tray and return the

@@ -14,6 +14,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Village.Items;
 
 namespace DeNelle.Village
@@ -117,7 +118,13 @@ namespace DeNelle.Village
                     crystals = s.State.Resources.Crystals;
                 }
             }
-            catch { }
+            catch (System.Exception ex)
+            {
+                // No silent failure (§12): a state read that throws leaves the footer at 0/0, but
+                // it must be logged — never swallowed blind.
+                FlowTrace.Warn("Inventory",
+                    $"BuildFooterBar: resource read threw ({ex.GetType().Name}: {ex.Message}) — wallet shows 0.");
+            }
 
             const float wEnd = 0.985f, wStart = 0.470f, wGap = 0.012f;
             float wW = (wEnd - wStart - wGap * 2f) / 3f;
@@ -261,7 +268,14 @@ namespace DeNelle.Village
                     default:              return null;
                 }
             }
-            catch { return null; }
+            catch (System.Exception ex)
+            {
+                // No silent failure (§12): a tab-icon load that throws falls back to no icon, but
+                // it must be logged — never swallowed blind.
+                FlowTrace.Warn("Inventory",
+                    $"TabPackIcon: load threw for tab {t} ({ex.GetType().Name}: {ex.Message}) — tab shows no icon.");
+                return null;
+            }
         }
 
         // (Shared UI primitives Add*/Dress*/AddCircle*/Rarity*/glyphs/Has/Cap/Hero* live once in the main partial file.
