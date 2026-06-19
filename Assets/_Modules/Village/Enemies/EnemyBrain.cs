@@ -150,6 +150,14 @@ namespace DeNelle.Village
 
         private EnemyTacticalState _tacticalState = EnemyTacticalState.Rush;
 
+        // A ranged enemy reads as a ranger only if it actually HOLDS a bow. The role
+        // (EnemyRole.Ranged) is assigned by the spawner AFTER Awake (brain.Role = ...),
+        // so we can't equip in Awake — we latch a one-time, idempotent equip on the first
+        // Update tick once the role is known and the skinned body+Animator exist. Reuses
+        // the hero's bow logic (HeroBowAttachment is a generic LeftHand-bone attacher; the
+        // "Hero" naming is cosmetic). Non-ranged enemies never enter this path.
+        private bool _bowEquipChecked;
+
         private readonly Collider[] _scanBuffer = new Collider[32];
 
         // DEF-72: throttle target-priority re-evaluation (not per-frame).
@@ -399,6 +407,27 @@ namespace DeNelle.Village
         private void Update()
         {
             if (_enemy == null || _enemy.IsDead) return;
+
+            // GEAR: give a Ranged enemy a VISIBLE bow on its bow (LEFT) hand so a ranger
+            // reads as a ranger (it fires Enemy.RangedAttack but previously held nothing).
+            // The role is set by the spawner after Awake, so this is the first point where
+            // the role is known AND the skinned body + Animator exist. Runs ONCE (latched),
+            // is fully guarded inside HeroBowAttachment (missing Animator / LeftHand bone →
+            // FlowTrace.Warn + skip, never an NRE), and is idempotent (its own _bow guard +
+            // DisallowMultipleComponent). A NON-Ranged role never reaches here, so it never
+            // gets a bow.
+            if (!_bowEquipChecked)
+            {
+                _bowEquipChecked = true;
+                if (Role == EnemyRole.Ranged)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Equip",
+                        $"enemy '{name}' is Ranged — attaching bow to bow hand");
+                    // Pass the enemy root as both root + body: AttachTo resolves the Animator
+                    // via GetComponentInChildren on the body, which finds the vis child's rig.
+                    HeroBowAttachment.AttachTo(gameObject, gameObject);
+                }
+            }
 
             // TAUNT OVERRIDE (Tier-2 Knight): a taunting companion Knight fixes this
             // enemy onto itself, ahead of even retaliation — it's a deliberate tank
