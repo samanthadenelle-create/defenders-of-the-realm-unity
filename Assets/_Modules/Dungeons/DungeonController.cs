@@ -26,6 +26,7 @@
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
+using DeNelle.Core.Diagnostics;
 using Unity.Cinemachine;
 using UnityEngine;
 
@@ -206,6 +207,7 @@ namespace DeNelle.Dungeons
         /// </summary>
         public async UniTask EnterDungeon()
         {
+            using var _flow = FlowTrace.Enter("Dungeon", $"EnterDungeon id='{_dungeonId}'");
             Ready = false;
 
             // Resolve the hero's walk controller up-front so input can be held
@@ -219,10 +221,24 @@ namespace DeNelle.Dungeons
             Layout = await DungeonLayoutLoader.LoadAsync(_dungeonId);
             if (Layout == null)
             {
-                Debug.LogError($"[DungeonController] Layout '{_dungeonId}' failed to load — " +
-                               "dungeon cannot assemble.");
+                // HARD STOP: no layout means NO geometry, NO actors — the scene would
+                // sit blank with the hero frozen (input was disabled above). Fail loud
+                // AND hand input back so the Keeper is never stuck in a dead scene.
+                FlowTrace.Fail("Dungeon",
+                    $"EnterDungeon: Layout '{_dungeonId}' failed to load — dungeon cannot " +
+                    "assemble. Re-enabling hero input so the Keeper is not frozen in a blank scene.");
+                if (_heroController != null) _heroController.SetInputEnabled(true);
                 return;
             }
+            FlowTrace.Step("Dungeon",
+                $"EnterDungeon: layout '{Layout.id}' loaded — rooms={Layout.rooms?.Length ?? 0}, " +
+                $"loreStones={Layout.loreStones?.Length ?? 0}, checkpoints={Layout.checkpoints?.Length ?? 0}, " +
+                $"scriptedEncounters={Layout.scriptedEncounters?.Length ?? 0}, miniBoss={(Layout.miniBoss != null ? "yes" : "no")}.");
+            // VERIFY rooms hydrated: a zero-room layout builds no playable space.
+            if ((Layout.rooms?.Length ?? 0) == 0)
+                FlowTrace.Warn("Dungeon",
+                    $"EnterDungeon: layout '{Layout.id}' has ZERO rooms — the dungeon will have no " +
+                    "navigable space and room-tracking will never resolve a room.");
 
             // Load the canonical lore-fragment set — feeds Bryn's entrance line
             // and each lore stone's reading text. A null set is non-fatal: the
@@ -284,6 +300,12 @@ namespace DeNelle.Dungeons
 
             DungeonRoom currentRoom = Layout.RoomAt(spawnPos);
             _lastRoomId = currentRoom?.id ?? entryRoomId;
+            // RENDER-COMMIT: the scene is assembled + the Keeper framed. Ready flips the
+            // per-frame loop on, so it self-reports the commit (and which room the hero
+            // resolved into) — a blank/frozen run is then diagnosable from the trace.
+            FlowTrace.Step("Dungeon",
+                $"EnterDungeon: run live (Ready=true) — spawn={spawnPos}, entryRoom='{_lastRoomId}', " +
+                $"resuming={resuming}.");
             Ready = true;
 
             // The run is live and the Keeper is framed — hand movement back.
@@ -479,8 +501,8 @@ namespace DeNelle.Dungeons
                 int n = Mathf.Min(pickups.Length, total);
                 if (pickups.Length != total)
                 {
-                    Debug.LogWarning(
-                        $"[DungeonController] Ingredient-pickup count mismatch — {pickups.Length} " +
+                    FlowTrace.Warn("Dungeon",
+                        $"ConfigureCrafting: ingredient-pickup count mismatch — {pickups.Length} " +
                         $"in scene, {total} in crafting data. Hydrating the first {n}.");
                 }
                 for (int i = 0; i < n; i++)
@@ -526,19 +548,33 @@ namespace DeNelle.Dungeons
             var stones = _loreStoneRoot.GetComponentsInChildren<LoreStone>(true);
             int total = Layout.loreStones.Length;
             int n = Mathf.Min(stones.Length, total);
-            if (stones.Length != total)
+            // VERIFY: the layout authored lore stones but the scene placed NONE — Mathf.Min
+            // would silently hydrate 0 and report "success". Assert >0 so a stripped/empty
+            // _loreStoneRoot self-reports instead of leaving the room bare of readable lore.
+            if (total > 0 && stones.Length == 0)
             {
-                Debug.LogWarning(
-                    $"[DungeonController] Lore-stone count mismatch — {stones.Length} in scene, " +
-                    $"{total} in layout. Hydrating the first {n}.");
+                FlowTrace.Warn("Dungeon",
+                    $"HydrateLoreStones: layout authored {total} lore stone(s) but the scene placed " +
+                    "ZERO under _loreStoneRoot — no lore will be readable. Check the scene builder.");
+            }
+            else if (stones.Length != total)
+            {
+                FlowTrace.Warn("Dungeon",
+                    $"HydrateLoreStones: count mismatch — {stones.Length} in scene, {total} in layout. " +
+                    $"Hydrating the first {n}.");
             }
 
             for (int i = 0; i < n; i++)
             {
-                stones[i].Configure(Layout.loreStones[i], _runtimeState, _hero, total);
-                if (_loreFragments != null)
-                    stones[i].SetLoreFragments(_loreFragments);
+                int idx = i;   // capture for the closure
+                FlowTrace.Try("Dungeon", $"configure lore stone[{idx}]", () =>
+                {
+                    stones[idx].Configure(Layout.loreStones[idx], _runtimeState, _hero, total);
+                    if (_loreFragments != null)
+                        stones[idx].SetLoreFragments(_loreFragments);
+                });
             }
+            FlowTrace.Step("Dungeon", $"HydrateLoreStones: hydrated {n} of {total} lore stone(s).");
         }
 
         /// <summary>
@@ -551,16 +587,31 @@ namespace DeNelle.Dungeons
             if (_checkpointRoot == null || Layout?.checkpoints == null) return;
 
             var shrines = _checkpointRoot.GetComponentsInChildren<Checkpoint>(true);
-            int n = Mathf.Min(shrines.Length, Layout.checkpoints.Length);
-            if (shrines.Length != Layout.checkpoints.Length)
+            int total = Layout.checkpoints.Length;
+            int n = Mathf.Min(shrines.Length, total);
+            // VERIFY: layout authored checkpoints but the scene placed NONE — without a
+            // checkpoint there is no heal/respawn anchor. Assert >0 so a stripped root
+            // self-reports rather than silently shipping a save-less run.
+            if (total > 0 && shrines.Length == 0)
             {
-                Debug.LogWarning(
-                    $"[DungeonController] Checkpoint count mismatch — {shrines.Length} in scene, " +
-                    $"{Layout.checkpoints.Length} in layout. Hydrating the first {n}.");
+                FlowTrace.Warn("Dungeon",
+                    $"HydrateCheckpoints: layout authored {total} checkpoint(s) but the scene placed " +
+                    "ZERO under _checkpointRoot — no heal/respawn anchor exists. Check the scene builder.");
+            }
+            else if (shrines.Length != total)
+            {
+                FlowTrace.Warn("Dungeon",
+                    $"HydrateCheckpoints: count mismatch — {shrines.Length} in scene, {total} in layout. " +
+                    $"Hydrating the first {n}.");
             }
 
             for (int i = 0; i < n; i++)
-                shrines[i].Configure(Layout.checkpoints[i], _runtimeState, _hero);
+            {
+                int idx = i;
+                FlowTrace.Try("Dungeon", $"configure checkpoint[{idx}]",
+                    () => shrines[idx].Configure(Layout.checkpoints[idx], _runtimeState, _hero));
+            }
+            FlowTrace.Step("Dungeon", $"HydrateCheckpoints: hydrated {n} of {total} checkpoint(s).");
         }
 
         /// <summary>
@@ -581,18 +632,30 @@ namespace DeNelle.Dungeons
             bool hasBoss = Layout.miniBoss != null;
             int expected = scripted.Length + (hasBoss ? 1 : 0);
 
-            if (triggers.Length != expected)
+            // VERIFY: the layout expects encounters (scripted and/or a boss) but the scene
+            // placed NONE — the dungeon would have no fights at all (and an unbeatable boss
+            // gate). Assert >0 so a stripped _encounterRoot self-reports rather than shipping
+            // a combat-less / un-clearable run.
+            if (expected > 0 && triggers.Length == 0)
             {
-                Debug.LogWarning(
-                    $"[DungeonController] Encounter-trigger count mismatch — {triggers.Length} " +
-                    $"in scene, {expected} expected ({scripted.Length} scripted + " +
-                    $"{(hasBoss ? 1 : 0)} boss). Hydrating what aligns.");
+                FlowTrace.Warn("Dungeon",
+                    $"HydrateEncounters: layout expects {expected} encounter(s) ({scripted.Length} scripted + " +
+                    $"{(hasBoss ? 1 : 0)} boss) but the scene placed ZERO triggers under _encounterRoot — " +
+                    "no fights will fire and the boss gate can never clear. Check the scene builder.");
+            }
+            else if (triggers.Length != expected)
+            {
+                FlowTrace.Warn("Dungeon",
+                    $"HydrateEncounters: count mismatch — {triggers.Length} in scene, {expected} expected " +
+                    $"({scripted.Length} scripted + {(hasBoss ? 1 : 0)} boss). Hydrating what aligns.");
             }
 
             int scriptedCount = Mathf.Min(scripted.Length, triggers.Length);
             for (int i = 0; i < scriptedCount; i++)
             {
-                triggers[i].ConfigureScripted(this, scripted[i], _runtimeState, _hero);
+                int idx = i;
+                FlowTrace.Try("Dungeon", $"configure scripted encounter[{idx}]",
+                    () => triggers[idx].ConfigureScripted(this, scripted[idx], _runtimeState, _hero));
                 _encounterTriggers.Add(triggers[i]);
             }
 
@@ -601,9 +664,21 @@ namespace DeNelle.Dungeons
             if (hasBoss && triggers.Length > scripted.Length)
             {
                 EncounterTrigger bossTrigger = triggers[triggers.Length - 1];
-                bossTrigger.ConfigureBoss(this, Layout.miniBoss, 4f, _runtimeState, _hero);
+                FlowTrace.Try("Dungeon", "configure boss encounter",
+                    () => bossTrigger.ConfigureBoss(this, Layout.miniBoss, 4f, _runtimeState, _hero));
                 _encounterTriggers.Add(bossTrigger);
             }
+            else if (hasBoss)
+            {
+                // A boss is authored but no trigger slot remained for it — the boss fight
+                // can never fire, so the dungeon's exit gate can never unlock.
+                FlowTrace.Warn("Dungeon",
+                    "HydrateEncounters: layout authored a mini-boss but no trailing trigger was " +
+                    "available to host it — the boss fight cannot fire and the exit gate stays locked.");
+            }
+            FlowTrace.Step("Dungeon",
+                $"HydrateEncounters: hydrated {_encounterTriggers.Count} trigger(s) ({scriptedCount} scripted" +
+                $"{(hasBoss && triggers.Length > scripted.Length ? " + 1 boss" : string.Empty)}).");
         }
 
         /// <summary>
@@ -642,9 +717,9 @@ namespace DeNelle.Dungeons
             // handoff anyway so the run is not wedged in a permanent combat lock.
             if (!settled)
             {
-                Debug.LogWarning(
-                    $"[DungeonController] No encounter trigger matched pending id " +
-                    $"'{pendingId}' on resume — clearing the handoff to unwedge the run.");
+                FlowTrace.Warn("Dungeon",
+                    $"ResolvePendingEncounter: no encounter trigger matched pending id " +
+                    $"'{pendingId}' on resume — clearing the handoff to unwedge the run (no combat-lock).");
                 _runtimeState.ResumeAfterEncounter(victory);
             }
         }
@@ -673,10 +748,10 @@ namespace DeNelle.Dungeons
 
             if (_ambientBgm.clip == null)
             {
-                Debug.LogWarning(
-                    "[DungeonController] Dungeon ambient clip 'echoes-beneath-elarion' " +
-                    "is not assigned — the MP3 is not yet imported under Assets/Audio/. " +
-                    "Dungeon will play silently; wire the clip when the file lands.");
+                FlowTrace.Warn("Dungeon",
+                    "StartAmbientAudio: ambient clip 'echoes-beneath-elarion' is not assigned — " +
+                    "the MP3 is not yet imported under Assets/Audio/. Dungeon plays silently; " +
+                    "wire the clip when the file lands.");
                 return;
             }
 

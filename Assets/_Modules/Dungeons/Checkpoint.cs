@@ -28,6 +28,7 @@
 // authors or paraphrases it.
 // =============================================================================
 
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -108,13 +109,32 @@ namespace DeNelle.Dungeons
             _runtimeState = runtimeState;
             _hero = hero;
 
-            if (_def != null)
-                transform.position = _def.position.ToWorld();
+            // VERIFY: a null def means this shrine has no id / position — it can never
+            // activate and would sit inert at the origin. Self-report instead of silently
+            // shipping a dead checkpoint.
+            if (_def == null)
+            {
+                FlowTrace.Warn("Dungeon",
+                    $"Checkpoint.Configure on '{name}': null definition — the shrine has no id/position " +
+                    "and will never activate.");
+                return;
+            }
+
+            transform.position = _def.position.ToWorld();
+
+            // VERIFY the render actor is wired — a checkpoint with no crystal renderer + no
+            // light is the "follow the light" cue rendered invisible. Warn so a bare shrine
+            // self-reports rather than reading blank to the player.
+            if (_crystalRenderer == null && _crystalLight == null)
+                FlowTrace.Warn("Dungeon",
+                    $"Checkpoint.Configure '{_def.id}' on '{name}': no crystal renderer AND no light — " +
+                    "the shrine will be invisible (no violet/gold cue). Check the scene wiring.");
 
             // A checkpoint already reached on a resumed run shows as saved.
-            Visited = _def != null && runtimeState != null
-                && runtimeState.HasReachedCheckpoint(_def.id);
+            Visited = runtimeState != null && runtimeState.HasReachedCheckpoint(_def.id);
             ApplyCrystalTone();
+            FlowTrace.Step("Dungeon",
+                $"Checkpoint.Configure '{_def.id}' at {transform.position} (visited={Visited}).");
         }
 
         // ── Per-frame ────────────────────────────────────────────────────────

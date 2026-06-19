@@ -21,6 +21,7 @@
 // No prefab, no .meta hand-authoring.
 // =============================================================================
 
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 
 namespace DeNelle.Dungeons
@@ -159,11 +160,23 @@ namespace DeNelle.Dungeons
             Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
                             ?? Shader.Find("Unlit/Color")
                             ?? Shader.Find("Sprites/Default");
-            if (shader == null) return;
+            if (shader == null)
+            {
+                // RENDER-VERIFY: no shader resolved means the quad keeps Unity's default
+                // material and renders as a MAGENTA "shader-missing" panel — a glaring
+                // visual break. Self-report instead of silently shipping a pink bubble.
+                FlowTrace.Fail("Dungeon",
+                    "WandererBubble.ApplyPanelMaterial: no Unlit shader found " +
+                    "(URP/Unlit, Unlit/Color, Sprites/Default all missing) — the bubble panel " +
+                    "will render MAGENTA (shader-missing). Ensure an unlit shader is in the build.");
+                return;
+            }
             var mat = new Material(shader) { color = _panelColor };
             // URP/Unlit exposes _BaseColor; Unlit/Color uses the legacy color.
             if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", _panelColor);
             _panelRenderer.sharedMaterial = mat;
+            FlowTrace.Step("Dungeon",
+                $"WandererBubble.ApplyPanelMaterial: panel material set via shader '{shader.name}'.");
         }
 
         /// <summary>Shows / hides the whole bubble container.</summary>

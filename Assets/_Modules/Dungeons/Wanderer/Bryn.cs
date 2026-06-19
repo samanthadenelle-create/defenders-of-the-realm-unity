@@ -26,6 +26,7 @@
 // small IWandererBubble seam so this MonoBehaviour stays free of a HUD import.
 // =============================================================================
 
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 
 namespace DeNelle.Dungeons
@@ -127,12 +128,32 @@ namespace DeNelle.Dungeons
             _runtimeState = runtimeState;
             _bubble = _bubbleBehaviour as IWandererBubble;
 
+            // VERIFY the bubble seam resolved — a non-null _bubbleBehaviour that does NOT
+            // implement IWandererBubble (wrong component wired) silently leaves _bubble null,
+            // so Bryn is MUTE: she sways but never speaks, with no error. Self-report it.
+            if (_bubble == null)
+                FlowTrace.Warn("Dungeon",
+                    $"Bryn.Configure on '{name}': no IWandererBubble resolved " +
+                    $"(_bubbleBehaviour={(_bubbleBehaviour == null ? "<null>" : _bubbleBehaviour.GetType().Name)}) — " +
+                    "Bryn will be MUTE (no speech bubble). Wire a WandererBubble component.");
+
+            // VERIFY the placement def hydrated — a null def leaves Bryn at the origin with a
+            // default speak radius; she may never reach the Keeper.
             if (_def != null)
             {
                 _basePosition = _def.position.ToWorld();
                 transform.position = _basePosition;
                 transform.rotation = Quaternion.Euler(0f, _def.facingY, 0f);
                 if (_def.speakRadius > 0f) _speakRadius = _def.speakRadius;
+                FlowTrace.Step("Dungeon",
+                    $"Bryn.Configure '{_def.npcId}' at {_basePosition} (speakRadius={_speakRadius}, " +
+                    $"bubble={(_bubble != null ? "ok" : "MUTE")}).");
+            }
+            else
+            {
+                FlowTrace.Warn("Dungeon",
+                    $"Bryn.Configure on '{name}': null definition — Bryn stays at the origin with the " +
+                    "default speak radius and may never speak.");
             }
 
             _bubble?.Hide();

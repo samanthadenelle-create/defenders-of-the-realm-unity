@@ -23,6 +23,7 @@
 // =============================================================================
 
 using System;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -117,10 +118,28 @@ namespace DeNelle.Dungeons
             _hero = hero;
             _totalLoreCount = totalLoreCount;
 
-            if (_def != null)
-                transform.position = _def.position.ToWorld();
+            // VERIFY: a null def means this stone has no id/position/body — it can never be
+            // read and would sit at the origin. Self-report rather than ship a dead stone.
+            if (_def == null)
+            {
+                FlowTrace.Warn("Dungeon",
+                    $"LoreStone.Configure on '{name}': null definition — the stone has no id/body " +
+                    "and can never be read.");
+                if (_interactPrompt != null) _interactPrompt.SetActive(false);
+                return;
+            }
+
+            transform.position = _def.position.ToWorld();
+
+            // VERIFY the stone carries readable prose (inline body or, later, a fragment).
+            if ((_def.body == null || _def.body.Length == 0))
+                FlowTrace.Warn("Dungeon",
+                    $"LoreStone.Configure '{_def.id}' on '{name}': inline body is empty — reading is blank " +
+                    "unless lore-fragments.json supplies it (SetLoreFragments).");
 
             if (_interactPrompt != null) _interactPrompt.SetActive(false);
+            FlowTrace.Step("Dungeon",
+                $"LoreStone.Configure '{_def.id}' at {transform.position} (of {totalLoreCount}).");
         }
 
         /// <summary>
@@ -138,8 +157,8 @@ namespace DeNelle.Dungeons
             if (_loreFragments != null && _def != null
                 && _loreFragments.Find(_def.id) == null)
             {
-                Debug.LogWarning(
-                    $"[LoreStone] Lore stone '{_def.id}' has no matching fragment in " +
+                FlowTrace.Warn("Dungeon",
+                    $"LoreStone.SetLoreFragments: stone '{_def.id}' has no matching fragment in " +
                     "lore-fragments.json — falling back to the layout JSON's inline copy.");
             }
         }

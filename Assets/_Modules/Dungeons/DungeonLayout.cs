@@ -18,6 +18,7 @@
 using System;
 using System.IO;
 using Cysharp.Threading.Tasks;
+using DeNelle.Core.Diagnostics;
 using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -273,7 +274,7 @@ namespace DeNelle.Dungeons
         {
             if (string.IsNullOrEmpty(dungeonId))
             {
-                Debug.LogError("[DungeonLayoutLoader] Empty dungeon id — load aborted.");
+                FlowTrace.Fail("Dungeon", "DungeonLayoutLoader.LoadAsync: empty dungeon id — load aborted.");
                 return null;
             }
 
@@ -283,7 +284,9 @@ namespace DeNelle.Dungeons
             string json = await ReadTextAsync(relativePath);
             if (string.IsNullOrEmpty(json))
             {
-                Debug.LogError($"[DungeonLayoutLoader] Could not read '{relativePath}'.");
+                FlowTrace.Fail("Dungeon",
+                    $"DungeonLayoutLoader.LoadAsync: could not read '{relativePath}' (empty/missing) — " +
+                    "layout will be null and the dungeon cannot assemble.");
                 return null;
             }
 
@@ -292,15 +295,19 @@ namespace DeNelle.Dungeons
                 var layout = JsonConvert.DeserializeObject<DungeonLayout>(json);
                 if (layout == null || string.IsNullOrEmpty(layout.id))
                 {
-                    Debug.LogError(
-                        $"[DungeonLayoutLoader] '{fileName}' deserialised to an empty layout.");
+                    FlowTrace.Fail("Dungeon",
+                        $"DungeonLayoutLoader.LoadAsync: '{fileName}' deserialised to an empty layout.");
                     return null;
                 }
+                FlowTrace.Step("Dungeon",
+                    $"DungeonLayoutLoader.LoadAsync: parsed '{fileName}' -> id='{layout.id}', " +
+                    $"rooms={layout.rooms?.Length ?? 0}.");
                 return layout;
             }
             catch (JsonException ex)
             {
-                Debug.LogError($"[DungeonLayoutLoader] Malformed JSON in '{fileName}': {ex.Message}");
+                FlowTrace.Fail("Dungeon",
+                    $"DungeonLayoutLoader.LoadAsync: malformed JSON in '{fileName}': {ex.Message}");
                 return null;
             }
         }
@@ -328,17 +335,31 @@ namespace DeNelle.Dungeons
             {
                 try
                 {
-                    if (!File.Exists(fullPath)) return null;
+                    if (!File.Exists(fullPath))
+                    {
+                        FlowTrace.Warn("Dungeon",
+                            $"DungeonLayoutLoader.ReadTextAsync: no Resources copy and file not found at " +
+                            $"'{fullPath}' — returning null (caller fails the load).");
+                        return null;
+                    }
                     return await File.ReadAllTextAsync(fullPath);
                 }
-                catch { return null; }
+                catch (Exception ex)
+                {
+                    // NO SILENT CATCH (§12): a read that throws must self-report, not blank.
+                    FlowTrace.Fail("Dungeon",
+                        $"DungeonLayoutLoader.ReadTextAsync: read threw for '{fullPath}': " +
+                        $"{ex.GetType().Name}: {ex.Message} — returning null (caller fails the load).");
+                    return null;
+                }
             }
 
             using var req = UnityWebRequest.Get(fullPath);
             await req.SendWebRequest();
             if (req.result != UnityWebRequest.Result.Success)
             {
-                Debug.LogError($"[DungeonLayoutLoader] UnityWebRequest failed: {req.error}");
+                FlowTrace.Fail("Dungeon",
+                    $"DungeonLayoutLoader.ReadTextAsync: UnityWebRequest failed for '{fullPath}': {req.error}");
                 return null;
             }
             return req.downloadHandler.text;

@@ -27,8 +27,10 @@
 // pure-C# RandomEncounterTable — this MonoBehaviour only owns scene wiring.
 // =============================================================================
 
+using System;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -227,6 +229,9 @@ namespace DeNelle.Dungeons
             _runtimeState.RegisterScriptedEncounter(_scriptedDef.id);
             _runtimeState.BeginEncounterHandoff(
                 _scriptedDef.id, _isBossTrigger, _hero.position);
+            FlowTrace.Step("Dungeon",
+                $"EncounterTrigger.TickScripted: FIRING scripted encounter '{_scriptedDef.id}' " +
+                $"(boss={_isBossTrigger}) — combat locked, handing off to ATB.");
             EncounterFired.Invoke(_scriptedDef.id);
             LaunchBattle(_scriptedDef.enemyTypes, _scriptedDef.waveLabel).Forget();
         }
@@ -301,6 +306,9 @@ namespace DeNelle.Dungeons
         /// </summary>
         private async UniTask LaunchBattle(string[] enemyTypes, string waveLabel)
         {
+            using var _flow = FlowTrace.Enter("Dungeon",
+                $"EncounterTrigger.LaunchBattle id='{EncounterId}' boss={_isBossTrigger}");
+
             var p = new BattleParams
             {
                 Wave = 0, // a dungeon encounter is not a village wave
@@ -314,7 +322,42 @@ namespace DeNelle.Dungeons
             // waveLabel is the authored pre-fight banner; the battle scene reads
             // it off the params. (BattleParams gains a Label field when the
             // Week-2 battle spec lands; until then the roster carries the fight.)
-            await SceneRouter.GoBattle(p);
+            //
+            // GUARD the ATB handoff: the caller already set _inCombat=true + stashed the
+            // encounter handoff BEFORE this call. If GoBattle THROWS (route missing / scene
+            // not in build / load failure) the scene never leaves the dungeon, so the run is
+            // left permanently combat-LOCKED with no battle and no rollback — the Keeper
+            // freezes. Catch it, FAIL loud, and ROLL BACK the handoff + combat lock + re-arm
+            // _hasFired so the trigger is not wedged (it can fire again once the route works).
+            try
+            {
+                await SceneRouter.GoBattle(p);
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("Dungeon",
+                    $"EncounterTrigger.LaunchBattle: ATB handoff THREW for encounter '{EncounterId}' " +
+                    $"(boss={_isBossTrigger}): {ex.GetType().Name}: {ex.Message} — rolling back the combat " +
+                    "lock + pending handoff so the run is not wedged in a battle-less combat lock.");
+                RollbackHandoff();
+            }
+        }
+
+        /// <summary>
+        /// Unwinds a failed encounter handoff: clears the pending battle + combat lock on the
+        /// run state and re-arms this trigger so the Keeper is never frozen in a battle that
+        /// never started. Control-flow safety — always runs (not behind the FlowTrace toggle).
+        /// </summary>
+        private void RollbackHandoff()
+        {
+            if (_runtimeState != null)
+            {
+                _runtimeState.ClearPendingEncounter();   // drop the stashed handoff
+                _runtimeState.ResolveEncounter();        // clear the InCombat lock
+            }
+            // Re-arm so the trigger can fire again when the route is fixed (a scripted
+            // encounter is one-shot only on a SUCCESSFUL handoff, not a failed one).
+            _hasFired = false;
         }
 
         private void OnDrawGizmosSelected()
