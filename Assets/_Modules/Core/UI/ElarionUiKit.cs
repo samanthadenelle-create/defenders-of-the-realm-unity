@@ -522,6 +522,7 @@ namespace DeNelle.Core.UI
             r.anchorMin = new Vector2(x0, y0); r.anchorMax = new Vector2(x1, y1);
             r.offsetMin = Vector2.zero; r.offsetMax = Vector2.zero;
             var t = go.GetComponent<TextMeshProUGUI>();
+            EnsureFont(t);          // assign a font BEFORE .text so first generation can't NRE
             t.text = text;
             t.fontSize = size;
             t.color = color;
@@ -530,6 +531,32 @@ namespace DeNelle.Core.UI
             t.raycastTarget = false;
             if (bold) t.fontStyle = FontStyles.Bold;
             return t;
+        }
+
+        // Font-safe construction. A code-built TextMeshProUGUI whose font/material is still
+        // unresolved at its first GenerateTextMesh() throws an NRE deep inside TMP — the
+        // 2026-06-19 chaos-fleet caught exactly this (TextMeshProUGUI.GenerateTextMesh, 5/8
+        // runs) on force-built panels (Canvas.ForceUpdateCanvases makes TMP generate the same
+        // frame the row is created, before TMP_Settings.defaultFontAsset has been leaned on).
+        // We never assigned a font here, so EVERY label was one timing edge from this NRE.
+        // Assign the default font explicitly before any .text set; fall back to the shipped
+        // LiberationSans SDF under Resources; Warn (never NRE / never silently blank) if both miss.
+        private static TMPro.TMP_FontAsset _fontCache;
+        /// <summary>Assign a resolved TMP font to <paramref name="t"/> if it has none, so its first
+        /// GenerateTextMesh() cannot NRE. Call this BEFORE setting .text on any code-built TMP that
+        /// is constructed outside <see cref="Label"/> (e.g. direct <c>new GameObject(typeof(TextMeshProUGUI))</c>).</summary>
+        public static void EnsureFont(TextMeshProUGUI t)
+        {
+            if (t == null || t.font != null) return;
+            if (_fontCache == null)
+            {
+                _fontCache = TMPro.TMP_Settings.defaultFontAsset
+                          ?? UnityEngine.Resources.Load<TMPro.TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+            }
+            if (_fontCache != null) t.font = _fontCache;
+            else DeNelle.Core.Diagnostics.FlowTrace.Warn("UI",
+                "ElarionUiKit.Label: no TMP font (TMP_Settings.defaultFontAsset null AND LiberationSans SDF " +
+                "absent from Resources) — assigning none to avoid an NRE; text may not render until a font ships.");
         }
 
         // =====================================================================
