@@ -18,6 +18,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Cosmetics
 {
@@ -88,12 +89,17 @@ namespace DeNelle.Cosmetics
         /// </summary>
         public void ApplyCosmetic(string cosmeticId)
         {
-            if (string.IsNullOrEmpty(cosmeticId)) return;
+            using var _ = FlowTrace.Enter("Cosmetics", $"ApplyCosmetic(id='{cosmeticId}') on '{gameObject.name}'");
+            if (string.IsNullOrEmpty(cosmeticId))
+            {
+                FlowTrace.Warn("Cosmetics", "ApplyCosmetic: empty cosmetic id — no-op.");
+                return;
+            }
 
             var def = CosmeticCatalog.Find(cosmeticId);
             if (def == null)
             {
-                Debug.LogWarning($"[CosmeticApplier] Cosmetic id '{cosmeticId}' not found in catalog.");
+                FlowTrace.Fail("Cosmetics", $"ApplyCosmetic: id '{cosmeticId}' not found in catalog — nothing applied.");
                 return;
             }
 
@@ -103,7 +109,7 @@ namespace DeNelle.Cosmetics
             ApplyPrefab();
             ApplyVfx();
 
-            Debug.Log($"[CosmeticApplier] Applied cosmetic '{def.DisplayName}' to {gameObject.name}.");
+            FlowTrace.Step("Cosmetics", $"ApplyCosmetic: applied '{def.DisplayName}' to '{gameObject.name}'.");
         }
 
         /// <summary>
@@ -112,12 +118,17 @@ namespace DeNelle.Cosmetics
         /// </summary>
         public void ApplyCosmetic(CosmeticDef cosmetic)
         {
-            if (cosmetic == null) return;
+            using var _ = FlowTrace.Enter("Cosmetics", $"ApplyCosmetic(def) on '{gameObject.name}'");
+            if (cosmetic == null)
+            {
+                FlowTrace.Warn("Cosmetics", "ApplyCosmetic(def): null CosmeticDef — no-op.");
+                return;
+            }
             _equippedCosmeticId = cosmetic.Id;
             ApplyMaterial(cosmetic);
             ApplyPrefab();
             ApplyVfx();
-            Debug.Log($"[CosmeticApplier] Applied cosmetic '{cosmetic.DisplayName}' to {gameObject.name}.");
+            FlowTrace.Step("Cosmetics", $"ApplyCosmetic: applied '{cosmetic.DisplayName}' to '{gameObject.name}'.");
         }
 
         /// <summary>
@@ -163,37 +174,147 @@ namespace DeNelle.Cosmetics
 
         private void ApplyMaterial(CosmeticDef def)
         {
-            if (meshRenderer == null) return;
+            using var _ = FlowTrace.Enter("Cosmetics", $"ApplyMaterial('{def?.Id}') on '{gameObject.name}'");
+            if (meshRenderer == null)
+            {
+                FlowTrace.Fail("Cosmetics",
+                    $"ApplyMaterial: no MeshRenderer on '{gameObject.name}' — cosmetic '{def?.Id}' cannot render a material.");
+                return;
+            }
 
             if (materialOverride != null)
             {
                 // Inspector-assigned material override — full swap.
                 meshRenderer.material = materialOverride;
+                // READ-BACK VERIFY: confirm the swap took (material non-null + identity matches).
+                var applied = meshRenderer.material;
+                if (applied == null)
+                {
+                    FlowTrace.Fail("Cosmetics",
+                        $"ApplyMaterial: material override for '{def?.Id}' did not take — renderer material is null after swap.");
+                    return;
+                }
+                FlowTrace.Step("Cosmetics", $"ApplyMaterial: swapped to override material '{applied.name}' for '{def?.Id}'.");
             }
             else
             {
                 // First-pass: tint by preview color. Creates a material instance
                 // (not shared) so other instances are unaffected.
                 var mat = meshRenderer.material; // creates instance
-                mat.color = def.PreviewUnityColor;
+                if (mat == null)
+                {
+                    FlowTrace.Fail("Cosmetics",
+                        $"ApplyMaterial: renderer produced no material instance for '{def?.Id}' — tint cannot apply.");
+                    return;
+                }
+                Color want = def != null ? def.PreviewUnityColor : Color.white;
+                mat.color = want;
+                // READ-BACK VERIFY (owner directive 2026-06-19: "anything that renders can be
+                // broken — read back the applied tint"). A shader without a `_Color` slot silently
+                // drops the assignment; the read-back self-reports that miss instead of a wrong colour.
+                Color got = mat.color;
+                bool took = Mathf.Approximately(got.r, want.r) && Mathf.Approximately(got.g, want.g) &&
+                            Mathf.Approximately(got.b, want.b);
+                if (!took)
+                {
+                    FlowTrace.Warn("Cosmetics",
+                        $"ApplyMaterial: tint for '{def?.Id}' did not read back (wanted {want}, got {got}) on " +
+                        $"material '{mat.name}' — shader may lack a colour slot; cosmetic tint may not show.");
+                }
+                else
+                {
+                    FlowTrace.Step("Cosmetics", $"ApplyMaterial: tinted '{def?.Id}' to {want} on '{mat.name}' (verified).");
+                }
             }
         }
 
         private void ApplyPrefab()
         {
             if (prefabOverride == null) return;
+            using var _ = FlowTrace.Enter("Cosmetics", $"ApplyPrefab('{prefabOverride.name}') on '{gameObject.name}'");
 
-            // Tear down any prior override.
+            // LIVE BUG FIX (verify-before-hide, mirrors HeroArmorVisual): the old order hid the
+            // default model (SetActive(false)) BEFORE an UNGUARDED Instantiate. If Instantiate
+            // threw, the GameObject was left permanently invisible with no rollback — a naked/blank
+            // object. So now: build + verify the replacement FIRST, hide the default ONLY after the
+            // replacement is confirmed instantiated AND renders; on ANY failure RE-ENABLE the default.
+
+            // Tear down any prior override (the default is still shown, so no blank flash).
             if (_currentOverrideModel != null)
                 Destroy(_currentOverrideModel);
 
+            var parent = attachmentPoint != null ? attachmentPoint : transform;
+
+            // 1) GUARDED instantiate — a throw no longer leaves the default hidden (it isn't yet).
+            GameObject instance = null;
+            try
+            {
+                instance = Instantiate(prefabOverride, parent);
+            }
+            catch (System.Exception ex)
+            {
+                FlowTrace.Fail("Cosmetics",
+                    $"ApplyPrefab: Instantiate threw for '{prefabOverride.name}': {ex.GetType().Name}: {ex.Message} — " +
+                    "keeping default model (no invisible object).");
+                RestoreDefaultModel();
+                return;
+            }
+            if (instance == null)
+            {
+                FlowTrace.Fail("Cosmetics",
+                    $"ApplyPrefab: Instantiate returned null for '{prefabOverride.name}' — keeping default model.");
+                RestoreDefaultModel();
+                return;
+            }
+
+            instance.transform.localPosition = Vector3.zero;
+            instance.transform.localRotation = Quaternion.identity;
+
+            // 2) RENDER-VERIFY: the override must carry >=1 renderer (Mesh or Skinned) so we never
+            // hide the default for a replacement that shows nothing. Failure => destroy + roll back.
+            if (!OverrideRenders(instance))
+            {
+                FlowTrace.Fail("Cosmetics",
+                    $"ApplyPrefab: override '{prefabOverride.name}' has no visible renderer — " +
+                    "dropping it, keeping default model (no invisible object).");
+                Destroy(instance);
+                RestoreDefaultModel();
+                return;
+            }
+
+            // 3) Replacement confirmed renderable — NOW it is safe to hide the default.
+            _currentOverrideModel = instance;
             if (defaultModel != null)
                 defaultModel.SetActive(false);
 
-            var parent = attachmentPoint != null ? attachmentPoint : transform;
-            _currentOverrideModel = Instantiate(prefabOverride, parent);
-            _currentOverrideModel.transform.localPosition = Vector3.zero;
-            _currentOverrideModel.transform.localRotation = Quaternion.identity;
+            FlowTrace.Step("Cosmetics",
+                $"ApplyPrefab: override '{prefabOverride.name}' instantiated + renders; default model hidden.");
+        }
+
+        // Render-verify helper: true when the instance has at least one renderer carrying a mesh,
+        // so hiding the default never leaves the object blank. Counts MeshRenderer + SkinnedMeshRenderer.
+        private static bool OverrideRenders(GameObject instance)
+        {
+            if (instance == null) return false;
+            foreach (var mr in instance.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (mr == null) continue;
+                var mf = mr.GetComponent<MeshFilter>();
+                if (mf != null && mf.sharedMesh != null) return true;
+            }
+            foreach (var sr in instance.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                if (sr != null && sr.sharedMesh != null) return true;
+            }
+            return false;
+        }
+
+        // Re-enable the default model — the never-invisible fallback whenever a prefab override
+        // fails to build/render. Always runs (not behind the FlowTrace toggle).
+        private void RestoreDefaultModel()
+        {
+            if (defaultModel != null && !defaultModel.activeSelf)
+                defaultModel.SetActive(true);
         }
 
         private void ApplyVfx()

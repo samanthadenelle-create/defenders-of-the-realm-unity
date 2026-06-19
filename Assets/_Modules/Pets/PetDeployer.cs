@@ -15,6 +15,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Pets
 {
@@ -425,6 +426,7 @@ namespace DeNelle.Pets
                 GameObject visual = TryLoadPetMesh(def);
                 if (visual != null)
                 {
+                    FlowTrace.Step("Pets", $"SpawnPet: loaded 3D mesh for '{def?.Species}' — seating + wiring.");
                     visual.transform.SetParent(go.transform, false);
                     visual.transform.localPosition = Vector3.zero;
                     // FORWARD CORRECTION (DEF-95, owner field-test: "pet travels in
@@ -510,8 +512,15 @@ namespace DeNelle.Pets
                     // on an unlit transparent material; PetBillboard turns it to face
                     // the camera each frame. Falls back to a TintColor-tinted quad
                     // when the portrait PNG isn't present yet.
+                    FlowTrace.Step("Pets", $"SpawnPet: no 3D mesh for '{def?.Species}' — building sprite billboard fallback (R).");
                     BuildSpriteBillboard(go, def);
                 }
+
+                // RENDER-VERIFY (owner directive 2026-06-19: "anything that renders can be broken").
+                // The pet MUST show SOMETHING — a mesh OR the billboard quad. If neither carries a
+                // visible renderer, Fail-loud so a capture pinpoints the invisible pet instead of the
+                // owner discovering a blank slot in the village.
+                VerifyPetRenders(go, def);
 
                 pet = go.AddComponent<Pet>();
 #if UNITY_EDITOR
@@ -565,11 +574,21 @@ namespace DeNelle.Pets
         /// </summary>
         private static GameObject TryLoadPetMesh(PetDef def)
         {
+            using var _ = FlowTrace.Enter("Pets", $"TryLoadPetMesh('{def?.Species}')");
+
             // WO-211 Phase 2: lite-pet visuals path never loads the heavy Tripo
             // FBX — the caller falls through to the sprite-billboard else-branch.
-            if (UseLitePetVisuals) return null;
+            if (UseLitePetVisuals)
+            {
+                FlowTrace.Step("Pets", "TryLoadPetMesh: UseLitePetVisuals=true — skipping 3D mesh (billboard fallback R).");
+                return null;
+            }
 
-            if (def == null || string.IsNullOrEmpty(def.Species)) return null;
+            if (def == null || string.IsNullOrEmpty(def.Species))
+            {
+                FlowTrace.Warn("Pets", "TryLoadPetMesh: null def / empty species — no mesh.");
+                return null;
+            }
 
             // Cosmetic pet skin (Glimmer shop) overrides the base mesh. The
             // cosmetic service lives in DeNelle.Cosmetics which DeNelle.Pets
@@ -579,11 +598,23 @@ namespace DeNelle.Pets
             if (!string.IsNullOrEmpty(equipped))
             {
                 var skin = Resources.Load<GameObject>("Cosmetics/Pets/" + equipped);
-                if (skin != null) return Instantiate(skin);
+                if (skin != null)
+                {
+                    FlowTrace.Step("Pets", $"TryLoadPetMesh: using cosmetic pet skin 'Cosmetics/Pets/{equipped}'.");
+                    return Instantiate(skin);
+                }
+                FlowTrace.Warn("Pets",
+                    $"TryLoadPetMesh: cosmetic pet skin equipped ('{equipped}') but no asset at " +
+                    $"Resources/Cosmetics/Pets/{equipped} — falling back to the base species mesh.");
             }
 
             var prefab = Resources.Load<GameObject>("Pets/" + def.Species);
-            if (prefab == null) return null;
+            if (prefab == null)
+            {
+                FlowTrace.Step("Pets",
+                    $"TryLoadPetMesh: no mesh at Resources/Pets/{def.Species} — caller uses the billboard fallback (R).");
+                return null;
+            }
             return Instantiate(prefab);
         }
 
@@ -616,8 +647,13 @@ namespace DeNelle.Pets
                         new[] { typeof(string) });
                 return _equippedForMethod?.Invoke(_glimmerInstance, new object[] { category }) as string;
             }
-            catch
+            catch (System.Exception ex)
             {
+                // §12 no-silent-failures: the reflection bridge into DeNelle.Cosmetics threw — log it
+                // (don't blank the cosmetic look silently). null => caller uses the base species mesh.
+                FlowTrace.Warn("Pets",
+                    $"TryGetEquippedCosmeticForCategory('{category}'): reflection bridge threw " +
+                    $"{ex.GetType().Name}: {ex.Message} — treating as no equipped cosmetic.");
                 return null;
             }
         }
@@ -632,9 +668,16 @@ namespace DeNelle.Pets
         /// </summary>
         private static void WirePetAnimator(GameObject visual, PetDef def)
         {
+            using var _ = FlowTrace.Enter("Pets", $"WirePetAnimator('{def?.Species}')");
             if (visual == null) return;
             var anim = visual.GetComponentInChildren<Animator>();
-            if (anim == null) return;   // no rig on this mesh — nothing to drive.
+            if (anim == null)
+            {
+                // No rig on this mesh — nothing to drive (a static decimated echo). Not a failure,
+                // but trace it so a "pet doesn't move" report can be split from a T-pose binding gap.
+                FlowTrace.Step("Pets", $"WirePetAnimator: '{def?.Species}' mesh has no Animator — static (no rig to drive).");
+                return;
+            }
 
             string species = def != null ? def.Species : null;
             RuntimeAnimatorController ctrl = null;
@@ -650,6 +693,17 @@ namespace DeNelle.Pets
                 // else Unity freezes the rig and it re-T-poses on re-entry to view.
                 anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
                 anim.Rebind();
+                // POSE-VERIFY (no silent T-pose): with a controller bound but no valid Avatar (Generic
+                // FBXs occasionally instantiate without one) the rig still freezes in its bind pose. The
+                // controller bound is the happy path; a missing/invalid avatar self-reports here so a
+                // capture splits "no controller" from "bound-but-can't-pose".
+                bool avatarOk = anim.avatar != null && anim.avatar.isValid;
+                if (!avatarOk)
+                    FlowTrace.Warn("Pets",
+                        $"WirePetAnimator: bound controller '{ctrl.name}' on '{species}' but its Animator has " +
+                        "no valid Avatar — the rig may freeze in a T-pose. Check the FBX rig import.");
+                else
+                    FlowTrace.Step("Pets", $"WirePetAnimator: bound controller '{ctrl.name}' on '{species}' (avatar valid).");
                 return;
             }
 
@@ -665,19 +719,19 @@ namespace DeNelle.Pets
                 var player = anim.gameObject.GetComponent<PetClipPlayer>();
                 if (player == null) player = anim.gameObject.AddComponent<PetClipPlayer>();
                 player.Initialize(anim, clip);
-                Debug.Log(
-                    "[PetDeployer] No .controller for pet '" + (species ?? "?") +
+                FlowTrace.Step("Pets",
+                    "WirePetAnimator: no .controller for pet '" + (species ?? "?") +
                     "' — playing its embedded clip '" + clip.name +
-                    "' via PetClipPlayer (WO-184 fallback). Author a per-species " +
+                    "' via PetClipPlayer (WO-184 fallback R). Author a per-species " +
                     "controller for a proper idle<->walk blend.");
             }
             else
             {
-                Debug.LogWarning(
-                    "[PetDeployer] No AnimatorController at Resources/Pets/" +
+                FlowTrace.Fail("Pets",
+                    "WirePetAnimator: no AnimatorController at Resources/Pets/" +
                     (species ?? "<species>") + ".controller (nor Resources/Pets/Pet" +
                     ".controller) AND no embedded clip on the FBX — pet '" +
-                    (species ?? "?") + "' will not animate (T-pose). Build a " +
+                    (species ?? "?") + "' will NOT animate (T-pose). Build a " +
                     "per-species controller from its embedded clips.");
             }
         }
@@ -703,6 +757,34 @@ namespace DeNelle.Pets
                 return c;
             }
             return null;
+        }
+
+        // RENDER-VERIFY: a freshly-spawned pet root MUST carry at least one renderer with a mesh
+        // (3D body OR billboard quad). Fail-loud when it shows nothing so a headless capture
+        // self-reports the invisible pet rather than the owner finding a blank deploy slot.
+        private static void VerifyPetRenders(GameObject root, PetDef def)
+        {
+            if (root == null)
+            {
+                FlowTrace.Fail("Pets", $"VerifyPetRenders: pet root for '{def?.Species}' is null — nothing to render.");
+                return;
+            }
+            int withMesh = 0;
+            foreach (var mr in root.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (mr == null) continue;
+                var mf = mr.GetComponent<MeshFilter>();
+                if (mf != null && mf.sharedMesh != null) withMesh++;
+            }
+            foreach (var sr in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                if (sr != null && sr.sharedMesh != null) withMesh++;
+
+            if (withMesh > 0)
+                FlowTrace.Step("Pets", $"VerifyPetRenders: pet '{def?.Species}' has {withMesh} visible mesh renderer(s).");
+            else
+                FlowTrace.Fail("Pets",
+                    $"VerifyPetRenders FAILED: pet '{def?.Species}' has NO visible mesh renderer (neither 3D body nor " +
+                    "billboard quad) — the pet will be invisible. Check the mesh load / billboard shader.");
         }
 
         private static void NormalizePetHeight(GameObject go, float targetHeight)
@@ -767,6 +849,7 @@ namespace DeNelle.Pets
         /// </summary>
         private static void BuildSpriteBillboard(GameObject root, PetDef def)
         {
+            using var _ = FlowTrace.Enter("Pets", $"BuildSpriteBillboard('{def?.Species}')");
             var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
             quad.name = "Body";
             quad.transform.SetParent(root.transform, false);
@@ -786,6 +869,17 @@ namespace DeNelle.Pets
                 Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
                                 ?? Shader.Find("Sprites/Default")
                                 ?? Shader.Find("Unlit/Transparent");
+                if (shader == null)
+                {
+                    // SILENT-BUG FIX (§12): none of the billboard shaders resolved (stripped from the
+                    // build), so the quad would render as the default pink/invisible "missing shader"
+                    // material with no log. Fail-loud — the pet's only visual is this quad, so a missing
+                    // shader = an invisible pet. The quad still exists (render-verify will also flag it).
+                    FlowTrace.Fail("Pets",
+                        $"BuildSpriteBillboard: NO billboard shader found (URP/Unlit, Sprites/Default, " +
+                        $"Unlit/Transparent all missing) for pet '{def?.Species}' — the quad will render as " +
+                        "the default magenta/invisible material. Add a billboard shader to the Always-Included list.");
+                }
                 var mat = shader != null ? new Material(shader) : null;
 
                 // id = "pet-<species>" — matches the PetCatalog id and the PNG the
@@ -815,11 +909,13 @@ namespace DeNelle.Pets
                         Color tint = def != null ? def.TintColor : Color.white;
                         if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tint);
                         if (mat.HasProperty("_Color"))     mat.SetColor("_Color", tint);
-                        Debug.LogWarning("[PetDeployer] No lite-pet portrait at " +
+                        FlowTrace.Warn("Pets", "BuildSpriteBillboard: no lite-pet portrait at " +
                             "Resources/PetPortraits/" + id + " — using TintColor " +
-                            "quad. Run Defenders → Art → Render Pet Portraits.");
+                            "quad (R). Run Defenders → Art → Render Pet Portraits.");
                     }
                     renderer.sharedMaterial = mat;
+                    FlowTrace.Step("Pets", $"BuildSpriteBillboard: quad built for '{def?.Species}' " +
+                        $"(portrait={(portraitTex != null ? "yes" : "tint-only")}).");
                 }
             }
 
