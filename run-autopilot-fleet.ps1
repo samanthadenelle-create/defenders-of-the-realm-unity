@@ -41,6 +41,20 @@ Write-Host "[fleet] exe   = $ExePath"
 Write-Host "[fleet] count = $Count   seedStart = $SeedStart   timeoutMin = $TimeoutMin"
 Write-Host "[fleet] (player builds need no license; -nographics = logic/flow/crash coverage only)"
 
+# --- clean stale run logs so the aggregation reflects ONLY this fleet ----------
+# The BreakCaptureHarness APPENDS to each run's break-log.jsonl (it does not
+# truncate at run start), and old --run=<i> folders from prior fleets/sessions
+# persist. Without this wipe the editor-side emitter re-reads pre-fix history and
+# re-reports ALREADY-FIXED issues every fleet forever -> corrupted truth/coverage
+# metrics (a fixed bug never appears "resolved"). Wipe before launching so each
+# fleet's ranked tickets reflect ONLY this fleet's fresh runs.
+$pdp = Join-Path $env:USERPROFILE 'AppData\LocalLow\DeNelle\Defenders of the Realm'
+$runsDir = Join-Path $pdp 'autopilot-runs'
+if (Test-Path $runsDir) { Remove-Item $runsDir -Recurse -Force -ErrorAction SilentlyContinue }
+$rootBreak = Join-Path $pdp 'break-log.jsonl'
+if (Test-Path $rootBreak) { Remove-Item $rootBreak -Force -ErrorAction SilentlyContinue }
+Write-Host "[fleet] cleaned stale run logs under '$pdp' (fresh aggregation slate)."
+
 # --- launch N headless instances ---------------------------------------------
 $procs = @()
 for ($i = 0; $i -lt $Count; $i++) {
