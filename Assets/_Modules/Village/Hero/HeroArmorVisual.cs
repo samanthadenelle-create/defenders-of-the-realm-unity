@@ -448,29 +448,51 @@ namespace DeNelle.Village
         {
             if (baseBody == null) return;
             var renderers = baseBody.GetComponentsInChildren<SkinnedMeshRenderer>(true);
-            int hidden = 0;
+            int hidden = 0, keptSkin = 0;
+            // Snapshot ONLY what we actually hid, so RestoreBaseBody re-enables exactly that set.
+            var hiddenList = new System.Collections.Generic.List<SkinnedMeshRenderer>();
             foreach (var r in renderers)
             {
                 if (r == null) continue;
+                // BLINK FIX (2026-06-19, "armor but no skin"): Blink armor SET prefabs ship armor
+                // pieces ONLY — no head/hands/face/hair skin. The base body is the only object that
+                // carries skin. The old behaviour disabled EVERY base renderer, so once armor equipped
+                // the hero read as floating armor + weapon over no body. So NEVER hide skin renderers —
+                // hide only the body's torso/limb/clothing meshes that the armor overlay replaces.
+                if (IsSkinRenderer(r.name)) { keptSkin++; continue; }
                 if (r.enabled) { r.enabled = false; hidden++; }
+                hiddenList.Add(r);
             }
-            _hiddenBaseRenderers = renderers;
-            if (hidden == 0)
+            _hiddenBaseRenderers = hiddenList.ToArray();
+            if (keptSkin == 0)
             {
-                // SELF-REPORT (Blink migration): with the real Blink base body, HideBaseBody should
-                // disable >=1 SkinnedMeshRenderer (the Starter_* body meshes). Disabling 0 means the
-                // resolved base body carries no enabled SkinnedMeshRenderer (wrong transform resolved,
-                // or the base body was already hidden / is a non-skinned placeholder) — the old
-                // "disabled 0" symptom. Warn so a run pinpoints it instead of a silently-still-naked hero.
+                // SELF-REPORT (§12): we recognised no skin mesh on the base body — the hero may still
+                // read bare. Means the base body's skin renderers don't match the IsSkinRenderer
+                // keywords (wrong base resolved, or unexpected mesh names) — pinpoint, don't blank.
                 FlowTrace.Warn("ArmorVisual",
-                    $"HideBaseBody: disabled 0 base SkinnedMeshRenderer(s) on '{baseBody.name}' " +
-                    $"({renderers?.Length ?? 0} found) — base body may be wrong/already-hidden. " +
-                    "Armored body still shown over it.");
+                    $"HideBaseBody: kept 0 skin renderer(s) on '{baseBody.name}' " +
+                    $"({renderers?.Length ?? 0} found, hid {hidden}) — no recognised skin mesh; " +
+                    "hero may still read bare under the armor. Check base-body renderer names.");
             }
             else
             {
-                FlowTrace.Step("ArmorVisual", $"HideBaseBody: disabled {hidden} base SkinnedMeshRenderer(s).");
+                FlowTrace.Step("ArmorVisual",
+                    $"HideBaseBody: hid {hidden} base clothing renderer(s), kept {keptSkin} skin renderer(s) visible under the armor.");
             }
+        }
+
+        // Blink/Tripo base-body renderer names that are SKIN / face / hair and must stay visible UNDER
+        // the armor overlay (armor SET prefabs bring no skin). Everything NOT matched here (torso, legs,
+        // arms, feet, built-in cloth) is a mesh the armor replaces and is hidden by HideBaseBody.
+        private static bool IsSkinRenderer(string n)
+        {
+            if (string.IsNullOrEmpty(n)) return false;
+            n = n.ToLowerInvariant();
+            return n.Contains("head") || n.Contains("hand") || n.Contains("neck") ||
+                   n.Contains("face") || n.Contains("ear")  || n.Contains("eye")  ||
+                   n.Contains("brow") || n.Contains("lash") || n.Contains("hair") ||
+                   n.Contains("beard") || n.Contains("moustache") || n.Contains("mustache") ||
+                   n.Contains("teeth") || n.Contains("tongue");
         }
 
         // Re-enable the base body's renderers we previously hid (re-resolving live ones if the
