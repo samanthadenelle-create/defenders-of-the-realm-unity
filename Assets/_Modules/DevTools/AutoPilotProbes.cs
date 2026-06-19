@@ -71,12 +71,14 @@ namespace DeNelle.DevTools
         private const float WallClipInterval   = 0.25f;  // ~4/sec
         private const float CoplanarInterval   = 5f;     // scan settled floors every 5s
         private const float NavMeshInterval    = 5f;     // dual-navmesh overlap scan
+        private const float NavLinkInterval    = 5f;     // navmesh-link connectivity scan
         private const float StrandedInterval   = 1f;     // poll path progress 1/sec
         private const float HeroRefreshInterval = 2f;    // re-resolve hero handle
 
         private float _nextWallClip;
         private float _nextCoplanar;
         private float _nextNavMesh;
+        private float _nextNavLink;
         private float _nextStranded;
         private float _nextHeroRefresh;
 
@@ -114,7 +116,7 @@ namespace DeNelle.DevTools
             if (_armed) return;
             _armed = true;
             SceneManager.sceneLoaded += OnSceneLoaded;
-            FlowTrace.Step(Tag, "AutoPilotProbes ARMED — UNEXPECTED-CROSS, COPLANAR-FLOOR, WALL-CLIP, DUAL-NAVMESH/STRANDED active.");
+            FlowTrace.Step(Tag, "AutoPilotProbes ARMED — UNEXPECTED-CROSS, COPLANAR-FLOOR, WALL-CLIP, DUAL-NAVMESH/STRANDED, NAVMESH-LINK active.");
         }
 
         /// <summary>
@@ -199,6 +201,13 @@ namespace DeNelle.DevTools
                 _nextNavMesh = now + NavMeshInterval;
                 try { CheckDualNavMesh(); }
                 catch (Exception ex) { FlowTrace.Warn(Tag, "DUAL-NAVMESH check threw: " + ex.Message); }
+            }
+
+            if (now >= _nextNavLink)
+            {
+                _nextNavLink = now + NavLinkInterval;
+                try { CheckNavMeshLinks(); }
+                catch (Exception ex) { FlowTrace.Warn(Tag, "NAVMESH-LINK check threw: " + ex.Message); }
             }
 
             if (now >= _nextStranded)
@@ -419,6 +428,105 @@ namespace DeNelle.DevTools
                         $"'{sceneBounds[j].Key}' overlap in XZ while a baked NavMesh is present — two navmeshes over the same region (agent may path onto the wrong surface).");
                 }
             }
+        }
+
+        // =====================================================================
+        //  PROBE 4c: NAVMESH-LINK CONNECTIVITY
+        //  The show-stopper class (WO-453): a seam between two additively-loaded
+        //  scenes that OVERLAP in XZ and both carry navmesh, but has NO NavMeshLink
+        //  bridging them -> the hero cannot WALK the seam; the crossing falls back to
+        //  a warp (or strands). This stayed hidden for weeks because the builder's
+        //  link placement only emitted a silent Debug.LogWarning on failure. Here it
+        //  BUBBLES UP: every run enumerates the links, validates each endpoint sits on
+        //  the baked navmesh, and Fails loud on (a) a dangling link (endpoint off-mesh)
+        //  and (b) an overlapping additive seam with zero bridging links.
+        // =====================================================================
+        private readonly HashSet<string> _navLinkSeen = new HashSet<string>();
+        private bool _navLinkCensusDone;
+
+        private void CheckNavMeshLinks()
+        {
+            var links = UnityEngine.Object.FindObjectsByType<Unity.AI.Navigation.NavMeshLink>(
+                FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+
+            // One-shot census so a run's report names EXACTLY what links exist + where.
+            if (!_navLinkCensusDone)
+            {
+                _navLinkCensusDone = true;
+                FlowTrace.Step(Tag, $"NAVMESH-LINK census: {links.Length} active NavMeshLink(s) across {SceneManager.sceneCount} loaded scene(s).");
+            }
+
+            // (a) Per-link endpoint validity: both ends must sample onto the baked navmesh,
+            //     else the link bridges nothing (a dangling/mis-placed seam).
+            const float SampleTol = 2.0f;
+            foreach (var link in links)
+            {
+                if (link == null || !link.isActiveAndEnabled) continue;
+                Transform t = link.transform;
+                Vector3 startW = t.TransformPoint(link.startPoint);
+                Vector3 endW   = t.TransformPoint(link.endPoint);
+                bool startOk = NavMesh.SamplePosition(startW, out _, SampleTol, NavMesh.AllAreas);
+                bool endOk   = NavMesh.SamplePosition(endW,   out _, SampleTol, NavMesh.AllAreas);
+                if (startOk && endOk) continue;
+
+                string lk = $"danglinglink:{link.gameObject.scene.name}:{link.name}";
+                if (!_navLinkSeen.Add(lk)) continue;
+                FlowTrace.Fail(Tag,
+                    $"NAVMESH-LINK DANGLING: '{link.name}' in '{link.gameObject.scene.name}' has an endpoint OFF the navmesh " +
+                    $"(start on-mesh={startOk} @ {startW}, end on-mesh={endOk} @ {endW}) — the link bridges nothing; the hero can't cross here.");
+            }
+
+            // (b) Overlapping additive seam with NO bridging link = warp-only seam (the WO-453
+            //     castle<->OuterWorld show-stopper). For each pair of loaded scenes whose XZ
+            //     footprints overlap, require >=1 NavMeshLink whose endpoints straddle the pair.
+            int loaded = SceneManager.sceneCount;
+            if (loaded < 2) return;
+
+            var sceneBounds = new List<KeyValuePair<string, Bounds>>(loaded);
+            for (int s = 0; s < loaded; s++)
+            {
+                Scene sc = SceneManager.GetSceneAt(s);
+                if (!sc.isLoaded) continue;
+                Bounds? bb = SceneXZBounds(sc);
+                if (bb.HasValue) sceneBounds.Add(new KeyValuePair<string, Bounds>(sc.name, bb.Value));
+            }
+
+            for (int i = 0; i < sceneBounds.Count; i++)
+            {
+                for (int j = i + 1; j < sceneBounds.Count; j++)
+                {
+                    Bounds a = sceneBounds[i].Value, b = sceneBounds[j].Value;
+                    bool overlapX = Mathf.Abs(a.center.x - b.center.x) < (a.extents.x + b.extents.x);
+                    bool overlapZ = Mathf.Abs(a.center.z - b.center.z) < (a.extents.z + b.extents.z);
+                    if (!overlapX || !overlapZ) continue;
+
+                    // A bridging link = one whose two endpoints land in the two different scene footprints.
+                    bool bridged = false;
+                    foreach (var link in links)
+                    {
+                        if (link == null || !link.isActiveAndEnabled) continue;
+                        Transform t = link.transform;
+                        Vector3 sW = t.TransformPoint(link.startPoint);
+                        Vector3 eW = t.TransformPoint(link.endPoint);
+                        bool sInA = InXZ(a, sW), eInB = InXZ(b, eW);
+                        bool sInB = InXZ(b, sW), eInA = InXZ(a, eW);
+                        if ((sInA && eInB) || (sInB && eInA)) { bridged = true; break; }
+                    }
+                    if (bridged) continue;
+
+                    string key = "nolink:" + PairKey(sceneBounds[i].Key, sceneBounds[j].Key);
+                    if (!_navLinkSeen.Add(key)) continue;
+                    FlowTrace.Fail(Tag,
+                        $"NAVMESH-LINK MISSING: additive scenes '{sceneBounds[i].Key}' and '{sceneBounds[j].Key}' overlap in XZ " +
+                        "but NO NavMeshLink bridges them — the seam is not walkable (warp-only / strands). This is the WO-453 castle<->OuterWorld class.");
+                }
+            }
+        }
+
+        private static bool InXZ(Bounds b, Vector3 p)
+        {
+            return Mathf.Abs(p.x - b.center.x) <= b.extents.x
+                && Mathf.Abs(p.z - b.center.z) <= b.extents.z;
         }
 
         // World-space XZ bounds of a scene's active renderers (cheap structural proxy for

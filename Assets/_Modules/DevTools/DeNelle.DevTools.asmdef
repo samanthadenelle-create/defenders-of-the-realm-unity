@@ -6,7 +6,8 @@
         "DeNelle.Village",
         "DeNelle.Wallet",
         "DeNelle.HUD",
-        "UniTask"
+        "UniTask",
+        "Unity.AI.Navigation"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
