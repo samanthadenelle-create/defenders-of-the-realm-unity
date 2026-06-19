@@ -177,6 +177,20 @@ namespace DeNelle.Village
 
             bool inRange = (_hero.position - transform.position).sqrMagnitude <= EffRadius * EffRadius;
 
+            // OUTPOST FAST-TRAVEL GATE (owner 2026-06-19): while ff.outposttravel is OFF, a seam
+            // whose destination is a garrison / raid OUTPOST (Garrison_* / Outpost_* / RaidBase_*)
+            // must NOT offer its "Travel to <outpost>" prompt — reaching an outpost is earned by
+            // walking (WO-453), not fast-travelled. The castle<->OuterWorld crossing is NOT an
+            // outpost destination, so it is never gated and continues to work. We force this seam
+            // to read as out-of-range so it neither shows a prompt nor wins the nearest-seam contest.
+            if (inRange && IsTravelGated())
+            {
+                FlowTrace.Once("Seam", $"{name}-travelgated",
+                    $"'{name}' -> '{targetSceneName}' outpost fast-travel is feature-flagged OFF " +
+                    "(ff.outposttravel) — prompt suppressed; walk to earn it.");
+                inRange = false;
+            }
+
             // CONFIRM-TO-CROSS (unconditional): NEVER auto-teleport. We REGISTER in-range
             // interest here and then resolve the prompt + Request for the single NEAREST
             // in-range seam — all WITHIN Update() (see ResolvePromptAndRequest + the
@@ -225,6 +239,25 @@ namespace DeNelle.Village
         // visible + tappable. Order-independent: it reads the PREVIOUS frame's completed
         // in-range list (s_prevFrameInRange), so it does not matter which seam's Update()
         // runs first this frame. Called once per seam per frame from Update().
+        // True when this seam's destination is an enemy raid OUTPOST scene (Garrison_* / Outpost_* /
+        // RaidBase_*) rather than the OuterWorld / hub crossing. Used only to gate outpost fast-travel.
+        private bool IsOutpostDestination()
+        {
+            string t = targetSceneName;
+            if (string.IsNullOrEmpty(t)) return false;
+            return t.StartsWith("Garrison", System.StringComparison.OrdinalIgnoreCase)
+                || t.StartsWith("Outpost",  System.StringComparison.OrdinalIgnoreCase)
+                || DeNelle.Core.HubScenes.IsRaid(t);
+        }
+
+        // Owner 2026-06-19: hide the "Travel to <outpost>" fast-travel prompt until earned. Gated ONLY
+        // for outpost destinations; the OuterWorld / hub crossing is never gated. Flip ff.outposttravel
+        // ON to restore the prompt.
+        private bool IsTravelGated()
+        {
+            return IsOutpostDestination() && !DeNelle.Core.FeatureFlags.OutpostTravel;
+        }
+
         private void ResolvePromptAndRequest()
         {
             if (_fired) return;

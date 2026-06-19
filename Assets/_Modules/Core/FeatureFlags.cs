@@ -37,6 +37,15 @@ namespace DeNelle.Core
         /// walk-to outpost). Default ON. PlayerPrefs "ff.raidwalk".</summary>
         public static bool RaidContinuousWalk => Get("raidwalk", defaultOn: true);
 
+        /// <summary>When OFF, the "Travel to &lt;outpost&gt;" confirm-to-cross prompt on garrison /
+        /// raid-outpost seams (<see cref="DeNelle.Village.World.SceneTransitionTrigger"/> whose target is a
+        /// <c>Garrison_*</c> / <c>Outpost_*</c> / <c>RaidBase_*</c> scene) is SUPPRESSED — the player can NOT
+        /// fast-travel to an outpost area; reaching it must be earned by walking (the WO-453 distance-gated
+        /// region vision). The castle&lt;-&gt;OuterWorld crossing is NOT an outpost destination and is never
+        /// gated by this flag. Default OFF (owner 2026-06-19: "i dont want that as a fast travel option, at
+        /// least not yet"). Flip ON via PlayerPrefs "ff.outposttravel" = 1 to restore the travel prompt.</summary>
+        public static bool OutpostTravel => Get("outposttravel", defaultOn: false);
+
         /// <summary>When ON, our decorative CHROME (gilt inner-rim / bottom rule / header shadow+rule /
         /// niche backings + per-panel solid fills + glows) does NOT render, so the Blink "Obsidian" panel
         /// sprite + functional content (text/rows/grid/buttons) show clean. Content/structure and the
