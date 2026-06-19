@@ -1,6 +1,6 @@
 // =============================================================================
-// CosmeticShopPanel - the in-game Cosmetic Shop UI (UI Toolkit). Toggled with
-// the C key once the player is in a hero scene. Two-column layout: a category
+// CosmeticShopPanel - the in-game Cosmetic Shop UI (UI Toolkit). Opened via its
+// world interactable (Marketplace). Two-column layout: a category
 // strip on the left (Hero / Pet / Village), a vertical card list on the right.
 // Each card shows the preview swatch, name, description, Glimmer price, and a
 // single action button (Buy / Equip / Equipped / Locked).
@@ -22,6 +22,7 @@ using System.Reflection;
 using UnityEngine;
 using UnityEngine.UIElements;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.HUD
 {
@@ -29,8 +30,6 @@ namespace DeNelle.HUD
     [RequireComponent(typeof(UIDocument))]
     public sealed class CosmeticShopPanel : MonoBehaviour
     {
-        public const KeyCode ToggleKey = KeyCode.C;
-
         private UIDocument _doc;
         private VisualElement _root;
         private VisualElement _overlay;
@@ -84,10 +83,17 @@ namespace DeNelle.HUD
             }
             if (_doc.panelSettings == null)
             {
-                Debug.LogWarning("[CosmeticShopPanel] No PanelSettings available - shop hidden.");
+                // V (WO-465 class): no PanelSettings means rootVisualElement is null and
+                // the panel would silently render nothing / disable itself. Self-report at
+                // Fail so the run pinpoints WHY the shop never showed instead of a blank.
+                FlowTrace.Fail("CosmeticShop",
+                    "Awake: no PanelSettings resolved (none on this UIDocument and none borrowable " +
+                    "from another UIDocument in the scene) — shop CANNOT render; disabling. " +
+                    "Wire a PanelSettings on the CosmeticShop UIDocument or ensure another UI panel exists first.");
                 enabled = false;
                 return;
             }
+            FlowTrace.Step("CosmeticShop", $"Awake: PanelSettings resolved ('{_doc.panelSettings.name}').");
             _doc.sortingOrder = 95; // above HUD chips, below the Help overlay (100)
             _panelHandle = PanelManager.Register("Cosmetic Shop", CloseOverlay, IsOverlayOpen);
             // DEF-213: let the Marketplace / Store interaction open this panel by id.
@@ -217,7 +223,10 @@ namespace DeNelle.HUD
         {
             if (_serviceInstance == null || s_equipMethod == null) return;
             try { s_equipMethod.Invoke(_serviceInstance, new object[] { id }); }
-            catch { /* swallow - reflected event */ }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("CosmeticShop", $"EquipId('{id}') reflected call threw: {ex.GetType().Name}: {ex.Message}");
+            }
         }
 
         private IEnumerable CatalogByCategory(string category)
@@ -258,7 +267,10 @@ namespace DeNelle.HUD
                 var removeMethod = s_changedEvent.GetRemoveMethod();
                 removeMethod?.Invoke(_serviceInstance, new object[] { _changedHandler });
             }
-            catch { /* swallow */ }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("CosmeticShop", $"UnsubscribeChanged reflected call threw: {ex.GetType().Name}: {ex.Message}");
+            }
             _changedHandler = null;
         }
 
@@ -266,8 +278,18 @@ namespace DeNelle.HUD
 
         private void BuildUi()
         {
+            using var _ = FlowTrace.Enter("CosmeticShop", "BuildUi");
             _root = _doc.rootVisualElement;
-            if (_root == null) return;
+            if (_root == null)
+            {
+                // Built-but-invisible guard: a live UIDocument with a PanelSettings should hand
+                // back a root. A null root here means the panel will be blank with no other
+                // symptom — Fail so the run says so instead of silently returning.
+                FlowTrace.Fail("CosmeticShop",
+                    "BuildUi: _doc.rootVisualElement is NULL (PanelSettings present but no root) — " +
+                    "shop UI cannot be built; panel will be empty.");
+                return;
+            }
             _root.pickingMode = PickingMode.Ignore; // don't block HUD beneath
             _root.Clear();
             _root.pickingMode = PickingMode.Ignore;
@@ -397,15 +419,21 @@ namespace DeNelle.HUD
             if (_cardList == null) return;
             _cardList.Clear();
 
-            bool anyCard = false;
+            int cardCount = 0;
             foreach (var def in CatalogByCategory(_activeCategory))
             {
                 if (def == null) continue;
                 _cardList.Add(BuildCard(def));
-                anyCard = true;
+                cardCount++;
             }
-            if (!anyCard)
+            if (cardCount == 0)
             {
+                // Empty-data roll-up (data-empty vs built-but-invisible split): a category
+                // with zero cards is shown to the player AND self-reported, so a missing/empty
+                // catalog never reads as a blank panel with no trace.
+                FlowTrace.Warn("CosmeticShop",
+                    $"Repaint: category '{_activeCategory}' produced 0 cosmetic cards — " +
+                    "showing the visible empty-state placeholder (data-empty: catalog returned nothing for this category).");
                 var empty = new Label("Nothing here yet - check back next season.");
                 empty.style.color = ElarionUi.ParchmentDim;
                 empty.style.unityFontStyleAndWeight = FontStyle.Italic;
@@ -576,7 +604,13 @@ namespace DeNelle.HUD
             if (s_previewCache.TryGetValue(id, out var cached)) return cached;
             Texture2D tex = null;
             try { tex = Resources.Load<Texture2D>($"Cosmetics/Previews/{id}"); }
-            catch { tex = null; }
+            catch (Exception ex)
+            {
+                // Missing previews are EXPECTED (later art pass) — a throw is not. Warn so a real
+                // Resources fault surfaces; the framed-gem fallback (null tex) still renders.
+                FlowTrace.Warn("CosmeticShop", $"ResolvePreviewTexture('{id}') threw: {ex.GetType().Name}: {ex.Message} — using framed-gem fallback.");
+                tex = null;
+            }
             s_previewCache[id] = tex;
             return tex;
         }
@@ -604,7 +638,13 @@ namespace DeNelle.HUD
 
         public void OpenOverlay()
         {
-            if (_overlay == null) return;
+            using var _ = FlowTrace.Enter("CosmeticShop", "OpenOverlay");
+            if (_overlay == null)
+            {
+                FlowTrace.Fail("CosmeticShop",
+                    "OpenOverlay: _overlay is NULL — BuildUi never produced an overlay (no PanelSettings/root?). Open is a no-op.");
+                return;
+            }
             _overlay.style.display = DisplayStyle.Flex;
             _overlay.pickingMode = PickingMode.Position;
             // Tell the arbiter we're open; it closes any other panel first.

@@ -23,6 +23,7 @@
 using System.Collections.Generic;
 using DeNelle.Core.Services;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -80,7 +81,11 @@ namespace DeNelle.HUD
 
         private void SetVisible(bool on)
         {
+            if (on) FlowTrace.Step("Leaderboard", "SetVisible(true) — opening leaderboard panel.");
             _visible = on;
+            if (on && _panel == null)
+                FlowTrace.Fail("Leaderboard",
+                    "SetVisible(true): _panel is NULL — Build never produced a panel (no PanelSettings/root?). Open is a no-op.");
             if (_panel != null)
                 _panel.style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
             if (on) Repaint();
@@ -90,8 +95,21 @@ namespace DeNelle.HUD
 
         private void Build()
         {
-            _root = _doc.rootVisualElement;
-            if (_root == null) return;
+            using var _ = FlowTrace.Enter("Leaderboard", "Build");
+            // V (WO-465 class): this UIDocument adopts no PanelSettings of its own. With none set,
+            // rootVisualElement is null and the old `if (_root == null) return;` silently produced an
+            // invisible panel. Fail-loud so a run reports WHY the leaderboard never showed.
+            if (_doc != null && _doc.panelSettings == null)
+                FlowTrace.Fail("Leaderboard",
+                    "Build: UIDocument has NO PanelSettings — rootVisualElement will be null and the " +
+                    "leaderboard renders invisible. Wire a PanelSettings on the Leaderboard UIDocument.");
+            _root = _doc != null ? _doc.rootVisualElement : null;
+            if (_root == null)
+            {
+                FlowTrace.Fail("Leaderboard",
+                    "Build: rootVisualElement is NULL (no UIDocument/PanelSettings) — leaderboard UI cannot be built; panel will be empty.");
+                return;
+            }
             _root.pickingMode = PickingMode.Ignore; // don't block HUD beneath
             _root.style.position = Position.Absolute;
             _root.style.left = 0; _root.style.right = 0;
@@ -286,6 +304,11 @@ namespace DeNelle.HUD
 
             if (rows == null || rows.Count == 0)
             {
+                // Empty-data roll-up: the fetch returned no rows. Keep the visible 'No entries yet.'
+                // row (R) and self-report so a blank list reads as data-empty, not a silent failure.
+                FlowTrace.Warn("Leaderboard",
+                    $"RebuildList: fetch for metric '{_metric}' returned {(rows == null ? "null" : "0 rows")} — " +
+                    "showing the visible 'No entries yet.' placeholder (data-empty).");
                 var hint = new Label("No entries yet.");
                 hint.style.color = new StyleColor(Muted);
                 hint.style.fontSize = 11;

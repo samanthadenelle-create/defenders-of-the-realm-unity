@@ -25,6 +25,7 @@ using System.Reflection;
 using UnityEngine;
 using UnityEngine.UIElements;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.HUD
 {
@@ -67,7 +68,20 @@ namespace DeNelle.HUD
                     break;
                 }
             }
-            if (_doc.panelSettings == null) { enabled = false; return; }
+            if (_doc.panelSettings == null)
+            {
+                // V (WO-465 class — WORST offender): this previously disabled itself with ZERO
+                // logging, so the Pet Skills panel just never appeared and nothing said why.
+                // Fail-loud: no PanelSettings -> rootVisualElement is null -> the panel cannot
+                // render. Self-report instead of silently disabling.
+                FlowTrace.Fail("PetSkillTree",
+                    "Awake: no PanelSettings resolved (none on this UIDocument and none borrowable " +
+                    "from another scene UIDocument) — Pet Skills CANNOT render; disabling. " +
+                    "Wire a PanelSettings or ensure another UI panel exists first.");
+                enabled = false;
+                return;
+            }
+            FlowTrace.Step("PetSkillTree", $"Awake: PanelSettings resolved ('{_doc.panelSettings.name}').");
             _doc.sortingOrder = 105; // above DailyQuestHud (80), below HelpMenu (?) but visible
 
             _panelHandle = PanelManager.Register("Pet Skills", Close, () => _open);
@@ -103,7 +117,11 @@ namespace DeNelle.HUD
 
         private void SetOpen(bool open)
         {
+            if (open) FlowTrace.Step("PetSkillTree", "SetOpen(true) — opening Pet Skills panel.");
             _open = open;
+            if (open && _overlay == null)
+                FlowTrace.Fail("PetSkillTree",
+                    "SetOpen(true): _overlay is NULL — BuildUi never produced an overlay (no PanelSettings/root?). Open is a no-op.");
             if (_overlay != null)
                 _overlay.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
             // Route through the modal arbiter so opening this closes any other panel,
@@ -117,8 +135,15 @@ namespace DeNelle.HUD
 
         private void BuildUi()
         {
+            using var _ = FlowTrace.Enter("PetSkillTree", "BuildUi");
             _root = _doc.rootVisualElement;
-            if (_root == null) return;
+            if (_root == null)
+            {
+                FlowTrace.Fail("PetSkillTree",
+                    "BuildUi: _doc.rootVisualElement is NULL (PanelSettings present but no root) — " +
+                    "Pet Skills UI cannot be built; panel will be empty.");
+                return;
+            }
             _root.pickingMode = PickingMode.Ignore; // don't block HUD beneath
             _root.Clear();
             _root.pickingMode = PickingMode.Ignore;
@@ -193,13 +218,22 @@ namespace DeNelle.HUD
 
         private void Repaint()
         {
-            if (_tabsRow == null || _treeColumn == null) return;
+            using var _ = FlowTrace.Enter("PetSkillTree", "Repaint");
+            if (_tabsRow == null || _treeColumn == null)
+            {
+                FlowTrace.Fail("PetSkillTree",
+                    "Repaint: tabs/tree containers are NULL — BuildUi never produced them (no root?). Repaint is a no-op.");
+                return;
+            }
             _tabsRow.Clear();
             _treeColumn.Clear();
             _statusLabel.text = "";
 
             if (!ResolveBridge())
             {
+                // Roll-up: catalog asmdef unavailable -> visible note kept (R), self-reported (data-empty cause).
+                FlowTrace.Warn("PetSkillTree",
+                    "Repaint: DeNelle.Pets catalog bridge unavailable — showing the visible 'catalog not available' note.");
                 var note = new Label("Echo catalog is not available. Try restarting the scene.");
                 note.style.color = new StyleColor(ElarionUi.Danger);
                 note.style.fontSize = ElarionUi.FontLabel;
@@ -210,6 +244,8 @@ namespace DeNelle.HUD
             var trees = GetAllTrees();
             if (trees == null || trees.Count == 0)
             {
+                FlowTrace.Warn("PetSkillTree",
+                    "Repaint: catalog returned 0 pet trees — showing the visible 'No pet trees defined' note (data-empty).");
                 var note = new Label("No pet trees defined.");
                 note.style.color = new StyleColor(ElarionUi.ParchmentDim);
                 note.style.fontSize = ElarionUi.FontLabel;
@@ -557,7 +593,7 @@ namespace DeNelle.HUD
                 {
                     if (!s_bridgeWarned)
                     {
-                        Debug.LogWarning("[PetSkillTreePanel] DeNelle.Pets.PetSkillTreeCatalog not found — panel renders empty.");
+                        FlowTrace.Fail("PetSkillTree", "ResolveBridge: DeNelle.Pets.PetSkillTreeCatalog not found — panel renders empty.");
                         s_bridgeWarned = true;
                     }
                     return false;
@@ -568,7 +604,7 @@ namespace DeNelle.HUD
             }
             catch (Exception ex)
             {
-                Debug.LogWarning("[PetSkillTreePanel] bridge resolve failed: " + ex.Message);
+                FlowTrace.Fail("PetSkillTree", "ResolveBridge failed: " + ex.Message);
                 return false;
             }
         }
@@ -585,7 +621,7 @@ namespace DeNelle.HUD
             }
             catch (Exception ex)
             {
-                Debug.LogWarning("[PetSkillTreePanel] AllTrees read failed: " + ex.Message);
+                FlowTrace.Warn("PetSkillTree", "AllTrees read failed: " + ex.Message);
             }
             return result;
         }
@@ -596,7 +632,7 @@ namespace DeNelle.HUD
             try { return s_getTree.Invoke(null, new object[] { species }); }
             catch (Exception ex)
             {
-                Debug.LogWarning("[PetSkillTreePanel] GetTree failed: " + ex.Message);
+                FlowTrace.Warn("PetSkillTree", "GetTree failed: " + ex.Message);
                 return null;
             }
         }
@@ -613,7 +649,7 @@ namespace DeNelle.HUD
             }
             catch (Exception ex)
             {
-                Debug.LogWarning("[PetSkillTreePanel] CanUnlock failed: " + ex.Message);
+                FlowTrace.Warn("PetSkillTree", "CanUnlock failed: " + ex.Message);
                 return false;
             }
         }
@@ -637,7 +673,7 @@ namespace DeNelle.HUD
             }
             catch (Exception ex)
             {
-                Debug.LogWarning("[PetSkillTreePanel] Skills read failed: " + ex.Message);
+                FlowTrace.Warn("PetSkillTree", "Skills read failed: " + ex.Message);
             }
             return list;
         }
@@ -650,7 +686,11 @@ namespace DeNelle.HUD
                 var f = obj.GetType().GetField(field);
                 return f?.GetValue(obj) as string;
             }
-            catch { return null; }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("PetSkillTree", $"ExtractString('{field}') threw: {ex.GetType().Name}: {ex.Message} — using null.");
+                return null;
+            }
         }
 
         private static int ExtractInt(object obj, string field, int fallback)
@@ -663,7 +703,11 @@ namespace DeNelle.HUD
                 object v = f.GetValue(obj);
                 return v is int i ? i : fallback;
             }
-            catch { return fallback; }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("PetSkillTree", $"ExtractInt('{field}') threw: {ex.GetType().Name}: {ex.Message} — using fallback {fallback}.");
+                return fallback;
+            }
         }
 
         private static float? ExtractFloatNullable(object obj, string field)
@@ -679,7 +723,11 @@ namespace DeNelle.HUD
                 if (v is double dv) return (float)dv;
                 return null;
             }
-            catch { return null; }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("PetSkillTree", $"ExtractFloatNullable('{field}') threw: {ex.GetType().Name}: {ex.Message} — using null.");
+                return null;
+            }
         }
 
         private static List<string> ExtractStringList(object obj, string field)

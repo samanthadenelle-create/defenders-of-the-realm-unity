@@ -18,6 +18,7 @@ using System.Reflection;
 using UnityEngine;
 using UnityEngine.UIElements;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.HUD
 {
@@ -80,7 +81,13 @@ namespace DeNelle.HUD
 
         public void Show()
         {
-            if (_overlay == null) return;
+            FlowTrace.Step("HeroTalent", "Show() — opening Hero Talents panel.");
+            if (_overlay == null)
+            {
+                FlowTrace.Fail("HeroTalent",
+                    "Show: _overlay is NULL — BuildUi never produced an overlay (no PanelSettings/root?). Show is a no-op.");
+                return;
+            }
             _visible = true;
             _overlay.style.display = DisplayStyle.Flex;
             // Tell the arbiter we're open; it closes any other panel first.
@@ -101,8 +108,26 @@ namespace DeNelle.HUD
 
         private void BuildUi()
         {
-            _root = _doc != null ? _doc.rootVisualElement : null;
-            if (_root == null) return;
+            using var _ = FlowTrace.Enter("HeroTalent", "BuildUi");
+            // V (WO-465 class): a null UIDocument or a UIDocument with no PanelSettings yields a
+            // null rootVisualElement — the panel would silently build nothing and never show. The
+            // old `if (_root == null) return;` swallowed exactly that. Fail-loud so a run says why.
+            if (_doc == null)
+            {
+                FlowTrace.Fail("HeroTalent", "BuildUi: UIDocument is NULL on this GameObject — talents cannot render.");
+                return;
+            }
+            if (_doc.panelSettings == null)
+                FlowTrace.Fail("HeroTalent",
+                    "BuildUi: UIDocument has NO PanelSettings — rootVisualElement will be null and the " +
+                    "panel will render invisible. Wire a PanelSettings on the HeroTalents UIDocument.");
+            _root = _doc.rootVisualElement;
+            if (_root == null)
+            {
+                FlowTrace.Fail("HeroTalent",
+                    "BuildUi: _doc.rootVisualElement is NULL — Hero Talents UI cannot be built; panel will be empty.");
+                return;
+            }
             // Owner 2026-05-20: Build button + skillset clicks weren't
             // registering. The agent-spawned panel UIDocs each have a root
             // VE with default PickingMode.Position, which captures clicks
@@ -196,7 +221,12 @@ namespace DeNelle.HUD
 
         private void Repaint()
         {
-            if (_columnsRow == null) return;
+            using var _ = FlowTrace.Enter("HeroTalent", "Repaint");
+            if (_columnsRow == null)
+            {
+                FlowTrace.Fail("HeroTalent", "Repaint: _columnsRow is NULL — BuildUi never produced it (no root?). Repaint is a no-op.");
+                return;
+            }
             _columnsRow.Clear();
 
             int wisdom = GetWisdom();
@@ -204,12 +234,18 @@ namespace DeNelle.HUD
 
             if (_wisdomLabel != null) _wisdomLabel.text = $"Wisdom: {wisdom}";
 
+            int treesResolved = 0;
             foreach (var heroSlug in HeroOrder)
             {
                 var tree = GetTree(heroSlug);
+                if (tree != null) treesResolved++;
                 var col = BuildHeroColumn(heroSlug, tree, wisdom, unlocked);
                 _columnsRow.Add(col);
             }
+            if (treesResolved == 0)
+                FlowTrace.Warn("HeroTalent",
+                    $"Repaint: 0 of {HeroOrder.Length} hero talent trees resolved (catalog bridge unavailable/empty) — " +
+                    "every column shows the visible '(catalog unavailable)' note.");
         }
 
         private VisualElement BuildHeroColumn(string heroSlug, object treeObj, int wisdom, HashSet<string> unlocked)
@@ -234,6 +270,9 @@ namespace DeNelle.HUD
 
             if (treeObj == null)
             {
+                FlowTrace.Warn("HeroTalent",
+                    $"BuildHeroColumn: no talent tree for hero '{heroSlug}' (catalog returned null) — " +
+                    "showing visible '(catalog unavailable)' note for this column.");
                 var missing = new Label("(catalog unavailable)");
                 missing.style.color = new StyleColor(ElarionUi.Danger);
                 missing.style.fontSize = ElarionUi.FontMicro;
@@ -431,7 +470,7 @@ namespace DeNelle.HUD
             var svc = GetServiceInstance();
             if (svc == null || s_unlockMethod == null)
             {
-                Debug.LogWarning("[HeroTalentPanel] WisdomCurrencyService unavailable.");
+                FlowTrace.Fail("HeroTalent", "OnSpend: WisdomCurrencyService unavailable — cannot unlock node '" + nodeId + "'.");
                 return;
             }
             try
@@ -440,7 +479,7 @@ namespace DeNelle.HUD
             }
             catch (Exception ex)
             {
-                Debug.LogWarning("[HeroTalentPanel] Unlock failed: " + ex.Message);
+                FlowTrace.Warn("HeroTalent", "OnSpend Unlock('" + nodeId + "') failed: " + ex.Message);
             }
             Repaint();
         }
@@ -450,18 +489,31 @@ namespace DeNelle.HUD
         private static void ResolveBridges()
         {
             if (s_catalogType != null && s_serviceType != null) return;
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            // G: the type scan reflects across every loaded assembly — a hostile/odd assembly can
+            // throw on GetType. Guard it so one bad assembly logs + is skipped, never blanks the panel.
+            try
             {
-                if (s_catalogType == null)
-                    s_catalogType = asm.GetType("DeNelle.Village.Talents.HeroTalentCatalog", false);
-                if (s_serviceType == null)
-                    s_serviceType = asm.GetType("DeNelle.Village.Talents.WisdomCurrencyService", false);
-                if (s_nodeType == null)
-                    s_nodeType = asm.GetType("DeNelle.Village.Talents.HeroTalentNodeDef", false);
-                if (s_treeType == null)
-                    s_treeType = asm.GetType("DeNelle.Village.Talents.HeroTalentTreeDef", false);
-                if (s_catalogType != null && s_serviceType != null) break;
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    if (s_catalogType == null)
+                        s_catalogType = asm.GetType("DeNelle.Village.Talents.HeroTalentCatalog", false);
+                    if (s_serviceType == null)
+                        s_serviceType = asm.GetType("DeNelle.Village.Talents.WisdomCurrencyService", false);
+                    if (s_nodeType == null)
+                        s_nodeType = asm.GetType("DeNelle.Village.Talents.HeroTalentNodeDef", false);
+                    if (s_treeType == null)
+                        s_treeType = asm.GetType("DeNelle.Village.Talents.HeroTalentTreeDef", false);
+                    if (s_catalogType != null && s_serviceType != null) break;
+                }
             }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("HeroTalent", "ResolveBridges: assembly type scan threw: " + ex.GetType().Name + ": " + ex.Message);
+            }
+            if (s_catalogType == null || s_serviceType == null)
+                FlowTrace.Warn("HeroTalent",
+                    $"ResolveBridges: DeNelle.Village.Talents bridge incomplete (catalog={(s_catalogType != null)}, " +
+                    $"service={(s_serviceType != null)}) — talent trees / Wisdom may read empty.");
             if (s_catalogType != null)
             {
                 s_getTree = s_catalogType.GetMethod("GetTree",
@@ -502,7 +554,7 @@ namespace DeNelle.HUD
             }
             catch (Exception ex)
             {
-                Debug.LogWarning("[HeroTalentPanel] Could not subscribe to WisdomCurrencyService.Changed: " + ex.Message);
+                FlowTrace.Warn("HeroTalent", "Could not subscribe to WisdomCurrencyService.Changed: " + ex.Message);
             }
         }
 
@@ -513,7 +565,10 @@ namespace DeNelle.HUD
             {
                 s_changedEvent.RemoveEventHandler(_serviceInstanceCache, _changedHandler);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("HeroTalent", "UnsubscribeFromService threw: " + ex.GetType().Name + ": " + ex.Message);
+            }
             _changedHandler = null;
             _serviceInstanceCache = null;
         }

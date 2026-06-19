@@ -19,6 +19,7 @@
 using System.Collections.Generic;
 using DeNelle.Core.Services;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -72,7 +73,11 @@ namespace DeNelle.HUD
 
         private void SetVisible(bool on)
         {
+            if (on) FlowTrace.Step("ClanChat", "SetVisible(true) — opening clan chat panel.");
             _visible = on;
+            if (on && _panel == null)
+                FlowTrace.Fail("ClanChat",
+                    "SetVisible(true): _panel is NULL — Build never produced a panel (no PanelSettings/root?). Open is a no-op.");
             if (_panel != null)
                 _panel.style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
             if (on) Repaint();
@@ -82,10 +87,22 @@ namespace DeNelle.HUD
 
         private void Build()
         {
-            _root = _doc.rootVisualElement;
-            if (_root == null) return;
+            using var _ = FlowTrace.Enter("ClanChat", "Build");
+            // V (WO-465 class): this UIDocument adopts no PanelSettings. With none set,
+            // rootVisualElement is null and the old `if (_root == null) return;` produced an
+            // invisible panel with no symptom. Fail-loud so a run reports why it never showed.
+            if (_doc != null && _doc.panelSettings == null)
+                FlowTrace.Fail("ClanChat",
+                    "Build: UIDocument has NO PanelSettings — rootVisualElement will be null and the " +
+                    "clan chat panel renders invisible. Wire a PanelSettings on the ClanChat UIDocument.");
+            _root = _doc != null ? _doc.rootVisualElement : null;
+            if (_root == null)
+            {
+                FlowTrace.Fail("ClanChat",
+                    "Build: rootVisualElement is NULL (no UIDocument/PanelSettings) — clan chat UI cannot be built; panel will be empty.");
+                return;
+            }
             _root.pickingMode = PickingMode.Ignore; // don't block HUD beneath
-            _root.pickingMode = PickingMode.Ignore;
             _root.style.position = Position.Absolute;
             _root.style.left = 0; _root.style.right = 0;
             _root.style.top = 0;  _root.style.bottom = 0;
@@ -259,6 +276,8 @@ namespace DeNelle.HUD
             var msgs = svc.Messages;
             if (msgs == null || msgs.Count == 0)
             {
+                FlowTrace.Step("ClanChat",
+                    "RebuildMessages: no messages yet — showing visible 'Send a phrase…' hint (expected empty, not a failure).");
                 var hint = new Label("Send a phrase below to start the chat.");
                 hint.style.color = new StyleColor(ElarionUi.ParchmentDim);
                 hint.style.fontSize = 11;
@@ -309,7 +328,24 @@ namespace DeNelle.HUD
             // Cap the chip rail at a comfortable density — full catalogue (24)
             // wraps cleanly into 3 short rows; no further pagination.
             var phrases = ChatPhraseCatalog.Phrases;
-            if (phrases == null) return;
+            // R (WORST offender): a null/empty phrase catalogue previously left the chip rail
+            // utterly blank with NO fallback and NO trace — the chat read as broken. Show a
+            // visible placeholder AND self-report (data-empty) instead of a silent empty rail.
+            if (phrases == null || phrases.Count == 0)
+            {
+                FlowTrace.Warn("ClanChat",
+                    $"RebuildChips: ChatPhraseCatalog.Phrases is {(phrases == null ? "null" : "empty")} — " +
+                    "no quick-phrase chips to show; rendering visible 'Custom… to chat' fallback (data-empty).");
+                var fallback = new Label("No quick phrases — use Custom… below to chat.");
+                fallback.style.color = new StyleColor(ElarionUi.ParchmentDim);
+                fallback.style.fontSize = 11;
+                fallback.style.unityFontStyleAndWeight = FontStyle.Italic;
+                fallback.style.width = new Length(100, LengthUnit.Percent);
+                fallback.style.marginTop = 4; fallback.style.marginBottom = 4;
+                _chipRail.Add(fallback);
+                return;
+            }
+            int chipCount = 0;
             string lastCategory = null;
             foreach (var p in phrases)
             {
@@ -327,6 +363,20 @@ namespace DeNelle.HUD
                     _chipRail.Add(divider);
                 }
                 _chipRail.Add(BuildChip(p));
+                chipCount++;
+            }
+            // All phrases were null entries -> rail still empty. Keep the never-blank contract.
+            if (chipCount == 0)
+            {
+                FlowTrace.Warn("ClanChat",
+                    "RebuildChips: every phrase entry was null — rendering visible 'Custom… to chat' fallback (data-empty).");
+                var fallback = new Label("No quick phrases — use Custom… below to chat.");
+                fallback.style.color = new StyleColor(ElarionUi.ParchmentDim);
+                fallback.style.fontSize = 11;
+                fallback.style.unityFontStyleAndWeight = FontStyle.Italic;
+                fallback.style.width = new Length(100, LengthUnit.Percent);
+                fallback.style.marginTop = 4; fallback.style.marginBottom = 4;
+                _chipRail.Add(fallback);
             }
         }
 
