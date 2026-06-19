@@ -537,7 +537,7 @@ namespace DeNelle.Village
             }
             catch (System.Exception ex)
             {
-                FlowTrace.Warn("Gear", $"Addressable load threw for '{address}': {ex.Message} — " +
+                FlowTrace.Fail("Gear", $"Addressable load threw for '{address}': {ex.Message} — " +
                                        "falling back to Resources map (hero stays armed).");
                 FallbackResourcesAttach(vis, hand, weaponId);
                 return;
@@ -564,7 +564,7 @@ namespace DeNelle.Village
 
                 if (!op.IsValid() || op.Status != AsyncOperationStatus.Succeeded || op.Result == null)
                 {
-                    FlowTrace.Warn("Gear", $"Addressable load FAILED for '{address}' " +
+                    FlowTrace.Fail("Gear", $"Addressable load FAILED for '{address}' " +
                         $"(status={op.Status}) — falling back to Resources map (hero stays armed).");
                     ReleaseWeaponHandle();
                     FallbackResourcesAttach(vis, hand, weaponId);
@@ -575,7 +575,20 @@ namespace DeNelle.Village
                 // preset so we never flip `native` on the shared cached IdMap instance.
                 var nativeVis = CopyOf(vis);
                 nativeVis.native = true;
-                GameObject prop = Instantiate(op.Result);
+                // GUARDED Instantiate (TGVRU): a bad/destroyed-mid-frame prefab must not throw or
+                // silently attach nothing — Guard.Try, null-check, Fail-loud, then fall back to
+                // the Resources map so the hero is never left unarmed by an Addressable hiccup.
+                GameObject prop = null;
+                Guard.Try("Gear", $"instantiate addressable weapon '{address}'",
+                    () => prop = Instantiate(op.Result));
+                if (prop == null)
+                {
+                    FlowTrace.Fail("Gear", $"Addressable Instantiate returned null for '{address}' " +
+                        $"(id='{weaponId}') — falling back to Resources map (hero stays armed).");
+                    ReleaseWeaponHandle();
+                    FallbackResourcesAttach(vis, hand, weaponId);
+                    return;
+                }
                 AttachLoadedProp(prop, nativeVis, hand, weaponId);
                 FlowTrace.Step("Gear", $"Addressable equip attached: id='{weaponId}' address='{address}'");
             };
@@ -674,6 +687,75 @@ namespace DeNelle.Village
             FlowTrace.Step("Equip", $"attached '{weaponId}' on '{name}': gripPos={vis.gripPos} " +
                 $"baseEuler={_baseGripRot.eulerAngles} kind={vis.kind} native={vis.native}");
             ApplyHoldPose();
+
+            // RENDER-VERIFY + ROLLBACK (TGVRU, owner directive 2026-06-19: "anything that renders
+            // can be broken — check render==true and roll back the error"). The prop can load +
+            // attach but be INVISIBLE (no enabled Renderer / no mesh) or SEATED WRONG (the grip
+            // root never landed under the hand bone). PROVE it renders + is parented under the
+            // resolved hand BEFORE we leave it on the hero; on fail, destroy the half-attached prop
+            // and clear the slot so no stray/invisible weapon is left behind (the never-left-broken
+            // contract — the failure self-reports to the break-log instead of reaching the player).
+            if (!VerifyWeaponRendersNow(gripRoot, hand, weaponId))
+                RollbackWeaponProp(gripRoot,
+                    $"render-verify failed for weapon '{weaponId}' (no visible renderer or not parented to '{hand.name}')");
+        }
+
+        // RENDER-VERIFY (synchronous, no camera/scene dependency): the attached weapon prop MUST
+        // have >=1 ENABLED Renderer carrying a sharedMesh AND its grip root MUST be parented under
+        // the resolved hand bone. Traces the exact counts so a capture splits "no visible mesh" vs
+        // "wrong/unparented seat" with zero guessing. Returns false => caller rolls back + unequips.
+        private bool VerifyWeaponRendersNow(GameObject prop, Transform handBone, string weaponId)
+        {
+            if (prop == null)
+            {
+                FlowTrace.Fail("Equip", $"VerifyWeaponRenders: weapon '{weaponId}' prop is null.");
+                return false;
+            }
+
+            int total = 0, enabledRen = 0, withMesh = 0;
+            foreach (var r in prop.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                total++;
+                if (r.enabled) enabledRen++;
+                // A SkinnedMeshRenderer exposes sharedMesh; MeshRenderer's mesh lives on a sibling
+                // MeshFilter. Treat either source as "has a mesh".
+                Mesh mesh = null;
+                if (r is SkinnedMeshRenderer smr) mesh = smr.sharedMesh;
+                else { var mf = r.GetComponent<MeshFilter>(); if (mf != null) mesh = mf.sharedMesh; }
+                if (mesh != null) withMesh++;
+            }
+
+            bool renders = enabledRen > 0 && withMesh > 0;
+            bool seated = prop.transform.parent == handBone;
+
+            FlowTrace.Step("Equip",
+                $"VerifyWeaponRenders weapon='{weaponId}' on '{name}': renderers total={total} enabled={enabledRen} " +
+                $"withMesh={withMesh}; gripParent='{(prop.transform.parent != null ? prop.transform.parent.name : "<null>")}' " +
+                $"expectedHand='{handBone.name}' => renders={renders} seated={seated}");
+
+            if (!renders || !seated)
+            {
+                FlowTrace.Fail("Equip",
+                    $"VerifyWeaponRenders FAILED weapon='{weaponId}' on '{name}': renders={renders} " +
+                    $"(enabled={enabledRen}, withMesh={withMesh}) seated={seated} " +
+                    $"(gripParent='{(prop.transform.parent != null ? prop.transform.parent.name : "<null>")}', expected='{handBone.name}').");
+                return false;
+            }
+            return true;
+        }
+
+        // ROLL BACK a half-attached weapon: destroy the grip root (and its loaded prop child) and
+        // clear the current-weapon slot so no stray/invisible weapon is left on the hand. Never
+        // behind the FlowTrace toggle — control-flow safety always runs. The hero ends UNARMED but
+        // CLEAN (no ghost prop) — and the Fail above self-reports why so it can be fixed at root.
+        private void RollbackWeaponProp(GameObject gripRoot, string reason)
+        {
+            FlowTrace.Fail("Equip", $"RollbackWeaponProp on '{name}': {reason} — destroying half-attached prop.");
+            if (_currentWeaponProp == gripRoot) _currentWeaponProp = null;
+            if (_gripRoot != null && gripRoot != null && _gripRoot == gripRoot.transform) _gripRoot = null;
+            if (gripRoot != null) Destroy(gripRoot);
+            ReleaseWeaponHandle();
         }
 
         // Release the held Addressables weapon handle (no-op if none open). ONE owner of the
@@ -948,6 +1030,7 @@ namespace DeNelle.Village
         // own lifecycle reference (no clobbering the main weapon's grip-root / hold-pose state).
         private void AttachOffHandProp(GameObject prop, WeaponVisual vis, Transform hand, string id)
         {
+            using var _ = FlowTrace.Enter("Equip", $"AttachOffHandProp '{id}' -> '{hand.name}' (kind={vis.kind})");
             prop.name = OffHandPropName;
             foreach (var c in prop.GetComponentsInChildren<Collider>(true)) if (c != null) Destroy(c);
             foreach (var rb in prop.GetComponentsInChildren<Rigidbody>(true)) if (rb != null) Destroy(rb);
@@ -960,6 +1043,20 @@ namespace DeNelle.Village
             gripRoot.transform.localRotation = Quaternion.Euler(vis.gripEuler);
 
             _currentOffHandProp = gripRoot;
+
+            // RENDER-VERIFY + DETACH-ON-FAIL (TGVRU): the shield can attach but be invisible (no
+            // enabled renderer / no mesh) or seated on the wrong bone. PROVE it renders + is parented
+            // under the resolved off hand (LeftHand) BEFORE leaving it on the hero; on fail destroy
+            // it + clear the slot so no stray/invisible shield is left behind. Self-reports the why.
+            if (!VerifyWeaponRendersNow(gripRoot, hand, id))
+            {
+                FlowTrace.Fail("Equip",
+                    $"AttachOffHandProp: render-verify failed for off-hand '{id}' (no visible renderer or not parented to '{hand.name}') — detaching.");
+                if (_currentOffHandProp == gripRoot) _currentOffHandProp = null;
+                if (gripRoot != null) Destroy(gripRoot);
+                return;
+            }
+            FlowTrace.Step("Equip", $"AttachOffHandProp: off-hand '{id}' verified rendered + seated on '{hand.name}'.");
         }
 
         private void DestroyCurrentOffHand()
@@ -1107,11 +1204,15 @@ namespace DeNelle.Village
         private void CacheRig()
         {
             if (_animator != null && _animator.isHuman) return;
+            using var _ = FlowTrace.Enter("Equip", $"CacheRig on '{name}'");
             // Body lives under "HeroBody" on the hero root (same convention as GearLoadout
             // / GearVisualApplier). Fall back to any child Animator.
             var body = transform.Find("HeroBody");
             _animator = body != null ? body.GetComponentInChildren<Animator>() : null;
             if (_animator == null) _animator = GetComponentInChildren<Animator>();
+            FlowTrace.Step("Equip",
+                $"CacheRig: animator={(_animator != null ? _animator.name : "<null>")} " +
+                $"isHuman={(_animator != null && _animator.isHuman)} (body='{(body != null ? body.name : "<none>")}')");
         }
 
         private void DestroyCurrentWeapon()
@@ -1179,9 +1280,12 @@ namespace DeNelle.Village
         /// </summary>
         private static GameObject LoadWeaponMesh(string meshName)
         {
+            using var _ = FlowTrace.Enter("Equip", $"LoadWeaponMesh '{meshName ?? "<null>"}'");
             if (string.IsNullOrEmpty(meshName)) return null;
             string path = WeaponPropResourceDir + meshName;
             var prefab = Resources.Load<GameObject>(path);
+            FlowTrace.Step("Equip",
+                $"LoadWeaponMesh: path='{path}' prefab={(prefab != null ? "found" : "MISSING -> primitive fallback")}");
             return prefab != null ? Instantiate(prefab) : null;
         }
 
