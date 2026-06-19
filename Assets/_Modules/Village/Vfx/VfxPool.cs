@@ -25,6 +25,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -85,8 +86,21 @@ namespace DeNelle.Village
         /// </summary>
         public static void SpawnHitImpact(Vector3 position)
         {
-            if (Instance == null) return;
+            // T+U: a null Instance means combat hits land with NO impact pop — self-report
+            // (throttled, this is a hot per-hit path) instead of a silent no-op.
+            if (Instance == null)
+            {
+                FlowTrace.Throttle("VfxPool", "hit-noinstance", 1f,
+                    "SpawnHitImpact: no VfxPool.Instance — hit impacts are silently absent.");
+                return;
+            }
             var vfx = Instance.GetFromPool(Instance._hitPool, Instance.CreateHit);
+            if (vfx == null)
+            {
+                FlowTrace.Throttle("VfxPool", "hit-novfx", 1f,
+                    "SpawnHitImpact: pool returned null — no impact shown.");
+                return;
+            }
             vfx.Play(position, duration: 0.45f, Instance._hitPool);
         }
 
@@ -95,8 +109,19 @@ namespace DeNelle.Village
         /// </summary>
         public static void SpawnDeathBurst(Vector3 position)
         {
-            if (Instance == null) return;
+            if (Instance == null)
+            {
+                FlowTrace.Throttle("VfxPool", "death-noinstance", 1f,
+                    "SpawnDeathBurst: no VfxPool.Instance — death bursts are silently absent.");
+                return;
+            }
             var vfx = Instance.GetFromPool(Instance._deathPool, Instance.CreateDeath);
+            if (vfx == null)
+            {
+                FlowTrace.Throttle("VfxPool", "death-novfx", 1f,
+                    "SpawnDeathBurst: pool returned null — no burst shown.");
+                return;
+            }
             vfx.Play(position, duration: 0.65f, Instance._deathPool);
         }
 
@@ -106,8 +131,19 @@ namespace DeNelle.Village
         /// </summary>
         public static PooledVfx GetTelegraph(Vector3 position)
         {
-            if (Instance == null) return null;
+            if (Instance == null)
+            {
+                FlowTrace.Throttle("VfxPool", "tel-noinstance", 1f,
+                    "GetTelegraph: no VfxPool.Instance — spawn telegraphs are silently absent.");
+                return null;
+            }
             var vfx = Instance.GetFromPool(Instance._telegraphPool, Instance.CreateTelegraph);
+            if (vfx == null)
+            {
+                FlowTrace.Throttle("VfxPool", "tel-novfx", 1f,
+                    "GetTelegraph: pool returned null — no telegraph shown.");
+                return null;
+            }
             vfx.PlayHeld(position);
             return vfx;
         }
@@ -136,8 +172,34 @@ namespace DeNelle.Village
                 var entry = pool.Dequeue();
                 if (entry != null) return entry;
             }
-            // Pool drained — expand.
-            return factory();
+            // Pool drained — expand. A factory throw must not blank the effect silently.
+            return FlowTrace.Try<PooledVfx>("VfxPool", "expand pool (factory)", factory, null);
+        }
+
+        // V: confirm a freshly built effect actually carries a visible Renderer with a mesh —
+        // a code-built primitive that lost its MeshFilter/MeshRenderer (or material) would play
+        // but render nothing. Traced once per kind so a broken build self-reports, not goes quiet.
+        private static PooledVfx VerifyBuilt(PooledVfx vfx, string kind)
+        {
+            if (vfx == null)
+            {
+                FlowTrace.Once("VfxPool", $"built-null:{kind}",
+                    $"Create{kind}: factory returned null PooledVfx — effect will never show.");
+                return null;
+            }
+            int rends = 0, withMesh = 0;
+            foreach (var r in vfx.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                rends++;
+                var mf = r.GetComponent<MeshFilter>();
+                if (mf != null && mf.sharedMesh != null) withMesh++;
+            }
+            if (rends == 0 || withMesh == 0)
+                FlowTrace.Once("VfxPool", $"built-norender:{kind}",
+                    $"Create{kind}: built effect has renderers={rends} withMesh={withMesh} — " +
+                    "will render nothing (invisible VFX).");
+            return vfx;
         }
 
         // =====================================================================
@@ -164,7 +226,7 @@ namespace DeNelle.Village
             ApplyEmissiveMaterial(inner.GetComponent<Renderer>(),
                 new Color(1f, 0.95f, 0.40f), emissive: 3.5f);   // amber-white flash
 
-            return go.AddComponent<PooledVfx>().Init(maxScale: 0.55f, kind: VfxKind.Hit);
+            return VerifyBuilt(go.AddComponent<PooledVfx>().Init(maxScale: 0.55f, kind: VfxKind.Hit), "Hit");
         }
 
         /// <summary>
@@ -185,7 +247,7 @@ namespace DeNelle.Village
             ApplyEmissiveMaterial(inner.GetComponent<Renderer>(),
                 new Color(0.75f, 0.20f, 0.80f), emissive: 4f);  // death violet
 
-            return go.AddComponent<PooledVfx>().Init(maxScale: 1.1f, kind: VfxKind.Death);
+            return VerifyBuilt(go.AddComponent<PooledVfx>().Init(maxScale: 1.1f, kind: VfxKind.Death), "Death");
         }
 
         /// <summary>
@@ -206,7 +268,7 @@ namespace DeNelle.Village
             ApplyEmissiveMaterial(disc.GetComponent<Renderer>(),
                 new Color(0.95f, 0.35f, 0.10f), emissive: 2.5f);  // warning orange
 
-            return go.AddComponent<PooledVfx>().Init(maxScale: 1.4f, kind: VfxKind.Telegraph);
+            return VerifyBuilt(go.AddComponent<PooledVfx>().Init(maxScale: 1.4f, kind: VfxKind.Telegraph), "Telegraph");
         }
 
         /// <summary>
@@ -215,11 +277,28 @@ namespace DeNelle.Village
         /// </summary>
         private static void ApplyEmissiveMaterial(Renderer r, Color colour, float emissive)
         {
-            if (r == null) return;
+            if (r == null)
+            {
+                // V+U: no renderer to colour → the built primitive will render the default
+                // grey/pink, not the authored emissive flash. Self-report (Once) rather than
+                // silently produce an off-colour effect.
+                FlowTrace.Once("VfxPool", "emissive-norenderer",
+                    "ApplyEmissiveMaterial: null Renderer — VFX primitive has no material applied (off-colour).");
+                return;
+            }
             Shader sh = Shader.Find("Universal Render Pipeline/Lit")
                      ?? Shader.Find("Universal Render Pipeline/Unlit")
                      ?? Shader.Find("Standard");
-            if (sh == null) return;
+            if (sh == null)
+            {
+                // R+U §12 anti-pattern: a silent return here leaves the renderer on Unity's
+                // default magenta/grey — the effect spawns but reads as "invisible/wrong".
+                // TRACE the fallback so a missing-shader build self-reports instead of going quiet.
+                FlowTrace.Once("VfxPool", "emissive-noshader",
+                    "ApplyEmissiveMaterial: no Lit/Unlit/Standard shader found — VFX keeps the " +
+                    "renderer's default material (effect may read invisible/off-colour). Check the URP shader set is included.");
+                return;
+            }
             var mat = new Material(sh);
             if (mat.HasProperty("_BaseColor"))  mat.SetColor("_BaseColor", colour);
             if (mat.HasProperty("_Color"))      mat.SetColor("_Color", colour);

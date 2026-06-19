@@ -46,6 +46,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -345,21 +346,45 @@ namespace DeNelle.Village
                                  Transform parent = null)
         {
             if (type == VFXType.None) return;
-            if (_activeOneshots >= _maxActiveOneshots) return;
+
+            // T+U §12: a cap hit means combat VFX go SILENTLY quiet mid-fight (the classic
+            // "screen stops popping" bug). Throttle-report the drop so a capped run self-detects
+            // instead of looking like nothing fired. Hot path → Throttle (~1/sec per cause).
+            if (_activeOneshots >= _maxActiveOneshots)
+            {
+                FlowTrace.Throttle("VFXManager", "oneshot-cap", 1f,
+                    $"PlayOneshot('{type}') SKIPPED — active oneshots {_activeOneshots}/{_maxActiveOneshots} " +
+                    "(cap hit; combat VFX dropping). Counter-leak or too-low cap?");
+                return;
+            }
 
             // Quality gate.
             if (_catalog != null && _catalog.TryGet(type, out var entry))
             {
-                if ((int)_quality < entry.MinQuality) return;
+                if ((int)_quality < entry.MinQuality)
+                {
+                    FlowTrace.Throttle("VFXManager", $"oneshot-quality:{type}", 2f,
+                        $"PlayOneshot('{type}') SKIPPED by quality gate (need {entry.MinQuality}, " +
+                        $"have {(int)_quality}) — effect intentionally absent at this quality.");
+                    return;
+                }
 
                 if (entry.Prefab != null)
                 {
                     // Prefab path — use pool.
                     var go = Acquire(type, entry);
+                    if (go == null)
+                    {
+                        FlowTrace.Warn("VFXManager",
+                            $"PlayOneshot('{type}'): Acquire returned null — falling back to procedural.");
+                        ProceduralFallback(type, position, rotation);
+                        return;
+                    }
                     go.transform.position = position;
                     go.transform.rotation = rotation;
                     if (parent != null) go.transform.SetParent(parent, true);
                     go.SetActive(true);
+                    VerifyHasParticles(go, type, "oneshot");
                     PlayAllParticles(go);
                     _activeOneshots++;
 
@@ -379,18 +404,40 @@ namespace DeNelle.Village
         private VFXHandle PlayLoop(VFXType type, Vector3 position, Transform parent = null)
         {
             if (type == VFXType.None) return null;
-            if (_activeLoops >= _maxActiveLoops) return null;
+
+            // T+U §12: a loop cap hit means auras/trails silently stop appearing. Throttle-report.
+            if (_activeLoops >= _maxActiveLoops)
+            {
+                FlowTrace.Throttle("VFXManager", "loop-cap", 1f,
+                    $"PlayLoop('{type}') SKIPPED — active loops {_activeLoops}/{_maxActiveLoops} " +
+                    "(cap hit; auras/trails dropping). Handles not Stop()'d, or cap too low?");
+                return null;
+            }
 
             if (_catalog != null && _catalog.TryGet(type, out var entry))
             {
-                if ((int)_quality < entry.MinQuality) return null;
+                if ((int)_quality < entry.MinQuality)
+                {
+                    FlowTrace.Throttle("VFXManager", $"loop-quality:{type}", 2f,
+                        $"PlayLoop('{type}') SKIPPED by quality gate (need {entry.MinQuality}, " +
+                        $"have {(int)_quality}) — loop intentionally absent at this quality.");
+                    return null;
+                }
 
                 if (entry.Prefab != null)
                 {
                     var go = Acquire(type, entry);
+                    if (go == null)
+                    {
+                        FlowTrace.Warn("VFXManager",
+                            $"PlayLoop('{type}'): Acquire returned null — falling back to procedural loop.");
+                        var fb = ProceduralLoopFallback(type, position, parent);
+                        return fb != null ? new VFXHandle(fb, type) : null;
+                    }
                     go.transform.position = position;
                     if (parent != null) go.transform.SetParent(parent, true);
                     go.SetActive(true);
+                    VerifyHasParticles(go, type, "loop");
                     PlayAllParticles(go);
                     _activeLoops++;
                     _loopObjects.Add(go);   // bug-triage P1: tag as loop for correct return-decrement
@@ -416,7 +463,11 @@ namespace DeNelle.Village
 
             if (_catalog == null)
             {
-                Debug.LogWarning("[VFXManager] No VFXCatalog assigned — all effects will use procedural fallback.");
+                // U: route through FlowTrace so it lands in the F8 break-log alongside the rest
+                // of the VFX flow. Not a hard Fail — procedural fallback still renders — but a
+                // Warn so a build shipping with NO catalog self-reports why every effect is procedural.
+                FlowTrace.Warn("VFXManager",
+                    "InitialisePools: no VFXCatalog assigned — ALL effects fall back to procedural AbilityVfxKit.");
                 return;
             }
 
@@ -435,10 +486,36 @@ namespace DeNelle.Village
 
         private GameObject CreatePooledInstance(GameObject prefab, VFXType type)
         {
+            if (prefab == null)
+            {
+                FlowTrace.Warn("VFXManager",
+                    $"CreatePooledInstance('{type}'): null prefab — no pooled instance built (will use procedural).");
+                return null;
+            }
             var go = Instantiate(prefab, _poolRoot);
             go.name = $"[VFX_{type}]";
+
+            // V §12: a wired prefab that ships NO ParticleSystem (or visible Renderer) pools and
+            // "plays" but renders nothing — the silent-invisible-effect class. Verify ONCE per type
+            // at warm time so a bad catalog entry self-reports instead of going quiet in combat.
+            VerifyHasParticles(go, type, "pooled-warm");
+
             go.SetActive(false);
             return go;
+        }
+
+        // V: a VFX GameObject MUST carry at least one ParticleSystem OR a visible Renderer to be
+        // seen. Traced Once per type (warm) / Throttled (play) so a content-side "invisible effect"
+        // surfaces in the break-log with the exact type, not as a vague "combat went quiet".
+        private static void VerifyHasParticles(GameObject go, VFXType type, string phase)
+        {
+            if (go == null) return;
+            int particles = go.GetComponentsInChildren<ParticleSystem>(true).Length;
+            int renderers = go.GetComponentsInChildren<Renderer>(true).Length;
+            if (particles == 0 && renderers == 0)
+                FlowTrace.Once("VFXManager", $"novisual:{type}",
+                    $"VerifyHasParticles({phase}, '{type}'): prefab has NO ParticleSystem and NO Renderer — " +
+                    "effect plays but renders nothing (invisible VFX). Check the catalog prefab for this type.");
         }
 
         /// <summary>Get a dormant instance from the pool or create a new one.</summary>
