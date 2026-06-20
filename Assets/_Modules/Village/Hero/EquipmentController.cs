@@ -223,6 +223,14 @@ namespace DeNelle.Village
         private GameObject _currentOffHandProp;
         private string _currentOffHandId;
 
+        // OFF-HAND Addressables handle (Blink shields load via "gear/weapon/Shield1h_XX"). ONE owner
+        // (this controller) — released on every off-hand swap / detach / OnDisable so a Blink shield
+        // prefab never leaks. Its OWN generation counter rejects a stale async completion that lands
+        // after the player swapped/unequipped the off-hand mid-load (no ghost shield).
+        private AsyncOperationHandle<GameObject> _offHandHandle;
+        private bool _offHandHandleOpen;
+        private int _offHandGeneration;
+
         // Addressables equip (WO-Item, Blink gear): when the equipped WeaponDef loads its
         // prefab via Addressables (loadVia=="addressable" or a "gear/" address in prefabPath),
         // we LoadAssetAsync the prefab and attach on completion. The handle is held here and
@@ -379,7 +387,9 @@ namespace DeNelle.Village
             // Release any open Addressables weapon handle so a Blink prefab never leaks
             // when the hero is disabled/destroyed (the load may even still be in flight).
             ReleaseWeaponHandle();
+            _offHandGeneration++;          // reject any in-flight off-hand completion
             DestroyCurrentOffHand();
+            ReleaseOffHandHandle();
         }
 
         private void HandleGearChanged() => EquipBestForHero();
@@ -976,8 +986,15 @@ namespace DeNelle.Village
         /// (LeftHand bone), mirroring the main-hand attach path. A null def DETACHES the off-hand.
         /// Reuses the same Resources/primitive resolve + grip/seat the main path uses (the off-hand
         /// goes through the Shield preset, which already seats centre-grip on the LeftHand). Safe to
-        /// call repeatedly (idempotent on an unchanged id). NOTE: the off-hand never uses the
-        /// Addressable async path — current shield rows are Resources/Tripo (build-safe + sync).
+        /// call repeatedly (idempotent on an unchanged id).
+        ///
+        /// BLINK FIX (2026-06-19, "shield hangs off the body, not on the arm"): a Blink shield row
+        /// (category=="shield", loadVia=="addressable", prefabPath "gear/weapon/Shield1h_XX") must
+        /// load its REAL addressable prefab — the old path ignored Addressables entirely and loaded
+        /// the legacy Tripo "shield_A" Resources mesh, whose foreign pivot + the non-zero gripPos
+        /// (-0.05) left the shield floating beside the forearm instead of strapped to the hand. We
+        /// now branch: Blink shields go through the SAME async Addressables path the main weapon uses
+        /// (and seat NATIVE — trust the authored grip), Tripo/Resources shields keep the sync path.
         /// </summary>
         public void EquipOffHand(WeaponDef def)
         {
@@ -988,7 +1005,10 @@ namespace DeNelle.Village
                 && _currentOffHandProp != null)
                 return;
 
+            // New off-hand request — invalidate any in-flight async off-hand load + drop the old prop/handle.
+            _offHandGeneration++;
             DestroyCurrentOffHand();
+            ReleaseOffHandHandle();
             _currentOffHandId = id;
             if (string.IsNullOrEmpty(id)) return;   // detach
 
@@ -1017,11 +1037,108 @@ namespace DeNelle.Village
                 return;
             }
 
+            // BLINK SHIELD (Addressable): load the real prefab async + seat NATIVE (trust the
+            // authored grip-at-origin). Mirrors the main-hand Addressable branch + its stale-load
+            // guard. A failed/throwing handle falls back to the sync Resources path (never unequipped).
+            if (LoadsViaAddressable(def))
+            {
+                FlowTrace.Step("Equip", $"off-hand branch: ADDRESSABLE ('{def.prefabPath}')");
+                BeginAddressableOffHand(def, vis, hand, id, _offHandGeneration);
+                return;
+            }
+
+            FlowTrace.Step("Equip", $"off-hand branch: RESOURCES map (mesh='{vis.mesh}')");
             GameObject prop = LoadWeaponMesh(vis.mesh) ?? BuildFallbackPrimitive(vis);
             if (prop == null) { FlowTrace.Fail("Equip", $"off-hand prop null for mesh '{vis.mesh}'"); return; }
 
             FlowTrace.Step("Equip", $"off-hand seated: id='{id}' mesh='{vis.mesh}' hand='{hand.name}'");
             AttachOffHandProp(prop, vis, hand, id);
+        }
+
+        // Kick off the async Addressables load of a Blink off-hand (shield) prefab + attach on
+        // completion. Mirrors BeginAddressableEquip (main hand): the off-hand handle has ONE owner,
+        // the generation guard rejects a stale completion, and any failure GUARDS back to the sync
+        // Resources path so the off-hand is never silently dropped because a Blink prefab hiccupped.
+        private void BeginAddressableOffHand(
+            WeaponDef def, WeaponVisual vis, Transform hand, string id, int generation)
+        {
+            string address = def.prefabPath;
+            FlowTrace.Step("Gear", $"Addressable off-hand equip begin: id='{id}' address='{address}'");
+
+            AsyncOperationHandle<GameObject> handle;
+            try
+            {
+                handle = Addressables.LoadAssetAsync<GameObject>(address);
+            }
+            catch (System.Exception ex)
+            {
+                FlowTrace.Fail("Gear", $"Addressable off-hand load threw for '{address}': {ex.Message} — " +
+                                       "falling back to Resources shield (hero keeps a shield).");
+                FallbackResourcesOffHand(vis, hand, id);
+                return;
+            }
+
+            _offHandHandle = handle;
+            _offHandHandleOpen = true;
+
+            handle.Completed += op =>
+            {
+                // Stale: the player swapped/unequipped the off-hand while this load was in flight.
+                if (generation != _offHandGeneration)
+                {
+                    if (_offHandHandle.Equals(op)) { _offHandHandle = default; _offHandHandleOpen = false; }
+                    DeferRelease(op);
+                    return;
+                }
+
+                if (!op.IsValid() || op.Status != AsyncOperationStatus.Succeeded || op.Result == null)
+                {
+                    FlowTrace.Fail("Gear", $"Addressable off-hand load FAILED for '{address}' " +
+                        $"(status={op.Status}) — falling back to Resources shield (hero keeps a shield).");
+                    ReleaseOffHandHandle();
+                    FallbackResourcesOffHand(vis, hand, id);
+                    return;
+                }
+
+                // Blink shield prefab is authored grip-at-origin + oriented → seat NATIVE.
+                var nativeVis = CopyOf(vis);
+                nativeVis.native = true;
+                GameObject prop = null;
+                Guard.Try("Gear", $"instantiate addressable off-hand '{address}'",
+                    () => prop = Instantiate(op.Result));
+                if (prop == null)
+                {
+                    FlowTrace.Fail("Gear", $"Addressable off-hand Instantiate returned null for '{address}' " +
+                        $"(id='{id}') — falling back to Resources shield (hero keeps a shield).");
+                    ReleaseOffHandHandle();
+                    FallbackResourcesOffHand(vis, hand, id);
+                    return;
+                }
+                AttachOffHandProp(prop, nativeVis, hand, id);
+                FlowTrace.Step("Gear", $"Addressable off-hand attached: id='{id}' address='{address}'");
+            };
+        }
+
+        // Off-hand fallback: a Blink Addressable resolve failed — seat via the sync Resources map
+        // (or the tinted primitive) so the hero is never left with the off slot blank. Non-native.
+        private void FallbackResourcesOffHand(WeaponVisual vis, Transform hand, string id)
+        {
+            var fb = CopyOf(vis);
+            fb.native = false;
+            GameObject prop = LoadWeaponMesh(fb.mesh) ?? BuildFallbackPrimitive(fb);
+            if (prop == null) return;
+            AttachOffHandProp(prop, fb, hand, id);
+        }
+
+        // Release the held Addressables off-hand handle (no-op if none open). ONE owner — called on
+        // every off-hand swap / detach / OnDisable so a Blink shield prefab never leaks.
+        private void ReleaseOffHandHandle()
+        {
+            if (!_offHandHandleOpen) return;
+            _offHandHandleOpen = false;
+            if (_offHandHandle.IsValid())
+                Addressables.Release(_offHandHandle);
+            _offHandHandle = default;
         }
 
         // Seat an off-hand prop on the off hand. Shields are centre-gripped (their own NormalizeInto
@@ -1036,11 +1153,27 @@ namespace DeNelle.Village
             foreach (var rb in prop.GetComponentsInChildren<Rigidbody>(true)) if (rb != null) Destroy(rb);
 
             var gripRoot = new GameObject(OffHandPropName);
-            NormalizeInto(prop, gripRoot.transform, vis.heldLength);
-
-            gripRoot.transform.SetParent(hand, false);
-            gripRoot.transform.localPosition = vis.gripPos;
-            gripRoot.transform.localRotation = Quaternion.Euler(vis.gripEuler);
+            // NATIVE Blink shield: trust the authored grip-at-origin + orientation (scale-only), and
+            // seat dead-centre in the hand (zero gripPos/euler) like the bow's proven off-hand seat —
+            // the foreign-pivot + (-0.05) offset of the legacy path is exactly what made the shield
+            // dangle beside the forearm. Tripo/Resources shields keep the bounds-normalize + preset
+            // grip (their pivot is unknown, so normalize centres them deterministically).
+            if (vis.native)
+            {
+                FlowTrace.Step("Equip", "off-hand seat: NATIVE (trust authored grip-at-origin, scale-only)");
+                SeatNative(prop, gripRoot.transform, vis.heldLength);
+                gripRoot.transform.SetParent(hand, false);
+                gripRoot.transform.localPosition = Vector3.zero;
+                gripRoot.transform.localRotation = Quaternion.identity;
+            }
+            else
+            {
+                FlowTrace.Step("Equip", "off-hand seat: NormalizeInto + preset grip (Tripo/Resources shield)");
+                NormalizeInto(prop, gripRoot.transform, vis.heldLength);
+                gripRoot.transform.SetParent(hand, false);
+                gripRoot.transform.localPosition = vis.gripPos;
+                gripRoot.transform.localRotation = Quaternion.Euler(vis.gripEuler);
+            }
 
             _currentOffHandProp = gripRoot;
 

@@ -333,8 +333,12 @@ namespace DeNelle.Village
                 return;
             }
 
-            // Armor proven renderable -> now safe to hide the base body.
-            HideBaseBody(baseBody);
+            // Armor proven renderable -> now safe to hide the base body. Pass the armored INSTANCE
+            // so HideBaseBody can detect whether this Blink set is FULL-BODY (ships its own head/
+            // hands/skin — the documented Blink "full-body outfit SET", BLINK_NOTES.md) vs pieces-
+            // only. A full-body set + kept base skin = TWO heads/hands on TWO animators that drift
+            // out of phase — the owner-reported "head and armor not in sync / parts not joined".
+            HideBaseBody(baseBody, instance);
 
             FlowTrace.Step("ArmorVisual",
                 $"BuildArmorBody: armored body '{armor.id}' shown (address='{address}'), base body hidden.");
@@ -552,9 +556,24 @@ namespace DeNelle.Village
 
         // Disable (never destroy) the base body's SkinnedMeshRenderers so the hero reads as the
         // armored body. Snapshot exactly what we disabled so RestoreBaseBody re-enables the same.
-        private void HideBaseBody(Transform baseBody)
+        //
+        // DOUBLED-BODY FIX (2026-06-19, owner "head and armor not in sync / parts not joined"):
+        // Blink armor sets are documented FULL-BODY OUTFIT SETS (HumanMale/HumanFemale — they ship
+        // their OWN head/hands/skin, BLINK_NOTES.md). If we KEEP the base body's head/hands visible
+        // while ALSO showing a full-body armor instance, the hero carries TWO heads + TWO hand sets
+        // driven by TWO separate animators (base + armor instance). Those animators evaluate on
+        // different cull/update phases and DRIFT — exactly the reported desync. So we first detect
+        // whether THIS armor set ships its own skin: if it does (full-body), hide EVERYTHING on the
+        // base (one body, one animator → joined + in-sync). Only when the armor is pieces-only (no
+        // own head/hands) do we keep the base skin visible under the overlay (the never-naked path).
+        private void HideBaseBody(Transform baseBody, GameObject armorInstance)
         {
             if (baseBody == null) return;
+
+            // Does the armored instance carry its OWN skin (head/hands/face/hair)? If yes it is a
+            // full-body set and the base skin must be hidden too (no doubled, desyncing body).
+            bool armorHasOwnSkin = ArmorShipsOwnSkin(armorInstance);
+
             var renderers = baseBody.GetComponentsInChildren<SkinnedMeshRenderer>(true);
             int hidden = 0, keptSkin = 0;
             // Snapshot ONLY what we actually hid, so RestoreBaseBody re-enables exactly that set.
@@ -562,31 +581,65 @@ namespace DeNelle.Village
             foreach (var r in renderers)
             {
                 if (r == null) continue;
-                // BLINK FIX (2026-06-19, "armor but no skin"): Blink armor SET prefabs ship armor
-                // pieces ONLY — no head/hands/face/hair skin. The base body is the only object that
-                // carries skin. The old behaviour disabled EVERY base renderer, so once armor equipped
-                // the hero read as floating armor + weapon over no body. So NEVER hide skin renderers —
-                // hide only the body's torso/limb/clothing meshes that the armor overlay replaces.
-                if (IsSkinRenderer(r.name)) { keptSkin++; continue; }
+                // FULL-BODY armor set: hide ALL base renderers (incl. skin) so only the armor body's
+                // single rig drives the visible character — no second head/hands on a second animator.
+                // PIECES-ONLY armor: keep the base skin (head/hands/hair) visible UNDER the armor
+                // pieces, hiding only the torso/limb/clothing the armor replaces (never-naked path).
+                if (!armorHasOwnSkin && IsSkinRenderer(r.name)) { keptSkin++; continue; }
                 if (r.enabled) { r.enabled = false; hidden++; }
                 hiddenList.Add(r);
             }
             _hiddenBaseRenderers = hiddenList.ToArray();
-            if (keptSkin == 0)
+
+            if (armorHasOwnSkin)
             {
-                // SELF-REPORT (§12): we recognised no skin mesh on the base body — the hero may still
-                // read bare. Means the base body's skin renderers don't match the IsSkinRenderer
-                // keywords (wrong base resolved, or unexpected mesh names) — pinpoint, don't blank.
+                FlowTrace.Step("ArmorVisual",
+                    $"HideBaseBody: armor is a FULL-BODY set (ships its own skin) — hid ALL {hidden} base " +
+                    "renderer(s) so one rig drives the character (no doubled/desyncing head+hands).");
+            }
+            else if (keptSkin == 0)
+            {
+                // SELF-REPORT (§12): pieces-only armor but we recognised no skin mesh on the base body
+                // — the hero may read bare. Means the base body's skin renderers don't match the
+                // IsSkinRenderer keywords (wrong base resolved, or unexpected mesh names) — pinpoint.
                 FlowTrace.Warn("ArmorVisual",
                     $"HideBaseBody: kept 0 skin renderer(s) on '{baseBody.name}' " +
                     $"({renderers?.Length ?? 0} found, hid {hidden}) — no recognised skin mesh; " +
-                    "hero may still read bare under the armor. Check base-body renderer names.");
+                    "hero may still read bare under the pieces-only armor. Check base-body renderer names.");
             }
             else
             {
                 FlowTrace.Step("ArmorVisual",
-                    $"HideBaseBody: hid {hidden} base clothing renderer(s), kept {keptSkin} skin renderer(s) visible under the armor.");
+                    $"HideBaseBody: pieces-only armor — hid {hidden} base clothing renderer(s), kept {keptSkin} skin renderer(s) under the armor.");
             }
+        }
+
+        // Detect whether a Blink armor INSTANCE ships its OWN skin (head/hands/face/hair) — i.e. it
+        // is a full-body outfit set, not armor pieces. Scans the instance's SkinnedMeshRenderers for
+        // a skin-keyword name (the same vocabulary IsSkinRenderer uses for the base). Conservative:
+        // a single recognised head/hand/face mesh on the armor => full-body. Traced so a capture
+        // shows exactly which path HideBaseBody took (and why) with zero guessing.
+        private static bool ArmorShipsOwnSkin(GameObject armorInstance)
+        {
+            if (armorInstance == null) return false;
+            var skins = armorInstance.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            int total = 0, skinNamed = 0;
+            string firstSkin = null;
+            foreach (var r in skins)
+            {
+                if (r == null) continue;
+                total++;
+                if (IsSkinRenderer(r.name))
+                {
+                    skinNamed++;
+                    if (firstSkin == null) firstSkin = r.name;
+                }
+            }
+            bool fullBody = skinNamed > 0;
+            FlowTrace.Step("ArmorVisual",
+                $"ArmorShipsOwnSkin: armor instance has {total} skinned renderer(s), {skinNamed} skin-named " +
+                $"(e.g. '{firstSkin ?? "<none>"}') => fullBody={fullBody}.");
+            return fullBody;
         }
 
         // Blink/Tripo base-body renderer names that are SKIN / face / hair and must stay visible UNDER
