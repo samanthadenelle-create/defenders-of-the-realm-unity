@@ -451,11 +451,17 @@ namespace DeNelle.Village
                 // still register with TalkPromptRegistry so the HUD TALK button fires us, and the
                 // desktop [F] path below is untouched.
                 TalkPromptRegistry.Register(transform, Interact);
+                // Owner severe: flip the HUD context button to its UPGRADE face when near an
+                // upgradable storefront. The NPC-fronted path never set HudBuildingFocus, so the
+                // button never swapped (trace: focus='<none>'). Match BuildingInteractable.
+                if (IsUpgradableId(_structureId)) HudBuildingFocus.Set(_structureId);
+                else                              HudBuildingFocus.Clear(_structureId);
             }
             else
             {
                 MobileInteractButton.Release(this);
                 TalkPromptRegistry.Deregister(transform);
+                HudBuildingFocus.Clear(_structureId);
             }
 
             // Mobile-first: the HUD TALK button (via TalkPromptRegistry above) is the
@@ -470,6 +476,20 @@ namespace DeNelle.Village
             // shop-vs-upgrade split is decided data-driven by that node's gates (seeded from
             // BuildingCatalog caps in CmdStructureStatus) — never here. Trace the id used so a
             // "wrongly offers shop" report maps to the catalog entry behind it.
+            // UPGRADE IS DIRECT, NEVER YARN (owner, severe): an upgradable building reached through
+            // its vendor NPC routes STRAIGHT to the code-built Building Upgrade panel — mirrors
+            // BuildingInteractable.Interact. This was the missed path (Mill/Old Pell, Arcane Tower
+            // still showed the Yarn StructureMenu). Buy/Sell/Talk for non-upgradable storefronts
+            // still fall through to the Yarn dialogue below, unchanged.
+            if (IsUpgradableId(_structureId))
+            {
+                if (PanelRouter.Open(PanelId.BuildingUpgrade, _structureId))
+                    FlowTrace.Step("Village", $"CastleNpc '{_label}' -> MVVM Building Upgrade (focus='{_structureId}').");
+                else
+                    FlowTrace.Warn("Village", $"Building Upgrade panel opener not registered for '{_structureId}' — NOT falling through to Yarn.");
+                return;
+            }
+
             FlowTrace.Step("Village", $"CastleNpc '{_label}' -> structure '{_structureId}' (StructureMenu gates shop/upgrade)");
             if (DialogueService.PlayStructure(_structureId, _label))
             {
@@ -477,6 +497,13 @@ namespace DeNelle.Village
                 Debug.Log($"[CastleNpcInteractable] {_label} -> structure dialogue '{_structureId}'.");
             }
         }
+
+        // Upgradable = city tiers (BuildingTierCatalog) OR legacy resource buildings — same test
+        // BuildingInteractable uses, so the building's own interact and its NPC agree.
+        private static bool IsUpgradableId(string id) =>
+            !string.IsNullOrEmpty(id) &&
+            (DeNelle.Core.State.BuildingTierCatalog.IsUpgradable(id) ||
+             Buildings.Progression.ResourceBuildingProgression.IsResourceBuilding(id));
 
         private void ResolveHero()
         {
@@ -490,6 +517,7 @@ namespace DeNelle.Village
         {
             MobileInteractButton.Release(this);
             TalkPromptRegistry.Deregister(transform);
+            if (!string.IsNullOrEmpty(_structureId)) HudBuildingFocus.Clear(_structureId);
         }
     }
 }

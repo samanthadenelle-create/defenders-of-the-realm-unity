@@ -45,16 +45,13 @@ namespace DeNelle.HUD
 
             if (FindHero() == null) return; // Title/HeroSelect skip.
 
-            var panel = FindPanelSettings();
-            if (panel == null) return;
-
+            // CANON-CORRECT (CLAUDE.md §8): QuestTrackerHud is now code-built uGUI — it builds its
+            // OWN ScreenSpaceOverlay Canvas, so NO UIDocument/PanelSettings is needed. The prior
+            // UIDocument version did not render (trace: active=False / hasRoot=False).
             var go = new GameObject("QuestTrackerHud");
             SceneManager.MoveGameObjectToScene(go, scene);
-            var ui = go.AddComponent<UIDocument>();
-            ui.panelSettings = panel;
-            ui.sortingOrder = 80; // above wave timer / below modals (same band as daily chips)
             go.AddComponent<QuestTrackerHud>();
-            FlowTrace.Step("UI", "QuestTrackerHud created (single instance)");
+            FlowTrace.Step("UI", "QuestTrackerHud created (uGUI, single instance)");
         }
 
         private static Transform FindHero()

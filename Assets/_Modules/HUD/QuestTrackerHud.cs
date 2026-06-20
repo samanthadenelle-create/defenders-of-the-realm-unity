@@ -1,140 +1,152 @@
 // =============================================================================
-// QuestTrackerHud — far-RIGHT HUD panel that PINS the player's ONE current active
-// story quest (title + current-stage objective). Owner design (2026-06-20): the
-// Rumor Board pop-up is the full browse/accept list; this HUD keeps just the single
-// active quest in view, far-right, live-updating as quests are accepted/advanced.
+// QuestTrackerHud — far-RIGHT HUD that PINS the player's ONE tracked story quest.
 // -----------------------------------------------------------------------------
-// Reads QuestService active quests + QuestCatalog titles/stages, repaints on the
-// service's QuestChanged event. Code-built UIElements (works in player builds;
-// only .uxml ASSETS fail to render — CLAUDE.md §8). Spawned by
-// QuestTrackerHudBootstrap once a scene has a hero.
+// CANON-CORRECT (CLAUDE.md §8): code-built uGUI (Canvas + Image + TMP), NOT a
+// UIDocument. The prior UIDocument version did not render (trace: active=False /
+// hasRoot=False / rootResolved=0x0) — UIDocument HUDs are unreliable in this project.
+// Builds its OWN ScreenSpaceOverlay Canvas (no PanelSettings/theme dependency), so it
+// renders the same as the Rumor Board (which is uGUI).
+//
+// Shows the player-TRACKED quest (chosen via the board's Track button; falls back to
+// the first active quest until one is picked). Click the card to POP OUT the full
+// Rumor Board. Reads QuestService + QuestCatalog; repaints on QuestService.QuestChanged.
+// Spawned by QuestTrackerHudBootstrap once a scene has a hero.
 // =============================================================================
 
 using DeNelle.Core.Quests;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
-using UnityEngine.UIElements;
+using UnityEngine.UI;
 
 namespace DeNelle.HUD
 {
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(UIDocument))]
     public sealed class QuestTrackerHud : MonoBehaviour
     {
-        private UIDocument _doc;
-        private VisualElement _root;
-        private VisualElement _stack;
-
-        private void Awake()
-        {
-            _doc = GetComponent<UIDocument>();
-        }
+        private GameObject _ui;
+        private RectTransform _card;   // the panel we rebuild on repaint
+        private bool _subscribed;
 
         private void OnEnable()
         {
             Build();
             if (QuestService.Instance != null)
+            {
                 QuestService.Instance.QuestChanged += Repaint;
+                _subscribed = true;
+            }
         }
 
         private void OnDisable()
         {
-            if (QuestService.Instance != null)
+            if (_subscribed && QuestService.Instance != null)
                 QuestService.Instance.QuestChanged -= Repaint;
+            _subscribed = false;
         }
 
+        private void OnDestroy() { if (_ui != null) Destroy(_ui); }
+
+        // ── Build the uGUI canvas + the right-side card ──────────────────────────
         private void Build()
         {
-            _root = _doc.rootVisualElement;
-            if (_root == null) return;
-            _root.style.flexDirection = FlexDirection.Column;
-            _root.style.justifyContent = Justify.FlexStart;
-            _root.style.alignItems = Align.FlexEnd;      // top-RIGHT (owner: pin the active quest far-right)
-            _root.pickingMode = PickingMode.Ignore;
+            if (_ui != null) return;
 
-            _stack = new VisualElement { name = "QuestTrackerStack" };
-            _stack.style.marginTop = 96;          // clear of the top HUD widgets
-            _stack.style.marginRight = 16;
-            _stack.style.width = 300;
-            _stack.style.flexDirection = FlexDirection.Column;
-            _stack.style.alignItems = Align.FlexEnd;
-            _stack.pickingMode = PickingMode.Ignore;
-            _root.Add(_stack);
+            _ui = new GameObject("QuestTrackerHudUI");
+            _ui.transform.SetParent(transform, false);
+
+            var canvas = _ui.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 80; // above wave timer, below modals (matches daily chips band)
+
+            var scaler = _ui.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1080, 1920);
+            scaler.matchWidthOrHeight = 0.5f;
+
+            _ui.AddComponent<GraphicRaycaster>();
+
+            // Far-RIGHT, LOWERED (mid-right), tall + narrow ("minimized but taller"), CLICKABLE.
+            var card = new GameObject("TrackerCard", typeof(Image), typeof(Button));
+            card.transform.SetParent(_ui.transform, false);
+            _card = card.GetComponent<RectTransform>();
+            _card.anchorMin = new Vector2(1f, 0.30f);
+            _card.anchorMax = new Vector2(1f, 0.58f);
+            _card.pivot = new Vector2(1f, 0.5f);
+            _card.sizeDelta = new Vector2(300f, 0f);      // width 300; height from the anchor span
+            _card.anchoredPosition = new Vector2(-12f, 0f);
+            card.GetComponent<Image>().color = ElarionUi.PanelStoneDark;
+            card.GetComponent<Button>().onClick.AddListener(OpenBoard); // click → pop the board
 
             Repaint();
         }
 
+        private void OpenBoard()
+        {
+            if (!PanelRouter.Open(PanelId.RumorBoard))
+                FlowTrace.Warn("HUD", "QuestTracker: RumorBoard opener not registered — cannot pop the board.");
+        }
+
+        // ── Paint the tracked quest into the card ────────────────────────────────
         private void Repaint()
         {
-            if (_stack == null) return;
-            _stack.Clear();
+            if (_card == null) return;
+            for (int i = _card.childCount - 1; i >= 0; i--) Destroy(_card.GetChild(i).gameObject);
 
             var svc = QuestService.Instance;
-            if (svc == null) return;
+            if (svc == null) { _card.gameObject.SetActive(false); return; }
 
             var ids = svc.ActiveQuestIds();
-            if (ids == null || ids.Count == 0) return; // nothing active → empty (no header noise)
+            if (ids == null || ids.Count == 0) { _card.gameObject.SetActive(false); return; }
 
-            // WO-454: pin the player-TRACKED quest (chosen via the board's Track button). If none
-            // is chosen yet — or the tracked quest is no longer active — fall back to the first
-            // active quest as the default until the player picks one. The board remains the full list.
+            // Player-tracked quest; fall back to the first active until one is chosen.
             string tracked = svc.TrackedId;
             if (string.IsNullOrEmpty(tracked) || !svc.IsActive(tracked))
             {
                 tracked = null;
                 foreach (var id in ids) { if (!string.IsNullOrEmpty(id)) { tracked = id; break; } }
             }
-            if (tracked == null) return;
+            if (tracked == null) { _card.gameObject.SetActive(false); return; }
 
-            var header = new Label("Quest");
-            header.style.color = new StyleColor(ElarionUi.Gilt);
-            header.style.fontSize = 13;
-            header.style.unityFontStyleAndWeight = FontStyle.Bold;
-            header.style.marginBottom = 4;
-            header.style.unityTextAlign = TextAnchor.MiddleRight;
-            _stack.Add(header);
+            _card.gameObject.SetActive(true);
 
-            _stack.Add(BuildCard(tracked, svc));
+            AddLabel("◈ QUEST", 0.86f, 0.97f, 13, ElarionUi.Gilt, TMPro.FontStyles.Bold,
+                TMPro.TextAlignmentOptions.Right);
+
+            var def = QuestCatalog.FindQuest(tracked);
+            string title = def != null && !string.IsNullOrEmpty(def.Title) ? def.Title : tracked;
+            AddLabel(title, 0.66f, 0.85f, 15, ElarionUi.Parchment, TMPro.FontStyles.Bold,
+                TMPro.TextAlignmentOptions.TopRight);
+
+            var stage = svc.GetStage(tracked);
+            string objective = stage != null && !string.IsNullOrEmpty(stage.ObjectiveText)
+                ? stage.ObjectiveText : "…";
+            AddLabel(objective, 0.04f, 0.64f, 12, ElarionUi.ParchmentDim, TMPro.FontStyles.Normal,
+                TMPro.TextAlignmentOptions.TopRight);
+
+            AddLabel("tap to open board", 0.0f, 0.05f, 10, ElarionUi.ParchmentDim, TMPro.FontStyles.Italic,
+                TMPro.TextAlignmentOptions.BottomRight);
         }
 
-        private static VisualElement BuildCard(string id, QuestService svc)
+        private void AddLabel(string text, float yMin, float yMax, int size, Color col,
+            TMPro.FontStyles style, TMPro.TextAlignmentOptions align)
         {
-            var def = QuestCatalog.FindQuest(id);
-            var stage = svc.GetStage(id);
-
-            var card = new VisualElement();
-            card.style.marginBottom = 4;
-            card.style.paddingLeft = 10; card.style.paddingRight = 10;
-            card.style.paddingTop = 6;   card.style.paddingBottom = 6;
-            card.style.minWidth = 260;
-            card.style.borderTopLeftRadius = 8;
-            card.style.borderTopRightRadius = 8;
-            card.style.borderBottomLeftRadius = 8;
-            card.style.borderBottomRightRadius = 8;
-            card.style.backgroundColor = new StyleColor(ElarionUi.PanelStoneDark);
-            card.style.borderLeftWidth = 0; card.style.borderRightWidth = 0;
-            card.style.borderTopWidth = 1;  card.style.borderBottomWidth = 1;
-            var rim = new StyleColor(ElarionUi.Gold);
-            card.style.borderTopColor = rim;
-            card.style.borderBottomColor = rim;
-
-            var title = new Label(def != null && !string.IsNullOrEmpty(def.Title) ? def.Title : id);
-            title.style.color = new StyleColor(ElarionUi.Parchment);
-            title.style.fontSize = 13;
-            title.style.unityFontStyleAndWeight = FontStyle.Bold;
-            card.Add(title);
-
-            string objective = stage != null && !string.IsNullOrEmpty(stage.ObjectiveText)
-                ? stage.ObjectiveText
-                : "…";
-            var obj = new Label(objective);
-            obj.style.color = new StyleColor(ElarionUi.ParchmentDim);
-            obj.style.fontSize = 12;
-            obj.style.marginTop = 2;
-            obj.style.whiteSpace = WhiteSpace.Normal;
-            card.Add(obj);
-
-            return card;
+            var go = new GameObject("L", typeof(TMPro.TextMeshProUGUI));
+            go.transform.SetParent(_card, false);
+            var r = go.GetComponent<RectTransform>();
+            r.anchorMin = new Vector2(0.04f, yMin);
+            r.anchorMax = new Vector2(0.96f, yMax);
+            r.offsetMin = Vector2.zero;
+            r.offsetMax = Vector2.zero;
+            var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(t); // font-safe before .text (avoids the TMP GenerateTextMesh NRE)
+            t.text = text;
+            t.fontSize = size;
+            t.color = col;
+            t.fontStyle = style;
+            t.alignment = align;
+            t.enableWordWrapping = true;
+            t.raycastTarget = false; // let the card's Button receive the click
         }
     }
 }

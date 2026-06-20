@@ -50,8 +50,22 @@ Write-Host "[fleet] (player builds need no license; -nographics = logic/flow/cra
 # fleet's ranked tickets reflect ONLY this fleet's fresh runs.
 $pdp = Join-Path $env:USERPROFILE 'AppData\LocalLow\DeNelle\Defenders of the Realm'
 $runsDir = Join-Path $pdp 'autopilot-runs'
-if (Test-Path $runsDir) { Remove-Item $runsDir -Recurse -Force -ErrorAction SilentlyContinue }
 $rootBreak = Join-Path $pdp 'break-log.jsonl'
+
+# DATA-LOSS GUARD (2026-06-20): the wipe below destroyed the owner's MANUAL F8 captures
+# (kind:"flagged" notes + flag_*.png) when a fleet ran while she had pending tickets. NEVER
+# delete a manual capture. If the root break-log has any flagged (F8) entries, ARCHIVE the
+# break-log + flag screenshots into QA_F8_ARCHIVE before wiping, so a fleet can never lose them.
+if ((Test-Path $rootBreak) -and (Select-String -Path $rootBreak -Pattern '"kind":"flagged"' -Quiet -ErrorAction SilentlyContinue)) {
+    $stamp = (Get-Date -Format 'yyyy-MM-dd_HHmmss')
+    $arch  = Join-Path $PSScriptRoot ("QA_F8_ARCHIVE\fleet-preserved_" + $stamp)
+    New-Item -ItemType Directory -Force -Path $arch | Out-Null
+    Copy-Item $rootBreak (Join-Path $arch 'break-log.jsonl') -Force -ErrorAction SilentlyContinue
+    Get-ChildItem -Path $pdp -Filter 'flag_*.png' -ErrorAction SilentlyContinue | Copy-Item -Destination $arch -Force -ErrorAction SilentlyContinue
+    Write-Host "[fleet] ARCHIVED manual F8 captures -> $arch (never wipe a ticket)."
+}
+
+if (Test-Path $runsDir) { Remove-Item $runsDir -Recurse -Force -ErrorAction SilentlyContinue }
 if (Test-Path $rootBreak) { Remove-Item $rootBreak -Force -ErrorAction SilentlyContinue }
 Write-Host "[fleet] cleaned stale run logs under '$pdp' (fresh aggregation slate)."
 
