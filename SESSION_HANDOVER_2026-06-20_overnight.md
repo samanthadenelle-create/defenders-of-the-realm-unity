@@ -321,6 +321,17 @@ the game). **The headless fleet now runs clean on every real signal.**
   clear `Btn_Close <- BuyRow` AND a chunk of the scroll-panel CLICK-BLOCKED noise. Rebuild bxht0wv6b →
   fleet to confirm. (This is the deeper, correct fix; the earlier SetAsLastSibling stays as harmless hardening.)
 
+**2026-06-20 ~03:4x — ✅ shop Close occlusion RESOLVED (was a probe false-positive), verified**
+- Fleet on the fresh build: **`Btn_Close <- BuyRow` = 0**. Confirmed it was a CLICK-BLOCKED false-positive
+  (RectMask2D-clipped row), NOT a player trap. Task #20 CLOSED with a real root cause, settled from code.
+- CLICK-BLOCKED 188 → 169 (the uGUI masked-scroll cases gone). Survivors are UITK panel-open blockers
+  (`VisualElement`/`Viewport`/`Label`) — UITK clips via overflow:hidden, not RectMask2D, so they're the
+  already-DEFERRED modal-aware-probe item (a considered fresh-session change, see earlier entry). All real
+  signals remain 0.
+- Net: the probe is now meaningfully more accurate (full-screen-modal skip + RectMask2D-clip skip), so the
+  only CLICK-BLOCKED left is genuine bot-opens-UITK-panel behavior. No false "can't click X" tickets from
+  masked scroll content anymore.
+
 ### Overnight scorecard so far
 - **Fixed + gated + pushed:** A1 pink-Body, B1 seam-guard, C1 craft-close, WO-327 wave-trigger (4). 
 - **Already-fixed/verified:** WO-325 node NRE, crystal spam, edge portal (3).
