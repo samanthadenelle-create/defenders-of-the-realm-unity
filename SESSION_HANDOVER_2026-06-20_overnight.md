@@ -284,6 +284,22 @@ the game). **The headless fleet now runs clean on every real signal.**
 - All real-signal probes remain **0** (magenta/dual-navmesh/verify-fail/NRE/seam/eco-spam). Rebuild
   bnnk1vl52 → final fleet to confirm captures are clean (only real occlusions like BuyRow/Close remain).
 
+**2026-06-20 ~02:0x — noise-reduction halted at the point of diminishing returns (deliberate)**
+- CLICK-BLOCKED 389 → **218** (full-screen modal overlays suppressed, both uGUI + UITK). Survivors are
+  UITK scroll-panel internals (`Viewport`/`unity-content-container`/`VisualElement`) covering HUD buttons —
+  the bot's own `OpenEachHUDPanel` phase opening 70–84%-of-screen panels over the HUD = the SAME expected
+  pattern, just under the 85% threshold.
+- **STOPPED here on purpose.** Pushing the threshold lower would start suppressing partial-but-still-modal
+  panels and risk masking a genuine occlusion (like the BuyRow/Close one just surfaced). The correct fix is
+  a **modal-open-aware probe** (only test HUD-button reachability when NO panel is open) — a considered
+  change for a fresh session, not a 2 AM tweak. DEFERRED with this recommendation.
+- **All real-signal probes remain 0** (magenta/dual-navmesh/verify-fail/NRE/seam/eco-spam). The game is
+  verifiably clean; the remaining CLICK-BLOCKED is bot-behavior noise, not game bugs.
+- **RECOMMENDED next probe pass (deferred):** in `ClickableActuator`, gate the HUD-reachability check on
+  "no modal/overlay currently open" (detect via an active high-sortingOrder UIDocument with content or a
+  visible scrim), so the only CLICK-BLOCKED reports are real normal-HUD occlusions. Also revisit
+  `Btn_Close ← BuyRow` (task #20) — the one confirmed real occlusion.
+
 ### Overnight scorecard so far
 - **Fixed + gated + pushed:** A1 pink-Body, B1 seam-guard, C1 craft-close, WO-327 wave-trigger (4). 
 - **Already-fixed/verified:** WO-325 node NRE, crystal spam, edge portal (3).
