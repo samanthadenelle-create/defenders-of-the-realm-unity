@@ -311,17 +311,25 @@ namespace DeNelle.Village
             // shader to URP/Lit before the body is shown.
             EnsureMaterialsUrp(instance);
 
-            // ── HUMANOID RETARGET ────────────────────────────────────────────────────
-            // Drive the armored body with the hero's EXISTING controller + avatar so it plays
-            // the same idle/walk/cast. Both are Humanoid on the shared Blink rig, so assigning
-            // the runtimeAnimatorController + the avatar makes the instance retarget the clips.
-            bool retargeted = RetargetToBaseAnimator(instance, baseAnim, armor.id);
-            if (!retargeted)
+            // ── HOW DO WE DRIVE THIS ARMOR? full-body SET vs pieces-only OVERLAY ──────
+            // FULL-BODY set (ships its own head/hands/skin — the documented Blink outfit SET):
+            //   give the instance its OWN Animator + the hero's controller/avatar; the base body is
+            //   hidden entirely, so ONE rig (the armor's) drives the whole visible character.
+            // PIECES-ONLY (chest/boots/helmet worn OVER the base skin): do NOT add a second animator.
+            //   Re-bind the pieces' SkinnedMeshRenderers onto the BASE skeleton (by bone name) so the
+            //   SINGLE base animator deforms body + head + pieces in lockstep. Two animators on one
+            //   visible character is EXACTLY the owner-reported "head and body move separately / lag".
+            bool fullBodySet = ArmorShipsOwnSkin(instance);
+            bool driven = fullBodySet
+                ? RetargetToBaseAnimator(instance, baseAnim, armor.id)
+                : ShareBaseSkeleton(instance, baseBody, armor.id);
+            if (!driven)
             {
-                // Could not bind a valid humanoid animator — the body would T-pose / float. Do
-                // NOT hide the base body; drop the half-built instance and keep the base shown.
+                // Could not bind/drive the armor — it would T-pose / float. Do NOT hide the base
+                // body; drop the half-built instance and keep the base body shown (never-naked).
                 FlowTrace.Fail("ArmorVisual",
-                    $"BuildArmorBody: could not retarget '{armor.id}' to the hero animator — " +
+                    $"BuildArmorBody: could not drive armor '{armor.id}' " +
+                    $"({(fullBodySet ? "full-body retarget" : "pieces bone-share")}) — " +
                     "dropping armored body, keeping the base body (no naked/static hero).");
                 Destroy(instance);
                 ReleaseArmorHandle();
@@ -336,7 +344,7 @@ namespace DeNelle.Village
             // drives nothing (the companion symptom). PROVE the armored body can render a posed
             // character BEFORE we hide the base. If it can't, ROLL BACK and keep the base body —
             // the failure self-reports (Fail -> break-log) and never reaches the player as broken.
-            if (!VerifyArmorRendersNow(instance, armor.id))
+            if (!VerifyArmorRendersNow(instance, armor.id, fullBodySet))
             {
                 RollbackArmor(instance, $"render-verify failed for armor '{armor.id}' (no visible skinned mesh or no bound animator)");
                 return;
@@ -360,18 +368,22 @@ namespace DeNelle.Village
             // WO-455: if this is a story companion, re-point its locomotion animator at the ARMORED
             // body — else StoryCompanion keeps driving the now-hidden base animator and the visible
             // armored body T-poses (owner-reported "companion changed gear, still T-pose").
+            // A FULL-BODY set has its own animator the companion must drive; a PIECES-ONLY overlay has
+            // none (it rides the base skeleton), so the companion keeps driving the BASE animator — the
+            // one that now deforms body+head+pieces together. Only repoint for the full-body case.
             var companionSwap = GetComponent<StoryCompanion>();
-            if (companionSwap != null)
+            if (companionSwap != null && fullBodySet)
                 companionSwap.SetActiveAnimator(instance != null ? instance.GetComponentInChildren<Animator>() : null);
 
             FlowTrace.Step("ArmorVisual",
                 $"BuildArmorBody: armored body '{armor.id}' shown (address='{address}'), base body hidden.");
 
-            // DEFERRED pose-verify: the animator hasn't evaluated yet this frame. A bound animator
-            // whose controller has NO clip for this rig leaves the body frozen in bind/T-pose —
-            // the owner-reported "companion is just armor in a T-pose". Watch the next few frames;
-            // if nothing ever drives the rig, ROLL BACK to the base body.
-            if (isActiveAndEnabled)
+            // DEFERRED pose-verify (FULL-BODY sets only): the armor's OWN animator hasn't evaluated
+            // yet this frame; a bound animator whose controller has NO clip for this rig leaves the
+            // body frozen in bind/T-pose — the owner-reported "companion is just armor in a T-pose".
+            // PIECES-ONLY armor has NO own animator — it rides the BASE animator (already pose-driven
+            // for the hero), so there is nothing separate to watch; the shared bones can't T-pose alone.
+            if (isActiveAndEnabled && fullBodySet)
                 StartCoroutine(VerifyPoseThenMaybeRollback(instance, armor.id, _equipGeneration));
         }
 
@@ -436,7 +448,10 @@ namespace DeNelle.Village
         // >=1 ENABLED SkinnedMeshRenderer carrying a sharedMesh AND a bound humanoid animator
         // (runtimeAnimatorController + valid avatar). Traces the exact counts so a capture splits
         // "no visible mesh" vs "no animator binding" with zero guessing. Returns false => caller rolls back.
-        private bool VerifyArmorRendersNow(GameObject instance, string armorId)
+        // requireOwnAnimator: a FULL-BODY set drives itself, so it MUST carry a bound humanoid animator
+        // (controller + valid avatar) or it would T-pose. A PIECES-ONLY overlay has NO own animator on
+        // purpose — it rides the base skeleton — so for it we verify ONLY that a skinned mesh is visible.
+        private bool VerifyArmorRendersNow(GameObject instance, string armorId, bool requireOwnAnimator)
         {
             if (instance == null)
             {
@@ -459,16 +474,18 @@ namespace DeNelle.Village
             bool avatarOk = anim != null && anim.avatar != null && anim.avatar.isValid;
             bool animBound = anim != null && anim.runtimeAnimatorController != null && avatarOk;
             bool renders = enabledSkin > 0 && withMesh > 0;
+            bool animOk = !requireOwnAnimator || animBound; // pieces-only rides the base animator
 
             FlowTrace.Step("ArmorVisual",
-                $"VerifyArmorRenders armor='{armorId}' on '{name}': skinned total={total} enabled={enabledSkin} withMesh={withMesh}; " +
-                $"animator='{(anim == null ? "<none>" : anim.name)}' controller='{ctrl}' avatarValid={avatarOk} => renders={renders} animBound={animBound}");
+                $"VerifyArmorRenders armor='{armorId}' on '{name}': mode={(requireOwnAnimator ? "full-body" : "pieces")} " +
+                $"skinned total={total} enabled={enabledSkin} withMesh={withMesh}; " +
+                $"animator='{(anim == null ? "<none>" : anim.name)}' controller='{ctrl}' avatarValid={avatarOk} => renders={renders} animBound={animBound} animOk={animOk}");
 
-            if (!renders || !animBound)
+            if (!renders || !animOk)
             {
                 FlowTrace.Fail("ArmorVisual",
                     $"VerifyArmorRenders FAILED armor='{armorId}' on '{name}': renders={renders} (enabledSkin={enabledSkin}, withMesh={withMesh}) " +
-                    $"animBound={animBound} (controller='{ctrl}', avatarValid={avatarOk}).");
+                    $"animOk={animOk} (requireOwnAnimator={requireOwnAnimator}, animBound={animBound}, controller='{ctrl}', avatarValid={avatarOk}).");
                 return false;
             }
             return true;
@@ -651,6 +668,69 @@ namespace DeNelle.Village
             return true;
         }
 
+        // PIECES-ONLY armor (chest/boots/helmet over the base skin): instead of a SECOND animator —
+        // which evaluates on a different phase and DRIFTS out of sync with the base body (the owner-
+        // reported "head and body move separately / lag") — re-bind every armor piece's
+        // SkinnedMeshRenderer onto the BASE body's skeleton BY BONE NAME, and disable any animator the
+        // piece prefab carries. The ONE base animator then deforms the base body, the head AND the
+        // pieces in lockstep. This is the standard modular-character technique; it works because Blink
+        // armor pieces share the base human rig's bone names + bind pose (docs/BLINK_NOTES.md). Returns
+        // false only if NO piece bone matched the base skeleton (caller keeps the base body, never-naked).
+        private bool ShareBaseSkeleton(GameObject instance, Transform baseBody, string armorId)
+        {
+            using var _ = FlowTrace.Enter("ArmorVisual", "ShareBaseSkeleton");
+            if (instance == null || baseBody == null) return false;
+
+            // Name -> base bone transform (bone names are unique within a skeleton — first match wins).
+            var baseBones = new System.Collections.Generic.Dictionary<string, Transform>();
+            foreach (var t in baseBody.GetComponentsInChildren<Transform>(true))
+                if (!baseBones.ContainsKey(t.name)) baseBones[t.name] = t;
+
+            // Fallback root: the base body's own skinned root bone (used when a piece's root can't map).
+            Transform baseRoot = null;
+            var baseSkin = baseBody.GetComponentInChildren<SkinnedMeshRenderer>(true);
+            if (baseSkin != null) baseRoot = baseSkin.rootBone;
+
+            var pieces = instance.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            int reboundPieces = 0, mappedBones = 0, missedBones = 0;
+            foreach (var smr in pieces)
+            {
+                if (smr == null) continue;
+                var src = smr.bones;
+                if (src != null && src.Length > 0)
+                {
+                    var dst = new Transform[src.Length];
+                    for (int i = 0; i < src.Length; i++)
+                    {
+                        if (src[i] != null && baseBones.TryGetValue(src[i].name, out var b)) { dst[i] = b; mappedBones++; }
+                        else { dst[i] = src[i]; missedBones++; }
+                    }
+                    smr.bones = dst;                         // re-point deformation at the base skeleton
+                }
+                if (smr.rootBone != null && baseBones.TryGetValue(smr.rootBone.name, out var rb)) smr.rootBone = rb;
+                else if (baseRoot != null) smr.rootBone = baseRoot;
+                reboundPieces++;
+            }
+
+            // Kill any animator the piece prefab carries — the BASE animator drives these bones now.
+            // (A live second animator would fight the base for the shared transforms.)
+            foreach (var a in instance.GetComponentsInChildren<Animator>(true)) a.enabled = false;
+
+            FlowTrace.Step("ArmorVisual",
+                $"ShareBaseSkeleton armor='{armorId}' on '{name}': rebound {reboundPieces} piece SMR(s) to the base " +
+                $"skeleton (bones mapped={mappedBones} missed={missedBones}); piece animator(s) disabled — the single " +
+                "base animator now drives body+head+pieces in sync.");
+
+            if (reboundPieces == 0 || mappedBones == 0)
+            {
+                FlowTrace.Fail("ArmorVisual",
+                    $"ShareBaseSkeleton FAILED armor='{armorId}' on '{name}': reboundPieces={reboundPieces} mappedBones={mappedBones} " +
+                    "(no piece bones matched the base skeleton by name) — keeping base body.");
+                return false;
+            }
+            return true;
+        }
+
         // Disable (never destroy) the base body's SkinnedMeshRenderers so the hero reads as the
         // armored body. Snapshot exactly what we disabled so RestoreBaseBody re-enables the same.
         //
@@ -671,20 +751,42 @@ namespace DeNelle.Village
             // full-body set and the base skin must be hidden too (no doubled, desyncing body).
             bool armorHasOwnSkin = ArmorShipsOwnSkin(armorInstance);
 
+            // PIECES-ONLY armor covers only SOME body regions (e.g. Centurion = torso/legs/feet/hands/
+            // head/shoulders/belt — but NO sleeves). Hiding EVERY non-skin base renderer therefore
+            // erased the base ARMS the armor never replaced — the owner-reported "no arms". So for a
+            // pieces set, hide ONLY base renderers whose region an armor piece actually covers; keep the
+            // base skin AND any region the armor leaves bare (arms). Full-body sets still hide everything.
+            var covered = armorHasOwnSkin ? null : ArmorCoveredRegions(armorInstance);
+
             var renderers = baseBody.GetComponentsInChildren<SkinnedMeshRenderer>(true);
-            int hidden = 0, keptSkin = 0;
+            int hidden = 0, keptSkin = 0, keptUncovered = 0;
             // Snapshot ONLY what we actually hid, so RestoreBaseBody re-enables exactly that set.
             var hiddenList = new System.Collections.Generic.List<SkinnedMeshRenderer>();
+            var keptNames = new System.Text.StringBuilder();
+            var hiddenNames = new System.Text.StringBuilder();
             foreach (var r in renderers)
             {
                 if (r == null) continue;
-                // FULL-BODY armor set: hide ALL base renderers (incl. skin) so only the armor body's
-                // single rig drives the visible character — no second head/hands on a second animator.
-                // PIECES-ONLY armor: keep the base skin (head/hands/hair) visible UNDER the armor
-                // pieces, hiding only the torso/limb/clothing the armor replaces (never-naked path).
-                if (!armorHasOwnSkin && IsSkinRenderer(r.name)) { keptSkin++; continue; }
+                if (!armorHasOwnSkin)
+                {
+                    // PIECES-ONLY: keep the base skin (head/hands/hair) — always.
+                    if (IsSkinRenderer(r.name)) { keptSkin++; continue; }
+                    // ...and keep any region the armor does NOT cover (the missing-arms fix). Unknown
+                    // region (no keyword match) is kept too — better a little base showing than a gap.
+                    string reg = BodyRegion(r.name);
+                    if (reg.Length == 0 || !covered.Contains(reg))
+                    {
+                        keptUncovered++;
+                        if (keptNames.Length < 240)
+                        { if (keptNames.Length > 0) keptNames.Append(", "); keptNames.Append($"{r.name}[{(reg.Length == 0 ? "?" : reg)}]"); }
+                        continue;
+                    }
+                }
+                // FULL-BODY set: hide ALL. PIECES-ONLY: hide only this covered-region base renderer.
                 if (r.enabled) { r.enabled = false; hidden++; }
                 hiddenList.Add(r);
+                if (hiddenNames.Length < 240)
+                { if (hiddenNames.Length > 0) hiddenNames.Append(", "); hiddenNames.Append(r.name); }
             }
             _hiddenBaseRenderers = hiddenList.ToArray();
 
@@ -694,20 +796,22 @@ namespace DeNelle.Village
                     $"HideBaseBody: armor is a FULL-BODY set (ships its own skin) — hid ALL {hidden} base " +
                     "renderer(s) so one rig drives the character (no doubled/desyncing head+hands).");
             }
-            else if (keptSkin == 0)
+            else if (keptSkin == 0 && keptUncovered == 0)
             {
-                // SELF-REPORT (§12): pieces-only armor but we recognised no skin mesh on the base body
-                // — the hero may read bare. Means the base body's skin renderers don't match the
-                // IsSkinRenderer keywords (wrong base resolved, or unexpected mesh names) — pinpoint.
+                // SELF-REPORT (§12): pieces-only armor but we kept NOTHING on the base — the hero may
+                // read bare. Means no base renderer matched skin keywords or an uncovered region (wrong
+                // base resolved, or unexpected mesh names). Names logged so a residual case self-IDs.
                 FlowTrace.Warn("ArmorVisual",
-                    $"HideBaseBody: kept 0 skin renderer(s) on '{baseBody.name}' " +
-                    $"({renderers?.Length ?? 0} found, hid {hidden}) — no recognised skin mesh; " +
-                    "hero may still read bare under the pieces-only armor. Check base-body renderer names.");
+                    $"HideBaseBody: kept 0 renderer(s) on '{baseBody.name}' " +
+                    $"({renderers?.Length ?? 0} found, hid {hidden}) — no recognised skin/uncovered mesh; " +
+                    "hero may read bare under the pieces-only armor. Check base-body renderer names.");
             }
             else
             {
                 FlowTrace.Step("ArmorVisual",
-                    $"HideBaseBody: pieces-only armor — hid {hidden} base clothing renderer(s), kept {keptSkin} skin renderer(s) under the armor.");
+                    $"HideBaseBody: pieces-only armor — covered regions=[{string.Join(",", covered)}]; " +
+                    $"hid {hidden} base renderer(s) in covered regions, kept {keptSkin} skin + {keptUncovered} uncovered (arms etc.). " +
+                    $"kept-uncovered=[{keptNames}] hidden=[{hiddenNames}].");
             }
         }
 
@@ -762,6 +866,45 @@ namespace DeNelle.Village
                    n.Contains("brow") || n.Contains("lash") || n.Contains("hair") ||
                    n.Contains("beard") || n.Contains("moustache") || n.Contains("mustache") ||
                    n.Contains("teeth") || n.Contains("tongue");
+        }
+
+        // Coarse body-REGION tag for a renderer name, so HideBaseBody hides ONLY the base parts an
+        // armor piece actually covers (a sleeveless set keeps the base arms instead of erasing them).
+        // Ordered MOST-SPECIFIC FIRST: 'Body_Arm' must read as ARMS, not torso; gloves as HANDS, not
+        // arms. Returns "" when unrecognised — caller KEEPS unknown regions (never blind-hide).
+        private static string BodyRegion(string n)
+        {
+            if (string.IsNullOrEmpty(n)) return "";
+            n = n.ToLowerInvariant();
+            if (n.Contains("glove") || n.Contains("gauntlet") || n.Contains("hand") || n.Contains("fist")) return "hands";
+            if (n.Contains("sleeve") || n.Contains("forearm") || n.Contains("upperarm") ||
+                n.Contains("lowerarm") || n.Contains("elbow") || n.Contains("bicep") || n.Contains("arm")) return "arms";
+            if (n.Contains("shoulder") || n.Contains("pauldron") || n.Contains("spaulder")) return "shoulders";
+            if (n.Contains("boot") || n.Contains("shoe") || n.Contains("sandal") || n.Contains("foot") || n.Contains("feet")) return "feet";
+            if (n.Contains("pant") || n.Contains("trouser") || n.Contains("thigh") || n.Contains("shin") ||
+                n.Contains("calf") || n.Contains("skirt") || n.Contains("kilt") || n.Contains("leg")) return "legs";
+            if (n.Contains("belt") || n.Contains("waist") || n.Contains("sash") || n.Contains("hip")) return "waist";
+            if (n.Contains("helm") || n.Contains("hood") || n.Contains("head")) return "head";
+            if (n.Contains("chest") || n.Contains("torso") || n.Contains("body") || n.Contains("shirt") ||
+                n.Contains("jacket") || n.Contains("vest") || n.Contains("tunic") || n.Contains("coat") ||
+                n.Contains("robe") || n.Contains("breast") || n.Contains("top")) return "torso";
+            return "";
+        }
+
+        // The set of body regions a pieces-only armor instance COVERS (from its piece renderer names).
+        // HideBaseBody hides a base renderer only when its region is in this set — so regions the armor
+        // omits (e.g. arms on a sleeveless set) keep their base mesh and the hero is never bare there.
+        private static System.Collections.Generic.HashSet<string> ArmorCoveredRegions(GameObject armorInstance)
+        {
+            var set = new System.Collections.Generic.HashSet<string>();
+            if (armorInstance == null) return set;
+            foreach (var r in armorInstance.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                if (r == null) continue;
+                string reg = BodyRegion(r.name);
+                if (reg.Length > 0) set.Add(reg);
+            }
+            return set;
         }
 
         // Re-enable the base body's renderers we previously hid (re-resolving live ones if the
