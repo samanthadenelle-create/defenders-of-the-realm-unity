@@ -359,6 +359,10 @@ namespace DeNelle.Village.Hero
                 closeLbl.outlineColor = new Color32(20, 12, 4, 235); closeLbl.outlineWidth = 0.22f;
                 closeLbl.transform.SetAsLastSibling();
             }
+            // Raise the WHOLE close button (not just its label) above the dynamically-rebuilt buy-rows so a
+            // row can never cover/eat it — the fleet's 'Btn_Close <- BuyRow' soft-trap (can't dismiss the
+            // shop). Status (below, bottom-right) doesn't overlap the close rect, so its later creation is fine.
+            if (closeBtn != null) closeBtn.transform.SetAsLastSibling();
 
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
             statusGo.transform.SetParent(panel, false);
