@@ -649,7 +649,10 @@ namespace DeNelle.Village
             // (Idle 0 / Walk 6 / Run 9) so basic locomotion plays. The old direct
             // _animator.SetFloat is kept for any legacy listeners; ActorAnimator is the
             // canonical (re-resolves on body swap, guards missing params).
-            _actor?.SetLocomotion(Velocity.magnitude);
+            // During a manual seam slide we drive transform.position directly (the agent is released),
+            // so Velocity may be ~0 even though the hero is moving — feed the animator a WALK speed so
+            // the locomotion cycle plays through the crossing instead of freezing.
+            _actor?.SetLocomotion(_crossingSeam ? _moveSpeed : Velocity.magnitude);
 
             // Battle Ready (stance) vs casual Idle: combat stance ONLY when actually in
             // combat — a live wave (Countdown/Active phase). Merely having a WaveManager in

@@ -2263,22 +2263,12 @@ namespace DeNelle.Editor
                 }
             }
 
-            // 3. Visual-only ground filler across the seam gap (castle floor edge ~-63 to
-            //    OuterWorld north edge ~-76). NO collider -> never bakes into either navmesh
-            //    (no overlap); purely so the player sees ground, not a void, mid-cross.
-            Guard.Try("BridgeSeam", "seam ground filler", () =>
-            {
-                var filler = GameObject.CreatePrimitive(PrimitiveType.Plane);
-                filler.name = "Seam_Ground_Filler";
-                filler.transform.SetParent(seamRoot.transform, false);
-                filler.transform.position = new Vector3(gateX, 0.02f, -69.5f);
-                filler.transform.localScale = new Vector3(2.4f, 1f, 1.6f); // ~24m x ~16m
-                var fcol = filler.GetComponent<Collider>();
-                if (fcol != null) Object.DestroyImmediate(fcol);           // visual only
-                var fr = filler.GetComponent<MeshRenderer>();
-                var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-                if (fr != null && sh != null) fr.sharedMaterial = new Material(sh) { color = new Color(0.34f, 0.30f, 0.24f) };
-            });
+            // 3. NO visual ground filler. The earlier Seam_Ground_Filler primitive used a runtime
+            //    `Shader.Find("Universal Render Pipeline/Lit")` which returns NULL in batchmode, so the
+            //    plane kept its default Standard material — which renders MAGENTA in URP ("pink ground",
+            //    owner flag 2026-06-20). The seam gap is small and the hero slides across it in <1s, so
+            //    we drop the filler entirely rather than ship a magenta plane. (If a visible gap proves
+            //    objectionable, re-add a filler using an EXISTING URP material asset, not Shader.Find.)
 
             // 4. The real crossing: a direct NavMeshLink castle-floor-edge -> OuterWorld north
             //    edge. Connects at RUNTIME when OuterWorld is additively loaded (the EnemyStronghold
