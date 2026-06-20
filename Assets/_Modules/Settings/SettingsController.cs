@@ -190,6 +190,19 @@ namespace DeNelle.Settings
             _bound = true;
         }
 
+        // WO-417: code-built UIToolkit text renders BLANK when the PanelSettings theme carries no
+        // default font ("all rows blank — backgrounds draw, glyphs don't"). Mirror the proven
+        // AdminOverlay.AdminFont() fix: assign a built-in fallback font to every dynamically-built
+        // button so the labels render regardless of the theme. (NOTE: any UXML-authored labels in
+        // this panel are a SEPARATE concern — UXML text in builds is canon-flagged unreliable,
+        // CLAUDE.md §8; if rows from UXML stay blank, that needs a code-built rebuild, a bigger WO.)
+        private static Font _uiFont;
+        private static Font UiFont()
+        {
+            if (_uiFont == null) _uiFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            return _uiFont;
+        }
+
         /// <summary>Builds the three quality-tier buttons into the quality row once.</summary>
         private void BuildQualityButtons()
         {
@@ -201,6 +214,7 @@ namespace DeNelle.Settings
                 QualityTier tier = Tiers[i];
                 var button = new Button { name = $"quality-tier-{i}", text = SettingsModel.TierLabel(tier) };
                 button.AddToClassList(TierButtonClass);
+                { var f = UiFont(); if (f != null) button.style.unityFont = f; }
                 // Capture the tier in a local so the closure binds the right value.
                 QualityTier captured = tier;
                 button.clicked += () => OnQualityTierClicked(captured);
@@ -227,6 +241,7 @@ namespace DeNelle.Settings
                     text = DifficultyTuning.Label(difficulty),
                 };
                 button.AddToClassList(DifficultyButtonClass);
+                { var f = UiFont(); if (f != null) button.style.unityFont = f; }
                 // Capture the difficulty in a local so the closure binds right.
                 Difficulty captured = difficulty;
                 button.clicked += () => OnDifficultyClicked(captured);
