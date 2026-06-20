@@ -751,15 +751,16 @@ namespace DeNelle.Village
             // full-body set and the base skin must be hidden too (no doubled, desyncing body).
             bool armorHasOwnSkin = ArmorShipsOwnSkin(armorInstance);
 
-            // PIECES-ONLY armor covers only SOME body regions (e.g. Centurion = torso/legs/feet/hands/
-            // head/shoulders/belt — but NO sleeves). Hiding EVERY non-skin base renderer therefore
-            // erased the base ARMS the armor never replaced — the owner-reported "no arms". So for a
-            // pieces set, hide ONLY base renderers whose region an armor piece actually covers; keep the
-            // base skin AND any region the armor leaves bare (arms). Full-body sets still hide everything.
-            var covered = armorHasOwnSkin ? null : ArmorCoveredRegions(armorInstance);
-
+            // PIECES-ONLY armor overlays the BARE base body. The base body is a bare-skin mannequin
+            // (Arms/Legs/Chest/Feet + skin) PLUS several swappable OUTFIT sets (Starter_*, Cloth1_*…),
+            // proven from the capture. Hiding by "region the armor covers" erased bare body parts the
+            // armor only PARTLY covers (owner: arms gone, then legs gone — the pants don't reach the
+            // boots). The robust rule: KEEP the bare body (skin + bare anatomy) so a limb is NEVER
+            // missing, and HIDE only the base's OUTFIT sets (which would clash with the armor). The
+            // armor pieces sit over the bare body; uncovered spots show skin (the look the owner liked).
+            // Full-body sets still hide everything (handled in the armorHasOwnSkin branch above).
             var renderers = baseBody.GetComponentsInChildren<SkinnedMeshRenderer>(true);
-            int hidden = 0, keptSkin = 0, keptUncovered = 0;
+            int hidden = 0, keptSkin = 0, keptBody = 0;
             // Snapshot ONLY what we actually hid, so RestoreBaseBody re-enables exactly that set.
             var hiddenList = new System.Collections.Generic.List<SkinnedMeshRenderer>();
             var keptNames = new System.Text.StringBuilder();
@@ -769,23 +770,22 @@ namespace DeNelle.Village
                 if (r == null) continue;
                 if (!armorHasOwnSkin)
                 {
-                    // PIECES-ONLY: keep the base skin (head/hands/hair) — always.
+                    // PIECES-ONLY: keep the base skin (head/hands/hair) AND the bare body anatomy
+                    // (arms/legs/chest/feet) — the never-naked mannequin the armor overlays.
                     if (IsSkinRenderer(r.name)) { keptSkin++; continue; }
-                    // ...and keep any region the armor does NOT cover (the missing-arms fix). Unknown
-                    // region (no keyword match) is kept too — better a little base showing than a gap.
-                    string reg = BodyRegion(r.name);
-                    if (reg.Length == 0 || !covered.Contains(reg))
+                    if (IsBareBodyPart(r.name))
                     {
-                        keptUncovered++;
-                        if (keptNames.Length < 240)
-                        { if (keptNames.Length > 0) keptNames.Append(", "); keptNames.Append($"{r.name}[{(reg.Length == 0 ? "?" : reg)}]"); }
+                        keptBody++;
+                        if (keptNames.Length < 200)
+                        { if (keptNames.Length > 0) keptNames.Append(", "); keptNames.Append(r.name); }
                         continue;
                     }
+                    // else: a base OUTFIT/clothing set (Starter_*, Cloth1_*…) — hide so it doesn't clash.
                 }
-                // FULL-BODY set: hide ALL. PIECES-ONLY: hide only this covered-region base renderer.
+                // FULL-BODY set: hide ALL. PIECES-ONLY: hide only the base outfit renderers.
                 if (r.enabled) { r.enabled = false; hidden++; }
                 hiddenList.Add(r);
-                if (hiddenNames.Length < 240)
+                if (hiddenNames.Length < 200)
                 { if (hiddenNames.Length > 0) hiddenNames.Append(", "); hiddenNames.Append(r.name); }
             }
             _hiddenBaseRenderers = hiddenList.ToArray();
@@ -796,22 +796,21 @@ namespace DeNelle.Village
                     $"HideBaseBody: armor is a FULL-BODY set (ships its own skin) — hid ALL {hidden} base " +
                     "renderer(s) so one rig drives the character (no doubled/desyncing head+hands).");
             }
-            else if (keptSkin == 0 && keptUncovered == 0)
+            else if (keptSkin == 0 && keptBody == 0)
             {
-                // SELF-REPORT (§12): pieces-only armor but we kept NOTHING on the base — the hero may
-                // read bare. Means no base renderer matched skin keywords or an uncovered region (wrong
-                // base resolved, or unexpected mesh names). Names logged so a residual case self-IDs.
+                // SELF-REPORT (§12): pieces-only armor but we kept NOTHING of the bare body — the hero
+                // may read bare/missing. Means no base renderer matched skin or bare-anatomy names
+                // (wrong base resolved, or unexpected mesh names). Names logged so a residual case self-IDs.
                 FlowTrace.Warn("ArmorVisual",
-                    $"HideBaseBody: kept 0 renderer(s) on '{baseBody.name}' " +
-                    $"({renderers?.Length ?? 0} found, hid {hidden}) — no recognised skin/uncovered mesh; " +
-                    "hero may read bare under the pieces-only armor. Check base-body renderer names.");
+                    $"HideBaseBody: kept 0 base body renderer(s) on '{baseBody.name}' " +
+                    $"({renderers?.Length ?? 0} found, hid {hidden}) — no recognised skin/bare-body mesh; " +
+                    "hero may read missing under the pieces-only armor. Check base-body renderer names.");
             }
             else
             {
                 FlowTrace.Step("ArmorVisual",
-                    $"HideBaseBody: pieces-only armor — covered regions=[{string.Join(",", covered)}]; " +
-                    $"hid {hidden} base renderer(s) in covered regions, kept {keptSkin} skin + {keptUncovered} uncovered (arms etc.). " +
-                    $"kept-uncovered=[{keptNames}] hidden=[{hiddenNames}].");
+                    $"HideBaseBody: pieces-only overlay — kept {keptSkin} skin + {keptBody} bare-body [{keptNames}], " +
+                    $"hid {hidden} base outfit renderer(s) [{hiddenNames}].");
             }
         }
 
@@ -868,43 +867,20 @@ namespace DeNelle.Village
                    n.Contains("teeth") || n.Contains("tongue");
         }
 
-        // Coarse body-REGION tag for a renderer name, so HideBaseBody hides ONLY the base parts an
-        // armor piece actually covers (a sleeveless set keeps the base arms instead of erasing them).
-        // Ordered MOST-SPECIFIC FIRST: 'Body_Arm' must read as ARMS, not torso; gloves as HANDS, not
-        // arms. Returns "" when unrecognised — caller KEEPS unknown regions (never blind-hide).
-        private static string BodyRegion(string n)
+        // A BARE base-body part (the skin mannequin under the armor) vs a swappable OUTFIT set. Bare
+        // parts are single anatomy tokens with NO set-prefix (Arms, Legs, Chest, Feet); outfit pieces
+        // are prefixed (Starter_Boots, Cloth1_Chest). We KEEP the bare body (so a limb is NEVER missing)
+        // and hide outfits (they clash with the armor). The underscore test separates 'Chest' (bare)
+        // from 'Cloth1_Chest' (outfit) without a brittle full keyword map. Skin is kept separately by
+        // IsSkinRenderer; this catches the bare anatomy meshes that are NOT skin-named.
+        private static bool IsBareBodyPart(string n)
         {
-            if (string.IsNullOrEmpty(n)) return "";
+            if (string.IsNullOrEmpty(n)) return false;
+            if (n.Contains("_")) return false; // set-prefixed name = an outfit/clothing variant, hide it
             n = n.ToLowerInvariant();
-            if (n.Contains("glove") || n.Contains("gauntlet") || n.Contains("hand") || n.Contains("fist")) return "hands";
-            if (n.Contains("sleeve") || n.Contains("forearm") || n.Contains("upperarm") ||
-                n.Contains("lowerarm") || n.Contains("elbow") || n.Contains("bicep") || n.Contains("arm")) return "arms";
-            if (n.Contains("shoulder") || n.Contains("pauldron") || n.Contains("spaulder")) return "shoulders";
-            if (n.Contains("boot") || n.Contains("shoe") || n.Contains("sandal") || n.Contains("foot") || n.Contains("feet")) return "feet";
-            if (n.Contains("pant") || n.Contains("trouser") || n.Contains("thigh") || n.Contains("shin") ||
-                n.Contains("calf") || n.Contains("skirt") || n.Contains("kilt") || n.Contains("leg")) return "legs";
-            if (n.Contains("belt") || n.Contains("waist") || n.Contains("sash") || n.Contains("hip")) return "waist";
-            if (n.Contains("helm") || n.Contains("hood") || n.Contains("head")) return "head";
-            if (n.Contains("chest") || n.Contains("torso") || n.Contains("body") || n.Contains("shirt") ||
-                n.Contains("jacket") || n.Contains("vest") || n.Contains("tunic") || n.Contains("coat") ||
-                n.Contains("robe") || n.Contains("breast") || n.Contains("top")) return "torso";
-            return "";
-        }
-
-        // The set of body regions a pieces-only armor instance COVERS (from its piece renderer names).
-        // HideBaseBody hides a base renderer only when its region is in this set — so regions the armor
-        // omits (e.g. arms on a sleeveless set) keep their base mesh and the hero is never bare there.
-        private static System.Collections.Generic.HashSet<string> ArmorCoveredRegions(GameObject armorInstance)
-        {
-            var set = new System.Collections.Generic.HashSet<string>();
-            if (armorInstance == null) return set;
-            foreach (var r in armorInstance.GetComponentsInChildren<SkinnedMeshRenderer>(true))
-            {
-                if (r == null) continue;
-                string reg = BodyRegion(r.name);
-                if (reg.Length > 0) set.Add(reg);
-            }
-            return set;
+            return n == "arms" || n == "arm" || n == "legs" || n == "leg" || n == "chest" ||
+                   n == "torso" || n == "body" || n == "feet" || n == "foot" || n == "hips" ||
+                   n == "hip" || n == "waist" || n == "pelvis" || n == "neck" || n == "spine";
         }
 
         // Re-enable the base body's renderers we previously hid (re-resolving live ones if the
