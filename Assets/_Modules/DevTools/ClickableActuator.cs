@@ -31,6 +31,7 @@ using UnityEngine.UIElements;
 using DeNelle.Core.Diagnostics;
 using UGuiButton = UnityEngine.UI.Button;
 using UiToolkitButton = UnityEngine.UIElements.Button;
+using UGuiGraphic = UnityEngine.UI.Graphic;
 
 namespace DeNelle.DevTools
 {
@@ -44,6 +45,17 @@ namespace DeNelle.DevTools
     {
         /// <summary>Max buttons actuated per surface so a huge tree can't stall the run.</summary>
         public const int MaxClicksPerSurface = 30;
+
+        // Greppable fleet-ticket prefix for buttons a real player COULD NOT click
+        // because something pickable covers them. The autopilot fires handlers
+        // directly, which would BYPASS such a cover (the "cannot build defense"
+        // scrim that passed the fleet 3x) — so we headless-detect occlusion and
+        // refuse to click blocked buttons, logging them as a Fail instead.
+        private const string ClickBlockedTag = "CLICK-BLOCKED";
+
+        // Names of buttons already reported blocked THIS run, so the same covered
+        // button logs exactly once per ActuateAll pass (deduped fleet ticket).
+        private static readonly HashSet<string> _reportedBlocked = new HashSet<string>();
 
         // Name fragments (case-insensitive) the bot must NEVER click — they would
         // tear down its own run or mutate persistent state.
@@ -73,6 +85,7 @@ namespace DeNelle.DevTools
         public static int ActuateAll(VisualElement uiToolkitRoot = null, System.Random rng = null)
         {
             int clicked = 0;
+            _reportedBlocked.Clear();   // fresh blocked-dedupe slate per run
             clicked += ActuateUGui(rng);
             clicked += ActuateUiToolkit(uiToolkitRoot, rng);
             FlowTrace.Step("Auto", $"ClickableActuator: actuated {clicked} clickable(s).");
@@ -119,7 +132,17 @@ namespace DeNelle.DevTools
                 if (!b.gameObject.scene.IsValid()) continue;
                 if (IsDenied(b.name)) continue;
 
-                FlowTrace.Step("Auto", $"ClickableActuator: uGUI click '{b.name}'.");
+                // REACHABILITY: a real player's click lands on whatever pickable UI
+                // is topmost at the button's center. If something covers it, firing
+                // onClick directly would be a false pass — refuse + report instead.
+                string blocker = FindUGuiBlocker(b, buttons);
+                if (blocker != null)
+                {
+                    ReportBlocked(b.name, blocker);
+                    continue;
+                }
+
+                FlowTrace.Step("Auto", $"ClickableActuator: uGUI click '{b.name}' (reachable).");
                 try { b.onClick?.Invoke(); clicked++; }
                 catch (Exception ex)
                 {
@@ -183,7 +206,18 @@ namespace DeNelle.DevTools
                     string label = !string.IsNullOrEmpty(b.name) ? b.name : b.text;
                     if (IsDenied(label) || IsDenied(b.text)) continue;
 
-                    FlowTrace.Step("Auto", $"ClickableActuator: UITK click '{label}'.");
+                    // REACHABILITY: panel.Pick at the button center returns the
+                    // topmost picking element across ALL live panels (headless-safe
+                    // layout pick, no GPU). If it isn't this button (or its kin),
+                    // a player's click would hit the cover, not the button.
+                    string blocker = FindUiToolkitBlocker(b);
+                    if (blocker != null)
+                    {
+                        ReportBlocked(label, blocker);
+                        continue;
+                    }
+
+                    FlowTrace.Step("Auto", $"ClickableActuator: UITK click '{label}' (reachable).");
                     try
                     {
                         // Synthesize the pointer click on the button. SendEvent assigns
@@ -207,6 +241,258 @@ namespace DeNelle.DevTools
                 }
             }
             return clicked;
+        }
+
+        // ── Reachability / occlusion (headless-robust) ───────────────────────
+        //
+        // The fleet runs -nographics: GraphicRaycaster + EventSystem screen
+        // raycasts often resolve NO hits without a camera/display, so we cannot
+        // lean on EventSystem.RaycastAll the way PointerInterceptDiagnostic does
+        // at runtime. Instead we reconstruct the cover analytically from layout:
+        //   • uGUI  — compare screen-space rects + render order of raycast-target
+        //             Graphics (RectTransform world corners; layout-only, no GPU).
+        //   • UITK  — panel.Pick (a layout pick, GPU-free) over every live panel.
+
+        // Emit the deduped CLICK-BLOCKED fleet ticket for a covered button.
+        private static void ReportBlocked(string buttonName, string blockerName)
+        {
+            string key = buttonName ?? "<unnamed>";
+            if (!_reportedBlocked.Add(key)) return;   // already logged this run
+            FlowTrace.Fail("Auto",
+                $"{ClickBlockedTag}: button '{key}' is covered by '{blockerName}' — a player cannot click it");
+        }
+
+        // ── uGUI occlusion ───────────────────────────────────────────────────
+        // Returns the name of a pickable Graphic that covers btn's screen center
+        // and renders ON TOP of it, or null when the button is reachable.
+        private static string FindUGuiBlocker(UGuiButton btn, UGuiButton[] allButtons)
+        {
+            try
+            {
+                var btnGraphic = btn.targetGraphic != null
+                    ? btn.targetGraphic
+                    : btn.GetComponent<UGuiGraphic>();
+                if (btnGraphic == null) return null;   // no drawable area to occlude
+
+                var btnCanvas = btn.GetComponentInParent<Canvas>();
+                if (btnCanvas == null) return null;
+
+                if (!TryGetScreenRect(btnGraphic, btnCanvas, out Rect btnRect))
+                    return null;
+                Vector2 center = btnRect.center;
+
+                // Scan ALL active raycast-target graphics; a higher-priority one
+                // whose screen-rect contains the button center is the cover.
+                UGuiGraphic[] graphics;
+                try { graphics = Resources.FindObjectsOfTypeAll<UGuiGraphic>(); }
+                catch { return null; }
+                if (graphics == null) return null;
+
+                foreach (var g in graphics)
+                {
+                    if (g == null || g == btnGraphic) continue;
+                    if (!g.isActiveAndEnabled || !g.raycastTarget) continue;
+                    if (!g.gameObject.scene.IsValid()) continue;
+                    // Don't treat the button's own sub-graphics (label/icon) as a cover.
+                    if (g.transform.IsChildOf(btn.transform)) continue;
+
+                    var gCanvas = g.GetComponentInParent<Canvas>();
+                    if (gCanvas == null) continue;
+
+                    if (!TryGetScreenRect(g, gCanvas, out Rect gRect)) continue;
+                    if (!gRect.Contains(center)) continue;
+
+                    if (RendersOnTop(gCanvas, g, btnCanvas, btnGraphic))
+                        return g.name;
+                }
+
+                // A UI Toolkit panel can also sit over a uGUI button. Pick the
+                // topmost UITK element at the same screen point; if a pickable
+                // one exists there, it eats the player's click first.
+                string utkBlocker = PickTopmostUiToolkit(center, null);
+                if (utkBlocker != null) return utkBlocker;
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("Auto",
+                    $"ClickableActuator: uGUI reachability check failed for '{btn?.name}' — {ex.Message}");
+                return null;   // fail-open: don't block a click on a probe error
+            }
+        }
+
+        // Screen-space rect of a Graphic. For ScreenSpaceOverlay the RectTransform
+        // world corners ARE screen coords; for Camera/World canvases project via
+        // the canvas camera. Layout-only — safe headless.
+        private static bool TryGetScreenRect(UGuiGraphic g, Canvas canvas, out Rect rect)
+        {
+            rect = default;
+            var rt = g.transform as RectTransform;
+            if (rt == null) return false;
+
+            var corners = new Vector3[4];
+            rt.GetWorldCorners(corners);
+
+            Camera cam = null;
+            if (canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+                cam = canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
+
+            float minX = float.MaxValue, minY = float.MaxValue;
+            float maxX = float.MinValue, maxY = float.MinValue;
+            for (int i = 0; i < 4; i++)
+            {
+                Vector2 sp = canvas.renderMode == RenderMode.ScreenSpaceOverlay
+                    ? (Vector2)corners[i]
+                    : (cam != null
+                        ? RectTransformUtility.WorldToScreenPoint(cam, corners[i])
+                        : (Vector2)corners[i]);
+                if (sp.x < minX) minX = sp.x;
+                if (sp.y < minY) minY = sp.y;
+                if (sp.x > maxX) maxX = sp.x;
+                if (sp.y > maxY) maxY = sp.y;
+            }
+            rect = Rect.MinMaxRect(minX, minY, maxX, maxY);
+            return rect.width > 0f && rect.height > 0f;
+        }
+
+        // Does graphic 'g' (on canvas gC) draw ON TOP of 'btnG' (on btnC)?
+        // Order of precedence: root-canvas sortingOrder, then this canvas's
+        // sortingOrder, then sibling/hierarchy order (later == on top).
+        private static bool RendersOnTop(Canvas gC, UGuiGraphic g, Canvas btnC, UGuiGraphic btnG)
+        {
+            var gRoot = gC.rootCanvas != null ? gC.rootCanvas : gC;
+            var bRoot = btnC.rootCanvas != null ? btnC.rootCanvas : btnC;
+            if (gRoot != bRoot)
+            {
+                if (gRoot.sortingOrder != bRoot.sortingOrder)
+                    return gRoot.sortingOrder > bRoot.sortingOrder;
+            }
+            if (gC.sortingOrder != btnC.sortingOrder)
+                return gC.sortingOrder > btnC.sortingOrder;
+
+            // Same canvas sortingOrder: later in the rendered hierarchy draws on top.
+            return HierarchyDrawIndex(g.transform) > HierarchyDrawIndex(btnG.transform);
+        }
+
+        // A monotonically-increasing "paint order" key from root→leaf sibling
+        // indices, so a deeper/later element compares greater (draws on top).
+        private static double HierarchyDrawIndex(Transform t)
+        {
+            // Build the chain root→t, then fold sibling indices into a positional
+            // number (most-significant = closest to root).
+            var chain = new List<int>(8);
+            for (Transform c = t; c != null; c = c.parent)
+                chain.Add(c.GetSiblingIndex());
+            double key = 0d;
+            for (int i = chain.Count - 1; i >= 0; i--)
+                key = key * 4096d + (chain[i] + 1);
+            return key;
+        }
+
+        // ── UI Toolkit occlusion ─────────────────────────────────────────────
+        // Returns a cover name, or null if 'btn' is the topmost picker at its
+        // own center (i.e. reachable). Works headless (pure layout pick).
+        private static string FindUiToolkitBlocker(UiToolkitButton btn)
+        {
+            try
+            {
+                var bPanel = btn.panel;
+                if (bPanel == null) return null;
+
+                Rect wb = btn.worldBound;
+                if (wb.width <= 0f || wb.height <= 0f) return null;
+
+                // Convert the button center from THIS panel's coords to screen
+                // coords, then pick the topmost element across every live panel.
+                Vector2 screenPt = PanelToScreen(bPanel, wb.center);
+                return PickTopmostUiToolkit(screenPt, btn);
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("Auto",
+                    $"ClickableActuator: UITK reachability check failed for '{btn?.name}' — {ex.Message}");
+                return null;   // fail-open on probe error
+            }
+        }
+
+        // Panel-space point -> screen point. RuntimePanelUtils only gives us
+        // ScreenToPanel; invert by adding the screen->panel delta back. For the
+        // common overlay panel (scale 1, no offset) panel coords == screen coords,
+        // so this is identity; for scaled panels we recover the screen point by
+        // solving panelPt = ScreenToPanel(screenPt).
+        private static Vector2 PanelToScreen(IPanel panel, Vector2 panelPt)
+        {
+            // ScreenToPanel is affine: panel = A*screen + b. Sample it at two
+            // points to recover the inverse without a dedicated API.
+            Vector2 p0 = RuntimePanelUtils.ScreenToPanel(panel, Vector2.zero);
+            Vector2 px = RuntimePanelUtils.ScreenToPanel(panel, new Vector2(1f, 0f));
+            Vector2 py = RuntimePanelUtils.ScreenToPanel(panel, new Vector2(0f, 1f));
+            float ax = px.x - p0.x, bx = py.x - p0.x;
+            float ay = px.y - p0.y, by = py.y - p0.y;
+            float det = ax * by - bx * ay;
+            if (Mathf.Abs(det) < 1e-6f) return panelPt;   // singular → assume identity
+            Vector2 d = panelPt - p0;
+            float sx = (d.x * by - bx * d.y) / det;
+            float sy = (ax * d.y - d.x * ay) / det;
+            return new Vector2(sx, sy);
+        }
+
+        // Across every live UIDocument panel, find the topmost (highest
+        // sortingOrder) panel that PICKS a non-button element at 'screenPt'.
+        // 'ignore' (and its descendants/ancestors) count as "the button itself"
+        // and are NOT treated as a cover. Returns the cover's name or null.
+        private static string PickTopmostUiToolkit(Vector2 screenPt, UiToolkitButton ignore)
+        {
+            UIDocument[] docs;
+            try { docs = UnityEngine.Object.FindObjectsByType<UIDocument>(FindObjectsSortMode.None); }
+            catch { return null; }
+            if (docs == null) return null;
+
+            string blocker = null;
+            float topSort = float.MinValue;
+            foreach (var d in docs)
+            {
+                if (d == null || d.rootVisualElement == null) continue;
+                var panel = d.rootVisualElement.panel;
+                if (panel == null) continue;
+                float sort = d.panelSettings != null ? d.panelSettings.sortingOrder : 0f;
+
+                Vector2 panelPt;
+                VisualElement picked;
+                try
+                {
+                    panelPt = RuntimePanelUtils.ScreenToPanel(panel, screenPt);
+                    picked = panel.Pick(panelPt);
+                }
+                catch { continue; }
+                if (picked == null) continue;
+
+                // The button itself (or its own subtree / a containing ancestor)
+                // picking is REACHABLE, not a cover.
+                if (ignore != null && IsButtonOrKin(picked, ignore)) continue;
+
+                if (sort >= topSort)
+                {
+                    topSort = sort;
+                    blocker = !string.IsNullOrEmpty(picked.name)
+                        ? picked.name
+                        : picked.GetType().Name;
+                }
+            }
+            return blocker;
+        }
+
+        // True when 'picked' is the button, a descendant of it, or an ancestor of
+        // it (the click still reaches the button in all three cases).
+        private static bool IsButtonOrKin(VisualElement picked, UiToolkitButton btn)
+        {
+            if (picked == null) return false;
+            for (VisualElement v = picked; v != null; v = v.parent)
+                if (v == btn) return true;          // picked is btn or its child
+            for (VisualElement v = btn.parent; v != null; v = v.parent)
+                if (v == picked) return true;       // picked is an ancestor of btn
+            return false;
         }
     }
 }

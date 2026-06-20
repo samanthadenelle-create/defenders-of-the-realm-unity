@@ -23,6 +23,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UIElements;       // panel.Pick — detect a UI scrim eating the build click
 using DeNelle.Core.Catalog;
 using DeNelle.Core.State;
 using DeNelle.Core.Diagnostics;   // TGVRU: instrument the place-spawn seam (§12)
@@ -317,7 +318,52 @@ namespace DeNelle.Village
             if (!confirmed) return false;
             // Suppress confirms whose screen point sits in the move-stick zone.
             if (VirtualJoystick.IsInZone(_input.ScreenPoint)) return false;
+            // Suppress + REPORT confirms eaten by a pickable UI panel over the cursor — the silent
+            // "cannot build" class (a full-screen scrim with a bad PanelSettings ate every click 3x
+            // in MainCastle_Hall). Naming the culprit (§12) turns a silent fail into a diagnosis.
+            if (PointerOverPickableUI(new Vector2(_input.ScreenPoint.x, _input.ScreenPoint.y), out string blocker))
+            {
+                if (_blockLogged.Add(blocker))
+                    FlowTrace.Warn("BuildMode", $"build/select click SUPPRESSED — cursor is over pickable UI '{blocker}'. " +
+                        "If you CANNOT place a structure, THIS panel is eating the click — check its PanelSettings / PickingMode.");
+                return false;
+            }
             return true;
+        }
+
+        // PANEL-BLOCK GUARD (build-defense RCA 2026-06-19): is a pickable UI element sitting over
+        // the cursor? panel.Pick across every live UIDocument returns the topmost picking element
+        // (click-through roots are PickingMode.Ignore and are skipped). The dev console legitimately
+        // sits on top, so it never counts as a gameplay blocker. Returns the highest-sort culprit.
+        private static readonly HashSet<string> _blockLogged = new HashSet<string>();
+        private bool PointerOverPickableUI(Vector2 screenPos, out string blocker)
+        {
+            blocker = null;
+            var docs = Object.FindObjectsByType<UIDocument>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            if (docs == null) return false;
+            float bestSort = float.MinValue;
+            foreach (var doc in docs)
+            {
+                if (doc == null) continue;
+                string docName = doc.gameObject != null ? doc.gameObject.name : "?";
+                if (docName.IndexOf("Dev", System.StringComparison.OrdinalIgnoreCase) >= 0) continue; // dev console isn't a blocker
+                var root = doc.rootVisualElement;
+                var panel = root != null ? root.panel : null;
+                if (panel == null) continue;
+                float sort = doc.panelSettings != null ? doc.panelSettings.sortingOrder : 0f;
+                try
+                {
+                    Vector2 p = RuntimePanelUtils.ScreenToPanel(panel, screenPos);
+                    var picked = panel.Pick(p);
+                    if (picked != null && sort >= bestSort)
+                    {
+                        bestSort = sort;
+                        blocker = docName + " > " + (string.IsNullOrEmpty(picked.name) ? picked.GetType().Name : picked.name);
+                    }
+                }
+                catch (System.Exception ex) { FlowTrace.Warn("BuildMode", "panel-block pick threw on '" + docName + "': " + ex.Message); }
+            }
+            return blocker != null;
         }
 
         /// <summary>Idle mode: a tap/click on a PlacedStructure selects it for edit.</summary>
