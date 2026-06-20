@@ -286,6 +286,9 @@ namespace DeNelle.Village
         {
             if (building == null) return null;
             string id = (building.BuildingId ?? "").ToLowerInvariant();
+            // Fall back to the GameObject NAME when no explicit BuildingId was authored (e.g. a placed
+            // "CastleBarracks" object with no id field) so name-based buildings still resolve their hook.
+            if (string.IsNullOrEmpty(id)) id = (building.gameObject != null ? building.gameObject.name : "").ToLowerInvariant();
             if (id.Length > 0)
             {
                 if (id.Contains("lumbermill")) return "lumbermill";
@@ -293,6 +296,7 @@ namespace DeNelle.Village
                 if (id == "forge") return "forge";
                 if (id.Contains("farm")) return "farm";
                 if (id.Contains("market")) return "market";
+                if (id.Contains("barracks")) return "barracks";   // WO-432: CastleBarracks -> barracks upgrade panel
                 if (id.Contains("pet")) return "pet-house";
                 if (id.Contains("workshop")) return "workshop";
                 if (id.Contains("arcane")) return "arcane-tower";
