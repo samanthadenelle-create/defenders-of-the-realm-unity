@@ -138,6 +138,25 @@ namespace DeNelle.Editor
                 FlowTrace.Step("CavePortal", "existing CavePortal found — DestroyImmediate (idempotent re-run).");
                 Object.DestroyImmediate(existing);
             }
+
+            // ALSO sweep every stale CavePortal_Trigger: since the trigger is now parented to
+            // the root (not the cave) so its world pos is unscaled, destroying the cave above no
+            // longer takes the trigger with it. A prior run's trigger would otherwise linger on
+            // the path (e.g. the -454 duplicate the fleet caught) and warp the player early. Sweep
+            // the whole scene by name and destroy all of them so a re-run leaves exactly one.
+            int sweptTriggers = 0;
+            foreach (var go in scene.GetRootGameObjects())
+            {
+                if (go == null) continue;
+                if (go.name == TriggerName) { Object.DestroyImmediate(go); sweptTriggers++; continue; }
+                foreach (var t in go.GetComponentsInChildren<Transform>(true))
+                {
+                    if (t != null && t.gameObject != null && t.gameObject.name == TriggerName)
+                    { Object.DestroyImmediate(t.gameObject); sweptTriggers++; }
+                }
+            }
+            if (sweptTriggers > 0)
+                FlowTrace.Step("CavePortal", $"swept {sweptTriggers} stale '{TriggerName}' object(s) (idempotent — no orphan triggers on the path).");
         }
 
         // Instantiate the polyperfect rock as the cave mouth. Skip-safe: a missing
