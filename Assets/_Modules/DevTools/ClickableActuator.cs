@@ -258,6 +258,18 @@ namespace DeNelle.DevTools
         {
             string key = buttonName ?? "<unnamed>";
             if (!_reportedBlocked.Add(key)) return;   // already logged this run
+            // A registered modal owns the screen (OpenEachHUDPanel opens a panel, then sweeps
+            // EVERY button) — HUD/other buttons BEHIND that modal are EXPECTED-unreachable, not an
+            // occlusion bug. The 85%-screen + RectMask2D guards above miss a ~67%-screen modal
+            // (PartyShopPanelMvvm), so the modal's own panel/viewport/rows leak through as false
+            // CLICK-BLOCKED Fails and drown the fleet ticket board. While a modal is open, downgrade
+            // to a non-error Step; a genuine NO-MODAL HUD overlap still Fails (the real-bug path).
+            if (DeNelle.Core.UI.PanelManager.AnyOpen)
+            {
+                FlowTrace.Step("Auto",
+                    $"CLICK-COVERED(expected): '{key}' behind modal '{DeNelle.Core.UI.PanelManager.OpenPanelName}' (blocker '{blockerName}')");
+                return;
+            }
             FlowTrace.Fail("Auto",
                 $"{ClickBlockedTag}: button '{key}' is covered by '{blockerName}' — a player cannot click it");
         }
