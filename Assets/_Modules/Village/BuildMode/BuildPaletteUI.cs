@@ -111,7 +111,11 @@ namespace DeNelle.Village
             UIDocument hud = null, any = null;
             foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                if (doc == null || doc == _document || doc.panelSettings == null) continue;
+                // Require a THEMED PanelSettings — adopting an unthemed one renders the palette
+                // blank (the empty-palette bug: in MainCastle_Hall the HUD is uGUI, so the only
+                // sibling was the dev console's unthemed runtime PanelSettings).
+                if (doc == null || doc == _document || doc.panelSettings == null ||
+                    doc.panelSettings.themeStyleSheet == null) continue;
                 if (any == null) any = doc;
                 if (doc.gameObject.name.IndexOf("Hud", StringComparison.OrdinalIgnoreCase) >= 0) { hud = doc; break; }
             }
@@ -121,12 +125,25 @@ namespace DeNelle.Village
                 _document.panelSettings = src.panelSettings;
                 _document.sortingOrder = src.sortingOrder + 6;   // above HUD + BuildMenu
                 FlowTrace.Step("BuildPalette", $"adopted PanelSettings from '{src.gameObject.name}' (sort={_document.sortingOrder})");
+                return;
             }
-            else
+
+            // NO themed sibling (the castle hub HUD is uGUI — no UIDocument to borrow). Build our
+            // OWN PanelSettings at runtime so the palette ALWAYS renders, instead of dead-ending
+            // invisible. Mirrors DevBootstrap.ResolvePanelSettings — the proven no-sibling fallback
+            // (the palette is inline-styled, so it renders even if no theme USS is available).
+            var created = ScriptableObject.CreateInstance<PanelSettings>();
+            created.name = "BuildPaletteRuntimePanelSettings";
+            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                FlowTrace.Warn("BuildPalette", "no sibling PanelSettings found — palette will NOT render (palette doc has no panel)");
-                Debug.LogWarning("[BuildPaletteUI] No sibling PanelSettings found — palette will not render.");
+                if (doc != null && doc.panelSettings != null && doc.panelSettings.themeStyleSheet != null)
+                { created.themeStyleSheet = doc.panelSettings.themeStyleSheet; break; }
             }
+            _document.panelSettings = created;
+            _document.sortingOrder = 130;   // above the town HUD
+            FlowTrace.Step("BuildPalette", created.themeStyleSheet != null
+                ? "no themed sibling — built runtime PanelSettings (borrowed a theme)"
+                : "no themed sibling/theme — built runtime PanelSettings (inline-styled palette still renders)");
         }
 
         // ── Show / Hide ────────────────────────────────────────────────────────

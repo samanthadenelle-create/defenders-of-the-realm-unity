@@ -54,6 +54,7 @@ namespace DeNelle.Village
         private TextMesh _promptText;
         private bool _openedStructure;   // this building opened the shared structure dialogue
         private string _myHookId;        // cached structure-dialogue id for this building
+        private bool _focusHeld;         // true while THIS building holds the HUD upgrade focus (transition-logged)
 
         // WO-415: structure ids whose FRONT NPC owns the talk → the matching building defers its
         // own interact prompt (the NPC opens the same shared dialogue — one trigger, not two).
@@ -153,13 +154,26 @@ namespace DeNelle.Village
                 MobileInteractButton.Request(this, "Interact: " + LabelFor(_building.Type), Interact);
                 // Owner 2026-06-20: tell the HUD an upgradable, not-maxed building is in reach
                 // so its bottom button swaps Quest -> Upgrade, focused on THIS building's id.
-                if (IsUpgradableNotMaxed(_myHookId)) DeNelle.Core.UI.HudBuildingFocus.Set(_myHookId);
+                bool want = IsUpgradableNotMaxed(_myHookId);
+                if (want) DeNelle.Core.UI.HudBuildingFocus.Set(_myHookId);
                 else DeNelle.Core.UI.HudBuildingFocus.Clear(_myHookId);
+                if (want != _focusHeld)
+                {
+                    _focusHeld = want;
+                    FlowTrace.Step("HUD", "BuildingFocus " + (want ? "SET" : "in-range-but-NOT-upgradable") +
+                        " id='" + (_myHookId ?? "<null>") + "' type=" + _building.Type +
+                        " (catalogUpgradable=" + DeNelle.Core.State.BuildingTierCatalog.IsUpgradable(_myHookId ?? "") + ")");
+                }
             }
             else
             {
                 MobileInteractButton.Release(this);
                 DeNelle.Core.UI.HudBuildingFocus.Clear(_myHookId);   // release focus if we held it
+                if (_focusHeld)
+                {
+                    _focusHeld = false;
+                    FlowTrace.Step("HUD", "BuildingFocus CLEAR id='" + (_myHookId ?? "<null>") + "' (out of range)");
+                }
             }
 
             // DEF-217: the shared MobileInteractButton is now the SINGLE canonical
@@ -239,21 +253,25 @@ namespace DeNelle.Village
             FlowTrace.Step("Village", $"Interact {_building.Type} (id='{_building.BuildingId}') -> " +
                 (hookId != null ? $"structure hook '{hookId}' (StructureMenu gates shop/upgrade)"
                                 : "legacy panel route"));
-            // MVVM upgrade panel (flag-gated, OFF by default): an upgradable building routes
-            // STRAIGHT to the code-built Building Upgrade panel instead of the Yarn upgrade menu.
-            // Decided exactly like the menu's upgrade gate — city tiers (BuildingTierCatalog) OR
-            // legacy resource buildings (ResourceBuildingProgression). Market/shop + Talk-only
-            // buildings fall through to the Yarn structure dialogue unchanged. The contextId is the
-            // canonical structure id (hookId) the panel's VM resolves on.
-            if (DeNelle.Core.FeatureFlags.BuildingUpgradePanel && hookId != null &&
+            // UPGRADE IS DIRECT, NEVER YARN (owner 2026-06-20, severe): an upgradable building
+            // ALWAYS opens the code-built Building Upgrade panel — it must NEVER fall through to the
+            // Yarn StructureMenu. The Yarn upgrade path ran a DIFFERENT backend (ResourceBuildingState
+            // vs the panel's BuildingUpgradeService) and decided the action from Yarn vars, so a panel
+            // registration race could fire the WRONG logic on the same click. Decoupling upgrade from
+            // YarnSpinner also shrinks Yarn's fragile surface. Upgradable = city tiers
+            // (BuildingTierCatalog) OR legacy resource buildings (ResourceBuildingProgression).
+            // Market/shop + Talk-only buildings still route to Yarn below (Buy/Sell/Talk unchanged).
+            bool isUpgradable = hookId != null &&
                 (DeNelle.Core.State.BuildingTierCatalog.IsUpgradable(hookId) ||
-                 Buildings.Progression.ResourceBuildingProgression.IsResourceBuilding(hookId)))
+                 Buildings.Progression.ResourceBuildingProgression.IsResourceBuilding(hookId));
+            if (isUpgradable)
             {
                 if (PanelRouter.Open(PanelId.BuildingUpgrade, hookId))
-                {
                     FlowTrace.Step("Village", $"Interact {_building.Type} -> MVVM Building Upgrade (focus='{hookId}').");
-                    return;
-                }
+                else
+                    FlowTrace.Warn("Village", $"Building Upgrade panel opener not registered for '{hookId}' — " +
+                        "NOT falling through to Yarn (upgrade is direct-only; check PanelRouter registration).");
+                return;   // upgradable buildings NEVER reach the Yarn StructureMenu
             }
 
             if (hookId != null)

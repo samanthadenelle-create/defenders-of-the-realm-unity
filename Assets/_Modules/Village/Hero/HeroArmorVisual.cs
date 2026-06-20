@@ -357,6 +357,13 @@ namespace DeNelle.Village
             var equip = GetComponentInParent<EquipmentController>();
             if (equip != null) equip.ReseatForBody(instance);
 
+            // WO-455: if this is a story companion, re-point its locomotion animator at the ARMORED
+            // body — else StoryCompanion keeps driving the now-hidden base animator and the visible
+            // armored body T-poses (owner-reported "companion changed gear, still T-pose").
+            var companionSwap = GetComponent<StoryCompanion>();
+            if (companionSwap != null)
+                companionSwap.SetActiveAnimator(instance != null ? instance.GetComponentInChildren<Animator>() : null);
+
             FlowTrace.Step("ArmorVisual",
                 $"BuildArmorBody: armored body '{armor.id}' shown (address='{address}'), base body hidden.");
 
@@ -767,6 +774,10 @@ namespace DeNelle.Village
                     if (!r.enabled) { r.enabled = true; shown++; }
                 }
             }
+
+            // WO-455: re-resolve a story companion's locomotion animator back to the restored base
+            // body (the swap had re-pointed it at the now-removed armor instance).
+            GetComponent<StoryCompanion>()?.RebindAnimator();
 
             if (shown > 0)
                 FlowTrace.Step("ArmorVisual", $"RestoreBaseBody: re-enabled {shown} base SkinnedMeshRenderer(s).");

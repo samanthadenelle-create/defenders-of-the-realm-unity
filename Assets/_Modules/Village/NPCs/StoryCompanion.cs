@@ -628,6 +628,32 @@ namespace DeNelle.Village
                 transform.rotation, Quaternion.LookRotation(dir, Vector3.up), Time.deltaTime * 8f);
         }
 
+        /// <summary>WO-455: re-point the locomotion animator at a specific body's animator after the
+        /// visible body changed. HeroArmorVisual swaps the companion's visible body for an armored
+        /// instance (and hides the base); without re-pointing here the companion keeps driving the
+        /// now-hidden base animator, so the visible armored body never gets the Speed blend and
+        /// T-poses (the owner-reported "changed gear, still T-pose"). Null → re-resolve from children.</summary>
+        public void SetActiveAnimator(Animator a)
+        {
+            if (a == null) { RebindAnimator(); return; }
+            _animator = a;
+            _hasSpeedParam = false;
+            if (a.runtimeAnimatorController != null)
+                foreach (var p in a.parameters)
+                    if (p.nameHash == SpeedHash) { _hasSpeedParam = true; break; }
+        }
+
+        /// <summary>Re-resolve the locomotion animator from the current child hierarchy — used after
+        /// the armor body is removed and the base body restored, so we don't keep a dangling ref.</summary>
+        public void RebindAnimator()
+        {
+            _animator = GetComponentInChildren<Animator>();
+            _hasSpeedParam = false;
+            if (_animator != null && _animator.runtimeAnimatorController != null)
+                foreach (var p in _animator.parameters)
+                    if (p.nameHash == SpeedHash) { _hasSpeedParam = true; break; }
+        }
+
         /// <summary>
         /// Feeds the locomotion blend tree: agent velocity when pathing, else the
         /// per-frame transform delta (lerp fallback). 0 → Idle, higher → Walk/Run.
