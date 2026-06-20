@@ -138,6 +138,33 @@ from the **synced git mirror** (the repo board the doc + Notion are kept in lock
   manual rect-tap loop. No more no-close trap. ✅ owner-felt verify (quick).
 - Remaining silos: **A2** hero shield/body rig (next, same hero-rig files), **D1** tower-reload regression.
 
+**2026-06-20 ~early+2 — D1 + A2 instrumented (not blind-fixed), WO-327 fixed; gate clean, pushed**
+- **WO-325** (resource-node upgrade NRE) — found **already fixed**: `CrystalMineNode.TryUpgrade` has the
+  null-guard (lines 296-301, landed with the crystal-economy fix `99072e88`). Closing, fleet-verify no NRE.
+- **WO-327** (`969b4e42`) — admin "Trigger next wave" no-op: the cached reflection-held WaveManager
+  (`object` ref) dodged Unity's fake-null after a scene change → re-resolve each click + report when none.
+- **D1 tower-reload** (`c37f3cbe`) — **deliberately NOT blind-fixed.** The agent's proposed `CommitLayout`
+  hub-skip would BREAK base persistence (MainCastle_Hall is the HOME hub where the base IS built). Added a
+  capture trace instead (scene+count per persist), pairing with `LoadFromState`'s replay trace.
+  **OWNER REPRO NEEDED:** place a tower, note the scene; new-game/replay; the `[Flow:BuildMode]
+  CommitLayout` + `[Flow:BaseLayout] LoadFromState` lines pinpoint the wrong-scene persist/replay — then
+  the correctly-scoped fix is a 2-liner. (Likely either: hub-built towers shouldn't persist, OR new-game
+  isn't clearing `GameState.BaseLayout`.)
+- **A2 hero rig** (`82a3802f`) — **deliberately NOT blind-fixed** (visual + Blink-specific tuning; the
+  shield zero-offset seat IS this session's dangle fix — reverting per the agent's stale RCA would re-break
+  it). Instrumented both seams: `ArmorShipsOwnSkin` now logs the FULL renderer-name list (reveals if a Blink
+  full-body SET ships under generic names with skinNamed=0 → wrongly keeps base skin → "not joined"); shield
+  seat logs landed local/world pos. **OWNER REPRO:** equip a Blink armor set + shield; the `[Flow:ArmorVisual]
+  ArmorShipsOwnSkin` name-list + `[Flow:Equip] AttachOffHandProp` seat-pos lines give the exact tuning data.
+
+### Overnight scorecard so far
+- **Fixed + gated + pushed:** A1 pink-Body, B1 seam-guard, C1 craft-close, WO-327 wave-trigger (4). 
+- **Already-fixed/verified:** WO-325 node NRE, crystal spam, edge portal (3).
+- **Instrumented + owner-repro-deferred (right call, not blind):** D1 tower-reload, A2 hero rig (2).
+- **Scheduled loop live:** fleet 2×/hr (`dc55e47a`), bug-poll 1×/hr (`4d2a1115`).
+- Net: of the 5 actionable silos, **3 fixed, 2 correctly instrumented-and-deferred** (would've been rework
+  to blind-fix) + 1 bonus WO fixed. Quality-first, north-star intact.
+
 **My overnight working subset (where autopilot authority is safe + verifiable, north-star compliant —
 NO scene/art/design/owner-felt work smuggled in):** the 4 active silos above PLUS the **code-only
 bug-class WOs** the fleet can probe headlessly — Lane 2 (WO-327 `WaveManager.ForceBeginNextWave`,
