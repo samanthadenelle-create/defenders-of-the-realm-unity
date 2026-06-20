@@ -27,7 +27,7 @@ namespace DeNelle.Core.State
     {
         // ── Versioning ───────────────────────────────────────────────────────
         /// <summary>CURRENT_SCHEMA_VERSION — bumped whenever the persisted shape changes.</summary>
-        public const int CurrentVersion = 23;  // v23 — building upgrade tiers (WO-430: per-building tier 0-4 survives save/load → compiled into GameModifiers + dialogue level title); v22 — army roster persistence (WO-453: owned troops + cap + wounded/recovery/veterancy survive save/load); v21 — node-settlement persistence (WO-159: claim/HP/phase + 3-day razed lockout survive save/load); v20 — gear inventory persistence (shop purchases survive reload + Neon sync); v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
+        public const int CurrentVersion = 24;  // v24 — Village/Stronghold tier + owned building-research perks (WO-432: WC3 tech-gate at the Heart + per-building Gold-cost research survives save/load → compiled into GameModifiers); v23 — building upgrade tiers (WO-430: per-building tier 0-4 survives save/load → compiled into GameModifiers + dialogue level title); v22 — army roster persistence (WO-453: owned troops + cap + wounded/recovery/veterancy survive save/load); v21 — node-settlement persistence (WO-159: claim/HP/phase + 3-day razed lockout survive save/load); v20 — gear inventory persistence (shop purchases survive reload + Neon sync); v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
         /// <summary>SaveExport.format — bumped only if the envelope shape changes.</summary>
         public const int FileFormat = 1;
 
@@ -269,6 +269,14 @@ namespace DeNelle.Core.State
             /// levels previously kept loose in PlayerPrefs → one persisted source of truth.)
             /// </summary>
             [JsonProperty("buildingTiers")] public System.Collections.Generic.Dictionary<string, int> BuildingTiers;
+
+            /// <summary>WO-432 (v24) — the global Village/Stronghold Tier (tech-gate). Absent on older
+            /// saves → defaults to 0 (no research gated open). Append-only at the END.</summary>
+            [JsonProperty("villageTier")] public int VillageTier;
+
+            /// <summary>WO-432 (v24) — owned building-research perks, keyed "buildingId:perkId". Absent
+            /// on older saves → the v23→v24 migration seeds an empty list. Append-only at the END.</summary>
+            [JsonProperty("ownedBuildingPerks")] public System.Collections.Generic.List<string> OwnedBuildingPerks;
         }
 
         // =====================================================================

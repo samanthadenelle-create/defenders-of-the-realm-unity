@@ -21,6 +21,28 @@ using UnityEngine;
 
 namespace DeNelle.Core.State
 {
+    /// <summary>
+    /// WO-432 — one Gold-cost RESEARCH perk unlocked at a building tier (the WC3 "research at the
+    /// Blacksmith" pillar). Numerical upgrades (damage/armor Lvl 1/2/3) and creative-owned ability
+    /// unlocks both ride this contract — a perk's effect IS a <see cref="GameModifiers"/>, compiled by
+    /// ModifierService exactly like a tier's. Bought with Gold (economy Coins); owned set persists in
+    /// GameState.OwnedBuildingPerks keyed "buildingId:perkId".
+    /// </summary>
+    [Serializable]
+    public sealed class BuildingPerkDef
+    {
+        [JsonProperty("id")] public string Id;
+        [JsonProperty("name")] public string Name;
+        /// <summary>Gold (economy Coins) cost to research this perk.</summary>
+        [JsonProperty("goldCost")] public int GoldCost;
+        /// <summary>Sprite id under Resources/HudItems/BuildingUpgrades/&lt;iconId&gt;; defaults to <see cref="Id"/>.</summary>
+        [JsonProperty("iconId")] public string IconId;
+        /// <summary>The Tier-3 capstone signature (gilt-highlighted in the panel). Creative-owned design.</summary>
+        [JsonProperty("isSignature")] public bool IsSignature;
+        /// <summary>This perk's contribution to the active modifier set (compiled like a tier's).</summary>
+        [JsonProperty("modifiers")] public GameModifiers Modifiers = new GameModifiers();
+    }
+
     /// <summary>One upgrade tier of one building: cost + the cumulative modifiers at that tier.</summary>
     [Serializable]
     public sealed class BuildingTierDef
@@ -30,8 +52,15 @@ namespace DeNelle.Core.State
         [JsonProperty("costWood")] public int CostWood;
         [JsonProperty("costFood")] public int CostFood;
         [JsonProperty("costCrystal")] public int CostCrystal;
+        /// <summary>WO-432 tech-gate — this tier (and its research) is locked until the global Village/
+        /// Stronghold Tier (Heart of Elarion) reaches this value. 0 = no gate (always available).</summary>
+        [JsonProperty("requiresVillageTier")] public int RequiresVillageTier;
         /// <summary>Cumulative perk contribution at this tier (unset fields = no-op 1.0/false).</summary>
         [JsonProperty("modifiers")] public GameModifiers Modifiers = new GameModifiers();
+        /// <summary>WO-432 — Gold-cost research perks UNLOCKED at this tier (buyable once the building
+        /// reaches this tier). Never null.</summary>
+        [JsonProperty("perks")] public System.Collections.Generic.List<BuildingPerkDef> Perks
+            = new System.Collections.Generic.List<BuildingPerkDef>();
     }
 
     /// <summary>One upgradable building and its tier ladder.</summary>

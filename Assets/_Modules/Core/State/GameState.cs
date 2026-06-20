@@ -320,6 +320,21 @@ namespace DeNelle.Core.State
         public System.Collections.Generic.Dictionary<string, int> BuildingTiers
             = new System.Collections.Generic.Dictionary<string, int>();
 
+        /// <summary>
+        /// WO-432 — the global Village/Stronghold Tier (the WC3 tech-gate, owner-decided anchor:
+        /// upgraded at the Heart of Elarion). A building's research level N requires VillageTier &gt;= N.
+        /// 0 on a fresh save. Round-trips through SaveSchema v24 (additive at the END).
+        /// </summary>
+        public int VillageTier = 0;
+
+        /// <summary>
+        /// WO-432 — owned building-research perks, keyed <c>"buildingId:perkId"</c> (e.g.
+        /// <c>"forge:forge-damage-2"</c>). ModifierService compiles each owned perk's GameModifiers into
+        /// the active set, like a tier. Never null (empty on fresh save). Round-trips through SaveSchema v24.
+        /// </summary>
+        public System.Collections.Generic.List<string> OwnedBuildingPerks
+            = new System.Collections.Generic.List<string>();
+
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
         {

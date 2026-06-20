@@ -60,6 +60,7 @@ namespace DeNelle.Core.State
                 { 21, MigrateToV21 },
                 { 22, MigrateToV22 },
                 { 23, MigrateToV23 },
+                { 24, MigrateToV24 },
             };
 
         /// <summary>
@@ -355,6 +356,15 @@ namespace DeNelle.Core.State
         {
             if (s.BuildingTiers == null)
                 s.BuildingTiers = new System.Collections.Generic.Dictionary<string, int>();
+            return s;
+        }
+
+        // v24 — Village/Stronghold tier + owned building-research perks (WO-432). VillageTier defaults
+        // to 0 (int); seed an empty perks list on older saves so the research system reads "none owned".
+        private static PersistedState MigrateToV24(PersistedState s)
+        {
+            if (s.OwnedBuildingPerks == null)
+                s.OwnedBuildingPerks = new System.Collections.Generic.List<string>();
             return s;
         }
 
