@@ -3044,8 +3044,12 @@ namespace DeNelle.HUD
             // owned by RefreshHeroPortrait). Missing art → keep the current sprite.
             if (slot >= 1 && _partyPortrait != null && _partyPortrait[slot] != null)
             {
+                // Companion portrait: prefer the canonical character art in Resources/HeroPortraits/<RosterName>
+                // (Grom/Sylas/Thrain/Elara.jpg — where the portraits actually LIVE + what HeroSelect/Title use).
+                // Fall back to the legacy class-key HudIcons portrait, then keep the current sprite if neither.
+                var portSp = !string.IsNullOrEmpty(name) ? Resources.Load<Sprite>("HeroPortraits/" + name.Trim()) : null;
                 var portKey = PortraitNameForRosterName(name);
-                var portSp = portKey != null ? WidgetSprite(portKey) : null;
+                if (portSp == null && portKey != null) portSp = WidgetSprite(portKey);
                 if (portSp != null) _partyPortrait[slot].sprite = portSp;
                 // WO-446: a missing companion portrait used to fail silently (slot kept its
                 // old/blank sprite). Surface it so a future typo'd key / un-imported icon is
