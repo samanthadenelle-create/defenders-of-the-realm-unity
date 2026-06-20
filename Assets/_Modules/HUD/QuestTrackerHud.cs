@@ -1,8 +1,8 @@
 // =============================================================================
-// QuestTrackerHud — top-LEFT panel listing the player's ACTIVE story quests and
-// each one's current-stage objective text. The story-quest counterpart of the
-// DailyQuestHud (top-right daily chips), placed on the opposite side so the two
-// stacks never overlap.
+// QuestTrackerHud — far-RIGHT HUD panel that PINS the player's ONE current active
+// story quest (title + current-stage objective). Owner design (2026-06-20): the
+// Rumor Board pop-up is the full browse/accept list; this HUD keeps just the single
+// active quest in view, far-right, live-updating as quests are accepted/advanced.
 // -----------------------------------------------------------------------------
 // Reads QuestService active quests + QuestCatalog titles/stages, repaints on the
 // service's QuestChanged event. Code-built UIElements (works in player builds;
@@ -49,15 +49,15 @@ namespace DeNelle.HUD
             if (_root == null) return;
             _root.style.flexDirection = FlexDirection.Column;
             _root.style.justifyContent = Justify.FlexStart;
-            _root.style.alignItems = Align.FlexStart;   // top-LEFT (daily quests sit top-right)
+            _root.style.alignItems = Align.FlexEnd;      // top-RIGHT (owner: pin the active quest far-right)
             _root.pickingMode = PickingMode.Ignore;
 
             _stack = new VisualElement { name = "QuestTrackerStack" };
-            _stack.style.marginTop = 96;          // clear of any top-left HUD widgets
-            _stack.style.marginLeft = 16;
+            _stack.style.marginTop = 96;          // clear of the top HUD widgets
+            _stack.style.marginRight = 16;
             _stack.style.width = 300;
             _stack.style.flexDirection = FlexDirection.Column;
-            _stack.style.alignItems = Align.FlexStart;
+            _stack.style.alignItems = Align.FlexEnd;
             _stack.pickingMode = PickingMode.Ignore;
             _root.Add(_stack);
 
@@ -75,19 +75,26 @@ namespace DeNelle.HUD
             var ids = svc.ActiveQuestIds();
             if (ids == null || ids.Count == 0) return; // nothing active → empty (no header noise)
 
-            var header = new Label("Quests");
+            // WO-454: pin the player-TRACKED quest (chosen via the board's Track button). If none
+            // is chosen yet — or the tracked quest is no longer active — fall back to the first
+            // active quest as the default until the player picks one. The board remains the full list.
+            string tracked = svc.TrackedId;
+            if (string.IsNullOrEmpty(tracked) || !svc.IsActive(tracked))
+            {
+                tracked = null;
+                foreach (var id in ids) { if (!string.IsNullOrEmpty(id)) { tracked = id; break; } }
+            }
+            if (tracked == null) return;
+
+            var header = new Label("Quest");
             header.style.color = new StyleColor(ElarionUi.Gilt);
             header.style.fontSize = 13;
             header.style.unityFontStyleAndWeight = FontStyle.Bold;
             header.style.marginBottom = 4;
-            header.style.unityTextAlign = TextAnchor.MiddleLeft;
+            header.style.unityTextAlign = TextAnchor.MiddleRight;
             _stack.Add(header);
 
-            foreach (var id in ids)
-            {
-                if (string.IsNullOrEmpty(id)) continue;
-                _stack.Add(BuildCard(id, svc));
-            }
+            _stack.Add(BuildCard(tracked, svc));
         }
 
         private static VisualElement BuildCard(string id, QuestService svc)

@@ -27,9 +27,10 @@ namespace DeNelle.HUD
         private static void SpawnInScene(Scene scene)
         {
             if (!scene.IsValid()) return;
-            // WO-411: no free-floating story-quest tracker on the town hub — quests reach via the
-            // TOWN ACTIONS "Quests" button there. Still spawns in combat/dungeon play scenes.
-            if (DeNelle.Core.HubScenes.IsHub(scene.name)) return;
+            // Owner 2026-06-20: the hub used to suppress this on the promise the "Quests" button
+            // surfaced quests — but that button now opens the MODAL Rumor Board, leaving the hub with
+            // no persistent on-screen tracker. Spawn it wherever a hero exists; it pins the ONE current
+            // active quest far-right (the board pop-up remains the full browse/accept list).
 
             // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<QuestTrackerHud>(

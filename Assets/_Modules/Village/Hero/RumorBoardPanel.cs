@@ -256,6 +256,33 @@ namespace DeNelle.Village.Hero
                 ? stage.ObjectiveText
                 : "…";
             CreateHook(row.transform, objective, ElarionUi.ParchmentDim);
+
+            // WO-454: Track → pin this quest to the far-right HUD slot, then close the board.
+            bool isTracked = svc != null && svc.TrackedId == def.Id;
+            var trackGo = new GameObject("Track", typeof(Button), typeof(Image));
+            trackGo.transform.SetParent(row.transform, false);
+            var tbr = trackGo.GetComponent<RectTransform>();
+            tbr.anchorMin = new Vector2(0.80f, 0.18f);
+            tbr.anchorMax = new Vector2(0.99f, 0.82f);
+            tbr.offsetMin = Vector2.zero;
+            tbr.offsetMax = Vector2.zero;
+            trackGo.GetComponent<Image>().color = isTracked
+                ? new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.92f)
+                : new Color(ElarionUi.PanelStone.r, ElarionUi.PanelStone.g, ElarionUi.PanelStone.b, 0.92f);
+            string tid = def.Id;
+            trackGo.GetComponent<Button>().onClick.AddListener(() => OnTrack(tid));
+
+            var tl = new GameObject("TL", typeof(TMPro.TextMeshProUGUI));
+            tl.transform.SetParent(trackGo.transform, false);
+            var tlr = tl.GetComponent<RectTransform>();
+            tlr.anchorMin = Vector2.zero; tlr.anchorMax = Vector2.one;
+            tlr.offsetMin = Vector2.zero; tlr.offsetMax = Vector2.zero;
+            var tlt = tl.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(tlt);
+            tlt.text = isTracked ? "TRACKED" : "TRACK";
+            tlt.fontSize = 12;
+            tlt.color = ElarionUi.Ink;
+            tlt.alignment = TMPro.TextAlignmentOptions.Center;
         }
 
         private void CreateAvailableRow(Transform parent, QuestDef def, ref float y)
@@ -363,6 +390,17 @@ namespace DeNelle.Village.Hero
             // QuestChanged repaints the board; if the service wasn't up to fire it,
             // repaint defensively so the row still moves to In Progress.
             if (!svc.IsActive(id)) Repaint();
+        }
+
+        // WO-454: pin an active quest to the far-right HUD tracker, then close the board
+        // (owner flow: open board → select the quest you want → close → it shows on the right).
+        private void OnTrack(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return;
+            var svc = QuestService.Instance;
+            if (svc == null) { SetStatus("Quests aren't ready yet."); return; }
+            svc.SetTracked(id);   // persists + raises QuestChanged → HUD pin repaints
+            Close();
         }
 
         // ── Chrome helpers (mirrors ShopPanel) ────────────────────────────────────

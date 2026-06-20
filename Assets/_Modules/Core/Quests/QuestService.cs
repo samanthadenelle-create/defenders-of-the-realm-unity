@@ -136,6 +136,7 @@ namespace DeNelle.Core.Quests
             prog.Active.Remove(id);
             prog.Available.Remove(id);
             prog.Completed[id] = true;
+            if (prog.TrackedId == id) prog.TrackedId = null; // WO-454: drop the HUD pin when the tracked quest completes
             Persist();
         }
 
@@ -172,6 +173,26 @@ namespace DeNelle.Core.Quests
             var prog = Progress;
             return prog != null && !string.IsNullOrEmpty(id)
                 && prog.Completed.TryGetValue(id, out bool done) && done;
+        }
+
+        // ── Public API — tracked quest (WO-454: the one pinned to the far-right HUD) ──
+
+        /// <summary>The player-selected quest id pinned to the HUD slot (null = none chosen).</summary>
+        public string TrackedId
+        {
+            get { var prog = Progress; return prog != null ? prog.TrackedId : null; }
+        }
+
+        /// <summary>Pin a quest as the tracked HUD quest (empty/null clears it). Persists and
+        /// raises QuestChanged so the HUD pin repaints to the player's selection.</summary>
+        public void SetTracked(string id)
+        {
+            var prog = Progress;
+            if (prog == null) return;
+            string norm = string.IsNullOrEmpty(id) ? null : id;
+            if (prog.TrackedId == norm) return;
+            prog.TrackedId = norm;
+            Persist();
         }
 
         // ── Public API — flags ────────────────────────────────────────────────

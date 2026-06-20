@@ -215,6 +215,10 @@ namespace DeNelle.Core.State
         // across quests). Additive — defaults to an empty list on read of an older
         // save, so NO version bump / migrator step is required.
         [JsonProperty("keystones")] public List<string> Keystones = new List<string>();
+        // WO-454: the player-selected quest pinned to the far-right HUD slot. Additive +
+        // nullable — defaults to null on read of an older save, so NO version bump / migrator
+        // step is required (same convention as keystones above / stageId on QuestState).
+        [JsonProperty("trackedId")] public string TrackedId;
 
         /// <summary>Fresh empty quest progress — the v6 migration seed.</summary>
         public static QuestProgress Empty()
