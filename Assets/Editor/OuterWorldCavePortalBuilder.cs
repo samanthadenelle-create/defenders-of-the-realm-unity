@@ -196,14 +196,18 @@ namespace DeNelle.Editor
         private static void BuildTrigger(Transform cave)
         {
             var trig = new GameObject(TriggerName);
-            trig.transform.SetParent(cave, false);
-            // A few metres IN FRONT of the cave mouth (toward the path the player walks
-            // in on, i.e. +Z from the terminus) so the hero reaches it on approach.
-            trig.transform.localPosition = new Vector3(0f, 1.5f, 4f);
+            // Parent under the cave's PARENT (the UNSCALED root), NOT the x4-scaled cave —
+            // parenting under the scaled cave multiplied a (0,1.5,4) local offset to a world
+            // (0,6,-454), floating the trigger 6m off the navmesh (fleet 2026-06-19:
+            // SEAM-OFF-MESH) and inflating the BoxCollider to 48x24x32m. Seat it at GROUND
+            // level on the approach path, ~16m north of the cave mouth (the player walks south
+            // in from z=-12, so +Z of the cave is the approach side), in unscaled world space.
+            trig.transform.SetParent(cave.parent, false);
+            trig.transform.position = new Vector3(CavePos.x, 1f, CavePos.z + 16f);
 
             var box = trig.AddComponent<BoxCollider>();
             box.isTrigger = true;
-            box.size = new Vector3(12f, 6f, 8f);
+            box.size = new Vector3(12f, 6f, 8f);   // unscaled now: a 12x6x8m volume on the path
 
             var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
             if (transType == null)
