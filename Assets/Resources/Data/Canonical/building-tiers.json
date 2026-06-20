@@ -1,55 +1,56 @@
 {
-  "version": 2,
-  "_comment": "WO-430 city upgrades + WO-432 tech-tree. Per-building tiers 1-4: cost (Wood/Food/Crystal) + cumulative GameModifiers + requiresVillageTier (the Heart-of-Elarion tech-gate: a tier is locked until the global Village/Stronghold Tier reaches it) + perks[] (Gold-cost research unlocked AT that tier, gated by building tier AND village tier; a perk's modifiers compile like a tier's; isSignature = the gilt capstone). Icons resolve Resources/HudItems/BuildingUpgrades/<iconId|id>.png. Mirror copy in StreamingAssets/Data/Canonical/.",
+  "version": 3,
+  "_comment": "WO-430 tiers + WO-432 tech-tree, perks re-authored to the owner's icon taxonomy (2026-06-20). Per building: tiers 1-4 (cost + cumulative GameModifiers + requiresVillageTier gate) + perks[] (Gold-cost research, unlocked AT a tier; iconId = a sprite in Resources/HudIcons/BuildingUpgrades/<iconId>.jpg; isSignature = the gilt T3 capstone). Owner mapping: Blacksmith = the armorer building; Barracks is a NEW building (troops); windmill keeps tiers, no perks. Icons are the existing <Building>_T1_<Perk> files. Mirror in StreamingAssets/Data/Canonical/.",
   "buildings": [
     {
       "id": "arcane-tower",
       "displayName": "Arcane Tower",
       "tiers": [
-        { "tier": 1, "name": "Awaken the Tower", "costWood": 800, "costFood": 500, "costCrystal": 0, "requiresVillageTier": 0, "modifiers": {} },
+        { "tier": 1, "name": "Awaken the Tower", "costWood": 800, "costFood": 500, "costCrystal": 0, "requiresVillageTier": 0, "modifiers": {},
+          "perks": [ { "id": "arcane-basics", "name": "Arcane Basics", "goldCost": 300, "iconId": "Arcane_Tower_T1_Arcane_Basics", "isSignature": false, "modifiers": { "towerDamageMult": 1.05 } } ] },
         { "tier": 2, "name": "Mana Flow", "costWood": 1400, "costFood": 900, "costCrystal": 200, "requiresVillageTier": 1, "modifiers": { "towerDamageMult": 1.08 },
-          "perks": [
-            { "id": "arcane-spell-1", "name": "Spell Focus I", "goldCost": 300, "isSignature": false, "modifiers": { "towerDamageMult": 1.06 } }
-          ] },
+          "perks": [ { "id": "arcane-mana-attunement", "name": "Mana Attunement", "goldCost": 600, "iconId": "Arcane_Tower_T1_Mana_Attunement", "isSignature": false, "modifiers": { "towerDamageMult": 1.10 } } ] },
         { "tier": 3, "name": "Arcane Resonance", "costWood": 2800, "costFood": 1800, "costCrystal": 600, "requiresVillageTier": 2, "modifiers": { "towerDamageMult": 1.18, "towerRangeMult": 1.12 },
-          "perks": [
-            { "id": "arcane-spell-2", "name": "Spell Focus II", "goldCost": 600, "isSignature": false, "modifiers": { "towerDamageMult": 1.12 } },
-            { "id": "arcane-overload-research", "name": "Arcane Overload", "goldCost": 1500, "isSignature": true, "modifiers": { "towerDamageMult": 1.08, "towerRangeMult": 1.10 } }
-          ] },
+          "perks": [ { "id": "arcane-warding-runes", "name": "Warding Runes", "goldCost": 1200, "iconId": "Arcane_Tower_T1_Warding_Runes", "isSignature": true, "modifiers": { "towerDamageMult": 1.06, "towerRangeMult": 1.12 } } ] },
         { "tier": 4, "name": "Arcane Overload", "costWood": 5500, "costFood": 3500, "costCrystal": 1500, "requiresVillageTier": 3, "modifiers": { "towerDamageMult": 1.18, "towerRangeMult": 1.12, "arcaneOverload": true } }
       ]
     },
     {
       "id": "armorer",
-      "displayName": "Armorer",
+      "displayName": "Blacksmith",
       "tiers": [
-        { "tier": 1, "name": "Open the Forge", "costWood": 600, "costFood": 400, "costCrystal": 100, "requiresVillageTier": 0, "modifiers": {} },
+        { "tier": 1, "name": "Open the Blacksmith", "costWood": 600, "costFood": 400, "costCrystal": 100, "requiresVillageTier": 0, "modifiers": {},
+          "perks": [ { "id": "blacksmith-reinforced-plating", "name": "Reinforced Plating", "goldCost": 300, "iconId": "Blacksmith_T1_Reinforced_Plating", "isSignature": false, "modifiers": { "troopHealthMult": 1.05 } } ] },
         { "tier": 2, "name": "Reinforced Armor", "costWood": 1200, "costFood": 800, "costCrystal": 300, "requiresVillageTier": 1, "modifiers": { "troopHealthMult": 1.07 },
-          "perks": [
-            { "id": "armorer-armor-1", "name": "Tempered Plate I", "goldCost": 300, "isSignature": false, "modifiers": { "troopHealthMult": 1.05 } }
-          ] },
+          "perks": [ { "id": "blacksmith-sharpened-edges", "name": "Sharpened Edges", "goldCost": 600, "iconId": "Blacksmith_T1_Sharpened_Edges", "isSignature": false, "modifiers": { "troopDamageMult": 1.08 } } ] },
         { "tier": 3, "name": "Master Smithing", "costWood": 2500, "costFood": 1600, "costCrystal": 700, "requiresVillageTier": 2, "modifiers": { "troopDamageMult": 1.15, "troopHealthMult": 1.10 },
-          "perks": [
-            { "id": "armorer-armor-2", "name": "Tempered Plate II", "goldCost": 600, "isSignature": false, "modifiers": { "troopHealthMult": 1.10 } },
-            { "id": "armorer-aegis", "name": "Aegis Ward", "goldCost": 1200, "isSignature": true, "modifiers": { "troopHealthMult": 1.12 } }
-          ] },
+          "perks": [ { "id": "blacksmith-sturdy-shields", "name": "Sturdy Shields", "goldCost": 1200, "iconId": "Blacksmith_T1_Sturdy_Shields", "isSignature": true, "modifiers": { "troopHealthMult": 1.10 } } ] },
         { "tier": 4, "name": "Battle Forged", "costWood": 4800, "costFood": 3200, "costCrystal": 1400, "requiresVillageTier": 3, "modifiers": { "troopDamageMult": 1.15, "troopHealthMult": 1.10, "battleForged": true } }
+      ]
+    },
+    {
+      "id": "barracks",
+      "displayName": "Barracks",
+      "tiers": [
+        { "tier": 1, "name": "Muster the Barracks", "costWood": 700, "costFood": 600, "costCrystal": 100, "requiresVillageTier": 0, "modifiers": {},
+          "perks": [ { "id": "barracks-swift-recruitment", "name": "Swift Recruitment", "goldCost": 300, "iconId": "Barracks_T1_Swift_Recruitment", "isSignature": false, "modifiers": { "troopHealthMult": 1.04 } } ] },
+        { "tier": 2, "name": "Drill Yard", "costWood": 1300, "costFood": 1100, "costCrystal": 300, "requiresVillageTier": 1, "modifiers": { "troopHealthMult": 1.08 },
+          "perks": [ { "id": "barracks-combat-drill", "name": "Basic Combat Drill", "goldCost": 600, "iconId": "Barracks_T1_Basic_Combat_Drill", "isSignature": false, "modifiers": { "troopDamageMult": 1.08, "troopHealthMult": 1.05 } } ] },
+        { "tier": 3, "name": "War College", "costWood": 2600, "costFood": 2200, "costCrystal": 700, "requiresVillageTier": 2, "modifiers": { "troopDamageMult": 1.12, "troopHealthMult": 1.10 },
+          "perks": [ { "id": "barracks-expanded-capacity", "name": "Expanded Capacity", "goldCost": 1200, "iconId": "Barracks_T1_Expanded_Capacity", "isSignature": true, "modifiers": { "troopHealthMult": 1.10 } } ] },
+        { "tier": 4, "name": "Standing Army", "costWood": 5000, "costFood": 4000, "costCrystal": 1400, "requiresVillageTier": 3, "modifiers": { "troopDamageMult": 1.15, "troopHealthMult": 1.15 } }
       ]
     },
     {
       "id": "forge",
       "displayName": "Forge",
       "tiers": [
-        { "tier": 1, "name": "Ignite the Forge", "costWood": 700, "costFood": 450, "costCrystal": 0, "requiresVillageTier": 0, "modifiers": {} },
+        { "tier": 1, "name": "Ignite the Forge", "costWood": 700, "costFood": 450, "costCrystal": 0, "requiresVillageTier": 0, "modifiers": {},
+          "perks": [ { "id": "forge-efficient-smelting", "name": "Efficient Smelting", "goldCost": 300, "iconId": "Forge_T1_Efficient_Smelting", "isSignature": false, "modifiers": { "resourceEfficiencyMult": 1.08 } } ] },
         { "tier": 2, "name": "Improved Smelting", "costWood": 1300, "costFood": 850, "costCrystal": 250, "requiresVillageTier": 1, "modifiers": { "resourceEfficiencyMult": 1.10 },
-          "perks": [
-            { "id": "forge-damage-1", "name": "Honed Edges I", "goldCost": 300, "isSignature": false, "modifiers": { "troopDamageMult": 1.05 } }
-          ] },
+          "perks": [ { "id": "forge-quality-forging", "name": "Quality Forging", "goldCost": 600, "iconId": "Forge_T1_Quality_Forging", "isSignature": false, "modifiers": { "troopDamageMult": 1.06 } } ] },
         { "tier": 3, "name": "Master Metallurgy", "costWood": 2600, "costFood": 1700, "costCrystal": 650, "requiresVillageTier": 2, "modifiers": { "resourceEfficiencyMult": 1.22 },
-          "perks": [
-            { "id": "forge-damage-2", "name": "Honed Edges II", "goldCost": 600, "isSignature": false, "modifiers": { "troopDamageMult": 1.10 } },
-            { "id": "forge-masterwork", "name": "Masterwork", "goldCost": 1200, "isSignature": true, "modifiers": { "troopDamageMult": 1.12 } }
-          ] },
+          "perks": [ { "id": "forge-resource-conservation", "name": "Resource Conservation", "goldCost": 1200, "iconId": "Forge_T1_Resource_Conservation", "isSignature": true, "modifiers": { "resourceEfficiencyMult": 1.15 } } ] },
         { "tier": 4, "name": "Forgefire", "costWood": 5000, "costFood": 3300, "costCrystal": 1300, "requiresVillageTier": 3, "modifiers": { "resourceEfficiencyMult": 1.22, "forgefire": true } }
       ]
     },
@@ -57,16 +58,12 @@
       "id": "lumbermill",
       "displayName": "Lumber Mill",
       "tiers": [
-        { "tier": 1, "name": "Restore the Mill", "costWood": 900, "costFood": 300, "costCrystal": 0, "requiresVillageTier": 0, "modifiers": { "woodProductionMult": 1.12 } },
+        { "tier": 1, "name": "Restore the Mill", "costWood": 900, "costFood": 300, "costCrystal": 0, "requiresVillageTier": 0, "modifiers": { "woodProductionMult": 1.12 },
+          "perks": [ { "id": "lumber-improved-logging", "name": "Improved Logging", "goldCost": 250, "iconId": "Lumber_Mill_T1_Improved_Logging", "isSignature": false, "modifiers": { "woodProductionMult": 1.08 } } ] },
         { "tier": 2, "name": "Reinforced Blades", "costWood": 1600, "costFood": 600, "costCrystal": 150, "requiresVillageTier": 1, "modifiers": { "woodProductionMult": 1.20 },
-          "perks": [
-            { "id": "lumber-yield-1", "name": "Sharper Saws I", "goldCost": 250, "isSignature": false, "modifiers": { "woodProductionMult": 1.08 } }
-          ] },
+          "perks": [ { "id": "lumber-efficient-processing", "name": "Efficient Processing", "goldCost": 500, "iconId": "Lumber_Mill_T1_Efficient_Processing", "isSignature": false, "modifiers": { "woodProductionMult": 1.15 } } ] },
         { "tier": 3, "name": "Automated Saws", "costWood": 3200, "costFood": 1200, "costCrystal": 400, "requiresVillageTier": 2, "modifiers": { "woodProductionMult": 1.35, "offlineBonusMult": 1.15 },
-          "perks": [
-            { "id": "lumber-yield-2", "name": "Sharper Saws II", "goldCost": 500, "isSignature": false, "modifiers": { "woodProductionMult": 1.15 } },
-            { "id": "lumber-heartwood", "name": "Heartwood", "goldCost": 1000, "isSignature": true, "modifiers": { "woodProductionMult": 1.12, "offlineBonusMult": 1.08 } }
-          ] },
+          "perks": [ { "id": "lumber-construction-aid", "name": "Construction Aid", "goldCost": 1000, "iconId": "Lumber_Mill_T1_Construction_Aid", "isSignature": true, "modifiers": { "woodProductionMult": 1.10, "offlineBonusMult": 1.08 } } ] },
         { "tier": 4, "name": "Eternal Grove", "costWood": 6000, "costFood": 2500, "costCrystal": 1000, "requiresVillageTier": 3, "modifiers": { "woodProductionMult": 1.50, "offlineBonusMult": 1.15, "eternalGrove": true } }
       ]
     },
@@ -75,15 +72,8 @@
       "displayName": "Windmill",
       "tiers": [
         { "tier": 1, "name": "Rebuild the Windmill", "costWood": 500, "costFood": 700, "costCrystal": 100, "requiresVillageTier": 0, "modifiers": { "foodProductionMult": 1.10 } },
-        { "tier": 2, "name": "Wind Harnessing", "costWood": 1100, "costFood": 1400, "costCrystal": 300, "requiresVillageTier": 1, "modifiers": { "foodProductionMult": 1.18 },
-          "perks": [
-            { "id": "windmill-yield-1", "name": "Bountiful Sails I", "goldCost": 250, "isSignature": false, "modifiers": { "foodProductionMult": 1.08 } }
-          ] },
-        { "tier": 3, "name": "Grand Mill", "costWood": 2400, "costFood": 2800, "costCrystal": 800, "requiresVillageTier": 2, "modifiers": { "foodProductionMult": 1.32, "offlineBonusMult": 1.12 },
-          "perks": [
-            { "id": "windmill-yield-2", "name": "Bountiful Sails II", "goldCost": 500, "isSignature": false, "modifiers": { "foodProductionMult": 1.15 } },
-            { "id": "windmill-bounty", "name": "Bountiful Harvest", "goldCost": 1000, "isSignature": true, "modifiers": { "foodProductionMult": 1.12, "offlineBonusMult": 1.08 } }
-          ] },
+        { "tier": 2, "name": "Wind Harnessing", "costWood": 1100, "costFood": 1400, "costCrystal": 300, "requiresVillageTier": 1, "modifiers": { "foodProductionMult": 1.18 } },
+        { "tier": 3, "name": "Grand Mill", "costWood": 2400, "costFood": 2800, "costCrystal": 800, "requiresVillageTier": 2, "modifiers": { "foodProductionMult": 1.32, "offlineBonusMult": 1.12 } },
         { "tier": 4, "name": "Winds of Plenty", "costWood": 5200, "costFood": 4200, "costCrystal": 1600, "requiresVillageTier": 3, "modifiers": { "foodProductionMult": 1.45, "offlineBonusMult": 1.12, "windsOfPlenty": true } }
       ]
     }

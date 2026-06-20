@@ -327,9 +327,31 @@ namespace DeNelle.Village.Buildings.Progression
             string id = item.Id;
             rowBtn.onClick.AddListener(() => _vm?.Select(id));
 
-            // Name (tier label).
+            // WO-432 — a research-perk row shows its icon at the LEFT (Resources/HudIcons/BuildingUpgrades/
+            // <IconName>, the owner's <Building>_T1_<Perk> sprites); tier rows have none. When an icon is
+            // present the name/cost shift right to make room. Missing icon = no icon (row still reads).
+            float textX0 = 0.04f;
+            if (item.IconRole == BuildingUpgradeVM.IconRolePerk && !string.IsNullOrEmpty(item.IconName))
+            {
+                var icon = Resources.Load<Sprite>("HudIcons/BuildingUpgrades/" + item.IconName);
+                if (icon != null)
+                {
+                    var iconGo = new GameObject("PerkIcon", typeof(Image));
+                    iconGo.transform.SetParent(row.transform, false);
+                    var irt = iconGo.GetComponent<RectTransform>();
+                    irt.anchorMin = new Vector2(0.02f, 0.12f); irt.anchorMax = new Vector2(0.14f, 0.88f);
+                    irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
+                    var iImg = iconGo.GetComponent<Image>();
+                    iImg.sprite = icon;
+                    iImg.preserveAspect = true;
+                    iImg.raycastTarget = false;
+                    textX0 = 0.17f;   // name/cost start after the icon
+                }
+            }
+
+            // Name (tier/perk label).
             ElarionUiKit.Label(row.transform, item.Name, 0.50f, 0.95f, ElarionUi.Parchment,
-                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.04f, 0.74f, bold: true);
+                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, textX0, 0.74f, bold: true);
 
             // Cost / state line (from the VM — affordability colour mapped from item.Affordable).
             string costLine = _vm != null ? _vm.CostFor(item.Id) : "";
@@ -337,7 +359,7 @@ namespace DeNelle.Village.Buildings.Progression
                             : item.Locked ? ElarionUi.ParchmentDim
                             : (item.Affordable ? ElarionUi.Affordable : ElarionUi.Danger);
             ElarionUiKit.Label(row.transform, costLine, 0.06f, 0.50f, costColor,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.04f, 0.74f);
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, textX0, 0.74f);
 
             // State chip on the right.
             string chip = item.Equipped ? "OWNED" : item.Locked ? "LOCKED" : "NEXT";
