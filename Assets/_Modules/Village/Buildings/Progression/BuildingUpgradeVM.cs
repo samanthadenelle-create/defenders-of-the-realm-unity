@@ -41,6 +41,9 @@ namespace DeNelle.Village.Buildings.Progression
     {
         /// <summary>Icon role key on each tier's ItemVM (the View maps it to art; no game state).</summary>
         public const string IconRoleTier = "tier";
+        /// <summary>Icon role key on each research-perk row (the View maps it to the perk's
+        /// Resources/HudItems/BuildingUpgrades/&lt;iconId&gt; sprite). WO-432.</summary>
+        public const string IconRolePerk = "perk";
 
         private readonly string _buildingId;
         private readonly IEconomy _economy;
@@ -257,7 +260,7 @@ namespace DeNelle.Village.Buildings.Progression
                         string pname = (p.IsSignature ? "★ " : "") + (!string.IsNullOrEmpty(p.Name) ? p.Name : p.Id);
                         _costById[rid] = owned ? "Researched" : (p.GoldCost + " Gold");
                         string iconKey = string.IsNullOrEmpty(p.IconId) ? p.Id : p.IconId;
-                        _upgrades.Add(new ItemVM(rid, pname, "perk", iconKey, 0, "", affordable,
+                        _upgrades.Add(new ItemVM(rid, pname, IconRolePerk, iconKey, 0, "", affordable,
                                                  rarity: null, equipped: owned, locked: !owned && !can));
                     }
                 }
