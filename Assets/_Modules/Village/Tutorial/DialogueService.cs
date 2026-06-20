@@ -72,6 +72,13 @@ namespace DeNelle.Village
                 return false;
             }
 
+            // WO-455 routing seam: when CustomDialogue is ON and this conversation has been
+            // converted into our own dialogue catalog, run it on the Yarn-FREE runner instead.
+            // Dormant by default (flag off); only ids present in dialogues.json ever route here,
+            // so the migration is "add the JSON + flip the flag" with zero risk to un-converted lines.
+            if (DeNelle.Core.FeatureFlags.CustomDialogue && DeNelle.Core.Dialogue.DialogueCatalog.Find(node) != null)
+                return DeNelle.Core.Dialogue.DialogueService.Play(node);
+
             DialogueRunner runner = Current ?? Host();
             if (runner == null) return false; // Host() already logged the reason.
 
@@ -214,6 +221,11 @@ namespace DeNelle.Village
             if (string.IsNullOrEmpty(structureId)) return false;
             CurrentStructureId = structureId;
             CurrentStructureName = displayName;
+
+            // WO-455 routing seam: a converted structure conversation runs on our Yarn-free runner
+            // when CustomDialogue is ON (dormant otherwise; only ids in dialogues.json route here).
+            if (DeNelle.Core.FeatureFlags.CustomDialogue && DeNelle.Core.Dialogue.DialogueCatalog.Find(structureId) != null)
+                return DeNelle.Core.Dialogue.DialogueService.Play(structureId);
 
             DialogueRunner runner = Current ?? Host();
             if (runner == null) return false;
