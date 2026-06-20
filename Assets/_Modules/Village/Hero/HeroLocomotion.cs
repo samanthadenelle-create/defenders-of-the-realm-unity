@@ -773,8 +773,13 @@ namespace DeNelle.Village
                 if (to.magnitude <= stepLen + 0.05f)
                 {
                     // Arrived: re-place the agent on the FAR navmesh (Warp re-binds the agent to
-                    // whatever surface is under the point), then resume normal control.
-                    if (_agent != null && _agent.enabled) _agent.Warp(_seamTarget);
+                    // whatever surface is under the point), then HAND CONTROL BACK to the agent.
+                    if (_agent != null && _agent.enabled)
+                    {
+                        _agent.Warp(_seamTarget);
+                        _agent.updatePosition = true;   // agent drives the transform again
+                        _agent.updateRotation = true;
+                    }
                     else transform.position = _seamTarget;
                     _crossingSeam = false;
                     _isTeleporting = false;
@@ -808,6 +813,14 @@ namespace DeNelle.Village
             _crossingSeam = true;
             _seamTarget = target;
             _isTeleporting = true;   // skip the off-mesh ±50 clamp while we cross the gap (z<-50)
+            // RELEASE the agent's grip on the transform during the slide — otherwise updatePosition
+            // clamps the hero back onto the castle navmesh every frame and it never crosses the gap
+            // (the BEGIN-without-DONE bug). We drive transform.position ourselves, then Warp + re-arm.
+            if (_agent != null && _agent.enabled)
+            {
+                _agent.updatePosition = false;
+                _agent.updateRotation = false;
+            }
             Debug.Log($"[HeroLocomotion] seam-cross BEGIN -> {target} (manual NavMeshLink traversal, in-world walk).");
         }
 
