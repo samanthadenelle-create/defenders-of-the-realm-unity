@@ -41,6 +41,23 @@ namespace DeNelle.Village
         // ── Singleton ──────────────────────────────────────────────────────────
         public static CrystalEconomy Instance { get; private set; }
 
+        // Self-bootstrap (2026-06-19): CrystalEconomy is a PURE GLOBAL FAÇADE over
+        // GameStateService.State.Resources.Crystals — it holds zero scene-specific
+        // state, so it belongs in EVERY scene, not just the legacy Village scene that
+        // happened to carry a hand-placed instance. The owner playtest hit this in
+        // MainCastle_Hall: there is no CrystalEconomy there, so Instance was null and a
+        // Crystal Mine upgrade attempt flooded the log with "Instance is null". Mirror
+        // the EnsureInstance / DDOL pattern used by MobileInteractButton + the other
+        // runtime bootstraps (PetHarvestBootstrap) so the wallet façade always exists,
+        // in any scene, the moment a node tries to spend. Idempotent + null-safe.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void EnsureExists()
+        {
+            if (Instance != null) return;
+            var go = new GameObject("CrystalEconomy");
+            go.AddComponent<CrystalEconomy>();   // Awake sets Instance + DDOL.
+        }
+
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -49,6 +66,10 @@ namespace DeNelle.Village
                 return;
             }
             Instance = this;
+            // Persist across scene loads so the global wallet façade survives the
+            // castle-hub → outer-world → raid scene transitions (it carries no
+            // scene-bound references — only GameStateService, itself a DDOL singleton).
+            DontDestroyOnLoad(gameObject);
         }
 
         private void OnDestroy()

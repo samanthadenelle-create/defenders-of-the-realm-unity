@@ -109,6 +109,16 @@ namespace DeNelle.Village
         private const float CheckInterval = 0.2f;
         private const float FeedbackSeconds = 2.0f;   // how long a feedback bubble lingers
 
+        // Belt-and-suspenders log throttle (2026-06-19): the null-wallet upgrade branch
+        // must NEVER flood the log, even if MobileInteractButton re-fires the tap callback
+        // faster than expected (owner saw dozens/sec in MainCastle_Hall). With the
+        // CrystalEconomy self-bootstrap the Instance should now always exist, but we gate
+        // the failure FlowTrace to at most once per NullLogInterval so a missing wallet can
+        // physically never spam again. The player-facing feedback bubble still shows on
+        // every press (it self-throttles via its own timer), so UX is unchanged.
+        private float _nextNullLogAt;
+        private const float NullLogInterval = 2.0f;
+
         /// <summary>The crystal grade this mine yields, gated by its region's danger tier
         /// (WO-144). Read by UI today; by the WO-144 grade ledger later.</summary>
         public CrystalGrade Grade => _grade;
@@ -224,7 +234,14 @@ namespace DeNelle.Village
             var econ = CrystalEconomy.Instance;
             if (econ == null)
             {
-                FlowTrace.Fail("CrystalMine", "Upgrade failed — CrystalEconomy.Instance is null.");
+                // Throttle the failure trace so a null wallet can never flood the log
+                // (≤ once / NullLogInterval) — see _nextNullLogAt note above. The
+                // self-throttling feedback bubble still answers every press.
+                if (Time.time >= _nextNullLogAt)
+                {
+                    _nextNullLogAt = Time.time + NullLogInterval;
+                    FlowTrace.Fail("CrystalMine", "Upgrade failed — CrystalEconomy.Instance is null.");
+                }
                 ShowFeedback("⚠  Crystal wallet unavailable");
                 return;
             }
