@@ -70,12 +70,14 @@ namespace DeNelle.HUD
             var card = new GameObject("TrackerCard", typeof(Image), typeof(Button));
             card.transform.SetParent(_ui.transform, false);
             _card = card.GetComponent<RectTransform>();
-            _card.anchorMin = new Vector2(1f, 0.30f);
+            _card.anchorMin = new Vector2(1f, 0.34f);
             _card.anchorMax = new Vector2(1f, 0.58f);
             _card.pivot = new Vector2(1f, 0.5f);
-            _card.sizeDelta = new Vector2(300f, 0f);      // width 300; height from the anchor span
-            _card.anchoredPosition = new Vector2(-12f, 0f);
-            card.GetComponent<Image>().color = ElarionUi.PanelStoneDark;
+            _card.sizeDelta = new Vector2(236f, 0f);      // sleeker: narrower; height from the anchor span
+            _card.anchoredPosition = new Vector2(-10f, 0f);
+            // Sleeker: translucent stone so it reads as a slim overlay, not a heavy block.
+            var bg = ElarionUi.PanelStoneDark;
+            card.GetComponent<Image>().color = new Color(bg.r, bg.g, bg.b, 0.72f);
             card.GetComponent<Button>().onClick.AddListener(OpenBoard); // click → pop the board
 
             Repaint();

@@ -1383,13 +1383,15 @@ namespace DeNelle.HUD
         private AttentionGlowUi _upgradeGlow;   // chasing-comet cue around the Upgrade button (like Talk)
         private void BuildTownActionPanel(Transform parent)
         {
-            // TOWN ACTIONS row (mockup #42): BUILD · TALK · BAG · QUESTS, bottom-right edge.
-            _townActionPanel = NewRect("TownActions", parent, new Vector2(1f, 0f), new Vector2(1f, 0f));
-            _townActionPanel.anchorMin = new Vector2(1f, 0f);
-            _townActionPanel.anchorMax = new Vector2(1f, 0f);
-            _townActionPanel.pivot = new Vector2(1f, 0f);
-            _townActionPanel.anchoredPosition = new Vector2(-20f, 20f);
-            _townActionPanel.sizeDelta = new Vector2(300f, 300f);   // square footprint for a compact DIAMOND cluster (clears the metrics bar)
+            // TOWN ACTIONS diamond: BUILD · TALK · BAG · QUESTS. Owner 2026-06-20: moved to the
+            // bottom-CENTER 9-slice (mobile-first natural thumb zone) — it was bottom-RIGHT and
+            // overlapped the right-side quest tracker pin. Centred + lifted off the bottom edge.
+            _townActionPanel = NewRect("TownActions", parent, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
+            _townActionPanel.anchorMin = new Vector2(0.5f, 0f);
+            _townActionPanel.anchorMax = new Vector2(0.5f, 0f);
+            _townActionPanel.pivot = new Vector2(0.5f, 0f);
+            _townActionPanel.anchoredPosition = new Vector2(0f, 20f);
+            _townActionPanel.sizeDelta = new Vector2(300f, 300f);   // square footprint for a compact DIAMOND cluster
 
             // DIAMOND layout (mobile-thumb-friendly, bottom-right corner):
             // BUILD top · TALK left · BAG right · QUESTS bottom.
@@ -1485,6 +1487,8 @@ namespace DeNelle.HUD
             if (_ctxModeInit && upgrade == _ctxUpgradeMode) return;   // unchanged — skip the swap
             _ctxModeInit = true;
             _ctxUpgradeMode = upgrade;
+            FlowTrace.Step("HUD", "Context button face -> " + (upgrade ? "UPGRADE" : "QUEST") +
+                " (focus='" + (DeNelle.Core.UI.HudBuildingFocus.CurrentBuildingId ?? "<none>") + "')");
 
             // Swap the art on the button's "Glyph" child (built by AddWidgetIcon under the cell).
             // Sprite-first; if the pack art is missing, fall back to the code glyph
