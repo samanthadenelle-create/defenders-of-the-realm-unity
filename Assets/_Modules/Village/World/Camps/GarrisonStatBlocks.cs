@@ -29,6 +29,13 @@ namespace DeNelle.Village.World.Camps
     /// </summary>
     public static class GarrisonStatBlocks
     {
+        // WO-433 — the single global difficulty dial for ALL garrison/raid defenders. Multiplies HP +
+        // contact damage on top of each enemy's base stats AND the per-level ApplyLevelScale (which
+        // already adds ~8% HP / ~5% dmg per level — do NOT duplicate that here). ONE knob, tune + rebuild:
+        //   1.0  = current live feel        1.2-1.4 = solid Village2 / early-outpost challenge
+        //   1.6+ = hard late-game raids
+        public const float GlobalDifficultyMult = 1.2f;
+
         // =====================================================================
         // Stat blocks (code-built EnemyDef, threat-scaled) — the Troll family.
         // Mirrors EnemyOutpost.BuildGuardDef / CampGuards so garrison defenders
@@ -47,9 +54,9 @@ namespace DeNelle.Village.World.Camps
                 Family = "troll",
                 Role = "brute",
                 Ai = "charger",
-                Hp = 320f * scale,
+                Hp = 320f * scale * GlobalDifficultyMult,
                 MoveSpeed = 1.8f,
-                ContactDamage = 14f * scale,
+                ContactDamage = 14f * scale * GlobalDifficultyMult,
                 AttackInterval = 1.8f,
                 Height = 2.6f,
                 AggroRadius = 15f,
@@ -71,9 +78,9 @@ namespace DeNelle.Village.World.Camps
                 Family = "troll",
                 Role = "skirmisher",
                 Ai = "skirmisher",
-                Hp = 180f * scale,
+                Hp = 180f * scale * GlobalDifficultyMult,
                 MoveSpeed = 2.6f,
-                ContactDamage = 10f * scale,
+                ContactDamage = 10f * scale * GlobalDifficultyMult,
                 AttackInterval = 1.3f,
                 Height = 2.1f,
                 AggroRadius = 16f,
@@ -137,9 +144,9 @@ namespace DeNelle.Village.World.Camps
                 Family = family,
                 Role = role,
                 Ai = ai,
-                Hp = hp,
+                Hp = hp * GlobalDifficultyMult,
                 MoveSpeed = moveSpeed,
-                ContactDamage = dmg,
+                ContactDamage = dmg * GlobalDifficultyMult,
                 AttackInterval = interval,
                 Height = height,
                 AggroRadius = 15f,
