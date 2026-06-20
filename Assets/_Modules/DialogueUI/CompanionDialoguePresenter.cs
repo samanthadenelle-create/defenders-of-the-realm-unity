@@ -66,6 +66,14 @@ namespace DeNelle.DialogueUI
         public override async YarnTask RunLineAsync(LocalizedLine line, LineCancellationToken token)
         {
             TryInjectPortraitTag(line);
+            // PRE-SEED the portrait into the base's icon image+container BEFORE the box
+            // animates in. The base only assigns the icon AFTER its 0.5s ShowDialogueBox
+            // await (RPGDialoguePresenter ~533-538), so without this the box pops in EMPTY
+            // and the portrait snaps in late ("character appears LAST"). The icon lives
+            // inside the animating container, so pre-populating it makes the portrait
+            // pop/fade in WITH the box as one unit. The base's later assignment just
+            // re-sets the same sprite (harmless). Safe-skips if anything is missing.
+            PreSeedPortrait(line);
             UpdateNameBanner(line);
             // Re-assert dark ink on the body + option-preface line text EVERY line.
             // The one-time reskin tints these once, but defend against any per-line
@@ -634,6 +642,133 @@ namespace DeNelle.DialogueUI
             System.Array.Copy(meta, grown, meta.Length);
             grown[meta.Length] = IconTagPrefix + path;                  // base will Resources.Load this
             line.Metadata = grown;
+        }
+
+        // -----------------------------------------------------------------------
+        // PORTRAIT PRE-SEED (the "character appears WITH the box" fix).
+        // -----------------------------------------------------------------------
+        // The base RPGDialoguePresenter shows the box (await ShowDialogueBox, ~0.5s
+        // pop+fade) FIRST and only assigns iconImage.sprite + activates iconContainer
+        // AFTER that await (RPGDialoguePresenter ~533-538) — so the box animates in
+        // EMPTY and the portrait snaps in late. We resolve the speaker's portrait
+        // sprite synchronously (PortraitCache, same path logic as TryInjectPortraitTag)
+        // and write it onto the base's PRIVATE iconImage + iconContainer up-front, so
+        // the icon is already populated + active inside the animating container and
+        // pops/fades in WITH the box. Fully null-guarded: no sprite / missing holder
+        // → leave it to the base (no NRE, no blank snap-in beyond what the base does).
+        private void PreSeedPortrait(LocalizedLine line)
+        {
+            if (line == null) return;
+
+            // Resolve the sprite the SAME way the base will: forced-portrait override,
+            // else HeroPortraits/<CharacterName>. PortraitCache.Get is synchronous.
+            string path = null;
+            string forced = DeNelle.Core.DialoguePortrait.Forced;
+            if (!string.IsNullOrEmpty(forced) && PortraitCache.Has(forced))
+                path = forced;
+            else if (!string.IsNullOrEmpty(line.CharacterName)
+                     && PortraitCache.Has(PortraitFolder + line.CharacterName))
+                path = PortraitFolder + line.CharacterName;
+
+            if (path == null) return;   // no portrait → let the base hide the icon as usual
+
+            Sprite sprite = PortraitCache.Get(path);
+            if (sprite == null) return;
+
+            // Reach the base's private serialized icon refs (iconImage / iconContainer).
+            Image iconImage = ResolveBaseIconImage();
+            if (iconImage == null)
+            {
+                FlowTrace.Warn("UI", "PreSeedPortrait: base iconImage not resolved — " +
+                    "portrait will still pop in late (base path only). Holder element name may have changed.");
+                return;
+            }
+
+            iconImage.sprite = sprite;
+
+            Transform iconContainer = ResolveBaseIconContainer();
+            if (iconContainer != null)
+                iconContainer.gameObject.SetActive(true);
+            else
+                FlowTrace.Warn("UI", "PreSeedPortrait: base iconContainer not resolved — " +
+                    "portrait sprite set but container activation deferred to the base.");
+        }
+
+        // Cached handles to the base presenter's PRIVATE serialized icon fields. They
+        // are private on the vendored RPGDialoguePresenter (which we must not edit), so
+        // we read them by reflection ONCE and cache. If reflection ever misses we fall
+        // back to the "Icon Holder" hierarchy lookup the reskin already uses (~line 396):
+        // the holder's own Image is the icon image, the holder itself the container.
+        private Image _baseIconImage;
+        private bool _baseIconImageResolved;
+        private Transform _baseIconContainer;
+        private bool _baseIconContainerResolved;
+
+        private Image ResolveBaseIconImage()
+        {
+            if (_baseIconImageResolved) return _baseIconImage;
+            _baseIconImageResolved = true;
+
+            // Walk up the type chain so we hit the field declared on RPGDialoguePresenter.
+            var f = FindBaseField("iconImage");
+            if (f != null)
+            {
+                object v = f.GetValue(this);
+                _baseIconImage = v as Image;
+            }
+
+            // Fallback: the portrait niche lives under "Icon Holder"; its Image is the
+            // icon image the base resolves to. (Matches ReskinToLightParchmentOnce.)
+            if (_baseIconImage == null)
+            {
+                Transform holder = FindDescendant(transform, "Icon Holder");
+                if (holder != null)
+                {
+                    // The base's iconImage is a child Image of the holder, NOT the
+                    // PortraitNiche we add. Prefer an Image not named "PortraitNiche".
+                    var imgs = holder.GetComponentsInChildren<Image>(true);
+                    foreach (var img in imgs)
+                        if (img != null && img.name != "PortraitNiche") { _baseIconImage = img; break; }
+                }
+            }
+
+            return _baseIconImage;
+        }
+
+        private Transform ResolveBaseIconContainer()
+        {
+            if (_baseIconContainerResolved) return _baseIconContainer;
+            _baseIconContainerResolved = true;
+
+            var f = FindBaseField("iconContainer");
+            if (f != null)
+            {
+                object v = f.GetValue(this);
+                _baseIconContainer = v as Transform;
+            }
+
+            // Fallback: the "Icon Holder" object itself is the container the base toggles.
+            if (_baseIconContainer == null)
+                _baseIconContainer = FindDescendant(transform, "Icon Holder");
+
+            return _baseIconContainer;
+        }
+
+        // Find a (possibly private) instance field by name anywhere up this type's chain
+        // — the icon fields are declared on the vendored RPGDialoguePresenter base.
+        private System.Reflection.FieldInfo FindBaseField(string fieldName)
+        {
+            const System.Reflection.BindingFlags flags =
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.NonPublic |
+                System.Reflection.BindingFlags.DeclaredOnly;
+            for (System.Type t = GetType(); t != null && t != typeof(object); t = t.BaseType)
+            {
+                var f = t.GetField(fieldName, flags);
+                if (f != null) return f;
+            }
+            return null;
         }
 
         // Clear any forced portrait when the conversation ends so it never leaks to the next.

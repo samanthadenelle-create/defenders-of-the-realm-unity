@@ -32,12 +32,17 @@ namespace DeNelle.Editor
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
             Debug.Log("[OuterWorldNavBake] opened " + ScenePath);
 
-            // Level the (flat) terrain so its surface sits at Y=0, flush with the castle floor
-            // (the terrain has historically shipped at Y=-0.5; align it so the seam is clean).
+            // Level the (flat) terrain so the WALKABLE PATH CORRIDOR sits at Y=0, flush with the
+            // castle floor. FIX 2026-06-20 (navlink RCA): the old sample point (42,0,0) was on the
+            // ORIGIN-centered terrain; after the un-stack the terrain spans z=-72..-1072, so (42,0,0)
+            // is OFF the terrain → SampleHeight returns garbage → the whole terrain (and the cave
+            // navmesh at z≈-684) gets mis-leveled → SEAM-OFF-MESH. Sample a point that is actually ON
+            // the flat corridor (x=0, z in [-76,-700]) so the corridor — and the cave — land at Y=0.
+            var levelSample = new Vector3(0f, 0f, -200f);   // on the un-stacked corridor
             foreach (var go in scene.GetRootGameObjects())
                 foreach (var terr in go.GetComponentsInChildren<Terrain>(true))
                 {
-                    float edge = terr.transform.position.y + terr.SampleHeight(new Vector3(42f, 0f, 0f));
+                    float edge = terr.transform.position.y + terr.SampleHeight(levelSample);
                     float delta = 0f - edge;
                     if (Mathf.Abs(delta) > 0.001f)
                     {

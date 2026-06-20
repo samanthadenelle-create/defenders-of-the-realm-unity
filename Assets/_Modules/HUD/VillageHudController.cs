@@ -2325,6 +2325,12 @@ namespace DeNelle.HUD
                 // Ability cluster hugs the bottom-RIGHT corner (right-thumb arc). Taller
                 // to fit the two labeled rows (SPELLS + WEAPON SKILLS) per the mockup.
                 SetAnchors(_skillBar,       new Vector2(0.58f, 0.0f),   new Vector2(1.0f, 0.28f));
+                // CLICK-FIX (F8 overlap probe): the TOWN ACTIONS diamond (BUILD/TALK/BAG/
+                // QUESTS) used a fixed bottom-RIGHT-corner footprint that sat UNDER the
+                // skill-bar slots (which render on the later battleRoot, on top) — so the
+                // BUILD tap could never land. Lift the diamond ABOVE the skill-bar band
+                // (skill top = 0.28) on the right edge, clearing the slot footprint.
+                SetAnchors(_townActionPanel, new Vector2(0.66f, 0.30f), new Vector2(1.0f, 0.58f));
                 // Hero vitals float on the bottom-LEFT, lifted ABOVE the joystick.
                 SetAnchors(_vitalsCluster,  new Vector2(0.02f, 0.235f), new Vector2(0.46f, 0.30f));
                 // Build entry lifts to the upper-right, clear of the skill cluster.
@@ -2354,6 +2360,10 @@ namespace DeNelle.HUD
                 SetAnchors(_resourceStrip,  new Vector2(0.76f, 0.94f), new Vector2(0.995f, 0.99f));
                 // Landscape: more width — ability cluster sits tight in the corner.
                 SetAnchors(_skillBar,       new Vector2(0.74f, 0.0f),   new Vector2(1.0f, 0.34f));
+                // CLICK-FIX (F8 overlap probe): lift the TOWN ACTIONS diamond ABOVE the
+                // landscape skill-bar band (skill top = 0.34) on the right edge so the
+                // BUILD/TALK/BAG/QUESTS icons no longer sit under the slot footprint.
+                SetAnchors(_townActionPanel, new Vector2(0.74f, 0.36f), new Vector2(1.0f, 0.66f));
                 // Vitals bottom-left above the (smaller) landscape joystick.
                 SetAnchors(_vitalsCluster,  new Vector2(0.02f, 0.30f),  new Vector2(0.30f, 0.37f));
                 SetAnchors(_buildBtn,       new Vector2(0.88f, 0.36f),  new Vector2(0.995f, 0.45f));
