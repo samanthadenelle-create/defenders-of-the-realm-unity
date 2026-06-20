@@ -320,6 +320,22 @@ namespace DeNelle.DevTools
                         float screenArea = (float)Screen.width * Screen.height;
                         float gArea = gRect.width * gRect.height;
                         if (screenArea > 0f && gArea >= 0.85f * screenArea) continue;
+
+                        // RectMask2D clip: a scroll-content row (BuyRow_*/EquipRow_*/LabelRow) has a
+                        // RectTransform that can extend OVER a button in CONTENT space, but its parent
+                        // Viewport's RectMask2D clips it there — so the player CAN actually click the button.
+                        // Honor the mask: if the button center lies OUTSIDE an ancestor RectMask2D of g, g is
+                        // clipped where the button is and is NOT a real cover (the false 'Btn_Close <- BuyRow'
+                        // soft-trap, and the bulk of the scroll-panel CLICK-BLOCKED noise).
+                        var clipMask = g.GetComponentInParent<UnityEngine.UI.RectMask2D>();
+                        if (clipMask != null)
+                        {
+                            var maskRt = clipMask.transform as RectTransform;
+                            if (maskRt != null &&
+                                !RectTransformUtility.RectangleContainsScreenPoint(maskRt, center, gCam))
+                                continue;
+                        }
+
                         // Embed the coords so a fleet run is SELF-VERIFYING (real overlap vs math artifact).
                         return $"{g.name} [blockerRect={RectStr(gRect)} btnRect={RectStr(btnRect)} center={center.x:0},{center.y:0}]";
                     }
