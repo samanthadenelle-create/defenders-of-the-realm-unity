@@ -107,11 +107,11 @@ namespace DeNelle.HUD
                 }
                 _document.panelSettings = ps;
             }
-            // DEF: HelpMenu sits at sortingOrder 2700 (it raised itself over the town
-            // mini-map canvas long after this 170 comment was written). At 170 the admin
-            // overlay opened BENEATH the Help panel + town HUD, so "Dev tools" appeared to
-            // do nothing. Sit just above HelpMenu so the dev panel is actually visible.
-            _document.sortingOrder = 2710; // just above HelpMenu (2700)
+            // The DEV overlay must sit ABOVE EVERY in-game panel so it is always usable — incl. the
+            // vendor/shop modals (uGUI Canvas at sortingOrder 31000 + a full-screen scrim). At the old
+            // 2710 the dev panel opened BENEATH an open shop's scrim after talking to a vendor, so its
+            // buttons were non-clickable. 32000 keeps it on top of the 31000 shop + everything below.
+            _document.sortingOrder = 32000; // topmost — above the 31000 shop/vendor modals
             BuildUi();
             _built = true;
             return true;
