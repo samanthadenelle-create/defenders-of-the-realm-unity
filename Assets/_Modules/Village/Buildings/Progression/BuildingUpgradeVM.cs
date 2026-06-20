@@ -176,6 +176,21 @@ namespace DeNelle.Village.Buildings.Progression
         public void Select(string tierId)
         {
             if (string.IsNullOrEmpty(tierId)) return;
+            // WO-432 — a research-perk row ("perk:<perkId>"): buy it with Gold (Coins).
+            if (tierId.StartsWith("perk:", StringComparison.Ordinal))
+            {
+                string perkId = tierId.Substring("perk:".Length);
+                if (BuildingPerkService.TryResearch(_buildingId, perkId))
+                    Status = "Researched.";
+                else
+                {
+                    BuildingPerkService.CanResearch(_buildingId, perkId, out string why);
+                    Status = !string.IsNullOrEmpty(why) ? why : "Can't research that yet.";
+                }
+                Rebuild();
+                Raise();
+                return;
+            }
             if (tierId == NextTierId()) { UpgradeNext(); return; }
             Status = "Tap the next tier to upgrade.";
             Raise();
@@ -220,6 +235,31 @@ namespace DeNelle.Village.Buildings.Progression
                     // Equipped flag carries "current/owned"; Locked carries "not yet reachable".
                     _upgrades.Add(new ItemVM(id, name, IconRoleTier, id, 0, "", affordable,
                                              rarity: null, equipped: isCurrent, locked: locked));
+                }
+            }
+
+            // WO-432 RESEARCH ROWS — every perk unlocked at a REACHED tier shows as a Gold-cost row
+            // under the tier ladder (owned = OWNED chip; gate-not-met = LOCKED; else NEXT + affordability
+            // colour). A perk-row tap routes to BuildingPerkService via Select("perk:<id>"). Rows are
+            // View-agnostic (a future Blink prefab View binds the same data — WO-435).
+            if (def != null && def.Tiers != null)
+            {
+                foreach (var t in def.Tiers)
+                {
+                    if (t == null || t.Perks == null) continue;
+                    foreach (var p in t.Perks)
+                    {
+                        if (p == null || string.IsNullOrEmpty(p.Id)) continue;
+                        bool owned = BuildingPerkService.IsOwned(_buildingId, p.Id);
+                        bool can = !owned && BuildingPerkService.CanResearch(_buildingId, p.Id, out _);
+                        bool affordable = can && (_economy == null || _economy.Coins >= p.GoldCost);
+                        string rid = "perk:" + p.Id;
+                        string pname = (p.IsSignature ? "★ " : "") + (!string.IsNullOrEmpty(p.Name) ? p.Name : p.Id);
+                        _costById[rid] = owned ? "Researched" : (p.GoldCost + " Gold");
+                        string iconKey = string.IsNullOrEmpty(p.IconId) ? p.Id : p.IconId;
+                        _upgrades.Add(new ItemVM(rid, pname, "perk", iconKey, 0, "", affordable,
+                                                 rarity: null, equipped: owned, locked: !owned && !can));
+                    }
                 }
             }
 
