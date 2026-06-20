@@ -46,6 +46,7 @@ namespace DeNelle.Village.Items
         // Craft panel: toggled by a button; one button per recipe.
         private GameObject _craftPanel;
         private RectTransform _craftToggleRect;
+        private RectTransform _craftCloseRect;   // ✕ in the panel header — dismiss affordance
         private readonly List<(RectTransform rect, string recipeId, Text label)> _craftButtons =
             new List<(RectTransform, string, Text)>();
 
@@ -97,6 +98,14 @@ namespace DeNelle.Village.Items
             // Craft buttons (only when the panel is open).
             if (_craftPanel != null && _craftPanel.activeSelf)
             {
+                // Close ✕ — dismiss the panel (matches the toggle's hide path).
+                if (_craftCloseRect != null &&
+                    RectTransformUtility.RectangleContainsScreenPoint(_craftCloseRect, tap, null))
+                {
+                    _craftPanel.SetActive(false);
+                    return;
+                }
+
                 for (int i = 0; i < _craftButtons.Count; i++)
                 {
                     var (rect, recipeId, _) = _craftButtons[i];
@@ -210,8 +219,19 @@ namespace DeNelle.Village.Items
             title.fontStyle = FontStyle.Bold;
             title.text = "Craft Consumables";
             var trt = title.rectTransform;
-            trt.anchorMin = new Vector2(0.05f, 0.90f); trt.anchorMax = new Vector2(0.95f, 0.99f);
+            trt.anchorMin = new Vector2(0.05f, 0.90f); trt.anchorMax = new Vector2(0.82f, 0.99f);
             trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
+
+            // Close affordance — the owner hit this panel with "no close option". A ✕ in the header,
+            // wired into the same rect-tap loop as the craft buttons (this HUD uses manual tap routing,
+            // not onClick). Mirrors the dismiss pattern other modals use (BuildingUpgradePanel etc.).
+            var (closeRect, closeLabel) = MakeButton(
+                _craftPanel.transform, "CraftClose",
+                new Vector2(0.84f, 0.905f), new Vector2(0.965f, 0.985f),
+                ElarionUiKit.Cell);
+            closeLabel.text = "✕";
+            closeLabel.color = ElarionUi.Danger;
+            _craftCloseRect = closeRect;
 
             var recipes = ConsumableCraftingCatalog.All;
             if (recipes != null)
