@@ -347,3 +347,5 @@ WO-419 enemies-don't-attack-post-transition, WO-315/326 facing), Lane 6 (WO-325 
 WO-424 harvest→HUD, WO-425 hero-unarmed), Lane 4 code-built fixes (WO-414 black-circle, WO-428
 health-bar-doesn't-move, WO-417 settings-labels-blank). These get pulled into silos as I clear the
 first five. Everything Lane 1/12 + design-deferred stays PARKED for an owner-driven session.
+
+**2026-06-20 ~04:3x — bug-poll: steady-state, no action.** Fleets seeds 19→48 all clean (real signals 0; ranked tickets = only known CLICK-BLOCKED + headless noise; bot completes castle→Village2 flow). No new/actionable bugs. Remaining = owner-gated (WO-432/433, item-preview, messy-UI, felt/visual verifies) + the deferred UITK modal-aware probe. Loop converged; not manufacturing work.
