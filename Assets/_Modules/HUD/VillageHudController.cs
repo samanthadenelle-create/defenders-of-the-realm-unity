@@ -2570,10 +2570,20 @@ namespace DeNelle.HUD
         /// <summary>Town GOLD/Coins badge (index 4) — mirrors SetCrystals; fed by HeartHudBridge.</summary>
         public void SetGold(int amount) { SetTownResource(4, amount); }
 
+        // §12 log-on-change cache: SetResources is invoked every frame by HeartHudBridge.
+        private int _lastLogWood = int.MinValue, _lastLogIron = int.MinValue,
+                    _lastLogFood = int.MinValue, _lastLogGems = int.MinValue;
+
         public void SetResources(int wood, int iron, int food, int gems)
         {
-            DeNelle.Core.Diagnostics.FlowTrace.Step("Eco",
-                $"HUD.SetResources W{wood} I{iron} F{food} C{gems} (battleTexts={(_resourceTexts != null)}, townTexts={(_townResText != null)})");
+            // Trace ONLY on change — an unconditional per-frame Step floods the capture (drowned the
+            // seam-cross lines in the owner's F8) and allocs a string/frame. The HUD still updates below.
+            if (wood != _lastLogWood || iron != _lastLogIron || food != _lastLogFood || gems != _lastLogGems)
+            {
+                _lastLogWood = wood; _lastLogIron = iron; _lastLogFood = food; _lastLogGems = gems;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Eco",
+                    $"HUD.SetResources W{wood} I{iron} F{food} C{gems} (battleTexts={(_resourceTexts != null)}, townTexts={(_townResText != null)})");
+            }
             if (_resourceTexts != null && _resourceTexts.Length >= 4)
             {
                 // Audit P1 fix (per-element null checks): guard each slot like

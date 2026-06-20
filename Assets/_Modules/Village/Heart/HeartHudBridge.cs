@@ -44,6 +44,9 @@ namespace DeNelle.Village
         private MethodInfo _setCrystals;     // SetCrystals(int amount)
         private MethodInfo _setGold;         // SetGold(int amount) — town Gold/Coins badge (optional)
         private MethodInfo _setResources;    // SetResources(int wood, int iron, int food, int gems)
+        // §12 log-on-change cache: PushResources runs every frame; trace only when the wallet moves.
+        private int _lastLoggedWood = int.MinValue, _lastLoggedIron = int.MinValue,
+                    _lastLoggedFood = int.MinValue, _lastLoggedCrystals = int.MinValue;
         private HeartController _heart;
         private readonly object[] _hpArgs = new object[2];
         private readonly object[] _crystalArgs = new object[1];
@@ -213,8 +216,17 @@ namespace DeNelle.Village
             _resourceArgs[2] = snapshot.Food;
             _resourceArgs[3] = snapshot.Crystals;
             _setResources.Invoke(_hud, _resourceArgs);
-            DeNelle.Core.Diagnostics.FlowTrace.Step("Eco",
-                $"HeartHudBridge pushed HUD W{snapshot.Wood} I{snapshot.Iron} F{snapshot.Food} C{snapshot.Crystals}");
+            // §12: this runs every frame — log ONLY when the wallet changes, else the trace floods the
+            // capture (it drowned the seam-cross lines in the owner's F8 grab) and allocs a string/frame.
+            // The HUD push itself stays every-frame (unchanged behavior); only the trace is gated.
+            if (snapshot.Wood != _lastLoggedWood || snapshot.Iron != _lastLoggedIron ||
+                snapshot.Food != _lastLoggedFood || snapshot.Crystals != _lastLoggedCrystals)
+            {
+                _lastLoggedWood = snapshot.Wood; _lastLoggedIron = snapshot.Iron;
+                _lastLoggedFood = snapshot.Food; _lastLoggedCrystals = snapshot.Crystals;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Eco",
+                    $"HeartHudBridge pushed HUD W{snapshot.Wood} I{snapshot.Iron} F{snapshot.Food} C{snapshot.Crystals}");
+            }
         }
 
         private void Update()
