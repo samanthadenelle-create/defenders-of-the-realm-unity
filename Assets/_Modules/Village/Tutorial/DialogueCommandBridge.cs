@@ -98,6 +98,15 @@ namespace DeNelle.Village
 
         private void RegisterCommands()
         {
+            // Quest/rumor board (owner 2026-06-20): expose the REAL story board
+            // (RumorBoardPanel) to the HUD context button through PanelRouter. The board
+            // has no PanelId opener of its own (it's driven by the dialogue node-start
+            // hook), so the HUD couldn't reach it; this registration is the seam. Idempotent
+            // — Install may re-run; Register replaces the opener with this live instance's
+            // method, so the delegate never goes stale across re-installs.
+            DeNelle.Core.UI.PanelRouter.Register(
+                DeNelle.Core.UI.PanelId.RumorBoard, OpenRumorBoard);
+
             // Camera
             Reg("camera_focus",          (Action<string>)CmdCameraFocus);
             Reg("camera_glance",         (Action<string>)CmdCameraFocus);

@@ -149,9 +149,18 @@ namespace DeNelle.Village
             // DEF-203: register the shared on-screen Interact button while in range so
             // touch/mobile (no keyboard) can fire the same action. Desktop F unchanged.
             if (inRange)
+            {
                 MobileInteractButton.Request(this, "Interact: " + LabelFor(_building.Type), Interact);
+                // Owner 2026-06-20: tell the HUD an upgradable, not-maxed building is in reach
+                // so its bottom button swaps Quest -> Upgrade, focused on THIS building's id.
+                if (IsUpgradableNotMaxed(_myHookId)) DeNelle.Core.UI.HudBuildingFocus.Set(_myHookId);
+                else DeNelle.Core.UI.HudBuildingFocus.Clear(_myHookId);
+            }
             else
+            {
                 MobileInteractButton.Release(this);
+                DeNelle.Core.UI.HudBuildingFocus.Clear(_myHookId);   // release focus if we held it
+            }
 
             // DEF-217: the shared MobileInteractButton is now the SINGLE canonical
             // interaction prompt. Suppress the world-space bubble whenever the button is
@@ -171,6 +180,24 @@ namespace DeNelle.Village
         private void OnDisable()
         {
             MobileInteractButton.Release(this);
+            DeNelle.Core.UI.HudBuildingFocus.Clear(_myHookId);   // don't leave the HUD focused on a gone building
+        }
+
+        /// <summary>
+        /// True when this building can still be upgraded (owner 2026-06-20 — drives the
+        /// HUD's Quest↔Upgrade context swap). Mirrors the Interact() upgrade gate: a city
+        /// tier-catalog building is upgradable only while its current tier is below max; a
+        /// legacy resource building not in the catalog (e.g. farm) counts as upgradable and
+        /// shows its own maxed state in the panel. Forge/Lumbermill live in the catalog, so
+        /// they get the precise not-maxed gate.
+        /// </summary>
+        private static bool IsUpgradableNotMaxed(string hookId)
+        {
+            if (string.IsNullOrEmpty(hookId)) return false;
+            if (DeNelle.Core.State.BuildingTierCatalog.IsUpgradable(hookId))
+                return DeNelle.Core.State.ModifierService.TierOf(hookId)
+                     < DeNelle.Core.State.BuildingTierCatalog.MaxTier(hookId);
+            return Buildings.Progression.ResourceBuildingProgression.IsResourceBuilding(hookId);
         }
 
         // ── Prompt ──────────────────────────────────────────────────────────

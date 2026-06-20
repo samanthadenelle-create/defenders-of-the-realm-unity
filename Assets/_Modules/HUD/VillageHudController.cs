@@ -434,7 +434,7 @@ namespace DeNelle.HUD
         private const string IconTalk         = "hud_talk";
         private const string IconQuest        = "hud_quest";
         private const string IconBuild        = "hud_build";    // standalone Resources/HudIcons/hud_build (tower)
-        private const string IconUpgrade      = "hud_upgrade";  // standalone Resources/HudIcons/hud_upgrade (owner-made); glyph fallback below
+        private const string IconUpgrade      = "Upgrade";      // standalone Resources/HudIcons/Upgrade.png (owner-made); glyph fallback below
         private const string IconIntel        = "hud_intel";    // standalone Resources/HudIcons/hud_intel (periscope/lookout)
         private const string IconRaid         = "hud_raid_2";   // standalone Resources/HudIcons/hud_raid_2 (crossed swords → enter raids)
         private const string IconHeart        = "hud_heart";    // standalone Resources/HudIcons/hud_heart (Heart-of-Elarion crest)
@@ -911,6 +911,10 @@ namespace DeNelle.HUD
             // an active wave only (Countdown/Active). In the non-combat castle hub they
             // would otherwise show a context-free green party-HP bar + "10/10" mana.
             ApplyCombatGate();
+
+            // Context action button: swap Quest <-> Upgrade by building proximity (owner
+            // 2026-06-20). Cheap — only re-skins the button when the focus state flips.
+            RefreshContextActionButton();
 
             // Countdown timer text + urgency colour (only when a wave is pending).
             if (_townTimerText != null)
@@ -1412,15 +1416,25 @@ namespace DeNelle.HUD
                     InventoryRequested?.Invoke();        // legacy per-instance event (Village bridge self-heal)
                     RaiseInventoryRequested();           // instance-independent static bridge (never goes stale)
                 });
-            // Bottom of the diamond: UPGRADE shortcut (was QUESTS) -> opens the building Upgrade panel
-            // (WO-432). Quests move to a dedicated quest board (WO-436). Glyph fallback "^" until the
-            // owner's hud_upgrade icon (Resources/HudIcons/hud_upgrade) is imported.
+            // Bottom of the diamond: CONTEXT button (owner 2026-06-20). It TOGGLES between
+            // QUESTS and UPGRADE by proximity — Upgrade (focused on that building) while the
+            // hero stands next to an upgradable, not-maxed building; otherwise the Quest/Rumor
+            // board. One button, one persistent tap handler that reads the live focus; only the
+            // icon + glow swap (RefreshContextActionButton, driven from UpdateTownHud). Built in
+            // the default Quest state; the first town tick swaps it if a building is already in
+            // reach. Glyph fallbacks: "^" Upgrade / "!" Quest until the sprites import.
             _upgradeButton = BuildIconButton(_townActionPanel, new Vector2(0.30f, 0.02f), new Vector2(0.70f, 0.44f),
-                IconUpgrade, "^", () => PanelRouter.Open(PanelId.BuildingUpgrade));
-            // Chasing-comet attention cue around the Upgrade button, the same cue Talk uses.
+                IconQuest, "!", OnContextActionTapped);
+            // Chasing-comet attention cue — same cue Talk uses, but ONLY shown in Upgrade mode
+            // (an actionable building is in reach). Starts hidden; RefreshContextActionButton
+            // toggles it. Quest mode = no comet (the board is always available, not a prompt).
             _upgradeGlow = AttentionGlowUi.Attach((RectTransform)_upgradeButton.transform,
                 new Color(1f, 0.85f, 0.35f, 1f), HudTheme.Disc);
-            if (_upgradeGlow != null) _upgradeGlow.transform.SetAsLastSibling();
+            if (_upgradeGlow != null)
+            {
+                _upgradeGlow.transform.SetAsLastSibling();
+                _upgradeGlow.gameObject.SetActive(false);   // default Quest mode: comet off
+            }
 
             // Reusable chasing-comet attention cue around the Talk button (also for tutorial focusing).
             _talkGlow = AttentionGlowUi.Attach((RectTransform)_talkButton.transform,
@@ -1431,6 +1445,68 @@ namespace DeNelle.HUD
             if (_talkGlow != null) _talkGlow.transform.SetAsLastSibling();
 
             SetTalkAvailable(false);   // gated until a talkable NPC is in range
+            RefreshContextActionButton();   // set the initial Quest/Upgrade face from current focus
+        }
+
+        // ── Context action button (owner 2026-06-20) ────────────────────────────
+        // The bottom diamond button toggles Quest <-> Upgrade by proximity. The focus
+        // (which upgradable building, if any, the hero is next to) is the cross-assembly
+        // HudBuildingFocus signal that BuildingInteractable sets/clears. We only swap the
+        // icon + glow when the mode flips; the tap handler is persistent and reads the
+        // live focus at click time, so no per-frame listener churn.
+        private bool _ctxUpgradeMode;   // current face: true = Upgrade, false = Quest
+        private bool _ctxModeInit;      // false until the first RefreshContextActionButton runs
+
+        /// <summary>Persistent tap handler — routes to the building Upgrade panel (focused on
+        /// the in-range building) when one is in reach, else the real Quest/Rumor board.</summary>
+        private void OnContextActionTapped()
+        {
+            string id = DeNelle.Core.UI.HudBuildingFocus.CurrentBuildingId;
+            if (!string.IsNullOrEmpty(id))
+            {
+                FlowTrace.Step("HUD", "Context button -> Building Upgrade (focus='" + id + "').");
+                PanelRouter.Open(PanelId.BuildingUpgrade, id);
+            }
+            else
+            {
+                FlowTrace.Step("HUD", "Context button -> Quest/Rumor board.");
+                if (!PanelRouter.Open(PanelId.RumorBoard))
+                    FlowTrace.Warn("HUD", "RumorBoard opener not registered — quest board unreachable from HUD.");
+            }
+        }
+
+        /// <summary>Re-evaluate the context button face from the live building focus and
+        /// swap the icon (sprite-first, glyph fallback) + comet only when the mode flips.
+        /// Cheap no-op when nothing changed; called every town tick from UpdateTownHud.</summary>
+        private void RefreshContextActionButton()
+        {
+            if (_upgradeButton == null) return;
+            bool upgrade = !string.IsNullOrEmpty(DeNelle.Core.UI.HudBuildingFocus.CurrentBuildingId);
+            if (_ctxModeInit && upgrade == _ctxUpgradeMode) return;   // unchanged — skip the swap
+            _ctxModeInit = true;
+            _ctxUpgradeMode = upgrade;
+
+            // Swap the art on the button's "Glyph" child (built by AddWidgetIcon under the cell).
+            // Sprite-first; if the pack art is missing, fall back to the code glyph
+            // ("^" Upgrade / "!" Quest).
+            var iconRt = _upgradeButton.transform.Find("Glyph");
+            if (iconRt != null)
+            {
+                var img = iconRt.GetComponent<Image>();
+                var txt = iconRt.GetComponentInChildren<TextMeshProUGUI>();
+                string widget   = upgrade ? IconUpgrade : IconQuest;
+                string fallback = upgrade ? "^" : "!";
+                bool hasArt = img != null && TrySetWidget(img, widget);
+                if (img != null && !hasArt) { img.color = new Color(0f, 0f, 0f, 0f); img.raycastTarget = false; }
+                if (txt != null)
+                {
+                    txt.gameObject.SetActive(!hasArt);
+                    if (!hasArt) txt.text = fallback;
+                }
+            }
+
+            // Comet invites the Upgrade action only (a building is in reach); Quest = no comet.
+            if (_upgradeGlow != null) _upgradeGlow.gameObject.SetActive(upgrade);
         }
 
         /// <summary>

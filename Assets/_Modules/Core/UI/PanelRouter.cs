@@ -48,6 +48,9 @@ namespace DeNelle.Core.UI
         PetSkillTree = 4,
         /// <summary>Party weapon/armor shop — the native code-built MVVM gear store (PartyShopPanelMvvm).</summary>
         PartyShop = 5,
+        /// <summary>Quest / rumor board — the real story board (RumorBoardPanel, WO-304/436).
+        /// Registered by DialogueCommandBridge so the HUD context button can open it.</summary>
+        RumorBoard = 6,
     }
 
     /// <summary>
