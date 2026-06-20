@@ -698,6 +698,7 @@ namespace DeNelle.Village
             if (armorInstance == null) return false;
             var skins = armorInstance.GetComponentsInChildren<SkinnedMeshRenderer>(true);
             int total = 0, skinNamed = 0;
+            bool hasHead = false;
             var names = new System.Text.StringBuilder();
             foreach (var r in skins)
             {
@@ -705,16 +706,24 @@ namespace DeNelle.Village
                 total++;
                 if (names.Length > 0) names.Append(", ");
                 names.Append(r.name);
-                if (IsSkinRenderer(r.name)) skinNamed++;
+                string n = r.name.ToLowerInvariant();
+                // Owner fix 2026-06-20: Blink full-body sets ship the body under generic names ('Body'/
+                // 'Torso'/'Legs'), which the base IsSkinRenderer vocabulary (head/hand/face) misses — so a
+                // full-body set false-read as pieces-only and the base head/hands stayed = double head.
+                // Count body/torso too, and flag a HEAD renderer (face/hair) as a definitive full-body tell.
+                bool head = n.Contains("head") || n.Contains("face") || n.Contains("hair");
+                bool bodyish = n.Contains("body") || n.Contains("torso") || n.Contains("legs");
+                if (head) hasHead = true;
+                if (head || bodyish || IsSkinRenderer(r.name)) skinNamed++;
             }
-            bool fullBody = skinNamed > 0;
-            // §12 capture for the owner-reported "body parts not joined": log the FULL renderer-name
-            // list. If a Blink full-body SET ships its body under generic names ('Body'/'Torso'/'Legs')
-            // with skinNamed=0, detection wrongly reads pieces-only and KEEPS the base head/hands →
-            // two rigs drift = "not joined". This list tells us the exact names to teach the detector.
+            // Full-body if it ships a HEAD (it replaces the face → must hide the base head) OR >=2 skin/
+            // body meshes (head+body / body+hands). A lone pieces-only overlay (skinNamed<2, no head)
+            // stays pieces-only so the base skin shows under it. §12: the renderer-name list is logged so
+            // a residual case still self-identifies.
+            bool fullBody = hasHead || skinNamed >= 2;
             FlowTrace.Step("ArmorVisual",
-                $"ArmorShipsOwnSkin: {total} skinned renderer(s) [{names}], {skinNamed} skin-named " +
-                $"=> fullBody={fullBody}.");
+                $"ArmorShipsOwnSkin: {total} skinned renderer(s) [{names}], skinNamed={skinNamed} " +
+                $"hasHead={hasHead} => fullBody={fullBody}.");
             return fullBody;
         }
 
