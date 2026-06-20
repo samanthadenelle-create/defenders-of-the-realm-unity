@@ -88,16 +88,34 @@ namespace DeNelle.Core.State
         private static GameModifiers Compute()
         {
             var result = new GameModifiers();
-            var tiers = GameStateService.Instance != null && GameStateService.Instance.State != null
-                ? GameStateService.Instance.State.BuildingTiers : null;
-            if (tiers == null) return result;
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            var tiers = state != null ? state.BuildingTiers : null;
 
-            foreach (var kv in tiers)
+            if (tiers != null)
             {
-                int tier = kv.Value;
-                if (tier < 1) continue;
-                var def = BuildingTierCatalog.TierOf(kv.Key, tier);
-                if (def != null && def.Modifiers != null) Apply(result, def.Modifiers);
+                foreach (var kv in tiers)
+                {
+                    int tier = kv.Value;
+                    if (tier < 1) continue;
+                    var def = BuildingTierCatalog.TierOf(kv.Key, tier);
+                    if (def != null && def.Modifiers != null) Apply(result, def.Modifiers);
+                }
+            }
+
+            // WO-432 — owned research perks fold in ON TOP of the tier modifiers (a perk's effect IS a
+            // GameModifiers, compiled identically). Key = "buildingId:perkId". This is what carries the
+            // numerical research (damage/armor) + the signature ability flags into towers/troops/raids.
+            var owned = state != null ? state.OwnedBuildingPerks : null;
+            if (owned != null)
+            {
+                foreach (var key in owned)
+                {
+                    if (string.IsNullOrEmpty(key)) continue;
+                    int sep = key.IndexOf(':');
+                    if (sep <= 0 || sep >= key.Length - 1) continue;
+                    var perk = BuildingTierCatalog.FindPerk(key.Substring(0, sep), key.Substring(sep + 1));
+                    if (perk != null && perk.Modifiers != null) Apply(result, perk.Modifiers);
+                }
             }
             return result;
         }

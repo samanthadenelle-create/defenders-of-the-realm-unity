@@ -44,6 +44,12 @@ namespace DeNelle.Village.Buildings.Progression
             var def = BuildingTierCatalog.TierOf(id, targetTier);
             if (def != null && targetTier == current + 1)
             {
+                // WO-432 TECH-GATE: a tier locked behind the Village/Stronghold Tier (Heart of Elarion)
+                // can't be bought until the village reaches it — the WC3 "need a Keep for tier-2" rule.
+                var gateState = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+                int villageTier = gateState != null ? gateState.VillageTier : 0;
+                if (def.RequiresVillageTier > villageTier) return false;
+
                 var cost = new DeNelle.Village.ResourceCost { Wood = def.CostWood, Food = def.CostFood, Crystals = def.CostCrystal };
                 var econ = EconomyService.Instance;
                 var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;

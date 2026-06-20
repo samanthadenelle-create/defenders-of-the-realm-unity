@@ -122,6 +122,37 @@ namespace DeNelle.Core.State
         /// <summary>True if this id is an upgradable building (in the catalog).</summary>
         public static bool IsUpgradable(string id) => Find(id) != null;
 
+        /// <summary>WO-432 — the research-perk def for (building, perk), or null. Searches every tier's perks.</summary>
+        public static BuildingPerkDef FindPerk(string buildingId, string perkId)
+        {
+            if (string.IsNullOrEmpty(perkId)) return null;
+            var b = Find(buildingId);
+            if (b == null || b.Tiers == null) return null;
+            foreach (var t in b.Tiers)
+            {
+                if (t == null || t.Perks == null) continue;
+                foreach (var p in t.Perks)
+                    if (p != null && p.Id == perkId) return p;
+            }
+            return null;
+        }
+
+        /// <summary>WO-432 — the building tier at which a perk unlocks (its owning Tiers[] entry), or
+        /// int.MaxValue if the perk is unknown. The perk's research gate (building tier + village tier).</summary>
+        public static int PerkUnlockTier(string buildingId, string perkId)
+        {
+            if (string.IsNullOrEmpty(perkId)) return int.MaxValue;
+            var b = Find(buildingId);
+            if (b == null || b.Tiers == null) return int.MaxValue;
+            foreach (var t in b.Tiers)
+            {
+                if (t == null || t.Perks == null) continue;
+                foreach (var p in t.Perks)
+                    if (p != null && p.Id == perkId) return t.Tier;
+            }
+            return int.MaxValue;
+        }
+
         public static void Reload() { _data = null; EnsureLoaded(); }
 
         private static void EnsureLoaded()
