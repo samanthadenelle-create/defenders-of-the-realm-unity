@@ -262,6 +262,16 @@ the game). **The headless fleet now runs clean on every real signal.**
   INTENTIONAL modal scrim (would cut ~389 expected lines/fleet → cleaner captures). Low priority, risks
   masking a real occlusion — left for a considered pass, not a blind overnight change.
 
+**2026-06-20 ~01:4x — bug-poll: fleet green, last noise source (CLICK-BLOCKED) refined**
+- Poll found NO new game bugs (fleet fully green on real signals). Remaining backlog is all owner-gated
+  (WO-432/433 design calls, item-preview, messy-UI, felt/visual verifies) — NOT fixed blind.
+- **CLICK-BLOCKED modal-scrim noise refined** (`cde3d965`) — the bot opens panels, so a full-screen scrim
+  covers the HUD behind it; the probe flagged every covered button (~389/fleet). A button behind an
+  INTENTIONAL open modal is expected, not a bug. Now skips full-screen covers (>=85% of screen), still
+  flags PARTIAL-element overlaps (the real class, e.g. the fixed Icon_hud_build-behind-Slot0). Same
+  noise-reduction class as the DUAL-NAVMESH + Eco-spam fixes. Rebuild bkr94gy1e → fleet to confirm the
+  captures are now genuinely clean (CLICK-BLOCKED → real-only).
+
 ### Overnight scorecard so far
 - **Fixed + gated + pushed:** A1 pink-Body, B1 seam-guard, C1 craft-close, WO-327 wave-trigger (4). 
 - **Already-fixed/verified:** WO-325 node NRE, crystal spam, edge portal (3).
