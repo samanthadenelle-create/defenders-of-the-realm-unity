@@ -13,6 +13,9 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
 - **Instrument, don't guess** — trace flows, name the exact object, verify.
 - **One thing at a time, fully verified before the next.**
 - **Deliver complete + felt-verified. No piecemeal.**
+- **Ticket pipeline (BINDING):** QA (read-only RCA, classify NEW-feature vs EXISTING) → CLI
+  (implement + headless-verify) → PO (felt-verify + close). Shared board = the Task list; log
+  every hand-off. Full spec: `docs/TICKET_PIPELINE.md`.
 
 ## Current State
 - **Game:** Defenders of the Realm (Unity 6 / URP, Solana integration, tower-defense + dungeon-crawler).
@@ -26,6 +29,7 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
 - `docs/UI_MVVM_BINDING_MAP.md`
 - `docs/BLINK_UI.md`
 - `docs/ARCHITECTURE_PRINCIPLES.md`
+- `docs/TICKET_PIPELINE.md` (QA→CLI→PO ticket lifecycle, BINDING)
 - `WORK_ORDER_432` / `WORK_ORDER_433`
 
 ---

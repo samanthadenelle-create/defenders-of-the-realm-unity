@@ -270,3 +270,23 @@ is proven stable — leave traces in while a system is being stabilised.
 toggle/lifecycle, where-to-instrument checklist, Guard usage, regression authoring,
 conventions — lives in `docs/INSTRUMENTATION_STANDARD.md`. §12 is the *rule*; that doc is
 the *method*.
+
+---
+
+## 13. Ticket Pipeline — QA → CLI → PO (BINDING)
+
+Owner directive (2026-06-20): the playtest/bug backlog runs through a **role-separated**
+pipeline. **Full spec: `docs/TICKET_PIPELINE.md` (BINDING — read it before working tickets).**
+In one breath:
+
+- **PO** (the owner) pulls a ticket from the QUEUE (F8 `break-log` flags), sets its **SILO**,
+  routes to QA; and **after deploy felt-verifies + CLOSES** it (headless can't judge feel).
+- **QA Triage = read-only agents.** Classify **NEW FEATURE vs EXISTING** first. NEW (not built)
+  → back to PO as a spec/WO — never RCA-fix the unbuilt. EXISTING → read-only RCA → push to CLI.
+- **CLI** (this seat, **sole committer**) validates + implements + **headless-verifies**
+  (`CompileGate` + AutoPilot fleet / `DataRegression`) + deploys → hands to PO. Never claims
+  fixed on faith (§5/§12).
+- **Shared board = the Task list** (one task per ticket; metadata `{ticket,type,silo,stage,
+  handoffLog}` is the hand-off log). **Log every hand-off.**
+- **Role separation is non-negotiable:** QA doesn't write, CLI doesn't classify-triage, PO closes
+  (not CLI). Read-only constraint on early triage.
