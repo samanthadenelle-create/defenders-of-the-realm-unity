@@ -310,6 +310,17 @@ the game). **The headless fleet now runs clean on every real signal.**
   bug, trapped=real. Not burning more cycles guessing at 3 AM; a glance settles it.
 - All real-signal probes remain **0**. Game stays verifiably clean.
 
+**2026-06-20 ~03:3x — shop Close occlusion root-caused FROM CODE (no owner needed) → probe RectMask2D fix**
+- Re-examined rather than punting to the owner check (the RIGHT path is to determine it from code). Found:
+  the buy-rows have **no own Canvas** + sit inside a **Viewport with RectMask2D** (ShopPanel.cs:573), and
+  the CLICK-BLOCKED probe had **zero RectMask2D handling**. So a row's RectTransform extends over Btn_Close
+  in CONTENT space, but the mask clips it there — the player CAN click Close. **It was a probe false
+  positive, not a player trap.**
+- **FIXED (`860fbc74`)** — the probe now skips a blocker whose ancestor RectMask2D doesn't contain the
+  button center (clipped там = not a real cover). Real unmasked partial occlusions still flag. Expected to
+  clear `Btn_Close <- BuyRow` AND a chunk of the scroll-panel CLICK-BLOCKED noise. Rebuild bxht0wv6b →
+  fleet to confirm. (This is the deeper, correct fix; the earlier SetAsLastSibling stays as harmless hardening.)
+
 ### Overnight scorecard so far
 - **Fixed + gated + pushed:** A1 pink-Body, B1 seam-guard, C1 craft-close, WO-327 wave-trigger (4). 
 - **Already-fixed/verified:** WO-325 node NRE, crystal spam, edge portal (3).
