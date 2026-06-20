@@ -51,7 +51,11 @@ namespace DeNelle.Editor
         private const string TriggerName = "CavePortal_Trigger";
 
         // Corridor terminus — the far end of the enlarged OuterWorld.
-        private static readonly Vector3 CavePos = new Vector3(0f, 0f, -700f);
+        // OWNER DECISION 2026-06-20: park the 600m walk to the far cave — put the outpost portal at
+        // the OUTERWORLD EDGE the player actually reaches just past the seam (~z-150, where she was),
+        // so the outpost is quick-access right after crossing. (The far-cave concept is parked, not
+        // deleted — bump this Z south again later for a "deep" entrance.)
+        private static readonly Vector3 CavePos = new Vector3(0f, 0f, -150f);
 
         // Village2 stronghold hero spawn. EnemyStrongholdBuilder.Build (~line 177)
         //   var entryPos = new Vector3(0f, 0.1f, -(courtyardHalf + 6f));
@@ -100,18 +104,18 @@ namespace DeNelle.Editor
                 $"target Village2 @ {Village2SpawnPos}, scene-saved={saved}.");
         }
 
-        // Prefer an explicit OuterWorld/Exterior root; otherwise place at scene root.
+        // Parent the portal under a root that SURVIVES a terrain rebuild. CRITICAL (2026-06-20):
+        // ExteriorTerrainBuilder.BuildExterior NUKES its "ExteriorRoot" — if the cave is parented
+        // there, a later BuildExterior DESTROYS it (owner: "the portal didn't spawn, we were at the
+        // end"). So we (a) NEVER use ExteriorRoot/ExteriorTerrainRoot, and (b) loop candidates OUTER
+        // so OuterWorldRoot (which BuildExterior preserves) wins regardless of scene root order.
         private static Transform FindRoot(Scene scene)
         {
-            string[] candidates = { "OuterWorldRoot", "ExteriorRoot", "OuterWorld", "ExteriorTerrainRoot" };
-            foreach (var go in scene.GetRootGameObjects())
-            {
-                foreach (var name in candidates)
-                {
-                    if (go.name == name) return go.transform;
-                }
-            }
-            return null; // scene root
+            string[] candidates = { "OuterWorldRoot", "OuterWorld" };   // BuildExterior-safe roots only
+            foreach (var name in candidates)
+                foreach (var go in scene.GetRootGameObjects())
+                    if (go != null && go.name == name) return go.transform;
+            return null; // scene root (also survives BuildExterior; only ExteriorRoot is nuked)
         }
 
         private static void DestroyExisting(Transform parent, Scene scene)
