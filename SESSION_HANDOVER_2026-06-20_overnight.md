@@ -189,6 +189,22 @@ from the **synced git mirror** (the repo board the doc + Notion are kept in lock
     mask an unknown wiring cause. Needs repro (fleet oracle: does the bot's hero hold a weapon?). NOT blind-fixed.
   - This is quality-first: 2 speculative fixes avoided > 2 wrong patches shipped (deliver-verified, §12).
 
+**2026-06-20 ~00:5x — PINK-BODY actually root-caused (instrument-don't-guess paid off) + Village2 spec**
+- **The fresh-build fleet caught that A1 did NOT fix the owner's pink** (6 magenta hits, t=4.4s, ZERO armor
+  events → not the armor overlay). New RCA on the hard data → the REAL object: **`StoryCompanionInjector`**
+  spawns a story companion when OuterWorld streams in; if its mesh load fails it falls back to a capsule
+  named `Body`, and `TintBody` did `Shader.Find(URP/Lit)??Find(Standard)` → BOTH null in the built player →
+  early-return with NO material → `Hidden/InternalErrorShader` = the magenta `Body` at OuterWorld origin.
+- **FIXED (`191d9aab`)** — `TintBody` now falls through URP Lit/SimpleLit/Unlit + the active pipeline's
+  `defaultMaterial` shader so a material is ALWAYS assigned. Gated COMPILE_GATE_OK, pushed. **Rebuild +
+  re-fleet in progress to confirm magenta=0.** (A1's HeroArmorVisual safety-net stays — valid for armor,
+  just wasn't this object. The probe loop is exactly why we don't ship guesses.)
+- **Village2 raid spec written:** `WORK_ORDER_433_village2_raid_destination.md`. RCA shows Village2 is
+  built/baked/reachable with 8 spawn points + a `GarrisonController` already wired — it just needs
+  `Activate()` on scene load + a victory flow (reuse RaidVictoryController's claim/companion/return) + an
+  autopilot Village2 combat phase (ENEMIES-PRESENT / RAID-WINNABLE oracles). 3 design decisions flagged for
+  owner (win condition / boss / reward) with defaults so the loop can build v1.
+
 ### Overnight scorecard so far
 - **Fixed + gated + pushed:** A1 pink-Body, B1 seam-guard, C1 craft-close, WO-327 wave-trigger (4). 
 - **Already-fixed/verified:** WO-325 node NRE, crystal spam, edge portal (3).
