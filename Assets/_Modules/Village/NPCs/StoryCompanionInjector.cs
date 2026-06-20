@@ -739,8 +739,23 @@ namespace DeNelle.Village
         private static void TintBody(Renderer renderer, HeroClass hero)
         {
             if (renderer == null) return;
-            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            if (shader == null) return;
+            // A URP PLAYER BUILD can STRIP "Universal Render Pipeline/Lit", and "Standard" doesn't exist
+            // in URP — so BOTH Shader.Find calls returned null in the built player and the old early-return
+            // left this fallback-capsule with NO material → Hidden/InternalErrorShader = the owner-seen
+            // MAGENTA 'Body' at the OuterWorld origin (a story companion spawned before the hero resolved,
+            // mesh-load failed → capsule). Fall through URP variants + the active pipeline's DEFAULT shader
+            // so a material is ALWAYS assigned; never leave the body magenta. (Fleet probe MAGENTA-MATERIAL
+            // proved A1's HeroArmorVisual safety-net did NOT cover this — different object, same bug-class.)
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit")
+                         ?? Shader.Find("Universal Render Pipeline/Simple Lit")
+                         ?? Shader.Find("Universal Render Pipeline/Unlit")
+                         ?? Shader.Find("Standard");
+            if (shader == null)
+            {
+                var rp = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline;
+                if (rp != null && rp.defaultMaterial != null) shader = rp.defaultMaterial.shader;
+            }
+            if (shader == null) return;   // truly nothing available — can't help it
             var mat = new Material(shader) { name = "StoryCompanion_" + hero };
             Color c = TintFor(hero);
             if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", c);
