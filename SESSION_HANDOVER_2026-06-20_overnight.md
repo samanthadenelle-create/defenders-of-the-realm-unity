@@ -243,6 +243,15 @@ from the **synced git mirror** (the repo board the doc + Notion are kept in lock
 - Trail of the fix (all valid, kept): A1 HeroArmorVisual safety-net → StoryCompanion TintBody → **the real
   one: WorkerManager worker-stub capsule** (probe-named once guessing stopped). 3 magenta-class holes closed.
 
+**2026-06-20 ~01:2x — fresh-seed fleet (7-12) clean; DUAL-NAVMESH false-positive suppressed**
+- Fleet (seeds 7-12, different chaos paths): **pink stays 0**, no tree false-fail, no NRE. Remaining noise
+  was headless `-nographics` video/render-shader artifacts (auto-filtered) + the modal-open CLICK-BLOCKED.
+- **DUAL-NAVMESH was a false positive** (`f1995b78`) — PROBE 4a flags AABB overlap, but post-un-stack
+  OuterWorld's huge AABB ENCLOSES the castle's while the navmesh surfaces are disjoint + bridged by the
+  NavMeshLink (the intended region architecture; seam works, SEAM-REACHABLE never flags). Suppressed 4a when
+  a NavMeshLink is present; the sibling CheckNavMeshLinks() still catches the REAL link-less overlap (WO-453
+  class), so coverage is preserved. Rebuild bwtj2uq5k → fleet to confirm a FULLY-GREEN run.
+
 ### Overnight scorecard so far
 - **Fixed + gated + pushed:** A1 pink-Body, B1 seam-guard, C1 craft-close, WO-327 wave-trigger (4). 
 - **Already-fixed/verified:** WO-325 node NRE, crystal spam, edge portal (3).
