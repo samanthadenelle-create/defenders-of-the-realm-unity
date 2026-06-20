@@ -302,6 +302,15 @@ namespace DeNelle.Village
             // JUST the mesh, never a stray camera/listener fighting the hero's own.
             StripEmbeddedArtifacts(instance);
 
+            // ── URP MATERIAL SAFETY NET (pink-'Body' fix, MAGENTA-MATERIAL probe) ─────────
+            // Blink armor packs can ship Built-in/Standard (or Phong) shaders; a URP player
+            // STRIPS those → the armored SkinnedMeshRenderer (named "Body") falls back to
+            // Hidden/InternalErrorShader = magenta. HeroBodySwapper.RetargetMaterialsToUrp fixes
+            // legacy Resources bodies, but this Addressables armor OVERLAY never retargeted — so a
+            // Blink "Body" rendered pink in OuterWorld. Swap any null/Standard/InternalError
+            // shader to URP/Lit before the body is shown.
+            EnsureMaterialsUrp(instance);
+
             // ── HUMANOID RETARGET ────────────────────────────────────────────────────
             // Drive the armored body with the hero's EXISTING controller + avatar so it plays
             // the same idle/walk/cast. Both are Humanoid on the shared Blink rig, so assigning
@@ -349,6 +358,63 @@ namespace DeNelle.Village
             // if nothing ever drives the rig, ROLL BACK to the base body.
             if (isActiveAndEnabled)
                 StartCoroutine(VerifyPoseThenMaybeRollback(instance, armor.id, _equipGeneration));
+        }
+
+        // URP MATERIAL SAFETY NET: Blink armor packs can ship Built-in/Standard shaders that a URP
+        // player strips → magenta Hidden/InternalErrorShader on the body (owner-seen "pink" in
+        // OuterWorld; the MAGENTA-MATERIAL probe named it: renderer 'Body', scene OuterWorld). Swap
+        // any null/Standard/InternalError shader on the armored instance to URP/Lit, preserving each
+        // material's colour + albedo. Mirrors HeroBodySwapper.RetargetMaterialsToUrp, scoped to the
+        // Addressables armor overlay (which never retargeted). One-shot per equip — acceptable cost.
+        private static void EnsureMaterialsUrp(GameObject instance)
+        {
+            if (instance == null) return;
+            Shader lit = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            if (lit == null)
+            {
+                FlowTrace.Warn("ArmorVisual",
+                    "EnsureMaterialsUrp: no URP/Lit or Standard shader found — leaving authored materials (may render magenta).");
+                return;
+            }
+
+            int fixedCount = 0;
+            var renderers = instance.GetComponentsInChildren<Renderer>(true);
+            foreach (var r in renderers)
+            {
+                if (r == null) continue;
+                var mats = r.materials; // instance copies — safe to mutate + reassign
+                bool changed = false;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    var m = mats[i];
+                    if (m == null) continue;
+                    var sh = m.shader;
+                    string sn = sh != null ? sh.name : null;
+                    bool broken = sh == null
+                                  || sn == "Standard"
+                                  || (sn != null && sn.Contains("InternalErrorShader"));
+                    if (!broken) continue;
+
+                    // Preserve authored colour + albedo across the shader swap.
+                    Color col = m.HasProperty("_Color") ? m.color : Color.white;
+                    Texture tex = m.HasProperty("_MainTex") ? m.mainTexture : null;
+                    m.shader = lit;
+                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", col);
+                    if (m.HasProperty("_Color")) m.color = col;
+                    if (tex != null)
+                    {
+                        if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
+                        if (m.HasProperty("_MainTex")) m.mainTexture = tex;
+                    }
+                    changed = true;
+                    fixedCount++;
+                }
+                if (changed) r.materials = mats;
+            }
+
+            if (fixedCount > 0)
+                FlowTrace.Step("ArmorVisual",
+                    $"EnsureMaterialsUrp: retargeted {fixedCount} magenta/Built-in material(s) on the armored body to URP/Lit.");
         }
 
         // RENDER-VERIFY (synchronous, no camera/scene dependency): the armored instance MUST have
