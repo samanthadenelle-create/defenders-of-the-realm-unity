@@ -157,6 +157,21 @@ from the **synced git mirror** (the repo board the doc + Notion are kept in lock
   seat logs landed local/world pos. **OWNER REPRO:** equip a Blink armor set + shield; the `[Flow:ArmorVisual]
   ArmorShipsOwnSkin` name-list + `[Flow:Equip] AttachOffHandProp` seat-pos lines give the exact tuning data.
 
+**2026-06-20 ~00:0x — fleet cycle #1 + DEFERRED-DESIGN unblocked (upgrade panel)**
+- **Fleet b70we4c1y** (6 bots) ran clean — **no flagged entries** (no MAGENTA/CLICK-BLOCKED/SEAM/DUAL-NAVMESH
+  in the newest runs). NOTE: the player .exe is **pre-tonight's-fixes** (A1/B1/417 are in source, not the
+  binary), so this is a "no new regressions" pass, NOT proof A1 landed — magenta-`Body` verification still
+  needs a **player rebuild → re-fleet**. No new bugs to fix this cycle.
+- **UPGRADE PANEL — DESIGN DECIDED by owner (was deferred-design).** She wants a faithful **Warcraft-3
+  tech-tree**: BUTTON-DRIVEN research at specialized buildings (Forge=damage, Armorer=armor, Arcane=caster),
+  incremental **Lvl 1/2/3 numerical** damage/armor upgrades that **mimic WC3**, plus **creative-owned ability
+  unlocks + Tier-3 signature capstones**. The faithful gate: research Lvl N requires **Village/Stronghold
+  Tier N** (Town Hall→Keep→Castle equiv; anchored at the **Heart of Elarion** since the Keep was removed §7).
+  Folds onto the EXISTING WO-430 ladder (`BuildingTierCatalog`/`BuildingUpgradeVM`/`ModifierService`; economy
+  already has Gold=`Coins`). **Spec written: `WORK_ORDER_432_building_perk_research_techtree.md` (READY).**
+  Canon: memory `building-upgrade-tier-perk-techtree`. **OPEN (owner confirm):** the tech-gate anchor =
+  Village Tier at the Heart (recommended) vs a dedicated town-center building.
+
 ### Overnight scorecard so far
 - **Fixed + gated + pushed:** A1 pink-Body, B1 seam-guard, C1 craft-close, WO-327 wave-trigger (4). 
 - **Already-fixed/verified:** WO-325 node NRE, crystal spam, edge portal (3).
