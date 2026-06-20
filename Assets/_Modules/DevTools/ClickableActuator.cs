@@ -491,6 +491,17 @@ namespace DeNelle.DevTools
                 // picking is REACHABLE, not a cover.
                 if (ignore != null && IsButtonOrKin(picked, ignore)) continue;
 
+                // A FULL-SCREEN UITK overlay (cosmetic-shop-overlay, HeroTalentOverlay, PetSkillTreeOverlay,
+                // help-overlay, a scrim) is an INTENTIONAL modal cover — the button behind it is
+                // expected-unreachable, not an occlusion bug (mirrors the uGUI full-screen-scrim skip). Only
+                // a PARTIAL element picked over the button (e.g. a shop BuyRow over a Close button — a real
+                // intra-panel layout bug) should flag. The picked overlay roots ARE the full-screen element;
+                // a partial widget is small — so test the picked element's own area vs the panel.
+                var rootWB = d.rootVisualElement.worldBound;
+                float rootArea = rootWB.width * rootWB.height;
+                var pWB = picked.worldBound;
+                if (rootArea > 0f && pWB.width * pWB.height >= 0.85f * rootArea) continue;
+
                 if (sort >= topSort)
                 {
                     topSort = sort;
