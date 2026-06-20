@@ -205,6 +205,22 @@ from the **synced git mirror** (the repo board the doc + Notion are kept in lock
   autopilot Village2 combat phase (ENEMIES-PRESENT / RAID-WINNABLE oracles). 3 design decisions flagged for
   owner (win condition / boss / reward) with defaults so the loop can build v1.
 
+**2026-06-20 ~00:5x–01:0x — pink guess #2 ALSO wrong; stopped guessing + instrumented; tree false-fail fixed**
+- **Pink STILL present** on the fresh build (6 hits, same `Body` @ OuterWorld (0,0.51,0)). The Eco-spam=0
+  on the same build PROVES my builds pick up fixes — so the StoryCompanion fix (`191d9aab`) IS in the binary
+  and is simply NOT this object. **Two wrong guesses now** (armor overlay, StoryCompanion capsule — both
+  valid latent fixes, neither the pink). Per instrument-don't-guess: **enhanced the MAGENTA-MATERIAL probe**
+  (`3b6cfcf2`) to dump the FULL transform path + mesh name + root + component list. The next fleet NAMES the
+  exact object — no third guess. (Rebuild bix3tiydc in flight → fleet → definitive ID → fix the RIGHT thing.)
+- **Tree-of-Life false VERIFY-FAILED fixed** (`ae111d24`) — fleet flagged 'Tree_Of_Life still grey' 6/6, but
+  RCA showed the tree renders fine (green-tinted FoliageMat); the verify re-used the texture-requiring
+  apply-predicate so the tint-only fallback false-failed. Added a verify-only URP predicate; apply stays
+  strict. Removes 12 false-fail lines/fleet + a real-grey would still flag.
+- **VERIFIED:** `[Flow:Eco]` log spam = **0** lines this fleet (log-on-change fix holds).
+- **Noted for next:** DUAL-NAVMESH x6 (investigate — possibly OuterWorld↔Village2 both loaded), CLICK-BLOCKED
+  x345 (mostly modal-open-expected: a scrim correctly covers the HUD behind an open panel; the real Slot0
+  occlusion was already fixed).
+
 ### Overnight scorecard so far
 - **Fixed + gated + pushed:** A1 pink-Body, B1 seam-guard, C1 craft-close, WO-327 wave-trigger (4). 
 - **Already-fixed/verified:** WO-325 node NRE, crystal spam, edge portal (3).
