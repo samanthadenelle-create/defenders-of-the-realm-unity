@@ -419,6 +419,17 @@ namespace DeNelle.DevTools
             int loaded = SceneManager.sceneCount;
             if (loaded < 2) return;
 
+            // ARCHITECTURE UPDATE (un-stacked gated regions, world-architecture memory): the castle and
+            // OuterWorld are now INTENTIONALLY loaded additively and BRIDGED by a NavMeshLink — their AABBs
+            // still overlap (OuterWorld's huge terrain + origin-area objects enclose the castle), but the
+            // navmesh SURFACES are disjoint + connected by the link. A present NavMeshLink means the
+            // multi-navmesh setup is deliberate + bridged, NOT the accidental same-origin stack this probe
+            // was written for. Suppress here; the sibling CheckNavMeshLinks() probe already flags the REAL
+            // link-less overlap (WO-453 class). This crude AABB check was firing 6/6/fleet as a false
+            // positive after the un-stack.
+            if (UnityEngine.Object.FindObjectsByType<Unity.AI.Navigation.NavMeshLink>(FindObjectsSortMode.None).Length > 0)
+                return;
+
             // Build per-scene XZ footprints of NavMesh coverage. We approximate a scene's
             // NavMesh footprint from the bounds of all NavMeshAgents/Obstacles + the global
             // triangulation clipped per scene is not available, so we use the cheap, robust
