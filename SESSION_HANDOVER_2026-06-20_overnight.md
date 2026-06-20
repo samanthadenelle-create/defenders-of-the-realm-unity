@@ -5,6 +5,39 @@
 
 ---
 
+## ☀️ MORNING BRIEF (read this first — full chronological log is at the bottom)
+
+**Done + fleet-verified overnight (~40 commits, all pushed to `feat/tower-core-loop`, never master):**
+- 🎯 **The OuterWorld PINK is dead + verified** — it was `WorkerManager/Worker-N/Body` (a primitive capsule
+  spawned with no material → magenta in URP). Took 2 wrong guesses; I stopped guessing, made the probe NAME
+  the object, fixed the real one. 3 magenta-class bugs closed total. (`dd61c6c8`)
+- ✅ Seam → cave portal → Village2 flow holds (your playtest + every clean fleet). Seam guarded.
+- ✅ Fixed: WO-327 wave-trigger · WO-417 P1 blank settings labels · `[Flow:Eco]` log spam ·
+  Tree-of-Life grey false-fail · probe accuracy (DUAL-NAVMESH + CLICK-BLOCKED full-screen + RectMask2D).
+- ✅ The "shop Close trap" (Btn_Close ← BuyRow) was a **probe false-positive**, not a real trap — root-caused
+  from code + fixed the probe. Verified.
+- 📋 Two design specs written + ready: **WO-432** (WC3 building tech-tree) · **WO-433** (Village2 raid).
+- 🧹 Fleet runs CLEAN on every real signal across seeds 19→72.
+
+**⛳ YOUR DECISIONS NEEDED (priority order — each unblocks autonomous build):**
+1. **WO-432 tech-gate anchor** — Village/Stronghold Tier at the Heart (my rec) *or* a dedicated town-center
+   building? (the rest of WO-432 is spec'd + ready to build)
+2. **WO-433 Village2 raid** — win-condition (clear garrison / kill boss / destroy altar?) · boss yes/no ·
+   reward (claim+companion / crystals / a Keystone)? Spec has defaults; I parked the BUILD per your
+   "park the outpost" + because you flagged these calls.
+3. **Item-preview** style — 3D rotating model · 2D icon+stats · hover tooltip?
+4. **"Messy / make-it-buttons"** — which screen did you mean? (building menu / HUD town-actions / vendor?)
+
+**👀 QUICK FELT/VISUAL VERIFIES (code applied; need your eyes):** seam motion-cycle · build button in normal
+play · dialogue portrait timing · hero shield+body rig (equip a Blink set; the `[Flow:ArmorVisual]` +
+`[Flow:Equip]` capture lines name the exact seat/skin if still off) · Village2 arrival camera.
+
+**🔭 Deferred *considered* change (not rushed at night):** UITK modal-aware CLICK-BLOCKED probe (the ~150
+remaining tickets are the bot opening panels over the HUD = expected; a modal-aware pass would silence them
+but risks masking a real occlusion — wants fresh eyes).
+
+---
+
 ## 🎯 THE HEADLINE: the seamless castle→OuterWorld WALK landed
 
 After the full saga (un-stack the scenes, find the root cause, fix it), the player now **walks
