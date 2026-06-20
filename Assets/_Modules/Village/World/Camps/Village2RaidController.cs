@@ -119,16 +119,24 @@ namespace DeNelle.Village.World.Camps
                 yield break;
             }
 
-            // ACTIVATE — spawn the garrison + arm the turrets (idempotent; a no-op if the
-            // scene/builder already activated it).
+            // NAVMESH SETTLE (owner-flagged timing fix): the garrison snaps each defender to the nearest
+            // navmesh point, so the surface must be LIVE first — additive load + bake can lag a few frames.
+            // Wait (bounded) until a spawn point samples onto the navmesh so the garrison doesn't spawn
+            // empty and insta-clear. Falls through after the cap so we never hang.
+            yield return WaitForNavMeshReady();
+
+            // ACTIVATE — spawn the garrison + arm the turrets (idempotent; a no-op if already activated).
             _garrison.Activate();
+            yield return null;   // let the synchronous spawn settle one frame before we read AliveCount
             FlowTrace.Step("Raid", $"Village2 garrison ACTIVATED — {_garrison.AliveCount}/{_garrison.TotalGarrison} defender(s) live.");
 
-            // If the garrison was empty / already cleared (e.g. no spawn points), handle the
-            // clear immediately; otherwise subscribe for the last-defender-dies event.
-            if (_garrison.Cleared)
+            // VICTORY binding. If the garrison is already cleared OR spawned empty (no defenders / no
+            // navmesh path), run victory now (anti-soft-lock — never strand the player in an empty raid);
+            // else subscribe for the last-defender-dies event. The AliveCount==0 force is belt-and-
+            // suspenders against a missed OnCleared on an empty composition.
+            if (_garrison.Cleared || _garrison.AliveCount == 0)
             {
-                FlowTrace.Step("Raid", "Village2 garrison was ALREADY cleared on bind — running victory immediately.");
+                FlowTrace.Step("Raid", $"Village2 garrison empty/already-cleared on bind (alive={_garrison.AliveCount}) — running victory immediately.");
                 HandleCleared(_garrison);
             }
             else
@@ -137,6 +145,20 @@ namespace DeNelle.Village.World.Camps
                 _garrison.OnCleared += HandleCleared;
                 FlowTrace.Step("Raid", $"Village2RaidController bound to OnCleared (garrison of {_garrison.TotalGarrison} defender(s)).");
             }
+        }
+
+        // Bounded wait until the navmesh under the stronghold is live enough that a spawn point samples
+        // onto it — so the garrison spawns ON-mesh instead of empty. Caps at ~30 frames so we never hang.
+        private IEnumerator WaitForNavMeshReady()
+        {
+            Vector3 probe = _garrison != null ? _garrison.transform.position : Vector3.zero;
+            for (int i = 0; i < 30; i++)
+            {
+                if (UnityEngine.AI.NavMesh.SamplePosition(probe, out _, 8f, UnityEngine.AI.NavMesh.AllAreas))
+                    yield break;
+                yield return null;
+            }
+            FlowTrace.Warn("Raid", "Village2RaidController: navmesh did not settle within the cap — activating anyway (spawns will snap if/when mesh appears).");
         }
 
         // Find the GarrisonController that lives in THIS controller's scene (Village2),
