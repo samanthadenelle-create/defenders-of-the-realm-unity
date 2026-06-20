@@ -101,7 +101,11 @@ namespace DeNelle.Village.Hero
                 new Color(ElarionUi.Danger.r, ElarionUi.Danger.g, ElarionUi.Danger.b, 0.55f));
 
             // Scroll-free content area (rows laid out top-down by anchor math).
-            _contentRoot = new GameObject("Content");
+            // Construct WITH a RectTransform: unlike the Image/Button/TMP children (which auto-add
+            // one), a bare GameObject has only a Transform — so GetComponent<RectTransform>() below
+            // was null and the anchor set NRE'd on every open (PROVEN: RumorBoardPanel.cs:107 throw
+            // captured by the full-stack fleet). Masked until the TMP-font NRE above it was fixed.
+            _contentRoot = new GameObject("Content", typeof(RectTransform));
             _contentRoot.transform.SetParent(panel.transform, false);
             var cr = _contentRoot.GetComponent<RectTransform>();
             cr.anchorMin = new Vector2(0.03f, 0.08f);
@@ -116,6 +120,7 @@ namespace DeNelle.Village.Hero
             sRect.anchorMin = new Vector2(0.02f, 0.01f);
             sRect.anchorMax = new Vector2(0.98f, 0.07f);
             _statusText = statusGo.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(_statusText); // font-safe: a code-built TMP with no font NREs on first GenerateTextMesh
             _statusText.fontSize = 14;
             _statusText.color = ElarionUi.ParchmentDim;
             _statusText.alignment = TMPro.TextAlignmentOptions.Center;
@@ -211,6 +216,7 @@ namespace DeNelle.Village.Hero
             r.offsetMin = Vector2.zero;
             r.offsetMax = Vector2.zero;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(t);
             t.text = txt;
             t.fontSize = 16;
             t.fontStyle = TMPro.FontStyles.Bold;
@@ -229,6 +235,7 @@ namespace DeNelle.Village.Hero
             r.offsetMin = Vector2.zero;
             r.offsetMax = Vector2.zero;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(t);
             t.text = txt;
             t.fontSize = 13;
             t.fontStyle = TMPro.FontStyles.Italic;
@@ -283,6 +290,7 @@ namespace DeNelle.Village.Hero
             blr.anchorMin = Vector2.zero; blr.anchorMax = Vector2.one;
             blr.offsetMin = Vector2.zero; blr.offsetMax = Vector2.zero;
             var blt = bl.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(blt);
             blt.text = "ACCEPT";
             blt.fontSize = 13;
             blt.color = ElarionUi.Ink;
@@ -315,6 +323,7 @@ namespace DeNelle.Village.Hero
             r.offsetMin = Vector2.zero;
             r.offsetMax = Vector2.zero;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(t);
             t.text = txt;
             t.fontSize = 15;
             t.fontStyle = TMPro.FontStyles.Bold;
@@ -332,6 +341,7 @@ namespace DeNelle.Village.Hero
             r.offsetMin = Vector2.zero;
             r.offsetMax = Vector2.zero;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(t);
             t.text = txt;
             t.fontSize = 12;
             t.color = col;
@@ -367,6 +377,7 @@ namespace DeNelle.Village.Hero
             r.offsetMin = Vector2.zero;
             r.offsetMax = Vector2.zero;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(t);
             t.fontSize = 24;
             t.color = ElarionUi.Gilt;
             t.alignment = TMPro.TextAlignmentOptions.Center;
@@ -392,6 +403,7 @@ namespace DeNelle.Village.Hero
             tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
             tr.offsetMin = Vector2.zero; tr.offsetMax = Vector2.zero;
             var tt = txt.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(tt);
             tt.text = label;
             tt.fontSize = 15;
             tt.color = ElarionUi.Parchment;
