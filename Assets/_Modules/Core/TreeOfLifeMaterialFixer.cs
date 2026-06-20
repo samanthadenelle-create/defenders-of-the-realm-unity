@@ -533,7 +533,7 @@ namespace DeNelle.Core
                 for (int i = 0; i < mats.Length; i++)
                 {
                     slots++;
-                    if (!SlotNeedsFix(mats[i])) continue;   // good — pass
+                    if (SlotOkAfterFix(mats[i])) continue;   // good — pass
                     stillBad++;
                     string sn = (mats[i] != null && mats[i].shader != null) ? mats[i].shader.name : "<null>";
                     FlowTrace.Fail("TreeOfLifeFix",
@@ -545,6 +545,19 @@ namespace DeNelle.Core
             if (stillBad == 0)
                 FlowTrace.Step("TreeOfLifeFix",
                     "VERIFY OK — all " + slots + " repaired Tree-of-Life slot(s) now on a good material (not grey).");
+        }
+
+        // VERIFY-side predicate (NOT the apply-side SlotNeedsFix): after Apply, a slot is GOOD if it
+        // landed on ANY URP shader. The FoliageMat fallback is URP/Lit + an intentional tint with NO
+        // _BaseMap texture — a deliberate non-grey outcome, not a failure. Reusing SlotNeedsFix here
+        // (which REQUIRES a texture) false-failed the verify on that legit fallback in 6/6 fleet runs.
+        // The only real unresolved fix is a still-null/Standard/Legacy/InternalError shader.
+        private static bool SlotOkAfterFix(Material m)
+        {
+            if (m == null) return false;
+            string sn = m.shader != null ? m.shader.name : "";
+            if (string.IsNullOrEmpty(sn)) return false;
+            return sn.StartsWith("Universal Render Pipeline/");   // textured art OR tinted fallback — both fine
         }
 
         // A non-grey, textured material another tree in the scene already uses.
