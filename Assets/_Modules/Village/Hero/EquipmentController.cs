@@ -1189,7 +1189,9 @@ namespace DeNelle.Village
                 if (gripRoot != null) Destroy(gripRoot);
                 return;
             }
-            FlowTrace.Step("Equip", $"AttachOffHandProp: off-hand '{id}' verified rendered + seated on '{hand.name}'.");
+            FlowTrace.Step("Equip", $"AttachOffHandProp: off-hand '{id}' verified rendered + seated on '{hand.name}' " +
+                $"(native={vis.native}, localPos={gripRoot.transform.localPosition}, worldPos={gripRoot.transform.position}). " +
+                "§12: if the owner still sees it off the arm, this is the exact landed seat to tune the Blink grip against.");
         }
 
         private void DestroyCurrentOffHand()

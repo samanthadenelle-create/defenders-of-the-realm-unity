@@ -690,21 +690,23 @@ namespace DeNelle.Village
             if (armorInstance == null) return false;
             var skins = armorInstance.GetComponentsInChildren<SkinnedMeshRenderer>(true);
             int total = 0, skinNamed = 0;
-            string firstSkin = null;
+            var names = new System.Text.StringBuilder();
             foreach (var r in skins)
             {
                 if (r == null) continue;
                 total++;
-                if (IsSkinRenderer(r.name))
-                {
-                    skinNamed++;
-                    if (firstSkin == null) firstSkin = r.name;
-                }
+                if (names.Length > 0) names.Append(", ");
+                names.Append(r.name);
+                if (IsSkinRenderer(r.name)) skinNamed++;
             }
             bool fullBody = skinNamed > 0;
+            // §12 capture for the owner-reported "body parts not joined": log the FULL renderer-name
+            // list. If a Blink full-body SET ships its body under generic names ('Body'/'Torso'/'Legs')
+            // with skinNamed=0, detection wrongly reads pieces-only and KEEPS the base head/hands →
+            // two rigs drift = "not joined". This list tells us the exact names to teach the detector.
             FlowTrace.Step("ArmorVisual",
-                $"ArmorShipsOwnSkin: armor instance has {total} skinned renderer(s), {skinNamed} skin-named " +
-                $"(e.g. '{firstSkin ?? "<none>"}') => fullBody={fullBody}.");
+                $"ArmorShipsOwnSkin: {total} skinned renderer(s) [{names}], {skinNamed} skin-named " +
+                $"=> fullBody={fullBody}.");
             return fullBody;
         }
 
