@@ -81,6 +81,7 @@ namespace DeNelle.DevTools
         private const float NavMeshInterval    = 5f;     // dual-navmesh overlap scan
         private const float NavLinkInterval    = 5f;     // navmesh-link connectivity scan
         private const float SeamReachInterval  = 5f;     // seam reachability scan
+        private const float MagentaInterval    = 8f;     // magenta/missing-shader material scan
         private const float StrandedInterval   = 1f;     // poll path progress 1/sec
         private const float HeroRefreshInterval = 2f;    // re-resolve hero handle
 
@@ -89,6 +90,8 @@ namespace DeNelle.DevTools
         private float _nextNavMesh;
         private float _nextNavLink;
         private float _nextSeamReach;
+        private float _nextMagenta;
+        private readonly HashSet<string> _magentaSeen = new HashSet<string>();
         private float _nextStranded;
         private float _nextHeroRefresh;
 
@@ -225,6 +228,13 @@ namespace DeNelle.DevTools
                 _nextSeamReach = now + SeamReachInterval;
                 try { CheckSeamReachable(); }
                 catch (Exception ex) { FlowTrace.Warn(Tag, "SEAM-REACHABLE check threw: " + ex.Message); }
+            }
+
+            if (now >= _nextMagenta)
+            {
+                _nextMagenta = now + MagentaInterval;
+                try { CheckMagentaMaterials(); }
+                catch (Exception ex) { FlowTrace.Warn(Tag, "MAGENTA-MATERIAL check threw: " + ex.Message); }
             }
 
             if (now >= _nextStranded)
@@ -749,6 +759,39 @@ namespace DeNelle.DevTools
                     FlowTrace.Fail(Tag, $"SEAM-UNREACHABLE: '{seam.gameObject.name}' in '{seam.gameObject.scene.name}' — the hero cannot get within " +
                         $"firing range (closest {approach:0.0}m > ProximityRadius {seam.ProximityRadius:0.0}m + {SeamReachMargin:0.0}m, path={status}). " +
                         "Bake gap or blocker keeps the hero too far from the seam to ever trip its proximity; the crossing never fires.");
+            }
+        }
+
+        // =====================================================================
+        //  PROBE: MAGENTA-MATERIAL (missing / non-URP shader -> renders magenta "pink")
+        //  Scans active renderers for materials whose shader is null, the Unity error
+        //  shader, or the built-in Standard shader (which renders MAGENTA under URP — the
+        //  classic "pink ground"). Reports each culprit ONCE by GameObject name + world pos,
+        //  so an owner "pink ground" flag self-identifies the exact object to fix.
+        // =====================================================================
+        private void CheckMagentaMaterials()
+        {
+            var renderers = UnityEngine.Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+            if (renderers == null) return;
+            foreach (var r in renderers)
+            {
+                if (r == null || !r.enabled || !r.gameObject.activeInHierarchy) continue;
+                var mats = r.sharedMaterials;
+                if (mats == null) continue;
+                foreach (var m in mats)
+                {
+                    if (m == null) continue;
+                    var sh = m.shader;
+                    bool magenta = sh == null
+                        || sh.name == "Hidden/InternalErrorShader"
+                        || sh.name == "Standard"   // built-in Standard renders MAGENTA under URP
+                        || sh.name.IndexOf("InternalError", StringComparison.OrdinalIgnoreCase) >= 0;
+                    if (!magenta) continue;
+                    string key = r.gameObject.name + "|" + (sh != null ? sh.name : "<null>");
+                    if (!_magentaSeen.Add(key)) continue;
+                    FlowTrace.Fail(Tag, $"MAGENTA-MATERIAL: renderer '{r.gameObject.name}' (scene '{r.gameObject.scene.name}') " +
+                        $"material '{m.name}' shader '{(sh != null ? sh.name : "<null>")}' renders MAGENTA/pink under URP @ {r.transform.position}.");
+                }
             }
         }
     }
