@@ -172,6 +172,23 @@ from the **synced git mirror** (the repo board the doc + Notion are kept in lock
   Canon: memory `building-upgrade-tier-perk-techtree`. **OPEN (owner confirm):** the tech-gate anchor =
   Village Tier at the Heart (recommended) vs a dedicated town-center building.
 
+**2026-06-20 ~00:4x — editor closed, batchmode resumed: log-spam fix + rebuild + WO triage**
+- **FIXED [Flow:Eco] log spam** (`db284b84`) — `HeartHudBridge.PushResources` + `VillageHudController
+  .SetResources` logged every frame (flooded the F8 capture, drowned seam-cross lines). Now log-on-change
+  via a last-value cache; HUD push unchanged; small GC win. Gated COMPILE_GATE_OK.
+- **Rebuilt the Windows player** (be4rxdlgg, exit 0) — now carries tonight's A1/B1/327/417/spam fixes.
+  **Verification fleet b8uhw2xq9 running** on the FRESH binary → finally tests pink-`Body` for real.
+- **WO triage — refused 2 blind fixes (premises didn't survive verification):**
+  - **WO-424** (harvest→HUD) = **ALREADY FIXED** — `HeartHudBridge` gates the push on HUD presence, not a
+    Heart (works in Castle/OuterWorld). Closing, fleet-verify.
+  - **WO-414** (black circle under TALK) = **DEFER** — the suspected `AttentionGlowUi` is passed a GOLD
+    tint (`1,0.85,0.35`), not black, so the RCA premise is wrong; the black object is something else.
+    Needs owner to name/screenshot the exact element. NOT blind-fixed.
+  - **WO-425** (hero unarmed) = **DEFER** — all 4 starter weapons (mage/knight/ranger/cleric_starter)
+    EXIST in canonical weapons.json, so the "missing starter data" premise is false. A code-fallback would
+    mask an unknown wiring cause. Needs repro (fleet oracle: does the bot's hero hold a weapon?). NOT blind-fixed.
+  - This is quality-first: 2 speculative fixes avoided > 2 wrong patches shipped (deliver-verified, §12).
+
 ### Overnight scorecard so far
 - **Fixed + gated + pushed:** A1 pink-Body, B1 seam-guard, C1 craft-close, WO-327 wave-trigger (4). 
 - **Already-fixed/verified:** WO-325 node NRE, crystal spam, edge portal (3).
