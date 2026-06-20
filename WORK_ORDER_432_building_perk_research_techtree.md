@@ -73,6 +73,20 @@ If the owner prefers a dedicated building, swap the anchor — keep the gate rea
   button per perk (owned = checked/disabled; unaffordable = dimmed; signature = gilt-highlighted). Show
   the tier prereq-lock reason on gated tiers ("Locked — needs <center> Tier 2").
 
+## Icon convention (so the owner's HUD icons auto-bind — NO drag-drop, per canon)
+**OWNER'S CHOSEN PATH (2026-06-20): `Resources/HudItems/BuildingUpgrades/` — all PNG, Sprite Mode = Single.**
+The building-upgrade/research icons resolve via `Resources.Load<Sprite>("HudItems/BuildingUpgrades/" + id)`
+(NOT the legacy `HudIcons/` path — that stays for the resource counters `hud_wood/iron/food/crystal`).
+Author each `BuildingPerkDef` with an `iconId` (defaults to the perk id); the View resolves
+`HudItems/BuildingUpgrades/<iconId>`. Names the owner authors against (file = `<id>.png`, Sprite, Single):
+- Tier rows: `tier-1`, `tier-2`, `tier-3`. Building icons: `arcane-tower`, `armorer`, `forge`,
+  `lumbermill`, `windmill`.
+- Research perks: `<building>-<perk>` e.g. `forge-damage-1/2/3`, `armorer-armor-1/2/3`,
+  `arcane-spell-1/2/3`; signatures: `forge-masterwork`, `arcane-overload`, etc.
+- Missing icon = `Debug.LogWarning` + a neutral placeholder (never an error / never blocks the button).
+- **Implementer note:** the existing `BuildingUpgradePanel.ResourceIcon` hard-codes `HudIcons/`; the WO-432
+  research/tier icon resolver must read `HudItems/BuildingUpgrades/`. Keep both — don't repoint the legacy one.
+
 ## Acceptance criteria
 - [ ] `building-tiers.json` carries `requiresVillageTier` + `perks[]`; Tier 3 of each of the 5 buildings has
       exactly one `isSignature` perk.
