@@ -83,14 +83,22 @@ namespace DeNelle.Village.World
 
             var parent = new GameObject(BoundaryName);
 
-            // WO-468 Phase 1: terrain enlarged to 1000x1000 (edge at ±500). The ring
-            // moves out to ±485 (just inside the edge) so the player can reach the
-            // cave/portal at z=-470 but cannot walk off the terrain. 20 m tall,
-            // 2 m thick; the long span is 970 m to match the ±485 corners.
-            AddWall(parent.transform, "North", new Vector3(0f, 10f, 485f), new Vector3(970f, 20f, 2f));
-            AddWall(parent.transform, "South", new Vector3(0f, 10f, -485f), new Vector3(970f, 20f, 2f));
-            AddWall(parent.transform, "East", new Vector3(485f, 10f, 0f), new Vector3(2f, 20f, 970f));
-            AddWall(parent.transform, "West", new Vector3(-485f, 10f, 0f), new Vector3(2f, 20f, 970f));
+            // WO-468 Phase 2 (un-stack): terrain is 1000x1000 but SHIFTED SOUTH to sit
+            // side-by-side with the castle — it now spans world z = -72 (north edge, just
+            // south of the castle gate) to -1072 (south edge), centred at z = -572; X stays
+            // ±500. The ring hugs those edges (~13 m inside) so the player can reach the cave
+            // at z=-700 but cannot walk off. North wall is OPEN-ish at the seam handled by the
+            // navlink; we still wall it just north of the terrain edge so the player can't
+            // wander into the void between the castle and the terrain off the path.
+            const float CenterZ = -572f;
+            // North edge is walled EXCEPT a ~24 m gap at the path (x≈0) where the navlink seam
+            // from the castle crosses — otherwise the player could never enter from the castle.
+            // Two segments leave x∈[-12,12] open for the crossing.
+            AddWall(parent.transform, "North_W", new Vector3(-256f, 10f, -74f), new Vector3(488f, 20f, 2f));
+            AddWall(parent.transform, "North_E", new Vector3(256f, 10f, -74f),  new Vector3(488f, 20f, 2f));
+            AddWall(parent.transform, "South", new Vector3(0f, 10f, -1070f), new Vector3(970f, 20f, 2f));
+            AddWall(parent.transform, "East",  new Vector3(485f, 10f, CenterZ),  new Vector3(2f, 20f, 992f));
+            AddWall(parent.transform, "West",  new Vector3(-485f, 10f, CenterZ), new Vector3(2f, 20f, 992f));
 
             // A new GameObject lands in the ACTIVE scene (MainCastle_Hall) by default;
             // move the ring into OuterWorld so it unloads/reloads with that scene.

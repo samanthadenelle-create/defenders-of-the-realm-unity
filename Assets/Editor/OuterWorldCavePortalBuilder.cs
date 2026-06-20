@@ -51,7 +51,7 @@ namespace DeNelle.Editor
         private const string TriggerName = "CavePortal_Trigger";
 
         // Corridor terminus — the far end of the enlarged OuterWorld.
-        private static readonly Vector3 CavePos = new Vector3(0f, 0f, -470f);
+        private static readonly Vector3 CavePos = new Vector3(0f, 0f, -700f);
 
         // Village2 stronghold hero spawn. EnemyStrongholdBuilder.Build (~line 177)
         //   var entryPos = new Vector3(0f, 0.1f, -(courtyardHalf + 6f));

@@ -2213,6 +2213,90 @@ namespace DeNelle.Editor
             }
         }
 
+        // =====================================================================
+        //  SEAMLESS OUTERWORLD SEAM (WO-468 Phase 2 — un-stack + WALK, no warp)
+        //  OuterWorld is now built SIDE-BY-SIDE (south of, not stacked under) the castle
+        //  (ExteriorTerrainBuilder TerrainCenterZ=-572, north edge z=-72), so a real
+        //  NavMeshLink can bridge the two ADJACENT navmeshes at runtime (both load
+        //  additively; WorldSceneLoader pulls OuterWorld on castle entry). This REPLACES
+        //  the confirm-to-cross warp with a WALK:
+        //   - strip the WorldGate warp trigger (no prompt, no teleport),
+        //   - a VISUAL-ONLY ground filler across the ~10 m seam (no collider -> no navmesh
+        //     overlap; the link carries the agent across the gap),
+        //   - a direct NavMeshLink castle-floor-edge -> OuterWorld north edge.
+        //  Editor must be CLOSED; rebakes the castle nav. Run AFTER the un-stacked OuterWorld
+        //  is built + baked.
+        // =====================================================================
+        [MenuItem("Defenders/World/Build Seamless OuterWorld Seam")]
+        public static void BuildSeamlessOuterWorldSeam()
+        {
+            FlowTrace.Step("BridgeSeam", "BuildSeamlessOuterWorldSeam: begin — WALK into the un-stacked OuterWorld (no warp).");
+            const string scenePath = "Assets/Scenes/MainCastle_Hall.unity";
+            var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+            var root = GameObject.Find(RootName);
+            if (root == null)
+            {
+                FlowTrace.Fail("BridgeSeam", "CastleHubRoot not found — cannot build the seamless seam.");
+                return;
+            }
+
+            float gateX = ReadSouthGatePos().x;
+
+            // 1. Idempotent: clear any prior seamless-seam subtree.
+            var prior = GameObject.Find("SeamlessOuterWorldSeam");
+            if (prior != null) Object.DestroyImmediate(prior);
+            var seamRoot = new GameObject("SeamlessOuterWorldSeam");
+            seamRoot.transform.SetParent(root.transform, false);
+
+            // 2. Strip the confirm-to-cross WARP trigger — crossing is a WALK now, so no
+            //    prompt/teleport competes with the link. (WorldSceneLoader still loads
+            //    OuterWorld additively on castle entry, so removing this never breaks loading.)
+            var marker = GameObject.Find("WorldGate_ConnectToOuterWorld_Marker");
+            if (marker != null)
+            {
+                var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
+                var comp = transType != null ? marker.GetComponent(transType) : null;
+                if (comp != null)
+                {
+                    Object.DestroyImmediate(comp);
+                    FlowTrace.Step("BridgeSeam", "removed the confirm-warp SceneTransitionTrigger — the castle->OuterWorld crossing is a WALK.");
+                }
+            }
+
+            // 3. Visual-only ground filler across the seam gap (castle floor edge ~-63 to
+            //    OuterWorld north edge ~-76). NO collider -> never bakes into either navmesh
+            //    (no overlap); purely so the player sees ground, not a void, mid-cross.
+            Guard.Try("BridgeSeam", "seam ground filler", () =>
+            {
+                var filler = GameObject.CreatePrimitive(PrimitiveType.Plane);
+                filler.name = "Seam_Ground_Filler";
+                filler.transform.SetParent(seamRoot.transform, false);
+                filler.transform.position = new Vector3(gateX, 0.02f, -69.5f);
+                filler.transform.localScale = new Vector3(2.4f, 1f, 1.6f); // ~24m x ~16m
+                var fcol = filler.GetComponent<Collider>();
+                if (fcol != null) Object.DestroyImmediate(fcol);           // visual only
+                var fr = filler.GetComponent<MeshRenderer>();
+                var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                if (fr != null && sh != null) fr.sharedMaterial = new Material(sh) { color = new Color(0.34f, 0.30f, 0.24f) };
+            });
+
+            // 4. The real crossing: a direct NavMeshLink castle-floor-edge -> OuterWorld north
+            //    edge. Connects at RUNTIME when OuterWorld is additively loaded (the EnemyStronghold
+            //    pattern). Its far end is off-mesh at THIS solo castle bake — expected; it binds live.
+            BuildBridgeNavLink(seamRoot.transform, "NavLink_CastleToOuterWorld",
+                new Vector3(gateX, 0f, -63f),    // on castle navmesh (CourtyardFloor_Nav edge ~-65)
+                new Vector3(gateX, 0f, -76f),    // on OuterWorld navmesh (north edge -72)
+                10f);
+
+            // 5. Rebake the castle nav (filler has no collider, so the castle surface is unchanged)
+            //    + persist + save.
+            BakeAllCastleSurfacesAndPersist("SEAMLESS-SEAM");
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            AssetDatabase.SaveAssets();
+            FlowTrace.Step("BridgeSeam", "BuildSeamlessOuterWorldSeam: done — WALK via NavLink_CastleToOuterWorld (runtime-connected to additively-loaded OuterWorld).");
+        }
+
         // DIRECT NavMeshLink for the bridge crossing — copied verbatim from
         // EnemyStrongholdBuilder.BuildNavLink (UpdateLink() + Guard.Try + loud FlowTrace.Fail).
         // Uses Unity.AI.Navigation.NavMeshLink DIRECTLY (the DeNelle.Editor asmdef references the

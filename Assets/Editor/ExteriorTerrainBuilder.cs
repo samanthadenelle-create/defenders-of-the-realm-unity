@@ -106,12 +106,29 @@ namespace DeNelle.Editor
         // heightmap, splatmaps, paths and tree/rock scatter re-fit automatically.
         private const float TerrainSizeXZ = 1000f;
 
-        // ── Cave path corridor (WO-468 Phase 1) ──────────────────────────────
-        // A clean, LEVEL road runs due south (x≈0) from the castle approach at
-        // z=-12 to the cave/portal mouth at z=CavePathEndZ. The corridor is held
-        // flat at the village baseline (Y≈0) and kept clear of trees/rocks.
-        private const float CavePathEndZ = -470f;       // cave/portal world Z (x≈0, y≈0)
-        private const float CavePathStartZ = -12f;      // player arrives from the castle here
+        // ── World placement (WO-468 Phase 2: UN-STACK) ───────────────────────
+        // The terrain is no longer origin-centered. Its world-Z CENTER sits at
+        // TerrainCenterZ so the whole OuterWorld terrain shifts SOUTH and sits
+        // ADJACENT to (not overlapping) the castle scene at world origin. With a
+        // 1000-u terrain centered at -572, the terrain spans world z = -72 (NORTH
+        // edge, just south of the castle gate at -68) to -1072 (SOUTH edge).
+        // X-center stays 0 (still origin-centered east-west).
+        //
+        // The biome height functions (North/East/South/WestHeight,
+        // SampleBiomeHeight) + SeamWeight expect a CENTERED coordinate
+        // (-size/2..+size/2). SampleBiomeHeight is the single chokepoint that
+        // re-centers Z by subtracting TerrainCenterZ, so EVERY caller now passes
+        // TRUE WORLD coordinates and the biomes render identically — just shifted
+        // south. The cave-path corridor constants below are already in WORLD Z.
+        private const float TerrainCenterZ = -572f;     // terrain world-Z center (X center = 0)
+
+        // ── Cave path corridor (WO-468) ──────────────────────────────────────
+        // A clean, LEVEL road runs due south (x≈0) from the north terrain edge
+        // (z=CavePathStartZ, the castle arrival) to the cave/portal mouth
+        // (z=CavePathEndZ). The corridor is held flat at the village baseline
+        // (Y≈0) and kept clear of trees/rocks. Constants are in WORLD Z.
+        private const float CavePathEndZ = -700f;       // cave/portal world Z (x≈0, y≈0)
+        private const float CavePathStartZ = -76f;      // player arrives from the castle here (just onto north edge)
         private const float CavePathHalfWidth = 6f;     // painted mud road half-width (world units)
         private const float CavePathFlattenHalf = 10f;  // corridor flattened to Y≈0 within |x|<this
         private const float CavePathFlattenFalloff = 8f; // soft blend band beyond the flatten half
@@ -229,7 +246,8 @@ namespace DeNelle.Editor
             // Terrain origin is its SW corner; centre it on the village origin
             // and drop it so heightmap-zero lands at Y = -TerrainBaseDepth.
             terrainGo.transform.position = new Vector3(
-                -TerrainSizeXZ * 0.5f, -TerrainBaseDepth, -TerrainSizeXZ * 0.5f);
+                -TerrainSizeXZ * 0.5f, -TerrainBaseDepth,
+                TerrainCenterZ - TerrainSizeXZ * 0.5f);
 
             var terrain = terrainGo.GetComponent<Terrain>();
             terrain.heightmapPixelError = 4f;
@@ -321,18 +339,19 @@ namespace DeNelle.Editor
                     // terrain origin is the village centre offset by half-size.
                     float u = x / (float)(res - 1);   // 0..1 across X (west->east)
                     float v = z / (float)(res - 1);   // 0..1 across Z (south->north)
+                    // TRUE world position of this sample (terrain shifted south by
+                    // TerrainCenterZ; SampleBiomeHeight re-centers Z internally).
                     float worldX = (u - 0.5f) * TerrainSizeXZ;
-                    float worldZ = (v - 0.5f) * TerrainSizeXZ;
+                    float worldZ = (v - 0.5f) * TerrainSizeXZ + TerrainCenterZ;
 
                     // Biome elevation in WORLD units relative to Y=0.
                     float biomeY = SampleBiomeHeight(worldX, worldZ);
 
-                    // Seam blend: hold the village footprint flat at Y=0 and
-                    // fade the biome elevation in across the falloff band. The
-                    // cave-path corridor (WO-468) also holds Y≈0 so the walk south
-                    // is LEVEL — combine the two flatten weights (max).
-                    float flat = Mathf.Max(SeamWeight(worldX, worldZ),
-                                           CorridorWeight(worldX, worldZ));
+                    // WO-468 Phase 2: the village/seam plateau is GONE — the castle
+                    // is a separate scene now, so nothing flattens the terrain
+                    // except the cave-path corridor (WO-468), which holds Y≈0 so
+                    // the walk south is LEVEL.
+                    float flat = CorridorWeight(worldX, worldZ);
                     float elevatedY = Mathf.Lerp(biomeY, 0f, flat);
 
                     // Normalise back to 0..1 heightmap space.
@@ -353,15 +372,14 @@ namespace DeNelle.Editor
         /// </summary>
         private static float SeamWeight(float worldX, float worldZ)
         {
-            // Signed distance "outside" the village rectangle, per axis.
-            float dx = Mathf.Max(0f, Mathf.Abs(worldX) - VillageHalfX);
-            float dz = Mathf.Max(0f, Mathf.Abs(worldZ) - VillageHalfZ);
-            float dist = Mathf.Sqrt(dx * dx + dz * dz);
-            if (dist <= 0f) return 1f;
-            if (dist >= SeamFalloff) return 0f;
-            // Smoothstep falloff for a soft, non-linear blend.
-            float t = dist / SeamFalloff;
-            return 1f - (t * t * (3f - 2f * t));
+            // WO-468 Phase 2: the in-terrain village plateau is RETIRED — the
+            // castle is a separate scene at world origin, NORTH of and adjacent to
+            // this (now southward-shifted) terrain. Nothing flattens except the
+            // cave-path corridor, so the seam weight is permanently 0. Kept as a
+            // method (rather than deleted) so the tree/rock-reject call sites still
+            // compile; they now reject nothing on this axis (correct — no village
+            // footprint to keep clear).
+            return 0f;
         }
 
         /// <summary>
@@ -372,10 +390,16 @@ namespace DeNelle.Editor
         /// </summary>
         private static float SampleBiomeHeight(float worldX, float worldZ)
         {
+            // WO-468 Phase 2: callers pass TRUE world coords; the biome fields are
+            // authored in TERRAIN-CENTERED space (-size/2..+size/2). Re-center Z by
+            // the terrain's world-Z center so the biomes render identically, just
+            // shifted south. X-center is 0, so worldX is already centered.
+            float cz = worldZ - TerrainCenterZ;
+
             // Direction weights -- how "north", "east" etc. this point is.
             // Normalised so the dominant direction drives its biome field.
-            float wN = Mathf.Max(0f, worldZ) / (TerrainSizeXZ * 0.5f);
-            float wS = Mathf.Max(0f, -worldZ) / (TerrainSizeXZ * 0.5f);
+            float wN = Mathf.Max(0f, cz) / (TerrainSizeXZ * 0.5f);
+            float wS = Mathf.Max(0f, -cz) / (TerrainSizeXZ * 0.5f);
             float wE = Mathf.Max(0f, worldX) / (TerrainSizeXZ * 0.5f);
             float wW = Mathf.Max(0f, -worldX) / (TerrainSizeXZ * 0.5f);
             float sum = wN + wS + wE + wW;
@@ -383,10 +407,10 @@ namespace DeNelle.Editor
             wN /= sum; wS /= sum; wE /= sum; wW /= sum;
 
             float h = 0f;
-            h += wN * NorthHeight(worldX, worldZ);
-            h += wS * SouthHeight(worldX, worldZ);
-            h += wE * EastHeight(worldX, worldZ);
-            h += wW * WestHeight(worldX, worldZ);
+            h += wN * NorthHeight(worldX, cz);
+            h += wS * SouthHeight(worldX, cz);
+            h += wE * EastHeight(worldX, cz);
+            h += wW * WestHeight(worldX, cz);
             return h;
         }
 
@@ -464,10 +488,9 @@ namespace DeNelle.Editor
         private static float WorldHeightAt(float worldX, float worldZ)
         {
             float biomeY = SampleBiomeHeight(worldX, worldZ);
-            // Mirror CreateTerrainData: flatten by the village seam OR the cave
-            // corridor (WO-468), whichever holds the ground flatter here.
-            float flat = Mathf.Max(SeamWeight(worldX, worldZ),
-                                   CorridorWeight(worldX, worldZ));
+            // Mirror CreateTerrainData: only the cave corridor (WO-468) flattens
+            // now — the village/seam plateau is gone (WO-468 Phase 2).
+            float flat = CorridorWeight(worldX, worldZ);
             return Mathf.Lerp(biomeY, 0f, flat);
         }
 
@@ -531,8 +554,11 @@ namespace DeNelle.Editor
                 {
                     float u = x / (float)(res - 1);
                     float v = z / (float)(res - 1);
+                    // TRUE world position (terrain shifted south by TerrainCenterZ).
                     float worldX = (u - 0.5f) * TerrainSizeXZ;
-                    float worldZ = (v - 0.5f) * TerrainSizeXZ;
+                    float worldZ = (v - 0.5f) * TerrainSizeXZ + TerrainCenterZ;
+                    // Terrain-CENTERED Z for biome-direction (north/south) tests.
+                    float cz = worldZ - TerrainCenterZ;
 
                     float y = WorldHeightAt(worldX, worldZ);
                     float slope = SteepnessAt(worldX, worldZ);   // 0..1
@@ -546,11 +572,11 @@ namespace DeNelle.Editor
                     wStone = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.30f, 0.62f, slope));
 
                     // Snow above Y+20 in the north only (§9.3).
-                    if (worldZ > 0f && y > 14f)
+                    if (cz > 0f && y > 14f)
                         wSnow = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(14f, 24f, y));
 
                     // Dark dead ground below Y-8 in the south only (§9.3).
-                    if (worldZ < 0f && y < -6f)
+                    if (cz < 0f && y < -6f)
                         wDead = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(-6f, -11f, y));
 
                     // Grass is whatever the other layers don't claim.
@@ -646,13 +672,17 @@ namespace DeNelle.Editor
             // 3. Pilgrim's road -- from S gate approach, winding SW, fading off.
             // 4. Hunter's trail -- through the eastern orchards, between trees.
             // 5. Crystal-vein   -- NW corner, worn path to a cliffside ore seam.
+            // WO-468 Phase 2: these narrative control points were authored in the
+            // OLD terrain-CENTERED space (village at origin). The terrain now sits
+            // south, so each Z is offset by TerrainCenterZ (via Vp) into true world
+            // Z to keep the cosmetic paths on the (shifted) terrain.
             var paths = new[]
             {
-                new[] { V(0, 124), V(22, 138), V(58, 132), V(96, 116), V(124, 96) },     // animal track
-                new[] { V(-150, 96), V(-186, 52), V(-198, -8), V(-176, -64), V(-148, -118) }, // smuggler's path
-                new[] { V(-18, -124), V(-58, -150), V(-104, -168), V(-138, -196), V(-152, -240*0.5f) }, // pilgrim's road
-                new[] { V(132, 70), V(160, 40), V(176, 4), V(168, -38), V(150, -78) },    // hunter's trail
-                new[] { V(-128, 96), V(-150, 118), V(-176, 136), V(-198, 150) },          // crystal-vein path
+                new[] { Vp(0, 124), Vp(22, 138), Vp(58, 132), Vp(96, 116), Vp(124, 96) },     // animal track
+                new[] { Vp(-150, 96), Vp(-186, 52), Vp(-198, -8), Vp(-176, -64), Vp(-148, -118) }, // smuggler's path
+                new[] { Vp(-18, -124), Vp(-58, -150), Vp(-104, -168), Vp(-138, -196), Vp(-152, -240*0.5f) }, // pilgrim's road
+                new[] { Vp(132, 70), Vp(160, 40), Vp(176, 4), Vp(168, -38), Vp(150, -78) },    // hunter's trail
+                new[] { Vp(-128, 96), Vp(-150, 118), Vp(-176, 136), Vp(-198, 150) },          // crystal-vein path
             };
 
             const float pathHalfWidth = 4.5f;   // world units -- a worn footpath
@@ -675,6 +705,14 @@ namespace DeNelle.Editor
         }
 
         private static Vector2 V(float x, float z) => new Vector2(x, z);
+
+        /// <summary>
+        /// Like <see cref="V"/> but treats the Z as a terrain-CENTERED coordinate
+        /// (old village-origin space) and offsets it into TRUE world Z by
+        /// <see cref="TerrainCenterZ"/> (WO-468 Phase 2 south shift). Used for the
+        /// cosmetic narrative paths authored before the un-stack.
+        /// </summary>
+        private static Vector2 Vp(float x, float z) => new Vector2(x, z + TerrainCenterZ);
 
         /// <summary>
         /// Stamps mud along a world-space polyline (sampled densely) into the
@@ -702,9 +740,11 @@ namespace DeNelle.Editor
         private static void StampMud(float[,,] splat, int res, float worldX, float worldZ,
             float halfWidth)
         {
-            // World XZ -> splatmap pixel space.
+            // TRUE world XZ -> splatmap pixel space. The terrain spans
+            // [-size/2, +size/2] in X and [TerrainCenterZ-size/2,
+            // TerrainCenterZ+size/2] in Z (WO-468 Phase 2 south shift).
             float u = worldX / TerrainSizeXZ + 0.5f;
-            float v = worldZ / TerrainSizeXZ + 0.5f;
+            float v = (worldZ - TerrainCenterZ) / TerrainSizeXZ + 0.5f;
             if (u < 0f || u > 1f || v < 0f || v > 1f) return;
 
             int cx = Mathf.RoundToInt(u * (res - 1));
@@ -818,10 +858,14 @@ namespace DeNelle.Editor
                 // Uniform candidate in normalised terrain space (0..1).
                 float nx = (float)_rng.NextDouble();
                 float nz = (float)_rng.NextDouble();
+                // TRUE world position (terrain shifted south by TerrainCenterZ) +
+                // terrain-CENTERED Z for the biome-direction tests below.
                 float worldX = (nx - 0.5f) * TerrainSizeXZ;
-                float worldZ = (nz - 0.5f) * TerrainSizeXZ;
+                float worldZ = (nz - 0.5f) * TerrainSizeXZ + TerrainCenterZ;
+                float cz = worldZ - TerrainCenterZ;
 
-                // Never plant inside the village footprint or its blend band.
+                // No village footprint anymore (WO-468 Phase 2) — SeamWeight is 0;
+                // kept as a guard in case the plateau is ever reinstated.
                 if (SeamWeight(worldX, worldZ) > 0.05f) continue;
 
                 // WO-468: keep the cave road CLEAR. Reject any candidate within
@@ -837,7 +881,7 @@ namespace DeNelle.Editor
                 int protoIndex;
                 float keepChance;
 
-                if (worldZ > VillageHalfZ)
+                if (cz > VillageHalfZ)
                 {
                     // NORTH -- forest. Dense conifers; thins to bare rock /
                     // snow at the highest elevations (§9.6).
@@ -848,7 +892,7 @@ namespace DeNelle.Editor
                         : (leafyCount > 0 ? leafyStart + _rng.Next(leafyCount)
                                           : coniferStart + _rng.Next(Mathf.Max(1, coniferCount)));
                 }
-                else if (worldZ < -VillageHalfZ)
+                else if (cz < -VillageHalfZ)
                 {
                     // SOUTH -- barren. Sparse dead trees only (§9.6).
                     keepChance = 0.16f;
@@ -953,8 +997,11 @@ namespace DeNelle.Editor
             while (_rockCount < boulderTarget && attempts < boulderTarget * 20)
             {
                 attempts++;
+                // TRUE world position (terrain shifted south) + centered Z for the
+                // biome-direction "rocky north" test.
                 float worldX = ((float)_rng.NextDouble() - 0.5f) * TerrainSizeXZ;
-                float worldZ = ((float)_rng.NextDouble() - 0.5f) * TerrainSizeXZ;
+                float worldZ = ((float)_rng.NextDouble() - 0.5f) * TerrainSizeXZ + TerrainCenterZ;
+                float cz = worldZ - TerrainCenterZ;
                 if (SeamWeight(worldX, worldZ) > 0.05f) continue;
                 // WO-468: keep the cave road clear of boulders too (matches PaintTrees).
                 if (DistanceToCavePath(worldX, worldZ) <
@@ -963,7 +1010,7 @@ namespace DeNelle.Editor
                 float y = WorldHeightAt(worldX, worldZ);
                 float slope = SteepnessAt(worldX, worldZ);
                 // Boulders favour slopes + the rocky north / valley ridges.
-                bool rocky = slope > 0.22f || (worldZ > 60f && y > 14f);
+                bool rocky = slope > 0.22f || (cz > 60f && y > 14f);
                 if (!rocky && _rng.NextDouble() > 0.18) continue;
 
                 SpawnRock(rockRoot.transform, rockMeshes, worldX, y, worldZ,
