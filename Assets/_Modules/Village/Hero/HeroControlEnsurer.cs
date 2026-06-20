@@ -151,6 +151,18 @@ namespace DeNelle.Village
                     }
                 }
             }
+            // If STILL no gameplay camera (Village2 + any builder scene with none baked), CREATE one so the
+            // hero is never left camera-less ("structure but no camera" — the Village2 arrival symptom).
+            // Tagged MainCamera; the SmartMobileCamera wiring below makes it follow the hero on arrival.
+            // Add an AudioListener only if the scene lacks one (avoid the two-listeners warning).
+            if (cam == null)
+            {
+                var camGo = new GameObject("GameplayCamera (ensured)");
+                cam = camGo.AddComponent<Camera>();
+                camGo.tag = "MainCamera";
+                if (FindFirstObjectByType<AudioListener>() == null) camGo.AddComponent<AudioListener>();
+                Debug.Log("[HeroControlEnsurer] no gameplay camera in scene — created one (Village2 etc.) so the hero is followed.");
+            }
             if (cam != null && cam.GetComponent<SmartMobileCamera>() == null)
             {
                 cam.gameObject.AddComponent<SmartMobileCamera>();
