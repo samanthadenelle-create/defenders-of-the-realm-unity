@@ -272,6 +272,18 @@ the game). **The headless fleet now runs clean on every real signal.**
   noise-reduction class as the DUAL-NAVMESH + Eco-spam fixes. Rebuild bkr94gy1e → fleet to confirm the
   captures are now genuinely clean (CLICK-BLOCKED → real-only).
 
+**2026-06-20 ~01:5x — CLICK-BLOCKED UITK path refined + a REAL occlusion surfaced**
+- uGUI fix worked; the UITK pick-path still flagged full-screen overlays (cosmetic-shop/HeroTalent/
+  PetSkillTree/help overlays over Start Wave) = expected modal noise. Refined the UITK path too
+  (`37bbb219`) — skip a picked element spanning >=85% of the panel; keep partial picks.
+- **REAL finding now visible (was drowned in noise):** `Btn_Close covered by BuyRow_blink_bow2h_02` — a
+  shop **Close button occluded by a buy-row** (a partial intra-panel occlusion, NOT a modal). Likely the
+  vendor list overlaps/scrolls over the Close button so the player can't dismiss the shop. NEEDS a look at
+  the shop/vendor panel layout (UITK) — flagged for owner/next session, not blind-fixed (UI layout +
+  owner-felt). This is exactly the payoff of cleaning the noise: a real bug stood up.
+- All real-signal probes remain **0** (magenta/dual-navmesh/verify-fail/NRE/seam/eco-spam). Rebuild
+  bnnk1vl52 → final fleet to confirm captures are clean (only real occlusions like BuyRow/Close remain).
+
 ### Overnight scorecard so far
 - **Fixed + gated + pushed:** A1 pink-Body, B1 seam-guard, C1 craft-close, WO-327 wave-trigger (4). 
 - **Already-fixed/verified:** WO-325 node NRE, crystal spam, edge portal (3).
