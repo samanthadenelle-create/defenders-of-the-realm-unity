@@ -84,7 +84,11 @@ namespace DeNelle.Core.Diagnostics
             // STANDARD §1.3/§1.6): Guard changes control flow and must always record. Same
             // [Flow:<system>] tag for grep + BreakCaptureHarness capture (Debug.LogError ->
             // break-log.jsonl). The full stack still prints to the Unity log.
-            Debug.LogError($"[Flow:{system}] {what} FAILED: {ex.GetType().Name}: {ex.Message}");
+            // Include ex.StackTrace (innermost-frame FIRST → the throw site survives any
+            // break-log truncation) so a caught fault is ROOT-CAUSED first-pass, not inferred.
+            // (Prior code logged only the message; the "full stack still prints" claim was false
+            // because the exception is caught — it never reaches Unity's unhandled-log path.)
+            Debug.LogError($"[Flow:{system}] {what} FAILED: {ex.GetType().Name}: {ex.Message}\nSTACK:\n{ex.StackTrace}");
         }
     }
 }

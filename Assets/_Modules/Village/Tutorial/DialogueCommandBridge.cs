@@ -1070,8 +1070,10 @@ namespace DeNelle.Village
             }
             catch (Exception ex)
             {
+                // Log ex.StackTrace (innermost-frame-FIRST, so the throw site survives any
+                // break-log tail-truncation) — proves the exact failing line instead of guessing.
                 FlowTrace.Fail("UI", $"OpenRumorBoard threw {ex.GetType().Name}: {ex.Message} — " +
-                    "panel skipped; conversation NOT blanked.");
+                    "panel skipped; conversation NOT blanked. STACK:\n" + ex.StackTrace);
             }
         }
 
