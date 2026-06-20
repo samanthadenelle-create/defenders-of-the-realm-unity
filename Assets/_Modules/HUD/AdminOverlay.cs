@@ -422,7 +422,17 @@ namespace DeNelle.HUD
         // ── Action handlers ─────────────────────────────────────────────────
         private void OnTriggerWave()
         {
+            // Force a FRESH resolve every click. _waveManagerInstance is held as `object`, so the
+            // `!= null` guard in ResolveWaveManager uses reference equality — it does NOT see Unity's
+            // fake-null on a DESTROYED WaveManager from a prior scene, so the cached ref goes stale
+            // after a scene change and the trigger silently no-ops (WO-327). Re-find the live one.
+            _waveManagerInstance = null;
             ResolveWaveManager();
+            if (_waveManagerInstance == null)
+            {
+                SetStatus("No WaveManager in this scene — nothing to trigger.");
+                return;
+            }
             InvokeMethod(_waveManagerInstance, "ForceSpawnNextWaveNow");
             SetStatus("Jumped to next wave (ForceSpawnNextWaveNow — spawns immediately, skips countdown).");
         }
