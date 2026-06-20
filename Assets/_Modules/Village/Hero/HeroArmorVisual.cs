@@ -492,9 +492,14 @@ namespace DeNelle.Village
         // first-frame transition). A rollback shows the base body (never-naked), never an invisible hero.
         private IEnumerator VerifyPoseThenMaybeRollback(GameObject instance, string armorId, int generation)
         {
-            const int MaxPoseFrames = 6;
-            bool everPlayed = false;
-            int lastCount = -1;
+            // The TRUE animating test is whether normalizedTime ADVANCES frame-to-frame.
+            // GetCurrentAnimatorClipInfoCount(0) > 0 is a FALSE POSITIVE: a state with an Idle clip
+            // assigned reports clipCount=1 even while FROZEN (not ticked / speed 0) — which is exactly
+            // the owner-reported visible T-pose the old check passed. Measure advancement, and capture
+            // WHY (animSpeed, the Speed param) so a capture names the cause, not just the symptom.
+            const int MaxPoseFrames = 8;
+            bool clipAssigned = false, advancing = false, animActive = false, hasSpeed = false;
+            int lastCount = -1; float prevNT = -1f, speedVal = 0f, animSpeed = 0f;
             for (int i = 0; i < MaxPoseFrames; i++)
             {
                 yield return null;
@@ -503,22 +508,33 @@ namespace DeNelle.Village
                     yield break;
 
                 var anim = instance.GetComponentInChildren<Animator>();
-                if (anim != null && anim.isActiveAndEnabled && anim.runtimeAnimatorController != null)
-                {
-                    lastCount = anim.GetCurrentAnimatorClipInfoCount(0);
-                    if (lastCount > 0) { everPlayed = true; break; }
-                }
+                if (anim == null || !anim.isActiveAndEnabled || anim.runtimeAnimatorController == null) continue;
+                animActive = true; animSpeed = anim.speed;
+                lastCount = anim.GetCurrentAnimatorClipInfoCount(0);
+                if (lastCount > 0) clipAssigned = true;
+                float nt = anim.GetCurrentAnimatorStateInfo(0).normalizedTime;
+                if (prevNT >= 0f && Mathf.Abs(nt - prevNT) > 0.0001f) advancing = true;
+                prevNT = nt;
+                if (!hasSpeed)
+                    foreach (var p in anim.parameters)
+                        if (p.name == "Speed") { hasSpeed = true; speedVal = anim.GetFloat("Speed"); break; }
             }
 
             FlowTrace.Step("ArmorVisual",
-                $"VerifyPose armor='{armorId}' on '{name}': everPlayed={everPlayed} lastClipCount={lastCount} " +
-                "(>=1 means an animation drives the rig; otherwise frozen T-pose).");
+                $"VerifyPose armor='{armorId}' on '{name}': animActive={animActive} clipAssigned={clipAssigned} " +
+                $"normalizedTimeADVANCING={advancing} (the REAL test) animSpeed={animSpeed:0.00} " +
+                $"hasSpeedParam={hasSpeed} speed={speedVal:0.00} clipCount={lastCount}.");
 
-            if (!everPlayed)
-            {
+            // FROZEN: active + a clip assigned but normalizedTime never advanced = the visible T-pose.
+            if (animActive && clipAssigned && !advancing)
+                FlowTrace.Fail("ArmorVisual",
+                    $"FROZEN armor body '{armorId}' on '{name}': clip assigned but normalizedTime NOT advancing " +
+                    $"(animSpeed={animSpeed:0.00}, hasSpeedParam={hasSpeed}, speed={speedVal:0.00}) — the rig is not being " +
+                    "ticked/driven = the owner's T-pose. The old clipCount check was a false 'OK'.");
+
+            if (!clipAssigned)
                 RollbackArmor(instance,
-                    $"deferred pose-verify: armored body never animated (T-pose, lastClipCount={lastCount}) — controller drives no clip for this rig");
-            }
+                    $"deferred pose-verify: armored body never assigned a clip (lastClipCount={lastCount})");
         }
 
         // BUG 1: cache a swap whose Blink body resolved before a base body existed, and start a
