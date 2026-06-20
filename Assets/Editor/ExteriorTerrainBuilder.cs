@@ -129,9 +129,13 @@ namespace DeNelle.Editor
         // (Y≈0) and kept clear of trees/rocks. Constants are in WORLD Z.
         private const float CavePathEndZ = -700f;       // cave/portal world Z (x≈0, y≈0)
         private const float CavePathStartZ = -76f;      // player arrives from the castle here (just onto north edge)
-        private const float CavePathHalfWidth = 6f;     // painted mud road half-width (world units)
-        private const float CavePathFlattenHalf = 10f;  // corridor flattened to Y≈0 within |x|<this
-        private const float CavePathFlattenFalloff = 8f; // soft blend band beyond the flatten half
+        // WIDENED 2026-06-20 (navlink RCA): the cave trigger at (0,1,-684) read SEAM-OFF-MESH
+        // (no walkable navmesh within 2m). A wider, gentler flat corridor gives the bake a solid
+        // agent-width walkable strip the whole way to the cave and keeps the falloff slope shallow
+        // enough that the navmesh isn't carved away at the corridor edges.
+        private const float CavePathHalfWidth = 10f;    // painted mud road half-width (world units)
+        private const float CavePathFlattenHalf = 20f;  // corridor flattened to Y≈0 within |x|<this
+        private const float CavePathFlattenFalloff = 14f; // soft blend band beyond the flatten half (gentle slope)
 
         // Vertical span of the heightmap. North rises to +30, South sinks to
         // -15; we give a little headroom so the heightmap (which is normalised

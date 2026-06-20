@@ -607,7 +607,14 @@ namespace DeNelle.Village
                 }
             }
 
-            if (Velocity.sqrMagnitude > 0.0001f)
+            // Manual seam-link traversal (WO-468 / navlink RCA 2026-06-20): the hero is
+            // INPUT-driven (we call _agent.Move, NOT SetDestination), so it CANNOT auto-cross a
+            // NavMeshLink — links are only traversed by a pathfinding agent. We carry it across the
+            // castle<->OuterWorld gap IN-WORLD (no warp/fade). While a crossing runs it OWNS
+            // movement, so suppress the normal Move this frame.
+            bool seamConsumed = TryTraverseSeamLink();
+
+            if (!seamConsumed && Velocity.sqrMagnitude > 0.0001f)
             {
                 if (!_loggedFirstInput)
                 {
@@ -738,6 +745,75 @@ namespace DeNelle.Village
             // Cheap: only runs while _animator is null, stops once wired.
             ResolveAnimator();
             if (_animator != null && _hasSpeedParam) _animator.SetFloat(AnimSpeed, Velocity.magnitude);
+        }
+
+        // ── Manual NavMeshLink traversal (WO-468) ────────────────────────────────────
+        // The castle<->OuterWorld seam is a NavMeshLink. An INPUT-driven agent (Move, not
+        // SetDestination) never auto-crosses links, so we do it ourselves: when the hero
+        // reaches one end of the seam while pushing toward the other, slide it across the
+        // gap IN-WORLD and re-snap onto the far navmesh (a continuous walk, NOT a warp/fade).
+        // Endpoints MUST match CastleHubBuilder.BuildSeamlessOuterWorldSeam's
+        // NavLink_CastleToOuterWorld (start on castle navmesh, end on OuterWorld).
+        private static readonly Vector3 SeamCastleEnd     = new Vector3(-4.37f, 0f, -63f);
+        private static readonly Vector3 SeamOuterWorldEnd = new Vector3(-4.37f, 0f, -76f);
+        private bool _crossingSeam;
+        private Vector3 _seamTarget;
+        private float _seamReengageAt;
+
+        /// <summary>True while it OWNS movement this frame (a crossing is starting or continuing);
+        /// the caller must then skip the normal Move so we don't double-move.</summary>
+        private bool TryTraverseSeamLink()
+        {
+            if (_crossingSeam)
+            {
+                Vector3 pos = transform.position;
+                Vector3 flatTarget = new Vector3(_seamTarget.x, pos.y, _seamTarget.z);
+                Vector3 to = flatTarget - pos; to.y = 0f;
+                float stepLen = _moveSpeed * Time.deltaTime;
+                if (to.magnitude <= stepLen + 0.05f)
+                {
+                    // Arrived: re-place the agent on the FAR navmesh (Warp re-binds the agent to
+                    // whatever surface is under the point), then resume normal control.
+                    if (_agent != null && _agent.enabled) _agent.Warp(_seamTarget);
+                    else transform.position = _seamTarget;
+                    _crossingSeam = false;
+                    _isTeleporting = false;
+                    _seamReengageAt = Time.time + 1.0f;            // cooldown so we don't bounce back
+                    Debug.Log($"[HeroLocomotion] seam-cross DONE -> {_seamTarget} (now on the far navmesh).");
+                }
+                else
+                {
+                    transform.position = pos + to.normalized * stepLen;
+                    transform.rotation = Quaternion.Slerp(transform.rotation,
+                        Quaternion.LookRotation(to.normalized), _rotationSpeed * Time.deltaTime);
+                }
+                return true;
+            }
+
+            if (Time.time < _seamReengageAt) return false;
+            Vector3 v = Velocity; v.y = 0f;
+            if (v.sqrMagnitude < 0.0001f) return false;
+
+            // Near one endpoint AND pushing toward the other? Begin a crossing.
+            Vector3 here = transform.position;
+            if (HorizDist(here, SeamCastleEnd) < 2.5f && Vector3.Dot(v, SeamOuterWorldEnd - SeamCastleEnd) > 0f)
+            { BeginSeamCross(SeamOuterWorldEnd); return true; }
+            if (HorizDist(here, SeamOuterWorldEnd) < 2.5f && Vector3.Dot(v, SeamCastleEnd - SeamOuterWorldEnd) > 0f)
+            { BeginSeamCross(SeamCastleEnd); return true; }
+            return false;
+        }
+
+        private void BeginSeamCross(Vector3 target)
+        {
+            _crossingSeam = true;
+            _seamTarget = target;
+            _isTeleporting = true;   // skip the off-mesh ±50 clamp while we cross the gap (z<-50)
+            Debug.Log($"[HeroLocomotion] seam-cross BEGIN -> {target} (manual NavMeshLink traversal, in-world walk).");
+        }
+
+        private static float HorizDist(Vector3 a, Vector3 b)
+        {
+            a.y = 0f; b.y = 0f; return Vector3.Distance(a, b);
         }
 
         // WO-277: one frame of tutorial-driven movement toward _autoWalkTarget. A
