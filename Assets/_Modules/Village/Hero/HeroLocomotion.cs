@@ -802,16 +802,24 @@ namespace DeNelle.Village
             Vector3 v = Velocity; v.y = 0f;
             if (v.sqrMagnitude < 0.0001f) return false;
 
-            // Near one endpoint AND pushing toward the other? Begin a crossing.
+            // CORRIDOR GUARD (additive safety — owner reported a possible "second seam / sliding
+            // again" further south). The crossing may ONLY engage inside the seam corridor around the
+            // two canonical endpoints (x≈-4.37, z∈[-63,-76]). Any navmesh edge / stale link OUTSIDE
+            // this band can never steal input and trigger a stray slide. Both real endpoints sit well
+            // inside the band, so the WORKING forward cross is untouched.
             Vector3 here = transform.position;
+            bool inCorridor = Mathf.Abs(here.x - SeamCastleEnd.x) <= 8f && here.z <= -55f && here.z >= -84f;
+            if (!inCorridor) return false;
+
+            // Near one endpoint AND pushing toward the other? Begin a crossing.
             if (HorizDist(here, SeamCastleEnd) < 2.5f && Vector3.Dot(v, SeamOuterWorldEnd - SeamCastleEnd) > 0f)
-            { BeginSeamCross(SeamOuterWorldEnd); return true; }
+            { BeginSeamCross(SeamOuterWorldEnd, here, v); return true; }
             if (HorizDist(here, SeamOuterWorldEnd) < 2.5f && Vector3.Dot(v, SeamCastleEnd - SeamOuterWorldEnd) > 0f)
-            { BeginSeamCross(SeamCastleEnd); return true; }
+            { BeginSeamCross(SeamCastleEnd, here, v); return true; }
             return false;
         }
 
-        private void BeginSeamCross(Vector3 target)
+        private void BeginSeamCross(Vector3 target, Vector3 from, Vector3 vel)
         {
             _crossingSeam = true;
             _seamTarget = target;
@@ -824,7 +832,12 @@ namespace DeNelle.Village
                 _agent.updatePosition = false;
                 _agent.updateRotation = false;
             }
-            Debug.Log($"[HeroLocomotion] seam-cross BEGIN -> {target} (manual NavMeshLink traversal, in-world walk).");
+            // Capture from-pos + velocity so a fleet/playtest can CONFIRM whether any unexpected
+            // SECOND cross fires (owner's "sliding again"). A forward cross reads from≈(-4.37,-63);
+            // any BEGIN logged from a different spot is the stray second seam to chase.
+            string dir = (target == SeamOuterWorldEnd) ? "castle→outer" : "outer→castle";
+            Debug.Log($"[HeroLocomotion] seam-cross BEGIN [{dir}] from {from} -> {target} vel={vel} " +
+                      "(manual NavMeshLink traversal, in-world walk).");
         }
 
         private static float HorizDist(Vector3 a, Vector3 b)
