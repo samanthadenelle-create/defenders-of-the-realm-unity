@@ -57,6 +57,14 @@ namespace DeNelle.DevTools
         // button logs exactly once per ActuateAll pass (deduped fleet ticket).
         private static readonly HashSet<string> _reportedBlocked = new HashSet<string>();
 
+        // Was a registered modal open at the START of the current ActuateAll sweep? The sweep
+        // clicks up to MaxClicksPerSurface buttons synchronously; if one CLOSES the open panel,
+        // PanelManager.AnyOpen flips false immediately while the panel's UITK content is only
+        // Destroyed at end-of-frame — so later covered HUD buttons in the SAME sweep would
+        // mis-report CLICK-BLOCKED behind the dying panel. Latch the sweep-start state so the
+        // whole sweep is treated as behind-the-modal (downgraded to a non-error Step).
+        private static bool _modalWasOpenThisSweep;
+
         // Name fragments (case-insensitive) the bot must NEVER click — they would
         // tear down its own run or mutate persistent state.
         private static readonly string[] Denylist =
@@ -86,6 +94,7 @@ namespace DeNelle.DevTools
         {
             int clicked = 0;
             _reportedBlocked.Clear();   // fresh blocked-dedupe slate per run
+            _modalWasOpenThisSweep = DeNelle.Core.UI.PanelManager.AnyOpen; // latch modal-at-sweep-start (close-race guard)
             clicked += ActuateUGui(rng);
             clicked += ActuateUiToolkit(uiToolkitRoot, rng);
             FlowTrace.Step("Auto", $"ClickableActuator: actuated {clicked} clickable(s).");
@@ -264,10 +273,10 @@ namespace DeNelle.DevTools
             // (PartyShopPanelMvvm), so the modal's own panel/viewport/rows leak through as false
             // CLICK-BLOCKED Fails and drown the fleet ticket board. While a modal is open, downgrade
             // to a non-error Step; a genuine NO-MODAL HUD overlap still Fails (the real-bug path).
-            if (DeNelle.Core.UI.PanelManager.AnyOpen)
+            if (DeNelle.Core.UI.PanelManager.AnyOpen || _modalWasOpenThisSweep)
             {
                 FlowTrace.Step("Auto",
-                    $"CLICK-COVERED(expected): '{key}' behind modal '{DeNelle.Core.UI.PanelManager.OpenPanelName}' (blocker '{blockerName}')");
+                    $"CLICK-COVERED(expected): '{key}' behind modal '{DeNelle.Core.UI.PanelManager.OpenPanelName ?? "(closed mid-sweep)"}' (blocker '{blockerName}')");
                 return;
             }
             FlowTrace.Fail("Auto",
