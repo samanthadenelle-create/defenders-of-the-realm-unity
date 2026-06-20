@@ -3,6 +3,11 @@
 This file is read by every agent (UI and CLI) before starting work.
 Rules here are **non-negotiable**. Do not skip them to ship faster.
 
+**READ FIRST, EVERY SESSION (owner directive 2026-06-20, BINDING):** load
+`SESSION_CANON_LOADER.md` (repo root) — the at-a-glance SME primer (core rules +
+current state + key files) the owner pastes to start a session. It is the fast path;
+the depth below + the deep-dive docs remain binding. THEN do the mandatory catalog read.
+
 **MANDATORY FIRST STEP (BINDING — read before ANY work, every session):** read
 `docs/MASTER_CATALOG.md` — the exhaustive, file-by-file catalog of every
 class/method/asset/scene/data-file/doc, with the architecture map + a prioritized
