@@ -311,8 +311,18 @@ namespace DeNelle.DevTools
                     if (grt == null || !RectTransformUtility.RectangleContainsScreenPoint(grt, center, gCam)) continue;
 
                     if (RendersOnTop(gCanvas, g, btnCanvas, btnGraphic))
+                    {
+                        // A FULL-SCREEN scrim/backdrop/panel covering the button is an INTENTIONAL modal
+                        // cover (the bot opens panels in OpenEachHUDPanel) — the button being unreachable
+                        // BEHIND an open modal is EXPECTED, not an occlusion bug. Only PARTIAL-element
+                        // overlaps are real (e.g. the fixed Icon_hud_build-behind-Slot0). Skip covers that
+                        // span >=85% of the screen — this was ~389 expected CLICK-BLOCKED lines/fleet.
+                        float screenArea = (float)Screen.width * Screen.height;
+                        float gArea = gRect.width * gRect.height;
+                        if (screenArea > 0f && gArea >= 0.85f * screenArea) continue;
                         // Embed the coords so a fleet run is SELF-VERIFYING (real overlap vs math artifact).
                         return $"{g.name} [blockerRect={RectStr(gRect)} btnRect={RectStr(btnRect)} center={center.x:0},{center.y:0}]";
+                    }
                 }
 
                 // A UI Toolkit panel can also sit over a uGUI button. Pick the
