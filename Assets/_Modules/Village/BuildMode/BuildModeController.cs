@@ -1374,6 +1374,17 @@ namespace DeNelle.Village
         private void CommitLayout()
         {
             // BaseLayout is mutated live as structures are placed; persist it now.
+            // §12 CAPTURE (do NOT blind-guard hub scenes here — MainCastle_Hall is the HOME hub
+            // where the player's base IS built; a blanket hub-skip would BREAK base persistence,
+            // a worse regression than the "remembers prior play's towers" bug). This trace records
+            // EXACTLY which scene each persist fires from, so an owner save-then-replay repro
+            // pinpoints the wrong-scene persist before we pick the correctly-scoped fix. Pairs with
+            // BaseLayoutLoader.LoadFromState's replay trace to close the save↔load loop.
+            var st = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            int n = st != null && st.BaseLayout != null ? st.BaseLayout.Count : 0;
+            string scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+            FlowTrace.Step("BuildMode",
+                $"CommitLayout: persisting BaseLayout ({n} structure(s)) from scene '{scene}'.");
             GameStateService.Instance?.Save();
         }
 
