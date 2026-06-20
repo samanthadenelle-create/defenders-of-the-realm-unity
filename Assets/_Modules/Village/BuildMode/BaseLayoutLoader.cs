@@ -22,6 +22,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using UnityEngine.SceneManagement;   // active-scene name — gate the village base-layout to its own scene
 using DeNelle.Core.Catalog;
 using DeNelle.Core.State;
 using DeNelle.Core.Diagnostics;   // TGVRU: instrument the base-layout spawn seam (§12)
@@ -39,6 +40,21 @@ namespace DeNelle.Village
 
         [Tooltip("Auto-load GameState.BaseLayout on Start. Disable to drive load manually (tests).")]
         [SerializeField] private bool _loadOnStart = true;
+
+        // HUB-SCOPE GUARD (build-defense regression, owner playtest 2026-06-19):
+        // GameState.BaseLayout is the PLAYER'S VILLAGE base — a single GLOBAL list (NOT
+        // scene-scoped). The pure HUB scenes (MainCastle_Hall / CastleHub) are NOT the
+        // village; they must never replay the village base. Build Mode was wired into the
+        // castle hub by commit ff2d64b7 ("drop Village-only scene guard"), which also let a
+        // place-in-hub spin up a BaseLayoutLoader whose Start() then re-instantiated the
+        // WHOLE prior-session village base INTO THE HUB ("it remembers the previous play's
+        // towers and re-adds them on load"). This is the regressed guard, restored: the
+        // loader spawns the base layout ONLY in a buildable VILLAGE scene, never in a hub.
+        private static readonly HashSet<string> _hubScenesNoBaseLayout = new HashSet<string>
+        {
+            "MainCastle_Hall",
+            "CastleHub",
+        };
 
         private Transform _root;            // parent for all loaded structures
         private readonly List<PlacedStructure> _loaded = new List<PlacedStructure>();
@@ -103,14 +119,36 @@ namespace DeNelle.Village
             if (_loadedOnce) return;
             _loadedOnce = true;
 
+            // HUB-SCOPE GUARD: never replay the player's VILLAGE base into a pure HUB scene
+            // (MainCastle_Hall / CastleHub). BaseLayout is a single GLOBAL list, so without
+            // this a build-in-hub (which spins up this loader via EnsureExists) would dump the
+            // whole prior-session village base into the hub — the reported "remembers previous
+            // play's towers and re-adds them" regression. Self-reports so a future regression
+            // (a new hub name, or the guard removed again) is visible in the capture, §12.
+            string scene = SceneManager.GetActiveScene().name;
+            if (_hubScenesNoBaseLayout.Contains(scene))
+            {
+                int n = GameStateService.Instance != null && GameStateService.Instance.State != null
+                    && GameStateService.Instance.State.BaseLayout != null
+                        ? GameStateService.Instance.State.BaseLayout.Count : 0;
+                FlowTrace.Warn("BaseLayout",
+                    $"LoadFromState: SKIPPED in hub scene '{scene}' — the village base ({n} placed " +
+                    "structure(s)) does NOT replay in a hub (would re-add prior-session towers).");
+                return;
+            }
+
             var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
             var layout = state != null ? state.BaseLayout : null;
             if (layout == null || layout.Count == 0)
             {
                 // Empty → fall through to the default village (the seed). No-op.
+                FlowTrace.Step("BaseLayout",
+                    $"LoadFromState: scene '{scene}' has an empty BaseLayout — default seed stands (no replay).");
                 return;
             }
 
+            FlowTrace.Step("BaseLayout",
+                $"LoadFromState: scene '{scene}' — replaying {layout.Count} persisted village structure(s).");
             Rebuild(layout);
         }
 
