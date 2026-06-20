@@ -787,12 +787,40 @@ namespace DeNelle.DevTools
                         || sh.name == "Standard"   // built-in Standard renders MAGENTA under URP
                         || sh.name.IndexOf("InternalError", StringComparison.OrdinalIgnoreCase) >= 0;
                     if (!magenta) continue;
-                    string key = r.gameObject.name + "|" + (sh != null ? sh.name : "<null>");
-                    if (!_magentaSeen.Add(key)) continue;
-                    FlowTrace.Fail(Tag, $"MAGENTA-MATERIAL: renderer '{r.gameObject.name}' (scene '{r.gameObject.scene.name}') " +
-                        $"material '{m.name}' shader '{(sh != null ? sh.name : "<null>")}' renders MAGENTA/pink under URP @ {r.transform.position}.");
+                    // DEFINITIVE identity (two wrong guesses on the OuterWorld 'Body' pink cost a rebuild
+                    // each): dump the FULL root→leaf path + mesh + components + root so the next capture
+                    // names the EXACT object + what spawns it — no third guess.
+                    string path = HierarchyPath(r.transform);
+                    if (!_magentaSeen.Add(path)) continue;
+                    FlowTrace.Fail(Tag, $"MAGENTA-MATERIAL: '{path}' (scene '{r.gameObject.scene.name}') " +
+                        $"type={r.GetType().Name} mesh='{MeshName(r)}' root='{r.transform.root.name}' " +
+                        $"comps=[{ComponentNames(r.gameObject)}] material '{m.name}' shader " +
+                        $"'{(sh != null ? sh.name : "<null>")}' renders MAGENTA/pink under URP @ {r.transform.position}.");
                 }
             }
+        }
+
+        // Full root→leaf transform path so a magenta object self-identifies (which 'Body', under what).
+        private static string HierarchyPath(Transform t)
+        {
+            var sb = new System.Text.StringBuilder(t.name);
+            for (var p = t.parent; p != null; p = p.parent) sb.Insert(0, p.name + "/");
+            return sb.ToString();
+        }
+
+        private static string MeshName(Renderer r)
+        {
+            if (r is SkinnedMeshRenderer smr && smr.sharedMesh != null) return smr.sharedMesh.name;
+            var mf = r.GetComponent<MeshFilter>();
+            return mf != null && mf.sharedMesh != null ? mf.sharedMesh.name : "<none>";
+        }
+
+        private static string ComponentNames(GameObject go)
+        {
+            var names = new System.Collections.Generic.List<string>();
+            foreach (var c in go.GetComponents<Component>())
+                if (c != null && !(c is Transform)) names.Add(c.GetType().Name);
+            return string.Join(",", names);
         }
     }
 }
