@@ -311,6 +311,32 @@ namespace DeNelle.Village
             var col = body.GetComponent<Collider>();
             if (col != null) Destroy(col);   // body is cosmetic; no physics needed
 
+            // URP MATERIAL — a primitive ships Unity's built-in Standard material, which the URP player
+            // STRIPS → Hidden/InternalErrorShader = MAGENTA. This is the OWNER-REPORTED OuterWorld pink:
+            // the MAGENTA-MATERIAL fleet probe named it exactly 'WorkerManager/Worker-N/Body' (mesh=Capsule,
+            // no material) after two wrong guesses. Assign a URP/Lit material (robust fallback chain) so the
+            // worker stub renders a solid earthy colour, never magenta.
+            var rend = body.GetComponent<Renderer>();
+            if (rend != null)
+            {
+                Shader sh = Shader.Find("Universal Render Pipeline/Lit")
+                         ?? Shader.Find("Universal Render Pipeline/Simple Lit")
+                         ?? Shader.Find("Standard");
+                if (sh == null)
+                {
+                    var rp = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline;
+                    if (rp != null && rp.defaultMaterial != null) sh = rp.defaultMaterial.shader;
+                }
+                if (sh != null)
+                {
+                    var mat = new Material(sh) { name = "Worker_Body" };
+                    var tint = new Color(0.55f, 0.42f, 0.30f);   // earthy worker brown
+                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tint);
+                    if (mat.HasProperty("_Color")) mat.color = tint;
+                    rend.sharedMaterial = mat;
+                }
+            }
+
             // Add a NavMeshAgent only if the spawn point is actually on a mesh, else the
             // worker uses Worker.cs's straight-line fallback so the verb still demos.
             if (NavMesh.SamplePosition(pos, out _, 2f, NavMesh.AllAreas))
