@@ -221,6 +221,21 @@ from the **synced git mirror** (the repo board the doc + Notion are kept in lock
   x345 (mostly modal-open-expected: a scrim correctly covers the HUD behind an open panel; the real Slot0
   occlusion was already fixed).
 
+**2026-06-20 ~01:0x — PINK SOLVED (definitively, by data): WorkerManager capsule**
+- The enhanced probe NAMED it: **`WorkerManager/Worker-N/Body`** — a primitive **Capsule** (mesh='Capsule',
+  comps=[MeshFilter,MeshRenderer]) the worker-dispatch system spawns in OuterWorld at origin with **NO
+  material**. A primitive ships Unity's built-in Standard material → STRIPPED in the URP player →
+  Hidden/InternalErrorShader = magenta. **This was the owner's pink all along** (not armor, not companion —
+  two earlier guesses; the probe ended the guessing).
+- **FIXED (`dd61c6c8`)** — `WorkerManager.cs:307` worker body now gets a URP/Lit material (robust fallback +
+  earthy tint). Gated COMPILE_GATE_OK, pushed. **Rebuild bd6b5ufe8 → fleet to confirm magenta=0.**
+- **Tree-of-Life false VERIFY-FAILED confirmed gone** (0 lines this fleet — the verify-predicate fix holds).
+- The two earlier pink fixes (A1 HeroArmorVisual, StoryCompanion TintBody) STAY — each closed a real latent
+  Shader.Find-null bug on ITS object; they just weren't the worker. Net: 3 magenta-class holes closed.
+- **Lesson re-proven:** after the build showed Eco-spam dropping to 0 (builds DO pick up fixes), the
+  persisting magenta could only mean wrong-object — so instrumenting the probe to name it was the ONLY
+  correct next step, not a third guess. Cost: 2 extra rebuilds; value: the actual fix, verified.
+
 ### Overnight scorecard so far
 - **Fixed + gated + pushed:** A1 pink-Body, B1 seam-guard, C1 craft-close, WO-327 wave-trigger (4). 
 - **Already-fixed/verified:** WO-325 node NRE, crystal spam, edge portal (3).
