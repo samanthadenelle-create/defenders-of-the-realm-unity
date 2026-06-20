@@ -434,6 +434,7 @@ namespace DeNelle.HUD
         private const string IconTalk         = "hud_talk";
         private const string IconQuest        = "hud_quest";
         private const string IconBuild        = "hud_build";    // standalone Resources/HudIcons/hud_build (tower)
+        private const string IconUpgrade      = "hud_upgrade";  // standalone Resources/HudIcons/hud_upgrade (owner-made); glyph fallback below
         private const string IconIntel        = "hud_intel";    // standalone Resources/HudIcons/hud_intel (periscope/lookout)
         private const string IconRaid         = "hud_raid_2";   // standalone Resources/HudIcons/hud_raid_2 (crossed swords → enter raids)
         private const string IconHeart        = "hud_heart";    // standalone Resources/HudIcons/hud_heart (Heart-of-Elarion crest)
@@ -1374,7 +1375,8 @@ namespace DeNelle.HUD
         private RectTransform _townActionPanel;
         private Button _talkButton;    // context-gated: only interactable when an NPC is in range
         private AttentionGlowUi _talkGlow;   // chasing-comet attention cue around the Talk button
-        private Button _questButton;   // dimmed until the hub quest modal exists (follow-up)
+        private Button _upgradeButton;   // HUD shortcut to the building Upgrade panel (was the quest button)
+        private AttentionGlowUi _upgradeGlow;   // chasing-comet cue around the Upgrade button (like Talk)
         private void BuildTownActionPanel(Transform parent)
         {
             // TOWN ACTIONS row (mockup #42): BUILD · TALK · BAG · QUESTS, bottom-right edge.
@@ -1410,8 +1412,15 @@ namespace DeNelle.HUD
                     InventoryRequested?.Invoke();        // legacy per-instance event (Village bridge self-heal)
                     RaiseInventoryRequested();           // instance-independent static bridge (never goes stale)
                 });
-            _questButton = BuildIconButton(_townActionPanel, new Vector2(0.30f, 0.02f), new Vector2(0.70f, 0.44f),
-                IconQuest, "!", () => DailyQuestHud.Instance?.Toggle());
+            // Bottom of the diamond: UPGRADE shortcut (was QUESTS) -> opens the building Upgrade panel
+            // (WO-432). Quests move to a dedicated quest board (WO-436). Glyph fallback "^" until the
+            // owner's hud_upgrade icon (Resources/HudIcons/hud_upgrade) is imported.
+            _upgradeButton = BuildIconButton(_townActionPanel, new Vector2(0.30f, 0.02f), new Vector2(0.70f, 0.44f),
+                IconUpgrade, "^", () => PanelRouter.Open(PanelId.BuildingUpgrade));
+            // Chasing-comet attention cue around the Upgrade button, the same cue Talk uses.
+            _upgradeGlow = AttentionGlowUi.Attach((RectTransform)_upgradeButton.transform,
+                new Color(1f, 0.85f, 0.35f, 1f), HudTheme.Disc);
+            if (_upgradeGlow != null) _upgradeGlow.transform.SetAsLastSibling();
 
             // Reusable chasing-comet attention cue around the Talk button (also for tutorial focusing).
             _talkGlow = AttentionGlowUi.Attach((RectTransform)_talkButton.transform,
