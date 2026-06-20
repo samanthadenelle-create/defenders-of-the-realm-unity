@@ -262,6 +262,9 @@ namespace DeNelle.DevTools
                 $"{ClickBlockedTag}: button '{key}' is covered by '{blockerName}' — a player cannot click it");
         }
 
+        // Compact screen-rect for the self-verifying CLICK-BLOCKED log.
+        private static string RectStr(Rect r) => $"({r.xMin:0},{r.yMin:0})-({r.xMax:0},{r.yMax:0})";
+
         // ── uGUI occlusion ───────────────────────────────────────────────────
         // Returns the name of a pickable Graphic that covers btn's screen center
         // and renders ON TOP of it, or null when the button is reachable.
@@ -300,10 +303,16 @@ namespace DeNelle.DevTools
                     if (gCanvas == null) continue;
 
                     if (!TryGetScreenRect(g, gCanvas, out Rect gRect)) continue;
-                    if (!gRect.Contains(center)) continue;
+                    // Canonical containment (handles overlay/camera correctly) — replaces the
+                    // hand-rolled gRect.Contains so a mis-built rect can't fake an overlap.
+                    Camera gCam = gCanvas.renderMode == RenderMode.ScreenSpaceOverlay
+                        ? null : (gCanvas.worldCamera != null ? gCanvas.worldCamera : Camera.main);
+                    var grt = g.transform as RectTransform;
+                    if (grt == null || !RectTransformUtility.RectangleContainsScreenPoint(grt, center, gCam)) continue;
 
                     if (RendersOnTop(gCanvas, g, btnCanvas, btnGraphic))
-                        return g.name;
+                        // Embed the coords so a fleet run is SELF-VERIFYING (real overlap vs math artifact).
+                        return $"{g.name} [blockerRect={RectStr(gRect)} btnRect={RectStr(btnRect)} center={center.x:0},{center.y:0}]";
                 }
 
                 // A UI Toolkit panel can also sit over a uGUI button. Pick the
