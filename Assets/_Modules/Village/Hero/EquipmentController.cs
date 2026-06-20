@@ -395,6 +395,24 @@ namespace DeNelle.Village
         private void HandleGearChanged() => EquipBestForHero();
 
         /// <summary>
+        /// Re-seat the equipped main-hand + off-hand onto a NEW body's bones. Called by HeroArmorVisual
+        /// when an armored Blink body swaps in: the props were seated on the now-HIDDEN base hand, and a
+        /// Blink full-body set has slightly different rig proportions, so the VISIBLE armor hand sits
+        /// elsewhere — the "shield hangs off the arm" symptom. Re-point the animator at the new body and
+        /// re-equip so the props follow the visible hands. No magic offsets — the equip path resolves the
+        /// hand by humanoid bone id on the new rig. No-op until the new rig is a ready Humanoid.
+        /// </summary>
+        public void ReseatForBody(GameObject body)
+        {
+            if (body == null) return;
+            var anim = body.GetComponentInChildren<Animator>();
+            if (anim == null || !anim.isHuman) return;   // need a humanoid rig to seat on bones
+            _animator = anim;
+            FlowTrace.Step("Equip", $"ReseatForBody: re-seating equipped props onto '{body.name}' bones (animator='{anim.name}').");
+            EquipBestForHero();
+        }
+
+        /// <summary>
         /// Re-reads the hero's currently equipped weapon from GearLoadout and shows the
         /// matching mesh. This is the hook into the EXISTING equip-change event — no new
         /// gear model. Safe to call repeatedly (idempotent on an unchanged id).

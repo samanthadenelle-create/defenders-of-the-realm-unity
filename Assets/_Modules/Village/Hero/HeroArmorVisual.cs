@@ -349,6 +349,14 @@ namespace DeNelle.Village
             // out of phase — the owner-reported "head and armor not in sync / parts not joined".
             HideBaseBody(baseBody, instance);
 
+            // RE-SEAT EQUIPPED PROPS onto the ARMORED body's hands. The off-hand/weapons were seated on
+            // the now-hidden BASE hand; a Blink full-body set has slightly different rig proportions, so
+            // the visible armor hand sits elsewhere -> the owner-reported "shield hangs off the arm".
+            // EquipmentController re-points its animator at the armor body + re-equips (no magic offsets;
+            // it resolves the hand by humanoid bone id on the new rig).
+            var equip = GetComponentInParent<EquipmentController>();
+            if (equip != null) equip.ReseatForBody(instance);
+
             FlowTrace.Step("ArmorVisual",
                 $"BuildArmorBody: armored body '{armor.id}' shown (address='{address}'), base body hidden.");
 
@@ -753,6 +761,14 @@ namespace DeNelle.Village
 
             if (shown > 0)
                 FlowTrace.Step("ArmorVisual", $"RestoreBaseBody: re-enabled {shown} base SkinnedMeshRenderer(s).");
+
+            // Re-seat equipped props back onto the BASE body's hands — the armor body (and our re-pointed
+            // animator) is going away, so the off-hand must not be left following a destroyed armor rig.
+            if (baseBody != null)
+            {
+                var equip = GetComponentInParent<EquipmentController>();
+                if (equip != null) equip.ReseatForBody(baseBody.gameObject);
+            }
         }
 
         // Resolve the BASE body to hide/seat/retarget against. The player hero names it
