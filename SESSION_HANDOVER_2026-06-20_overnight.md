@@ -252,6 +252,16 @@ from the **synced git mirror** (the repo board the doc + Notion are kept in lock
   a NavMeshLink is present; the sibling CheckNavMeshLinks() still catches the REAL link-less overlap (WO-453
   class), so coverage is preserved. Rebuild bwtj2uq5k → fleet to confirm a FULLY-GREEN run.
 
+**2026-06-20 ~01:3x — ✅✅ FULLY-GREEN FLEET (seeds 13-18, fresh build)**
+All real game-bug signals = **0**: MAGENTA-MATERIAL, DUAL-NAVMESH, TreeOfLife-VERIFY-FAIL, NullReference,
+SEAM-OFF-MESH, SEAM-UNREACHABLE, UNEXPECTED-CROSS. Remaining "errors" are 100% expected noise — 389
+CLICK-BLOCKED (probe correctly sees a modal scrim covering the HUD behind an OPEN panel; the real Slot0
+occlusion was already fixed) + 72 `-nographics` headless video/render-shader artifacts (environment, not
+the game). **The headless fleet now runs clean on every real signal.**
+- DEFERRED (probe-quality, not a bug): the CLICK-BLOCKED probe could skip buttons that sit behind an
+  INTENTIONAL modal scrim (would cut ~389 expected lines/fleet → cleaner captures). Low priority, risks
+  masking a real occlusion — left for a considered pass, not a blind overnight change.
+
 ### Overnight scorecard so far
 - **Fixed + gated + pushed:** A1 pink-Body, B1 seam-guard, C1 craft-close, WO-327 wave-trigger (4). 
 - **Already-fixed/verified:** WO-325 node NRE, crystal spam, edge portal (3).
