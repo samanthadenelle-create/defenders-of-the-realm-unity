@@ -236,6 +236,13 @@ from the **synced git mirror** (the repo board the doc + Notion are kept in lock
   persisting magenta could only mean wrong-object — so instrumenting the probe to name it was the ONLY
   correct next step, not a third guess. Cost: 2 extra rebuilds; value: the actual fix, verified.
 
+**2026-06-20 ~01:1x — ✅ PINK CONFIRMED DEAD (fleet-verified)**
+- Final verification fleet (b012vqh8x) on the fresh build with the WorkerManager fix: **MAGENTA-MATERIAL = 0**,
+  regression sweep fully clean (no magenta, no tree false-fail, no seam/null flags). The owner's
+  long-standing OuterWorld pink is FIXED and VERIFIED. Pink saga CLOSED.
+- Trail of the fix (all valid, kept): A1 HeroArmorVisual safety-net → StoryCompanion TintBody → **the real
+  one: WorkerManager worker-stub capsule** (probe-named once guessing stopped). 3 magenta-class holes closed.
+
 ### Overnight scorecard so far
 - **Fixed + gated + pushed:** A1 pink-Body, B1 seam-guard, C1 craft-close, WO-327 wave-trigger (4). 
 - **Already-fixed/verified:** WO-325 node NRE, crystal spam, edge portal (3).
