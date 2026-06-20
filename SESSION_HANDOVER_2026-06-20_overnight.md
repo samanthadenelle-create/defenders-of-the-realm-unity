@@ -300,6 +300,16 @@ the game). **The headless fleet now runs clean on every real signal.**
   visible scrim), so the only CLICK-BLOCKED reports are real normal-HUD occlusions. Also revisit
   `Btn_Close ← BuyRow` (task #20) — the one confirmed real occlusion.
 
+**2026-06-20 ~02:5x — shop Close occlusion: clean fix tried, didn't clear → deferred with disambiguation**
+- Applied the standard fix (raise the close BUTTON to last-sibling, `f16e37a0`) for `Btn_Close <- BuyRow`.
+  Fleet-verified: **DID NOT clear** (still 2 hits) → it is NOT panel sibling-order. Kept the change (correct
+  hardening, harmless), but the real cause is deeper. **DEFERRED (task #20)** — two possibilities:
+  (a) buy-rows have a NESTED CANVAS w/ sortingOrder above the panel = REAL occlusion (fix: own-Canvas higher
+  sortingOrder on Close, or drop the row Canvas); (b) the CLICK-BLOCKED probe ignores RectMask2D clipping =
+  FALSE positive (Close works in-game). **OWNER DISAMBIGUATES IN 2s:** open shop, click Close — works=probe
+  bug, trapped=real. Not burning more cycles guessing at 3 AM; a glance settles it.
+- All real-signal probes remain **0**. Game stays verifiably clean.
+
 ### Overnight scorecard so far
 - **Fixed + gated + pushed:** A1 pink-Body, B1 seam-guard, C1 craft-close, WO-327 wave-trigger (4). 
 - **Already-fixed/verified:** WO-325 node NRE, crystal spam, edge portal (3).
