@@ -119,6 +119,9 @@ namespace DeNelle.Village
         [JsonProperty("xpReward")]    public int XpReward    = 15;
         /// <summary>Glimmer (cosmetic currency) awarded to the hero on kill.</summary>
         [JsonProperty("glimmerReward")] public int GlimmerReward = 3;
+        /// <summary>WO-432/433 — GOLD (economy Coins) dropped on kill, the source that funds building
+        /// research. 0 = use the XP-derived fallback in Enemy's death reward (so every enemy still pays).</summary>
+        [JsonProperty("coinReward")]    public int CoinReward    = 0;
 
         /// <summary>
         /// True when this enemy flies (<see cref="Movement"/> == "flying", case-

@@ -1537,6 +1537,16 @@ namespace DeNelle.Village
             if (killed && _def != null && _def.GlimmerReward > 0)
                 TryAwardGlimmer(_def.GlimmerReward);
 
+            // WO-432/433: grant GOLD (Coins) on kill so the Gold-cost building research has a kill-driven
+            // source. Data-driven (EnemyDef.CoinReward) with an XP-derived fallback so EVERY enemy pays out
+            // (~6-20 early game; tougher enemies have more XP -> more gold). EconomyService.AddCoins is the
+            // single Coins grant + HUD/save path.
+            if (killed && _def != null)
+            {
+                int gold = _def.CoinReward > 0 ? _def.CoinReward : Mathf.Max(4, Mathf.RoundToInt(_def.XpReward * 0.4f));
+                if (gold > 0) EconomyService.Instance?.AddCoins(gold);
+            }
+
             // Play the death (collapse) animation, then RETURN TO THE POOL (no longer
             // Destroy — pooling reuses the body to kill the per-spawn GameObject churn
             // / stray accumulation). The Dead bool latches the controller's Death state;
