@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "dialogues": [
+    {
+      "id": "brom_intro",
+      "startNode": "greet",
+      "nodes": [
+        {
+          "id": "greet",
+          "lines": [
+            { "speaker": "Brom", "text": "Word travels in Elarion. What do you need, defender?" }
+          ],
+          "options": [
+            { "text": "Show me the rumor board.", "goto": "open_board" },
+            { "text": "Tell me of the Dimming.", "requires": "quest_dimming_active", "goto": "dimming" },
+            { "text": "Just passing through.", "goto": "end" }
+          ]
+        },
+        {
+          "id": "open_board",
+          "commands": [
+            { "verb": "OpenRumorBoard", "args": [] }
+          ]
+        },
+        {
+          "id": "dimming",
+          "lines": [
+            { "speaker": "Brom", "text": "The light fails at the realm's edge. Few return who chase it." },
+            { "speaker": "Brom", "text": "If you mean to, the board has the threads. Mind the dark." }
+          ],
+          "next": "greet"
+        }
+      ]
+    }
+  ]
+}

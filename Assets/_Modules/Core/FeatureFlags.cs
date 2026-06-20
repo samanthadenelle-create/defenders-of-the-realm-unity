@@ -81,6 +81,13 @@ namespace DeNelle.Core
         /// ON (legacy ShopPanel path when OFF), so the two never double-open.</summary>
         public static bool PartyShop => Get("partyshop", defaultOn: true);
 
+        /// <summary>WO-455 — when ON, dialogue runs through OUR code-built system (DeNelle.Core.Dialogue:
+        /// data-driven nodes + DialogueRunner + MVVM DialogueView styled via ElarionUiKit) instead of
+        /// YarnSpinner. Lifecycle WE control = no "No node" race, no Stop()-teardown NRE. Default OFF
+        /// during the phased migration (the Yarn path stays until narrative is converted + Yarn is
+        /// ripped). PlayerPrefs "ff.customdialogue".</summary>
+        public static bool CustomDialogue => Get("customdialogue", defaultOn: false);
+
         /// <summary>Global runtime kill-switch for ALL dev keyboard hotkeys (DevPanel F1, DebugCanvas
         /// F12, AdminOverlay Ctrl+Shift+A, the test spawners J/K/L, the tower dev harness B/J/K/N/U,
         /// the jukebox J open, etc.). Default OFF — so every dev hotkey is DEAD everywhere (editor AND
