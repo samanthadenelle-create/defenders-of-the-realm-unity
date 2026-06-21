@@ -767,6 +767,7 @@ namespace DeNelle.Village
         // gap IN-WORLD and re-snap onto the far navmesh (a continuous walk, NOT a warp/fade).
         // Endpoints MUST match CastleHubBuilder.BuildSeamlessOuterWorldSeam's
         // NavLink_CastleToOuterWorld (start on castle navmesh, end on OuterWorld).
+        // Castle<->OuterWorld seam endpoints — the original in-world SLIDE crossing (kept working).
         private static readonly Vector3 SeamCastleEnd     = new Vector3(-4.37f, 0f, -63f);
         private static readonly Vector3 SeamOuterWorldEnd = new Vector3(-4.37f, 0f, -76f);
         private bool _crossingSeam;
@@ -811,13 +812,27 @@ namespace DeNelle.Village
             if (Time.time < _seamReengageAt) return false;
             Vector3 v = Velocity; v.y = 0f;
             if (v.sqrMagnitude < 0.0001f) return false;
-
-            // CORRIDOR GUARD (additive safety — owner reported a possible "second seam / sliding
-            // again" further south). The crossing may ONLY engage inside the seam corridor around the
-            // two canonical endpoints (x≈-4.37, z∈[-63,-76]). Any navmesh edge / stale link OUTSIDE
-            // this band can never steal input and trigger a stray slide. Both real endpoints sit well
-            // inside the band, so the WORKING forward cross is untouched.
             Vector3 here = transform.position;
+
+            // PAIRED-CROSSING WARP (HeroLinkCrossing, owner 2026-06-21): explicit id-paired portal —
+            // if the hero is moving + within an ENTERABLE crossing's radius, spawn it at the id-matched
+            // partner (distance-independent, no navmesh adjacency, no "closest" guessing). Checked BEFORE
+            // the legacy castle slide so an explicit pair always wins. !bidirectional = destination-only end.
+            for (int ci = 0; ci < HeroLinkCrossing.Registry.Count; ci++)
+            {
+                var c = HeroLinkCrossing.Registry[ci];
+                if (c == null || !c.isActiveAndEnabled || !c.bidirectional) continue;
+                if (HorizDist(here, c.transform.position) > c.enterRadius) continue;
+                var partner = c.Partner();
+                if (partner == null) continue;
+                WarpTo(partner.transform.position, transform.rotation);
+                _seamReengageAt = Time.time + 1.2f;   // cooldown so it doesn't bounce back at the destination
+                Debug.Log($"[HeroLocomotion] crossing '{c.crossingId}' -> spawned at partner {partner.transform.position}.");
+                return true;
+            }
+
+            // CORRIDOR GUARD (legacy castle<->OuterWorld SLIDE — additive safety). The slide may ONLY engage
+            // inside the seam corridor (x≈-4.37, z∈[-63,-76]) so no stray navmesh edge triggers a false slide.
             bool inCorridor = Mathf.Abs(here.x - SeamCastleEnd.x) <= 8f && here.z <= -55f && here.z >= -84f;
             if (!inCorridor) return false;
 
