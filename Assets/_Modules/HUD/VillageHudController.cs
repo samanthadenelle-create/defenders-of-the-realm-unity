@@ -432,6 +432,7 @@ namespace DeNelle.HUD
         private const string IconSettings     = "hud_settings";
         private const string IconInventory    = "hud_inventory";
         private const string IconTalk         = "hud_talk";
+        private const string IconBuySell      = "hud_gold";     // TKT-15 reskin: the vendor button reads BUY/SELL (gold coin), not "Talk"
         private const string IconQuest        = "hud_quest";
         private const string IconBuild        = "hud_build";    // standalone Resources/HudIcons/hud_build (tower)
         private const string IconUpgrade      = "Upgrade";      // standalone Resources/HudIcons/Upgrade.png (owner-made); glyph fallback below
@@ -1397,8 +1398,13 @@ namespace DeNelle.HUD
             // BUILD top · TALK left · BAG right · QUESTS bottom.
             BuildIconButton(_townActionPanel, new Vector2(0.30f, 0.56f), new Vector2(0.70f, 0.98f),
                 IconBuild, "B", () => BuildRequested?.Invoke());
+            // TKT-15 reskin (owner 2026-06-20): this button is the VENDOR affordance — reads BUY/SELL
+            // (gold-coin icon, "$" glyph), not "Talk". It still fires TalkRequested, which the Village
+            // TalkHudBridge routes to the in-range vendor's shop/dialogue — so the player BUYS here,
+            // while the separate context button stays the Upgrade<->Quest toggle. Fixes "buy weapons
+            // ended at the upgrade screen" (the player had only the upgrade toggle to tap before).
             _talkButton = BuildIconButton(_townActionPanel, new Vector2(0.02f, 0.29f), new Vector2(0.42f, 0.71f),
-                IconTalk, "T", () => TalkRequested?.Invoke());
+                IconBuySell, "$", () => TalkRequested?.Invoke());
             // T-010/T-016 (the "black shape under the Talk icon"): Talk is the only icon button
             // that gets DISABLED (when no NPC is in range). Unity's ColorTint then paints the
             // button's targetGraphic (the seat, which carries the HudTheme.Disc sprite) with the
