@@ -143,6 +143,10 @@ namespace DeNelle.Village
             }
             if (p.scaleX > 0f)   // explicit owner-dialed (non-uniform) scale overrides the uniform sizeM fit
                 vis.transform.localScale = new Vector3(p.scaleX, p.scaleY, p.scaleZ);
+            // Ticket #10 (RCA 2026-06-21): a TryPlace structure (e.g. the colosseum) has NO baked
+            // collider at all — the inject path is visual-only. Fit one to the final visible mesh so
+            // it's solid. Done AFTER scale so the box matches what the player sees.
+            EnsureStructureCollider(host, vis);
             Debug.Log("[HubStructureVisualInjector] placed " + p.name + " (" + p.modelPath + ") at " + p.worldPos + ".");
         }
 
@@ -177,6 +181,12 @@ namespace DeNelle.Village
             if (s.setLocalPos)
             {
                 vis.transform.localPosition = new Vector3(s.posX, s.posY, s.posZ);
+                // Ticket #10 (RCA 2026-06-21): when the visual is moved off the baked root (barracks),
+                // the baked SOLID collider stays at the root — a phantom wall where nothing is visible,
+                // and the visible building is walk-through. Disable the baked NON-TRIGGER colliders (keep
+                // TRIGGER colliders — NPC interaction points rely on them) and fit a new one below.
+                foreach (var c in target.GetComponentsInChildren<Collider>(true))
+                    if (c != null && !c.isTrigger) c.enabled = false;
             }
             else if (s.posY != 0f)
             {
@@ -209,7 +219,43 @@ namespace DeNelle.Village
                 }
                 else Debug.LogWarning("[HubStructureVisualInjector] texPath '" + s.texPath + "' not found for " + s.bakedName + ".");
             }
+            // Ticket #10: when the visual was repositioned (setLocalPos), the baked collider is now
+            // mislocated (disabled above) — fit a fresh one to the visible mesh so the building is solid
+            // where it's seen. Only for setLocalPos: the 6 non-repositioned swaps keep their co-located
+            // baked colliders (don't touch what works — no smuggled changes).
+            if (s.setLocalPos)
+                EnsureStructureCollider(target.gameObject, vis);
             Debug.Log("[HubStructureVisualInjector] " + s.bakedName + " re-skinned to " + s.modelPath + ".");
+        }
+
+        // Fit a world-axis-aligned BoxCollider to the visible mesh so an injected structure is solid.
+        // The collider lives on a child whose world rotation is identity and world scale is 1, so the
+        // box maps 1:1 to world units regardless of the host/visual transform (rotation + non-uniform
+        // scale on the Tripo visual would otherwise skew a collider placed directly on it). Ticket #10.
+        private static void EnsureStructureCollider(GameObject host, GameObject vis)
+        {
+            if (host == null || vis == null) return;
+            Bounds b = default; bool have = false;
+            foreach (var r in vis.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                if (!have) { b = r.bounds; have = true; } else b.Encapsulate(r.bounds);
+            }
+            if (!have) return;   // no renderable mesh -> nothing to wall off
+
+            var holder = new GameObject("StructureCollider");
+            holder.transform.SetParent(host.transform, false);
+            holder.transform.position = b.center;
+            holder.transform.rotation = Quaternion.identity;
+            // Neutralize inherited scale so BoxCollider.size is in world units.
+            Vector3 pls = host.transform.lossyScale;
+            holder.transform.localScale = new Vector3(
+                Mathf.Abs(pls.x) > 1e-4f ? 1f / pls.x : 1f,
+                Mathf.Abs(pls.y) > 1e-4f ? 1f / pls.y : 1f,
+                Mathf.Abs(pls.z) > 1e-4f ? 1f / pls.z : 1f);
+            var box = holder.AddComponent<BoxCollider>();
+            box.size = b.size;
+            Debug.Log($"[HubStructureVisualInjector] fitted BoxCollider on '{host.name}' size={b.size} center={b.center}.");
         }
 
         // Name match across the loaded scene(s). Runs once per hub load (not per frame).
