@@ -547,6 +547,9 @@ namespace DeNelle.Village
             // walking so stairs/ramparts/walls behave identically.
             if (_autoWalkTarget != null)
             {
+                // Crossings must fire during auto-walk too (bot tests + scripted cutscene walks), not just
+                // player input — otherwise the hero auto-walks INTO a HeroLinkCrossing and never warps.
+                if (TryTraverseSeamLink()) return;
                 AutoWalkStep();
                 return;
             }
@@ -773,6 +776,7 @@ namespace DeNelle.Village
         private bool _crossingSeam;
         private Vector3 _seamTarget;
         private float _seamReengageAt;
+        private bool _crossArmed = true;   // paired-crossing: fire on ENTER, re-arm when clear of all crossings
 
         /// <summary>True while it OWNS movement this frame (a crossing is starting or continuing);
         /// the caller must then skip the normal Move so we don't double-move.</summary>
@@ -809,30 +813,38 @@ namespace DeNelle.Village
                 return true;
             }
 
-            if (Time.time < _seamReengageAt) return false;
-            Vector3 v = Velocity; v.y = 0f;
-            if (v.sqrMagnitude < 0.0001f) return false;
             Vector3 here = transform.position;
 
-            // PAIRED-CROSSING WARP (HeroLinkCrossing, owner 2026-06-21): explicit id-paired portal —
-            // if the hero is moving + within an ENTERABLE crossing's radius, spawn it at the id-matched
-            // partner (distance-independent, no navmesh adjacency, no "closest" guessing). Checked BEFORE
-            // the legacy castle slide so an explicit pair always wins. !bidirectional = destination-only end.
+            // PAIRED-CROSSING WARP (HeroLinkCrossing, owner 2026-06-21): explicit id-paired portal. ENTER-TRIGGERED
+            // (arm/disarm) — NO input-velocity requirement, so it fires whether the hero is driven by player input
+            // OR auto-walk, and it's bot-testable. Fires once when the hero ENTERS an enterable crossing's radius;
+            // re-arms only when clear of ALL crossings (so warping ONTO the partner never bounces back). Distance-
+            // independent, no navmesh adjacency, no "closest" guessing. Checked BEFORE the legacy slide.
+            bool nearAnyCrossing = false;
             for (int ci = 0; ci < HeroLinkCrossing.Registry.Count; ci++)
             {
                 var c = HeroLinkCrossing.Registry[ci];
                 if (c == null || !c.isActiveAndEnabled || !c.bidirectional) continue;
                 if (HorizDist(here, c.transform.position) > c.enterRadius) continue;
+                nearAnyCrossing = true;
                 var partner = c.Partner();
                 if (partner == null) continue;
-                WarpTo(partner.transform.position, transform.rotation);
-                _seamReengageAt = Time.time + 1.2f;   // cooldown so it doesn't bounce back at the destination
-                Debug.Log($"[HeroLocomotion] crossing '{c.crossingId}' -> spawned at partner {partner.transform.position}.");
-                return true;
+                if (_crossArmed)
+                {
+                    WarpTo(partner.transform.position, transform.rotation);
+                    _crossArmed = false;   // re-arms below once the hero leaves all crossing radii
+                    Debug.Log($"[HeroLocomotion] crossing '{c.crossingId}' -> spawned at partner {partner.transform.position}.");
+                    return true;
+                }
             }
+            if (!nearAnyCrossing) _crossArmed = true;   // clear of every crossing -> ready to fire again
 
-            // CORRIDOR GUARD (legacy castle<->OuterWorld SLIDE — additive safety). The slide may ONLY engage
-            // inside the seam corridor (x≈-4.37, z∈[-63,-76]) so no stray navmesh edge triggers a false slide.
+            // ── LEGACY castle<->OuterWorld SLIDE (needs input velocity + direction) ──
+            if (Time.time < _seamReengageAt) return false;
+            Vector3 v = Velocity; v.y = 0f;
+            if (v.sqrMagnitude < 0.0001f) return false;
+            // CORRIDOR GUARD (additive safety): the slide may ONLY engage inside the seam corridor
+            // (x≈-4.37, z∈[-63,-76]) so no stray navmesh edge triggers a false slide.
             bool inCorridor = Mathf.Abs(here.x - SeamCastleEnd.x) <= 8f && here.z <= -55f && here.z >= -84f;
             if (!inCorridor) return false;
 

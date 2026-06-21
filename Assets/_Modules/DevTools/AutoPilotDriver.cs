@@ -191,6 +191,10 @@ namespace DeNelle.DevTools
             // If the hero never resolved, RunAll short-circuits to the summary.
             if (_hero != null)
             {
+                // Hero-crossing test (owner 2026-06-21): if a HeroLinkCrossing pair exists (e.g. Village2 gate),
+                // walk the hero into the entry and assert it WARPS to the destination. Runs first so --scene=Village2
+                // proves the gate crossing headless (owner never the detector).
+                yield return RunPhase("AssertHeroCrossing", AssertHeroCrossing());
                 yield return RunPhase("WalkToEachGate", WalkToEachGate());
                 yield return RunPhase("OpenEachVendor", OpenEachVendor());
                 // Runs even if building discovery found 0 vendors: it opens shops DIRECTLY
@@ -424,6 +428,49 @@ namespace DeNelle.DevTools
             FlowTrace.Step("DiagRoster", $"DiagGarrisonRoster done — built {built}/{roster.Length}, magenta={magenta}, tipped={tipped}.");
         }
 
+        // =====================================================================
+        //  PHASE: AssertHeroCrossing — walk the hero into a HeroLinkCrossing entry
+        //  and confirm it WARPS to the paired destination (owner 2026-06-21, headless
+        //  test of the Village2 gate crossing). Skips cleanly if no crossing pair.
+        // =====================================================================
+        private IEnumerator AssertHeroCrossing()
+        {
+            if (_hero == null) { _lastDetail = "no hero"; yield break; }
+            // Pick the CLOSEST enterable crossing to the hero (the one it can actually walk to on its island).
+            HeroLinkCrossing entry = null; float best = 9999f;
+            foreach (var c in HeroLinkCrossing.Registry)
+            {
+                if (c == null || !c.bidirectional || c.Partner() == null) continue;
+                float d = HorizontalDistance(_hero.transform.position, c.transform.position);
+                if (d < best) { best = d; entry = c; }
+            }
+            if (entry == null) { _lastDetail = "no HeroLinkCrossing pair"; FlowTrace.Step("Auto", "AssertHeroCrossing: no crossing pair in scene — skipping."); yield break; }
+
+            Vector3 destPos = entry.Partner().transform.position;
+            FlowTrace.Step("Auto", $"AssertHeroCrossing: nearest crossing '{entry.crossingId}' @ {entry.transform.position} " +
+                                   $"(d={best:F1}); walking hero {_hero.transform.position} into it; partner @ {destPos}.");
+            _hero.SetAutoWalk(entry.transform);
+
+            // A REAL warp = a single-frame position JUMP far larger than a walk step (not mere proximity).
+            bool warped = false; bool reachedEntry = false;
+            Vector3 lastPos = _hero.transform.position;
+            float t0 = Time.realtimeSinceStartup;
+            while (Time.realtimeSinceStartup - t0 < 14f)
+            {
+                if (_hero == null) break;
+                Vector3 pos = _hero.transform.position;
+                if (HorizontalDistance(pos, entry.transform.position) < entry.enterRadius + 0.5f) reachedEntry = true;
+                if (HorizontalDistance(pos, lastPos) > 6f) { warped = true; break; }   // teleport, not a step
+                lastPos = pos;
+                yield return null;
+            }
+            if (_hero != null) _hero.ClearAutoWalk();
+            if (warped)
+            { FlowTrace.Step("Auto", $"AssertHeroCrossing: CROSSED '{entry.crossingId}' — real warp jump, hero now {_hero.transform.position}."); _lastDetail = "crossing OK (warp fired)"; }
+            else
+            { FlowTrace.Fail("Auto", $"AssertHeroCrossing: NO warp on '{entry.crossingId}' — reachedEntry={reachedEntry}, hero {(_hero != null ? _hero.transform.position.ToString() : "<null>")}. If reachedEntry=false the marker is unreachable on the hero's navmesh island."); _lastDetail = "crossing FAILED"; }
+        }
+
         private static float TimeoutFor(string phase)
         {
             switch (phase)
@@ -441,6 +488,7 @@ namespace DeNelle.DevTools
                 case "ResolveHero":       return ResolveHeroTimeout;
                 case "WalkToOuterWorldOutpost": return OuterWalkTimeout;
                 case "DiagGarrisonRoster": return 45f;
+                case "AssertHeroCrossing": return 18f;
                 default:                  return 30f;
             }
         }
