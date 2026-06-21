@@ -173,13 +173,14 @@ namespace DeNelle.Editor
             // 4) Ground floor (big stone plane) — feeds the navmesh via its MeshCollider.
             BuildGroundFloor(environment.transform, courtyardHalf);
 
-            // 5) Hero entry seam + return-to-OuterWorld trigger (mirrors GarrisonSceneBuilder).
+            // 5) Hero entry seam ONLY (mirrors GarrisonSceneBuilder). WO-480 (E): Village2 is a
+            //    ONE-WAY outpost — do NOT build the ReturnToOuterWorld_Seam (the BuildReturnSeam
+            //    method stays defined but unused; the seam GameObject must NOT be created).
             var entryPos = new Vector3(0f, 0.1f, -(courtyardHalf + 6f));
             var entry = new GameObject("HeroStartPoint_PlayerSpawn");
             entry.transform.SetParent(root.transform, false);
             entry.transform.position = entryPos;
             entry.transform.rotation = Quaternion.LookRotation((Vector3.zero - entryPos).normalized, Vector3.up);
-            BuildReturnSeam(root.transform, courtyardHalf);
 
             int placed = 0;
 
@@ -195,9 +196,13 @@ namespace DeNelle.Editor
 
             // 7) LAYER 2 — chokepoint: an INNER wall ring with a NARROW front gate.
             //    Traps cluster in the chokepoint lane (between outer gate and inner gate).
+            // WO-480 (pass 2, C): widen the inner gate gap to the FULL gateWidth (was gateWidth*0.6 ~0.6
+            // tiles). After the bake erodes the opening by the navmesh agent radius, a 0.6-tile half-gap
+            // is too narrow for the agent to fit through, so courtyard<->chokepoint stayed split even with
+            // the gate collider stripped (Edit A). Match the outer ring's half-gap so the agent fits.
             placed += BuildWallRing(environment.transform, chokeHalf, 0f,
-                wallRole: "wall_stone", frontGateHalf: gateWidth * 0.6f,
-                destruction: recipe.Destruction, label: "Inner");
+                wallRole: "wall_stone", frontGateHalf: gateWidth,
+                destruction: recipe.Destruction, label: "Inner", carve: false);   // WO-480 (A): no carve — keep courtyard+chokepoint connected
             placed += PlaceOneCounted(environment.transform, "gate",
                 new Vector3(0f, 0f, -chokeHalf), 0f, "ChokepointGate");
 
@@ -248,8 +253,11 @@ namespace DeNelle.Editor
         // SOLID invisible carve-ring so the navmesh stops at the wall line (mirrors
         // GarrisonSceneBuilder.BuildPalisadeCarveRing — thin wall props don't carve alone).
         // Destruction: a fraction of wall slots become a "rubble" pile instead of a wall.
+        // WO-480 (A): `carve` gates the invisible carve-ring. The INNER chokepoint ring passes
+        // carve:false so the courtyard + chokepoint bake as ONE connected navmesh patch (concentric
+        // carve rings were sealing them into separate islands). Inner walls stay as visual props.
         private static int BuildWallRing(Transform parent, float half, float y, string wallRole,
-            float frontGateHalf, StrongholdDestruction destruction, string label)
+            float frontGateHalf, StrongholdDestruction destruction, string label, bool carve = true)
         {
             int placed = 0;
             const float seg = 3f;
@@ -259,8 +267,18 @@ namespace DeNelle.Editor
             void Slot(Vector3 pos, float yaw, string nm)
             {
                 bool broken = dmgChance > 0f && rng.NextDouble() < dmgChance;
-                string role = broken ? "rubble" : wallRole;
-                if (PlaceOneCounted(parent, role, pos, yaw, nm) > 0) placed++;
+                if (broken)
+                {
+                    // WO-480 (D): rubble is VISUAL ONLY — must NOT fragment/trap the navmesh. Place it
+                    // NOT NavigationStatic and strip its (potentially non-convex MeshCollider) collider,
+                    // so the NavMeshSurface bakes straight through it (no island split, no agent trap —
+                    // the named InnerWall_Front oracle break came from rubble MeshColliders).
+                    if (PlaceVisualOnly(parent, "rubble", pos, yaw, nm) > 0) placed++;
+                }
+                else
+                {
+                    if (PlaceOneCounted(parent, wallRole, pos, yaw, nm) > 0) placed++;
+                }
             }
 
             // Front (-Z) with gate gap, back (+Z), and the two sides.
@@ -276,7 +294,9 @@ namespace DeNelle.Editor
             }
 
             // Invisible solid carve-ring so the navmesh respects the wall line (front gate open).
-            BuildCarveRing(parent, half, y, frontGateHalf, label);
+            // WO-480 (A): only the OUTER ring carves; the inner ring (carve:false) leaves the
+            // courtyard + chokepoint as one connected surface.
+            if (carve) BuildCarveRing(parent, half, y, frontGateHalf, label);
             return placed;
         }
 
@@ -345,11 +365,19 @@ namespace DeNelle.Editor
             plat.transform.SetParent(env, false);
             plat.transform.localPosition = new Vector3(0f, platH * 0.5f, keepHalf * 0.4f);
             plat.transform.localScale = new Vector3(keepHalf * 2.2f, platH, keepHalf * 2.2f);
+            // WO-480 (pass 2, B): the platform TOP must bake navmesh so Spawn_Keep is on-mesh (it was
+            // OFF-MESH entirely — the ramp led nowhere). The primitive cube carries a BoxCollider that
+            // the NavMeshSurface samples (useGeometry = PhysicsColliders), and MarkStatic flags it
+            // NavigationStatic. Platform TOP y = localPos.y(platH*0.5) + halfScale.y(platH*0.5) = platH,
+            // which is exactly where the keep ramp arrives (rampTop.y = platH) — slope meets surface.
             MarkStatic(plat);
             TintMesh(plat, new Color(0.30f, 0.28f, 0.26f));
             placed++;
+            FlowTrace.Step("Stronghold",
+                $"Platform_Keep walkable: top y={platH} (NavigationStatic + BoxCollider) — ramp top meets it.");
 
-            // Keep core (a stone tower) on top of the platform.
+            // Keep core (a stone tower) on top of the platform. It sits CENTRE only — do NOT carve
+            // interior walls that would re-fragment the platform top (WO-480 pass 2, B: leave it open).
             placed += PlaceOneCounted(env, "stone_tower",
                 new Vector3(0f, platH, keepHalf * 0.4f), 0f, "Keep_Core");
 
@@ -389,38 +417,51 @@ namespace DeNelle.Editor
             return placed;
         }
 
-        // Place a stair run (visual ramp, named Stairs_*) climbing from base to top, AND a
-        // NavMeshLink so NavMeshAgents can traverse the verticality. The link uses
-        // Unity.AI.Navigation.NavMeshLink DIRECTLY (asmdef-referenced) and FAILS LOUD if the
-        // component can't be added — never a silent link failure (today's seam lesson).
+        // WO-480 (C): WALKABLE RAMP, not a NavMeshLink. The Village2 hero is an INPUT-driven
+        // NavMeshAgent (Move(), not SetDestination) — it CANNOT auto-cross a NavMeshLink, so a
+        // raised tier reached only by a link is ALWAYS a separate island for the player. Instead we
+        // lay a NavigationStatic sloped box from courtyard ground up to the platform top, with a
+        // shallow-enough pitch (rise platH over run ~platH*4) that the NavMeshSurface bakes a
+        // CONTINUOUS slope onto the keep. The agent simply walks up. No NavMeshLink is created.
         private static int BuildStairsWithLink(Transform env, Transform links, string label,
             Vector3 basePos, Vector3 topPos, float width)
         {
             int placed = 0;
 
-            // Visual ramp (a thin tilted cube) under the link line — named Stairs_* for the bake.
+            // Shallow walkable slope: enforce run >= rise*4 (<= ~14 deg) so the surface bakes onto it.
+            float rise = topPos.y - basePos.y;
+            float dirZ = (topPos.z - basePos.z);
+            float dirSign = dirZ >= 0f ? 1f : -1f;
+            float minRun = Mathf.Max(1f, Mathf.Abs(rise) * 4f);     // shallow enough to bake
+            // Re-derive the ramp top so the run is long enough (extend the base outward from the platform).
+            float runLen = Mathf.Max(minRun, Mathf.Abs(dirZ));
+            Vector3 rampBase = new Vector3(topPos.x, basePos.y, topPos.z - dirSign * runLen);
+            Vector3 rampTop  = new Vector3(topPos.x, topPos.y, topPos.z);
+
             var ramp = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            ramp.name = $"Stairs_{label}";
+            ramp.name = $"Ramp_{label}";   // the RAMP carries the navmesh (WO-480 C)
             ramp.transform.SetParent(env, false);
-            Vector3 mid = (basePos + topPos) * 0.5f;
-            float dz = topPos.z - basePos.z;
-            float dy = topPos.y - basePos.y;
-            float runLen = Mathf.Sqrt(dz * dz + dy * dy);
-            float pitch = Mathf.Atan2(dy, Mathf.Abs(dz)) * Mathf.Rad2Deg;
+            Vector3 mid = (rampBase + rampTop) * 0.5f;
+            float pitch = Mathf.Atan2(rise, runLen) * Mathf.Rad2Deg;   // shallow incline
             ramp.transform.localPosition = mid;
-            ramp.transform.localRotation = Quaternion.Euler(-pitch * Mathf.Sign(dz == 0 ? 1 : 1), 0f, 0f);
-            ramp.transform.localScale = new Vector3(width, 0.4f, Mathf.Max(1f, runLen));
-            MarkStatic(ramp);
+            ramp.transform.localRotation = Quaternion.Euler(-pitch * dirSign, 0f, 0f);
+            float slabLen = Mathf.Sqrt(runLen * runLen + rise * rise);
+            ramp.transform.localScale = new Vector3(Mathf.Max(width, 4f), 0.4f, Mathf.Max(1f, slabLen));
+            MarkStatic(ramp);   // NavigationStatic — the slope bakes onto the keep platform
             TintMesh(ramp, new Color(0.33f, 0.30f, 0.27f));
             placed++;
 
-            // The NavMeshLink — the verticality fix.
-            BuildNavLink(links, $"NavLink_{label}", basePos, topPos, width);
+            // WO-480 (C): NO NavMeshLink — the input-hero cannot cross it. The ramp IS the path.
+            FlowTrace.Step("Stronghold",
+                $"Ramp_{label}: walkable slope base={rampBase} top={rampTop} pitch={pitch:F1}deg — input-hero walks up (no NavMeshLink).");
             return placed;
         }
 
         // Add a NavMeshLink bridging basePos -> topPos. Uses the type DIRECTLY (the
         // DeNelle.Editor asmdef references Unity.AI.Navigation). LOUD FAIL on any miss.
+        // WO-480 (C): NO LONGER CALLED for Village2 — the input-driven hero cannot cross a
+        // NavMeshLink, so verticality is now a walkable ramp (see BuildStairsWithLink). Kept
+        // defined for reference / future SetDestination-only strongholds.
         private static void BuildNavLink(Transform parent, string name, Vector3 worldBase,
             Vector3 worldTop, float width)
         {
@@ -556,15 +597,30 @@ namespace DeNelle.Editor
         //  GROUND / LIGHTING / SEAM / SPAWNS
         // ===================================================================
 
+        // WO-480 (B + F): ONE continuous interior floor covering the FULL traversed interior:
+        // the arrival point at z = -(half + 6), the keep base, and the OuterWorld CavePortal warp
+        // target (20.6, 0.1, -38.3). The plane must reach every walked point so the NavMeshSurface
+        // bakes a single connected patch (no off-mesh arrival, no keep gap).
+        // *** The CavePortal target (20.6, -38.3) MUST stay on this floor — if it moves, re-size here. ***
         private static void BuildGroundFloor(Transform parent, float half)
         {
+            const float CavePortalZ = -38.3f;   // OuterWorld CavePortal warp Z (arrival must be on-mesh)
+            const float CavePortalX = 20.6f;    // OuterWorld CavePortal warp X
+            // Required half-extent: cover at least (half + 10) every direction, the arrival -Z
+            // (half + 6), AND the CavePortal point with margin (WO-480 F).
+            float reqExtent = Mathf.Max(
+                half + 10f,
+                half + 6f + 4f,                 // arrival point + margin
+                Mathf.Abs(CavePortalZ) + 6f,    // CavePortal Z + margin
+                Mathf.Abs(CavePortalX) + 6f);   // CavePortal X + margin
+
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "Floor_Stronghold";
             ground.transform.SetParent(parent, false);
-            float planeScale = (half + 10f) / 5f;   // Unity plane is 10m => /5 per half
+            float planeScale = reqExtent / 5f;   // Unity plane is 10m => /5 per half-extent
             ground.transform.localScale = new Vector3(planeScale, 1f, planeScale);
             TintMesh(ground, new Color(0.22f, 0.21f, 0.20f));   // dark stone
-            MarkStatic(ground);
+            MarkStatic(ground);   // NavigationStatic — the NavMeshSurface bakes the connected surface on this floor
         }
 
         private static void BuildMoodyLighting(Transform parent, StrongholdRecipe recipe)
@@ -737,9 +793,61 @@ namespace DeNelle.Editor
             inst.transform.localPosition = localPos;
             inst.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
             inst.name = name;
-            MarkStatic(inst);
+
+            // WO-480 (pass 2, A): a GATE prop is purely DECORATIVE — the wall-ring gap defines the
+            // actual opening. Left intact, the gate prop's blocking MeshCollider re-seals its own gap
+            // (the owner previously fixed traversal by HAND-removing the ChokepointGate collider), which
+            // split arrival<->courtyard (MainGate) and courtyard<->chokepoint (ChokepointGate) into
+            // separate navmesh islands. So strip ALL its colliders AND keep it NOT NavigationStatic so
+            // the NavMeshSurface bakes straight through the gap. (Walls/towers/etc. still MarkStatic below.)
+            bool isGate = string.Equals((role ?? "").Trim(), "gate", System.StringComparison.OrdinalIgnoreCase)
+                       || string.Equals((role ?? "").Trim(), "gate_wood", System.StringComparison.OrdinalIgnoreCase);
+            if (isGate)
+            {
+                foreach (var col in inst.GetComponentsInChildren<Collider>(true))
+                    if (col != null) Object.DestroyImmediate(col);
+                // Deliberately NOT MarkStatic — the gate prop is excluded from NavigationStatic geometry.
+                FlowTrace.Step("Stronghold",
+                    $"gate prop '{name}' colliders stripped (gap stays open for nav).");
+            }
+            else
+            {
+                MarkStatic(inst);
+            }
 
             // Render-verify: a placed piece with NO visible mesh self-reports (footprint logged).
+            VerifyRenders(inst, role, name);
+            return 1;
+        }
+
+        // WO-480 (D): place a role as VISUAL-ONLY decoration — NOT NavigationStatic and with all
+        // colliders stripped — so it can never carve/fragment the navmesh or trap the agent.
+        // Used for destruction rubble (the InnerWall_Front oracle trap was a rubble MeshCollider).
+        private static int PlaceVisualOnly(Transform parent, string role, Vector3 localPos, float yaw, string name)
+        {
+            var prefab = ResolveRole(role);
+            GameObject inst;
+            if (prefab != null)
+            {
+                inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+                inst.transform.SetParent(parent, false);
+            }
+            else
+            {
+                inst = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                inst.transform.SetParent(parent, false);
+                inst.transform.localScale = new Vector3(2f, 1.2f, 2f);
+                TintMesh(inst, new Color(0.30f, 0.27f, 0.24f));
+            }
+            inst.transform.localPosition = localPos;
+            inst.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+            inst.name = name;
+
+            // Strip every collider so the bake (PhysicsColliders geometry) ignores the rubble entirely.
+            foreach (var col in inst.GetComponentsInChildren<Collider>(true))
+                if (col != null) Object.DestroyImmediate(col);
+            // Deliberately NOT MarkStatic — rubble is excluded from NavigationStatic geometry.
+
             VerifyRenders(inst, role, name);
             return 1;
         }
