@@ -98,7 +98,12 @@ namespace DeNelle.Village
                     float max = c.MaxHp > 0f ? c.MaxHp : Placeholder;
                     float cur = Mathf.Clamp(c.Hp, 0f, max);
                     _memberArgs[0] = hudSlot;
-                    _memberArgs[1] = c.DisplayName;
+                    // WO-438 (FIX D): DisplayName is the TITLED name ("Grom, Veteran of the Wall"), but the
+                    // HUD party feed keys the portrait lookup on the BARE name (HeroPortraits/Grom +
+                    // PortraitNameForRosterName's "Grom"/"Sylas"/... switch). The titled string matched neither,
+                    // so companion slots 1-3 showed no portrait. Push the bare token (first comma-segment); the
+                    // full titled name still drives the speech bubble elsewhere.
+                    _memberArgs[1] = string.IsNullOrEmpty(c.DisplayName) ? c.DisplayName : c.DisplayName.Split(',')[0].Trim();
                     _memberArgs[2] = cur;
                     _memberArgs[3] = max;
                     _setPartyMember?.Invoke(_hud, _memberArgs);
