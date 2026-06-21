@@ -152,9 +152,19 @@ namespace DeNelle.Village
         {
             if (_capsuleMesh != null) return _capsuleMesh;
             var temp = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            // Ticket #6 (RCA 2026-06-21): the OLD code left this throwaway as a bare root-level "Capsule"
+            // with the default (Standard) material and used DEFERRED Destroy — so a MagentaGuard sweep in
+            // the SAME frame (the OuterWorld additive-load sweep) caught it, its stripped shader resolved to
+            // Hidden/InternalErrorShader (magenta), and it Fail-logged a phantom "stray magenta Capsule" every
+            // run. Rename it (never mistaken for art), disable its renderer (can never render/strip-magenta),
+            // hide+dontsave, and DestroyImmediate so it cannot survive into any sweep.
+            temp.name = "__CapsuleMeshProbe";
+            temp.hideFlags = HideFlags.HideAndDontSave;
+            var rr = temp.GetComponent<Renderer>();
+            if (rr != null) rr.enabled = false;
             var mf = temp.GetComponent<MeshFilter>();
             _capsuleMesh = mf != null ? mf.sharedMesh : null;
-            Destroy(temp);
+            DestroyImmediate(temp);
             return _capsuleMesh;
         }
     }
