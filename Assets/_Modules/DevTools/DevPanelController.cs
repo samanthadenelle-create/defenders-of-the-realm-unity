@@ -607,8 +607,8 @@ namespace DeNelle.DevTools
             // (UITK overlay — hard-code the ElarionUi tokens; this asmdef can't reference
             //  the UGUI ElarionUi palette type, but the values match it 1:1.)
             chip.style.position = Position.Absolute;
-            chip.style.top = 6;
-            chip.style.right = 6;
+            chip.style.bottom = 6;   // bottom-LEFT (owner): quiet corner, away from the top-right resource/settings UI
+            chip.style.left = 6;
             chip.style.paddingLeft = 6; chip.style.paddingRight = 6;
             chip.style.paddingTop = 1; chip.style.paddingBottom = 1;
             // ElarionUiKit.GlassDeep (0.04,0.05,0.07) — dark glass, low alpha = subtle.
