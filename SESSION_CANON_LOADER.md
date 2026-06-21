@@ -10,7 +10,9 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
 - **Presentation never touches objects** — HUD → Core only, Village → Core only.
 - **MVVM strict:** the VM holds all logic/state; the View is a dumb skin (no game-state reads).
 - **Flag-gated changes only** (BlinkChrome, BuildingUpgradePanel, etc.).
-- **Instrument, don't guess** — trace flows, name the exact object, verify.
+- **Instrument, don't guess — THE HARD GATE (BINDING, CLAUDE.md §12):** NO code edit on a real bug
+  until CAPTURED DATA proves the cause. Loggers step IN/OUT → run HEADLESS → data pinpoints → fix THAT.
+  Static reading locates candidates, never concludes. Never inference-fix; it's the OPENING move, unprompted.
 - **One thing at a time, fully verified before the next.**
 - **Deliver complete + felt-verified. No piecemeal.**
 - **Ticket pipeline (BINDING):** QA (read-only RCA, classify NEW-feature vs EXISTING) → CLI

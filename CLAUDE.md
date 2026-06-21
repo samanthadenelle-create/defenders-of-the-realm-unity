@@ -241,6 +241,22 @@ Other sessions write + signal "ready"; the one committer reconciles. This is non
 
 ## 12. Debugging Directive — INSTRUMENT, don't guess (BINDING)
 
+> ### ★ THE HARD GATE (owner 2026-06-21 — BINDING on EVERY agent + CLI, forever) ★
+> **No code edit on a non-trivial bug until you can cite CAPTURED DATA that proves the cause.**
+> Instrument FIRST — loggers that step IN and OUT of each item (`FlowTrace.Enter/Step/Warn/Fail`,
+> `Guard`), run it (prefer **HEADLESS** to self-serve — the AutoPilot fleet + `break-log.jsonl` +
+> on-load state dumps), read the trace, let the data **PINPOINT the dead step**, then fix THAT.
+> - **Static code-reading LOCATES candidates; it NEVER CONCLUDES the cause.** An inferred root is a guess.
+> - **Never inference-fix. Never guess-and-ship.** A "plausible fix" *feels* like progress and is the
+>   slow path (N blind cycles); instrumenting *feels* slow and is the fast path (one read).
+> - This is the **OPENING MOVE, unprompted** — not a fallback after a guess fails. If you can't point
+>   to the data line that proves it, you have not earned the edit.
+> - The methodology is to be **passed to every agent ever spawned, every CLI, every session.** Propagate it.
+>
+> *Lesson forged 2026-06-21:* the castle "pink floor" was guessed at for 3 cycles (a terrain theory that
+> was WRONG); one headless FloorDiag dump then named the real cause — colorless URP/Lit floor tiles — in
+> a single read. Memory: `never-inference-fix`.
+
 Owner mandate (2026-06-13, from B2B-scale practice): **we do not guess at bugs — we
 instrument the flow and let the data tell us where it dies.** Repeated symptom-patching
 on a hypothesis wastes credits and owner time. The standing loop:

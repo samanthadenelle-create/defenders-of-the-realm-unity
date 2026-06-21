@@ -3,7 +3,10 @@
 > Companion to `PARALLEL_LANES.md`. Each block is a self-contained brief for one CLI silo.
 > **Hard rule:** only Agent 1 edits `VillageSceneBuilder.cs`. Shared files needing coordination:
 > `GameState.cs` (additive field-adds, one at a time) and `SaveSchema`/`SaveMigrator` (Agent 3 owns the bump).
-> Every agent: brace-gate each `.cs`, commit by explicit path, Village→Core only, no UXML, editor closed for bakes.
+> Every agent: **INSTRUMENT-FIRST — CLAUDE.md §12 HARD GATE: no fix on a non-trivial bug until CAPTURED
+> DATA proves the cause (loggers step in/out → run headless → data pinpoints → fix that). Never guess /
+> inference-fix; it's the OPENING move, unprompted.** brace-gate each `.cs`, commit by explicit path,
+> Village→Core only, no UXML, editor closed for bakes.
 
 ## WAVE 1 — start these 7 now (zero deps, disjoint files)
 
