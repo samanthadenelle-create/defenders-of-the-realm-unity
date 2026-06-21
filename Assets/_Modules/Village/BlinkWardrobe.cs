@@ -60,7 +60,11 @@ namespace DeNelle.Village
             foreach (var r in body.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
                 if (r == null) continue;
-                bool show = IsSkinRenderer(r.name) || IsOutfitOf(r.name, outfit) || IsBareArm(r.name);
+                // SHOW: skin + the chosen outfit's pieces + the WHOLE bare body (so a limb is NEVER
+                // missing — owner flagged arms, then legs; the Starter set is incomplete so hiding the
+                // bare body lost the legs). HIDE: only the OTHER outfit sets. The outfit clothes the body
+                // (not underwear); the bare body fills any gaps the outfit leaves (not missing).
+                bool show = IsSkinRenderer(r.name) || IsOutfitOf(r.name, outfit) || IsBareBody(r.name);
                 if (r.enabled != show) r.enabled = show;
                 if (show)
                 {
@@ -106,14 +110,17 @@ namespace DeNelle.Village
             return n.ToLowerInvariant().StartsWith(outfit.ToLowerInvariant());
         }
 
-        // The bare ARMS mesh (single anatomy token, no set-prefix). The Blink outfit sets are sleeveless
-        // so the arms stay bare skin under them (a look the owner likes). Other bare anatomy
-        // (Chest/Legs/Feet) is HIDDEN because the outfit covers it.
-        public static bool IsBareArm(string n)
+        // A BARE base-body anatomy mesh (Arms/Legs/Chest/Feet/torso/...) — single token, NO set-prefix
+        // (so 'Chest' is bare body but 'Cloth1_Chest' is an outfit). KEPT under the outfit so a limb is
+        // NEVER missing when the chosen outfit set is incomplete (Starter ships no full leg/arm cover).
+        // The outfit pieces render OVER it; bare skin only peeks where the outfit has gaps.
+        public static bool IsBareBody(string n)
         {
             if (string.IsNullOrEmpty(n) || n.Contains("_")) return false;
             n = n.ToLowerInvariant();
-            return n == "arm" || n == "arms";
+            return n == "arm" || n == "arms" || n == "legs" || n == "leg" || n == "chest" ||
+                   n == "torso" || n == "body" || n == "feet" || n == "foot" || n == "hips" ||
+                   n == "hip" || n == "waist" || n == "pelvis" || n == "neck" || n == "spine";
         }
     }
 }

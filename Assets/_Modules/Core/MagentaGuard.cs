@@ -92,22 +92,35 @@ namespace DeNelle.Core
                     var mats = r.sharedMaterials;
                     if (mats == null) continue;
 
-                    // FLOOR/GROUND DIAGNOSTIC (owner "still a pink floor", TKT-1): NAME any large
-                    // ground-like renderer + its shader/material/texture/colour even if its shader is
-                    // NOT "broken" by the predicate below — so a capture identifies a pink floor this
-                    // guard didn't recover (a valid-named shader with a missing texture, a terrain, or
-                    // a genuinely magenta-tinted material). Once per renderer name. Fix follows the data.
-                    if (IsGroundLike(r) && _floorSeen.Add(r.name))
+                    // FLOOR FIX (TKT-1, owner "still pink floor"): the Raid PROVED the lavender floor is
+                    // the Quaternius courtyard (material 'MI_WoodTrim', shader 'Shader Graphs/M_BaseMaterial')
+                    // rendering an UNTEXTURED white surface the scene lighting tints lavender — its albedo
+                    // didn't survive the build. NOT bright magenta, so the broken-shader recovery skipped it.
+                    // So: a GROUND-LIKE renderer on a NON-URP-Lit, non-particles/terrain shader → retarget to
+                    // URP/Lit, carrying any albedo texture we can find (Quaternius uses '_Base_Color'); if none
+                    // survived, set a warm wood/stone base so it's NEVER lavender. Mutates the SHARED material
+                    // once (all tiles fixed); idempotent (re-runs see URP/Lit and skip). Textured floors are
+                    // left alone. Quiet: a single Step, not an error per tile.
+                    if (_lit != null && IsGroundLike(r) && _floorSeen.Add(r.name))
                     {
                         var fm = mats.Length > 0 ? mats[0] : null;
-                        string fsh = fm != null && fm.shader != null ? fm.shader.name : "<null>";
-                        bool hasTex = fm != null && ((fm.HasProperty("_BaseMap") && fm.GetTexture("_BaseMap") != null)
-                                                  || (fm.HasProperty("_MainTex") && fm.mainTexture != null));
-                        Color bc = fm != null && fm.HasProperty("_BaseColor") ? fm.GetColor("_BaseColor")
-                                 : (fm != null && fm.HasProperty("_Color") ? fm.color : Color.white);
-                        FlowTrace.Fail("MagentaGuard",
-                            $"FLOOR-DIAG '{HierarchyPath(r.transform)}' (scene '{r.gameObject.scene.name}') mesh='{MeshName(r)}' " +
-                            $"material '{(fm != null ? fm.name : "<null>")}' shader '{fsh}' hasBaseTex={hasTex} baseColor={bc} — pink-floor diagnostic.");
+                        string fsh = fm != null && fm.shader != null ? fm.shader.name : "";
+                        bool nonLit = fm != null && fm.shader != null
+                                      && fsh != "Universal Render Pipeline/Lit"
+                                      && fsh.IndexOf("Particles", System.StringComparison.OrdinalIgnoreCase) < 0
+                                      && fsh.IndexOf("Terrain", System.StringComparison.OrdinalIgnoreCase) < 0
+                                      && fsh.IndexOf("Unlit", System.StringComparison.OrdinalIgnoreCase) < 0;
+                        if (nonLit)
+                        {
+                            Texture tex = null;
+                            foreach (var prop in new[] { "_BaseMap", "_MainTex", "_Base_Color", "_BaseColorMap", "_Albedo", "_AlbedoMap" })
+                                if (fm.HasProperty(prop) && fm.GetTexture(prop) != null) { tex = fm.GetTexture(prop); break; }
+                            fm.shader = _lit;
+                            if (tex != null && fm.HasProperty("_BaseMap")) fm.SetTexture("_BaseMap", tex);
+                            else if (fm.HasProperty("_BaseColor")) fm.SetColor("_BaseColor", new Color(0.42f, 0.34f, 0.24f, 1f)); // warm wood — never lavender
+                            FlowTrace.Step("MagentaGuard",
+                                $"FLOOR-FIX '{fm.name}' (was '{fsh}', scene '{r.gameObject.scene.name}') -> URP/Lit, albedoTex={(tex != null)} — lavender floor corrected.");
+                        }
                     }
 
                     // First broken material on this renderer (and its dead shader name for the log).
