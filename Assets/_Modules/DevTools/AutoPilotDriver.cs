@@ -784,9 +784,11 @@ namespace DeNelle.DevTools
                 bool shoppable = false;
                 try { var def = BuildingCatalog.Find(id); shoppable = def != null && def.IsShoppable; } catch { }
 
-                // Clean slate so the surface we observe is THIS vendor's response.
+                // Clean slate + clear the route seam so we read THIS invoke's decision (not a stale one).
                 try { DialogueService.Stop(); } catch { }
                 try { PanelManager.CloseOpen(); } catch { }
+                CastleNpcInteractable.LastInteractRoute = null;
+                CastleNpcInteractable.LastInteractId = null;
                 yield return null;
 
                 // Drive the REAL routing — the exact private path the HUD Talk button fires.
@@ -795,29 +797,28 @@ namespace DeNelle.DevTools
                 catch (Exception ex) { threw = true; FlowTrace.Fail("Auto", $"AssertVendorTalkRoute: Interact() threw for '{id}' — {ex.Message}"); }
                 yield return null;
 
-                bool running = false;
-                try { running = DialogueService.IsRunning; } catch { }
-                string openPanel = null;
-                try { openPanel = PanelManager.AnyOpen ? PanelManager.OpenPanelName : null; } catch { }
+                // The DECISION is the headless-observable truth — the opened SURFACE is not (the Yarn
+                // dialogue + the UITK upgrade panel are both invisible in -nographics, so IsRunning /
+                // openPanel can't distinguish the routes). Read the route Interact() recorded.
+                string route = CastleNpcInteractable.LastInteractRoute;
+                bool running = false; try { running = DialogueService.IsRunning; } catch { }
 
                 checkedCount++;
                 if (shoppable)
                 {
                     shoppableChecked++;
-                    if (running)
-                    {
-                        FlowTrace.Step("Auto", $"AssertVendorTalkRoute: '{id}' shoppable -> TALK DIALOGUE opened (route OK).");
-                    }
+                    if (route == "talk-dialogue")
+                        FlowTrace.Step("Auto", $"AssertVendorTalkRoute: '{id}' shoppable -> route='talk-dialogue' (FIX OK; IsRunning={running}).");
                     else
                     {
                         violations++;
-                        FlowTrace.Fail("Auto", $"TALK-ROUTE VIOLATION: shoppable vendor '{id}' did NOT open the Buy/Sell dialogue on Talk " +
-                            $"(IsRunning=false, openPanel='{openPanel ?? "<none>"}', threw={threw}) — the upgrade short-circuit is stealing Talk.");
+                        FlowTrace.Fail("Auto", $"TALK-ROUTE VIOLATION: shoppable vendor '{id}' routed to '{route ?? "<none>"}' on Talk " +
+                            $"(expected 'talk-dialogue', threw={threw}) — the upgrade short-circuit is stealing Talk.");
                     }
                 }
                 else
                 {
-                    FlowTrace.Step("Auto", $"AssertVendorTalkRoute: '{id}' not-shoppable -> route='{(running ? "dialogue" : (openPanel ?? "<none>"))}' (informational).");
+                    FlowTrace.Step("Auto", $"AssertVendorTalkRoute: '{id}' not-shoppable -> route='{route ?? "<none>"}' (informational).");
                 }
 
                 // Teardown so the next vendor starts clean.

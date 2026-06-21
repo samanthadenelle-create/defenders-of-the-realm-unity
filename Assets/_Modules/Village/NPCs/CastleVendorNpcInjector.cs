@@ -399,6 +399,14 @@ namespace DeNelle.Village
 
         private string _structureId;
         private string _label;
+
+        // TEST SEAM (data-verify, 2026-06-20): the last routing DECISION Interact() made, exposed so
+        // the headless AutoPilot oracle (AssertVendorTalkRoute) can assert a SHOPPABLE vendor's Talk
+        // press routes to the dialogue ("talk-dialogue"), NOT the upgrade panel ("upgrade-panel").
+        // This is observable WITHOUT rendering — the Yarn dialogue + UITK upgrade panel are both
+        // invisible in -nographics, so the opened surface can't distinguish the routes; the decision can.
+        public static string LastInteractRoute;
+        public static string LastInteractId;
         private Transform _hero;
         private bool _openedStructure;
 
@@ -475,7 +483,9 @@ namespace DeNelle.Village
             // branch so a HEADLESS capture PROVES Talk reaches the Buy/Sell dialogue for shoppable
             // vendors (forge/armorer/market/jeweler) instead of being stolen by the upgrade panel.
             bool up = IsUpgradableId(_structureId), shop = IsShoppableId(_structureId);
-            FlowTrace.Step("Village", $"CastleNpc.Interact '{_label}' id='{_structureId}' upgradable={up} shoppable={shop} -> route={((up && !shop) ? "upgrade-panel" : "talk-dialogue")}");
+            LastInteractId = _structureId;
+            LastInteractRoute = (up && !shop) ? "upgrade-panel" : "talk-dialogue";
+            FlowTrace.Step("Village", $"CastleNpc.Interact '{_label}' id='{_structureId}' upgradable={up} shoppable={shop} -> route={LastInteractRoute}");
             // §12 / WO-413: the castle vendor NPCs are the primary live interaction surface (the
             // home hub is MainCastle_Hall). They open the SAME parameterized StructureMenu, so the
             // shop-vs-upgrade split is decided data-driven by that node's gates (seeded from
