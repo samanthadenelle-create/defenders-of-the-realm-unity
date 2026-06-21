@@ -189,6 +189,10 @@ namespace DeNelle.DevTools
                 // DialogueService, NOT BuildingInteractable), so the contract assertion is
                 // not gated on building discovery.
                 yield return RunPhase("AssertVendorContracts", AssertVendorContracts());
+                // TKT-15 talk-fix DATA-VERIFY: drive each castle vendor's REAL Interact() (the path
+                // the HUD Talk button fires) and assert SHOPPABLE vendors open the Buy/Sell dialogue,
+                // not the upgrade panel (the regression). Closes the castle-vendor headless coverage hole.
+                yield return RunPhase("AssertVendorTalkRoute", AssertVendorTalkRoute());
                 // ASSERTION-DEPTH EXPANSION: the bot used to mostly verify "didn't crash" +
                 // the vendor STOCK contract. These two phases assert real CORRECTNESS of the
                 // economy + equip wiring — that a buy actually deducts the cost AND grows the
@@ -326,6 +330,7 @@ namespace DeNelle.DevTools
                 case "WalkToEachGate":    return WalkToGateTimeout * 6f; // covers multiple gates
                 case "OpenEachVendor":    return VendorTimeout * 12f;
                 case "AssertVendorContracts": return ContractTimeout * 8f; // covers the known-context set
+                case "AssertVendorTalkRoute": return ContractTimeout * 8f; // one Interact() per castle vendor
                 case "AssertEconomyDeduct": return EconomyDeductTimeout;
                 case "AssertEquip":       return EquipTimeout;
                 case "OpenEachHUDPanel":  return HudPanelTimeout * 8f;
@@ -731,6 +736,98 @@ namespace DeNelle.DevTools
             if (seq == null) return false;
             foreach (var _ in seq) return true;
             return false;
+        }
+
+        // =====================================================================
+        //  PHASE: AssertVendorTalkRoute  (TKT-15 talk-fix DATA-VERIFY, 2026-06-20)
+        //  Owner top-priority bug: the castle Talk button must open the vendor Buy/Sell
+        //  DIALOGUE for SHOPPABLE vendors (forge/armorer/market/jeweler), NOT be stolen
+        //  by the upgrade panel (the TKT-15 regression). OpenEachVendor never exercises
+        //  this — castle vendors are CastleNpcInteractable, not BuildingInteractable. So
+        //  this oracle drives the REAL routing: for each castle vendor it reflect-invokes
+        //  the private Interact() (the exact path the HUD Talk button fires via
+        //  TalkPromptRegistry) and asserts a SHOPPABLE vendor took the dialogue route
+        //  (DialogueService.IsRunning) rather than opening the BuildingUpgrade panel. A
+        //  violation is FlowTrace.Fail -> break-log -> ranked ticket. Upgrade-only vendors
+        //  (lumbermill/farm/arcane-tower) are reported, not flagged. PlayStructure is the
+        //  same headless-safe seam OpenEachVendor already uses.
+        // =====================================================================
+        private IEnumerator AssertVendorTalkRoute()
+        {
+            var vendors = UnityEngine.Object.FindObjectsByType<CastleNpcInteractable>(
+                FindObjectsSortMode.None);
+            if (vendors == null || vendors.Length == 0)
+            {
+                _lastDetail = "0 CastleNpcInteractable found (not in MainCastle_Hall?)";
+                FlowTrace.Warn("Auto", "AssertVendorTalkRoute: 0 castle vendors found — talk route not exercised.");
+                yield break;
+            }
+
+            var mInteract = typeof(CastleNpcInteractable).GetMethod(
+                "Interact", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var fId = typeof(CastleNpcInteractable).GetField(
+                "_structureId", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (mInteract == null || fId == null)
+            {
+                _lastDetail = "reflection failed (Interact/_structureId not found)";
+                FlowTrace.Fail("Auto", "AssertVendorTalkRoute: could not reflect Interact()/_structureId on CastleNpcInteractable.");
+                yield break;
+            }
+
+            int checkedCount = 0, shoppableChecked = 0, violations = 0;
+            foreach (var v in vendors)
+            {
+                if (v == null) continue;
+                string id = fId.GetValue(v) as string;
+                if (string.IsNullOrEmpty(id)) continue;
+
+                bool shoppable = false;
+                try { var def = BuildingCatalog.Find(id); shoppable = def != null && def.IsShoppable; } catch { }
+
+                // Clean slate so the surface we observe is THIS vendor's response.
+                try { DialogueService.Stop(); } catch { }
+                try { PanelManager.CloseOpen(); } catch { }
+                yield return null;
+
+                // Drive the REAL routing — the exact private path the HUD Talk button fires.
+                bool threw = false;
+                try { mInteract.Invoke(v, null); }
+                catch (Exception ex) { threw = true; FlowTrace.Fail("Auto", $"AssertVendorTalkRoute: Interact() threw for '{id}' — {ex.Message}"); }
+                yield return null;
+
+                bool running = false;
+                try { running = DialogueService.IsRunning; } catch { }
+                string openPanel = null;
+                try { openPanel = PanelManager.AnyOpen ? PanelManager.OpenPanelName : null; } catch { }
+
+                checkedCount++;
+                if (shoppable)
+                {
+                    shoppableChecked++;
+                    if (running)
+                    {
+                        FlowTrace.Step("Auto", $"AssertVendorTalkRoute: '{id}' shoppable -> TALK DIALOGUE opened (route OK).");
+                    }
+                    else
+                    {
+                        violations++;
+                        FlowTrace.Fail("Auto", $"TALK-ROUTE VIOLATION: shoppable vendor '{id}' did NOT open the Buy/Sell dialogue on Talk " +
+                            $"(IsRunning=false, openPanel='{openPanel ?? "<none>"}', threw={threw}) — the upgrade short-circuit is stealing Talk.");
+                    }
+                }
+                else
+                {
+                    FlowTrace.Step("Auto", $"AssertVendorTalkRoute: '{id}' not-shoppable -> route='{(running ? "dialogue" : (openPanel ?? "<none>"))}' (informational).");
+                }
+
+                // Teardown so the next vendor starts clean.
+                try { DialogueService.Stop(); } catch { }
+                try { PanelManager.CloseOpen(); } catch { }
+                yield return Wait(SettleSeconds);
+            }
+
+            _lastDetail = $"{checkedCount} castle vendors ({shoppableChecked} shoppable), {violations} talk-route violation(s)";
+            FlowTrace.Step("Auto", $"AssertVendorTalkRoute: {_lastDetail}.");
         }
 
         // =====================================================================
