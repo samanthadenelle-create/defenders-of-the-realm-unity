@@ -122,10 +122,12 @@ namespace DeNelle.Village
             }
             else if (model == "Troll")
             {
-                // STILL raw-Tripo HumanoidLarge (face-down export class — not yet AccuRIG'd): pitch
-                // up with X=-90 to stand + the -90 yaw to face. If facing-wrong, tune the Y; if
-                // still face-down, flip X. (Move to the Demon/OgreMage branch once AccuRIG'd.)
-                skinOpts.LocalRotation = Quaternion.Euler(-90f, -90f, 0f);
+                // Ticket #2 (DATA-PROVEN 2026-06-21, DiagGarrisonRoster oracle): the old X=-90 pitch
+                // (Euler(-90,-90,0)) laid the troll ON ITS BACK — captured worldUp=(1,0,0), localEuler
+                // (270,270,0), tipped=True. The Troll imports UPRIGHT like Demon/OgreMage (same rig class,
+                // captured upright at Euler(0,-90,0) worldUp=(0,1,0)). Drop the pitch: -90 YAW ONLY, like
+                // Demon. Keep the Tripo->URP fixer (raw-Tripo material). This is the proven 'troll y+90' fix.
+                skinOpts.LocalRotation = Quaternion.Euler(0f, -90f, 0f);
                 skinOpts.FixTripoMaterials = true;
             }
             var vis = VisualFactory.Skin(go.transform, "Enemies/" + model, skinOpts);
