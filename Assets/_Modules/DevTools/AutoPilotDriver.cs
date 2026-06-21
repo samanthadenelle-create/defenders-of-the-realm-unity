@@ -132,14 +132,23 @@ namespace DeNelle.DevTools
         /// namespaces the summary into persistentDataPath/autopilot-runs/&lt;id&gt;/ to
         /// match the BreakCaptureHarness output for the same run.
         /// </summary>
-        public void Begin(bool quitOnDone, int seed, string runId)
+        public void Begin(bool quitOnDone, int seed, string runId, string startScene = null)
         {
             _quitOnDone = quitOnDone;
             _seed = seed;
             _runId = string.IsNullOrEmpty(runId) ? null : runId;
+            _startScene = string.IsNullOrEmpty(startScene) ? null : startScene.Trim();
             _rng = new System.Random(seed);
             StartCoroutine(RunAll());
         }
+
+        // Optional boot-scene override (--scene=<name> / AUTOPILOT_SCENE). When set, BootToGameplay loads
+        // THIS scene instead of MainCastle_Hall — the "instant spawn into Village2 / a garrison" the owner
+        // asked for, so a headless/dev bot lands directly in the system under test (the real Village2Raid/
+        // Garrison/HeroControlEnsurer path) with no traversal. The scene MUST be in Build Settings to load
+        // by name; if it isn't, the LoadScene throws and is caught/logged (falls through to abort).
+        private string _startScene;
+        private string TargetScene => string.IsNullOrEmpty(_startScene) ? GameplayScene : _startScene;
 
         private void Start()
         {
@@ -447,21 +456,24 @@ namespace DeNelle.DevTools
         // =====================================================================
         private IEnumerator BootToGameplay()
         {
-            if (ActiveScene() == GameplayScene)
+            string target = TargetScene;   // --scene override (Village2 / a garrison) else MainCastle_Hall
+            if (ActiveScene() == target)
             {
-                FlowTrace.Step("Auto", $"BootToGameplay -> already in '{GameplayScene}', nothing to load.");
+                FlowTrace.Step("Auto", $"BootToGameplay -> already in '{target}', nothing to load.");
                 _lastDetail = "already in gameplay scene";
                 yield break;
             }
 
-            FlowTrace.Step("Auto", $"BootToGameplay -> loading {GameplayScene} (from '{ActiveScene()}').");
+            FlowTrace.Step("Auto", $"BootToGameplay -> loading {target} (from '{ActiveScene()}')" +
+                                   (_startScene != null ? " [--scene override]" : "") + ".");
             try
             {
-                SceneManager.LoadScene(GameplayScene);
+                SceneManager.LoadScene(target);
             }
             catch (Exception ex)
             {
-                FlowTrace.Fail("Auto", $"BootToGameplay: LoadScene('{GameplayScene}') threw — {ex.Message}");
+                FlowTrace.Fail("Auto", $"BootToGameplay: LoadScene('{target}') threw — {ex.Message} " +
+                               "(is the --scene target in Build Settings?)");
                 _lastDetail = "LoadScene threw";
                 yield break;
             }
@@ -470,13 +482,13 @@ namespace DeNelle.DevTools
             bool arrived = false;
             while (Time.realtimeSinceStartup - t0 < BootTimeout)
             {
-                if (ActiveScene() == GameplayScene) { arrived = true; break; }
+                if (ActiveScene() == target) { arrived = true; break; }
                 yield return null;
             }
 
             if (!arrived)
             {
-                FlowTrace.Fail("Auto", $"BootToGameplay: '{GameplayScene}' never became active within {BootTimeout:0}s — aborting.");
+                FlowTrace.Fail("Auto", $"BootToGameplay: '{target}' never became active within {BootTimeout:0}s — aborting.");
                 _lastDetail = "scene never active";
                 yield break;
             }
@@ -485,8 +497,8 @@ namespace DeNelle.DevTools
             // OuterWorld load it kicks off) get a chance to run before ResolveHero.
             for (int i = 0; i < 3; i++) yield return null;
 
-            FlowTrace.Step("Auto", $"BootToGameplay -> arrived in '{GameplayScene}'.");
-            _lastDetail = $"loaded {GameplayScene}";
+            FlowTrace.Step("Auto", $"BootToGameplay -> arrived in '{target}'.");
+            _lastDetail = $"loaded {target}";
         }
 
         // =====================================================================

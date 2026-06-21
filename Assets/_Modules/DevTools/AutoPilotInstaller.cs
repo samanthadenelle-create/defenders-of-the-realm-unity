@@ -57,9 +57,18 @@ namespace DeNelle.DevTools
                 // keep a lone run deterministic + writing to the root path.
                 int seed = ParseInt("--seed=", AutoPilotDriver.DefaultSeed);
                 string runId = ParseString("--run=");
+                // Optional boot-scene override (owner request 2026-06-21): "--scene=Village2" (or the
+                // AUTOPILOT_SCENE env var) boots the bot DIRECTLY into that scene instead of MainCastle_Hall,
+                // so a headless/dev run lands in the real system under test (Village2 garrison, a Garrison_*
+                // outpost) with no traversal. The target must be in Build Settings to load by name.
+                string startScene = ParseString("--scene=");
+                if (string.IsNullOrEmpty(startScene))
+                {
+                    try { startScene = Environment.GetEnvironmentVariable("AUTOPILOT_SCENE"); } catch { }
+                }
 
-                FlowTrace.Step("Auto", $"AutoPilotInstaller: --autopilot requested — starting bot (quitOnDone=true, seed={seed}, run='{runId ?? "<none>"}').");
-                driver.Begin(quitOnDone: true, seed: seed, runId: runId);
+                FlowTrace.Step("Auto", $"AutoPilotInstaller: --autopilot requested — starting bot (quitOnDone=true, seed={seed}, run='{runId ?? "<none>"}', scene='{startScene ?? "<default>"}').");
+                driver.Begin(quitOnDone: true, seed: seed, runId: runId, startScene: startScene);
             }
             catch (Exception e)
             {
