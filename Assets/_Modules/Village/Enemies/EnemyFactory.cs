@@ -104,6 +104,13 @@ namespace DeNelle.Village
             {
                 // Orc Warband: upright already, just a -90 yaw so +X-forward faces +Z.
                 skinOpts.LocalRotation = Quaternion.Euler(0f, -90f, 0f);
+                // Ticket #4 (RCA 2026-06-21): the old assumption above ("orcs render because their
+                // materials were extracted to external URP .mats") is STALE — Orc_*.fbx.meta remaps to
+                // tripo_mat_*.mat assets that no longer exist, so the orc imports its raw Phong material
+                // and renders MAGENTA ("pink people") in the URP player build. Attach the runtime
+                // Tripo→URP fixer like Troll/Demon. Idempotent + self-verifying (logs TripoMatFix VERIFY),
+                // so it's a safe no-op if an orc IS already URP, and the proof line if it wasn't.
+                skinOpts.FixTripoMaterials = true;
             }
             else if (model == "Demon" || model == "OgreMage")
             {
