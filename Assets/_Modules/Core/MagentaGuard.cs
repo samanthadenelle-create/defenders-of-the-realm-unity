@@ -122,6 +122,26 @@ namespace DeNelle.Core
                             FlowTrace.Step("MagentaGuard",
                                 $"FLOOR-FIX '{fm.name}' (was '{fsh}', scene '{r.gameObject.scene.name}') -> URP/Lit, albedoTex={(tex != null)} — lavender floor corrected.");
                         }
+                        else if (fm != null && fsh == "Universal Render Pipeline/Lit" && fm.HasProperty("_BaseColor"))
+                        {
+                            // PROVEN by FloorDiag (owner F8 2026-06-21): MainCastle_Hall has NO terrain — the
+                            // visible floor is the CourtyardFloor_* tiles + Planes, ALREADY URP/Lit but carrying
+                            // _BaseColor (0,0,0,0) (colorless AND zero-alpha) with no _BaseMap, so under the
+                            // lavender Trilight ambient they render pink/lavender. The nonLit branch never touched
+                            // them (already Lit) — THIS is why every prior fix missed it. Repaint to OPAQUE warm floor.
+                            bool hasTex = fm.HasProperty("_BaseMap") && fm.GetTexture("_BaseMap") != null;
+                            Color bc = fm.GetColor("_BaseColor");
+                            bool colorless = bc.a < 0.05f || (bc.r + bc.g + bc.b) < 0.05f;
+                            if (!hasTex && colorless)
+                            {
+                                fm.SetColor("_BaseColor", new Color(0.42f, 0.34f, 0.24f, 1f));   // opaque warm wood/stone
+                                if (fm.HasProperty("_Surface")) fm.SetFloat("_Surface", 0f);      // URP: 0 = Opaque
+                                if (fm.HasProperty("_ZWrite"))  fm.SetFloat("_ZWrite", 1f);
+                                fm.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
+                                FlowTrace.Step("MagentaGuard",
+                                    $"FLOOR-FIX(colorless URP/Lit) '{fm.name}' (scene '{r.gameObject.scene.name}') baseColor was {bc} -> opaque warm wood (pink floor corrected).");
+                            }
+                        }
                     }
 
                     // First broken material on this renderer (and its dead shader name for the log).
