@@ -29,6 +29,7 @@ indexed separately in `../PROJECT_INDEX.md`.
   `build-mode-architecture.md`), `CHARACTER_ARCHITECTURE.md`, `MONSTER_FAMILY_ARCHITECTURE.md`
 - `CATALOG_SYSTEM.md`, `refactor-feature-modules-spec.md`, `addressables-implementation-plan.md`
 - `ANIMATION_PIPELINE.md` — **canonical animation method** (Shared + per-type, Humanoid retarget; all current/future models)
+- `WARDROBE_ARCHITECTURE.md` — **Dressable capability at the rig level** (BlinkWardrobe + VisualFactory.Skin): characters start clothed not in underwear; data-driven per-character wardrobe collection that feeds the cosmetic store (foundation shipped, data layer = WO-456). Read before touching clothing/cosmetics/store.
 - `unity-decisions.md`, `UNITY_BEST_PRACTICES_AUDIT.md`
 - `INSTRUMENTATION_STANDARD.md` — how new code is written observable-first (FlowTrace/Guard/regression authoring standard; the *method* that operationalizes `CLAUDE.md §12`)
 - `DEBUGGER_TOOLKIT_DESIGN.md` — the debugger/diagnostics toolkit as it ACTUALLY exists (FlowTrace/Guard/BreakCaptureHarness + the AutoPilotProbes fleet oracles + TGVRU); reconciled 2026-06-19, supersedes the old DebugProbe/hotkey design

@@ -748,70 +748,36 @@ namespace DeNelle.Village
             if (baseBody == null) return;
 
             // Does the armored instance carry its OWN skin (head/hands/face/hair)? If yes it is a
-            // full-body set and the base skin must be hidden too (no doubled, desyncing body).
+            // full-body set and the base body must be hidden ENTIRELY (no doubled, desyncing body).
             bool armorHasOwnSkin = ArmorShipsOwnSkin(armorInstance);
-
-            // PIECES-ONLY armor overlays the BARE base body. The base body is a bare-skin mannequin
-            // (Arms/Legs/Chest/Feet + skin) PLUS several swappable OUTFIT sets (Starter_*, Cloth1_*…),
-            // proven from the capture. Hiding by "region the armor covers" erased bare body parts the
-            // armor only PARTLY covers (owner: arms gone, then legs gone — the pants don't reach the
-            // boots). The robust rule: KEEP the bare body (skin + bare anatomy) so a limb is NEVER
-            // missing, and HIDE only the base's OUTFIT sets (which would clash with the armor). The
-            // armor pieces sit over the bare body; uncovered spots show skin (the look the owner liked).
-            // Full-body sets still hide everything (handled in the armorHasOwnSkin branch above).
-            var renderers = baseBody.GetComponentsInChildren<SkinnedMeshRenderer>(true);
-            int hidden = 0, keptSkin = 0, keptBody = 0;
-            // Snapshot ONLY what we actually hid, so RestoreBaseBody re-enables exactly that set.
-            var hiddenList = new System.Collections.Generic.List<SkinnedMeshRenderer>();
-            var keptNames = new System.Text.StringBuilder();
-            var hiddenNames = new System.Text.StringBuilder();
-            foreach (var r in renderers)
-            {
-                if (r == null) continue;
-                if (!armorHasOwnSkin)
-                {
-                    // PIECES-ONLY: keep the base skin (head/hands/hair) AND the bare body anatomy
-                    // (arms/legs/chest/feet) — the never-naked mannequin the armor overlays.
-                    if (IsSkinRenderer(r.name)) { keptSkin++; continue; }
-                    if (IsBareBodyPart(r.name))
-                    {
-                        keptBody++;
-                        if (keptNames.Length < 200)
-                        { if (keptNames.Length > 0) keptNames.Append(", "); keptNames.Append(r.name); }
-                        continue;
-                    }
-                    // else: a base OUTFIT/clothing set (Starter_*, Cloth1_*…) — hide so it doesn't clash.
-                }
-                // FULL-BODY set: hide ALL. PIECES-ONLY: hide only the base outfit renderers.
-                if (r.enabled) { r.enabled = false; hidden++; }
-                hiddenList.Add(r);
-                if (hiddenNames.Length < 200)
-                { if (hiddenNames.Length > 0) hiddenNames.Append(", "); hiddenNames.Append(r.name); }
-            }
-            _hiddenBaseRenderers = hiddenList.ToArray();
 
             if (armorHasOwnSkin)
             {
+                // FULL-BODY set: hide the WHOLE base body — the armor IS the visible character, driven
+                // by one rig (no second head/hands on a second animator).
+                int hidden = 0;
+                var hiddenList = new System.Collections.Generic.List<SkinnedMeshRenderer>();
+                foreach (var r in baseBody.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                {
+                    if (r == null) continue;
+                    if (r.enabled) { r.enabled = false; hidden++; }
+                    hiddenList.Add(r);
+                }
+                _hiddenBaseRenderers = hiddenList.ToArray();
                 FlowTrace.Step("ArmorVisual",
-                    $"HideBaseBody: armor is a FULL-BODY set (ships its own skin) — hid ALL {hidden} base " +
-                    "renderer(s) so one rig drives the character (no doubled/desyncing head+hands).");
+                    $"HideBaseBody: FULL-BODY set (ships own skin) — hid ALL {hidden} base renderer(s).");
+                return;
             }
-            else if (keptSkin == 0 && keptBody == 0)
-            {
-                // SELF-REPORT (§12): pieces-only armor but we kept NOTHING of the bare body — the hero
-                // may read bare/missing. Means no base renderer matched skin or bare-anatomy names
-                // (wrong base resolved, or unexpected mesh names). Names logged so a residual case self-IDs.
-                FlowTrace.Warn("ArmorVisual",
-                    $"HideBaseBody: kept 0 base body renderer(s) on '{baseBody.name}' " +
-                    $"({renderers?.Length ?? 0} found, hid {hidden}) — no recognised skin/bare-body mesh; " +
-                    "hero may read missing under the pieces-only armor. Check base-body renderer names.");
-            }
-            else
-            {
-                FlowTrace.Step("ArmorVisual",
-                    $"HideBaseBody: pieces-only overlay — kept {keptSkin} skin + {keptBody} bare-body [{keptNames}], " +
-                    $"hid {hidden} base outfit renderer(s) [{hiddenNames}].");
-            }
+
+            // PIECES-ONLY armor overlays the base body. The never-naked underlayer must be CLOTHED, not
+            // bare skin — keeping the bare mannequin made the uncovered torso/legs read as UNDERWEAR
+            // (owner: "still just underwear" under armor). Dress the base in its default outfit via the
+            // RIG-LEVEL wardrobe capability (BlinkWardrobe — the single home for the dress logic, also
+            // run at VisualFactory.Skin so EVERY dressable body starts clothed), then the armor pieces
+            // sit over it; uncovered spots show clothing, never skin. _hiddenBaseRenderers no longer
+            // needed for the pieces path (dressing is deterministic by name).
+            _hiddenBaseRenderers = null;
+            BlinkWardrobe.DressInStarter(baseBody.gameObject);
         }
 
         // Detect whether a Blink armor INSTANCE ships its OWN skin (head/hands/face/hair) — i.e. it
@@ -840,7 +806,7 @@ namespace DeNelle.Village
                 bool head = n.Contains("head") || n.Contains("face") || n.Contains("hair");
                 bool bodyish = n.Contains("body") || n.Contains("torso") || n.Contains("legs");
                 if (head) hasHead = true;
-                if (head || bodyish || IsSkinRenderer(r.name)) skinNamed++;
+                if (head || bodyish || BlinkWardrobe.IsSkinRenderer(r.name)) skinNamed++;
             }
             // Full-body if it ships a HEAD (it replaces the face → must hide the base head) OR >=2 skin/
             // body meshes (head+body / body+hands). A lone pieces-only overlay (skinNamed<2, no head)
@@ -853,35 +819,9 @@ namespace DeNelle.Village
             return fullBody;
         }
 
-        // Blink/Tripo base-body renderer names that are SKIN / face / hair and must stay visible UNDER
-        // the armor overlay (armor SET prefabs bring no skin). Everything NOT matched here (torso, legs,
-        // arms, feet, built-in cloth) is a mesh the armor replaces and is hidden by HideBaseBody.
-        private static bool IsSkinRenderer(string n)
-        {
-            if (string.IsNullOrEmpty(n)) return false;
-            n = n.ToLowerInvariant();
-            return n.Contains("head") || n.Contains("hand") || n.Contains("neck") ||
-                   n.Contains("face") || n.Contains("ear")  || n.Contains("eye")  ||
-                   n.Contains("brow") || n.Contains("lash") || n.Contains("hair") ||
-                   n.Contains("beard") || n.Contains("moustache") || n.Contains("mustache") ||
-                   n.Contains("teeth") || n.Contains("tongue");
-        }
-
-        // A BARE base-body part (the skin mannequin under the armor) vs a swappable OUTFIT set. Bare
-        // parts are single anatomy tokens with NO set-prefix (Arms, Legs, Chest, Feet); outfit pieces
-        // are prefixed (Starter_Boots, Cloth1_Chest). We KEEP the bare body (so a limb is NEVER missing)
-        // and hide outfits (they clash with the armor). The underscore test separates 'Chest' (bare)
-        // from 'Cloth1_Chest' (outfit) without a brittle full keyword map. Skin is kept separately by
-        // IsSkinRenderer; this catches the bare anatomy meshes that are NOT skin-named.
-        private static bool IsBareBodyPart(string n)
-        {
-            if (string.IsNullOrEmpty(n)) return false;
-            if (n.Contains("_")) return false; // set-prefixed name = an outfit/clothing variant, hide it
-            n = n.ToLowerInvariant();
-            return n == "arms" || n == "arm" || n == "legs" || n == "leg" || n == "chest" ||
-                   n == "torso" || n == "body" || n == "feet" || n == "foot" || n == "hips" ||
-                   n == "hip" || n == "waist" || n == "pelvis" || n == "neck" || n == "spine";
-        }
+        // Renderer-name vocabulary (IsSkinRenderer / outfit / bare-arm) now lives in BlinkWardrobe — the
+        // single home for the dressable capability. HeroArmorVisual references it (e.g. ArmorShipsOwnSkin
+        // uses BlinkWardrobe.IsSkinRenderer) rather than carrying its own copy.
 
         // Re-enable the base body's renderers we previously hid (re-resolving live ones if the
         // snapshot is stale). The base body is the SAFE fallback — always re-shown on restore.
@@ -909,6 +849,11 @@ namespace DeNelle.Village
                     if (!r.enabled) { r.enabled = true; shown++; }
                 }
             }
+
+            // DRESS the restored base in its default outfit (never underwear): unequipping armor returns
+            // to a CLOTHED body, not the bare mannequin. The rig-level wardrobe capability owns the look,
+            // so this matches the look VisualFactory.Skin gave the body at birth.
+            if (baseBody != null) BlinkWardrobe.DressInStarter(baseBody.gameObject);
 
             // WO-455: re-resolve a story companion's locomotion animator back to the restored base
             // body (the swap had re-pointed it at the now-removed armor instance).

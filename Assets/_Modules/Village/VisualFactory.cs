@@ -149,6 +149,15 @@ namespace DeNelle.Village
                 return null;
             }
 
+            // RIG-LEVEL DRESSABLE capability (BlinkWardrobe, owner architecture 2026-06-20): a body that
+            // ships outfit-set renderers self-dresses to its default outfit HERE — beside the rig, the one
+            // shared path every character skins through — so EVERY dressable humanoid (hero / companion /
+            // arena fighter / future human-skinned enemy) starts CLOTHED, never in underwear. Non-dressable
+            // bodies (skeletons / animals / structures) ship no outfit renderers → IsDressable=false → skip.
+            // The data-driven per-character wardrobe + cosmetic-store feed land on this seam (WO-456).
+            FlowTrace.Try("VisualFactory", "wardrobe default-dress",
+                () => { if (BlinkWardrobe.IsDressable(go)) BlinkWardrobe.DressInStarter(go); });
+
             return go;
         }
 
