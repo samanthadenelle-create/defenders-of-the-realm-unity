@@ -36,6 +36,8 @@ using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 using DeNelle.Core.Diagnostics;   // TGVRU — FlowTrace/Guard on the garrison spawn path
+using DeNelle.Core;               // CoreServices (audio)
+using DeNelle.Core.Audio;         // MusicTrack (the interface enum IAudioService.PlayMusic takes) — battle music (owner 2026-06-21)
 // EnemyDef / Enemy / EnemyFactory all live in the parent namespace DeNelle.Village,
 // visible here because DeNelle.Village.World.Camps nests under it (same as EnemyOutpost).
 
@@ -131,6 +133,8 @@ namespace DeNelle.Village.World.Camps
             _activated = true;
             SpawnInitialGuards();
             ArmGarrisonTurrets();
+            // Combat begins when the garrison spawns -> battle music (owner 2026-06-21). Null-safe (§10).
+            CoreServices.Audio?.PlayMusic(MusicTrack.Battle);
         }
 
         // =====================================================================
@@ -370,6 +374,7 @@ namespace DeNelle.Village.World.Camps
             if (Cleared) return;
             Cleared = true;
             Debug.Log($"[GarrisonController] {name} CLEARED — garrison wiped.");
+            CoreServices.Audio?.PlayMusic(MusicTrack.Victory);   // garrison wiped -> victory sting (owner 2026-06-21)
             OnCleared?.Invoke(this);
         }
 
