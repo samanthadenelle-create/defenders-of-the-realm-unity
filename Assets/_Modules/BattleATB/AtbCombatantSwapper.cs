@@ -164,6 +164,13 @@ namespace DeNelle.BattleATB
             // paint the real basecolor onto every slot (the village's go-live appearance).
             ApplyHeroTexturedMaterial(model, slug);
 
+            // Ticket #7 (RCA 2026-06-21, data-proven asymmetry): bind the per-class hero animator
+            // controller. The hero FBX imports Humanoid with a valid avatar but NO controller, so
+            // without this the rig holds its bind/T-pose. The enemy path (ApplyEnemyAnimator) and the
+            // village path (HeroBodySwapper) BOTH load a controller; the ATB hero path was the only one
+            // that didn't — the missing assignment IS the T-pose. Controllers live in Resources/Heroes.
+            ApplyHeroAnimator(model, slug);
+
             // Size to the slot, then RE-CENTER onto it. Tripo pivots are far off
             // centre, so scaling localScale flings the visible mesh away from the
             // capsule (the "hero in empty area" bug — same trap as the buildings).
@@ -474,6 +481,42 @@ namespace DeNelle.BattleATB
                 // never block the swap — but SELF-REPORT (§12) so a failed animator bind is captured.
                 FlowTrace.Warn("AtbSwap",
                     $"ApplyEnemyAnimator: '{modelName}' threw {ex.GetType().Name}: {ex.Message} — enemy may T-pose.");
+            }
+        }
+
+        // ── Hero animator (ticket #7: no-T-pose) ─────────────────────────────
+        // Mirror of ApplyEnemyAnimator for the swapped HERO. The per-class controllers live in
+        // Resources/Heroes/{Ranger,Knight,Mage,Cleric}.controller (the same ones HeroBodySwapper
+        // loads in the village). Without this the Humanoid hero rig stays in bind/T-pose. We do NOT
+        // reference DeNelle.Village — Resources.Load reaches the shared assets at runtime.
+        private static void ApplyHeroAnimator(GameObject model, string slug)
+        {
+            if (model == null) return;
+            try
+            {
+                // GetComponentInChildren returns Unity "fake-null" for an absent native object, so
+                // test with Unity's overloaded == (no ??) before AddComponent — same trap as enemies.
+                var anim = model.GetComponentInChildren<Animator>();
+                if (anim == null) anim = model.AddComponent<Animator>();
+                anim.applyRootMotion = false; // turn-based stage: no locomotion drift
+                var ctrl = Resources.Load<RuntimeAnimatorController>("Heroes/" + slug);
+                if (ctrl != null)
+                {
+                    anim.runtimeAnimatorController = ctrl;
+                    anim.Rebind();
+                    FlowTrace.Step("AtbSwap", $"ApplyHeroAnimator: bound 'Heroes/{slug}' controller '{ctrl.name}'.");
+                }
+                else
+                {
+                    FlowTrace.Fail("AtbSwap",
+                        $"ApplyHeroAnimator: no controller Heroes/{slug} — hero WILL T-pose (was the ticket #7 bug).");
+                }
+            }
+            catch (Exception ex)
+            {
+                // never block the swap — but SELF-REPORT (§12) so a failed animator bind is captured.
+                FlowTrace.Warn("AtbSwap",
+                    $"ApplyHeroAnimator: '{slug}' threw {ex.GetType().Name}: {ex.Message} — hero may T-pose.");
             }
         }
 
