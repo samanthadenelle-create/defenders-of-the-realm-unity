@@ -346,6 +346,10 @@ namespace DeNelle.DevTools
             float now = Time.unscaledTime;
             _tapStreak = (now - _lastTapTime <= TapWindowSec) ? _tapStreak + 1 : 1;
             _lastTapTime = now;
+            // DEV-TAP-DIAG (owner F8 2026-06-21 "dev tools still blocked after shop"): log EVERY tap that
+            // reaches the dev UIDocument. If taps stop arriving after a shop, UITK pointer input is being
+            // eaten upstream (the real block); if they arrive but the panel doesn't open, it's elsewhere.
+            FlowTrace.Step("DevTapDiag", $"corner tap RECEIVED streak={_tapStreak}/{TapsToReveal} (UITK input IS reaching the dev document).");
             if (_tapStreak < TapsToReveal) return;   // not enough rapid taps yet — stay hidden
             _tapStreak = 0;
             FlowTrace.Step("UI", $"DevPanel revealed via {TapsToReveal}-tap corner gesture.");

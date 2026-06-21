@@ -154,19 +154,28 @@ namespace DeNelle.Village
         // tap-to-advance the LineAdvancer leaves armed) and clear any stale EventSystem selection.
         private static void ReleaseOrphanedAdvanceInput()
         {
+            int disabled = 0, enabledTotal = 0;
+            var others = new System.Text.StringBuilder();
             try
             {
                 foreach (var a in UnityEngine.InputSystem.InputSystem.ListEnabledActions())
                 {
                     if (a == null) continue;
+                    enabledTotal++;
                     var asset = a.actionMap != null ? a.actionMap.asset : null;
-                    if (asset != null && asset.name == "DialogueAdvance") a.Disable();
+                    if (asset != null && asset.name == "DialogueAdvance") { a.Disable(); disabled++; }
+                    else if (enabledTotal <= 40) others.Append((asset != null ? asset.name : "?") + "/" + a.name + " ");
                 }
             }
             catch (System.Exception ex) { FlowTrace.Warn("UI", "ReleaseOrphanedAdvanceInput failed: " + ex.Message); }
 
             var es = UnityEngine.EventSystems.EventSystem.current;
+            string sel = (es != null && es.currentSelectedGameObject != null) ? es.currentSelectedGameObject.name : "<none>";
             if (es != null) es.SetSelectedGameObject(null);
+            // DEV-TAP-DIAG (owner F8 2026-06-21 "dev tools still blocked after shop"): did the release run,
+            // find the orphaned action, and what ELSE is still enabled that could eat UITK pointer input?
+            FlowTrace.Fail("DevTapDiag", "ReleaseOrphanedAdvanceInput ran: disabled " + disabled + " DialogueAdvance action(s); " +
+                enabledTotal + " action(s) were enabled; EventSystem selected was '" + sel + "'. Other enabled: " + others);
         }
 
         // ── New-Game dialogue reset (DeNelle.Core decoupling hook) ────────────
