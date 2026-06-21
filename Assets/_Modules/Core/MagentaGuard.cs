@@ -40,6 +40,7 @@ namespace DeNelle.Core
     public static class MagentaGuard
     {
         private static Shader _lit;
+        private static Shader _terrainLit;
         private static bool _hooked;
         private static readonly HashSet<string> _floorSeen = new HashSet<string>();
 
@@ -161,9 +162,41 @@ namespace DeNelle.Core
                     }
                 }
 
-                if (recovered > 0 || hiddenStray > 0)
+                // TERRAIN PASS (owner F8 2026-06-21 "Pink Floor", ran-from-exe): MainCastle_Hall's VISIBLE
+                // floor is the additively-loaded OuterWorld Terrain (the wood courtyard tiles are dropped to
+                // Y=-0.5 by GroundZFightFixer and hidden). A Terrain is NOT a Renderer, so the loop above
+                // never sees it AND the IsGroundLike path excludes "Terrain" shaders — so a stripped URP
+                // Terrain/Lit shader (-> InternalError = pink) is structurally unreachable by the code above.
+                // Recover it here. GUARDED: only acts when the terrain's shader is genuinely broken, so if the
+                // pink is from something else (lighting), this is a safe no-op. SOURCE fix is to pin
+                // "Universal Render Pipeline/Terrain/Lit" in the build (ExteriorTerrainBuilder.EnsureTerrainShaderIncluded).
+                int terrainFixed = 0;
+                var terrains = Object.FindObjectsByType<Terrain>(FindObjectsSortMode.None);
+                if (terrains != null && terrains.Length > 0)
+                {
+                    if (_terrainLit == null) _terrainLit = Shader.Find("Universal Render Pipeline/Terrain/Lit");
+                    foreach (var t in terrains)
+                    {
+                        if (t == null) continue;
+                        var tm = t.materialTemplate;
+                        if (tm == null || !IsBrokenShader(tm.shader)) continue;   // valid terrain shader -> leave alone
+                        string dead = tm.shader != null ? tm.shader.name : "<null>";
+                        if (_terrainLit == null)
+                        {
+                            FlowTrace.Warn("MagentaGuard", $"terrain '{t.name}' broken-shader '{dead}' but URP Terrain/Lit not found — cannot recover.");
+                            continue;
+                        }
+                        tm.shader = _terrainLit;
+                        terrainFixed++;
+                        FlowTrace.Fail("MagentaGuard",
+                            $"recovered MAGENTA TERRAIN '{t.name}' (scene '{t.gameObject.scene.name}') dead-shader '{dead}' -> URP Terrain/Lit " +
+                            "(pink floor killed at runtime; pin the terrain shader in the build to fix at source).");
+                    }
+                }
+
+                if (recovered > 0 || hiddenStray > 0 || terrainFixed > 0)
                     FlowTrace.Step("MagentaGuard",
-                        $"sweep '{sceneName}': recovered {recovered} lost-shader material(s) -> URP/Lit, hid {hiddenStray} stray placeholder primitive(s).");
+                        $"sweep '{sceneName}': recovered {recovered} lost-shader material(s) -> URP/Lit, hid {hiddenStray} stray placeholder primitive(s), fixed {terrainFixed} terrain(s).");
             }
             catch (System.Exception e)
             {
