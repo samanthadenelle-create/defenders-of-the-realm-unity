@@ -57,11 +57,11 @@ namespace DeNelle.Editor
         // deleted — bump this Z south again later for a "deep" entrance.)
         private static readonly Vector3 CavePos = new Vector3(0f, 0f, -150f);
 
-        // Village2 stronghold hero spawn. EnemyStrongholdBuilder.Build (~line 177)
-        //   var entryPos = new Vector3(0f, 0.1f, -(courtyardHalf + 6f));
-        // with the default courtyardHalf (StrongholdLayout default Courtyard.Size = 14):
-        //   -(14 + 6) = -20  =>  (0, 0.1, -20). We use that exact resolved value.
-        private static readonly Vector3 Village2SpawnPos = new Vector3(0f, 0.1f, -20f);
+        // Village2 ARRIVAL point — where the player ports TO from OuterWorld (owner 2026-06-21).
+        // Set to the owner's chosen Village2 arrival on the spawn-side approach (island[4]); the player
+        // arrives here, then walks into the stronghold (the in-scene HeroLinkCrossing gate). WarpTo samples
+        // the navmesh on arrival. (Was hardcoded (0,0.1,-20), an old stronghold-edge spawn.)
+        private static readonly Vector3 Village2SpawnPos = new Vector3(20.6f, 0.1f, -38.3f);
 
         [MenuItem("Defenders/World/Place OuterWorld Cave Portal")]
         public static void PlaceCavePortal()
