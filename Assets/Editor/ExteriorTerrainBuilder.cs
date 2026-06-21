@@ -1182,14 +1182,11 @@ namespace DeNelle.Editor
             tower.transform.position = new Vector3(-228f, 13f, -30f);
             ApplyColor(tower, new Color(0.30f, 0.30f, 0.38f));
 
-            // ── Southern "Wound" crack -- a dark, easy-to-miss horizon scar ──
-            var crack = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            crack.name = "DistantWoundCrack";
-            crack.transform.SetParent(lmRoot.transform, false);
-            crack.transform.localScale = new Vector3(140f, 34f, 4f);
-            crack.transform.rotation = Quaternion.Euler(0f, 12f, 6f);
-            crack.transform.position = new Vector3(-10f, 6f, -236f);
-            ApplyEmissive(crack, new Color(0.16f, 0.06f, 0.22f), 0.4f); // faint violet glow
+            // ── Southern "Wound" crack — REMOVED 2026-06-21 (owner). It was a primitive cube (so it
+            // carried a default BoxCollider) with a violet glow, reading as a purple slab/wall in the play
+            // space rather than a far horizon scar. Owner deleted it; removed at the source so no rebuild
+            // re-adds it. (If we ever want the lore scar back, do it renderer-only — strip the collider —
+            // and far on the horizon.)
         }
 
         // =====================================================================
