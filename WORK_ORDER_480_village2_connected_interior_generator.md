@@ -1,6 +1,20 @@
 # WORK ORDER 480 — Village2 (EnemyStrongholdBuilder): connected, walkable interior
 
-**Status: IN PROGRESS — BLOCKED on undiagnosed fragmenter (2026-06-21)**
+**Status: SOLVED (pass 4, 2026-06-21) — interior traverses arrival -> chokepoint -> keep ramp**
+
+## RESOLUTION (pass 4)
+ROOT CAUSE (proven by the gate-approach probe): wall PREFABS are ~15.75m wide but slots step
+every 3m, so walls flanking the gate SPILLED across the ~4m opening, pinching the gate navmesh
+to a hairline that SamplePosition bridges but CalculatePath won't cross. The NotWalkable carve
+cubes (pass 3) pinched it further and were redundant (walls already carve as NotWalkable colliders).
+FIX: skip any FRONT wall whose body overlaps the opening (clear a band > wall half-width ~7.9m ->
+~5m clear gate), and stop building the carve-ring entirely. RESULT: arrival->chokepoint reaches
+within 0.4m (connected); arrival->keep climbs the ramp to y=1.51 (on the platform); islands 38->33.
+Residual: spawn MARKERS sit a few m off the walkable mesh (pedestals/under Keep_Core) — regions
+traverse; markers don't need to be walkable. Shipped scene = this regenerated connected Village2.
+
+---
+**Earlier progress (passes 1-3, 2026-06-21)**
 
 ## Progress log (2026-06-21)
 Generator improvements landed (carve outer ring only; walkable ramps replace keep/boss

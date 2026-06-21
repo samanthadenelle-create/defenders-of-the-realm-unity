@@ -712,8 +712,8 @@ Transform:
   m_Children:
   - {fileID: 2096451516}
   - {fileID: 1925835960}
-  - {fileID: 1026844816}
-  - {fileID: 1440494069}
+  - {fileID: 854763906}
+  - {fileID: 1808255679}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &608694591
@@ -1080,6 +1080,119 @@ Material:
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
+--- !u!1001 &854763905
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 565611520}
+    m_Modifications:
+    - target: {fileID: 8280190318267957205, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+      propertyPath: m_Name
+      value: CavePortal
+      objectReference: {fileID: 0}
+    - target: {fileID: 8280190318267957205, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 30
+      objectReference: {fileID: 0}
+    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 4
+      objectReference: {fileID: 0}
+    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 4
+      objectReference: {fileID: 0}
+    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 4
+      objectReference: {fileID: 0}
+    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -150
+      objectReference: {fileID: 0}
+    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 8280190318267957205, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 854763908}
+  m_SourcePrefab: {fileID: 100100000, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+--- !u!4 &854763906 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+  m_PrefabInstance: {fileID: 854763905}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &854763907 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 8280190318267957205, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
+  m_PrefabInstance: {fileID: 854763905}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &854763908
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 854763907}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 30a9bfbd23c2f574287268bd2497eba6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.PortalVFXController
+  vortexParticles: {fileID: 0}
+  entryBurstParticles: {fileID: 0}
+  portalLight: {fileID: 0}
+  idleLightIntensity: 1.8
+  activeLightIntensity: 4.5
+  glowPlane: {fileID: 0}
+  idleGlowColor: {r: 0.3, g: 0, b: 0.8, a: 0.4}
+  activeGlowColor: {r: 0.6, g: 0.2, b: 1, a: 0.9}
+  activationRadius: 3
+  flashDuration: 0.22
+  idleGlowIntensity: 1.4
+  activeGlowIntensity: 3.6
+  pulseSpeed: 0.55
+  pulseDepth: 0.3
+  glowEaseSpeed: 4.5
 --- !u!1 &957438666
 GameObject:
   m_ObjectHideFlags: 0
@@ -1386,119 +1499,6 @@ Material:
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
---- !u!1001 &1026844815
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 565611520}
-    m_Modifications:
-    - target: {fileID: 8280190318267957205, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
-      propertyPath: m_Name
-      value: CavePortal
-      objectReference: {fileID: 0}
-    - target: {fileID: 8280190318267957205, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
-      propertyPath: m_StaticEditorFlags
-      value: 30
-      objectReference: {fileID: 0}
-    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
-      propertyPath: m_LocalScale.x
-      value: 4
-      objectReference: {fileID: 0}
-    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
-      propertyPath: m_LocalScale.y
-      value: 4
-      objectReference: {fileID: 0}
-    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
-      propertyPath: m_LocalScale.z
-      value: 4
-      objectReference: {fileID: 0}
-    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -150
-      objectReference: {fileID: 0}
-    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 8280190318267957205, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1026844818}
-  m_SourcePrefab: {fileID: 100100000, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
---- !u!4 &1026844816 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 8764837849314698607, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
-  m_PrefabInstance: {fileID: 1026844815}
-  m_PrefabAsset: {fileID: 0}
---- !u!1 &1026844817 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 8280190318267957205, guid: f709221ce09c1a84f89cdc677042a391, type: 3}
-  m_PrefabInstance: {fileID: 1026844815}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &1026844818
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1026844817}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 30a9bfbd23c2f574287268bd2497eba6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.PortalVFXController
-  vortexParticles: {fileID: 0}
-  entryBurstParticles: {fileID: 0}
-  portalLight: {fileID: 0}
-  idleLightIntensity: 1.8
-  activeLightIntensity: 4.5
-  glowPlane: {fileID: 0}
-  idleGlowColor: {r: 0.3, g: 0, b: 0.8, a: 0.4}
-  activeGlowColor: {r: 0.6, g: 0.2, b: 1, a: 0.9}
-  activationRadius: 3
-  flashDuration: 0.22
-  idleGlowIntensity: 1.4
-  activeGlowIntensity: 3.6
-  pulseSpeed: 0.55
-  pulseDepth: 0.3
-  glowEaseSpeed: 4.5
 --- !u!1 &1055932058
 GameObject:
   m_ObjectHideFlags: 0
@@ -2244,78 +2244,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 2096451516}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1440494068
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1440494069}
-  - component: {fileID: 1440494071}
-  - component: {fileID: 1440494070}
-  m_Layer: 0
-  m_Name: CavePortal_Trigger
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1440494069
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1440494068}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -134}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 565611520}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1440494070
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1440494068}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 75540c3504804694da745180f4825e8b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.SceneTransitionTrigger
-  targetSceneName: Village2
-  targetPosition: {x: 20.6, y: 0.1, z: -38.3}
-  loadAdditive: 0
-  ProximityRadius: 16
-  promptOverride: Enter the enemy stronghold
-  requireConfirm: 1
---- !u!65 &1440494071
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1440494068}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 1
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 12, y: 6, z: 8}
-  m_Center: {x: 0, y: 0, z: 0}
 --- !u!21 &1461171768
 Material:
   serializedVersion: 8
@@ -3058,6 +2986,78 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1742690572}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &1808255678
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1808255679}
+  - component: {fileID: 1808255681}
+  - component: {fileID: 1808255680}
+  m_Layer: 0
+  m_Name: CavePortal_Trigger
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1808255679
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1808255678}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 1, z: -134}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 565611520}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1808255680
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1808255678}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 75540c3504804694da745180f4825e8b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.SceneTransitionTrigger
+  targetSceneName: Village2
+  targetPosition: {x: 0, y: 0.1, z: -20}
+  loadAdditive: 0
+  ProximityRadius: 16
+  promptOverride: Enter the enemy stronghold
+  requireConfirm: 1
+--- !u!65 &1808255681
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1808255678}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 12, y: 6, z: 8}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1882139285
 GameObject:
   m_ObjectHideFlags: 0

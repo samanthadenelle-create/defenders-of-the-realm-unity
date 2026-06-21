@@ -282,9 +282,16 @@ namespace DeNelle.Editor
             }
 
             // Front (-Z) with gate gap, back (+Z), and the two sides.
+            // WO-480 (pass 4): the wall PREFAB is ~15.75m wide but slots step every 3m, so a wall
+            // placed just outside frontGateHalf SPILLS across the gate opening, pinching the gate
+            // navmesh to a hairline pathfinding can't cross (proven by the gate-approach probe: the
+            // x=0 corridor samples on-mesh but CalculatePath dead-ends short). Skip any FRONT wall
+            // whose body would overlap the opening — clear a band wider than the wall half-width so a
+            // genuinely connected corridor bakes through the gate. The gate ARCH prop still marks it.
+            const float frontWallSkip = 9f; // > wall prefab half-width (~7.9m) -> ~5m clear gate
             for (float x = -half; x <= half; x += seg)
             {
-                if (Mathf.Abs(x) > frontGateHalf) Slot(new Vector3(x, y, -half), 0f, $"{label}Wall_Front");
+                if (Mathf.Abs(x) > frontWallSkip) Slot(new Vector3(x, y, -half), 0f, $"{label}Wall_Front");
                 Slot(new Vector3(x, y, half), 0f, $"{label}Wall_Back");
             }
             for (float z = -half; z <= half; z += seg)
@@ -293,10 +300,12 @@ namespace DeNelle.Editor
                 Slot(new Vector3( half, y, z), 90f, $"{label}Wall_Right");
             }
 
-            // Invisible solid carve-ring so the navmesh respects the wall line (front gate open).
-            // WO-480 (A): only the OUTER ring carves; the inner ring (carve:false) leaves the
-            // courtyard + chokepoint as one connected surface.
-            if (carve) BuildCarveRing(parent, half, y, frontGateHalf, label);
+            // WO-480 (pass 4): the carve-ring is now REDUNDANT — the walls are themselves NotWalkable
+            // colliders (pass 3) that carve the navmesh at the wall line. Worse, the front carve cubes
+            // (FrontL/FrontR) PINCHED the gate opening, contributing to the hairline gate seam. So the
+            // carve-ring is no longer built; walls bound the navmesh, gate gaps stay genuinely open.
+            // (BuildCarveRing/AddCarveWall are retained but unused.)
+            _ = carve; // param kept for call-site compatibility; carve-ring intentionally not built
             return placed;
         }
 
@@ -332,6 +341,10 @@ namespace DeNelle.Editor
             var mr = w.GetComponent<MeshRenderer>();
             if (mr != null) mr.enabled = false;   // invisible — collider only
             MarkStatic(w);
+            // WO-480 (pass 3): a carve cube is non-floor OBSTACLE geometry — its job is to carve the
+            // wall line, NOT to be walked on. Mark it NOT WALKABLE so its 4m-tall top doesn't bake its
+            // own walkable sheet (the same y~6.84 wall-top root cause that fragments the floor).
+            MarkNotWalkable(w);
         }
 
         private static int BuildCornerTowers(Transform parent, float half, int count)
@@ -813,6 +826,13 @@ namespace DeNelle.Editor
             else
             {
                 MarkStatic(inst);
+                // WO-480 (pass 3): EVERY prop placed through PlaceOneCounted is NON-floor geometry
+                // (walls, watchtower/stone_tower, altar, torch, spikes, decor — the floor/ramp/platform
+                // are built as primitives elsewhere and never come through here). Mark it NOT WALKABLE so
+                // its collider CARVES the floor but bakes no walkable top (kills the y~6.84 wall-top sheet
+                // + lets the floor bake as ONE connected surface). Roles excluded by construction: the gate
+                // prop above (colliders stripped, not static) and Floor_Stronghold / Ramp_* / Platform_Keep.
+                MarkNotWalkable(inst);
             }
 
             // Render-verify: a placed piece with NO visible mesh self-reports (footprint logged).
@@ -847,6 +867,9 @@ namespace DeNelle.Editor
             foreach (var col in inst.GetComponentsInChildren<Collider>(true))
                 if (col != null) Object.DestroyImmediate(col);
             // Deliberately NOT MarkStatic — rubble is excluded from NavigationStatic geometry.
+            // WO-480 (pass 3): also flag NOT WALKABLE for belt-and-suspenders (with colliders stripped it
+            // contributes no bake geometry anyway, but this guarantees rubble can never bake a walkable top).
+            MarkNotWalkable(inst);
 
             VerifyRenders(inst, role, name);
             return 1;
@@ -968,6 +991,36 @@ namespace DeNelle.Editor
             GameObjectUtility.SetStaticEditorFlags(go,
                 StaticEditorFlags.NavigationStatic | StaticEditorFlags.BatchingStatic |
                 StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic);
+        }
+
+        // WO-480 (pass 3): mark NON-floor geometry as NOT WALKABLE so it CARVES the floor
+        // navmesh but contributes NO walkable surface. ROOT CAUSE (proven by bake diag, not a
+        // guess): the StrongholdRoot NavMeshSurface has collectObjects=All, useGeometry=
+        // PhysicsColliders, layerMask=~0 — so it bakes EVERY collider as a walkable surface,
+        // including the flat TOPS of walls + towers. The diag found a navmesh sheet at y~6.84
+        // (wall/tower tops) stacked over the y~0 courtyard floor, and the floor fragmented into
+        // disconnected islands (wall/tower/prop footprints + their baked tops split it). The hero
+        // can never reach the wall-tops and the floor isn't one connected sheet.
+        //
+        // FIX: add a NavMeshModifier with overrideArea=true and area=1 (the built-in "Not Walkable"
+        // area index) to every wall / tower / gate / decorative prop / rubble / trap-visual. The
+        // collider still OBSTRUCTS (carves) the floor — the hero can't walk through a wall — but the
+        // bake produces NO walkable top, so the y~6.84 wall-top sheet vanishes and the floor bakes as
+        // ONE connected surface (wall footprints carved + gate gaps open). NavMeshModifier applies to
+        // the GameObject it's on AND its children (unless a child has its own modifier), so adding it
+        // to the placed prop root covers the whole prop hierarchy.
+        //
+        // Apply ONLY to non-floor geometry. Do NOT apply to the walkable surfaces:
+        // Floor_Stronghold, the Ramp_* slopes, and Platform_Keep (they must stay default area 0).
+        private const int NotWalkableArea = 1;   // Unity built-in "Not Walkable" navmesh area index
+
+        private static void MarkNotWalkable(GameObject go)
+        {
+            if (go == null) return;
+            var mod = go.GetComponent<NavMeshModifier>();
+            if (mod == null) mod = go.AddComponent<NavMeshModifier>();
+            mod.overrideArea = true;
+            mod.area = NotWalkableArea;   // carves the floor, bakes no walkable top (no y~6.84 sheet)
         }
 
         private static void TintMesh(GameObject go, Color c)

@@ -114,7 +114,34 @@ namespace DeNelle.Editor
             ReportReach("HeroStartPoint_PlayerSpawn", "Spawn_Keep");
             ReportReach("Crossing_Village2Gate_Dest", "Spawn_Keep");
 
+            // CAVE-PORTAL ARRIVAL: the OuterWorld rock warps the hero to this literal point.
+            // It MUST connect to the interior or the player ports in and is stranded.
+            ReportReachLiteral("CavePortalArrival(20.6,-38.3)", new Vector3(20.6f, 0.1f, -38.3f), "Spawn_Chokepoint");
+
             Log("=== done. The crossing DEST should be on the same island as Spawn_Keep/Chokepoint, and reachability above should read PathComplete. ===");
+        }
+
+        // Reachability from a LITERAL world point (e.g. the cave-portal arrival) to a named marker.
+        private static void ReportReachLiteral(string fromLabel, Vector3 fromPos, string toName)
+        {
+            var to = GameObject.Find(toName);
+            if (to == null) { Log($"  reach {fromLabel} -> {toName}: target marker missing"); return; }
+            if (!NavMesh.SamplePosition(fromPos, out NavMeshHit hf, 4f, NavMesh.AllAreas))
+            { Log($"  reach {fromLabel} -> {toName}: ARRIVAL OFF-MESH (no navmesh within 4m of {fromPos}) — hero would be stranded"); return; }
+            if (!NavMesh.SamplePosition(to.transform.position, out NavMeshHit ht, 4f, NavMesh.AllAreas))
+            { Log($"  reach {fromLabel} -> {toName}: target OFF-MESH"); return; }
+            try
+            {
+                var path = new NavMeshPath();
+                NavMesh.CalculatePath(hf.position, ht.position, NavMesh.AllAreas, path);
+                Log($"  reach {fromLabel} (snapped {hf.position}) -> {toName}: {path.status}");
+                if (path.corners != null && path.corners.Length > 0)
+                {
+                    var last = path.corners[path.corners.Length - 1];
+                    Log($"      dead-ends at {last}; gap to target = {Vector3.Distance(last, ht.position):F1}m");
+                }
+            }
+            catch (System.Exception e) { Log($"  reach {fromLabel} -> {toName}: threw {e.Message}"); }
         }
 
         private static void ReportSurfaces()
@@ -195,6 +222,15 @@ namespace DeNelle.Editor
                 bool ok = NavMesh.CalculatePath(hf.position, ht.position, NavMesh.AllAreas, path);
                 string status = ok ? path.status.ToString() : "PathInvalid (CalculatePath returned false)";
                 Log($"  reach {fromName} -> {toName}: {status}");
+                // BARRIER LOCATOR: on a partial path, the LAST corner is exactly where the
+                // route dead-ends against the unconnected boundary — names the blocking gate/wall.
+                if (path.corners != null && path.corners.Length > 0)
+                {
+                    var last = path.corners[path.corners.Length - 1];
+                    Log($"      from {hf.position} -> dead-ends at corner[{path.corners.Length - 1}] {last} (target was {ht.position}); gap to target = {Vector3.Distance(last, ht.position):F1}m");
+                    for (int ci = 0; ci < path.corners.Length && ci < 8; ci++)
+                        Log($"        corner[{ci}] = {path.corners[ci]}");
+                }
             }
             catch (System.Exception e)
             {

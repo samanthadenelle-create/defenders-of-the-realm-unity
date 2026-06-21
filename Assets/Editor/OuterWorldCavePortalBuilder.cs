@@ -57,11 +57,13 @@ namespace DeNelle.Editor
         // deleted — bump this Z south again later for a "deep" entrance.)
         private static readonly Vector3 CavePos = new Vector3(0f, 0f, -150f);
 
-        // Village2 ARRIVAL point — where the player ports TO from OuterWorld (owner 2026-06-21).
-        // Set to the owner's chosen Village2 arrival on the spawn-side approach (island[4]); the player
-        // arrives here, then walks into the stronghold (the in-scene HeroLinkCrossing gate). WarpTo samples
-        // the navmesh on arrival. (Was hardcoded (0,0.1,-20), an old stronghold-edge spawn.)
-        private static readonly Vector3 Village2SpawnPos = new Vector3(20.6f, 0.1f, -38.3f);
+        // Village2 ARRIVAL point — where the player ports TO from OuterWorld.
+        // WO-480 (connected-interior regen): the player arrives at the front-gate approach and WALKS in
+        // through the now-connected gate -> chokepoint -> keep ramp (no in-scene crossing needed).
+        // The old (20.6,-38.3) spot dead-ends 33.9m from the gate on a SEPARATE exterior island after the
+        // regen (hero stranded); (0,-20) is the HeroStartPoint approach that reaches chokepoint (0.4m) and
+        // climbs the keep ramp. WarpTo samples the navmesh on arrival.
+        private static readonly Vector3 Village2SpawnPos = new Vector3(0f, 0.1f, -20f);
 
         [MenuItem("Defenders/World/Place OuterWorld Cave Portal")]
         public static void PlaceCavePortal()
