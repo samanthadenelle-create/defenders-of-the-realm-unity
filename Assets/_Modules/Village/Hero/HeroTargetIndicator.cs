@@ -192,6 +192,14 @@ namespace DeNelle.Village
                 _reticleMat.color = want;
             }
 
+            // The reticle quad is a STANDALONE scene object (not parented to the hero), so a
+            // scene change that CARRIES the hero (HeroControlEnsurer DDOL across a Single-load
+            // seam, e.g. OuterWorld->Village2) destroys the quad while THIS component survives on
+            // the carried hero — leaving _reticle a destroyed reference. Setting .position on it
+            // then NRE-spams every frame once a target is in range. Rebuild on demand.
+            if (_reticle == null) BuildReticle();
+            if (_reticle == null) { SetVisible(false); return; }
+
             Vector3 p = CurrentTarget.WorldPosition + Vector3.up * _headHeight;
             _reticle.position = p;
             if (_cam != null)
