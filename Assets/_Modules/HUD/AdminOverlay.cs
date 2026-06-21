@@ -112,6 +112,10 @@ namespace DeNelle.HUD
             // 2710 the dev panel opened BENEATH an open shop's scrim after talking to a vendor, so its
             // buttons were non-clickable. 32000 keeps it on top of the 31000 shop + everything below.
             _document.sortingOrder = 32000; // topmost — above the 31000 shop/vendor modals
+            // FIX (RCA 2026-06-21, data-proven sortOrder=0 at runtime): UIDocument.sortingOrder does NOT
+            // reliably propagate to PanelSettings.sortingOrder — and input dispatch reads the PanelSettings.
+            // Set it on the (own, runtime) PanelSettings so the layering is REAL (dev panel above the shop).
+            if (_document.panelSettings != null) _document.panelSettings.sortingOrder = 32000;
             BuildUi();
             _built = true;
             return true;

@@ -68,8 +68,15 @@ namespace DeNelle.DevTools
 
             // The UIDocument needs a PanelSettings asset to render.
             var document = go.AddComponent<UIDocument>();
-            document.panelSettings = ResolvePanelSettings();
+            // RCA 2026-06-21: ResolvePanelSettings may return a SHARED asset (Resources DevPanelSettings or a
+            // borrowed sibling). Setting sortingOrder must NOT mutate a shared asset, and UIDocument.sortingOrder
+            // doesn't reliably reach PanelSettings.sortingOrder (which input dispatch reads). So CLONE it to an
+            // own instance, then set sortingOrder on the clone — independent + the layering becomes real.
+            var ps = ResolvePanelSettings();
+            if (ps != null) { ps = Object.Instantiate(ps); ps.name = "DevRuntimePanelSettings"; }
+            document.panelSettings = ps;
             document.sortingOrder = PanelSortOrder;
+            if (document.panelSettings != null) document.panelSettings.sortingOrder = PanelSortOrder;
 
             // The controller builds its ENTIRE UI in C# (inline styles) — it does
             // NOT read DevPanel.uxml (this project's UXML renders empty in player

@@ -89,6 +89,9 @@ namespace DeNelle.HUD
             // UIToolkit panels and uGUI Screen-Space-Overlay canvases sort by
             // their own sortingOrder, so this must exceed the town canvas.
             _document.sortingOrder = 2700;   // above the town HUD (140) + inventory modal (2600) — settings menu is top-most
+            // FIX (RCA 2026-06-21): UIDocument.sortingOrder doesn't reliably reach PanelSettings.sortingOrder
+            // (input dispatch reads the PanelSettings, which stayed 0). Set it on our OWN runtime PanelSettings.
+            if (_document.panelSettings != null) _document.panelSettings.sortingOrder = 2700;
             BuildUi();
             // DEF-212: register with the single-modal arbiter AFTER BuildUi so _overlay exists.
             // Opening the Help menu now closes any other open panel; closing clears our slot.
