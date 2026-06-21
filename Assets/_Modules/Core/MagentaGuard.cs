@@ -130,24 +130,34 @@ namespace DeNelle.Core
                             FlowTrace.Step("MagentaGuard",
                                 $"FLOOR-FIX '{fm.name}' (was '{fsh}', scene '{r.gameObject.scene.name}') -> URP/Lit, albedoTex={(tex != null)} — lavender floor corrected.");
                         }
-                        else if (fm != null && fsh == "Universal Render Pipeline/Lit" && fm.HasProperty("_BaseColor"))
+                        else if (fm != null && fsh == "Universal Render Pipeline/Lit")
                         {
-                            // PROVEN by FloorDiag (owner F8 2026-06-21): MainCastle_Hall has NO terrain — the
-                            // visible floor is the CourtyardFloor_* tiles + Planes, ALREADY URP/Lit but carrying
-                            // _BaseColor (0,0,0,0) (colorless AND zero-alpha) with no _BaseMap, so under the
-                            // lavender Trilight ambient they render pink/lavender. The nonLit branch never touched
-                            // them (already Lit) — THIS is why every prior fix missed it. Repaint to OPAQUE warm floor.
+                            // PROVEN (RCA 2026-06-21, floordiag-probe2.log): the visible castle floor is the
+                            // CourtyardFloor_* tiles — URP/Lit, no _BaseMap. Their material is FBX-EMBEDDED
+                            // (Floor_WoodDark.fbx, externalObjects:{}), so fm.HasProperty("_BaseColor") is FALSE.
+                            // The PRIOR fix guarded the whole branch on HasProperty("_BaseColor") -> it short-
+                            // circuited and NEVER fired (zero FLOOR-FIX lines in the full log) — THIS is why every
+                            // floor fix (incl. mine) missed it. Under the lavender Trilight ambient a colorless lit
+                            // tile renders pink. Fix: treat colorless OR property-missing as "needs paint", and
+                            // ASSIGN A FRESH URP/Lit material to the renderer (mutating the embedded SHARED material
+                            // may not stick in a built player). Self-idempotent: once repainted opaque, colorless=false.
                             bool hasTex = fm.HasProperty("_BaseMap") && fm.GetTexture("_BaseMap") != null;
-                            Color bc = fm.GetColor("_BaseColor");
-                            bool colorless = bc.a < 0.05f || (bc.r + bc.g + bc.b) < 0.05f;
+                            bool hasBC  = fm.HasProperty("_BaseColor");
+                            Color bc    = hasBC ? fm.GetColor("_BaseColor") : Color.clear;
+                            bool colorless = !hasBC || bc.a < 0.05f || (bc.r + bc.g + bc.b) < 0.05f;
                             if (!hasTex && colorless)
                             {
-                                fm.SetColor("_BaseColor", new Color(0.42f, 0.34f, 0.24f, 1f));   // opaque warm wood/stone
-                                if (fm.HasProperty("_Surface")) fm.SetFloat("_Surface", 0f);      // URP: 0 = Opaque
-                                if (fm.HasProperty("_ZWrite"))  fm.SetFloat("_ZWrite", 1f);
-                                fm.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
+                                // §12 proof line: logs the disambiguator (hasBC) at fix time — captured to the full
+                                // Player.log (Step lands there; the break-log is errors-only — see BreakCaptureHarness).
+                                var fresh = new Material(_lit) { name = fm.name + "_FloorFix" };
+                                fresh.SetColor("_BaseColor", new Color(0.42f, 0.34f, 0.24f, 1f));   // opaque warm wood/stone
+                                if (fresh.HasProperty("_Surface")) fresh.SetFloat("_Surface", 0f);  // URP: 0 = Opaque
+                                if (fresh.HasProperty("_ZWrite"))  fresh.SetFloat("_ZWrite", 1f);
+                                fresh.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
+                                var sm = r.sharedMaterials;
+                                if (sm != null && sm.Length > 0) { sm[0] = fresh; r.sharedMaterials = sm; }
                                 FlowTrace.Step("MagentaGuard",
-                                    $"FLOOR-FIX(colorless URP/Lit) '{fm.name}' (scene '{r.gameObject.scene.name}') baseColor was {bc} -> opaque warm wood (pink floor corrected).");
+                                    $"FLOOR-FIX(colorless URP/Lit) '{fm.name}' (scene '{r.gameObject.scene.name}') hasBaseColorProp={hasBC} was {bc} -> FRESH opaque warm wood (pink floor corrected).");
                             }
                         }
                     }
