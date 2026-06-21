@@ -137,6 +137,14 @@ namespace DeNelle.Village
         // exact impossible state that cost 3 passes. The assertion fires loud (Fail rolls up).
         private bool _tapInitiated;
 
+        // SINGLE-LOAD HERO CARRY (RCA: the "purple emergency pill") — set TRUE in Cross()
+        // ONLY on the Single-load (!loadAdditive) branch, right after we DontDestroyOnLoad
+        // the hero root so it survives the scene swap. RepositionPlayerAfterLoad reads it to
+        // re-home the carried hero into the freshly-active target scene after the warp, so the
+        // DDOL'd hero unloads normally on the NEXT transition instead of leaking/duplicating.
+        // Additive seams never set this (the hero already survives an additive load).
+        private bool _carriedHero;
+
         private void Update()
         {
             if (!_announced)
@@ -433,6 +441,32 @@ namespace DeNelle.Village
 
                 FlowTrace.Step("Seam", $"load-additive: '{targetSceneName}' {(loadAdditive ? "Additive" : "Single")} (was NOT loaded)");
                 Debug.Log($"[SeamTrace] '{name}' Cross() loading '{targetSceneName}' {(loadAdditive ? "additive" : "single")} (was not loaded).");
+
+                // SINGLE-LOAD HERO CARRY (RCA: the "purple emergency pill") — an Additive load
+                // keeps the previous scene (and the hero) alive, but a Single load DESTROYS every
+                // root in the old scene, including the hero. When that happened the captured
+                // `player` Transform died mid-load → RepositionPlayerAfterLoad saw a dead ref →
+                // WarpTo no-op'd, and HeroControlEnsurer (finding no Player) spawned the purple
+                // emergency pill at the origin. Fix: BEFORE the Single load, mark the hero ROOT
+                // DontDestroyOnLoad so it survives the swap and the same live Transform can be
+                // warped into the target scene. (Additive: do NOT DDOL — it already survives.)
+                if (!loadAdditive)
+                {
+                    var heroRoot = (player != null && player.root != null) ? player.root.gameObject : null;
+                    if (heroRoot != null)
+                    {
+                        Object.DontDestroyOnLoad(heroRoot);
+                        _carriedHero = true;
+                        FlowTrace.Step("Seam",
+                            $"carry: DontDestroyOnLoad hero '{heroRoot.name}' across Single load to '{targetSceneName}'");
+                    }
+                    else
+                    {
+                        FlowTrace.Warn("Seam",
+                            $"carry: could not resolve hero root for Single load to '{targetSceneName}' — hero may be lost (pill risk)");
+                    }
+                }
+
                 FlowTrace.Try("Seam", "LoadScene",
                     () => SceneManager.LoadScene(targetSceneName, loadAdditive ? LoadSceneMode.Additive : LoadSceneMode.Single));
             }
@@ -561,6 +595,25 @@ namespace DeNelle.Village
 
                 FlowTrace.Step("Seam", $"repositioned: requested {targetPosition}, hero now @ {playerTransform.position} in '{targetSceneName}' (loco={(loco != null)})");
                 Debug.Log($"[SeamTrace] '{name}' repositioned: requested {targetPosition}, hero now at {playerTransform.position} in '{targetSceneName}' (loco={(loco != null)}).");
+
+                // SINGLE-LOAD HERO CARRY — re-home step (only when WE DDOL'd the hero above).
+                // A DontDestroyOnLoad object lives in the special DDOL scene, NOT the target
+                // scene; if we leave it there it would survive (leak/duplicate) the NEXT Single
+                // load. Now that the target scene is active and the hero is warped into it, move
+                // the hero root back into the active scene so it unloads normally on the next
+                // transition. Guarded: only when _carriedHero (we actually DDOL'd it).
+                if (_carriedHero && playerTransform.root != null)
+                {
+                    FlowTrace.Try("Seam", "MoveHeroToActiveScene", () =>
+                    {
+                        var active = SceneManager.GetActiveScene();
+                        if (active.IsValid() && active.isLoaded)
+                        {
+                            SceneManager.MoveGameObjectToScene(playerTransform.root.gameObject, active);
+                            FlowTrace.Step("Seam", $"carry: re-homed hero into active scene '{active.name}'");
+                        }
+                    });
+                }
             }
 
             // (3) Let the follow camera settle on the warped hero for one frame

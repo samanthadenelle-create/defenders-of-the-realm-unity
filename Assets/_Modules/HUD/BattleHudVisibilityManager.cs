@@ -286,8 +286,32 @@ namespace DeNelle.HUD
             // wave/vitals chrome) would stay faded out. Treat the raid scene as BATTLE so
             // the combat HUD comes up. Cheap active-scene string test (Core-only).
             if (IsWaveActive() || IsInBattle() || IsRaidScene()) return HudMode.Battle;
+
+            // WO-470 / HUD-RCA: an ENEMY-OWNED scene (e.g. Village2, the enemy
+            // outpost) is a combat scene too, but it isn't a RaidBase_* name, has no
+            // WaveManager and no ATB BattleController — so none of the above fire and
+            // it would mis-classify to Hidden (Village2 is NOT inVillage), hiding the
+            // whole HUD. Ownership is read Core-clean (HubScenes.IsEnemyOwnedScene
+            // mirrors DeNelle.Village.SceneOwnership via the same scene-configs.json;
+            // HUD never references DeNelle.Village, CLAUDE.md §5). PRECEDENCE: this
+            // sits above the town/inVillage fallthrough so the battle HUD wins.
+            if (IsEnemyOwnedScene()) return HudMode.Battle;
+
             bool inVillage = _hud != null && _hud.InVillage;
             return inVillage ? HudMode.Town : HudMode.Hidden;
+        }
+
+        /// <summary>True when the active scene is enemy-owned (WO-470). Core-clean —
+        /// reads DeNelle.Core.HubScenes (HUD → Core only).</summary>
+        private bool IsEnemyOwnedScene()
+        {
+            var s = SceneManager.GetActiveScene();
+            if (!s.IsValid()) return false;
+            bool enemy = DeNelle.Core.HubScenes.IsEnemyOwnedScene(s.name);
+            if (enemy)
+                DeNelle.Core.Diagnostics.FlowTrace.Step(
+                    "HUD", $"[HUD] enemy-owned scene '{s.name}' -> Battle mode");
+            return enemy;
         }
 
         /// <summary>True while a <c>RaidBase_*</c> raid scene is active (WO-457).</summary>

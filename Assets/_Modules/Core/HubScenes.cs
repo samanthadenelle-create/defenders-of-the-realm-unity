@@ -12,6 +12,11 @@
 // Lives in Core so BOTH DeNelle.Village (WorldSceneLoader) and DeNelle.HUD
 // (VillageHudController) can reference it (Village→Core, HUD→Core; never Village↔HUD).
 // =============================================================================
+using System;
+using System.Collections.Generic;
+using Newtonsoft.Json;
+using UnityEngine;
+
 namespace DeNelle.Core
 {
     public static class HubScenes
@@ -37,6 +42,87 @@ namespace DeNelle.Core
         {
             return !string.IsNullOrEmpty(sceneName)
                 && sceneName.StartsWith("RaidBase", System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  Enemy-owned scene test (WO-470 / HUD-RCA)
+        // -----------------------------------------------------------------------
+        //  WHY HERE (architecture): the authoritative ownership flag lives in
+        //  DeNelle.Village.SceneOwnership, but the HUD (DeNelle.HUD) may NOT
+        //  reference DeNelle.Village (CLAUDE.md §5). It CAN reference Core. The
+        //  ownership DATA — scene-configs.json — is read through the Core-side
+        //  CanonicalJson loader (the SAME loader SceneOwnership/SceneConfigCatalog
+        //  use). So we expose a Core-clean test that reads the SAME canonical data
+        //  here, rather than adding a CoreServices delegate + a Village-side setter
+        //  (more surface). One JSON parse, cached. SceneOwnership remains the
+        //  runtime gameplay flag; this is the read-only mirror the HUD consumes.
+        // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>StreamingAssets-relative path (CanonicalJson strips the ext for Resources).</summary>
+        private const string SceneConfigsPath = "Data/Canonical/scene-configs.json";
+
+        // Cached sceneName(lower) -> isEnemy map, built once from scene-configs.json.
+        private static Dictionary<string, bool> _enemyByScene;
+
+        /// <summary>True if <paramref name="sceneName"/> is an ENEMY-OWNED scene per
+        /// scene-configs.json (ownership == "Enemy"). HUD-readable mirror of
+        /// DeNelle.Village.SceneOwnership without a Village reference (WO-470).
+        /// Default false (safe) for any scene without a matching config entry.</summary>
+        public static bool IsEnemyOwnedScene(string sceneName)
+        {
+            if (string.IsNullOrEmpty(sceneName)) return false;
+            EnsureOwnershipLoaded();
+            return _enemyByScene != null
+                && _enemyByScene.TryGetValue(sceneName, out bool enemy)
+                && enemy;
+        }
+
+        private static void EnsureOwnershipLoaded()
+        {
+            if (_enemyByScene != null) return;
+            _enemyByScene = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+
+            try
+            {
+                string text = CanonicalJson.Read(SceneConfigsPath);
+                if (string.IsNullOrEmpty(text))
+                {
+                    Debug.LogWarning("[Flow:HUD] HubScenes: scene-configs.json not found — " +
+                                     "all scenes default to NOT enemy-owned.");
+                    return;
+                }
+
+                var file = JsonConvert.DeserializeObject<SceneConfigFile>(text);
+                if (file != null && file.configs != null)
+                {
+                    foreach (var c in file.configs)
+                    {
+                        if (c == null || string.IsNullOrEmpty(c.sceneName)) continue;
+                        _enemyByScene[c.sceneName] =
+                            string.Equals(c.ownership, "Enemy", StringComparison.OrdinalIgnoreCase);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // §12 no silent failure: report + default to not-enemy-owned (safe).
+                Debug.LogWarning("[Flow:HUD] HubScenes: failed to read scene-configs.json (" +
+                                 ex.Message + ") — all scenes default to NOT enemy-owned.");
+            }
+        }
+
+        // Minimal JSON shape (mirrors scene-configs.json: { configs:[{ sceneName, ownership }] }).
+        [Serializable]
+        private sealed class SceneConfigFile
+        {
+            public List<SceneConfigEntry> configs;
+        }
+
+        [Serializable]
+        private sealed class SceneConfigEntry
+        {
+            public string sceneName;
+            public string ownership;
         }
     }
 }
