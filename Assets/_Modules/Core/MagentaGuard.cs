@@ -102,8 +102,16 @@ namespace DeNelle.Core
                     // survived, set a warm wood/stone base so it's NEVER lavender. Mutates the SHARED material
                     // once (all tiles fixed); idempotent (re-runs see URP/Lit and skip). Textured floors are
                     // left alone. Quiet: a single Step, not an error per tile.
-                    if (_lit != null && IsGroundLike(r) && _floorSeen.Add(r.name))
+                    if (_lit != null && IsGroundLike(r))
                     {
+                        // PROVEN (RCA 2026-06-21): the colorless RE-CHECK below must NOT sit behind the
+                        // `_floorSeen.Add` name-dedup — `_floorSeen` is process-static, so a name consumed on
+                        // an EARLIER sweep made `Add` return false on the sweep where the tile is actually
+                        // colorless, and the branch NEVER fired (no FLOOR-FIX(colorless) log, tiles stayed
+                        // (0,0,0,0)). The dedup is only correct for the one-time nonLit IDENTITY swap; the
+                        // colorless fix tests a mutable STATE and must run every sweep (self-idempotent:
+                        // once repainted opaque, colorless=false -> no-op).
+                        bool firstName = _floorSeen.Add(r.name);
                         var fm = mats.Length > 0 ? mats[0] : null;
                         string fsh = fm != null && fm.shader != null ? fm.shader.name : "";
                         bool nonLit = fm != null && fm.shader != null
@@ -111,7 +119,7 @@ namespace DeNelle.Core
                                       && fsh.IndexOf("Particles", System.StringComparison.OrdinalIgnoreCase) < 0
                                       && fsh.IndexOf("Terrain", System.StringComparison.OrdinalIgnoreCase) < 0
                                       && fsh.IndexOf("Unlit", System.StringComparison.OrdinalIgnoreCase) < 0;
-                        if (nonLit)
+                        if (firstName && nonLit)
                         {
                             Texture tex = null;
                             foreach (var prop in new[] { "_BaseMap", "_MainTex", "_Base_Color", "_BaseColorMap", "_Albedo", "_AlbedoMap" })
