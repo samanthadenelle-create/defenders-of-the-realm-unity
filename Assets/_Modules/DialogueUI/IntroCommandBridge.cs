@@ -84,9 +84,13 @@ namespace DeNelle.DialogueUI
 
         private async YarnTask CmdTransitionTo(string target)
         {
-            // The intro ends by handing off to hero select. Stop the runner first so it
-            // doesn't keep ticking into the next scene.
-            if (_runner != null && _runner.IsDialogueRunning) _runner.Stop();
+            // The intro ends by handing off to hero select. Do NOT call _runner.Stop() here:
+            // Yarn's DialogueRunner runs Dialogue.Continue() AFTER a command handler returns, so a
+            // mid-command Stop() tears down the selected node and the post-command Continue() throws
+            // "No node has been selected" (ticket #5, RCA 2026-06-21; canonical anti-pattern, memory
+            // yarn-no-node-stop-after-panel-command). The script ends the runner cleanly with <<stop>>
+            // right after <<transition_to>>, so the runner completes via onDialogueComplete — no orphaned
+            // Continue(). The handler only performs the scene route.
             await YieldFrame();
             SceneRouter.GoHeroSelect();
         }

@@ -188,4 +188,5 @@ They gave their souls to survive. Now they need you to bring them back.
 
 <<wait 0.5>>
 <<transition_to hero_select>>
+<<stop>>
 ===
