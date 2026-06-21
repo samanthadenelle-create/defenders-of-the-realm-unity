@@ -476,12 +476,12 @@ namespace DeNelle.Village
             // shop-vs-upgrade split is decided data-driven by that node's gates (seeded from
             // BuildingCatalog caps in CmdStructureStatus) — never here. Trace the id used so a
             // "wrongly offers shop" report maps to the catalog entry behind it.
-            // UPGRADE IS DIRECT, NEVER YARN (owner, severe): an upgradable building reached through
-            // its vendor NPC routes STRAIGHT to the code-built Building Upgrade panel — mirrors
-            // BuildingInteractable.Interact. This was the missed path (Mill/Old Pell, Arcane Tower
-            // still showed the Yarn StructureMenu). Buy/Sell/Talk for non-upgradable storefronts
-            // still fall through to the Yarn dialogue below, unchanged.
-            if (IsUpgradableId(_structureId))
+            // UPGRADE-ONLY buildings route STRAIGHT to the code-built Building Upgrade panel (owner:
+            // Mill/Old Pell, Arcane Tower must NOT show a Yarn menu). But a SHOPPABLE vendor (forge,
+            // armorer, market, jeweler) is a TALK target first: Talk fires the vendor DIALOGUE
+            // (Buy/Sell/Leave + quest options), per owner 2026-06-21. Its upgrade, if any, is reached
+            // through the dedicated HUD context/Upgrade button — never by stealing the Talk press.
+            if (IsUpgradableId(_structureId) && !IsShoppableId(_structureId))
             {
                 if (PanelRouter.Open(PanelId.BuildingUpgrade, _structureId))
                     FlowTrace.Step("Village", $"CastleNpc '{_label}' -> MVVM Building Upgrade (focus='{_structureId}').");
@@ -504,6 +504,13 @@ namespace DeNelle.Village
             !string.IsNullOrEmpty(id) &&
             (DeNelle.Core.State.BuildingTierCatalog.IsUpgradable(id) ||
              Buildings.Progression.ResourceBuildingProgression.IsResourceBuilding(id));
+
+        // Shoppable = the catalog entry opts in (buildings.json isShoppable). A shoppable vendor's
+        // Talk press opens the Buy/Sell/Leave dialogue (StructureMenu), never the upgrade panel —
+        // upgrade is reached through the dedicated HUD context/Upgrade button (owner 2026-06-21).
+        private static bool IsShoppableId(string id) =>
+            !string.IsNullOrEmpty(id) &&
+            BuildingCatalog.Find(id)?.IsShoppable == true;
 
         private void ResolveHero()
         {
