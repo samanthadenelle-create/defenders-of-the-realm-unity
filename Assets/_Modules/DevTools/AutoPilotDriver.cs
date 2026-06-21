@@ -199,6 +199,13 @@ namespace DeNelle.DevTools
                 // inventory, and that equipping actually changes the hero's loadout/stat.
                 yield return RunPhase("AssertEconomyDeduct", AssertEconomyDeduct());
                 yield return RunPhase("AssertEquip", AssertEquip());
+                // DETERMINISTIC GARRISON-ROSTER DIAG (tickets #2 troll-orientation + #4 magenta): the chaos
+                // walk cannot reliably reach Village2's garrison before the time budget, so the orc/troll
+                // roster never spawns to be inspected. Build the EXACT village2_stronghold roster HERE via the
+                // canonical EnemyFactory path (no traversal) and let EnemyFactory's own render-verify + the
+                // worldUp trace + TripoMatFix VERIFY lines capture each one. Also warps the hero to prove the
+                // WarpTo path keeps its body (the #2 bare-pill hero-side check). Read-only diagnosis; cleans up.
+                yield return RunPhase("DiagGarrisonRoster", DiagGarrisonRoster());
                 yield return RunPhase("OpenEachHUDPanel", OpenEachHUDPanel());
                 yield return RunPhase("TriggerWave", TriggerWave());
                 // AttemptExitCastle deliberately crosses a scene seam, so tell the
@@ -323,6 +330,91 @@ namespace DeNelle.DevTools
         // A phase can stash a one-line detail (e.g. counts) for the summary row.
         private string _lastDetail;
 
+        // =====================================================================
+        //  PHASE: DiagGarrisonRoster (tickets #2 + #4 deterministic capture)
+        //  Builds the real village2_stronghold roster via the canonical
+        //  GarrisonStatBlocks -> EnemyFactory.Build path, in the CURRENT scene, so
+        //  the orc/troll/hollow bodies actually instantiate (the chaos walk never
+        //  reaches the garrison in time). Each Build self-reports via EnemyFactory's
+        //  render-verify + the worldUp trace + TripoMatFix VERIFY lines, which is the
+        //  data that proves: (#4) orcs render URP not magenta after the fixer fix;
+        //  (#2) the troll's worldUp (tipped vs upright). Then warp the hero and dump
+        //  its body/renderer/onMesh state (the #2 bare-pill hero-side check). Cleans up.
+        // =====================================================================
+        private IEnumerator DiagGarrisonRoster()
+        {
+            string[] roster = { "orc-berserker", "orc-shaman", "orc-raider", "troll", "hollow-warrior", "hollow-walker" };
+            Vector3 around = _hero != null ? _hero.transform.position : Vector3.zero;
+            var root = new GameObject("[DiagGarrisonRoster]").transform;
+            int built = 0, magenta = 0, tipped = 0;
+
+            for (int i = 0; i < roster.Length; i++)
+            {
+                string id = roster[i];
+                Vector3 want = around + new Vector3((i - 2) * 2.5f, 0f, 7f);
+                if (UnityEngine.AI.NavMesh.SamplePosition(want, out UnityEngine.AI.NavMeshHit hit, 10f, UnityEngine.AI.NavMesh.AllAreas)) want = hit.position;
+
+                Enemy enemy = null;
+                try
+                {
+                    EnemyDef def = DeNelle.Village.World.Camps.GarrisonStatBlocks.BuildTypedDef(id, 1);
+                    enemy = EnemyFactory.Build(def, want, Quaternion.identity, root);   // logs render-verify + worldUp (+ TripoMatFix)
+                }
+                catch (Exception ex)
+                {
+                    FlowTrace.Fail("DiagRoster", $"build '{id}' threw {ex.GetType().Name}: {ex.Message}");
+                }
+
+                // Let the body skin + the Tripo material fixer run a few frames before we read shaders.
+                yield return Wait(0.35f);
+
+                if (enemy != null)
+                {
+                    built++;
+                    bool anyMagenta = false; Vector3 up = Vector3.up; bool haveUp = false;
+                    foreach (var r in enemy.GetComponentsInChildren<Renderer>(true))
+                    {
+                        if (r == null) continue;
+                        var m = r.sharedMaterial;
+                        string sh = (m != null && m.shader != null) ? m.shader.name : "<null>";
+                        bool isMagenta = sh.IndexOf("InternalError", StringComparison.OrdinalIgnoreCase) >= 0
+                                      || sh.IndexOf("Hidden/", StringComparison.OrdinalIgnoreCase) >= 0;
+                        if (isMagenta) anyMagenta = true;
+                        if (!haveUp) { up = r.transform.up; haveUp = true; }
+                        FlowTrace.Step("DiagRoster", $"'{id}' renderer '{r.name}' shader='{sh}' magenta={isMagenta}");
+                    }
+                    bool isTipped = Vector3.Angle(up, Vector3.up) > 30f;   // >30deg off vertical = laid over
+                    if (anyMagenta) magenta++;
+                    if (isTipped) tipped++;
+                    FlowTrace.Step("DiagRoster",
+                        $"'{id}' SUMMARY magenta={anyMagenta} worldUp={up} tipped={isTipped} (upright iff worldUp~=(0,1,0)).");
+                }
+            }
+
+            // #2 hero-side: warp the hero and confirm it keeps its skinned body + lands on navmesh
+            // (the bare-pill arrival theory). WarpTo self-logs SamplePosition HIT/MISS + isOnNavMesh.
+            if (_hero != null)
+            {
+                int bodyRenderers = 0;
+                foreach (var smr in _hero.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                    if (smr != null && smr.enabled && smr.sharedMesh != null) bodyRenderers++;
+                Vector3 dest = around + new Vector3(0f, 0f, 9f);
+                _hero.WarpTo(dest);
+                yield return Wait(0.2f);
+                int afterRenderers = 0;
+                foreach (var smr in _hero.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                    if (smr != null && smr.enabled && smr.sharedMesh != null) afterRenderers++;
+                FlowTrace.Step("DiagRoster",
+                    $"HERO post-warp body skinned-renderers before={bodyRenderers} after={afterRenderers} name='{_hero.name}' " +
+                    $"(bare-pill iff after==0).");
+            }
+
+            yield return Wait(0.3f);
+            if (root != null) UnityEngine.Object.Destroy(root.gameObject);
+            _lastDetail = $"roster built {built}/{roster.Length}, magenta={magenta}, tipped={tipped}";
+            FlowTrace.Step("DiagRoster", $"DiagGarrisonRoster done — built {built}/{roster.Length}, magenta={magenta}, tipped={tipped}.");
+        }
+
         private static float TimeoutFor(string phase)
         {
             switch (phase)
@@ -339,6 +431,7 @@ namespace DeNelle.DevTools
                 case "BootToGameplay":    return BootTimeout;
                 case "ResolveHero":       return ResolveHeroTimeout;
                 case "WalkToOuterWorldOutpost": return OuterWalkTimeout;
+                case "DiagGarrisonRoster": return 45f;
                 default:                  return 30f;
             }
         }
