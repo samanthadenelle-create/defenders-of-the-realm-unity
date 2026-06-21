@@ -945,11 +945,19 @@ namespace DeNelle.Village
         private static HeroClass CompanionClassFor(HeroClass player)
             => CompanionSpawner.CompanionClassFor(player);
 
-        // Name-based hero lookup (matches AmbientNPC / VillageNpcInjector).
+        // Robust hero lookup. F8 RCA 2026-06-21: the old loose StartsWith("Hero") matched the STATIONARY
+        // 'HeroStartPoint_PlayerSpawn' marker (also starts with "Hero"), so the companion "followed" a spawn
+        // point that never moves -> no-follow with heroResolved=True (no null, no NRE). Prefer the canonical
+        // Player tag, then the HeroLocomotion component, then ONLY the real body 'Hero (' (trailing " (" excludes
+        // HeroStartPoint_*). Never match bare "Hero".
         private static Transform ResolveHero()
         {
+            var tagged = GameObject.FindWithTag("Player");
+            if (tagged != null) return tagged.transform;
+            var loco = FindFirstObjectByType<HeroLocomotion>();
+            if (loco != null) return loco.transform;
             foreach (var t in FindObjectsByType<Transform>(FindObjectsSortMode.None))
-                if (t != null && t.name.StartsWith("Hero")) return t;
+                if (t != null && t.name.StartsWith("Hero (")) return t;   // "Hero (Blaise)", NOT "HeroStartPoint_*"
             return null;
         }
     }
