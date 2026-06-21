@@ -255,7 +255,9 @@ namespace DeNelle.Village
                 Mathf.Abs(pls.z) > 1e-4f ? 1f / pls.z : 1f);
             var box = holder.AddComponent<BoxCollider>();
             box.size = b.size;
-            Debug.Log($"[HubStructureVisualInjector] fitted BoxCollider on '{host.name}' size={b.size} center={b.center}.");
+            // FlowTrace (not Debug.Log) so the headless break-log captures it — proof the structure is solid.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Hub",
+                $"fitted BoxCollider on '{host.name}' size={b.size} center={b.center} (ticket #10 — now solid).");
         }
 
         // Name match across the loaded scene(s). Runs once per hub load (not per frame).
