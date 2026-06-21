@@ -482,10 +482,9 @@ namespace DeNelle.Village
             // DATA-VERIFY (owner 2026-06-20, never inference-fix): log the routing inputs + chosen
             // branch so a HEADLESS capture PROVES Talk reaches the Buy/Sell dialogue for shoppable
             // vendors (forge/armorer/market/jeweler) instead of being stolen by the upgrade panel.
-            bool up = IsUpgradableId(_structureId), shop = IsShoppableId(_structureId);
             LastInteractId = _structureId;
-            LastInteractRoute = (up && !shop) ? "upgrade-panel" : "talk-dialogue";
-            FlowTrace.Step("Village", $"CastleNpc.Interact '{_label}' id='{_structureId}' upgradable={up} shoppable={shop} -> route={LastInteractRoute}");
+            LastInteractRoute = ResolveRoute(_structureId);
+            FlowTrace.Step("Village", $"CastleNpc.Interact '{_label}' id='{_structureId}' -> route={LastInteractRoute}");
             // §12 / WO-413: the castle vendor NPCs are the primary live interaction surface (the
             // home hub is MainCastle_Hall). They open the SAME parameterized StructureMenu, so the
             // shop-vs-upgrade split is decided data-driven by that node's gates (seeded from
@@ -496,7 +495,7 @@ namespace DeNelle.Village
             // armorer, market, jeweler) is a TALK target first: Talk fires the vendor DIALOGUE
             // (Buy/Sell/Leave + quest options), per owner 2026-06-21. Its upgrade, if any, is reached
             // through the dedicated HUD context/Upgrade button — never by stealing the Talk press.
-            if (IsUpgradableId(_structureId) && !IsShoppableId(_structureId))
+            if (LastInteractRoute == "upgrade-panel")
             {
                 if (PanelRouter.Open(PanelId.BuildingUpgrade, _structureId))
                     FlowTrace.Step("Village", $"CastleNpc '{_label}' -> MVVM Building Upgrade (focus='{_structureId}').");
@@ -526,6 +525,14 @@ namespace DeNelle.Village
         private static bool IsShoppableId(string id) =>
             !string.IsNullOrEmpty(id) &&
             BuildingCatalog.Find(id)?.IsShoppable == true;
+
+        // SHARED routing decision — the SINGLE source of truth for Interact()'s branch AND the headless
+        // oracle (AssertVendorTalkRoute), so the test can never drift from the real route. PURE, no side
+        // effects: an upgrade-ONLY building (upgradable, not shoppable) goes straight to the upgrade
+        // panel; everything else (incl. a SHOPPABLE+upgradable forge/armorer) opens the Talk dialogue
+        // (Buy/Sell/Leave), per owner 2026-06-21. Verifiable headless WITHOUT rendering the surface.
+        public static string ResolveRoute(string structureId) =>
+            (IsUpgradableId(structureId) && !IsShoppableId(structureId)) ? "upgrade-panel" : "talk-dialogue";
 
         private void ResolveHero()
         {

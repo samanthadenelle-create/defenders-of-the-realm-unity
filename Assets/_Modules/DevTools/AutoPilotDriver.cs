@@ -763,14 +763,12 @@ namespace DeNelle.DevTools
                 yield break;
             }
 
-            var mInteract = typeof(CastleNpcInteractable).GetMethod(
-                "Interact", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             var fId = typeof(CastleNpcInteractable).GetField(
                 "_structureId", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            if (mInteract == null || fId == null)
+            if (fId == null)
             {
-                _lastDetail = "reflection failed (Interact/_structureId not found)";
-                FlowTrace.Fail("Auto", "AssertVendorTalkRoute: could not reflect Interact()/_structureId on CastleNpcInteractable.");
+                _lastDetail = "reflection failed (_structureId not found)";
+                FlowTrace.Fail("Auto", "AssertVendorTalkRoute: could not reflect _structureId on CastleNpcInteractable.");
                 yield break;
             }
 
@@ -784,36 +782,26 @@ namespace DeNelle.DevTools
                 bool shoppable = false;
                 try { var def = BuildingCatalog.Find(id); shoppable = def != null && def.IsShoppable; } catch { }
 
-                // Clean slate + clear the route seam so we read THIS invoke's decision (not a stale one).
-                try { DialogueService.Stop(); } catch { }
-                try { PanelManager.CloseOpen(); } catch { }
-                CastleNpcInteractable.LastInteractRoute = null;
-                CastleNpcInteractable.LastInteractId = null;
-                yield return null;
-
-                // Drive the REAL routing — the exact private path the HUD Talk button fires.
-                bool threw = false;
-                try { mInteract.Invoke(v, null); }
-                catch (Exception ex) { threw = true; FlowTrace.Fail("Auto", $"AssertVendorTalkRoute: Interact() threw for '{id}' — {ex.Message}"); }
-                yield return null;
-
-                // The DECISION is the headless-observable truth — the opened SURFACE is not (the Yarn
-                // dialogue + the UITK upgrade panel are both invisible in -nographics, so IsRunning /
-                // openPanel can't distinguish the routes). Read the route Interact() recorded.
-                string route = CastleNpcInteractable.LastInteractRoute;
-                bool running = false; try { running = DialogueService.IsRunning; } catch { }
+                // Verify the routing DECISION via the SAME shared method Interact() uses — PURE, no
+                // side effects. (Invoking the full Interact() would host a Yarn dialogue whose teardown
+                // Stop() races the known No-node bug, polluting the break-log every cycle — the RUN-1
+                // harness-integrity trap. ResolveRoute is the single source of truth, so asserting it
+                // cannot drift from the real branch, and the opened SURFACE is headless-invisible anyway.)
+                string route = null;
+                try { route = CastleNpcInteractable.ResolveRoute(id); }
+                catch (Exception ex) { FlowTrace.Fail("Auto", $"AssertVendorTalkRoute: ResolveRoute('{id}') threw — {ex.Message}"); }
 
                 checkedCount++;
                 if (shoppable)
                 {
                     shoppableChecked++;
                     if (route == "talk-dialogue")
-                        FlowTrace.Step("Auto", $"AssertVendorTalkRoute: '{id}' shoppable -> route='talk-dialogue' (FIX OK; IsRunning={running}).");
+                        FlowTrace.Step("Auto", $"AssertVendorTalkRoute: '{id}' shoppable -> route='talk-dialogue' (FIX OK).");
                     else
                     {
                         violations++;
-                        FlowTrace.Fail("Auto", $"TALK-ROUTE VIOLATION: shoppable vendor '{id}' routed to '{route ?? "<none>"}' on Talk " +
-                            $"(expected 'talk-dialogue', threw={threw}) — the upgrade short-circuit is stealing Talk.");
+                        FlowTrace.Fail("Auto", $"TALK-ROUTE VIOLATION: shoppable vendor '{id}' resolves to '{route ?? "<none>"}' " +
+                            "(expected 'talk-dialogue') — the upgrade short-circuit is stealing Talk.");
                     }
                 }
                 else
@@ -821,10 +809,7 @@ namespace DeNelle.DevTools
                     FlowTrace.Step("Auto", $"AssertVendorTalkRoute: '{id}' not-shoppable -> route='{route ?? "<none>"}' (informational).");
                 }
 
-                // Teardown so the next vendor starts clean.
-                try { DialogueService.Stop(); } catch { }
-                try { PanelManager.CloseOpen(); } catch { }
-                yield return Wait(SettleSeconds);
+                yield return null;
             }
 
             _lastDetail = $"{checkedCount} castle vendors ({shoppableChecked} shoppable), {violations} talk-route violation(s)";
