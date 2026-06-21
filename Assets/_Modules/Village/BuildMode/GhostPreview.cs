@@ -63,10 +63,26 @@ namespace DeNelle.Village
                 ? Mathf.Max(1f, entry.repo.placement.footprint)
                 : 3f;
 
+            // WYSIWYG SCALE (TKT-12): match StructureFactory.Create's fit EXACTLY, or the ghost and the
+            // PLACED object end up different sizes. The placed path uses FitHeight when the entry sets a
+            // visualHeight (DEF-208 tall-structure fix) and FitLargest(footprint) otherwise — so the ghost
+            // must do the SAME, not always FitLargest. Mirrors StructureFactory.cs:79-94. (`fit` stays
+            // method-scoped — the pack-missing fallback disc below also uses it.)
+            SkinOptions opts;
+            float visualHeight = entry.repo != null ? entry.repo.visualHeight : 0f;
+            if (visualHeight > 0f)
+            {
+                opts = SkinOptions.Structure(0f);
+                opts.FitHeight = visualHeight;
+            }
+            else
+            {
+                opts = SkinOptions.Structure(fit);
+            }
+
             GameObject skinned = null;
             if (!string.IsNullOrEmpty(entry.visualPrefabPath))
-                skinned = VisualFactory.Skin(_visual.transform, entry.visualPrefabPath,
-                    SkinOptions.Structure(fit));
+                skinned = VisualFactory.Skin(_visual.transform, entry.visualPrefabPath, opts);
 
             // WYSIWYG — apply the entry's human-verified upright correction to the skinned
             // model the SAME way StructureFactory.Create does (StructureFactory.cs:90-98),

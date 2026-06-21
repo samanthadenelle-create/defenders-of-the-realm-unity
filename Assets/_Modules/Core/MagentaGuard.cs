@@ -41,6 +41,22 @@ namespace DeNelle.Core
     {
         private static Shader _lit;
         private static bool _hooked;
+        private static readonly HashSet<string> _floorSeen = new HashSet<string>();
+
+        // A large, flat, ground-like renderer (by name or by footprint) — the candidates for a
+        // "pink floor". Used only to NAME them in the diagnostic, never to auto-mutate (a terrain
+        // shader is valid; we fix the named cause, not blindly swap the floor).
+        private static bool IsGroundLike(Renderer r)
+        {
+            if (r == null) return false;
+            string n = r.name.ToLowerInvariant();
+            if (n.Contains("floor") || n.Contains("ground") || n.Contains("terrain") ||
+                n.Contains("plaza") || n.Contains("courtyard")) return true;
+            string mesh = MeshName(r).ToLowerInvariant();
+            if (mesh.Contains("floor") || mesh.Contains("ground") || mesh.Contains("plane")) return true;
+            var b = r.bounds; // big footprint, thin in Y = a floor slab
+            return b.size.x > 8f && b.size.z > 8f && b.size.y < 2f;
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Init()
@@ -75,6 +91,24 @@ namespace DeNelle.Core
                     if (r == null) continue;
                     var mats = r.sharedMaterials;
                     if (mats == null) continue;
+
+                    // FLOOR/GROUND DIAGNOSTIC (owner "still a pink floor", TKT-1): NAME any large
+                    // ground-like renderer + its shader/material/texture/colour even if its shader is
+                    // NOT "broken" by the predicate below — so a capture identifies a pink floor this
+                    // guard didn't recover (a valid-named shader with a missing texture, a terrain, or
+                    // a genuinely magenta-tinted material). Once per renderer name. Fix follows the data.
+                    if (IsGroundLike(r) && _floorSeen.Add(r.name))
+                    {
+                        var fm = mats.Length > 0 ? mats[0] : null;
+                        string fsh = fm != null && fm.shader != null ? fm.shader.name : "<null>";
+                        bool hasTex = fm != null && ((fm.HasProperty("_BaseMap") && fm.GetTexture("_BaseMap") != null)
+                                                  || (fm.HasProperty("_MainTex") && fm.mainTexture != null));
+                        Color bc = fm != null && fm.HasProperty("_BaseColor") ? fm.GetColor("_BaseColor")
+                                 : (fm != null && fm.HasProperty("_Color") ? fm.color : Color.white);
+                        FlowTrace.Fail("MagentaGuard",
+                            $"FLOOR-DIAG '{HierarchyPath(r.transform)}' (scene '{r.gameObject.scene.name}') mesh='{MeshName(r)}' " +
+                            $"material '{(fm != null ? fm.name : "<null>")}' shader '{fsh}' hasBaseTex={hasTex} baseColor={bc} — pink-floor diagnostic.");
+                    }
 
                     // First broken material on this renderer (and its dead shader name for the log).
                     Material brokenMat = null;

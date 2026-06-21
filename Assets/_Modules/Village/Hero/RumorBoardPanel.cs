@@ -100,18 +100,45 @@ namespace DeNelle.Village.Hero
             CreateBigButton(panel.transform, "Close", new Vector2(0.5f, 0.94f), Close,
                 new Color(ElarionUi.Danger.r, ElarionUi.Danger.g, ElarionUi.Danger.b, 0.55f));
 
-            // Scroll-free content area (rows laid out top-down by anchor math).
-            // Construct WITH a RectTransform: unlike the Image/Button/TMP children (which auto-add
-            // one), a bare GameObject has only a Transform — so GetComponent<RectTransform>() below
-            // was null and the anchor set NRE'd on every open (PROVEN: RumorBoardPanel.cs:107 throw
-            // captured by the full-stack fleet). Masked until the TMP-font NRE above it was fixed.
-            _contentRoot = new GameObject("Content", typeof(RectTransform));
-            _contentRoot.transform.SetParent(panel.transform, false);
+            // SCROLLABLE content area (TKT-3): the board overflowed because rows were placed by
+            // normalized anchor math with no clipping/scroll. Now a uGUI ScrollRect — Viewport
+            // (RectMask2D clips to the panel) + a vertically-laid-out Content (VerticalLayoutGroup +
+            // ContentSizeFitter) that GROWS with the rows and scrolls when it exceeds the viewport.
+            // Mirrors ShopPanel's scroll pattern.
+            var viewportGo = new GameObject("Viewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
+            viewportGo.transform.SetParent(panel.transform, false);
+            var vpr = viewportGo.GetComponent<RectTransform>();
+            vpr.anchorMin = new Vector2(0.03f, 0.08f);
+            vpr.anchorMax = new Vector2(0.97f, 0.87f);
+            vpr.offsetMin = Vector2.zero;
+            vpr.offsetMax = Vector2.zero;
+            viewportGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f); // near-invisible catcher so drags scroll
+
+            // Content: top-stretch so it grows DOWNWARD as rows are added; sized by ContentSizeFitter.
+            _contentRoot = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            _contentRoot.transform.SetParent(viewportGo.transform, false);
             var cr = _contentRoot.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0.03f, 0.08f);
-            cr.anchorMax = new Vector2(0.97f, 0.87f);
+            cr.anchorMin = new Vector2(0f, 1f);
+            cr.anchorMax = new Vector2(1f, 1f);
+            cr.pivot     = new Vector2(0.5f, 1f);
             cr.offsetMin = Vector2.zero;
             cr.offsetMax = Vector2.zero;
+            var vlg = _contentRoot.GetComponent<VerticalLayoutGroup>();
+            vlg.childControlWidth  = true; vlg.childForceExpandWidth  = true;
+            vlg.childControlHeight = true; vlg.childForceExpandHeight = false;
+            vlg.spacing = 10f;
+            vlg.padding = new RectOffset(6, 6, 6, 6);
+            var csf = _contentRoot.GetComponent<ContentSizeFitter>();
+            csf.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
+            csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+            var scroll = viewportGo.GetComponent<ScrollRect>();
+            scroll.viewport = vpr;
+            scroll.content  = cr;
+            scroll.horizontal = false;
+            scroll.vertical   = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 25f;
 
             // Status line
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
@@ -188,52 +215,40 @@ namespace DeNelle.Village.Hero
                 }
             }
 
-            float y = 0.98f;
-
-            CreateSectionLabel(_contentRoot.transform, "— In Progress —", ref y);
+            CreateSectionLabel(_contentRoot.transform, "— In Progress —");
             if (active.Count == 0)
-                CreateFlavorRow(_contentRoot.transform, "Nothing underway. Pick up a thread below.", ref y);
+                CreateFlavorRow(_contentRoot.transform, "Nothing underway. Pick up a thread below.");
             foreach (var def in active)
-                CreateActiveRow(_contentRoot.transform, def, svc, ref y);
+                CreateActiveRow(_contentRoot.transform, def, svc);
 
-            y -= 0.02f;
-            CreateSectionLabel(_contentRoot.transform, "— Rumors & Requests —", ref y);
+            CreateSectionLabel(_contentRoot.transform, "— Rumors & Requests —");
             if (available.Count == 0)
-                CreateFlavorRow(_contentRoot.transform, "You've answered every call. For now.", ref y);
+                CreateFlavorRow(_contentRoot.transform, "You've answered every call. For now.");
             foreach (var def in available)
-                CreateAvailableRow(_contentRoot.transform, def, ref y);
+                CreateAvailableRow(_contentRoot.transform, def);
         }
 
         // ── Row builders ─────────────────────────────────────────────────────────
 
-        private void CreateSectionLabel(Transform parent, string txt, ref float y)
+        private void CreateSectionLabel(Transform parent, string txt)
         {
-            var go = new GameObject("Section", typeof(TMPro.TextMeshProUGUI));
+            var go = new GameObject("Section", typeof(TMPro.TextMeshProUGUI), typeof(LayoutElement));
             go.transform.SetParent(parent, false);
-            var r = go.GetComponent<RectTransform>();
-            r.anchorMin = new Vector2(0.0f, y - 0.05f);
-            r.anchorMax = new Vector2(1.0f, y);
-            r.offsetMin = Vector2.zero;
-            r.offsetMax = Vector2.zero;
+            go.GetComponent<LayoutElement>().preferredHeight = 46f;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
             ElarionUiKit.EnsureFont(t);
             t.text = txt;
             t.fontSize = 16;
             t.fontStyle = TMPro.FontStyles.Bold;
             t.color = ElarionUi.Gilt;
-            t.alignment = TMPro.TextAlignmentOptions.Left;
-            y -= 0.06f;
+            t.alignment = TMPro.TextAlignmentOptions.BottomLeft;
         }
 
-        private void CreateFlavorRow(Transform parent, string txt, ref float y)
+        private void CreateFlavorRow(Transform parent, string txt)
         {
-            var go = new GameObject("Flavor", typeof(TMPro.TextMeshProUGUI));
+            var go = new GameObject("Flavor", typeof(TMPro.TextMeshProUGUI), typeof(LayoutElement));
             go.transform.SetParent(parent, false);
-            var r = go.GetComponent<RectTransform>();
-            r.anchorMin = new Vector2(0.02f, y - 0.05f);
-            r.anchorMax = new Vector2(0.98f, y);
-            r.offsetMin = Vector2.zero;
-            r.offsetMax = Vector2.zero;
+            go.GetComponent<LayoutElement>().preferredHeight = 40f;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
             ElarionUiKit.EnsureFont(t);
             t.text = txt;
@@ -241,13 +256,12 @@ namespace DeNelle.Village.Hero
             t.fontStyle = TMPro.FontStyles.Italic;
             t.color = ElarionUi.ParchmentDim;
             t.alignment = TMPro.TextAlignmentOptions.Left;
-            y -= 0.055f;
         }
 
-        private void CreateActiveRow(Transform parent, QuestDef def, QuestService svc, ref float y)
+        private void CreateActiveRow(Transform parent, QuestDef def, QuestService svc)
         {
-            var row = MakeRowFrame(parent, "Active_" + def.Id, ref y,
-                new Color(ElarionUi.PanelStone.r, ElarionUi.PanelStone.g, ElarionUi.PanelStone.b, 0.85f), 0.11f);
+            var row = MakeRowFrame(parent, "Active_" + def.Id,
+                new Color(ElarionUi.PanelStone.r, ElarionUi.PanelStone.g, ElarionUi.PanelStone.b, 0.85f), 150f);
 
             CreateTitle(row.transform, def.Title ?? def.Id);
 
@@ -285,10 +299,10 @@ namespace DeNelle.Village.Hero
             tlt.alignment = TMPro.TextAlignmentOptions.Center;
         }
 
-        private void CreateAvailableRow(Transform parent, QuestDef def, ref float y)
+        private void CreateAvailableRow(Transform parent, QuestDef def)
         {
-            var row = MakeRowFrame(parent, "Avail_" + def.Id, ref y,
-                new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.85f), 0.13f);
+            var row = MakeRowFrame(parent, "Avail_" + def.Id,
+                new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.85f), 170f);
 
             CreateTitle(row.transform, def.Title ?? def.Id);
 
@@ -324,19 +338,15 @@ namespace DeNelle.Village.Hero
             blt.alignment = TMPro.TextAlignmentOptions.Center;
         }
 
-        // Shared row frame: an Image strip that consumes `height` of normalized Y
-        // starting at the current cursor, advancing `y` past it.
-        private GameObject MakeRowFrame(Transform parent, string name, ref float y, Color bg, float height)
+        // Shared row frame: an Image strip with a FIXED PIXEL height. The Content's
+        // VerticalLayoutGroup stacks it under the previous row; ContentSizeFitter + the ScrollRect
+        // handle overflow (scrollable). Internal children still anchor 0–1 within this row.
+        private GameObject MakeRowFrame(Transform parent, string name, Color bg, float heightPx)
         {
-            var row = new GameObject(name, typeof(Image));
+            var row = new GameObject(name, typeof(Image), typeof(LayoutElement));
             row.transform.SetParent(parent, false);
-            var rr = row.GetComponent<RectTransform>();
-            rr.anchorMin = new Vector2(0.0f, y - height);
-            rr.anchorMax = new Vector2(1.0f, y - 0.01f);
-            rr.offsetMin = Vector2.zero;
-            rr.offsetMax = Vector2.zero;
+            row.GetComponent<LayoutElement>().preferredHeight = heightPx;
             row.GetComponent<Image>().color = bg;
-            y -= (height + 0.01f);
             return row;
         }
 

@@ -232,12 +232,25 @@ namespace DeNelle.Village
             }
         }
 
+        // TKT-8: the scene's hero-start marker (raid/Village2 scenes seat the entry away from the hub
+        // spot). Returns the marker position (capsule centre) or null so the caller keeps its hub fallback.
+        private static Vector3? FindSpawnMarkerPosition()
+        {
+            var marker = GameObject.Find("HeroStartPoint_PlayerSpawn");
+            if (marker == null) marker = GameObject.Find("HeroStartPoint_InsidePersonalQuarters");
+            if (marker == null) return null;
+            return marker.transform.position + Vector3.up * 0.9f;
+        }
+
         private void SpawnEmergencyHero()
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             go.name = "Hero (Blaise)";                       // so camera / NPCs find it by name
             go.tag = "Player";                               // WO-450: canonical hero tag for all consumers
-            go.transform.position = new Vector3(6f, 1f, 4f); // BuildHero's spawn (capsule centre at y=1)
+            // TKT-8: seat at the scene's hero-start marker when present (Village2 / raid scenes put the
+            // entry point elsewhere — the old hardcoded (6,1,4) put the hero off-map there). Falls back
+            // to MainCastle_Hall's (6,1,4) so the hub is unchanged.
+            go.transform.position = FindSpawnMarkerPosition() ?? new Vector3(6f, 1f, 4f);
 
             // Drop the primitive collider so HeroLocomotion's CapsuleCast can't
             // self-block (it sweeps against OTHER colliders for walls).
