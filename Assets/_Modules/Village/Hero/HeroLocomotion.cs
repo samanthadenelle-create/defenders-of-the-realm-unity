@@ -138,7 +138,15 @@ namespace DeNelle.Village
         {
             _isTeleporting = true;   // clamp/movement skips this frame
 
-            if (NavMesh.SamplePosition(worldPos, out NavMeshHit hit, 5f, NavMesh.AllAreas))
+            // §12 ticket #2: prove ground-side vs hero-side at the garrison warp. A MISS (or a large
+            // sample distance) means the destination navmesh isn't online yet / isn't there — the agent
+            // lands off-mesh and (no physics collider) falls through. Captured to break-log.
+            bool sampled = NavMesh.SamplePosition(worldPos, out NavMeshHit hit, 5f, NavMesh.AllAreas);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Seam",
+                sampled
+                    ? $"WarpTo sample HIT @ {hit.position} dist={Vector3.Distance(worldPos, hit.position):F2} (req {worldPos}) scene='{gameObject.scene.name}'"
+                    : $"WarpTo sample MISS for {worldPos} (no navmesh within 5m) scene='{gameObject.scene.name}' — hero will land OFF-MESH.");
+            if (sampled)
                 worldPos = hit.position;   // land on valid mesh
 
             if (_agent != null)
@@ -148,6 +156,8 @@ namespace DeNelle.Village
                 _agent.Warp(worldPos);             // re-acquires the destination NavMesh
                 _agent.enabled = true;
                 _agent.ResetPath();
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Seam",
+                    $"WarpTo post-warp: agent.isOnNavMesh={_agent.isOnNavMesh} @ {transform.position}");
             }
             else
             {

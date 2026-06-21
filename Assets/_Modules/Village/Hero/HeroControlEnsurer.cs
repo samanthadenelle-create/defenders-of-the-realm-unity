@@ -244,6 +244,12 @@ namespace DeNelle.Village
 
         private void SpawnEmergencyHero()
         {
+            // §12 ticket #2: the purple emergency pill (no collider, falls through ground) IS this object.
+            // Fail-log WHICH scene loses the carried hero so we know if the garrison warp drops it (vs the
+            // pill being the normal arrival). If this fires in a Garrison_* scene, the carry/warp is the bug.
+            DeNelle.Core.Diagnostics.FlowTrace.Fail("Hero",
+                $"EMERGENCY pill spawned in scene '{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}' — carried hero not found.");
+
             var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             go.name = "Hero (Blaise)";                       // so camera / NPCs find it by name
             go.tag = "Player";                               // WO-450: canonical hero tag for all consumers

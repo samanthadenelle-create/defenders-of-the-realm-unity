@@ -152,6 +152,13 @@ namespace DeNelle.Village
                 // rest at the root's Y. Null-safe — no renderers → skip. Applies to every model
                 // (the offset is ~0 for already-grounded rigs) so no spawner can ship a buried body.
                 ReGroundVisual(go.transform, vis);
+
+                // §12 ticket #2 (troll y+90): prove orientation by DATA before any rotation edit. A worldUp
+                // far from (0,1,0) means the rig is tipped (the Troll Euler(-90,-90,0) pitch is the suspect).
+                // Captured headless; if worldUp ~= (0,1,0) the "mis-rotated" report is stale and NO edit is warranted.
+                if (vis != null)
+                    FlowTrace.Step("Enemy",
+                        $"'{model}' visual localEuler={vis.transform.localEulerAngles} worldUp={vis.transform.up} (upright iff worldUp~=(0,1,0))");
             }
             else
             {
