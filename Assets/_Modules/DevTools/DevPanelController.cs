@@ -73,8 +73,9 @@ namespace DeNelle.DevTools
         [SerializeField] private UIDocument _document;
 
         [Header("Hotkey")]
-        [Tooltip("Key that toggles the dev console open / closed. Default F1.")]
-        [SerializeField] private KeyCode _toggleKey = KeyCode.F1;
+        [Tooltip("Key that toggles the dev console open / closed. Default F10 — obscure on purpose so a " +
+                 "tester won't stumble onto the dev tools; the visible DEV corner chip is hidden too.")]
+        [SerializeField] private KeyCode _toggleKey = KeyCode.F10;
 
         [Tooltip("Open the panel automatically when the scene starts.")]
         [SerializeField] private bool _openOnStart;
@@ -276,9 +277,15 @@ namespace DeNelle.DevTools
             _root.style.flexGrow = 1f;
             _root.pickingMode = PickingMode.Ignore;   // never eat gameplay input
 
-            // Always-visible corner chip — toggles the console (touch-friendly).
-            _cornerTap = new Label("DEV") { name = CornerTapName };
+            // INVISIBLE corner TAP-ZONE (mobile has no F-keys, so the dev tools need a touch entry that
+            // a tester won't stumble onto). No "DEV" label, fully transparent — it opens the console ONLY
+            // on FIVE rapid taps (OnCornerTapped), the classic hidden-dev-menu gesture. A stray single
+            // tap does nothing.
+            _cornerTap = new Label("") { name = CornerTapName };
             StyleCornerChip(_cornerTap);
+            _cornerTap.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0f)); // invisible
+            _cornerTap.style.borderTopWidth = 0; _cornerTap.style.borderBottomWidth = 0;
+            _cornerTap.style.borderLeftWidth = 0; _cornerTap.style.borderRightWidth = 0;
             _cornerTap.RegisterCallback<ClickEvent>(OnCornerTapped);
             _root.Add(_cornerTap);
 
@@ -326,10 +333,23 @@ namespace DeNelle.DevTools
             _bound = true;
         }
 
+        // Hidden-gesture entry (mobile-safe): the dev console opens ONLY on FIVE rapid taps in the
+        // invisible corner zone, so a tester won't stumble onto it with a stray tap. The streak resets
+        // when the gap between taps exceeds the window. (F10 also toggles it, for desktop QA.)
+        private float _lastTapTime;
+        private int _tapStreak;
+        private const float TapWindowSec = 2.0f;
+        private const int TapsToReveal = 5;
+
         private void OnCornerTapped(ClickEvent _)
         {
-            FlowTrace.Step("UI", "DevPanel toggle/click reached (corner DEV chip tapped)");
-            SetOpen(!_isOpen);
+            float now = Time.unscaledTime;
+            _tapStreak = (now - _lastTapTime <= TapWindowSec) ? _tapStreak + 1 : 1;
+            _lastTapTime = now;
+            if (_tapStreak < TapsToReveal) return;   // not enough rapid taps yet — stay hidden
+            _tapStreak = 0;
+            FlowTrace.Step("UI", $"DevPanel revealed via {TapsToReveal}-tap corner gesture.");
+            SetOpen(true);
         }
 
         /// <summary>Opens / closes the panel window.</summary>
