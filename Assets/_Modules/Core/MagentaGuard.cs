@@ -170,28 +170,66 @@ namespace DeNelle.Core
                 // Recover it here. GUARDED: only acts when the terrain's shader is genuinely broken, so if the
                 // pink is from something else (lighting), this is a safe no-op. SOURCE fix is to pin
                 // "Universal Render Pipeline/Terrain/Lit" in the build (ExteriorTerrainBuilder.EnsureTerrainShaderIncluded).
+                // ── FLOOR-DIAG (owner F8 2026-06-21 "still pink, PERSISTENT") ─────────────────
+                // The narrow shader-broken fix didn't resolve it, so DUMP the full ground state on
+                // every hub/OuterWorld load — the next F8 names the exact pink surface + cause. All
+                // [Flow:FloorDiag] Fail lines land in break-log.jsonl. REMOVE once root-caused.
+                // Causes this distinguishes: (a) terrain shader stripped (-> InternalError), (b) terrain
+                // LAYER missing its diffuse texture (magenta even with a valid shader — the modified
+                // Exterior_*.terrainlayer are suspects), (c) null terrain material, (d) a violet/tinted
+                // scene light making a white floor read lavender, (e) the visible floor is a Renderer not
+                // the Terrain. Keeps the broken-shader auto-recovery.
                 int terrainFixed = 0;
+                if (_terrainLit == null) _terrainLit = Shader.Find("Universal Render Pipeline/Terrain/Lit");
                 var terrains = Object.FindObjectsByType<Terrain>(FindObjectsSortMode.None);
-                if (terrains != null && terrains.Length > 0)
+                FlowTrace.Fail("FloorDiag", $"sweep '{sceneName}': {(terrains != null ? terrains.Length : 0)} Terrain(s); URP-Terrain-Lit-found={_terrainLit != null}.");
+                if (terrains != null)
                 {
-                    if (_terrainLit == null) _terrainLit = Shader.Find("Universal Render Pipeline/Terrain/Lit");
                     foreach (var t in terrains)
                     {
                         if (t == null) continue;
                         var tm = t.materialTemplate;
-                        if (tm == null || !IsBrokenShader(tm.shader)) continue;   // valid terrain shader -> leave alone
-                        string dead = tm.shader != null ? tm.shader.name : "<null>";
-                        if (_terrainLit == null)
+                        string sh = (tm != null && tm.shader != null) ? tm.shader.name : "<null-mat-or-shader>";
+                        string layers = "<no terrainData>";
+                        var td = t.terrainData;
+                        if (td != null && td.terrainLayers != null)
                         {
-                            FlowTrace.Warn("MagentaGuard", $"terrain '{t.name}' broken-shader '{dead}' but URP Terrain/Lit not found — cannot recover.");
-                            continue;
+                            var lb = new System.Text.StringBuilder();
+                            for (int li = 0; li < td.terrainLayers.Length; li++)
+                            {
+                                var L = td.terrainLayers[li];
+                                string dt = (L != null && L.diffuseTexture != null) ? L.diffuseTexture.name : "<NULL-DIFFUSE>";
+                                lb.Append("[" + li + "]" + (L != null ? L.name : "<null>") + ":" + dt + " ");
+                            }
+                            layers = td.terrainLayers.Length + " layer(s): " + lb;
                         }
-                        tm.shader = _terrainLit;
-                        terrainFixed++;
-                        FlowTrace.Fail("MagentaGuard",
-                            $"recovered MAGENTA TERRAIN '{t.name}' (scene '{t.gameObject.scene.name}') dead-shader '{dead}' -> URP Terrain/Lit " +
-                            "(pink floor killed at runtime; pin the terrain shader in the build to fix at source).");
+                        FlowTrace.Fail("FloorDiag",
+                            "TERRAIN '" + t.name + "' scene='" + t.gameObject.scene.name + "' pos=" + t.transform.position +
+                            " mat='" + (tm != null ? tm.name : "<NULL>") + "' shader='" + sh + "' broken=" + (tm != null && IsBrokenShader(tm.shader)) + " " + layers);
+                        if (tm != null && IsBrokenShader(tm.shader) && _terrainLit != null)
+                        {
+                            tm.shader = _terrainLit; terrainFixed++;
+                            FlowTrace.Fail("FloorDiag", "-> recovered TERRAIN '" + t.name + "' broken shader -> URP Terrain/Lit.");
+                        }
                     }
+                }
+                // Scene lighting — a violet/tinted ambient or sun makes a plain floor read lavender.
+                var sun = RenderSettings.sun;
+                FlowTrace.Fail("FloorDiag",
+                    "LIGHTING scene='" + sceneName + "' ambientMode=" + RenderSettings.ambientMode + " ambient=" + RenderSettings.ambientLight +
+                    " sun=" + (sun != null ? (sun.name + " color=" + sun.color + " intensity=" + sun.intensity) : "<none>"));
+                // Ground-like Renderers (in case the visible floor is a Renderer, not the Terrain).
+                int gdump = 0;
+                foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+                {
+                    if (r == null || !IsGroundLike(r) || gdump >= 12) continue;
+                    var m0 = (r.sharedMaterials != null && r.sharedMaterials.Length > 0) ? r.sharedMaterials[0] : null;
+                    string gsh = (m0 != null && m0.shader != null) ? m0.shader.name : "<null>";
+                    Color gc = (m0 != null && m0.HasProperty("_BaseColor")) ? m0.GetColor("_BaseColor")
+                             : (m0 != null && m0.HasProperty("_Color") ? m0.color : Color.clear);
+                    FlowTrace.Fail("FloorDiag", "GROUND '" + HierarchyPath(r.transform) + "' scene='" + r.gameObject.scene.name +
+                        "' shader='" + gsh + "' baseColor=" + gc + " size=" + r.bounds.size);
+                    gdump++;
                 }
 
                 if (recovered > 0 || hiddenStray > 0 || terrainFixed > 0)

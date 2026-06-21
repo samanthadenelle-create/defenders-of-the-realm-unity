@@ -123,14 +123,18 @@ namespace DeNelle.Village
         {
             using var _ = FlowTrace.Enter("Village", "BarracksNpcInjector.SpawnDrillmaster");
 
-            // Stand in front of the building (its forward points toward castle centre /
-            // the plaza where the hero approaches). Snap onto the navmesh if it's near.
-            Vector3 pos = barracks.position + barracks.forward * FrontOffset;
+            // CENTER-FACING PLACEMENT (owner 2026-06-21): stand the drillmaster on the barracks' side
+            // FACING THE HEART (the tree at castle centre), so it's always between the barracks and the
+            // tree ("easier to find"). Was placed along barracks.forward, which didn't point at the tree —
+            // that's why the barracks NPC read as "missing". Mirrors CastleVendorNpcInjector.
+            Vector3 center = HeartCenter();
+            Vector3 toHeart = new Vector3(center.x - barracks.position.x, 0f, center.z - barracks.position.z);
+            toHeart = toHeart.sqrMagnitude < 0.01f ? barracks.forward : toHeart.normalized;
+            Vector3 pos = barracks.position + toHeart * FrontOffset;
             if (NavMesh.SamplePosition(pos, out var hit, 6f, NavMesh.AllAreas))
                 pos = hit.position;
-
-            // Face back toward the building front / approaching hero.
-            Quaternion rot = Quaternion.LookRotation(-barracks.forward, Vector3.up);
+            // Face the Heart / approaching hero.
+            Quaternion rot = Quaternion.LookRotation(toHeart, Vector3.up);
 
             var prefab = Resources.Load<GameObject>(BodyDrillmaster)
                          ?? Resources.Load<GameObject>(BodyFallback);
@@ -266,6 +270,14 @@ namespace DeNelle.Village
                 var bubbleRoot = go.transform.Find("BubbleRoot");
                 if (bubbleRoot != null) bubbleRoot.localScale = Vector3.one / Mathf.Max(0.01f, npcScale);
             }
+        }
+
+        // The castle centre to face the drillmaster toward — the Heart (world-tree). Runtime-found;
+        // CastleHubBuilder places it at (0,0,12), the fallback if the controller isn't up yet.
+        private static Vector3 HeartCenter()
+        {
+            var h = FindFirstObjectByType<HeartController>();
+            return h != null ? h.transform.position : new Vector3(0f, 0f, 12f);
         }
 
         private static Transform ResolveHero()

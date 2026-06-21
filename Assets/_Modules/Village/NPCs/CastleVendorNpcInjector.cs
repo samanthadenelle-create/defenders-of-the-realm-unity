@@ -190,6 +190,14 @@ namespace DeNelle.Village
         }
 
         /// <summary>Spawns ONE static NPC at the marker and attaches the interaction.</summary>
+        // The castle centre to face NPCs toward — the Heart (world-tree). Runtime-found; CastleHubBuilder
+        // places it at (0,0,12), the fallback used if the controller isn't up yet.
+        private static Vector3 HeartCenter()
+        {
+            var h = FindFirstObjectByType<HeartController>();
+            return h != null ? h.transform.position : new Vector3(0f, 0f, 12f);
+        }
+
         private bool SpawnVendor(Transform marker, string role, Transform hero, Transform parent)
         {
             using var _ = FlowTrace.Enter("Village", $"CastleVendorNpcInjector.SpawnVendor role='{role}'");
@@ -207,15 +215,22 @@ namespace DeNelle.Village
                 return SpawnPlaceholder(marker, role, v, hero, parent);
             }
 
-            // Snap the marker world position onto the baked NavMesh if it's cheap/near, so
-            // the body stands on walkable ground (it never moves, so this is just placement).
-            Vector3 pos = marker.position;
+            // CENTER-FACING PLACEMENT (owner 2026-06-21): put every vendor on the building's side
+            // FACING THE HEART (the tree at castle centre), at the marker's tuned distance — so NPCs are
+            // always BETWEEN their building and the tree, never behind/beside it ("easier to find").
+            // Preserves the hand-baked front-offset DISTANCE; only redirects WHICH side it sits on.
+            Vector3 buildingPos = marker.parent != null ? marker.parent.position : marker.position;
+            Vector3 flatBuild = new Vector3(buildingPos.x, 0f, buildingPos.z);
+            float frontDist = Vector3.Distance(flatBuild, new Vector3(marker.position.x, 0f, marker.position.z));
+            if (frontDist < 1f) frontDist = 5f;   // marker sits at the building -> default front distance
+            Vector3 center = HeartCenter();
+            Vector3 toHeart = new Vector3(center.x - buildingPos.x, 0f, center.z - buildingPos.z);
+            toHeart = toHeart.sqrMagnitude < 0.01f ? Vector3.forward : toHeart.normalized;
+            Vector3 pos = flatBuild + toHeart * frontDist;
             if (NavMesh.SamplePosition(pos, out var hit, 4f, NavMesh.AllAreas))
                 pos = hit.position;
-
-            // Face OUTWARD — toward the courtyard / approaching hero. The marker's forward
-            // (+Z local of the building front offset) already points away from the building.
-            Quaternion rot = marker.rotation;
+            // Face the Heart / approaching hero (the hero comes from the centre).
+            Quaternion rot = Quaternion.LookRotation(toHeart, Vector3.up);
 
             GameObject go = null;
             Guard.Try("Village", $"instantiate vendor body role='{role}'", () =>
