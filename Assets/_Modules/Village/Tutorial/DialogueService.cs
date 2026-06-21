@@ -340,6 +340,18 @@ namespace DeNelle.Village
                                "may be unbound, but the village still loads (WebGL crash-guard). " + ex);
             }
 
+            // DEV-TOOLS-BLOCKED-AFTER-SHOP fix (owner F8 2026-06-21, ran-from-exe): the Yarn LineAdvancer
+            // leaves its tap-to-advance "DialogueAdvance" InputAction ENABLED, and its complete-handler only
+            // unhooks callbacks — it never .Disable()s the action. A COMMAND-opened panel (OpenShop etc.)
+            // ends its dialogue via the .yarn node's built-in <<stop>> -> the runner's onDialogueComplete,
+            // which never routed through DialogueService.Stop(), so the orphaned action stayed armed and
+            // contended with the Input System UI module -> UI Toolkit pointer events (the hidden dev 5-tap
+            // gesture's ONLY input channel) stopped resolving for the rest of the session. Release the
+            // orphan on EVERY dialogue completion (one-time listener; Host() builds the runner once).
+            // Same mechanic + release routine already used on the Stop() walk-away path.
+            if (runner.onDialogueComplete != null)
+                runner.onDialogueComplete.AddListener(ReleaseOrphanedAdvanceInput);
+
             return runner;
         }
 
