@@ -174,7 +174,7 @@ namespace DeNelle.Village
             if (es != null) es.SetSelectedGameObject(null);
             // DEV-TAP-DIAG (owner F8 2026-06-21 "dev tools still blocked after shop"): did the release run,
             // find the orphaned action, and what ELSE is still enabled that could eat UITK pointer input?
-            FlowTrace.Fail("DevTapDiag", "ReleaseOrphanedAdvanceInput ran: disabled " + disabled + " DialogueAdvance action(s); " +
+            FlowTrace.Step("DevTapDiag", "ReleaseOrphanedAdvanceInput ran: disabled " + disabled + " DialogueAdvance action(s); " +
                 enabledTotal + " action(s) were enabled; EventSystem selected was '" + sel + "'. Other enabled: " + others);
         }
 

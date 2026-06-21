@@ -220,7 +220,7 @@ namespace DeNelle.Core
                 int terrainFixed = 0;
                 if (_terrainLit == null) _terrainLit = Shader.Find("Universal Render Pipeline/Terrain/Lit");
                 var terrains = Object.FindObjectsByType<Terrain>(FindObjectsSortMode.None);
-                FlowTrace.Fail("FloorDiag", $"sweep '{sceneName}': {(terrains != null ? terrains.Length : 0)} Terrain(s); URP-Terrain-Lit-found={_terrainLit != null}.");
+                FlowTrace.Step("FloorDiag", $"sweep '{sceneName}': {(terrains != null ? terrains.Length : 0)} Terrain(s); URP-Terrain-Lit-found={_terrainLit != null}.");
                 if (terrains != null)
                 {
                     foreach (var t in terrains)
@@ -241,19 +241,19 @@ namespace DeNelle.Core
                             }
                             layers = td.terrainLayers.Length + " layer(s): " + lb;
                         }
-                        FlowTrace.Fail("FloorDiag",
+                        FlowTrace.Step("FloorDiag",
                             "TERRAIN '" + t.name + "' scene='" + t.gameObject.scene.name + "' pos=" + t.transform.position +
                             " mat='" + (tm != null ? tm.name : "<NULL>") + "' shader='" + sh + "' broken=" + (tm != null && IsBrokenShader(tm.shader)) + " " + layers);
                         if (tm != null && IsBrokenShader(tm.shader) && _terrainLit != null)
                         {
                             tm.shader = _terrainLit; terrainFixed++;
-                            FlowTrace.Fail("FloorDiag", "-> recovered TERRAIN '" + t.name + "' broken shader -> URP Terrain/Lit.");
+                            FlowTrace.Warn("FloorDiag", "-> recovered TERRAIN '" + t.name + "' broken shader -> URP Terrain/Lit.");
                         }
                     }
                 }
                 // Scene lighting — a violet/tinted ambient or sun makes a plain floor read lavender.
                 var sun = RenderSettings.sun;
-                FlowTrace.Fail("FloorDiag",
+                FlowTrace.Step("FloorDiag",
                     "LIGHTING scene='" + sceneName + "' ambientMode=" + RenderSettings.ambientMode + " ambient=" + RenderSettings.ambientLight +
                     " sun=" + (sun != null ? (sun.name + " color=" + sun.color + " intensity=" + sun.intensity) : "<none>"));
                 // Ground-like Renderers (in case the visible floor is a Renderer, not the Terrain).
@@ -265,7 +265,7 @@ namespace DeNelle.Core
                     string gsh = (m0 != null && m0.shader != null) ? m0.shader.name : "<null>";
                     Color gc = (m0 != null && m0.HasProperty("_BaseColor")) ? m0.GetColor("_BaseColor")
                              : (m0 != null && m0.HasProperty("_Color") ? m0.color : Color.clear);
-                    FlowTrace.Fail("FloorDiag", "GROUND '" + HierarchyPath(r.transform) + "' scene='" + r.gameObject.scene.name +
+                    FlowTrace.Step("FloorDiag", "GROUND '" + HierarchyPath(r.transform) + "' scene='" + r.gameObject.scene.name +
                         "' shader='" + gsh + "' baseColor=" + gc + " size=" + r.bounds.size);
                     gdump++;
                 }
