@@ -471,6 +471,11 @@ namespace DeNelle.Village
         private void Interact()
         {
             if (string.IsNullOrEmpty(_structureId)) return;
+            // DATA-VERIFY (owner 2026-06-20, never inference-fix): log the routing inputs + chosen
+            // branch so a HEADLESS capture PROVES Talk reaches the Buy/Sell dialogue for shoppable
+            // vendors (forge/armorer/market/jeweler) instead of being stolen by the upgrade panel.
+            bool up = IsUpgradableId(_structureId), shop = IsShoppableId(_structureId);
+            FlowTrace.Step("Village", $"CastleNpc.Interact '{_label}' id='{_structureId}' upgradable={up} shoppable={shop} -> route={((up && !shop) ? "upgrade-panel" : "talk-dialogue")}");
             // §12 / WO-413: the castle vendor NPCs are the primary live interaction surface (the
             // home hub is MainCastle_Hall). They open the SAME parameterized StructureMenu, so the
             // shop-vs-upgrade split is decided data-driven by that node's gates (seeded from

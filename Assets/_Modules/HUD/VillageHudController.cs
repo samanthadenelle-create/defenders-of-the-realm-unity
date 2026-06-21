@@ -1404,7 +1404,11 @@ namespace DeNelle.HUD
             // Leave, plus quest options when a questline is active). Upgrade is its OWN affordance (the
             // bottom-diamond context toggle), so Talk never short-circuits to the upgrade screen.
             _talkButton = BuildIconButton(_townActionPanel, new Vector2(0.02f, 0.29f), new Vector2(0.42f, 0.71f),
-                IconTalk, "T", () => TalkRequested?.Invoke());
+                IconTalk, "T", () =>
+                {
+                    FlowTrace.Step("HUD", "Talk button tapped -> raising TalkRequested (routes to nearest vendor dialogue).");
+                    TalkRequested?.Invoke();
+                });
             // T-010/T-016 (the "black shape under the Talk icon"): Talk is the only icon button
             // that gets DISABLED (when no NPC is in range). Unity's ColorTint then paints the
             // button's targetGraphic (the seat, which carries the HudTheme.Disc sprite) with the
