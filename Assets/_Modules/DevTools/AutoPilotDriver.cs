@@ -466,7 +466,23 @@ namespace DeNelle.DevTools
             }
             if (_hero != null) _hero.ClearAutoWalk();
             if (warped)
-            { FlowTrace.Step("Auto", $"AssertHeroCrossing: CROSSED '{entry.crossingId}' — real warp jump, hero now {_hero.transform.position}."); _lastDetail = "crossing OK (warp fired)"; }
+            {
+                FlowTrace.Step("Auto", $"AssertHeroCrossing: CROSSED '{entry.crossingId}' — real warp jump, hero now {_hero.transform.position}.");
+                _lastDetail = "crossing OK (warp fired)";
+                // Post-warp internal navigation: from the landing point, can the hero PATH to the keep / chokepoint?
+                Vector3 land = _hero.transform.position;
+                foreach (var n in new[] { "Spawn_Keep", "Spawn_Chokepoint", "Spawn_Rear" })
+                {
+                    var go = GameObject.Find(n);
+                    if (go == null) continue;
+                    if (!UnityEngine.AI.NavMesh.SamplePosition(land, out var a, 4f, UnityEngine.AI.NavMesh.AllAreas)) continue;
+                    if (!UnityEngine.AI.NavMesh.SamplePosition(go.transform.position, out var b, 6f, UnityEngine.AI.NavMesh.AllAreas))
+                    { FlowTrace.Warn("Auto", $"post-warp: '{n}' has no navmesh nearby."); continue; }
+                    var p = new UnityEngine.AI.NavMeshPath();
+                    UnityEngine.AI.NavMesh.CalculatePath(a.position, b.position, UnityEngine.AI.NavMesh.AllAreas, p);
+                    FlowTrace.Step("Auto", $"post-warp inside-nav: landing -> '{n}': status={p.status} (PathComplete = walkable inside).");
+                }
+            }
             else
             { FlowTrace.Fail("Auto", $"AssertHeroCrossing: NO warp on '{entry.crossingId}' — reachedEntry={reachedEntry}, hero {(_hero != null ? _hero.transform.position.ToString() : "<null>")}. If reachedEntry=false the marker is unreachable on the hero's navmesh island."); _lastDetail = "crossing FAILED"; }
         }
