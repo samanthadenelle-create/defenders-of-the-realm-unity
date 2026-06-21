@@ -541,13 +541,26 @@ namespace DeNelle.Village
             !string.IsNullOrEmpty(id) &&
             BuildingCatalog.Find(id)?.IsShoppable == true;
 
+        // A building whose Talk opens a NON-shop interactive FUNCTION (e.g. the barracks drillmaster's troop
+        // TRAINING menu). Like a shoppable vendor, its Talk press opens that function and its upgrade is
+        // reached via the HUD context/Upgrade button — NEVER by stealing the Talk press (owner 2026-06-21:
+        // "match what we use everywhere else"). Extend this set as other "has a menu" buildings appear.
+        // Ticket #11: barracks became upgradable, which (without this) routed its NPC to the upgrade panel
+        // and made the troop-TRAINING flow unreachable through the drillmaster — this restores the vendor pattern.
+        private static readonly System.Collections.Generic.HashSet<string> TalkFunctionIds =
+            new System.Collections.Generic.HashSet<string> { "barracks" };
+        public static bool HasTalkFunctionId(string id) =>
+            !string.IsNullOrEmpty(id) && TalkFunctionIds.Contains(id);
+
         // SHARED routing decision — the SINGLE source of truth for Interact()'s branch AND the headless
         // oracle (AssertVendorTalkRoute), so the test can never drift from the real route. PURE, no side
-        // effects: an upgrade-ONLY building (upgradable, not shoppable) goes straight to the upgrade
-        // panel; everything else (incl. a SHOPPABLE+upgradable forge/armorer) opens the Talk dialogue
-        // (Buy/Sell/Leave), per owner 2026-06-21. Verifiable headless WITHOUT rendering the surface.
+        // effects: route to the upgrade panel ONLY when upgrade is the building's ONLY function (upgradable,
+        // NOT shoppable, and no other talk function); everything else — a SHOPPABLE+upgradable forge/armorer
+        // OR a TALK-FUNCTION building like the barracks — opens the Talk dialogue (its primary function).
+        // Upgrade for those is the HUD context button (owner 2026-06-21). Verifiable headless WITHOUT rendering.
         public static string ResolveRoute(string structureId) =>
-            (IsUpgradableId(structureId) && !IsShoppableId(structureId)) ? "upgrade-panel" : "talk-dialogue";
+            (IsUpgradableId(structureId) && !IsShoppableId(structureId) && !HasTalkFunctionId(structureId))
+                ? "upgrade-panel" : "talk-dialogue";
 
         private void ResolveHero()
         {

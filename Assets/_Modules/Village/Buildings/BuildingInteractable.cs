@@ -261,7 +261,11 @@ namespace DeNelle.Village
             // YarnSpinner also shrinks Yarn's fragile surface. Upgradable = city tiers
             // (BuildingTierCatalog) OR legacy resource buildings (ResourceBuildingProgression).
             // Market/shop + Talk-only buildings still route to Yarn below (Buy/Sell/Talk unchanged).
+            // Ticket #11 / owner "match everywhere else": a TALK-FUNCTION building (barracks troop training)
+            // is a Talk target first — its upgrade is the HUD context button, like a shoppable vendor. Exclude
+            // it from the upgrade short-circuit so the body-tap opens its primary function, agreeing with the NPC.
             bool isUpgradable = hookId != null &&
+                !CastleNpcInteractable.HasTalkFunctionId(hookId) &&
                 (DeNelle.Core.State.BuildingTierCatalog.IsUpgradable(hookId) ||
                  Buildings.Progression.ResourceBuildingProgression.IsResourceBuilding(hookId));
             if (isUpgradable)
