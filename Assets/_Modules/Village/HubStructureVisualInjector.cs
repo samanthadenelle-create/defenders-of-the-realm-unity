@@ -62,14 +62,14 @@ namespace DeNelle.Village
             // ALL need yawDeg=90 to face the plaza, and their embedded materials are URP-fixed
             // automatically by SkinOptions.Structure (FixTripoMaterials). Keep new Tripo rows at yaw 90.
             // Trade convention: forge = WEAPONS (Blacksmith), armorer = ARMOR (Forge_Armor), store = Market.
-            new Swap { bakedName = "EchoHollow_Pets_RoamingArea",   modelPath = "Structures/PetHouse2",    sizeM = 7f,  yawDeg = 180f, pitchDeg = -90f },
+            new Swap { bakedName = "EchoHollow_Pets_RoamingArea",   modelPath = "Structures/PetHouse2",    sizeM = 7f,  yawDeg = 0f,   pitchDeg = -90f, rollDeg = 270f },   // owner hand-dialed 2026-06-21
             new Swap { bakedName = "ArcaneTower_MagicUpgrades",     modelPath = "Structures/arcane tower", sizeM = 12f, yawDeg = 0f,   pitchDeg = -90f, posY = -0.6f, texPath = "Structures/arcane tower/arcane tower" },
-            new Swap { bakedName = "Blacksmith_Weapons_Storefront", modelPath = "Structures/Forge",        sizeM = 7f,  yawDeg = 90f,  pitchDeg = -90f },
+            new Swap { bakedName = "Blacksmith_Weapons_Storefront", modelPath = "Structures/Forge",        sizeM = 7f,  yawDeg = 0f,   pitchDeg = -90f, rollDeg = 180f },   // owner hand-dialed 2026-06-21
             new Swap { bakedName = "Forge_Armor_Storefront",        modelPath = "Structures/armorer",      sizeM = 7f,  yawDeg = 90f,  pitchDeg = -90f },
             new Swap { bakedName = "Marketplace_Monetization",      modelPath = "Structures/store",        sizeM = 8f,  yawDeg = 90f,  pitchDeg = -90f },
             new Swap { bakedName = "Jeweler_Gems_Storefront",       modelPath = "Structures/jeweler",      sizeM = 7f,  yawDeg = 0f,   pitchDeg = -90f, rollDeg = 110.4f, scaleX = 5.4f, scaleY = 3.77f, scaleZ = 3.6f },
             new Swap { bakedName = "Lumbermill_Wood_Storefront",    modelPath = "Structures/lumbermill",   sizeM = 7f,  yawDeg = 0f,   pitchDeg = -90f, posY = 1.5f },
-            new Swap { bakedName = "Windmill_Food_Storefront",      modelPath = "Structures/farm",         sizeM = 8f,  yawDeg = 90f,  pitchDeg = -90f },
+            new Swap { bakedName = "Windmill_Food_Storefront",      modelPath = "Structures/farm",         sizeM = 8f,  yawDeg = 0f,   pitchDeg = -90f, rollDeg = 212f },   // owner hand-dialed 2026-06-21
             // Castle barracks = the troop-TRAINING building (existing scene prefab "CastleBarracks");
             // visual swap only — its training function is already wired. Size/yaw owner-dialed.
             new Swap { bakedName = "CastleBarracks",                modelPath = "Structures/barracks",     sizeM = 8f,  yawDeg = 180f, pitchDeg = -90f, setLocalPos = true, posX = 38.3f, posY = 0f, posZ = 36f },
@@ -88,6 +88,10 @@ namespace DeNelle.Village
             public float   sizeM;
             public float   yawDeg;
             public float   pitchDeg;
+            public float   rollDeg;    // Z rotation (owner hand-dial; default 0) — mirrors Swap.rollDeg
+            public float   scaleX;     // OPTIONAL explicit non-uniform scale; scaleX>0 OVERRIDES the sizeM
+            public float   scaleY;     // fit with (scaleX,scaleY,scaleZ) — for a model the owner sized by
+            public float   scaleZ;     // hand. Default 0 -> use sizeM fit. Mirrors Swap.scaleX/Y/Z.
         }
 
         // The old ArenaMonument was deleted; place the colosseum (arena.fbx) at the arena herald spot
@@ -97,7 +101,9 @@ namespace DeNelle.Village
         private static readonly Place[] Places =
         {
             new Place { name = "Colosseum_ArenaEntrance", modelPath = "Structures/arena",
-                        worldPos = new Vector3(15f, 0f, 6f), sizeM = 16f, yawDeg = 90f, pitchDeg = -90f },
+                        worldPos = new Vector3(-0.39f, 0f, 23.1f), sizeM = 16f,
+                        yawDeg = 0f, pitchDeg = -90f, rollDeg = 90f,
+                        scaleX = 10.6f, scaleY = 8.4f, scaleZ = 10.53f },   // owner hand-dialed 2026-06-21
         };
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -127,7 +133,7 @@ namespace DeNelle.Village
             var host = new GameObject(p.name);
             host.transform.position = p.worldPos;
             var opts = SkinOptions.Structure(p.sizeM);
-            opts.LocalRotation = Quaternion.Euler(p.pitchDeg, p.yawDeg, 0f);
+            opts.LocalRotation = Quaternion.Euler(p.pitchDeg, p.yawDeg, p.rollDeg);
             var vis = VisualFactory.Skin(host.transform, p.modelPath, opts);
             if (vis == null)
             {
@@ -135,6 +141,8 @@ namespace DeNelle.Village
                 Object.Destroy(host);
                 return;
             }
+            if (p.scaleX > 0f)   // explicit owner-dialed (non-uniform) scale overrides the uniform sizeM fit
+                vis.transform.localScale = new Vector3(p.scaleX, p.scaleY, p.scaleZ);
             Debug.Log("[HubStructureVisualInjector] placed " + p.name + " (" + p.modelPath + ") at " + p.worldPos + ".");
         }
 
