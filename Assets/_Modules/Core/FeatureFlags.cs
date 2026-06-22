@@ -27,6 +27,13 @@ namespace DeNelle.Core
         public static bool Raid  => Get("raid",  defaultOn: true);
         public static bool Arena => Get("arena", defaultOn: true);
 
+        /// <summary>PIVOT (owner 2026-06-22): SINGLE-HERO combat. When ON, the ATB battle party is
+        /// JUST the hero — no pets/companions are surfaced as combatants (see
+        /// <see cref="DeNelle.BattleATB.BattleController"/> BuildParty). Companions were a net negative
+        /// (they didn't heal/engage), so the direction is one hero + a wider skill tree (heal + ranged).
+        /// Default ON. Flag-gated so the hero+pets party is reversible: PlayerPrefs "ff.singlehero" = 0.</summary>
+        public static bool SingleHero => Get("singlehero", defaultOn: true);
+
         /// <summary>WO-449 — when ON, the raid loop IS the continuous distance-gated WALK: the raid
         /// target is a live EnemyOutpost spawned in the OuterWorld (~70m out a gate), the hero walks
         /// to it on one continuous NavMesh, combat triggers on approach (Enemy hero-aggro), and clearing

@@ -283,27 +283,33 @@ namespace DeNelle.BattleATB
                 aiMode: PetAiMode.Balanced,
                 defaultMode: ControlMode.Player));
 
-            // The player's collected pets → companion members (default AI).
-            var svc = DeNelle.Core.State.GameStateService.Instance;
-            var state = (svc != null) ? svc.State : null;
-            if (state != null && state.Pets != null)
+            // PIVOT (owner 2026-06-22): single-hero combat. When ff.singlehero is ON (default), the
+            // party is JUST the hero — no pets/companions surfaced (companions were a net negative;
+            // direction is one hero + a wider skill tree). Flag OFF restores the hero+pets party below.
+            if (!DeNelle.Core.FeatureFlags.SingleHero)
             {
-                int idx = 0;
-                foreach (var pet in state.Pets)
+                // The player's collected pets → companion members (default AI).
+                var svc = DeNelle.Core.State.GameStateService.Instance;
+                var state = (svc != null) ? svc.State : null;
+                if (state != null && state.Pets != null)
                 {
-                    if (party.Count >= MaxParty) break;
-                    PetSpecies species = MapPetSpecies(pet.Species);
-                    int bond = BondRankFor(state, pet.Species);
-                    string name = !string.IsNullOrEmpty(pet.Nickname) ? pet.Nickname : DefaultPetName(species);
-                    party.Add(MakeMember(
-                        id: $"pet-{idx}",
-                        name: name,
-                        heroClass: null,
-                        species: species,
-                        bondRank: bond,
-                        aiMode: PetAiMode.Balanced,
-                        defaultMode: ControlMode.AI));
-                    idx++;
+                    int idx = 0;
+                    foreach (var pet in state.Pets)
+                    {
+                        if (party.Count >= MaxParty) break;
+                        PetSpecies species = MapPetSpecies(pet.Species);
+                        int bond = BondRankFor(state, pet.Species);
+                        string name = !string.IsNullOrEmpty(pet.Nickname) ? pet.Nickname : DefaultPetName(species);
+                        party.Add(MakeMember(
+                            id: $"pet-{idx}",
+                            name: name,
+                            heroClass: null,
+                            species: species,
+                            bondRank: bond,
+                            aiMode: PetAiMode.Balanced,
+                            defaultMode: ControlMode.AI));
+                        idx++;
+                    }
                 }
             }
 
