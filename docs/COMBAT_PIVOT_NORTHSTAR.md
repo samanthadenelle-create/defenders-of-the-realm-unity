@@ -36,6 +36,59 @@ tree that does the healing + ranged the companions were faking.
 7. **Blink armor JUNKED.** DONE: `ff.blinkarmor` (default OFF) — `HeroArmorVisual` is inert (no
    swap, no bone-mapping, no error spam). Armor/cosmetics move to the Tripo direction.
 
+## Combat staging + camera (owner 2026-06-22): a DEFINED battle anchor, not free-roam
+ATB plays well with the camera "sitting back" ONLY if combat is a composed TABLEAU, not free movement
+(the genre rule — FF/Persona/Octopath). So define a single **battle anchor / attack point**:
+- Fixed HERO stance position + fixed ENEMY stance position(s) + a camera rig composed on that engagement.
+- Define it ONCE; every fight snaps to it. Action = ability choices + watching the staged animations.
+- Why: a consistent composed frame is what makes animation-as-mechanics READABLE (every wind-up /
+  shield-block / hit reads the same legible way). Free camera would undercut it. Also massively simpler
+  to build — no combat nav, no camera chase.
+
+**Camera resolution (settles the earlier FP pin):**
+- COMBAT = composed THIRD-PERSON battle stage (sitting back, framing hero + enemy). NOT first-person —
+  FP suits twitch action, not turn-paced ATB where you must see both sides.
+- EXPLORATION = a separate follow cam (walking to the fight).
+- Flow: explore (follow cam) -> reach enemy -> combat STAGES at the battle anchor (hero+enemy snap to
+  stances, camera composes) -> ATB resolves -> back to exploration.
+- Keep a little life (slight push-in on your turn, punch-in on big hits / killing blow) so the locked
+  frame isn't lifeless — but the ANCHOR stays defined + consistent.
+
+The battle anchor is the highest-leverage thing to PROTOTYPE first: it's the frame everything else
+(animation, telegraphs, shield-block, ability VFX) gets composed inside.
+
+## THE UNIFYING PRINCIPLE (owner, 2026-06-22)
+**You directly control exactly ONE thing — the hero. Everything else is AUTONOMOUS. Allies exist only
+where autonomy is a feature, never something you micro.** This explains every call:
+- Companions-as-followers (micro'd) = BUST. Troops-as-auto-defenders (autonomous) = good.
+- Pets-as-ATB-combatants (micro'd) = bust. Echoes-as-autonomous-harvesters = good.
+Anything that requires the player to babysit a second unit in live combat is OUT. Allies are systems
+you SET UP and then WATCH/benefit from.
+
+## Pets -> Echoes / Spirits of the Tree of Life (owner, 2026-06-22)
+Pivot pets into **echoes/spirits released from the Tree of Life (the Heart of Elarion, world-tree at
+center)** — autonomous beings that **harvest resources** (and "assist somehow" — define later). Pets
+failed as ATB combatants; as autonomous harvesters, autonomy IS the feature (same pattern as
+companions->troops). Lore writes itself: the world tree releases life that gathers.
+- **Economy — three resource streams:** raid loot (active), wave rewards (trigger+watch), echo harvest
+  (passive/idle while away). Feeds "one feeds the other."
+- **LIFE FORCE = the keystone that links offense -> economy (owner 2026-06-22).** Driving the enemy
+  BACK strengthens the Tree of Life's life force; the stronger the life force, the FASTER/MORE the echoes
+  harvest. So offense becomes a PERSISTENT WORLD STATE, not transactional loot: every outpost cleared
+  permanently raises your harvest. Reframes the game as RECLAIMING THE WORLD (darkness recedes -> tree
+  heals -> more/stronger spirits). Lore + math are the same sentence (enemy encroachment weakens the
+  tree; pushing back heals it; a healed tree births stronger life). Gives the region/territory system
+  (WO-453, outpost convert) a real job: reclaimed territory = life force = harvest rate; pushing the
+  front line back IS progression. Keep the meter LEGIBLE: life force = f(outposts cleared / territory
+  reclaimed); harvest rate (then maybe echo count) scales off it. One meter, one cause, one effect.
+- **Phasing (refined):** echoes + life force are the **V1 offense economy hook** (clear territory ->
+  life force up -> harvest up -> fund the skill tree) — a LIGHT version ships in V1 so V1 offense has a
+  living, responsive economy. The heavier autonomous-being MANAGEMENT layer (echo types/bonds/upgrades/
+  many) + the base-DEFENSE build stay V2-gated, only if they show value.
+- **Scope:** start dead simple — tree releases N echoes, passive resource gen. No echo-sim until earned.
+- **Cleanup:** retires PetSelect onboarding (#19 bypass) + pet-ATB (already dormant under ff.singlehero).
+- **NOTE:** an echo system already EXISTS — be SME on it before "redo better" (no blank-slate guessing).
+
 ## Loop reward swap
 The outpost loop's reward was "unlock the next companion" (`Village2RaidController` /
 `RaidVictoryController`). With no companions, the reward becomes **skill points / gear** so the
