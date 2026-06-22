@@ -81,6 +81,21 @@ companions->troops). Lore writes itself: the world tree releases life that gathe
   (WO-453, outpost convert) a real job: reclaimed territory = life force = harvest rate; pushing the
   front line back IS progression. Keep the meter LEGIBLE: life force = f(outposts cleared / territory
   reclaimed); harvest rate (then maybe echo count) scales off it. One meter, one cause, one effect.
+- **GROWING WORKFORCE — ONE ECHO PER RESOURCE (owner 2026-06-22):** echoes AUTO-find & gather so the
+  player NEVER hand-gathers (manual gathering = tedious filler, removed). Each echo automates ONE
+  resource stream. RESOURCES = EXACTLY THREE (owner locked 2026-06-22): WOOD, IRON, GRAIN. No essence,
+  no crystal — grounded settlement resources, instantly legible, no fantasy-currency creep. So EXACTLY
+  3 echoes: echo 1 = wood; next life-force threshold -> echo 2 = +iron; next -> echo 3 = +grain. Each
+  has a DISTINCT job so all three matter: wood -> structures/building upgrades; iron -> weapons/shield/
+  armor (hero gear); grain -> troops/upkeep (feed the autonomous defenders). (Gold/coin stays the
+  separate STORE currency; wood/iron/grain are the GATHERED ones.) Every new echo is a real event. The tree is a LIVING PROGRESS MONUMENT —
+  you SEE spirits multiply around a brighter tree (emotional feedback + return-hook: it works while away).
+  TWO scaling axes off the same life-force meter: (a) RATE — existing echoes gather faster as life force
+  grows; (b) BREADTH — thresholds birth a new echo = new resource TYPE. Feeds CRAFTING: wood+iron are the
+  inputs to weapon/shield upgrades + skill-tree costs, closing the chain (reclaim -> life force -> echo ->
+  resource -> gear/skills -> reclaim further). SCOPE: define the resource list FIRST (sets echo count +
+  recipes + costs — the economy spine). Keep the sim ABSTRACT — "echo finds wood" = a RATE + flavor
+  movement (a spirit drifting out + back), NOT a node-discovery sim. Render the flavor, fake the sim.
 - **Phasing (refined):** echoes + life force are the **V1 offense economy hook** (clear territory ->
   life force up -> harvest up -> fund the skill tree) — a LIGHT version ships in V1 so V1 offense has a
   living, responsive economy. The heavier autonomous-being MANAGEMENT layer (echo types/bonds/upgrades/
@@ -163,6 +178,20 @@ they push in** (a self-paced siege/horde test, escalating risk->reward). You nev
 auto-defend, you watch); your agency is build -> choose to test -> choose how hard -> read the weak points
 -> upgrade -> test deeper. Replayable in a way scripted waves never were. (Reuses WaveManager re-pointed
 from auto-spawn to player-triggered escalating; towers; GarrisonController defenders.)
+
+**FULL ECONOMIC WEB (owner 2026-06-22):** as you build defenses stronger + repel stronger waves with
+AUTOMATED troops (from town + defense upgrades), the MORE rewards come out. So the defense loop scales
+with investment, mirroring the offense/life-force scaling. The complete web:
+- SOURCES (in): hero raids -> life force -> echo harvest (passive); player-triggered waves -> rewards
+  (scale with defense/troop strength).
+- SINK (out): UPGRADES — town, defense, troops, hero gear, skill tree.
+- AMPLIFIER: upgrades strengthen the sources (stronger defense -> harder waves -> more rewards; stronger
+  hero -> more territory -> more life force -> more harvest). Sink feeds back into sources; investment compounds.
+- Every PRODUCER is autonomous (echoes harvest, troops defend); only the hero is directly controlled.
+  Troops get STRONGER via upgrades but still fight themselves.
+PHASING HOLDS: V1 = the LEFT half (hero offense -> life force -> light echo harvest -> hero upgrades) —
+whole + shippable on its own. V2 (gated, earn-it) = the RIGHT half (town/defense/troop upgrades,
+escalating triggered waves, wave rewards). Balance/number-tuning is a LATER problem; the design is coherent.
 
 **EACH WAVE DROPS REWARDS (owner 2026-06-22)** — this is the engine that makes the loop worth doing.
 Cleared wave -> loot; deeper waves -> bigger loot. This is the "one feeds the other" resource source
