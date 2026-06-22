@@ -65,6 +65,17 @@ where autonomy is a feature, never something you micro.** This explains every ca
 Anything that requires the player to babysit a second unit in live combat is OUT. Allies are systems
 you SET UP and then WATCH/benefit from.
 
+**PERFORMANCE is a consequence of the spine (owner 2026-06-22):** because only the hero is player-
+controlled, EVERYTHING else is a perf knob WE hold — critical for the WebGL/mobile target. Levers:
+(1) THROTTLE AI tick rates — autonomous agents think ~4x/sec, not 60 (10-15x cheaper; nobody can tell);
+(2) AUTO-RESOLVE the unwatched — "continue" runs the math (near-zero), "watch" renders it; full sim only
+when looked at; (3) BOUNDED agent counts BY DESIGN (3 echoes, capped troop slots, few enemies) cap the
+worst-case load — the game-feel caps and the perf budget are the SAME caps. Perf-friendly BY CONSTRUCTION,
+not by later optimization. DISCIPLINE: build it budgeted from the start (throttled ticks + auto-resolve
+baked in, not retrofitted). The ONLY slice that must be tight = hero + the watched battle tableau (the
+battle anchor); everything outside that frame gets to be cheap. The spine wins on 3 axes at once:
+design + scope + performance.
+
 ## Pets -> Echoes / Spirits of the Tree of Life (owner, 2026-06-22)
 Pivot pets into **echoes/spirits released from the Tree of Life (the Heart of Elarion, world-tree at
 center)** — autonomous beings that **harvest resources** (and "assist somehow" — define later). Pets
@@ -206,6 +217,24 @@ defense is autonomous so it resolves the SAME either way:
 - **Continue** -> auto-resolve the battle (troop-vs-raid math via the headless sim infra), apply
   result, notify.
 - **Watch** -> render that same result playing out (spectator camera over the base).
+
+**BARRACKS -> TROOP SLOTS (owner 2026-06-22):** upgrading the barracks raises your TROOP SLOT count;
+you fill the slots with trained troops that auto-defend. Classic capacity model (CoC army camp / RTS
+pop cap). MOSTLY ALREADY BUILT — the barracks premium troop-upgrade track exists (WO-432 / task #11);
+this is WIRING (tier -> slots; trained troops fill them), not new invention. GRAIN = the upkeep that
+feeds the troops in those slots, so the standing army is gated by barracks tier (how many) AND grain
+(can you feed them) — gives grain a real job without a 4th resource. Army stays BOUNDED (tier caps
+slots; no infinite spam — same bounded-by-upgrades discipline as the 3 echoes). Autonomy holds: train
+them, they fill slots + defend themselves; never commanded in live combat. V2 (behind ff.basebuilding).
+
+**TROOP TYPES + TOWER MAGES (owner 2026-06-22):** progression unlocks BETTER troop TYPES, not just more
+of the same — e.g. unlock MAGES who STAND ON TOWERS and cast spells. Fuses two existing systems (troops
++ towers): towers become MANNED caster posts (not dumb turrets) — melee holds the ground, mages rain
+spells from the walls. Big WATCH payoff (the casting animation is the spectacle). Guardrails: FEW DISTINCT
+types (front-line melee -> tower mage -> maybe an archer), each reads differently, bounded by progression;
+SIMPLE assignment (tower has a caster slot; an unlocked mage fills it) — NOT an RTS placement/micro sim
+(that'd break the "never command troops" spine). V2 (behind ff.basebuilding). Reuses towers +
+GarrisonController + the troop-upgrade track.
 
 REQUIREMENTS for it to work:
 1. **Identical outcome watched vs skipped** — "resolve the math, optionally render it." Watching
