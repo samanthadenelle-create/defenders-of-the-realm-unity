@@ -99,6 +99,11 @@ namespace DeNelle.Village
 
         private void OnEnable()
         {
+            // PIVOT (owner 2026-06-22): Blink armor JUNKED. When ff.blinkarmor is OFF (default) this
+            // component is INERT — it never subscribes to gear changes and never swaps the body, so the
+            // hero keeps its base body and the "ShareBaseSkeleton FAILED" bone-mapping spam is gone.
+            if (!DeNelle.Core.FeatureFlags.BlinkArmor) return;
+
             if (_loadout == null) _loadout = GetComponent<GearLoadout>();
             if (_loadout != null) _loadout.OnGearChanged += HandleGearChanged;
             // Reflect whatever is already equipped on enable (auto-best may have run first).
@@ -120,6 +125,7 @@ namespace DeNelle.Village
 
         private void HandleGearChanged()
         {
+            if (!DeNelle.Core.FeatureFlags.BlinkArmor) return; // Blink armor junked (pivot 2026-06-22)
             using var _ = FlowTrace.Enter("ArmorVisual", "HandleGearChanged");
             if (_loadout == null) _loadout = GetComponent<GearLoadout>();
             ArmorDef armor = _loadout != null ? _loadout.EquippedArmor : null;

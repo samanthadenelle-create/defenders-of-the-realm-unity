@@ -558,6 +558,10 @@ namespace DeNelle.Core.State
         /// <summary>playerSlice <c>chooseHero</c> — lock in the hero class. Idempotent.</summary>
         public void ChooseHero(HeroClass cls)
         {
+            // PIVOT (owner 2026-06-22): lock to ONE polished hero (Knight) for now; fold in other
+            // classes once it's done well. ff.knightonly forces any selection to Knight (flag OFF
+            // restores free class choice).
+            if (DeNelle.Core.FeatureFlags.KnightOnly) cls = HeroClass.Knight;
             var opt = ((HeroClass?)cls).ToOpt();
             if (_state.HeroClass == opt) return;
             _state.HeroClass = opt;

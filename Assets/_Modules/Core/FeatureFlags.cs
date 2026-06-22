@@ -34,6 +34,28 @@ namespace DeNelle.Core
         /// Default ON. Flag-gated so the hero+pets party is reversible: PlayerPrefs "ff.singlehero" = 0.</summary>
         public static bool SingleHero => Get("singlehero", defaultOn: true);
 
+        /// <summary>PIVOT (owner 2026-06-22): Blink armor is JUNKED. When OFF (default), HeroArmorVisual
+        /// is inert — no addressable armored-body swap, no rig bone-mapping (which spammed
+        /// "ShareBaseSkeleton FAILED" in the F8 logs), and the owner dislikes the look. The hero keeps
+        /// its base body; armor/cosmetics move to the Tripo self-rigged direction. Flip ON to restore the
+        /// Blink armor swap: PlayerPrefs "ff.blinkarmor" = 1.</summary>
+        public static bool BlinkArmor => Get("blinkarmor", defaultOn: false);
+
+        /// <summary>PIVOT (owner 2026-06-22): lock to ONE polished hero (Knight) for now — do it well,
+        /// then fold in the other classes. When ON (default), <see cref="DeNelle.Core.State.GameStateService"/>
+        /// ChooseHero forces the class to Knight. Flip OFF to restore free class choice:
+        /// PlayerPrefs "ff.knightonly" = 0.</summary>
+        public static bool KnightOnly => Get("knightonly", defaultOn: true);
+
+        /// <summary>PIVOT (owner 2026-06-22): base-building / CoC base-defense is GATED OFF — NOT on the
+        /// V1 critical path. Polish the solo-hero OFFENSE loop first; revisit base-building only if the
+        /// polished loop shows it would add value. This gates: convert-on-clear (WO-475 "cleared outpost
+        /// -> your base" — base CREATION), the troop auto-defense + watch/continue raid-on-base event, and
+        /// any build-a-base UI. V1 outpost reward = skill points / gear (NOT a base). Existing barracks /
+        /// WaveManager / towers / GarrisonController stay dormant behind this. Flip ON when V2 is greenlit:
+        /// PlayerPrefs "ff.basebuilding" = 1. See docs/COMBAT_PIVOT_NORTHSTAR.md.</summary>
+        public static bool BaseBuilding => Get("basebuilding", defaultOn: false);
+
         /// <summary>WO-449 — when ON, the raid loop IS the continuous distance-gated WALK: the raid
         /// target is a live EnemyOutpost spawned in the OuterWorld (~70m out a gate), the hero walks
         /// to it on one continuous NavMesh, combat triggers on approach (Enemy hero-aggro), and clearing
