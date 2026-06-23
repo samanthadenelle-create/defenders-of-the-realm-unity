@@ -177,6 +177,16 @@ namespace DeNelle.Editor
         // flat but lets trees/rocks land within ~120 u of the walls.
         private const float SeamFalloff = 20f;         // blend band width beyond the wall
 
+        // Castle footprint kept CLEAR of tree/rock scatter (WO-483 re-center, 2026-06-23):
+        // the OuterWorld terrain is origin-centered again and now OVERLAPS the castle scene at
+        // world origin, so scatter inside the wall footprint (~±42) lands "trees inside walls"
+        // (owner flag). Reject scatter within this footprint + a soft taper. Kept SEPARATE from
+        // VillageHalfX/Z (those drive the biome HEIGHT falloff, lines ~426-464) so the clear-zone
+        // tunes independently of terrain heights.
+        private const float CastleClearHalfX  = 62f;   // origin-centered; covers the ±42 walls + margin
+        private const float CastleClearHalfZ  = 62f;
+        private const float CastleClearFalloff = 14f;  // soft taper so the tree-line edge isn't a hard ring
+
         // ── Tree budget (§9.6) ───────────────────────────────────────────────
         // WO-468 Phase 1: bumped 320 -> 1000 so the ~11x-larger terrain isn't
         // sparse. The path-corridor reject (below) keeps the cave road clear.
@@ -380,14 +390,17 @@ namespace DeNelle.Editor
         /// </summary>
         private static float SeamWeight(float worldX, float worldZ)
         {
-            // WO-468 Phase 2: the in-terrain village plateau is RETIRED — the
-            // castle is a separate scene at world origin, NORTH of and adjacent to
-            // this (now southward-shifted) terrain. Nothing flattens except the
-            // cave-path corridor, so the seam weight is permanently 0. Kept as a
-            // method (rather than deleted) so the tree/rock-reject call sites still
-            // compile; they now reject nothing on this axis (correct — no village
-            // footprint to keep clear).
-            return 0f;
+            // WO-483 RE-CENTER (2026-06-23): the terrain is origin-centered again and now
+            // OVERLAPS the castle scene at world origin, so the castle/wall footprint MUST stay
+            // clear of scattered trees/rocks (owner: "trees populate inside walls"). 1.0 inside
+            // the footprint, smoothstep taper over CastleClearFalloff. Used ONLY by the tree
+            // (~877) + rock (~1013) reject — NO terrain-height effect (height uses VillageHalfX/Z).
+            float dx = Mathf.Abs(worldX) - CastleClearHalfX;
+            float dz = Mathf.Abs(worldZ) - CastleClearHalfZ;
+            float d = Mathf.Max(dx, dz);                 // <=0 inside the footprint, grows outside
+            if (d <= 0f) return 1f;                      // inside the walls -> full reject
+            if (d >= CastleClearFalloff) return 0f;      // past the taper -> trees/rocks allowed
+            return 1f - Mathf.SmoothStep(0f, 1f, d / CastleClearFalloff);
         }
 
         /// <summary>
