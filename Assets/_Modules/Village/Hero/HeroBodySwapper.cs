@@ -314,10 +314,16 @@ namespace DeNelle.Village
                         "Defenders → Animation → Setup " + slug + " Animator. Hero will not animate.");
             }
 
-            // DEF-232 (facing) self-correct — replaces the hard-coded -90° guess above for any body
-            // whose authored forward ISN'T +X. Needs the valid Humanoid avatar ensured just above, so
-            // it runs here (not in the FORWARD CORRECTION block). No-op for already-aligned bodies.
-            AlignBodyFacingToRoot(body, anim);
+            // DEF-232 (facing) self-correct — for the BLINK rig only. The Blink body comment above
+            // (BuildBlinkHeroBody) relies on this skeleton-derived alignment because Blink applies NO
+            // forward yaw. The LEGACY Tripo body already carries the PROVEN static -90° yaw
+            // (BuildLegacyResourcesBody, the EXACT same convention the orcs use in EnemyFactory:
+            // LocalRotation = Euler(0,-90,0)). Re-deriving forward from the hip lateral axis on the
+            // Tripo Knight rig mis-reads its bind pose and rotates the already-correct body ~90° off —
+            // the "walking NORTH but FACING EAST" regression. Skip the self-correct on the legacy path
+            // so the Knight keeps its proven -90° (model-forward = move-forward), matching the orcs.
+            if (isBlink)
+                AlignBodyFacingToRoot(body, anim);
             if (controller != null)
             {
                 anim.runtimeAnimatorController = controller;
