@@ -755,6 +755,13 @@ namespace DeNelle.Village
 
         private static HeroClass ResolveHeroClass()
         {
+            // V1 LOCK (2026-06-23): ff.knightonly forces the hero to Knight at the BUILD chokepoint,
+            // not only at selection. The PetSelect-bypass flow auto-routes to the castle WITHOUT
+            // calling GameStateService.ChooseHero (the only other KnightOnly enforcer), so a None/
+            // persisted state otherwise fell through to the Mage default below and the hero rendered
+            // as a Mage ("still not a knight", data-proven 2026-06-23). Forcing here makes the single-
+            // Knight north star hold on every path. Flip OFF (ff.knightonly=0) to restore free class.
+            if (DeNelle.Core.FeatureFlags.KnightOnly) return HeroClass.Knight;
             var svc = GameStateService.Instance;
             if (svc == null) return HeroClass.Mage;
             var opt = svc.State?.HeroClass.ToNullable();
