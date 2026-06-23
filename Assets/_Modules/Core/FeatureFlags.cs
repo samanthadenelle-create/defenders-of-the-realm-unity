@@ -135,6 +135,16 @@ namespace DeNelle.Core
         /// Title/HeroSelect -> PetSelect -> Castle step: PlayerPrefs "ff.bypasspetselect" = 0.</summary>
         public static bool BypassPetSelect => Get("bypasspetselect", defaultOn: true);
 
+        /// <summary>WO-467 runtime variant (owner 2026-06-23, "world seam still broken" x3): when ON
+        /// (default), <c>RuntimeRegionGate</c> self-bootstraps on a hub scene and BUILDS the castle↔OuterWorld
+        /// crossing from the <c>region-gates.json</c> recipe AT RUNTIME — a walkable approach deck welded to the
+        /// source navmesh (runtime <c>NavMeshSurface</c> re-bake, NO editor bake), a deck-seated
+        /// <c>SceneTransitionTrigger</c> masked-warp for the hero, a GUID-keyed <c>HeroLinkCrossing</c> entry/dest
+        /// pair, gate-funnel choke panels, and (once OuterWorld is additive-loaded) a narrow cross-scene
+        /// <c>NavMeshLink</c> for AI. No scene hand-edit, no stale baked coord. Flip OFF to fall back to the
+        /// editor-baked seam: PlayerPrefs "ff.runtimeworldseam" = 0. Spec: WORK_ORDER_467 §"Runtime auto-seam".</summary>
+        public static bool RuntimeWorldSeam => Get("runtimeworldseam", defaultOn: true);
+
         /// <summary>Global runtime kill-switch for ALL dev keyboard hotkeys (DevPanel F1, DebugCanvas
         /// F12, AdminOverlay Ctrl+Shift+A, the test spawners J/K/L, the tower dev harness B/J/K/N/U,
         /// the jukebox J open, etc.). Default OFF — so every dev hotkey is DEAD everywhere (editor AND
