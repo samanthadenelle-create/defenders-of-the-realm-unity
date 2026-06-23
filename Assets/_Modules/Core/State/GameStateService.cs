@@ -109,6 +109,19 @@ namespace DeNelle.Core.State
             if (_loadOnAwake)
                 Load();
 
+            // START-FLOW GUARANTEE (2026-06-23): the body builder (HeroBodySwapper.ResolveHeroClass)
+            // TRUSTS that HeroClass is persisted before it builds, and screams (FlowTrace.Fail) if it
+            // is not. Most paths persist it at SELECTION (HeroSelectController) or at the Continue load
+            // (TitleController.OnContinue) — but the BYPASS paths reach MainCastle_Hall WITHOUT either:
+            //   • the AutoPilot/headless boot (AutoPilotDriver.BootToGameplay loads the castle directly)
+            //   • a fresh launch / cleared-or-stale save that was never picked in a prior session
+            // This Awake is the ONE chokepoint EVERY entry path crosses (boot scene's service, the
+            // RuntimeInitialize auto-instance, and any direct-boot scene). Seal the source HERE: if the
+            // load left HeroClass unset, persist V1's default now — ChooseHero applies the KnightOnly
+            // force + Save()s — so NO path can reach body-build with HeroClass None. The HeroBodySwapper
+            // canary then only ever fires on a true regression (this guarantee removed/broken).
+            EnsureHeroClassPersisted();
+
             // WO1: ensure the PersistenceBridge is alive so wave-clear saves,
             // scene-enter loads, and quit saves are all wired automatically.
             if (Application.isPlaying)
@@ -567,6 +580,23 @@ namespace DeNelle.Core.State
             _state.HeroClass = opt;
             PlayerChanged.Invoke();
             Save();
+        }
+
+        /// <summary>
+        /// START-FLOW GUARANTEE — persists a default HeroClass at session/load init if (and only if)
+        /// the loaded state left it unset, so a bypass entry path (headless/AutoPilot boot, fresh
+        /// launch, or a save never picked in a prior session) can NEVER reach body-build with
+        /// HeroClass = None. Idempotent: a no-op when a real pick is already persisted. V1 is
+        /// single-hero, and <see cref="ChooseHero"/> applies the KnightOnly force, so the default
+        /// lands as Knight; this stays correct when KnightOnly is later turned off (default = Knight).
+        /// </summary>
+        private void EnsureHeroClassPersisted()
+        {
+            if (_state != null && _state.HeroClass.ToNullable().HasValue) return; // already picked — leave it
+            FlowTrace.Warn("Save",
+                "EnsureHeroClassPersisted: HeroClass was UNSET after load — persisting V1 default (Knight) at " +
+                "the session/load source so no bypass entry path reaches body-build with HeroClass None.");
+            ChooseHero(HeroClass.Knight); // applies KnightOnly force + Save()
         }
 
         /// <summary>settingsSlice <c>setMuted</c> — toggle global audio mute.</summary>
