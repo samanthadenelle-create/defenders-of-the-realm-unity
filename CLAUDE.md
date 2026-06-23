@@ -323,5 +323,12 @@ line + screenshot) instead of waiting to be told.
 - **Re-arm after every fire** (it exits on the first real capture) so it covers the whole session.
 - It fires ONLY on real captures (F8 `flagged` / error / exception / softlock); `session_start` +
   `scene_loaded` startup noise is filtered; it re-baselines on a fresh Play session.
-- On a fire: harvest the surrounding `[Flow:*]` lines + the screenshot, RCA, and route per §13
-  (CLI implements + headless-verifies; PO felt-verifies + closes). The owner just plays and F8s.
+- On a fire the watcher **AUTO-HARVESTS** the recent `[Flow:*]` / `[FeatureFlags]` / Guard / exception
+  lines from `Editor.log` (in-editor felt-test) or `Player.log` (build) and prints them under
+  `AUTO-HARVESTED CAPTURE CONTEXT`. **TRIAGE FROM THOSE LINES — read the already-captured data FIRST,
+  before any code-read, any agent, any theory.** Spawning a code-reading agent before reading the
+  harvested trace is the banned failure (memory `never-inference-fix` "guessing when the data already
+  exists", owner 2026-06-23: "you have the answers yet choose to not look"). The owner must NEVER have
+  to ask "did the data show that" — the look is structural, not something the owner triggers.
+- Then RCA from the data + screenshot, and route per §13 (CLI implements + headless-verifies; PO
+  felt-verifies + closes). The owner just plays and F8s.
