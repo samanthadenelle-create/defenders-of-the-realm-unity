@@ -106,21 +106,25 @@ namespace DeNelle.Editor
         // heightmap, splatmaps, paths and tree/rock scatter re-fit automatically.
         private const float TerrainSizeXZ = 1000f;
 
-        // ── World placement (WO-468 Phase 2: UN-STACK) ───────────────────────
-        // The terrain is no longer origin-centered. Its world-Z CENTER sits at
-        // TerrainCenterZ so the whole OuterWorld terrain shifts SOUTH and sits
-        // ADJACENT to (not overlapping) the castle scene at world origin. With a
-        // 1000-u terrain centered at -572, the terrain spans world z = -72 (NORTH
-        // edge, just south of the castle gate at -68) to -1072 (SOUTH edge).
-        // X-center stays 0 (still origin-centered east-west).
+        // ── World placement (WO-483 RE-CENTER, 2026-06-23; supersedes WO-468 south-shift) ──
+        // The terrain is ORIGIN-CENTERED again. The WO-468 Phase-2 south-shift
+        // (TerrainCenterZ=-572) was for the old "walk south into OuterWorld" design;
+        // the WO-482 encounter loop replaced it. ZoneManager (the Core truth) is
+        // origin-centered, and the hero now PLAYS around origin..z~-75 (reps anchor
+        // there). With the terrain south-shifted, that play area fell in a FLOORLESS
+        // gap north of the terrain edge (z=-72) -> no navmesh -> enemy CreateAgent
+        // failed / "no COMPLETE path to hero" (owner+trace, 2026-06-23). Centering at
+        // 0 puts a 1000u terrain (z = -500..+500) UNDER the whole play area so the
+        // navmesh bakes where the encounter loop happens.
         //
-        // The biome height functions (North/East/South/WestHeight,
-        // SampleBiomeHeight) + SeamWeight expect a CENTERED coordinate
-        // (-size/2..+size/2). SampleBiomeHeight is the single chokepoint that
-        // re-centers Z by subtracting TerrainCenterZ, so EVERY caller now passes
-        // TRUE WORLD coordinates and the biomes render identically — just shifted
-        // south. The cave-path corridor constants below are already in WORLD Z.
-        private const float TerrainCenterZ = -572f;     // terrain world-Z center (X center = 0)
+        // The biome height functions (North/East/South/WestHeight, SampleBiomeHeight)
+        // + SeamWeight expect a CENTERED coordinate (-size/2..+size/2). SampleBiomeHeight
+        // is the single chokepoint that re-centers Z by subtracting TerrainCenterZ, so
+        // every caller passes TRUE WORLD coordinates and the biomes re-fit automatically
+        // to the new center. The legacy cave-path corridor (CavePath*Z below) is in WORLD
+        // Z and now runs partly off the south edge — harmless for V1 (cave/portal is
+        // legacy, gated; not on the encounter-loop path).
+        private const float TerrainCenterZ = 0f;        // terrain world-Z center (X center = 0) — RE-CENTERED to origin
 
         // ── Cave path corridor (WO-468) ──────────────────────────────────────
         // A clean, LEVEL road runs due south (x≈0) from the north terrain edge

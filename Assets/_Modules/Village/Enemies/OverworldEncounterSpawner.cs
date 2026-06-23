@@ -164,6 +164,16 @@ namespace DeNelle.Village
             float ang = (index * 137f) * Mathf.Deg2Rad;
             Vector3 anchor = origin + new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * (26f + 6f * index);
 
+            // Belt-and-suspenders (data 2026-06-23): snap the anchor onto the baked navmesh so the
+            // rep spawns walkable + can path to the hero. The terrain re-center (WO-483) puts a floor
+            // under the play area; this guards the edges so a rep never lands in a no-navmesh pocket
+            // (the old failure: "Failed to create agent because there is no valid NavMesh" / "no
+            // COMPLETE path to hero"). If nothing's within 12m, log it LOUD rather than spawn a dead rep.
+            if (UnityEngine.AI.NavMesh.SamplePosition(anchor, out var navHit, 12f, UnityEngine.AI.NavMesh.AllAreas))
+                anchor = navHit.position;
+            else
+                FlowTrace.Warn("Encounter", $"SpawnRep #{index}: no navmesh within 12m of {anchor} — rep may be unreachable (check OuterWorld floor/bake).");
+
             var def = new EnemyDef
             {
                 Id = "orc-warrior", Name = "Orc Warleader", DisplayName = "Orc Warband", Ai = "walker",

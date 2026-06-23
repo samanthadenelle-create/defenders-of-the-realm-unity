@@ -124,7 +124,7 @@ namespace DeNelle.Core
         /// were. Separate from ATB (its own system). Default OFF until the vertical is felt-verified
         /// ("unflag when proven"). PlayerPrefs "ff.overworldencounter". Spec: WORK_ORDER_482. See
         /// docs/COMBAT_PIVOT_NORTHSTAR.md + memory overworld-encounter-isolated-battle.</summary>
-        public static bool OverworldEncounter => Get("overworldencounter", defaultOn: false);
+        public static bool OverworldEncounter => Get("overworldencounter", defaultOn: true);  // PROVEN 2026-06-23: full loop felt-verified (walk->engage rep->isolated BattleArena->fight orc family->resolve->warp home). "Unflag when proven." PlayerPrefs "ff.overworldencounter"=0 to disable.
 
         /// <summary>WO-473 / PIVOT (owner 2026-06-22): SINGLE-HERO V1 onboarding has NO pet step. When ON
         /// (default), the intro flow skips the PetSelect screen entirely — after the hero pick (Title in-flow
