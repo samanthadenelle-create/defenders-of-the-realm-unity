@@ -216,9 +216,13 @@ namespace DeNelle.Core.Diagnostics
             _softlockReported = false;
         }
 
+        bool _f8PollWarned;
         void Update()
         {
-            try { if (Input.GetKeyDown(FlagKey)) FlagHere(); } catch { }   // poll the flag key every frame
+            // §12: NEVER swallow silently — if the F8 poll/flag throws, LOG it once (Debug.LogWarning)
+            // so a DEAD F8 capture self-reports its cause instead of failing invisibly (owner: "no F8").
+            try { if (Input.GetKeyDown(FlagKey)) FlagHere(); }
+            catch (Exception ex) { if (!_f8PollWarned) { _f8PollWarned = true; Debug.LogWarning("[BreakCapture] F8 poll/flag threw (capture disabled?): " + ex); } }
 
             float now = Time.realtimeSinceStartup;
             if (now < _nextWatchdog) return;
@@ -300,6 +304,21 @@ namespace DeNelle.Core.Diagnostics
                 catch { CommitFlag(); }
                 return;
             }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // RELIABLE capture trigger (owner: "no F8"). F8 is unreliable in the editor (Game-view
+            // focus / function-key interception) and ABSENT on mobile — and this game is mobile-first.
+            // A small always-visible IMGUI button flags a bug with ZERO input-system / focus dependency
+            // (tap on mobile, click in the editor). F8 stays as the desktop shortcut. Dev/editor builds
+            // only — never shown to players (BreakCaptureHarness itself ships, the button does not).
+            if (!_noteMode)
+            {
+                var prevFlag = GUI.color;
+                GUI.color = new Color(1f, 0.85f, 0.2f, 0.92f);
+                if (GUI.Button(new Rect(8f, Screen.height * 0.5f - 18f, 96f, 36f), "⚑ Flag")) FlagHere();
+                GUI.color = prevFlag;
+            }
+#endif
+
             // brief "flagged" confirmation toast
             if (Time.realtimeSinceStartup > _toastUntil) return;
             try

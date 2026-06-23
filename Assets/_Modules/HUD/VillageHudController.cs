@@ -1805,11 +1805,29 @@ namespace DeNelle.HUD
             var hc = svc != null && svc.State != null ? svc.State.HeroClass : DeNelle.Core.State.HeroClassOpt.None;
             var sp = WidgetSprite(PortraitNameForClass(hc));
             if (sp != null) _partyPortrait[0].sprite = sp;
-            // Hero's roster name (Mage→Thrain, Knight→Grom, Ranger→Sylas, Cleric→Elara) — not "Hero".
+            // SINGLE-HERO: slot 0 IS the player's hero — it must NOT show a COMPANION name
+            // (Grom/Thrain/Sylas/Elara are the recruited companions, NameForClass). Use the
+            // CLASS LABEL (Knight/Mage/Ranger/Cleric). The hero's real display name is a
+            // later owner/data choice (player-named or data-driven); until then show the class.
             if (_partyName != null && _partyName.Length > 0 && _partyName[0] != null)
-                _partyName[0].text = NameForClass(hc);
+                _partyName[0].text = HeroNameForClass(hc);
         }
 
+        // SINGLE-HERO: the HERO portrait label (slot 0). Returns the CLASS label, never a
+        // companion identity. The hero's real display name is a later owner/data choice.
+        private static string HeroNameForClass(DeNelle.Core.State.HeroClassOpt hc)
+        {
+            switch (hc)
+            {
+                case DeNelle.Core.State.HeroClassOpt.Knight: return "Knight";
+                case DeNelle.Core.State.HeroClassOpt.Mage:   return "Mage";
+                case DeNelle.Core.State.HeroClassOpt.Ranger: return "Ranger";
+                case DeNelle.Core.State.HeroClassOpt.Cleric: return "Cleric";
+                default: return "Hero";
+            }
+        }
+
+        // Companion roster names (used for companion party slots, not the hero).
         private static string NameForClass(DeNelle.Core.State.HeroClassOpt hc)
         {
             switch (hc)

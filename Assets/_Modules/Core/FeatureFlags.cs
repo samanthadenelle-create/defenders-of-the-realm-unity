@@ -117,6 +117,15 @@ namespace DeNelle.Core
         /// ripped). PlayerPrefs "ff.customdialogue".</summary>
         public static bool CustomDialogue => Get("customdialogue", defaultOn: false);
 
+        /// <summary>WO-482 — when ON, the overworld touch-encounter loop is live: wandering enemy "rep" mobs
+        /// in the open world that aggro/chase (chase-music sting, wide leash, ~+5% player speed) and, on
+        /// engage, transition into an ISOLATED real-time battle arena (the generic <c>BattleArena</c>) where the
+        /// single hero (Knight) fights the full Tripo orc family in an OPEN kite arena, then returns to where you
+        /// were. Separate from ATB (its own system). Default OFF until the vertical is felt-verified
+        /// ("unflag when proven"). PlayerPrefs "ff.overworldencounter". Spec: WORK_ORDER_482. See
+        /// docs/COMBAT_PIVOT_NORTHSTAR.md + memory overworld-encounter-isolated-battle.</summary>
+        public static bool OverworldEncounter => Get("overworldencounter", defaultOn: false);
+
         /// <summary>Global runtime kill-switch for ALL dev keyboard hotkeys (DevPanel F1, DebugCanvas
         /// F12, AdminOverlay Ctrl+Shift+A, the test spawners J/K/L, the tower dev harness B/J/K/N/U,
         /// the jukebox J open, etc.). Default OFF — so every dev hotkey is DEAD everywhere (editor AND
@@ -198,6 +207,26 @@ namespace DeNelle.Core
         private static bool ToggleBlinkChromeValidate()
         {
             UnityEditor.Menu.SetChecked(BlinkChromeMenu, BlinkChrome);
+            return true;
+        }
+
+        // WO-482 — flip the overworld-encounter battle loop on/off from the menu (no PlayerPrefs
+        // fiddling). ON => orc reps spawn in OuterWorld; engage one -> the isolated BattleArena.
+        private const string OverworldEncounterMenu = "Defenders/Debug/Overworld Encounter (WO-482 battle loop)";
+
+        [UnityEditor.MenuItem(OverworldEncounterMenu, priority = 201)]
+        private static void ToggleOverworldEncounter()
+        {
+            bool on = !OverworldEncounter;
+            PlayerPrefs.SetInt("ff.overworldencounter", on ? 1 : 0);
+            PlayerPrefs.Save();
+            Debug.Log("[FeatureFlags] ff.overworldencounter = " + (on ? "ON (orc reps spawn in OuterWorld; engage -> BattleArena)" : "OFF"));
+        }
+
+        [UnityEditor.MenuItem(OverworldEncounterMenu, validate = true)]
+        private static bool ToggleOverworldEncounterValidate()
+        {
+            UnityEditor.Menu.SetChecked(OverworldEncounterMenu, OverworldEncounter);
             return true;
         }
 #endif

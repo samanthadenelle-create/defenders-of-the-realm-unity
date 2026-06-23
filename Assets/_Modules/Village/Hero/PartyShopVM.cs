@@ -46,6 +46,15 @@ namespace DeNelle.Village.Hero
     public enum PartyShopTab { Buy, Sell }
 
     /// <summary>
+    /// The category selector for the shop list (the "dropdown selections" — owner 2026-06-23).
+    /// A gear shop combines weapons + armor into one flat list; with the catalog holding hundreds
+    /// of weapons this drowns out armor, so the player needs a category narrow. ALL shows the
+    /// armor-then-weapons combined list (armor/weapons-first, STORE_EQUIP_SPEC); WEAPONS / ARMOR
+    /// narrow to one kind. Applies to BOTH the BUY and SELL lists.
+    /// </summary>
+    public enum PartyShopCategory { All, Weapons, Armor }
+
+    /// <summary>
     /// Detail payload for one shop row — the stat line + the "why it's better" delta vs the
     /// selected member's currently-equipped piece, plus the icon KEYS the View resolves to art.
     /// Carried by the VM so the View renders the row purely from data (no state-pull).
@@ -116,6 +125,7 @@ namespace DeNelle.Village.Hero
 
         private int _selectedMember;                 // index into _members (default = active hero = 0)
         private PartyShopTab _tab = PartyShopTab.Buy;
+        private PartyShopCategory _category = PartyShopCategory.All;   // the category "dropdown" selection
 
         // The per-row action keyed by item id (armed on rebuild), plus the detail payload per id.
         private readonly Dictionary<string, Action> _rowActions = new Dictionary<string, Action>();
@@ -194,6 +204,15 @@ namespace DeNelle.Village.Hero
         // ── Read-only data the View renders ─────────────────────────────────────
 
         public PartyShopTab Tab => _tab;
+
+        /// <summary>The active category "dropdown" selection (All / Weapons / Armor). The View
+        /// highlights the matching selector chip and rebuilds the list when it changes.</summary>
+        public PartyShopCategory Category => _category;
+
+        /// <summary>Whether this vendor offers BOTH gear kinds (so the category selector is useful).
+        /// A weapon-only or armor-only vendor pins the category and hides the selector.</summary>
+        public bool CategorySelectorVisible =>
+            (_storeKinds & GearKind.Weapon) != 0 && (_storeKinds & GearKind.Armor) != 0;
 
         /// <summary>The party-member chips (one per member; the selected one flagged). Never null.</summary>
         public IReadOnlyList<PartyMemberVM> Party
@@ -278,6 +297,16 @@ namespace DeNelle.Village.Hero
             Raise();
         }
 
+        /// <summary>Set the category "dropdown" (All / Weapons / Armor), then rebuild the list.</summary>
+        public void SetCategory(PartyShopCategory category)
+        {
+            if (category == _category) return;
+            _category = category;
+            SelectedId = null;
+            Rebuild();
+            Raise();
+        }
+
         /// <summary>Inspect a row (holds it as selected so the View can show its details).</summary>
         public void Select(string id)
         {
@@ -355,7 +384,17 @@ namespace DeNelle.Village.Hero
             // for SELL; for BUY we pass the raw vendor context so the resolver can also yield craftables.
             var shoppable = ShopCatalog.Shoppable(_vendorContext, job, level);
 
-            foreach (var entry in shoppable)
+            // Category "dropdown": ALL shows the combined list ARMOR-FIRST then weapons (armor/
+            // weapons-first, STORE_EQUIP_SPEC); WEAPONS / ARMOR narrow to one kind. Craftables
+            // always pass (a crafting vendor's only stock). Reorder so armor leads in ALL.
+            var ordered = new List<ShoppableEntry>(shoppable.Count);
+            if (_category != PartyShopCategory.Weapons)
+                foreach (var e in shoppable) if (e.Kind == ShoppableKind.Armor) ordered.Add(e);
+            if (_category != PartyShopCategory.Armor)
+                foreach (var e in shoppable) if (e.Kind == ShoppableKind.Weapon) ordered.Add(e);
+            foreach (var e in shoppable) if (e.Kind == ShoppableKind.Craftable) ordered.Add(e);
+
+            foreach (var entry in ordered)
             {
                 switch (entry.Kind)
                 {
@@ -474,24 +513,11 @@ namespace DeNelle.Village.Hero
         {
             var member = SelectedMember;
 
-            foreach (var (w, qty) in _store.OwnedWeapons())
-            {
-                if (w == null || (_storeKinds & GearKind.Weapon) == 0) continue;
-                bool equipped = member != null && member.EquippedWeapon != null &&
-                                string.Equals(member.EquippedWeapon.id, w.id, StringComparison.OrdinalIgnoreCase);
-                var refund = ScaleCost(GearCatalog.GetBuyCost(w), 0.50f);
-                string id = w.id;
-                string name = (string.IsNullOrEmpty(w.name) ? w.id : w.name) + " x" + qty;
-
-                _rowDetails[id] = new PartyShopDetail(
-                    WeaponStats(w), "", DescribeGear(w.job, w.rarity), w.iconPath, IconRoleWeapon, id);
-                _rowActions[id] = () => SellGear(w.id, refund);
-                _items.Add(new ItemVM(id, name, IconRoleWeapon, id, refund.Coins, "gold", true, w.rarity, equipped: equipped));
-            }
-
+            // Armor leads in the SELL list too (armor/weapons-first), narrowed by the category dropdown.
             foreach (var (a, qty) in _store.OwnedArmor())
             {
                 if (a == null || (_storeKinds & GearKind.Armor) == 0) continue;
+                if (_category == PartyShopCategory.Weapons) continue;
                 bool equipped = member != null && member.EquippedArmor != null &&
                                 string.Equals(member.EquippedArmor.id, a.id, StringComparison.OrdinalIgnoreCase);
                 var refund = ScaleCost(GearCatalog.GetBuyCost(a), 0.50f);
@@ -502,6 +528,22 @@ namespace DeNelle.Village.Hero
                     ArmorStats(a), "", DescribeGear(a.job, a.rarity), a.iconPath, IconRoleArmor, id);
                 _rowActions[id] = () => SellGear(a.id, refund);
                 _items.Add(new ItemVM(id, name, IconRoleArmor, id, refund.Coins, "gold", true, a.rarity, equipped: equipped));
+            }
+
+            foreach (var (w, qty) in _store.OwnedWeapons())
+            {
+                if (w == null || (_storeKinds & GearKind.Weapon) == 0) continue;
+                if (_category == PartyShopCategory.Armor) continue;
+                bool equipped = member != null && member.EquippedWeapon != null &&
+                                string.Equals(member.EquippedWeapon.id, w.id, StringComparison.OrdinalIgnoreCase);
+                var refund = ScaleCost(GearCatalog.GetBuyCost(w), 0.50f);
+                string id = w.id;
+                string name = (string.IsNullOrEmpty(w.name) ? w.id : w.name) + " x" + qty;
+
+                _rowDetails[id] = new PartyShopDetail(
+                    WeaponStats(w), "", DescribeGear(w.job, w.rarity), w.iconPath, IconRoleWeapon, id);
+                _rowActions[id] = () => SellGear(w.id, refund);
+                _items.Add(new ItemVM(id, name, IconRoleWeapon, id, refund.Coins, "gold", true, w.rarity, equipped: equipped));
             }
 
             Status = _items.Count == 0

@@ -51,6 +51,7 @@ namespace DeNelle.Village.Hero
         private GameObject _contentRoot;
         private GameObject _partyBar;
         private GameObject _tabBar;
+        private GameObject _categoryBar;
         private RectTransform _scrollContent;
         private TMPro.TextMeshProUGUI _headerLabel;
         private TMPro.TextMeshProUGUI _memberLabel;
@@ -206,6 +207,7 @@ namespace DeNelle.Village.Hero
 
             RebuildPartyBar();
             HighlightTab(_vm.Tab);
+            UpdateCategoryBar();
             RebuildList();
             HighlightSelectedRow();
         }
@@ -279,11 +281,23 @@ namespace DeNelle.Village.Hero
             CreateTab("BUY",  new Vector2(0.02f, 0.49f), () => _vm?.SetTab(PartyShopTab.Buy));
             CreateTab("SELL", new Vector2(0.51f, 0.98f), () => _vm?.SetTab(PartyShopTab.Sell));
 
+            // Category selector ("dropdown selections": All / Weapons / Armor) — the missing
+            // narrow over the combined weapons+armor list. Pinned/hidden for single-kind vendors
+            // (CategorySelectorVisible). Sits just under the tab/member band, above the grid.
+            _categoryBar = new GameObject("CategoryBar", typeof(RectTransform));
+            _categoryBar.transform.SetParent(panel, false);
+            var cb = _categoryBar.GetComponent<RectTransform>();
+            cb.anchorMin = new Vector2(0.04f, 0.705f); cb.anchorMax = new Vector2(0.96f, 0.748f);
+            cb.offsetMin = Vector2.zero; cb.offsetMax = Vector2.zero;
+            CreateCategory("All",     new Vector2(0.01f, 0.32f),  PartyShopCategory.All);
+            CreateCategory("Armor",   new Vector2(0.34f, 0.65f),  PartyShopCategory.Armor);
+            CreateCategory("Weapons", new Vector2(0.67f, 0.99f),  PartyShopCategory.Weapons);
+
             // The scroll list area (the item grid).
             _contentRoot = new GameObject("Content", typeof(RectTransform));
             _contentRoot.transform.SetParent(panel, false);
             var cr = _contentRoot.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0.04f, 0.12f); cr.anchorMax = new Vector2(0.96f, 0.745f);
+            cr.anchorMin = new Vector2(0.04f, 0.12f); cr.anchorMax = new Vector2(0.96f, 0.70f);
             cr.offsetMin = Vector2.zero; cr.offsetMax = Vector2.zero;
 
             // Close + status (bottom band).
@@ -310,6 +324,35 @@ namespace DeNelle.Village.Hero
                 new Vector2(anchorX.x, 0.05f), new Vector2(anchorX.y, 0.95f), onClick,
                 packSpriteName: RpgUiCatalog.ButtonFrame);
             CreamTab(btn);
+        }
+
+        private void CreateCategory(string label, Vector2 anchorX, PartyShopCategory cat)
+        {
+            var btn = ElarionUiKit.ButtonPack(_categoryBar.transform, label, ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(anchorX.x, 0.08f), new Vector2(anchorX.y, 0.92f),
+                () => _vm?.SetCategory(cat),
+                packSpriteName: RpgUiCatalog.ButtonFrame);
+            CreamTab(btn);
+        }
+
+        // Show the category selector only for vendors that stock BOTH gear kinds (else it is
+        // pinned to the single kind and the row is hidden), then highlight the active category.
+        private void UpdateCategoryBar()
+        {
+            if (_categoryBar == null || _vm == null) return;
+            bool show = _vm.CategorySelectorVisible;
+            _categoryBar.SetActive(show);
+            if (!show) return;
+
+            string active = _vm.Category == PartyShopCategory.Weapons ? "Btn_Weapons"
+                          : _vm.Category == PartyShopCategory.Armor   ? "Btn_Armor"
+                          : "Btn_All";
+            foreach (Transform child in _categoryBar.transform)
+            {
+                if (child == null) continue;
+                var img = child.GetComponent<Image>();
+                if (img != null) img.color = child.name == active ? TabSelectedTint : TabRestTint;
+            }
         }
 
         private void HighlightTab(PartyShopTab tab)
@@ -731,6 +774,7 @@ namespace DeNelle.Village.Hero
             _contentRoot = null;
             _partyBar = null;
             _tabBar = null;
+            _categoryBar = null;
             _scrollContent = null;
             _rowPlates.Clear();
             PanelManager.NotifyClosed(_panelHandle);

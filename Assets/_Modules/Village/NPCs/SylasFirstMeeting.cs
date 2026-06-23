@@ -134,6 +134,12 @@ namespace DeNelle.Village
             get
             {
                 if (s_ranThisSession) return false;
+
+                // SINGLE-HERO (ff.singlehero, default ON): the pivot is ONE hero with NO
+                // companions — the join beats must NOT recruit anyone. Stand down so no
+                // companion is added to the party. Flag OFF restores the party-of-4 join.
+                if (FeatureFlags.SingleHero) return false;
+
                 if (ForceRun) return true;
 
                 // SINGLE-TRIGGER (owner 2026-06-12): when the walk-up companion-introducer

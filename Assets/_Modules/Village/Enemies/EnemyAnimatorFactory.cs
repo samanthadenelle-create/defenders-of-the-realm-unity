@@ -21,7 +21,7 @@ using DeNelle.Core.Diagnostics;
 namespace DeNelle.Village
 {
     /// <summary>Rig family of an enemy mesh — selects which shared controller to apply.</summary>
-    public enum EnemyRig { HumanoidMedium, HumanoidLarge, Boss, Dragon, OrcWarband, LargeHumanoid }
+    public enum EnemyRig { HumanoidMedium, HumanoidLarge, Boss, Dragon, OrcWarband, LargeHumanoid, OrcHumanoid }
 
     public static class EnemyAnimatorFactory
     {
@@ -50,6 +50,13 @@ namespace DeNelle.Village
                 case "Orc_Berserker":
                 case "Orc_Shaman":
                 case "Orc_Necromancer": return EnemyRig.OrcWarband;
+                // WO-482: the NEW Tripo orc FAMILY (Warrior leader / Tank / Mage — WO-481 roster) is a
+                // distinct humanoid rig with its own controller (OrcHumanoid, already in Resources/Enemies,
+                // proven by ATB slice 2c). Kept separate from the older OrcWarband orcs so each family
+                // drives its own clip set. These are the overworld-encounter combatants.
+                case "Orc_Warrior":
+                case "Orc_Tank":
+                case "Orc_Mage":        return EnemyRig.OrcHumanoid;
                 default:               return EnemyRig.HumanoidMedium; // Warrior/Minion/Rogue/Mage
             }
         }
@@ -62,6 +69,7 @@ namespace DeNelle.Village
                 case EnemyRig.Boss:           return "Boss";
                 case EnemyRig.Dragon:         return "Dragon";
                 case EnemyRig.OrcWarband:     return "OrcWarband";    // DEF-221 Humanoid orc controller
+                case EnemyRig.OrcHumanoid:    return "OrcHumanoid";   // WO-482 new Tripo orc family (Orc_Warrior/Tank/Mage)
                 case EnemyRig.LargeHumanoid:  return "LargeHumanoid"; // WO-445 Humanoid brute controller (Troll/Demon/OgreMage)
                 default:                      return "HumanoidEnemy";
             }

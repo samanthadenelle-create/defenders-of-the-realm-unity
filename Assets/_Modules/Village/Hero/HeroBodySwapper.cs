@@ -967,7 +967,15 @@ namespace DeNelle.Village
                 //   the mesh's OWN basecolor means every UV island samples its matching region —
                 //   a real textured Knight, not the flat-steel stopgap. If this load fails,
                 //   ApplyExtractedTexture returns false and Start() falls back to flat steel.
-                HeroClass.Knight => "Heroes/Textures/HeroTank_Diffuse",
+                // WO-481 Slice 4 (2026-06-23) ARMORED KNIGHT PROMOTION: the playable Knight is now
+                //   the ARMORED Tripo model (armor baked into the mesh — the pivot's static-armor body),
+                //   promoted over Resources/Heroes/Knight.fbx. Its UV-matched basecolor is the Tripo
+                //   PBR export medieval_knight_3d_model_basecolor, copied (distinct name) into the
+                //   reliably-loadable plain Heroes/Textures/ folder as KnightArmored_basecolor. Binding
+                //   the mesh's OWN basecolor means every UV island samples its matching region — a real
+                //   textured armored Knight, not the flat-steel stopgap. If this load fails,
+                //   ApplyExtractedTexture returns false and Start() falls back to flat steel.
+                HeroClass.Knight => "Heroes/Textures/KnightArmored_basecolor",
                 // DEF-229 (2026-06-03): the Ranger body is now the CC5/CC_Base adult
                 // archer (InstaLOD-remeshed: ONE combined mesh + ONE baked PBR atlas),
                 // imported Humanoid by PeopleCharacterImporter.ImportRangerCC5 into
@@ -1049,10 +1057,14 @@ namespace DeNelle.Village
                     // armour plates/cloth catch surface detail. Knight-ONLY: the other classes ship
                     // base-color only and keep _BumpMap cleared. Null-guarded — a missing normal
                     // is a clean no-op (the basecolor still drives the look).
-                    var heroTankNormal = Resources.Load<Texture2D>("Heroes/Textures/HeroTank_Normal");
-                    if (heroTankNormal != null && baked.HasProperty("_BumpMap"))
+                    // WO-481 Slice 4: the armored Tripo Knight ships a UV-matched NORMAL map alongside
+                    // its basecolor (medieval_knight_3d_model_normal, copied to Heroes/Textures/
+                    // KnightArmored_normal, imported textureType=NormalMap). Bind it so the armour
+                    // plates/cloth catch surface detail. Null-guarded — a missing normal is a clean no-op.
+                    var knightArmoredNormal = Resources.Load<Texture2D>("Heroes/Textures/KnightArmored_normal");
+                    if (knightArmoredNormal != null && baked.HasProperty("_BumpMap"))
                     {
-                        baked.SetTexture("_BumpMap", heroTankNormal);
+                        baked.SetTexture("_BumpMap", knightArmoredNormal);
                         baked.EnableKeyword("_NORMALMAP");
                     }
                 }

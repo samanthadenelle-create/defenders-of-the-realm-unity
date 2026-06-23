@@ -101,6 +101,12 @@ namespace DeNelle.Village
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            // SINGLE-HERO (ff.singlehero, default ON): the pivot is ONE hero with NO
+            // companions — the walk-up introducer NPC must NOT spawn or recruit anyone.
+            // No-op the bootstrap so no introducer body appears and Active stays false.
+            // Flag OFF restores the walk-up companion intro fully.
+            if (FeatureFlags.SingleHero) return;
+
             if (Instance != null) return;
             new GameObject("CastleCompanionIntroducerInjector")
                 .AddComponent<CastleCompanionIntroducerInjector>();

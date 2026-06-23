@@ -146,6 +146,20 @@ namespace DeNelle.Village
 
         private void Spawn()
         {
+            // PIVOT (ff.singlehero, owner 2026-06-22): single-hero mode has NO companion BODIES —
+            // this is the pivot's "retire StoryCompanionInjector". Despawn any live companion and
+            // bail, so no party body ever follows the lone hero. Flag OFF restores the party-of-4.
+            if (FeatureFlags.SingleHero)
+            {
+                if (_companions.Count > 0)
+                {
+                    foreach (var kv in _companions) if (kv.Value != null) Destroy(kv.Value.gameObject);
+                    _companions.Clear();
+                    FlowTrace.Step("Roster", "ff.singlehero ON — despawned all companion bodies (single-hero, no party).");
+                }
+                return;
+            }
+
             // The set of companion classes that SHOULD be live this frame.
             //   • Story-beat override (FTUE / first-meeting): exactly that one class,
             //     so the beat can frame a single companion before the roster is written.

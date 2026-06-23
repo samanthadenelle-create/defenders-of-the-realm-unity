@@ -93,6 +93,9 @@ namespace DeNelle.Village
             // blanket-rotate. ⚠ "Troll" is mapped but RigFor falls it to KayKit
             // (HumanoidMedium) → 0 rotation here; playtest if a Tripo Troll lands.
             var skinOpts = SkinOptions.Enemy(height);
+            // WO-482: resolve the rig ONCE here so the orc-yaw/material block AND the post-Skin
+            // basecolor fallback below both read the same authority (EnemyAnimatorFactory.RigFor).
+            EnemyRig rigForModel = EnemyAnimatorFactory.RigFor(model);
             // WIGHT FIX (RCA 2026-06-13): Demon / OgreMage are newer +X-forward Tripo creature
             // exports (same convention as the Orc Warband + the heroes, all -90f) but they resolve
             // to the HumanoidLarge rig — NOT OrcWarband — so the old condition rotated neither, and
@@ -100,9 +103,9 @@ namespace DeNelle.Village
             // materials were extracted to external URP .mats at import; Demon/OgreMage ship raw
             // FbxSurfacePhong → magenta/unlit). Treat them like the orcs: same -90 yaw + attach the
             // runtime Tripo→URP material fixer. By name so we never blanket-rotate the rig class.
-            if (EnemyAnimatorFactory.RigFor(model) == EnemyRig.OrcWarband)
+            if (rigForModel == EnemyRig.OrcWarband || rigForModel == EnemyRig.OrcHumanoid)
             {
-                // Orc Warband: upright already, just a -90 yaw so +X-forward faces +Z.
+                // Orc Warband + WO-482 orc family: upright already, just a -90 yaw so +X-forward faces +Z.
                 skinOpts.LocalRotation = Quaternion.Euler(0f, -90f, 0f);
                 // Ticket #4 (RCA 2026-06-21): the old assumption above ("orcs render because their
                 // materials were extracted to external URP .mats") is STALE — Orc_*.fbx.meta remaps to
@@ -152,6 +155,26 @@ namespace DeNelle.Village
                 FlowTrace.Once("Enemy", $"skinned-{model}",
                     $"VisualFactory.Skin OK for model '{model}' (id '{(def != null ? def.Id : "?")}') — real mesh, not capsule");
                 EnemyAnimatorFactory.Apply(vis, model);   // walk/attack/die controller
+
+                // WO-482: the new Tripo orc FAMILY (Orc_Warrior/Tank/Mage) ships EXTERNAL textures with an
+                // unbound _MainTex → renders solid WHITE under the URP fixer unless the per-orc basecolor is
+                // bound as the fixer's FALLBACK (the exact fix ATB slice 2c needed). The fixer was attached by
+                // VisualFactory (skinOpts.FixTripoMaterials, set above for the OrcHumanoid rig); bind the
+                // fallback NOW — synchronous, before the fixer's deferred Start() — so it paints the atlas.
+                if (rigForModel == EnemyRig.OrcHumanoid)
+                {
+                    string orcTex =
+                        model == "Orc_Warrior" ? "Enemies/OrcTex/Orc_Warrior_basecolor" :
+                        model == "Orc_Tank"    ? "Enemies/OrcTex/Orc_Tank_basecolor"    :
+                        model == "Orc_Mage"    ? "Enemies/OrcTex/Orc_Mage_basecolor"    : null;
+                    if (!string.IsNullOrEmpty(orcTex))
+                    {
+                        // Explicit Unity null-check (NOT ?. — GetComponent returns a fake-null the
+                        // null-conditional operator won't catch; the project lints against it).
+                        var orcFixer = vis.GetComponentInChildren<DeNelle.Core.TripoMaterialFixer>();
+                        if (orcFixer != null) orcFixer.SetFallbackTexture(orcTex);
+                    }
+                }
 
                 // WIGHT HALF-UNDERGROUND FIX (RCA 2026-06-17): the Tripo/AccuRIG FBXs pivot at
                 // the mesh CENTRE, so when the visual is scaled up (the Demon/wight at 4x) the
@@ -276,6 +299,14 @@ namespace DeNelle.Village
                 case "orc-berserker":    return "Orc_Berserker";     // brute / charger
                 case "orc-shaman":       return "Orc_Shaman";        // caster
                 case "orc-necromancer":  return "Orc_Necromancer";   // camp elite
+
+                // ── ORC FAMILY (WO-482) — new Tripo roster, OrcHumanoid rig ──────
+                // The WO-481 overworld-encounter combatants: Warrior leader + Tank + Mage.
+                // Distinct models + controller (OrcHumanoid) from the older OrcWarband orcs
+                // above; they render via the per-orc OrcTex basecolor fallback (set after Skin).
+                case "orc-warrior":      return "Orc_Warrior";       // family leader / DPS
+                case "orc-tank":         return "Orc_Tank";          // bulwark
+                case "orc-mage":         return "Orc_Mage";          // caster
                 // ENEMY-VARIETY EXT (2026-06-13): the EnemyOutpost RAID BOSS ("orc-warlord",
                 // EnemyOutpost.BuildBossDef) set NO Family/Role, so it fell to the size
                 // default (height 2.6 → Skeleton_Golem) and the warband's capstone boss

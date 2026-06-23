@@ -306,3 +306,22 @@ In one breath:
   handoffLog}` is the hand-off log). **Log every hand-off.**
 - **Role separation is non-negotiable:** QA doesn't write, CLI doesn't classify-triage, PO closes
   (not CLI). Read-only constraint on early triage.
+
+---
+
+## 14. F8 Live-Triage Watcher (BINDING — every CLI session, forever)
+
+Owner directive (2026-06-23): **the owner is NEVER the bug detector** (memory
+`never-dragdrop-or-manual-playtest`). Whenever the owner is (or is about to start) felt-testing,
+the CLI **ARMS the F8 break-log watcher** so every F8 flag / error / softlock the harness records
+surfaces on the CLI **the instant it lands** — and the CLI **triages it LIVE** (RCA from the captured
+line + screenshot) instead of waiting to be told.
+
+- **Arm it:** `bash .claude/skills/run-defenders/f8-watch.sh` via the **Bash tool with
+  `run_in_background: true`** (a detached/hook process can't route findings back to the agent — the
+  agent must launch it itself to get the completion notification).
+- **Re-arm after every fire** (it exits on the first real capture) so it covers the whole session.
+- It fires ONLY on real captures (F8 `flagged` / error / exception / softlock); `session_start` +
+  `scene_loaded` startup noise is filtered; it re-baselines on a fresh Play session.
+- On a fire: harvest the surrounding `[Flow:*]` lines + the screenshot, RCA, and route per §13
+  (CLI implements + headless-verifies; PO felt-verifies + closes). The owner just plays and F8s.

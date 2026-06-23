@@ -117,6 +117,12 @@ namespace DeNelle.Village
             get
             {
                 if (s_ranThisSession) return false;
+
+                // SINGLE-HERO (ff.singlehero, default ON): NO companions — the first-return
+                // join must NOT recruit Grom. Stand down (the watcher self-destructs). Flag
+                // OFF restores the party-of-4 join.
+                if (FeatureFlags.SingleHero) return false;
+
                 if (ForceRun) return true;
                 var svc = GameStateService.Instance;
                 if (svc == null || svc.State == null) return true; // wait for Core

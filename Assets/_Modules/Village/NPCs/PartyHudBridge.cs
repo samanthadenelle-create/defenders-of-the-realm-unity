@@ -56,6 +56,20 @@ namespace DeNelle.Village
 
             if (!ResolveHud()) return;
 
+            // SINGLE-HERO (ff.singlehero, default ON): the pivot is ONE hero with NO
+            // companions. Show ZERO companion frames — hide slots 1..3 and skip the roster
+            // fill entirely. Flag OFF restores the full party-of-4 fill below.
+            if (FeatureFlags.SingleHero)
+            {
+                for (int slot = 0; slot < CompanionSlots; slot++)
+                {
+                    _visibleArgs[0] = slot + 1; // 0 is the hero
+                    _visibleArgs[1] = false;
+                    _setPartyVisible?.Invoke(_hud, _visibleArgs);
+                }
+                return;
+            }
+
             // WO-301 — the PERSISTED ROSTER is the source of truth for how many party
             // frames show. PartySize companions (slots 1..PartySize) are visible; the
             // rest are hidden. The live StoryCompanion still supplies the per-frame
