@@ -469,8 +469,15 @@ namespace DeNelle.BattleATB
 
             if (roster.Count == 0)
             {
-                string fb = string.IsNullOrEmpty(_fallbackEnemyDefId) ? "skeleton" : _fallbackEnemyDefId;
-                roster.Add(new BreachEnemySpec { DefId = MapToEngineDef(fb) });
+                // WO-481 combat-pivot: the V1 prototype encounter is the Orc FAMILY (leader +
+                // followers), not a lone skeleton. With no breach handoff (dev / direct ATBBattle
+                // play) stage the family so the battle anchor shows the real V1 fight. The swapper
+                // reads the SAME list (AtbPrototypeEncounter.OrcFamily) so engine roster ↔ visuals match.
+                foreach (var id in AtbPrototypeEncounter.OrcFamily)
+                {
+                    if (roster.Count >= MaxEnemies) break;
+                    roster.Add(new BreachEnemySpec { DefId = MapToEngineDef(id) });
+                }
             }
             return roster;
         }

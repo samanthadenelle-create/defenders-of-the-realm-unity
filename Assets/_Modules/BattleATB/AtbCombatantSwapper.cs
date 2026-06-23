@@ -28,6 +28,14 @@ using DeNelle.BattleATB.Engine;   // Defs.ENEMY_DEFS — validate breach ids aga
 
 namespace DeNelle.BattleATB
 {
+    /// <summary>WO-481 combat-pivot: the V1 prototype encounter — the Orc FAMILY (leader first,
+    /// then followers). BattleController.BuildEnemyRoster (engine side) and AtbCombatantSwapper
+    /// (visual side) BOTH read this so the engine roster and the staged models stay in sync.</summary>
+    public static class AtbPrototypeEncounter
+    {
+        public static readonly string[] OrcFamily = { "orc-warrior", "orc-tank", "orc-mage" };
+    }
+
     /// <summary>Swaps the ATB placeholder capsules for real combatant visuals.</summary>
     public static class AtbCombatantSwapper
     {
@@ -326,16 +334,21 @@ namespace DeNelle.BattleATB
             // cannot reference here). No-op-safe if the controller asset is absent.
             ApplyEnemyAnimator(model, enemySlug);
 
-            var fixer = FindType("DeNelle.Core.TripoMaterialFixer");
-            if (fixer != null)
+            // TripoMaterialFixer rebuilds URP materials. WO-481: the new Tripo orcs ship EXTERNAL
+            // textures (unbound _MainTex), so set the basecolor FALLBACK (Resources/Enemies/OrcTex/*)
+            // — same trick as the hero (ApplyHeroTexturedMaterial) — else they render white. Other
+            // enemies have working textures so no fallback is set. Typed (BattleATB refs DeNelle.Core).
+            try
             {
-                try { model.AddComponent(fixer); }
-                catch (Exception ex)
-                {
-                    FlowTrace.Warn("AtbSwap",
-                        $"SwapEnemy: TripoMaterialFixer AddComponent threw {ex.GetType().Name}: {ex.Message} — " +
-                        "enemy model kept (may render raw/untextured).");
-                }
+                var efixer = model.AddComponent<DeNelle.Core.TripoMaterialFixer>();
+                string orcTex = EnemyBasecolorPath(enemySlug);
+                if (!string.IsNullOrEmpty(orcTex)) efixer.SetFallbackTexture(orcTex);
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("AtbSwap",
+                    $"SwapEnemy: TripoMaterialFixer AddComponent threw {ex.GetType().Name}: {ex.Message} — " +
+                    "enemy model kept (may render raw/untextured).");
             }
 
             if (haveSlot)
@@ -368,6 +381,88 @@ namespace DeNelle.BattleATB
             // freezes in T-pose — re-show (and tint) the capsule rather than leave a statue.
             var capForPose = capsule;
             AtbSwapPoseVerifier.Watch(capsule, model, capsuleRenderers, () => TintEnemy(capForPose), "enemy:" + enemySlug);
+
+            // WO-481 — stage the REST of the family (followers) in formation behind/flanking the
+            // leader, so the battle anchor reads as a led pack. Followers are formation visuals
+            // (idle via OrcHumanoid); the leader at the capsule stays the BattleController-driven foe.
+            StageEnemyFollowers(capsule, heroCapsule, haveSlot ? slot.size.y : 2f);
+        }
+
+        // WO-481 — stage the family's FOLLOWERS (roster[1..]) around the leader capsule. Each is a
+        // real Resources/Enemies orc model (idle via OrcHumanoid + textured via the fixer fallback),
+        // grounded + facing the hero, placed at a behind-and-flanking formation offset. Visual only
+        // (the engine roster already carries the full family); never blocks the load.
+        private static void StageEnemyFollowers(Transform leaderCapsule, Transform heroCapsule, float height)
+        {
+            if (leaderCapsule == null) return;
+            if (GameObject.Find("AtbEnemyFollowers") != null) return;   // already staged
+
+            var slugs = FollowerSlugs();
+            if (slugs.Count == 0) return;
+
+            var holder = new GameObject("AtbEnemyFollowers");
+            holder.transform.position = leaderCapsule.position;
+
+            // Behind (+X, away from the hero on -X) and flanking (±Z) the leader.
+            Vector3[] offs =
+            {
+                new Vector3(0.9f, 0f,  1.2f),
+                new Vector3(0.9f, 0f, -1.2f),
+                new Vector3(1.9f, 0f,  0f),
+            };
+
+            for (int i = 0; i < slugs.Count && i < offs.Length; i++)
+            {
+                string slug = slugs[i];
+                var prefab = Resources.Load<GameObject>("Enemies/" + slug);
+                if (prefab == null)
+                {
+                    FlowTrace.Warn("AtbSwap", $"StageEnemyFollowers: Resources/Enemies/{slug} missing — skipped.");
+                    continue;
+                }
+
+                var model = UnityEngine.Object.Instantiate(prefab, holder.transform);
+                model.name = "AtbFollower_" + slug;
+                StripCamerasAndColliders(model);
+                ApplyEnemyAnimator(model, slug);
+                try
+                {
+                    var fx = model.AddComponent<DeNelle.Core.TripoMaterialFixer>();
+                    string t = EnemyBasecolorPath(slug);
+                    if (!string.IsNullOrEmpty(t)) fx.SetFallbackTexture(t);
+                }
+                catch (Exception ex) { FlowTrace.Warn("AtbSwap", $"StageEnemyFollowers: fixer threw {ex.GetType().Name} — {slug} may render raw."); }
+
+                NormalizeHeight(model, Mathf.Max(0.5f, height));
+
+                // Recenter: bounds-centre XZ → the formation target; feet → ground (y=0).
+                Vector3 target = leaderCapsule.position + offs[i];
+                Bounds mb = ModelBounds(model);
+                model.transform.position += new Vector3(target.x - mb.center.x, 0f - mb.min.y, target.z - mb.center.z);
+
+                // Face the hero (same +Z aim as the leader's FaceEnemyTowardHero).
+                if (heroCapsule != null)
+                {
+                    Vector3 dir = heroCapsule.position - model.transform.position; dir.y = 0f;
+                    if (dir.sqrMagnitude > 0.0001f) model.transform.rotation = Quaternion.LookRotation(dir.normalized, Vector3.up);
+                }
+                FlowTrace.Step("AtbSwap", $"StageEnemyFollowers: '{slug}' staged at {target}.");
+            }
+        }
+
+        // Follower model slugs = the roster AFTER the leader (index 0, already at the capsule).
+        // Reads the same source as BattleController.BuildEnemyRoster: the breach handoff if present,
+        // else the prototype Orc family — so engine roster and visuals stay in sync.
+        private static System.Collections.Generic.List<string> FollowerSlugs()
+        {
+            var list = new System.Collections.Generic.List<string>();
+            var handoff = DeNelle.Core.SceneRouter.PendingBattle;
+            string[] ids = (handoff != null && handoff.BreachedIds != null && handoff.BreachedIds.Length > 0)
+                ? handoff.BreachedIds
+                : AtbPrototypeEncounter.OrcFamily;
+            for (int i = 1; i < ids.Length; i++)
+                list.Add(ModelSlugForEngineDef(EngineDefFor(ids[i])));
+            return list;
         }
 
         // WO-381 #3 — orient the enemy model so its visual forward (+Z) points at the hero.
@@ -444,6 +539,9 @@ namespace DeNelle.BattleATB
         {
             switch (engineDef)
             {
+                case "orc-warrior":       return "Orc_Warrior";       // WO-481 family LEADER
+                case "orc-tank":          return "Orc_Tank";          // WO-481 follower
+                case "orc-mage":          return "Orc_Mage";          // WO-481 follower
                 case "goblin":            return "Skeleton_Minion";   // small grunt
                 case "bruiser":           return "Skeleton_Golem";    // heavy tank → large rig
                 case "necromancer":       return "Necromancer";
@@ -527,6 +625,9 @@ namespace DeNelle.BattleATB
                 case "Skeleton_Golem":  return "LargeEnemy";
                 case "Necromancer":     return "Boss";
                 case "Dragon":          return "Dragon";
+                case "Orc_Warrior":     // WO-481 new Tripo orcs are HUMANOID → humanoid controller
+                case "Orc_Tank":
+                case "Orc_Mage":        return "OrcHumanoid";
                 case "Orc_Berserker":
                 case "Orc_Shaman":
                 case "Orc_Necromancer": return "OrcWarband";
@@ -595,6 +696,20 @@ namespace DeNelle.BattleATB
                 case "Ranger": return "Heroes/Textures/ranger_basecolor";
                 case "Cleric": return "Heroes/Textures/Cleric_basecolor";
                 default:       return "Heroes/Textures/tripo_mat_9b343081_Pbr_Diffuse"; // Mage (+ None)
+            }
+        }
+
+        // WO-481 — per-orc basecolor (Resources path, no extension) for the TripoMaterialFixer
+        // fallback. The new Tripo orcs ship external textures (copied to Resources/Enemies/OrcTex
+        // by PromoteOrcsToResources); other enemies have working/embedded textures → null (no fallback).
+        private static string EnemyBasecolorPath(string slug)
+        {
+            switch (slug)
+            {
+                case "Orc_Warrior": return "Enemies/OrcTex/Orc_Warrior_basecolor";
+                case "Orc_Tank":    return "Enemies/OrcTex/Orc_Tank_basecolor";
+                case "Orc_Mage":    return "Enemies/OrcTex/Orc_Mage_basecolor";
+                default:            return null;
             }
         }
 
