@@ -521,13 +521,13 @@ namespace DeNelle.Village.Arena
             GameObject heroGo = GameObject.FindWithTag("Player");
             if (heroGo == null) return null;
 
-            var loadout = heroGo.GetComponent<DeNelle.Village.Hero.GearLoadout>();
-            if (loadout == null) loadout = heroGo.AddComponent<DeNelle.Village.Hero.GearLoadout>();
+            var loadout = heroGo.GetComponent<DeNelle.Village.GearLoadout>();
+            if (loadout == null) loadout = heroGo.AddComponent<DeNelle.Village.GearLoadout>();
             if (loadout == null) return null;
 
-            var abilities   = heroGo.GetComponent<DeNelle.Village.Hero.HeroAbilities>();
+            var abilities   = heroGo.GetComponent<DeNelle.Village.HeroAbilities>();
             var progression = heroGo.GetComponent<DeNelle.Village.HeroProgression>();
-            string job   = abilities != null ? abilities.HeroClass : DeNelle.Village.Hero.AbilityCatalog.DefaultClass;
+            string job   = abilities != null ? abilities.HeroClass : DeNelle.Village.AbilityCatalog.DefaultClass;
             int    level = progression != null ? progression.Level : 1;
 
             // Bias low: arena drops stay common/uncommon (the outpost owns the rare/epic curve).
@@ -553,10 +553,10 @@ namespace DeNelle.Village.Arena
 
         // Pick the eligible weapon at the target rarity the hero qualifies for; else the
         // best weapon for the hero's job/level (GearCatalog fallback). Null if none.
-        private static DeNelle.Village.Hero.WeaponDef PickArenaWeapon(string job, int level, string rarity)
+        private static DeNelle.Village.WeaponDef PickArenaWeapon(string job, int level, string rarity)
         {
-            DeNelle.Village.Hero.WeaponDef exact = null;
-            foreach (var w in DeNelle.Village.Hero.GearCatalog.AllWeapons())
+            DeNelle.Village.WeaponDef exact = null;
+            foreach (var w in DeNelle.Village.GearCatalog.AllWeapons())
             {
                 if (w == null) continue;
                 if (!string.IsNullOrEmpty(w.job)
@@ -568,13 +568,13 @@ namespace DeNelle.Village.Arena
                     if (exact == null || w.damageMult > exact.damageMult) exact = w;
                 }
             }
-            return exact ?? DeNelle.Village.Hero.GearCatalog.BestWeapon(job, level);
+            return exact ?? DeNelle.Village.GearCatalog.BestWeapon(job, level);
         }
 
-        private static DeNelle.Village.Hero.ArmorDef PickArenaArmor(int level, string rarity)
+        private static DeNelle.Village.ArmorDef PickArenaArmor(int level, string rarity)
         {
-            DeNelle.Village.Hero.ArmorDef exact = null;
-            foreach (var a in DeNelle.Village.Hero.GearCatalog.AllArmors())
+            DeNelle.Village.ArmorDef exact = null;
+            foreach (var a in DeNelle.Village.GearCatalog.AllArmors())
             {
                 if (a == null) continue;
                 if (a.req != null && level < a.req.level) continue;
@@ -583,7 +583,7 @@ namespace DeNelle.Village.Arena
                     if (exact == null || a.defense > exact.defense) exact = a;
                 }
             }
-            return exact ?? DeNelle.Village.Hero.GearCatalog.BestArmor("any", level);
+            return exact ?? DeNelle.Village.GearCatalog.BestArmor("any", level);
         }
     }
 }
