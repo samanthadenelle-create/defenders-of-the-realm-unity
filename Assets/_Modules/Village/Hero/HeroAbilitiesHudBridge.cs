@@ -18,6 +18,7 @@ namespace DeNelle.Village
         [SerializeField] private UnityEngine.Object _hud;
         private HeroAbilities _abilities;
         private HeroHealth _health; // same GameObject — drives the HUD hero-HP bar
+        private HeroLoadout _loadout; // same GameObject — skill-tree equipped W/E/R abilities
         private UnityEvent<int> _abilityRequestedEvent;
         private UnityAction<int> _onAbilityRequested;
 
@@ -61,7 +62,29 @@ namespace DeNelle.Village
         {
             _abilities = GetComponent<HeroAbilities>();
             _health = GetComponent<HeroHealth>(); // optional — re-resolved lazily in Update (HeroHealth may be added later by HeroHealthBootstrap)
+            EnsureLoadoutSubscription();
         }
+
+        // Skill-tree spine: when the player equips/clears a W/E/R ability via the
+        // loadout chooser, re-push the 4 slot cells so the HUD ability bar reflects
+        // the equipped kit (the bridge otherwise only re-pushes on a class change).
+        // Subscribe once; re-resolve the loadout lazily (it lives on this rig but may
+        // be added after Awake). Unity-object null checks are explicit (no ?./??).
+        private void EnsureLoadoutSubscription()
+        {
+            if (_loadout == null) _loadout = GetComponent<HeroLoadout>();
+            if (_loadout != null && !_loadoutSubscribed)
+            {
+                _loadout.Changed += OnLoadoutChanged;
+                _loadoutSubscribed = true;
+            }
+        }
+
+        private bool _loadoutSubscribed;
+
+        // Force the next frame's PushClassLoadoutIfChanged to re-push by clearing the
+        // class gate — the equipped abilities changed even though the class did not.
+        private void OnLoadoutChanged() => _lastPushedClass = null;
 
         // True once the HUD reflection methods + AbilityRequested event are bound to the
         // current _hud. Reset when _hud is lost so a new HUD (scene reload) rebinds.
@@ -164,6 +187,11 @@ namespace DeNelle.Village
         {
             if (_abilityRequestedEvent != null && _onAbilityRequested != null)
                 _abilityRequestedEvent.RemoveListener(_onAbilityRequested);
+            if (_loadout != null && _loadoutSubscribed)
+            {
+                _loadout.Changed -= OnLoadoutChanged;
+                _loadoutSubscribed = false;
+            }
             _hudBound = false; // rebind on next enable (the HUD may rebuild across scenes)
         }
 
@@ -178,6 +206,9 @@ namespace DeNelle.Village
             // (castle/OuterWorld) or the HUD streamed in after enable.
             if (_hud == null || !_hudBound) EnsureHud();
             if (_abilities == null || _hud == null) return;
+
+            // Lazily (re)subscribe — the loadout component may attach after Awake.
+            if (!_loadoutSubscribed) EnsureLoadoutSubscription();
 
             // HeroHealth is added by HeroHealthBootstrap, which can run AFTER this
             // bridge's Awake — so _health may have been null then. Re-resolve here
@@ -254,7 +285,7 @@ namespace DeNelle.Village
             for (int i = 0; i < 4; i++)
             {
                 var slot = (AbilitySlot)i;
-                var def = AbilityCatalog.Find(heroClass, slot);
+                var def = ResolveSlotDef(heroClass, slot);
 
                 string key = def != null && !string.IsNullOrEmpty(def.Key) ? def.Key : DefaultKey(i);
                 string glyph = GlyphFor(def);
@@ -287,6 +318,25 @@ namespace DeNelle.Village
             }
 
             Debug.Log($"[HeroAbilitiesHudBridge] Pushed ability bar for class '{heroClass}': {pushed}");
+        }
+
+        // Resolve the AbilityDef shown in a HUD slot: the loadout-equipped ability
+        // (W/E/R, by id) when one is set, else the class's stock Q/W/E/R def. Mirrors
+        // HeroAbilities.Resolve so the bar shows exactly what will cast. Q is the
+        // locked basic attack — always the class def.
+        private AbilityDef ResolveSlotDef(string heroClass, AbilitySlot slot)
+        {
+            if (_loadout == null) _loadout = GetComponent<HeroLoadout>();
+            if (_loadout != null && slot != AbilitySlot.Q)
+            {
+                string id = _loadout.AbilityIdForSlot(slot);
+                if (!string.IsNullOrEmpty(id))
+                {
+                    var equipped = AbilityCatalog.FindById(id);
+                    if (equipped != null) return equipped;
+                }
+            }
+            return AbilityCatalog.Find(heroClass, slot);
         }
 
         // Compose a concise 1-line effect blurb for the slot tooltip. Built from the

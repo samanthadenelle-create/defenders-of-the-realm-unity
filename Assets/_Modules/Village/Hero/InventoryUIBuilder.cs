@@ -162,23 +162,31 @@ namespace DeNelle.Village
         }
 
         // ── TABS ---
+        // The four item tabs PLUS a "Skills" pseudo-tab. Skills isn't a content category
+        // (the tree is a full MVVM modal — HeroSkillTreePanelMvvm); tapping it OPENS that
+        // panel via PanelRouter (PanelManager swaps the inventory out, one-modal-at-a-time).
+        // Consistent with how the other tabs switch the right-pane content.
         private void BuildTabs(Transform host)
         {
-            string[] names = { "Weapons", "Armor", "Accessories", "Consumables" };
-            Tab[] tabs = { Tab.Weapons, Tab.Armor, Tab.Outfits, Tab.Consumables };
+            string[] names = { "Weapons", "Armor", "Accessories", "Consumables", "Skills" };
+            // Skills carries a null Tab (handled specially below); the other indices map 1:1.
+            Tab[] tabs = { Tab.Weapons, Tab.Armor, Tab.Outfits, Tab.Consumables, Tab.Weapons };
+            const int skillsIndex = 4;
             float y0 = 0.06f, y1 = 0.94f;
             float gap = 0.012f;
             float w = (1f - gap * (names.Length - 1)) / names.Length;
             float x = 0f;
             for (int i = 0; i < names.Length; i++)
             {
+                bool isSkills = i == skillsIndex;
                 Tab t = tabs[i];
-                bool sel = _tab == t;
+                bool sel = !isSkills && _tab == t;
                 float cx = x + w * 0.5f;
                 Color inactive = new Color(0.847f, 0.804f, 0.710f, 1f);
                 Color bg = sel ? ElarionUi.GoldButton : inactive;
+                System.Action onTap = isSkills ? (System.Action)OpenSkillTree : () => SelectTab(t);
                 var btn = AddButton(host, names[i], new Vector2(cx, w * 0.5f), new Vector2(y0, y1),
-                                    bg, () => SelectTab(t), sel ? ButtonKind.Gold : ButtonKind.Neutral);
+                                    bg, onTap, sel ? ButtonKind.Gold : ButtonKind.Neutral);
                 if (sel) 
                 { 
                     DressButtonPack(btn);
@@ -215,7 +223,7 @@ namespace DeNelle.Village
                         ApplyRounded(pi);
                     }
                 }
-                Sprite tabIcon = TabPackIcon(t);
+                Sprite tabIcon = isSkills ? null : TabPackIcon(t);
                 if (tabIcon != null)
                 {
                     var ic = AddImage(btn.transform, "TabIcon",
@@ -248,6 +256,19 @@ namespace DeNelle.Village
                 }
                 x += w + gap;
             }
+        }
+
+        // The "Skills" pseudo-tab: open the code-built MVVM skill tree (HeroSkillTreePanelMvvm).
+        // Routes through PanelRouter so the inventory needs NO reference to the Talents panel type;
+        // PanelManager swaps this modal out for the skill tree (one-panel-at-a-time). When the
+        // panel isn't registered (e.g. no hero), Close the inventory and log — never silently nothing.
+        private void OpenSkillTree()
+        {
+            if (DeNelle.Core.UI.PanelRouter.Open(DeNelle.Core.UI.PanelId.HeroSkillTree))
+                return;
+            // Not registered — close the inventory so the tap isn't a dead end, and report.
+            Close();
+            FlowTrace.Warn("UI", "Skills tab: HeroSkillTree panel not registered (no hero?) — nothing to open.");
         }
 
         private static Sprite TabPackIcon(Tab t)

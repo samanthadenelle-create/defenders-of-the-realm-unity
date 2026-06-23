@@ -51,6 +51,12 @@ namespace DeNelle.Core.UI
         /// <summary>Quest / rumor board — the real story board (RumorBoardPanel, WO-304/436).
         /// Registered by DialogueCommandBridge so the HUD context button can open it.</summary>
         RumorBoard = 6,
+        /// <summary>Knight skill tree — the code-built MVVM HeroSkillTreePanelMvvm (replaces the
+        /// empty-in-builds UIDocument HeroTalentPanel). Opened from the inventory's "Skills" tab.</summary>
+        HeroSkillTree = 7,
+        /// <summary>Ability loadout chooser — HeroLoadoutPanelMvvm (W/E/R equip). Opened from the
+        /// skill-tree panel's "Equip" button.</summary>
+        HeroLoadout = 8,
     }
 
     /// <summary>

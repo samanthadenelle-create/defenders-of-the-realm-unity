@@ -234,12 +234,14 @@ namespace DeNelle.DevTools
                 // raid/outpost teleport would trip AutoPilotProbes' scene-load Fail.
                 yield return RunPhase("WalkToOuterWorldOutpost", WalkToOuterWorldOutpost());
 
-                // WO-482: drive the overworld-encounter -> isolated BattleArena loop HEADLESSLY and
-                // assert build->spawn->win->reward->return. The rep spawns in OuterWorld (WO-453-blocked
-                // for the fleet), so we trigger BeginEncounter DIRECTLY and force the win by killing the
-                // staged family (headless can't drive hero swings). The owner is never the tester (memory
-                // never-dragdrop-or-manual-playtest); the fleet asserts the loop via FlowTrace.Fail.
-                yield return RunPhase("AssertEncounterBattle", AssertEncounterBattle());
+                // WO-482: drive the overworld-encounter -> isolated BattleArena loop HEADLESSLY via the
+                // REAL trigger path end-to-end (NOT a BeginEncounter bypass). Warp the hero into an
+                // OuterWorld roster region, force the spawner's real SpawnRep, then warp the hero onto
+                // the rep so RepEngageWatcher's own Update fires Engage()->BeginEncounter. Asserts a rep
+                // SPAWNED + the battle DROPPED + the family staged, then force-wins. This FAILS if the
+                // rep->engage->battle path is broken (the spawn-gate bug that sailed through the old
+                // direct-call oracle). The owner is never the tester (memory never-dragdrop-or-manual).
+                yield return RunPhase("AssertEncounterBattle", AssertEncounterRealPath());
             }
 
             FlowTrace.Step("Auto", "AutoPilot complete");
@@ -256,49 +258,113 @@ namespace DeNelle.DevTools
             }
         }
 
-        // WO-482 — HEADLESS verify of the overworld-encounter -> isolated BattleArena loop.
-        // Triggers BeginEncounter directly (the rep/OuterWorld path is WO-453-blocked for the
-        // fleet), proves the orc family spawns in the open arena, force-wins by killing them
-        // (headless drives no hero swings), and asserts the battle RESOLVED + the hero RETURNED.
+        // WO-482 — HEADLESS verify of the overworld-encounter -> isolated BattleArena loop
+        // via the REAL trigger path (NOT a BeginEncounter bypass). The old oracle called
+        // BattleArena.BeginEncounter DIRECTLY and a real bug (reps never spawned: the
+        // spawner gated on GetActiveScene()=="OuterWorld", false under additive OuterWorld)
+        // sailed through a green PASS. This drives the ACTUAL chain: warp the hero into an
+        // OuterWorld roster region on navmesh -> force the spawner's REAL SpawnRep ->
+        // warp the hero onto the rep so RepEngageWatcher's OWN Update fires Engage()->
+        // BeginEncounter -> assert BattleInProgress -> assert the family staged -> force-win.
         // Every failure is a FlowTrace.Fail so it lands in break-log.jsonl as a ranked ticket.
-        private IEnumerator AssertEncounterBattle()
+        private IEnumerator AssertEncounterRealPath()
         {
             const string Tag = "Auto";
-            if (_hero == null) { _lastDetail = "no hero - skipped"; FlowTrace.Warn(Tag, "AssertEncounterBattle: no hero — skipped."); yield break; }
+            if (_hero == null) { _lastDetail = "no hero - skipped"; FlowTrace.Warn(Tag, "AssertEncounterRealPath: no hero - skipped."); yield break; }
 
-            // Enable the (default-OFF) feature for the assertion; restore after.
+            // 1) Enable the (default-OFF) feature for the assertion; restore after.
             int prevFlag = PlayerPrefs.GetInt("ff.overworldencounter", -1);
             PlayerPrefs.SetInt("ff.overworldencounter", 1);
 
+            // 2) Ensure OuterWorld is loaded, then warp the hero to a point that is BOTH on
+            //    navmesh AND classified by ZoneManager as an OUTER roster region (so the
+            //    spawner's HeroInOuterWorld()/anchor are valid). Sample candidate points.
             Vector3 homePos = _hero.transform.position;
-            var p = new DeNelle.Village.Arena.EncounterParams
+            Vector3[] candidates = { new Vector3(40f, 0f, 40f), new Vector3(60f, 0f, 0f), new Vector3(0f, 0f, 40f), new Vector3(40f, 0f, 0f), new Vector3(-40f, 0f, 40f) };
+            Vector3 landing = Vector3.zero;
+            bool placed = false;
+            foreach (var c in candidates)
             {
-                EnemyIds = new[] { "orc-warrior", "orc-tank", "orc-mage" },
-                Threat = 1,
-                BackdropContext = "outerworld",
-                ReturnScene = ActiveScene(),
-                ReturnPosition = homePos,
-                ReturnYaw = _hero.transform.eulerAngles.y,
-            };
+                if (!UnityEngine.AI.NavMesh.SamplePosition(c, out var nh, 12f, UnityEngine.AI.NavMesh.AllAreas)) continue;
+                bool roster = false;
+                try { roster = DeNelle.Core.World.RegionSpawnTable.HasRoster(DeNelle.Core.World.ZoneManager.GetZone(nh.position)); }
+                catch (Exception ex) { FlowTrace.Warn(Tag, "AssertEncounterRealPath: zone check threw " + ex.Message); }
+                if (roster) { landing = nh.position; placed = true; break; }
+            }
 
-            var arena = DeNelle.Village.Arena.BattleArena.Instance;
-            bool started = false;
-            try { started = arena.BeginEncounter(p); }
-            catch (Exception ex) { FlowTrace.Fail(Tag, "AssertEncounterBattle: BeginEncounter threw " + ex.GetType().Name + ": " + ex.Message); }
-            if (!started)
+            if (!placed)
             {
-                _lastDetail = "BeginEncounter returned false";
-                FlowTrace.Fail(Tag, "AssertEncounterBattle: BeginEncounter returned false — the encounter did not start.");
+                _lastDetail = "no on-mesh roster region found -> rep cannot anchor";
+                FlowTrace.Fail(Tag, "AssertEncounterRealPath: no candidate point was BOTH on navmesh AND in an OuterWorld roster region (OuterWorld not loaded / navmesh not baked?) - the real rep path cannot run.");
                 RestoreEncounterFlag(prevFlag);
                 yield break;
             }
 
-            // Let the arena build + bake + warp + spawn settle.
+            try { _hero.WarpTo(landing); } catch (Exception ex) { FlowTrace.Warn(Tag, "AssertEncounterRealPath: hero WarpTo threw " + ex.Message); }
+            for (int i = 0; i < 3; i++) yield return null;
+            FlowTrace.Step(Tag, "AssertEncounterRealPath: hero warped into OuterWorld roster region @ " + landing + ".");
+
+            // 3) Force the spawner's REAL spawn path (SpawnRep) -- do NOT spawn reps ourselves,
+            //    do NOT call BeginEncounter. Then wait for a real OrcRep_* to exist.
+            var spawner = DeNelle.Village.OverworldEncounterSpawner.Instance;
+            if (spawner == null)
+            {
+                _lastDetail = "OverworldEncounterSpawner.Instance NULL";
+                FlowTrace.Fail(Tag, "AssertEncounterRealPath: OverworldEncounterSpawner.Instance was NULL - the spawner never bootstrapped.");
+                RestoreEncounterFlag(prevFlag);
+                yield break;
+            }
+            try { spawner.ForcePopulateForTest(); } catch (Exception ex) { FlowTrace.Fail(Tag, "AssertEncounterRealPath: ForcePopulateForTest threw " + ex.GetType().Name + ": " + ex.Message); }
+
+            GameObject rep = null;
+            float spawnWait = 0f;
+            while (spawnWait < 8f)
+            {
+                rep = FindRepObject();
+                if (rep != null) break;
+                spawnWait += Time.deltaTime; yield return null;
+            }
+
+            bool repSpawned = rep != null;
+            if (!repSpawned)
+            {
+                // THIS is the bug the old direct-call oracle missed: no rep ever materialised.
+                _lastDetail = "repSpawned=false -> rep->engage->battle path BROKEN";
+                FlowTrace.Fail(Tag, "AssertEncounterRealPath: NO OrcRep_* spawned within 8s after the REAL SpawnRep path - the overworld rep never materialised (the spawn-gate class of bug).");
+                RestoreEncounterFlag(prevFlag);
+                yield break;
+            }
+            FlowTrace.Step(Tag, "AssertEncounterRealPath: real rep '" + rep.name + "' spawned @ " + rep.transform.position + ".");
+
+            // 4) Drive the REAL engage: warp the hero ONTO the rep (within EngageRange ~2.6m) so
+            //    RepEngageWatcher's OWN Update fires Engage()->BeginEncounter. Do NOT call Engage().
+            Vector3 onRep = rep.transform.position;
+            try { _hero.WarpTo(onRep); } catch (Exception ex) { FlowTrace.Warn(Tag, "AssertEncounterRealPath: hero WarpTo(rep) threw " + ex.Message); }
+            FlowTrace.Step(Tag, "AssertEncounterRealPath: hero warped onto rep @ " + onRep + " (within EngageRange) - waiting for the watcher to fire Engage.");
+
+            // 5) Assert the battle DROPS (BattleInProgress becomes true) within ~6s -- the real
+            //    "drop to battle" the owner never reached.
+            var arena = DeNelle.Village.Arena.BattleArena.Instance;
+            float engageWait = 0f;
+            while (engageWait < 6f && !(arena != null && arena.BattleInProgress))
+            {
+                // re-assert position in case any locomotion nudged the hero off the rep before the watcher ticked
+                engageWait += Time.deltaTime; yield return null;
+            }
+            bool droppedToBattle = arena != null && arena.BattleInProgress;
+            if (!droppedToBattle)
+            {
+                _lastDetail = "repSpawned=true droppedToBattle=false -> engage->battle BROKEN";
+                FlowTrace.Fail(Tag, "AssertEncounterRealPath: rep spawned but BattleInProgress never became true within 6s of the hero touching it - RepEngageWatcher.Engage()->BeginEncounter did NOT drop to battle.");
+                RestoreEncounterFlag(prevFlag);
+                yield break;
+            }
+            FlowTrace.Step(Tag, "AssertEncounterRealPath: dropped to battle (BattleInProgress=true) via the REAL watcher engage.");
+
+            // 6) Let the arena build + bake + warp + spawn settle, then assert the family staged.
             float build = 0f;
             while (build < 4f) { build += Time.deltaTime; yield return null; }
 
-            // Assert the family materialised in the open arena -- AND that each orc is the REAL
-            // Tripo model on the OrcHumanoid rig (Slice 1), not a tinted-capsule / T-pose fallback.
             var found = new System.Collections.Generic.List<DeNelle.Village.Enemy>();
             foreach (var e in UnityEngine.Object.FindObjectsByType<DeNelle.Village.Enemy>(FindObjectsSortMode.None))
                 if (e != null && e.gameObject.name.StartsWith("ArenaEnemy_")) found.Add(e);
@@ -314,37 +380,46 @@ namespace DeNelle.DevTools
             }
 
             if (found.Count == 0)
-                FlowTrace.Fail(Tag, "AssertEncounterBattle: NO arena enemies spawned — the open-arena family never materialised.");
+                FlowTrace.Fail(Tag, "AssertEncounterRealPath: NO arena enemies spawned - the open-arena family never materialised.");
             else if (skinned < found.Count)
-                FlowTrace.Fail(Tag, "AssertEncounterBattle: " + (found.Count - skinned) + "/" + found.Count + " orcs fell back to a CAPSULE (model failed to load).");
+                FlowTrace.Fail(Tag, "AssertEncounterRealPath: " + (found.Count - skinned) + "/" + found.Count + " orcs fell back to a CAPSULE (model failed to load).");
             else if (orcCtrl < found.Count)
-                FlowTrace.Fail(Tag, "AssertEncounterBattle: " + (found.Count - orcCtrl) + "/" + found.Count + " orcs lack an Orc animator controller (would T-pose).");
+                FlowTrace.Fail(Tag, "AssertEncounterRealPath: " + (found.Count - orcCtrl) + "/" + found.Count + " orcs lack an Orc animator controller (would T-pose).");
             else
-                FlowTrace.Step(Tag, "AssertEncounterBattle: " + found.Count + " orcs spawned, all skinned + Orc-rigged.");
+                FlowTrace.Step(Tag, "AssertEncounterRealPath: " + found.Count + " orcs spawned, all skinned + Orc-rigged.");
 
             // Force the WIN path deterministically (headless can't drive hero attacks).
             foreach (var e in found)
-                if (e != null) { try { e.Kill(); } catch (Exception ex) { FlowTrace.Warn(Tag, "AssertEncounterBattle: Kill threw " + ex.Message); } }
+                if (e != null) { try { e.Kill(); } catch (Exception ex) { FlowTrace.Warn(Tag, "AssertEncounterRealPath: Kill threw " + ex.Message); } }
 
             // Wait for resolution (BattleInProgress -> false).
             float wait = 0f;
             while (arena.BattleInProgress && wait < 15f) { wait += Time.deltaTime; yield return null; }
             bool resolved = !arena.BattleInProgress;
             if (!resolved)
-                FlowTrace.Fail(Tag, "AssertEncounterBattle: battle did NOT resolve within 15s after the family died — loop stuck.");
+                FlowTrace.Fail(Tag, "AssertEncounterRealPath: battle did NOT resolve within 15s after the family died - loop stuck.");
 
-            // Assert the hero returned to the engagement spot.
-            float dist = (_hero != null) ? Vector3.Distance(_hero.transform.position, homePos) : 999f;
-            bool returned = dist <= 5f;
-            if (!returned)
-                FlowTrace.Fail(Tag, "AssertEncounterBattle: hero NOT returned (dist " + dist.ToString("F1") + "m from engagement spot).");
+            // Assert the hero returned to the engagement spot (where it touched the rep).
+            float dist = (_hero != null) ? Vector3.Distance(_hero.transform.position, onRep) : 999f;
+            bool heroReturn = dist <= 5f;
+            if (!heroReturn)
+                FlowTrace.Fail(Tag, "AssertEncounterRealPath: hero NOT returned (dist " + dist.ToString("F1") + "m from engagement spot).");
 
-            bool pass = found.Count > 0 && skinned == found.Count && orcCtrl == found.Count && resolved && returned;
-            _lastDetail = "spawned=" + found.Count + " skinned=" + skinned + " orcRig=" + orcCtrl +
+            bool pass = repSpawned && droppedToBattle && found.Count > 0 && skinned == found.Count && orcCtrl == found.Count && resolved && heroReturn;
+            _lastDetail = "repSpawned=" + repSpawned + " droppedToBattle=" + droppedToBattle +
+                          " spawned=" + found.Count + " skinned=" + skinned + " orcRig=" + orcCtrl +
                           " resolved=" + resolved + " heroReturn=" + dist.ToString("F1") + "m -> " + (pass ? "PASS" : "FAIL");
-            FlowTrace.Step(Tag, "AssertEncounterBattle: " + _lastDetail);
+            FlowTrace.Step(Tag, "AssertEncounterRealPath: " + _lastDetail);
 
             RestoreEncounterFlag(prevFlag);
+        }
+
+        // Find a live overworld rep object (named "OrcRep_*" by the spawner's SpawnRep).
+        private static GameObject FindRepObject()
+        {
+            foreach (var e in UnityEngine.Object.FindObjectsByType<DeNelle.Village.Enemy>(FindObjectsSortMode.None))
+                if (e != null && e.gameObject.name.StartsWith("OrcRep_")) return e.gameObject;
+            return null;
         }
 
         private static void RestoreEncounterFlag(int prev)

@@ -116,6 +116,12 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-482 LIGHT WORLD: when the overworld-encounter loop is on, the open world holds
+            // ONLY the wandering orc "reps" — no materialized tribe raids. Suppress the whole
+            // activation/retarget pass so a tribe never spawns a band the player attacks that
+            // doesn't drop to battle. Flag OFF = today's behavior (gated, not deleted, reversible).
+            if (DeNelle.Core.FeatureFlags.OverworldEncounter) return;
+
             _checkTimer -= Time.deltaTime;
             if (_checkTimer > 0f) return;
             _checkTimer = CheckInterval;

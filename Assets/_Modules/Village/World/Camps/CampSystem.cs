@@ -115,6 +115,12 @@ namespace DeNelle.Village.World.Camps
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            // WO-482 LIGHT WORLD: when the overworld-encounter loop is on, keep the open
+            // world light — only the wandering orc "reps" populate it. Claimable camps with
+            // their guard packs would bury the reps and give the player non-encounter enemies
+            // to fight that never drop to battle. Suppress. Flag OFF = today's behavior (gated,
+            // not deleted — fully reversible).
+            if (DeNelle.Core.FeatureFlags.OverworldEncounter) return;
             if (!Enabled) return;             // SHIPS DARK: do nothing at all.
             SpawnNow();
         }
@@ -129,6 +135,7 @@ namespace DeNelle.Village.World.Camps
             // T — entry/branch trace so a capture sees WHY no camps spawned (disabled / already
             // spawned / not in the outer world) vs. a per-anchor build that threw.
             using var _ = FlowTrace.Enter("Camp", "CampSystem.SpawnNow");
+            if (DeNelle.Core.FeatureFlags.OverworldEncounter) { FlowTrace.Step("Camp", "SpawnNow: overworld-encounter loop ON (WO-482 light world) — no camps."); return; }
             if (!Enabled) { FlowTrace.Step("Camp", "SpawnNow: feature disabled — no camps."); return; }
             if (_spawned) { FlowTrace.Step("Camp", "SpawnNow: already spawned — no-op."); return; }
 

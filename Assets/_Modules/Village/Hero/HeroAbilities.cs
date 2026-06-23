@@ -115,10 +115,39 @@ namespace DeNelle.Village
         /// <summary>Seconds of cooldown remaining on a slot — 0 means ready.</summary>
         public float CooldownRemaining(AbilitySlot slot) => _cooldownRemaining[(int)slot];
 
+        // Loadout indirection (Knight skill-tree spine): a HeroLoadout on this rig may
+        // equip a skill-tree ability into W/E/R. Resolve(slot) returns that equipped
+        // def (looked up by id) when one is set, else the class's stock def. Cached +
+        // re-resolved only while null so it survives the body swap. With NO loadout
+        // component / nothing equipped, Resolve == AbilityCatalog.Find — identity.
+        private HeroLoadout _loadout;
+
+        /// <summary>
+        /// The AbilityDef for <paramref name="slot"/>: the loadout-equipped ability
+        /// (by id) when one is set on W/E/R, otherwise the class's stock Q/W/E/R def.
+        /// Q is the locked basic attack and always resolves to the class def. Behaviour
+        /// is identical to <c>AbilityCatalog.Find(_heroClass, slot)</c> when no loadout
+        /// is present — the chooser is purely additive.
+        /// </summary>
+        private AbilityDef Resolve(AbilitySlot slot)
+        {
+            if (_loadout == null) _loadout = GetComponent<HeroLoadout>();
+            if (_loadout != null && slot != AbilitySlot.Q)
+            {
+                string id = _loadout.AbilityIdForSlot(slot);
+                if (!string.IsNullOrEmpty(id))
+                {
+                    var equipped = AbilityCatalog.FindById(id);
+                    if (equipped != null) return equipped;
+                }
+            }
+            return AbilityCatalog.Find(_heroClass, slot);
+        }
+
         /// <summary>0..1 cooldown fill for the HUD — 1 = ready, 0 = just cast.</summary>
         public float CooldownFraction(AbilitySlot slot)
         {
-            var def = AbilityCatalog.Find(_heroClass, slot);
+            var def = Resolve(slot);
             if (def == null || def.Cooldown <= 0f) return 1f;
             return 1f - Mathf.Clamp01(_cooldownRemaining[(int)slot] / def.Cooldown);
         }
@@ -126,7 +155,7 @@ namespace DeNelle.Village
         /// <summary>True when the slot is off cooldown AND there is enough mana to cast it.</summary>
         public bool CanCast(AbilitySlot slot)
         {
-            var def = AbilityCatalog.Find(_heroClass, slot);
+            var def = Resolve(slot);
             if (def == null) return false;
             return _cooldownRemaining[(int)slot] <= 0f && _mana >= def.ManaCost;
         }
@@ -198,7 +227,7 @@ namespace DeNelle.Village
         /// </summary>
         public bool TryCast(AbilitySlot slot)
         {
-            var def = AbilityCatalog.Find(_heroClass, slot);
+            var def = Resolve(slot);
             if (def == null)
             {
                 Debug.LogWarning($"[HeroAbilities] No ability for {_heroClass}/{slot} in abilities.json.");

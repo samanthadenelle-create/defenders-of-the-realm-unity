@@ -119,6 +119,16 @@ namespace DeNelle.Onboarding
 
         private void OnEnable()
         {
+            // WO-473 / single-hero V1: PetSelect is bypassed in the onboarding flow.
+            // Belt-and-braces — if anything still loads this scene with the flag ON,
+            // route straight to the castle before binding any UI (no pet step in V1).
+            if (FeatureFlags.BypassPetSelect)
+            {
+                FlowTrace.Step("Onboarding", "PetSelectController.OnEnable: BypassPetSelect ON — GoCastle (screen skipped).");
+                SceneRouter.GoCastle();
+                return;
+            }
+
             // A returning player who already picked a starter pet skips this
             // screen — route on to the Village before binding any UI.
             if (_skipWhenPetChosen && HasStarterPet())

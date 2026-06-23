@@ -828,6 +828,16 @@ namespace DeNelle.Onboarding
         {
             if (!_hasSelection) return;
             PersistHero();
+
+            // WO-473 / single-hero V1: skip the PetSelect screen — straight to the castle.
+            // Hero pick is persisted above; PetSelect persists nothing (Echo Hollow owns pet bonding).
+            if (FeatureFlags.BypassPetSelect)
+            {
+                FlowTrace.Step("Onboarding", "OnDiveVillageClicked: BypassPetSelect ON — GoCastle (PetSelect skipped).");
+                SceneRouter.GoCastle();
+                return;
+            }
+
             SceneRouter.GoPetSelect();
         }
 

@@ -1324,12 +1324,23 @@ namespace DeNelle.Onboarding
             RouteToPetSelect();
         }
 
-        /// <summary>Persists the chosen hero and loads PetSelect (single route path).</summary>
+        /// <summary>Persists the chosen hero and routes onward (single route path).</summary>
         private void RouteToPetSelect()
         {
-            Debug.Log("[TitleController] Hero confirmed: " + _selectedHero + " — routing to PetSelect.");
             var svc = GameStateService.Instance;
             if (svc != null) svc.ChooseHero(_selectedHero);
+
+            // WO-473 / single-hero V1: skip the PetSelect screen — straight to the castle.
+            // The hero pick is already persisted above; PetSelect persists nothing (Echo Hollow owns pets).
+            if (FeatureFlags.BypassPetSelect)
+            {
+                FlowTrace.Step("Onboarding", "RouteToPetSelect: BypassPetSelect ON — GoCastle (PetSelect skipped).");
+                Debug.Log("[TitleController] Hero confirmed: " + _selectedHero + " — bypassing PetSelect, routing to Castle.");
+                SceneRouter.GoCastle();
+                return;
+            }
+
+            Debug.Log("[TitleController] Hero confirmed: " + _selectedHero + " — routing to PetSelect.");
             SceneRouter.GoPetSelect();
         }
 

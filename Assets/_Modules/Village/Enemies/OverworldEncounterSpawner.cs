@@ -54,6 +54,8 @@ namespace DeNelle.Village
             new GameObject("OverworldEncounterSpawner").AddComponent<OverworldEncounterSpawner>();
         }
 
+        private bool _populating;
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
@@ -61,7 +63,13 @@ namespace DeNelle.Village
             DontDestroyOnLoad(gameObject);
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneLoaded += OnSceneLoaded;
-            MaybePopulate(SceneManager.GetActiveScene());
+            // OuterWorld may ALREADY be loaded additively (the active scene is MainCastle_Hall,
+            // OuterWorld streams in over it via WorldSceneLoader) by the time this DDOL singleton
+            // boots — the per-scene sceneLoaded callback won't re-fire for an already-loaded scene.
+            // So evaluate the WHOLE loaded set now, not just the active scene (the old bug: this
+            // checked only GetActiveScene() == "OuterWorld", which is FALSE in MainCastle_Hall, so
+            // reps never spawned in the live additive setup).
+            MaybePopulate();
         }
 
         private void OnDestroy()
@@ -70,31 +78,87 @@ namespace DeNelle.Village
             SceneManager.sceneLoaded -= OnSceneLoaded;
         }
 
-        private void OnSceneLoaded(Scene scene, LoadSceneMode mode) => MaybePopulate(scene);
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode) => MaybePopulate();
 
-        private void MaybePopulate(Scene scene)
+        // True when OuterWorld is loaded (active OR additive), case-insensitive — mirrors
+        // RaidOutpostSystem.InOuterWorld so the rep gate matches the other world systems.
+        private static bool OuterWorldLoaded()
         {
-            if (!FeatureFlags.OverworldEncounter) return;          // dormant until proven
+            int count = SceneManager.sceneCount;
+            for (int i = 0; i < count; i++)
+            {
+                var s = SceneManager.GetSceneAt(i);
+                if (s.isLoaded &&
+                    !string.IsNullOrEmpty(s.name) &&
+                    s.name.IndexOf(OuterWorldScene, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+            }
+            return false;
+        }
+
+        private void MaybePopulate()
+        {
+            if (!FeatureFlags.OverworldEncounter) { FlowTrace.Step("Encounter", "MaybePopulate: ff.overworldencounter OFF — dormant."); return; }
             if (BattleArena.Instance != null && BattleArena.Instance.BattleInProgress) return; // not while a battle is up
-            if (scene.name != OuterWorldScene) return;            // v1: OuterWorld only
+            if (!OuterWorldLoaded())                                  // v1: OuterWorld only
+            {
+                FlowTrace.Step("Encounter", "MaybePopulate: OuterWorld not loaded yet — waiting for its sceneLoaded.");
+                return;
+            }
+            if (_populating) return;                                  // a populate is already scheduled
 
             // Stagger off the scene-load frame (mirrors RaidOutpostSystem) so the rep
             // realizes after the world + navmesh are up.
+            _populating = true;
             StartCoroutine(PopulateAfterDelay());
         }
 
         private System.Collections.IEnumerator PopulateAfterDelay()
         {
             yield return new WaitForSeconds(3f);
-            // Drop stale references (scene change destroyed them).
-            _reps.RemoveAll(r => r == null);
-            for (int i = _reps.Count; i < RepCount; i++) SpawnRep(i);
+            _populating = false;
+
+            // The hero spawns in MainCastle_Hall and WARPS into OuterWorld later (SceneTransitionTrigger).
+            // If reps were anchored to the hero's CASTLE position they'd strand 26m+ from where the hero
+            // actually walks out — "too far, they do not engage". Wait until the hero is actually standing
+            // IN the OuterWorld region before anchoring the reps to its current position.
+            float waited = 0f;
+            while (waited < 30f && !HeroInOuterWorld())
+            {
+                yield return new WaitForSeconds(1f);
+                waited += 1f;
+            }
+
+            _reps.RemoveAll(r => r == null);   // drop stale references (scene change destroyed them)
+            if (!HeroInOuterWorld())
+            {
+                FlowTrace.Warn("Encounter", "PopulateAfterDelay: hero not in OuterWorld after 30s — anchoring reps to world origin (will re-anchor on next OuterWorld load).");
+            }
+            int spawned = 0;
+            for (int i = _reps.Count; i < RepCount; i++) { SpawnRep(i); spawned++; }
+            FlowTrace.Step("Encounter", $"PopulateAfterDelay: ensured {_reps.Count}/{RepCount} reps live (spawned {spawned} this pass).");
+        }
+
+        // The hero is "in" OuterWorld once it is physically inside an outer region (ZoneManager
+        // classifies its position into a roster region) — i.e. it has crossed out of the castle/
+        // village footprint. Until then, anchoring reps to the hero would place them in the castle.
+        private static bool HeroInOuterWorld()
+        {
+            var hero = GameObject.FindWithTag("Player");
+            if (hero == null) return false;
+            bool outside = false;
+            Guard.Try("Encounter", "hero-in-world check",
+                () => outside = DeNelle.Core.World.RegionSpawnTable.HasRoster(
+                                    DeNelle.Core.World.ZoneManager.GetZone(hero.transform.position)));
+            return outside;
         }
 
         private void SpawnRep(int index)
         {
             var hero = GameObject.FindWithTag("Player");
             Vector3 origin = hero != null ? hero.transform.position : Vector3.zero;
+            if (hero == null)
+                FlowTrace.Warn("Encounter", $"SpawnRep #{index}: no 'Player'-tagged hero found — anchoring rep to world origin (it may strand far from the player).");
 
             // Place the rep a comfortable distance from the hero, spread by index.
             float ang = (index * 137f) * Mathf.Deg2Rad;
@@ -127,6 +191,22 @@ namespace DeNelle.Village
                 _reps.Add(enemy.gameObject);
                 FlowTrace.Step("Encounter", $"spawned orc rep #{index} at {anchor} (wide aggro, +5% chase, 0 dmg).");
             }
+        }
+
+        // -----------------------------------------------------------------------------
+        // TEST SEAM (WO-482 fleet oracle) — runs the SAME real spawn path MaybePopulate()
+        // drives, but WITHOUT the flag/scene/already-populating gates and WITHOUT the
+        // 3s+30s stagger waits (the oracle has already warped the hero into an OuterWorld
+        // roster region + asserted navmesh). It ensures up to RepCount reps exist via the
+        // real SpawnRep -> EnemyFactory -> RepEngageWatcher chain, so the oracle proves the
+        // ACTUAL rep->engage->battle path, never a BeginEncounter bypass. ASCII-only.
+        // -----------------------------------------------------------------------------
+        public void ForcePopulateForTest()
+        {
+            _reps.RemoveAll(r => r == null);
+            int spawned = 0;
+            for (int i = _reps.Count; i < RepCount; i++) { SpawnRep(i); spawned++; }
+            FlowTrace.Step("Encounter", $"ForcePopulateForTest: ensured {_reps.Count}/{RepCount} reps live (spawned {spawned} via real SpawnRep).");
         }
 
         // Light threat read from the world zone (reuses the shared classifier).
@@ -208,10 +288,26 @@ namespace DeNelle.Village
                 RepId = gameObject.name,
             };
 
-            FlowTrace.Step("Encounter", $"ENGAGE rep '{gameObject.name}' -> BattleArena (family [{string.Join(",", _family)}], threat {_threat}, theme '{p.BackdropContext}').");
+            FlowTrace.Step("Encounter", $"ENGAGE rep '{gameObject.name}' -> BattleArena (family [{string.Join(",", _family)}], threat {_threat}, theme '{p.BackdropContext}', hero={(hero != null ? "found" : "NULL")}).");
 
             bool started = false;
-            Guard.Try("Encounter", "begin encounter", () => started = BattleArena.Instance.BeginEncounter(p));
+            var arena = BattleArena.Instance;   // lazy singleton — non-null, but guard anyway
+            if (arena == null)
+            {
+                FlowTrace.Fail("Encounter", "Engage: BattleArena.Instance was NULL — cannot drop to battle.");
+            }
+            else
+            {
+                Guard.Try("Encounter", "begin encounter", () => started = arena.BeginEncounter(p));
+            }
+
+            // No drop to battle is the OWNER's reported symptom — make the failure LOUD so a
+            // capture pinpoints WHY (ff off / battle already in progress / empty family) instead
+            // of the rep silently despawning and the player wondering why nothing happened.
+            if (started)
+                FlowTrace.Step("Encounter", $"Engage: BattleArena.BeginEncounter SUCCEEDED for rep '{gameObject.name}' — dropped to battle.");
+            else
+                FlowTrace.Fail("Encounter", $"Engage: BattleArena.BeginEncounter returned FALSE for rep '{gameObject.name}' — NO drop to battle (check ff.overworldencounter / BattleInProgress / empty family).");
 
             // Consume the rep regardless (the full family lives in the battle now); if the
             // battle failed to start (flag off / busy) the rep simply despawns -- never a stuck hook.

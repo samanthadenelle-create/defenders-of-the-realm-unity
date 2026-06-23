@@ -72,6 +72,12 @@ namespace DeNelle.Village
         [JsonProperty("slot")] public string Slot;
         /// <summary>The on-screen hotkey label (e.g. "Q", "F").</summary>
         [JsonProperty("key")] public string Key;
+        /// <summary>
+        /// Stable unique id for the ability (e.g. "knight.shield-bash"). Optional —
+        /// the per-class Q/W/E/R defs need no id; skill-tree abilities carry one so a
+        /// HeroLoadout can equip them by id via <see cref="AbilityCatalog.FindById"/>.
+        /// </summary>
+        [JsonProperty("id")] public string Id;
         /// <summary>Canon ability name — verbatim, never paraphrased.</summary>
         [JsonProperty("name")] public string Name;
         /// <summary>HUD glyph.</summary>
@@ -201,6 +207,31 @@ namespace DeNelle.Village
                 cls.Abilities.TryGetValue(SlotKey(slot), out var def))
             {
                 return def;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Looks up one ability by its unique <see cref="AbilityDef.Id"/> across ALL
+        /// class loadouts (a flat id index). Returns null for a null/empty/unknown id.
+        /// Used by HeroLoadout to resolve an equipped skill-tree ability into the live
+        /// AbilityDef the cast path consumes. Comparison is case-insensitive on the
+        /// trimmed id to match the lenient slot/class normalisation elsewhere here.
+        /// </summary>
+        public static AbilityDef FindById(string abilityId)
+        {
+            if (string.IsNullOrEmpty(abilityId)) return null;
+            EnsureLoaded();
+            if (_data.Classes == null) return null;
+            string want = abilityId.Trim().ToLowerInvariant();
+            foreach (var cls in _data.Classes.Values)
+            {
+                if (cls?.Abilities == null) continue;
+                foreach (var def in cls.Abilities.Values)
+                {
+                    if (def == null || string.IsNullOrEmpty(def.Id)) continue;
+                    if (def.Id.Trim().ToLowerInvariant() == want) return def;
+                }
             }
             return null;
         }

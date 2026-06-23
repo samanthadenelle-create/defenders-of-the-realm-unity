@@ -130,6 +130,13 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-482 LIGHT WORLD: when the overworld-encounter loop is on, the open world
+            // holds ONLY the wandering orc "reps" (OverworldEncounterSpawner) — no ambient
+            // roamers. Suppress this entire population so the player's attacks land on a rep
+            // that drops to battle, not on dozens of non-encounter wanderers. Flag OFF =
+            // today's behavior (fully reversible — the spawner is gated, not deleted).
+            if (DeNelle.Core.FeatureFlags.OverworldEncounter) return;
+
             _tickTimer -= Time.deltaTime;
             if (_tickTimer > 0f) return;
             _tickTimer = TickInterval;

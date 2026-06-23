@@ -137,6 +137,12 @@ namespace DeNelle.Village.World.Camps
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            // WO-482 LIGHT WORLD: when the overworld-encounter loop is on, the open world is
+            // kept light — only the wandering orc "reps" populate it. The 4 cardinal raid
+            // outposts (each a boss-led garrison) would bury the reps and give the player a
+            // pile of non-encounter enemies to attack that never drop to battle. Suppress them.
+            // Flag OFF = today's behavior (the outpost system is gated, not deleted — reversible).
+            if (DeNelle.Core.FeatureFlags.OverworldEncounter) return;
             if (!Enabled) return;   // SHIPS DARK: do nothing at all.
             SpawnNow();
         }
@@ -158,6 +164,7 @@ namespace DeNelle.Village.World.Camps
         /// </summary>
         public static void SpawnNow()
         {
+            if (DeNelle.Core.FeatureFlags.OverworldEncounter) return;   // WO-482 light world
             if (!Enabled) return;
             if (_spawned) return;
             if (!InOuterWorld()) return;   // re-bootstrap fires on the next scene load

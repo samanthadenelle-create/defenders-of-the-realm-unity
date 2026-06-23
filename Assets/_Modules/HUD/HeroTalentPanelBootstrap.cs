@@ -33,6 +33,16 @@ namespace DeNelle.HUD
         {
             if (!scene.IsValid()) return;
 
+            // RETIRED (skill-tree MVVM slice): the UIDocument HeroTalentPanel renders EMPTY in
+            // player builds (§8 — UXML/UI-Toolkit HUDs come up blank). It is replaced by the
+            // code-built HeroSkillTreePanelMvvm, which now also owns PanelId.HeroTalents (the
+            // Arcane Tower / "OpenTalents" route). This bootstrap is suppressed so the empty
+            // UIDocument panel never spawns and can't re-register over the MVVM panel. Kept
+            // (not deleted) so the type/asmdef/file set is unchanged — flip this to re-enable.
+            FlowTrace.Step("UI", "HeroTalentPanel (UIDocument) RETIRED — HeroSkillTreePanelMvvm owns the route now.");
+            return;
+#pragma warning disable CS0162 // legacy spawn kept for reference / re-enable
+
             // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in Object.FindObjectsByType<HeroTalentPanel>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
@@ -57,6 +67,7 @@ namespace DeNelle.HUD
             go.AddComponent<HeroTalentPanel>();
             go.AddComponent<HeroTalentHotkey>();
             FlowTrace.Step("UI", "HeroTalentPanel created (single instance)");
+#pragma warning restore CS0162
         }
 
         private static Transform FindHero()

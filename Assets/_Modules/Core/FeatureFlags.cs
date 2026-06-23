@@ -126,6 +126,15 @@ namespace DeNelle.Core
         /// docs/COMBAT_PIVOT_NORTHSTAR.md + memory overworld-encounter-isolated-battle.</summary>
         public static bool OverworldEncounter => Get("overworldencounter", defaultOn: false);
 
+        /// <summary>WO-473 / PIVOT (owner 2026-06-22): SINGLE-HERO V1 onboarding has NO pet step. When ON
+        /// (default), the intro flow skips the PetSelect screen entirely — after the hero pick (Title in-flow
+        /// pick OR HeroSelect confirm) the player routes STRAIGHT to the castle (MainCastle_Hall). Hero-pick
+        /// persistence (<c>svc.ChooseHero</c>) is preserved; PetSelect persists nothing since the 2026-06-13
+        /// pet-acquisition rework (real bonding moved to the in-town Echo Hollow), so bypassing it loses
+        /// nothing. The PetSelect scene/controller/router const stay INTACT — flip OFF to restore the
+        /// Title/HeroSelect -> PetSelect -> Castle step: PlayerPrefs "ff.bypasspetselect" = 0.</summary>
+        public static bool BypassPetSelect => Get("bypasspetselect", defaultOn: true);
+
         /// <summary>Global runtime kill-switch for ALL dev keyboard hotkeys (DevPanel F1, DebugCanvas
         /// F12, AdminOverlay Ctrl+Shift+A, the test spawners J/K/L, the tower dev harness B/J/K/N/U,
         /// the jukebox J open, etc.). Default OFF — so every dev hotkey is DEAD everywhere (editor AND

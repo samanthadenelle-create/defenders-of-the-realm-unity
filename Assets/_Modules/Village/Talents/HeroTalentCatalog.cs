@@ -40,6 +40,21 @@ namespace DeNelle.Village.Talents
         // HeroTalentModifiers and folded into HeroAbilities' damage/cooldown math.
         [JsonProperty("damageBonus")] public float DamageBonus;
         [JsonProperty("cdReduction")] public float CdReduction;
+
+        // Knight skill-tree (loadout spine): a SKILL node carries an abilityId that
+        // references an entry in abilities.json — the loadout chooser equips these
+        // into a Q/W/E/R slot. A STAT node leaves abilityId empty (default) and
+        // contributes the passive damageBonus/cdReduction above. 'kind' is an
+        // optional explicit label ("skill" | "stat"); IsSkill below treats any node
+        // with a non-empty abilityId as a skill node regardless, so the field is a
+        // convenience for authoring/UI and defaults empty = stat node (additive, no
+        // behaviour change for existing trees).
+        [JsonProperty("abilityId")] public string AbilityId;
+        [JsonProperty("kind")] public string Kind;
+
+        /// <summary>True when this node equips an ability (carries an abilityId).</summary>
+        [JsonIgnore]
+        public bool IsSkill => !string.IsNullOrEmpty(AbilityId);
     }
 
     [Serializable]
