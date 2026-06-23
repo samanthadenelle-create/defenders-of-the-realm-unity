@@ -150,6 +150,9 @@ namespace DeNelle.Village
             // 5) Gate-funnel choke panels at the arch edges.
             BuildFunnelPanels(width);
 
+            // 5b) VISIBLE gate beacon so the player can SEE where to cross (findability).
+            BuildGateBeacon();
+
             // Runtime navmesh re-bake of the source surface so the deck welds + is on-mesh.
             RebakeSourceSurface();
 
@@ -273,17 +276,32 @@ namespace DeNelle.Village
         {
             Guard.Try("RuntimeSeam", "seat SceneTransitionTrigger", () =>
             {
+                // FORGIVING/FINDABLE FIX (data-proven, owner felt-test 2026-06-23):
+                // [Flow:RuntimeSeam] showed `closestEver=61.1m radius=40m out` — the hero only
+                // reached the prompt when walking DEAD-SOUTH to the exact threshold spot
+                // (z≈-62.6), because the OLD trigger sat at the FAR threshold end of the deck and
+                // its sphere (effective 40m) barely scraped the deck's north end. Reseat the
+                // trigger at the DECK CENTRE so its generous sphere BLANKETS the whole approach
+                // lane — the "Travel to the Outer World" prompt now fires the moment the hero is
+                // heading down the south approach, from anywhere on the deck, not just one spot.
+                float overlap   = _recipe.approachOverlap > 0.01f ? Mathf.Max(_recipe.approachOverlap, 18f) : 18f;
+                float deckNorthZ = _gatePos.z + overlap;     // north end, inside the courtyard
+                float deckCentreZ = (deckNorthZ + _thresholdZ) * 0.5f;   // centre of the approach deck
                 var go = new GameObject("RuntimeSeam_Trigger");
                 go.transform.SetParent(transform, false);
-                go.transform.position = new Vector3(_gatePos.x, _gatePos.y, _thresholdZ);
+                go.transform.position = new Vector3(_gatePos.x, _gatePos.y, deckCentreZ);
 
                 var trig = go.AddComponent<SceneTransitionTrigger>();
                 trig.targetSceneName = _recipe.to;
                 trig.targetPosition  = _landing;
                 trig.loadAdditive    = !string.Equals(_recipe.loadMode, "single", System.StringComparison.OrdinalIgnoreCase);
+                // Generous recipe radius (44m) — wins over the 40m ConfirmMinRadius floor via
+                // EffRadius=Max(ProximityRadius,40). Centred on the deck, a ~44m sphere covers the
+                // ±20m deck length AND the ~40m navmesh-edge stall the hero parks at, so the prompt
+                // is reachable on a NORMAL south approach (not only the dead-centre exact spot).
                 trig.ProximityRadius = _recipe.triggerRadius > 0.01f ? _recipe.triggerRadius : 6f;
                 FlowTrace.Step("RuntimeSeam",
-                    $"trigger seated @({_gatePos.x:F2},{_gatePos.y:F2},{_thresholdZ:F1}) -> '{_recipe.to}'@{_landing} additive={trig.loadAdditive} r={trig.ProximityRadius}.");
+                    $"trigger seated @DECK-CENTRE ({_gatePos.x:F2},{_gatePos.y:F2},{deckCentreZ:F1}) [was far-threshold z={_thresholdZ:F1}] -> '{_recipe.to}'@{_landing} additive={trig.loadAdditive} r={trig.ProximityRadius} (EffRadius=Max(r,40m)) — sphere blankets the {overlap + (_gatePos.z - _thresholdZ):F0}m approach deck so the prompt is FORGIVING (fires on the whole south approach, not just the exact spot).");
             });
         }
 
@@ -326,16 +344,19 @@ namespace DeNelle.Village
             Guard.Try("RuntimeSeam", "build funnel panels", () =>
             {
                 float half = width * 0.5f;
-                // Place panels CLEAR of the deck's walkable width (panel X-half = 0.5, so seat the panel
-                // centre at half + 1.0 → inner carve face at half + 0.5, a 0.5m clearance OUTSIDE the deck
-                // edge). The widened/deepened weld deck (root-cause fix above) must keep its full lane, so
-                // the carve sits beyond the deck and only seals the SIDE gaps — it cannot pinch the lane.
-                float panelOffset = half + 1.0f;
+                // FORGIVING LANE (2026-06-23): widen the gap between the funnel panels so a NORMAL
+                // (not dead-centre) south approach is never pinched to the lane centre. Panel X-half
+                // = 0.5, so seat the panel centre at half + 2.5 → inner carve face at half + 2.0, a
+                // 2.0m clearance OUTSIDE each deck edge (was 0.5m). That widens the walkable gap by
+                // ~3m total — the hero can drift off-centre on the approach and still reach the
+                // trigger sphere. The carve still seals the SIDE gaps beyond the deck; it cannot
+                // pinch the welded weld-tongue lane.
+                float panelOffset = half + 2.5f;
                 float panelZ = _gatePos.z;
                 BuildPanel($"RuntimeSeam_Funnel_L", new Vector3(_gatePos.x - panelOffset, _gatePos.y + 1.5f, panelZ));
                 BuildPanel($"RuntimeSeam_Funnel_R", new Vector3(_gatePos.x + panelOffset, _gatePos.y + 1.5f, panelZ));
                 FlowTrace.Step("RuntimeSeam",
-                    $"funnel panels at ±{panelOffset:F1}m of gate x={_gatePos.x:F2} (inner carve face ±{half + 0.5f:F1}, 0.5m clear of deck edge ±{half:F1}) — route through opening, lane unpinched.");
+                    $"funnel panels at ±{panelOffset:F1}m of gate x={_gatePos.x:F2} (inner carve face ±{half + 2.0f:F1}, 2.0m clear of deck edge ±{half:F1}) — route through opening, lane WIDENED/unpinched (forgiving off-centre approach).");
             });
         }
 
@@ -354,6 +375,64 @@ namespace DeNelle.Village
             obs.shape   = NavMeshObstacleShape.Box;
             obs.size    = box.size;
             obs.carving = true;                                 // carve so navmesh routes through the opening
+        }
+
+        // --------------------------------------------------------------------
+        //  PART 5b — VISIBLE gate BEACON (findability fix, 2026-06-23).
+        //  The seam WORKED but the player couldn't SEE where to cross (owner: "walking
+        //  directly south and only south works"). Add a cheap, prefab-free, code-built
+        //  emissive beacon at the gate: a tall glowing pillar + a colored point light, in
+        //  the same style as WardStone's runtime code-built glow (cube + Light + emissive).
+        //  Skip-safe (Guard.Try → LogWarning, never a hard error): if anything fails to
+        //  build, the crossing still works, the player just loses the visual cue.
+        // --------------------------------------------------------------------
+        private void BuildGateBeacon()
+        {
+            Guard.Try("RuntimeSeam", "build visible gate beacon", () =>
+            {
+                // Seat the beacon AT the gate opening (NOT on the deck lane — offset to the
+                // gate centre so it marks the threshold without obstructing the walk).
+                Vector3 beaconBase = new Vector3(_gatePos.x, _gatePos.y, _gatePos.z);
+
+                var root = new GameObject("RuntimeSeam_GateBeacon");
+                root.transform.SetParent(transform, false);
+                root.transform.position = beaconBase;
+
+                // Warm portal-blue, like WardStone's lit ward-glow — reads as a "go here" cue.
+                Color glowColor = new Color(0.40f, 0.75f, 1.00f);
+
+                // 1) A tall thin emissive pillar (a stretched cube) so the gate is visible from
+                //    across the courtyard. No collider (don't block the hero) — render-only.
+                var pillar = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                pillar.name = "Beacon_Pillar";
+                pillar.transform.SetParent(root.transform, false);
+                pillar.transform.localPosition = new Vector3(0f, 3f, 0f);   // rise from the ground
+                pillar.transform.localScale    = new Vector3(0.5f, 6f, 0.5f);
+                var col = pillar.GetComponent<Collider>();
+                if (col != null) Object.Destroy(col);                       // never obstruct the lane
+                var r = pillar.GetComponent<MeshRenderer>();
+                if (r != null && r.material != null)
+                {
+                    var m = r.material;
+                    m.color = glowColor;
+                    m.EnableKeyword("_EMISSION");
+                    m.SetColor("_EmissionColor", glowColor * 2.2f);          // bright self-lit glow
+                }
+
+                // 2) A colored point light at the gate so the area is lit + the eye is drawn to it.
+                var lightGo = new GameObject("Beacon_Light");
+                lightGo.transform.SetParent(root.transform, false);
+                lightGo.transform.localPosition = new Vector3(0f, 4f, 0f);
+                var light = lightGo.AddComponent<Light>();
+                light.type      = LightType.Point;
+                light.color     = glowColor;
+                light.intensity = 4f;
+                light.range     = 18f;
+                light.shadows   = LightShadows.None;                         // cheap
+
+                FlowTrace.Step("RuntimeSeam",
+                    $"gate BEACON built @{beaconBase} (emissive pillar + point light, no collider) — player can SEE the south crossing now (findability fix).");
+            });
         }
 
         // --------------------------------------------------------------------

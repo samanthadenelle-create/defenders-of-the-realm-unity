@@ -160,9 +160,48 @@ namespace DeNelle.Village
             if (hero == null)
                 FlowTrace.Warn("Encounter", $"SpawnRep #{index}: no 'Player'-tagged hero found — anchoring rep to world origin (it may strand far from the player).");
 
-            // Place the rep a comfortable distance from the hero, spread by index.
+            // Default placement: a comfortable distance from the hero, spread by index.
             float ang = (index * 137f) * Mathf.Deg2Rad;
             Vector3 anchor = origin + new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * (26f + 6f * index);
+
+            // FINDABILITY PLACEMENT (arena felt-verify, 2026-06-23): rep #0 must spawn where the hero
+            // can WALK STRAIGHT TO IT without crossing the south castle seam. (The owner saw a
+            // south-placed rep but it sat on the OTHER SIDE of the gate — a different navmesh island,
+            // unreachable while the seam is narrow.) So pick the FIRST short courtyard offset (biased
+            // AWAY from the south gate, avoiding -Z) that BOTH snaps to navmesh AND yields a
+            // PathComplete path from the hero — proving it's on the hero's OWN island. REVERSIBLE:
+            // delete this branch to restore the angular spread for ALL reps.
+            if (index == 0 && hero != null)
+            {
+                Vector3[] candidates =
+                {
+                    new Vector3( 10f, 0f,   0f),   // east
+                    new Vector3(-10f, 0f,   0f),   // west
+                    new Vector3(  0f, 0f,  10f),   // north (away from the south gate)
+                    new Vector3(  8f, 0f,   8f),   // NE
+                    new Vector3( -8f, 0f,   8f),   // NW
+                    new Vector3( 12f, 0f,   0f),   // east, a touch farther
+                    new Vector3(-12f, 0f,   0f),   // west, a touch farther
+                };
+                bool placed = false;
+                var path = new UnityEngine.AI.NavMeshPath();
+                foreach (var off in candidates)
+                {
+                    Vector3 cand = origin + off;
+                    if (!UnityEngine.AI.NavMesh.SamplePosition(cand, out var ch, 6f, UnityEngine.AI.NavMesh.AllAreas))
+                        continue;
+                    if (UnityEngine.AI.NavMesh.CalculatePath(origin, ch.position, UnityEngine.AI.NavMesh.AllAreas, path)
+                        && path.status == UnityEngine.AI.NavMeshPathStatus.PathComplete)
+                    {
+                        anchor = ch.position;
+                        placed = true;
+                        FlowTrace.Step("Encounter", $"SpawnRep #0: REACHABLE test-placement at {anchor} (offset {off} from hero {origin}, path PathComplete) — same-island courtyard, no seam crossing. Revert this branch for angular spread.");
+                        break;
+                    }
+                }
+                if (!placed)
+                    FlowTrace.Warn("Encounter", $"SpawnRep #0: no PathComplete courtyard offset found near hero {origin} — falling back to angular anchor {anchor} (may be unreachable; check bake/seam).");
+            }
 
             // Belt-and-suspenders (data 2026-06-23): snap the anchor onto the baked navmesh so the
             // rep spawns walkable + can path to the hero. The terrain re-center (WO-483) puts a floor
