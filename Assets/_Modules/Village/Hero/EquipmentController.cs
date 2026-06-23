@@ -157,7 +157,7 @@ namespace DeNelle.Village
         private static WeaponVisual Shield(string mesh) => new WeaponVisual
         {
             mesh = mesh, leftHand = true, kind = WeaponClass.Shield,   // shields -> LeftHand per spec
-            gripPos = new Vector3(-0.05f, 0f, 0f), gripEuler = new Vector3(135f, -10f, 90f),  // owner felt-test: shield rotate X+135, Z+90 (was (0,-10,0))
+            gripPos = new Vector3(-0.05f, 0f, 0f), gripEuler = new Vector3(135f, 170f, 90f),  // owner felt-test: shield Y+180 (was (135,-10,90)); earlier X+135, Z+90 (orig (0,-10,0))
             heldLength = 0.55f, tint = new Color(0.58f, 0.60f, 0.64f)
         };
 
@@ -301,7 +301,7 @@ namespace DeNelle.Village
         // the Inspector against the real hand bone — no recompile. The idle/combat hold
         // offset composes on top of THIS (see ApplyHoldPose), so the hold tilt stays
         // relative to the corrected ready orientation (no double-apply).
-        [SerializeField] private Vector3 _swordGripEuler = new Vector3(-25f, 0f, 0f);
+        [SerializeField] private Vector3 _swordGripEuler = new Vector3(-25f, 90f, 0f);  // owner felt-test: "model" (sword prop) Y+90 (was (-25,0,0))
 
         // WO-435: per-archetype calibration nudges, the staff/mace/etc. equivalents of
         // _swordGripEuler. ALL melee now run the same rig-aware grip path (bounds-derived
