@@ -190,15 +190,50 @@ namespace DeNelle.Village
             GameObject deck = null;
             Guard.Try("RuntimeSeam", "build approach deck", () =>
             {
-                float overlap   = _recipe.approachOverlap > 0.01f ? _recipe.approachOverlap : 6f;
-                float centreZ   = (_gatePos.z + _thresholdZ) * 0.5f;
-                float lenZ      = Mathf.Abs(_gatePos.z - _thresholdZ) + overlap;   // +overlap welds to courtyard
+                // ROOT-CAUSE FIX (data-proven RUNTIME_SEAM_NAV_FAIL / PathPartial, 2026-06-23):
+                // (a) the weld tongue was too SHORT *and* mis-centred. The old math centred the deck
+                //     at the gate↔threshold MIDPOINT and added the overlap to the *total length*, so
+                //     only overlap/2 (=3m of the recipe's 6m) actually reached NORTH past the gate into
+                //     the courtyard nav-floor — the other 3m hung south past the threshold (wasted).
+                //     After agent-radius erosion + the fine 0.18 voxel + minRegionArea pruning, a 3m
+                //     tongue between two separately-voxelised planes failed to FUSE -> PathPartial.
+                //     Fix: floor the overlap to a SUBSTANTIAL minimum and extend the deck so the WHOLE
+                //     overlap reaches north of the gate (deep into CourtyardFloor_Nav / GateExit_South_Nav,
+                //     which run y=0 from ±65m / 8m inside the wall) — none wasted south of the threshold.
+                // (b) Y must match the courtyard nav surface (all CastleHubBuilder nav planes are y=0).
+                //     We SAMPLE the existing courtyard navmesh just inside the gate and snap the deck to
+                //     that exact Y so a vertical lip can't read as a gap; fall back to _gatePos.y (0).
+                float recipeOverlap = _recipe.approachOverlap > 0.01f ? _recipe.approachOverlap : 6f;
+                // Deep overlap so the deck DEEPLY OVERLAPS the existing castle navmesh — the agent paths
+                // on the UNION of the overlapping surfaces, so with the Children-only bake (see
+                // RebakeSourceSurface) this overlap is what connects the deck to the editor-baked courtyard.
+                // 18m drives the deck ~18m past the gate, well inside CourtyardFloor_Nav (±65m) and the
+                // 8m-inside GateExit_South_Nav strip — far past any erosion/voxel pinch.
+                float overlap   = Mathf.Max(recipeOverlap, 18f);
+
+                // Deck Y = the actual courtyard nav surface height (snap to it), else _gatePos.y. Deeper
+                // probe per the external review: sample 10m inside the gate, lifted +2m, radius 15 — lands
+                // squarely on the courtyard navmesh body (not the gate-edge fringe) so the deck Y matches.
+                float deckY = _gatePos.y;
+                var probe = new Vector3(_gatePos.x, _gatePos.y + 2f, _gatePos.z + 10f);   // deep inside the courtyard
+                if (NavMesh.SamplePosition(probe, out NavMeshHit pHit, 15f, NavMesh.AllAreas))
+                    deckY = pHit.position.y;
+
+                // The deck spans from the threshold (south end) NORTH past the gate by the full overlap,
+                // so the courtyard-side end sits at gate.z + overlap (north = +Z here; gate.z=-40.6,
+                // threshold.z=-62.6). Centre + length derived from those two ends so the whole overlap is
+                // the weld tongue and nothing is wasted south of the threshold.
+                float courtyardEndZ = _gatePos.z + overlap;        // north end, INSIDE the courtyard
+                float southEndZ     = _thresholdZ;                 // south end, at the trigger
+                float centreZ       = (courtyardEndZ + southEndZ) * 0.5f;
+                float lenZ          = Mathf.Abs(courtyardEndZ - southEndZ);
                 // Unity plane = 10m/unit: scale.z = len/10, scale.x = width/10.
                 deck = CreateInvisibleWalkableFloor(transform, "RuntimeSeam_Deck_Nav",
-                    new Vector3(_gatePos.x, _gatePos.y, centreZ),
+                    new Vector3(_gatePos.x, deckY, centreZ),
                     new Vector3(width / 10f, 1f, lenZ / 10f));
                 FlowTrace.Step("RuntimeSeam",
-                    $"deck: centre=({_gatePos.x:F2},{_gatePos.y:F2},{centreZ:F1}) len≈{lenZ:F1}m width={width}m (gate {_gatePos.z:F1} → threshold {_thresholdZ:F1}, +{overlap}m courtyard overlap).");
+                    $"deck: centre=({_gatePos.x:F2},{deckY:F2},{centreZ:F1}) len≈{lenZ:F1}m width={width}m " +
+                    $"(threshold {_thresholdZ:F1} → courtyardEnd {courtyardEndZ:F1}, +{overlap:F0}m FULL deck/courtyard overlap north of gate {_gatePos.z:F1}, deckY snapped to courtyard navmesh — overlap is the connect with the Children-only bake).");
             });
             if (deck == null)
                 FlowTrace.Fail("RuntimeSeam", "approach deck FAILED to build — the crossing cannot weld; hero will hit the navmesh edge.");
@@ -291,13 +326,16 @@ namespace DeNelle.Village
             Guard.Try("RuntimeSeam", "build funnel panels", () =>
             {
                 float half = width * 0.5f;
-                // Place panels just OUTSIDE the opening edges (±half) on the gate line; thin in X,
-                // tall in Y, deep enough in Z to seal the side gaps along the approach.
+                // Place panels CLEAR of the deck's walkable width (panel X-half = 0.5, so seat the panel
+                // centre at half + 1.0 → inner carve face at half + 0.5, a 0.5m clearance OUTSIDE the deck
+                // edge). The widened/deepened weld deck (root-cause fix above) must keep its full lane, so
+                // the carve sits beyond the deck and only seals the SIDE gaps — it cannot pinch the lane.
+                float panelOffset = half + 1.0f;
                 float panelZ = _gatePos.z;
-                BuildPanel($"RuntimeSeam_Funnel_L", new Vector3(_gatePos.x - half - 0.5f, _gatePos.y + 1.5f, panelZ));
-                BuildPanel($"RuntimeSeam_Funnel_R", new Vector3(_gatePos.x + half + 0.5f, _gatePos.y + 1.5f, panelZ));
+                BuildPanel($"RuntimeSeam_Funnel_L", new Vector3(_gatePos.x - panelOffset, _gatePos.y + 1.5f, panelZ));
+                BuildPanel($"RuntimeSeam_Funnel_R", new Vector3(_gatePos.x + panelOffset, _gatePos.y + 1.5f, panelZ));
                 FlowTrace.Step("RuntimeSeam",
-                    $"funnel panels at ±{half + 0.5f:F1}m of gate x={_gatePos.x:F2} — navmesh+physics route through the opening only.");
+                    $"funnel panels at ±{panelOffset:F1}m of gate x={_gatePos.x:F2} (inner carve face ±{half + 0.5f:F1}, 0.5m clear of deck edge ±{half:F1}) — route through opening, lane unpinched.");
             });
         }
 
@@ -308,7 +346,9 @@ namespace DeNelle.Village
             go.transform.position = worldPos;
 
             var box = go.AddComponent<BoxCollider>();
-            box.size = new Vector3(1f, 3f, 6f);                 // thin X, tall Y, deep Z (seals the side gap)
+            // thin X, tall Y, modest Z (seals the side gap AT the gate line without carving deep along
+            // the welded approach tongue — a 6m Z-depth straddled the gate into the courtyard weld zone).
+            box.size = new Vector3(1f, 3f, 3f);
 
             var obs = go.AddComponent<NavMeshObstacle>();
             obs.shape   = NavMeshObstacleShape.Box;
@@ -325,12 +365,15 @@ namespace DeNelle.Village
         {
             Guard.Try("RuntimeSeam", "runtime NavMeshSurface re-bake", () =>
             {
-                // Collect from the WHOLE scene (deck + courtyard floor) so the deck FUSES with the
-                // existing castle navmesh rather than baking an isolated island. PhysicsColliders so
-                // the renderer-off deck is picked up; agent type 0 (the shared hero/enemy agent).
+                // Collect ONLY the CHILDREN of the seam host (the clean deck + funnel/trigger/link
+                // primitives) — NOT the whole scene. This eliminates the ~240 "does not allow read
+                // access" skips the polyperfect castle render meshes caused (external review fix, matches
+                // the proven ArenaNavMeshBaker which also bakes Children-only). The deck connects to the
+                // EXISTING editor-baked courtyard navmesh by DEEPLY OVERLAPPING it (18m tongue + Y-snap,
+                // see BuildApproachDeck) — the agent paths on the union of the overlapping walkable surfaces.
                 var surf = gameObject.GetComponent<NavMeshSurface>();
                 if (surf == null) surf = gameObject.AddComponent<NavMeshSurface>();
-                surf.collectObjects = CollectObjects.All;
+                surf.collectObjects = CollectObjects.Children;
 
                 // BAKE FROM PHYSICS COLLIDERS, NOT RENDER MESHES — matches the WORKING
                 // ArenaNavMeshBaker (useGeometry=PhysicsColliders, agentTypeID=0). DATA-PROVEN
@@ -343,12 +386,8 @@ namespace DeNelle.Village
                 surf.agentTypeID = 0;
 
                 // EXCLUDE the "Structure" layer (the castle walls/gates/towers live there per
-                // CastleHubBuilder WO-449) so the bake never even visits those non-readable imported
-                // meshes — the read-access skip spam disappears and the source set stays clean. The
-                // weld geometry (the renderer-off invisible nav planes: this deck + the courtyard
-                // NavMeshFloor_Invisible_Walkable) sit on the Default layer and ARE collected, with
-                // their primitive MeshColliders (readable) — so deck + courtyard still FUSE. Their
-                // carving NavMeshObstacles cut the walls back out, exactly as the editor bake did.
+                // CastleHubBuilder WO-449) — belt-and-braces with Children-only: even among the host's
+                // children nothing on Structure is voxelised, so the deck lane stays clear.
                 int structureLayer = LayerMask.NameToLayer("Structure");
                 surf.layerMask = structureLayer >= 0 ? ~(1 << structureLayer) : ~0;
 
@@ -360,8 +399,8 @@ namespace DeNelle.Village
 
                 surf.BuildNavMesh();
                 FlowTrace.Step("RuntimeSeam",
-                    $"runtime NavMeshSurface.BuildNavMesh() — useGeometry=PhysicsColliders, layerMask excludes 'Structure'({structureLayer}) " +
-                    "so non-readable polyperfect render meshes are NOT collected; deck welded into source navmesh from colliders (no editor bake, no read-access skips).");
+                    $"runtime NavMeshSurface.BuildNavMesh() — Children + PhysicsColliders only, layerMask excludes 'Structure'({structureLayer}) " +
+                    "so the ~240 non-readable polyperfect render-mesh skips are gone; deck connects to the editor-baked courtyard navmesh by deep 18m overlap + Y-snap (no read-access skips).");
             });
         }
 
