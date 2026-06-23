@@ -20,9 +20,11 @@ Docs index: `docs/README.md`.
 | `CLI_GATEKEEPER_PLAYBOOK.md` | CLI agent playbook |
 | `AGENT_OPENERS.md` | Prompt openers for spawning agents |
 
-## Work orders — `WORK_ORDER_NNN_name.md`
+## Work orders — `WorkOrders/WORK_ORDER_NNN_name.md`
 
-The unit of work (~280 files, WO-05 → WO-383 (next free 384)).
+The unit of work. **Moved out of root into `WorkOrders/` 2026-06-22** to declutter
+(504 spec + result files). The numbering authority `CLI_LANES_WO_NUMBERS.md` +
+`WO_AUDIT_*.md` stay at root.
 
 - `WORK_ORDER_NNN_name.md` — the spec. Status line inside says if READY TO IMPLEMENT
 - `WORK_ORDER_NNN_name.RESULT.md` — CLI's completion report. **If a .RESULT.md

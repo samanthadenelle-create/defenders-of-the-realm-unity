@@ -1,6 +1,9 @@
 # WORK ORDER 435 — Weapon grip/handle orientation on the held hero weapon (LOGGED BUG)
 
-**Status: LOGGED — fix later** (owner: "agree but log bug for later", 2026-06-17). Not started.
+**Status: FIXED (2026-06-18)** — melee weapons (incl. native Blink/Tripo swords) now ALWAYS run the
+derived NormalizeInto -> SeatByHandle -> rig-hand-axis grip path; native pivot is no longer trusted for
+melee (it was wrong -> hilt floated/blade clipped). Equip flow instrumented with deep FlowTrace ("Equip").
+Was: **LOGGED — fix later** (owner: "agree but log bug for later", 2026-06-17).
 **Severity:** P2 felt/polish (cosmetic; equip flow itself works). **Lane:** Combat/Art (orient).
 
 ## Symptom
