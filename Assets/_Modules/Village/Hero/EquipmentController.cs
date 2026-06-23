@@ -157,7 +157,7 @@ namespace DeNelle.Village
         private static WeaponVisual Shield(string mesh) => new WeaponVisual
         {
             mesh = mesh, leftHand = true, kind = WeaponClass.Shield,   // shields -> LeftHand per spec
-            gripPos = new Vector3(-0.05f, 0f, 0f), gripEuler = new Vector3(0f, -10f, 0f),
+            gripPos = new Vector3(-0.05f, 0f, 0f), gripEuler = new Vector3(135f, -10f, 90f),  // owner felt-test: shield rotate X+135, Z+90 (was (0,-10,0))
             heldLength = 0.55f, tint = new Color(0.58f, 0.60f, 0.64f)
         };
 

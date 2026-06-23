@@ -30,6 +30,10 @@ namespace DeNelle.Editor
         // owner can hand-nudge scale/position after — the runtime NPC injector keys off the
         // root NAME, so the Drillmaster follows wherever the barracks ends up.
         private const float BarracksScale = 0.6f;
+        // Y-only stretch (owner 2026-06-23: "scale the barracks 1.5x on the Y axis only" —
+        // taller, same footprint). Applied to localScale.y AFTER the uniform shrink and
+        // BEFORE the bounds ground-seat, so the base re-seats on the floor automatically.
+        private const float BarracksHeightScale = 1.5f;
         // Offset from the spawn: to the side (+X) and toward castle centre (+Z),
         // so it's adjacent to the spawn but not on the hero / the path out.
         private static readonly Vector3 SpawnOffset = new Vector3(6f, 0f, 4f);
@@ -59,6 +63,9 @@ namespace DeNelle.Editor
             if (go == null) go = Object.Instantiate(prefab);
             go.name = RootName;
             go.transform.localScale *= BarracksScale; // shrink to building scale (before bounds-seat)
+            // Y-only stretch: taller, same X/Z footprint. Bounds ground-seat below re-corrects the base.
+            var s = go.transform.localScale;
+            go.transform.localScale = new Vector3(s.x, s.y * BarracksHeightScale, s.z);
             // Face roughly toward castle centre (so the door reads toward the plaza).
             var toCentre = new Vector3(-pos.x, 0f, -pos.z);
             if (toCentre.sqrMagnitude > 0.01f)
