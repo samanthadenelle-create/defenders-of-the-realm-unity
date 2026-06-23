@@ -157,7 +157,7 @@ namespace DeNelle.Village
         private static WeaponVisual Shield(string mesh) => new WeaponVisual
         {
             mesh = mesh, leftHand = true, kind = WeaponClass.Shield,   // shields -> LeftHand per spec
-            gripPos = new Vector3(-0.05f, 0f, 0f), gripEuler = new Vector3(135f, 170f, 90f),  // owner felt-test: shield Y+180 (was (135,-10,90)); earlier X+135, Z+90 (orig (0,-10,0))
+            gripPos = new Vector3(-0.05f, 0f, 0f), gripEuler = new Vector3(135f, 170f, -45f),  // owner felt-test 2026-06-23: shield Z -45 (was 90); Y+180; earlier X+135 (orig (0,-10,0)) -- UNVERIFIED, confirm next build
             heldLength = 0.55f, tint = new Color(0.58f, 0.60f, 0.64f)
         };
 
