@@ -115,6 +115,34 @@ companions->troops). Lore writes itself: the world tree releases life that gathe
 - **Cleanup:** retires PetSelect onboarding (#19 bypass) + pet-ATB (already dormant under ff.singlehero).
 - **NOTE:** an echo system already EXISTS — be SME on it before "redo better" (no blank-slate guessing).
 
+### Echo workforce — SETTLED + supersedes "EXACTLY 3" above (owner 2026-06-22)
+The "EXACTLY 3 echoes / one per resource" line above is REFINED into a small growing workforce:
+- **Resource TYPES still locked at 3:** WOOD / IRON / GRAIN (no currency creep). Gold = separate store currency.
+- **Echo COUNT = workforce, CAP = 5:** **3 organic** (auto-born at life-force thresholds, one each on wood/iron/grain
+  = baseline) **+ 2 extra** (earned at higher life-force tiers = flex). Bounded by design (perf-cap = game-feel cap).
+- **ONE interaction = drag-and-drop to assign:** drag a spirit onto a resource → "harvest here"; the 2 extra double up
+  a chosen resource (e.g. both on iron when you need gear). That single placement IS the strategy; no other micro.
+- **After placement: passive + autonomous.** Auto-gathers on a rate; "render the flavor, fake the sim" (rate + a spirit
+  drifting out & back), so even 5 is near-zero perf. Value (owner): **"more echo more resources."**
+- **Passive-to-play, ENGAGING-to-watch:** passive INPUT ≠ forgettable. Keep it legible — brighter tree, multiplying
+  spirits, readable life-force meter, glanceable "+wood" drift. This is the "reclaiming the world" feeling + return-hook.
+- **Rule note:** the in-game drag-drop is PLAYER UX — NOT the banned dev/inspector field-wiring drag-drop. Different thing.
+
+## Canonical roster + V1 starting slice (owner 2026-06-22)
+The disliked low-poly packs are replaced by an owner-made **Tripo roster — the ONLY roster** (staged in
+`Downloads\Heros\` + `Downloads\Enemies\`). All models are **humanoid, skinned/rigged, ~6 mesh sections each.**
+- **Heroes:** Knight, Ranger, Wizard (`.fbx` + Tripo PBR set each).
+- **Enemies:** Orcs / Skeletons / Trolls, each in Mage / Tank / Warrior (3×3 = 9).
+- **V1 STARTS with KNIGHT + the ORC family only.** Orcs first because living humanoids show animation clearly (the
+  pivot rests on animation-as-mechanics — the wind-up IS the telegraph); skeletons read stiff. **Make the Knight perfect
+  — everything about it — before Ranger/Wizard or the other families.**
+- **Keep-it-light stack:** (1) shared **Humanoid rig + retarget ONE clip set** to all (the big animation-labor win);
+  (2) **Mesh Baker per-character 6 sections → 1** SkinnedMeshRenderer + 1 atlas (NOT cross-character — different
+  skeletons; that's a V2-horde concern); (3) **poly-decimate + texture compress/downsize** (Tripo is dense + 2K — the
+  real WebGL/mobile memory win; Mesh Baker does neither).
+- **GATE before any downstream work (CLAUDE.md §12):** Knight.fbx is confirmed rigged/skinned; OPEN = does each model
+  ship a usable CLIP SET or just a bind pose? Confirm on Unity import FIRST. Spec: `WORK_ORDER_481`.
+
 ## Loop reward swap
 The outpost loop's reward was "unlock the next companion" (`Village2RaidController` /
 `RaidVictoryController`). With no companions, the reward becomes **skill points / gear** so the
