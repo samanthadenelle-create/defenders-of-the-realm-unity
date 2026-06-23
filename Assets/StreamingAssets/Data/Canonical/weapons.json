@@ -75,6 +75,20 @@
       "buyIron": 40
     },
     {
+      "id": "knight_shield_starter",
+      "name": "Squire's Heater",
+      "icon": "🛡️",
+      "job": "knight",
+      "category": "shield",
+      "rarity": "common",
+      "req": {
+        "level": 1
+      },
+      "buyWood": 30,
+      "buyIron": 30,
+      "flavor": "A plain iron-banded heater — the first thing a squire is taught to hold."
+    },
+    {
       "id": "knight_iron",
       "name": "Iron Longsword",
       "icon": "🗡️",

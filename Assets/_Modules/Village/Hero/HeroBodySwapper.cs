@@ -348,6 +348,15 @@ namespace DeNelle.Village
             equipLoadout.Refresh();
             if (GetComponent<EquipmentController>() == null)
                 gameObject.AddComponent<EquipmentController>();
+            // Seed the Knight's default SHIELD (off-hand) the first time a Knight body is built —
+            // only if nothing's persisted, so it never overrides a player's later choice. The data
+            // row 'knight_shield_starter' (category "shield") resolves to the shield_A visual and
+            // EquipmentController attaches it to LeftHand on the OnGearChanged this fires (the
+            // controller is already added above, so it's subscribed). Knight-specific, like the
+            // height tweak — Tripo donor carries no weapon/shield, so we attach them as gear.
+            if (cls == HeroClass.Knight && equipLoadout.EquippedOffHand == null)
+                Guard.Try("HeroBody", "seed knight default shield",
+                    () => equipLoadout.EquipOffHandById("knight_shield_starter"));
             // ARMOR RENDER (HeroArmorVisual): show EQUIPPED Blink armor on the BODY by swapping
             // in the full-body armored skinned-mesh and humanoid-retargeting it to THIS hero's
             // animator (hiding the base "HeroBody" while armored, restoring it on unequip). It
