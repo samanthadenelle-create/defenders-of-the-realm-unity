@@ -331,12 +331,37 @@ namespace DeNelle.Village
                 var surf = gameObject.GetComponent<NavMeshSurface>();
                 if (surf == null) surf = gameObject.AddComponent<NavMeshSurface>();
                 surf.collectObjects = CollectObjects.All;
-                surf.useGeometry    = NavMeshCollectGeometry.PhysicsColliders;
-                surf.agentTypeID    = 0;
-                surf.layerMask      = ~0;
+
+                // BAKE FROM PHYSICS COLLIDERS, NOT RENDER MESHES — matches the WORKING
+                // ArenaNavMeshBaker (useGeometry=PhysicsColliders, agentTypeID=0). DATA-PROVEN
+                // (fleet build run): the prior bake dragged in the polyperfect castle RENDER MESHES
+                // (wall-medieval_stone / tower-castle_round / UCX_Floor_WoodDark_1 …), which require
+                // "Read/Write Enabled" on import they don't have -> RuntimeNavMeshBuilder SKIPPED
+                // 150+ sources ("is skipped because it does not allow read access"), leaving the seam
+                // navmesh incomplete so the crossing wouldn't path.
+                surf.useGeometry = NavMeshCollectGeometry.PhysicsColliders;
+                surf.agentTypeID = 0;
+
+                // EXCLUDE the "Structure" layer (the castle walls/gates/towers live there per
+                // CastleHubBuilder WO-449) so the bake never even visits those non-readable imported
+                // meshes — the read-access skip spam disappears and the source set stays clean. The
+                // weld geometry (the renderer-off invisible nav planes: this deck + the courtyard
+                // NavMeshFloor_Invisible_Walkable) sit on the Default layer and ARE collected, with
+                // their primitive MeshColliders (readable) — so deck + courtyard still FUSE. Their
+                // carving NavMeshObstacles cut the walls back out, exactly as the editor bake did.
+                int structureLayer = LayerMask.NameToLayer("Structure");
+                surf.layerMask = structureLayer >= 0 ? ~(1 << structureLayer) : ~0;
+
+                // Voxel/region tuning copied from ArenaNavMeshBaker (the proven runtime bake): a
+                // finer voxel for a tight local weld + prune stray islands smaller than MinRegionArea.
+                surf.overrideVoxelSize = true;
+                surf.voxelSize         = 0.18f;   // ArenaNavMeshBaker.VoxelSize
+                surf.minRegionArea     = 0.5f;    // ArenaNavMeshBaker.MinRegionArea
+
                 surf.BuildNavMesh();
                 FlowTrace.Step("RuntimeSeam",
-                    "runtime NavMeshSurface.BuildNavMesh() — deck welded into source navmesh (no editor bake).");
+                    $"runtime NavMeshSurface.BuildNavMesh() — useGeometry=PhysicsColliders, layerMask excludes 'Structure'({structureLayer}) " +
+                    "so non-readable polyperfect render meshes are NOT collected; deck welded into source navmesh from colliders (no editor bake, no read-access skips).");
             });
         }
 
