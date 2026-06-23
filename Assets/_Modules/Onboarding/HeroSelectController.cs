@@ -729,6 +729,12 @@ namespace DeNelle.Onboarding
         {
             _selectedHero = hero;
             _hasSelection = true;
+            // SOURCE FIX: persist the pick THE INSTANT it is selected so GameState.HeroClass
+            // is written + saved + KnightOnly-enforced even when a bypass route (e.g.
+            // FeatureFlags.BypassPetSelect → SceneRouter.GoCastle) skips the confirm/PersistHero
+            // path. The confirm path (OnDiveVillageClicked → PersistHero) still calls ChooseHero;
+            // ChooseHero is idempotent so the double-call is harmless.
+            GameStateService.Instance?.ChooseHero(_selectedHero);
             RefreshSelectionVisuals();
             RefreshConfirmEnabled();
         }

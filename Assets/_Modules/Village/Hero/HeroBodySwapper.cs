@@ -766,17 +766,19 @@ namespace DeNelle.Village
 
         private static HeroClass ResolveHeroClass()
         {
-            // V1 LOCK (2026-06-23): ff.knightonly forces the hero to Knight at the BUILD chokepoint,
-            // not only at selection. The PetSelect-bypass flow auto-routes to the castle WITHOUT
-            // calling GameStateService.ChooseHero (the only other KnightOnly enforcer), so a None/
-            // persisted state otherwise fell through to the Mage default below and the hero rendered
-            // as a Mage ("still not a knight", data-proven 2026-06-23). Forcing here makes the single-
-            // Knight north star hold on every path. Flip OFF (ff.knightonly=0) to restore free class.
-            if (DeNelle.Core.FeatureFlags.KnightOnly) return HeroClass.Knight;
+            // The body builder TRUSTS the persisted HeroClass — the SOURCE layer guarantees it:
+            // a hero pick is persisted at SELECTION (HeroSelectController.OnCardClicked →
+            // GameStateService.ChooseHero) and at the start-flow entry, before any bypass routing.
+            // No KnightOnly force here (band-aid removed 2026-06-23) — if the persisted value is
+            // ever unset at body-build, that is a SOURCE regression: we scream (FlowTrace.Fail) and
+            // fall back to V1's single hero (Knight) rather than silently rendering a wrong class.
             var svc = GameStateService.Instance;
-            if (svc == null) return HeroClass.Mage;
-            var opt = svc.State?.HeroClass.ToNullable();
-            return opt ?? HeroClass.Mage;
+            var opt = svc != null ? svc.State?.HeroClass.ToNullable() : null;
+            if (opt.HasValue) return opt.Value;
+            DeNelle.Core.Diagnostics.FlowTrace.Fail("HeroBody",
+                "ResolveHeroClass: HeroClass was UNSET at body-build — source (selection/start-flow) " +
+                "failed to persist it. Defaulting to Knight (V1). This is a SOURCE regression to fix.");
+            return HeroClass.Knight;
         }
 
         /// <summary>
