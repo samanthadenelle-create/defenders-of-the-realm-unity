@@ -220,6 +220,19 @@ namespace DeNelle.Core
         // Matches the polyperfect ring trees, KayKit hex trees, and any "*tree*" prop.
         private static bool IsTreeRenderer(Transform t)
         {
+            // EXCLUSION FIRST: the hero's equipment props (weapon / shield-offhand / bow)
+            // are NOT trees. They can name-collide with the foliage matcher (e.g. a "branch"
+            // token, or a tree-named parent bone they're parented under), which made this
+            // tree fixer collect them and overwrite their good material to flat white. If
+            // ANY transform in the parent chain reads as an equipment prop, it is never a
+            // tree — bail out before the tree-name walk so the fix/verify never touch it.
+            Transform e = t;
+            while (e != null)
+            {
+                if (IsEquipmentProp(e.name)) return false;
+                e = e.parent;
+            }
+
             Transform cur = t;
             while (cur != null)
             {
@@ -227,6 +240,20 @@ namespace DeNelle.Core
                 cur = cur.parent;
             }
             return false;
+        }
+
+        // Hero equipment props (weapon, off-hand shield, bow) — these must NEVER be treated
+        // as trees nor have their authored material mutated by the tree fixer.
+        private static bool IsEquipmentProp(string n)
+        {
+            if (string.IsNullOrEmpty(n)) return false;
+            string lower = n.ToLowerInvariant();
+            return lower.Contains("equipmentprop")
+                || lower.Contains("bowprop")
+                || lower.Contains("weaponprop")
+                || lower.Contains("_weapon")
+                || lower.Contains("offhand")
+                || lower.Contains("shield");
         }
 
         private static bool NameIsTree(string n)
