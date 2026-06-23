@@ -1,0 +1,158 @@
+================================================================================
+ OFFSET FORGE  —  v1.0
+ A tiny Blender-style viewer for fixing model attachment offsets in Unity.
+ Load a model, rotate X/Y/Z, read the exact offset, store it. Forever correct.
+================================================================================
+
+--------------------------------------------------------------------------------
+ 1. WHAT IT IS
+--------------------------------------------------------------------------------
+Offset Forge is a single, dependency-free Unity Editor window. It solves one
+small, universal problem: a sword/shield/prop/model that won't sit right when you
+attach it to a hand, socket, or mount point, and you're left typing rotation
+values blind and pressing Play over and over to check.
+
+With Offset Forge you:
+  1. Drop in any model or prefab.
+  2. Orbit it and dial Rotation X/Y/Z + Position X/Y/Z until it looks right.
+  3. Read the EXACT offset, Copy it to your clipboard, or Save it to JSON.
+
+That's it. No play mode, no rebuilds, no guessing. You set the offset once by eye;
+the numbers are then correct every time.
+
+--------------------------------------------------------------------------------
+ 2. WHY IT EXISTS  (the AI-era angle)
+--------------------------------------------------------------------------------
+Code can do almost everything now — but a script (or an AI coding assistant)
+cannot LOOK at a model and know it needs to rotate 45 degrees on Z. Spatial
+alignment is a human-eye task. Offset Forge is the bridge: a human sets the offset
+visually one time, exports the numbers, and any script, prefab, or AI pipeline
+consumes those exact numbers from then on. It's the one manual step that makes the
+automated steps possible.
+
+--------------------------------------------------------------------------------
+ 3. INSTALL
+--------------------------------------------------------------------------------
+  - Unity 2021.3 LTS or newer (tested through Unity 6).
+  - Import the package (Assets > Import Package, or via the Package Manager if you
+    received a .tgz / git URL).
+  - Everything lives under  Assets/OffsetForge/  and is Editor-only — it adds
+    NOTHING to your build and has NO runtime dependencies.
+
+No setup, no scene changes, no settings to configure.
+
+--------------------------------------------------------------------------------
+ 4. QUICK START  (60 seconds)
+--------------------------------------------------------------------------------
+  1. Open the window:   Tools > Offset Forge
+  2. Drag a prefab or model asset into the "Model" field at the top
+     (or click the circle-select and pick one).
+  3. The model appears in the viewport. Orbit it:
+        - Left-drag  = orbit
+        - Scroll     = zoom
+        - Middle-drag (or Alt+drag) = pan
+  4. Use the Rotation X / Y / Z and Position X / Y / Z fields (type a number or
+     drag the slider) until the model is oriented the way you want it attached.
+        - Tip: toggle "Snap" to step rotation in 5 or 15 degree increments.
+  5. Read the live "Offset" panel at the bottom. It shows the exact values:
+        Rotation (eulerAngles):  (x, y, z)
+        Position (localPosition): (x, y, z)
+  6. Click "Copy Rotation" / "Copy Position" to put the value on your clipboard
+     (as a Vector3 you can paste straight into code or the Inspector), or
+  7. Click "Save to JSON" to append/update this model's offset in your offsets
+     file (default: Assets/OffsetForge/offsets.json).
+
+--------------------------------------------------------------------------------
+ 5. USING THE OFFSETS IN YOUR PROJECT
+--------------------------------------------------------------------------------
+Two ways, pick what fits:
+
+  A) COPY/PASTE (fastest):
+     Hit "Copy Rotation", then paste into your attach code or Inspector:
+        weapon.localRotation = Quaternion.Euler(135f, 170f, -45f);
+        weapon.localPosition = new Vector3(-0.05f, 0f, 0f);
+
+  B) DATA-DRIVEN (scales to many items):
+     Hit "Save to JSON". offsets.json looks like:
+
+        {
+          "offsets": [
+            {
+              "id": "Sword_Knight",
+              "rot": { "x": -25.0, "y": 90.0, "z": 0.0 },
+              "pos": { "x": 0.0,  "y": 0.0,  "z": 0.0 },
+              "scale": 1.0
+            },
+            {
+              "id": "Shield_Round",
+              "rot": { "x": 135.0, "y": 170.0, "z": -45.0 },
+              "pos": { "x": -0.05, "y": 0.0,  "z": 0.0 },
+              "scale": 1.0
+            }
+          ]
+        }
+
+     Load it at runtime (or edit-time) and apply by id. A minimal loader:
+
+        var json = File.ReadAllText(path);           // or Resources.Load<TextAsset>
+        var table = JsonUtility.FromJson<OffsetTable>(json);
+        var o = table.Find("Shield_Round");
+        t.localRotation = Quaternion.Euler(o.rot.x, o.rot.y, o.rot.z);
+        t.localPosition = new Vector3(o.pos.x, o.pos.y, o.pos.z);
+
+     (A ready-to-use OffsetTable struct + Find() helper is included under
+      Assets/OffsetForge/Runtime/ as an OPTIONAL convenience — delete it if you
+      prefer your own loader. It is plain C#, no dependencies.)
+
+--------------------------------------------------------------------------------
+ 6. FOR AI / AUTOMATION WORKFLOWS
+--------------------------------------------------------------------------------
+offsets.json is intentionally flat and human/AI readable. An AI assistant can:
+  - read offsets.json and emit the exact attach code,
+  - reference an offset by id without ever seeing the model,
+  - ask the human to "open Offset Forge and dial in <id>" for the one step it
+    cannot do itself.
+Keep offsets.json in version control next to your prefabs — it is the single
+source of truth for "how this thing attaches."
+
+--------------------------------------------------------------------------------
+ 7. FAQ
+--------------------------------------------------------------------------------
+Q: Does it add anything to my build?
+A: No. It is 100% Editor-only (OffsetForge.Editor asmdef, Editor platform only).
+   The optional runtime loader is the only thing that ships, and only if you use
+   it.
+
+Q: Does it modify my models or prefabs?
+A: No. It never writes to your assets. It only reads them to preview, and writes
+   the numbers you choose to offsets.json (or your clipboard).
+
+Q: What does the offset represent?
+A: A local Rotation (euler) + local Position you intend to apply to the object
+   once it's parented to a hand/socket/mount. It is data you apply; the tool does
+   not parent anything for you.
+
+Q: Can I use it for non-weapons (props, attachments, camera rigs, decals)?
+A: Yes — it's just "look at a thing, get its local transform offset." Anything
+   you attach to anything benefits.
+
+Q: Multiple offsets per model?
+A: Save under different ids (e.g. "Sword_Knight@RightHand",
+   "Sword_Knight@Sheath").
+
+--------------------------------------------------------------------------------
+ 8. SUPPORT
+--------------------------------------------------------------------------------
+  Email:   samanthadenelle@gmail.com
+  Docs:    this file + README.md
+  Please include your Unity version and the model/format you were aligning.
+
+--------------------------------------------------------------------------------
+ 9. CHANGELOG
+--------------------------------------------------------------------------------
+  See CHANGELOG.md.
+
+================================================================================
+ Thank you for using Offset Forge. It was built to scratch a real itch — we hope
+ it saves you the same hour it saved us.
+================================================================================
