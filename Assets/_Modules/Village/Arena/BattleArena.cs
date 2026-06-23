@@ -444,19 +444,146 @@ namespace DeNelle.Village.Arena
             FlowTrace.Step("BattleArena", "Resolve: stage torn down, hero returned, battle ended.");
         }
 
-        // Minimal win reward: hero XP scaled by the staged family size + threat. Routes
-        // through HeroProgression by reflection (no hard ref ordering assumption).
+        // Win reward (C2 — close the FELT reward loop): a staged-family/threat-scaled
+        // payout the player FEELS, every drop routed to an EXISTING system (no parallel
+        // economy — mirrors EnemyOutpost.GrantClearReward):
+        //   1) hero XP        -> HeroProgression (kept; reflection, no ref-order assumption)
+        //   2) skill points   -> WisdomCurrencyService.Grant (the talent-tree currency)
+        //   3) resources      -> EconomyService.Grant (a small wood/iron bundle)
+        //   4) gear (chance)  -> GearLoadout.Equip*ById (a low-tier weapon/armor drop)
+        // V1-simple + deterministic-ish (formulas, not data files). Cross-module lookups
+        // are Unity-fake-null-guarded (explicit != null, not ?.) per the lint.
         private static void GrantWinReward(EncounterParams p)
         {
             if (p == null) return;
-            int xp = 20 + 8 * Mathf.Max(0, p.EnemyIds.Length) + 4 * Mathf.Max(0, p.Threat);
+            int family = Mathf.Max(0, p.EnemyIds != null ? p.EnemyIds.Length : 0);
+            int threat = Mathf.Max(0, p.Threat);
+
+            // 1) XP — unchanged path (HeroProgression via reflection).
+            int xp = 20 + 8 * family + 4 * threat;
             var prog = GameObject.FindObjectOfType(Type.GetType("DeNelle.Village.HeroProgression, DeNelle.Village")) as MonoBehaviour;
             if (prog != null)
             {
                 var add = prog.GetType().GetMethod("AddXp", new[] { typeof(float) });
                 add?.Invoke(prog, new object[] { (float)xp });
             }
-            FlowTrace.Step("BattleArena", $"GrantWinReward: +{xp} XP.");
+            FlowTrace.Step("BattleArena", $"GrantWinReward: +{xp} XP (family={family} threat={threat}).");
+
+            // 2) SKILL POINTS (Wisdom) — 1 base + 1 per 2 family members + 1 per 2 threat
+            // tiers, so a bigger/deadlier family pays a felt skill-point bump.
+            int wisdom = 1 + family / 2 + threat / 2;
+            var wallet = DeNelle.Village.Talents.WisdomCurrencyService.Instance;
+            if (wallet != null)
+            {
+                wallet.Grant(wisdom);
+                FlowTrace.Step("BattleArena", $"GrantWinReward: +{wisdom} Wisdom (skill points).");
+            }
+            else
+            {
+                FlowTrace.Warn("BattleArena", "GrantWinReward: WisdomCurrencyService null - skill points not granted.");
+            }
+
+            // 3) RESOURCES — a small wood/iron bundle via the existing EconomyService
+            // (same grant surface EnemyOutpost uses; no new resource path).
+            int wood = 10 + 4 * threat;
+            int iron = 4 + 2 * threat;
+            var econ = EconomyService.Instance;
+            if (econ != null)
+            {
+                econ.Grant(wood: wood, iron: iron);
+                FlowTrace.Step("BattleArena", $"GrantWinReward: +{wood} wood, +{iron} iron.");
+            }
+            else
+            {
+                FlowTrace.Warn("BattleArena", "GrantWinReward: EconomyService null - resources not granted.");
+            }
+
+            // 4) GEAR (chance) — a low-tier drop equipped through the REAL armory API
+            // (GearLoadout.Equip*ById), exactly like the outpost loot path but capped at
+            // the low tiers so the arena stays a light, frequent reward.
+            string gear = TryGrantArenaGear(threat);
+            if (gear != null)
+                FlowTrace.Step("BattleArena", $"GrantWinReward: gear drop [{gear}] equipped.");
+        }
+
+        // Low-tier gear drop for an arena win — reuses the outpost's armory-grant pattern
+        // (find the Player-tagged hero's GearLoadout, pick a catalog item the hero qualifies
+        // for, equip it) but biased to common/uncommon. Drop chance rises a little with
+        // threat. Returns the equipped item's display name, or null on no drop. Fake-null-safe.
+        private static string TryGrantArenaGear(int threat)
+        {
+            const float baseChance = 0.30f;
+            const float perTier    = 0.05f;
+            const float maxChance  = 0.65f;
+            float chance = Mathf.Min(maxChance, baseChance + perTier * Mathf.Max(0, threat));
+            if (UnityEngine.Random.value > chance) return null;
+
+            GameObject heroGo = GameObject.FindWithTag("Player");
+            if (heroGo == null) return null;
+
+            var loadout = heroGo.GetComponent<DeNelle.Village.Hero.GearLoadout>();
+            if (loadout == null) loadout = heroGo.AddComponent<DeNelle.Village.Hero.GearLoadout>();
+            if (loadout == null) return null;
+
+            var abilities   = heroGo.GetComponent<DeNelle.Village.Hero.HeroAbilities>();
+            var progression = heroGo.GetComponent<DeNelle.Village.HeroProgression>();
+            string job   = abilities != null ? abilities.HeroClass : DeNelle.Village.Hero.AbilityCatalog.DefaultClass;
+            int    level = progression != null ? progression.Level : 1;
+
+            // Bias low: arena drops stay common/uncommon (the outpost owns the rare/epic curve).
+            string targetRarity = UnityEngine.Random.value < 0.65f ? "common" : "uncommon";
+
+            // 50/50 weapon vs armor; fall back to the other type if the first yields none.
+            if (UnityEngine.Random.value < 0.5f)
+            {
+                var w = PickArenaWeapon(job, level, targetRarity);
+                if (w != null) { loadout.EquipWeaponById(w.id); return w.name; }
+                var a = PickArenaArmor(level, targetRarity);
+                if (a != null) { loadout.EquipArmorById(a.id); return a.name; }
+            }
+            else
+            {
+                var a = PickArenaArmor(level, targetRarity);
+                if (a != null) { loadout.EquipArmorById(a.id); return a.name; }
+                var w = PickArenaWeapon(job, level, targetRarity);
+                if (w != null) { loadout.EquipWeaponById(w.id); return w.name; }
+            }
+            return null;
+        }
+
+        // Pick the eligible weapon at the target rarity the hero qualifies for; else the
+        // best weapon for the hero's job/level (GearCatalog fallback). Null if none.
+        private static DeNelle.Village.Hero.WeaponDef PickArenaWeapon(string job, int level, string rarity)
+        {
+            DeNelle.Village.Hero.WeaponDef exact = null;
+            foreach (var w in DeNelle.Village.Hero.GearCatalog.AllWeapons())
+            {
+                if (w == null) continue;
+                if (!string.IsNullOrEmpty(w.job)
+                    && !w.job.Equals("any", StringComparison.OrdinalIgnoreCase)
+                    && !w.job.Equals(job ?? string.Empty, StringComparison.OrdinalIgnoreCase)) continue;
+                if (w.req != null && level < w.req.level) continue;
+                if (string.Equals(w.rarity, rarity, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (exact == null || w.damageMult > exact.damageMult) exact = w;
+                }
+            }
+            return exact ?? DeNelle.Village.Hero.GearCatalog.BestWeapon(job, level);
+        }
+
+        private static DeNelle.Village.Hero.ArmorDef PickArenaArmor(int level, string rarity)
+        {
+            DeNelle.Village.Hero.ArmorDef exact = null;
+            foreach (var a in DeNelle.Village.Hero.GearCatalog.AllArmors())
+            {
+                if (a == null) continue;
+                if (a.req != null && level < a.req.level) continue;
+                if (string.Equals(a.rarity, rarity, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (exact == null || a.defense > exact.defense) exact = a;
+                }
+            }
+            return exact ?? DeNelle.Village.Hero.GearCatalog.BestArmor("any", level);
         }
     }
 }
