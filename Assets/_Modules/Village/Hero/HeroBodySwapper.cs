@@ -66,6 +66,17 @@ namespace DeNelle.Village
                 Destroy(old.gameObject);
             }
 
+            // KNIGHT routes to the existing Tripo ARMORED body via the legacy Resources path
+            // (Resources/Heroes/Knight.fbx + Knight.controller + -90° yaw + Tripo material pipeline).
+            // The Blink LowPoly base is the BARE male body — wrong for the armored Knight. Skip the
+            // Blink base load entirely for the Knight and build the armored body directly.
+            if (cls == HeroClass.Knight)
+            {
+                FlowTrace.Step("HeroBody", $"class={cls} slug={slug} — Knight routes to legacy Tripo armored body (skipping Blink base).");
+                BuildLegacyResourcesBody(cls, slug, controllerSnapshot);
+                return;
+            }
+
             FlowTrace.Step("HeroBody", $"class={cls} slug={slug} — kicking Blink base load '{BlinkBaseBodyAddress}'.");
             BeginBlinkBaseLoad(cls, slug, controllerSnapshot);
         }
