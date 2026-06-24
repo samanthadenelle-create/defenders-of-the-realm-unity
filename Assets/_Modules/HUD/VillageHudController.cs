@@ -991,6 +991,28 @@ namespace DeNelle.HUD
             // it on outside.
             if (townShown || inArenaBattle) SetActiveSafe(_castleBanner, false);
             else if (_inVillage || _villageOnlyForced) SetActiveSafe(_castleBanner, true);
+
+            // WO-507 (owner 2026-06-24, double-HUD screenshot): when the 9-zone battle HUD is
+            // APPLIED (ff.battlehud9zone ON) AND a BattleArena fight is live, the 9-zone fully
+            // owns the battle screen (its own canvas: hero plate, enemy family overview, current
+            // target, basic-attack pill, ability arc, quick-focus). The LEGACY battle cluster —
+            // VillageHudController's _battleHudGroup, which parents _vitalsCluster (HP/mana),
+            // _skillBar (the old ability/Attack/PARRY discs), the wave readout, and the
+            // momentum/arrow chips — was still fading IN underneath it (BattleHudVisibilityManager
+            // shows _battleHudGroup in Battle mode), giving the owner a DOUBLE HUD. So while the
+            // 9-zone is active in battle, FORCE the legacy battle group's GameObject OFF (one gate
+            // hides every child — vitals, skill bar, focus buttons, arrow chips). This wins over
+            // the manager's per-frame alpha fade (deactivating the GameObject hides children
+            // regardless of CanvasGroup alpha) and restores the instant the battle ends or the
+            // 9-zone flag is OFF, so the legacy (non-9-zone) battle HUD path is UNCHANGED.
+            bool hud9Owns = inArenaBattle && DeNelle.Core.FeatureFlags.BattleHud9Zone;
+            if (_battleHudGroup != null)
+            {
+                var battleHostRt = _battleHudGroup.transform as RectTransform;
+                if (hud9Owns) SetActiveSafe(battleHostRt, false);
+                else if (battleHostRt != null && !battleHostRt.gameObject.activeSelf)
+                    battleHostRt.gameObject.SetActive(true);
+            }
         }
 
         private void ProjectMiniMap()
