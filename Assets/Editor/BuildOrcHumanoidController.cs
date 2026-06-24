@@ -104,7 +104,12 @@ namespace DeNelle.Editor
 
             var sm = ctrl.layers[0].stateMachine;
 
-            // ── Locomotion: 1-D blend tree on Speed (idle@0 / walk@6 / run@9) ──
+            // ── Locomotion: 1-D blend tree on Speed (idle@0 / walk@1.5 / run@3.5) ──
+            // ORC-SPEED-TUNED thresholds (NOT hero-tuned): orcs move 2.09-3.04 m/s
+            // post-multiplier, so the old hero values (walk@6 / run@9) were never
+            // crossed and the orc stayed in Idle while moving -> slide. walk@1.5f
+            // covers the whole orc range; run@3.5f catches the fast end / the 6.3 m/s
+            // chase rep. Owner can felt-tune these named values.
             // CRITICAL: useAutomaticThresholds=false so the explicit thresholds stick
             // (Unity defaults true and overwrites them, which skips walk). Mirrors
             // HeroAnimatorFactory.cs:216-238 — the proven blend that fixes the slide.
@@ -115,9 +120,9 @@ namespace DeNelle.Editor
             AssetDatabase.AddObjectToAsset(loco, ctrl);
             locoState.motion = loco;
             int locoChildren = 0;
-            if (s_idle != null) { loco.AddChild(s_idle, 0f); locoChildren++; }
-            if (s_walk != null) { loco.AddChild(s_walk, 6f); locoChildren++; }
-            if (s_run  != null) { loco.AddChild(s_run,  9f); locoChildren++; }
+            if (s_idle != null) { loco.AddChild(s_idle, 0f);   locoChildren++; }
+            if (s_walk != null) { loco.AddChild(s_walk, 1.5f); locoChildren++; } // orc-speed-tuned walk threshold
+            if (s_run  != null) { loco.AddChild(s_run,  3.5f); locoChildren++; } // orc-speed-tuned run threshold
             if (locoChildren == 0)
                 Debug.LogWarning("[OrcCtrl] no locomotion clips - Locomotion state is empty.");
 
@@ -130,16 +135,18 @@ namespace DeNelle.Editor
             AssetDatabase.AddObjectToAsset(injTree, ctrl);
             injuredState.motion = injTree;
             int injChildren = 0;
-            if (injIdle != null) { injTree.AddChild(injIdle, 0f); injChildren++; }
-            if (injWalk != null) { injTree.AddChild(injWalk, 6f); injChildren++; }
-            if (injRun  != null) { injTree.AddChild(injRun,  9f); injChildren++; }
+            // ORC-SPEED-TUNED thresholds (NOT hero-tuned) — same idle@0 / walk@1.5 /
+            // run@3.5 as healthy locomotion so the wounded orc reaches walk too.
+            if (injIdle != null) { injTree.AddChild(injIdle, 0f);   injChildren++; }
+            if (injWalk != null) { injTree.AddChild(injWalk, 1.5f); injChildren++; }
+            if (injRun  != null) { injTree.AddChild(injRun,  3.5f); injChildren++; }
             if (injChildren == 0)
             {
                 // No injured clips — fall back to the healthy locomotion clips so the
                 // state is never empty (Injured then reads identical to Locomotion).
                 if (s_idle != null) injTree.AddChild(s_idle, 0f);
-                if (s_walk != null) injTree.AddChild(s_walk, 6f);
-                if (s_run  != null) injTree.AddChild(s_run,  9f);
+                if (s_walk != null) injTree.AddChild(s_walk, 1.5f); // orc-speed-tuned
+                if (s_run  != null) injTree.AddChild(s_run,  3.5f); // orc-speed-tuned
                 Debug.LogWarning("[OrcCtrl] no injured clips - InjuredLocomotion falls back to healthy loco.");
             }
             // Loco <-> InjuredLocomotion on the Injured bool.
