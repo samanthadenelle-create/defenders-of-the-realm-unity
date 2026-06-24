@@ -414,12 +414,21 @@ namespace DeNelle.Village
                 var col = pillar.GetComponent<Collider>();
                 if (col != null) Object.Destroy(col);                       // never obstruct the lane
                 var r = pillar.GetComponent<MeshRenderer>();
-                if (r != null && r.material != null)
+                if (r != null)
                 {
-                    var m = r.material;
-                    m.color = glowColor;
-                    m.EnableKeyword("_EMISSION");
-                    m.SetColor("_EmissionColor", glowColor * 2.2f);          // bright self-lit glow
+                    // CreatePrimitive assigns Unity's built-in STANDARD-shader Default-Material,
+                    // which is stripped in the URP build -> InternalErrorShader -> magenta (auto-hidden
+                    // by MagentaGuard). REPLACE it with a fresh URP/Lit material (WardStone pattern)
+                    // instead of patching the Standard default.
+                    var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                    if (sh != null)
+                    {
+                        var beaconMat = new Material(sh) { name = "BeaconPillar" };
+                        beaconMat.SetColor("_BaseColor", glowColor);
+                        beaconMat.EnableKeyword("_EMISSION");
+                        beaconMat.SetColor("_EmissionColor", glowColor * 2.2f); // bright self-lit glow
+                        r.sharedMaterial = beaconMat;
+                    }
                 }
 
                 // 2) A colored point light at the gate so the area is lit + the eye is drawn to it.

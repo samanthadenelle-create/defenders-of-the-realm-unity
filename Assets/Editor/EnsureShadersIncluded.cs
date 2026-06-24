@@ -27,8 +27,9 @@ namespace DeNelle.Editor
         {
             // URP core shaders loaded at runtime via Shader.Find — fixes the BUILD-only
             // crash in BattleArena.BuildBackdrop (`new Material(null)` when the unlit shader
-            // is stripped) AND the magenta RuntimeSeam gate beacon (CreatePrimitive's default
-            // material references URP/Lit, also stripped). Both share the same strip root.
+            // is stripped) AND the magenta RuntimeSeam gate beacon (BuildGateBeacon now assigns
+            // URP/Lit explicitly via Shader.Find — so this Always-Included entry is
+            // belt-and-suspenders, NOT the actual fix). Both share the same strip root.
             "Universal Render Pipeline/Unlit",
             "Universal Render Pipeline/Lit",
 
