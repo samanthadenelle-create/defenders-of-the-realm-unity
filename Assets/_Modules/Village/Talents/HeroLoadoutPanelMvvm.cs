@@ -127,9 +127,15 @@ namespace DeNelle.Village.Talents
 
             var img = tile.GetComponent<Image>();
             ElarionUiKit.ApplyRounded(img);
+            // Discoverability (owner: "not intuitive how to assign — could only get the first slot"):
+            // once a skill is picked, the tappable W/E/R slots glow gold so it's obvious THIS is the
+            // next tap target (the tap-skill-then-tap-slot flow). Q (locked) never glows.
+            bool aSkillIsPicked = _vm != null && !string.IsNullOrEmpty(_vm.SelectedAbilityId);
+            bool isAssignTarget = !slot.IsLocked && aSkillIsPicked;
             // Q (locked) reads dim; empty W/E/R read as a quiet socket; filled read gold-warm.
             Color fill;
             if (slot.IsLocked) fill = new Color(ElarionUiKit.Cell.r, ElarionUiKit.Cell.g, ElarionUiKit.Cell.b, 0.30f);
+            else if (isAssignTarget) fill = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.42f);
             else if (slot.IsEmpty) fill = ElarionUiKit.Track;
             else fill = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.20f);
             img.color = fill;
@@ -156,8 +162,8 @@ namespace DeNelle.Village.Talents
             }
             else if (slot.IsEmpty)
             {
-                body = "+";
-                bodyColor = ElarionUi.ParchmentDim;
+                body = isAssignTarget ? "tap to assign" : "+";
+                bodyColor = isAssignTarget ? ElarionUi.Gilt : ElarionUi.ParchmentDim;
             }
             else
             {

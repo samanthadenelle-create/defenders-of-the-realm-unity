@@ -130,6 +130,22 @@ namespace DeNelle.Village
             // emergency capsule) it simply keeps the existing body (never naked). Subscribes to
             // GearLoadout.OnGearChanged; [DisallowMultipleComponent] makes a double-add a no-op.
             if (hero.GetComponent<HeroArmorVisual>() == null) hero.AddComponent<HeroArmorVisual>();
+            // LOADOUT (HeroLoadout): the per-hero W/E/R equipped-ability map (Knight skill-tree
+            // spine). It was BUILT (HeroLoadout + HeroLoadoutAccess + the chooser VM/View) but NEVER
+            // attached to the hero — so HeroLoadoutAccess.Current resolved null and every Equip(W/E/R)
+            // silently no-op'd (owner: "can't assign unlocked weapon skills"). Adding it here makes
+            // its Awake() run -> Load() from PlayerPrefs -> HeroLoadoutAccess.Current resolves, and
+            // all three W/E/R slots equip + persist. Re-added each Ensure() so a recreated/scene-
+            // reloaded hero restores its saved loadout from PlayerPrefs (DisallowMultipleComponent
+            // makes a double-add a no-op).
+            if (hero.GetComponent<HeroLoadout>() == null) hero.AddComponent<HeroLoadout>();
+            // Persistence belt-and-suspenders: a freshly-added HeroLoadout restores via its own
+            // Awake->Load, but a hero that PERSISTS across the scene load (carried/DDOL) won't re-run
+            // Awake — so replay the PlayerPrefs load here to guarantee the saved W/E/R loadout is
+            // restored after every (re)ensure. PlayerPrefs is the source of truth (Equip saves it
+            // immediately), so this is idempotent.
+            var heroLoadout = hero.GetComponent<HeroLoadout>();
+            heroLoadout?.ReloadFromPrefs();
             // DEF-205: the always-on blue ground "reach ring" read as a mystery indicator
             // while walking (players couldn't tell what it meant). Removed — do NOT attach
             // HeroReachRing. The class is kept (HeroReachRing.cs) in case a gated, opt-in
@@ -276,6 +292,7 @@ namespace DeNelle.Village
             go.AddComponent<HeroLocomotion>();
             go.AddComponent<HeroDeathLogger>();   // catch it too, in case the destroyer is periodic
             go.AddComponent<HeroTargetIndicator>();
+            go.AddComponent<HeroLoadout>();        // emergency hero also gets the W/E/R loadout (loads from PlayerPrefs)
 
             // Wire camera for emergency hero (prefer modern SmartMobileCamera; legacy fallback).
             // Prevents "camera stuck on tree" in recovery scenarios on WebGL / clean loads.

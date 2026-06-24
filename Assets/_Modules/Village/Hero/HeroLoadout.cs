@@ -47,6 +47,18 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// Re-reads the saved loadout from PlayerPrefs into this instance (replays Load).
+        /// Awake already does this for a freshly-added component; this public path covers a
+        /// hero that PERSISTS across a scene load (DontDestroyOnLoad / carried hero) — its
+        /// Awake does not re-run, so HeroControlEnsurer calls this to guarantee the saved
+        /// W/E/R loadout is restored after every (re)ensure. Raises <see cref="Changed"/>.
+        /// </summary>
+        public void ReloadFromPrefs()
+        {
+            Load();
+        }
+
+        /// <summary>
         /// The abilityId equipped in <paramref name="slot"/>, or null when nothing is
         /// equipped (the slot then falls back to the class's stock def). Q always
         /// returns null — it is the locked basic attack, resolved from the class kit.
