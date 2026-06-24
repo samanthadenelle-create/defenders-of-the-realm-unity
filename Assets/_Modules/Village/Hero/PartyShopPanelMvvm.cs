@@ -1,23 +1,23 @@
 // =============================================================================
-// PartyShopPanelMvvm — the PARTY weapon/armor shop VIEW (docs/STORE_EQUIP_SPEC.md).
+// PartyShopPanelMvvm - the PARTY weapon/armor shop VIEW (docs/STORE_EQUIP_SPEC.md).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Hero
 //
 // A DUMB SKIN: builds presentation (ElarionUiKit dark-glass + gold frame, the SHARED
 // kit) and BINDS a PartyShopVM. ALL state/logic (party filter, buy/sell/equip,
-// affordability, deltas) lives in the VM — the View never reads game state.
+// affordability, deltas) lives in the VM - the View never reads game state.
 //
 // MIRRORS EquipmentPanel + ShopPanel exactly:
-//   • BuildModalCanvas (sortingOrder 31000 + overrideSorting) + Scrim(onTapClose) + PanelFramed;
-//   • TOP-LEFT a row of PARTY-MEMBER icon buttons (one per member, portrait/crest) — tap
-//     selects → vm.SelectMember → Render re-filters; the selected member is highlighted;
-//   • BUY / SELL tabs (both on the SAME screen — single-tap, no leaving to sell);
-//   • a dynamic scroll grid of item rows, each: the REAL item image (iconPath sprite, glyph
+//   * BuildModalCanvas (sortingOrder 31000 + overrideSorting) + Scrim(onTapClose) + PanelFramed;
+//   * TOP-LEFT a row of PARTY-MEMBER icon buttons (one per member, portrait/crest) - tap
+//     selects -> vm.SelectMember -> Render re-filters; the selected member is highlighted;
+//   * BUY / SELL tabs (both on the SAME screen - single-tap, no leaving to sell);
+//   * a dynamic scroll grid of item rows, each: the REAL item image (iconPath sprite, glyph
 //     fallback), name, price, the stat + delta line, affordability colour, EQUIPPED/OWNED
 //     state, and ONE single-tap buy/equip/sell action (no duplicate bars);
-//   • scrim / Close ✕ (touch — no Escape; hotkeys are gone).
+//   * scrim / Close ? (touch - no Escape; hotkeys are gone).
 //
-// Code-built uGUI ONLY (no UXML — §8). It builds its own Canvas on Open, so it needs no
+// Code-built uGUI ONLY (no UXML - ?8). It builds its own Canvas on Open, so it needs no
 // PanelSettings. Registered with PanelManager + PanelRouter (PanelId.PartyShop). SHIPS
 // BEHIND FeatureFlags.PartyShop (OFF): the bootstrap only spawns when ON, and CmdOpenShop
 // suppresses the legacy ShopPanel when ON, so the two never double-open.
@@ -26,6 +26,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Rendering.Universal;                 // URP: the runtime preview camera renders to its RT (mirror BuildPreviewModal)
+using UnityEngine.AddressableAssets;                   // Blink "gear/" model resolve for the 3D preview
+using UnityEngine.ResourceManagement.AsyncOperations;  // the addressable handle (released on swap/close)
 using DeNelle.Core.UI;
 using DeNelle.Core.UI.Mvvm;
 using DeNelle.Core.Diagnostics;
@@ -52,11 +55,43 @@ namespace DeNelle.Village.Hero
         private GameObject _partyBar;
         private GameObject _tabBar;
         private GameObject _categoryBar;
+        private GameObject _typeBar;
         private RectTransform _scrollContent;
         private TMPro.TextMeshProUGUI _headerLabel;
         private TMPro.TextMeshProUGUI _memberLabel;
         private TMPro.TextMeshProUGUI _walletText;
         private TMPro.TextMeshProUGUI _statusText;
+
+        // -- Preview pane (WO-501 owner point 3) - a 3D render of the selected gear + stat-diff + price --
+        private GameObject _previewRoot;        // the chrome well that holds the preview widgets
+        private RawImage _previewImage;         // fed by the live RenderTexture (3D model)
+        private TMPro.TextMeshProUGUI _previewGlyph;  // 2D fallback glyph drawn over the image when no model
+        private Image _previewSprite;           // 2D fallback sprite (iconPath/catalog) when no model
+        private TMPro.TextMeshProUGUI _previewName;
+        private TMPro.TextMeshProUGUI _previewStats;
+        private TMPro.TextMeshProUGUI _previewDelta;
+        private TMPro.TextMeshProUGUI _previewPrice;
+        private TMPro.TextMeshProUGUI _previewEmpty;  // "Select an item to preview." empty state
+
+        // The single Purchase/Sell toggle + Equip buttons (bottom action bar).
+        private Button _buySellBtn;
+        private TMPro.TextMeshProUGUI _buySellLabel;
+        private Button _equipBtn;
+        private TMPro.TextMeshProUGUI _equipLabel;
+
+        // -- The isolated runtime 3D-preview rig (the BuildPreviewModal "Offset Forge" pattern) --
+        private const int RtSize = 384;
+        private const int PreviewLayer = 31;
+        private GameObject _rigRoot;
+        private GameObject _rigVisual;
+        private Camera _rigCam;
+        private RenderTexture _rigRt;
+        private readonly List<Material> _rigMaterials = new List<Material>();
+        private AsyncOperationHandle<GameObject> _rigHandle;
+        private bool _rigHandleOpen;
+        private string _rigModelId;             // the id currently mounted (skip rebuild when unchanged)
+        private int _rigGeneration;             // stale-async guard (a newer select supersedes an in-flight load)
+        private float _rigYaw;                  // auto-spin angle
 
         private PanelHandle _panelHandle;
 
@@ -65,7 +100,7 @@ namespace DeNelle.Village.Hero
 
         public bool IsOpen => _ui != null;
 
-        // ── Registration (mirror BuildingUpgradePanelMvvm) ────────────────────────
+        // -- Registration (mirror BuildingUpgradePanelMvvm) ------------------------
 
         private void Awake()
         {
@@ -77,6 +112,7 @@ namespace DeNelle.Village.Hero
         private void OnDestroy()
         {
             DisposeViewModel();
+            TeardownRig();
             if (_ui != null) Destroy(_ui);
             _ui = null;
             PanelRouter.Unregister(PanelId.PartyShop, OpenGeneric);
@@ -86,7 +122,7 @@ namespace DeNelle.Village.Hero
         private void OpenGeneric() => Open(null, null);
         private void OpenContext(string vendorContext) => Open(vendorContext, null);
 
-        // ── Open: resolve party + store at the open-site, build chrome, bind VM ───
+        // -- Open: resolve party + store at the open-site, build chrome, bind VM ---
 
         public void Open(string vendorContext, string displayName)
         {
@@ -99,7 +135,7 @@ namespace DeNelle.Village.Hero
             Bind(_vm);
 
             if (!PanelManager.NotifyOpened(_panelHandle))
-                return;   // rejected (e.g. in battle) — NotifyOpened already invoked Close.
+                return;   // rejected (e.g. in battle) - NotifyOpened already invoked Close.
 
             Debug.Log($"[PartyShopPanelMvvm] Opened for vendor '{_vendorContext}'. Bound PartyShopVM (MVVM).");
         }
@@ -178,7 +214,7 @@ namespace DeNelle.Village.Hero
             }
         }
 
-        // ── IPanelView ────────────────────────────────────────────────────────────
+        // -- IPanelView ------------------------------------------------------------
 
         public void Bind(IPanelViewModel vm)
         {
@@ -194,7 +230,7 @@ namespace DeNelle.Village.Hero
             if (_vm != null) _vm.Changed -= Render;
         }
 
-        // ── Render: repaint from vm.* ONLY ────────────────────────────────────────
+        // -- Render: repaint from vm.* ONLY ----------------------------------------
 
         private void Render()
         {
@@ -208,11 +244,14 @@ namespace DeNelle.Village.Hero
             RebuildPartyBar();
             HighlightTab(_vm.Tab);
             UpdateCategoryBar();
+            RebuildTypeBar();
             RebuildList();
             HighlightSelectedRow();
+            RenderPreview();
+            RenderActionBar();
         }
 
-        // ── Chrome (presentation only) ────────────────────────────────────────────
+        // -- Chrome (presentation only) --------------------------------------------
 
         private void BuildChrome()
         {
@@ -259,7 +298,7 @@ namespace DeNelle.Village.Hero
             pb.anchorMin = new Vector2(0.04f, 0.80f); pb.anchorMax = new Vector2(0.96f, 0.885f);
             pb.offsetMin = Vector2.zero; pb.offsetMax = Vector2.zero;
 
-            // Selected-member sub-header (name — class (Lv N)).
+            // Selected-member sub-header (name - class (Lv N)).
             var memGo = new GameObject("MemberLabel", typeof(TMPro.TextMeshProUGUI));
             memGo.transform.SetParent(panel, false);
             var mr = memGo.GetComponent<RectTransform>();
@@ -272,7 +311,7 @@ namespace DeNelle.Village.Hero
             _memberLabel.alignment = TMPro.TextAlignmentOptions.Left;
             _memberLabel.raycastTarget = false;
 
-            // BUY / SELL tabs (both on the same screen — spec point 4).
+            // BUY / SELL tabs (both on the same screen - spec point 4).
             _tabBar = new GameObject("TabBar", typeof(RectTransform));
             _tabBar.transform.SetParent(panel, false);
             var tb = _tabBar.GetComponent<RectTransform>();
@@ -281,7 +320,7 @@ namespace DeNelle.Village.Hero
             CreateTab("BUY",  new Vector2(0.02f, 0.49f), () => _vm?.SetTab(PartyShopTab.Buy));
             CreateTab("SELL", new Vector2(0.51f, 0.98f), () => _vm?.SetTab(PartyShopTab.Sell));
 
-            // Category selector ("dropdown selections": All / Weapons / Armor) — the missing
+            // Category selector ("dropdown selections": All / Weapons / Armor) - the missing
             // narrow over the combined weapons+armor list. Pinned/hidden for single-kind vendors
             // (CategorySelectorVisible). Sits just under the tab/member band, above the grid.
             _categoryBar = new GameObject("CategoryBar", typeof(RectTransform));
@@ -293,29 +332,64 @@ namespace DeNelle.Village.Hero
             CreateCategory("Armor",   new Vector2(0.34f, 0.65f),  PartyShopCategory.Armor);
             CreateCategory("Weapons", new Vector2(0.67f, 0.99f),  PartyShopCategory.Weapons);
 
-            // The scroll list area (the item grid).
+            // Finer weapon/armor TYPE chip row (WO-501 owner point 1) - sits just under the category
+            // bar. Rebuilt per Render from _vm.AvailableTypes so it only shows live chips (>0 rows).
+            _typeBar = new GameObject("TypeBar", typeof(RectTransform));
+            _typeBar.transform.SetParent(panel, false);
+            var tyb = _typeBar.GetComponent<RectTransform>();
+            tyb.anchorMin = new Vector2(0.04f, 0.655f); tyb.anchorMax = new Vector2(0.96f, 0.70f);
+            tyb.offsetMin = Vector2.zero; tyb.offsetMax = Vector2.zero;
+
+            // The scroll list area - SLIM name column (WO-501 owner point 2): narrowed to the left ~36%
+            // so the 3D preview pane sits beside it. The VerticalLayoutGroup auto-fits the new width.
             _contentRoot = new GameObject("Content", typeof(RectTransform));
             _contentRoot.transform.SetParent(panel, false);
             var cr = _contentRoot.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0.04f, 0.12f); cr.anchorMax = new Vector2(0.96f, 0.70f);
+            cr.anchorMin = new Vector2(0.04f, 0.12f); cr.anchorMax = new Vector2(0.40f, 0.645f);
             cr.offsetMin = Vector2.zero; cr.offsetMax = Vector2.zero;
 
-            // Close + status (bottom band).
+            // The 3D render preview pane (WO-501 owner point 3) beside the slim list.
+            BuildPreviewPane(panel);
+
+            // -- Bottom action bar (WO-501 owner point 4): Close + Purchase/Sell toggle + Equip --
             var closeBtn = ElarionUiKit.ButtonPack(panel, "Close", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.06f, 0.03f), new Vector2(0.30f, 0.095f), () => _vm?.Close(),
+                new Vector2(0.04f, 0.03f), new Vector2(0.26f, 0.105f), () => _vm?.Close(),
                 packSpriteName: RpgUiCatalog.ButtonFrame);
             CreamTab(closeBtn);
 
+            // ONE Purchase/Sell button whose label + action TOGGLE on _vm.Tab (the proven ShopPanel
+            // pattern, ShopPanel.cs:341-344) - routes through _vm.Act on the selected id.
+            _buySellBtn = ElarionUiKit.ButtonPack(panel, "Purchase", ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.30f, 0.03f), new Vector2(0.60f, 0.105f),
+                () => { var s = _vm?.SelectedId; if (!string.IsNullOrEmpty(s)) _vm.Act(s); },
+                packSpriteName: DeNelle.Core.FeatureFlags.BlinkChrome ? RpgUiCatalog.ButtonConfirm : null);
+            CreamTab(_buySellBtn);
+            _buySellLabel = _buySellBtn != null ? _buySellBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
+
+            // EQUIP the selected owned item to the selected member (IEquipTarget seam via the VM).
+            _equipBtn = ElarionUiKit.ButtonPack(panel, "Equip", ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.64f, 0.03f), new Vector2(0.86f, 0.105f),
+                () => _vm?.EquipSelected(),
+                packSpriteName: DeNelle.Core.FeatureFlags.BlinkChrome ? RpgUiCatalog.ButtonConfirm : null);
+            CreamTab(_equipBtn);
+            _equipLabel = _equipBtn != null ? _equipBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
+
+            // Status line (narrow strip above the buttons so a row can never eat the tap).
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
             statusGo.transform.SetParent(panel, false);
             var sRect = statusGo.GetComponent<RectTransform>();
-            sRect.anchorMin = new Vector2(0.32f, 0.03f); sRect.anchorMax = new Vector2(0.96f, 0.095f);
+            sRect.anchorMin = new Vector2(0.04f, 0.115f); sRect.anchorMax = new Vector2(0.96f, 0.16f);
             sRect.offsetMin = Vector2.zero; sRect.offsetMax = Vector2.zero;
             _statusText = statusGo.GetComponent<TMPro.TextMeshProUGUI>();
             _statusText.fontSize = ElarionUi.FontLabel;
             _statusText.color = ElarionUi.ParchmentDim;
             _statusText.alignment = TMPro.TextAlignmentOptions.Center;
             _statusText.raycastTarget = false;
+
+            // Raise the action buttons above the scroll content so a row never eats the tap (ShopPanel trap).
+            if (_buySellBtn != null) _buySellBtn.transform.SetAsLastSibling();
+            if (_equipBtn != null) _equipBtn.transform.SetAsLastSibling();
+            if (closeBtn != null) closeBtn.transform.SetAsLastSibling();
         }
 
         private void CreateTab(string label, Vector2 anchorX, System.Action onClick)
@@ -333,6 +407,59 @@ namespace DeNelle.Village.Hero
                 () => _vm?.SetCategory(cat),
                 packSpriteName: RpgUiCatalog.ButtonFrame);
             CreamTab(btn);
+        }
+
+        // -- Finer weapon/armor TYPE chip row (WO-501 owner point 1) ------------------
+        // Rebuilt per Render from _vm.AvailableTypes so only chips with >0 candidate rows show
+        // (never a dead chip) + an "All" chip to clear the narrow. Highlights the active chip.
+        private void RebuildTypeBar()
+        {
+            if (_typeBar == null || _vm == null) return;
+            for (int i = _typeBar.transform.childCount - 1; i >= 0; i--)
+            {
+                var c = _typeBar.transform.GetChild(i);
+                if (c != null) Destroy(c.gameObject);
+            }
+
+            var avail = _vm.AvailableTypes;
+            // Only one TYPE => the narrow is meaningless (the hero's gear is already one kind): hide the row.
+            if (avail == null || avail.Count <= 1) { _typeBar.SetActive(false); return; }
+            _typeBar.SetActive(true);
+
+            // "All" + one chip per available type, evenly spaced across the bar.
+            var chips = new List<(string label, PartyShopType type)> { ("All", PartyShopType.Any) };
+            foreach (var t in avail) chips.Add((TypeLabel(t), t));
+
+            int n = chips.Count;
+            const float gap = 0.01f;
+            float w = (1f - gap * (n + 1)) / n;
+            for (int i = 0; i < n; i++)
+            {
+                var chip = chips[i];
+                float x0 = gap + i * (w + gap);
+                var btn = ElarionUiKit.ButtonPack(_typeBar.transform, chip.label, ElarionUiKit.ButtonKind.Quiet,
+                    new Vector2(x0, 0.08f), new Vector2(x0 + w, 0.92f),
+                    () => _vm?.SetType(chip.type),
+                    packSpriteName: RpgUiCatalog.ButtonFrame);
+                if (btn == null) continue;
+                btn.name = "Type_" + chip.type;
+                CreamTab(btn);
+                var img = btn.GetComponent<Image>();
+                if (img != null) img.color = _vm.Type == chip.type ? TabSelectedTint : TabRestTint;
+            }
+        }
+
+        private static string TypeLabel(PartyShopType t)
+        {
+            switch (t)
+            {
+                case PartyShopType.OneHand: return "1h";
+                case PartyShopType.TwoHand: return "2h";
+                case PartyShopType.Shield:  return "Shield";
+                case PartyShopType.Light:   return "Light";
+                case PartyShopType.Heavy:   return "Heavy";
+                default:                    return "All";
+            }
         }
 
         // Show the category selector only for vendors that stock BOTH gear kinds (else it is
@@ -367,7 +494,7 @@ namespace DeNelle.Village.Hero
             }
         }
 
-        // ── Party selector (top-left member icon buttons) ─────────────────────────
+        // -- Party selector (top-left member icon buttons) -------------------------
 
         private void RebuildPartyBar()
         {
@@ -446,7 +573,7 @@ namespace DeNelle.Village.Hero
             }
         }
 
-        // ── Item list ─────────────────────────────────────────────────────────────
+        // -- Item list -------------------------------------------------------------
 
         private void RebuildList()
         {
@@ -462,7 +589,7 @@ namespace DeNelle.Village.Hero
             var (built, failed) = Guard.TryEach("Store", "build party-shop row", _vm.Items,
                 item => CreateRow(listRoot, item));
 
-            // STOCKED-N COMMIT SEAM: rows offered vs built — splits data-empty from built-but-broken.
+            // STOCKED-N COMMIT SEAM: rows offered vs built - splits data-empty from built-but-broken.
             FlowTrace.Step("Store",
                 $"PartyShop stocked {built} row(s) (wanted {wantCount}, failed {failed}).");
 
@@ -471,17 +598,17 @@ namespace DeNelle.Village.Hero
             {
                 if (wantCount == 0)
                     FlowTrace.Warn("Store",
-                        $"PartyShop has NO items for tab {_vm.Tab} — showing empty-state row (data-empty).");
+                        $"PartyShop has NO items for tab {_vm.Tab} - showing empty-state row (data-empty).");
                 else
                     FlowTrace.Fail("Store",
-                        $"PartyShop had {wantCount} item(s) but built 0 rows ({failed} failed) — showing empty-state row (built-but-broken).");
+                        $"PartyShop had {wantCount} item(s) but built 0 rows ({failed} failed) - showing empty-state row (built-but-broken).");
                 CreateEmptyStateRow(listRoot, _vm.Tab == PartyShopTab.Sell ? "Nothing to sell." : "No wares in stock.");
             }
 
             FinalizeScroll();
         }
 
-        // A single visible row carrying the empty-state copy — the never-blank fallback.
+        // A single visible row carrying the empty-state copy - the never-blank fallback.
         private void CreateEmptyStateRow(Transform parent, string msg)
         {
             var go = new GameObject("EmptyStateRow", typeof(TMPro.TextMeshProUGUI), typeof(LayoutElement));
@@ -514,7 +641,7 @@ namespace DeNelle.Village.Hero
             }
         }
 
-        private const float RowHeightPx = 74f;
+        private const float RowHeightPx = 44f;   // WO-501: name-only rows are shorter
         private const float RowGapPx    = 4f;
 
         private Transform BuildScrollContent()
@@ -578,12 +705,12 @@ namespace DeNelle.Village.Hero
             LayoutRebuilder.ForceRebuildLayoutImmediate(_scrollContent);
         }
 
-        // One item row: real item image (iconPath sprite, glyph fallback) + name + stat/delta
-        // line + price + EQUIPPED/OWNED chip + ONE single-tap action (no duplicate bars).
+        // SLIM name-only row (WO-501 owner point 2): one plate (for the selected-row hold tint) + the
+        // NAME spanning the row. All the detail (icon/stats/delta/price/action) moved to the preview
+        // pane beside the list. Tapping the row inspects it -> _vm.Select(id) -> Render -> RenderPreview.
         private void CreateRow(Transform parent, ItemVM item)
         {
             bool isSell = _vm != null && _vm.Tab == PartyShopTab.Sell;
-            var detail = _vm != null ? _vm.DetailFor(item.Id) : null;
 
             var row = new GameObject((isSell ? "SellRow_" : "BuyRow_") + item.Id,
                 typeof(Image), typeof(Button), typeof(LayoutElement));
@@ -600,70 +727,424 @@ namespace DeNelle.Village.Hero
             rowBtn.targetGraphic = rowImg;
             ElarionUiKit.StyleButtonColors(rowBtn);
             string id = item.Id;
-            // Tap the ROW = inspect (hold-select). The action button performs the single-tap buy/sell.
+            // Tap the ROW = inspect (hold-select) -> the preview + action bar follow the selection.
             rowBtn.onClick.AddListener(() => _vm?.Select(id));
 
-            // REAL ITEM IMAGE (spec point 5): iconPath sprite first, else the catalog/glyph fallback.
-            var iconHost = ElarionUiKit.AddImage(row.transform, "Icon",
-                new Vector2(0.015f, 0.12f), new Vector2(0.135f, 0.88f),
-                new Color(0f, 0f, 0f, 0.18f), rounded: false);
-            var iconImg = iconHost.GetComponent<Image>();
-            iconImg.raycastTarget = false;
-            var sprite = ResolveItemSprite(detail, item);
-            if (sprite != null)
+            // Name only - equipped names bold + gilt so the player sees what is worn.
+            ElarionUiKit.Label(row.transform, item.Name,
+                0.0f, 1f, item.Equipped ? ElarionUi.Gilt : ElarionUi.Parchment,
+                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.06f, 0.94f, bold: item.Equipped);
+        }
+
+        // -- 3D RENDER PREVIEW pane (WO-501 owner point 3) ----------------------------
+        // A well beside the slim list holding, top->bottom: the 3D render (RawImage), a 2D
+        // sprite/glyph fallback in the same square, the name, the stat line, the colored delta,
+        // and a LARGE price. Built once in BuildChrome; repainted per Render via RenderPreview.
+        private void BuildPreviewPane(Transform panel)
+        {
+            _previewRoot = ElarionUiKit.Well(panel, new Vector2(0.42f, 0.17f), new Vector2(0.96f, 0.70f));
+            var wImg = _previewRoot.GetComponent<Image>();
+            if (wImg != null)
             {
-                iconImg.sprite = sprite;
-                iconImg.color = Color.white;
-                iconImg.preserveAspect = true;
+                wImg.raycastTarget = false;
+                if (DeNelle.Core.FeatureFlags.BlinkChrome) { var c = wImg.color; c.a = 0f; wImg.color = c; }
+            }
+            var pane = _previewRoot.transform;
+
+            // The 3D render image (square, top of the pane). Fed by the live RenderTexture in RenderPreview.
+            var imgGo = new GameObject("PreviewImage", typeof(RawImage));
+            imgGo.transform.SetParent(pane, false);
+            var ir = imgGo.GetComponent<RectTransform>();
+            ir.anchorMin = new Vector2(0.20f, 0.42f); ir.anchorMax = new Vector2(0.80f, 0.98f);
+            ir.offsetMin = Vector2.zero; ir.offsetMax = Vector2.zero;
+            _previewImage = imgGo.GetComponent<RawImage>();
+            _previewImage.color = Color.white;
+            _previewImage.raycastTarget = false;
+
+            // 2D fallback sprite in the SAME square (shown when no 3D model resolves).
+            var spriteGo = ElarionUiKit.AddImage(pane, "PreviewSprite",
+                new Vector2(0.20f, 0.42f), new Vector2(0.80f, 0.98f), new Color(0f, 0f, 0f, 0f), rounded: false);
+            _previewSprite = spriteGo.GetComponent<Image>();
+            _previewSprite.raycastTarget = false;
+            _previewSprite.preserveAspect = true;
+
+            // 2D emoji/glyph fallback over the square (last-resort never-blank).
+            _previewGlyph = ElarionUiKit.Label(pane, "", 0.42f, 0.98f, ElarionUi.Parchment,
+                ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0.20f, 0.80f, bold: true);
+
+            // Empty state (nothing selected).
+            _previewEmpty = ElarionUiKit.Label(pane, "Select an item to preview.", 0.50f, 0.62f,
+                ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
+
+            // Name (gilt bold).
+            _previewName = ElarionUiKit.Label(pane, "", 0.34f, 0.41f, ElarionUi.Gilt,
+                ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+
+            // Stat line.
+            _previewStats = ElarionUiKit.Label(pane, "", 0.27f, 0.34f, ElarionUi.Parchment,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
+
+            // Delta vs equipped (colored by DeltaColor).
+            _previewDelta = ElarionUiKit.Label(pane, "", 0.21f, 0.27f, ElarionUi.ParchmentDim,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+
+            // PRICE - large + readable (WO-501 owner point 3).
+            _previewPrice = ElarionUiKit.Label(pane, "", 0.04f, 0.18f, ElarionUi.Gilt,
+                ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+        }
+
+        // Repaint the preview pane from _vm.Selected ONLY (name/stats/delta/price) + rebuild the 3D
+        // model (or 2D fallback) for the selected id. Never-blank: 3D model -> 2D sprite -> emoji glyph.
+        private void RenderPreview()
+        {
+            if (_vm == null || _previewRoot == null) return;
+            var sel = _vm.Selected;
+
+            if (!sel.HasValue)
+            {
+                // Nothing selected - clear + show the empty state, tear the rig down.
+                TeardownRig();
+                if (_previewImage != null) _previewImage.enabled = false;
+                if (_previewSprite != null) _previewSprite.color = new Color(0f, 0f, 0f, 0f);
+                if (_previewGlyph != null) _previewGlyph.text = "";
+                if (_previewName != null) _previewName.text = "";
+                if (_previewStats != null) _previewStats.text = "";
+                if (_previewDelta != null) _previewDelta.text = "";
+                if (_previewPrice != null) _previewPrice.text = "";
+                if (_previewEmpty != null) _previewEmpty.gameObject.SetActive(true);
+                return;
+            }
+
+            if (_previewEmpty != null) _previewEmpty.gameObject.SetActive(false);
+            var d = sel.Value;
+            var item = _vm.SelectedItem;
+
+            if (_previewName != null) _previewName.text = item.HasValue ? item.Value.Name : "";
+            if (_previewStats != null) _previewStats.text = d.Stats ?? "";
+            if (_previewDelta != null)
+            {
+                _previewDelta.text = d.Delta ?? "";
+                _previewDelta.color = DeltaColor(d.Delta);
+            }
+            if (_previewPrice != null)
+            {
+                _previewPrice.text = _vm.SelectedPriceText;
+                // Affordability-colored on BUY; gilt for refund/owned.
+                bool sell = _vm.Tab == PartyShopTab.Sell;
+                bool affordable = item.HasValue && (item.Value.Price <= 0 || item.Value.Affordable);
+                _previewPrice.color = sell ? ElarionUi.Affordable
+                                    : (item.HasValue && !affordable ? ElarionUi.Danger : ElarionUi.Gilt);
+            }
+
+            BuildPreviewModelOrFallback(_vm.SelectedId, d, item);
+        }
+
+        // Resolve the selected gear MODEL into the rig, mirroring the equip load path (DRY the heuristic
+        // with EquipmentController.LoadsViaAddressable): addressable "gear/" -> Addressables; else Resources
+        // via VisualFactory.Skin (the BuildPreviewModal pattern). Falls back to the 2D sprite, then the
+        // emoji glyph - never blanks. Logs the chosen branch for headless capture (?12).
+        private void BuildPreviewModelOrFallback(string id, PartyShopDetail detail, ItemVM? item)
+        {
+            if (string.IsNullOrEmpty(id)) { ShowSpriteFallback(detail, item, "no-id"); return; }
+            if (_rigModelId == id && (_rigVisual != null || _rigHandleOpen)) return;   // already mounted
+
+            // Resolve the def for prefabPath via the same key the rows use (role-keyed catalog find).
+            bool isArmor = detail.IconRole == PartyShopVM.IconRoleArmor;
+            string prefabPath = null;
+            bool addressable = false;
+            if (isArmor)
+            {
+                var a = GearCatalog.FindArmor(id);
+                prefabPath = a?.prefabPath;
+                addressable = ArmorLoadsViaAddressable(a);
             }
             else
             {
-                iconImg.color = new Color(0f, 0f, 0f, 0f);
-                ElarionUiKit.Label(iconHost.transform, item.IconRole == PartyShopVM.IconRoleArmor ? "[]" : "/",
-                    0f, 1f, ElarionUi.Parchment, ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
+                var w = GearCatalog.FindWeapon(id);
+                prefabPath = w?.prefabPath;
+                addressable = WeaponLoadsViaAddressable(w);
             }
 
-            // Name (upper).
-            ElarionUiKit.Label(row.transform, item.Name, 0.52f, 0.92f, item.Equipped ? ElarionUi.Gilt : ElarionUi.Parchment,
-                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.16f, 0.66f, bold: item.Equipped);
-
-            // Stat + delta line (the "why it's better" — spec point 6).
-            string statLine = detail.HasValue ? detail.Value.Stats : "";
-            string delta = detail.HasValue ? detail.Value.Delta : "";
-            if (!string.IsNullOrEmpty(delta)) statLine += "    " + delta;
-            ElarionUiKit.Label(row.transform, statLine, 0.08f, 0.50f,
-                DeltaColor(delta), ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.16f, 0.66f);
-
-            // Price / refund column.
-            string priceText = isSell ? "+" + PriceString(item) : (item.Equipped || item.Price <= 0 ? "Owned" : PriceString(item));
-            Color priceColor = isSell ? ElarionUi.Affordable
-                             : (item.Price <= 0 ? ElarionUi.Gilt : (item.Affordable ? ElarionUi.Affordable : ElarionUi.Danger));
-            ElarionUiKit.Label(row.transform, priceText, 0.52f, 0.92f, priceColor,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Right, 0.66f, 0.80f, bold: true);
-
-            // State chip (EQUIPPED / OWNED), BUY tab only.
-            if (!isSell)
+            if (string.IsNullOrEmpty(prefabPath))
             {
-                string chip = item.Equipped ? "EQUIPPED" : (item.Price <= 0 ? "OWNED" : "");
-                if (!string.IsNullOrEmpty(chip))
-                    ElarionUiKit.Label(row.transform, chip, 0.08f, 0.40f,
-                        item.Equipped ? ElarionUi.Gilt : ElarionUi.ParchmentDim,
-                        ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Right, 0.66f, 0.80f, bold: true);
+                // Most gear today has no prefabPath (GearCatalog "NULL for now") - degrade to 2D.
+                ShowSpriteFallback(detail, item, "no-prefab");
+                return;
             }
 
-            // THE single-tap action button (exactly ONE per row — no duplicate bars).
-            string actionLabel = isSell ? "Sell"
-                               : item.Equipped ? "Equipped"
-                               : (item.Price <= 0 ? "Equip" : "Buy");
-            // packSpriteName: only the TEXT-FREE Blink confirm plate when BlinkChrome is ON; otherwise
-            // the clean procedural gold button (NOT ButtonGold — its art has "PLAY" baked in, which
-            // would make every row button read "PLAY"; ElarionUiKit.ButtonPack documents this trap).
-            var actBtn = ElarionUiKit.ButtonPack(row.transform, actionLabel, ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.82f, 0.16f), new Vector2(0.985f, 0.84f),
-                () => _vm?.Act(id),
-                packSpriteName: DeNelle.Core.FeatureFlags.BlinkChrome ? RpgUiCatalog.ButtonConfirm : null);
-            CreamTab(actBtn);
-            if (actBtn != null) actBtn.interactable = !item.Equipped;   // already-equipped row is a no-op
+            EnsureRig();
+            ClearRigVisual();
+            _rigModelId = id;
+
+            if (addressable)
+            {
+                FlowTrace.Step("Store", $"preview model id={id} branch=addressable path={prefabPath}");
+                BeginAddressablePreview(prefabPath, id);
+            }
+            else
+            {
+                FlowTrace.Step("Store", $"preview model id={id} branch=resources path={prefabPath}");
+                GameObject skinned = null;
+                Guard.Try("Store", $"skin preview model '{prefabPath}'",
+                    () => skinned = VisualFactory.Skin(_rigVisual.transform, prefabPath, SkinOptions.Prop(2.5f)));
+                if (skinned == null)
+                {
+                    ShowSpriteFallback(detail, item, "resources-miss");
+                    return;
+                }
+                ShowModel();
+            }
+        }
+
+        // Mirror of EquipmentController.LoadsViaAddressable (which is private - replicated, NOT forked;
+        // see report). Addressable when loadVia=="addressable" or prefabPath starts "gear/".
+        private static bool WeaponLoadsViaAddressable(WeaponDef def)
+        {
+            if (def == null) return false;
+            if (!string.IsNullOrEmpty(def.loadVia) &&
+                def.loadVia.Equals("addressable", System.StringComparison.OrdinalIgnoreCase)) return true;
+            return !string.IsNullOrEmpty(def.prefabPath) &&
+                   def.prefabPath.StartsWith("gear/", System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool ArmorLoadsViaAddressable(ArmorDef def)
+        {
+            if (def == null) return false;
+            if (!string.IsNullOrEmpty(def.loadVia) &&
+                def.loadVia.Equals("addressable", System.StringComparison.OrdinalIgnoreCase)) return true;
+            return !string.IsNullOrEmpty(def.prefabPath) &&
+                   def.prefabPath.StartsWith("gear/", System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Async Addressables load (mirror BeginAddressableEquip): guarded, stale-checked via _rigGeneration,
+        // released on swap/close. On any miss, fall back to the 2D sprite so the preview never blanks.
+        private void BeginAddressablePreview(string address, string id)
+        {
+            int generation = ++_rigGeneration;
+            AsyncOperationHandle<GameObject> handle;
+            try { handle = Addressables.LoadAssetAsync<GameObject>(address); }
+            catch (System.Exception ex)
+            {
+                FlowTrace.Fail("Store", $"preview addressable load threw for '{address}': {ex.Message} - 2D fallback.");
+                ShowSpriteFallback(_vm != null ? _vm.Selected ?? default : default,
+                                   _vm != null ? _vm.SelectedItem : null, "addr-threw");
+                return;
+            }
+            _rigHandle = handle;
+            _rigHandleOpen = true;
+            handle.Completed += op =>
+            {
+                if (generation != _rigGeneration) return;   // a newer select superseded this load
+                if (!op.IsValid() || op.Status != AsyncOperationStatus.Succeeded || op.Result == null)
+                {
+                    FlowTrace.Fail("Store", $"preview addressable FAILED for '{address}' (status={op.Status}) - 2D fallback.");
+                    ShowSpriteFallback(_vm != null ? _vm.Selected ?? default : default,
+                                       _vm != null ? _vm.SelectedItem : null, "addr-miss");
+                    return;
+                }
+                if (_rigVisual == null) return;   // panel closed mid-flight
+                GameObject skinned = null;
+                Guard.Try("Store", $"skin addressable preview '{address}'",
+                    () => skinned = VisualFactory.Skin(_rigVisual.transform, op.Result, SkinOptions.Prop(2.5f)));
+                if (skinned == null)
+                {
+                    ShowSpriteFallback(_vm != null ? _vm.Selected ?? default : default,
+                                       _vm != null ? _vm.SelectedItem : null, "addr-skin-null");
+                    return;
+                }
+                ShowModel();
+            };
+        }
+
+        // Show the 3D render (hide the 2D fallback), framing the camera on the rig.
+        private void ShowModel()
+        {
+            FrameRig();
+            if (_previewImage != null) { _previewImage.enabled = true; _previewImage.texture = _rigRt; }
+            if (_previewSprite != null) _previewSprite.color = new Color(0f, 0f, 0f, 0f);
+            if (_previewGlyph != null) _previewGlyph.text = "";
+        }
+
+        // Hide the 3D render, draw the 2D sprite (else the emoji glyph). Never blanks.
+        private void ShowSpriteFallback(PartyShopDetail detail, ItemVM? item, string why)
+        {
+            FlowTrace.Step("Store", $"preview model id={_vm?.SelectedId} branch=sprite ({why})");
+            TeardownRig();
+            if (_previewImage != null) _previewImage.enabled = false;
+
+            var sprite = ResolveItemSprite(detail, item ?? default);
+            if (sprite != null && _previewSprite != null)
+            {
+                _previewSprite.sprite = sprite;
+                _previewSprite.color = Color.white;
+                if (_previewGlyph != null) _previewGlyph.text = "";
+            }
+            else
+            {
+                if (_previewSprite != null) _previewSprite.color = new Color(0f, 0f, 0f, 0f);
+                if (_previewGlyph != null)
+                    _previewGlyph.text = detail.IconRole == PartyShopVM.IconRoleArmor ? "[]" : "/";
+            }
+        }
+
+        // -- The isolated runtime preview rig (BuildPreviewModal pattern) -------------
+        private void EnsureRig()
+        {
+            if (_rigRt == null)
+            {
+                _rigRt = new RenderTexture(RtSize, RtSize, 16, RenderTextureFormat.ARGB32);
+                _rigRt.Create();
+            }
+            if (_rigRoot != null) return;
+
+            _rigRoot = new GameObject("PartyShopPreviewRoot");
+            _rigRoot.transform.position = new Vector3(0f, -5000f, 0f);
+
+            var light1 = new GameObject("PreviewLight1").AddComponent<Light>();
+            light1.transform.SetParent(_rigRoot.transform, false);
+            light1.transform.localPosition = new Vector3(2, 3, -2);
+            light1.type = LightType.Directional;
+            light1.color = new Color(0.9f, 0.9f, 0.95f);
+            light1.intensity = 0.9f;
+            light1.cullingMask = 1 << PreviewLayer;
+
+            var light2 = new GameObject("PreviewLight2").AddComponent<Light>();
+            light2.transform.SetParent(_rigRoot.transform, false);
+            light2.transform.localPosition = new Vector3(-2, 2, 2);
+            light2.type = LightType.Directional;
+            light2.color = new Color(0.6f, 0.65f, 0.7f);
+            light2.intensity = 0.5f;
+            light2.cullingMask = 1 << PreviewLayer;
+
+            _rigVisual = new GameObject("PreviewVisual");
+            _rigVisual.transform.SetParent(_rigRoot.transform, false);
+            _rigVisual.transform.localPosition = Vector3.zero;
+
+            var camGo = new GameObject("PreviewCam");
+            camGo.transform.SetParent(_rigRoot.transform, false);
+            _rigCam = camGo.AddComponent<Camera>();
+            _rigCam.clearFlags = CameraClearFlags.SolidColor;
+            _rigCam.backgroundColor = new Color(0.10f, 0.09f, 0.08f, 0f);
+            _rigCam.orthographic = true;
+            _rigCam.nearClipPlane = 0.1f;
+            _rigCam.farClipPlane = 10000f;
+            _rigCam.targetTexture = _rigRt;
+            _rigCam.cullingMask = 1 << PreviewLayer;
+
+            var urp = camGo.AddComponent<UniversalAdditionalCameraData>();
+            urp.renderType = CameraRenderType.Base;
+            urp.renderPostProcessing = false;
+            urp.requiresColorOption = CameraOverrideOption.Off;
+            urp.requiresDepthOption = CameraOverrideOption.Off;
+
+            SetLayerRecursive(_rigRoot.transform, PreviewLayer);
+        }
+
+        // Auto-spin the mounted model for a "wow factor" viewer (optional per WO-501). Cheap; only
+        // runs while a model is mounted. The owner can swap this for drag-to-rotate in finesse.
+        private void Update()
+        {
+            if (_rigVisual == null || _rigVisual.transform.childCount == 0) return;
+            _rigYaw = Mathf.Repeat(_rigYaw + Time.deltaTime * 35f, 360f);
+            _rigVisual.transform.localRotation = Quaternion.Euler(0f, _rigYaw, 0f);
+        }
+
+        private void ClearRigVisual()
+        {
+            if (_rigVisual == null) return;
+            for (int i = _rigVisual.transform.childCount - 1; i >= 0; i--)
+            {
+                var c = _rigVisual.transform.GetChild(i);
+                if (c != null) Destroy(c.gameObject);
+            }
+        }
+
+        // Frame the ortho camera on the rig bounds from a 3/4 angle (mirror FrameCameraOnRig).
+        private void FrameRig()
+        {
+            if (_rigRoot == null || _rigCam == null) return;
+            SetLayerRecursive(_rigRoot.transform, PreviewLayer);
+            Bounds b;
+            var rends = _rigVisual != null ? _rigVisual.GetComponentsInChildren<Renderer>() : null;
+            if (rends != null && rends.Length > 0)
+            {
+                b = rends[0].bounds;
+                for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+            }
+            else
+            {
+                b = new Bounds(_rigRoot.transform.position, Vector3.one * 2f);
+            }
+            float radius = Mathf.Max(0.5f, b.extents.magnitude);
+            Vector3 dir = new Vector3(1f, 0.9f, -1f).normalized;
+            _rigCam.transform.position = b.center + dir * (radius * 2.5f);
+            _rigCam.transform.LookAt(b.center);
+            _rigCam.orthographicSize = radius * 1.15f;
+        }
+
+        private void ReleaseRigHandle()
+        {
+            if (_rigHandleOpen && _rigHandle.IsValid())
+            {
+                Addressables.Release(_rigHandle);
+            }
+            _rigHandle = default;
+            _rigHandleOpen = false;
+        }
+
+        private void TeardownRig()
+        {
+            _rigGeneration++;   // invalidate any in-flight addressable load
+            ReleaseRigHandle();
+            if (_rigRoot != null) { Destroy(_rigRoot); _rigRoot = null; }
+            _rigVisual = null;
+            _rigCam = null;
+            if (_rigRt != null) { _rigRt.Release(); Destroy(_rigRt); _rigRt = null; }
+            for (int i = 0; i < _rigMaterials.Count; i++)
+                if (_rigMaterials[i] != null) Destroy(_rigMaterials[i]);
+            _rigMaterials.Clear();
+            _rigModelId = null;
+        }
+
+        private static void SetLayerRecursive(Transform root, int layer)
+        {
+            if (root == null) return;
+            root.gameObject.layer = layer;
+            for (int i = 0; i < root.childCount; i++)
+                SetLayerRecursive(root.GetChild(i), layer);
+        }
+
+        // -- Bottom action bar state (WO-501 owner point 4) ---------------------------
+        private void RenderActionBar()
+        {
+            if (_vm == null) return;
+            bool sell = _vm.Tab == PartyShopTab.Sell;
+            var item = _vm.SelectedItem;
+            bool hasSel = item.HasValue;
+
+            // Purchase/Sell toggle label + enable.
+            if (_buySellLabel != null)
+            {
+                string price = _vm.SelectedPriceText;
+                if (sell) _buySellLabel.text = hasSel ? "Sell  " + price : "Sell";
+                else _buySellLabel.text = hasSel
+                        ? (item.Value.Equipped || item.Value.Price <= 0 ? "Owned" : "Purchase  " + price)
+                        : "Purchase";
+            }
+            if (_buySellBtn != null)
+            {
+                bool canBuy = hasSel && (sell
+                    ? true
+                    : !(item.Value.Equipped) && (item.Value.Price <= 0 || item.Value.Affordable));
+                _buySellBtn.interactable = canBuy;
+            }
+
+            // Equip: only for an OWNED, not-yet-equipped item on the BUY tab.
+            if (_equipBtn != null)
+            {
+                bool canEquip = hasSel && !sell && (item.Value.Price <= 0) && !item.Value.Equipped;
+                _equipBtn.interactable = canEquip;
+            }
         }
 
         // Real item sprite from the VM detail: prefer iconPath (the rendered item image), else the
@@ -699,8 +1180,6 @@ namespace DeNelle.Village.Hero
             if (delta.StartsWith("=")) return ElarionUi.ParchmentDim;
             return ElarionUi.Danger;   // a negative delta (worse than equipped)
         }
-
-        private static string PriceString(ItemVM item) => item.Price > 0 ? item.Price + " Gold" : "Free";
 
         private static void DressRowPlate(Image rowImg)
         {
@@ -738,7 +1217,7 @@ namespace DeNelle.Village.Hero
             return char.ToUpperInvariant(s[0]) + s.Substring(1);
         }
 
-        // ── Teardown ────────────────────────────────────────────────────────────
+        // -- Teardown ------------------------------------------------------------
 
         private void ClearContent()
         {
@@ -765,16 +1244,31 @@ namespace DeNelle.Village.Hero
         private void Close()
         {
             DisposeViewModel();
+            TeardownRig();
             _walletText = null;
             _statusText = null;
             _headerLabel = null;
             _memberLabel = null;
+            _previewRoot = null;
+            _previewImage = null;
+            _previewSprite = null;
+            _previewGlyph = null;
+            _previewName = null;
+            _previewStats = null;
+            _previewDelta = null;
+            _previewPrice = null;
+            _previewEmpty = null;
+            _buySellBtn = null;
+            _buySellLabel = null;
+            _equipBtn = null;
+            _equipLabel = null;
             if (_ui != null) Destroy(_ui);
             _ui = null;
             _contentRoot = null;
             _partyBar = null;
             _tabBar = null;
             _categoryBar = null;
+            _typeBar = null;
             _scrollContent = null;
             _rowPlates.Clear();
             PanelManager.NotifyClosed(_panelHandle);

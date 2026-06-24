@@ -1,22 +1,22 @@
 // =============================================================================
-// PartyShopVM — the PARTY weapon/armor shop's pure ViewModel (docs/STORE_EQUIP_SPEC.md).
+// PartyShopVM - the PARTY weapon/armor shop's pure ViewModel (docs/STORE_EQUIP_SPEC.md).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Hero
 //
 // THE COMPLETE store-to-spec ViewModel that replaces the broken ShopVM/ShopPanel
 // experience (two sell bars, no party selection, blank icons). It composes the
-// PROVEN MVVM seams already in the repo — IEconomy (wallet/spend), IInventoryStore
+// PROVEN MVVM seams already in the repo - IEconomy (wallet/spend), IInventoryStore
 // (owned set + gear defs + fit-by-class), and IEquipTarget (per-member loadout +
-// equip/unequip) — into ONE unified shop:
+// equip/unequip) - into ONE unified shop:
 //
 //   1. PARTY SELECTOR. Holds the party (hero + companions) as IEquipTarget members
 //      (id/name/class/portrait). SelectMember(i) re-filters. Default = the active hero.
-//   2. TAP → FILTER. The row list = gear the SELECTED member can equip: weapons by
+//   2. TAP -> FILTER. The row list = gear the SELECTED member can equip: weapons by
 //      `job` (WeaponFitsClass); armor by `ArmorFitsClass` (weight/class); both by
 //      `req.level <= member level`; the store TYPE (weapon shop / armor shop) is the
 //      VendorStockContract gate over the catalog.
 //   3. ONE action per row, SINGLE TAP. BUY (spend + add to inventory + auto-equip to
-//      the selected member), or EQUIP (already owned), or SELL (in the SAME screen —
+//      the selected member), or EQUIP (already owned), or SELL (in the SAME screen -
 //      a Sell tab; selling owned gear credits coins so the player can afford new gear
 //      WITHOUT leaving). EXACTLY one buy button per row; NO duplicate buy/sell bars.
 //   4. REAL ITEM IMAGE. Each row carries the iconPath (the rendered sprite key); the
@@ -28,7 +28,7 @@
 // PURE: NO UnityEngine UI types (no GameObject/Image/Sprite/RectTransform/Color).
 // Icons are carried as KEYS on ItemVM (IconRole/IconName) + a parallel detail map; the
 // View resolves the real sprite. Math uses System.Math, never UnityEngine.Mathf, so the
-// VM is unit-testable without a scene (ARCHITECTURE_PRINCIPLES.md §2 / §2c; ui-mvvm-binding-seam).
+// VM is unit-testable without a scene (ARCHITECTURE_PRINCIPLES.md ?2 / ?2c; ui-mvvm-binding-seam).
 //
 // Implements DeNelle.Core.UI.Mvvm.IPanelViewModel: the View binds it, re-renders on
 // Changed, routes input back as commands, and never reads game state.
@@ -46,7 +46,7 @@ namespace DeNelle.Village.Hero
     public enum PartyShopTab { Buy, Sell }
 
     /// <summary>
-    /// The category selector for the shop list (the "dropdown selections" — owner 2026-06-23).
+    /// The category selector for the shop list (the "dropdown selections" - owner 2026-06-23).
     /// A gear shop combines weapons + armor into one flat list; with the catalog holding hundreds
     /// of weapons this drowns out armor, so the player needs a category narrow. ALL shows the
     /// armor-then-weapons combined list (armor/weapons-first, STORE_EQUIP_SPEC); WEAPONS / ARMOR
@@ -55,7 +55,15 @@ namespace DeNelle.Village.Hero
     public enum PartyShopCategory { All, Weapons, Armor }
 
     /// <summary>
-    /// Detail payload for one shop row — the stat line + the "why it's better" delta vs the
+    /// The finer weapon/armor TYPE sub-filter (WO-501 owner point 1 - narrow ON TOP of the
+    /// hero-fit + category list). Read PURELY from data already on the def (no schema change):
+    /// OneHand -> WeaponDef.IsOneHandedMain, TwoHand -> IsTwoHanded, Shield -> IsOffHandItem,
+    /// Light/Heavy -> ArmorDef.weight. Any = no narrow. Applies to BOTH the BUY and SELL lists.
+    /// </summary>
+    public enum PartyShopType { Any, OneHand, TwoHand, Shield, Light, Heavy }
+
+    /// <summary>
+    /// Detail payload for one shop row - the stat line + the "why it's better" delta vs the
     /// selected member's currently-equipped piece, plus the icon KEYS the View resolves to art.
     /// Carried by the VM so the View renders the row purely from data (no state-pull).
     /// </summary>
@@ -67,7 +75,7 @@ namespace DeNelle.Village.Hero
         public readonly string Delta;
         /// <summary>One-line description (rarity + class fit + flavour).</summary>
         public readonly string Description;
-        /// <summary>iconPath (the rendered item sprite key), or null — the View falls back to a category glyph.</summary>
+        /// <summary>iconPath (the rendered item sprite key), or null - the View falls back to a category glyph.</summary>
         public readonly string IconPath;
         /// <summary>Coarse icon role for the View's glyph fallback ("weapon" / "armor").</summary>
         public readonly string IconRole;
@@ -86,7 +94,7 @@ namespace DeNelle.Village.Hero
         }
     }
 
-    /// <summary>One party member chip — id/name/class for the selector, portrait key for the View.</summary>
+    /// <summary>One party member chip - id/name/class for the selector, portrait key for the View.</summary>
     public readonly struct PartyMemberVM
     {
         public readonly string Name;
@@ -106,7 +114,7 @@ namespace DeNelle.Village.Hero
 
     public sealed class PartyShopVM : IPanelViewModel, IDisposable
     {
-        // ── Icon role keys (ItemVM.IconRole) — the View maps these to the real sprite source ──
+        // -- Icon role keys (ItemVM.IconRole) - the View maps these to the real sprite source --
         public const string IconRoleWeapon    = "weapon";
         public const string IconRoleArmor     = "armor";
         public const string IconRoleCraftable = "craftable";
@@ -126,6 +134,7 @@ namespace DeNelle.Village.Hero
         private int _selectedMember;                 // index into _members (default = active hero = 0)
         private PartyShopTab _tab = PartyShopTab.Buy;
         private PartyShopCategory _category = PartyShopCategory.All;   // the category "dropdown" selection
+        private PartyShopType _type = PartyShopType.Any;               // the finer weapon/armor TYPE sub-filter (WO-501)
 
         // The per-row action keyed by item id (armed on rebuild), plus the detail payload per id.
         private readonly Dictionary<string, Action> _rowActions = new Dictionary<string, Action>();
@@ -133,6 +142,8 @@ namespace DeNelle.Village.Hero
 
         private readonly List<ItemVM> _items = new List<ItemVM>();
         private readonly List<(string id, GearKind kind)> _currentStock = new List<(string id, GearKind kind)>();
+        // The TYPE chips that have >0 candidate rows, captured during Rebuild ahead of the TYPE narrow.
+        private readonly List<PartyShopType> _availableTypes = new List<PartyShopType>();
 
         // The store TYPE this vendor sells (weapon shop -> Weapon, armor shop -> Armor), from the contract.
         private readonly GearKind _storeKinds;
@@ -183,7 +194,7 @@ namespace DeNelle.Village.Hero
             Rebuild();
         }
 
-        // ── IPanelViewModel ───────────────────────────────────────────────────
+        // -- IPanelViewModel ---------------------------------------------------
 
         public event Action Changed;
 
@@ -201,13 +212,22 @@ namespace DeNelle.Village.Hero
             Changed = null;
         }
 
-        // ── Read-only data the View renders ─────────────────────────────────────
+        // -- Read-only data the View renders -------------------------------------
 
         public PartyShopTab Tab => _tab;
 
         /// <summary>The active category "dropdown" selection (All / Weapons / Armor). The View
         /// highlights the matching selector chip and rebuilds the list when it changes.</summary>
         public PartyShopCategory Category => _category;
+
+        /// <summary>The active finer weapon/armor TYPE sub-filter (WO-501). The View highlights the
+        /// matching chip and rebuilds the list when it changes.</summary>
+        public PartyShopType Type => _type;
+
+        /// <summary>The weapon/armor TYPES the hero-fit + category list offers BEFORE the TYPE narrow
+        /// (so the View only shows chips with &gt;0 candidate rows - never a dead chip). Captured during
+        /// Rebuild, ahead of the TYPE predicate, so toggling a chip never strips the other chips.</summary>
+        public IReadOnlyList<PartyShopType> AvailableTypes => _availableTypes;
 
         /// <summary>Whether this vendor offers BOTH gear kinds (so the category selector is useful).
         /// A weapon-only or armor-only vendor pins the category and hides the selector.</summary>
@@ -233,7 +253,7 @@ namespace DeNelle.Village.Hero
 
         public int SelectedMemberIndex => _selectedMember;
 
-        /// <summary>"Name — Class (Lv N)" for the selected member (the panel's sub-header).</summary>
+        /// <summary>"Name - Class (Lv N)" for the selected member (the panel's sub-header).</summary>
         public string MemberLabel
         {
             get
@@ -243,7 +263,7 @@ namespace DeNelle.Village.Hero
                 string name = string.IsNullOrEmpty(m.TargetName) ? "Hero" : m.TargetName;
                 string cls = string.IsNullOrEmpty(m.TargetClass) ? "" : Cap(m.TargetClass);
                 string lv = " (Lv " + SelectedLevel + ")";
-                return string.IsNullOrEmpty(cls) ? name + lv : name + " — " + cls + lv;
+                return string.IsNullOrEmpty(cls) ? name + lv : name + " - " + cls + lv;
             }
         }
 
@@ -260,23 +280,51 @@ namespace DeNelle.Village.Hero
         public PartyShopDetail? DetailFor(string id) =>
             id != null && _rowDetails.TryGetValue(id, out var d) ? d : (PartyShopDetail?)null;
 
+        /// <summary>The selected row's ItemVM (price/affordable/owned/equipped), or null. Pure lookup
+        /// into the built _items by SelectedId - the View binds the preview price/buttons off this.</summary>
+        public ItemVM? SelectedItem
+        {
+            get
+            {
+                if (SelectedId == null) return null;
+                for (int i = 0; i < _items.Count; i++)
+                    if (_items[i].Id == SelectedId) return _items[i];
+                return null;
+            }
+        }
+
+        /// <summary>The large, readable price line for the selected row (WO-501 owner point 3). On the
+        /// SELL tab it reads "+N Gold" (the refund); on BUY it reads "N Gold", "Owned" (held), or "Free".</summary>
+        public string SelectedPriceText
+        {
+            get
+            {
+                var it = SelectedItem;
+                if (it == null) return "";
+                var item = it.Value;
+                if (_tab == PartyShopTab.Sell) return "+" + (item.Price > 0 ? item.Price + " Gold" : "Free");
+                if (item.Equipped || item.Price <= 0) return "Owned";
+                return item.Price + " Gold";
+            }
+        }
+
         public string Status { get; private set; }
 
-        /// <summary>Live wallet readout (the View rebuilds its "Gold: …" line from these).</summary>
+        /// <summary>Live wallet readout (the View rebuilds its "Gold: ..." line from these).</summary>
         public int Coins    => _economy?.Coins ?? 0;
         public int Wood     => _economy?.Wood ?? 0;
         public int Iron     => _economy?.Iron ?? 0;
         public int Food     => _economy?.Food ?? 0;
         public int Crystals => _economy?.Crystals ?? 0;
 
-        /// <summary>The store's ACTUAL built stock (id + category) — for an AutoPilot bot assertion.</summary>
+        /// <summary>The store's ACTUAL built stock (id + category) - for an AutoPilot bot assertion.</summary>
         public IReadOnlyList<(string id, GearKind kind)> CurrentStock => _currentStock;
 
         public string VendorContext => _vendorContext;
 
-        // ── Commands ────────────────────────────────────────────────────────────
+        // -- Commands ------------------------------------------------------------
 
-        /// <summary>Select a party member by index → re-filter the list FOR that member.</summary>
+        /// <summary>Select a party member by index -> re-filter the list FOR that member.</summary>
         public void SelectMember(int index)
         {
             if (index < 0 || index >= _members.Count) return;
@@ -287,7 +335,7 @@ namespace DeNelle.Village.Hero
             Raise();
         }
 
-        /// <summary>Switch BUY ↔ SELL (both live on the same screen — no leaving to sell).</summary>
+        /// <summary>Switch BUY <-> SELL (both live on the same screen - no leaving to sell).</summary>
         public void SetTab(PartyShopTab tab)
         {
             if (tab == _tab) return;
@@ -302,6 +350,17 @@ namespace DeNelle.Village.Hero
         {
             if (category == _category) return;
             _category = category;
+            _type = PartyShopType.Any;   // a category switch resets the finer TYPE narrow (chip set changes)
+            SelectedId = null;
+            Rebuild();
+            Raise();
+        }
+
+        /// <summary>Set the finer weapon/armor TYPE sub-filter (WO-501), then rebuild the list.</summary>
+        public void SetType(PartyShopType type)
+        {
+            if (type == _type) return;
+            _type = type;
             SelectedId = null;
             Rebuild();
             Raise();
@@ -328,6 +387,27 @@ namespace DeNelle.Village.Hero
             Raise();
         }
 
+        /// <summary>WO-501 EQUIP button: equip the SELECTED owned item to the selected member through
+        /// the IEquipTarget seam (GearLoadout auto-routes shields to off-hand + enforces hand rules).
+        /// A no-op (with status) when nothing is selected, the item isn't owned, or it is already worn.</summary>
+        public void EquipSelected()
+        {
+            string id = SelectedId;
+            if (string.IsNullOrEmpty(id)) { Status = "Select an item to equip."; Raise(); return; }
+            if (_store == null || _store.OwnedQuantity(id) <= 0)
+            {
+                Status = "You must buy it before you can equip it.";
+                Raise();
+                return;
+            }
+            var w = GearCatalog.FindWeapon(id);
+            if (w != null) { EquipWeapon(w); Raise(); return; }
+            var a = GearCatalog.FindArmor(id);
+            if (a != null) { EquipArmor(a); Raise(); return; }
+            Status = "That item can't be equipped.";
+            Raise();
+        }
+
         private void Raise() { if (!_disposed) Changed?.Invoke(); }
 
         private void OnModelChanged()
@@ -337,7 +417,7 @@ namespace DeNelle.Village.Hero
             Changed?.Invoke();
         }
 
-        // ── Selected-member helpers ──────────────────────────────────────────────
+        // -- Selected-member helpers ----------------------------------------------
 
         private IEquipTarget SelectedMember =>
             (_members.Count > 0 && _selectedMember >= 0 && _selectedMember < _members.Count)
@@ -348,7 +428,7 @@ namespace DeNelle.Village.Hero
 
         private string SelectedJob => SelectedMember != null ? SelectedMember.TargetClass : null;
 
-        // ── List build (dispatch) ────────────────────────────────────────────────
+        // -- List build (dispatch) ------------------------------------------------
 
         private void Rebuild()
         {
@@ -356,10 +436,11 @@ namespace DeNelle.Village.Hero
             _rowActions.Clear();
             _rowDetails.Clear();
             _currentStock.Clear();
+            _availableTypes.Clear();
 
             if (_store == null)
             {
-                DeNelle.Core.Diagnostics.FlowTrace.Warn("PartyShop", "no inventory store bound — list empty.");
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("PartyShop", "no inventory store bound - list empty.");
                 return;
             }
 
@@ -367,14 +448,14 @@ namespace DeNelle.Village.Hero
             else BuildSell();
         }
 
-        // ── BUY — the catalog gear the SELECTED member can equip, gated by store type ──────
+        // -- BUY - the catalog gear the SELECTED member can equip, gated by store type ------
         private void BuildBuy()
         {
             var member = SelectedMember;
             string job = SelectedJob;
             int level = SelectedLevel;
 
-            // §12: guard the catalog read so a parse/IO failure logs + is skipped instead of throwing.
+            // ?12: guard the catalog read so a parse/IO failure logs + is skipped instead of throwing.
             DeNelle.Core.Diagnostics.Guard.Try("PartyShop", "reload gear catalog", () => GearCatalog.Reload());
 
             // RECONCILED FILTER: ask the ONE shoppable resolver what this vendor offers the selected
@@ -402,6 +483,7 @@ namespace DeNelle.Village.Hero
                     {
                         var w = GearCatalog.FindWeapon(entry.Id);
                         if (w == null) continue;
+                        if (!WeaponPassesType(w)) continue;   // WO-501 TYPE narrow (registers availability)
                         bool owned = _store.OwnedQuantity(w.id) > 0;
                         bool equipped = member != null && member.EquippedWeapon != null &&
                                         string.Equals(member.EquippedWeapon.id, w.id, StringComparison.OrdinalIgnoreCase);
@@ -416,6 +498,7 @@ namespace DeNelle.Village.Hero
                     {
                         var a = GearCatalog.FindArmor(entry.Id);
                         if (a == null) continue;
+                        if (!ArmorPassesType(a)) continue;   // WO-501 TYPE narrow (registers availability)
                         bool owned = _store.OwnedQuantity(a.id) > 0;
                         bool equipped = member != null && member.EquippedArmor != null &&
                                         string.Equals(member.EquippedArmor.id, a.id, StringComparison.OrdinalIgnoreCase);
@@ -440,7 +523,7 @@ namespace DeNelle.Village.Hero
                 ? "No gear here fits " + who + " yet."
                 : "Tap a row to BUY (auto-equips) or EQUIP what you own.";
 
-            // §12: no silent blank — record WHY the BUY list is empty (data vs filtered).
+            // ?12: no silent blank - record WHY the BUY list is empty (data vs filtered).
             if (_items.Count == 0)
             {
                 bool catalogEmpty = GearCatalog.AllWeapons().Count == 0 && GearCatalog.AllArmors().Count == 0;
@@ -450,7 +533,7 @@ namespace DeNelle.Village.Hero
                 else
                     DeNelle.Core.Diagnostics.FlowTrace.Warn("PartyShop",
                         $"BUY EMPTY for '{_vendorContext}' member job='{job}' lvl={level} " +
-                        $"(store kinds {_storeKinds}) — every catalog item filtered out by class/level.");
+                        $"(store kinds {_storeKinds}) - every catalog item filtered out by class/level.");
             }
         }
 
@@ -488,9 +571,9 @@ namespace DeNelle.Village.Hero
                 affordable, a.rarity, equipped: equipped, locked: false));
         }
 
-        // ── BUY — a CRAFTABLE recipe row (crafting-as-shoppable). Surfaced when the vendor's
+        // -- BUY - a CRAFTABLE recipe row (crafting-as-shoppable). Surfaced when the vendor's
         // contract allows GearKind.Craftable. The recipe is crafted at the forge/pedestal (not
-        // bought for gold), so the row's action explains where — it never spends or equips. ──
+        // bought for gold), so the row's action explains where - it never spends or equips. --
         private void AddBuyCraftableRow(ShoppableCraftable c)
         {
             if (string.IsNullOrEmpty(c.Id)) return;
@@ -508,7 +591,7 @@ namespace DeNelle.Village.Hero
                 true, null, equipped: false, locked: false));
         }
 
-        // ── SELL — owned gear (any kind the shop type accepts), credits coins, same screen ──
+        // -- SELL - owned gear (any kind the shop type accepts), credits coins, same screen --
         private void BuildSell()
         {
             var member = SelectedMember;
@@ -518,6 +601,7 @@ namespace DeNelle.Village.Hero
             {
                 if (a == null || (_storeKinds & GearKind.Armor) == 0) continue;
                 if (_category == PartyShopCategory.Weapons) continue;
+                if (!ArmorPassesType(a)) continue;   // WO-501 TYPE narrow (registers availability)
                 bool equipped = member != null && member.EquippedArmor != null &&
                                 string.Equals(member.EquippedArmor.id, a.id, StringComparison.OrdinalIgnoreCase);
                 var refund = ScaleCost(GearCatalog.GetBuyCost(a), 0.50f);
@@ -534,6 +618,7 @@ namespace DeNelle.Village.Hero
             {
                 if (w == null || (_storeKinds & GearKind.Weapon) == 0) continue;
                 if (_category == PartyShopCategory.Armor) continue;
+                if (!WeaponPassesType(w)) continue;   // WO-501 TYPE narrow (registers availability)
                 bool equipped = member != null && member.EquippedWeapon != null &&
                                 string.Equals(member.EquippedWeapon.id, w.id, StringComparison.OrdinalIgnoreCase);
                 var refund = ScaleCost(GearCatalog.GetBuyCost(w), 0.50f);
@@ -548,10 +633,44 @@ namespace DeNelle.Village.Hero
 
             Status = _items.Count == 0
                 ? "You own no gear to sell here."
-                : "Tap an item to SELL it for coins — buy without leaving.";
+                : "Tap an item to SELL it for coins - buy without leaving.";
         }
 
-        // ── Transactions ─────────────────────────────────────────────────────────
+        // -- Finer weapon/armor TYPE narrow (WO-501, read PURELY from def flags) ------
+        // Capture which TYPE a candidate row belongs to (so the View shows only live chips),
+        // then return whether it passes the active _type narrow. Called per candidate ahead of
+        // adding the row; a weapon that is neither 1h/2h/shield (shouldn't happen) registers
+        // nothing and passes only when _type==Any.
+
+        private bool WeaponPassesType(WeaponDef w)
+        {
+            if (w == null) return false;
+            PartyShopType t = w.IsOffHandItem ? PartyShopType.Shield
+                            : w.IsTwoHanded   ? PartyShopType.TwoHand
+                            : w.IsOneHandedMain ? PartyShopType.OneHand
+                            : PartyShopType.Any;
+            if (t != PartyShopType.Any && !_availableTypes.Contains(t)) _availableTypes.Add(t);
+            // An ARMOR type narrow (Light/Heavy) drops all weapons; a weapon type passes only its own kind.
+            if (_type == PartyShopType.Light || _type == PartyShopType.Heavy) return false;
+            return _type == PartyShopType.Any || _type == t;
+        }
+
+        private bool ArmorPassesType(ArmorDef a)
+        {
+            if (a == null) return false;
+            string wt = (a.weight ?? "").Trim().ToLowerInvariant();
+            PartyShopType t = wt == "light" ? PartyShopType.Light
+                            : wt == "heavy" ? PartyShopType.Heavy
+                            : PartyShopType.Any;
+            if (t != PartyShopType.Any && !_availableTypes.Contains(t)) _availableTypes.Add(t);
+            // An armor TYPE narrow (Light/Heavy) never hides weapon-only chip selections and vice versa:
+            // when a WEAPON type is active, armor rows are dropped; when an ARMOR type is active, weapons drop.
+            if (_type == PartyShopType.OneHand || _type == PartyShopType.TwoHand || _type == PartyShopType.Shield)
+                return false;
+            return _type == PartyShopType.Any || _type == t;
+        }
+
+        // -- Transactions ---------------------------------------------------------
 
         private void BuyWeapon(WeaponDef w)
         {
@@ -560,7 +679,7 @@ namespace DeNelle.Village.Hero
             var cost = GearCatalog.GetBuyCost(w);
             if (!_economy.TrySpend(cost))
             {
-                Status = "Not enough gold for " + Display(w.name, w.id) + " — needs " + CostString(cost) + ".";
+                Status = "Not enough gold for " + Display(w.name, w.id) + " - needs " + CostString(cost) + ".";
                 return;
             }
             VillageInventory.Instance?.Add(w.id, 1);
@@ -577,7 +696,7 @@ namespace DeNelle.Village.Hero
             var cost = GearCatalog.GetBuyCost(a);
             if (!_economy.TrySpend(cost))
             {
-                Status = "Not enough gold for " + Display(a.name, a.id) + " — needs " + CostString(cost) + ".";
+                Status = "Not enough gold for " + Display(a.name, a.id) + " - needs " + CostString(cost) + ".";
                 return;
             }
             VillageInventory.Instance?.Add(a.id, 1);
@@ -625,7 +744,7 @@ namespace DeNelle.Village.Hero
             DeNelle.Core.CoreServices.Hud?.SetResources(_economy.Wood, _economy.Iron, _economy.Food, _economy.Crystals);
         }
 
-        // ── Title (mirrors ShopVM.ResolveTitle) ──────────────────────────────────
+        // -- Title (mirrors ShopVM.ResolveTitle) ----------------------------------
 
         private string ResolveTitle()
         {
@@ -645,7 +764,7 @@ namespace DeNelle.Village.Hero
             return char.ToUpper(id[0]) + (id.Length > 1 ? id.Substring(1) : "");
         }
 
-        // ── Stat / delta / cost formatting (pure; System.Math) ────────────────────
+        // -- Stat / delta / cost formatting (pure; System.Math) --------------------
 
         private string MemberName()
         {
@@ -725,7 +844,7 @@ namespace DeNelle.Village.Hero
             return char.ToUpperInvariant(s[0]) + s.Substring(1);
         }
 
-        // ── Pure math (System.Math — keeps the VM Unity-UI-free) ──────────────────
+        // -- Pure math (System.Math - keeps the VM Unity-UI-free) ------------------
         private static int RoundToInt(float f) => (int)Math.Floor(f + 0.5f);
         private static float Max(float a, float b) => a > b ? a : b;
         private static float Clamp(float v, float lo, float hi) => v < lo ? lo : (v > hi ? hi : v);
