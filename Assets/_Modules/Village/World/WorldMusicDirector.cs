@@ -24,6 +24,7 @@
 using UnityEngine;
 using DeNelle.Core;
 using DeNelle.Core.World;
+using DeNelle.Village.Arena;
 
 namespace DeNelle.Village
 {
@@ -61,6 +62,12 @@ namespace DeNelle.Village
         {
             if (Time.unscaledTime < _nextPoll) return;
             _nextPoll = Time.unscaledTime + PollInterval;
+
+            // A live BattleArena warps the hero to ArenaCentre (classified OuterWorld),
+            // so re-asserting zone music here would stomp the Arena track StageRoutine set.
+            // Let the poll timer advance (above) but skip the zone-music re-assertion until
+            // the battle resolves (RestoreAmbientAfter restores Overworld on Resolve).
+            if (BattleArena.Instance != null && BattleArena.Instance.BattleInProgress) return;
 
             var hero = ResolveHero();
             if (hero == null) { _initialised = false; return; }
