@@ -50,6 +50,16 @@ namespace OffsetForge.Editor
         private string _savePath = "Assets/OffsetForge/offsets.json";
         private string _saveId = "";
 
+        // ---- Grip context (reference hand/hero for positional context) -------
+        private GameObject _contextModel;       // the reference hand/hero asset dropped in
+        private GameObject _contextInstance;    // instantiated clone in the preview scene
+        private bool _showContext;              // checkbox: show the hand/grip context
+        private string _gripBoneName = "R_Hand"; // the bone the weapon parents under
+        private Transform _gripAnchor;          // resolved grip bone on context (null => context root)
+
+        private const string PrefShowContext = "OffsetForge.ShowContext";
+        private const string PrefGripBone = "OffsetForge.GripBone";
+
         private Vector2 _scroll;
 
         [MenuItem("Tools/Offset Forge")]
@@ -62,11 +72,15 @@ namespace OffsetForge.Editor
 
         private void OnEnable()
         {
+            _showContext = EditorPrefs.GetBool(PrefShowContext, false);
+            _gripBoneName = EditorPrefs.GetString(PrefGripBone, "R_Hand");
             EnsurePreviewUtility();
         }
 
         private void OnDisable()
         {
+            EditorPrefs.SetBool(PrefShowContext, _showContext);
+            EditorPrefs.SetString(PrefGripBone, _gripBoneName);
             CleanupPreview();
         }
 
@@ -108,6 +122,7 @@ namespace OffsetForge.Editor
         private void CleanupPreview()
         {
             DestroyPreviewInstance();
+            DestroyContextInstance();
             if (_preview != null)
             {
                 try { _preview.Cleanup(); }
@@ -137,6 +152,9 @@ namespace OffsetForge.Editor
                 _previewInstance.hideFlags = HideFlags.HideAndDontSave;
                 // PreviewRenderUtility owns an isolated scene; add the instance to it.
                 _preview.AddSingleGO(_previewInstance);
+                // If context is active, seat the weapon under the resolved grip bone so
+                // the authored offset reads as the weapon's LOCAL transform in the hand.
+                ParentPreviewToContext();
                 _framed = false; // re-frame on next repaint
             }
             catch (Exception e)
@@ -145,6 +163,91 @@ namespace OffsetForge.Editor
                                  (_sourceModel != null ? _sourceModel.name : "<null>") + "': " + e.Message);
                 _previewInstance = null;
             }
+        }
+
+        // ---------------------------------------------------------------------
+        // Grip context lifecycle
+        // ---------------------------------------------------------------------
+        private void DestroyContextInstance()
+        {
+            if (_contextInstance != null)
+            {
+                DestroyImmediate(_contextInstance);
+                _contextInstance = null;
+            }
+            _gripAnchor = null;
+        }
+
+        private void RebuildContextInstance()
+        {
+            // Re-parent the weapon to the preview-scene root first so destroying the
+            // old context never takes the weapon (a child) down with it.
+            if (_previewInstance != null)
+                _previewInstance.transform.SetParent(null, false);
+
+            DestroyContextInstance();
+            EnsurePreviewUtility();
+
+            if (_showContext && _contextModel != null)
+            {
+                try
+                {
+                    _contextInstance = (GameObject)UnityEngine.Object.Instantiate(_contextModel);
+                    _contextInstance.hideFlags = HideFlags.HideAndDontSave;
+                    _contextInstance.transform.position = Vector3.zero;
+                    _contextInstance.transform.rotation = Quaternion.identity;
+                    _contextInstance.transform.localScale = Vector3.one;
+                    _preview.AddSingleGO(_contextInstance);
+                    _gripAnchor = ResolveGripAnchor(_contextInstance);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning("[OffsetForge] failed to instantiate context '" +
+                                     (_contextModel != null ? _contextModel.name : "<null>") + "': " + e.Message);
+                    _contextInstance = null;
+                    _gripAnchor = null;
+                }
+            }
+
+            // Re-seat the weapon now that context (and its anchor) is rebuilt.
+            ParentPreviewToContext();
+            _framed = false;
+        }
+
+        private Transform ResolveGripAnchor(GameObject contextRoot)
+        {
+            if (contextRoot == null) return null;
+            var xforms = contextRoot.GetComponentsInChildren<Transform>(true);
+            // Exact name match (case-insensitive) on the configured grip bone.
+            for (int i = 0; i < xforms.Length; i++)
+            {
+                if (xforms[i] != null &&
+                    string.Equals(xforms[i].name, _gripBoneName, StringComparison.OrdinalIgnoreCase))
+                    return xforms[i];
+            }
+            // Fallback: any transform whose name contains "hand".
+            for (int i = 0; i < xforms.Length; i++)
+            {
+                if (xforms[i] != null &&
+                    xforms[i].name.IndexOf("hand", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return xforms[i];
+            }
+            Debug.LogWarning("[OffsetForge] grip bone '" + _gripBoneName +
+                             "' not found on context '" + contextRoot.name +
+                             "'; parented weapon at the context root instead.");
+            return contextRoot.transform;
+        }
+
+        // Parent the weapon under the grip anchor when context is active, or detach it
+        // back to the preview-scene root (floating, world-relative) when context is off.
+        private void ParentPreviewToContext()
+        {
+            if (_previewInstance == null) return;
+            bool contextActive = _showContext && _contextInstance != null && _gripAnchor != null;
+            if (contextActive)
+                _previewInstance.transform.SetParent(_gripAnchor, false);
+            else
+                _previewInstance.transform.SetParent(null, false);
         }
 
         // ---------------------------------------------------------------------
@@ -159,6 +262,8 @@ namespace OffsetForge.Editor
             DrawModelField();
             EditorGUILayout.Space(4);
             DrawViewport();
+            EditorGUILayout.Space(6);
+            DrawGripContext();
             EditorGUILayout.Space(6);
             DrawControls();
             EditorGUILayout.Space(6);
@@ -186,6 +291,79 @@ namespace OffsetForge.Editor
             }
             if (_sourceModel == null)
                 EditorGUILayout.HelpBox("Drop in any prefab or model asset to begin.", MessageType.Info);
+        }
+
+        private void DrawGripContext()
+        {
+            EditorGUILayout.LabelField("Grip Context", EditorStyles.boldLabel);
+
+            EditorGUI.BeginChangeCheck();
+
+            var newContext = (GameObject)EditorGUILayout.ObjectField(
+                "Hand / Hero", _contextModel, typeof(GameObject), false);
+            bool newShow = EditorGUILayout.ToggleLeft("Show hand / grip context", _showContext);
+            string newBone = EditorGUILayout.TextField("Grip bone", _gripBoneName);
+
+            if (EditorGUI.EndChangeCheck())
+            {
+                _contextModel = newContext;
+                _showContext = newShow;
+                _gripBoneName = string.IsNullOrEmpty(newBone) ? "R_Hand" : newBone;
+                RebuildContextInstance();
+                Repaint();
+            }
+
+            EditorGUILayout.HelpBox(
+                "Drop a hand/hero model, toggle it on, and the weapon seats under the grip " +
+                "bone so the offset reads in context. Grip bone = the bone the weapon parents " +
+                "under (e.g. R_Hand, or L_Hand for a shield).", MessageType.None);
+
+            if (GUILayout.Button("Load Hero", GUILayout.Width(120)))
+                TryLoadHero();
+        }
+
+        private void TryLoadHero()
+        {
+            string[] roots = { "Assets/Resources/Heroes" };
+            string[] guids = AssetDatabase.FindAssets("t:GameObject", roots);
+            if (guids == null || guids.Length == 0)
+            {
+                Debug.LogWarning("[OffsetForge] no GameObject assets found under Assets/Resources/Heroes.");
+                return;
+            }
+
+            for (int i = 0; i < guids.Length; i++)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                if (string.IsNullOrEmpty(path) || !path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (go == null) continue;
+                if (HasTransformNamed(go, "R_Hand"))
+                {
+                    _contextModel = go;
+                    _showContext = true;
+                    RebuildContextInstance();
+                    Repaint();
+                    Debug.Log("[OffsetForge] loaded hero context: " + path);
+                    return;
+                }
+            }
+
+            Debug.LogWarning("[OffsetForge] no hero prefab with an 'R_Hand' transform found under Assets/Resources/Heroes.");
+        }
+
+        private static bool HasTransformNamed(GameObject root, string boneName)
+        {
+            if (root == null) return false;
+            var xforms = root.GetComponentsInChildren<Transform>(true);
+            for (int i = 0; i < xforms.Length; i++)
+            {
+                if (xforms[i] != null &&
+                    string.Equals(xforms[i].name, boneName, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
         }
 
         private void DrawViewport()
@@ -296,17 +474,25 @@ namespace OffsetForge.Editor
         private bool TryGetInstanceBounds(out Bounds bounds)
         {
             bounds = new Bounds(Vector3.zero, Vector3.zero);
-            if (_previewInstance == null) return false;
-            var rends = _previewInstance.GetComponentsInChildren<Renderer>();
-            if (rends == null || rends.Length == 0) return false;
             bool has = false;
+            EncapsulateRenderers(_previewInstance, ref bounds, ref has);
+            // When context is shown, frame the hand + weapon together.
+            if (_showContext && _contextInstance != null)
+                EncapsulateRenderers(_contextInstance, ref bounds, ref has);
+            return has;
+        }
+
+        private static void EncapsulateRenderers(GameObject go, ref Bounds bounds, ref bool has)
+        {
+            if (go == null) return;
+            var rends = go.GetComponentsInChildren<Renderer>();
+            if (rends == null) return;
             for (int i = 0; i < rends.Length; i++)
             {
                 if (rends[i] == null) continue;
                 if (!has) { bounds = rends[i].bounds; has = true; }
                 else bounds.Encapsulate(rends[i].bounds);
             }
-            return has;
         }
 
         private void ApplyOffsetToInstance()
