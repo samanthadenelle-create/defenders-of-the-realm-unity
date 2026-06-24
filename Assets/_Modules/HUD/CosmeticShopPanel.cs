@@ -304,6 +304,9 @@ namespace DeNelle.HUD
             // shop card. Local override only — the shared ElarionUi.Scrim is untouched.
             _overlay.style.backgroundColor = new StyleColor(new Color(0.03f, 0.02f, 0.06f, 0.98f));
             _overlay.style.display = DisplayStyle.None;
+            // Closed scrim must NOT intercept pointer input (else the hidden full-screen
+            // overlay eats all world/store clicks before first open). Open/Close toggle this.
+            _overlay.pickingMode = PickingMode.Ignore;
             _root.Add(_overlay);
 
             // Town-HUD canon shop-window frame (dark-glass 9-slice rounded panel + gold rim).

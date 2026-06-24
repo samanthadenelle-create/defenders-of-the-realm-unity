@@ -123,7 +123,11 @@ namespace DeNelle.HUD
                 FlowTrace.Fail("PetSkillTree",
                     "SetOpen(true): _overlay is NULL — BuildUi never produced an overlay (no PanelSettings/root?). Open is a no-op.");
             if (_overlay != null)
+            {
                 _overlay.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
+                // Closed scrim must not eat pointer input (invisible click-blocker).
+                _overlay.pickingMode = open ? PickingMode.Position : PickingMode.Ignore;
+            }
             // Route through the modal arbiter so opening this closes any other panel,
             // and closing clears our slot (DEF-212).
             if (open) PanelManager.NotifyOpened(_panelHandle);
@@ -150,6 +154,8 @@ namespace DeNelle.HUD
 
             _overlay = new VisualElement { name = "PetSkillTreeOverlay" };
             ElarionUi.StyleScrim(_overlay);
+            // Start non-picking so the closed/never-opened scrim never blocks input.
+            _overlay.pickingMode = PickingMode.Ignore;
             // Anchor the card near the top (tabbed sheet) rather than centred.
             _overlay.style.flexDirection = FlexDirection.Column;
             _overlay.style.justifyContent = Justify.FlexStart;

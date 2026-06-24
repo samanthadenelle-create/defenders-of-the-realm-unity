@@ -90,6 +90,7 @@ namespace DeNelle.HUD
             }
             _visible = true;
             _overlay.style.display = DisplayStyle.Flex;
+            _overlay.pickingMode = PickingMode.Position;
             // Tell the arbiter we're open; it closes any other panel first.
             PanelManager.NotifyOpened(_panelHandle);
             Repaint();
@@ -100,6 +101,8 @@ namespace DeNelle.HUD
             if (_overlay == null) return;
             _visible = false;
             _overlay.style.display = DisplayStyle.None;
+            // Closed scrim must not intercept pointer input.
+            _overlay.pickingMode = PickingMode.Ignore;
             // Clear our slot. No-op if the manager already swapped us out.
             PanelManager.NotifyClosed(_panelHandle);
         }
@@ -139,7 +142,9 @@ namespace DeNelle.HUD
 
             _overlay = new VisualElement { name = "HeroTalentOverlay" };
             ElarionUi.StyleScrim(_overlay);
-            _overlay.pickingMode = PickingMode.Position;
+            // Built hidden — start non-picking so the closed scrim never eats input.
+            // Show()/Hide() flip this to Position/Ignore alongside display.
+            _overlay.pickingMode = PickingMode.Ignore;
             _overlay.RegisterCallback<ClickEvent>(evt =>
             {
                 if (evt.target == _overlay) Hide();

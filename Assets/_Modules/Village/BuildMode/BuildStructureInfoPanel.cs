@@ -113,13 +113,18 @@ namespace DeNelle.Village
             if (_root == null) return;
             Populate(entry);
             _root.style.display = DisplayStyle.Flex;
+            _root.pickingMode = PickingMode.Position;
         }
 
         /// <summary>Hide the preview (no arm). Idempotent.</summary>
         public void Hide()
         {
             _current = null;
-            if (_root != null) _root.style.display = DisplayStyle.None;
+            if (_root != null)
+            {
+                _root.style.display = DisplayStyle.None;
+                _root.pickingMode = PickingMode.Ignore;
+            }
         }
 
         // ── Build (once) ─────────────────────────────────────────────────────────
@@ -138,6 +143,8 @@ namespace DeNelle.Village
             _root.style.justifyContent = Justify.Center;
             _root.style.alignItems = Align.FlexStart;
             _root.style.display = DisplayStyle.None;
+            // Closed scrim must not intercept pointer input. Show()/Hide() flip this.
+            _root.pickingMode = PickingMode.Ignore;
             _root.RegisterCallback<PointerDownEvent>(OnScrimPointerDown);
             docRoot.Add(_root);
 

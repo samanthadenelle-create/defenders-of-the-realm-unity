@@ -120,6 +120,8 @@ namespace DeNelle.Village.UI
             // Full-screen centering overlay (Elarion scrim)
             _overlay = new VisualElement { name = "TalentTreeOverlay" };
             ElarionUi.StyleScrim(_overlay);
+            // Start non-picking; SetVisible flips it so the closed scrim never eats input.
+            _overlay.pickingMode = PickingMode.Ignore;
             _overlay.RegisterCallback<ClickEvent>(evt =>
             {
                 // Tap outside the card → close
@@ -410,7 +412,11 @@ namespace DeNelle.Village.UI
         private void SetVisible(bool visible)
         {
             if (_overlay != null)
+            {
                 _overlay.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+                // Closed scrim must not intercept pointer input.
+                _overlay.pickingMode = visible ? PickingMode.Position : PickingMode.Ignore;
+            }
         }
     }
 }
