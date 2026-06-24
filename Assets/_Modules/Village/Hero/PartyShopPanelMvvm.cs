@@ -64,6 +64,7 @@ namespace DeNelle.Village.Hero
 
         // -- Preview pane (WO-501 owner point 3) - a 3D render of the selected gear + stat-diff + price --
         private GameObject _previewRoot;        // the chrome well that holds the preview widgets
+        private Image _previewBacking;          // dark slate frame BEHIND the icon/3D square (transparent-icon backing)
         private RawImage _previewImage;         // fed by the live RenderTexture (3D model)
         private TMPro.TextMeshProUGUI _previewGlyph;  // 2D fallback glyph drawn over the image when no model
         private Image _previewSprite;           // 2D fallback sprite (iconPath/catalog) when no model
@@ -79,6 +80,17 @@ namespace DeNelle.Village.Hero
         private TMPro.TextMeshProUGUI _buySellLabel;
         private Button _equipBtn;
         private TMPro.TextMeshProUGUI _equipLabel;
+
+        // -- Preview icon BACKING card (tunable) -----------------------------------
+        // A dark slate frame drawn BEHIND the preview icon/3D square so a transparent (or
+        // baked-grey) icon sits on a neutral premium backing instead of the gold store panel.
+        // The square anchors below MUST match the _previewImage/_previewSprite square in
+        // BuildPreviewPane (kept in sync via these consts).
+        private static readonly Vector2 PreviewSquareMin = new Vector2(0.20f, 0.42f);
+        private static readonly Vector2 PreviewSquareMax = new Vector2(0.80f, 0.98f);
+        // The backing extends a little PAST the icon square so it reads as a frame around it.
+        private const float PreviewBackingPad = 0.03f;
+        private static readonly Color PreviewBackingColor = new Color(0.05f, 0.05f, 0.06f, 0.92f);  // dark slate
 
         // -- The isolated runtime 3D-preview rig (the BuildPreviewModal "Offset Forge" pattern) --
         private const int RtSize = 384;
@@ -752,6 +764,28 @@ namespace DeNelle.Village.Hero
             }
             var pane = _previewRoot.transform;
 
+            // FRAMED BACKING CARD (behind the icon/3D square): a dark slate plate so a transparent or
+            // baked-grey icon sits on a neutral premium backing, never the gold store panel / a checker.
+            // Padded slightly past the icon square so it reads as a frame; reuses the pack's slot plate
+            // sprite (premium frame) when present, else a rounded dark slate fill.
+            var backMin = new Vector2(PreviewSquareMin.x - PreviewBackingPad, PreviewSquareMin.y - PreviewBackingPad);
+            var backMax = new Vector2(PreviewSquareMax.x + PreviewBackingPad, PreviewSquareMax.y + PreviewBackingPad);
+            var backGo = ElarionUiKit.AddImage(pane, "PreviewBacking", backMin, backMax, PreviewBackingColor, rounded: true);
+            _previewBacking = backGo.GetComponent<Image>();
+            if (_previewBacking != null)
+            {
+                _previewBacking.raycastTarget = false;
+                var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotItem);
+                if (plate != null)
+                {
+                    _previewBacking.sprite = plate;
+                    _previewBacking.type   = Image.Type.Sliced;
+                    _previewBacking.color  = PreviewBackingColor;
+                }
+            }
+            ElarionUiKit.AddInnerRim(backGo, new Color(0f, 0f, 0f, 0.40f));
+            backGo.transform.SetAsFirstSibling();   // keep it BEHIND every preview widget
+
             // The 3D render image (square, top of the pane). Fed by the live RenderTexture in RenderPreview.
             var imgGo = new GameObject("PreviewImage", typeof(RawImage));
             imgGo.transform.SetParent(pane, false);
@@ -822,6 +856,7 @@ namespace DeNelle.Village.Hero
             {
                 // Nothing selected - clear + show the empty state, tear the rig down.
                 TeardownRig();
+                if (_previewBacking != null) _previewBacking.enabled = false;   // no card behind an empty preview
                 if (_previewImage != null) _previewImage.enabled = false;
                 if (_previewSprite != null) _previewSprite.color = new Color(0f, 0f, 0f, 0f);
                 if (_previewGlyph != null) _previewGlyph.text = "";
@@ -835,6 +870,7 @@ namespace DeNelle.Village.Hero
             }
 
             if (_previewEmpty != null) _previewEmpty.gameObject.SetActive(false);
+            if (_previewBacking != null) _previewBacking.enabled = true;   // framed card behind the icon/3D square
             var d = sel.Value;
             var item = _vm.SelectedItem;
 
@@ -1326,6 +1362,7 @@ namespace DeNelle.Village.Hero
             _headerLabel = null;
             _memberLabel = null;
             _previewRoot = null;
+            _previewBacking = null;
             _previewImage = null;
             _previewSprite = null;
             _previewGlyph = null;
