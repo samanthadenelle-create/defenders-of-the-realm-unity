@@ -57,8 +57,8 @@ namespace DeNelle.Village.Arena
         private static readonly Vector3 ArenaCentre = new Vector3(5000f, 0f, 5000f);
 
         // Open kite arena footprint (owner doc ~28-35 x 18-22) -- big enough to kite.
-        private const float ArenaHalfWidth = 16f;   // X half-extent (~32 wide)
-        private const float ArenaHalfDepth = 10f;   // Z half-extent (~20 deep)
+        private const float ArenaHalfWidth = 30f;   // X half-extent (~60 wide) — owner 2026-06-23: bigger to KITE + lure one away
+        private const float ArenaHalfDepth = 24f;   // Z half-extent (~48 deep) — open kite space, not a square
 
         private const float BattleTimeoutSeconds = 240f; // generous; a stuck fight ends, never soft-locks
 

@@ -34,6 +34,9 @@ slide in arena, no motions", owner). `ActorAnimator` (Enemy.cs:184) already trie
    - **Rooted while casting:** stop the NavMeshAgent for the cast duration — the caster does NOT
      slide/move while casting (commit to the cast). Resume after. (This is also the telegraph that
      makes it dodgeable.) Applies to the mage cast + any heavy/tank attack.
+   - **AUDIO telegraph (owner 2026-06-23, not now):** add a sound cue on cast wind-up — an audible
+     "you're being cast on" signal (via CoreServices.Audio / a charge/whoosh SfxId) so the player
+     reacts even off-screen. Pairs with the visual tell; tune so a busy fight stays readable.
 3. **Wire the triggers:** EnemyBrain/Enemy fires `Attack` on melee contact (exists) and a `Cast`
    trigger on the mage's ability cast (new) — so the animation matches the action.
 4. **Apply to BOTH venues:** the same controllers drive the roaming overworld reps AND the arena

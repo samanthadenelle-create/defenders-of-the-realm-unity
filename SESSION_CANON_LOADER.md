@@ -5,6 +5,16 @@ loads this before doing anything, to stay an SME. It is the fast-path summary; t
 binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HANDOVER.md`,
 `docs/MASTER_CATALOG.md`, and `docs/INSTRUMENTATION_STANDARD.md`.
 
+> ## 🟥 DAY-1 BOOT — the owner should NEVER have to remind you of this
+> The #1 recurring waste (owner, EVERY day, 2026-06-23): she has to re-teach a fresh CLI to read docs / canons /
+> absorb memories / orchestrate / stop guessing — even though it's all written here and in memory. **Reading this
+> is not doing it.** So turn ONE, unprompted, BEFORE your first task reply:
+> 1. **Read + be SME:** this file + `docs/MASTER_CATALOG.md` (relevant area) + the `docs/*ARCHITECTURE*` for what you'll touch. Reuse built systems; never reinvent.
+> 2. **Boot posture = VERIFY + DELEGATE + INSTRUMENT-FIRST:** delegate deep work to agents (your hands = gates + commits); on ANY non-trivial bug, READ the captured data (F8 break-log / Editor.log / FlowTrace) and cite the line BEFORE any edit. Never guess / inference-fix.
+> 3. **Hold the line** (pleasing ≠ right): park off-focus shiny things into a WO; bank wins before building more.
+> 4. **Never say "I'll mark it" — write the memory AND the doc in the moment** (persist in both places).
+> If you catch yourself about to guess, solo-dig, or please-and-slide → STOP and do the above. The reminder being needed AT ALL is the failure to eliminate.
+
 ## Core Rules (always follow)
 - **One Model:** Capability is a property on the entry. Never hard-code per type/tag.
 - **Presentation never touches objects** — HUD → Core only, Village → Core only.

@@ -285,7 +285,11 @@ namespace DeNelle.HUD
             // IsWaveActive nor IsInBattle fires there and the battle HUD (ability bar +
             // wave/vitals chrome) would stay faded out. Treat the raid scene as BATTLE so
             // the combat HUD comes up. Cheap active-scene string test (Core-only).
-            if (IsWaveActive() || IsInBattle() || IsRaidScene()) return HudMode.Battle;
+            // BattleArena (real-time encounter) has no ATB BattleController, but it REGISTERS a
+            // BattleLock probe (BattleArena.cs:102), so BattleLock.IsInBattle() is the Core-clean
+            // signal that the arena fight is live -> Battle HUD in the arena (owner 2026-06-23).
+            if (IsWaveActive() || IsInBattle() || IsRaidScene()
+                || DeNelle.Core.Combat.BattleLock.IsInBattle()) return HudMode.Battle;
 
             // WO-470 / HUD-RCA: an ENEMY-OWNED scene (e.g. Village2, the enemy
             // outpost) is a combat scene too, but it isn't a RaidBase_* name, has no
