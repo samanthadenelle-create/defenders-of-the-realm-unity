@@ -196,10 +196,15 @@ namespace DeNelle.HUD
             // onboarded toggles, save, reset-save, orient tool) are dropped from the panel; their
             // handlers stay in the file in case they're wanted back.
             card.Add(Button("Load resources (full base)",   OnLoadResources));
+            // Level shortcuts — same REAL leveling path the F10 DevPanel uses
+            // (HeroProgression.AddXp -> ApplyLevelRewards grants Wisdom + skill points),
+            // reached by reflection here since the HUD asmdef can't reference DeNelle.Village.
+            card.Add(Button("Set Level 5 (+skill pts)",     () => OnSetHeroLevel(5)));
+            card.Add(Button("Set Level 10 (+skill pts)",    () => OnSetHeroLevel(10)));
             card.Add(Button("Trigger next wave",            OnTriggerWave));
             card.Add(Button("Reset Yarn (replay tutorial)", OnReplayTutorial));
             card.Add(Button("Close",                        Toggle));
-            FlowTrace.Step("UI", "DevPanel (AdminOverlay) UI built — wired 4 buttons");
+            FlowTrace.Step("UI", "DevPanel (AdminOverlay) UI built — wired 6 buttons");
 
             _status = new Label(string.Empty);
             _status.style.color = ElarionUi.ParchmentDim;
@@ -611,6 +616,59 @@ namespace DeNelle.HUD
                 $"DevGrant (AdminOverlay) +W{wood} F{food} I{iron} C{crystals} -> " +
                 $"pool W{poolWood} I{poolIron} F{poolFood} C{poolCrys} | " +
                 $"GameState W{gsWood} I{gsIron}");
+        }
+
+        /// <summary>
+        /// Sets the hero to <paramref name="target"/> through the SAME real leveling path the
+        /// F10 DevPanel's "Set Level 5/10" uses (DevPanelController.SetHeroLevelTo): feed XP via
+        /// HeroProgression.AddXp(XpToNext + 1) until the target level is reached, so each level
+        /// crossed runs ApplyLevelRewards and banks that level's Wisdom (the skill-tree spend
+        /// currency) + a skill point. The HUD asmdef can't reference DeNelle.Village, so the
+        /// HeroProgression loop + the resulting Wisdom read are done by reflection (same idiom
+        /// as OnLoadResources / the orient menu / the wave manager above). No-op if already
+        /// at/above the target.
+        /// </summary>
+        private void OnSetHeroLevel(int target)
+        {
+            target = Mathf.Max(1, target);
+
+            var hpType = Type.GetType("DeNelle.Village.HeroProgression, DeNelle.Village");
+            var hp = hpType != null ? UnityEngine.Object.FindAnyObjectByType(hpType) : null;
+            if (hp == null) { SetStatus("Level: HeroProgression not in scene yet."); return; }
+
+            var levelProp = hpType.GetProperty("Level", BindingFlags.Public | BindingFlags.Instance);
+            var xpToNextProp = hpType.GetProperty("XpToNext", BindingFlags.Public | BindingFlags.Instance);
+            var addXp = hpType.GetMethod("AddXp",
+                BindingFlags.Public | BindingFlags.Instance, null, new[] { typeof(float) }, null);
+            if (levelProp == null || xpToNextProp == null || addXp == null)
+            {
+                SetStatus("Level: HeroProgression API (Level/XpToNext/AddXp) not found.");
+                return;
+            }
+
+            int LevelNow() => levelProp.GetValue(hp) is int l ? l : 0;
+            float XpToNextNow() => xpToNextProp.GetValue(hp) is float x ? x : 0f;
+
+            // Mirror SetHeroLevelTo: repeated AddXp(XpToNext + 1) until the target level.
+            int guard = 0;
+            while (LevelNow() < target && guard++ < 500)
+                addXp.Invoke(hp, new object[] { XpToNextNow() + 1f });
+
+            int reached = LevelNow();
+
+            // Resulting Wisdom (skill-tree spend currency) — WisdomCurrencyService.Instance.Wisdom.
+            int wisdom = 0;
+            var wisType = Type.GetType("DeNelle.Village.Talents.WisdomCurrencyService, DeNelle.Village");
+            var wisInst = wisType?.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            if (wisInst != null)
+            {
+                var wisProp = wisType.GetProperty("Wisdom", BindingFlags.Public | BindingFlags.Instance);
+                if (wisProp?.GetValue(wisInst) is int w) wisdom = w;
+            }
+
+            FlowTrace.Step("Hero",
+                $"DevPanel (AdminOverlay) set hero -> Lv.{reached} (target {target}), Wisdom {wisdom}");
+            SetStatus($"Set hero to Lv.{reached} (target {target}) — {wisdom} Wisdom to spend in the skill tree.");
         }
 
         private void OnReplayTutorial()

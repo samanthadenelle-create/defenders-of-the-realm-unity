@@ -1,4 +1,9 @@
 // =============================================================================
+// DEPRECATED (owner 2026-06-24): F10 dev menu retired - use Settings -> DevTools
+// (AdminOverlay). Remove after confirming no tool is lost. Activation (F10 hotkey +
+// 5-tap corner gesture) is gated OFF below; the class + all action handlers remain
+// intact so any F10-only tool can be migrated to the Settings menu before purge.
+// -----------------------------------------------------------------------------
 // DevPanelController — the DEV-ONLY in-game QA / debug console (DeNelle.DevTools)
 // -----------------------------------------------------------------------------
 // An in-game console for QA: it loads resources and jumps game state so the
@@ -232,7 +237,13 @@ namespace DeNelle.DevTools
             // dev console in the shipped .exe OR the editor unless a dev opts in
             // (PlayerPrefs ff.devhotkeys=1). The on-screen "DEV" corner chip remains
             // the always-available entry.
-            if (DeNelle.Core.FeatureFlags.DevHotkeys && Input.GetKeyDown(_toggleKey))
+            // DEPRECATED (owner 2026-06-24): F10 dev menu retired - use Settings -> DevTools
+            // (AdminOverlay). Remove after confirming no tool is lost. The F10 hotkey toggle is
+            // disabled (gated behind a constant false) so this menu no longer opens; the Settings
+            // menu is the single dev-tools entry. Handler kept for migration/restore.
+            const bool F10MenuRetired = true;
+            if (!F10MenuRetired &&
+                DeNelle.Core.FeatureFlags.DevHotkeys && Input.GetKeyDown(_toggleKey))
                 SetOpen(!_isOpen);
 
             // Smooth FPS every frame (unscaled so it reads true during slow-mo).
@@ -281,13 +292,21 @@ namespace DeNelle.DevTools
             // a tester won't stumble onto). No "DEV" label, fully transparent — it opens the console ONLY
             // on FIVE rapid taps (OnCornerTapped), the classic hidden-dev-menu gesture. A stray single
             // tap does nothing.
-            _cornerTap = new Label("") { name = CornerTapName };
-            StyleCornerChip(_cornerTap);
-            _cornerTap.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0f)); // invisible
-            _cornerTap.style.borderTopWidth = 0; _cornerTap.style.borderBottomWidth = 0;
-            _cornerTap.style.borderLeftWidth = 0; _cornerTap.style.borderRightWidth = 0;
-            _cornerTap.RegisterCallback<ClickEvent>(OnCornerTapped);
-            _root.Add(_cornerTap);
+            // DEPRECATED (owner 2026-06-24): F10 dev menu retired - use Settings -> DevTools
+            // (AdminOverlay). Remove after confirming no tool is lost. The 5-tap corner gesture is
+            // disabled: the tap-zone is no longer created/registered, so this menu cannot spawn.
+            // The Settings -> DevTools menu is the single dev-tools entry. (OnCornerTapped kept.)
+            const bool F10CornerTapRetired = true;
+            if (!F10CornerTapRetired)
+            {
+                _cornerTap = new Label("") { name = CornerTapName };
+                StyleCornerChip(_cornerTap);
+                _cornerTap.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0f)); // invisible
+                _cornerTap.style.borderTopWidth = 0; _cornerTap.style.borderBottomWidth = 0;
+                _cornerTap.style.borderLeftWidth = 0; _cornerTap.style.borderRightWidth = 0;
+                _cornerTap.RegisterCallback<ClickEvent>(OnCornerTapped);
+                _root.Add(_cornerTap);
+            }
 
             // The console window — hidden until opened.
             _window = new VisualElement { name = WindowName };
