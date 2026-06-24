@@ -346,6 +346,14 @@ namespace DeNelle.Village.Arena
                 }
                 var sh = Shader.Find("Universal Render Pipeline/Unlit");
                 if (sh == null) sh = Shader.Find("Unlit/Texture");
+                if (sh == null)
+                {
+                    // Build-strip guard: the unlit shader was dropped from the player (no baked/
+                    // Always-Included reference). Degrade to "no backdrop" — keep the persisted sky —
+                    // never throw on `new Material(null)`. Durable fix: AlwaysIncludedShaders helper.
+                    FlowTrace.Warn("BattleArena", "BuildBackdrop: unlit shader missing from build -> skipping backdrop (sky kept).");
+                    return;
+                }
                 var mat = new Material(sh) { name = "ArenaBackdrop_" + key };
                 if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", tex);
                 if (mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", tex);

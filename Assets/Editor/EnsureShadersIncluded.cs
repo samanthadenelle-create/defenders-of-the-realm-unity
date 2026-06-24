@@ -25,6 +25,13 @@ namespace DeNelle.Editor
         // run time; any name that does not resolve is warned and skipped.
         static readonly string[] WantedShaderNames =
         {
+            // URP core shaders loaded at runtime via Shader.Find — fixes the BUILD-only
+            // crash in BattleArena.BuildBackdrop (`new Material(null)` when the unlit shader
+            // is stripped) AND the magenta RuntimeSeam gate beacon (CreatePrimitive's default
+            // material references URP/Lit, also stripped). Both share the same strip root.
+            "Universal Render Pipeline/Unlit",
+            "Universal Render Pipeline/Lit",
+
             // URP particle shaders — fixes magenta particles (WO-420).
             "Universal Render Pipeline/Particles/Unlit",
             "Universal Render Pipeline/Particles/Lit",
@@ -105,6 +112,15 @@ namespace DeNelle.Editor
             }
             var addedText = added.Count > 0 ? sb.ToString() : "(none)";
             Debug.Log($"[EnsureShadersIncluded] added: {addedText}; already-present: {alreadyPresent}");
+
+            // Batchmode marker (grepped by run-unity-method.ps1 callers).
+            var names = new StringBuilder();
+            for (int i = 0; i < WantedShaderNames.Length; i++)
+            {
+                if (i > 0) names.Append(", ");
+                names.Append(WantedShaderNames[i]);
+            }
+            Debug.Log($"ALWAYS_INCLUDED_OK :: {names}");
         }
     }
 }
