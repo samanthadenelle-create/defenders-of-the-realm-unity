@@ -43,6 +43,9 @@ namespace DeNelle.HUD
         // Dev orient tool — catalog id the owner types in.
         private TextField _orientIdField;
 
+        // Lock-On A/B toggle button (WO-512) — label reflects ff.lockon state, retargeted on tap.
+        private Button _lockOnButton;
+
         // Reflection handles — resolved lazily on first show.
         private Type _gameStateServiceType;
         private object _gameStateInstance;
@@ -203,6 +206,11 @@ namespace DeNelle.HUD
             card.Add(Button("Set Level 10 (+skill pts)",    () => OnSetHeroLevel(10)));
             card.Add(Button("Trigger next wave",            OnTriggerWave));
             card.Add(Button("VFX Parade",                   OnVfxParade));
+            // Lock-On A/B toggle (WO-512): flip ff.lockon live so the owner can compare
+            // locked vs free camera mid-fight in the built exe. FeatureFlags.Get reads
+            // PlayerPrefs live each call (no cache), so the write below takes effect next frame.
+            _lockOnButton = Button(LockOnLabel(), OnToggleLockOn);
+            card.Add(_lockOnButton);
             card.Add(Button("Reset Yarn (replay tutorial)", OnReplayTutorial));
             card.Add(Button("Close",                        Toggle));
             FlowTrace.Step("UI", "DevPanel (AdminOverlay) UI built — wired 6 buttons");
@@ -490,6 +498,26 @@ namespace DeNelle.HUD
             // arbiter so the modal slot is cleared, not just the display flag).
             Close();
             SetStatus("VFX Parade opened. Use Next/Prev, tag a moment + note, Bookmark -> vfx-picks.json.");
+        }
+
+        // ── Lock-On A/B toggle (WO-512) ──────────────────────────────────────
+        // FeatureFlags.Get reads PlayerPrefs live each call (no in-memory cache), so writing
+        // "ff.lockon" + Save() here takes effect on the NEXT FeatureFlags.LockOn read — the
+        // lock-on slices (SmartMobileCamera / HeroLocomotion / BattleArena) re-check it each
+        // frame, so the owner can flip locked vs free camera mid-fight with no rebuild/restart.
+        private static string LockOnLabel()
+        {
+            return "Lock-On: " + (DeNelle.Core.FeatureFlags.LockOn ? "ON" : "OFF");
+        }
+
+        private void OnToggleLockOn()
+        {
+            bool on = !DeNelle.Core.FeatureFlags.LockOn;   // resolved value, then invert
+            PlayerPrefs.SetInt("ff.lockon", on ? 1 : 0);
+            PlayerPrefs.Save();
+            if (_lockOnButton != null) _lockOnButton.text = LockOnLabel();
+            FlowTrace.Step("UI", "DevPanel (AdminOverlay) ff.lockon = " + (on ? "ON" : "OFF"));
+            SetStatus("Lock-On " + (on ? "ON" : "OFF") + " (live next frame) - re-engage or move to feel the camera change.");
         }
 
         private void OnGiveCrystals(int delta)
