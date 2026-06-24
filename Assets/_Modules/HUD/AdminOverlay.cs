@@ -202,6 +202,7 @@ namespace DeNelle.HUD
             card.Add(Button("Set Level 5 (+skill pts)",     () => OnSetHeroLevel(5)));
             card.Add(Button("Set Level 10 (+skill pts)",    () => OnSetHeroLevel(10)));
             card.Add(Button("Trigger next wave",            OnTriggerWave));
+            card.Add(Button("VFX Parade",                   OnVfxParade));
             card.Add(Button("Reset Yarn (replay tutorial)", OnReplayTutorial));
             card.Add(Button("Close",                        Toggle));
             FlowTrace.Step("UI", "DevPanel (AdminOverlay) UI built — wired 6 buttons");
@@ -444,6 +445,51 @@ namespace DeNelle.HUD
             }
             InvokeMethod(_waveManagerInstance, "ForceSpawnNextWaveNow");
             SetStatus("Jumped to next wave (ForceSpawnNextWaveNow — spawns immediately, skips countdown).");
+        }
+
+        /// <summary>
+        /// Launches the RUNTIME VFX Parade overlay (VfxParade.VfxParadeRuntime) so the
+        /// owner can curate effects in the built exe with no editor open. The HUD asmdef
+        /// does not reference VfxParade.Runtime, so the singleton is created + shown via
+        /// reflection (same idiom as the orient menu / wave manager). The overlay pauses
+        /// time itself and restores it on Close; this just opens it and hides the admin
+        /// panel so it is unobstructed.
+        /// </summary>
+        private void OnVfxParade()
+        {
+            var runtimeType = Type.GetType("VfxParade.VfxParadeRuntime, VfxParade.Runtime");
+            if (runtimeType == null)
+            {
+                SetStatus("VFX Parade: VfxParade.Runtime assembly/type not found in this build.");
+                return;
+            }
+
+            var launch = runtimeType.GetMethod("Launch",
+                BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);
+            if (launch == null)
+            {
+                SetStatus("VFX Parade: VfxParadeRuntime.Launch() not found.");
+                return;
+            }
+
+            object instance = null;
+            try { instance = launch.Invoke(null, null); }
+            catch (Exception e)
+            {
+                SetStatus("VFX Parade: launch threw - " + e.Message);
+                return;
+            }
+
+            if (instance == null)
+            {
+                SetStatus("VFX Parade: Launch returned null (no manifest baked? run VfxParadeManifestBuilder.Build).");
+                return;
+            }
+
+            // Hide the admin overlay so the parade panel is unobstructed (route through the
+            // arbiter so the modal slot is cleared, not just the display flag).
+            Close();
+            SetStatus("VFX Parade opened. Use Next/Prev, tag a moment + note, Bookmark -> vfx-picks.json.");
         }
 
         private void OnGiveCrystals(int delta)

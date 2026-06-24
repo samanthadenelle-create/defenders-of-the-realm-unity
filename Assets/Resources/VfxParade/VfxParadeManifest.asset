@@ -1,0 +1,75 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f1af0e8b20360b045aa48f98a1f80b06, type: 3}
+  m_Name: VfxParadeManifest
+  m_EditorClassIdentifier: VfxParade.Runtime::VfxParade.VfxParadeManifest
+  entries:
+  - prefab: {fileID: 13531440185366499, guid: 19be04178a7a6d542b5543b52eaacea4, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Arcane.prefab
+    name: Casting_Arcane
+  - prefab: {fileID: 6010434030211556052, guid: 123a2c2ed754c1a43b099c90ea4f6f19, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Arcane_2.prefab
+    name: Casting_Arcane_2
+  - prefab: {fileID: 7694918616103158141, guid: 0962a013299146c47a7951a572809219, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Arcane_3.prefab
+    name: Casting_Arcane_3
+  - prefab: {fileID: 3922451924162243604, guid: 3f672f963d945314d914eb885b2bb7ef, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Dark.prefab
+    name: Casting_Dark
+  - prefab: {fileID: 1088404570457305704, guid: 6052ae45b5b592c419e0ac09a0291b36, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Dark_2.prefab
+    name: Casting_Dark_2
+  - prefab: {fileID: 5577821093500930883, guid: 79c9c45636ccd6f40b9c09d8abc5e9c3, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Dark_3.prefab
+    name: Casting_Dark_3
+  - prefab: {fileID: 113066221756827721, guid: 74f99139c074ef74fa6155b10f848447, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Dark_4.prefab
+    name: Casting_Dark_4
+  - prefab: {fileID: 6881474406348169789, guid: 4f22658952fbb0a42865716c53e103b2, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Fire.prefab
+    name: Casting_Fire
+  - prefab: {fileID: 8469585828306071224, guid: 108cad7330a59a948aa5fc314b27d662, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Fire_2.prefab
+    name: Casting_Fire_2
+  - prefab: {fileID: 1754530298286186280, guid: 39e8c6afc8cc4bd49bba32ca0925488a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Fire_3.prefab
+    name: Casting_Fire_3
+  - prefab: {fileID: 4178702466511207507, guid: a178aad92fd4bd245ba584e291fd6cf2, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Fire_4.prefab
+    name: Casting_Fire_4
+  - prefab: {fileID: 3475472405203810721, guid: 75134cf30eb81694b8369220ab1023ca, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Ice.prefab
+    name: Casting_Ice
+  - prefab: {fileID: 1327007866463590907, guid: e4fe462ca7a5bde4cbb999739a7478a6, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Ice_2.prefab
+    name: Casting_Ice_2
+  - prefab: {fileID: 8984049990862226196, guid: fec64312ce33a884ead0404c7c824e6e, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Ice_3.prefab
+    name: Casting_Ice_3
+  - prefab: {fileID: 2020952792066653868, guid: e6f07c1f9b84b9e41b865d1052260a89, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Light.prefab
+    name: Casting_Light
+  - prefab: {fileID: 6382894885670788804, guid: 327604702b8201345ae46da5f9c62458, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Light_2.prefab
+    name: Casting_Light_2
+  - prefab: {fileID: 4829314983320849567, guid: d9b7856bde11ef34b922b7b4e0dbc408, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Nature.prefab
+    name: Casting_Nature
+  - prefab: {fileID: 2357110867927384953, guid: 6bf776fd83123c245b1fc5c26e6bde64, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Nature_2.prefab
+    name: Casting_Nature_2
+  - prefab: {fileID: 7606108794216414597, guid: 1393f62af9be3f544a123c837f8e82b0, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Storm.prefab
+    name: Casting_Storm
+  - prefab: {fileID: 8642405335803613004, guid: 436d293919a6e424ba06702cf30fb0c7, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Storm_2.prefab
+    name: Casting_Storm_2
