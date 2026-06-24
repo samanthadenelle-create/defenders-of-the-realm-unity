@@ -54,11 +54,13 @@ namespace OffsetForge.Editor
         private GameObject _contextModel;       // the reference hand/hero asset dropped in
         private GameObject _contextInstance;    // instantiated clone in the preview scene
         private bool _showContext;              // checkbox: show the hand/grip context
-        private string _gripBoneName = "R_Hand"; // the bone the weapon parents under
+        private string _gripBoneName = "R_Hand"; // manual-override bone name (non-humanoid rigs only)
+        private bool _useLeftHand;              // false = RightHand (weapons), true = LeftHand (shields)
         private Transform _gripAnchor;          // resolved grip bone on context (null => context root)
 
         private const string PrefShowContext = "OffsetForge.ShowContext";
         private const string PrefGripBone = "OffsetForge.GripBone";
+        private const string PrefUseLeftHand = "OffsetForge.UseLeftHand";
 
         private Vector2 _scroll;
 
@@ -74,6 +76,7 @@ namespace OffsetForge.Editor
         {
             _showContext = EditorPrefs.GetBool(PrefShowContext, false);
             _gripBoneName = EditorPrefs.GetString(PrefGripBone, "R_Hand");
+            _useLeftHand = EditorPrefs.GetBool(PrefUseLeftHand, false);
             EnsurePreviewUtility();
         }
 
@@ -81,6 +84,7 @@ namespace OffsetForge.Editor
         {
             EditorPrefs.SetBool(PrefShowContext, _showContext);
             EditorPrefs.SetString(PrefGripBone, _gripBoneName);
+            EditorPrefs.SetBool(PrefUseLeftHand, _useLeftHand);
             CleanupPreview();
         }
 
@@ -217,21 +221,48 @@ namespace OffsetForge.Editor
         private Transform ResolveGripAnchor(GameObject contextRoot)
         {
             if (contextRoot == null) return null;
+
+            // (a) Authoritative path: mirror the GAME, which attaches via the humanoid
+            //     AVATAR (animator.GetBoneTransform(HumanBodyBones.Right/LeftHand)) rather
+            //     than a literal bone name. Works on ANY rig (Mixamo/Tripo etc.).
+            var animator = contextRoot.GetComponentInChildren<Animator>();
+            if (animator != null && animator.isHuman)
+            {
+                HumanBodyBones bone = _useLeftHand ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand;
+                Transform handBone = animator.GetBoneTransform(bone);
+                if (handBone != null)
+                {
+                    Debug.Log("[OffsetForge] grip anchor via humanoid avatar (" +
+                              (_useLeftHand ? "LeftHand" : "RightHand") + "): " + handBone.name);
+                    return handBone;
+                }
+            }
+
             var xforms = contextRoot.GetComponentsInChildren<Transform>(true);
-            // Exact name match (case-insensitive) on the configured grip bone.
+
+            // (b) Manual override: exact name match (case-insensitive) on the grip bone.
             for (int i = 0; i < xforms.Length; i++)
             {
                 if (xforms[i] != null &&
                     string.Equals(xforms[i].name, _gripBoneName, StringComparison.OrdinalIgnoreCase))
+                {
+                    Debug.Log("[OffsetForge] grip anchor via name match: " + xforms[i].name);
                     return xforms[i];
+                }
             }
-            // Fallback: any transform whose name contains "hand".
+
+            // (c) Fallback: any transform whose name contains "hand".
             for (int i = 0; i < xforms.Length; i++)
             {
                 if (xforms[i] != null &&
                     xforms[i].name.IndexOf("hand", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    Debug.Log("[OffsetForge] grip anchor via 'hand' fallback: " + xforms[i].name);
                     return xforms[i];
+                }
             }
+
+            // (d) Last resort: context root.
             Debug.LogWarning("[OffsetForge] grip bone '" + _gripBoneName +
                              "' not found on context '" + contextRoot.name +
                              "'; parented weapon at the context root instead.");
@@ -302,21 +333,30 @@ namespace OffsetForge.Editor
             var newContext = (GameObject)EditorGUILayout.ObjectField(
                 "Hand / Hero", _contextModel, typeof(GameObject), false);
             bool newShow = EditorGUILayout.ToggleLeft("Show hand / grip context", _showContext);
-            string newBone = EditorGUILayout.TextField("Grip bone", _gripBoneName);
+
+            // Hand-side selector. On a humanoid rig this picks Right vs Left HAND bone
+            // through the avatar (matches the game); Left = shields.
+            int sideIndex = _useLeftHand ? 1 : 0;
+            int newSideIndex = GUILayout.Toolbar(sideIndex, new[] { "Right hand", "Left hand (shields)" });
+            bool newUseLeftHand = newSideIndex == 1;
+
+            string newBone = EditorGUILayout.TextField("Grip bone (manual)", _gripBoneName);
 
             if (EditorGUI.EndChangeCheck())
             {
                 _contextModel = newContext;
                 _showContext = newShow;
+                _useLeftHand = newUseLeftHand;
                 _gripBoneName = string.IsNullOrEmpty(newBone) ? "R_Hand" : newBone;
                 RebuildContextInstance();
                 Repaint();
             }
 
             EditorGUILayout.HelpBox(
-                "Drop a hand/hero model, toggle it on, and the weapon seats under the grip " +
-                "bone so the offset reads in context. Grip bone = the bone the weapon parents " +
-                "under (e.g. R_Hand, or L_Hand for a shield).", MessageType.None);
+                "Drop a hand/hero model and toggle it on; on a humanoid rig the weapon seats " +
+                "in the correct hand automatically via the avatar (matches the game), no typing " +
+                "needed. Right/Left picks the hand bone (Left = shields). 'Grip bone (manual)' " +
+                "is only used as a fallback when the rig is NOT humanoid.", MessageType.None);
 
             if (GUILayout.Button("Load Hero", GUILayout.Width(120)))
                 TryLoadHero();
