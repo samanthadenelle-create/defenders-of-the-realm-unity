@@ -296,10 +296,12 @@ namespace DeNelle.Village
                 trig.targetSceneName = _recipe.to;
                 trig.targetPosition  = _landing;
                 trig.loadAdditive    = !string.Equals(_recipe.loadMode, "single", System.StringComparison.OrdinalIgnoreCase);
-                // Generous recipe radius (44m) — wins over the 40m ConfirmMinRadius floor via
-                // EffRadius=Max(ProximityRadius,40). Centred on the deck, a ~44m sphere covers the
-                // ±20m deck length AND the ~40m navmesh-edge stall the hero parks at, so the prompt
-                // is reachable on a NORMAL south approach (not only the dead-centre exact spot).
+                // WO-497 seam slim-down: the 44m radius was a FINDABILITY band-aid for the (now-
+                // suppressed) "Travel to..." tap-prompt. With suppressPrompt=true the actual crossing
+                // is the ~2m HeroLinkCrossing warp; this trigger is only the passive warp BACKSTOP, so
+                // the recipe radius is shrunk to ~8m (region-gates.json). The deck weld is INDEPENDENT
+                // of this radius (RUNTIME_SEAM_NAV_OK path unaffected). SceneTransitionTrigger may still
+                // floor the effective radius internally; that's fine for a suppressed-prompt backstop.
                 trig.ProximityRadius = _recipe.triggerRadius > 0.01f ? _recipe.triggerRadius : 6f;
                 FlowTrace.Step("RuntimeSeam",
                     $"trigger seated @DECK-CENTRE ({_gatePos.x:F2},{_gatePos.y:F2},{deckCentreZ:F1}) [was far-threshold z={_thresholdZ:F1}] -> '{_recipe.to}'@{_landing} additive={trig.loadAdditive} r={trig.ProximityRadius} (EffRadius=Max(r,40m)) — sphere blankets the {overlap + (_gatePos.z - _thresholdZ):F0}m approach deck so the prompt is FORGIVING (fires on the whole south approach, not just the exact spot).");

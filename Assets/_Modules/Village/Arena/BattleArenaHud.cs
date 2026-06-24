@@ -33,6 +33,11 @@ namespace DeNelle.Village.Arena
         private GameObject _liveGroup;   // primary bar + flee (hidden when the banner shows)
         private Action _onFlee;
 
+        // WO-498 — the new 9-zone mobile battle HUD bones. Spawned alongside this overlay
+        // when ff.battlehud9zone is ON (BattleHud9Zone.Create self-no-ops + returns null when
+        // OFF). Tracked so it tears down with this overlay on Close/ShowResult.
+        private BattleHud9Zone _hud9;
+
         private static readonly Color Gold   = new Color(0.92f, 0.78f, 0.36f);
         private static readonly Color Dark   = new Color(0.06f, 0.07f, 0.10f, 0.82f);
         private static readonly Color Danger = new Color(0.80f, 0.24f, 0.22f);
@@ -45,6 +50,9 @@ namespace DeNelle.Village.Arena
             DontDestroyOnLoad(go);
             var hud = go.AddComponent<BattleArenaHud>();
             hud.Build();
+            // WO-498 — spawn the 9-zone mobile battle HUD bones alongside (flag-gated; returns
+            // null + no-ops when ff.battlehud9zone is OFF, so the legacy overlay is unchanged).
+            hud._hud9 = BattleHud9Zone.Create();
             return hud;
         }
 
@@ -73,6 +81,8 @@ namespace DeNelle.Village.Arena
 
         public void Close()
         {
+            // WO-498 — tear the 9-zone bones down with this overlay (it is a separate canvas).
+            if (_hud9 != null) { _hud9.Close(); _hud9 = null; }
             if (this != null && gameObject != null) Destroy(gameObject);
         }
 

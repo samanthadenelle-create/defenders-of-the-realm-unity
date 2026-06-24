@@ -88,6 +88,27 @@ namespace DeNelle.Village
         public float Fraction => _maxHp > 0f ? Mathf.Clamp01(_hp / _maxHp) : 0f;
         public bool  IsAlive  => _hp > 0f;
 
+        // ── WO-493 #5 / WO-497: HERO injured stance (the hero half; the ENEMY half is
+        //    Enemy.DriveAnimator). Below the low-HP cutoff the hero reads "wounded":
+        //    the Injured locomotion swap (ActorAnimator.SetInjured), a breathing red
+        //    screen-edge vignette, a slight move slow, and an optional heartbeat cue.
+        //    All flag-gated by FeatureFlags.HeroInjuredStance. ─────────────────────
+        private const float InjuredFraction = 0.30f;  // enter injured below this HP fraction
+        private bool  _injured;                        // current injured latch (set on threshold cross)
+        private HeroInjuredVignette _vignette;         // optional edge vignette (resolved in Awake)
+        private float _heartbeatCooldown;              // throttles the optional heartbeat cue
+        private static AudioClip s_heartbeatClip;      // generated once, shared
+
+        // Movement slow seam: a global multiplier the hero's locomotion can read to
+        // ease the felt move speed while wounded. Defaults to 1 (no change). Kept as a
+        // public static so HeroLocomotion can consume it WITHOUT a hard reference back
+        // to HeroHealth (and so this WO touches only HeroHealth/vignette/factory).
+        public static float MoveSpeedMultiplier { get; private set; } = 1f;
+        private const float InjuredMoveScale = 0.85f;  // ~15% slower while wounded
+
+        /// <summary>True while the hero is below the low-HP injured cutoff.</summary>
+        public bool IsInjured => _injured;
+
         /// <summary>Fired whenever HP changes — args = (current, max).</summary>
         public event Action<float, float> OnHealthChanged;
         /// <summary>Fired once when HP reaches zero.</summary>
@@ -105,6 +126,11 @@ namespace DeNelle.Village
             _impactFeedback = GetComponent<HeroImpactFeedback>();
             if (!TryGetComponent(out _actor)) _actor = gameObject.AddComponent<ActorAnimator>();
 
+            // WO-493 #5 / WO-497: the hero's low-HP screen-edge vignette. Self-attached so
+            // it needs no prefab wiring (mirrors HeroHitReaction). Resolved up-front here.
+            if (!TryGetComponent(out _vignette)) _vignette = gameObject.AddComponent<HeroInjuredVignette>();
+            MoveSpeedMultiplier = 1f;   // start un-slowed every fresh hero
+
             // Capture the spawn point as the respawn anchor. Resolved later in
             // HandleDeath against the Heart if the recorded point is unsafe.
             _spawnPosition = transform.position;
@@ -121,7 +147,12 @@ namespace DeNelle.Village
 
         private void Update()
         {
-            if (_hp <= 0f) return;
+            if (_hp <= 0f) { UpdateInjuredState(); return; }
+
+            // WO-493 #5 / WO-497: re-evaluate the wounded stance every frame off the single
+            // HP-fraction source of truth. Cheap: the latch only flips the visuals/anim/slow
+            // on an actual threshold CROSS; while injured it just pulses the optional heartbeat.
+            UpdateInjuredState();
 
             if (!_modeChecked)
             {
@@ -309,6 +340,77 @@ namespace DeNelle.Village
             _hp = Mathf.Min(_maxHp, _hp + amount);
             OnHealthChanged?.Invoke(_hp, _maxHp);
             VFXManager.Play(VFXType.Impact_Heal, transform.position + Vector3.up * 1.0f);
+        }
+
+        // ── WO-493 #5 / WO-497: HERO injured stance ───────────────────────────
+        // Single source of truth for "wounded": HP fraction vs the cutoff. On a
+        // threshold CROSS it drives the animator's Injured swap, toggles the red
+        // edge vignette, and sets the move-speed multiplier; while injured it pulses
+        // the optional heartbeat cue. All flag-gated (FeatureFlags.HeroInjuredStance);
+        // when the flag is off the hero is forced healthy (no swap, full speed, dark
+        // vignette) so the feature can be disabled cleanly without a rebuild.
+        private void UpdateInjuredState()
+        {
+            bool flagOn = DeNelle.Core.FeatureFlags.HeroInjuredStance;
+            // Injured only while alive + below the cutoff + the flag is on. A dead hero
+            // is "not injured" — the Death anim/respawn owns that beat, not the limp.
+            bool injured = flagOn && _hp > 0f && Fraction < InjuredFraction;
+
+            if (injured != _injured)
+            {
+                _injured = injured;
+                _actor?.SetInjured(injured);
+                _vignette?.SetInjured(injured);
+                MoveSpeedMultiplier = injured ? InjuredMoveScale : 1f;
+                _heartbeatCooldown = 0f;   // let the first beat land promptly on entry
+                Debug.Log($"[HeroHealth] Injured stance {(injured ? "ON" : "OFF")} " +
+                          $"(hp={Mathf.CeilToInt(_hp)}/{Mathf.CeilToInt(_maxHp)}, frac={Fraction:F2}).");
+            }
+
+            // Optional heartbeat cue while wounded — paced ~1/sec, routed through the
+            // audio service (null-safe). Generated once so it works with no audio asset.
+            if (_injured)
+            {
+                _heartbeatCooldown -= Time.deltaTime;
+                if (_heartbeatCooldown <= 0f)
+                {
+                    _heartbeatCooldown = 1.0f;
+                    if (s_heartbeatClip == null) s_heartbeatClip = GenerateHeartbeat();
+                    DeNelle.Core.CoreServices.Audio?.PlaySfx(s_heartbeatClip, 0.35f);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Builds a short two-thump "lub-dub" heartbeat clip procedurally so the cue
+        /// works with no authored audio asset (mirrors GameSfx's generated SFX). One
+        /// low sine burst, a gap, then a softer second burst.
+        /// </summary>
+        private static AudioClip GenerateHeartbeat()
+        {
+            const int rate = 44100;
+            const float dur = 0.55f;
+            int n = Mathf.CeilToInt(rate * dur);
+            var data = new float[n];
+            // Two thumps: lub at ~0.00s (loud), dub at ~0.18s (softer).
+            AddThump(data, rate, 0.00f, 0.10f, 55f, 0.9f);
+            AddThump(data, rate, 0.18f, 0.10f, 48f, 0.6f);
+            var clip = AudioClip.Create("HeroHeartbeat", n, 1, rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        private static void AddThump(float[] data, int rate, float start, float len,
+                                     float freq, float gain)
+        {
+            int s = Mathf.Clamp(Mathf.RoundToInt(start * rate), 0, data.Length - 1);
+            int e = Mathf.Min(data.Length, s + Mathf.RoundToInt(len * rate));
+            for (int i = s; i < e; i++)
+            {
+                float t = (i - s) / (float)rate;
+                float env = Mathf.Exp(-t * 24f);   // fast percussive decay
+                data[i] += Mathf.Sin(2f * Mathf.PI * freq * t) * env * gain;
+            }
         }
 
         // ── IDamageableStructure ─────────────────────────────────────────────

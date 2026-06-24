@@ -585,7 +585,7 @@ namespace DeNelle.Village
             // Higher accel when grabbing speed, higher decel when releasing,
             // so the hero responds promptly to a key press but glides slightly
             // when stopped (no instant-snap to zero).
-            Vector3 targetVelocity = move * _moveSpeed;
+            Vector3 targetVelocity = move * (_moveSpeed * HeroHealth.MoveSpeedMultiplier);   // injured-stance slow (1.0 = healthy)
             float maxStep = (targetVelocity.sqrMagnitude > Velocity.sqrMagnitude
                 ? _accelMetresPerSec2
                 : _decelMetresPerSec2) * Time.deltaTime;
@@ -898,7 +898,7 @@ namespace DeNelle.Village
             // cleanly at the waypoint (mirrors the pet's arrival damping).
             Vector3 dir = dist > 0.0001f ? to / dist : Vector3.zero;
             float speedScale = Mathf.Clamp01(dist / Mathf.Max(0.01f, AutoWalkArriveRadius));
-            Vector3 targetVelocity = dir * (_moveSpeed * speedScale);
+            Vector3 targetVelocity = dir * (_moveSpeed * speedScale * HeroHealth.MoveSpeedMultiplier);   // injured-stance slow (1.0 = healthy)
 
             float maxStep = (targetVelocity.sqrMagnitude > Velocity.sqrMagnitude
                 ? _accelMetresPerSec2

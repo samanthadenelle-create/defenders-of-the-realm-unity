@@ -93,6 +93,13 @@ namespace DeNelle.Village.Arena
         private BattleArenaHud _hud;
         private FamilyLeader _familyLeader;   // WO-146 MonsterFamily — the orc pack's leader
         private bool _familyEngaged;          // disbanded-on-arrival latch (formation -> real 1vN)
+        private string _activeBiome;          // WO-499 resolved biome (backdrop + particles)
+        private ArenaDeathCam _deathCam;      // WO-493 #4 climactic death-camera hold
+
+        // WO-493 #4: the dying actor to linger on for the climactic death-cam (the LAST enemy
+        // killed, or the hero on a loss). Captured at the resolving moment so the camera frames
+        // the right body even as _liveEnemies empties / the hero ragdolls.
+        private Transform _climaxBody;
 
         // Cavern mood: saved RenderSettings to restore on Resolve so the open world is untouched.
         private bool _moodSaved;
@@ -138,6 +145,7 @@ namespace DeNelle.Village.Arena
 
             _current = p;
             _resolved = false;
+            _climaxBody = null;
             BattleInProgress = true;
             FlowTrace.Step("BattleArena", $"BeginEncounter: family=[{string.Join(",", p.EnemyIds)}] threat={p.Threat} theme='{p.BackdropContext}' return='{p.ReturnScene}'.");
             StartCoroutine(StageRoutine(p));
@@ -200,6 +208,13 @@ namespace DeNelle.Village.Arena
             _arenaRoot = new GameObject("[BattleArena_Stage]");
             _arenaRoot.transform.position = ArenaCentre;
 
+            // WO-499 #3 danger gradient: resolve the BIOME from the context + threat so the
+            // backdrop SIGNALS the fight (forest=easy ... volcanic=hard family ... castle=tanky).
+            // Ground/edge/cavern-mood still key off the raw 'theme' (their existing keys); the
+            // biome only drives the painted backdrop + the per-biome particles.
+            int threat = _current != null ? _current.Threat : 0;
+            _activeBiome = ArenaBiomeDressing.ResolveBiome(theme, threat);
+
             // Floor: a scaled primitive plane (10x10 units at scale 1) -> cover the footprint.
             var floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
             floor.name = "ArenaFloor";
@@ -219,7 +234,11 @@ namespace DeNelle.Village.Arena
             DressArenaEdge(theme);
 
             // THE WOW (WO-499): a painted biome backdrop ringing the arena behind the treeline. Skip-safe.
-            BuildBackdrop(theme);
+            BuildBackdrop(_activeBiome);
+
+            // WO-499 #2: subtle per-biome particles (leaves/motes/embers/dust + mist) parented to the
+            // stage so they tear down with it. Cheap, short-lived, capped -> "effects clear out fast".
+            ArenaBiomeDressing.BuildParticles(_arenaRoot.transform, _activeBiome);
 
             // Cavern ONLY: dim the persisted sky/ambient/fog to a stone-cave mood (restored on Resolve).
             // Default (outerworld/castle) leaves the persisted dawn sky untouched -- it already matches.
@@ -316,8 +335,9 @@ namespace DeNelle.Village.Arena
         {
             Guard.Try("BattleArena", "build backdrop", () =>
             {
-                string key = (theme ?? "outerworld").ToLowerInvariant();
+                string key = (theme ?? ArenaBiomeDressing.Forest).ToLowerInvariant();
                 var tex = Resources.Load<Texture2D>("Arena/Backdrops/" + key + "_backdrop");
+                if (tex == null) tex = Resources.Load<Texture2D>("Arena/Backdrops/forest_backdrop");
                 if (tex == null) tex = Resources.Load<Texture2D>("Arena/Backdrops/outerworld_backdrop");
                 if (tex == null)
                 {
@@ -602,6 +622,10 @@ namespace DeNelle.Village.Arena
         private void HandleEnemyDied(Enemy e)
         {
             _liveEnemies.Remove(e);
+            // WO-493 #4: remember the BATTLE-WINNING body so the death-cam lingers on the
+            // climactic kill (only when this death empties the family). Reserved for the
+            // last death -- not every kill.
+            if (_liveEnemies.Count == 0 && e != null) _climaxBody = e.transform;
             FlowTrace.Step("BattleArena", $"enemy down; {_liveEnemies.Count} remain.");
         }
 
@@ -618,17 +642,54 @@ namespace DeNelle.Village.Arena
                 // Push primary-target state to the overlay (presentation; logic owns the values).
                 if (_hud != null && _liveEnemies.Count > 0)
                     _hud.SetPrimary(null, _liveEnemies[0] != null ? _liveEnemies[0].HpFraction : 0f, _liveEnemies.Count);
-                if (_liveEnemies.Count == 0) { Resolve(true); yield break; }
+                if (_liveEnemies.Count == 0)
+                {
+                    // WO-493 #4: linger on the climactic kill (slow-mo) BEFORE teardown/return.
+                    yield return StartCoroutine(PlayDeathCam(_climaxBody, slowMo: true));
+                    Resolve(true);
+                    yield break;
+                }
 
                 // LOSE: hero down.
                 var hh = HeroHealth.Instance;
-                if (hh != null && !hh.IsAlive) { FlowTrace.Step("BattleArena", "hero down - loss."); Resolve(false); yield break; }
+                if (hh != null && !hh.IsAlive)
+                {
+                    FlowTrace.Step("BattleArena", "hero down - loss.");
+                    // Linger on the hero's defeat (no slow-mo -- the defeat beat plays at speed).
+                    var heroGo = GameObject.FindWithTag("Player");
+                    yield return StartCoroutine(PlayDeathCam(heroGo != null ? heroGo.transform : null, slowMo: false));
+                    Resolve(false);
+                    yield break;
+                }
 
                 // Safety: a stuck/AFK fight ends (loss) rather than soft-locking.
                 if (Time.time >= deadline) { FlowTrace.Warn("BattleArena", "battle timeout - loss."); Resolve(false); yield break; }
 
                 yield return new WaitForSeconds(0.25f);
             }
+        }
+
+        // WO-493 #4: run the climactic death-camera hold and WAIT for it before teardown/return.
+        // Skip-safe: a null body or any failure ends instantly (the fight resolves as before, the
+        // existing return-to-engagement-spot flow is untouched -- this only inserts a brief linger).
+        private IEnumerator PlayDeathCam(Transform body, bool slowMo)
+        {
+            if (body == null)
+            {
+                FlowTrace.Warn("BattleArena", "PlayDeathCam: no body to linger on - skipping.");
+                yield break;
+            }
+
+            if (_deathCam == null)
+                Guard.Try("BattleArena", "create death cam", () => { _deathCam = gameObject.AddComponent<ArenaDeathCam>(); });
+            if (_deathCam == null) yield break;
+
+            FlowTrace.Step("BattleArena", $"PlayDeathCam: linger on '{body.name}' (slowMo={slowMo}).");
+            _deathCam.Hold(body, slowMo);
+            // Wait out the linger (safety-capped so a stuck hold never soft-locks the return).
+            float guardDeadline = Time.unscaledTime + 7f;
+            while (_deathCam.IsHolding && Time.unscaledTime < guardDeadline)
+                yield return null;
         }
 
         /// <summary>Retreat from the battle (Flee button): ends it as a loss + returns. No reward.</summary>

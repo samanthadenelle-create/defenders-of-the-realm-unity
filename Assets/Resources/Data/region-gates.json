@@ -9,7 +9,7 @@
       "approachWidth": 7.0,
       "approachOverlap": 6.0,
       "thresholdBackFromGate": 22.0,
-      "triggerRadius": 44.0,
+      "triggerRadius": 8.0,
       "occluder": true
     }
   ]

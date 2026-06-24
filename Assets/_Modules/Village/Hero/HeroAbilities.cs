@@ -402,6 +402,21 @@ namespace DeNelle.Village
 
         private void ResolveEffect(AbilityDef def, Vector3 origin)
         {
+            // WO-494: Knight arena kit adds three NEW effect SHAPES — dash / knockback /
+            // taunt — that the AbilityEffect enum (AbilityCatalog) doesn't carry yet, so
+            // they parse to EffectEnum.Strike by default. Branch on the raw effect string
+            // FIRST and resolve them here, reusing the existing Strike/Cleave damage + the
+            // StatusEffect CC primitives. Unknown strings fall through to the enum switch
+            // below, so this is fully additive / flag-safe (no behaviour change for mage/
+            // ranger or any ability whose effect is one of the six canonical shapes).
+            string rawEffect = (def.Effect ?? string.Empty).Trim().ToLowerInvariant();
+            switch (rawEffect)
+            {
+                case "dash":      ResolveDash(def, origin);      return;
+                case "knockback": ResolveKnockback(def, origin); return;
+                case "taunt":     ResolveTaunt(def, origin);     return;
+            }
+
             DamageElement element = ElementOf(def);
 
             // WO-36 (talent -> stat): scale outgoing enemy damage by the hero's
@@ -501,6 +516,7 @@ namespace DeNelle.Village
                             hitFoe.TakeDamage(hitDmg, hitEl);
                             DeNelle.Core.Combat.DamageAttribution.Record(hitFoe, HeroProgression.Id, hitDmg);
                             if (snare) hitFoe.ApplyStatus(StatusEffect.Slow, 2.5f); // castAbility.ts snare
+                            ReportRumble(hitDmg);   // WO-497: rumble on the projectile CONNECTING
                         });
                     }
                     // Cast beat only (origin SFX/VFX). Impact juice now comes from the projectile
@@ -550,6 +566,130 @@ namespace DeNelle.Village
             }
         }
 
+        // =====================================================================
+        //  WO-494 — Knight arena kit: dash / knockback / taunt effect shapes.
+        //  Built on the existing seams (NearestHostile, Blast, IDamageable CC,
+        //  HeroLocomotion.WarpTo, HeroHealth.Heal). All null-guarded + additive.
+        // =====================================================================
+
+        /// <summary>
+        /// WO-494 Heroic Leap — gap-closer. Dash to the nearest in-range hostile (or the
+        /// reticle-locked foe), land a single-target hit, and apply a brief Freeze (stun)
+        /// when dashing INTO a backline target (modelled as: the hit foe is interrupted).
+        /// Reuses NearestHostile + HeroLocomotion.WarpTo; no new movement system.
+        /// </summary>
+        private void ResolveDash(AbilityDef def, Vector3 origin)
+        {
+            float dmg = DamageFor(def);
+            float maxR = def.Range + _enemyHitRadius;
+            var foe = InReach(LockedTarget, origin, maxR) ? LockedTarget : NearestHostile(origin, maxR);
+            if (foe == null && AimPointOverride == null) foe = LiveBoss();
+
+            if (foe != null)
+            {
+                // Dash to just short of the foe (keep melee spacing), then strike.
+                Vector3 fp = foe.WorldPosition;
+                Vector3 dir = fp - origin; dir.y = 0f;
+                Vector3 landing = dir.sqrMagnitude > 0.01f
+                    ? fp - dir.normalized * Mathf.Min(1.6f, dir.magnitude)
+                    : origin;
+                if (_loco == null) _loco = GetComponent<HeroLocomotion>();
+                _loco?.WarpTo(landing);
+
+                foe.TakeDamage(dmg, DamageElement.Aether);
+                DeNelle.Core.Combat.DamageAttribution.Record(foe, HeroProgression.Id, dmg);
+                // Bonus vs backline: a stun/interrupt on the dashed-into target (Freeze = stun).
+                foe.ApplyStatus(StatusEffect.Freeze, 1.0f);
+                ReportRumble(dmg);
+            }
+            SpawnVfx(origin, def, 1.6f, foe?.WorldPosition);
+        }
+
+        /// <summary>
+        /// WO-494 Shield Bash — knockback cone + brief slow; interrupts a caster (Freeze)
+        /// and breaks a tank's guard. Reuses Blast for the cone damage; pushes survivors
+        /// out via a Slow + an away-impulse on any rigidbody, and Freeze to model the
+        /// cast interrupt. Cone is approximated as a forward half-radius blast.
+        /// </summary>
+        private void ResolveKnockback(AbilityDef def, Vector3 origin)
+        {
+            float dmg = DamageFor(def);
+            Vector3 fwd = transform.forward;
+            Vector3 centre = origin + fwd * (def.Range * 0.5f);
+            float r = def.Range + _enemyHitRadius;
+            int count = Physics.OverlapSphereNonAlloc(centre, r, _overlap, _enemyMask, QueryTriggerInteraction.Collide);
+            for (int i = 0; i < count; i++)
+            {
+                var target = AsHostile(_overlap[i]);
+                if (target == null) continue;
+                target.TakeDamage(dmg, DamageElement.None);   // physical knockback
+                DeNelle.Core.Combat.DamageAttribution.Record(target, HeroProgression.Id, dmg);
+                target.ApplyStatus(StatusEffect.Slow, 1.5f);   // brief slow
+                target.ApplyStatus(StatusEffect.Freeze, 0.4f); // interrupt a cast / break guard
+                // Physical knockback impulse on any rigidbody (null-safe; many enemies are kinematic).
+                var rb = _overlap[i].attachedRigidbody;
+                if (rb != null && !rb.isKinematic)
+                {
+                    Vector3 push = target.WorldPosition - origin; push.y = 0f;
+                    if (push.sqrMagnitude > 0.001f)
+                        rb.AddForce(push.normalized * 6f, ForceMode.VelocityChange);
+                }
+            }
+            ReportRumble(dmg);
+            SpawnVfx(centre, def, def.Range);
+        }
+
+        /// <summary>
+        /// WO-494 Defender's Call — taunt zone + temp shield. There is no Taunt status
+        /// primitive (StatusEffect = Slow/Freeze/Burn), so this models the "hold them on
+        /// me" intent by Slowing every nearby hostile (they stick to the Knight) and
+        /// grants the Knight a temp shield via a small self-heal. The AI-side taunt
+        /// re-target is owned by the enemy brain (separate system) — additive + safe here.
+        /// </summary>
+        private void ResolveTaunt(AbilityDef def, Vector3 origin)
+        {
+            float r = def.Range + _enemyHitRadius;
+            int count = Physics.OverlapSphereNonAlloc(origin, r, _overlap, _enemyMask, QueryTriggerInteraction.Collide);
+            for (int i = 0; i < count; i++)
+            {
+                var target = AsHostile(_overlap[i]);
+                if (target == null) continue;
+                // Hold nearby foes on the Knight for the zone duration (def.Freeze = seconds).
+                target.ApplyStatus(StatusEffect.Slow, Mathf.Max(2f, def.Freeze));
+            }
+            // Temp shield = a small self-heal (the temp-shield system is separate; this is the cheap stand-in).
+            var heroHp = GetComponent<HeroHealth>() ?? HeroHealth.Instance;
+            heroHp?.Heal(20f);
+            VFXManager.Play(VFXType.Impact_ShockwaveRing, origin + Vector3.up * 1.0f);
+            ReportRumble(20f);
+            SpawnVfx(origin, def, def.Range);
+        }
+
+        /// <summary>WO-494: the full damage chain (talent x level x timing x weapon) for a def's base damage.</summary>
+        private float DamageFor(AbilityDef def)
+        {
+            if (_progression == null) _progression = GetComponent<HeroProgression>();
+            float levelMult = _progression != null ? _progression.DamageMultiplier : 1f;
+            float dmg = def.Damage * HeroTalentModifiers.DamageMultiplier(_heroClass) * levelMult * _pendingTimingBonus * WeaponMult();
+            _pendingTimingBonus = 1f;
+            return dmg;
+        }
+
+        /// <summary>
+        /// WO-497 cheap wire: rumble on LANDING a hit (the existing HeroImpactFeedback.PlayHaptic
+        /// only fired when the hero TAKES damage). Scales intensity by the damage dealt. Null-safe:
+        /// resolved lazily, no-op without the component / a gamepad. Capped so a 600-dmg ult doesn't
+        /// max the motor for the whole duration.
+        /// </summary>
+        private HeroImpactFeedback _impactFeedback;
+        private void ReportRumble(float damage)
+        {
+            if (_impactFeedback == null) _impactFeedback = GetComponent<HeroImpactFeedback>();
+            if (_impactFeedback == null) return;
+            float intensity = Mathf.Clamp(0.15f + damage * 0.004f, 0.15f, 0.6f);
+            _impactFeedback.PlayHaptic(intensity, 0.10f);
+        }
+
         /// <summary>
         /// DEF (combat feel): launches a VISIBLE projectile (Ranger arrow / Mage-or-other
         /// spell orb) toward <paramref name="target"/> and invokes <paramref name="onArrive"/>
@@ -592,6 +732,7 @@ namespace DeNelle.Village
         {
             float r = radius + _enemyHitRadius;
             int count = Physics.OverlapSphereNonAlloc(centre, r, _overlap, _enemyMask, QueryTriggerInteraction.Collide);
+            bool anyHit = false;
             for (int i = 0; i < count; i++)
             {
                 var target = AsHostile(_overlap[i]);
@@ -602,7 +743,9 @@ namespace DeNelle.Village
                 DeNelle.Core.Combat.DamageAttribution.Record(target, HeroProgression.Id, damage);
                 if (freezeSeconds > 0f)
                     target.ApplyStatus(StatusEffect.Freeze, freezeSeconds);
+                anyHit = true;
             }
+            if (anyHit) ReportRumble(damage);   // WO-497: rumble on a connecting blast
         }
 
         /// <summary>

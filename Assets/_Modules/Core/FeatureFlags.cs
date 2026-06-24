@@ -152,12 +152,30 @@ namespace DeNelle.Core
         /// to disable the wounded swap (the orc keeps the healthy locomotion at all HP).</summary>
         public static bool EnemyInjuredStance => Get("enemyinjured", defaultOn: true);
 
+        /// <summary>WO-493 #5 / WO-497 — when ON (default), the HERO reads a wounded look + feel below the
+        /// low-HP cutoff (~30%): ActorAnimator.SetInjured drives the Injured locomotion swap on the hero
+        /// body, a screen-edge red vignette pulses (HeroInjuredVignette), an optional heartbeat cue plays,
+        /// and the hero moves slightly slower (HeroHealth.MoveSpeedMultiplier). Restored on heal above the
+        /// cutoff. Mirrors the EnemyInjuredStance polish on the enemy half. Default ON; PlayerPrefs
+        /// "ff.heroinjured" = 0 to disable (the hero keeps the healthy stance/speed at all HP).</summary>
+        public static bool HeroInjuredStance => Get("heroinjured", defaultOn: true);
+
         /// <summary>WO-491 — when ON (default), an enemy's RANGED/cast attack is ROOTED + telegraphed:
         /// the NavMeshAgent stops for the cast window (the caster commits, does not slide while casting)
         /// and a WindUp -> Cast animation + audio charge cue play so the strike is readable/dodgeable.
         /// When OFF the legacy instant ranged hit (no root, no telegraph) is restored. Default ON;
         /// PlayerPrefs "ff.enemyrootedcast" = 0 to disable.</summary>
         public static bool EnemyRootedCast => Get("enemyrootedcast", defaultOn: true);
+
+        /// <summary>WO-498 — when ON, the new 9-zone mobile battle HUD (<see cref="DeNelle.Village.Arena.BattleHud9Zone"/>)
+        /// spawns alongside <see cref="DeNelle.Village.Arena.BattleArenaHud"/> when a battle stages: a 3x3
+        /// tic-tac-toe layout (TL Knight HP+resources, TC enemy family role overview, TR timer+pause,
+        /// ML current-target portrait, MR quick-focus, BL joystick (mobile), BC basic attack pill,
+        /// BR ability arc with radial cooldown rings). Dark semi-transparent premium-fantasy panels
+        /// wired to HeroHealth / HeroAbilities+AbilityCatalog / HeroTargetIndicator. Default OFF — this is
+        /// the BONES (WO-498 overnight) that the owner finesses look/feel on tomorrow; togglable without a
+        /// rebuild. PlayerPrefs "ff.battlehud9zone" = 1 to preview.</summary>
+        public static bool BattleHud9Zone => Get("battlehud9zone", defaultOn: false);
 
         /// <summary>Global runtime kill-switch for ALL dev keyboard hotkeys (DevPanel F1, DebugCanvas
         /// F12, AdminOverlay Ctrl+Shift+A, the test spawners J/K/L, the tower dev harness B/J/K/N/U,

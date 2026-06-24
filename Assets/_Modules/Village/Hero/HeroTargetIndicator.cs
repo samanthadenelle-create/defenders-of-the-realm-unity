@@ -10,12 +10,15 @@
 // range (the same detection the hero's melee/ability sweeps use) and parks a ring
 // billboard over the current target's head.
 //
-// TARGET LOCK / CYCLE: by default the reticle tracks the NEAREST hostile. Press
-// Tab (keyboard) or the right shoulder (gamepad) to CYCLE to the next hostile in
-// range — that manual lock turns the reticle red and is fed to
-// HeroAbilities.AimPointOverride so ranged spells aim at it. The lock auto-clears
-// (back to nearest) when the target dies or leaves range. Self-installed on the
-// hero by HeroControlEnsurer — no scene edit, no art asset (ring drawn at runtime).
+// TARGET LOCK / CYCLE: by default the reticle tracks the NEAREST hostile. CYCLE to
+// the next hostile in range with the right shoulder (gamepad) or RIGHT-CLICK (desktop,
+// WO-497); that manual lock turns the reticle red and is fed to
+// HeroAbilities.AimPointOverride so ranged spells aim at it. WO-497 also adds a DIRECT
+// pick: TAP (mobile) or LEFT-click an enemy to lock THAT enemy (raycast on the Enemy
+// layer), bypassing the AUTO forward-arc/LoS gates like a manual cycle; a tap on empty
+// space clears the lock back to auto-nearest. The lock auto-clears (back to nearest)
+// when the target dies or leaves range. Self-installed on the hero by HeroControlEnsurer
+// — no scene edit, no art asset (ring drawn at runtime).
 //
 // The transparent-material setup mirrors PetDeployer.BuildSpriteBillboard, which
 // is proven to render in WebGL builds (URP/Unlit transparent, double-sided).
@@ -137,6 +140,19 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-497: TAP (mobile) / LEFT-tap-on-enemy direct lock takes priority — a tap ON an
+            // enemy collider locks THAT enemy directly (bypasses the AUTO forward-arc/LoS gates,
+            // like a manual cycle); a tap on EMPTY clears back to auto-nearest.
+            if (TapOrClickThisFrame(out Vector2 screenPos))
+            {
+                if (TryLockAtScreenPoint(screenPos)) return;   // hit an enemy → direct lock done
+                // tap on empty space → clear manual lock (revert to auto-nearest)
+                _locked = null;
+                return;
+            }
+
+            // WO-497: RIGHT-CLICK (desktop) cycles/switches the locked target, additive to the
+            // existing Tab/right-shoulder cycle (CyclePressed).
             if (CyclePressed()) CycleTarget();
         }
 
@@ -234,7 +250,58 @@ namespace DeNelle.Village
             // tracks the nearest hostile.
             var gp = Gamepad.current;
             if (gp != null && gp.rightShoulder.wasPressedThisFrame) return true;
+
+            // WO-497: RIGHT-CLICK (desktop) ALSO cycles/switches the locked target — additive
+            // to the gamepad shoulder. (A right-click does not carry a useful "what was under
+            // the cursor" intent here; it just advances the cycle, matching Tab/shoulder.)
+            var mouse = Mouse.current;
+            if (mouse != null && mouse.rightButton.wasPressedThisFrame) return true;
             return false;
+        }
+
+        // WO-497: was there a TAP (touch) or LEFT mouse click this frame? Returns the screen
+        // point so the caller can raycast it into the world for a direct enemy lock. Touch wins
+        // over mouse when both report (a touch device that also exposes a synthetic mouse).
+        private static bool TapOrClickThisFrame(out Vector2 screenPos)
+        {
+            screenPos = default;
+            var ts = Touchscreen.current;
+            if (ts != null && ts.primaryTouch.press.wasPressedThisFrame)
+            {
+                screenPos = ts.primaryTouch.position.ReadValue();
+                return true;
+            }
+            var mouse = Mouse.current;
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+            {
+                screenPos = mouse.position.ReadValue();
+                return true;
+            }
+            return false;
+        }
+
+        // WO-497: raycast a screen point into the world and, if it strikes an alive Hostile
+        // IDamageable, set it as the MANUAL lock directly (bypassing the AUTO forward-arc/LoS
+        // gates, like a Tab/shoulder cycle). Returns true when an enemy was locked. The raycast
+        // uses the Enemy layer mask so terrain/walls between the camera and the foe don't eat the
+        // pick; the ray length is bounded by the acquire range (no sniping off-screen mobs).
+        private bool TryLockAtScreenPoint(Vector2 screenPos)
+        {
+            if (_cam == null || !_cam.isActiveAndEnabled) _cam = ResolveCamera();
+            if (_cam == null) return false;
+
+            Ray ray = _cam.ScreenPointToRay(screenPos);
+            // Pick on the Enemy layer only — a wide pick range so a tap anywhere on the foe's
+            // body locks it; bound it generously past the acquire range for camera distance.
+            float maxDist = _acquireRange * 2f + 50f;
+            if (!Physics.Raycast(ray, out RaycastHit hit, maxDist, _enemyMask, QueryTriggerInteraction.Collide))
+                return false;
+
+            var d = hit.collider != null ? hit.collider.GetComponentInParent<IDamageable>() : null;
+            if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) return false;
+
+            _locked = d;   // direct manual lock — bypasses AUTO arc/LoS, like Tab
+            return true;
         }
 
         private void CycleTarget()

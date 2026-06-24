@@ -174,6 +174,11 @@ namespace DeNelle.Village
         // the hero root, so they're plain sibling GetComponent lookups.
         private HeroLocomotion     _loco;
         private HeroTargetIndicator _targetIndicator;
+
+        // WO-497 cheap wire: rumble on LANDING a melee hit. HeroImpactFeedback.PlayHaptic
+        // previously fired only when the hero TOOK damage (HeroHealth). Resolved lazily +
+        // null-safe (no component / no gamepad = silent no-op).
+        private HeroImpactFeedback _impactFeedback;
         private int   _comboIndex;
         private float _lastSwingTime;
         private const int   ComboLength    = 3;     // Knight melee combo swings
@@ -454,6 +459,7 @@ namespace DeNelle.Village
             float weaponMult = _gear != null ? _gear.WeaponMult : 1f;
 
             bool anyHit = false;
+            float lastHitDamage = 0f;   // WO-497: scales the landing rumble
             foreach (var col in hits)
             {
                 if (col == null) continue;
@@ -485,6 +491,7 @@ namespace DeNelle.Village
                 // which is acceptable — only enemies are hostile melee targets.)
                 damageable.TakeDamage(damage, DamageElement.None);
                 anyHit = true;
+                lastHitDamage = damage;
 
                 if (isPerfect)
                     TriggerPerfectHitFeedback(hitPos);
@@ -498,6 +505,11 @@ namespace DeNelle.Village
                 string cls = _abilities != null ? _abilities.HeroClass : null;
                 if (cls == "mage" || cls == "cleric") GameSfx.PlaySpellCast();
                 else GameSfx.PlaySwordClash();
+
+                // WO-497: rumble on the swing CONNECTING (was rumble-on-take-damage only).
+                // Intensity scales with the damage dealt; null-safe (no gamepad = no-op).
+                if (_impactFeedback == null) _impactFeedback = GetComponent<HeroImpactFeedback>();
+                _impactFeedback?.PlayHaptic(Mathf.Clamp(0.2f + lastHitDamage * 0.004f, 0.2f, 0.6f), 0.10f);
 
                 if (riposte)
                 {

@@ -65,6 +65,17 @@ namespace DeNelle.Editor
         private const string DeathClip     = "Shared_Death";
         private const string BlockClip     = "Shared_Block";
 
+        // WO-493 #5 / WO-497: HERO injured-stance locomotion. Reuses the same retargetable
+        // Humanoid injured clips the ENEMY half uses (Assets/Action/Enemies/injured*.fbx) —
+        // a wounded idle/limp/stagger sub-tree entered when the Injured bool is set (the
+        // hero drops below ~30% HP; HeroHealth drives ActorAnimator.SetInjured). Mirrors
+        // BuildOrcHumanoidController's InjuredLocomotion swap. Null-guarded: a missing clip
+        // falls back to the healthy locomotion so the state is never empty.
+        private static readonly string[] InjuredRoots = { "Assets/Action/Enemies/" };
+        private const string InjuredIdleClip = "injured idle";
+        private const string InjuredWalkClip = "injured walk";
+        private const string InjuredRunClip  = "injured run";
+
         // Directional death clips (DeathDir int: 0=Fall/centre, 1=Left, 2=Right). When
         // present, a "Death1"/"Death2" state is gated on Dead==true AND DeathDir==N so a
         // hit from the side topples the right way; the plain Death covers DeathDir 0.
@@ -207,6 +218,7 @@ namespace DeNelle.Editor
             ctrl.AddParameter("Dead",     AnimatorControllerParameterType.Bool);
             ctrl.AddParameter("DeathDir", AnimatorControllerParameterType.Int);
             ctrl.AddParameter("Victory",  AnimatorControllerParameterType.Trigger);
+            ctrl.AddParameter("Injured",  AnimatorControllerParameterType.Bool); // WO-493 #5 / WO-497: wounded-stance swap
 
             var sm = ctrl.layers[0].stateMachine;
 
@@ -239,6 +251,15 @@ namespace DeNelle.Editor
             if (added.Count == 0)
                 Debug.LogWarning($"[HeroAnimatorFactory] {spec.slug}: no locomotion clips found — " +
                                  "Locomotion state is empty.");
+
+            // ── WO-493 #5 / WO-497: Injured locomotion swap ────────────────────
+            // A SECOND 1-D blend tree on Speed (the wounded idle/limp/stagger),
+            // entered when Injured==true and returned when Injured==false — the hero
+            // reads "hurt" below ~30% HP (HeroHealth.UpdateInjuredState drives
+            // ActorAnimator.SetInjured). Mirrors BuildOrcHumanoidController's swap.
+            // Reuses the retargetable Humanoid injured clips from Action/Enemies/;
+            // falls back to the healthy locomotion clips so the state is never empty.
+            BuildInjuredLocomotion(ctrl, sm, locoState, idle, walk, run, spec);
 
             // ── Cast — Any → Cast on the trigger, returns to Locomotion ────────
             // WO-217: snappier — state.speed bumped + tighter exit so recovery is
@@ -366,6 +387,48 @@ namespace DeNelle.Editor
                       $"{(attackStates > 0 ? $" + Attack({attackStates})" : "")}" +
                       $"{(hit != null ? " + Hit" : "")}{(death != null ? " + Death" : "")}{(block != null ? " + Block" : "")}" +
                       $"{(victory != null ? " + Victory" : "")} → {spec.controllerPath}");
+        }
+
+        /// <summary>
+        /// WO-493 #5 / WO-497: builds the hero's Injured locomotion swap — a second 1-D
+        /// blend tree on Speed (wounded idle/limp/stagger) entered when Injured==true and
+        /// returned when Injured==false. Mirrors BuildOrcHumanoidController's InjuredLocomotion.
+        /// The injured idle/walk/run clips come from Action/Enemies/ (retargetable Humanoid);
+        /// any missing injured clip falls back to the matching healthy clip so the tree is
+        /// never empty (Injured then reads identical to Locomotion — a safe no-op visually).
+        /// </summary>
+        private static void BuildInjuredLocomotion(AnimatorController ctrl, AnimatorStateMachine sm,
+                                                   AnimatorState locoState, AnimationClip healthyIdle,
+                                                   AnimationClip healthyWalk, AnimationClip healthyRun,
+                                                   HeroSpec spec)
+        {
+            AnimationClip injIdle = LoadClip(InjuredIdleClip, InjuredRoots) ?? healthyIdle;
+            AnimationClip injWalk = LoadClip(InjuredWalkClip, InjuredRoots) ?? healthyWalk;
+            AnimationClip injRun  = LoadClip(InjuredRunClip,  InjuredRoots) ?? healthyRun;
+
+            var injuredState = sm.AddState("InjuredLocomotion");
+            var injTree = new BlendTree { name = "InjuredLocomotion", blendType = BlendTreeType.Simple1D,
+                                          blendParameter = "Speed", useAutomaticThresholds = false };
+            AssetDatabase.AddObjectToAsset(injTree, ctrl);
+            injuredState.motion = injTree;
+
+            int injChildren = 0;
+            // Match the healthy thresholds (idle@0 / walk@6 / run@9) so the swap reads at
+            // the same Speed bands the hero already feeds.
+            if (injIdle != null) { injTree.AddChild(injIdle, 0f); injChildren++; }
+            if (injWalk != null) { injTree.AddChild(injWalk, 6f); injChildren++; }
+            if (injRun  != null) { injTree.AddChild(injRun,  9f); injChildren++; }
+            if (injChildren == 0)
+                Debug.LogWarning($"[HeroAnimatorFactory] {spec.slug}: no injured/healthy locomotion " +
+                                 "clips — InjuredLocomotion state is empty.");
+
+            // Locomotion ⇄ InjuredLocomotion on the Injured bool.
+            var toInjured = locoState.AddTransition(injuredState);
+            toInjured.hasExitTime = false; toInjured.duration = 0.2f;
+            toInjured.AddCondition(AnimatorConditionMode.If, 0f, "Injured");
+            var fromInjured = injuredState.AddTransition(locoState);
+            fromInjured.hasExitTime = false; fromInjured.duration = 0.2f;
+            fromInjured.AddCondition(AnimatorConditionMode.IfNot, 0f, "Injured");
         }
 
         /// <summary>
