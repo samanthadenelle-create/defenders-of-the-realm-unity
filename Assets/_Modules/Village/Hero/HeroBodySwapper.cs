@@ -198,8 +198,9 @@ namespace DeNelle.Village
             }
 
             float targetH = (cls == HeroClass.Knight) ? TargetHeightMeters * 1.0286f : TargetHeightMeters;
-            // WO-326: -90f is the proven legacy forward-yaw for the Tripo/AccuRIG FBXs.
-            float forwardYaw = -90f;
+            // WO-326: -90f was the legacy forward-yaw for the Tripo/AccuRIG FBXs.
+            // Knight LOCKED via Offset Forge 2026-06-23: forwardYaw +15 (owner felt-verified perfect).
+            float forwardYaw = (cls == HeroClass.Knight) ? 15f : -90f;
             GameObject body = null;
             Guard.Try("HeroBody", "VisualFactory.Skin (legacy Resources)", () =>
             {

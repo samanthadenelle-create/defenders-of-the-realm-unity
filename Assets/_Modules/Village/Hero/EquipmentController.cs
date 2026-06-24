@@ -157,8 +157,8 @@ namespace DeNelle.Village
         private static WeaponVisual Shield(string mesh) => new WeaponVisual
         {
             mesh = mesh, leftHand = true, kind = WeaponClass.Shield,   // shields -> LeftHand per spec
-            gripPos = new Vector3(-0.05f, 0f, 0f), gripEuler = new Vector3(135f, 170f, -45f),  // owner felt-test 2026-06-23: shield Z -45 (was 90); Y+180; earlier X+135 (orig (0,-10,0)) -- UNVERIFIED, confirm next build
-            heldLength = 0.55f, tint = new Color(0.58f, 0.60f, 0.64f)
+            gripPos = new Vector3(-0.05f, 0f, 0f), gripEuler = new Vector3(-58f, 16f, -90f),  // Offset Forge + hand-bone nudge 2026-06-23: shield_A rot (-58,16,-90).
+            heldLength = 0.48f, tint = new Color(0.58f, 0.60f, 0.64f)   // owner felt-test 2026-06-23: shield renders a little smaller (was 0.55)
         };
 
         // Shallow copy of a preset so the Addressable/fallback paths can flip `native` WITHOUT

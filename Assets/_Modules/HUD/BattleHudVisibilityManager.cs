@@ -297,8 +297,13 @@ namespace DeNelle.HUD
             // sits above the town/inVillage fallthrough so the battle HUD wins.
             if (IsEnemyOwnedScene()) return HudMode.Battle;
 
-            bool inVillage = _hud != null && _hud.InVillage;
-            return inVillage ? HudMode.Town : HudMode.Hidden;
+            // Owner 2026-06-23 (felt-test: "we lose the HUD as I slide to OuterWorld; it returns once
+            // I step back in the castle"): OuterWorld is now ACTIVE gameplay (encounters + harvesting),
+            // so the HUD must persist past the town ring instead of vanishing the instant the hero
+            // crosses the seam. Non-combat hub -> Town HUD whether the hero is in-ring OR out in
+            // OuterWorld. (Was: inVillage ? Town : Hidden -- a radial hide from when OuterWorld was
+            // empty transit. The radial InVillage check no longer gates HUD visibility.)
+            return HudMode.Town;
         }
 
         /// <summary>True when the active scene is enemy-owned (WO-470). Core-clean —

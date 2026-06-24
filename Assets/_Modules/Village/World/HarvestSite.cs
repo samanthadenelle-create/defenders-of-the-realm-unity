@@ -236,7 +236,8 @@ namespace DeNelle.Village.World
             // through to the primitive post + per-resource top below (never breaks the demo).
             string modelPath = ResourceModelPath(ResourceType);
             var model = string.IsNullOrEmpty(modelPath) ? null : VisualFactory.Skin(transform, modelPath,
-                new SkinOptions { FitLargest = 2.4f, SeatOnGround = true, FixTripoMaterials = true });
+                new SkinOptions { FitLargest = 2.4f, SeatOnGround = true, FixTripoMaterials = true,
+                    LocalRotation = Quaternion.Euler(0f, 180f, -90f) });   // Offset Forge 2026-06-23: Tripo resource-model orientation fix (all harvest nodes).
             if (model != null)
             {
                 model.name = "HarvestVisual_Model";

@@ -21,6 +21,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -45,10 +46,14 @@ namespace DeNelle.Village
             if (go == null) return;
             if (!TryGetWorldBounds(go, out Bounds b)) return;
 
-            float groundY = ResolveGroundY(go.transform, b, fallbackGroundY);
+            float groundY = ResolveGroundY(go.transform, b, fallbackGroundY, out bool hitFloor, out float rawHitY);
             float gap = b.min.y - groundY;          // >0 = feet float above floor; <0 = sunk in
+            // vendor-sink triage (2026-06-23): one-shot trace of the seat decision (remove once stable).
+            string state = gap < 0f ? "SUNK-below-floor" : "float-above";
+            FlowTrace.Step("NpcSeat", $"'{go.name}': boundsMinY={b.min.y:F2} hitFloor={hitFloor} hitY={rawHitY:F2} fallbackY={fallbackGroundY:F2} -> groundY={groundY:F2} gap={gap:F2} ({state})");
             if (Mathf.Abs(gap) > 0.01f)
                 go.transform.position -= new Vector3(0f, gap, 0f);
+            FlowTrace.Step("NpcSeat", $"'{go.name}': seated final pos.y={go.transform.position.y:F2}");
         }
 
         /// <summary>Combined world-space renderer bounds of the body + its children.</summary>
@@ -71,7 +76,7 @@ namespace DeNelle.Village
         /// from just above the body, ignoring this body's own (trigger) colliders.
         /// Falls back to <paramref name="fallbackGroundY"/> when nothing is hit.
         /// </summary>
-        private static float ResolveGroundY(Transform self, Bounds b, float fallbackGroundY)
+        private static float ResolveGroundY(Transform self, Bounds b, float fallbackGroundY, out bool hitFloor, out float rawHitY)
         {
             Vector3 origin = new Vector3(b.center.x, b.max.y + 1f, b.center.z);
             float distance = b.size.y + 5f;
@@ -86,7 +91,15 @@ namespace DeNelle.Village
                 if (h.collider != null && h.collider.transform.IsChildOf(self)) continue;
                 if (h.point.y > best) { best = h.point.y; found = true; }
             }
-            return found ? best : fallbackGroundY;
+            hitFloor = found;
+            rawHitY = found ? best : fallbackGroundY;
+            // FIX (2026-06-23, data-proven via [Flow:NpcSeat]): NEVER seat below the navmesh-sampled
+            // ground. The downward ray can punch through the visible floor and hit a foundation/base
+            // collider beneath it (castle courtyard: a plane at y=-0.55 under tiles whose navmesh sits
+            // at y=0.06), which dropped every vendor ~0.5m underground. A hit ABOVE the navmesh is a
+            // real step/platform (keep it, e.g. Lumbermill at +1.08); a hit BELOW is a basement (ignore
+            // it, use the navmesh floor). Clamp the resolved ground to the fallback.
+            return found ? Mathf.Max(best, fallbackGroundY) : fallbackGroundY;
         }
     }
 }

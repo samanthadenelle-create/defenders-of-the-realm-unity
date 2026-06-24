@@ -292,6 +292,7 @@ namespace DeNelle.Village
                 go.transform.position = new Vector3(_gatePos.x, _gatePos.y, deckCentreZ);
 
                 var trig = go.AddComponent<SceneTransitionTrigger>();
+                trig.suppressPrompt  = true;   // passive walk-across seam: HeroLinkCrossing crosses; no "Travel to..." button (owner 2026-06-23).
                 trig.targetSceneName = _recipe.to;
                 trig.targetPosition  = _landing;
                 trig.loadAdditive    = !string.Equals(_recipe.loadMode, "single", System.StringComparison.OrdinalIgnoreCase);

@@ -43,6 +43,11 @@ namespace DeNelle.Village
                  "Empty = the default friendly-destination label.")]
         public string promptOverride = "";
 
+        [Tooltip("When true this trigger shows NO confirm prompt/button. Used by passive walk-across " +
+                 "seams (the runtime RegionGate) where HeroLinkCrossing handles the cross, so the " +
+                 "'Travel to <dest>' button is redundant verbiage that breaks the seamless feel.")]
+        public bool suppressPrompt = false;
+
         // CONFIRM-TO-CROSS is now the ONLY behaviour (owner directive 2026-06-18, root-cause
         // fix). The serialized field is RETAINED only so the baked scene components keep
         // deserializing without a missing-field warning — it is NO LONGER read by the runtime.
@@ -296,6 +301,14 @@ namespace DeNelle.Village
 
             // Not the winner → yield the shared prompt to the nearer seam.
             if (nearest != this)
+            {
+                if (_promptShown) { MobileInteractButton.Release(this); _promptShown = false; }
+                return;
+            }
+
+            // Passive walk-across seam (RegionGate): HeroLinkCrossing handles the cross, so show NO
+            // prompt -- the button is redundant verbiage that breaks the seamless feel (owner 2026-06-23).
+            if (suppressPrompt)
             {
                 if (_promptShown) { MobileInteractButton.Release(this); _promptShown = false; }
                 return;

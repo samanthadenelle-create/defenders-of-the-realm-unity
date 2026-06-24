@@ -43,7 +43,7 @@ namespace DeNelle.Village
         // "means something" if you wandered into one too strong. Contact damage ZERO
         // (hook, not a combatant) -- engagement, not death, is what the rep delivers.
         private const float RepChaseSpeed = 6.3f;   // ~+5% over the hero's 6.0
-        private const int   RepCount      = 2;
+        private const int   RepCount      = 8;   // owner 2026-06-23: scatter roaming reps (8 for the verify lap; proximity-realization next so this can scale to 20+ cheaply)
 
         private readonly List<GameObject> _reps = new List<GameObject>();
 
@@ -160,47 +160,40 @@ namespace DeNelle.Village
             if (hero == null)
                 FlowTrace.Warn("Encounter", $"SpawnRep #{index}: no 'Player'-tagged hero found — anchoring rep to world origin (it may strand far from the player).");
 
-            // Default placement: a comfortable distance from the hero, spread by index.
-            float ang = (index * 137f) * Mathf.Deg2Rad;
-            Vector3 anchor = origin + new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * (26f + 6f * index);
-
-            // FINDABILITY PLACEMENT (arena felt-verify, 2026-06-23): rep #0 must spawn where the hero
-            // can WALK STRAIGHT TO IT without crossing the south castle seam. (The owner saw a
-            // south-placed rep but it sat on the OTHER SIDE of the gate — a different navmesh island,
-            // unreachable while the seam is narrow.) So pick the FIRST short courtyard offset (biased
-            // AWAY from the south gate, avoiding -Z) that BOTH snaps to navmesh AND yields a
-            // PathComplete path from the hero — proving it's on the hero's OWN island. REVERSIBLE:
-            // delete this branch to restore the angular spread for ALL reps.
-            if (index == 0 && hero != null)
+            // SCATTER (owner 2026-06-23 "20 random ones roaming everywhere"): each rep takes a RANDOM
+            // reachable navmesh point in a ring around the hero, so they populate the world and you can
+            // always bump into one. Validate PathComplete (up to 8 tries) so a rep never strands on an
+            // island across the seam. Each rep then ROAMS its leash (RepEngageWatcher) until it sees you,
+            // then chases. (Replaces the old single-rep courtyard placement; THIS is the spread.)
+            float fang = UnityEngine.Random.Range(0f, 360f) * Mathf.Deg2Rad;
+            Vector3 anchor = origin + new Vector3(Mathf.Cos(fang), 0f, Mathf.Sin(fang)) * UnityEngine.Random.Range(14f, 55f);
+            if (hero != null)
             {
-                Vector3[] candidates =
-                {
-                    new Vector3( 10f, 0f,   0f),   // east
-                    new Vector3(-10f, 0f,   0f),   // west
-                    new Vector3(  0f, 0f,  10f),   // north (away from the south gate)
-                    new Vector3(  8f, 0f,   8f),   // NE
-                    new Vector3( -8f, 0f,   8f),   // NW
-                    new Vector3( 12f, 0f,   0f),   // east, a touch farther
-                    new Vector3(-12f, 0f,   0f),   // west, a touch farther
-                };
-                bool placed = false;
                 var path = new UnityEngine.AI.NavMeshPath();
-                foreach (var off in candidates)
+                for (int attempt = 0; attempt < 8; attempt++)
                 {
-                    Vector3 cand = origin + off;
-                    if (!UnityEngine.AI.NavMesh.SamplePosition(cand, out var ch, 6f, UnityEngine.AI.NavMesh.AllAreas))
-                        continue;
+                    float a = UnityEngine.Random.Range(0f, 360f) * Mathf.Deg2Rad;
+                    float dist = UnityEngine.Random.Range(14f, 55f);
+                    Vector3 cand = origin + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * dist;
+                    if (!UnityEngine.AI.NavMesh.SamplePosition(cand, out var ch, 8f, UnityEngine.AI.NavMesh.AllAreas)) continue;
+                    // CASTLE = SAFE (owner 2026-06-23): only place reps in an OuterWorld roster region,
+                    // never inside the castle footprint (enemies can't reliably traverse the seam navmesh).
+                    // ===== V2 TODO (owner wants to RESOLVE this, not now) =====
+                    // The castle-safe rule is currently a WORKAROUND for a navmesh limitation: enemy
+                    // agents don't reliably path ACROSS the RegionGate seam (separate navmesh islands +
+                    // the hero warp-crossing, not an agent-walkable link). V2: stitch/link the navmesh
+                    // across the seam (NavMeshLink the agents actually traverse) so reps CAN pursue the
+                    // hero between regions -- then "castle = safe" becomes a deliberate DESIGN choice
+                    // (e.g. a warded threshold), not a tech limitation, and this OuterWorld-only spawn
+                    // gate + the chase-stalls-at-seam behaviour can be lifted/retuned.
+                    bool inOuter = false;
+                    Guard.Try("Encounter", "rep zone gate", () => inOuter =
+                        DeNelle.Core.World.RegionSpawnTable.HasRoster(DeNelle.Core.World.ZoneManager.GetZone(ch.position)));
+                    if (!inOuter) continue;
                     if (UnityEngine.AI.NavMesh.CalculatePath(origin, ch.position, UnityEngine.AI.NavMesh.AllAreas, path)
                         && path.status == UnityEngine.AI.NavMeshPathStatus.PathComplete)
-                    {
-                        anchor = ch.position;
-                        placed = true;
-                        FlowTrace.Step("Encounter", $"SpawnRep #0: REACHABLE test-placement at {anchor} (offset {off} from hero {origin}, path PathComplete) — same-island courtyard, no seam crossing. Revert this branch for angular spread.");
-                        break;
-                    }
+                    { anchor = ch.position; break; }
                 }
-                if (!placed)
-                    FlowTrace.Warn("Encounter", $"SpawnRep #0: no PathComplete courtyard offset found near hero {origin} — falling back to angular anchor {anchor} (may be unreachable; check bake/seam).");
             }
 
             // Belt-and-suspenders (data 2026-06-23): snap the anchor onto the baked navmesh so the
@@ -230,8 +223,12 @@ namespace DeNelle.Village
                 if (enemy == null) return;
                 enemy.gameObject.name = $"OrcRep_{index}";
                 enemy.Configure($"orc-rep-{index}", def, null);   // no Heart -> it wanders its tether + aggros the hero
-                enemy.SetBrainTargetPosition(anchor);             // tether: wander around its spawn until it sees you
-                enemy.gameObject.AddComponent<EnemyBrain>().Role = EnemyRole.DPS;
+                enemy.SetBrainTargetPosition(anchor);             // tether: idle at its spawn until it sees you
+                // NO EnemyBrain (fix 2026-06-23 "can't find the orc"): a DPS brain calls
+                // SetBrainTargetPosition(null) EVERY frame (DPS returns no destination), which CLEARED
+                // RepEngageWatcher's chase target each frame -> the rep never actually chased. The
+                // RepEngageWatcher now fully owns the rep: tether (above) until aggro, then it drives
+                // the brain-position override onto the hero uncontested so the orc runs you down.
                 enemy.gameObject.AddComponent<RepEngageWatcher>().Init(OrcFamily, ZoneThreatAt(anchor));
             });
 
@@ -283,12 +280,17 @@ namespace DeNelle.Village
 
         private const float AggroRange  = 22f;  // wide -- "they see us" + chase begins
         private const float EngageRange = 2.6f; // contact -> transition
+        private const float LeashRadius = 14f;  // wander this far from spawn until aggro
+
+        private Vector3 _leashCenter;           // spawn point -- centre of the wander leash
+        private float   _roamRepathAt;          // next time to pick a new roam point
 
         public void Init(string[] family, int threat)
         {
             _family = (family != null && family.Length > 0) ? family : new[] { "orc-warrior" };
             _threat = Mathf.Max(1, threat);
             _enemy = GetComponent<Enemy>();
+            _leashCenter = transform.position;                    // wander leash centred on the spawn
             if (_enemy != null) _enemy.Damaged += OnRepDamaged;   // hero attacked the rep -> engage
         }
 
@@ -303,6 +305,21 @@ namespace DeNelle.Village
         {
             if (_engaged || !FeatureFlags.OverworldEncounter) return;
 
+            // FALL-THROUGH GUARD (owner 2026-06-23 "they fall through ground when I change zones"):
+            // a zone/navmesh swap can drop a NavMeshAgent below the floor. If a rep falls below y=-2,
+            // re-snap it onto the navmesh AND log it -- self-heals, and PROVES whether the fall is real.
+            if (transform.position.y < -2f)
+            {
+                Guard.Try("Encounter", "rep re-seat", () =>
+                {
+                    if (UnityEngine.AI.NavMesh.SamplePosition(transform.position, out var hit, 20f, UnityEngine.AI.NavMesh.AllAreas))
+                    {
+                        transform.position = hit.position;
+                        FlowTrace.Warn("Encounter", $"rep '{gameObject.name}' fell below y=-2 -> re-seated onto navmesh at {hit.position}.");
+                    }
+                });
+            }
+
             var hero = GameObject.FindWithTag("Player");
             if (hero == null) return;
             float d = Vector3.Distance(hero.transform.position, transform.position);
@@ -314,7 +331,37 @@ namespace DeNelle.Village
                 FlowTrace.Step("Encounter", "rep aggro -> chase sting ('they see us').");
             }
 
+            // ROAM until aggro, then CHASE -- "a wandering leash till it goes to battle" (owner 2026-06-23).
+            // The rep drives Enemy's brain-position override (no EnemyBrain to clear it): a random leash
+            // point while idle, the hero once it sees you. +5% MoveSpeed guarantees the chase closes to
+            // EngageRange, so the orc runs you down instead of being left behind.
+            if (_enemy != null)
+            {
+                if (_stung)
+                    Guard.Try("Encounter", "rep chase", () => _enemy.SetBrainTargetPosition(hero.transform.position));
+                else if (Time.time >= _roamRepathAt)
+                {
+                    Vector3 roam = PickRoamPoint();
+                    Guard.Try("Encounter", "rep roam", () => _enemy.SetBrainTargetPosition(roam));
+                    _roamRepathAt = Time.time + UnityEngine.Random.Range(2.5f, 5f);
+                }
+            }
+
             if (d <= EngageRange) Engage();
+        }
+
+        // Random navmesh point within the leash of the spawn -- the wander target while idle.
+        private Vector3 PickRoamPoint()
+        {
+            Vector3 p = _leashCenter;
+            Guard.Try("Encounter", "roam pick", () =>
+            {
+                Vector2 r = UnityEngine.Random.insideUnitCircle * LeashRadius;
+                Vector3 cand = _leashCenter + new Vector3(r.x, 0f, r.y);
+                if (UnityEngine.AI.NavMesh.SamplePosition(cand, out var hit, 6f, UnityEngine.AI.NavMesh.AllAreas))
+                    p = hit.position;
+            });
+            return p;
         }
 
         private void Engage()
