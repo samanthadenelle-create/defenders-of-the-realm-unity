@@ -502,8 +502,32 @@ namespace DeNelle.Village
             }
 
             HumanBodyBones boneId = vis.leftHand ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand;
-            Transform hand = FlowTrace.Try("Equip", $"GetBoneTransform({boneId})",
-                () => _animator.GetBoneTransform(boneId), null);
+
+            // ── INSTANTIATION-TIME ATTACH OVERRIDE (WO-510 slice 1) ───────────────────
+            // An OPTIONAL rig-profiles.json may name the attach transform by hierarchy path
+            // (rig-agnostic — we never rename the model's bones). The override is AUTHORITATIVE;
+            // the humanoid avatar (below) is the FALLBACK. ZERO behaviour change when no profile
+            // exists. heroRoot = the GameObject owning the Animator avatar we seat on; rigId =
+            // its name (the model/prefab name key, e.g. "Knight"). A dead override path SCREAMS
+            // (FlowTrace.Fail) then falls through to the avatar — never silently swallowed.
+            GameObject heroRoot = _animator.gameObject;
+            string rigId = heroRoot.name;
+            Transform hand = null;
+            if (RigAttachmentRegistry.TryResolve(heroRoot, rigId, vis.leftHand, out var overrideAnchor, out var how))
+            {
+                hand = overrideAnchor;
+                FlowTrace.Step("Offset", $"attach rig={rigId} hand={(vis.leftHand ? "L" : "R")} -> '{hand.name}' (via json-override)");
+            }
+            else
+            {
+                if (how != null && how.StartsWith("missing"))
+                    FlowTrace.Fail("Offset", $"attach rig={rigId} hand={(vis.leftHand ? "L" : "R")} override path absent in model ({how}); falling back to avatar");
+
+                hand = FlowTrace.Try("Equip", $"GetBoneTransform({boneId})",
+                    () => _animator.GetBoneTransform(boneId), null);
+                FlowTrace.Step("Offset", $"attach rig={rigId} hand={(vis.leftHand ? "L" : "R")} -> '{(hand != null ? hand.name : "<null>")}' (via avatar)");
+            }
+
             if (hand == null)
             {
                 // LOUD: a Humanoid rig with a missing hand bone is exactly why the companion bow
@@ -1071,8 +1095,27 @@ namespace DeNelle.Village
                 return;
             }
 
-            Transform hand = FlowTrace.Try("Equip", "GetBoneTransform(LeftHand)",
-                () => _animator.GetBoneTransform(HumanBodyBones.LeftHand), null);
+            // ── INSTANTIATION-TIME ATTACH OVERRIDE (WO-510 slice 1) ───────────────────
+            // Off-hand (shield) always seats on the LEFT hand; consult the rig-profiles.json
+            // override (leftHand) first, authoritative over the humanoid avatar. ZERO change
+            // when no profile exists. A dead override path SCREAMS then falls to the avatar.
+            GameObject heroRoot = _animator.gameObject;
+            string rigId = heroRoot.name;
+            Transform hand = null;
+            if (RigAttachmentRegistry.TryResolve(heroRoot, rigId, true, out var overrideAnchor, out var how))
+            {
+                hand = overrideAnchor;
+                FlowTrace.Step("Offset", $"attach rig={rigId} hand=L -> '{hand.name}' (via json-override)");
+            }
+            else
+            {
+                if (how != null && how.StartsWith("missing"))
+                    FlowTrace.Fail("Offset", $"attach rig={rigId} hand=L override path absent in model ({how}); falling back to avatar");
+
+                hand = FlowTrace.Try("Equip", "GetBoneTransform(LeftHand)",
+                    () => _animator.GetBoneTransform(HumanBodyBones.LeftHand), null);
+                FlowTrace.Step("Offset", $"attach rig={rigId} hand=L -> '{(hand != null ? hand.name : "<null>")}' (via avatar)");
+            }
             if (hand == null)
             {
                 FlowTrace.Fail("Equip", $"Humanoid rig on '{name}' has NO LeftHand bone — " +
