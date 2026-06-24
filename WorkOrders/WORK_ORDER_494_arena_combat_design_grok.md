@@ -46,3 +46,71 @@ The orc family = a COORDINATED threat that rewards smart play:
   mechanics it rides on. Roles (mage/tank/warrior) exist; HEALER is implied here — confirm if the family
   includes a healer or add one. Mobile-first: big clear ability buttons, tap-to-priority-target, one-tap ult.
 - Cross-check against the immersion-research agent's takeaways (Fallout/Clash/WC3/SC) — merge, don't duplicate.
+
+---
+
+## DEEP DIVE (Grok expanded, 2026-06-23) — full mobile-first battle design
+**Core philosophy:** dynamic positioning in OPEN space replaces chokepoints; role counterplay makes each
+family learnable; juicy mobile feedback keeps it satisfying on touch.
+
+### Enemy family roles (visual + behavior + spawn)
+- **Tank** — big shield icon, heavy armor glow; high HP, taunts Knight, charges with knock-up; stays
+  BETWEEN Knight and backline.
+- **Healer** — bright green cross + pulsing aura; channels big heals + occasional self-shield; stays back,
+  RUNS if focused. (Interrupt/focus-kill first.)
+- **Wizard** — glowing staff, purple energy buildup; slow but devastating AoE / targeted burst; positions
+  for coverage, VULNERABLE while charging.
+- **DPS** — dual daggers/bow, red trails; fast attacks, flanks, ranged poke; circles to backstab.
+- **Spawn:** start SPREAD in the natural terrain (behind trees/rocks — initial surprise); CONVERGE on the
+  Knight after 3-5s. (Ties to the WO-495 treeline + the bigger 60x48 arena.)
+
+### Knight kit (small, high-impact, positioning/timing-rewarding)
+- **Dash / gap-closer** — tap+direction-swipe to a target/location; BONUS dmg dashing to Healer/Wizard.
+- **Knockback / repel** — swipe to push in a cone/circle; breaks Tank protection, knocks Wizard out of cast.
+- **Taunt / zone** — short area forcing Tank/DPS onto you; buys time to focus Healer (protects future pets).
+- **Ultimate "Heroic Strike"** — brief charge → massive AoE/nuke; EXTRA dmg on a low-HP Healer / interrupted Wizard.
+
+### Mobile controls
+Move = tap ground (path-preview line). Basic = auto / tap enemy. Abilities = 4 large bottom-screen buttons
+with cooldown rings + icons. Target priority = tap enemy portrait OR a "Focus Healer" button. One-tap ult
+(+ optional direction swipe).
+
+### Pacing / phases / win
+45-90s fights, phases: **Open** (family converges) → **Burst** (Wizard charges) → **Sustain** (Healer ramps).
+Win = defeat all; BONUS for Healer-first; PERFECT run (no death + all interrupts) = extra SKR / cosmetic drop.
+
+### Post-fight screen (important on mobile)
+"Great positioning — Healer interrupted 3x!" + performance STARS + reward breakdown + Retry / Continue Adventure.
+
+### Visual/audio polish (premium feel)
+Enemy health bars with floating role icons; Wizard cast = screen-edge PURPLE tint + warning; hit feedback =
+camera shake + SLOW-MO on big interrupts + satisfying "thud"; environment = destructible rocks/trees for
+temporary cover / AoE clears.
+
+### Build-first menu (Grok's suggested entry points — owner to pick)
+1. Ability System skeleton (Knight kit C# with synergies). ← spec'd below
+2. Enemy family spawner (roles + simple AI behaviors).
+3. Battle UI layout (mobile buttons + targeting).
+4. Visual feedback package (VFX/particle drop-ins).
+
+---
+
+## KNIGHT ABILITY KIT — cooldown spec (Grok, 2026-06-23) — BUILD-READY
+Tight 4-ability touch kit for 45-90s fights; cooldowns tuned so each gets 2-4 uses/fight with meaningful
+positioning windows. Each ability counters specific family roles.
+
+| Ability | CD | Uses/fight | Best vs | Effect | Mobile control |
+|---|---|---|---|---|---|
+| **Heroic Leap** (dash) | 6s | 3-4 | Healer/Wizard | dash to loc/enemy; **bonus dmg + stun** if dashing into Healer/Wizard | tap ground/enemy → swipe for direction boost |
+| **Shield Bash** (knockback) | 9s | 2-3 | Wizard/Tank | cone/circle knockback + brief slow; breaks Tank protection, **interrupts Wizard cast** | tap button + swipe for cone |
+| **Defender's Call** (taunt/zone) | 12s | 2 | Tank/DPS swarm | short-area taunt forcing Tank/DPS onto you + temp shield | tap to place zone |
+| **Radiant Strike** (ult) | 35-45s | 1-2 | Healer priority | charge 1.5s → massive AoE/nuke; **bonus dmg** on low Healer / interrupted Wizard | big button + charge bar → tap to confirm |
+
+**Synergy/reward combos:**
+- Dash → Knockback to ISOLATE the Healer.
+- Taunt the Tank → Ult the Healer = massive reward.
+- Interrupt Wizard cast with Knockback → bonus SKR / **"Perfect Counter"** popup.
+
+**Mobile UI:** bottom row of 4 large buttons + cooldown overlay (dim + timer text); ability trails; screen
+shake on Ult; slow-mo on big interrupts. **Balance:** start with these CDs, shave 1-2s off Dash/Knock if
+fights feel slow. Ties to WO-496 #1 (fire feedback on the button TAP, not on resolution) + #5 (reserve juice).
