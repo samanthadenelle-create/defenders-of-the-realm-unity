@@ -174,8 +174,12 @@ namespace DeNelle.Core
         /// BR ability arc with radial cooldown rings). Dark semi-transparent premium-fantasy panels
         /// wired to HeroHealth / HeroAbilities+AbilityCatalog / HeroTargetIndicator. Default OFF — this is
         /// the BONES (WO-498 overnight) that the owner finesses look/feel on tomorrow; togglable without a
-        /// rebuild. PlayerPrefs "ff.battlehud9zone" = 1 to preview.</summary>
-        public static bool BattleHud9Zone => Get("battlehud9zone", defaultOn: false);
+        /// rebuild. PlayerPrefs "ff.battlehud9zone" = 1 to preview.
+        /// APPLIED 2026-06-23 (owner: "the new 9-slice HUD should be applied"): default flipped ON
+        /// so the 9-zone bones spawn on every BattleArena fight via BattleArenaHud.Create ->
+        /// BattleHud9Zone.Create. The owner finesses look/feel on top (WO-507). To revert to the
+        /// legacy overlay only: PlayerPrefs "ff.battlehud9zone" = 0.</summary>
+        public static bool BattleHud9Zone => Get("battlehud9zone", defaultOn: true);
 
         /// <summary>Global runtime kill-switch for ALL dev keyboard hotkeys (DevPanel F1, DebugCanvas
         /// F12, AdminOverlay Ctrl+Shift+A, the test spawners J/K/L, the tower dev harness B/J/K/N/U,

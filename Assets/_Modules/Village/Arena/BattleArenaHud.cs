@@ -31,7 +31,28 @@ namespace DeNelle.Village.Arena
         private Image _enemyFill;
         private Text _remain;
         private GameObject _liveGroup;   // primary bar + flee (hidden when the banner shows)
+        private Image _primaryPanel;     // the TOP-CENTRE title + enemy bar (suppressed when the 9-zone owns the top)
         private Action _onFlee;
+
+        // Flee tap-to-confirm (anti-misfire). First tap ARMS the button ("Tap again to flee?")
+        // for a short window; a second tap inside the window actually flees; otherwise it
+        // disarms back to "Flee". This prevents an accidental tap from bailing the fight.
+        private Button _fleeBtn;
+        private Image _fleePanel;
+        private Text _fleeLabel;
+        private bool _fleeArmed;
+        private System.Collections.IEnumerator _fleeDisarm;
+        private const float FleeConfirmWindow = 2f;   // seconds the armed state stays live
+
+        // Owner-tunable Flee anchor: TOP-LEFT corner, well away from the bottom-right ability
+        // arc / basic-attack / joystick zones. Small + de-emphasised (a retreat, not a primary
+        // action). anchoredPosition is from the top-left pivot (x right, y down).
+        private static readonly Vector2 FleePivot  = new Vector2(0f, 1f);   // top-left anchor
+        private static readonly Vector2 FleeOffset = new Vector2(96f, -52f);// in from the corner
+        private static readonly Vector2 FleeSize   = new Vector2(140f, 48f);
+
+        private static readonly Color FleeIdle  = new Color(0.42f, 0.20f, 0.20f, 0.78f); // de-emphasised
+        private static readonly Color FleeArmed = new Color(0.85f, 0.30f, 0.26f, 0.95f); // bright "confirm"
 
         // WO-498 — the new 9-zone mobile battle HUD bones. Spawned alongside this overlay
         // when ff.battlehud9zone is ON (BattleHud9Zone.Create self-no-ops + returns null when
@@ -53,7 +74,23 @@ namespace DeNelle.Village.Arena
             // WO-498 — spawn the 9-zone mobile battle HUD bones alongside (flag-gated; returns
             // null + no-ops when ff.battlehud9zone is OFF, so the legacy overlay is unchanged).
             hud._hud9 = BattleHud9Zone.Create();
+            // WO-507 (avoid a DOUBLE HUD): when the 9-zone is APPLIED it owns the top of the
+            // screen (Zone 2 enemy family overview @ top-centre, Zone 3 timer @ top-right) and the
+            // hero/ability readouts. So SUPPRESS this overlay's duplicate TOP-CENTRE primary panel
+            // (encounter title + enemy HP bar + "N foes remain"). We KEEP the pieces the 9-zone
+            // bones DON'T have: the top-left Flee+confirm (separate corner) and the centre
+            // victory/defeat RESULT banner + stars (ShowResult). When the 9-zone is OFF the legacy
+            // overlay is unchanged (the primary panel stays).
+            if (hud._hud9 != null) hud.SuppressPrimaryForHud9();
             return hud;
+        }
+
+        /// <summary>WO-507 — hide the duplicate top-centre primary panel when the 9-zone HUD
+        /// is active (it provides the enemy family overview + timer up top). Flee + the result
+        /// banner are untouched, so nothing is lost.</summary>
+        private void SuppressPrimaryForHud9()
+        {
+            if (_primaryPanel != null) _primaryPanel.gameObject.SetActive(false);
         }
 
         public void SetFleeHandler(Action onFlee) => _onFlee = onFlee;
@@ -137,6 +174,7 @@ namespace DeNelle.Village.Arena
             // TOP CENTRE: encounter title + enemy HP bar + remaining count.
             var top = AddPanel(_liveGroup.transform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                                new Vector2(0f, -54f), new Vector2(560f, 78f), Dark);
+            _primaryPanel = top;
             _title = AddText(top.transform, "Orc Warband", 22, Gold, TextAnchor.UpperCenter);
             var tr = _title.rectTransform; tr.anchorMin = new Vector2(0f, 1f); tr.anchorMax = new Vector2(1f, 1f);
             tr.pivot = new Vector2(0.5f, 1f); tr.anchoredPosition = new Vector2(0f, -6f); tr.sizeDelta = new Vector2(-16f, 26f);
@@ -152,9 +190,43 @@ namespace DeNelle.Village.Arena
             var rr = _remain.rectTransform; rr.anchorMin = new Vector2(0f, 0f); rr.anchorMax = new Vector2(1f, 0f);
             rr.pivot = new Vector2(0.5f, 0f); rr.anchoredPosition = new Vector2(0f, 4f); rr.sizeDelta = new Vector2(-16f, 20f);
 
-            // BOTTOM RIGHT: Flee button.
-            var flee = AddButton(_liveGroup.transform, "Flee", new Vector2(1f, 0f), new Vector2(1f, 0f),
-                                 new Vector2(-110f, 56f), new Vector2(160f, 56f), () => _onFlee?.Invoke());
+            // TOP-LEFT (separate, safe corner): Flee button with tap-to-confirm. Deliberately
+            // far from the bottom-right ability arc / basic-attack / joystick so it can never be
+            // tapped by accident while reaching for a skill.
+            _fleePanel = AddPanel(_liveGroup.transform, FleePivot, FleePivot, FleeOffset, FleeSize, FleeIdle);
+            _fleeBtn = _fleePanel.gameObject.AddComponent<Button>();
+            _fleeBtn.targetGraphic = _fleePanel;
+            _fleeBtn.onClick.AddListener(OnFleeTapped);
+            _fleeLabel = AddText(_fleePanel.transform, "Flee", 20, Color.white, TextAnchor.MiddleCenter);
+            Stretch(_fleeLabel.rectTransform);
+        }
+
+        // First tap arms ("Tap again to flee?"); a second tap inside the window actually flees.
+        // An idle window disarms it back to "Flee" so a stray tap is harmless.
+        private void OnFleeTapped()
+        {
+            if (_fleeArmed)
+            {
+                if (_fleeDisarm != null) { StopCoroutine(_fleeDisarm); _fleeDisarm = null; }
+                _onFlee?.Invoke();
+                return;
+            }
+
+            _fleeArmed = true;
+            if (_fleePanel != null) _fleePanel.color = FleeArmed;
+            if (_fleeLabel != null) { _fleeLabel.text = "Tap again to flee?"; _fleeLabel.fontSize = 16; }
+            if (_fleeDisarm != null) StopCoroutine(_fleeDisarm);
+            _fleeDisarm = DisarmFleeAfter(FleeConfirmWindow);
+            StartCoroutine(_fleeDisarm);
+        }
+
+        private System.Collections.IEnumerator DisarmFleeAfter(float s)
+        {
+            yield return new WaitForSeconds(s);
+            _fleeArmed = false;
+            _fleeDisarm = null;
+            if (_fleePanel != null) _fleePanel.color = FleeIdle;
+            if (_fleeLabel != null) { _fleeLabel.text = "Flee"; _fleeLabel.fontSize = 20; }
         }
 
         private static void EnsureEventSystem()

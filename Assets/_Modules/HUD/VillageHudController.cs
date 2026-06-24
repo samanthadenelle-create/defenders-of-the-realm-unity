@@ -969,10 +969,27 @@ namespace DeNelle.HUD
             // When the town group fades out (BATTLE / exploration) the legacy strip +
             // banner return so combat still shows resources + Heart HP as before.
             bool townShown = _townHudGroup != null && _townHudGroup.alpha > 0.5f;
-            SetActiveSafe(_resourceStrip, !townShown);
+
+            // WO-507 (owner 2026-06-23: "the currency is still on the battle map — don't
+            // need it there"): inside an ISOLATED BattleArena encounter the town economy
+            // chrome has no meaning and clutters the fight. BattleLock.IsInBattle() is the
+            // Core-clean signal that the arena fight is live (HUD -> Core only). When in a
+            // battle, FORCE the legacy currency strip + castle banner + compass OFF so the
+            // arena is clean (the 9-zone HUD owns the combat readout). They restore the
+            // instant the battle ends (this gate runs per-frame). Note: the town-resource
+            // badges + mini-map live in _townHudGroup, which the visibility manager already
+            // fades out in Battle mode — only these base-canvas widgets leaked through.
+            bool inArenaBattle = DeNelle.Core.Combat.BattleLock.IsInBattle();
+
+            SetActiveSafe(_resourceStrip, !townShown && !inArenaBattle);
+            // Compass is base-canvas top chrome (never in either CanvasGroup) — hide it in
+            // battle so the arena top-centre is clear for the 9-zone family overview.
+            if (inArenaBattle) SetActiveSafe(_compassWidget, false);
+            else SetActiveSafe(_compassWidget, true);
             // Castle banner is ALSO village-context gated (ApplyContext); only override
-            // it OFF while the town HUD owns the readout, never force it on outside.
-            if (townShown) SetActiveSafe(_castleBanner, false);
+            // it OFF while the town HUD owns the readout OR a battle is live, never force
+            // it on outside.
+            if (townShown || inArenaBattle) SetActiveSafe(_castleBanner, false);
             else if (_inVillage || _villageOnlyForced) SetActiveSafe(_castleBanner, true);
         }
 
