@@ -165,8 +165,22 @@ namespace DeNelle.Village
             // always bump into one. Validate PathComplete (up to 8 tries) so a rep never strands on an
             // island across the seam. Each rep then ROAMS its leash (RepEngageWatcher) until it sees you,
             // then chases. (Replaces the old single-rep courtyard placement; THIS is the spread.)
-            float fang = UnityEngine.Random.Range(0f, 360f) * Mathf.Deg2Rad;
-            Vector3 anchor = origin + new Vector3(Mathf.Cos(fang), 0f, Mathf.Sin(fang)) * UnityEngine.Random.Range(14f, 55f);
+            // CASTLE = SAFE (owner 2026-06-23): a rep may ONLY spawn on an OuterWorld roster region,
+            // never inside the castle/Village footprint (enemies can't reliably traverse the seam
+            // navmesh). The anchor starts UNSET -- it is ONLY assigned from a candidate that PASSES the
+            // HasRoster zone gate. If the 8-try loop finds none, we DO NOT SPAWN (no castle-side
+            // fall-through). This keeps the castle a safe shop/gear haven; the chase begins only once
+            // the hero has crossed into OuterWorld.
+            // ===== V2 TODO (owner wants to RESOLVE this, not now) =====
+            // The castle-safe rule is currently a WORKAROUND for a navmesh limitation: enemy
+            // agents don't reliably path ACROSS the RegionGate seam (separate navmesh islands +
+            // the hero warp-crossing, not an agent-walkable link). V2: stitch/link the navmesh
+            // across the seam (NavMeshLink the agents actually traverse) so reps CAN pursue the
+            // hero between regions -- then "castle = safe" becomes a deliberate DESIGN choice
+            // (e.g. a warded threshold), not a tech limitation, and this OuterWorld-only spawn
+            // gate + the chase-stalls-at-seam behaviour can be lifted/retuned.
+            Vector3 anchor = Vector3.zero;
+            bool anchorFound = false;
             if (hero != null)
             {
                 var path = new UnityEngine.AI.NavMeshPath();
@@ -176,24 +190,22 @@ namespace DeNelle.Village
                     float dist = UnityEngine.Random.Range(14f, 55f);
                     Vector3 cand = origin + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * dist;
                     if (!UnityEngine.AI.NavMesh.SamplePosition(cand, out var ch, 8f, UnityEngine.AI.NavMesh.AllAreas)) continue;
-                    // CASTLE = SAFE (owner 2026-06-23): only place reps in an OuterWorld roster region,
-                    // never inside the castle footprint (enemies can't reliably traverse the seam navmesh).
-                    // ===== V2 TODO (owner wants to RESOLVE this, not now) =====
-                    // The castle-safe rule is currently a WORKAROUND for a navmesh limitation: enemy
-                    // agents don't reliably path ACROSS the RegionGate seam (separate navmesh islands +
-                    // the hero warp-crossing, not an agent-walkable link). V2: stitch/link the navmesh
-                    // across the seam (NavMeshLink the agents actually traverse) so reps CAN pursue the
-                    // hero between regions -- then "castle = safe" becomes a deliberate DESIGN choice
-                    // (e.g. a warded threshold), not a tech limitation, and this OuterWorld-only spawn
-                    // gate + the chase-stalls-at-seam behaviour can be lifted/retuned.
                     bool inOuter = false;
                     Guard.Try("Encounter", "rep zone gate", () => inOuter =
                         DeNelle.Core.World.RegionSpawnTable.HasRoster(DeNelle.Core.World.ZoneManager.GetZone(ch.position)));
                     if (!inOuter) continue;
                     if (UnityEngine.AI.NavMesh.CalculatePath(origin, ch.position, UnityEngine.AI.NavMesh.AllAreas, path)
                         && path.status == UnityEngine.AI.NavMeshPathStatus.PathComplete)
-                    { anchor = ch.position; break; }
+                    { anchor = ch.position; anchorFound = true; break; }
                 }
+            }
+
+            // NO castle-side fall-through: if no OuterWorld-side candidate cleared the zone gate in 8
+            // tries (e.g. the hero is still in/near the castle), SKIP this spawn so the castle stays safe.
+            if (!anchorFound)
+            {
+                FlowTrace.Warn("Encounter", $"SpawnRep #{index}: no OuterWorld-side candidate in 8 tries -> skipping (castle stays safe).");
+                return;
             }
 
             // Belt-and-suspenders (data 2026-06-23): snap the anchor onto the baked navmesh so the
@@ -205,6 +217,19 @@ namespace DeNelle.Village
                 anchor = navHit.position;
             else
                 FlowTrace.Warn("Encounter", $"SpawnRep #{index}: no navmesh within 12m of {anchor} — rep may be unreachable (check OuterWorld floor/bake).");
+
+            // POST-SNAP CASTLE-SAFE RE-CHECK (owner 2026-06-23): the 12m navmesh snap above can drift
+            // the anchor OFF its zone-gated candidate and back across the seam into the Village/castle
+            // footprint. Re-confirm the FINAL position is still an OuterWorld roster region; if it
+            // drifted into the castle, ABORT the spawn so a snapped point never leaks a rep castle-side.
+            bool finalInOuter = false;
+            Guard.Try("Encounter", "rep zone gate (post-snap)", () => finalInOuter =
+                DeNelle.Core.World.RegionSpawnTable.HasRoster(DeNelle.Core.World.ZoneManager.GetZone(anchor)));
+            if (!finalInOuter)
+            {
+                FlowTrace.Warn("Encounter", $"SpawnRep #{index}: final anchor {anchor} snapped into a non-OuterWorld (castle/Village) region -> aborting spawn (castle stays safe).");
+                return;
+            }
 
             var def = new EnemyDef
             {
