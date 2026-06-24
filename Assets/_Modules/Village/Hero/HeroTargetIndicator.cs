@@ -91,6 +91,24 @@ namespace DeNelle.Village
         /// <summary>The hostile the hero is currently targeting (locked or nearest), or null.</summary>
         public IDamageable CurrentTarget { get; private set; }
 
+        /// <summary>
+        /// Clear any MANUAL target lock (revert to auto-nearest) and drop the current target +
+        /// its aim override. Called by BattleArena.Resolve on a loss so the hero doesn't return
+        /// to the open world still locked onto a dead/stale foe (which would keep aiming abilities
+        /// at nothing). Safe to call any time; the next LateUpdate re-acquires from scratch.
+        /// </summary>
+        public void ClearLock()
+        {
+            _locked = null;
+            CurrentTarget = null;
+            if (_abilities == null) _abilities = GetComponent<HeroAbilities>();
+            if (_abilities != null) { _abilities.AimPointOverride = null; _abilities.LockedTarget = null; }
+            // Release the previous target's pinned HP bar so it isn't left revealed.
+            SetBarTargeted(_prevTarget, false);
+            _prevTarget = null;
+            SetVisible(false);
+        }
+
         private Transform _reticle;
         private Material _reticleMat;
         private Camera _cam;

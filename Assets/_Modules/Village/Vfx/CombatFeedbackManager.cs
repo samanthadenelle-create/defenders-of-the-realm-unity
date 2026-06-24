@@ -49,6 +49,7 @@
 
 using System.Collections;
 using UnityEngine;
+using DeNelle.Village.Arena;   // BattleArena — gate home-scene combat feel during a staged battle
 
 namespace DeNelle.Village
 {
@@ -236,8 +237,27 @@ namespace DeNelle.Village
 
         // ── Instance logic ────────────────────────────────────────────────────
 
+        // BATTLE ISOLATION helper: true when this impact is a HOME-scene bleed-through that must be
+        // suppressed — i.e. a battle is staged AND the impact is NOT inside the far-offset arena.
+        // A live arena hit (inside the arena) always passes; outside-arena hits only pass when no
+        // battle is running. Guarded so a missing arena singleton never throws into combat.
+        private static bool SuppressHomeBleed(Vector3 worldPos)
+        {
+            // Non-creating check: never spawn the arena singleton just to probe (BattleArena.Existing
+            // is null until a fight is first staged).
+            if (!BattleArena.AnyBattleInProgress) return false;
+            return !BattleArena.IsArenaPosition(worldPos);
+        }
+
         private void RegisterHit(Vector3 worldPos, float damage)
         {
+            // BATTLE ISOLATION: while an additive arena battle is staged, the home scene must NOT
+            // contribute combat feel (hit-stop / shake / rumble) — that bled into the battle as a
+            // phantom rumble and double-simmed the feel (choppy). Gate by IMPACT POSITION so the
+            // LIVE arena's own hits (staged ~7km away) still fire their feel; only home-scene
+            // bleed-through (impacts back near the origin world) is suppressed during a battle.
+            if (SuppressHomeBleed(worldPos)) return;
+
             // 1. Hit stop — rate-capped (DEF-178). A fresh freeze can only start once
             // per _hitStopMinIntervalSeconds so a multi-enemy AoE wave doesn't re-freeze
             // every frame. Extra hits inside the window still drive combo + shake + VFX
@@ -261,6 +281,11 @@ namespace DeNelle.Village
 
         private void RegisterKill(Vector3 worldPos)
         {
+            // BATTLE ISOLATION (see RegisterHit): suppress home-scene kill feel (streak slow-mo /
+            // shake / rumble) while an arena battle is staged so it can't bleed into the fight; the
+            // live arena's own kills (far-offset) still fire.
+            if (SuppressHomeBleed(worldPos)) return;
+
             _killStreak++;
             _killStreakTimer = _killStreakWindowSeconds;
             OnKillStreakChanged?.Invoke(_killStreak);

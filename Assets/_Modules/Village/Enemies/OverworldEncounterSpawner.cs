@@ -318,6 +318,65 @@ namespace DeNelle.Village
         private const float EngageRange = 2.6f; // contact -> transition
         private const float LeashRadius = 14f;  // wander this far from spawn until aggro
 
+        // -------------------------------------------------------------------------
+        //  BATTLE ISOLATION + POST-LOSS GRACE (lose-flow fix, owner TOP priority).
+        //  Two STATIC gates shared by EVERY home-scene rep:
+        //    * _battlePaused  — while a BattleArena fight is staged, ALL home reps freeze
+        //      (no roam/chase/aggro/engage). Removes the home-combat rumble bleed, the
+        //      re-engage loop source, AND the double-sim choppiness in one move. Driven by
+        //      BattleArena.BeginEncounter (PauseAll) / Resolve (ResumeAll).
+        //    * _noEngageUntil — a brief re-aggro GRACE after a LOSS: no rep may aggro/engage
+        //      the hero until this wall-clock time, so the hero recovers instead of being
+        //      re-fought the instant it warps home. Set by BattleArena.Resolve on a loss.
+        //  Both are honored at the TOP of Update() and Engage() so the loop breaks no matter
+        //  the exact rep state. Tunables are named consts.
+        // -------------------------------------------------------------------------
+        private const float PostLossGraceSeconds = 3.5f;   // owner ~3-4s recovery window after a loss
+
+        private static bool  _battlePaused;     // true while a BattleArena fight is staged
+        private static float _noEngageUntil;    // Time.time before which no rep may aggro/engage
+
+        /// <summary>Freeze every home-scene rep (roam/chase/aggro/engage) for the duration of a
+        /// staged battle. Called by BattleArena.BeginEncounter. Idempotent.</summary>
+        public static void PauseAll() => _battlePaused = true;
+
+        /// <summary>Resume home-scene reps after a battle resolves. Called by BattleArena.Resolve.</summary>
+        public static void ResumeAll() => _battlePaused = false;
+
+        /// <summary>Open a post-loss re-aggro grace window: no rep may aggro/engage the hero until
+        /// now + <paramref name="seconds"/> (defaults to the tuned PostLossGraceSeconds). Called by
+        /// BattleArena.Resolve on a LOSS so the hero is not instantly re-engaged.</summary>
+        public static void BeginPostLossGrace(float seconds = PostLossGraceSeconds)
+            => _noEngageUntil = Time.time + Mathf.Max(0f, seconds);
+
+        /// <summary>True while a battle is staged OR the post-loss grace window is open — no rep
+        /// may aggro/engage the hero. Read by the aggro check.</summary>
+        private static bool EngagementSuppressed => _battlePaused || Time.time < _noEngageUntil;
+
+        /// <summary>
+        /// LOSS cleanup: immediately remove any still-live home rep whose GameObject name matches
+        /// <paramref name="repId"/> (the EncounterParams.RepId that triggered the fight). The
+        /// triggering rep is normally Destroy()'d in Engage(), but a queued Destroy can race the
+        /// loss-resolve warp and leave the hero inside its aggro on return — so we DestroyImmediate
+        /// any survivor here to guarantee it is gone. Guarded; never throws into Resolve.
+        /// </summary>
+        public static void DespawnRepImmediate(string repId)
+        {
+            if (string.IsNullOrEmpty(repId)) return;
+            Guard.Try("Encounter", "loss rep despawn", () =>
+            {
+                var watchers = FindObjectsOfType<RepEngageWatcher>();
+                if (watchers == null) return;
+                foreach (var w in watchers)
+                {
+                    if (w == null || w.gameObject == null) continue;
+                    if (w.gameObject.name != repId) continue;
+                    FlowTrace.Step("Encounter", $"DespawnRepImmediate: removing lingering rep '{repId}' on loss (kills the instant re-engage).");
+                    DestroyImmediate(w.gameObject);
+                }
+            });
+        }
+
         private Vector3 _leashCenter;           // spawn point -- centre of the wander leash
         private float   _roamRepathAt;          // next time to pick a new roam point
 
@@ -340,6 +399,12 @@ namespace DeNelle.Village
         private void Update()
         {
             if (_engaged || !FeatureFlags.OverworldEncounter) return;
+
+            // BATTLE ISOLATION + POST-LOSS GRACE: while a fight is staged, or during the brief
+            // post-loss recovery window, EVERY home rep freezes — no roam/chase/aggro/engage.
+            // This kills the home-combat rumble bleed, the instant re-engage loop, and the
+            // double-sim choppiness. The rep simply holds until the gate clears.
+            if (EngagementSuppressed) return;
 
             // FALL-THROUGH GUARD (owner 2026-06-23 "they fall through ground when I change zones"):
             // a zone/navmesh swap can drop a NavMeshAgent below the floor. If a rep falls below y=-2,
@@ -404,6 +469,10 @@ namespace DeNelle.Village
         {
             if (_engaged) return;
             if (BattleArena.Instance != null && BattleArena.Instance.BattleInProgress) return;
+            // Honor the battle-pause + post-loss grace here too: OnRepDamaged (the hero hit the
+            // rep) routes straight to Engage and bypasses Update's gate, so the same suppression
+            // must hold or a single stray swing re-starts the fight inside the grace window.
+            if (EngagementSuppressed) return;
             _engaged = true;
 
             var hero = GameObject.FindWithTag("Player");

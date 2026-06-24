@@ -58,6 +58,19 @@ namespace DeNelle.Village.Arena
         // skybox/ambient persist, so the backdrop still "matches where you were".
         private static readonly Vector3 ArenaCentre = new Vector3(5000f, 0f, 5000f);
 
+        // Radius around ArenaCentre that counts as "inside the staged arena". Generous (well past
+        // the ~30x24 footprint) so any arena actor reads as arena; anything else is the home scene.
+        private const float ArenaWorldRadius = 200f;
+
+        /// <summary>
+        /// True when <paramref name="worldPos"/> lies inside the far-offset staged arena (vs. the
+        /// home/open-world scene that stays in memory). Lets shared systems (e.g. combat feel) tell
+        /// a LIVE arena hit from a home-scene bleed-through hit by where it happened — the arena is
+        /// staged ~7km away, so distance is an unambiguous discriminator.
+        /// </summary>
+        public static bool IsArenaPosition(Vector3 worldPos)
+            => (worldPos - ArenaCentre).sqrMagnitude <= ArenaWorldRadius * ArenaWorldRadius;
+
         // Open kite arena footprint (owner doc ~28-35 x 18-22) -- big enough to kite.
         private const float ArenaHalfWidth = 30f;   // X half-extent (~60 wide) — owner 2026-06-23: bigger to KITE + lure one away
         private const float ArenaHalfDepth = 24f;   // Z half-extent (~48 deep) — open kite space, not a square
@@ -72,6 +85,13 @@ namespace DeNelle.Village.Arena
         // BGM crossfades back in. Matched to the result banner's ~2.5s hold so the climax
         // music plays under the banner, then the open-world ambient returns. Owner-tunable.
         private const float RewardCueSeconds = 2.5f;
+
+        // LOSE-FLOW (owner TOP priority): on a LOSS the hero must land SAFE, not back inside the
+        // rep's aggro (which re-fought instantly). We pull the return point BACK along the hero's
+        // approach heading by this much — far enough to clear a rep's ~14m aggro radius — so the
+        // hero recovers with breathing room instead of re-engaging on the spot. Win returns to the
+        // exact engagement spot (the rep is dead) unchanged.
+        private const float LossSafeRetreatMeters = 18f;   // > rep AggroRange (14f) so the warp clears aggro
 
         // ---------------------------------------------------------------------
         //  WO-504 #2: arena BLOOM tunables (BONES - owner felt-tunes the numbers).
@@ -109,6 +129,13 @@ namespace DeNelle.Village.Arena
                 return _instance;
             }
         }
+
+        /// <summary>The live BattleArena WITHOUT creating one (null until first staged). Use this in
+        /// hot paths / probes that must not spawn the singleton just to ask if a battle is running.</summary>
+        public static BattleArena Existing => _instance;
+
+        /// <summary>True iff a battle is currently staged — non-creating (safe in hot combat paths).</summary>
+        public static bool AnyBattleInProgress => _instance != null && _instance.BattleInProgress;
 
         /// <summary>True while a battle is staged (blocks a second start + locks panels/hotkeys).</summary>
         public bool BattleInProgress { get; private set; }
@@ -187,6 +214,14 @@ namespace DeNelle.Village.Arena
             _climaxBody = null;
             _battleStartTime = Time.time;   // WO-505: start the star-rating clock.
             BattleInProgress = true;
+
+            // BATTLE ISOLATION: freeze EVERY home-scene rep for the duration of the fight. The
+            // open world stays in memory (additive intent), so without this its reps keep roaming/
+            // chasing/aggroing + running home combat — bleeding rumble/feedback into the battle and
+            // double-simulating (choppy). One static gate removes all three sources at once; reps
+            // resume on Resolve. (Static so no per-rep FindObjectsOfType scan is needed.)
+            RepEngageWatcher.PauseAll();
+
             FlowTrace.Step("BattleArena", $"BeginEncounter: family=[{string.Join(",", p.EnemyIds)}] threat={p.Threat} theme='{p.BackdropContext}' return='{p.ReturnScene}'.");
             StartCoroutine(StageRoutine(p));
             return true;
@@ -733,6 +768,59 @@ namespace DeNelle.Village.Arena
             FlowTrace.Warn("BattleArena", "WarpHero: WarpTo not found - used transform fallback.");
         }
 
+        // LOSE-FLOW: a SAFE return point for a loss — pull back from the engagement spot along the
+        // hero's (reversed) approach heading by LossSafeRetreatMeters so the hero lands OUTSIDE a
+        // rep's ~14m aggro radius. Snapped onto the navmesh so the hero doesn't strand off-mesh /
+        // below the floor; falls back to the raw offset (then the engagement spot) if no mesh is hit.
+        private static Vector3 SafeLossReturnPosition(Vector3 engagePos, float engageYaw)
+        {
+            // The hero faced engageYaw at engage; retreat is BEHIND that facing (back toward where
+            // the hero came from — typically toward the castle/seam, away from the rep ahead).
+            Vector3 fwd = Quaternion.Euler(0f, engageYaw, 0f) * Vector3.forward;
+            Vector3 retreat = engagePos - fwd.normalized * LossSafeRetreatMeters;
+
+            Vector3 result = retreat;
+            Guard.Try("BattleArena", "snap loss-safe return to navmesh", () =>
+            {
+                if (NavMesh.SamplePosition(retreat, out var hit, 12f, NavMesh.AllAreas))
+                    result = hit.position;
+            });
+            FlowTrace.Step("BattleArena", $"SafeLossReturnPosition: engage={engagePos} -> safe={result} (retreat {LossSafeRetreatMeters}m).");
+            return result;
+        }
+
+        // CAMERA RE-LOCK: re-enable the follow camera and have it re-acquire the hero after the
+        // death-cam + warp. SmartMobileCamera owns the open-world follow; the death-cam disabled
+        // it and our warp moved the hero, so explicitly enable + snap it here. Reflection-soft so a
+        // missing API never throws into Resolve.
+        private static void ReacquireFollowCamera()
+        {
+            Guard.Try("BattleArena", "reacquire follow camera", () =>
+            {
+                var smc = SmartMobileCamera.Instance;
+                if (smc == null) return;
+                if (!smc.enabled) smc.enabled = true;   // death-cam disabled it; re-enable the follow
+                // Snap the rig onto the hero immediately so it doesn't ease across the whole world
+                // on return (the warp moved the hero while the camera was suspended).
+                smc.ForceFollowImmediate();
+                FlowTrace.Step("BattleArena", "ReacquireFollowCamera: follow camera re-enabled + snapped to hero.");
+            });
+        }
+
+        // CAMERA RE-LOCK (cont.): clear any stale target lock on the hero's reticle so a loss return
+        // doesn't keep the dead/old foe locked (which would re-aim abilities at nothing). Resolved
+        // off the live hero; guarded.
+        private static void ClearHeroTargetLock()
+        {
+            Guard.Try("BattleArena", "clear hero target lock", () =>
+            {
+                var hero = GameObject.FindWithTag("Player");
+                if (hero == null) return;
+                var indicator = hero.GetComponent<HeroTargetIndicator>();
+                indicator?.ClearLock();
+            });
+        }
+
         // ---------------------------------------------------------------------
         //  Watch -> resolve
         // ---------------------------------------------------------------------
@@ -891,9 +979,40 @@ namespace DeNelle.Village.Arena
             if (_arenaRoot != null) Destroy(_arenaRoot);
             _arenaRoot = null;
 
-            // Warp the hero back to the engagement spot (the open world stayed in memory).
+            // LOSE-FLOW (owner TOP priority): make a LOSS RECOVERABLE — no instant re-engage.
+            //   1) Despawn the triggering rep NOW (DestroyImmediate) if it somehow still exists,
+            //      beating the queued-Destroy race that could leave it live as the hero returns.
+            //   2) Open a post-loss re-aggro GRACE so NO rep can engage the hero for a few seconds,
+            //      regardless of any rep's exact state — this is the loop-breaker.
+            //   3) Warp the hero to a SAFE spot (pulled back along its approach heading past a rep's
+            //      aggro radius), not the exact engagement spot inside aggro.
+            if (!won && _current != null)
+            {
+                RepEngageWatcher.DespawnRepImmediate(_current.RepId);
+                RepEngageWatcher.BeginPostLossGrace();   // ~3.5s no-engage window
+            }
+
+            // Compute the return pose. WIN: exact engagement spot (rep is dead). LOSS: safe retreat.
+            Vector3 returnPos = _current != null ? _current.ReturnPosition : Vector3.zero;
+            float   returnYaw = _current != null ? _current.ReturnYaw : 0f;
+            if (!won && _current != null)
+                returnPos = SafeLossReturnPosition(_current.ReturnPosition, _current.ReturnYaw);
+
+            // Warp the hero home (the open world stayed in memory).
             if (_current != null)
-                WarpHero(_current.ReturnPosition, Quaternion.Euler(0f, _current.ReturnYaw, 0f));
+                WarpHero(returnPos, Quaternion.Euler(0f, returnYaw, 0f));
+
+            // BATTLE ISOLATION: the fight is over — let home reps roam/chase/aggro again. (On a
+            // loss the post-loss grace above still suppresses ENGAGE for a few seconds even though
+            // the pause is lifted, so the hero recovers; a win lifts both gates cleanly.)
+            RepEngageWatcher.ResumeAll();
+
+            // CAMERA RE-LOCK (loss especially): the death-cam released SmartMobileCamera, but the
+            // hero was warped AFTER that and the stale target lock was never cleared. Re-enable the
+            // follow camera + snap it to the hero, and clear the reticle's manual lock so the next
+            // engagement starts clean.
+            ReacquireFollowCamera();
+            ClearHeroTargetLock();
 
             // WO-505: restore explore BGM AFTER the victory/defeat cue has had its beat, so
             // the climax is not cut to silence (the banner shows for ~2.5s; we let the sting
@@ -907,7 +1026,7 @@ namespace DeNelle.Village.Arena
             BattleInProgress = false;
 
             OnBattleEnded?.Invoke(done, won);
-            FlowTrace.Step("BattleArena", "Resolve: stage torn down, hero returned, battle ended.");
+            FlowTrace.Step("BattleArena", $"Resolve: stage torn down, hero {(won ? "returned" : "retreated SAFE")}, battle ended.");
         }
 
         // WO-505: wait out the victory/defeat cue, then crossfade back to the open-world
