@@ -34,6 +34,13 @@ namespace DeNelle.Village
     /// </summary>
     internal static class NpcGroundSeat
     {
+        // Max height a raycast floor-hit may sit ABOVE the navmesh ground and still be
+        // accepted as a real step/floor. A hit higher than this is a raised BUILDING
+        // PLATFORM (e.g. Lumbermill visual raised +1.5m via HubStructureVisualInjector),
+        // not the floor the NPC should stand on - reject it and use the navmesh ground.
+        // Owner-tunable (felt-verify): raise if a legit step is being rejected.
+        private const float AcceptedFloorBandAboveGround = 0.4f;
+
         /// <summary>
         /// Drop <paramref name="go"/> so the bottom of its combined renderer bounds
         /// rests on the floor directly below it. Call AFTER any rescale so the bounds
@@ -93,13 +100,23 @@ namespace DeNelle.Village
             }
             hitFloor = found;
             rawHitY = found ? best : fallbackGroundY;
-            // FIX (2026-06-23, data-proven via [Flow:NpcSeat]): NEVER seat below the navmesh-sampled
-            // ground. The downward ray can punch through the visible floor and hit a foundation/base
-            // collider beneath it (castle courtyard: a plane at y=-0.55 under tiles whose navmesh sits
-            // at y=0.06), which dropped every vendor ~0.5m underground. A hit ABOVE the navmesh is a
-            // real step/platform (keep it, e.g. Lumbermill at +1.08); a hit BELOW is a basement (ignore
-            // it, use the navmesh floor). Clamp the resolved ground to the fallback.
-            return found ? Mathf.Max(best, fallbackGroundY) : fallbackGroundY;
+            if (!found)
+                return fallbackGroundY;
+
+            // FIX (2026-06-24, data-proven via [Flow:NpcSeat]): the navmesh-sampled ground
+            // (fallbackGroundY) is the TRUE floor. The downward ray can punch through it BELOW
+            // (castle courtyard foundation plane at y=-0.55 under tiles whose navmesh sits at
+            // y=0.06 -> vendor sank ~0.5m underground) OR hit a raised BUILDING PLATFORM ABOVE
+            // (Lumbermill visual raised +1.5m -> vendor floated). Both are wrong. Accept the
+            // raycast hit ONLY when it is a genuine floor in a small band around the navmesh
+            // ground: clamp it to [fallbackGroundY, fallbackGroundY + AcceptedFloorBandAboveGround].
+            //  - hit BELOW ground (basement): clamp UP to fallbackGroundY (preserves the -0.55 fix).
+            //  - hit far ABOVE ground (building platform): reject, use fallbackGroundY.
+            float ceiling = fallbackGroundY + AcceptedFloorBandAboveGround;
+            float chosen = Mathf.Clamp(best, fallbackGroundY, ceiling);
+            if (Mathf.Abs(chosen - best) > 0.01f)
+                FlowTrace.Step("NpcSeat", $"'{self.name}': rejected raw hitY={best:F2} (outside floor band [{fallbackGroundY:F2}..{ceiling:F2}]) -> chosen groundY={chosen:F2} (fallbackY={fallbackGroundY:F2})");
+            return chosen;
         }
     }
 }
