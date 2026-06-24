@@ -183,6 +183,16 @@ namespace DeNelle.Village
 
         private ActorAnimator _actor; // guarded driver (Core) for Speed/Attack/Hit/Dead on the visual child controller
 
+        // ── Position-delta locomotion fallback (anti-slide) ──────────────────
+        // DEF-56 / formation-slot drift: during throttled SetDestination + formation
+        // slot moves the NavMeshAgent's velocity reads ~0 even while the transform
+        // actually slides. That left Speed=0 -> idle pose gliding. We fall back to
+        // a position delta (horizontal only) when agent.velocity is near-zero, so
+        // the blend tree blends to walk/run in BOTH the arena (formation) and the
+        // overworld (solo brain) contexts.
+        private Vector3 _lastAnimPos;
+        private bool _hasLastAnimPos;
+
         // ── DEF-21 / DEF-72: EnemyBrain nav-target override ──────────────────
         // DEF-21: EnemyBrain.Update() calls SetBrainTarget each frame with a role-
         //   specific Transform destination. When non-null DriveNav() follows this
@@ -701,6 +711,23 @@ namespace DeNelle.Village
             float speed = (_agent != null && _agent.isOnNavMesh)
                 ? _agent.velocity.magnitude
                 : 0f;
+
+            // Anti-slide fallback: NavMeshAgent velocity reads ~0 during throttled
+            // SetDestination (DEF-56) + formation-slot drift, so estimate speed from
+            // the horizontal transform delta when velocity is near-zero but we're
+            // actually moving. Y is zeroed so a vertical settle never reads as motion.
+            // Clamp to _moveSpeed so a teleport/warp (e.g. NavMesh respawn) can't spike
+            // the blend into a sprint. Covers arena (formation) AND overworld (solo brain).
+            if (speed < 0.05f && _hasLastAnimPos && Time.deltaTime > 0f)
+            {
+                Vector3 cur = transform.position;
+                Vector3 d = cur - _lastAnimPos;
+                d.y = 0f;
+                float est = d.magnitude / Time.deltaTime;
+                speed = Mathf.Min(est, Mathf.Max(0.1f, _moveSpeed));
+            }
+            _lastAnimPos = transform.position;
+            _hasLastAnimPos = true;
 
             // Drive the (new) ActorAnimator for locomotion (idle/walk/run blendtree in the
             // shared enemy controllers). Also keep the legacy direct _animator.SetFloat
