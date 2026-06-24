@@ -63,6 +63,16 @@ namespace DeNelle.Core.Diagnostics
         bool _softlockReported;
         float _nextWatchdog;
 
+        // Cross-assembly read of DeNelle.Village.HeroLocomotion.InputSuppressed via reflection.
+        // Core must NOT reference Village (asmdef one-way: Village -> Core), so we cache the
+        // static getter once (same pattern as SceneRouter.FindHeroLocomotion / PersistenceBridge).
+        // The softlock MOVEMENT watchdog must not count scripted/dialogue/cutscene/autowalk time
+        // as a stall: while input is suppressed the hero legitimately stands still (reading a line,
+        // a camera beat, an autowalk), so the 75s timer would false-fire (it did, in MainCastle_Hall
+        // intro). Real softlocks during dialogue still surface via the error/exception path.
+        static bool _suppressProbed;       // have we attempted to resolve the getter yet
+        static System.Reflection.MethodInfo _inputSuppressedGetter;  // null = type/prop absent -> behave as today
+
         // owner-pressed bug flag for subjective/visual bugs the code can't detect
         // on its own ("ugly", "feels off", "wrong text"). One tap = screenshot + mark.
         const KeyCode FlagKey = KeyCode.F8;
@@ -238,6 +248,18 @@ namespace DeNelle.Core.Diagnostics
                         MarkProgress();
                     }
                 }
+                // SUPPRESS the movement watchdog while the hero is under scripted control:
+                // dialogue line on screen, a cutscene/camera beat, or a scripted autowalk all
+                // legitimately freeze the hero. Treat that as progress (reset the timer) so the
+                // 75s stall never accumulates during scripted time and only resumes counting once
+                // the player has free control and is still idle. DialogueEventBus advances already
+                // count as progress; this covers the WAIT-on-a-line / cutscene stretches between.
+                if (IsHeroInputSuppressed())
+                {
+                    if (_hero != null) _lastHeroPos = _hero.position;
+                    MarkProgress();
+                    return;
+                }
                 if (!_softlockReported && now - _lastProgressTime > SoftlockSeconds)
                 {
                     _softlockReported = true;
@@ -253,6 +275,30 @@ namespace DeNelle.Core.Diagnostics
         {
             try { var go = GameObject.FindGameObjectWithTag(HeroTag); return go ? go.transform : null; }
             catch { return null; }   // tag undefined / none in scene
+        }
+
+        // True when DeNelle.Village.HeroLocomotion.InputSuppressed is set (dialogue / cutscene /
+        // autowalk active). Read via cached reflection so Core stays decoupled from Village.
+        // Null-safe: if the type or property can't be resolved (e.g. Village not loaded), returns
+        // false so the watchdog behaves exactly as it did before this guard existed.
+        static bool IsHeroInputSuppressed()
+        {
+            try
+            {
+                if (!_suppressProbed)
+                {
+                    _suppressProbed = true;
+                    var t = System.Type.GetType("DeNelle.Village.HeroLocomotion, DeNelle.Village");
+                    var p = t != null
+                        ? t.GetProperty("InputSuppressed",
+                              System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+                        : null;
+                    _inputSuppressedGetter = p != null ? p.GetGetMethod(nonPublic: false) : null;
+                }
+                if (_inputSuppressedGetter == null) return false;
+                return _inputSuppressedGetter.Invoke(null, null) is bool b && b;
+            }
+            catch { return false; }   // any reflection failure -> behave as today (count as stall)
         }
 
         // ---- owner-pressed flag (F8): screenshot, freeze, type one line ---------
