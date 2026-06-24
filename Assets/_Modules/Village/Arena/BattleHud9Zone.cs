@@ -110,8 +110,11 @@ namespace DeNelle.Village.Arena
         private static readonly Vector2 TR_Pos  = new Vector2(-150f, -48f); // from top-right
         private static readonly Vector2 TR_Size = new Vector2(220f, 64f);
 
-        // -- Target-cycle list (render: sits directly UNDER the top-left hero plate) --
-        private static readonly Vector2 ML_Pos     = new Vector2(232f, -118f); // top-left anchored, under TL plate
+        // -- Mid-Left: TARGET CYCLE / enemy-roster list (owner 2026-06-24: moved here from the
+        //    top-left, where it overlapped the player-stats plate). MID-LEFT zone of the 9-grid:
+        //    left edge, vertically CENTERED. Anchor + pivot = left-middle (0, 0.5); ML_Pos.x is
+        //    the inset from the screen's left edge, ML_Pos.y a vertical nudge about screen center.
+        private static readonly Vector2 ML_Pos     = new Vector2(232f, 0f);  // from MID-LEFT (left edge, centered)
         private static readonly Vector2 ML_Size    = new Vector2(420f, 300f);
         private const int   ML_MaxRows = 4;         // Tank/DPS/DPS/Healer family
         private const float ML_RowH    = 56f;
@@ -254,7 +257,7 @@ namespace DeNelle.Village.Arena
             gameObject.AddComponent<GraphicRaycaster>();
 
             BuildTopLeftPlayerStats();
-            BuildTargetCycleList();        // sits directly UNDER the top-left hero plate
+            BuildTargetCycleList();        // MID-LEFT zone (left edge, vertically centered)
             BuildTopCenterTarget();
             BuildTopRightSettingsFlee();
             // Mid-Center is intentionally EMPTY - the fight shows through.
@@ -512,12 +515,14 @@ namespace DeNelle.Village.Arena
         }
 
         // ---------------------------------------------------------------------
-        //  TARGET CYCLE - vertical list directly UNDER the top-left hero plate
+        //  TARGET CYCLE - vertical enemy-roster list in the MID-LEFT zone (owner
+        //  2026-06-24: moved off the top-left so it no longer overlaps the player-
+        //  stats plate). Anchored left-edge / vertically centered (0, 0.5).
         //  (render: each enemy = class-colored SQUARE icon + name + HP + a ">" chevron).
         // ---------------------------------------------------------------------
         private void BuildTargetCycleList()
         {
-            var panel = AddPanel(transform, new Vector2(0f, 1f), new Vector2(0f, 1f), ML_Pos, ML_Size, PanelDark);
+            var panel = AddPanel(transform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), ML_Pos, ML_Size, PanelDark);
             Frame(panel);
 
             var hdr = AddText(panel.transform, "TARGET CYCLE", 11, Parchment, TextAnchor.UpperLeft);
