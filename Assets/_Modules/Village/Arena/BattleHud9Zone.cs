@@ -1,38 +1,45 @@
 // =============================================================================
-// BattleHud9Zone — the WO-498 mobile battle HUD BONES: a 3x3 tic-tac-toe of
-// anchored RectTransform zones over the isolated BattleArena fight.
+// BattleHud9Zone - the WO-507 AUTHORITATIVE-MOCKUP battle HUD: nine edge-anchored
+// zones hugging the screen corners/edges, the CENTER left clear so the fight shows
+// through. Restructured to the owner's 2026-06-24 sketch (supersedes the WO-498
+// tic-tac-toe legend; the layout below is the spec).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Arena
 //
-// SCOPE (owner directive 2026-06-23): this is the BONES/scaffold assembled to the
-// WO-498 spec, NOT the creative/finesse pass (the owner tunes look/feel tomorrow).
-// FLAG-GATED behind FeatureFlags.BattleHud9Zone (default OFF) so it is safe + togglable.
+// SCOPE (owner directive): BONES to the mockup - build the LAYOUT/STRUCTURE exactly,
+// wire the systems that already have data, placeholder the not-yet-built systems with
+// just the UI bones + a label. Exact colors/sizes are TUNABLE CONSTS the owner dials
+// live (every position/size/color below is a clearly-named const = a one-line tweak).
+// FLAG-GATED behind FeatureFlags.BattleHud9Zone (default OFF).
 //
-// HP-B2B law (logic / presentation split): this is a self-contained VIEW that PULLS
-// read-only state from the existing combat systems every frame (it never mutates them
-// beyond firing their own public cast/target intents on a button press):
-//   - HeroHealth      (zone 1 HP bar)
-//   - HeroAbilities + AbilityCatalog (zone 1 mana pips, zone 8 basic attack, zone 9
-//                     ability arc + radial cooldown rings)
-//   - HeroTargetIndicator (zone 4 current-target portrait/role, zone 6 quick-focus)
-//   - Enemy + EnemyBrain.Role (zone 2 family role overview, zone 4 target)
+// HP-B2B law (logic / presentation split): self-contained VIEW that PULLS read-only
+// state each frame and fires only the existing public intents on a press:
+//   - HeroHealth          (Top-Left HP bar)
+//   - HeroTargetIndicator (Top-Center target name + lock state + toggle; target cycle)
+//   - HeroLoadout + HeroAbilities + AbilityCatalog (Bottom-Center ability ROW: skill-tree
+//                     equipped W/E/R + radial cooldown rings; SLASH anchor = basic attack Q)
+//   - Enemy + EnemyBrain.Role (target-cycle rows, Top-Center target)
+//   - BattleStarRating + the battle timer (star conditions + stars + time-to-keep-star)
+//   - BattleArena.Flee()  (Top-Right FLEE)
 //
-// 3x3 ZONE MAP (the WO-498 tic-tac-toe):
-//   1 TL  Knight HP + resource pips        2 TC  enemy family role overview (4 chips)
-//   3 TR  timer + pause (+settings/audio)  4 ML  current-target portrait + role
-//   5 C   EMPTY (the fight shows through)  6 MR  quick-focus buttons (Healer/Wizard)
-//   7 BL  movement joystick (mobile)       8 BC  Basic Attack pill + weapon skill
-//   9 BR  4 ability buttons w/ cooldown rings
+// THE LAYOUT (render-authoritative, each an edge-anchored RectTransform):
+//   Top-Left   : SQUARE hero portrait + name + GREEN HP + BLUE resource + small ability/buff
+//                icon row; the TARGET CYCLE list sits directly UNDER it (class-square + name +
+//                HP + ">" chevron per enemy)
+//   Top-Center : prominent ENEMY TARGET block - name + LEVEL + HP value + HP bar + role/threat;
+//                ATK/DEF gated behind ShowEnemyDeepStats; lock state + toggle. Star-conditions
+//                + live countdown sit just below it (tunable anchor).
+//   Top-Right  : Settings gears + FLEE (Flee lives here now)
+//   Mid-Center : EMPTY (the fight shows through)
+//   Mid-Right  : FOCUS AREA - heal-toggle + Attack + mode switch (placeholder buttons)
+//   Bottom-Left: virtual D-PAD (cross of 4 arrows + center dot)
+//   Bottom-Ctr : horizontal ROW of the loadout-equipped ability icons (empty slot = hidden) +
+//                Potion / Rapid Heal / Desperate WS (placeholder) + Stars + keep-star timer
+//   Bottom-Rgt : 1 big SLASH anchor (basic attack) + a cluster of 3 round utility buttons
+//                (target-lock / dash / aim), NOT a fanned arc
 //
-// Code-built uGUI, Canvas Screen Space - Overlay (UXML does NOT ship — CLAUDE.md S8).
-// Dark semi-transparent panels (the premium-fantasy backdrop shines through), large
-// touch targets, high contrast, landscape-focus. WebGL-safe solid sprites. ASCII logs.
-//
-// Icons pull from the existing catalogs (owner: don't placeholder) — the staged
-// Resources/HudIcons/<Class>/ ability art + Resources/HudIcons/<Role>/<role>.jpg role
-// portraits + RpgUiCatalog (gilt frames/icons) + abilities.json per-ability color/glyph.
-// Every sprite lookup is null-safe and falls back to a tinted disc + glyph so the bones
-// read even when art is absent.
+// Code-built uGUI, Canvas Screen Space - Overlay (UXML does NOT ship - CLAUDE.md S8).
+// Dark semi-transparent panels, anchored TIGHT, NO overlap. ASCII logs.
 // =============================================================================
 
 using System.Collections.Generic;
@@ -45,101 +52,187 @@ using DeNelle.Core.Combat;
 
 namespace DeNelle.Village.Arena
 {
-    /// <summary>The 9-zone mobile battle HUD bones (WO-498). Flag-gated, self-contained VIEW.</summary>
+    /// <summary>The 9-zone mobile battle HUD to the owner's authoritative mockup (WO-507).</summary>
     public sealed class BattleHud9Zone : MonoBehaviour
     {
-        // ── palette (dark semi-transparent premium fantasy) ───────────────────
-        private static readonly Color PanelDark = new Color(0.05f, 0.06f, 0.09f, 0.78f);
+        // =====================================================================
+        //  TUNABLE CONSTS - the owner dials these live ("tighter / left / bigger").
+        //  Every position/size/color a zone uses is named here, one line each.
+        // =====================================================================
+
+        // -- palette (dark semi-transparent premium fantasy) -------------------
+        private static readonly Color PanelDark = new Color(0.05f, 0.06f, 0.09f, 0.80f);
         private static readonly Color PanelDim  = new Color(0.05f, 0.06f, 0.09f, 0.55f);
         private static readonly Color Gold      = new Color(0.92f, 0.78f, 0.36f, 1f);
         private static readonly Color Parchment = new Color(0.86f, 0.84f, 0.78f, 1f);
-        private static readonly Color HpGreen   = new Color(0.36f, 0.80f, 0.40f, 1f);
-        private static readonly Color ManaBlue  = new Color(0.36f, 0.62f, 0.92f, 1f);
+        private static readonly Color HpGreen   = new Color(0.30f, 0.78f, 0.34f, 1f);   // mockup: PLAYER HP is GREEN
+        private static readonly Color HpRed     = new Color(0.82f, 0.26f, 0.24f, 1f);   // mockup: ENEMY/TARGET HP is RED
+        private static readonly Color Bar2Blue  = new Color(0.36f, 0.62f, 0.92f, 1f);   // 2nd bar (resource/level)
         private static readonly Color TrackBg   = new Color(0f, 0f, 0f, 0.55f);
         private static readonly Color DeadGrey  = new Color(0.30f, 0.30f, 0.33f, 0.85f);
         private static readonly Color RingTrack = new Color(0f, 0f, 0f, 0.62f);
+        private static readonly Color BuffSlot  = new Color(0.16f, 0.18f, 0.22f, 0.85f);
+        private static readonly Color LockOn    = new Color(0.85f, 0.30f, 0.26f, 1f);   // Locked = red
+        private static readonly Color LockOff   = new Color(0.45f, 0.48f, 0.52f, 1f);   // Unlocked = grey
 
-        // Role colors (WO-498): Tank gray/blue, Healer green, Wizard purple, DPS red.
+        // Role colors: Tank gray/blue, Healer green, Wizard purple, DPS red.
         private static readonly Color ColTank   = new Color(0.46f, 0.60f, 0.78f, 1f);
         private static readonly Color ColHealer = new Color(0.40f, 0.80f, 0.45f, 1f);
         private static readonly Color ColWizard = new Color(0.66f, 0.45f, 0.92f, 1f);
         private static readonly Color ColDps    = new Color(0.84f, 0.32f, 0.28f, 1f);
 
-        // ── live system refs (self-resolved; read-only pulls) ─────────────────
+        // GATE: when false, the top-center enemy block shows name/HP/role/level only.
+        // When true it ALSO shows ATK/DEF (a future "scout/inspect" skill unlocks this).
+        private const bool ShowEnemyDeepStats = false;
+
+        // -- Top-Left: hero portrait + name + HP(green) + resource(blue) + ability/buff icons --
+        private static readonly Vector2 TL_Pos      = new Vector2(232f, -58f); // from top-left
+        private static readonly Vector2 TL_Size     = new Vector2(420f, 100f);
+        private const float TL_PortraitSize = 72f;   // SQUARE hero portrait
+        private const int   TL_BuffSlots   = 4;      // small ability/buff icon row
+        private const float TL_BuffSize    = 26f;
+        private const float TL_BuffGap     = 30f;
+
+        // -- Top-Center: target + lock -----------------------------------------
+        // Top-Center = the PROMINENT enemy-target focal block (name + HP value + HP bar
+        // + role/threat row). Bigger than a thin label so it reads as the focal element.
+        private static readonly Vector2 TC_Pos  = new Vector2(0f, -84f);  // from top-center
+        private static readonly Vector2 TC_Size = new Vector2(440f, 150f);
+
+        // Star-conditions + live countdown readout. Anchored UNDER the top-center enemy
+        // block by default; the owner can move it (e.g. top-right near settings) by dialing
+        // SC_Anchor*/SC_Pos. SC_Anchor is the screen anchor (0.5,1 = top-center).
+        private static readonly Vector2 SC_Anchor = new Vector2(0.5f, 1f);  // top-center; (1,1)=top-right
+        private static readonly Vector2 SC_Pos    = new Vector2(0f, -150f); // below the enemy block
+        private static readonly Vector2 SC_Size   = new Vector2(420f, 40f);
+
+        // -- Top-Right: settings + FLEE ----------------------------------------
+        private static readonly Vector2 TR_Pos  = new Vector2(-150f, -48f); // from top-right
+        private static readonly Vector2 TR_Size = new Vector2(220f, 64f);
+
+        // -- Target-cycle list (render: sits directly UNDER the top-left hero plate) --
+        private static readonly Vector2 ML_Pos     = new Vector2(232f, -118f); // top-left anchored, under TL plate
+        private static readonly Vector2 ML_Size    = new Vector2(420f, 300f);
+        private const int   ML_MaxRows = 4;         // Tank/DPS/DPS/Healer family
+        private const float ML_RowH    = 56f;
+        private const float ML_RowGap  = 4f;
+
+        // -- Mid-Right: focus area (placeholder) -------------------------------
+        private static readonly Vector2 MR_Pos  = new Vector2(-18f, 0f); // from mid-right
+        private static readonly Vector2 MR_Size = new Vector2(200f, 300f);
+
+        // -- Bottom-Left: D-PAD (cross of 4 arrows + center dot) ---------------
+        private static readonly Vector2 BL_PadCenter = new Vector2(150f, 140f); // d-pad center from bottom-left
+        private const float BL_PadBtn  = 56f;   // each directional button
+        private const float BL_PadGap  = 60f;   // center-to-arrow offset
+        private const float BL_PadDot  = 34f;   // center dot
+
+        // -- Bottom-Center: horizontal ROW of the unlocked ability icons (Q/W/E/R) --
+        private static readonly Vector2 BC_Pos  = new Vector2(-60f, 70f);  // row centered slightly left of center-bottom
+        private const float BC_AbilitySize = 84f;
+        private const float BC_AbilityGap  = 96f;
+        // Consumables (Potion/Rapid Heal/Desperate WS) + stars/timer tuck to the right of the row.
+        private static readonly Vector2 BC_UtilPos = new Vector2(260f, 70f); // from bottom-center
+        private const float BC_ConsumeSize = 52f;
+        private const float BC_ConsumeGap  = 60f;
+
+        // -- Bottom-Right: 1 big SLASH anchor + a cluster of ~3 round utility buttons --
+        private static readonly Vector2 BR_SlashPos = new Vector2(-104f, 104f); // big basic-attack anchor from bottom-right
+        private const float BR_SlashSize = 128f;
+        private const float BR_UtilSize  = 60f;
+        // The 3 small utility discs cluster UP-LEFT of the SLASH anchor (lock / dash / aim).
+        private static readonly Vector2[] BR_UtilCluster =
+        {
+            new Vector2(-196f,  86f),   // target-lock
+            new Vector2(-214f, 168f),   // dash
+            new Vector2(-150f, 200f),   // aim/move
+        };
+
+        // -- live system refs (self-resolved; read-only pulls) -----------------
         private Canvas _canvas;
         private HeroHealth _health;
         private HeroAbilities _abilities;
         private HeroTargetIndicator _target;
-
-        // ── zone 1 — hero plate ───────────────────────────────────────────────
-        private Image _hpFill;
-        private Text _hpText;
-        private readonly List<Image> _resourcePips = new List<Image>();
-
-        // ── zone 2 — enemy family overview chips ──────────────────────────────
-        private sealed class RoleChip
-        {
-            public EnemyRole Role;
-            public GameObject Root;
-            public Image Disc;
-            public Image HpFill;
-            public Text Label;
-            public Enemy Tracked;   // representative enemy of this role (for the mini HP bar)
-        }
-        private readonly List<RoleChip> _chips = new List<RoleChip>();
-        private float _nextFamilyScan;
-
-        // ── zone 3 — timer + pause ────────────────────────────────────────────
-        private Text _timerText;
         private float _battleStart;
 
-        // ── zone 4 — current target ───────────────────────────────────────────
-        private Image _targetPortrait;
-        private Image _targetRoleDisc;
-        private Text _targetName;
-        private Text _targetRole;
-        private GameObject _targetGroup;
+        // -- Top-Left ----------------------------------------------------------
+        private Image _hpFill;
+        private Text  _hpText;
+        private Image _bar2Fill;
+        private Image _heroPortrait;
 
-        // ── zone 9 — ability arc ──────────────────────────────────────────────
+        // -- Top-Center (prominent enemy-target focal block) -------------------
+        private Text  _targetName;
+        private Text  _targetHpValue;   // numeric HP (e.g. "1300")
+        private Image _targetHpFill;    // enemy HP bar
+        private Text  _targetThreat;    // role + threat row
+        private Text  _targetLevel;     // enemy LEVEL
+        private Text  _targetDeepStats; // ATK/DEF (gated by ShowEnemyDeepStats)
+        private Text  _lockState;
+        private Image _lockBtnBg;
+
+        // -- Star conditions + live countdown readout --------------------------
+        private Text _starCondText;
+
+        // -- Mid-Left target-cycle rows ----------------------------------------
+        private sealed class CycleRow
+        {
+            public GameObject Root;
+            public Image Portrait;
+            public Text  Name;
+            public Image HpFill;
+            public Enemy Tracked;
+        }
+        private readonly List<CycleRow> _cycleRows = new List<CycleRow>();
+        private float _nextFamilyScan;
+
+        // -- Bottom-Center -----------------------------------------------------
+        private Text _starsText;
+        private Text _keepTimerText;
+
+        // -- Bottom-Center ability row (skill-tree / loadout driven) -----------
         private sealed class AbilityBtn
         {
             public AbilitySlot Slot;
+            public GameObject Root;   // hidden when the slot is empty (W/E/R unequipped)
             public Image Disc;
-            public Image CdRing;   // radial cooldown overlay (Filled / Radial360)
-            public Text CdText;
-            public Text Label;
+            public Image Icon;        // the equipped ability's icon (re-bound on loadout change)
+            public Image CdRing;
+            public Text  CdText;
+            public Text  Label;
+            public string BoundId;    // the abilityId currently shown (to detect a loadout swap)
         }
         private readonly AbilityBtn[] _abilityBtns = new AbilityBtn[4];
 
-        // The owner's open battle family is mage/tank/warrior — WO-498 asks the legend to
-        // read the canonical 4 roles (Tank/Healer/Wizard/DPS) as the role-designation KEY,
-        // and chips dim when that role has no living member. The four chips are always built.
-        private static readonly EnemyRole[] LegendRoles =
-            { EnemyRole.Tank, EnemyRole.Healer, EnemyRole.Ranged /*=Wizard*/, EnemyRole.DPS };
+        // Optional external flee handler; defaults to BattleArena.Existing.Flee().
+        private System.Action _onFlee;
 
-        // ─────────────────────────────────────────────────────────────────────
+        // ---------------------------------------------------------------------
         //  Lifecycle
-        // ─────────────────────────────────────────────────────────────────────
+        // ---------------------------------------------------------------------
 
         /// <summary>
-        /// Build the 9-zone overlay (and an EventSystem if none exists), but ONLY when the
-        /// FeatureFlags.BattleHud9Zone gate is ON. Returns null when the flag is OFF so the
-        /// caller can no-op cleanly. Mirrors BattleArenaHud.Create.
+        /// Build the 9-zone overlay (and an EventSystem if none exists) only when the
+        /// FeatureFlags.BattleHud9Zone gate is ON. Returns null when OFF so the caller
+        /// no-ops cleanly. Mirrors BattleArenaHud.Create.
         /// </summary>
         public static BattleHud9Zone Create()
         {
             if (!FeatureFlags.BattleHud9Zone)
             {
-                Debug.Log("[BattleHud9Zone] ff.battlehud9zone OFF - 9-zone HUD not spawned (bones await finesse).");
+                Debug.Log("[BattleHud9Zone] ff.battlehud9zone OFF - 9-zone HUD not spawned.");
                 return null;
             }
             var go = new GameObject("BattleHud9Zone");
             DontDestroyOnLoad(go);
             var hud = go.AddComponent<BattleHud9Zone>();
             hud.Build();
-            Debug.Log("[BattleHud9Zone] spawned 9-zone battle HUD bones (WO-498).");
+            Debug.Log("[BattleHud9Zone] spawned 9-zone battle HUD (WO-507 mockup).");
             return hud;
         }
+
+        /// <summary>Override the Top-Right FLEE handler. Defaults to BattleArena.Existing.Flee().</summary>
+        public void SetFleeHandler(System.Action onFlee) => _onFlee = onFlee;
 
         public void Close()
         {
@@ -153,36 +246,35 @@ namespace DeNelle.Village.Arena
 
             _canvas = gameObject.AddComponent<Canvas>();
             _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            _canvas.sortingOrder = 5200;  // above BattleArenaHud (5000) so the bones own the screen
+            _canvas.sortingOrder = 5200;  // above BattleArenaHud (5000)
             var scaler = gameObject.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             scaler.matchWidthOrHeight = 0.5f;
             gameObject.AddComponent<GraphicRaycaster>();
 
-            BuildZone1HeroPlate();
-            BuildZone2FamilyOverview();
-            BuildZone3TimerPause();
-            BuildZone4CurrentTarget();
-            // Zone 5 (center) is intentionally EMPTY — the fight shows through.
-            BuildZone6QuickFocus();
-            BuildZone7Joystick();
-            BuildZone8BasicAttack();
-            BuildZone9AbilityArc();
+            BuildTopLeftPlayerStats();
+            BuildTargetCycleList();        // sits directly UNDER the top-left hero plate
+            BuildTopCenterTarget();
+            BuildTopRightSettingsFlee();
+            // Mid-Center is intentionally EMPTY - the fight shows through.
+            BuildMidRightFocusArea();
+            BuildBottomLeftDPad();
+            BuildBottomCenterAbilityRow();
+            BuildBottomRightSlashCluster();
         }
 
         private void Update()
         {
             ResolveSystems();
-            PushHeroPlate();
-            PushFamilyOverview();
-            PushTimer();
-            PushCurrentTarget();
+            PushPlayerStats();
+            PushTarget();
+            PushTargetCycle();
+            PushStarConditions();
+            PushBottomCenter();
             PushAbilityCooldowns();
         }
 
-        // Self-resolve the hero subsystems (the hero is warped in by BattleArena; resolve
-        // lazily so a late-spawned hero still binds). Unity null checks are explicit.
         private void ResolveSystems()
         {
             if (_health == null) _health = HeroHealth.Instance;
@@ -190,50 +282,52 @@ namespace DeNelle.Village.Arena
             if (_target == null) _target = Object.FindFirstObjectByType<HeroTargetIndicator>();
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        //  ZONE 1 — Top-Left: Knight HP + resource pips
-        // ─────────────────────────────────────────────────────────────────────
-        private void BuildZone1HeroPlate()
+        // ---------------------------------------------------------------------
+        //  TOP-LEFT - player HP (red) + 2nd bar + BUFFS row (placeholder)
+        // ---------------------------------------------------------------------
+        private void BuildTopLeftPlayerStats()
         {
-            var plate = AddPanel(transform, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                                 new Vector2(220f, -64f), new Vector2(400f, 108f), PanelDark);
+            var plate = AddPanel(transform, new Vector2(0f, 1f), new Vector2(0f, 1f), TL_Pos, TL_Size, PanelDark);
             Frame(plate);
 
-            // Shield emblem (role/class crest).
-            var emblem = AddIcon(plate.transform, RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield),
-                                 new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(40f, 0f), new Vector2(56f, 56f), Gold);
+            // SQUARE hero portrait (left).
+            _heroPortrait = AddImage(plate.transform, new Color(0.12f, 0.12f, 0.15f, 1f));
+            Anchor(_heroPortrait.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(14f, -14f),
+                   new Vector2(TL_PortraitSize, TL_PortraitSize), new Vector2(0f, 1f));
+            var pSp = RoleIcon(EnemyRole.Tank);   // "knight" armored portrait stand-in
+            if (pSp != null) { _heroPortrait.sprite = pSp; _heroPortrait.color = Color.white; }
 
-            var name = AddText(plate.transform, "Knight", 24, Gold, TextAnchor.UpperLeft);
-            Anchor(name.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(78f, -10f), new Vector2(-90f, 28f), new Vector2(0f, 1f));
+            float bx = 14f + TL_PortraitSize + 12f;  // x where the bars/name start (right of portrait)
+            var name = AddText(plate.transform, "Knight", 20, Gold, TextAnchor.UpperLeft);
+            Anchor(name.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(bx, -8f), new Vector2(-bx - 8f, 24f), new Vector2(0f, 1f));
 
-            // HP bar (big green, gilt track).
-            var hpBg = AddPanel(plate.transform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f),
-                                new Vector2(40f, -2f), new Vector2(-94f, 26f), TrackBg);
-            var hr = hpBg.rectTransform; hr.anchorMin = new Vector2(0f, 0.5f); hr.anchorMax = new Vector2(1f, 0.5f);
-            hr.offsetMin = new Vector2(78f, -14f); hr.offsetMax = new Vector2(-16f, 12f);
+            // HP bar (GREEN per the render).
+            var hpBg = AddImage(plate.transform, TrackBg);
+            Anchor(hpBg.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(bx, -38f), new Vector2(-bx - 12f, 16f), new Vector2(0f, 1f));
             _hpFill = AddImage(hpBg.transform, HpGreen);
             FillBarLeft(_hpFill);
-            _hpText = AddText(hpBg.transform, "100 / 100", 14, Color.white, TextAnchor.MiddleCenter);
+            _hpText = AddText(hpBg.transform, "100 / 100", 12, Color.white, TextAnchor.MiddleCenter);
             Stretch(_hpText.rectTransform);
 
-            // Resource pips row (placeholder bones — mana orbs; the owner maps real resources tomorrow).
-            var pipRow = new GameObject("ResourcePips");
-            pipRow.transform.SetParent(plate.transform, false);
-            var prt = pipRow.AddComponent<RectTransform>();
-            Anchor(prt, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(78f, 14f), new Vector2(-94f, 16f), new Vector2(0f, 0f));
-            for (int i = 0; i < 5; i++)
+            // Resource bar (BLUE).
+            var bar2Bg = AddImage(plate.transform, TrackBg);
+            Anchor(bar2Bg.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(bx, -58f), new Vector2(-bx - 12f, 12f), new Vector2(0f, 1f));
+            _bar2Fill = AddImage(bar2Bg.transform, Bar2Blue);
+            FillBarLeft(_bar2Fill);
+
+            // Small ability/buff icon row under the bars (placeholder slots - new system).
+            for (int i = 0; i < TL_BuffSlots; i++)
             {
-                var pip = AddImage(pipRow.transform, ManaBlue);
-                var pr = pip.rectTransform;
-                pr.anchorMin = new Vector2(0f, 0.5f); pr.anchorMax = new Vector2(0f, 0.5f);
-                pr.pivot = new Vector2(0f, 0.5f);
-                pr.sizeDelta = new Vector2(14f, 14f);
-                pr.anchoredPosition = new Vector2(i * 20f, 0f);
-                _resourcePips.Add(pip);
+                var slot = AddImage(plate.transform, BuffSlot);
+                var sr = slot.rectTransform;
+                sr.anchorMin = new Vector2(0f, 0f); sr.anchorMax = new Vector2(0f, 0f); sr.pivot = new Vector2(0f, 0f);
+                sr.sizeDelta = new Vector2(TL_BuffSize, TL_BuffSize);
+                sr.anchoredPosition = new Vector2(bx + i * TL_BuffGap, 8f);
+                MakeCircle(slot);
             }
         }
 
-        private void PushHeroPlate()
+        private void PushPlayerStats()
         {
             if (_health != null && _hpFill != null)
             {
@@ -242,323 +336,398 @@ namespace DeNelle.Village.Arena
                 _hpFill.fillAmount = frac;
                 if (_hpText != null) _hpText.text = Mathf.CeilToInt(Mathf.Max(0f, _health.Hp)) + " / " + Mathf.CeilToInt(max);
             }
-            // Resource pips = mana (lit up to current mana). Bones; owner remaps to real resources.
-            if (_abilities != null && _resourcePips.Count > 0)
-            {
-                float maxMana = _abilities.MaxMana <= 0f ? _resourcePips.Count : _abilities.MaxMana;
-                float per = maxMana / _resourcePips.Count;
-                for (int i = 0; i < _resourcePips.Count; i++)
-                {
-                    bool lit = _abilities.Mana >= (i + 1) * per - 0.001f;
-                    _resourcePips[i].color = lit ? ManaBlue : new Color(ManaBlue.r, ManaBlue.g, ManaBlue.b, 0.22f);
-                }
-            }
+            // Resource bar tracks mana when a real pool exists; otherwise a static bone.
+            if (_abilities != null && _bar2Fill != null && _abilities.MaxMana > 0f)
+                _bar2Fill.fillAmount = Mathf.Clamp01(_abilities.Mana / _abilities.MaxMana);
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        //  ZONE 2 — Top-Center: enemy family role overview (4 chips, dim-on-death)
-        // ─────────────────────────────────────────────────────────────────────
-        private void BuildZone2FamilyOverview()
+        // ---------------------------------------------------------------------
+        //  TOP-CENTER - the PROMINENT enemy-target focal block (owner refinement):
+        //  enemy NAME + numeric HP value + HP bar + role/threat row + lock state/toggle.
+        // ---------------------------------------------------------------------
+        private void BuildTopCenterTarget()
         {
-            var bar = AddPanel(transform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                               new Vector2(0f, -56f), new Vector2(540f, 92f), PanelDark);
-            Frame(bar);
-
-            var legend = AddText(bar.transform, "FAMILY", 12, Parchment, TextAnchor.UpperCenter);
-            Anchor(legend.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -4f), new Vector2(0f, 16f), new Vector2(0.5f, 1f));
-
-            float chipW = 124f;
-            for (int i = 0; i < LegendRoles.Length; i++)
-            {
-                var role = LegendRoles[i];
-                var chipGo = new GameObject("Chip_" + role);
-                chipGo.transform.SetParent(bar.transform, false);
-                var crt = chipGo.AddComponent<RectTransform>();
-                crt.anchorMin = new Vector2(0.5f, 0.5f); crt.anchorMax = new Vector2(0.5f, 0.5f);
-                crt.pivot = new Vector2(0.5f, 0.5f);
-                crt.sizeDelta = new Vector2(chipW - 8f, 60f);
-                crt.anchoredPosition = new Vector2((i - 1.5f) * chipW, -4f);
-
-                var chip = new RoleChip { Role = role, Root = chipGo };
-
-                // Role disc + icon.
-                var disc = AddImage(chipGo.transform, RoleColor(role));
-                var dr = disc.rectTransform;
-                dr.anchorMin = new Vector2(0f, 0.5f); dr.anchorMax = new Vector2(0f, 0.5f); dr.pivot = new Vector2(0f, 0.5f);
-                dr.sizeDelta = new Vector2(34f, 34f); dr.anchoredPosition = new Vector2(2f, 6f);
-                var roleSp = RoleIcon(role);
-                if (roleSp != null) { disc.sprite = roleSp; disc.color = Color.white; }
-                chip.Disc = disc;
-
-                // Label.
-                var lbl = AddText(chipGo.transform, RoleLabel(role), 13, Parchment, TextAnchor.MiddleLeft);
-                Anchor(lbl.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 1f), new Vector2(42f, 0f), new Vector2(-2f, 24f), new Vector2(0f, 0.5f));
-                chip.Label = lbl;
-
-                // Mini HP bar.
-                var hpBg = AddImage(chipGo.transform, TrackBg);
-                Anchor(hpBg.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(42f, 6f), new Vector2(-2f, 10f), new Vector2(0f, 0f));
-                var hpFill = AddImage(hpBg.transform, RoleColor(role));
-                FillBarLeft(hpFill);
-                chip.HpFill = hpFill;
-
-                _chips.Add(chip);
-            }
-        }
-
-        private void PushFamilyOverview()
-        {
-            // Re-scan the live family every ~0.3s (cheap; the family is small) and bind a
-            // representative enemy per role so the chip mini-bar + dim-on-death track the fight.
-            if (Time.time >= _nextFamilyScan)
-            {
-                _nextFamilyScan = Time.time + 0.3f;
-                RebindFamily();
-            }
-            for (int i = 0; i < _chips.Count; i++)
-            {
-                var chip = _chips[i];
-                bool alive = chip.Tracked != null && !chip.Tracked.IsDead;
-                if (chip.HpFill != null) chip.HpFill.fillAmount = alive ? chip.Tracked.HpFraction : 0f;
-                // Dim-on-death: grey the disc + label when no living member of this role.
-                if (chip.Disc != null && chip.Disc.sprite == null)
-                    chip.Disc.color = alive ? RoleColor(chip.Role) : DeadGrey;
-                else if (chip.Disc != null)
-                    chip.Disc.color = alive ? Color.white : DeadGrey;
-                if (chip.Label != null) chip.Label.color = alive ? Parchment : DeadGrey;
-            }
-        }
-
-        // Bind each role chip to a living enemy of that role (nearest-with-most-HP is fine for bones).
-        private void RebindFamily()
-        {
-            var enemies = Object.FindObjectsByType<Enemy>(FindObjectsSortMode.None);
-            for (int c = 0; c < _chips.Count; c++)
-            {
-                var chip = _chips[c];
-                // Keep the current tracked enemy if it's still alive + same role.
-                if (chip.Tracked != null && !chip.Tracked.IsDead && RoleOf(chip.Tracked) == chip.Role) continue;
-                chip.Tracked = null;
-                for (int e = 0; e < enemies.Length; e++)
-                {
-                    var en = enemies[e];
-                    if (en == null || en.IsDead) continue;
-                    if (RoleOf(en) == chip.Role) { chip.Tracked = en; break; }
-                }
-            }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        //  ZONE 3 — Top-Right: timer + pause (+ settings/audio, minimal rail)
-        // ─────────────────────────────────────────────────────────────────────
-        private void BuildZone3TimerPause()
-        {
-            var box = AddPanel(transform, new Vector2(1f, 1f), new Vector2(1f, 1f),
-                               new Vector2(-150f, -52f), new Vector2(220f, 72f), PanelDark);
-            Frame(box);
-
-            _timerText = AddText(box.transform, "0:00", 26, Gold, TextAnchor.MiddleLeft);
-            Anchor(_timerText.rectTransform, new Vector2(0f, 0f), new Vector2(0.55f, 1f), new Vector2(14f, 0f), Vector2.zero, new Vector2(0f, 0.5f));
-
-            // Pause button (bones; wires to Time.timeScale toggle — non-destructive).
-            AddIconButton(box.transform, RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSettings), "II",
-                          new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-32f, 0f), new Vector2(44f, 44f),
-                          PanelDim, Gold, TogglePause);
-            // Settings/audio mini-icon (de-emphasized far-right rail).
-            AddIconButton(box.transform, RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSettings), "*",
-                          new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-80f, 0f), new Vector2(40f, 40f),
-                          PanelDim, Parchment, null);
-        }
-
-        private void PushTimer()
-        {
-            if (_timerText == null) return;
-            int s = Mathf.Max(0, Mathf.FloorToInt(Time.time - _battleStart));
-            _timerText.text = (s / 60) + ":" + (s % 60).ToString("00");
-        }
-
-        private bool _paused;
-        private void TogglePause()
-        {
-            _paused = !_paused;
-            Time.timeScale = _paused ? 0f : 1f;
-            Debug.Log("[BattleHud9Zone] pause toggled -> " + (_paused ? "PAUSED" : "RUNNING"));
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        //  ZONE 4 — Middle-Left: current-target portrait + role
-        // ─────────────────────────────────────────────────────────────────────
-        private void BuildZone4CurrentTarget()
-        {
-            var panel = AddPanel(transform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
-                                 new Vector2(130f, 40f), new Vector2(228f, 132f), PanelDark);
+            var panel = AddPanel(transform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), TC_Pos, TC_Size, PanelDark);
             Frame(panel);
-            _targetGroup = panel.gameObject;
 
-            // Portrait disc.
-            _targetPortrait = AddImage(panel.transform, new Color(0.12f, 0.12f, 0.15f, 1f));
-            Anchor(_targetPortrait.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(14f, -14f), new Vector2(72f, 72f), new Vector2(0f, 1f));
-            // Small role disc badge over the portrait corner.
-            _targetRoleDisc = AddImage(panel.transform, ColDps);
-            Anchor(_targetRoleDisc.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(64f, -64f), new Vector2(28f, 28f), new Vector2(0f, 1f));
+            var hdr = AddText(panel.transform, "TARGET", 11, Parchment, TextAnchor.UpperLeft);
+            Anchor(hdr.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(16f, -6f), new Vector2(-12f, 14f), new Vector2(0f, 1f));
 
-            _targetName = AddText(panel.transform, "No Target", 16, Parchment, TextAnchor.UpperLeft);
-            Anchor(_targetName.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(94f, -16f), new Vector2(-8f, 24f), new Vector2(0f, 1f));
-            _targetRole = AddText(panel.transform, "", 14, Gold, TextAnchor.UpperLeft);
-            Anchor(_targetRole.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(94f, -42f), new Vector2(-8f, 22f), new Vector2(0f, 1f));
+            // Enemy NAME (large, the focal line) + LEVEL chip + numeric HP value to its right.
+            _targetName = AddText(panel.transform, "No Target", 24, Gold, TextAnchor.UpperLeft);
+            Anchor(_targetName.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(16f, -22f), new Vector2(-200f, 30f), new Vector2(0f, 1f));
+            _targetLevel = AddText(panel.transform, "", 14, Parchment, TextAnchor.UpperRight);
+            Anchor(_targetLevel.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-58f, -24f), new Vector2(120f, 22f), new Vector2(1f, 1f));
+            _targetHpValue = AddText(panel.transform, "", 20, HpRed, TextAnchor.UpperRight);
+            Anchor(_targetHpValue.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-58f, -2f), new Vector2(120f, 24f), new Vector2(1f, 1f));
+
+            // Enemy HP bar.
+            var hpBg = AddImage(panel.transform, TrackBg);
+            Anchor(hpBg.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(16f, -6f), new Vector2(-32f, 14f), new Vector2(0f, 0.5f));
+            _targetHpFill = AddImage(hpBg.transform, HpRed);
+            FillBarLeft(_targetHpFill);
+
+            // Role + threat row (role label + star-style threat glyphs).
+            _targetThreat = AddText(panel.transform, "", 13, Parchment, TextAnchor.LowerLeft);
+            Anchor(_targetThreat.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(16f, 24f), new Vector2(-180f, 18f), new Vector2(0f, 0f));
+
+            // ATK/DEF deep stats (gated behind the future scout/inspect skill).
+            _targetDeepStats = AddText(panel.transform, "", 12, new Color(0.78f, 0.80f, 0.86f, 1f), TextAnchor.LowerLeft);
+            Anchor(_targetDeepStats.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(16f, 6f), new Vector2(-180f, 16f), new Vector2(0f, 0f));
+
+            // Lock state + lock-toggle button (bottom-right of the block).
+            _lockState = AddText(panel.transform, "Unlocked", 12, LockOff, TextAnchor.LowerRight);
+            Anchor(_lockState.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-58f, 6f), new Vector2(96f, 18f), new Vector2(1f, 0f));
+            _lockBtnBg = AddIconButton(panel.transform, RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield), "L",
+                                       new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-28f, 0f), new Vector2(44f, 44f),
+                                       PanelDim, Gold, ToggleLock);
+            MakeCircle(_lockBtnBg);
+
+            BuildStarConditions();
         }
 
-        private void PushCurrentTarget()
+        // Star-conditions + live countdown readout (owner refinement: "add star conditions
+        // somewhere" in the top area). Shows the time-box thresholds from BattleStarRating
+        // + the live elapsed clock. Anchor is a tunable const (SC_Anchor/SC_Pos) so the owner
+        // can park it under the enemy block (default) or top-right near settings.
+        private void BuildStarConditions()
         {
-            if (_target == null || _targetName == null) return;
+            var panel = AddPanel(transform, SC_Anchor, SC_Anchor, SC_Pos, SC_Size, PanelDim);
+            Frame(panel);
+            _starCondText = AddText(panel.transform, "", 13, Gold, TextAnchor.MiddleCenter);
+            Stretch(_starCondText.rectTransform);
+        }
+
+        // Star CONDITIONS (the time-box goal): show the duration thresholds that earn 3/2/1
+        // stars (from BattleStarRating) + the LIVE elapsed clock ticking, so the player sees
+        // what to beat. Thresholds are the BattleStarRating consts; the clock is the battle timer.
+        private void PushStarConditions()
+        {
+            if (_starCondText == null) return;
+            int s = Mathf.Max(0, Mathf.FloorToInt(Time.time - _battleStart));
+            string clock = (s / 60) + ":" + (s % 60).ToString("00");
+            _starCondText.text = "3* <" + Mathf.RoundToInt(BattleStarRating.ThreeStarSeconds) + "s  |  "
+                               + "2* <" + Mathf.RoundToInt(BattleStarRating.TwoStarSeconds) + "s  |  "
+                               + clock;
+        }
+
+        private void PushTarget()
+        {
+            if (_targetName == null) return;
+            if (_target == null) { _targetName.text = "No Target"; return; }
             var cur = _target.CurrentTarget;
             var curMb = cur as MonoBehaviour;
             var en = (curMb != null) ? curMb.GetComponentInParent<Enemy>() : null;
             if (cur == null || !cur.IsAlive || en == null)
             {
                 _targetName.text = "No Target";
-                if (_targetRole != null) _targetRole.text = "";
-                if (_targetRoleDisc != null) _targetRoleDisc.color = DeadGrey;
-                if (_targetPortrait != null) _targetPortrait.color = new Color(0.12f, 0.12f, 0.15f, 0.6f);
+                if (_targetHpValue != null) _targetHpValue.text = "";
+                if (_targetLevel != null) _targetLevel.text = "";
+                if (_targetHpFill != null) _targetHpFill.fillAmount = 0f;
+                if (_targetThreat != null) _targetThreat.text = "";
+                if (_targetDeepStats != null) _targetDeepStats.text = "";
+                if (_lockState != null) { _lockState.text = "Unlocked"; _lockState.color = LockOff; }
+                if (_lockBtnBg != null) _lockBtnBg.color = PanelDim;
                 return;
             }
-            var role = RoleOf(en);
             _targetName.text = en.name.Replace("(Clone)", "").Trim();
-            if (_targetRole != null) _targetRole.text = RoleLabel(role);
-            if (_targetRoleDisc != null) _targetRoleDisc.color = RoleColor(role);
-            if (_targetPortrait != null)
+            if (_targetHpValue != null) _targetHpValue.text = Mathf.CeilToInt(Mathf.Max(0f, en.Hp)).ToString();
+            if (_targetHpFill != null) _targetHpFill.fillAmount = en.HpFraction;
+
+            // LEVEL: Enemy exposes no public Level field; derive a readable stub from max-HP
+            // (cheap, monotone) until an EnemyDef.Level surfaces. Stubs gracefully ("Lv ?").
+            if (_targetLevel != null) _targetLevel.text = "Lv " + EnemyLevelStub(en);
+
+            // Role + threat row: role label + threat glyphs scaled by remaining HP fraction.
+            var role = RoleOf(en);
+            if (_targetThreat != null)
             {
-                var sp = RoleIcon(role);
-                if (sp != null) { _targetPortrait.sprite = sp; _targetPortrait.color = Color.white; }
-                else _targetPortrait.color = RoleColor(role);
+                int threat = 1 + Mathf.Clamp(Mathf.FloorToInt(en.HpFraction * 3f), 0, 2); // 1..3 stars
+                var sb = new System.Text.StringBuilder();
+                for (int i = 0; i < 3; i++) sb.Append(i < threat ? "* " : "- ");
+                _targetThreat.text = RoleName(role) + "   " + sb.ToString().TrimEnd();
+                _targetThreat.color = RoleColor(role);
+            }
+
+            // ATK/DEF deep stats - only when the scout/inspect gate is on. Enemy exposes no
+            // public ATK/DEF; stub gracefully ("-") so the bones read without touching Enemy.cs.
+            if (_targetDeepStats != null)
+                _targetDeepStats.text = ShowEnemyDeepStats ? "ATK -   DEF -" : "";
+
+            bool locked = _lockEngaged;
+            if (_lockState != null)
+            {
+                _lockState.text = locked ? "Locked" : "Unlocked";
+                _lockState.color = locked ? LockOn : LockOff;
+            }
+            if (_lockBtnBg != null) _lockBtnBg.color = locked ? LockOn : PanelDim;
+        }
+
+        // Lock toggle: ON locks HeroAbilities onto the current target; OFF clears the lock
+        // (reverts to auto-nearest) via HeroTargetIndicator.ClearLock.
+        private bool _lockEngaged;
+        private void ToggleLock()
+        {
+            _lockEngaged = !_lockEngaged;
+            if (_lockEngaged)
+            {
+                var cur = _target?.CurrentTarget;
+                if (cur != null && _abilities != null)
+                {
+                    _abilities.LockedTarget = cur;
+                    _abilities.AimPointOverride = cur.WorldPosition;
+                }
+            }
+            else
+            {
+                _target?.ClearLock();
+            }
+            Debug.Log("[BattleHud9Zone] lock toggled -> " + (_lockEngaged ? "LOCKED" : "UNLOCKED"));
+        }
+
+        // ---------------------------------------------------------------------
+        //  TOP-RIGHT - Settings gear + FLEE (Flee lives here now)
+        // ---------------------------------------------------------------------
+        private void BuildTopRightSettingsFlee()
+        {
+            var box = AddPanel(transform, new Vector2(1f, 1f), new Vector2(1f, 1f), TR_Pos, TR_Size, PanelDark);
+            Frame(box);
+
+            // Settings gear (left of the FLEE button).
+            AddIconButton(box.transform, RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSettings), "*",
+                          new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(34f, 0f), new Vector2(48f, 48f),
+                          PanelDim, Parchment, null);
+
+            // FLEE (de-emphasised retreat; reuses BattleArena.Flee).
+            AddTextButton(box.transform, "FLEE", new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
+                          new Vector2(-78f, 0f), new Vector2(120f, 48f), new Color(0.42f, 0.20f, 0.20f, 0.85f), OnFlee);
+        }
+
+        private void OnFlee()
+        {
+            if (_onFlee != null) { _onFlee(); return; }
+            var arena = BattleArena.Existing;
+            if (arena != null) arena.Flee();
+            else Debug.Log("[BattleHud9Zone] FLEE - no BattleArena to flee from.");
+        }
+
+        // ---------------------------------------------------------------------
+        //  TARGET CYCLE - vertical list directly UNDER the top-left hero plate
+        //  (render: each enemy = class-colored SQUARE icon + name + HP + a ">" chevron).
+        // ---------------------------------------------------------------------
+        private void BuildTargetCycleList()
+        {
+            var panel = AddPanel(transform, new Vector2(0f, 1f), new Vector2(0f, 1f), ML_Pos, ML_Size, PanelDark);
+            Frame(panel);
+
+            var hdr = AddText(panel.transform, "TARGET CYCLE", 11, Parchment, TextAnchor.UpperLeft);
+            Anchor(hdr.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -6f), new Vector2(-12f, 16f), new Vector2(0f, 1f));
+
+            for (int i = 0; i < ML_MaxRows; i++)
+            {
+                var rowGo = new GameObject("CycleRow_" + i);
+                rowGo.transform.SetParent(panel.transform, false);
+                var rrt = rowGo.AddComponent<RectTransform>();
+                rrt.anchorMin = new Vector2(0f, 1f); rrt.anchorMax = new Vector2(1f, 1f); rrt.pivot = new Vector2(0.5f, 1f);
+                rrt.offsetMin = new Vector2(8f, 0f); rrt.offsetMax = new Vector2(-8f, 0f);
+                rrt.sizeDelta = new Vector2(rrt.sizeDelta.x, ML_RowH);
+                rrt.anchoredPosition = new Vector2(0f, -26f - i * (ML_RowH + ML_RowGap));
+
+                // Tappable row (selects/cycles to this enemy).
+                var rowBtn = rowGo.AddComponent<Image>();
+                rowBtn.color = PanelDim;
+                var btn = rowGo.AddComponent<Button>();
+                btn.targetGraphic = rowBtn;
+                int idx = i;
+                btn.onClick.AddListener(() => SelectCycleRow(idx));
+
+                var row = new CycleRow { Root = rowGo };
+
+                // Class-colored SQUARE icon (no MakeCircle - render shows squares).
+                row.Portrait = AddImage(rowGo.transform, new Color(0.12f, 0.12f, 0.15f, 1f));
+                Anchor(row.Portrait.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(8f, 0f), new Vector2(40f, 40f), new Vector2(0f, 0.5f));
+
+                row.Name = AddText(rowGo.transform, "-", 14, Parchment, TextAnchor.UpperLeft);
+                Anchor(row.Name.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(56f, -6f), new Vector2(-30f, 20f), new Vector2(0f, 1f));
+
+                var hpBg = AddImage(rowGo.transform, TrackBg);
+                Anchor(hpBg.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(56f, 8f), new Vector2(-30f, 10f), new Vector2(0f, 0f));
+                row.HpFill = AddImage(hpBg.transform, ColDps);
+                FillBarLeft(row.HpFill);
+
+                // ">" chevron (cycle affordance, far right).
+                var chev = AddText(rowGo.transform, ">", 20, Gold, TextAnchor.MiddleRight);
+                Anchor(chev.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-8f, 0f), new Vector2(20f, 28f), new Vector2(1f, 0.5f));
+                chev.raycastTarget = false;
+
+                _cycleRows.Add(row);
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        //  ZONE 6 — Middle-Right: quick-focus buttons (Focus Healer / Wizard)
-        // ─────────────────────────────────────────────────────────────────────
-        private void BuildZone6QuickFocus()
+        private void PushTargetCycle()
         {
-            var col = new GameObject("QuickFocus");
-            col.transform.SetParent(transform, false);
-            var crt = col.AddComponent<RectTransform>();
-            crt.anchorMin = new Vector2(1f, 0.5f); crt.anchorMax = new Vector2(1f, 0.5f);
-            crt.pivot = new Vector2(1f, 0.5f);
-            crt.sizeDelta = new Vector2(190f, 140f);
-            crt.anchoredPosition = new Vector2(-20f, 40f);
-
-            AddTextButton(col.transform, "Focus Healer", new Vector2(1f, 1f), new Vector2(1f, 1f),
-                          new Vector2(0f, -2f), new Vector2(186f, 56f), ColHealer, () => FocusRole(EnemyRole.Healer));
-            AddTextButton(col.transform, "Focus Wizard", new Vector2(1f, 1f), new Vector2(1f, 1f),
-                          new Vector2(0f, -66f), new Vector2(186f, 56f), ColWizard, () => FocusRole(EnemyRole.Ranged));
+            if (Time.time >= _nextFamilyScan)
+            {
+                _nextFamilyScan = Time.time + 0.3f;
+                RebindFamily();
+            }
+            for (int i = 0; i < _cycleRows.Count; i++)
+            {
+                var row = _cycleRows[i];
+                bool alive = row.Tracked != null && !row.Tracked.IsDead;
+                if (row.Root != null) row.Root.SetActive(row.Tracked != null);
+                if (!alive)
+                {
+                    if (row.HpFill != null) row.HpFill.fillAmount = 0f;
+                    if (row.Name != null) row.Name.color = DeadGrey;
+                    continue;
+                }
+                var role = RoleOf(row.Tracked);
+                if (row.Name != null)
+                {
+                    row.Name.text = row.Tracked.name.Replace("(Clone)", "").Trim();
+                    row.Name.color = Parchment;
+                }
+                if (row.HpFill != null)
+                {
+                    row.HpFill.fillAmount = row.Tracked.HpFraction;
+                    row.HpFill.color = RoleColor(role);
+                }
+                if (row.Portrait != null)
+                {
+                    var sp = RoleIcon(role);
+                    if (sp != null) { row.Portrait.sprite = sp; row.Portrait.color = Color.white; }
+                    else row.Portrait.color = RoleColor(role);
+                }
+            }
         }
 
-        // Quick-focus: lock HeroTargetIndicator onto the nearest living enemy of the role.
-        // We reuse the indicator's own target via its public FocusRole-equivalent — but it
-        // exposes only CurrentTarget (get). So we drive its lock by directly handing the
-        // ability a locked target through the indicator's public surface where available;
-        // for the bones we set the aim by selecting the nearest role member and nudging the
-        // ability LockedTarget (HeroAbilities.LockedTarget is public). This is a soft focus.
-        private void FocusRole(EnemyRole role)
+        // Bind each row to a living family member (one row per enemy, nearest-first).
+        private void RebindFamily()
         {
             var enemies = Object.FindObjectsByType<Enemy>(FindObjectsSortMode.None);
-            Enemy best = null; float bestSq = float.MaxValue;
+            // Sort by distance to the hero for a stable, readable list.
             Vector3 me = _abilities != null ? _abilities.transform.position : Vector3.zero;
-            for (int i = 0; i < enemies.Length; i++)
+            System.Array.Sort(enemies, (a, b) =>
             {
-                var en = enemies[i];
-                if (en == null || en.IsDead || RoleOf(en) != role) continue;
-                float sq = (en.transform.position - me).sqrMagnitude;
-                if (sq < bestSq) { bestSq = sq; best = en; }
+                if (a == null) return 1; if (b == null) return -1;
+                return (a.transform.position - me).sqrMagnitude.CompareTo((b.transform.position - me).sqrMagnitude);
+            });
+            int r = 0;
+            for (int e = 0; e < enemies.Length && r < _cycleRows.Count; e++)
+            {
+                var en = enemies[e];
+                if (en == null || en.IsDead) continue;
+                _cycleRows[r].Tracked = en;
+                r++;
             }
-            if (best == null) { Debug.Log("[BattleHud9Zone] FocusRole " + role + " - no living member."); return; }
-            var dmg = best.GetComponent<IDamageable>();
-            if (dmg == null) dmg = best.GetComponentInParent<IDamageable>();
+            for (; r < _cycleRows.Count; r++) _cycleRows[r].Tracked = null;
+        }
+
+        // Row tap -> lock HeroAbilities onto that enemy (placeholder cycle interactivity:
+        // a soft focus via the public lock surface, like Mid-Right focus did).
+        private void SelectCycleRow(int idx)
+        {
+            if (idx < 0 || idx >= _cycleRows.Count) return;
+            var en = _cycleRows[idx].Tracked;
+            if (en == null || en.IsDead) return;
+            var dmg = en.GetComponent<IDamageable>() ?? en.GetComponentInParent<IDamageable>();
             if (dmg != null && _abilities != null)
             {
                 _abilities.LockedTarget = dmg;
                 _abilities.AimPointOverride = dmg.WorldPosition;
-                Debug.Log("[BattleHud9Zone] FocusRole " + role + " -> locked " + best.name + ".");
+                _lockEngaged = true;
+                Debug.Log("[BattleHud9Zone] target-cycle select -> " + en.name + ".");
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        //  ZONE 7 — Bottom-Left: movement joystick (mobile; desktop keeps WASD)
-        // ─────────────────────────────────────────────────────────────────────
-        private void BuildZone7Joystick()
+        // ---------------------------------------------------------------------
+        //  MID-RIGHT - FOCUS AREA: heal-toggle + Attack + mode switch (PLACEHOLDER)
+        // ---------------------------------------------------------------------
+        private void BuildMidRightFocusArea()
         {
-            // Bones: a static joystick base + knob. Touch-drag steering wiring is the finesse
-            // pass (the owner tunes joystick feel tomorrow); desktop keeps the existing WASD path,
-            // so this is a visual placeholder that does not intercept movement input yet.
-            var baseImg = AddImage(transform, PanelDim);
-            var br = baseImg.rectTransform;
-            br.anchorMin = new Vector2(0f, 0f); br.anchorMax = new Vector2(0f, 0f); br.pivot = new Vector2(0f, 0f);
-            br.sizeDelta = new Vector2(180f, 180f); br.anchoredPosition = new Vector2(40f, 40f);
-            MakeCircle(baseImg);
-            Frame(baseImg);
+            var panel = AddPanel(transform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), MR_Pos, MR_Size, PanelDark);
+            Frame(panel);
 
-            var knob = AddImage(baseImg.transform, new Color(0.85f, 0.82f, 0.70f, 0.85f));
-            var kr = knob.rectTransform;
-            kr.anchorMin = new Vector2(0.5f, 0.5f); kr.anchorMax = new Vector2(0.5f, 0.5f); kr.pivot = new Vector2(0.5f, 0.5f);
-            kr.sizeDelta = new Vector2(72f, 72f); kr.anchoredPosition = Vector2.zero;
-            MakeCircle(knob);
+            var hdr = AddText(panel.transform, "FOCUS", 11, Parchment, TextAnchor.UpperCenter);
+            Anchor(hdr.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -6f), new Vector2(-12f, 16f), new Vector2(0.5f, 1f));
 
-            // Two small round buttons above the stick (profile, menu) — bones per the mockup.
-            AddIconButton(transform, null, "P", new Vector2(0f, 0f), new Vector2(0f, 0f),
-                          new Vector2(72f, 244f), new Vector2(48f, 48f), PanelDim, Parchment, null);
-            AddIconButton(transform, null, "=", new Vector2(0f, 0f), new Vector2(0f, 0f),
-                          new Vector2(140f, 244f), new Vector2(48f, 48f), PanelDim, Parchment, null);
+            // Heal-toggle (placeholder - toggles a heal-focus mode later).
+            AddTextButton(panel.transform, "Heal: Off", new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                          new Vector2(0f, -34f), new Vector2(168f, 48f), ColHealer, () => Debug.Log("[BattleHud9Zone] focus heal-toggle (placeholder)."));
+
+            // Attack (placeholder - a quick-focus attack press later).
+            AddTextButton(panel.transform, "Attack", new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                          new Vector2(0f, -90f), new Vector2(168f, 48f), ColDps, () => Debug.Log("[BattleHud9Zone] focus attack (placeholder)."));
+
+            // Mode switch (attack / ranged / spell - placeholder cycle).
+            AddTextButton(panel.transform, "Mode: Attack", new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                          new Vector2(0f, -146f), new Vector2(168f, 48f), ColWizard, () => Debug.Log("[BattleHud9Zone] focus mode-switch (placeholder)."));
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        //  ZONE 8 — Bottom-Center: Basic Attack pill + weapon skill
-        // ─────────────────────────────────────────────────────────────────────
-        private void BuildZone8BasicAttack()
+        // ---------------------------------------------------------------------
+        //  BOTTOM-LEFT - virtual D-PAD: a CROSS of 4 directional arrows + center dot
+        // ---------------------------------------------------------------------
+        private void BuildBottomLeftDPad()
         {
-            // Wide "Basic Attack" pill -> HeroAbilities.TryCast(Q) (the canonical basic attack
-            // per abilities.json; we do NOT touch PlayerAttackController).
-            var pill = AddTextButton(transform, "Basic Attack", new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                                     new Vector2(-70f, 60f), new Vector2(300f, 76f), PanelDark, () => Cast(AbilitySlot.Q));
-            Frame(pill.targetGraphic as Image);
-
-            // Weapon-skill button (W slot) beside it — uses the per-class ability art.
-            var wsSprite = AbilitySprite(AbilitySlot.W);
-            var ws = AddIconButton(transform, wsSprite, "W", new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                                   new Vector2(130f, 60f), new Vector2(76f, 76f), PanelDark, Gold, () => Cast(AbilitySlot.W));
-            Frame(ws);
-            MakeCircle(ws);
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        //  ZONE 9 — Bottom-Right: 4 ability buttons w/ radial COOLDOWN RINGS
-        // ─────────────────────────────────────────────────────────────────────
-        private void BuildZone9AbilityArc()
-        {
-            // Fan four discs in an arc, bottom-right (Dash/Knockback/Taunt/Ultimate are the V1
-            // Knight examples; the bar is skill-tree-driven so it reads the active ability set).
-            // Arc anchor positions relative to the bottom-right corner (x left of corner, y up).
-            var arc = new[]
+            // Bones: 4 arrow buttons in a cross + a center dot. Touch-drive of locomotion is a
+            // finesse pass; desktop keeps WASD, so these are visual + log-only for now.
+            // up / down / left / right offsets from the d-pad center.
+            var dirs = new[]
             {
-                new Vector2(-96f,  72f),
-                new Vector2(-176f, 116f),
-                new Vector2(-236f, 188f),
-                new Vector2(-272f, 280f),
+                new Vector2(0f,  BL_PadGap),   // up
+                new Vector2(0f, -BL_PadGap),   // down
+                new Vector2(-BL_PadGap, 0f),   // left
+                new Vector2( BL_PadGap, 0f),   // right
             };
+            string[] glyph = { "^", "v", "<", ">" };
+            for (int i = 0; i < 4; i++)
+            {
+                AddIconButton(transform, null, glyph[i], new Vector2(0f, 0f), new Vector2(0f, 0f),
+                              BL_PadCenter + dirs[i], new Vector2(BL_PadBtn, BL_PadBtn), PanelDim, Parchment,
+                              null);
+            }
+            // Center dot.
+            var dot = AddImage(transform, new Color(0.85f, 0.82f, 0.70f, 0.55f));
+            var dr = dot.rectTransform;
+            dr.anchorMin = new Vector2(0f, 0f); dr.anchorMax = new Vector2(0f, 0f); dr.pivot = new Vector2(0.5f, 0.5f);
+            dr.sizeDelta = new Vector2(BL_PadDot, BL_PadDot); dr.anchoredPosition = BL_PadCenter;
+            MakeCircle(dot);
+        }
 
+        // ---------------------------------------------------------------------
+        //  BOTTOM-CENTER - horizontal ROW of the unlocked ability icons (Q/W/E/R)
+        //  + the placeholder consumables + stars/keep-timer tucked to the right.
+        // ---------------------------------------------------------------------
+        private void BuildBottomCenterAbilityRow()
+        {
+            // The ability row is SKILL-TREE / LOADOUT driven (NOT hardcoded Q/W/E/R):
+            //   Q     = the class BASIC ATTACK (always present).
+            //   W/E/R = whatever the player has EQUIPPED in the skill-tree loadout; an
+            //           unequipped slot renders EMPTY (the button hides).
+            // We build all four slot bones here; PushAbilityCooldowns() re-reads the live
+            // HeroLoadout each frame and (re)binds icon/label/visibility, so a weapon-skill
+            // swap updates the bar without a rebuild.
             for (int i = 0; i < 4; i++)
             {
                 var slot = (AbilitySlot)i;
-                var def = AbilityCatalog.Find(HeroClassId(), slot);
-                Color disc = AbilityColor(def, i);
+                Vector2 pos = BC_Pos + new Vector2((i - 1.5f) * BC_AbilityGap, 0f);
 
-                // Disc button.
-                var btn = AddIconButton(transform, AbilitySprite(slot), GlyphFor(def, i),
-                                        new Vector2(1f, 0f), new Vector2(1f, 0f), arc[i], new Vector2(96f, 96f),
-                                        disc, Color.white, () => Cast(slot));
+                var btn = AddPanel(transform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), pos,
+                                   new Vector2(BC_AbilitySize, BC_AbilitySize), PanelDim);
+                var b = btn.gameObject.AddComponent<Button>();
+                b.targetGraphic = btn;
+                b.onClick.AddListener(() => Cast(slot));
                 MakeCircle(btn);
                 Frame(btn);
 
-                // Radial cooldown ring overlay (Filled / Radial360, sweeps as cooldown burns down).
+                // Icon child (re-bound per frame to the equipped ability).
+                var icon = AddImage(btn.transform, new Color(1f, 1f, 1f, 0f));
+                var ir = icon.rectTransform;
+                ir.anchorMin = new Vector2(0.5f, 0.5f); ir.anchorMax = new Vector2(0.5f, 0.5f); ir.pivot = new Vector2(0.5f, 0.5f);
+                ir.sizeDelta = new Vector2(BC_AbilitySize, BC_AbilitySize) * 0.74f; ir.anchoredPosition = Vector2.zero;
+                icon.raycastTarget = false;
+
                 var ring = AddImage(btn.transform, RingTrack);
                 Stretch(ring.rectTransform);
                 MakeCircle(ring);
@@ -569,33 +738,142 @@ namespace DeNelle.Village.Arena
                 ring.fillAmount = 0f;
                 ring.raycastTarget = false;
 
-                var cdText = AddText(btn.transform, "", 22, Color.white, TextAnchor.MiddleCenter);
+                var cdText = AddText(btn.transform, "", 20, Color.white, TextAnchor.MiddleCenter);
                 Stretch(cdText.rectTransform);
                 cdText.raycastTarget = false;
 
-                var label = AddText(btn.transform, AbilityName(def, i), 12, Parchment, TextAnchor.UpperCenter);
-                Anchor(label.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, -18f), new Vector2(0f, 16f), new Vector2(0.5f, 1f));
+                var label = AddText(btn.transform, "", 11, Parchment, TextAnchor.UpperCenter);
+                Anchor(label.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, -16f), new Vector2(0f, 14f), new Vector2(0.5f, 1f));
                 label.raycastTarget = false;
 
-                _abilityBtns[i] = new AbilityBtn { Slot = slot, Disc = btn, CdRing = ring, CdText = cdText, Label = label };
+                _abilityBtns[i] = new AbilityBtn { Slot = slot, Root = btn.gameObject, Disc = btn,
+                                                   Icon = icon, CdRing = ring, CdText = cdText, Label = label, BoundId = null };
             }
+
+            // Placeholder consumables (Potion / Rapid Heal / Desperate WS) to the right of the row.
+            string[] cons = { "Potion", "Rapid Heal", "Desperate WS" };
+            Sprite potionSp = RpgUiCatalog.Get(RpgUiCatalog.RolePotion, RpgUiCatalog.PotionHealth);
+            for (int i = 0; i < cons.Length; i++)
+            {
+                Vector2 pos = BC_UtilPos + new Vector2(i * BC_ConsumeGap, 14f);
+                var c = AddIconButton(transform, i == 0 ? potionSp : null, i == 0 ? "" : (i == 1 ? "+" : "!"),
+                                      new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), pos,
+                                      new Vector2(BC_ConsumeSize, BC_ConsumeSize), PanelDim, Gold,
+                                      () => Debug.Log("[BattleHud9Zone] consumable (placeholder)."));
+                MakeCircle(c);
+                var lbl = AddText(transform, cons[i], 9, Parchment, TextAnchor.LowerCenter);
+                var lr = lbl.rectTransform;
+                lr.anchorMin = new Vector2(0.5f, 0f); lr.anchorMax = new Vector2(0.5f, 0f); lr.pivot = new Vector2(0.5f, 1f);
+                lr.sizeDelta = new Vector2(BC_ConsumeGap, 12f); lr.anchoredPosition = pos + new Vector2(0f, -32f);
+            }
+
+            // Stars earned + keep-star timer (wired to BattleStarRating + the battle clock).
+            _starsText = AddText(transform, "- - -", 24, Gold, TextAnchor.MiddleCenter);
+            Anchor(_starsText.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), BC_UtilPos + new Vector2(BC_ConsumeGap * 3f + 30f, 24f), new Vector2(120f, 32f), new Vector2(0.5f, 0f));
+            _keepTimerText = AddText(transform, "0:00", 13, Parchment, TextAnchor.MiddleCenter);
+            Anchor(_keepTimerText.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), BC_UtilPos + new Vector2(BC_ConsumeGap * 3f + 30f, 2f), new Vector2(120f, 16f), new Vector2(0.5f, 0f));
+        }
+
+        private void PushBottomCenter()
+        {
+            float elapsed = Time.time - _battleStart;
+            // Live stars: the rating the player would earn if the battle ended NOW.
+            int stars = BattleStarRating.StarsForDuration(elapsed);
+            if (_starsText != null)
+            {
+                var sb = new System.Text.StringBuilder(BattleStarRating.MaxStars * 2);
+                for (int i = 0; i < BattleStarRating.MaxStars; i++) sb.Append(i < stars ? "* " : "- ");
+                _starsText.text = sb.ToString().TrimEnd();
+            }
+            // Time-to-keep-current-star: seconds until the NEXT threshold drops a star.
+            if (_keepTimerText != null)
+            {
+                float nextDrop = elapsed <= BattleStarRating.ThreeStarSeconds ? BattleStarRating.ThreeStarSeconds
+                               : elapsed <= BattleStarRating.TwoStarSeconds ? BattleStarRating.TwoStarSeconds
+                               : -1f;
+                if (nextDrop < 0f) _keepTimerText.text = "1*";
+                else
+                {
+                    int rem = Mathf.Max(0, Mathf.CeilToInt(nextDrop - elapsed));
+                    _keepTimerText.text = (rem / 60) + ":" + (rem % 60).ToString("00");
+                }
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        //  BOTTOM-RIGHT - 1 big SLASH anchor (basic attack) + a cluster of 3 round
+        //  utility buttons (target-lock / dash / aim) up-left of it. NOT a fanned arc.
+        // ---------------------------------------------------------------------
+        private void BuildBottomRightSlashCluster()
+        {
+            // SLASH = the big basic-attack thumb anchor (basic attack = Q per abilities.json).
+            var slash = AddIconButton(transform, AbilitySprite(AbilitySlot.Q), "",
+                                      new Vector2(1f, 0f), new Vector2(1f, 0f), BR_SlashPos,
+                                      new Vector2(BR_SlashSize, BR_SlashSize), PanelDark, Gold, () => Cast(AbilitySlot.Q));
+            MakeCircle(slash);
+            Frame(slash);
+            var sLbl = AddText(slash.transform, "SLASH", 13, Parchment, TextAnchor.MiddleCenter);
+            Stretch(sLbl.rectTransform);
+            sLbl.raycastTarget = false;
+
+            // 3 small round utility buttons clustered up-left of the SLASH anchor.
+            // [0] target-lock -> toggles the lock (same intent as the top-center lock toggle)
+            // [1] dash        -> placeholder (a future dash skill)
+            // [2] aim/move    -> placeholder (a future aim-assist toggle)
+            var uLock = AddIconButton(transform, RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield), "O",
+                          new Vector2(1f, 0f), new Vector2(1f, 0f), BR_UtilCluster[0],
+                          new Vector2(BR_UtilSize, BR_UtilSize), PanelDim, Gold, ToggleLock);
+            var uDash = AddIconButton(transform, null, ">>",
+                          new Vector2(1f, 0f), new Vector2(1f, 0f), BR_UtilCluster[1],
+                          new Vector2(BR_UtilSize, BR_UtilSize), PanelDim, Parchment,
+                          () => Debug.Log("[BattleHud9Zone] dash (placeholder)."));
+            var uAim = AddIconButton(transform, null, "+",
+                          new Vector2(1f, 0f), new Vector2(1f, 0f), BR_UtilCluster[2],
+                          new Vector2(BR_UtilSize, BR_UtilSize), PanelDim, Parchment,
+                          () => Debug.Log("[BattleHud9Zone] aim/move (placeholder)."));
+            MakeCircle(uLock); MakeCircle(uDash); MakeCircle(uAim);
         }
 
         private void PushAbilityCooldowns()
         {
             if (_abilities == null) return;
-            string cls = HeroClassId();
             for (int i = 0; i < _abilityBtns.Length; i++)
             {
                 var b = _abilityBtns[i];
                 if (b == null) continue;
-                var def = AbilityCatalog.Find(cls, b.Slot);
-                float total = def != null ? def.Cooldown : 0f;
+
+                // LIVE LOADOUT: resolve THIS slot's equipped def each frame. Q = the class
+                // basic attack (always present); W/E/R = the equipped skill-tree ability, or
+                // null when the slot is unequipped (the button then hides).
+                var def = ResolveSlotDef(b.Slot, out string boundId);
+                bool equipped = def != null;
+
+                // Empty W/E/R slot -> hide the button entirely (no placeholder ability).
+                if (b.Root != null && b.Root.activeSelf != equipped) b.Root.SetActive(equipped);
+                if (!equipped) { b.BoundId = null; continue; }
+
+                // Re-bind icon/label/disc-color only when the equipped ability CHANGED (a swap).
+                if (!string.Equals(b.BoundId, boundId, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    b.BoundId = boundId;
+                    Color disc = AbilityColor(def, (int)b.Slot);
+                    if (b.Disc != null) b.Disc.color = disc;
+                    if (b.Icon != null)
+                    {
+                        // Per-class slot art (the map keys on the slot index, which matches the
+                        // equipped W/E/R slot the def now occupies).
+                        var sp = AbilitySprite(b.Slot);
+                        if (sp != null) { b.Icon.sprite = sp; b.Icon.color = Color.white; }
+                        else { b.Icon.sprite = null; b.Icon.color = new Color(1f, 1f, 1f, 0f); }
+                    }
+                    if (b.Label != null) b.Label.text = AbilityName(def, (int)b.Slot);
+                }
+
+                float total = def.Cooldown;
                 float remaining = _abilities.CooldownRemaining(b.Slot);
                 float frac = (total > 0.001f) ? Mathf.Clamp01(remaining / total) : 0f;
                 if (b.CdRing != null) b.CdRing.fillAmount = frac;
                 if (b.CdText != null) b.CdText.text = remaining > 0.05f ? Mathf.CeilToInt(remaining).ToString() : "";
-                // Dim the disc while on cooldown.
                 if (b.Disc != null)
                 {
                     var c = b.Disc.color;
@@ -605,23 +883,64 @@ namespace DeNelle.Village.Arena
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        //  Cast intent (the only writes — fire the existing public cast path)
-        // ─────────────────────────────────────────────────────────────────────
+        // Resolve the AbilityDef the player has in a slot RIGHT NOW from the live loadout.
+        //   Q     -> the class basic attack (AbilityCatalog.Find(class, Q)); always present.
+        //   W/E/R -> HeroLoadout.AbilityIdForSlot -> AbilityCatalog.FindById; null when the
+        //            slot is unequipped (caller hides the button). boundId is the id we matched
+        //            (the class+slot key for Q, the abilityId for an equipped W/E/R) so the
+        //            caller can detect a swap and re-bind only then.
+        private AbilityDef ResolveSlotDef(AbilitySlot slot, out string boundId)
+        {
+            if (slot == AbilitySlot.Q)
+            {
+                boundId = "Q:" + HeroClassId();
+                return AbilityCatalog.Find(HeroClassId(), slot);
+            }
+            var lo = HeroLoadoutAccess.Current;
+            string id = lo != null ? lo.AbilityIdForSlot(slot) : null;
+            if (string.IsNullOrEmpty(id)) { boundId = null; return null; }
+            boundId = id;
+            return AbilityCatalog.FindById(id);
+        }
+
+        // ---------------------------------------------------------------------
+        //  Cast intent (the only writes - fire the existing public cast path)
+        // ---------------------------------------------------------------------
         private void Cast(AbilitySlot slot)
         {
             if (_abilities == null) _abilities = Object.FindFirstObjectByType<HeroAbilities>();
             if (_abilities != null) _abilities.TryCast(slot);
         }
 
-        // ─────────────────────────────────────────────────────────────────────
+        // ---------------------------------------------------------------------
         //  Role / ability helpers
-        // ─────────────────────────────────────────────────────────────────────
+        // ---------------------------------------------------------------------
         private static EnemyRole RoleOf(Enemy e)
         {
             if (e == null) return EnemyRole.DPS;
             var brain = e.GetComponent<EnemyBrain>();
             return brain != null ? brain.Role : EnemyRole.DPS;
+        }
+
+        private static string RoleName(EnemyRole role)
+        {
+            switch (role)
+            {
+                case EnemyRole.Tank:     return "Tank";
+                case EnemyRole.Healer:   return "Healer";
+                case EnemyRole.Ranged:   return "Wizard";
+                case EnemyRole.MiniBoss: return "Boss";
+                default:                 return "DPS";
+            }
+        }
+
+        // Derive a readable LEVEL stub from the enemy's max HP (no public Level field exists).
+        // Monotone + cheap; graceful "?" when HP is unknown. Replace when EnemyDef.Level lands.
+        private static int EnemyLevelStub(Enemy e)
+        {
+            if (e == null) return 1;
+            float maxHp = e.HpFraction > 0.001f ? e.Hp / e.HpFraction : e.Hp;
+            return Mathf.Max(1, Mathf.RoundToInt(maxHp / 25f));
         }
 
         private static Color RoleColor(EnemyRole role)
@@ -635,40 +954,25 @@ namespace DeNelle.Village.Arena
             }
         }
 
-        private static string RoleLabel(EnemyRole role)
-        {
-            switch (role)
-            {
-                case EnemyRole.Tank:   return "Tank";
-                case EnemyRole.Healer: return "Healer";
-                case EnemyRole.Ranged: return "Wizard";
-                case EnemyRole.MiniBoss: return "Boss";
-                default:               return "DPS";
-            }
-        }
-
-        // Role portrait/icon: reuse the staged Resources/HudIcons/<Role>/<role>.jpg art.
         private static Sprite RoleIcon(EnemyRole role)
         {
             string path;
             switch (role)
             {
-                case EnemyRole.Tank:   path = "HudIcons/Knight/knight"; break;     // armored stand-in for tank
+                case EnemyRole.Tank:   path = "HudIcons/Knight/knight"; break;
                 case EnemyRole.Healer: path = "HudIcons/Healer/healer"; break;
                 case EnemyRole.Ranged: path = "HudIcons/Wizard/wizard"; break;
-                default:               path = "HudIcons/Ranger/ranger"; break;     // DPS stand-in
+                default:               path = "HudIcons/Ranger/ranger"; break;
             }
             return SafeLoad(path);
         }
 
         private string HeroClassId()
         {
-            // HeroAbilities.HeroClass is the live class id ("knight"/"mage"/...). Default knight (V1).
             if (_abilities != null && !string.IsNullOrEmpty(_abilities.HeroClass)) return _abilities.HeroClass;
             return "knight";
         }
 
-        // Per-class ability art (reuses the VillageHudController staged map: Resources/HudIcons/<Class>/...).
         private Sprite AbilitySprite(AbilitySlot slot)
         {
             string cls = HeroClassId();
@@ -712,13 +1016,7 @@ namespace DeNelle.Village.Arena
         private static string AbilityName(AbilityDef def, int slot)
         {
             if (def != null && !string.IsNullOrEmpty(def.Name)) return def.Name;
-            switch (slot) { case 0: return "Dash"; case 1: return "Knockback"; case 2: return "Taunt"; default: return "Ultimate"; }
-        }
-
-        private static string GlyphFor(AbilityDef def, int slot)
-        {
-            if (def != null && !string.IsNullOrEmpty(def.Icon)) return def.Icon;
-            switch (slot) { case 0: return ">>"; case 1: return "<>"; case 2: return "!"; default: return "*"; }
+            switch (slot) { case 0: return "Q"; case 1: return "W"; case 2: return "E"; default: return "R"; }
         }
 
         private static Sprite SafeLoad(string path)
@@ -728,9 +1026,9 @@ namespace DeNelle.Village.Arena
             catch { return null; }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        //  uGUI builders (solid sprites, WebGL-safe — mirrors BattleArenaHud)
-        // ─────────────────────────────────────────────────────────────────────
+        // ---------------------------------------------------------------------
+        //  uGUI builders (solid sprites, WebGL-safe - mirrors BattleArenaHud)
+        // ---------------------------------------------------------------------
         private static void EnsureEventSystem()
         {
             if (Object.FindObjectOfType<EventSystem>() == null)
@@ -763,18 +1061,6 @@ namespace DeNelle.Village.Arena
             return img;
         }
 
-        // Icon image with explicit anchors (sprite optional; tint applies when no sprite).
-        private static Image AddIcon(Transform parent, Sprite sprite, Vector2 aMin, Vector2 aMax,
-                                     Vector2 pos, Vector2 size, Color tint)
-        {
-            var img = AddImage(parent, sprite != null ? Color.white : tint);
-            if (sprite != null) img.sprite = sprite;
-            var rt = img.rectTransform;
-            rt.anchorMin = aMin; rt.anchorMax = aMax; rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = pos; rt.sizeDelta = size;
-            return img;
-        }
-
         private static Text AddText(Transform parent, string s, int size, Color col, TextAnchor anchor)
         {
             var go = new GameObject("Text");
@@ -788,7 +1074,6 @@ namespace DeNelle.Village.Arena
             return t;
         }
 
-        // A round/disc icon button with an optional glyph fallback.
         private static Image AddIconButton(Transform parent, Sprite sprite, string glyph, Vector2 aMin, Vector2 aMax,
                                            Vector2 pos, Vector2 size, Color bg, Color glyphCol, System.Action onClick)
         {
@@ -820,14 +1105,12 @@ namespace DeNelle.Village.Arena
             var btn = panel.gameObject.AddComponent<Button>();
             btn.targetGraphic = panel;
             if (onClick != null) btn.onClick.AddListener(() => onClick());
-            var t = AddText(panel.transform, label, 20, Gold, TextAnchor.MiddleCenter);
+            var t = AddText(panel.transform, label, 18, Gold, TextAnchor.MiddleCenter);
             t.raycastTarget = false;
             Stretch(t.rectTransform);
             return btn;
         }
 
-        // Gilt frame outline (ornate-panel border). Reuses the RpgUi panel sprite when present,
-        // else draws a thin gold border via a slightly-larger backing image.
         private static void Frame(Image panel)
         {
             if (panel == null) return;
@@ -838,7 +1121,6 @@ namespace DeNelle.Village.Arena
                 panel.type = Image.Type.Sliced;
                 return;
             }
-            // Fallback: a thin gilt outline behind the panel.
             var outline = new GameObject("Frame");
             outline.transform.SetParent(panel.transform, false);
             outline.transform.SetAsFirstSibling();
@@ -850,8 +1132,6 @@ namespace DeNelle.Village.Arena
             rt.offsetMin = new Vector2(-2f, -2f); rt.offsetMax = new Vector2(2f, 2f);
         }
 
-        // Make an Image read as a circle by assigning the RpgUi disc/badge sprite if available
-        // (bones: a sliced/round frame). When no round sprite exists, the square panel stands in.
         private static void MakeCircle(Image img)
         {
             if (img == null) return;
