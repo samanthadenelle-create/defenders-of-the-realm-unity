@@ -678,6 +678,13 @@ namespace DeNelle.DevTools
             AddButton(resources, "+150 XP (hero)", () => GiveHeroXp(150f));
             AddButton(resources, "+10,000 XP (hero)", () => GiveHeroXp(10000f));
             AddButton(resources, "Level up hero", LevelHero);
+            // One-click level jumps for skill-tree testing: route through the REAL level
+            // path (HeroProgression.AddXp -> ApplyLevelRewards) so each gained level grants
+            // its Wisdom (the skill-tree spend currency) + skill points. Reaching L5 banks
+            // ~8 Wisdom, L10 ~23 — both ample to unlock + equip weapon skills (tier-1 = 1
+            // Wisdom each) in the Hero skill tree. See SetHeroLevelTo().
+            AddButton(resources, "Set Level 5 (+skill pts)", () => SetHeroLevelTo(5));
+            AddButton(resources, "Set Level 10 (+skill pts)", () => SetHeroLevelTo(10));
             AddTextField(resources, _levelInput.ToString(),
                 v => { if (int.TryParse(v, out var n)) _levelInput = Mathf.Max(1, n); });
             AddButton(resources, "Set hero to level N", SetHeroLevel);
@@ -977,15 +984,32 @@ namespace DeNelle.DevTools
         /// <summary>Levels the hero up to the typed target level (repeated AddXp until reached).</summary>
         private void SetHeroLevel()
         {
+            SetHeroLevelTo(Mathf.Max(1, _levelInput));
+        }
+
+        /// <summary>
+        /// Sets the hero to <paramref name="target"/> by feeding XP through the REAL
+        /// level path (HeroProgression.AddXp). Each level crossed runs ApplyLevelRewards,
+        /// which grants that level's Wisdom (the skill-tree spend currency) + a SkillSystem
+        /// point — so after this the owner can open the Hero skill tree and spend Wisdom to
+        /// unlock + equip weapon skills (abilityId -> W/E/R slot via HeroLoadout). One-click
+        /// "Set Level 5/10" buttons call this. No-op if already at/above the target.
+        /// </summary>
+        private void SetHeroLevelTo(int target)
+        {
             var hp = UnityEngine.Object.FindAnyObjectByType<DeNelle.Village.HeroProgression>();
             if (hp == null) { SetStatus("HeroProgression not in scene yet."); return; }
-            int target = Mathf.Max(1, _levelInput);
+            target = Mathf.Max(1, target);
             int guard = 0;
             while (hp.Level < target && guard++ < 500)
                 hp.AddXp(hp.XpToNext + 1f);
+
+            int wisdom = DeNelle.Village.Talents.WisdomCurrencyService.Instance?.Wisdom ?? 0;
+            int skillPts = DeNelle.Core.Progression.SkillSystem.Instance?.AvailablePoints ?? 0;
             DeNelle.Village.DamageNumberSpawner.SpawnLabel(
                 $"LEVEL {hp.Level}", hp.WorldPosition, new Color(0.45f, 1f, 0.55f, 1f), 1.4f);
-            SetStatus($"Set hero to Lv.{hp.Level} (target {target}).");
+            SetStatus($"Set hero to Lv.{hp.Level} (target {target}) — {wisdom} Wisdom + " +
+                      $"{skillPts} skill pts to spend in the skill tree.");
         }
 
         /// <summary>Skips the prep countdown and starts the wave now (WaveManager.ForceBeginNextWave).</summary>
