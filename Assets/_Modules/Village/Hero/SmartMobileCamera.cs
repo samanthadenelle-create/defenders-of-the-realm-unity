@@ -126,6 +126,25 @@ namespace DeNelle.Village
         [Tooltip("How quickly the look-at recentres on the hero when no enemies are near.")]
         [SerializeField, Min(0.5f)] private float _framingReturnSpeed = 4f;
 
+        // ── WO-512 slice 2: lock-on framing ──────────────────────────────────────
+        // When a lock target is bound (BattleArena.SetLockTarget) AND FeatureFlags.LockOn is
+        // on, the auto-framing source is OVERRIDDEN to the LOCKED enemy instead of the
+        // auto-nearest scan, framing engages immediately (combat blend forced toward 1), and a
+        // SEPARATE, capped bias keeps the Knight well in-frame. It REUSES the exact same
+        // _leadPoint SmoothDamp as the existing framing path — never a transform set, never a
+        // snap; a switch eases because it only moves the damp goal. When the lock target is null
+        // OR the flag is off, this whole block is skipped and the camera path is byte-identical
+        // to today (zero free-look regression). Yaw-assist (auto-centering) is deliberately NOT
+        // implemented this slice (it is the mobile-nausea hotspot — deferred to slice 4).
+        [Tooltip("WO-512: fraction of the offset from hero to the LOCKED enemy applied to the " +
+                 "look-at centroid while lock-on framing is active. CAPPED at 0.45 so the Knight " +
+                 "always stays well inside the frame (kept distinct from _framingBias).")]
+        [SerializeField, Range(0f, 0.45f)] private float _lockFramingBias = 0.32f;
+
+        // The enemy currently locked-on (set by BattleArena.SetLockTarget, cleared on
+        // ClearLockTarget / Resolve / disable). Null = no lock -> today's exact framing path.
+        private Transform _lockTarget;
+
         [Header("Orbit-behind (third-person)")]
         [Tooltip("Owner 2026-06-02 (\"will the camera pivot behind me when I walk around the " +
                  "castle?\"): when ON, the follow offset rotates with the hero's TRAVEL direction " +
@@ -407,6 +426,7 @@ namespace DeNelle.Village
             SceneManager.sceneLoaded -= OnSceneLoadedForCamera;
             UnsubscribeTeleport();   // WO-383: detach the hero teleport handler (re-attaches on next acquire)
             RestoreAllFaded();   // WO-385: restore any faded occluders so nothing is left invisible
+            _lockTarget = null;  // WO-512: drop the lock-on framing target so a re-enable starts clean
         }
 
         private void OnSceneLoadedForCamera(Scene scene, LoadSceneMode mode)
@@ -622,7 +642,23 @@ namespace DeNelle.Village
                 leadTarget += heroVelFlat.normalized * _leadDistance;
 
             // ── 6. Auto-framing ───────────────────────────────────────────────
-            if (_framingEnabled && _enemyInRange && _combatBlend > 0.1f)
+            // WO-512 slice 2: LOCK-ON framing override. When a lock target is bound AND the flag is
+            // on, frame the LOCKED enemy (not the auto-nearest scan): engage framing immediately
+            // (force the combat blend toward 1 so we don't wait for the proximity scan) and bias the
+            // look-at toward the locked enemy with the SEPARATE capped _lockFramingBias. Reuses the
+            // SAME _leadPoint SmoothDamp below — only the damp GOAL changes, so a switch eases and
+            // there is never a snap. GUARDED so flag-off / no-lock is byte-identical to today.
+            bool lockFraming = _lockTarget != null && DeNelle.Core.FeatureFlags.LockOn;
+            if (lockFraming)
+            {
+                // Force framing to engage now (don't gate on _enemyInRange / the proximity scan).
+                _combatBlend = Mathf.MoveTowards(_combatBlend, 1f, _combatZoomSpeed * dt);
+
+                Vector3 lockPos = _lockTarget.position + Vector3.up;   // chest-ish, matches scan anchor
+                Vector3 midpoint = Vector3.Lerp(heroBase, lockPos, _lockFramingBias);
+                leadTarget = Vector3.Lerp(leadTarget, midpoint, _combatBlend);
+            }
+            else if (_framingEnabled && _enemyInRange && _combatBlend > 0.1f)
             {
                 Vector3 midpoint = Vector3.Lerp(heroBase, _nearestEnemyPos, _framingBias);
                 leadTarget = Vector3.Lerp(leadTarget, midpoint, _combatBlend);
@@ -676,6 +712,32 @@ namespace DeNelle.Village
         {
             get => _framingEnabled;
             set => _framingEnabled = value;
+        }
+
+        // ── WO-512 slice 2: lock-on framing API ─────────────────────────────────
+        /// <summary>
+        /// Bind the LOCKED enemy the camera should keep framed (called by BattleArena when the
+        /// soft lock engages / switches). While bound AND FeatureFlags.LockOn is on, LateUpdate
+        /// frames this transform via the existing _leadPoint damp (no snap). Passing a null /
+        /// destroyed transform is treated as a clear. A switch is just another SetLockTarget — the
+        /// shared damp eases the look-at to the new foe smoothly. No-op when the flag is off.
+        /// </summary>
+        public void SetLockTarget(Transform t)
+        {
+            if (!DeNelle.Core.FeatureFlags.LockOn) return;   // flag off -> today's exact camera
+            if (t == null) { ClearLockTarget(); return; }
+            _lockTarget = t;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena",
+                "LOCKON camera framing target bound '" + t.name.Replace("(Clone)", "").Trim() + "'.");
+        }
+
+        /// <summary>Release the lock-on framing (back to today's auto-framing / free-look). The
+        /// _leadPoint damp eases back; never a snap. Safe to call any time.</summary>
+        public void ClearLockTarget()
+        {
+            if (_lockTarget == null) return;
+            _lockTarget = null;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena", "LOCKON camera framing target cleared.");
         }
 
         /// <summary>

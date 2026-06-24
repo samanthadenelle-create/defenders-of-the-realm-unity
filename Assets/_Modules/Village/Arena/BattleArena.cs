@@ -276,6 +276,10 @@ namespace DeNelle.Village.Arena
                         var t = indicator.LockedEnemyTarget as MonoBehaviour;
                         string nm = t != null ? t.gameObject.name.Replace("(Clone)", "").Trim() : "none";
                         FlowTrace.Step("BattleArena", "LOCKON acquire target='" + nm + "' (auto-nearest on engage).");
+                        // WO-512 slice 2: bind the camera to keep the LOCKED enemy framed (reuses the
+                        // SMC auto-framing damp; no snap). No-op when the flag is off. WatchToResolution
+                        // re-binds each tick so a HUD switch / auto-drop-on-death re-frames smoothly.
+                        if (t != null) SmartMobileCamera.Instance?.SetLockTarget(t.transform);
                     }
                 });
             }
@@ -839,6 +843,30 @@ namespace DeNelle.Village.Arena
                 var indicator = hero.GetComponent<HeroTargetIndicator>();
                 indicator?.ClearLock();
             });
+            // WO-512 slice 2: also release the lock-on CAMERA framing so the open-world camera
+            // returns to its normal auto-framing / free-look on resolve (loss + win). No-op if no
+            // lock target was ever bound; eases back via the shared damp (never a snap).
+            Guard.Try("BattleArena", "clear lock camera framing",
+                () => SmartMobileCamera.Instance?.ClearLockTarget());
+        }
+
+        // WO-512 slice 2: re-bind the lock-on camera to the hero's CURRENT locked enemy each watch
+        // tick. The HUD/indicator can switch or drop the lock without BattleArena knowing, so we
+        // read the live LockedEnemyTarget and hand its transform to the camera (SetLockTarget eases
+        // via the shared damp; null/no-lock clears the camera framing). Guard-wrapped + reflection-
+        // soft so a missing actor never throws into the watch loop.
+        private static void MaybeRebindLockCamera()
+        {
+            Guard.Try("BattleArena", "rebind lock camera", () =>
+            {
+                var smc = SmartMobileCamera.Instance;
+                if (smc == null) return;
+                var hero = GameObject.FindWithTag("Player");
+                var indicator = hero != null ? hero.GetComponent<HeroTargetIndicator>() : null;
+                var locked = indicator != null ? indicator.LockedEnemyTarget as MonoBehaviour : null;
+                if (locked != null) smc.SetLockTarget(locked.transform);
+                else                smc.ClearLockTarget();
+            });
         }
 
         // ---------------------------------------------------------------------
@@ -861,6 +889,13 @@ namespace DeNelle.Village.Arena
             {
                 // Pack approaches in formation, then breaks to fight when it reaches the hero.
                 MaybeDisbandOnArrival();
+
+                // WO-512 slice 2: keep the lock-on camera framed on the CURRENT locked foe. The
+                // lock can switch (HUD cycle/tap) or auto-drop (target died) without BattleArena
+                // observing it, so we re-read the live locked transform each tick and re-bind the
+                // camera (a Transform set eased by the shared _leadPoint damp -> smooth re-frame,
+                // never a snap). Flag-gated + Guard-wrapped so flag-off is today's exact path.
+                if (FeatureFlags.LockOn) MaybeRebindLockCamera();
 
                 // WIN: every staged enemy is dead.
                 _liveEnemies.RemoveAll(e => e == null || e.IsDead);
