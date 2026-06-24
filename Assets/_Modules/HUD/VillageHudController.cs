@@ -152,6 +152,29 @@ namespace DeNelle.HUD
         private float _xpPollTimer;
         private const float XpPollInterval = 0.25f;
 
+        // ── Wisdom skill-tree badge (owner 2026-06-24) ───────────────────────────
+        // A small, non-intrusive corner badge that ANNOUNCES unspent Wisdom + is the
+        // entry point to the skill tree. Replaces the retired level-up allocate popup
+        // (LevelUpSkillPopup): hidden/dim when no unspent Wisdom; appears + gently
+        // pulses when Wisdom > 0; tap → PanelRouter.Open(PanelId.HeroSkillTree). Only
+        // in town/exploration (hidden during the arena battle). Wisdom is read by
+        // reflection (HUD→Core asmdef can't reference DeNelle.Village.Talents), matching
+        // the XP-line reflection pattern. Polled on the same cadence as the XP line.
+        private RectTransform _wisdomBadge;       // the badge rect (pulsed scale/alpha)
+        private CanvasGroup _wisdomBadgeGroup;     // alpha fade (hidden when no Wisdom)
+        private object _wisdomSvc;                 // cached WisdomCurrencyService.Instance (reflection)
+        private System.Type _wisdomSvcType;
+        private System.Reflection.PropertyInfo _wisdomProp;   // WisdomCurrencyService.Wisdom (int)
+        private float _wisdomPollTimer;
+        private int _unspentWisdom;                // last polled unspent Wisdom
+        private float _wisdomPulse;                // 0..1 pulse phase driver
+        // Tunables — position/size/pulse (kept here so the badge is easy to nudge).
+        private const float WisdomBadgeInsetX = 20f;   // from the right edge
+        private const float WisdomBadgeInsetY = 150f;  // from the top (below the gear/raid cluster)
+        private const float WisdomBadgeSize = 72f;     // small corner badge
+        private const float WisdomPulseSpeed = 3.2f;   // pulse cycles/sec driver
+        private const float WisdomPollInterval = 0.25f;
+
         // ── Wave-timer fallback poll (HUD→Core; WaveManager is in DeNelle.Village) ─
         // The town countdown is primarily fed by SetCountdown (WaveManager.OnCountdownTick,
         // pushed via a Village-side bridge). To guarantee a LIVE timer even when no bridge
@@ -705,6 +728,7 @@ namespace DeNelle.HUD
             AnimateLookoutBell();
             UpdateTownHud();
             UpdateHeroXpLine();
+            UpdateWisdomBadge();
             ApplyForgettingDim();
         }
 
@@ -1188,6 +1212,12 @@ namespace DeNelle.HUD
             // WO-403: top-centre ornate COMPASS + top-right Settings / Inventory icons.
             BuildTopChrome(_safeArea);
 
+            // Owner 2026-06-24: small pulsing skill-tree badge (unspent-Wisdom announcement
+            // + skill-tree entry point). Base chrome (always-on canvas); gated to town/
+            // exploration + hidden during the arena battle in its poll. Replaces the retired
+            // level-up allocate popup.
+            BuildWisdomBadge(_safeArea);
+
             // IDLE / village UI — base canvas (NEVER hidden by the battle-HUD gate).
             BuildResourceStrip(_safeArea);
             BuildCastleBanner(_safeArea);
@@ -1399,6 +1429,118 @@ namespace DeNelle.HUD
             HudTheme.StyleButtonColors(btn, LPortrait);
             if (action != null) btn.onClick.AddListener(action);
             return btn;
+        }
+
+        // ── Wisdom skill-tree badge (owner 2026-06-24) ───────────────────────────
+        // A minimal top-right corner badge: a sprite-first skill-tree icon (IconTree,
+        // glyph fallback) inside a CanvasGroup we fade in/out + a rect we gently pulse.
+        // Hidden when no unspent Wisdom; on tap opens the Knight skill tree. Built on the
+        // base canvas so it shows in town/exploration; PollWisdomBadge() gates it OFF in
+        // the arena battle. Starts hidden (alpha 0) until the first poll finds Wisdom > 0.
+        private void BuildWisdomBadge(Transform parent)
+        {
+            var cell = NewRect("WisdomSkillBadge", parent, new Vector2(1f, 1f), new Vector2(1f, 1f));
+            cell.pivot = new Vector2(1f, 1f);
+            cell.anchoredPosition = new Vector2(-WisdomBadgeInsetX, -WisdomBadgeInsetY);
+            cell.sizeDelta = new Vector2(WisdomBadgeSize, WisdomBadgeSize);
+            _wisdomBadge = cell;
+
+            // Fade group — alpha 0 hides it cleanly (no Wisdom = invisible + not clickable).
+            _wisdomBadgeGroup = cell.gameObject.AddComponent<CanvasGroup>();
+            _wisdomBadgeGroup.alpha = 0f;
+            _wisdomBadgeGroup.interactable = false;
+            _wisdomBadgeGroup.blocksRaycasts = false;
+
+            // Transparent click target (raycast on a clear Image still receives taps).
+            var seat = cell.gameObject.AddComponent<Image>();
+            seat.color = new Color(0f, 0f, 0f, 0f);
+            seat.sprite = HudTheme.Disc;
+
+            // Sprite-first skill-tree icon (glyph fallback) inset inside the cell.
+            AddWidgetIcon("Glyph", cell, new Vector2(0.12f, 0.12f), new Vector2(0.88f, 0.88f),
+                IconTree, "Y", 30, LGilt);
+
+            var btn = cell.gameObject.AddComponent<Button>();
+            btn.targetGraphic = seat;
+            HudTheme.StyleButtonColors(btn, LPortrait);
+            btn.onClick.AddListener(OpenSkillTree);
+        }
+
+        // Tap → open the Knight skill tree (HUD → Core router; the badge is both the
+        // unspent-Wisdom announcement AND the door to spend it).
+        private static void OpenSkillTree()
+        {
+            PanelRouter.Open(PanelId.HeroSkillTree);
+        }
+
+        // Poll unspent Wisdom (reflection, HUD → Core) + gate visibility to town/
+        // exploration (hidden in the arena battle) + drive the gentle pulse. Called from
+        // Update on the XP-line cadence.
+        private void UpdateWisdomBadge()
+        {
+            if (_wisdomBadge == null || _wisdomBadgeGroup == null) return;
+
+            _wisdomPollTimer -= Time.unscaledDeltaTime;
+            if (_wisdomPollTimer <= 0f)
+            {
+                _wisdomPollTimer = WisdomPollInterval;
+                ResolveWisdomSvcIfNeeded();
+                if (_wisdomSvc != null && _wisdomProp != null)
+                {
+                    try { _unspentWisdom = (int)_wisdomProp.GetValue(_wisdomSvc); }
+                    catch (System.Exception e)
+                    {
+                        FlowTrace.Throttle("HUD", "wisdom-read", 2f,
+                            $"UpdateWisdomBadge: Wisdom read threw ({e.GetType().Name}: {e.Message}) — re-resolving next tick.");
+                        _wisdomSvc = null;
+                    }
+                }
+            }
+
+            // Show only in town/exploration with unspent Wisdom; never during the arena battle.
+            bool inBattle = DeNelle.Core.Combat.BattleLock.IsInBattle();
+            bool show = _unspentWisdom > 0 && !inBattle;
+
+            float targetAlpha = show ? 1f : 0f;
+            float a = Mathf.MoveTowards(_wisdomBadgeGroup.alpha, targetAlpha, Time.unscaledDeltaTime * 4f);
+            _wisdomBadgeGroup.alpha = a;
+            bool live = a > 0.5f;
+            _wisdomBadgeGroup.interactable = live;
+            _wisdomBadgeGroup.blocksRaycasts = live;
+
+            if (show)
+            {
+                // Gentle pulse: a subtle scale swing (+ a touch of alpha shimmer) saying
+                // "go spend skill points whenever" — calm, not attention-grabbing.
+                _wisdomPulse += Time.unscaledDeltaTime * WisdomPulseSpeed;
+                float swing = Mathf.PingPong(_wisdomPulse, 1f);
+                float scale = 1f + 0.10f * swing;
+                _wisdomBadge.localScale = new Vector3(scale, scale, 1f);
+                _wisdomBadgeGroup.alpha = Mathf.Min(a, Mathf.Lerp(0.78f, 1f, swing));
+            }
+            else if (_wisdomBadge.localScale.x != 1f)
+            {
+                _wisdomPulse = 0f;
+                _wisdomBadge.localScale = Vector3.one;
+            }
+        }
+
+        private void ResolveWisdomSvcIfNeeded()
+        {
+            if (_wisdomSvc != null) return;
+            if (_wisdomSvcType == null)
+                _wisdomSvcType = System.Type.GetType(
+                    "DeNelle.Village.Talents.WisdomCurrencyService, DeNelle.Village");
+            if (_wisdomSvcType == null) return;
+
+            var instProp = _wisdomSvcType.GetProperty("Instance",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            object svc = instProp != null ? instProp.GetValue(null) : null;
+            if (svc == null) svc = UnityEngine.Object.FindObjectOfType(_wisdomSvcType);
+            if (svc == null) return;
+
+            _wisdomSvc = svc;
+            _wisdomProp = _wisdomSvcType.GetProperty("Wisdom");
         }
 
         // ── WO-403/404 · RIGHT-edge TOWN action panel — Talk + Quest rune buttons. ─

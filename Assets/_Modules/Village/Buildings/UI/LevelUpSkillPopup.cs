@@ -87,9 +87,18 @@ namespace DeNelle.Village.UI
             Show(lvl);
         }
 
+        // RETIRED (owner 2026-06-24): level-up popup not used - Wisdom shown via flashing skill-tree icon instead.
+        // The popup/modal that asks the player to allocate points is disabled; the nice level-up
+        // VFX/gold flash (LevelUpVFXController) and the floating "Level Up!" label (ProgressionManager
+        // /FloatingXpText) stay. Show() is hard-gated to a no-op so nothing ever pops up to allocate;
+        // the unspent-Wisdom announcement + skill-tree entry point now lives on the HUD's pulsing
+        // skill-tree badge (VillageHudController). Code kept (not deleted) for an easy revert.
+        private const bool PopupRetired = true;
+
         /// <summary>Reveal the popup (arg = the level just reached — title text only).</summary>
         private void Show(int newLevel)
         {
+            if (PopupRetired) return;   // RETIRED — no allocate-popup; Wisdom shown via flashing skill-tree icon.
             if (_overlay == null) return;
             // DEF-266 — Level 1 is the baseline (account creation), not an achievement.
             // The DEF-82 starting skill-point gift banks points at level 1, which would
@@ -119,6 +128,7 @@ namespace DeNelle.Village.UI
         // you can't find it again"). With no points left, hide everything.
         private void Collapse()
         {
+            if (PopupRetired) { Hide(); return; }   // RETIRED — never surface the persistent spend pill.
             var sys = SkillSystem.Instance;
             if (sys != null && sys.AvailablePoints > 0)
             {
@@ -144,6 +154,7 @@ namespace DeNelle.Village.UI
         {
             var sys = SkillSystem.Instance;
             if (_overlay == null || sys == null) return;
+            if (PopupRetired) { Hide(); return; }   // RETIRED — keep the popup/pill hidden regardless of points.
 
             int pts = sys.AvailablePoints;
             if (_points != null) _points.text = $"Available points: {pts}";
