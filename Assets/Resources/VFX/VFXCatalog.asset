@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.VFXCatalog
   Entries:
   - Type: 1
-    Prefab: {fileID: 879681129677348344, guid: bb7c04ee23d5c584c99ac06601febe0c, type: 3}
+    Prefab: {fileID: 3894563636541966133, guid: c27fac790990ed84f8ffc7736dd4b189, type: 3}
     PoolSize: 4
     IsLoop: 0
     MinQuality: 0
@@ -177,6 +177,12 @@ MonoBehaviour:
     LifetimeOverride: 0
   - Type: 31
     Prefab: {fileID: 9169863999176627214, guid: d80674d25b4036a43a9e0b72ed9f4fad, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 67
+    Prefab: {fileID: 3255629840924039632, guid: 446383bc4333b1041bb1cc082b8b7102, type: 3}
     PoolSize: 4
     IsLoop: 0
     MinQuality: 0

@@ -83,7 +83,10 @@ namespace DeNelle.Editor
         private static readonly Dictionary<string, Pick> Map = new Dictionary<string, Pick>
         {
             // -- Impacts (oneshot hits) ----------------------------------------
-            { "Impact_Physical",        new Pick(Lana + "Slash/Hit_stone.prefab") },
+            // Battle-polish: the melee hit is the highest-traffic combat moment.
+            // Upgrade from the small Hit_stone spark to a readable SLASH ARC so every
+            // sword connect reads as a strike, not a pebble poof. Still a cheap oneshot.
+            { "Impact_Physical",        new Pick(Lana + "Slash/Slash_stone_once.prefab") },
             { "Impact_Flame",           new Pick(Lana + "Range_attack/Hit_fire.prefab") },
             { "Impact_Ice",             new Pick(Lana + "Range_attack/Hit_frost.prefab") },
             { "Impact_Aether",          new Pick(Lana + "Range_attack/Hit_magic.prefab") },
@@ -117,6 +120,10 @@ namespace DeNelle.Editor
             { "Death_Wolf",             new Pick(Lana + "Burst/Poof_water.prefab") },
             { "Death_Tiefling",         new Pick(Spells + "Projectiles/Explosion/Explosion_Fire_2.prefab") },
             { "Death_Generic",          new Pick(Lana + "Burst/Poof_generic.prefab") },
+            // Battle-polish: dungeon enemy death fires this live but had no wired prefab
+            // (procedural only). A darker owned Dark explosion reads bigger than the
+            // village Poof for the dungeon run. Owned, cheap oneshot.
+            { "Death_EnemyExplosion_Dungeon", new Pick(Spells + "Projectiles/Explosion/Explosion_Dark_2.prefab") },
 
             // -- Auras (persistent loops) --------------------------------------
             { "Aura_Flame",             new Pick(Lana + "Fire/Fire_medium.prefab",  isLoop: true, minQuality: 1) },
