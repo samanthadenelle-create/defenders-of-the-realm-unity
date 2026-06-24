@@ -99,27 +99,26 @@ namespace DeNelle.Editor
             var mr = ground.GetComponent<MeshRenderer>();
             if (mr != null)
             {
+                // CRITICAL: assign a SERIALIZABLE material ASSET reference -- NEVER a
+                // `new Material(...)` runtime instance. A runtime instance does NOT
+                // serialize into a prefab via SaveAsPrefabAsset, so the Ground material
+                // saves as null ({fileID: 0}) -> URP renders the floor MAGENTA.
+                // Grass_1.mat already has emission black, so a direct assign is correct.
                 var mat = AssetDatabase.LoadAssetAtPath<Material>(GroundMat);
                 if (mat == null)
                 {
-                    // Fallback: a lit grass-green material with NO emission (never white).
-                    var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-                    mat = new Material(sh) { name = "ArenaGround_Forest" };
-                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(0.40f, 0.52f, 0.30f));
-                    if (mat.HasProperty("_Color")) mat.SetColor("_Color", new Color(0.40f, 0.52f, 0.30f));
+                    // Fallback: another EXISTING Arena material ASSET (still serializable).
+                    Debug.LogWarning("[ArenaPrefabBuilder] " + GroundMat + " not found -- falling back to Dwarven_Ground.mat.");
+                    mat = AssetDatabase.LoadAssetAtPath<Material>(ArenaDir + "/Dwarven_Ground.mat");
+                }
+                if (mat == null)
+                {
+                    Debug.LogError("[ArenaPrefabBuilder] No ground material ASSET found in " + ArenaDir + " -- Ground left unassigned (would render magenta). Add Grass_1.mat or Dwarven_Ground.mat.");
                 }
                 else
                 {
-                    // Instance so tiling + emission scrub don't mutate the shared asset.
-                    mat = new Material(mat) { name = "ArenaGround_Forest" };
+                    mr.sharedMaterial = mat;
                 }
-                // Whiteout guard (WO-506 section 7): emission OFF/black so bloom never blows the floor out.
-                if (mat.HasProperty("_EmissionColor")) mat.SetColor("_EmissionColor", Color.black);
-                mat.DisableKeyword("_EMISSION");
-                mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.EmissiveIsBlack;
-                if (mat.HasProperty("_BaseMap")) mat.SetTextureScale("_BaseMap", new Vector2(12f, 10f));
-                if (mat.HasProperty("_MainTex")) mat.SetTextureScale("_MainTex", new Vector2(12f, 10f));
-                mr.sharedMaterial = mat;
             }
         }
 
