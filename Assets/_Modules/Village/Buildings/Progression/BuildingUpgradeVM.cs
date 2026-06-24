@@ -22,6 +22,7 @@
 
 using System;
 using System.Collections.Generic;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using DeNelle.Core.UI.Mvvm;
 // Disambiguate the two ResourceCost types in scope: the build-economy cost (Wood/Food/
@@ -143,6 +144,27 @@ namespace DeNelle.Village.Buildings.Progression
             {
                 int next = CurrentTier + 1;
                 if (next > MaxTier) { Status = "This is already at its highest level."; Raise(); return; }
+
+                // WO-432 TIER GATE — mirror BuildingUpgradeService's gate so a tier-locked
+                // upgrade reports an HONEST reason, not the generic "can't afford" (the service
+                // returns a bare false for BOTH cases). Resources are fine; she's village-tier-gated.
+                var nextDef = BuildingTierCatalog.TierOf(_buildingId, next);
+                int villageTier = GameStateService.Instance?.State?.VillageTier ?? 0;
+                if (nextDef != null)
+                {
+                    FlowTrace.Step("BuildingUpgrade", "UpgradeNext " + _buildingId + " tier=" + next
+                        + " requiresVillageTier=" + nextDef.RequiresVillageTier
+                        + " villageTier=" + villageTier
+                        + " gated=" + (nextDef.RequiresVillageTier > villageTier));
+                    if (nextDef.RequiresVillageTier > villageTier)
+                    {
+                        Status = "Requires Village Tier " + nextDef.RequiresVillageTier
+                                 + " (you have " + villageTier + ").";
+                        Raise();
+                        return;
+                    }
+                }
+
                 bool ok = BuildingUpgradeService.TryUpgrade(_buildingId, next);
                 Status = ok
                     ? "Upgraded to Tier " + next + "."
