@@ -61,6 +61,16 @@ namespace DeNelle.Village
         private float _faceHoldRemaining;   // seconds the face-request stays valid
         private const float FaceYawDegPerSec = 540f; // yaw slew rate while facing a target
 
+        // WO-512 slice 3: lock-face / strafe. While a soft lock-on is engaged (driven by
+        // HeroTargetIndicator), the hero continuously slews its root yaw toward the LOCKED
+        // enemy INSTEAD of the move-direction LookRotation(Velocity) writer — even while
+        // moving. The camera-relative MOVE vector is deliberately left untouched, so pressing
+        // A/D translates the hero sideways while it keeps facing the orc → strafe falls out
+        // for free. When _lockFaceActive is false / the flag is off / the target is null/dead,
+        // the EXISTING LookRotation(Velocity) path runs byte-identical (zero regression).
+        private bool      _lockFaceActive;  // a lock-face is engaged (HeroTargetIndicator drives it)
+        private Transform _lockFaceTarget;  // the locked enemy transform to keep facing
+
         /// <summary>
         /// WO-423 — request a brief yaw-slew so the hero turns to face <paramref name="worldPoint"/>
         /// before/while attacking. Only applies while movement input is ~0 (so it never fights
@@ -77,6 +87,54 @@ namespace DeNelle.Village
             _faceTargetYaw    = Quaternion.LookRotation(to.normalized, Vector3.up).eulerAngles.y;
             _faceHoldRemaining = Mathf.Max(0f, hold);
             _facingActive     = true;
+        }
+
+        /// <summary>
+        /// WO-512 slice 3 — engage lock-face: while a lock-on holds <paramref name="target"/>, the hero
+        /// auto-faces it (yaw slew, reusing <see cref="StepYaw"/>/_rotationSpeed) even while moving, so
+        /// A/D strafe around it. Only the FACING is overridden — the camera-relative move vector is
+        /// untouched. Null target is treated as a clear. Honored only while <c>FeatureFlags.LockOn</c>;
+        /// suspended by the existing InputSuppressed / auto-walk early-returns (dialogue/cutscene win).
+        /// </summary>
+        public void SetLockFace(Transform target)
+        {
+            if (target == null) { ClearLockFace(); return; }
+            _lockFaceTarget = target;
+            _lockFaceActive = true;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena",
+                "LOCKON face-lock on '" + target.gameObject.name.Replace("(Clone)", "").Trim() + "'.");
+        }
+
+        /// <summary>
+        /// WO-512 slice 3 — clear lock-face: the hero returns to the normal LookRotation(Velocity)
+        /// facing writer (byte-identical to today). Called on lock release / target death.
+        /// </summary>
+        public void ClearLockFace()
+        {
+            if (!_lockFaceActive && _lockFaceTarget == null) return;
+            _lockFaceActive = false;
+            _lockFaceTarget = null;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena", "LOCKON face-lock cleared -> free facing.");
+        }
+
+        // WO-512 slice 3: slew the root yaw toward the locked enemy (XZ direction only), reusing
+        // StepYaw for the shortest-arc step at _rotationSpeed-equivalent feel. Caller already
+        // verified _lockFaceTarget != null. If the target is on top of the hero (no horizontal
+        // delta) we leave facing as-is (nothing meaningful to face). Yaw only — Y/pitch untouched,
+        // matching the move-direction LookRotation writer it replaces.
+        private void ApplyLockFaceYaw()
+        {
+            Vector3 to = _lockFaceTarget.position - transform.position;
+            to.y = 0f;
+            if (to.sqrMagnitude < 0.0004f) return;   // enemy on top of the hero — nothing to face
+
+            float curYaw    = transform.eulerAngles.y;
+            float targetYaw  = Quaternion.LookRotation(to.normalized, Vector3.up).eulerAngles.y;
+            // _rotationSpeed is a Slerp factor (~rad/sec-ish); scale to a per-frame degree cap so
+            // the slew feel matches the normal Slerp path without re-introducing a second tunable.
+            float maxDelta  = _rotationSpeed * 60f * Time.deltaTime;
+            float nextYaw   = StepYaw(curYaw, targetYaw, maxDelta);
+            transform.rotation = Quaternion.Euler(0f, nextYaw, 0f);
         }
 
         /// <summary>
@@ -627,6 +685,13 @@ namespace DeNelle.Village
             // movement, so suppress the normal Move this frame.
             bool seamConsumed = TryTraverseSeamLink();
 
+            // WO-512 slice 3: is the lock-face governing facing this frame? Only when a lock is
+            // engaged with a live target AND the flag is on. (InputSuppressed/auto-walk already
+            // early-returned above, so dialogue/cutscene facing is never fought.) When false, the
+            // EXISTING LookRotation(Velocity) writer below runs byte-identical — zero regression.
+            bool lockFacing = _lockFaceActive && _lockFaceTarget != null &&
+                              DeNelle.Core.FeatureFlags.LockOn;
+
             if (!seamConsumed && Velocity.sqrMagnitude > 0.0001f)
             {
                 if (!_loggedFirstInput)
@@ -640,21 +705,41 @@ namespace DeNelle.Village
                 // follows the surface height, so stairs / ramparts / hills "just work" exactly
                 // like the enemies. Fall back to a raw transform move if the hero isn't on a
                 // NavMesh yet (scene without a bake / spawned off-mesh) so movement never breaks.
+                // NOTE (WO-512): the move STEP is the camera-relative Velocity — UNCHANGED by
+                // lock-face. Only the facing writer below differs, so locking the facing to the
+                // orc while A/D keeps feeding a sideways move vector = strafe, for free.
                 Vector3 step = Velocity * Time.deltaTime;
                 if (_agent != null && _agent.isOnNavMesh)
                     _agent.Move(step);
                 else
                     transform.position += step;
 
-                // Face the move direction. HeroBodySwapper applies a root-child LocalRotation
-                // (WO-326: -90f, the proven companion value) so the visual mesh's authored +X
-                // forward aligns to the locomotion root's +Z. HeroLocomotion therefore does
-                // pure LookRotation on the velocity for the root transform — no extra Euler
-                // offset. (If the hero ever sidesteps again, the forwardYaw sign in
-                // HeroBodySwapper is the single place to flip.)
-                Quaternion target = Quaternion.LookRotation(Velocity.normalized);
-                transform.rotation = Quaternion.Slerp(
-                    transform.rotation, target, _rotationSpeed * Time.deltaTime);
+                if (lockFacing)
+                {
+                    // WO-512 slice 3: face the LOCKED enemy instead of the move direction. Reuse
+                    // StepYaw + _rotationSpeed (degrees/sec) for the same slew feel; the move vector
+                    // above is untouched, so this is the only difference vs. the normal path.
+                    ApplyLockFaceYaw();
+                }
+                else
+                {
+                    // Face the move direction. HeroBodySwapper applies a root-child LocalRotation
+                    // (WO-326: -90f, the proven companion value) so the visual mesh's authored +X
+                    // forward aligns to the locomotion root's +Z. HeroLocomotion therefore does
+                    // pure LookRotation on the velocity for the root transform — no extra Euler
+                    // offset. (If the hero ever sidesteps again, the forwardYaw sign in
+                    // HeroBodySwapper is the single place to flip.)
+                    Quaternion target = Quaternion.LookRotation(Velocity.normalized);
+                    transform.rotation = Quaternion.Slerp(
+                        transform.rotation, target, _rotationSpeed * Time.deltaTime);
+                }
+            }
+            else if (lockFacing && !seamConsumed)
+            {
+                // WO-512 slice 3: standing still but locked — keep facing the orc (the normal
+                // path only re-faces while moving, which would freeze facing at the last travel
+                // dir during a stationary duel). Move vector is zero here, so this is facing-only.
+                ApplyLockFaceYaw();
             }
 
             // Core animation fix: drive the guarded ActorAnimator (used by DTT + village

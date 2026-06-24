@@ -127,6 +127,7 @@ namespace DeNelle.Village
             var mb = target as MonoBehaviour;
             string nm = mb != null ? mb.gameObject.name.Replace("(Clone)", "").Trim() : "target";
             DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena", "LOCKON engage target='" + nm + "'.");
+            DriveLockFace(target);   // WO-512 slice 3: auto-face + strafe around the locked enemy
         }
 
         /// <summary>
@@ -153,6 +154,7 @@ namespace DeNelle.Village
             var mb = t as MonoBehaviour;
             string nm = mb != null ? mb.gameObject.name.Replace("(Clone)", "").Trim() : "none";
             DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena", "LOCKON switch -> '" + nm + "'.");
+            DriveLockFace(t);   // WO-512 slice 3: re-point the lock-face at the newly cycled enemy
         }
 
         /// <summary>
@@ -172,12 +174,32 @@ namespace DeNelle.Village
             SetBarTargeted(_prevTarget, false);
             _prevTarget = null;
             SetVisible(false);
+
+            // WO-512 slice 3: a full clear also drops the hero's lock-face (back to free facing).
+            DriveLockFace(null);
+        }
+
+        // ── WO-512 slice 3: lock-face / strafe drive ─────────────────────────────
+        // Push the locked enemy's Transform to the sibling HeroLocomotion so the Knight auto-faces
+        // it (and A/D strafe around it). Resolved lazily via GetComponent (same pattern as _abilities).
+        // Behind FeatureFlags.LockOn: with the flag OFF this is a no-op, so the hero's facing path is
+        // byte-identical to today. Passing null clears the lock-face.
+        private void DriveLockFace(IDamageable target)
+        {
+            if (!DeNelle.Core.FeatureFlags.LockOn) return;
+            if (_locomotion == null) _locomotion = GetComponent<HeroLocomotion>();
+            if (_locomotion == null) return;
+
+            Transform t = (target != null && target.IsAlive) ? (target as MonoBehaviour)?.transform : null;
+            if (t != null) _locomotion.SetLockFace(t);
+            else           _locomotion.ClearLockFace();
         }
 
         private Transform _reticle;
         private Material _reticleMat;
         private Camera _cam;
         private HeroAbilities _abilities;
+        private HeroLocomotion _locomotion;   // WO-512 slice 3: sibling for lock-face/strafe drive
         private float _nextScan;
 
         private IDamageable _locked;   // manual lock (null = auto-nearest)
@@ -228,16 +250,17 @@ namespace DeNelle.Village
             // like a manual cycle); a tap on EMPTY clears back to auto-nearest.
             if (TapOrClickThisFrame(out Vector2 screenPos))
             {
-                if (TryLockAtScreenPoint(screenPos)) return;   // hit an enemy → direct lock done
+                if (TryLockAtScreenPoint(screenPos)) { DriveLockFace(_locked); return; }   // hit an enemy → direct lock done
                 // tap on empty space → clear manual lock (revert to auto-nearest)
                 _locked = null;
                 LockEngaged = false;   // WO-512: keep the lock-on flag honest on a tap-to-clear
+                DriveLockFace(null);   // WO-512 slice 3: tap-to-clear also drops lock-face
                 return;
             }
 
             // WO-497: RIGHT-CLICK (desktop) cycles/switches the locked target, additive to the
             // existing Tab/right-shoulder cycle (CyclePressed). WO-512: a manual cycle engages lock.
-            if (CyclePressed()) { CycleTarget(); LockEngaged = _locked != null; }
+            if (CyclePressed()) { CycleTarget(); LockEngaged = _locked != null; DriveLockFace(_locked); }
         }
 
         private void LateUpdate()
@@ -250,7 +273,12 @@ namespace DeNelle.Village
 
             // Drop a manual lock that died or wandered out of range.
             if (_locked != null && (!_locked.IsAlive || !_candidates.Contains(_locked)))
+            {
                 _locked = null;
+                // WO-512 slice 3: the locked foe is gone — release lock-face so the Knight stops
+                // facing a dead/absent target and the LookRotation(Velocity) writer resumes.
+                if (LockEngaged) { LockEngaged = false; DriveLockFace(null); }
+            }
 
             CurrentTarget = _locked ?? NearestCandidate();
 
