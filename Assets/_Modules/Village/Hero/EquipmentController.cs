@@ -714,6 +714,31 @@ namespace DeNelle.Village
 
             FlowTrace.Step("Equip", $"attached '{weaponId}' on '{name}': gripPos={vis.gripPos} " +
                 $"baseEuler={_baseGripRot.eulerAngles} kind={vis.kind} native={vis.native}");
+
+            // ── OFFSET FORGE OVERRIDE (WO-490 slice 2) ───────────────────────────────
+            // If the owner authored an attachment offset for this weapon in the Offset Forge
+            // tool (Tools > Offset Forge -> offsets.json), APPLY it as the AUTHORITATIVE grip:
+            // it overrides the inferred gripPos/baseGripRot with the by-eye-correct values,
+            // using the SAME convention the tool's preview uses (localRotation = Euler(rot);
+            // localPosition = pos; localScale = one*scale). The key is the weapon's mesh name
+            // (e.g. "sword_A" / "shield_A", what the Forge defaults its save-id to) with a
+            // fallback to the weapon id. If NO offset is stored, nothing changes (no regression).
+            string offsetKey = !string.IsNullOrEmpty(vis.mesh) ? vis.mesh : weaponId;
+            if (AttachmentOffsetRegistry.TryGetOffset(offsetKey, out var fo) ||
+                (offsetKey != weaponId && AttachmentOffsetRegistry.TryGetOffset(weaponId, out fo)))
+            {
+                gripRoot.transform.localPosition = vis.gripPos + fo.pos;
+                _baseGripEuler = fo.eulerRot;
+                _baseGripRot = Quaternion.Euler(fo.eulerRot);
+                if (fo.scale > 0f && Mathf.Abs(fo.scale - 1f) > 1e-4f)
+                    gripRoot.transform.localScale = gripRoot.transform.localScale * fo.scale;
+                FlowTrace.Step("Offset", $"applied weapon '{offsetKey}' pos={fo.pos} rot={fo.eulerRot} scale={fo.scale:0.###}");
+            }
+            else
+            {
+                FlowTrace.Step("Offset", $"no offset stored for '{offsetKey}' — identity/inferred grip kept.");
+            }
+
             ApplyHoldPose();
 
             // RENDER-VERIFY + ROLLBACK (TGVRU, owner directive 2026-06-19: "anything that renders
