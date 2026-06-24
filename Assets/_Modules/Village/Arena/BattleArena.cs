@@ -85,7 +85,7 @@ namespace DeNelle.Village.Arena
         // Defaults: intensity moderate so HDR pops without washing the scene; threshold ~1.0
         // so only HDR > 1 (the VFX) blooms, not lit geometry. Owner tunes these by eye.
         private const float ArenaBloomIntensity = 1.4f;   // moderate glow multiplier (0..~3 typical)
-        private const float ArenaBloomThreshold = 1.0f;   // only luminance > 1 (HDR VFX) blooms
+        private const float ArenaBloomThreshold = 1.2f;   // only true-HDR VFX (lum > 1.2) blooms; lit ground stays out of bloom
         private const float ArenaBloomScatter   = 0.7f;   // glow spread (URP default)
         private const int   ArenaBloomPriority  = 100;    // outrank the global DefaultVolumeProfile (priority 0)
 
@@ -259,12 +259,33 @@ namespace DeNelle.Village.Arena
             int threat = _current != null ? _current.Threat : 0;
             _activeBiome = ArenaBiomeDressing.ResolveBiome(theme, threat);
 
-            // Floor: a scaled primitive plane (10x10 units at scale 1) -> cover the footprint.
-            var floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            floor.name = "ArenaFloor";
-            floor.transform.SetParent(_arenaRoot.transform, false);
-            floor.transform.localScale = new Vector3((ArenaHalfWidth * 2f) / 10f + 0.4f, 1f, (ArenaHalfDepth * 2f) / 10f + 0.4f);
-            ApplyGroundTheme(floor, theme);
+            // WO-506: the REAL authored landscape. Load + instantiate the forest-clearing
+            // PREFAB (Resources/Arena/ForestClearingArena, built by ArenaPrefabBuilder) onto
+            // _arenaRoot -> a real ground mesh + dressed treeline + soft light, NOT a primitive
+            // box. The prefab's Ground carries a Default-layer MeshCollider so the StageRoutine
+            // ArenaNavMeshBaker bakes over it (no duplicate bake here). Idempotent loaders are
+            // Guard-wrapped; a null prefab degrades to a plain LIT ground (never white/primitive-box).
+            GameObject stage = null;
+            Guard.Try("BattleArena", "load arena landscape prefab", () =>
+            {
+                stage = Resources.Load<GameObject>("Arena/ForestClearingArena");
+            });
+            if (stage != null)
+            {
+                Guard.Try("BattleArena", "instantiate arena landscape", () =>
+                {
+                    var go = UnityEngine.Object.Instantiate(stage, _arenaRoot.transform, false);
+                    go.name = "ArenaLandscape";
+                });
+                FlowTrace.Step("BattleArena", "BuildArena: loaded landscape prefab 'Arena/ForestClearingArena'.");
+            }
+            else
+            {
+                // SAFE FALLBACK: a plain lit ground plane (real _BaseColor, NO white emission)
+                // so the fight degrades to a real floor, never a white box / missing ground.
+                BuildFallbackFloor(theme);
+                FlowTrace.Warn("BattleArena", "BuildArena: landscape prefab missing -> plain lit ground fallback.");
+            }
 
             // Invisible boundary walls so neither hero nor enemy can wander off the stage.
             // (The NavMesh already confines agents; the walls are belt-and-braces + block
@@ -274,8 +295,9 @@ namespace DeNelle.Village.Arena
             BuildWall(new Vector3( ArenaHalfWidth + 0.5f, 2f, 0f),  new Vector3(1f, 6f, ArenaHalfDepth * 2f + 2f));
             BuildWall(new Vector3(-ArenaHalfWidth - 0.5f, 2f, 0f),  new Vector3(1f, 6f, ArenaHalfDepth * 2f + 2f));
 
-            // Natural see-through edge OUTSIDE the walls (silhouette only, colliders stripped).
-            DressArenaEdge(theme);
+            // WO-506: the edge treeline now lives IN the loaded landscape prefab (EdgeProps),
+            // authored with the same DressArenaEdge ring math. The old runtime DressArenaEdge
+            // call is dropped from the build path (the prefab provides the silhouette ring).
 
             // THE WOW (WO-499): a painted biome backdrop ringing the arena behind the treeline. Skip-safe.
             BuildBackdrop(_activeBiome);
@@ -299,81 +321,19 @@ namespace DeNelle.Village.Arena
         }
 
         // ---------------------------------------------------------------------
-        //  Natural arena edge: a jittered ring of low-poly props OUTSIDE the walls.
+        //  WO-506 SAFE FALLBACK: a plain lit ground plane (real _BaseColor, NO white
+        //  emission) used only when the landscape prefab is missing, so the fight
+        //  degrades to a real floor, NEVER a white/primitive-box void. The prefab is
+        //  the normal path; this guarantees a bakeable Default-layer floor regardless.
         // ---------------------------------------------------------------------
-        // Silhouette-only treeline / boulders that ring the kite space so the arena reads as
-        // a clearing, not a plane in a void. Parented to _arenaRoot (auto torn down with the
-        // stage), colliders STRIPPED (never catch the kiting hero), deterministic seed.
-        private void DressArenaEdge(string theme)
+        private void BuildFallbackFloor(string theme)
         {
-            string key = (theme ?? "outerworld").ToLowerInvariant();
-
-            // Per-theme prop set (Resources/Arena/<fbx name>); empty/sparse for stone themes.
-            string[] props;
-            int count;
-            switch (key)
-            {
-                case "cavern":
-                    props = new[] { "Rock_1_A_Color1", "Rock_2_C_Color1", "Rock_3_E_Color1", "Rock_1_J_Color1" };
-                    count = 16;
-                    break;
-                case "castle":
-                    props = new[] { "Rock_1_A_Color1", "Rock_2_C_Color1" };
-                    count = 8;   // sparse/bare around a keep
-                    break;
-                default: // outerworld -- a soft treeline + scattered boulders
-                    props = new[] { "Tree_2_A_Color1", "Tree_5_C_Color1", "Tree_7_A_Color1",
-                                    "Tree_Bare_1_A_Color1", "Rock_1_A_Color1", "Rock_3_E_Color1" };
-                    count = 18;
-                    break;
-            }
-            if (props == null || props.Length == 0) return;
-
-            count = Mathf.Clamp(count, 0, 20); // mobile-light cap
-
-            // Deterministic seed off the theme so a given region always rings the same (autopilot-chaos memory).
-            var rng = new System.Random(key.GetHashCode());
-
-            var edge = new GameObject("[ArenaEdge]");
-            edge.transform.SetParent(_arenaRoot.transform, false);
-
-            float ringHalfX = ArenaHalfWidth + 4.5f;  // OUTSIDE the invisible walls (ArenaHalf+3..6)
-            float ringHalfZ = ArenaHalfDepth + 4.5f;
-
-            for (int i = 0; i < count; i++)
-            {
-                // Even angular spacing + jitter -> a natural, non-gridded ring.
-                float baseAng = (i / (float)count) * Mathf.PI * 2f;
-                float ang = baseAng + (float)(rng.NextDouble() - 0.5) * 0.35f;
-                float radJitter = (float)rng.NextDouble() * 1.5f; // 0..1.5m outward jitter
-                float x = Mathf.Cos(ang) * (ringHalfX + radJitter);
-                float z = Mathf.Sin(ang) * (ringHalfZ + radJitter);
-
-                string name = props[rng.Next(props.Length)];
-                GameObject prefab = null;
-                Guard.Try("BattleArena", "load edge prop '" + name + "'", () =>
-                {
-                    prefab = Resources.Load<GameObject>("Arena/" + name);
-                });
-                if (prefab == null)
-                {
-                    Debug.LogWarning("[BattleArena] edge prop 'Arena/" + name + "' not found - skipped.");
-                    continue;
-                }
-
-                Guard.Try("BattleArena", "place edge prop '" + name + "'", () =>
-                {
-                    var go = UnityEngine.Object.Instantiate(prefab, edge.transform);
-                    go.name = "Edge_" + name + "_" + i;
-                    go.transform.localPosition = new Vector3(x, 0f, z);
-                    go.transform.localRotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
-                    float s = 0.9f + (float)rng.NextDouble() * 0.6f; // 0.9..1.5 scale variety
-                    go.transform.localScale = new Vector3(s, s, s);
-                    StripColliders(go);
-                });
-            }
-
-            FlowTrace.Step("BattleArena", "DressArenaEdge: ringed '" + key + "' with up to " + count + " silhouette props.");
+            var floor = GameObject.CreatePrimitive(PrimitiveType.Plane); // MeshFilter + MeshRenderer + MeshCollider
+            floor.name = "ArenaFloor_Fallback";
+            floor.transform.SetParent(_arenaRoot.transform, false);
+            floor.layer = 0; // Default layer so ArenaNavMeshBaker (PhysicsColliders) bakes it.
+            floor.transform.localScale = new Vector3((ArenaHalfWidth * 2f) / 10f + 0.4f, 1f, (ArenaHalfDepth * 2f) / 10f + 0.4f);
+            ApplyGroundTheme(floor, theme);
         }
 
         // Strip every collider so an edge prop is a pure silhouette (never blocks the kite/navmesh).
@@ -460,6 +420,11 @@ namespace DeNelle.Village.Arena
                 bloom.threshold.Override(Mathf.Max(0f, ArenaBloomThreshold));
                 bloom.scatter.Override(Mathf.Clamp01(ArenaBloomScatter));
                 // Mobile-cheap: leave high-quality filtering OFF (default) -> bloom only, light cost.
+
+                // Tonemapping safety net: compress HDR back to SDR so the lit ground can never blow
+                // out to white even with HDR camera + bloom. Neutral mode = perceptually faithful.
+                var tonemap = profile.Add<UnityEngine.Rendering.Universal.Tonemapping>(true);
+                tonemap.mode.Override(UnityEngine.Rendering.Universal.TonemappingMode.Neutral);
 
                 var go = new GameObject("ArenaBloomVolume");
                 go.transform.SetParent(_arenaRoot.transform, false);

@@ -88,19 +88,16 @@ namespace DeNelle.Village.Arena
                 host.transform.SetParent(arenaRoot, false);
                 host.transform.localPosition = new Vector3(0f, 6f, 0f); // drift down over the kite floor
 
-                // Per-biome flavour layer.
+                // Per-biome flavour layer (leaves / embers / motes / dust).
                 BiomeFx fx = FxFor(key);
                 BuildSystem(host.transform, "flavour", fx);
 
-                // A faint, shared mist drift under everything (WO-499 #2 "+ mist").
-                BuildSystem(host.transform, "mist", new BiomeFx
-                {
-                    color = new Color(0.75f, 0.78f, 0.82f, 0.06f),
-                    rate = 4f, size = 9f, sizeJitter = 4f, lifetime = 9f,
-                    gravity = -0.01f, speed = 0.25f, additive = false,
-                });
+                // FOG REMOVED (owner 2026-06-23): the faint "mist" drift layer rendered as
+                // oversized boxy gray clouds above the player (size 9 + 4 jitter, spawned at +6m).
+                // Cleanly removable: re-add a BuildSystem(host.transform, "mist", ...) here to
+                // restore it. The per-biome flavour layer above is intentionally kept intact.
 
-                FlowTrace.Step("BattleArena", "BuildParticles: biome '" + key + "' flavour + mist (cheap, pooled with stage).");
+                FlowTrace.Step("BattleArena", "BuildParticles: biome '" + key + "' flavour (mist/fog removed).");
             });
         }
 
