@@ -260,6 +260,26 @@ namespace DeNelle.Village.Arena
                 yield break;
             }
 
+            // WO-512 slice 1: AUTO-LOCK the nearest enemy on engaging the battle (flag-gated).
+            // Behind FeatureFlags.LockOn so OFF == today's exact behavior (no lock acquired). The single
+            // lock owner is HeroTargetIndicator on the hero; EngageLock(null) picks the nearest hostile.
+            // No camera/facing change here (slices 2-3) — only the reticle reds + abilities aim follow.
+            if (FeatureFlags.LockOn)
+            {
+                Guard.Try("BattleArena", "auto-lock nearest on engage", () =>
+                {
+                    var hero = GameObject.FindWithTag("Player");
+                    var indicator = hero != null ? hero.GetComponent<HeroTargetIndicator>() : null;
+                    if (indicator != null)
+                    {
+                        indicator.EngageLock();   // auto-nearest
+                        var t = indicator.LockedEnemyTarget as MonoBehaviour;
+                        string nm = t != null ? t.gameObject.name.Replace("(Clone)", "").Trim() : "none";
+                        FlowTrace.Step("BattleArena", "LOCKON acquire target='" + nm + "' (auto-nearest on engage).");
+                    }
+                });
+            }
+
             // 5) Present: battle HUD + combat BGM. (Presentation layer; logic already staged.)
             Guard.Try("BattleArena", "show combat HUD", () => ArenaHudBridge.SetVisible(true));
             Guard.Try("BattleArena", "build battle overlay", () =>

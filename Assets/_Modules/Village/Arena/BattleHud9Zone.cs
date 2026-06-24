@@ -457,7 +457,7 @@ namespace DeNelle.Village.Arena
             if (_targetDeepStats != null)
                 _targetDeepStats.text = ShowEnemyDeepStats ? "ATK -   DEF -" : "";
 
-            bool locked = _lockEngaged;
+            bool locked = _target != null && _target.LockEngaged;   // WO-512: read the single lock owner
             if (_lockState != null)
             {
                 _lockState.text = locked ? "Locked" : "Unlocked";
@@ -466,26 +466,16 @@ namespace DeNelle.Village.Arena
             if (_lockBtnBg != null) _lockBtnBg.color = locked ? LockOn : PanelDim;
         }
 
-        // Lock toggle: ON locks HeroAbilities onto the current target; OFF clears the lock
-        // (reverts to auto-nearest) via HeroTargetIndicator.ClearLock.
-        private bool _lockEngaged;
+        // Lock toggle (WO-512): route ALL lock intent through the single owner, HeroTargetIndicator.
+        // ON engages the lock onto the current target (the indicator owns the per-frame
+        // AimPointOverride/LockedTarget writes now — NO duplicate aim writes here); OFF releases to
+        // auto-nearest free-look. The Locked/Unlocked label READS HeroTargetIndicator.LockEngaged.
         private void ToggleLock()
         {
-            _lockEngaged = !_lockEngaged;
-            if (_lockEngaged)
-            {
-                var cur = _target?.CurrentTarget;
-                if (cur != null && _abilities != null)
-                {
-                    _abilities.LockedTarget = cur;
-                    _abilities.AimPointOverride = cur.WorldPosition;
-                }
-            }
-            else
-            {
-                _target?.ClearLock();
-            }
-            Debug.Log("[BattleHud9Zone] lock toggled -> " + (_lockEngaged ? "LOCKED" : "UNLOCKED"));
+            if (_target == null) return;
+            if (_target.LockEngaged) _target.ReleaseLock();
+            else _target.EngageLock(_target.CurrentTarget);
+            Debug.Log("[BattleHud9Zone] lock toggled -> " + (_target.LockEngaged ? "LOCKED" : "UNLOCKED"));
         }
 
         // ---------------------------------------------------------------------
@@ -629,19 +619,17 @@ namespace DeNelle.Village.Arena
             for (; r < _cycleRows.Count; r++) _cycleRows[r].Tracked = null;
         }
 
-        // Row tap -> lock HeroAbilities onto that enemy (placeholder cycle interactivity:
-        // a soft focus via the public lock surface, like Mid-Right focus did).
+        // Row tap -> engage the soft lock-on onto that enemy (WO-512): route through the single lock
+        // owner, HeroTargetIndicator, which owns the per-frame aim writes (no direct _abilities writes).
         private void SelectCycleRow(int idx)
         {
             if (idx < 0 || idx >= _cycleRows.Count) return;
             var en = _cycleRows[idx].Tracked;
             if (en == null || en.IsDead) return;
             var dmg = en.GetComponent<IDamageable>() ?? en.GetComponentInParent<IDamageable>();
-            if (dmg != null && _abilities != null)
+            if (dmg != null && _target != null)
             {
-                _abilities.LockedTarget = dmg;
-                _abilities.AimPointOverride = dmg.WorldPosition;
-                _lockEngaged = true;
+                _target.EngageLock(dmg);
                 Debug.Log("[BattleHud9Zone] target-cycle select -> " + en.name + ".");
             }
         }

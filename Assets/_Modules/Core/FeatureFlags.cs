@@ -191,6 +191,15 @@ namespace DeNelle.Core
         /// and are unaffected by this flag.</summary>
         public static bool DevHotkeys => Get("devhotkeys", defaultOn: false);
 
+        /// <summary>WO-512 — when ON, the battle SOFT LOCK-ON is live: auto-lock the nearest enemy on
+        /// engaging a battle (BattleArena.StageRoutine), tap the HUD Lock toggle to release to free-look,
+        /// and switch via the roster/cycle. The single lock owner is <see cref="DeNelle.Village.HeroTargetIndicator"/>
+        /// (the HUD routes through it; no duplicate aim writes). Slices 0-1 add NO camera motion and NO
+        /// hero-facing change — they are the safe foundation (flag-gated; OFF == today's exact behavior).
+        /// Camera framing + face/strafe (slices 2-3) are layered behind this same flag later. Default OFF
+        /// until felt-proven (mobile-nausea is the top risk). PlayerPrefs "ff.lockon". Spec: WORK_ORDER_512.</summary>
+        public static bool LockOn => Get("lockon", defaultOn: false);
+
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
         {
@@ -282,6 +291,26 @@ namespace DeNelle.Core
         private static bool ToggleOverworldEncounterValidate()
         {
             UnityEditor.Menu.SetChecked(OverworldEncounterMenu, OverworldEncounter);
+            return true;
+        }
+
+        // WO-512 — flip the battle soft lock-on on/off from the menu (no PlayerPrefs fiddling).
+        // ON => auto-lock nearest enemy on engage + HUD lock toggle routes through HeroTargetIndicator.
+        private const string LockOnMenu = "Defenders/Debug/Lock-On (WO-512 battle soft lock)";
+
+        [UnityEditor.MenuItem(LockOnMenu, priority = 202)]
+        private static void ToggleLockOn()
+        {
+            bool on = !LockOn;
+            PlayerPrefs.SetInt("ff.lockon", on ? 1 : 0);
+            PlayerPrefs.Save();
+            Debug.Log("[FeatureFlags] ff.lockon = " + (on ? "ON (auto-lock nearest enemy on engage; HUD lock routes through HeroTargetIndicator)" : "OFF"));
+        }
+
+        [UnityEditor.MenuItem(LockOnMenu, validate = true)]
+        private static bool ToggleLockOnValidate()
+        {
+            UnityEditor.Menu.SetChecked(LockOnMenu, LockOn);
             return true;
         }
 #endif

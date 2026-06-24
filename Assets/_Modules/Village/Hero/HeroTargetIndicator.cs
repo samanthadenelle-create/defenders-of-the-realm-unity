@@ -91,6 +91,70 @@ namespace DeNelle.Village
         /// <summary>The hostile the hero is currently targeting (locked or nearest), or null.</summary>
         public IDamageable CurrentTarget { get; private set; }
 
+        // ── WO-512 lock-owner API (THE single lock owner) ────────────────────────
+        // The HUD (BattleHud9Zone) and BattleArena route ALL lock intent through these thin
+        // wrappers over the existing _locked/CycleTarget/ClearLock internals, so there is one
+        // owner of the manual lock + the per-frame AimPointOverride/LockedTarget writes (collapses
+        // the old two-owner bug where the HUD wrote aim fields the indicator overwrote next frame).
+        // These change NO behavior on their own — they just expose the existing lock as a clean API.
+
+        /// <summary>True when a soft lock-on is engaged (the player/engage held a specific foe), false in
+        /// free-look / auto-nearest. Mirror of "_locked != null engaged via the lock API".</summary>
+        public bool LockEngaged { get; private set; }
+
+        /// <summary>The locked enemy when <see cref="LockEngaged"/>, else null. Reads CurrentTarget so a
+        /// dropped lock (target died / left range) reports null on the next LateUpdate.</summary>
+        public IDamageable LockedEnemyTarget => LockEngaged ? CurrentTarget : null;
+
+        /// <summary>
+        /// Engage the soft lock-on onto a specific target (or the nearest candidate when null).
+        /// Idempotent: engaging while already locked just re-points. Sets the same _locked the manual
+        /// Tab/tap lock uses, so the reticle reds + abilities aim at it through the existing per-frame
+        /// writes. No camera/facing change (slices 2-3).
+        /// </summary>
+        public void EngageLock(IDamageable target = null)
+        {
+            if (target == null)
+            {
+                // Pick the nearest hostile from a fresh scan (CurrentTarget may be stale this frame).
+                RebuildCandidates();
+                target = _candidates.Count > 0 ? _candidates[0] : (_locked ?? CurrentTarget);
+            }
+            if (target == null || !target.IsAlive) return;   // nothing to lock — stay auto-nearest
+            _locked = target;
+            LockEngaged = true;
+            CurrentTarget = target;   // reflect immediately so reticle/HUD don't lag a frame
+            var mb = target as MonoBehaviour;
+            string nm = mb != null ? mb.gameObject.name.Replace("(Clone)", "").Trim() : "target";
+            DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena", "LOCKON engage target='" + nm + "'.");
+        }
+
+        /// <summary>
+        /// Release the soft lock-on back to auto-nearest (free-look). Reuses ClearLock internals (drops
+        /// _locked + the aim override + the pinned bar) and leaves the reticle in auto/gold; the next
+        /// LateUpdate re-acquires the nearest hostile from scratch.
+        /// </summary>
+        public void ReleaseLock()
+        {
+            LockEngaged = false;
+            ClearLock();   // drops _locked, aim override, prev-target bar; reticle reverts to auto/gold
+            DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena", "LOCKON release -> free-look.");
+        }
+
+        /// <summary>
+        /// Switch the locked target in the existing nearest-first cycle order (dir reserved for a future
+        /// reverse step; current cycle is forward). Engages the lock if it wasn't already.
+        /// </summary>
+        public void CycleLock(int dir)
+        {
+            CycleTarget();          // reuse the existing nearest-first cycle ordering
+            LockEngaged = _locked != null;
+            var t = _locked;
+            var mb = t as MonoBehaviour;
+            string nm = mb != null ? mb.gameObject.name.Replace("(Clone)", "").Trim() : "none";
+            DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena", "LOCKON switch -> '" + nm + "'.");
+        }
+
         /// <summary>
         /// Clear any MANUAL target lock (revert to auto-nearest) and drop the current target +
         /// its aim override. Called by BattleArena.Resolve on a loss so the hero doesn't return
@@ -100,6 +164,7 @@ namespace DeNelle.Village
         public void ClearLock()
         {
             _locked = null;
+            LockEngaged = false;   // WO-512: any clear path (Resolve loss, tap-empty) also drops the lock-on flag
             CurrentTarget = null;
             if (_abilities == null) _abilities = GetComponent<HeroAbilities>();
             if (_abilities != null) { _abilities.AimPointOverride = null; _abilities.LockedTarget = null; }
@@ -166,12 +231,13 @@ namespace DeNelle.Village
                 if (TryLockAtScreenPoint(screenPos)) return;   // hit an enemy → direct lock done
                 // tap on empty space → clear manual lock (revert to auto-nearest)
                 _locked = null;
+                LockEngaged = false;   // WO-512: keep the lock-on flag honest on a tap-to-clear
                 return;
             }
 
             // WO-497: RIGHT-CLICK (desktop) cycles/switches the locked target, additive to the
-            // existing Tab/right-shoulder cycle (CyclePressed).
-            if (CyclePressed()) CycleTarget();
+            // existing Tab/right-shoulder cycle (CyclePressed). WO-512: a manual cycle engages lock.
+            if (CyclePressed()) { CycleTarget(); LockEngaged = _locked != null; }
         }
 
         private void LateUpdate()
@@ -319,6 +385,7 @@ namespace DeNelle.Village
             if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) return false;
 
             _locked = d;   // direct manual lock — bypasses AUTO arc/LoS, like Tab
+            LockEngaged = true;   // WO-512: a direct tap-lock engages the lock-on flag
             return true;
         }
 
