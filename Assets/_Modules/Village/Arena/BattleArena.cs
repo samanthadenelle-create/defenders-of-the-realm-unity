@@ -38,6 +38,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using UnityEngine.Rendering;            // URP Volume / VolumeProfile (arena bloom, WO-504 #2)
+using UnityEngine.Rendering.Universal;  // Bloom override + UniversalAdditionalCameraData
 using DeNelle.Core;
 using DeNelle.Core.Audio;
 using DeNelle.Core.Combat;
@@ -61,6 +63,22 @@ namespace DeNelle.Village.Arena
         private const float ArenaHalfDepth = 24f;   // Z half-extent (~48 deep) — open kite space, not a square
 
         private const float BattleTimeoutSeconds = 240f; // generous; a stuck fight ends, never soft-locks
+
+        // ---------------------------------------------------------------------
+        //  WO-504 #2: arena BLOOM tunables (BONES - owner felt-tunes the numbers).
+        // ---------------------------------------------------------------------
+        // The global DefaultVolumeProfile ships Bloom intensity 0 (effectively OFF) and the
+        // URP asset has HDR off, so the arena's HDR materials (Crystal 4.2 / Arcane Shield 4.5
+        // / FireTrail 3.0 / additive particles) do NOT glow. We add a LOCAL global Volume +
+        // a code-built Bloom profile under _arenaRoot, force the combat camera's post-process
+        // + HDR on for the fight, and restore both on Resolve. Cheap (bloom only) for mobile.
+        //
+        // Defaults: intensity moderate so HDR pops without washing the scene; threshold ~1.0
+        // so only HDR > 1 (the VFX) blooms, not lit geometry. Owner tunes these by eye.
+        private const float ArenaBloomIntensity = 1.4f;   // moderate glow multiplier (0..~3 typical)
+        private const float ArenaBloomThreshold = 1.0f;   // only luminance > 1 (HDR VFX) blooms
+        private const float ArenaBloomScatter   = 0.7f;   // glow spread (URP default)
+        private const int   ArenaBloomPriority  = 100;    // outrank the global DefaultVolumeProfile (priority 0)
 
         private static BattleArena _instance;
 
@@ -108,6 +126,14 @@ namespace DeNelle.Village.Arena
         private float _savedFogDensity;
         private Color _savedAmbientLight;
         private float _savedAmbientIntensity;
+
+        // WO-504 #2: combat-camera post-process/HDR overrides, saved so the open-world camera
+        // is untouched on return. Saved when staged, restored in Resolve.
+        private bool _camStateSaved;
+        private Camera _bloomCam;
+        private bool _savedCamAllowHDR;
+        private bool _savedCamPostFx;
+        private bool _hadCamData;
 
         private void Awake()
         {
@@ -195,6 +221,10 @@ namespace DeNelle.Village.Arena
             });
             CoreServices.Audio?.PlayMusic(MusicTrack.Arena);
 
+            // WO-504 #2: force the combat camera's post-processing + HDR ON so the arena Volume's
+            // Bloom is applied and HDR > 1 VFX actually glow. Saved + restored on Resolve.
+            EnableCombatBloomCamera();
+
             FlowTrace.Step("BattleArena", $"StageRoutine: staged {_liveEnemies.Count} enemies; fight live.");
 
             // 6) Watch to resolution.
@@ -235,6 +265,12 @@ namespace DeNelle.Village.Arena
 
             // THE WOW (WO-499): a painted biome backdrop ringing the arena behind the treeline. Skip-safe.
             BuildBackdrop(_activeBiome);
+
+            // WO-504 #2: the BLOOM multiplier so the HDR VFX/materials actually GLOW. A local
+            // global Volume (priority above the global profile) + a code-built Bloom override,
+            // staged with the arena (torn down with _arenaRoot). Camera post-fx/HDR forced on
+            // separately (EnableCombatBloomCamera). Skip-safe -> no glow, never breaks the fight.
+            BuildArenaBloom();
 
             // WO-499 #2: subtle per-biome particles (leaves/motes/embers/dust + mist) parented to the
             // stage so they tear down with it. Cheap, short-lived, capped -> "effects clear out fast".
@@ -381,6 +417,96 @@ namespace DeNelle.Village.Arena
                 }
                 FlowTrace.Step("BattleArena", "BuildBackdrop: cyclorama backdrop '" + key + "' behind the treeline (r=" + r.ToString("0") + ").");
             });
+        }
+
+        // ---------------------------------------------------------------------
+        //  WO-504 #2: arena BLOOM - a local global URP Volume + code-built Bloom profile.
+        // ---------------------------------------------------------------------
+        // Why a LOCAL volume (not the shipped DefaultVolumeProfile): that profile's Bloom is
+        // intensity 0 (off), and the far-offset arena should glow ONLY during the fight (no
+        // global post-fx change leaking to the open world). The Volume is parented to
+        // _arenaRoot so it tears down automatically on Resolve. Global mode (isGlobal=true)
+        // so it covers the whole far-offset stage without a box collider. Priority above the
+        // global profile so its Bloom override wins. Skip-safe (Guard) -> no glow, never throws.
+        private void BuildArenaBloom()
+        {
+            Guard.Try("BattleArena", "build arena bloom volume", () =>
+            {
+                // Code-built profile (ScriptableObject, not an asset) so there is no Resources
+                // dependency and nothing to drag-drop. A single Bloom override, HDR-thresholded.
+                var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+                profile.name = "ArenaBloomProfile";
+
+                var bloom = profile.Add<Bloom>(overrides: true);
+                bloom.intensity.Override(Mathf.Max(0f, ArenaBloomIntensity));
+                bloom.threshold.Override(Mathf.Max(0f, ArenaBloomThreshold));
+                bloom.scatter.Override(Mathf.Clamp01(ArenaBloomScatter));
+                // Mobile-cheap: leave high-quality filtering OFF (default) -> bloom only, light cost.
+
+                var go = new GameObject("ArenaBloomVolume");
+                go.transform.SetParent(_arenaRoot.transform, false);
+                var vol = go.AddComponent<Volume>();
+                vol.isGlobal = true;                 // covers the whole far-offset stage, no collider needed
+                vol.priority = ArenaBloomPriority;   // outrank the global DefaultVolumeProfile
+                vol.sharedProfile = profile;
+
+                FlowTrace.Step("BattleArena", $"BuildArenaBloom: local bloom volume (intensity={ArenaBloomIntensity}, threshold={ArenaBloomThreshold}).");
+            });
+        }
+
+        // Force the combat camera's post-processing + HDR ON for the fight so the arena Bloom
+        // volume is applied and HDR > 1 VFX glow (the URP asset ships m_SupportsHDR off, so the
+        // camera-level allowHDR is what lets the HDR materials exceed 1.0 into bloom). The prior
+        // state is saved and restored on Resolve so the open-world camera is untouched. Skip-safe.
+        private void EnableCombatBloomCamera()
+        {
+            if (_camStateSaved) return;
+            Guard.Try("BattleArena", "enable combat bloom camera", () =>
+            {
+                var cam = Camera.main;
+                if (cam == null) { FlowTrace.Warn("BattleArena", "EnableCombatBloomCamera: no Camera.main - bloom volume still applies if another camera has post-fx."); return; }
+
+                _bloomCam = cam;
+                _savedCamAllowHDR = cam.allowHDR;
+                cam.allowHDR = true;
+
+                var data = cam.GetComponent<UniversalAdditionalCameraData>();
+                if (data != null)
+                {
+                    _hadCamData = true;
+                    _savedCamPostFx = data.renderPostProcessing;
+                    data.renderPostProcessing = true;
+                }
+                else
+                {
+                    _hadCamData = false;
+                }
+
+                _camStateSaved = true;
+                FlowTrace.Step("BattleArena", $"EnableCombatBloomCamera: post-fx+HDR forced on (hadData={_hadCamData}).");
+            });
+        }
+
+        // Restore the combat camera's saved post-fx/HDR state on Resolve. One-shot + null-safe
+        // (the camera may have been destroyed between stage and resolve; we only touch it if live).
+        private void RestoreCombatBloomCamera()
+        {
+            if (!_camStateSaved) return;
+            Guard.Try("BattleArena", "restore combat bloom camera", () =>
+            {
+                if (_bloomCam != null)
+                {
+                    _bloomCam.allowHDR = _savedCamAllowHDR;
+                    if (_hadCamData)
+                    {
+                        var data = _bloomCam.GetComponent<UniversalAdditionalCameraData>();
+                        if (data != null) data.renderPostProcessing = _savedCamPostFx;
+                    }
+                }
+                FlowTrace.Step("BattleArena", "RestoreCombatBloomCamera: open-world camera post-fx/HDR restored.");
+            });
+            _camStateSaved = false;
+            _bloomCam = null;
         }
 
         private static void StripColliders(GameObject go)
@@ -727,6 +853,10 @@ namespace DeNelle.Village.Arena
 
             // Restore any cavern mood RenderSettings BEFORE the open world is back in view.
             RestoreCavernMood();
+
+            // WO-504 #2: hand the combat camera's post-fx/HDR back to its open-world state
+            // (the Volume itself tears down with _arenaRoot below).
+            RestoreCombatBloomCamera();
 
             // Tear the stage down: kill any survivors + destroy the arena root.
             foreach (var e in _liveEnemies) if (e != null) Guard.Try("BattleArena", "despawn enemy", () => Destroy(e.gameObject));
