@@ -94,6 +94,32 @@ namespace DeNelle.Village.Hero
         }
     }
 
+    /// <summary>
+    /// One readable SPEC line for the selected item's details pane (WO: "make weapons matter" -
+    /// read out the stat + the +/- delta vs equipped before buying). The View renders, per line:
+    /// "<Label> <Value> (<Delta>)" with <Delta> tinted by <DeltaSign> (green up / red down / dim same).
+    /// Value is already formatted; Delta is "" when nothing comparable is equipped (raw stat, no tint).
+    /// </summary>
+    public readonly struct PartyShopSpec
+    {
+        /// <summary>Stat label, e.g. "Damage", "Defense", "HP", "Reach".</summary>
+        public readonly string Label;
+        /// <summary>Formatted absolute value, e.g. "25", "0.14", "2.5m".</summary>
+        public readonly string Value;
+        /// <summary>Formatted +/- delta vs the equipped piece, e.g. "+5", "-0.02"; "" when no comparison.</summary>
+        public readonly string Delta;
+        /// <summary>-1 worse / 0 same / +1 better; the View maps this to red / dim / green. 0 when no delta.</summary>
+        public readonly int DeltaSign;
+
+        public PartyShopSpec(string label, string value, string delta, int deltaSign)
+        {
+            Label = label;
+            Value = value;
+            Delta = delta;
+            DeltaSign = deltaSign;
+        }
+    }
+
     /// <summary>One party member chip - id/name/class for the selector, portrait key for the View.</summary>
     public readonly struct PartyMemberVM
     {
@@ -275,6 +301,17 @@ namespace DeNelle.Village.Hero
         /// <summary>The selected row's detail payload, or null when nothing is selected.</summary>
         public PartyShopDetail? Selected =>
             SelectedId != null && _rowDetails.TryGetValue(SelectedId, out var d) ? d : (PartyShopDetail?)null;
+
+        /// <summary>
+        /// The selected item's readable SPEC lines (label + absolute value + signed delta vs the
+        /// selected member's equipped piece), for the details pane. Empty when nothing is selected
+        /// or the row isn't gear (craftable). Reuses the SAME equipped-comparison the delta line
+        /// uses; on the SELL tab (or when nothing comparable is equipped) the delta column is blank.
+        /// </summary>
+        public IReadOnlyList<PartyShopSpec> SelectedSpecs => BuildSpecs(SelectedId);
+
+        /// <summary>Per-id spec lines (View can render the details for any row). Never null.</summary>
+        public IReadOnlyList<PartyShopSpec> SpecsFor(string id) => BuildSpecs(id);
 
         /// <summary>Detail payload for any row id (View renders the per-row stats/delta from this). Null when absent.</summary>
         public PartyShopDetail? DetailFor(string id) =>
@@ -475,6 +512,16 @@ namespace DeNelle.Village.Hero
                 foreach (var e in shoppable) if (e.Kind == ShoppableKind.Weapon) ordered.Add(e);
             foreach (var e in shoppable) if (e.Kind == ShoppableKind.Craftable) ordered.Add(e);
 
+            // ?12 INSTRUMENT (affordability live-RCA, no logic change): ONCE per rebuild, capture the
+            // exact context the affordability check sees - whether the economy/state are bound and what
+            // gold it reads - so the owner's next store-open NAMES "coins read 0 / state null" vs "cost wrong".
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Store",
+                "affordability ctx: economyNull=" + (_economy == null)
+                + " stateNull=" + (DeNelle.Core.State.GameStateService.Instance?.State == null)
+                + " coins=" + (_economy?.Coins ?? -1));
+            // Sample only the first few buyable rows (cheap; avoids per-frame/long-list spam).
+            int _affordSamples = 0;
+
             foreach (var entry in ordered)
             {
                 switch (entry.Kind)
@@ -490,6 +537,16 @@ namespace DeNelle.Village.Hero
                         var cost = GearCatalog.GetBuyCost(w);
                         bool affordable = owned || _economy == null || _economy.CanAfford(cost);
 
+                        if (_affordSamples < 3)
+                        {
+                            _affordSamples++;
+                            DeNelle.Core.Diagnostics.FlowTrace.Step("Store",
+                                "afford row '" + w.id + "' cost=" + DescribeCost(cost)
+                                + " coins=" + (_economy?.Coins ?? -1)
+                                + " canAfford=" + (_economy?.CanAfford(cost) ?? true)
+                                + " owned=" + owned);
+                        }
+
                         AddBuyWeaponRow(w, cost, owned, equipped, affordable);
                         _currentStock.Add((w.id, GearKind.Weapon));
                         break;
@@ -504,6 +561,16 @@ namespace DeNelle.Village.Hero
                                         string.Equals(member.EquippedArmor.id, a.id, StringComparison.OrdinalIgnoreCase);
                         var cost = GearCatalog.GetBuyCost(a);
                         bool affordable = owned || _economy == null || _economy.CanAfford(cost);
+
+                        if (_affordSamples < 3)
+                        {
+                            _affordSamples++;
+                            DeNelle.Core.Diagnostics.FlowTrace.Step("Store",
+                                "afford row '" + a.id + "' cost=" + DescribeCost(cost)
+                                + " coins=" + (_economy?.Coins ?? -1)
+                                + " canAfford=" + (_economy?.CanAfford(cost) ?? true)
+                                + " owned=" + owned);
+                        }
 
                         AddBuyArmorRow(a, cost, owned, equipped, affordable);
                         _currentStock.Add((a.id, GearKind.Armor));
@@ -815,6 +882,80 @@ namespace DeNelle.Village.Hero
             return d == 0 ? "= equipped" : (d > 0 ? "+" + d + "% def vs equipped" : d + "% def vs equipped");
         }
 
+        // -- Readable per-stat SPEC lines + per-stat delta vs the equipped piece (WO: weapons matter) --
+        // Reads the RAW stat fields the def exposes (WeaponDef.damageMult/reach, ArmorDef.defense/hpBonus)
+        // and, when a comparable piece is equipped on the selected member (BUY tab), the signed delta.
+        // Delta is suppressed on SELL (you'd be comparing the item to itself/your own loadout) and when
+        // nothing comparable is equipped - then the raw stat shows with no tint.
+        private IReadOnlyList<PartyShopSpec> BuildSpecs(string id)
+        {
+            var list = new List<PartyShopSpec>();
+            if (string.IsNullOrEmpty(id)) return list;
+            bool compare = _tab == PartyShopTab.Buy;
+            var m = SelectedMember;
+
+            var w = GearCatalog.FindWeapon(id);
+            if (w != null)
+            {
+                // Damage: a derived whole number from the multiplier (the "damage" the player reads).
+                float dmg = DerivedDamage(w.damageMult);
+                bool cmp = compare && m != null && m.EquippedWeapon != null
+                           && !string.Equals(m.EquippedWeapon.id, w.id, StringComparison.OrdinalIgnoreCase);
+                float curDmg = cmp ? DerivedDamage(m.EquippedWeapon.damageMult) : 0f;
+                list.Add(MakeSpec("Damage", Fmt0(dmg), cmp, dmg - curDmg, 0f));
+
+                if (w.reach > 0f || (cmp && m.EquippedWeapon.reach > 0f))
+                {
+                    float curReach = cmp ? m.EquippedWeapon.reach : 0f;
+                    list.Add(MakeSpec("Reach", Fmt1(w.reach) + "m", cmp, w.reach - curReach, 0.05f, "m"));
+                }
+                return list;
+            }
+
+            var a = GearCatalog.FindArmor(id);
+            if (a != null)
+            {
+                bool cmp = compare && m != null && m.EquippedArmor != null
+                           && !string.Equals(m.EquippedArmor.id, a.id, StringComparison.OrdinalIgnoreCase);
+                float curDef = cmp ? Clamp(m.EquippedArmor.defense, 0f, 0.9f) : 0f;
+                float def = Clamp(a.defense, 0f, 0.9f);
+                list.Add(MakeSpec("Defense", Fmt2(def), cmp, def - curDef, 0.005f));
+
+                if (a.hpBonus > 0f || (cmp && m.EquippedArmor.hpBonus > 0f))
+                {
+                    float curHp = cmp ? m.EquippedArmor.hpBonus : 0f;
+                    list.Add(MakeSpec("HP", Fmt0(a.hpBonus), cmp, a.hpBonus - curHp, 0.5f));
+                }
+                return list;
+            }
+
+            return list;   // craftable / non-gear row - no stat block
+        }
+
+        // Build one spec line: format the signed delta + classify the sign (with a small epsilon so a
+        // float wobble doesn't read as a change). suffix is appended to the delta number (e.g. "m").
+        private static PartyShopSpec MakeSpec(string label, string value, bool compare, float delta, float eps, string suffix = "")
+        {
+            if (!compare) return new PartyShopSpec(label, value, "", 0);
+            int sign = delta > eps ? 1 : (delta < -eps ? -1 : 0);
+            string ds = FmtDelta(delta, suffix);
+            return new PartyShopSpec(label, value, ds, sign);
+        }
+
+        // A readable whole-number "damage" from the multiplier baseline (e.g. 1.18x -> 18 over a base).
+        // Uses a nominal base of 20 so a +X% weapon reads as a sensible attack number; the delta math
+        // is consistent because both sides go through the same transform.
+        private static float DerivedDamage(float mult) => Max(0f, (Max(0.1f, mult)) * 20f);
+
+        private static string FmtDelta(float v, string suffix)
+        {
+            // Round to the value's display precision so "(+5)"/"(-0.02)" matches the shown value.
+            string sign = v >= 0f ? "+" : "-";
+            float a = v < 0f ? -v : v;
+            string num = a >= 10f ? Fmt0(a) : (a >= 1f ? Fmt1(a) : Fmt2(a));
+            return sign + num + suffix;
+        }
+
         private static string DescribeGear(string job, string rarity)
         {
             string r = string.IsNullOrEmpty(rarity) ? "" : char.ToUpper(rarity[0]) + (rarity.Length > 1 ? rarity.Substring(1) : "");
@@ -838,6 +979,13 @@ namespace DeNelle.Village.Hero
             return parts.Count == 0 ? "Free" : string.Join(" ", parts);
         }
 
+        // ?12 INSTRUMENT helper: dump EVERY field of a ResourceCost (not just non-zero like CostString),
+        // so the affordability trace proves whether the cost is in the right currency (coins) or wrongly
+        // carries wood/iron/food/crystals, and whether the amount is sane vs huge.
+        private static string DescribeCost(ResourceCost c) =>
+            "{coins=" + c.Coins + " wood=" + c.Wood + " iron=" + c.Iron
+            + " food=" + c.Food + " crystals=" + c.Crystals + "}";
+
         private static string Cap(string s)
         {
             if (string.IsNullOrEmpty(s)) return s;
@@ -848,6 +996,8 @@ namespace DeNelle.Village.Hero
         private static int RoundToInt(float f) => (int)Math.Floor(f + 0.5f);
         private static float Max(float a, float b) => a > b ? a : b;
         private static float Clamp(float v, float lo, float hi) => v < lo ? lo : (v > hi ? hi : v);
+        private static string Fmt0(float v) => v.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
         private static string Fmt1(float v) => v.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+        private static string Fmt2(float v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
     }
 }

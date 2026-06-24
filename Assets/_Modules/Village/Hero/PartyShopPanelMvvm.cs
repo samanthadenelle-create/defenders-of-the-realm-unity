@@ -68,8 +68,9 @@ namespace DeNelle.Village.Hero
         private TMPro.TextMeshProUGUI _previewGlyph;  // 2D fallback glyph drawn over the image when no model
         private Image _previewSprite;           // 2D fallback sprite (iconPath/catalog) when no model
         private TMPro.TextMeshProUGUI _previewName;
-        private TMPro.TextMeshProUGUI _previewStats;
-        private TMPro.TextMeshProUGUI _previewDelta;
+        private TMPro.TextMeshProUGUI _previewStats;   // flavour/desc line (rarity + class fit)
+        private TMPro.TextMeshProUGUI _previewDelta;   // summary delta line (kept; per-stat block below)
+        private RectTransform _previewSpecs;           // per-stat block: "Label Value (Delta)" rows (WO: weapons matter)
         private TMPro.TextMeshProUGUI _previewPrice;
         private TMPro.TextMeshProUGUI _previewEmpty;  // "Select an item to preview." empty state
 
@@ -777,16 +778,33 @@ namespace DeNelle.Village.Hero
                 ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
 
             // Name (gilt bold).
-            _previewName = ElarionUiKit.Label(pane, "", 0.34f, 0.41f, ElarionUi.Gilt,
+            _previewName = ElarionUiKit.Label(pane, "", 0.355f, 0.41f, ElarionUi.Gilt,
                 ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
 
-            // Stat line.
-            _previewStats = ElarionUiKit.Label(pane, "", 0.27f, 0.34f, ElarionUi.Parchment,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
+            // Flavour line (rarity + class fit) - the readable desc under the name.
+            _previewStats = ElarionUiKit.Label(pane, "", 0.325f, 0.355f, ElarionUi.ParchmentDim,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
 
-            // Delta vs equipped (colored by DeltaColor).
-            _previewDelta = ElarionUiKit.Label(pane, "", 0.21f, 0.27f, ElarionUi.ParchmentDim,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+            // -- Per-stat SPEC block (WO: "make weapons matter") - one line per spec, top->bottom:
+            // "<Label>   <Value> (<Delta>)" with the delta tinted green(up)/red(down)/dim(same). Built
+            // here as a vertical container; rebuilt per Render from _vm.SelectedSpecs. Sits between the
+            // flavour line and the price. --
+            var specsGo = new GameObject("PreviewSpecs", typeof(RectTransform));
+            specsGo.transform.SetParent(pane, false);
+            _previewSpecs = specsGo.GetComponent<RectTransform>();
+            _previewSpecs.anchorMin = new Vector2(0.06f, 0.185f); _previewSpecs.anchorMax = new Vector2(0.94f, 0.32f);
+            _previewSpecs.offsetMin = Vector2.zero; _previewSpecs.offsetMax = Vector2.zero;
+            var specsVlg = specsGo.AddComponent<VerticalLayoutGroup>();
+            specsVlg.childAlignment = TextAnchor.UpperCenter;
+            specsVlg.spacing = 2f;
+            specsVlg.childControlWidth = true;
+            specsVlg.childControlHeight = true;
+            specsVlg.childForceExpandWidth = true;
+            specsVlg.childForceExpandHeight = false;
+
+            // Summary delta line is folded into the per-stat block now; keep the field null so the
+            // legacy single-line path is inert (no double-rendering of the delta).
+            _previewDelta = null;
 
             // PRICE - large + readable (WO-501 owner point 3).
             _previewPrice = ElarionUiKit.Label(pane, "", 0.04f, 0.18f, ElarionUi.Gilt,
@@ -810,6 +828,7 @@ namespace DeNelle.Village.Hero
                 if (_previewName != null) _previewName.text = "";
                 if (_previewStats != null) _previewStats.text = "";
                 if (_previewDelta != null) _previewDelta.text = "";
+                ClearSpecs();
                 if (_previewPrice != null) _previewPrice.text = "";
                 if (_previewEmpty != null) _previewEmpty.gameObject.SetActive(true);
                 return;
@@ -820,12 +839,16 @@ namespace DeNelle.Village.Hero
             var item = _vm.SelectedItem;
 
             if (_previewName != null) _previewName.text = item.HasValue ? item.Value.Name : "";
-            if (_previewStats != null) _previewStats.text = d.Stats ?? "";
+            // Flavour/desc line (rarity + class fit) under the name.
+            if (_previewStats != null) _previewStats.text = d.Description ?? "";
+            // Legacy single delta line kept inert (folded into the per-stat block).
             if (_previewDelta != null)
             {
                 _previewDelta.text = d.Delta ?? "";
                 _previewDelta.color = DeltaColor(d.Delta);
             }
+            // Per-stat SPEC block: "Label  Value (Delta)" with the delta tinted by sign.
+            RebuildSpecs(_vm.SelectedSpecs);
             if (_previewPrice != null)
             {
                 _previewPrice.text = _vm.SelectedPriceText;
@@ -838,6 +861,59 @@ namespace DeNelle.Village.Hero
 
             BuildPreviewModelOrFallback(_vm.SelectedId, d, item);
         }
+
+        // -- Per-stat SPEC block (WO: "make weapons matter") --------------------------
+        // Render one label per spec: "<Label>   <Value> (<Delta>)" with the (Delta) tinted green for an
+        // upgrade, red for a downgrade, dim for same - via TMP rich-text so the colored delta sits inline.
+        // A spec with no delta (nothing comparable equipped / SELL tab) shows just "<Label>   <Value>".
+        private void RebuildSpecs(System.Collections.Generic.IReadOnlyList<PartyShopSpec> specs)
+        {
+            ClearSpecs();
+            if (_previewSpecs == null || specs == null) return;
+
+            for (int i = 0; i < specs.Count; i++)
+            {
+                var s = specs[i];
+                string line = "<b>" + Esc(s.Label) + "</b>   " + Esc(s.Value);
+                if (!string.IsNullOrEmpty(s.Delta))
+                {
+                    string hex = ColorUtility.ToHtmlStringRGB(DeltaSignColor(s.DeltaSign));
+                    line += "  <color=#" + hex + ">(" + Esc(s.Delta) + ")</color>";
+                }
+
+                var go = new GameObject("Spec_" + (string.IsNullOrEmpty(s.Label) ? i.ToString() : s.Label),
+                    typeof(TMPro.TextMeshProUGUI), typeof(LayoutElement));
+                go.transform.SetParent(_previewSpecs, false);
+                var le = go.GetComponent<LayoutElement>();
+                le.preferredHeight = 20f;
+                le.minHeight = 16f;
+                var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+                t.richText = true;
+                t.text = line;
+                t.fontSize = ElarionUi.FontLabel;
+                t.color = ElarionUi.Parchment;
+                t.alignment = TMPro.TextAlignmentOptions.Center;
+                t.raycastTarget = false;
+            }
+        }
+
+        private void ClearSpecs()
+        {
+            if (_previewSpecs == null) return;
+            for (int i = _previewSpecs.childCount - 1; i >= 0; i--)
+            {
+                var c = _previewSpecs.GetChild(i);
+                if (c != null) Destroy(c.gameObject);
+            }
+        }
+
+        // Green (better) / red (worse) / dim (same) for a per-stat delta sign.
+        private static Color DeltaSignColor(int sign) =>
+            sign > 0 ? ElarionUi.Affordable : (sign < 0 ? ElarionUi.Danger : ElarionUi.ParchmentDim);
+
+        // Strip TMP rich-text control chars from VM-supplied text so a stray '<' can't break the markup.
+        private static string Esc(string s) =>
+            string.IsNullOrEmpty(s) ? "" : s.Replace("<", "[").Replace(">", "]");
 
         // Resolve the selected gear MODEL into the rig, mirroring the equip load path (DRY the heuristic
         // with EquipmentController.LoadsViaAddressable): addressable "gear/" -> Addressables; else Resources
@@ -1256,6 +1332,7 @@ namespace DeNelle.Village.Hero
             _previewName = null;
             _previewStats = null;
             _previewDelta = null;
+            _previewSpecs = null;
             _previewPrice = null;
             _previewEmpty = null;
             _buySellBtn = null;
