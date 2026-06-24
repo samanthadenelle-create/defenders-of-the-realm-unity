@@ -99,7 +99,11 @@ namespace DeNelle.Village.Arena
                 if (_instance == null)
                 {
                     var host = new GameObject("BattleArena");
-                    DontDestroyOnLoad(host);
+                    // DontDestroyOnLoad is play-mode-only and THROWS in an editor script
+                    // (the headless ArenaCombatOracle stands this host up in batchmode to
+                    // drive the real Resolve path). Guard it so the host is editor-
+                    // instantiable; in a build/playtest the persist behaviour is unchanged.
+                    if (Application.isPlaying) DontDestroyOnLoad(host);
                     _instance = host.AddComponent<BattleArena>();
                 }
                 return _instance;
@@ -426,6 +430,10 @@ namespace DeNelle.Village.Arena
                     StripColliders(q);
                 }
                 FlowTrace.Step("BattleArena", "BuildBackdrop: cyclorama backdrop '" + key + "' behind the treeline (r=" + r.ToString("0") + ").");
+                // PERMANENT live instrumentation (owner steer 2026-06-23 "debug line background loaded"):
+                // a headless encounter run / F8 felt-test self-PROVES the painted biome backdrop actually
+                // rendered (4 quads built on the success path) — not inferred from code-reading.
+                FlowTrace.Step("BattleArena", "BACKDROP loaded theme=" + key + " tex=" + tex.name + " quads=4");
             });
         }
 
@@ -845,6 +853,26 @@ namespace DeNelle.Village.Arena
         }
 
         // ---------------------------------------------------------------------
+        //  HEADLESS ORACLE SEAM (WO-505) — drive the REAL Resolve() path with a
+        //  synthetic context, no full PlayMode fight. Lets DeNelle.Editor's
+        //  ArenaCombatOracle EXECUTE the win/loss resolve (audio cue + star/reward
+        //  computation + GrantWinReward) and assert the FlowTrace FIRED lines were
+        //  emitted — closing the "rests on code-reading inference" gap. This calls
+        //  the SAME private Resolve the live fight calls (zero behaviour fork); it
+        //  only pre-seeds the fields BeginEncounter would have set. Editor/QA seam
+        //  only — never called by gameplay. duration lets the oracle pin a star tier.
+        // ---------------------------------------------------------------------
+        public void ResolveForTest(EncounterParams p, bool won, float durationSeconds)
+        {
+            _current = p;
+            _resolved = false;
+            _climaxBody = null;
+            _battleStartTime = Time.time - Mathf.Max(0f, durationSeconds);
+            BattleInProgress = true;
+            Resolve(won);
+        }
+
+        // ---------------------------------------------------------------------
         //  Resolve + return (reward, tear down the stage, warp hero home)
         // ---------------------------------------------------------------------
         private void Resolve(bool won)
@@ -858,11 +886,21 @@ namespace DeNelle.Village.Arena
             int stars = won ? BattleStarRating.StarsForDuration(durationSeconds) : 0;
             float rewardMult = won ? BattleStarRating.MultiplierForStars(stars) : 1f;
             FlowTrace.Step("BattleArena", $"Resolve: {(won ? "WIN" : "LOSS")} in {durationSeconds:0.0}s -> {stars} star(s), reward x{rewardMult:0.00}.");
+            // WO-505 ORACLE FIRE-POINT (permanent live instrumentation — leave in behind the
+            // FlowTrace toggle): the star/reward computation the headless ArenaCombatOracle reads
+            // to PROVE (not infer) stars + multiplier were computed on this resolve path.
+            FlowTrace.Step("BattleArena", $"STARS={stars} rewardMult={rewardMult:0.00} applied (won={won}).");
 
             // WO-505: play the climax CUE so the death-cam beat is not silent. Victory fanfare
             // on a win / defeat sting on a loss (the clips exist: Audio/Resources/victory.mp3,
             // defeat.mp3, wired by AudioBootstrap). Overworld BGM is restored after the banner
             // beat (RestoreAmbientAfter) so we never cut the climax to silence.
+            // WO-505 ORACLE FIRE-POINT: an explicit FIRED line AT the PlayMusic call so the
+            // headless oracle (and the owner's F8 felt-test break-log) prove the victory/defeat
+            // cue actually fired on the real resolve path — not from code-reading. Permanent.
+            FlowTrace.Step("BattleArena", won
+                ? "VICTORY AUDIO FIRED track=Victory"
+                : "DEFEAT AUDIO FIRED track=Defeat");
             Guard.Try("BattleArena", "battle result music cue",
                 () => CoreServices.Audio?.PlayMusic(won ? MusicTrack.Victory : MusicTrack.Defeat));
 

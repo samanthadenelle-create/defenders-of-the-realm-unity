@@ -622,6 +622,16 @@ namespace DeNelle.Village
             _trailColor = vfx.TrailColor;
             _trailStartWidth = vfx.TrailWidth;
 
+            // WO-504 s3 ORACLE FIRE-POINT (permanent live instrumentation — leave in behind the
+            // FlowTrace toggle): an explicit FIRED line AT the apply so the headless
+            // ArenaCombatOracle (and the owner's F8 felt-test break-log) PROVE the controller
+            // applied a rarity-driven (non-default for a high-rarity blade) trail color/width on
+            // the real path — not from code-reading. band="" when no weapon (steel default).
+            string band = w != null ? (w.rarity ?? "common") : "<none>";
+            FlowTrace.Step("WeaponVfx",
+                $"TRAIL color=({_trailColor.r:0.00},{_trailColor.g:0.00},{_trailColor.b:0.00},{_trailColor.a:0.00}) " +
+                $"width={_trailStartWidth:0.000} rarity={band} applied.");
+
             _swingTrail.startWidth = _trailStartWidth;
             _swingTrail.endWidth = 0f;
 
@@ -631,6 +641,21 @@ namespace DeNelle.Village
                 new[] { new GradientColorKey(_trailColor, 0f), new GradientColorKey(_trailColor, 1f) },
                 new[] { new GradientAlphaKey(_trailColor.a, 0f), new GradientAlphaKey(0f, 1f) });
             _swingTrail.colorGradient = grad;
+        }
+
+        // ---------------------------------------------------------------------
+        //  HEADLESS ORACLE SEAM (WO-504 s3) — build the real swing trail and apply
+        //  the equipped weapon's rarity-driven VFX, then report the applied color so
+        //  DeNelle.Editor's ArenaCombatOracle can PROVE the controller applied a
+        //  NON-default (non-steel) trail for a high-rarity blade — exercising the
+        //  SAME EnsureSwingTrail + ApplyWeaponTrailVfx path a live swing runs (no
+        //  fork). Editor/QA seam only — gameplay never calls this.
+        // ---------------------------------------------------------------------
+        public Color ApplyWeaponTrailVfxForTest()
+        {
+            EnsureSwingTrail();      // real lazy build + first ApplyWeaponTrailVfx
+            ApplyWeaponTrailVfx();   // re-apply against the now-current equipped weapon
+            return _trailColor;
         }
 
         private void TriggerPerfectHitFeedback(Vector3 hitPos)

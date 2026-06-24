@@ -1545,6 +1545,10 @@ namespace DeNelle.Village
 
             // Drive death anim (latches Dead bool so last frame holds; see ActorAnimator + controllers).
             _actor?.Die();
+            // PERMANENT live instrumentation (owner steer 2026-06-23 "enemy animation in effect"):
+            // emit AT the point the Dead state is driven so a kill self-PROVES the death animation
+            // FIRED at runtime (headless encounter run / F8 break-log) — not inferred from the asset existing.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Enemy", "DEATH ANIM playing actor=" + gameObject.name + " state=Dead");
             Died?.Invoke(this);
 
             // DEF-52 / DEF-46: death burst VFX + audio + micro screen shake.
