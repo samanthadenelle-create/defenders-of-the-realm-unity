@@ -25,6 +25,7 @@
 
 using UnityEngine;
 using UnityEngine.InputSystem;
+using DeNelle.Core.Combat;
 
 namespace DeNelle.Village
 {
@@ -48,6 +49,14 @@ namespace DeNelle.Village
             // breaking the story beat. HeroLocomotion raises this gate on dialogue start
             // and clears it on complete (one suppression source for the whole input surface).
             if (HeroLocomotion.InputSuppressed) return;
+
+            // Owner rule (2026-06-24): "in town (non combat) no button should create combat
+            // moves." Ability casts / the primary strike are COMBAT moves — gate them on the
+            // canonical battle lock (same predicate PlayerAttackController uses) so Q / 1-4 /
+            // gamepad face buttons / left-click are inert in town + the overworld walk and only
+            // fire inside a live battle (BattleArena / ArenaMode / ATB register the in-progress
+            // probe). A throwing probe degrades to "not in battle", so this can never wedge input.
+            if (!BattleLock.IsInBattle()) return;
 
             // PRIMARY ATTACK: left-click / Space / gamepad-South fire slot Q (the
             // class basic strike) at the auto-locked target. Universal, forgiving

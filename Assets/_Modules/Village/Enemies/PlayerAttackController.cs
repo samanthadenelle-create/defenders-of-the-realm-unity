@@ -156,6 +156,11 @@ namespace DeNelle.Village
         private float        _swingStartTime;
         private bool         _isInSwing;
 
+        // Owner rule (2026-06-24): combat moves (attack/block/parry) only process while a
+        // battle is live (BattleLock.IsInBattle()). This latch tracks the suppressed<->live
+        // transition so the FlowTrace fires ONCE per transition (not every frame in town).
+        private bool         _combatInputSuppressed;
+
         // WO-219: code-built swing trail. Enabled at swing start, disabled after the
         // active window (+ a short linger). Lazily built on the resolved trail origin.
         private TrailRenderer _swingTrail;
@@ -244,6 +249,35 @@ namespace DeNelle.Village
                     _actor?.SetBlocking(false);
                 }
                 return;
+            }
+
+            // OWNER RULE 2026-06-24 ("in town / non-combat, NO button creates combat moves"):
+            // attack / block / parry are COMBAT moves and must only process while a battle is
+            // actually live (in the BattleArena). Gate on the canonical, assembly-neutral
+            // BattleLock.IsInBattle() — the single source of truth every battle owner
+            // (BattleArena, ArenaMode, ATBCombatManager) registers its in-progress probe into.
+            // When NOT in battle (town MainCastle_Hall / overworld walk): suppress the swing,
+            // drop any held block, and skip UpdateBlock so RMB/Shift can't raise a shield or
+            // fire the parry-ward nova. Movement, camera, interaction, build-mode and NPC-talk
+            // are UNTOUCHED — only the combat inputs are gated here.
+            if (!BattleLock.IsInBattle())
+            {
+                if (_blocking)
+                {
+                    _blocking = false;
+                    _actor?.SetBlocking(false);
+                }
+                if (!_combatInputSuppressed)
+                {
+                    _combatInputSuppressed = true;
+                    FlowTrace.Step("Combat", "input gated: not in battle (town/overworld) - combat moves suppressed");
+                }
+                return;
+            }
+            if (_combatInputSuppressed)
+            {
+                _combatInputSuppressed = false;
+                FlowTrace.Step("Combat", "input live: battle started - combat moves enabled");
             }
 
             bool attackPressed = false;
