@@ -114,3 +114,15 @@ positioning windows. Each ability counters specific family roles.
 **Mobile UI:** bottom row of 4 large buttons + cooldown overlay (dim + timer text); ability trails; screen
 shake on Ult; slow-mo on big interrupts. **Balance:** start with these CDs, shave 1-2s off Dash/Knock if
 fights feel slow. Ties to WO-496 #1 (fire feedback on the button TAP, not on resolution) + #5 (reserve juice).
+
+---
+
+## TIME-BOX + STAR RATING + BOSS FIGHTS (owner 2026-06-23)
+- **TIME-BOX EVERY FIGHT — regular AND boss:** each fight has a TARGET time; beat it faster -> more STARS
+  (1-3, Clash-style). The point: **never a drawn-out slog** — punchy, replayable, performance-rewarding.
+  (`BattleArena.BattleTimeoutSeconds` exists as a hard safety cap; this adds a TARGET/par time for the star
+  rating, not just a timeout.) Ties to WO-496 #14 (count-up reward beats) + #17 (live progress meter).
+- **Stars** = beat-the-clock + perfect-play (no death, all interrupts) -> bonus SKR / cosmetic (WO-494 win conds).
+- **BOSS FIGHTS:** one HUGE boss with its OWN unique movesets (telegraphed, WO-491) + its own timer for stars.
+  Special boss scenes/backdrops (WO-499, LFS art "when we get there"). The boss is the climactic time-boxed test.
+- Post-fight: stars slam in + count-up rewards + "Retry/Continue" (WO-494 post-fight screen).

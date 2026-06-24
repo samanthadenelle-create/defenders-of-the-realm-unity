@@ -133,7 +133,7 @@ namespace DeNelle.Village
         /// play before <see cref="Die"/> destroys it. Only applied when the enemy
         /// has an Animator; with none it is destroyed immediately.
         /// </summary>
-        private const float DeathHoldSeconds = 1.6f;
+        private const float DeathHoldSeconds = 3.5f;   // owner 2026-06-23: was 1.6f (cut the death anim) -> let the death cycle play through. (The dramatic ~10s camera linger on the BATTLE-WINNING kill is a separate death-cam, WO-493.)
 
         /// <summary>
         /// Lifetime cap for an authored per-type hit/death VFX prefab spawned via
@@ -734,7 +734,27 @@ namespace DeNelle.Village
         /// </summary>
         private void DriveNav()
         {
-            if (_agent == null || _heart == null) return;
+            if (_agent == null) return;
+
+            // HEARTLESS HOOK (overworld encounter rep) — DATA-PROVEN root of "no chase" 2026-06-23:
+            // a rep has NO Heart (Configure(...,null)), so the old `_heart == null` bail returned
+            // IMMEDIATELY and the agent was NEVER driven -> the rep stood still (no roam, no chase)
+            // despite RepEngageWatcher setting _brainPositionOverride every frame. Drive a heartless
+            // agent straight to its override (roam point while idle, hero while aggro'd) and RETURN,
+            // never touching the Heart-based logic below (zero risk to normal Heart-driven enemies).
+            if (_heart == null)
+            {
+                if (_agent.isOnNavMesh && _brainPositionOverride.HasValue)
+                {
+                    if (_agent.isStopped) _agent.isStopped = false;
+                    Vector3 hv = _agent.velocity; hv.y = 0f;
+                    if (hv.sqrMagnitude > 0.01f)
+                        transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(hv.normalized), 10f * Time.deltaTime);
+                    _agent.SetDestination(_brainPositionOverride.Value);
+                }
+                else if (_agent.isOnNavMesh && !_agent.isStopped) _agent.isStopped = true;
+                return;
+            }
 
             // Locked onto a structure — stand and fight, do not path past it.
             if (_currentTarget != null && _currentTarget.IsAlive)

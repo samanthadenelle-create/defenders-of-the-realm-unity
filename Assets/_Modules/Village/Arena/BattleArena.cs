@@ -218,6 +218,9 @@ namespace DeNelle.Village.Arena
             // Natural see-through edge OUTSIDE the walls (silhouette only, colliders stripped).
             DressArenaEdge(theme);
 
+            // THE WOW (WO-499): a painted biome backdrop ringing the arena behind the treeline. Skip-safe.
+            BuildBackdrop(theme);
+
             // Cavern ONLY: dim the persisted sky/ambient/fog to a stone-cave mood (restored on Resolve).
             // Default (outerworld/castle) leaves the persisted dawn sky untouched -- it already matches.
             if ((theme ?? "outerworld").ToLowerInvariant() == "cavern")
@@ -305,6 +308,53 @@ namespace DeNelle.Village.Arena
         }
 
         // Strip every collider so an edge prop is a pure silhouette (never blocks the kite/navmesh).
+        // THE WOW (WO-499): a painted biome backdrop ringing the arena behind the treeline. Loads
+        // Resources/Arena/Backdrops/<theme>_backdrop onto 4 inward-facing UNLIT quads (cyclorama) so any
+        // camera angle shows a painted horizon. Unlit = glows like a matte painting; fog fades the seams.
+        // Skip-safe: no texture -> keep the persisted sky. Parented to _arenaRoot (auto teardown).
+        private void BuildBackdrop(string theme)
+        {
+            Guard.Try("BattleArena", "build backdrop", () =>
+            {
+                string key = (theme ?? "outerworld").ToLowerInvariant();
+                var tex = Resources.Load<Texture2D>("Arena/Backdrops/" + key + "_backdrop");
+                if (tex == null) tex = Resources.Load<Texture2D>("Arena/Backdrops/outerworld_backdrop");
+                if (tex == null)
+                {
+                    FlowTrace.Step("BattleArena", "BuildBackdrop: no backdrop texture for '" + key + "' -> skip (persisted sky kept).");
+                    return;
+                }
+                var sh = Shader.Find("Universal Render Pipeline/Unlit");
+                if (sh == null) sh = Shader.Find("Unlit/Texture");
+                var mat = new Material(sh) { name = "ArenaBackdrop_" + key };
+                if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", tex);
+                if (mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", tex);
+
+                float r = Mathf.Max(ArenaHalfWidth, ArenaHalfDepth) + 16f;   // behind the treeline ring
+                float h = 60f;
+                var root = new GameObject("ArenaBackdrop");
+                root.transform.SetParent(_arenaRoot.transform, false);
+                root.transform.localPosition = new Vector3(0f, h * 0.32f, 0f);
+
+                Vector3[] poss = { new Vector3(0f, 0f, r), new Vector3(0f, 0f, -r), new Vector3(r, 0f, 0f), new Vector3(-r, 0f, 0f) };
+                float[] yaws = { 180f, 0f, -90f, 90f };
+                for (int i = 0; i < 4; i++)
+                {
+                    var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                    q.name = "Backdrop_" + i;
+                    q.transform.SetParent(root.transform, false);
+                    q.transform.localPosition = poss[i];
+                    q.transform.localRotation = Quaternion.Euler(0f, yaws[i], 0f);
+                    q.transform.localScale = new Vector3(r * 2.4f, h, 1f);
+                    var mr = q.GetComponent<MeshRenderer>();
+                    mr.sharedMaterial = mat;
+                    mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    StripColliders(q);
+                }
+                FlowTrace.Step("BattleArena", "BuildBackdrop: cyclorama backdrop '" + key + "' behind the treeline (r=" + r.ToString("0") + ").");
+            });
+        }
+
         private static void StripColliders(GameObject go)
         {
             var cols = go.GetComponentsInChildren<Collider>(true);

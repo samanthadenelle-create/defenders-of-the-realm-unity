@@ -1320,24 +1320,15 @@ namespace DeNelle.HUD
             cluster.anchoredPosition = new Vector2(-55f, -55f);   // inset ≈ resource-bar height from top + right
             cluster.sizeDelta = new Vector2(410f, 135f);   // widened from 280 → fits THREE evenly-spaced icons (gear · intel · raid)
 
-            // Three evenly-spaced slots: 0–0.31 · 0.345–0.655 · 0.69–1.
+            // Owner 2026-06-23: INTEL HIDDEN (phase-2 feature) and SETTINGS pushed to the far-right
+            // corner (phase-2-adjacent / de-emphasized). Raid moves to the left slot. Two icons now;
+            // the IntelRequested event stays declared for when intel returns in phase 2.
+            // Left = enter RAIDS (crossed-swords icon; glyph fallback until art lands).
             BuildIconButton(cluster, new Vector2(0f, 0f), new Vector2(0.31f, 1f),
-                IconSettings, "*", () => HelpMenu.Instance?.ToggleOverlay());   // gear → Help/Settings menu (Report bug, Controls, Dev tools[dev], Credits)
-            // Middle = enemy scout report / lookout (periscope icon — self-evident).
-            BuildIconButton(cluster, new Vector2(0.345f, 0f), new Vector2(0.655f, 1f),
-                IconIntel, "o", () => IntelRequested?.Invoke());
-            // Far top-right = enter RAIDS (crossed-swords icon; glyph fallback until art lands).
-            BuildIconButton(cluster, new Vector2(0.69f, 0f), new Vector2(1f, 1f),
                 IconRaid, "x", () => RaidRequested?.Invoke());
-
-            // MOCKUP ALIGN: a small "INTEL" caption under the periscope so the top-right
-            // corner reads as the labeled INTEL button from hud_mobile_combat. Decorative
-            // (non-raycast) — the icon button above owns the tap.
-            var intelCap = NewRect("IntelLabel", cluster, new Vector2(0.345f, -0.30f), new Vector2(0.655f, 0.04f));
-            var ic = AddText(intelCap, "INTEL", 12, HudTheme.Gilt, TextAlignmentOptions.Center);
-            ic.fontStyle = FontStyles.Bold; ic.characterSpacing = 2f;
-            ic.outlineColor = new Color32(0, 0, 0, 200); ic.outlineWidth = 0.08f;
-            ic.raycastTarget = false;
+            // FAR top-right = SETTINGS gear → Help/Settings menu (Report bug, Controls, Dev tools[dev], Credits).
+            BuildIconButton(cluster, new Vector2(0.69f, 0f), new Vector2(1f, 1f),
+                IconSettings, "*", () => HelpMenu.Instance?.ToggleOverlay());
         }
 
         // A round rune-framed icon BUTTON: gilt ring seat + sprite-first widget icon

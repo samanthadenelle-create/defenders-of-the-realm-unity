@@ -26,6 +26,13 @@ junked Blink hero armor; safe to reuse).
    - `cavern` → `StylizedDungeonTextures/Floor_Sharp_Stones/Floor_Sharp_Stones.mat` (alt `Dirt_Stones`).
    Set `mainTextureScale ~ (12,10)` for the 60x48 plane. **Skip-safe:** null load → keep today's per-theme
    `Color` tint + LogWarning once. Never break the fight.
+1b. **THEMED BACKDROP IMAGE (owner 2026-06-23 — "the background makes it feel much more immersive"):** the
+   owner will provide Grok-generated background art per biome (forest/dungeon/castle). Use each as a cheap,
+   high-immersion **skybox or far-billboard backdrop** behind the 3D treeline — ONE texture, near-zero perf.
+   Wire it per `BackdropContext` (forest behind outerworld, cave behind cavern). Mobile-compress (max ~2k,
+   crunch). This is the single biggest immersion lever — the painted depth a real-time scene can't model in
+   geometry. Replaces/augments the persisted skybox for the themed look. Store under `Resources/Arena/Backdrops/`.
+
 2. **Sky/ambient/fog:** default = DO NOTHING (persisted dawn sky/Trilight ambient/pink fog already match).
    `cavern` ONLY → optionally save current `RenderSettings` fog/ambient in `BuildArena`, set dim stone mood,
    **restore in `Resolve` (~412-445)** so the open world is untouched on return. Null-safe save/restore.
