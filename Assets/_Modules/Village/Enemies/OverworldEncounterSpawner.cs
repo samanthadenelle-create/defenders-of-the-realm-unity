@@ -45,6 +45,13 @@ namespace DeNelle.Village
         private const float RepChaseSpeed = 6.3f;   // ~+5% over the hero's 6.0
         private const int   RepCount      = 8;   // owner 2026-06-23: scatter roaming reps (8 for the verify lap; proximity-realization next so this can scale to 20+ cheaply)
 
+        // BUFFER tuning (owner 2026-06-24 FELT values — dial these): give the hero room to cross
+        // out of the castle and walk a bit into OuterWorld before any rep is on top of her.
+        // SpawnMinDistance/SpawnMaxDistance = the ring (around the hero) reps spawn into. Raising
+        // the MIN pushes reps DEEPER so a freshly-crossed hero isn't aggro'd right at the seam.
+        private const float SpawnMinDistance = 28f;  // was 14f — push reps deeper into OuterWorld
+        private const float SpawnMaxDistance = 55f;  // ring outer edge (unchanged)
+
         private readonly List<GameObject> _reps = new List<GameObject>();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -187,7 +194,7 @@ namespace DeNelle.Village
                 for (int attempt = 0; attempt < 8; attempt++)
                 {
                     float a = UnityEngine.Random.Range(0f, 360f) * Mathf.Deg2Rad;
-                    float dist = UnityEngine.Random.Range(14f, 55f);
+                    float dist = UnityEngine.Random.Range(SpawnMinDistance, SpawnMaxDistance);
                     Vector3 cand = origin + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * dist;
                     if (!UnityEngine.AI.NavMesh.SamplePosition(cand, out var ch, 8f, UnityEngine.AI.NavMesh.AllAreas)) continue;
                     bool inOuter = false;
@@ -303,7 +310,11 @@ namespace DeNelle.Village
         private bool _stung;
         private Enemy _enemy;
 
-        private const float AggroRange  = 22f;  // wide -- "they see us" + chase begins
+        // AggroRange = how far a rep can NOTICE the hero and start the chase. Lowered from 22f
+        // (owner 2026-06-24 FELT buffer) so a rep doesn't spot the hero from across the map / reach
+        // back across the seam — the hero gets a buffer after crossing before being hunted. Once
+        // aggro'd, the chase/leash/engage behaviour below is UNCHANGED (owner loves the chase).
+        private const float AggroRange  = 14f;  // was 22f — shorter notice radius for the cross-in buffer
         private const float EngageRange = 2.6f; // contact -> transition
         private const float LeashRadius = 14f;  // wander this far from spawn until aggro
 
