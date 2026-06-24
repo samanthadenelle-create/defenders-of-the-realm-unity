@@ -1,0 +1,273 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b917af926dfe271498055964f6d17e95, type: 3}
+  m_Name: VFXCatalog
+  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.VFXCatalog
+  Entries:
+  - Type: 1
+    Prefab: {fileID: 879681129677348344, guid: bb7c04ee23d5c584c99ac06601febe0c, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 3
+    Prefab: {fileID: 1835174905073365006, guid: adfd6c86cf180e64aaaa1bece2395926, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 4
+    Prefab: {fileID: 8260617210669617129, guid: 5ebe2034595c94f41a8e89907c5be9a5, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 2
+    Prefab: {fileID: 6750108211637369354, guid: 34f3a8b34366bc5469ddbf9e468212fa, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 5
+    Prefab: {fileID: 6394855951143000011, guid: 2db29b3b6b1a8b6468716e5eb23adb30, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 6
+    Prefab: {fileID: 7156317333231045241, guid: fb8d8f6d8dd5fe247a08487a0dbf3943, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 7
+    Prefab: {fileID: 5490221094549253126, guid: 85d321755e8a85847beb01a0a7246f92, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 8
+    Prefab: {fileID: 1475618779179179817, guid: 07799b25da23d9c4d97a417f6f0d0f31, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 9
+    Prefab: {fileID: 7634420434017284396, guid: b9ed127bfed05be4db493ca51e744a76, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 10
+    Prefab: {fileID: 9169863999176627214, guid: d80674d25b4036a43a9e0b72ed9f4fad, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 11
+    Prefab: {fileID: 6140006693554785414, guid: 4054bcdc85f14527b1b91143c2ad9b75, type: 3}
+    PoolSize: 4
+    IsLoop: 1
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 12
+    Prefab: {fileID: 8357042805450777661, guid: 2282fa9cfe8949118cb9cabd0f60965b, type: 3}
+    PoolSize: 4
+    IsLoop: 1
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 13
+    Prefab: {fileID: 3069835964258947450, guid: 9d7886058ed12e34b901240a31cb5a8e, type: 3}
+    PoolSize: 4
+    IsLoop: 1
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 14
+    Prefab: {fileID: 1485987801625442810, guid: 1b695686da9a4cf1953e751f929adb2d, type: 3}
+    PoolSize: 4
+    IsLoop: 1
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 18
+    Prefab: {fileID: 3995925170779068658, guid: c3f9cc642d2939049b616447ca5e3e90, type: 3}
+    PoolSize: 4
+    IsLoop: 1
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 19
+    Prefab: {fileID: 13531440185366499, guid: 19be04178a7a6d542b5543b52eaacea4, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 20
+    Prefab: {fileID: 1124706107622163540, guid: e7b5223a82034394e97422a2d9da986d, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 21
+    Prefab: {fileID: 4829314983320849567, guid: d9b7856bde11ef34b922b7b4e0dbc408, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 22
+    Prefab: {fileID: 5023353015567381922, guid: e747544088e0b8842a0eca8697a4f65a, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 23
+    Prefab: {fileID: 3475472405203810721, guid: 75134cf30eb81694b8369220ab1023ca, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 24
+    Prefab: {fileID: 3922451924162243604, guid: 3f672f963d945314d914eb885b2bb7ef, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 25
+    Prefab: {fileID: 1088404570457305704, guid: 6052ae45b5b592c419e0ac09a0291b36, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 26
+    Prefab: {fileID: 9169863999176627214, guid: d80674d25b4036a43a9e0b72ed9f4fad, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 27
+    Prefab: {fileID: 403557928190742514, guid: f1de3fbd6b76f96478ba35446cf15b36, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 28
+    Prefab: {fileID: 8307689965681055727, guid: 8050863a467fe9e46acb029a0fa570fc, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 29
+    Prefab: {fileID: 6249547268878789604, guid: 2b63dc4ef27af5a4085970bebc9ad197, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 30
+    Prefab: {fileID: 6981941031284743971, guid: 84cbf7d4f1c16bc478f079adeb0b6994, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 31
+    Prefab: {fileID: 9169863999176627214, guid: d80674d25b4036a43a9e0b72ed9f4fad, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 35
+    Prefab: {fileID: 4490938630221411753, guid: f3d1c3c1d16cf374aa593c00329adefa, type: 3}
+    PoolSize: 4
+    IsLoop: 1
+    MinQuality: 1
+    LifetimeOverride: 0
+  - Type: 36
+    Prefab: {fileID: 3607185601950021820, guid: d6d1ed8faf0030f4cb28009ba37496f4, type: 3}
+    PoolSize: 4
+    IsLoop: 1
+    MinQuality: 1
+    LifetimeOverride: 0
+  - Type: 34
+    Prefab: {fileID: 2979407750726019859, guid: da2dd75828c5d5543b8dcb22e8172d75, type: 3}
+    PoolSize: 4
+    IsLoop: 1
+    MinQuality: 1
+    LifetimeOverride: 0
+  - Type: 32
+    Prefab: {fileID: 8251054824596030187, guid: 9fc9ecc9ee97f644a80e287f1c5ac74e, type: 3}
+    PoolSize: 4
+    IsLoop: 1
+    MinQuality: 1
+    LifetimeOverride: 0
+  - Type: 33
+    Prefab: {fileID: 5984480896937644376, guid: a5751cdcc19e35141b9794ed4c040008, type: 3}
+    PoolSize: 4
+    IsLoop: 1
+    MinQuality: 1
+    LifetimeOverride: 0
+  - Type: 38
+    Prefab: {fileID: 6690736211316310120, guid: 384b90b36553de84598f25f8e442279b, type: 3}
+    PoolSize: 4
+    IsLoop: 1
+    MinQuality: 1
+    LifetimeOverride: 0
+  - Type: 44
+    Prefab: {fileID: 4477386985593874650, guid: 69f5e935af9debf41a8ef47c741b6fce, type: 3}
+    PoolSize: 4
+    IsLoop: 1
+    MinQuality: 1
+    LifetimeOverride: 0
+  - Type: 51
+    Prefab: {fileID: 230651131596242121, guid: d8a8bbe703ee8174e9754da9050b17a9, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 52
+    Prefab: {fileID: 185424289494172251, guid: 30a30a88f553cbe43b24f837a577276c, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 53
+    Prefab: {fileID: 4557073698510574151, guid: 152b26d6bb970d14192b83bf861851d0, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 59
+    Prefab: {fileID: 4557073698510574151, guid: 152b26d6bb970d14192b83bf861851d0, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 54
+    Prefab: {fileID: 4557073698510574151, guid: 152b26d6bb970d14192b83bf861851d0, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 60
+    Prefab: {fileID: 4557073698510574151, guid: 152b26d6bb970d14192b83bf861851d0, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 61
+    Prefab: {fileID: 1124706107622163540, guid: e7b5223a82034394e97422a2d9da986d, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0
+  - Type: 62
+    Prefab: {fileID: 876949634925983196, guid: cc873cc6f9ca10248917b4dfb7ef0adc, type: 3}
+    PoolSize: 4
+    IsLoop: 0
+    MinQuality: 0
+    LifetimeOverride: 0

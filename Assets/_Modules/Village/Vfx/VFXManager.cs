@@ -73,12 +73,45 @@ namespace DeNelle.Village
 
         public static VFXManager Instance { get; private set; }
 
+        // WO-504: VFXManager is not authored into any scene/prefab, so without a
+        // self-bootstrap its Instance is null and SpellVfxFactory / Enemy / Env calls
+        // SILENTLY no-op or stay procedural. Self-create on load (mirrors VfxPool) so the
+        // pooled, catalog-driven authored VFX path is always live. Idempotent - a scene
+        // that DOES author a VFXManager wins (the first Awake claims Instance).
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap()
+        {
+            if (Instance != null) return;
+            var go = new GameObject("[VFXManager]");
+            go.AddComponent<VFXManager>();
+        }
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             DontDestroyOnLoad(gameObject);
+            EnsureCatalog();
             InitialisePools();
+        }
+
+        // WO-504: the VFXCatalog is a ScriptableObject asset (VFXType -> authored prefab).
+        // VFXManager is NOT placed in any scene/prefab, so _catalog is never wired in an
+        // inspector - without this, every effect falls back to procedural AbilityVfxKit.
+        // Auto-load the script-generated catalog from Resources when none is assigned, so
+        // the authored Lana/Spells/custom prefabs take effect with zero drag-drop. Only the
+        // single asset (+ the prefabs it references) ships - no whole pack in Resources.
+        private void EnsureCatalog()
+        {
+            if (_catalog != null) return;
+            _catalog = Resources.Load<VFXCatalog>("VFX/VFXCatalog");
+            if (_catalog == null)
+                FlowTrace.Warn("VFXManager",
+                    "EnsureCatalog: no _catalog assigned and Resources/VFX/VFXCatalog not found - " +
+                    "ALL effects use procedural fallback. Run DeNelle.Editor.VFXCatalogGenerator.Generate.");
+            else
+                FlowTrace.Step("VFXManager",
+                    $"EnsureCatalog: loaded VFXCatalog from Resources/VFX/VFXCatalog ({_catalog.Entries?.Length ?? 0} entries).");
         }
 
         private void OnDestroy()
