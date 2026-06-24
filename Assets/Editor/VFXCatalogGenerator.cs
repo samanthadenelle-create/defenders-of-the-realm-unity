@@ -105,13 +105,24 @@ namespace DeNelle.Editor
             { "Projectile_EnemyCasterBolt", new Pick(Lana + "Range_attack/Projectiles_dark_magic.prefab", isLoop: true) },
 
             // -- Casts (wind-up on caster) -------------------------------------
-            { "Cast_MageCharge",        new Pick(Spells + "Projectiles/Casting/Casting_Arcane.prefab") },
-            { "Cast_KnightSlam",        new Pick(Lana + "Burst/Flash_circle.prefab") },
-            { "Cast_RangerDraw",        new Pick(Spells + "Projectiles/Casting/Casting_Nature.prefab") },
-            { "Cast_Heal",              new Pick(Lana + "Regeneration/Regeneration_health.prefab") },
-            { "Cast_FrostNova",         new Pick(Spells + "Projectiles/Casting/Casting_Ice.prefab") },
-            { "Cast_NecromancerSummon", new Pick(Spells + "Projectiles/Casting/Casting_Dark.prefab") },
-            { "Cast_EnemyCaster",       new Pick(Spells + "Projectiles/Casting/Casting_Dark_2.prefab") },
+            // BATTLE-POLISH (owner: "better spell effects on casting overall"):
+            //   The cast/wind-up is now a READABLE "gathering energy" charge moment
+            //   on the caster, using the Lana Orbs/Flash/Area families (orbiting
+            //   particles that converge = a clear charge) instead of a faint flash.
+            //   CRITICAL fresh-clone fix: the prior picks pointed at the Spells Pack
+            //   (Casting_*), which is GITIGNORED + NOT git-tracked - so on a clean
+            //   clone every hero cast silently fell back to procedural (the weak look
+            //   the owner is seeing). EVERY pick below is a GIT-COMMITTED Lana prefab,
+            //   so the impressive cast survives a fresh checkout. Element-coded +
+            //   cheap oneshots (loops are scaled down via the Orbs' own short life).
+            { "Cast_MageCharge",        new Pick(Lana + "Orbs/Orbs_electric.prefab") },               // arcane violet gather
+            { "Cast_FireCharge",        new Pick(Lana + "Orbs/Orbs_fire.prefab") },                   // ember gather (Meteor/Radiant)
+            { "Cast_KnightSlam",        new Pick(Lana + "Burst/Flash_dubble_circle.prefab") },        // bigger double-ring cast pulse
+            { "Cast_RangerDraw",        new Pick(Lana + "Orbs/Orbs_leaves.prefab") },                 // nature-green gather at the bow
+            { "Cast_Heal",              new Pick(Lana + "Regeneration/Regeneration_health_area.prefab") }, // rising warm heal column
+            { "Cast_FrostNova",         new Pick(Lana + "Area_generic/Area_generic_blue_outbreak.prefab") }, // spreading frost ground ring
+            { "Cast_NecromancerSummon", new Pick(Lana + "Area_generic/Area_generic_green_outbreak.prefab") }, // dark/poison summon swell
+            { "Cast_EnemyCaster",       new Pick(Lana + "Orbs/Orbs_electric.prefab") },               // enemy caster violet swell
 
             // -- Deaths (oneshot burst) ----------------------------------------
             { "Death_Skeleton",         new Pick(Lana + "Burst/Poof_generic.prefab") },

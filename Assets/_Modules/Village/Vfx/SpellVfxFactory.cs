@@ -201,7 +201,10 @@ namespace DeNelle.Village
 
         private static VFXType CastTypeFor(SpellElement element) => element switch
         {
-            SpellElement.Fire     => VFXType.Cast_MageCharge,   // fiery wind-up (procedural flame fallback)
+            // Battle-polish: a fire cast now reads with its OWN gathering-ember charge
+            // (Cast_FireCharge), not the arcane-violet MageCharge — so the Knight's
+            // Radiant Strike / a Meteor wind-up looks fiery instead of purple.
+            SpellElement.Fire     => VFXType.Cast_FireCharge,
             SpellElement.Frost    => VFXType.Cast_FrostNova,
             SpellElement.Holy     => VFXType.Cast_Heal,
             SpellElement.Physical => VFXType.Cast_KnightSlam,

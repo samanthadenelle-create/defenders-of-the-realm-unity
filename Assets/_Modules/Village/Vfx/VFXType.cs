@@ -65,6 +65,10 @@ namespace DeNelle.Village
         // ── Casting / Charge (on caster Transform, plays before release) ──────
         /// <summary>Mage charge wind-up — swirling white-violet gathering.</summary>
         Cast_MageCharge,
+        /// <summary>Fire charge wind-up — gathering ember orbs converging on the
+        /// caster before a fire release (Meteor / Radiant Strike). Distinct from the
+        /// arcane MageCharge so a fiery ultimate reads fiery, not violet. Battle-polish.</summary>
+        Cast_FireCharge,
         /// <summary>Knight slam wind-up — gold sparks and ground crack glow.</summary>
         Cast_KnightSlam,
         /// <summary>Ranger bow-draw — thin green streak spiral around bow.</summary>
