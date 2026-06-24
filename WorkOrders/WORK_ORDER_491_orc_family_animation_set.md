@@ -56,3 +56,51 @@ then headless-smoke + owner felt-verify.
 ## Note
 Bigger than a tweak — it's an animation pass. Do it on a CLEAN committed base (the encounter +
 hero + HUD fixes from this session must be banked first).
+
+---
+
+## ✅ IMPLEMENTATION PLAN (Plan agent, 2026-06-23 — verified from code; BUILD-READY)
+
+**Good news — most wiring already exists; only the controller + `Injured` are missing:**
+- `ActorAnimator.SetLocomotion` already feeds `Speed`; `Enemy.DriveAnimator` calls it — but the legacy
+  path is gated by `_hasSpeedParam`=false because the controller has NO `Speed` param. Add the param +
+  Walk state and the slide is fixed for everyone. (Enemy.cs:698-709, ActorAnimator.cs:94-99.)
+- `AnimParams` ALREADY has `Cast`/`CastVariant`/`WindUp` (+hashes); `ActorAnimator.PlayCast`/`PlayWindUp`
+  exist + guarded. **Do NOT re-add.** `Injured` is the ONLY new param.
+- Mage cast moment fires via `Enemy.RangedAttack` ← `EnemyBrain.TriggerAttack` (EnemyBrain.cs:269) — the
+  seam to fire `Cast` + root the agent. Both venues route through `EnemyAnimatorFactory.Apply`.
+
+**Architecture:** ONE base `OrcHumanoid` controller (full state machine + all params) + per-role
+`AnimatorOverrideController` assets (`OrcHumanoid_Mage/_Warrior/_Tank`) swapping clips on shared states
+(the owner's "all pull same rig"). Follow `HeroAnimatorFactory.cs:216-238` blend-tree pattern:
+`BlendTree Simple1D blendParameter="Speed" useAutomaticThresholds=false` children idle@0/walk@6/run@9
+(the `=false` is load-bearing — auto-thresholds skips walk).
+
+**Clips (all Humanoid animationType:3, retargetable onto the shared avatar):**
+- Loco: Idle `Assets/Action/Orc Idle.fbx` · Walk `Assets/Action/standing walk forward.fbx` · Run `Assets/Action/standing run forward.fbx`
+- Mage cast: `Assets/Action/Spell Cast.fbx` (+ `Standing 2H Magic Attack 01/03.fbx`, `Standing 2H Magic Area Attack 01.fbx` for variants/wind-up)
+- Warrior: `Assets/Action/Knight/standing melee combo attack ver. 1.fbx` / `Assets/Action/Sword And Shield Attack.fbx`
+- Tank: idle `Assets/Action/Knight/sword and shield idle.fbx` · taunt `standing taunt battlecry.fbx` · heavy `standing melee attack downward.fbx`
+- Hit `Assets/Action/Shared/Shared_Hit_Reaction.fbx` · Death `Assets/Action/Shared/Shared_Death.fbx`
+- Injured: `Assets/Action/Enemies/injured idle.fbx` · `injured walk.fbx` · `injured run.fbx`
+
+**File changes (all .cs via CLI; ASCII logs; brace gate; flag-gated; §12):**
+1. `Core/Combat/AnimParams.cs` — add `Injured` const + hash (Cast/WindUp already there).
+2. `Core/Combat/ActorAnimator.cs` (+ IActorAnimator) — add `SetInjured(bool)` guarded by `Has(InjuredHash)`.
+3. `Assets/Editor/BuildOrcHumanoidController.cs` — REBUILD: add params Speed/Cast/CastVariant/WindUp/Injured
+   (+HitDir/DeathDir parity); replace bare Idle with a Speed Locomotion blend tree; add Cast state
+   (AnyState→Cast on trigger, →Loco on exit) + WindUp telegraph state; add Injured loco sub-tree
+   (injured idle/walk/run) entered when Injured==true; then create the 3 AnimatorOverrideController
+   assets under `Assets/Resources/Enemies/`. Log `ORC_CTRL_OK ...` (ASCII).
+4. `Village/Enemies/EnemyAnimatorFactory.cs` — role→override: Orc_Mage/_Warrior/_Tank → the override name
+   (default Orc_* → base); `Resources.Load<RuntimeAnimatorController>` (override IS a RuntimeAnimatorController).
+5. `Village/Enemies/Enemy.cs` — in `RangedAttack`: `PlayWindUp()`→`PlayCast()` + `_agent.isStopped=true` for
+   the cast window then resume (ROOTED cast, reuse `TelegraphThenAttack` shape); in `DriveAnimator` drive
+   `SetInjured(HpFraction < ~0.3)`; flag-gate.
+6. `Village/Enemies/EnemyCombatAudio.cs` — add `PlayCastCharge()` via `CoreServices.Audio` (the audio tell).
+
+**Build/gate (editor CLOSED, batchmode):** CLI writes .cs → brace gate → CompileGate → build controllers
+(`run-unity-method.ps1 -Method DeNelle.Editor.BuildOrcHumanoidController.Run`) confirm `ORC_CTRL_OK` +
+4 .controller assets + walk/cast resolved (no idle-fallback) → fleet smoke (nonzero Speed, no param-MISSING,
+mage rooted on cast, low-HP flips Injured) → owner felt-verify in the arena.
+Reference: `Assets/Editor/HeroAnimatorFactory.cs` (the proven blend-tree/Cast/override pattern).
