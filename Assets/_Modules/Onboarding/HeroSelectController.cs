@@ -1,17 +1,21 @@
 // =============================================================================
 // HeroSelectController — drives the hero-select screen (intro flow).
 // -----------------------------------------------------------------------------
-// THE SCREEN (owner acceptance, DEF — "stop the hero-select regressing"):
-//   TOP        : a light brand block (title + subtitle). The old heart-wing
-//                "dragon" banner was REMOVED in a polish pass (owner: the screen
-//                felt too heavy and the dragon read as disconnected) — the roster
-//                now fills the whole screen so the layout breathes.
-//   MIDDLE     : FOUR hero panels, evenly distributed across the full width,
-//                responsive in BOTH landscape and portrait (re-flows on
-//                orientation / screen-size change — never fixed pixel columns).
-//   BELOW THEM : the selected hero's PLAY-CARD details (name / role / blurb /
-//                HP / Attack / Speed pips / signature ability / CTA) render
-//                BELOW the four panels.
+// THE SCREEN (WO-503 single-hero V1):
+//   TOP        : a light brand block (title + subtitle) + the eyebrow
+//                "— YOUR HERO —".
+//   CENTERPIECE: the HERO STAGE for Grom (the single playable hero == Knight) —
+//                a LARGE gold-framed portrait with his backstory UNDER it (name /
+//                role / blurb) on the LEFT, and a STATS panel (HP / Attack / Speed
+//                pips + signature ability) BESIDE it on the RIGHT. Responsive: a
+//                ROW in landscape, re-flows to a COLUMN in portrait (never fixed
+//                pixel columns).
+//   BELOW      : a LOCKED "coming later" carousel of the other three heroes
+//                (Thrain/Mage, Sylas/Ranger, Elara/Cleric) — dimmed, scrim +
+//                LOCK badge, PickingMode.Ignore so they are PROVABLY non-selectable.
+//   FOOTER     : a single confirm CTA "Enter Elarion" (Grom pre-selected, enabled
+//                on load) that persists the hero and routes straight to the home
+//                hub (MainCastle_Hall) — no pet-select step.
 //
 // WHY THIS KEPT REGRESSING (root cause, fixed here):
 //   The old screen BOUND to named elements inside HeroSelectScreen.uxml
@@ -39,9 +43,10 @@
 // PERSISTENCE: on confirm, GameStateService.ChooseHero(hero) writes
 // GameState.HeroClass and Save()s it, then routes onward.
 //
-// RETURNING-PLAYER SKIP: a save that already records BOTH a hero AND a starter
-// pet has finished the intro flow — the screen self-skips straight to the
-// Village so a returning player is not re-asked.
+// RETURNING-PLAYER SKIP: a save that already records a hero has finished the
+// intro flow — the screen self-skips straight to the Castle so a returning
+// player is not re-asked. (WO-503: the gate no longer requires a starter pet,
+// because the pet-select step is gone and no longer writes StarterPetId.)
 //
 // Lives in DeNelle.Onboarding; references DeNelle.Core only — module isolation.
 // =============================================================================
@@ -56,12 +61,13 @@ using UnityEngine.UIElements;
 namespace DeNelle.Onboarding
 {
     /// <summary>
-    /// Drives the hero-select screen: builds (in code) the dragon banner, the
-    /// four evenly-distributed hero panels, and the selected-hero play-card
-    /// detail block below them; tracks the player's pick; and on confirm writes
-    /// <see cref="GameState.HeroClass"/> and routes onward. Fully responsive —
-    /// re-flows on orientation change. A returning player who has finished the
-    /// intro is skipped straight to the Village.
+    /// Drives the single-hero select screen (WO-503): builds (in code) the hero
+    /// stage for Grom (large image + backstory + stats panel beside it) over a
+    /// LOCKED, non-selectable "coming later" carousel of the other heroes. Grom is
+    /// pre-selected; on confirm it writes <see cref="GameState.HeroClass"/> and
+    /// routes straight to the home hub (MainCastle_Hall). Fully responsive —
+    /// the stage re-flows row↔column on orientation change. A returning player who
+    /// already chose a hero is skipped straight to the Castle.
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class HeroSelectController : MonoBehaviour
@@ -69,7 +75,8 @@ namespace DeNelle.Onboarding
         // -- en.json keys for the screen's own copy --------------------------
         private const string TitleKey    = "heroSelect.title";
         private const string SubtitleKey = "heroSelect.subtitle";
-        // "Dive into Village" — the sole confirm CTA, routes to pet-select/village.
+        // The confirm CTA en.json key (falls back to "Enter Elarion" — WO-503 D2).
+        // Routes straight to the home hub (no pet-select step).
         private const string DiveKey    = "heroSelect.diveVillage";
         // WO-327: ConfirmKey ("heroSelect.jumpAction" / "Jump into the Action") was
         // removed with the DTT-crashing button.
@@ -80,10 +87,7 @@ namespace DeNelle.Onboarding
         // the layout below unchanged while every colour resolves canonically.)
         private static readonly Color ColBackground   = ElarionUi.PanelStoneDark;                                     // full-screen stone
         private static readonly Color ColPanelDark     = ElarionUi.PanelStone;                                         // roster panel fill
-        private static readonly Color ColCardIdle      = ElarionUi.PanelStoneDark;                                     // card rest fill
-        private static readonly Color ColCardActive    = ElarionUi.PanelStone;                                         // card selected fill
         private static readonly Color ColAmber         = ElarionUi.Gold;                                               // accents / eyebrow → runic gold
-        private static readonly Color ColVioletBorder  = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f); // soft gold rim
         private static readonly Color ColTextBright    = ElarionUi.Parchment;                                          // primary text
         private static readonly Color ColTextMuted     = ElarionUi.ParchmentDim;                                       // secondary text
 
@@ -92,40 +96,31 @@ namespace DeNelle.Onboarding
         [SerializeField] private UIDocument _document;
 
         [Header("Behaviour")]
-        [Tooltip("Skip straight to the Village when the save already records a hero AND a " +
-                 "starter pet (a returning player who finished the intro). Editor testing: " +
+        [Tooltip("Skip straight to the Castle when the save already records a hero " +
+                 "(a returning player who finished the intro). Editor testing: " +
                  "disable to always show the screen.")]
         [SerializeField] private bool _skipWhenIntroComplete = true;
 
         // -- Built UI elements (all created in code) -------------------------
+        // WO-503 single-hero layout: a HERO STAGE (large Grom image + backstory
+        // under it, stats panel beside it) + a LOCKED CAROUSEL of the other heroes
+        // ("coming later", non-selectable). Replaces the old four-even-card grid.
         private VisualElement _root;
-        private VisualElement _cardRow;       // bottom — 4 hero panels
-        private VisualElement _detailCard;    // below panels — selected-hero details
-        private Label _detailName;
-        private Label _detailRole;
-        private Label _detailBlurb;
-        // WO polish: the detail-card stat block — HP / Attack / Speed pip rows +
-        // signature ability (name + one-line effect). Data lives in HeroCardInfo
-        // (WO-329); these labels just render it.
-        private Label _detailHp;
-        private Label _detailAttack;
-        private Label _detailSpeed;
-        private Label _detailAbilityName;
-        private Label _detailAbilityDesc;
-        // WO-327: the "Jump into the Action" CTA (DTT/PatriciaLight quick-entry)
-        // was REMOVED — it launched Defend the Tower in a state that crashed the
-        // player build. Only the single "Dive into Village" confirm remains.
-        private Button _diveButton;           // "Dive into Village"    — normal village
-
-        // One card VisualElement per hero, in HeroCatalog order.
-        private readonly VisualElement[] _cards = new VisualElement[HeroCatalog.Heroes.Length];
-        // The gold image-frame of each card (parallel to _cards) so selection can
-        // brighten the frame rim to gilt (WO-374 selection state).
-        private readonly VisualElement[] _cardFrames = new VisualElement[HeroCatalog.Heroes.Length];
+        private VisualElement _heroStage;     // row (landscape) / column (portrait): image+story | stats
+        private VisualElement _stageLeft;     // image + backstory column
+        private VisualElement _stageRight;    // stats panel column
+        private VisualElement _lockedRow;     // bottom band — the 3 locked carousel cards
 
         private bool _built;
         private bool _hasSelection;
         private HeroClass _selectedHero;
+
+        // The single playable hero in V1 — Grom == HeroClass.Knight (KnightOnly ON).
+        private const HeroClass PlayableHero = HeroClass.Knight;
+
+        // WO-503 confirm CTA — "Enter Elarion" (D2): the destination is the home
+        // hub, not a TD raid. Pre-enabled (single hero is pre-selected).
+        private Button _diveButton;
 
         // =====================================================================
         //  Lifecycle
@@ -161,15 +156,22 @@ namespace DeNelle.Onboarding
         // =====================================================================
 
         /// <summary>
-        /// True when the save already records BOTH a chosen hero and a starter
-        /// pet — the intro flow is finished and this screen has nothing to ask.
+        /// True when the save already records a chosen hero — the intro flow is
+        /// finished and this screen has nothing to ask.
+        ///
+        /// WO-503 dependency fix: this gate USED to require BOTH a hero AND a
+        /// non-empty StarterPetId. The pet-select step is gone (single-hero V1) and
+        /// no longer writes StarterPetId, so requiring it would NEVER be satisfied —
+        /// a returning player who already picked Grom would be re-shown hero-select
+        /// every launch. The gate is now HeroClass alone. (GameState.StarterPetId
+        /// the FIELD stays — Echo Hollow + save migration still use it; only this
+        /// boot gate stops depending on it.)
         /// </summary>
         private static bool IsIntroComplete()
         {
             var svc = GameStateService.Instance;
             if (svc == null || svc.State == null) return false; // first launch
-            return svc.State.HeroClass != HeroClassOpt.None
-                   && !string.IsNullOrEmpty(svc.State.StarterPetId);
+            return svc.State.HeroClass != HeroClassOpt.None;
         }
 
         // =====================================================================
@@ -182,11 +184,11 @@ namespace DeNelle.Onboarding
         /// the build (CLAUDE.md §8) cannot break this screen. Structure:
         ///   root (column)
         ///     └─ roster panel  (full screen, opaque)
-        ///          ├─ brand     (title + subtitle)
-        ///          ├─ eyebrow
-        ///          ├─ card row  (4 hero panels, flex-even, re-flows on resize)
-        ///          ├─ detail card (selected-hero name / role / blurb + stats)
-        ///          └─ footer    (confirm CTA)
+        ///          ├─ brand       (title + subtitle)
+        ///          ├─ eyebrow     ("— YOUR HERO —")
+        ///          ├─ hero stage  (image + backstory | stats — row/column reflow)
+        ///          ├─ locked row  (3 dimmed, non-selectable "coming later" cards)
+        ///          └─ footer      (confirm CTA "Enter Elarion")
         /// </summary>
         private void BuildScreen()
         {
@@ -208,20 +210,21 @@ namespace DeNelle.Onboarding
             _root.style.justifyContent = Justify.FlexStart;
             _root.style.backgroundColor = ColBackground;
 
-            // Dragon banner REMOVED (owner polish: the screen felt too heavy and
-            // the dragon read as disconnected). The roster panel now fills the
-            // whole screen and carries the brand title/subtitle itself, so the
-            // layout breathes lighter.
-            BuildRosterPanel();   // full screen (brand + eyebrow + cards + detail + CTAs)
+            // WO-503: single-hero stage (large Grom image + backstory + stats) over
+            // a locked "coming later" carousel of the other heroes. The roster panel
+            // carries brand title/subtitle + the eyebrow at the top.
+            BuildRosterPanel();   // full screen (brand + eyebrow + hero stage + locked carousel + CTA)
 
-            // Initial selection state + a re-flow pass once we know the size.
-            PreselectFromSave();
-            RefreshSelectionVisuals();
+            // Grom (Knight) is PRE-SELECTED — the big stage IS the selection. The
+            // confirm CTA is enabled immediately (there is nothing to choose).
+            _selectedHero = PlayableHero;
+            _hasSelection = true;
+            GameStateService.Instance?.ChooseHero(PlayableHero); // KnightOnly-forced; idempotent
             RefreshConfirmEnabled();
 
             // Re-flow the responsive layout on every screen-size / orientation
-            // change. This is what keeps the four panels evenly centred in BOTH
-            // landscape and portrait without fixed pixel positions.
+            // change — keeps the hero stage row (landscape) re-flowing to a column
+            // (portrait) without fixed pixel positions.
             _root.RegisterCallback<GeometryChangedEvent>(OnRootGeometryChanged);
 
             _built = true;
@@ -230,20 +233,22 @@ namespace DeNelle.Onboarding
             // panel already has its geometry (so we never wait a frame to verify).
             ReflowForSize(_root.resolvedStyle.width, _root.resolvedStyle.height);
 
-            // V — prove the screen built: root has children AND the four cards exist.
-            // A built-but-empty hero-select is a dead-end screen, so a zero count Fails.
+            // V — prove the screen built: root has children AND the hero stage +
+            // the 3 locked carousel cards exist. A built-but-empty hero-select is a
+            // dead-end screen, so a zero count Fails.
             int rootChildren = _root.childCount;
-            int cardCount = _cardRow != null ? _cardRow.childCount : 0;
-            if (rootChildren == 0 || cardCount == 0)
+            int lockedCount = _lockedRow != null ? _lockedRow.childCount : 0;
+            bool stageOk = _heroStage != null && _stageLeft != null && _stageRight != null;
+            if (rootChildren == 0 || !stageOk || lockedCount == 0)
             {
                 FlowTrace.Fail("Onboarding",
-                    $"BuildScreen VERIFY FAILED — rootChildren={rootChildren} cards={cardCount}. " +
-                    "Hero-select built but EMPTY (blank/dead-end screen).");
+                    $"BuildScreen VERIFY FAILED — rootChildren={rootChildren} stageOk={stageOk} locked={lockedCount}. " +
+                    "Hero-select built but EMPTY/incomplete (blank/dead-end screen).");
             }
             else
             {
                 FlowTrace.Step("Onboarding",
-                    $"BuildScreen VERIFY ok — rootChildren={rootChildren} cards={cardCount}.");
+                    $"BuildScreen VERIFY ok — rootChildren={rootChildren} stageOk={stageOk} locked={lockedCount}.");
             }
         }
 
@@ -264,8 +269,7 @@ namespace DeNelle.Onboarding
             roster.style.paddingLeft = 10f;
             roster.style.paddingRight = 10f;
 
-            // Brand block — relocated out of the (removed) dragon banner so the
-            // screen still announces itself, now lighter at the top of the roster.
+            // Brand block — title + subtitle at the top of the roster.
             var brand = new VisualElement { name = "hero-brand-block" };
             brand.style.alignSelf = Align.Stretch;
             brand.style.alignItems = Align.Center;
@@ -301,8 +305,8 @@ namespace DeNelle.Onboarding
             divider.style.backgroundColor = ColAmber;
             roster.Add(divider);
 
-            // Eyebrow.
-            var eyebrow = new Label("— CHOOSE YOUR HERO —");
+            // Eyebrow — WO-503 D3: inline literal "— YOUR HERO —" (only one to pick).
+            var eyebrow = new Label("— YOUR HERO —");
             eyebrow.style.fontSize = 12f;
             eyebrow.style.unityFontStyleAndWeight = FontStyle.Bold;
             eyebrow.style.color = ColAmber;
@@ -311,23 +315,16 @@ namespace DeNelle.Onboarding
             eyebrow.style.flexShrink = 0f;
             roster.Add(eyebrow);
 
-            // The four hero panels — an evenly distributed flex row.
-            _cardRow = new VisualElement { name = "hero-card-row" };
-            _cardRow.style.flexDirection = FlexDirection.Row;
-            _cardRow.style.justifyContent = Justify.SpaceBetween; // even across full width
-            _cardRow.style.alignItems = Align.Stretch;
-            _cardRow.style.flexGrow = 1f;
-            _cardRow.style.flexShrink = 1f;
-            _cardRow.style.alignSelf = Align.Stretch;
-            roster.Add(_cardRow);
+            // ── HERO STAGE — the centerpiece. Row in landscape (image+story left,
+            //    stats right); re-flows to a column in portrait (ReflowForSize).
+            BuildHeroStage();
+            roster.Add(_heroStage);
 
-            BuildCards();
+            // ── LOCKED CAROUSEL — the other heroes, "coming later", non-selectable.
+            BuildLockedCarousel();
+            roster.Add(_lockedRow);
 
-            // Selected-hero play-card details — BELOW the four panels (acceptance #3).
-            BuildDetailCard();
-            roster.Add(_detailCard);
-
-            // Footer — two CTAs side by side.
+            // Footer — the single confirm CTA.
             var footer = new VisualElement { name = "select-footer" };
             footer.style.marginTop = 12f;
             footer.style.flexShrink = 0f;
@@ -336,15 +333,9 @@ namespace DeNelle.Onboarding
             footer.style.justifyContent = Justify.Center;
             footer.style.alignItems = Align.Center;
 
-            // Sole CTA — the normal first-run path. "Dive into Village" persists
-            // the hero then routes to pet-select. (Styled primary/amber.)
-            //
-            // WO-327: the old "Jump into the Action" CTA was REMOVED entirely. It
-            // was the Defend-the-Tower (PatriciaLight) quick-entry that launched
-            // DTT in a state that crashed the player build, so the button, its
-            // styling/registration, and its onClick handler are all gone — leaving
-            // a single safe confirm in both editor and player builds.
-            _diveButton = new Button { text = FallbackLocale(DiveKey, "Dive into Village") };
+            // WO-503 D2: "Enter Elarion" — the destination is the home hub. Grom is
+            // pre-selected, so the CTA is enabled on load.
+            _diveButton = new Button { text = FallbackLocale(DiveKey, "Enter Elarion") };
             StyleCta(_diveButton, secondary: false);
             _diveButton.clicked += OnDiveVillageClicked;
             footer.Add(_diveButton);
@@ -353,94 +344,49 @@ namespace DeNelle.Onboarding
             _root.Add(roster);
         }
 
-        /// <summary>Builds the four hero panels into the card row.</summary>
-        private void BuildCards()
-        {
-            if (_cardRow == null) return;
-            _cardRow.Clear();
-
-            for (int i = 0; i < HeroCatalog.Heroes.Length; i++)
-            {
-                HeroCardInfo info = HeroCatalog.Heroes[i];
-                VisualElement card = BuildCard(info);
-                _cardRow.Add(card);
-                _cards[i] = card;
-                _cardFrames[i] = card.Q<VisualElement>("image-frame");
-            }
-        }
-
         /// <summary>
-        /// Builds one hero panel (WO-374 card framing): a gold-framed portrait
-        /// IMAGE sitting above a clearly-separated DATA strip (hero name + class),
-        /// with no overlap between the two. Sized with flex (NOT a fixed pixel
-        /// width) so the four panels share the row evenly and re-flow in both
-        /// orientations.
-        ///
-        /// Structure:
-        ///   card (column, padded)
-        ///     ├─ image-frame   (gold double-rim, dark backing, fixed 3:4 aspect)
-        ///     │    └─ portrait  (cover-fit art, or accent glyph fallback)
-        ///     ├─ accent strip   (element colour)
-        ///     └─ data strip     (name in gold, class line in cream — BELOW image)
+        /// Builds the single-hero stage for Grom (Knight): a LARGE gold-framed
+        /// portrait with the backstory UNDER it on the left, and the stats panel
+        /// (HP/Attack/Speed pips + signature ability + role) BESIDE it on the right.
+        /// Row layout in landscape; ReflowForSize switches it to a column in portrait.
         /// </summary>
-        private VisualElement BuildCard(HeroCardInfo info)
+        private void BuildHeroStage()
         {
-            var card = new VisualElement { name = $"hero-card-{info.Hero}" };
+            HeroCardInfo info = FindInfo(PlayableHero);
 
-            // Even distribution: each panel flex-grows equally, with a tiny gutter.
-            // No hardcoded width / x position — this is what makes it orientation-robust.
-            card.style.flexGrow = 1f;
-            card.style.flexShrink = 1f;
-            card.style.flexBasis = 0f;
-            card.style.marginLeft = 5f;
-            card.style.marginRight = 5f;
-            card.style.maxWidth = Length.Percent(25f);    // never wider than its even quarter
-            card.style.minWidth = 0f;
+            _heroStage = new VisualElement { name = "hero-stage" };
+            _heroStage.style.flexGrow = 1f;
+            _heroStage.style.flexShrink = 1f;
+            _heroStage.style.flexDirection = FlexDirection.Row;   // ReflowForSize flips to Column in portrait
+            _heroStage.style.alignItems = Align.Stretch;
+            _heroStage.style.justifyContent = Justify.Center;
 
-            float radius = 12f;
-            card.style.borderTopLeftRadius = radius;
-            card.style.borderTopRightRadius = radius;
-            card.style.borderBottomLeftRadius = radius;
-            card.style.borderBottomRightRadius = radius;
-            SetBorderWidth(card, 2f);
-            SetBorderColor(card, ColVioletBorder);
-            card.style.backgroundColor = ColCardIdle;
-            card.style.overflow = Overflow.Hidden;
-            card.style.flexDirection = FlexDirection.Column;
-            card.style.alignItems = Align.Stretch;
-            card.style.justifyContent = Justify.FlexStart;
-            // Breathing room inside the card so the framed image isn't flush to
-            // the violet card border (WO-374 #3: cards were cramped).
-            card.style.paddingTop = 8f;
-            card.style.paddingBottom = 8f;
-            card.style.paddingLeft = 8f;
-            card.style.paddingRight = 8f;
+            // ── LEFT column: large image + backstory under it (the larger half).
+            _stageLeft = new VisualElement { name = "hero-stage-left" };
+            _stageLeft.style.flexGrow = 1.3f;
+            _stageLeft.style.flexShrink = 1f;
+            _stageLeft.style.flexBasis = 0f;
+            _stageLeft.style.minWidth = 0f;
+            _stageLeft.style.flexDirection = FlexDirection.Column;
+            _stageLeft.style.alignItems = Align.Stretch;
+            _stageLeft.style.marginRight = 8f;
 
-            // ── Image frame (WO-374 #1): a gold double-rim around a dark backing
-            //    holds the portrait at a fixed portrait aspect, clearly set off
-            //    from the data strip below. ScaleAndCrop "covers" the frame so the
-            //    art is never stretched/squashed; overflow-hidden + rounding keep
-            //    it neatly inside the gilt rim.
-            var imageFrame = new VisualElement { name = "image-frame" };
+            // Large hero image — gold double-rim, dark backing, cover-fit Grom.jpg.
+            var imageFrame = new VisualElement { name = "hero-image-frame" };
             imageFrame.style.flexGrow = 1f;
             imageFrame.style.flexShrink = 1f;
-            imageFrame.style.minHeight = 70f;
+            imageFrame.style.minHeight = 160f;
             imageFrame.style.overflow = Overflow.Hidden;
-            imageFrame.style.alignItems = Align.Center;
-            imageFrame.style.justifyContent = Justify.Center;
-            imageFrame.style.backgroundColor = new Color(0f, 0f, 0f, 0.30f); // dark backing
-            float frameRadius = 8f;
-            imageFrame.style.borderTopLeftRadius = frameRadius;
-            imageFrame.style.borderTopRightRadius = frameRadius;
-            imageFrame.style.borderBottomLeftRadius = frameRadius;
-            imageFrame.style.borderBottomRightRadius = frameRadius;
-            SetBorderWidth(imageFrame, 2f);
-            SetBorderColor(imageFrame, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f));
+            imageFrame.style.backgroundColor = new Color(0f, 0f, 0f, 0.30f);
+            float fr = 10f;
+            imageFrame.style.borderTopLeftRadius = fr;
+            imageFrame.style.borderTopRightRadius = fr;
+            imageFrame.style.borderBottomLeftRadius = fr;
+            imageFrame.style.borderBottomRightRadius = fr;
+            SetBorderWidth(imageFrame, 3f);
+            SetBorderColor(imageFrame, ElarionUi.Gilt);
 
-            // Portrait art fills the frame (cover-fit). Portraits use the owner's
-            // character-named art (canon roster): Thrain=Mage, Grom=Knight,
-            // Sylas=Ranger, Elara=Cleric.
-            var portrait = new VisualElement { name = "portrait" };
+            var portrait = new VisualElement { name = "hero-portrait" };
             portrait.style.position = Position.Absolute;
             portrait.style.left = 0f;
             portrait.style.right = 0f;
@@ -448,168 +394,267 @@ namespace DeNelle.Onboarding
             portrait.style.bottom = 0f;
             portrait.style.alignItems = Align.Center;
             portrait.style.justifyContent = Justify.Center;
+            ApplyPortrait(portrait, info, glyphSize: 96f);
+            imageFrame.Add(portrait);
+            _stageLeft.Add(imageFrame);
 
+            // Backstory UNDER the image: name (gold, big) + role (amber) + blurb.
+            var story = new VisualElement { name = "hero-backstory" };
+            story.style.flexShrink = 0f;
+            story.style.marginTop = 10f;
+            story.style.paddingLeft = 2f;
+            story.style.paddingRight = 2f;
+
+            var nameLabel = new Label(info != null ? CanonStrings.Locale(info.NameKey) : "Grom");
+            nameLabel.style.fontSize = 24f;
+            nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            nameLabel.style.color = ElarionUi.Gold;
+            nameLabel.style.whiteSpace = WhiteSpace.Normal;
+            story.Add(nameLabel);
+
+            var roleLabel = new Label(info != null ? CanonStrings.Locale(info.RoleKey) : string.Empty);
+            roleLabel.style.marginTop = 2f;
+            roleLabel.style.fontSize = 13f;
+            roleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            roleLabel.style.color = ColAmber;
+            roleLabel.style.whiteSpace = WhiteSpace.Normal;
+            story.Add(roleLabel);
+
+            var blurbLabel = new Label(info != null ? CanonStrings.Locale(info.BlurbKey) : string.Empty);
+            blurbLabel.style.marginTop = 6f;
+            blurbLabel.style.fontSize = 13f;
+            blurbLabel.style.color = ColTextBright;
+            blurbLabel.style.whiteSpace = WhiteSpace.Normal;
+            story.Add(blurbLabel);
+
+            _stageLeft.Add(story);
+            _heroStage.Add(_stageLeft);
+
+            // ── RIGHT column: the stats panel BESIDE the image.
+            _stageRight = new VisualElement { name = "hero-stage-right" };
+            _stageRight.style.flexGrow = 1f;
+            _stageRight.style.flexShrink = 1f;
+            _stageRight.style.flexBasis = 0f;
+            _stageRight.style.minWidth = 0f;
+            _stageRight.style.justifyContent = Justify.Center;
+            _stageRight.style.marginLeft = 8f;
+
+            var statsPanel = new VisualElement { name = "hero-stats-panel" };
+            statsPanel.style.paddingTop = 14f;
+            statsPanel.style.paddingBottom = 14f;
+            statsPanel.style.paddingLeft = 16f;
+            statsPanel.style.paddingRight = 16f;
+            float pr = 12f;
+            statsPanel.style.borderTopLeftRadius = pr;
+            statsPanel.style.borderTopRightRadius = pr;
+            statsPanel.style.borderBottomLeftRadius = pr;
+            statsPanel.style.borderBottomRightRadius = pr;
+            SetBorderWidth(statsPanel, 2f);
+            SetBorderColor(statsPanel, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f));
+            statsPanel.style.backgroundColor = ElarionUi.PanelStone;
+
+            BuildStatRow(statsPanel, "HP",     PipString(info != null ? info.Hp : 5));
+            BuildStatRow(statsPanel, "ATTACK", PipString(info != null ? info.Attack : 3));
+            BuildStatRow(statsPanel, "SPEED",  PipString(info != null ? info.Speed : 2));
+
+            // Divider then the signature ability.
+            var statDivider = new VisualElement();
+            statDivider.style.height = 1f;
+            statDivider.style.marginTop = 10f;
+            statDivider.style.marginBottom = 8f;
+            statDivider.style.backgroundColor = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.4f);
+            statsPanel.Add(statDivider);
+
+            var abilityName = new Label(info != null ? info.AbilityName : "Bulwark Slam");
+            abilityName.style.fontSize = 15f;
+            abilityName.style.unityFontStyleAndWeight = FontStyle.Bold;
+            abilityName.style.color = ColAmber;
+            abilityName.style.whiteSpace = WhiteSpace.Normal;
+            statsPanel.Add(abilityName);
+
+            var abilityDesc = new Label(info != null ? info.AbilityDesc : string.Empty);
+            abilityDesc.style.marginTop = 2f;
+            abilityDesc.style.fontSize = 12f;
+            abilityDesc.style.color = ColTextMuted;
+            abilityDesc.style.whiteSpace = WhiteSpace.Normal;
+            statsPanel.Add(abilityDesc);
+
+            _stageRight.Add(statsPanel);
+            _heroStage.Add(_stageRight);
+        }
+
+        /// <summary>
+        /// Builds the locked "coming later" carousel — one dimmed, NON-SELECTABLE
+        /// card per locked hero (Thrain/Mage, Sylas/Ranger, Elara/Cleric). Each card
+        /// is PickingMode.Ignore with NO click handler, so a tap provably does
+        /// nothing — it can never select a locked hero.
+        /// </summary>
+        private void BuildLockedCarousel()
+        {
+            _lockedRow = new VisualElement { name = "hero-locked-row" };
+            _lockedRow.style.flexDirection = FlexDirection.Row;
+            _lockedRow.style.justifyContent = Justify.Center;
+            _lockedRow.style.alignItems = Align.Stretch;
+            _lockedRow.style.flexShrink = 0f;
+            _lockedRow.style.marginTop = 12f;
+            // The whole band is inert — provably non-interactive.
+            _lockedRow.pickingMode = PickingMode.Ignore;
+
+            for (int i = 0; i < HeroCatalog.Heroes.Length; i++)
+            {
+                HeroCardInfo info = HeroCatalog.Heroes[i];
+                if (info.Hero == PlayableHero) continue;   // Grom is the stage, not a locked card
+                _lockedRow.Add(BuildLockedCard(info));
+            }
+        }
+
+        /// <summary>
+        /// Builds one dimmed, non-selectable locked card (portrait dimmed under a
+        /// dark scrim + a LOCK badge + "Coming later" caption + dim name/class).
+        /// Provably inert: PickingMode.Ignore and no PointerDownEvent.
+        /// </summary>
+        private VisualElement BuildLockedCard(HeroCardInfo info)
+        {
+            var card = new VisualElement { name = $"hero-locked-{info.Hero}" };
+            card.style.flexGrow = 1f;
+            card.style.flexShrink = 1f;
+            card.style.flexBasis = 0f;
+            card.style.maxWidth = Length.Percent(30f);
+            card.style.minWidth = 0f;
+            card.style.marginLeft = 5f;
+            card.style.marginRight = 5f;
+            float radius = 10f;
+            card.style.borderTopLeftRadius = radius;
+            card.style.borderTopRightRadius = radius;
+            card.style.borderBottomLeftRadius = radius;
+            card.style.borderBottomRightRadius = radius;
+            SetBorderWidth(card, 2f);
+            SetBorderColor(card, ElarionUi.Disabled);
+            card.style.backgroundColor = ElarionUi.Disabled;
+            card.style.overflow = Overflow.Hidden;
+            card.style.flexDirection = FlexDirection.Column;
+            card.style.alignItems = Align.Stretch;
+            card.style.paddingTop = 6f;
+            card.style.paddingBottom = 6f;
+            card.style.paddingLeft = 6f;
+            card.style.paddingRight = 6f;
+            // PROVABLY NON-SELECTABLE: the card ignores pointer events and registers
+            // NO click handler — a tap does nothing, never selects a locked hero.
+            card.pickingMode = PickingMode.Ignore;
+
+            var imageFrame = new VisualElement { name = "locked-image-frame" };
+            imageFrame.style.flexGrow = 1f;
+            imageFrame.style.flexShrink = 1f;
+            imageFrame.style.minHeight = 56f;
+            imageFrame.style.overflow = Overflow.Hidden;
+            imageFrame.style.backgroundColor = new Color(0f, 0f, 0f, 0.30f);
+            float fr = 6f;
+            imageFrame.style.borderTopLeftRadius = fr;
+            imageFrame.style.borderTopRightRadius = fr;
+            imageFrame.style.borderBottomLeftRadius = fr;
+            imageFrame.style.borderBottomRightRadius = fr;
+            SetBorderWidth(imageFrame, 1f);
+            SetBorderColor(imageFrame, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.35f));
+
+            // Dimmed portrait.
+            var portrait = new VisualElement { name = "locked-portrait" };
+            portrait.style.position = Position.Absolute;
+            portrait.style.left = 0f;
+            portrait.style.right = 0f;
+            portrait.style.top = 0f;
+            portrait.style.bottom = 0f;
+            portrait.style.alignItems = Align.Center;
+            portrait.style.justifyContent = Justify.Center;
+            portrait.style.opacity = 0.35f;   // greyed/dimmed
+            ApplyPortrait(portrait, info, glyphSize: 36f);
+            imageFrame.Add(portrait);
+
+            // Dark scrim + centered LOCK badge over the portrait.
+            var scrim = new VisualElement { name = "locked-scrim" };
+            scrim.style.position = Position.Absolute;
+            scrim.style.left = 0f;
+            scrim.style.right = 0f;
+            scrim.style.top = 0f;
+            scrim.style.bottom = 0f;
+            scrim.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);
+            scrim.style.alignItems = Align.Center;
+            scrim.style.justifyContent = Justify.Center;
+            scrim.pickingMode = PickingMode.Ignore;
+
+            var lockGlyph = new Label("LOCKED");
+            lockGlyph.style.fontSize = 12f;
+            lockGlyph.style.unityFontStyleAndWeight = FontStyle.Bold;
+            lockGlyph.style.color = ElarionUi.Parchment;
+            lockGlyph.style.unityTextAlign = TextAnchor.MiddleCenter;
+            scrim.Add(lockGlyph);
+            imageFrame.Add(scrim);
+
+            card.Add(imageFrame);
+
+            // Dim name + class so the player sees who is coming.
+            var nameLabel = new Label(CanonStrings.Locale(info.NameKey));
+            nameLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            nameLabel.style.marginTop = 4f;
+            nameLabel.style.fontSize = 12f;
+            nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            nameLabel.style.color = ColTextMuted;
+            nameLabel.style.whiteSpace = WhiteSpace.Normal;
+            card.Add(nameLabel);
+
+            var classLabel = new Label(CanonStrings.Locale(info.RoleKey));
+            classLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            classLabel.style.fontSize = 10f;
+            classLabel.style.color = ColTextMuted;
+            classLabel.style.whiteSpace = WhiteSpace.Normal;
+            card.Add(classLabel);
+
+            var coming = new Label("Coming later");
+            coming.style.unityTextAlign = TextAnchor.MiddleCenter;
+            coming.style.marginTop = 1f;
+            coming.style.fontSize = 9f;
+            coming.style.unityFontStyleAndWeight = FontStyle.Italic;
+            coming.style.color = ColTextMuted;
+            card.Add(coming);
+
+            return card;
+        }
+
+        /// <summary>
+        /// Applies a hero's portrait art (cover-fit) to a portrait element, falling
+        /// back to the accent glyph when the art is absent (shared by the hero stage
+        /// and the locked cards). No missing-asset risk — Grom/Thrain/Sylas/Elara
+        /// portraits all exist in Resources/HeroPortraits.
+        /// </summary>
+        private static void ApplyPortrait(VisualElement portrait, HeroCardInfo info, float glyphSize)
+        {
+            if (portrait == null || info == null) return;
             string slug = SlugFor(info.Hero);
             var portraitSprite = Resources.Load<Sprite>($"HeroPortraits/{slug}");
             if (portraitSprite != null)
             {
                 portrait.style.backgroundImage = new StyleBackground(portraitSprite);
                 portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+                return;
             }
-            else
+            var portraitTex = Resources.Load<Texture2D>($"HeroPortraits/{slug}");
+            if (portraitTex != null)
             {
-                var portraitTex = Resources.Load<Texture2D>($"HeroPortraits/{slug}");
-                if (portraitTex != null)
-                {
-                    portrait.style.backgroundImage = new StyleBackground(portraitTex);
-                    portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
-                }
-                else
-                {
-                    var glyph = new Label(info.Glyph);
-                    glyph.style.fontSize = 48f;
-                    glyph.style.unityFontStyleAndWeight = FontStyle.Bold;
-                    glyph.style.color = info.Accent;
-                    portrait.Add(glyph);
-                }
+                portrait.style.backgroundImage = new StyleBackground(portraitTex);
+                portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+                return;
             }
-            imageFrame.Add(portrait);
-            card.Add(imageFrame);
-
-            // Element-coloured accent strip — a clean seam between image and data.
-            var accent = new VisualElement();
-            accent.style.height = 3f;
-            accent.style.flexShrink = 0f;
-            accent.style.marginTop = 8f;
-            accent.style.backgroundColor = info.Accent;
-            float accentRadius = 2f;
-            accent.style.borderTopLeftRadius = accentRadius;
-            accent.style.borderTopRightRadius = accentRadius;
-            accent.style.borderBottomLeftRadius = accentRadius;
-            accent.style.borderBottomRightRadius = accentRadius;
-            card.Add(accent);
-
-            // ── Data strip (WO-374 #2): name + class BELOW the framed image, never
-            //    overlapping it. Name in runic gold, class line in muted cream.
-            var dataStrip = new VisualElement { name = "card-data" };
-            dataStrip.style.flexShrink = 0f;
-            dataStrip.style.paddingTop = 6f;
-            dataStrip.style.paddingBottom = 4f;
-            dataStrip.style.paddingLeft = 2f;
-            dataStrip.style.paddingRight = 2f;
-            dataStrip.style.alignItems = Align.Center;
-
-            var nameLabel = new Label(CanonStrings.Locale(info.NameKey));
-            nameLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-            nameLabel.style.fontSize = 15f;
-            nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            nameLabel.style.color = ElarionUi.Gold;        // gold name (WO-374 typography)
-            nameLabel.style.whiteSpace = WhiteSpace.Normal;
-            nameLabel.style.flexShrink = 0f;
-            dataStrip.Add(nameLabel);
-
-            var classLabel = new Label(CanonStrings.Locale(info.RoleKey));
-            classLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-            classLabel.style.marginTop = 1f;
-            classLabel.style.fontSize = 11f;
-            classLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            classLabel.style.color = ElarionUi.ParchmentDim; // cream class line
-            classLabel.style.whiteSpace = WhiteSpace.Normal;
-            classLabel.style.flexShrink = 0f;
-            dataStrip.Add(classLabel);
-
-            card.Add(dataStrip);
-
-            // Whole panel is the hit target.
-            HeroClass captured = info.Hero;
-            card.RegisterCallback<PointerDownEvent>(_ => OnCardClicked(captured));
-
-            return card;
+            var glyph = new Label(info.Glyph);
+            glyph.style.fontSize = glyphSize;
+            glyph.style.unityFontStyleAndWeight = FontStyle.Bold;
+            glyph.style.color = info.Accent;
+            portrait.Add(glyph);
         }
 
         /// <summary>
-        /// Builds the selected-hero detail card that sits BELOW the four panels
-        /// (acceptance #3). Populated by <see cref="RefreshDetailCard"/>.
+        /// Builds one stat row into the stats panel — a fixed-width gold label on
+        /// the left and a pre-filled 1-5 pip value on the right.
         /// </summary>
-        private void BuildDetailCard()
-        {
-            _detailCard = new VisualElement { name = "hero-detail-card" };
-            _detailCard.style.marginTop = 12f;
-            _detailCard.style.flexShrink = 0f;
-            _detailCard.style.alignSelf = Align.Stretch;
-            _detailCard.style.paddingTop = 12f;
-            _detailCard.style.paddingBottom = 12f;
-            _detailCard.style.paddingLeft = 16f;
-            _detailCard.style.paddingRight = 16f;
-            float r = 12f;
-            _detailCard.style.borderTopLeftRadius = r;
-            _detailCard.style.borderTopRightRadius = r;
-            _detailCard.style.borderBottomLeftRadius = r;
-            _detailCard.style.borderBottomRightRadius = r;
-            SetBorderWidth(_detailCard, 1f);
-            SetBorderColor(_detailCard, ColVioletBorder);
-            _detailCard.style.backgroundColor = ElarionUi.PanelStone;
-
-            _detailName = new Label(string.Empty);
-            _detailName.style.fontSize = 20f;
-            _detailName.style.unityFontStyleAndWeight = FontStyle.Bold;
-            _detailName.style.color = ColTextBright;
-            _detailName.style.whiteSpace = WhiteSpace.Normal;
-            _detailCard.Add(_detailName);
-
-            _detailRole = new Label(string.Empty);
-            _detailRole.style.marginTop = 2f;
-            _detailRole.style.fontSize = 12f;
-            _detailRole.style.unityFontStyleAndWeight = FontStyle.Bold;
-            _detailRole.style.color = ColAmber;
-            _detailRole.style.whiteSpace = WhiteSpace.Normal;
-            _detailCard.Add(_detailRole);
-
-            _detailBlurb = new Label(string.Empty);
-            _detailBlurb.style.marginTop = 6f;
-            _detailBlurb.style.fontSize = 13f;
-            _detailBlurb.style.color = ColTextMuted;
-            _detailBlurb.style.whiteSpace = WhiteSpace.Normal;
-            _detailCard.Add(_detailBlurb);
-
-            // ── Stat block: HP / Attack / Speed as 1-5 pip rows, then the
-            //    signature ability (name + one-line effect). All data already
-            //    lives in HeroCardInfo (WO-329) — this is display only.
-            var statBlock = new VisualElement { name = "hero-detail-stats" };
-            statBlock.style.marginTop = 10f;
-            statBlock.style.flexShrink = 0f;
-            statBlock.style.flexDirection = FlexDirection.Column;
-            statBlock.style.alignItems = Align.Stretch;
-
-            _detailHp     = BuildStatRow(statBlock, "HP");
-            _detailAttack = BuildStatRow(statBlock, "ATTACK");
-            _detailSpeed  = BuildStatRow(statBlock, "SPEED");
-
-            _detailCard.Add(statBlock);
-
-            // Signature ability — name in runic gold, effect in muted cream.
-            _detailAbilityName = new Label(string.Empty);
-            _detailAbilityName.style.marginTop = 10f;
-            _detailAbilityName.style.fontSize = 14f;
-            _detailAbilityName.style.unityFontStyleAndWeight = FontStyle.Bold;
-            _detailAbilityName.style.color = ColAmber;
-            _detailAbilityName.style.whiteSpace = WhiteSpace.Normal;
-            _detailCard.Add(_detailAbilityName);
-
-            _detailAbilityDesc = new Label(string.Empty);
-            _detailAbilityDesc.style.marginTop = 2f;
-            _detailAbilityDesc.style.fontSize = 12f;
-            _detailAbilityDesc.style.color = ColTextMuted;
-            _detailAbilityDesc.style.whiteSpace = WhiteSpace.Normal;
-            _detailCard.Add(_detailAbilityDesc);
-        }
-
-        /// <summary>
-        /// Builds one stat row — a fixed-width gold label on the left and a value
-        /// label on the right that <see cref="RefreshDetailCard"/> fills with a
-        /// 1-5 pip string. Returns the value label so it can be updated per-hero.
-        /// </summary>
-        private Label BuildStatRow(VisualElement parent, string label)
+        private void BuildStatRow(VisualElement parent, string label, string pipValue)
         {
             var row = new VisualElement();
             row.style.flexDirection = FlexDirection.Row;
@@ -624,7 +669,7 @@ namespace DeNelle.Onboarding
             key.style.color = ColAmber;
             row.Add(key);
 
-            var value = new Label(string.Empty);
+            var value = new Label(pipValue);
             value.style.fontSize = 14f;
             value.style.unityFontStyleAndWeight = FontStyle.Bold;
             value.style.color = ColTextBright;
@@ -632,7 +677,6 @@ namespace DeNelle.Onboarding
             row.Add(value);
 
             parent.Add(row);
-            return value;
         }
 
         /// <summary>
@@ -656,163 +700,81 @@ namespace DeNelle.Onboarding
         }
 
         /// <summary>
-        /// Re-flows the layout for the current screen size / orientation. The four
-        /// panels always share the row evenly (SpaceBetween + equal flex-grow). In
-        /// a tall portrait the panels get a little extra breathing room so nothing
-        /// crowds. No fixed x positions — purely flex — so it re-centres
-        /// identically in landscape and portrait.
+        /// Re-flows the hero stage for the current screen size / orientation:
+        /// LANDSCAPE = a ROW (large image + backstory on the left, stats panel on
+        /// the right); PORTRAIT = a COLUMN (image on top, stats below, backstory
+        /// under the image) so nothing crowds. No fixed x positions — purely flex —
+        /// so it re-centres identically in both orientations. Then self-asserts.
         /// </summary>
         private void ReflowForSize(float width, float height)
         {
-            if (!_built || _cardRow == null) return;
+            if (!_built || _heroStage == null) return;
             if (width <= 0f || height <= 0f) return;
 
             bool portrait = height >= width;
 
-            // Tighten the inter-panel gutter in portrait so four narrow columns
-            // still fit comfortably; widen it a touch in landscape.
-            float gutter = portrait ? 4f : 6f;
-            for (int i = 0; i < _cards.Length; i++)
+            // Stage flips between row (landscape) and column (portrait).
+            _heroStage.style.flexDirection = portrait ? FlexDirection.Column : FlexDirection.Row;
+
+            // In portrait the columns stack — drop the side margins, add a small
+            // vertical gap; in landscape they sit side-by-side with side margins.
+            if (_stageLeft != null)
             {
-                if (_cards[i] == null) continue;
-                _cards[i].style.marginLeft = gutter;
-                _cards[i].style.marginRight = gutter;
+                _stageLeft.style.marginRight = portrait ? 0f : 8f;
+                _stageLeft.style.marginBottom = portrait ? 10f : 0f;
+            }
+            if (_stageRight != null)
+            {
+                _stageRight.style.marginLeft = portrait ? 0f : 8f;
             }
 
-            VerifyFourPanelsEven();
+            VerifyStage();
         }
 
         /// <summary>
-        /// Regression guard: asserts the four hero panels exist and are laid out
-        /// as an even row (equal flex-grow, no fixed widths). If a future edit
-        /// breaks the contract this logs loudly so it is caught immediately
-        /// rather than shipping a broken screen again.
+        /// Regression guard: asserts the hero stage (image + backstory + stats
+        /// beside it) is present AND exactly the locked-carousel cards exist and are
+        /// provably non-interactive (PickingMode.Ignore). Logs loudly if a future
+        /// edit breaks the contract so it is caught immediately.
         /// </summary>
-        private void VerifyFourPanelsEven()
+        private void VerifyStage()
         {
-            int expected = HeroCatalog.Heroes.Length;
-            int actual = _cardRow != null ? _cardRow.childCount : 0;
-            if (actual != expected)
+            if (_heroStage == null || _stageLeft == null || _stageRight == null)
             {
-                // Wrong card count = a broken/empty roster — roll up as a hard failure.
                 FlowTrace.Fail("Onboarding",
-                    $"VerifyFourPanelsEven: PANEL ASSERT FAILED — expected {expected} hero panels, found {actual}. " +
-                    "The hero row is not evenly built.");
+                    "VerifyStage: HERO STAGE ASSERT FAILED — stage / left / right column missing.");
                 return;
             }
-            for (int i = 0; i < _cards.Length; i++)
+
+            // The locked carousel = HeroCatalog minus the single playable hero.
+            int expectedLocked = HeroCatalog.Heroes.Length - 1;
+            int actualLocked = _lockedRow != null ? _lockedRow.childCount : 0;
+            if (actualLocked != expectedLocked)
             {
-                if (_cards[i] == null)
+                FlowTrace.Fail("Onboarding",
+                    $"VerifyStage: LOCKED CAROUSEL ASSERT FAILED — expected {expectedLocked} locked cards, found {actualLocked}.");
+                return;
+            }
+
+            // Every locked card MUST be non-interactive (PickingMode.Ignore) — a
+            // tap can never select a locked hero.
+            for (int i = 0; i < _lockedRow.childCount; i++)
+            {
+                var card = _lockedRow[i];
+                if (card.pickingMode != PickingMode.Ignore)
                 {
-                    FlowTrace.Fail("Onboarding", $"VerifyFourPanelsEven: PANEL ASSERT FAILED — hero panel {i} is null.");
-                    return;
-                }
-                // Even distribution contract: every panel must flex-grow equally
-                // and must NOT carry a fixed pixel width (which would break the
-                // responsive re-flow in the other orientation). A no-flex panel still
-                // renders (visible, just uneven) — Warn rather than Fail.
-                if (_cards[i].resolvedStyle.flexGrow <= 0f)
-                {
-                    FlowTrace.Warn("Onboarding",
-                        $"VerifyFourPanelsEven: hero panel {i} has no flex-grow; the row will not distribute evenly.");
+                    FlowTrace.Fail("Onboarding",
+                        $"VerifyStage: locked card {i} is INTERACTIVE (pickingMode != Ignore) — it must be non-selectable.");
                     return;
                 }
             }
         }
 
         // =====================================================================
-        //  Selection
+        //  Selection (single hero — pre-selected, no in-screen choice)
         // =====================================================================
 
-        /// <summary>A hero panel was tapped — mark it active and refresh the detail card.</summary>
-        private void OnCardClicked(HeroClass hero)
-        {
-            _selectedHero = hero;
-            _hasSelection = true;
-            // SOURCE FIX: persist the pick THE INSTANT it is selected so GameState.HeroClass
-            // is written + saved + KnightOnly-enforced even when a bypass route (e.g.
-            // FeatureFlags.BypassPetSelect → SceneRouter.GoCastle) skips the confirm/PersistHero
-            // path. The confirm path (OnDiveVillageClicked → PersistHero) still calls ChooseHero;
-            // ChooseHero is idempotent so the double-call is harmless.
-            GameStateService.Instance?.ChooseHero(_selectedHero);
-            RefreshSelectionVisuals();
-            RefreshConfirmEnabled();
-        }
-
-        /// <summary>
-        /// Pre-selects the hero the save already records, if any — covers a player
-        /// who chose a hero on a prior session but had not yet picked a pet.
-        /// </summary>
-        private void PreselectFromSave()
-        {
-            var svc = GameStateService.Instance;
-            HeroClass? saved = svc != null && svc.State != null
-                ? svc.State.HeroClass.ToNullable()
-                : null;
-            if (saved.HasValue)
-            {
-                _selectedHero = saved.Value;
-                _hasSelection = true;
-            }
-        }
-
-        /// <summary>Marks the active panel, clears the rest, and refreshes the detail card.</summary>
-        private void RefreshSelectionVisuals()
-        {
-            for (int i = 0; i < _cards.Length; i++)
-            {
-                if (_cards[i] == null) continue;
-                bool active = _hasSelection && HeroCatalog.Heroes[i].Hero == _selectedHero;
-                SetBorderColor(_cards[i], active ? ColAmber : ColVioletBorder);
-                _cards[i].style.backgroundColor = active ? ColCardActive : ColCardIdle;
-
-                // Brighten the framed-image rim to gilt on the selected card so the
-                // chosen hero stands out (WO-374 selection state).
-                if (_cardFrames[i] != null)
-                {
-                    Color rim = active
-                        ? ElarionUi.Gilt
-                        : new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f);
-                    SetBorderColor(_cardFrames[i], rim);
-                    SetBorderWidth(_cardFrames[i], active ? 3f : 2f);
-                }
-            }
-            RefreshDetailCard();
-        }
-
-        /// <summary>Fills the below-panels detail card with the selected hero's copy.</summary>
-        private void RefreshDetailCard()
-        {
-            if (_detailCard == null) return;
-
-            if (!_hasSelection)
-            {
-                if (_detailName  != null) _detailName.text  = "Tap a hero to see their story";
-                if (_detailRole  != null) _detailRole.text  = string.Empty;
-                if (_detailBlurb != null) _detailBlurb.text = string.Empty;
-                if (_detailHp     != null) _detailHp.text     = string.Empty;
-                if (_detailAttack != null) _detailAttack.text = string.Empty;
-                if (_detailSpeed  != null) _detailSpeed.text  = string.Empty;
-                if (_detailAbilityName != null) _detailAbilityName.text = string.Empty;
-                if (_detailAbilityDesc != null) _detailAbilityDesc.text = string.Empty;
-                return;
-            }
-
-            HeroCardInfo info = FindInfo(_selectedHero);
-            if (info == null) return;
-            if (_detailName  != null) _detailName.text  = CanonStrings.Locale(info.NameKey);
-            if (_detailRole  != null) _detailRole.text  = CanonStrings.Locale(info.RoleKey);
-            if (_detailBlurb != null) _detailBlurb.text = CanonStrings.Locale(info.BlurbKey);
-
-            // Stats (1-5 pips) + signature ability — straight from HeroCardInfo (WO-329).
-            if (_detailHp     != null) _detailHp.text     = PipString(info.Hp);
-            if (_detailAttack != null) _detailAttack.text = PipString(info.Attack);
-            if (_detailSpeed  != null) _detailSpeed.text  = PipString(info.Speed);
-            if (_detailAbilityName != null) _detailAbilityName.text = info.AbilityName;
-            if (_detailAbilityDesc != null) _detailAbilityDesc.text = info.AbilityDesc;
-        }
-
-        /// <summary>Enables the confirm CTA only once a hero is chosen.</summary>
+        /// <summary>Enables the confirm CTA when a hero is selected (always, for the single hero).</summary>
         private void RefreshConfirmEnabled()
         {
             if (_diveButton != null) _diveButton.SetEnabled(_hasSelection);
@@ -826,20 +788,38 @@ namespace DeNelle.Onboarding
         // routed into Defend the Tower — was REMOVED with its button.
 
         /// <summary>
-        /// "Dive into Village" — the canonical first-run path. Persists the chosen
-        /// hero, then routes to the PET-SELECT screen so the player bonds a starter
-        /// Warden before entering the village.
+        /// "Enter Elarion" — the confirm CTA. Persists the chosen hero (Grom), then
+        /// routes DIRECTLY to the home hub (MainCastle_Hall) via GoCastle().
+        ///
+        /// WO-503 (D1, hard-wire): the live path is now UNCONDITIONAL HeroSelect ->
+        /// Castle — the pet-select step is gone for single-hero V1. The
+        /// FeatureFlags.BypassPetSelect branch is kept ONLY as a reversibility hatch
+        /// (flag OFF restores the old pet step); the DEFAULT/normal path never loads
+        /// PetSelect. The flag + the pet-step route are retired in the WO-504 purge.
         /// </summary>
         private void OnDiveVillageClicked()
         {
             if (!_hasSelection) return;
             PersistHero();
 
-            // WO-473 / single-hero V1: skip the PetSelect screen — straight to the castle.
-            // Hero pick is persisted above; PetSelect persists nothing (Echo Hollow owns pet bonding).
+            // DELETION-PENDING (WO-503, after felt-verify): the WO-504 pet-select
+            // purge removes the entire boot pet step. Once the owner felt-verifies
+            // Title -> HeroSelect(Grom) -> Castle, delete the following assets:
+            //   - Assets/_Modules/Onboarding/PetSelectController.cs (+ .meta)
+            //   - Assets/Scenes/PetSelect.unity (+ .meta) and de-register it from Build Settings
+            //   - Assets/_Modules/Onboarding/UI/PetSelectScreen.uxml (+ .meta)
+            //   - SceneRouter.PetSelect const + SceneRouter.GoPetSelect()
+            //   - IntroFlowSceneBuilder.cs PetSelect generation + Build-Settings insert
+            //   - FeatureFlags.BypassPetSelect (the reversibility hatch below) once nothing references it
+            // BOUNDARY: this is the pet-SELECT boot screen ONLY. Do NOT touch the
+            // Echo WORKFORCE / harvest system or Assets/_Modules/Pets/** or the
+            // GameState.StarterPetId field — those are the live pet/echo gameplay.
+
+            // Reversibility hatch (D1): flag OFF -> old pet step. DEFAULT path is
+            // GoCastle (flag default ON) — single-hero V1 never shows PetSelect.
             if (FeatureFlags.BypassPetSelect)
             {
-                FlowTrace.Step("Onboarding", "OnDiveVillageClicked: BypassPetSelect ON — GoCastle (PetSelect skipped).");
+                FlowTrace.Step("Onboarding", "OnDiveVillageClicked: single-hero V1 — GoCastle (PetSelect skipped).");
                 SceneRouter.GoCastle();
                 return;
             }
