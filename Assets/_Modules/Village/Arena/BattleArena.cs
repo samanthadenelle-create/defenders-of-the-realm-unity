@@ -64,6 +64,15 @@ namespace DeNelle.Village.Arena
 
         private const float BattleTimeoutSeconds = 240f; // generous; a stuck fight ends, never soft-locks
 
+        // WO-505 "battle closing": the wall-clock time the fight went live (set in
+        // BeginEncounter). Resolve subtracts it to get the duration the star rating reads.
+        private float _battleStartTime;
+
+        // WO-505: how long the victory/defeat cue is allowed to breathe before the explore
+        // BGM crossfades back in. Matched to the result banner's ~2.5s hold so the climax
+        // music plays under the banner, then the open-world ambient returns. Owner-tunable.
+        private const float RewardCueSeconds = 2.5f;
+
         // ---------------------------------------------------------------------
         //  WO-504 #2: arena BLOOM tunables (BONES - owner felt-tunes the numbers).
         // ---------------------------------------------------------------------
@@ -172,6 +181,7 @@ namespace DeNelle.Village.Arena
             _current = p;
             _resolved = false;
             _climaxBody = null;
+            _battleStartTime = Time.time;   // WO-505: start the star-rating clock.
             BattleInProgress = true;
             FlowTrace.Step("BattleArena", $"BeginEncounter: family=[{string.Join(",", p.EnemyIds)}] threat={p.Threat} theme='{p.BackdropContext}' return='{p.ReturnScene}'.");
             StartCoroutine(StageRoutine(p));
@@ -841,15 +851,29 @@ namespace DeNelle.Village.Arena
         {
             if (_resolved) return;
             _resolved = true;
-            FlowTrace.Step("BattleArena", $"Resolve: {(won ? "WIN" : "LOSS")}.");
+
+            // WO-505 "battle closing": how long the fight took -> a 1..3 star rating. The
+            // duration is read at the resolving moment so it reflects the actual fight.
+            float durationSeconds = Mathf.Max(0f, Time.time - _battleStartTime);
+            int stars = won ? BattleStarRating.StarsForDuration(durationSeconds) : 0;
+            float rewardMult = won ? BattleStarRating.MultiplierForStars(stars) : 1f;
+            FlowTrace.Step("BattleArena", $"Resolve: {(won ? "WIN" : "LOSS")} in {durationSeconds:0.0}s -> {stars} star(s), reward x{rewardMult:0.00}.");
+
+            // WO-505: play the climax CUE so the death-cam beat is not silent. Victory fanfare
+            // on a win / defeat sting on a loss (the clips exist: Audio/Resources/victory.mp3,
+            // defeat.mp3, wired by AudioBootstrap). Overworld BGM is restored after the banner
+            // beat (RestoreAmbientAfter) so we never cut the climax to silence.
+            Guard.Try("BattleArena", "battle result music cue",
+                () => CoreServices.Audio?.PlayMusic(won ? MusicTrack.Victory : MusicTrack.Defeat));
 
             // Banner (presentation; self-destructs after a beat). Live overlay hides inside ShowResult.
-            Guard.Try("BattleArena", "battle result banner", () => _hud?.ShowResult(won));
+            Guard.Try("BattleArena", "battle result banner", () => _hud?.ShowResult(won, stars));
             _hud = null;
 
-            // REWARD (logic, v1 minimal): XP on a win. Fuller loot (gear/resources) is the
-            // EnemyOutpost loot-table reuse follow-up; kept light here so the loop is closed.
-            if (won) Guard.Try("BattleArena", "grant win XP", () => GrantWinReward(_current));
+            // REWARD (logic, v1 minimal): XP on a win, scaled by the star multiplier. Fuller
+            // loot (gear/resources) is the EnemyOutpost loot-table reuse follow-up; kept light
+            // here so the loop is closed.
+            if (won) Guard.Try("BattleArena", "grant win XP", () => GrantWinReward(_current, rewardMult));
 
             // Restore any cavern mood RenderSettings BEFORE the open world is back in view.
             RestoreCavernMood();
@@ -868,8 +892,12 @@ namespace DeNelle.Village.Arena
             if (_current != null)
                 WarpHero(_current.ReturnPosition, Quaternion.Euler(0f, _current.ReturnYaw, 0f));
 
-            // Restore explore BGM + leave the HUD up for the open world.
-            CoreServices.Audio?.PlayMusic(MusicTrack.Overworld);
+            // WO-505: restore explore BGM AFTER the victory/defeat cue has had its beat, so
+            // the climax is not cut to silence (the banner shows for ~2.5s; we let the sting
+            // breathe, then crossfade back to Overworld). Coroutine on this persistent
+            // singleton; guarded so a teardown race never throws.
+            Guard.Try("BattleArena", "schedule ambient restore",
+                () => StartCoroutine(RestoreAmbientAfter(RewardCueSeconds)));
 
             var done = _current;
             _current = null;
@@ -877,6 +905,14 @@ namespace DeNelle.Village.Arena
 
             OnBattleEnded?.Invoke(done, won);
             FlowTrace.Step("BattleArena", "Resolve: stage torn down, hero returned, battle ended.");
+        }
+
+        // WO-505: wait out the victory/defeat cue, then crossfade back to the open-world
+        // ambient. Unscaled wait so a slow-mo death-cam time scale doesn't stretch it.
+        private System.Collections.IEnumerator RestoreAmbientAfter(float seconds)
+        {
+            yield return new WaitForSecondsRealtime(Mathf.Max(0f, seconds));
+            CoreServices.Audio?.PlayMusic(MusicTrack.Overworld);
         }
 
         // Win reward (C2 — close the FELT reward loop): a staged-family/threat-scaled
@@ -888,14 +924,19 @@ namespace DeNelle.Village.Arena
         //   4) gear (chance)  -> GearLoadout.Equip*ById (a low-tier weapon/armor drop)
         // V1-simple + deterministic-ish (formulas, not data files). Cross-module lookups
         // are Unity-fake-null-guarded (explicit != null, not ?.) per the lint.
-        private static void GrantWinReward(EncounterParams p)
+        private static void GrantWinReward(EncounterParams p, float rewardMult = 1f)
         {
             if (p == null) return;
             int family = Mathf.Max(0, p.EnemyIds != null ? p.EnemyIds.Length : 0);
             int threat = Mathf.Max(0, p.Threat);
 
+            // WO-505: the star rating scales the FELT payout (1x / 1.25x / 1.5x). Applied to
+            // every quantified grant below (XP, wisdom, resources) so a faster, cleaner win
+            // pays more. Guarded to a sane floor so a bad value never zeroes the reward.
+            float mult = Mathf.Max(1f, rewardMult);
+
             // 1) XP — unchanged path (HeroProgression via reflection).
-            int xp = 20 + 8 * family + 4 * threat;
+            int xp = Mathf.RoundToInt((20 + 8 * family + 4 * threat) * mult);
             var prog = GameObject.FindObjectOfType(Type.GetType("DeNelle.Village.HeroProgression, DeNelle.Village")) as MonoBehaviour;
             if (prog != null)
             {
@@ -906,7 +947,7 @@ namespace DeNelle.Village.Arena
 
             // 2) SKILL POINTS (Wisdom) — 1 base + 1 per 2 family members + 1 per 2 threat
             // tiers, so a bigger/deadlier family pays a felt skill-point bump.
-            int wisdom = 1 + family / 2 + threat / 2;
+            int wisdom = Mathf.RoundToInt((1 + family / 2 + threat / 2) * mult);
             var wallet = DeNelle.Village.Talents.WisdomCurrencyService.Instance;
             if (wallet != null)
             {
@@ -920,8 +961,8 @@ namespace DeNelle.Village.Arena
 
             // 3) RESOURCES — a small wood/iron bundle via the existing EconomyService
             // (same grant surface EnemyOutpost uses; no new resource path).
-            int wood = 10 + 4 * threat;
-            int iron = 4 + 2 * threat;
+            int wood = Mathf.RoundToInt((10 + 4 * threat) * mult);
+            int iron = Mathf.RoundToInt((4 + 2 * threat) * mult);
             var econ = EconomyService.Instance;
             if (econ != null)
             {

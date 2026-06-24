@@ -22,6 +22,7 @@ using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.ResourceManagement.ResourceLocations;
 using DeNelle.Village;
+using DeNelle.Village.Arena;
 using DeNelle.Village.Items;
 using DeNelle.Core.State;
 using DeNelle.Core.Catalog;
@@ -136,6 +137,22 @@ namespace DeNelle.Editor
             // off-hand clears a 2H main; a 1H + shield coexist; the swap never leaves the hero
             // unarmed when a 1H exists. Exercises the actual enforcement, not a re-derivation.
             CheckHandSlotRules(failures, log);
+
+            // --- BATTLE CLOSING (WO-505) — victory/defeat audio + star rating ------
+            // Two provable bones from the silent-climax gap: (a) the victory + defeat
+            // music clips resolve to a NON-NULL AudioClip through the SAME Resources path
+            // AudioBootstrap uses (Resources.Load<AudioClip>("victory"/"defeat")) — this
+            // catches the silent-track bug class (e.g. Resources.Load("dungeon") == null);
+            // (b) BattleStarRating computes the right tier + multiplier for sample durations.
+            CheckBattleClosing(failures, log);
+
+            // --- WEAPON SWING-TRAIL VFX (WO-504 slice 3) ---------------------------
+            // The Knight swings one shared mesh, so the rarity must read through the
+            // swing-trail color/width. Assert the pure WeaponVfxMap resolver returns a
+            // DISTINCT color per band, the gold const at legendary, the steel default
+            // for null, and a MONOTONICALLY escalating width. Bones — owner felt-tunes
+            // the exact colors later; this gates the MAPPING, not the aesthetic.
+            CheckWeaponVfx(failures, log);
 
             // --- verdict -----------------------------------------------------------
             log.AppendLine("=== verdict ===");
@@ -644,6 +661,178 @@ namespace DeNelle.Editor
                 Debug.LogWarning($"[DataRegression] Addressable key probe threw for '{key}': {ex.Message}");
                 return false;
             }
+        }
+
+        // =====================================================================
+        //  BATTLE CLOSING — WO-505: victory/defeat clip resolve + star-rating math
+        // -----------------------------------------------------------------------
+        //  (a) AUDIO: the win/loss climax must not be silent. The clips ship at
+        //      Assets/Audio/Resources/{victory,defeat}.mp3 and AudioBootstrap loads
+        //      them by short name via Resources.Load<AudioClip>("victory"/"defeat").
+        //      We do the EXACT same load and FAIL if either returns null — that is the
+        //      silent-track bug class (the known Resources.Load("dungeon") == null).
+        //  (b) STARS: BattleStarRating.StarsForDuration must map sample durations to the
+        //      right tier (60s->3, 100s->2, 200s->1) and MultiplierForStars must match
+        //      (3->1.50x, 2->1.25x, 1->1.00x). Pure math; deterministic.
+        //  Emits FlowTrace.Fail per violation so it lands in the break-log marker, in
+        //  addition to the REGRESSION_FAIL line.
+        // =====================================================================
+        private static void CheckBattleClosing(List<string> failures, StringBuilder log)
+        {
+            log.AppendLine("[battle-closing] victory/defeat clip resolve + star-rating tiers:");
+
+            // (a) AUDIO — resolve through the same Resources path AudioBootstrap uses.
+            string[] cueNames = { "victory", "defeat" };
+            foreach (var name in cueNames)
+            {
+                var clip = Resources.Load<AudioClip>(name);
+                if (clip == null)
+                {
+                    string msg = $"battle-closing: Resources.Load<AudioClip>(\"{name}\") is NULL — " +
+                                 "the win/loss climax would play SILENT (clip missing from " +
+                                 "Assets/Audio/Resources/ or not imported as an AudioClip)";
+                    failures.Add(msg);
+                    DeNelle.Core.Diagnostics.FlowTrace.Fail("Regression", msg);
+                    log.AppendLine($"  AUDIO '{name}' -> NULL (SILENT CLIMAX)");
+                }
+                else
+                {
+                    log.AppendLine($"  AUDIO '{name}' -> clip OK ('{clip.name}', {clip.length:0.0}s)");
+                }
+            }
+
+            // (b) STARS — sample durations -> expected tier, and the matching multiplier.
+            // (duration, expectedStars, expectedMultiplier)
+            var samples = new (float dur, int stars, float mult)[]
+            {
+                (60f,  3, 1.50f),   // fast clean win
+                (90f,  3, 1.50f),   // exactly the 3-star boundary (inclusive)
+                (100f, 2, 1.25f),   // mid
+                (120f, 2, 1.25f),   // exactly the 2-star boundary (inclusive)
+                (200f, 1, 1.00f),   // slow win
+            };
+            foreach (var s in samples)
+            {
+                int gotStars = BattleStarRating.StarsForDuration(s.dur);
+                float gotMult = BattleStarRating.MultiplierForStars(gotStars);
+                bool starOk = gotStars == s.stars;
+                bool multOk = Mathf.Approximately(gotMult, s.mult);
+                if (!starOk)
+                {
+                    string msg = $"battle-closing: StarsForDuration({s.dur:0}s) = {gotStars}, expected {s.stars}";
+                    failures.Add(msg);
+                    DeNelle.Core.Diagnostics.FlowTrace.Fail("Regression", msg);
+                }
+                if (!multOk)
+                {
+                    string msg = $"battle-closing: MultiplierForStars({gotStars}) = {gotMult:0.00}, expected {s.mult:0.00}";
+                    failures.Add(msg);
+                    DeNelle.Core.Diagnostics.FlowTrace.Fail("Regression", msg);
+                }
+                log.AppendLine($"  STARS dur={s.dur:0}s -> {gotStars} star(s) x{gotMult:0.00} " +
+                               $"(expected {s.stars} x{s.mult:0.00}) {((starOk && multOk) ? "OK" : "FAIL")}");
+            }
+        }
+
+        // =====================================================================
+        //  WEAPON SWING-TRAIL VFX - WO-504 slice 3 (WeaponVfxMap pure resolver)
+        // -----------------------------------------------------------------------
+        //  Gates the rarity -> trail color/width MAPPING (not the aesthetic - the
+        //  exact colors are owner-felt-tune bones). Asserts:
+        //   1. each band resolves a DISTINCT color (common != legendary, etc.);
+        //   2. legendary (and elarion) == the GoldColor const, common/null == SteelColor;
+        //   3. a null weapon -> the steel common default (null-safe);
+        //   4. trail WIDTH escalates MONOTONICALLY common < uncommon < rare < epic < legendary.
+        //  Emits FlowTrace.Fail per violation so it lands in the break-log marker.
+        // =====================================================================
+        private static void CheckWeaponVfx(List<string> failures, StringBuilder log)
+        {
+            log.AppendLine("[weapon-vfx] rarity -> swing-trail color/width mapping (WO-504 s3):");
+
+            // (1) distinct color per band - build the per-band colors via the resolver.
+            string[] bands = { "common", "uncommon", "rare", "epic", "legendary", "elarion" };
+            var colors = new Dictionary<string, Color>();
+            var widths = new Dictionary<string, float>();
+            foreach (var b in bands)
+            {
+                var w = new WeaponDef { id = "vfx_" + b, name = b, rarity = b };
+                var profile = WeaponVfxMap.Resolve(w);
+                colors[b] = profile.TrailColor;
+                widths[b] = profile.TrailWidth;
+                log.AppendLine($"  VFX {b} -> color=({profile.TrailColor.r:0.00},{profile.TrailColor.g:0.00}," +
+                               $"{profile.TrailColor.b:0.00},{profile.TrailColor.a:0.00}) width={profile.TrailWidth:0.000}");
+            }
+
+            // The five DISTINCT visual tiers (legendary & elarion intentionally SHARE the gold apex).
+            string[] distinct = { "common", "uncommon", "rare", "epic", "legendary" };
+            for (int i = 0; i < distinct.Length; i++)
+                for (int j = i + 1; j < distinct.Length; j++)
+                {
+                    if (ApproxColor(colors[distinct[i]], colors[distinct[j]]))
+                    {
+                        string msg = $"weapon-vfx: bands '{distinct[i]}' and '{distinct[j]}' resolve the SAME trail color " +
+                                     "(each rarity tier must read distinct)";
+                        failures.Add(msg);
+                        DeNelle.Core.Diagnostics.FlowTrace.Fail("Regression", msg);
+                    }
+                }
+
+            // common vs legendary must differ (the headline read).
+            if (ApproxColor(colors["common"], colors["legendary"]))
+            {
+                string msg = "weapon-vfx: common and legendary resolve the same trail color (a legendary blade must read legendary)";
+                failures.Add(msg);
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Regression", msg);
+            }
+
+            // (2) apex/default consts pinned by name.
+            if (!ApproxColor(colors["legendary"], WeaponVfxMap.GoldColor))
+            {
+                string msg = "weapon-vfx: legendary color != WeaponVfxMap.GoldColor (the gold apex const)";
+                failures.Add(msg);
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Regression", msg);
+            }
+            if (!ApproxColor(colors["elarion"], WeaponVfxMap.GoldColor))
+            {
+                string msg = "weapon-vfx: elarion mark color != WeaponVfxMap.GoldColor (top band shares the gold apex)";
+                failures.Add(msg);
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Regression", msg);
+            }
+
+            // (3) null weapon -> steel common default (null-safe).
+            var nullProfile = WeaponVfxMap.Resolve(null);
+            if (!ApproxColor(nullProfile.TrailColor, WeaponVfxMap.SteelColor))
+            {
+                string msg = "weapon-vfx: Resolve(null) color != WeaponVfxMap.SteelColor (null weapon must fall back to the steel default)";
+                failures.Add(msg);
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Regression", msg);
+            }
+            if (!Mathf.Approximately(nullProfile.TrailWidth, WeaponVfxMap.CommonWidth))
+            {
+                string msg = "weapon-vfx: Resolve(null) width != WeaponVfxMap.CommonWidth (null weapon must fall back to the common width)";
+                failures.Add(msg);
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Regression", msg);
+            }
+
+            // (4) width escalates MONOTONICALLY common < uncommon < rare < epic < legendary.
+            for (int i = 1; i < distinct.Length; i++)
+            {
+                float prev = widths[distinct[i - 1]];
+                float cur  = widths[distinct[i]];
+                if (!(cur > prev))
+                {
+                    string msg = $"weapon-vfx: trail width does not escalate '{distinct[i - 1]}'({prev:0.000}) -> " +
+                                 $"'{distinct[i]}'({cur:0.000}) (must be monotonically increasing)";
+                    failures.Add(msg);
+                    DeNelle.Core.Diagnostics.FlowTrace.Fail("Regression", msg);
+                }
+            }
+        }
+
+        private static bool ApproxColor(Color a, Color b)
+        {
+            return Mathf.Approximately(a.r, b.r) && Mathf.Approximately(a.g, b.g)
+                && Mathf.Approximately(a.b, b.b) && Mathf.Approximately(a.a, b.a);
         }
 
         private static string CostStr(DeNelle.Village.ResourceCost c)

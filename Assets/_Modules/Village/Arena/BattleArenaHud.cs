@@ -66,16 +66,40 @@ namespace DeNelle.Village.Arena
             if (_remain != null) _remain.text = remaining > 1 ? (remaining + " foes remain") : "1 foe remains";
         }
 
-        /// <summary>Show the win/loss banner (family-friendly + encouraging), then self-destruct.</summary>
-        public void ShowResult(bool won)
+        /// <summary>
+        /// Show the win/loss banner (family-friendly + encouraging), then self-destruct.
+        /// WO-505: <paramref name="stars"/> (0..3) draws the earned star rating under the
+        /// line on a WIN — filled glyphs for earned stars, dim glyphs for the rest. 0 (a
+        /// loss) shows no stars. Glyph rating only (bones); a sprite pass is the owner's later.
+        /// </summary>
+        public void ShowResult(bool won, int stars = 0)
         {
             if (_liveGroup != null) _liveGroup.SetActive(false);
             string line = won ? "Victory!  The realm is safer because of you!"
                               : "Fall back and regroup, hero.";
             var banner = AddPanel(_canvas.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                                  new Vector2(0f, 60f), new Vector2(760f, 130f), Dark);
-            var label = AddText(banner.transform, line, 30, won ? Win : Gold, TextAnchor.MiddleCenter);
-            Stretch(label.rectTransform);
+                                  new Vector2(0f, 60f), new Vector2(760f, 160f), Dark);
+            var label = AddText(banner.transform, line, 30, won ? Win : Gold, TextAnchor.UpperCenter);
+            var lr = label.rectTransform;
+            lr.anchorMin = new Vector2(0f, 1f); lr.anchorMax = new Vector2(1f, 1f);
+            lr.pivot = new Vector2(0.5f, 1f); lr.anchoredPosition = new Vector2(0f, -18f);
+            lr.sizeDelta = new Vector2(-24f, 48f);
+
+            // WO-505 star rating row (win only). ASCII glyphs (the legacy runtime font is
+            // ASCII-only): '*' = earned star, '-' = unearned, spaced for readability. A sprite
+            // star pass is the owner's later polish; these bones prove the wiring.
+            if (won && stars > 0)
+            {
+                int max = Mathf.Max(stars, 3);
+                var sb = new System.Text.StringBuilder(max * 2);
+                for (int i = 0; i < max; i++) sb.Append(i < stars ? "* " : "- ");
+                var starLabel = AddText(banner.transform, sb.ToString().TrimEnd(), 40, Gold, TextAnchor.LowerCenter);
+                var sr = starLabel.rectTransform;
+                sr.anchorMin = new Vector2(0f, 0f); sr.anchorMax = new Vector2(1f, 0f);
+                sr.pivot = new Vector2(0.5f, 0f); sr.anchoredPosition = new Vector2(0f, 14f);
+                sr.sizeDelta = new Vector2(-24f, 52f);
+            }
+
             StartCoroutine(CloseAfter(2.5f));
         }
 
