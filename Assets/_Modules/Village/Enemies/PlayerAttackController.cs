@@ -210,6 +210,24 @@ namespace DeNelle.Village
             // Only seed when unset in the inspector; if "Structure" doesn't exist GetMask returns
             // 0 and HasLoS's degrade rule (value == 0 → clear) keeps the swing able to hit.
             if (_losMask.value == 0) _losMask = LayerMask.GetMask("Structure");
+
+            // WO-504 slice 3: re-tint the swing trail the instant the equipped weapon changes
+            // (rarity-driven color/width), so a swap is FELT without waiting for the next swing.
+            // Null-safe lazy resolve; unsubscribed in OnDestroy.
+            if (_gear == null) _gear = GetComponent<GearLoadout>();
+            if (_gear != null) _gear.OnGearChanged += OnGearChangedReTrail;
+        }
+
+        private void OnDestroy()
+        {
+            if (_gear != null) _gear.OnGearChanged -= OnGearChangedReTrail;
+        }
+
+        /// <summary>WO-504 slice 3: weapon swapped -> re-resolve the swing-trail VFX. No-op until
+        /// the trail is built (the next EnsureSwingTrail applies the current weapon's look anyway).</summary>
+        private void OnGearChangedReTrail()
+        {
+            if (_swingTrail != null) ApplyWeaponTrailVfx();
         }
 
         private void Update()
@@ -574,19 +592,45 @@ namespace DeNelle.Village
             _swingTrail.emitting = false;
             _swingTrail.alignment = LineAlignment.View;
 
-            // Colour gradient: bright at the swing edge → transparent tail.
-            var grad = new Gradient();
-            grad.SetKeys(
-                new[] { new GradientColorKey(_trailColor, 0f), new GradientColorKey(_trailColor, 1f) },
-                new[] { new GradientAlphaKey(_trailColor.a, 0f), new GradientAlphaKey(0f, 1f) });
-            _swingTrail.colorGradient = grad;
-
             // URP-safe unlit material so the trail isn't magenta in a URP build
             // (same missing-shader guard the ability VFX uses). Only swap when a
             // known shader resolves in THIS build.
             Shader sh = Shader.Find("Universal Render Pipeline/Particles/Unlit")
                      ?? Shader.Find("Sprites/Default");
             if (sh != null) _swingTrail.material = new Material(sh);
+
+            // WO-504 slice 3: color + width are driven by the EQUIPPED WEAPON's rarity
+            // (and a makersMark theme tint) so a legendary blade reads legendary even on
+            // the shared mesh. Applied here on build and re-applied on every OnGearChanged.
+            ApplyWeaponTrailVfx();
+        }
+
+        /// <summary>
+        /// WO-504 slice 3: drive the swing trail's color + width from the equipped weapon's
+        /// rarity via the pure <see cref="WeaponVfxMap"/> resolver (null-safe — no loadout /
+        /// no weapon -> the steel common default, identical to the legacy hard-coded look).
+        /// Re-applied on OnGearChanged so swapping a blade re-tints the arc immediately.
+        /// </summary>
+        private void ApplyWeaponTrailVfx()
+        {
+            if (_swingTrail == null) return;
+
+            if (_gear == null) _gear = GetComponent<GearLoadout>();
+            WeaponDef w = _gear != null ? _gear.EquippedWeapon : null;
+            WeaponVfxProfile vfx = WeaponVfxMap.Resolve(w);
+
+            _trailColor = vfx.TrailColor;
+            _trailStartWidth = vfx.TrailWidth;
+
+            _swingTrail.startWidth = _trailStartWidth;
+            _swingTrail.endWidth = 0f;
+
+            // Colour gradient: bright at the swing edge -> transparent tail.
+            var grad = new Gradient();
+            grad.SetKeys(
+                new[] { new GradientColorKey(_trailColor, 0f), new GradientColorKey(_trailColor, 1f) },
+                new[] { new GradientAlphaKey(_trailColor.a, 0f), new GradientAlphaKey(0f, 1f) });
+            _swingTrail.colorGradient = grad;
         }
 
         private void TriggerPerfectHitFeedback(Vector3 hitPos)
