@@ -41,6 +41,10 @@ namespace DeNelle.Core.Combat
         /// <summary>Hold (or release) a block.</summary>
         void SetBlocking(bool on);
 
+        /// <summary>Wounded stance (low HP) — swaps locomotion to an injured idle/walk/run
+        /// sub-tree. No-op on controllers that declare no <c>Injured</c> param.</summary>
+        void SetInjured(bool injured);
+
         /// <summary>Flinch from a hit coming from <paramref name="dir"/>.</summary>
         void PlayHit(HitDirection dir);
 

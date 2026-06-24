@@ -69,10 +69,33 @@ namespace DeNelle.Village
                 case EnemyRig.Boss:           return "Boss";
                 case EnemyRig.Dragon:         return "Dragon";
                 case EnemyRig.OrcWarband:     return "OrcWarband";    // DEF-221 Humanoid orc controller
-                case EnemyRig.OrcHumanoid:    return "OrcHumanoid";   // WO-482 new Tripo orc family (Orc_Warrior/Tank/Mage)
+                case EnemyRig.OrcHumanoid:    return "OrcHumanoid";   // WO-482/491 new Tripo orc family base (Orc_Warrior/Tank/Mage)
                 case EnemyRig.LargeHumanoid:  return "LargeHumanoid"; // WO-445 Humanoid brute controller (Troll/Demon/OgreMage)
                 default:                      return "HumanoidEnemy";
             }
+        }
+
+        /// <summary>
+        /// WO-491: resolves the per-MODEL controller name for the shared OrcHumanoid rig.
+        /// The Tripo orc family (Warrior / Tank / Mage) all pull the SAME rig, so each role
+        /// loads a per-role AnimatorOverrideController (OrcHumanoid_Mage/_Warrior/_Tank) that
+        /// swaps only its action clips over the shared base (cast / swing / heavy + idle).
+        /// An AnimatorOverrideController IS a RuntimeAnimatorController, so Resources.Load
+        /// resolves it the same way. Falls back to the base name for any non-role orc.
+        /// </summary>
+        private static string ControllerForModel(EnemyRig rig, string modelName)
+        {
+            if (rig == EnemyRig.OrcHumanoid)
+            {
+                switch (modelName)
+                {
+                    case "Orc_Mage":    return "OrcHumanoid_Mage";
+                    case "Orc_Warrior": return "OrcHumanoid_Warrior";
+                    case "Orc_Tank":    return "OrcHumanoid_Tank";
+                    default:            return "OrcHumanoid";   // base fallback (other orc-family ids)
+                }
+            }
+            return Controller(rig);
         }
 
         /// <summary>Stamps the shared controller for <paramref name="modelName"/> onto
@@ -96,8 +119,21 @@ namespace DeNelle.Village
             if (anim != null) anim.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
 
             EnemyRig rig = RigFor(modelName);
-            string ctrlName = Controller(rig);
+            // WO-491: per-role override controller for the shared Tripo orc rig (Mage/Warrior/Tank);
+            // base name for every other enemy.
+            string ctrlName = ControllerForModel(rig, modelName);
             var ctrl = Resources.Load<RuntimeAnimatorController>("Enemies/" + ctrlName);
+            // WO-491: if the per-role override asset is missing (e.g. controllers not yet
+            // rebuilt), fall back to the shared base so the orc still walks/attacks.
+            if (ctrl == null && rig == EnemyRig.OrcHumanoid && ctrlName != "OrcHumanoid")
+            {
+                ctrl = Resources.Load<RuntimeAnimatorController>("Enemies/OrcHumanoid");
+                if (ctrl != null)
+                    FlowTrace.Warn("Enemy",
+                        $"animator: model '{modelName}' role override 'Enemies/{ctrlName}' MISSING " +
+                        "- using shared base 'Enemies/OrcHumanoid' (run BuildOrcHumanoidController)");
+                ctrlName = "OrcHumanoid";
+            }
             if (ctrl != null)
             {
                 anim.runtimeAnimatorController = ctrl;

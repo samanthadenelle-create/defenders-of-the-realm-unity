@@ -94,6 +94,14 @@ namespace DeNelle.Village.Arena
         private FamilyLeader _familyLeader;   // WO-146 MonsterFamily — the orc pack's leader
         private bool _familyEngaged;          // disbanded-on-arrival latch (formation -> real 1vN)
 
+        // Cavern mood: saved RenderSettings to restore on Resolve so the open world is untouched.
+        private bool _moodSaved;
+        private bool _savedFog;
+        private Color _savedFogColor;
+        private float _savedFogDensity;
+        private Color _savedAmbientLight;
+        private float _savedAmbientIntensity;
+
         private void Awake()
         {
             if (_instance != null && _instance != this) { Destroy(this); return; }
@@ -207,7 +215,141 @@ namespace DeNelle.Village.Arena
             BuildWall(new Vector3( ArenaHalfWidth + 0.5f, 2f, 0f),  new Vector3(1f, 6f, ArenaHalfDepth * 2f + 2f));
             BuildWall(new Vector3(-ArenaHalfWidth - 0.5f, 2f, 0f),  new Vector3(1f, 6f, ArenaHalfDepth * 2f + 2f));
 
+            // Natural see-through edge OUTSIDE the walls (silhouette only, colliders stripped).
+            DressArenaEdge(theme);
+
+            // Cavern ONLY: dim the persisted sky/ambient/fog to a stone-cave mood (restored on Resolve).
+            // Default (outerworld/castle) leaves the persisted dawn sky untouched -- it already matches.
+            if ((theme ?? "outerworld").ToLowerInvariant() == "cavern")
+                ApplyCavernMood();
+
             FlowTrace.Step("BattleArena", $"BuildArena: open kite floor {ArenaHalfWidth * 2f}x{ArenaHalfDepth * 2f} at {ArenaCentre} (theme '{theme}', no structures).");
+        }
+
+        // ---------------------------------------------------------------------
+        //  Natural arena edge: a jittered ring of low-poly props OUTSIDE the walls.
+        // ---------------------------------------------------------------------
+        // Silhouette-only treeline / boulders that ring the kite space so the arena reads as
+        // a clearing, not a plane in a void. Parented to _arenaRoot (auto torn down with the
+        // stage), colliders STRIPPED (never catch the kiting hero), deterministic seed.
+        private void DressArenaEdge(string theme)
+        {
+            string key = (theme ?? "outerworld").ToLowerInvariant();
+
+            // Per-theme prop set (Resources/Arena/<fbx name>); empty/sparse for stone themes.
+            string[] props;
+            int count;
+            switch (key)
+            {
+                case "cavern":
+                    props = new[] { "Rock_1_A_Color1", "Rock_2_C_Color1", "Rock_3_E_Color1", "Rock_1_J_Color1" };
+                    count = 16;
+                    break;
+                case "castle":
+                    props = new[] { "Rock_1_A_Color1", "Rock_2_C_Color1" };
+                    count = 8;   // sparse/bare around a keep
+                    break;
+                default: // outerworld -- a soft treeline + scattered boulders
+                    props = new[] { "Tree_2_A_Color1", "Tree_5_C_Color1", "Tree_7_A_Color1",
+                                    "Tree_Bare_1_A_Color1", "Rock_1_A_Color1", "Rock_3_E_Color1" };
+                    count = 18;
+                    break;
+            }
+            if (props == null || props.Length == 0) return;
+
+            count = Mathf.Clamp(count, 0, 20); // mobile-light cap
+
+            // Deterministic seed off the theme so a given region always rings the same (autopilot-chaos memory).
+            var rng = new System.Random(key.GetHashCode());
+
+            var edge = new GameObject("[ArenaEdge]");
+            edge.transform.SetParent(_arenaRoot.transform, false);
+
+            float ringHalfX = ArenaHalfWidth + 4.5f;  // OUTSIDE the invisible walls (ArenaHalf+3..6)
+            float ringHalfZ = ArenaHalfDepth + 4.5f;
+
+            for (int i = 0; i < count; i++)
+            {
+                // Even angular spacing + jitter -> a natural, non-gridded ring.
+                float baseAng = (i / (float)count) * Mathf.PI * 2f;
+                float ang = baseAng + (float)(rng.NextDouble() - 0.5) * 0.35f;
+                float radJitter = (float)rng.NextDouble() * 1.5f; // 0..1.5m outward jitter
+                float x = Mathf.Cos(ang) * (ringHalfX + radJitter);
+                float z = Mathf.Sin(ang) * (ringHalfZ + radJitter);
+
+                string name = props[rng.Next(props.Length)];
+                GameObject prefab = null;
+                Guard.Try("BattleArena", "load edge prop '" + name + "'", () =>
+                {
+                    prefab = Resources.Load<GameObject>("Arena/" + name);
+                });
+                if (prefab == null)
+                {
+                    Debug.LogWarning("[BattleArena] edge prop 'Arena/" + name + "' not found - skipped.");
+                    continue;
+                }
+
+                Guard.Try("BattleArena", "place edge prop '" + name + "'", () =>
+                {
+                    var go = UnityEngine.Object.Instantiate(prefab, edge.transform);
+                    go.name = "Edge_" + name + "_" + i;
+                    go.transform.localPosition = new Vector3(x, 0f, z);
+                    go.transform.localRotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+                    float s = 0.9f + (float)rng.NextDouble() * 0.6f; // 0.9..1.5 scale variety
+                    go.transform.localScale = new Vector3(s, s, s);
+                    StripColliders(go);
+                });
+            }
+
+            FlowTrace.Step("BattleArena", "DressArenaEdge: ringed '" + key + "' with up to " + count + " silhouette props.");
+        }
+
+        // Strip every collider so an edge prop is a pure silhouette (never blocks the kite/navmesh).
+        private static void StripColliders(GameObject go)
+        {
+            var cols = go.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < cols.Length; i++)
+                if (cols[i] != null) UnityEngine.Object.Destroy(cols[i]);
+        }
+
+        // Save the persisted RenderSettings then dim them to a stone-cave mood (cavern only).
+        // Null-safe + one-shot (a second call without restore is ignored so we never clobber the save).
+        private void ApplyCavernMood()
+        {
+            if (_moodSaved) return;
+            Guard.Try("BattleArena", "save+apply cavern mood", () =>
+            {
+                _savedFog = RenderSettings.fog;
+                _savedFogColor = RenderSettings.fogColor;
+                _savedFogDensity = RenderSettings.fogDensity;
+                _savedAmbientLight = RenderSettings.ambientLight;
+                _savedAmbientIntensity = RenderSettings.ambientIntensity;
+                _moodSaved = true;
+
+                RenderSettings.fog = true;
+                RenderSettings.fogColor = new Color(0.10f, 0.10f, 0.13f);
+                RenderSettings.fogMode = FogMode.Exponential;
+                RenderSettings.fogDensity = 0.02f;
+                RenderSettings.ambientLight = new Color(0.18f, 0.17f, 0.22f);
+                RenderSettings.ambientIntensity = 0.55f;
+                FlowTrace.Step("BattleArena", "ApplyCavernMood: dim stone-cave fog/ambient set (saved for restore).");
+            });
+        }
+
+        // Restore the saved RenderSettings on Resolve so the open world is untouched on return.
+        private void RestoreCavernMood()
+        {
+            if (!_moodSaved) return;
+            Guard.Try("BattleArena", "restore cavern mood", () =>
+            {
+                RenderSettings.fog = _savedFog;
+                RenderSettings.fogColor = _savedFogColor;
+                RenderSettings.fogDensity = _savedFogDensity;
+                RenderSettings.ambientLight = _savedAmbientLight;
+                RenderSettings.ambientIntensity = _savedAmbientIntensity;
+                FlowTrace.Step("BattleArena", "RestoreCavernMood: open-world RenderSettings restored.");
+            });
+            _moodSaved = false;
         }
 
         private void BuildWall(Vector3 localPos, Vector3 size)
@@ -220,21 +362,62 @@ namespace DeNelle.Village.Arena
             // No renderer -> invisible boundary.
         }
 
-        // Bright/heroic, family-friendly ground tint by theme (presentation; data-light v1).
+        // Tracks whether the textured-ground null fallback has already warned (once per session).
+        private static bool _groundFallbackWarned;
+
+        // Ground theme: lay the SOURCE REGION's real textured material on the floor so the
+        // arena reads as an extension of where you stood (grass / dwarven-stone / sharp-stone),
+        // tiled across the big plane. Skip-safe: a null Resources.Load keeps today's per-theme
+        // Color tint exactly (LogWarning once) so a missing asset NEVER breaks the fight.
         private static void ApplyGroundTheme(GameObject floor, string theme)
         {
             var r = floor.GetComponent<Renderer>();
             if (r == null) return;
+
+            string key = (theme ?? "outerworld").ToLowerInvariant();
+
+            // theme -> Resources/Arena/<name> ground material (copied into Resources for runtime load).
+            string matName;
+            switch (key)
+            {
+                case "castle": matName = "Arena/Dwarven_Ground"; break;
+                case "cavern": matName = "Arena/Floor_Sharp_Stones"; break;
+                default:       matName = "Arena/Grass_1"; break;
+            }
+
+            Material loaded = null;
+            Guard.Try("BattleArena", "load ground material '" + matName + "'", () =>
+            {
+                loaded = Resources.Load<Material>(matName);
+            });
+
+            if (loaded != null)
+            {
+                // Instance the shared material so tiling on the big plane does not mutate the asset.
+                var inst = new Material(loaded) { name = "ArenaGround_" + key };
+                if (inst.HasProperty("_BaseMap")) inst.SetTextureScale("_BaseMap", new Vector2(12f, 10f));
+                if (inst.HasProperty("_MainTex")) inst.SetTextureScale("_MainTex", new Vector2(12f, 10f));
+                r.sharedMaterial = inst;
+                FlowTrace.Step("BattleArena", "ApplyGroundTheme: textured ground '" + matName + "' (theme '" + key + "').");
+                return;
+            }
+
+            // Fallback: keep the original per-theme flat tint exactly as before.
+            if (!_groundFallbackWarned)
+            {
+                _groundFallbackWarned = true;
+                Debug.LogWarning("[BattleArena] ground material '" + matName + "' not found in Resources - using flat tint fallback.");
+            }
             var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
             if (sh == null) return;
             Color c;
-            switch ((theme ?? "outerworld").ToLowerInvariant())
+            switch (key)
             {
                 case "castle": c = new Color(0.55f, 0.55f, 0.60f); break;   // stone
                 case "cavern": c = new Color(0.34f, 0.30f, 0.36f); break;   // cave
                 default:       c = new Color(0.40f, 0.52f, 0.30f); break;   // grassy overworld
             }
-            var m = new Material(sh) { name = "ArenaGround_" + theme };
+            var m = new Material(sh) { name = "ArenaGround_" + key };
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
             if (m.HasProperty("_Color")) m.SetColor("_Color", c);
             r.sharedMaterial = m;
@@ -422,6 +605,9 @@ namespace DeNelle.Village.Arena
             // REWARD (logic, v1 minimal): XP on a win. Fuller loot (gear/resources) is the
             // EnemyOutpost loot-table reuse follow-up; kept light here so the loop is closed.
             if (won) Guard.Try("BattleArena", "grant win XP", () => GrantWinReward(_current));
+
+            // Restore any cavern mood RenderSettings BEFORE the open world is back in view.
+            RestoreCavernMood();
 
             // Tear the stage down: kill any survivors + destroy the arena root.
             foreach (var e in _liveEnemies) if (e != null) Guard.Try("BattleArena", "despawn enemy", () => Destroy(e.gameObject));

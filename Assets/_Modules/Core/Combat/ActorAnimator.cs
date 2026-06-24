@@ -157,6 +157,13 @@ namespace DeNelle.Core.Combat
                 _animator.SetBool(AnimParams.BlockHash, on);
         }
 
+        public void SetInjured(bool injured)
+        {
+            EnsureAnimator();
+            if (_animator != null && Has(AnimParams.InjuredHash))
+                _animator.SetBool(AnimParams.InjuredHash, injured);
+        }
+
         public void PlayHit(HitDirection dir)
         {
             EnsureAnimator();

@@ -145,6 +145,20 @@ namespace DeNelle.Core
         /// editor-baked seam: PlayerPrefs "ff.runtimeworldseam" = 0. Spec: WORK_ORDER_467 §"Runtime auto-seam".</summary>
         public static bool RuntimeWorldSeam => Get("runtimeworldseam", defaultOn: true);
 
+        /// <summary>WO-491 — when ON (default), low-HP orcs drive the <c>Injured</c> wounded-stance
+        /// locomotion (ActorAnimator.SetInjured from Enemy.DriveAnimator below the HP cutoff). This is
+        /// the slide-fix-adjacent locomotion polish; the slide fix itself (Speed param + walk state) is
+        /// in the rebuilt controller and needs no flag. Default ON; PlayerPrefs "ff.enemyinjured" = 0
+        /// to disable the wounded swap (the orc keeps the healthy locomotion at all HP).</summary>
+        public static bool EnemyInjuredStance => Get("enemyinjured", defaultOn: true);
+
+        /// <summary>WO-491 — when ON (default), an enemy's RANGED/cast attack is ROOTED + telegraphed:
+        /// the NavMeshAgent stops for the cast window (the caster commits, does not slide while casting)
+        /// and a WindUp -> Cast animation + audio charge cue play so the strike is readable/dodgeable.
+        /// When OFF the legacy instant ranged hit (no root, no telegraph) is restored. Default ON;
+        /// PlayerPrefs "ff.enemyrootedcast" = 0 to disable.</summary>
+        public static bool EnemyRootedCast => Get("enemyrootedcast", defaultOn: true);
+
         /// <summary>Global runtime kill-switch for ALL dev keyboard hotkeys (DevPanel F1, DebugCanvas
         /// F12, AdminOverlay Ctrl+Shift+A, the test spawners J/K/L, the tower dev harness B/J/K/N/U,
         /// the jukebox J open, etc.). Default OFF — so every dev hotkey is DEAD everywhere (editor AND

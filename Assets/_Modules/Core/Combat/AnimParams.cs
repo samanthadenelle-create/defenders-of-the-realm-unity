@@ -47,6 +47,7 @@ namespace DeNelle.Core.Combat
         public const string CastVariant = "CastVariant"; // Int — which spell/cast clip (0 = generic; q/w/e/r = 1..4)
         public const string WindUp   = "WindUp";    // Trigger— telegraph before attack
         public const string Block    = "Block";     // Bool   — hold block
+        public const string Injured  = "Injured";   // Bool   — wounded stance (low HP) locomotion swap
         public const string Hit      = "Hit";       // Trigger— hit reaction
         public const string HitDir   = "HitDir";    // Int    — HitDirection
         public const string Dead     = "Dead";      // Bool   — canonical death latch
@@ -64,6 +65,7 @@ namespace DeNelle.Core.Combat
         public static readonly int CastVariantHash = Animator.StringToHash(CastVariant);
         public static readonly int WindUpHash    = Animator.StringToHash(WindUp);
         public static readonly int BlockHash     = Animator.StringToHash(Block);
+        public static readonly int InjuredHash   = Animator.StringToHash(Injured);
         public static readonly int HitHash       = Animator.StringToHash(Hit);
         public static readonly int HitDirHash    = Animator.StringToHash(HitDir);
         public static readonly int DeadHash      = Animator.StringToHash(Dead);

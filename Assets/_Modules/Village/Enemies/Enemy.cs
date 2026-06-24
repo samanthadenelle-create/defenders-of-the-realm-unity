@@ -708,6 +708,13 @@ namespace DeNelle.Village
             _actor?.SetLocomotion(speed);
             _animator.SetFloat(AnimSpeed, speed);
 
+            // WO-491: wounded stance below the low-HP cutoff — the orc reads "hurt" (limp /
+            // stagger locomotion sub-tree). Flag-gated + guarded inside ActorAnimator
+            // (no-op on controllers without an Injured param). Drives every frame; the
+            // Animator only transitions on a change of the bool.
+            if (DeNelle.Core.FeatureFlags.EnemyInjuredStance)
+                _actor?.SetInjured(HpFraction < 0.3f);
+
             // Battle idle / ready when stopped with target (for family enemies in combat).
             // Combined with speed drive gives Idle (0 no target), Movement, Engagement/BattleReady.
             // Hit/Death/Attack driven from damage/contact (PlayHit/PlayAttack/Die on _actor
@@ -1118,17 +1125,82 @@ namespace DeNelle.Village
             var structure = target.GetComponentInParent<IDamageableStructure>();
             if (structure == null || !structure.IsAlive) return false;
 
-            structure.ApplyContactDamage(damage);
-
-            // Face the target so the shot reads, then play the attack pose (null-safe).
-            // Smooth pivot (anti-snap): request the facing; TickFacing slerps the root
-            // toward it over frames instead of the old instant LookRotation snap.
+            // Face the target so the shot reads (smooth pivot, anti-snap).
             Vector3 toTarget = target.position - transform.position; toTarget.y = 0f;
             if (toTarget.sqrMagnitude > 0.001f)
                 RequestFacing(toTarget);
+
+            // WO-491: ROOTED + TELEGRAPHED cast (flag-gated). The caster plays a WindUp ->
+            // Cast animation + an audio charge cue and ROOTS the NavMeshAgent for the cast
+            // window so the strike is readable/dodgeable and the caster does NOT slide while
+            // casting. Damage lands at the END of the wind-up (re-checked for viability).
+            // When the flag is OFF (or already mid-cast) the legacy instant hit runs.
+            if (DeNelle.Core.FeatureFlags.EnemyRootedCast && !_casting)
+            {
+                StartCoroutine(RootedCast(target, damage));
+                return true;
+            }
+
+            // ── Legacy instant ranged hit (flag OFF) ─────────────────────────
+            structure.ApplyContactDamage(damage);
             if (_animator != null && _hasAttackParam) _animator.SetTrigger(AnimAttack);
             PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
             return true;
+        }
+
+        // WO-491: true while a rooted cast wind-up is in flight — blocks a second cast
+        // (and the TickContactAttack telegraph) from overlapping it.
+        private bool _casting;
+
+        /// <summary>
+        /// WO-491: rooted, telegraphed ranged cast (mirrors <see cref="TelegraphThenAttack"/>'s
+        /// shape). Stops the agent, plays WindUp -> charge audio -> Cast, waits the wind-up,
+        /// then applies the damage if the target is still viable, then resumes the agent.
+        /// </summary>
+        private System.Collections.IEnumerator RootedCast(Transform target, float damage)
+        {
+            _casting = true;
+
+            // Telegraph window — readable wind-up before the strike. Reuse the type-set's
+            // configured telegraph duration when present, else a sane default.
+            float windUp = (_typeVfxSet != null && _typeVfxSet.TelegraphDuration > 0f)
+                ? _typeVfxSet.TelegraphDuration : 0.5f;
+
+            // Root the agent for the cast (commit to it — no slide while casting).
+            bool wasStopped = false;
+            if (_agent != null && _agent.isOnNavMesh)
+            {
+                wasStopped = _agent.isStopped;
+                _agent.isStopped = true;
+            }
+
+            // Telegraph: wind-up pose + audio charge cue.
+            _actor?.PlayWindUp();
+            EnemyCombatAudio.PlayCastCharge();
+
+            yield return new WaitForSeconds(windUp * 0.6f);
+
+            // The cast itself (rooted): cast animation pose at the strike moment.
+            if (!_dead) _actor?.PlayCast();
+
+            yield return new WaitForSeconds(windUp * 0.4f);
+
+            // Land the damage if the target is still alive/valid after the wind-up.
+            if (!_dead && target != null)
+            {
+                var structure = target.GetComponentInParent<IDamageableStructure>();
+                if (structure != null && structure.IsAlive)
+                {
+                    structure.ApplyContactDamage(damage);
+                    PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
+                }
+            }
+
+            // Resume movement (only if WE rooted it — don't un-stop a contact-locked agent).
+            if (_agent != null && _agent.isOnNavMesh && !wasStopped && _currentTarget == null)
+                _agent.isStopped = false;
+
+            _casting = false;
         }
 
         /// <summary>

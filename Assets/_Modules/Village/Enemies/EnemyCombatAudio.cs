@@ -38,6 +38,7 @@ namespace DeNelle.Village
 
         private static AudioClip s_hitClip;
         private static AudioClip s_deathClip;
+        private static AudioClip s_castChargeClip;
 
         /// <summary>
         /// Plays the generic enemy hit "thwack" through CoreServices.Audio.
@@ -65,6 +66,20 @@ namespace DeNelle.Village
             CoreServices.Audio?.PlaySfx(s_deathClip, 0.6f);
         }
 
+        /// <summary>
+        /// WO-491: plays the cast-charge "you're being cast on" telegraph cue through
+        /// CoreServices.Audio (null-safe). Fired at the START of an enemy's rooted cast
+        /// wind-up so the player hears the spell coming even off-screen. Prefers an
+        /// authored CC0 clip (Sfx/EnemyCastCharge) if dropped in; otherwise generated.
+        /// No-op when the audio service is not yet registered.
+        /// </summary>
+        public static void PlayCastCharge()
+        {
+            if (s_castChargeClip == null)
+                s_castChargeClip = Resources.Load<AudioClip>("Sfx/EnemyCastCharge") ?? GenerateCastCharge();
+            CoreServices.Audio?.PlaySfx(s_castChargeClip, 0.5f);
+        }
+
         // ── Procedural generation (fresh-clone-safe) ─────────────────────────
 
         // A short noisy mid "thwack" — fast attack, quick exponential decay.
@@ -79,6 +94,14 @@ namespace DeNelle.Village
         {
             return Synth("sfx_enemy_death", dur: 0.32f, f0: 300f, f1: 70f,
                          noise: 0.45f, amp: 0.7f, seed: 0xDEA7);
+        }
+
+        // A rising charge "whoosh / hum" — ASCENDING pitch (low->high) so it reads as
+        // energy gathering, longer tail than the hit, telegraphing the incoming cast.
+        private static AudioClip GenerateCastCharge()
+        {
+            return Synth("sfx_enemy_cast_charge", dur: 0.45f, f0: 160f, f1: 620f,
+                         noise: 0.30f, amp: 0.55f, seed: 0xCA57);
         }
 
         // Mirrors ProceduralSfx.Synth (kept local so this file is self-contained
