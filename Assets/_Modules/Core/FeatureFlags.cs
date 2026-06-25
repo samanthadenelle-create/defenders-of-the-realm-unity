@@ -191,6 +191,16 @@ namespace DeNelle.Core
         /// and are unaffected by this flag.</summary>
         public static bool DevHotkeys => Get("devhotkeys", defaultOn: false);
 
+        /// <summary>HUB AMBIENT DEPTH (owner 2026-06-23, overnight first-pass) -- when ON (default), the
+        /// <see cref="DeNelle.Village.HubAmbientVfxInjector"/> attaches tasteful looping ambient VFX to the
+        /// home hub (MainCastle_Hall) at runtime, WITHOUT hand-editing the scene: a soft glowing aura around
+        /// the Tree of Life (Heart of Elarion) at plaza centre, plus a small warm flame/ember accent at the
+        /// top of each of the 4 castle corner towers. Self-built procedural ParticleSystems rendered with the
+        /// committed URP-safe material helper (no gitignored VFX-pack dependency, clean-clone safe). This is
+        /// the BONES -- exact effect/scale/colour are tunables in the injector the owner finesses by eye
+        /// tomorrow. Default ON so the draft is visible; PlayerPrefs "ff.hubambientvfx" = 0 to disable.</summary>
+        public static bool HubAmbientVfx => Get("hubambientvfx", defaultOn: true);
+
         /// <summary>WO-512 — when ON, the battle SOFT LOCK-ON is live: auto-lock the nearest enemy on
         /// engaging a battle (BattleArena.StageRoutine), tap the HUD Lock toggle to release to free-look,
         /// and switch via the roster/cycle. The single lock owner is <see cref="DeNelle.Village.HeroTargetIndicator"/>
@@ -199,6 +209,18 @@ namespace DeNelle.Core
         /// Camera framing + face/strafe (slices 2-3) are layered behind this same flag later. Default OFF
         /// until felt-proven (mobile-nausea is the top risk). PlayerPrefs "ff.lockon". Spec: WORK_ORDER_512.</summary>
         public static bool LockOn => Get("lockon", defaultOn: false);
+
+        /// <summary>WO-509 (overnight BONES) — when ON, a diegetic WATER MOAT ring is built around the
+        /// MainCastle_Hall perimeter with 4 WIDE DRAWBRIDGE decks at the cardinal gates (N/E/S/W), so the
+        /// "you cannot go past here" castle edge READS as deliberate (water = natural impassable boundary)
+        /// and the exits read as intentional WIDE crossings, not dead-ends. The bridges are also the
+        /// defensive CHOKEPOINTS (single-lane crossings towers/troops cover; raisable to seal a lane is a
+        /// future hook) and ARE the WO-509 four RegionGates (only the south is wired today). FIRST-PASS:
+        /// visual moat + visible bridge decks only (no footprint shrink, no navmesh re-bake, no functional
+        /// N/E/W crossings yet — those are the editor/architect follow per docs/CASTLE_MOAT_DESIGN_NOTE).
+        /// Default ON so the owner sees the bones; PlayerPrefs "ff.castlemoat" = 0 to hide. Tunables live in
+        /// <see cref="DeNelle.Village.World.CastleMoatBuilder"/>.</summary>
+        public static bool CastleMoat => Get("castlemoat", defaultOn: true);
 
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
