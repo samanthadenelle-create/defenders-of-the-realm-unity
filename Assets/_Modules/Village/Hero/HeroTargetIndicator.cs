@@ -16,7 +16,11 @@
 // HeroAbilities.AimPointOverride so ranged spells aim at it. WO-497 also adds a DIRECT
 // pick: TAP (mobile) or LEFT-click an enemy to lock THAT enemy (raycast on the Enemy
 // layer), bypassing the AUTO forward-arc/LoS gates like a manual cycle; a tap on empty
-// space clears the lock back to auto-nearest. The lock auto-clears (back to nearest)
+// space clears the lock back to auto-nearest. WO-512 MANUAL LOCK ("pull one orc out"):
+// MIDDLE mouse / center-click (desktop) or a TOUCH tap (mobile) on an enemy EngageLocks
+// THAT foe for the FULL lock-on (camera frames it + Knight faces/strafes); center-clicking
+// the already-locked foe TOGGLES off; clicking/tapping empty releases. RIGHT mouse stays
+// BLOCK and LEFT mouse stays ATTACK — untouched. The lock auto-clears (back to nearest)
 // when the target dies or leaves range. Self-installed on the hero by HeroControlEnsurer
 // — no scene edit, no art asset (ring drawn at runtime).
 //
@@ -245,11 +249,72 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-512 manual-lock (DESKTOP): MIDDLE mouse button (center-click) is the dedicated
+            // "pull one enemy out" lock — pick the orc under the cursor and EngageLock(it) for the
+            // FULL lock-on (camera frames it, Knight faces/strafes it). RIGHT mouse is BLOCK and
+            // LEFT mouse is ATTACK, so center-click is the conflict-free desktop lock. Center-click
+            // ON the already-locked foe TOGGLES the lock off (release to auto/free); center-click on
+            // EMPTY space releases. Behind FeatureFlags.LockOn so flag-off = today (EngageLock /
+            // DriveLockFace are themselves no-ops with the flag off, but we also skip the empty-space
+            // release so the WO-497 paths stay byte-identical when the lock-on feature is off).
+            if (DeNelle.Core.FeatureFlags.LockOn && MiddleClickThisFrame(out Vector2 midPos))
+            {
+                var pick = PickEnemyAtScreenPoint(midPos);
+                if (pick != null)
+                {
+                    if (ReferenceEquals(pick, _locked) && LockEngaged)
+                    {
+                        ReleaseLock();   // toggle: center-click the locked foe again → release
+                    }
+                    else
+                    {
+                        string nm = (pick as MonoBehaviour) != null
+                            ? (pick as MonoBehaviour).gameObject.name.Replace("(Clone)", "").Trim() : "target";
+                        DeNelle.Core.Diagnostics.FlowTrace.Step(
+                            "BattleArena", "LOCKON manual pick -> '" + nm + "' (middle-click).");
+                        EngageLock(pick);   // pull THAT orc out: full lock-on (camera + face + strafe)
+                    }
+                }
+                else
+                {
+                    // center-click on empty space → release the manual lock back to auto/free
+                    DeNelle.Core.Diagnostics.FlowTrace.Step(
+                        "BattleArena", "LOCKON manual release -> empty (middle-click).");
+                    ReleaseLock();
+                }
+                return;
+            }
+
             // WO-497: TAP (mobile) / LEFT-tap-on-enemy direct lock takes priority — a tap ON an
             // enemy collider locks THAT enemy directly (bypasses the AUTO forward-arc/LoS gates,
             // like a manual cycle); a tap on EMPTY clears back to auto-nearest.
-            if (TapOrClickThisFrame(out Vector2 screenPos))
+            if (TapOrClickThisFrame(out Vector2 screenPos, out bool isTouch))
             {
+                // WO-512 manual-lock (MOBILE): a TOUCH tap on an enemy gets the SAME full lock-on
+                // as desktop center-click (camera frames it + Knight faces/strafes) by routing
+                // through EngageLock — touch has no separate attack-vs-lock button so this is safe.
+                // A DESKTOP LEFT-click stays WO-497 direct-lock-only (TryLockAtScreenPoint), because
+                // LEFT-click is ALSO the primary attack (HeroAbilityInput slot Q) and must not engage
+                // the camera lock-on. The touch full-lock is gated by FeatureFlags.LockOn.
+                if (isTouch && DeNelle.Core.FeatureFlags.LockOn)
+                {
+                    var pick = PickEnemyAtScreenPoint(screenPos);
+                    if (pick != null)
+                    {
+                        string nm = (pick as MonoBehaviour) != null
+                            ? (pick as MonoBehaviour).gameObject.name.Replace("(Clone)", "").Trim() : "target";
+                        DeNelle.Core.Diagnostics.FlowTrace.Step(
+                            "BattleArena", "LOCKON manual pick -> '" + nm + "' (tap).");
+                        EngageLock(pick);   // full lock-on for touch
+                        return;
+                    }
+                    // tap on empty space → release the manual lock (revert to auto-nearest)
+                    DeNelle.Core.Diagnostics.FlowTrace.Step(
+                        "BattleArena", "LOCKON manual release -> empty (tap).");
+                    ReleaseLock();
+                    return;
+                }
+
                 if (TryLockAtScreenPoint(screenPos)) { DriveLockFace(_locked); return; }   // hit an enemy → direct lock done
                 // tap on empty space → clear manual lock (revert to auto-nearest)
                 _locked = null;
@@ -374,17 +439,41 @@ namespace DeNelle.Village
         // WO-497: was there a TAP (touch) or LEFT mouse click this frame? Returns the screen
         // point so the caller can raycast it into the world for a direct enemy lock. Touch wins
         // over mouse when both report (a touch device that also exposes a synthetic mouse).
-        private static bool TapOrClickThisFrame(out Vector2 screenPos)
+        // WO-512 manual-lock: also reports whether the input was a TOUCH (vs a desktop LEFT-click)
+        // so the caller can route ONLY touch through full EngageLock(...) — a desktop LEFT-click
+        // is ALSO the primary attack (HeroAbilityInput slot Q), so it must keep its WO-497
+        // direct-lock-only behaviour and never engage the camera lock-on.
+        private static bool TapOrClickThisFrame(out Vector2 screenPos, out bool isTouch)
         {
             screenPos = default;
+            isTouch = false;
             var ts = Touchscreen.current;
             if (ts != null && ts.primaryTouch.press.wasPressedThisFrame)
             {
                 screenPos = ts.primaryTouch.position.ReadValue();
+                isTouch = true;
                 return true;
             }
             var mouse = Mouse.current;
             if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+            {
+                screenPos = mouse.position.ReadValue();
+                return true;
+            }
+            return false;
+        }
+
+        // WO-512 manual-lock: was the MIDDLE mouse button (button 2 / center-click) pressed this
+        // frame? This is the dedicated DESKTOP manual lock-on input — owner asked for "right OR
+        // center click", and RIGHT mouse is the Knight's BLOCK input (PlayerAttackController.
+        // UpdateBlock), so center-click is the conflict-free choice. New Input System to match the
+        // rest of this file (Mouse.current / Gamepad.current / Touchscreen.current). Returns the
+        // screen point so the caller raycasts it into the Enemy layer to pick THAT orc.
+        private static bool MiddleClickThisFrame(out Vector2 screenPos)
+        {
+            screenPos = default;
+            var mouse = Mouse.current;
+            if (mouse != null && mouse.middleButton.wasPressedThisFrame)
             {
                 screenPos = mouse.position.ReadValue();
                 return true;
@@ -399,22 +488,33 @@ namespace DeNelle.Village
         // pick; the ray length is bounded by the acquire range (no sniping off-screen mobs).
         private bool TryLockAtScreenPoint(Vector2 screenPos)
         {
+            var d = PickEnemyAtScreenPoint(screenPos);
+            if (d == null) return false;
+
+            _locked = d;   // direct manual lock — bypasses AUTO arc/LoS, like Tab
+            LockEngaged = true;   // WO-512: a direct tap-lock engages the lock-on flag
+            return true;
+        }
+
+        // WO-512 manual-lock: raycast a screen point into the Enemy layer and return the alive
+        // Hostile IDamageable struck (or null). Shared by the WO-497 tap/LEFT-click direct lock and
+        // the new MIDDLE-click manual lock so they pick identically; the caller decides what to do
+        // with the hit (direct _locked set vs full EngageLock vs toggle-release).
+        private IDamageable PickEnemyAtScreenPoint(Vector2 screenPos)
+        {
             if (_cam == null || !_cam.isActiveAndEnabled) _cam = ResolveCamera();
-            if (_cam == null) return false;
+            if (_cam == null) return null;
 
             Ray ray = _cam.ScreenPointToRay(screenPos);
             // Pick on the Enemy layer only — a wide pick range so a tap anywhere on the foe's
             // body locks it; bound it generously past the acquire range for camera distance.
             float maxDist = _acquireRange * 2f + 50f;
             if (!Physics.Raycast(ray, out RaycastHit hit, maxDist, _enemyMask, QueryTriggerInteraction.Collide))
-                return false;
+                return null;
 
             var d = hit.collider != null ? hit.collider.GetComponentInParent<IDamageable>() : null;
-            if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) return false;
-
-            _locked = d;   // direct manual lock — bypasses AUTO arc/LoS, like Tab
-            LockEngaged = true;   // WO-512: a direct tap-lock engages the lock-on flag
-            return true;
+            if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) return null;
+            return d;
         }
 
         private void CycleTarget()
