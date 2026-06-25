@@ -92,6 +92,15 @@ namespace DeNelle.Village
         private Transform _cam;
         private bool _built;
 
+        // WO-512 slice 3: LOCK highlight. The "engage to reveal" model lit the bar but gave
+        // the player's LOCKED target NO distinct world-space mark - it looked identical to any
+        // damaged orc. These build a red outline ring + a bright "lock caret" chevron above the
+        // bar, shown ONLY while _isTargeted, so the locked orc is unmistakable in 3D (this
+        // survives the camera framing better than the tiny head reticle).
+        private Image _lockOutline;   // red ring framing the chip while locked
+        private Image _lockCaret;     // bright marker above the bar while locked
+        private static readonly Color LockHi = new Color(1f, 0.22f, 0.18f, 1f);   // loud lock red
+
         /// <summary>
         /// Attach (or reuse) a floating HP bar on <paramref name="host"/>. The bar
         /// reads the unit via the supplied delegates so it stays type-agnostic.
@@ -242,6 +251,36 @@ namespace DeNelle.Village
             _fillRect.offsetMin = Vector2.zero;
             _fillRect.offsetMax = Vector2.zero;
             _fillRect.sizeDelta = new Vector2(_barSize.x, 0f);
+
+            // WO-512 slice 3: LOCK highlight overlay - a red outline ring grown OUTWARD past
+            // the chip + a bright caret marker above it. Both start hidden; LateUpdate enables
+            // them only while this unit is the player's locked/current target.
+            var outlineGo = new GameObject("LockOutline");
+            outlineGo.transform.SetParent(canvasGo.transform, false);
+            _lockOutline = outlineGo.AddComponent<Image>();
+            _lockOutline.sprite = chip; _lockOutline.type = Image.Type.Simple;
+            _lockOutline.color = LockHi;
+            _lockOutline.raycastTarget = false;
+            // Grow OUTWARD so it frames the bar as a red border (drawn first = behind the chip).
+            StretchToCanvas(_lockOutline.GetComponent<RectTransform>(), -0.06f);
+            outlineGo.transform.SetAsFirstSibling();   // behind rim/frame/track/fill
+            outlineGo.SetActive(false);
+
+            // Bright caret/marker centered above the bar (a small downward-pointing chip).
+            var caretGo = new GameObject("LockCaret");
+            caretGo.transform.SetParent(canvasGo.transform, false);
+            _lockCaret = caretGo.AddComponent<Image>();
+            _lockCaret.sprite = chip; _lockCaret.type = Image.Type.Simple;
+            _lockCaret.color = LockHi;
+            _lockCaret.raycastTarget = false;
+            var caretRt = _lockCaret.GetComponent<RectTransform>();
+            caretRt.anchorMin = new Vector2(0.5f, 1f);
+            caretRt.anchorMax = new Vector2(0.5f, 1f);
+            caretRt.pivot     = new Vector2(0.5f, 0f);
+            caretRt.sizeDelta = new Vector2(_barSize.y * 1.2f, _barSize.y * 1.2f);
+            caretRt.anchoredPosition = new Vector2(0f, _barSize.y * 0.6f);   // just above the bar
+            caretGo.transform.rotation = Quaternion.Euler(0f, 0f, 45f);      // diamond marker
+            caretGo.SetActive(false);
         }
 
         // WO-302: cancel the host transform's (possibly non-uniform, possibly huge
@@ -407,6 +446,21 @@ namespace DeNelle.Village
             bool active = _alpha > 0.001f;
             if (_canvas.enabled != active) _canvas.enabled = active;
             if (!active) return;
+
+            // WO-512 slice 3: show the LOCK highlight (red outline + caret) ONLY while this
+            // unit is the player's locked/current target, so the locked orc is unmistakable.
+            bool showLock = _isTargeted;
+            if (_lockOutline != null && _lockOutline.gameObject.activeSelf != showLock)
+                _lockOutline.gameObject.SetActive(showLock);
+            if (_lockCaret != null && _lockCaret.gameObject.activeSelf != showLock)
+                _lockCaret.gameObject.SetActive(showLock);
+            if (showLock && _lockCaret != null)
+            {
+                // Gentle pulse so the lock marker reads as a live, deliberate highlight.
+                float pulse = 0.6f + 0.4f * Mathf.Abs(Mathf.Sin(Time.time * 5f));
+                var lc = LockHi; lc.a = pulse;
+                _lockCaret.color = lc;
+            }
 
             if (_fillRect != null)
                 _fillRect.sizeDelta = new Vector2(_barSize.x * frac, 0f);

@@ -404,6 +404,28 @@ namespace DeNelle.Village
                 if (away.sqrMagnitude > 0.0001f)
                     _reticle.rotation = Quaternion.LookRotation(away.normalized, Vector3.up);
             }
+
+            // WO-512 slice 1 INSTRUMENT (throttled, ~1/sec): prove WHERE the reticle sits.
+            // Log the world pos, the resolved camera, whether it's on-screen, and a cheap
+            // screen-space size estimate (project two points _size apart). The next run
+            // tells us off-screen vs tiny vs behind-camera WITHOUT changing geometry.
+            string camName = _cam != null ? _cam.name : "NULL";
+            string onScreen = "n/a";
+            string ssize = "n/a";
+            if (_cam != null)
+            {
+                Vector3 sp = _cam.WorldToScreenPoint(p);
+                bool inFront = sp.z > 0f;
+                bool inView = inFront && sp.x >= 0f && sp.x <= Screen.width && sp.y >= 0f && sp.y <= Screen.height;
+                onScreen = inView ? "yes" : (inFront ? "off-edge" : "behind");
+                Vector3 spEdge = _cam.WorldToScreenPoint(p + _cam.transform.right * (_size * 0.5f));
+                float px = Mathf.Abs(spEdge.x - sp.x) * 2f;
+                ssize = px.ToString("0") + "px";
+            }
+            DeNelle.Core.Diagnostics.FlowTrace.Throttle("Reticle", "reticle-show", 1f,
+                "show pos=(" + p.x.ToString("0.0") + "," + p.y.ToString("0.0") + "," + p.z.ToString("0.0")
+                + ") cam='" + camName + "' onScreen=" + onScreen + " screenSize=" + ssize
+                + " color=" + (_locked != null ? "LOCK-red" : "auto-gold") + ".");
         }
 
         // Robust camera lookup: Camera.main only finds a "MainCamera"-tagged camera, which
@@ -623,7 +645,15 @@ namespace DeNelle.Village
         private void SetVisible(bool on)
         {
             if (_reticle != null && _reticle.gameObject.activeSelf != on)
+            {
                 _reticle.gameObject.SetActive(on);
+                // WO-512 slice 1 INSTRUMENT: log every visibility flip + which target it
+                // was shown/hidden for, so we can correlate "lock fired" with "reticle on".
+                var tmb = CurrentTarget as MonoBehaviour;
+                string tn = tmb != null ? tmb.gameObject.name.Replace("(Clone)", "").Trim() : "none";
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Reticle",
+                    "SetVisible on=" + on + " target='" + tn + "'.");
+            }
         }
 
         // DEF-206: flag the target's floating HP bar as the player's current target
@@ -682,6 +712,18 @@ namespace DeNelle.Village
 
             _reticle = quad.transform;
             _reticle.gameObject.SetActive(false);
+
+            // WO-512 slice 1 INSTRUMENT (no geometry change): prove what the reticle
+            // actually built. Log the shader, whether the material/renderer resolved,
+            // the layer, and the world size — so the NEXT run shows if the ring renders
+            // at all (vs null material / wrong layer / edge-on / tiny). ASCII only.
+            string shaderName = (_reticleMat != null && _reticleMat.shader != null)
+                ? _reticleMat.shader.name : "NULL";
+            var mrCheck = quad.GetComponent<MeshRenderer>();
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Reticle",
+                "BuildReticle shader='" + shaderName + "' matNull=" + (_reticleMat == null)
+                + " rendererNull=" + (mrCheck == null) + " layer=" + quad.layer
+                + " size=" + _size.ToString("0.00") + ".");
         }
 
         /// <summary>A cached 64×64 soft ring (target-bracket) texture, drawn once.</summary>

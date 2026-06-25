@@ -74,6 +74,10 @@ namespace DeNelle.Village.Arena
         private static readonly Color BuffSlot  = new Color(0.16f, 0.18f, 0.22f, 0.85f);
         private static readonly Color LockOn    = new Color(0.85f, 0.30f, 0.26f, 1f);   // Locked = red
         private static readonly Color LockOff   = new Color(0.45f, 0.48f, 0.52f, 1f);   // Unlocked = grey
+        // WO-512 slice 2: LOUD lock confirmation - the whole top-center target panel goes a
+        // saturated dark-red while LOCKED (vs the neutral PanelDark when free-look), so the
+        // lock is unmistakable even when the camera frames the orc and hides the small reticle.
+        private static readonly Color PanelLocked = new Color(0.34f, 0.07f, 0.07f, 0.92f);
 
         // Role colors: Tank gray/blue, Healer green, Wizard purple, DPS red.
         private static readonly Color ColTank   = new Color(0.46f, 0.60f, 0.78f, 1f);
@@ -173,6 +177,7 @@ namespace DeNelle.Village.Arena
         private Text  _targetDeepStats; // ATK/DEF (gated by ShowEnemyDeepStats)
         private Text  _lockState;
         private Image _lockBtnBg;
+        private Image _targetPanelBg;   // WO-512 slice 2: top-center panel bg, tinted red on LOCK
 
         // -- Star conditions + live countdown readout --------------------------
         private Text _starCondText;
@@ -352,6 +357,7 @@ namespace DeNelle.Village.Arena
         {
             var panel = AddPanel(transform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), TC_Pos, TC_Size, PanelDark);
             Frame(panel);
+            _targetPanelBg = panel;   // WO-512 slice 2: tint red while LOCKED
 
             var hdr = AddText(panel.transform, "TARGET", 11, Parchment, TextAnchor.UpperLeft);
             Anchor(hdr.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(16f, -6f), new Vector2(-12f, 14f), new Vector2(0f, 1f));
@@ -431,9 +437,15 @@ namespace DeNelle.Village.Arena
                 if (_targetDeepStats != null) _targetDeepStats.text = "";
                 if (_lockState != null) { _lockState.text = "Unlocked"; _lockState.color = LockOff; }
                 if (_lockBtnBg != null) _lockBtnBg.color = PanelDim;
+                // WO-512 slice 2: no target -> revert the loud LOCK styling to neutral.
+                if (_targetPanelBg != null) _targetPanelBg.color = PanelDark;
+                if (_targetName != null) _targetName.color = Gold;
                 return;
             }
-            _targetName.text = en.name.Replace("(Clone)", "").Trim();
+            // Role first so the friendly name can fold the role token ("Orc Tank").
+            var role = RoleOf(en);
+            // WO-512 slice 2: show a FRIENDLY label, not the raw "ArenaEnemy_orc-tank_1".
+            _targetName.text = FriendlyTargetName(en, role);
             if (_targetHpValue != null) _targetHpValue.text = Mathf.CeilToInt(Mathf.Max(0f, en.Hp)).ToString();
             if (_targetHpFill != null) _targetHpFill.fillAmount = en.HpFraction;
 
@@ -442,7 +454,6 @@ namespace DeNelle.Village.Arena
             if (_targetLevel != null) _targetLevel.text = "Lv " + EnemyLevelStub(en);
 
             // Role + threat row: role label + threat glyphs scaled by remaining HP fraction.
-            var role = RoleOf(en);
             if (_targetThreat != null)
             {
                 int threat = 1 + Mathf.Clamp(Mathf.FloorToInt(en.HpFraction * 3f), 0, 2); // 1..3 stars
@@ -457,13 +468,20 @@ namespace DeNelle.Village.Arena
             if (_targetDeepStats != null)
                 _targetDeepStats.text = ShowEnemyDeepStats ? "ATK -   DEF -" : "";
 
-            bool locked = _target != null && _target.LockEngaged;   // WO-512: read the single lock owner
+            // WO-512 slice 2: LOUD, guaranteed-visible lock confirmation (no camera/reticle
+            // dependency). When the single lock owner reports LockEngaged we shout it on the
+            // top-center panel: "LOCKED" in red, the target NAME reddens, and the whole panel
+            // background tints dark-red - unmissable even when the camera frames the orc.
+            // Gated by FeatureFlags.LockOn so flag-off is byte-identical to today (neutral).
+            bool locked = DeNelle.Core.FeatureFlags.LockOn && _target != null && _target.LockEngaged;
             if (_lockState != null)
             {
-                _lockState.text = locked ? "Locked" : "Unlocked";
+                _lockState.text = locked ? "LOCKED" : "Unlocked";
                 _lockState.color = locked ? LockOn : LockOff;
             }
             if (_lockBtnBg != null) _lockBtnBg.color = locked ? LockOn : PanelDim;
+            if (_targetPanelBg != null) _targetPanelBg.color = locked ? PanelLocked : PanelDark;
+            if (_targetName != null) _targetName.color = locked ? LockOn : Gold;
         }
 
         // Lock toggle (WO-512): route ALL lock intent through the single owner, HeroTargetIndicator.
@@ -913,6 +931,52 @@ namespace DeNelle.Village.Arena
             if (e == null) return EnemyRole.DPS;
             var brain = e.GetComponent<EnemyBrain>();
             return brain != null ? brain.Role : EnemyRole.DPS;
+        }
+
+        // WO-512 slice 2: turn the raw GameObject name ("ArenaEnemy_orc-tank_1(Clone)")
+        // into a friendly target label ("Orc Tank"). Strips the ArenaEnemy_/encounter_/
+        // Enemy_ spawn prefixes + the trailing _N index, splits on -/_ , Title-Cases each
+        // word, and folds the redundant role token (a name ending in "tank" + a Tank role
+        // would read "Orc Tank Tank") so the role suffix isn't doubled. Falls back to the
+        // role name alone when nothing readable survives. ASCII-only.
+        private static string FriendlyTargetName(Enemy en, EnemyRole role)
+        {
+            string raw = en != null ? en.name : "";
+            if (string.IsNullOrEmpty(raw)) return RoleName(role);
+            raw = raw.Replace("(Clone)", "").Trim();
+
+            // Drop known spawn prefixes (case-insensitive, longest first).
+            string[] prefixes = { "ArenaEnemy_", "encounter-", "encounter_", "Enemy_", "Enemy-" };
+            foreach (var pre in prefixes)
+            {
+                if (raw.Length >= pre.Length &&
+                    raw.Substring(0, pre.Length).ToLowerInvariant() == pre.ToLowerInvariant())
+                {
+                    raw = raw.Substring(pre.Length);
+                    break;
+                }
+            }
+
+            // Split on - and _ , drop a purely-numeric trailing index, Title-Case words,
+            // and skip a word that just repeats the role (avoid "Orc Tank Tank").
+            string roleLower = RoleName(role).ToLowerInvariant();
+            var parts = raw.Split(new[] { '-', '_', ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < parts.Length; i++)
+            {
+                string w = parts[i];
+                int dummy;
+                if (int.TryParse(w, out dummy)) continue;          // trailing _N index
+                if (w.ToLowerInvariant() == roleLower) continue;   // role added explicitly below
+                if (sb.Length > 0) sb.Append(' ');
+                sb.Append(char.ToUpperInvariant(w[0]));
+                if (w.Length > 1) sb.Append(w.Substring(1).ToLowerInvariant());
+            }
+
+            string family = sb.ToString().Trim();
+            string roleName = RoleName(role);
+            if (string.IsNullOrEmpty(family)) return roleName;     // nothing readable -> role only
+            return family + " " + roleName;                        // e.g. "Orc Tank"
         }
 
         private static string RoleName(EnemyRole role)
