@@ -13,6 +13,51 @@ MonoBehaviour:
   m_Name: VfxParadeManifest
   m_EditorClassIdentifier: VfxParade.Runtime::VfxParade.VfxParadeManifest
   entries:
+  - prefab: {fileID: 7450571408265255760, guid: 501c58ca6f83cee4d86ecfd79e1d9b64, type: 3}
+    path: Assets/Spells Pack/Demo/Environment/Smoke.prefab
+    name: Smoke
+  - prefab: {fileID: 3594149076506533137, guid: a3c2a5190890d2b4caf52909306f6828, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Auras/Aura_Arcane.prefab
+    name: Aura_Arcane
+  - prefab: {fileID: 4832121135125949560, guid: 288ebd6cc10e0824789b8fd0dbcfd69c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Auras/Aura_Dark.prefab
+    name: Aura_Dark
+  - prefab: {fileID: 5869229029559480062, guid: 05460e985cd82564cbad4ff3659410da, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Auras/Aura_Fire.prefab
+    name: Aura_Fire
+  - prefab: {fileID: 1814480919851174754, guid: 0d459ccbe5032ac4a8b10dbb0ad13c49, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Auras/Aura_Ice.prefab
+    name: Aura_Ice
+  - prefab: {fileID: 174211133732289389, guid: 45ac8be0dc80ecf48b330e3d398901f6, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Auras/Aura_Light.prefab
+    name: Aura_Light
+  - prefab: {fileID: 1644219875506746880, guid: c35d3f96714e57e4fb5bca81ce8b3293, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Auras/Aura_Nature.prefab
+    name: Aura_Nature
+  - prefab: {fileID: 282865943274501379, guid: c151e8aac9b9eb94b99c008d2eb2c7e4, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Auras/Aura_Storm.prefab
+    name: Aura_Storm
+  - prefab: {fileID: 2623578689131902494, guid: c3769bd4acde34e4fb2cd514e11b03d2, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Buffs/Buff_Arcane.prefab
+    name: Buff_Arcane
+  - prefab: {fileID: 6518157807667906587, guid: e06bab612f6998246af9d45e27a94c45, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Buffs/Buff_Dark.prefab
+    name: Buff_Dark
+  - prefab: {fileID: 7669813180258880655, guid: b6718cd50c115994f968d1fa5f41c9dd, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Buffs/Buff_Fire.prefab
+    name: Buff_Fire
+  - prefab: {fileID: 9131177870940378679, guid: 6bbbbc976a5025349a844d8e6a592f20, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Buffs/Buff_Ice.prefab
+    name: Buff_Ice
+  - prefab: {fileID: 6479325296391499975, guid: 85eaee30681296a48ba9564854369b08, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Buffs/Buff_Light.prefab
+    name: Buff_Light
+  - prefab: {fileID: 970493957870217587, guid: 4c1531c376675e646ae7aabcf20f9bdb, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Buffs/Buff_Nature.prefab
+    name: Buff_Nature
+  - prefab: {fileID: 7650850409149008753, guid: 43d5f70eb081605468d66b84aa46db66, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Buffs/Buff_Storm.prefab
+    name: Buff_Storm
   - prefab: {fileID: 13531440185366499, guid: 19be04178a7a6d542b5543b52eaacea4, type: 3}
     path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Arcane.prefab
     name: Casting_Arcane
@@ -73,3 +118,1597 @@ MonoBehaviour:
   - prefab: {fileID: 8642405335803613004, guid: 436d293919a6e424ba06702cf30fb0c7, type: 3}
     path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Storm_2.prefab
     name: Casting_Storm_2
+  - prefab: {fileID: 5490221094549253126, guid: 85d321755e8a85847beb01a0a7246f92, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Arcane.prefab
+    name: Explosion_Arcane
+  - prefab: {fileID: 3470175545269027477, guid: a37ca35ff3a74ba40b96928a40ecff7b, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Arcane_2.prefab
+    name: Explosion_Arcane_2
+  - prefab: {fileID: 3728020703757951210, guid: 14d31d6feefd3c7488d14144bf1e1115, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Arcane_3.prefab
+    name: Explosion_Arcane_3
+  - prefab: {fileID: 403557928190742514, guid: f1de3fbd6b76f96478ba35446cf15b36, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Dark.prefab
+    name: Explosion_Dark
+  - prefab: {fileID: 3255629840924039632, guid: 446383bc4333b1041bb1cc082b8b7102, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Dark_2.prefab
+    name: Explosion_Dark_2
+  - prefab: {fileID: 90632426749341989, guid: 3bde7781ea185eb48b9103e0c3d6b6c8, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Dark_3.prefab
+    name: Explosion_Dark_3
+  - prefab: {fileID: 7675784908668134992, guid: c787ac16f850497479119a1d36a39dee, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Dark_4.prefab
+    name: Explosion_Dark_4
+  - prefab: {fileID: 7156317333231045241, guid: fb8d8f6d8dd5fe247a08487a0dbf3943, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Fire.prefab
+    name: Explosion_Fire
+  - prefab: {fileID: 6981941031284743971, guid: 84cbf7d4f1c16bc478f079adeb0b6994, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Fire_2.prefab
+    name: Explosion_Fire_2
+  - prefab: {fileID: 5685069347925975538, guid: fd3b802c2fdd92641aa23ec351995025, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Fire_3.prefab
+    name: Explosion_Fire_3
+  - prefab: {fileID: 1542232142529162184, guid: 43ecb19fe882a254d9374adb1c128492, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Fire_4.prefab
+    name: Explosion_Fire_4
+  - prefab: {fileID: 4336402204210802743, guid: acf8ccb22975d754c9dd6e53155c5663, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Ice.prefab
+    name: Explosion_Ice
+  - prefab: {fileID: 101492313709125170, guid: 94a0762f8616675498c99dba4dfcd006, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Ice_2.prefab
+    name: Explosion_Ice_2
+  - prefab: {fileID: 5910997854716048990, guid: 2d681988617fe2e4687fdaf940f86cf2, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Ice_3.prefab
+    name: Explosion_Ice_3
+  - prefab: {fileID: 1785246201711463945, guid: 4bacaaaccbc92864da491c340c4d2232, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Light.prefab
+    name: Explosion_Light
+  - prefab: {fileID: 4020421568969601508, guid: 685b91b649b2e1346aec12559548ab26, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Light_2.prefab
+    name: Explosion_Light_2
+  - prefab: {fileID: 6632198514663776466, guid: 24f47ca68a7f8e34480ac6582fa0ff47, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Nature.prefab
+    name: Explosion_Nature
+  - prefab: {fileID: 6260301569182032418, guid: f0c05c8358d0ce741a03a7224e2b5a8d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Nature_2.prefab
+    name: Explosion_Nature_2
+  - prefab: {fileID: 1715412861929044475, guid: b60ac164b9306fa4490a08f088cce962, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Storm.prefab
+    name: Explosion_Storm
+  - prefab: {fileID: 7033440514832319137, guid: 471582da29e591e4c898d5dd9a4c6c8c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Explosion/Explosion_Storm_2.prefab
+    name: Explosion_Storm_2
+  - prefab: {fileID: 6140006693554785414, guid: af1e64aeef4734641a99b959a0f60767, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Arcane.prefab
+    name: Projectile_Arcane
+  - prefab: {fileID: 8965278452187400715, guid: 89ad6875895816e4dbfd927aef71aecb, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Arcane_2.prefab
+    name: Projectile_Arcane_2
+  - prefab: {fileID: 7928370588998662685, guid: 99d2d4b8b99b59b4291bc32c1608ea8e, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Arcane_3.prefab
+    name: Projectile_Arcane_3
+  - prefab: {fileID: 7603222385795505173, guid: 35556ea4ee14a6744b055c2293b6e6fa, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Dark.prefab
+    name: Projectile_Dark
+  - prefab: {fileID: 239525892755074683, guid: 15ac25e00d8cb09479bbfc9abc0e78fe, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Dark_2.prefab
+    name: Projectile_Dark_2
+  - prefab: {fileID: 5416836022004786063, guid: a41f8efa78aa3bd4f971dade269d4ef4, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Dark_3.prefab
+    name: Projectile_Dark_3
+  - prefab: {fileID: 9047127540421221634, guid: ba7252531389f4f4199fa8f2bf5fbba2, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Dark_4.prefab
+    name: Projectile_Dark_4
+  - prefab: {fileID: 1485987801625442810, guid: 0203a37b0f047a74794f252f4783d6b2, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Fire.prefab
+    name: Projectile_Fire
+  - prefab: {fileID: 3800864110370926544, guid: fca5bc6be87474d4d8479f14d0ed2351, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Fire_2.prefab
+    name: Projectile_Fire_2
+  - prefab: {fileID: 283538348305088910, guid: fe0ea5f557248d34bb88a3244da8a561, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Fire_3.prefab
+    name: Projectile_Fire_3
+  - prefab: {fileID: 2994363800222682087, guid: 81f333b872174404b94a3609d25e5f70, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Fire_4.prefab
+    name: Projectile_Fire_4
+  - prefab: {fileID: 8357042805450777661, guid: ab3404488d7b5f84394f8aeed7654211, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Ice.prefab
+    name: Projectile_Ice
+  - prefab: {fileID: 6284957955835133802, guid: dbd380a7993dad14c9d4bada1519077f, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Ice_2.prefab
+    name: Projectile_Ice_2
+  - prefab: {fileID: 2594342239608267824, guid: cb6a830959b825146a9f9f1551cc607f, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Ice_3.prefab
+    name: Projectile_Ice_3
+  - prefab: {fileID: 5517236050904519028, guid: 4a8cf0e165051ee41aeca36b26844ffa, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Light.prefab
+    name: Projectile_Light
+  - prefab: {fileID: 4474299800310568026, guid: 17d91a617a059c9409597debeb5c7278, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Light_2.prefab
+    name: Projectile_Light_2
+  - prefab: {fileID: 4353209434063490667, guid: e96769166368ff34e89824c13582e0a3, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Nature.prefab
+    name: Projectile_Nature
+  - prefab: {fileID: 6408456870218817403, guid: 9e712b8534095ec4cab53f877c6aec24, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Nature_2.prefab
+    name: Projectile_Nature_2
+  - prefab: {fileID: 5900896550996689396, guid: 0cb362b1d8868e34d84b467abe6a1d72, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Storm.prefab
+    name: Projectile_Storm
+  - prefab: {fileID: 3677407660804703815, guid: bfce539f906af2643b4ea3c7178819ba, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Projectiles/Projectiles/Projectile_Storm_2.prefab
+    name: Projectile_Storm_2
+  - prefab: {fileID: 7441502302898250610, guid: 1e934c0a341124a4291ad73096e6abd4, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Shields/Shield_Arcane.prefab
+    name: Shield_Arcane
+  - prefab: {fileID: 3193697957291008932, guid: 4a484a33faee9d745aca16852ec04a29, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Shields/Shield_Dark.prefab
+    name: Shield_Dark
+  - prefab: {fileID: 5677331674781024806, guid: 195dc6caf555b1649a8562ea7357a3bf, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Shields/Shield_Fire.prefab
+    name: Shield_Fire
+  - prefab: {fileID: 6146425452966005824, guid: d7e6bb69dcba4824a81cd84eeb884ac0, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Shields/Shield_Ice.prefab
+    name: Shield_Ice
+  - prefab: {fileID: 2293308700942882778, guid: 013cb904f54c2de44866eaf0a39bd331, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Shields/Shield_Light.prefab
+    name: Shield_Light
+  - prefab: {fileID: 871944872379322040, guid: e87f9ebb8e616584f81aa4dd91e77e2d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Shields/Shield_Nature.prefab
+    name: Shield_Nature
+  - prefab: {fileID: 2006655157700944086, guid: 959e4173f1a6daf468ed7cbbd43089ec, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Shields/Shield_Storm.prefab
+    name: Shield_Storm
+  - prefab: {fileID: 2186942109981119635, guid: c5f02a16d58781e42a3f6c5264d52e90, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Arcane.prefab
+    name: Spell_Arcane
+  - prefab: {fileID: 8010547172077499361, guid: 790181f20e698cd4cad12432da3d61e3, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Arcane_10.prefab
+    name: Spell_Arcane_10
+  - prefab: {fileID: 5417113857823291448, guid: d6ec19e8f13d9d747982d9db03488d8c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Arcane_11.prefab
+    name: Spell_Arcane_11
+  - prefab: {fileID: 981598918805561394, guid: 6c4c955eb532a464a987f53ca0b96b67, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Arcane_2.prefab
+    name: Spell_Arcane_2
+  - prefab: {fileID: 217051656145255241, guid: f0d0793ff6755cb4d82287dd3e4d1146, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Arcane_3.prefab
+    name: Spell_Arcane_3
+  - prefab: {fileID: 8946035426504197056, guid: 1196c427a4e4b6d45bf4a4e91e452f11, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Arcane_4.prefab
+    name: Spell_Arcane_4
+  - prefab: {fileID: 8676627530502376134, guid: 998f7e44c85c20148b3b04f193475e06, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Arcane_5.prefab
+    name: Spell_Arcane_5
+  - prefab: {fileID: 2007446721470092919, guid: 319f86d706ffac346ac4a4dd1bd71d9b, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Arcane_6.prefab
+    name: Spell_Arcane_6
+  - prefab: {fileID: 7306680212488205248, guid: 31f2921a9a362fb4c98ec124fba5facc, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Arcane_7.prefab
+    name: Spell_Arcane_7
+  - prefab: {fileID: 8365423207749520850, guid: aacad47cc1e1433498a9f95c5839dac3, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Arcane_8.prefab
+    name: Spell_Arcane_8
+  - prefab: {fileID: 6126239333473367207, guid: 4ed9d85b103ffeb4380d969a1e80e00d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Arcane_9.prefab
+    name: Spell_Arcane_9
+  - prefab: {fileID: 398403790546872768, guid: 01892f8232324ac429b387c796c2d4bd, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Dark.prefab
+    name: Spell_Dark
+  - prefab: {fileID: 9159622708154072583, guid: 97e7108bbfd6ed94f820aac3285bab03, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Dark_10.prefab
+    name: Spell_Dark_10
+  - prefab: {fileID: 7083818865219112985, guid: e4235d32ebd48f1499935ec5d4c8e5ae, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Dark_2.prefab
+    name: Spell_Dark_2
+  - prefab: {fileID: 4740315085272670911, guid: 3e006f039301b3546a8e442f2ad51b1f, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Dark_3.prefab
+    name: Spell_Dark_3
+  - prefab: {fileID: 2195992500377507925, guid: 039a480a4c3a50d4dbeb096ef8387e76, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Dark_4.prefab
+    name: Spell_Dark_4
+  - prefab: {fileID: 1708261037296587272, guid: 8d12400ce1b37cb4590bfec31dd3e88a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Dark_5.prefab
+    name: Spell_Dark_5
+  - prefab: {fileID: 7831262613398163671, guid: 3b34a40d563b1cb4bbac5c9ee9bb0b41, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Dark_6.prefab
+    name: Spell_Dark_6
+  - prefab: {fileID: 5631821202973691364, guid: b1754d9984cd60847b604ccc37aa81dc, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Dark_7.prefab
+    name: Spell_Dark_7
+  - prefab: {fileID: 3174922190208004343, guid: 27a0ff2d6e4b1e14398e9c726962bbc6, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Dark_8.prefab
+    name: Spell_Dark_8
+  - prefab: {fileID: 5116116427015974604, guid: 8156502275ecd354096208a20db5832f, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Dark_9.prefab
+    name: Spell_Dark_9
+  - prefab: {fileID: 6844273986923257540, guid: dee07cb3ed72b59499446ff2189aff0a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Fire.prefab
+    name: Spell_Fire
+  - prefab: {fileID: 2946998425503733554, guid: 7e22fef2736064640a0c940b7c13e3cd, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Fire_10.prefab
+    name: Spell_Fire_10
+  - prefab: {fileID: 2385584162586526071, guid: a900f7de657fd444e87c2c9876fe10c9, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Fire_11.prefab
+    name: Spell_Fire_11
+  - prefab: {fileID: 3391080959227641130, guid: 5dc5b641683f92841ada1680da2df4f3, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Fire_12.prefab
+    name: Spell_Fire_12
+  - prefab: {fileID: 3192426079943343367, guid: d0bc04c2490925c45afe9f7812fd2ca6, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Fire_2.prefab
+    name: Spell_Fire_2
+  - prefab: {fileID: 3420216945880062043, guid: 52019dfaa06ce04419c2e7304f39f840, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Fire_3.prefab
+    name: Spell_Fire_3
+  - prefab: {fileID: 6669767379399158163, guid: 94cdc85128ed52745b736769ec3e94b8, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Fire_4.prefab
+    name: Spell_Fire_4
+  - prefab: {fileID: 1953714657109559461, guid: 9556e40635c6f4a47929213ddb022409, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Fire_5.prefab
+    name: Spell_Fire_5
+  - prefab: {fileID: 1320848605815502591, guid: 1bb164cb58786a04a8d3de75ed23a5d6, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Fire_6.prefab
+    name: Spell_Fire_6
+  - prefab: {fileID: 4302235364674815816, guid: c9d7340b8b8807648881e50144995e96, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Fire_7.prefab
+    name: Spell_Fire_7
+  - prefab: {fileID: 7310852798245284593, guid: 0011549e85c32bf4f8ce3fa40201fa62, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Fire_8.prefab
+    name: Spell_Fire_8
+  - prefab: {fileID: 5360962108930817432, guid: 9d050a758c1b52a4498c7cfa292f025a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Fire_9.prefab
+    name: Spell_Fire_9
+  - prefab: {fileID: 7750434138733341158, guid: 1d65689f96e6791459d6318547991212, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Ice.prefab
+    name: Spell_Ice
+  - prefab: {fileID: 8308391781665392937, guid: f574a142b8686ee4eaa5db08c8f4f614, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Ice_10.prefab
+    name: Spell_Ice_10
+  - prefab: {fileID: 6218023325072127499, guid: fbfe94caac35758428ed49bf9f79541e, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Ice_11.prefab
+    name: Spell_Ice_11
+  - prefab: {fileID: 1838517241263308555, guid: 663610dbfd35d2a458853ccdadd7768d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Ice_12.prefab
+    name: Spell_Ice_12
+  - prefab: {fileID: 2151534343677383834, guid: c4cb87d678c2c3948905d73424c07288, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Ice_2.prefab
+    name: Spell_Ice_2
+  - prefab: {fileID: 5814864941146802141, guid: 73b819bcb9324494bb4f22d94b845009, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Ice_3.prefab
+    name: Spell_Ice_3
+  - prefab: {fileID: 2353240480721080108, guid: e80af06d7ddeebb448749ee14de3a2b8, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Ice_4.prefab
+    name: Spell_Ice_4
+  - prefab: {fileID: 534280799920659046, guid: 5eac405beae91e04f8597885a7568808, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Ice_5.prefab
+    name: Spell_Ice_5
+  - prefab: {fileID: 7579983198049091657, guid: 07b5929724d24004bb91688e2a7a7174, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Ice_6.prefab
+    name: Spell_Ice_6
+  - prefab: {fileID: 4941193099715453670, guid: 4c296006f97c4ec489793be8366e1366, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Ice_7.prefab
+    name: Spell_Ice_7
+  - prefab: {fileID: 1933841571898710198, guid: 4358806a02887a74f84fa9d94ab37171, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Ice_8.prefab
+    name: Spell_Ice_8
+  - prefab: {fileID: 4321065396101114601, guid: 91d54d231b4d1294cafc6f8f126e61db, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Ice_9.prefab
+    name: Spell_Ice_9
+  - prefab: {fileID: 4365573117504592596, guid: 6c861cb594c39db43b46ddc8d95f8977, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Light.prefab
+    name: Spell_Light
+  - prefab: {fileID: 5260246783796237652, guid: d626745a18eb3d8488d36f9ce6e92993, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Light_10.prefab
+    name: Spell_Light_10
+  - prefab: {fileID: 8152471459190970492, guid: bd322e1b5aa20eb4e8110182af757e6c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Light_11.prefab
+    name: Spell_Light_11
+  - prefab: {fileID: 4737006685481212167, guid: 44cc181682f31bf408c76340d76b0819, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Light_2.prefab
+    name: Spell_Light_2
+  - prefab: {fileID: 3152030751980378987, guid: e8a4ca70da468f34daebd29d4b2c367c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Light_3.prefab
+    name: Spell_Light_3
+  - prefab: {fileID: 8568502112785259859, guid: a894e7f90d6303b41b43b63d01349917, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Light_4.prefab
+    name: Spell_Light_4
+  - prefab: {fileID: 3240619130287013369, guid: caf5916b67e478e4081acf9f177a389c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Light_5.prefab
+    name: Spell_Light_5
+  - prefab: {fileID: 1400503165379871390, guid: 76204a57e3d5cdc458026a1c115397c5, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Light_6.prefab
+    name: Spell_Light_6
+  - prefab: {fileID: 8953386689490299122, guid: a52b16e1858c9314d8028b3a4fda2f6b, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Light_7.prefab
+    name: Spell_Light_7
+  - prefab: {fileID: 1580067441666978075, guid: 85e70957fefc33f48bcafa70f9a18f09, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Light_8.prefab
+    name: Spell_Light_8
+  - prefab: {fileID: 3927318853210982926, guid: c3abf1269de13e24ab04dea2c0090ebd, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Light_9.prefab
+    name: Spell_Light_9
+  - prefab: {fileID: 6944427238180338099, guid: 81f48fe67fdfc434d96b4dffb6b7fc00, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Nature.prefab
+    name: Spell_Nature
+  - prefab: {fileID: 7731317770373597872, guid: 6e033b4d904cf38469081fce124019f0, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Nature_10.prefab
+    name: Spell_Nature_10
+  - prefab: {fileID: 6084038271707980725, guid: fa508bb44eb320643b38e99f3ebc44b0, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Nature_2.prefab
+    name: Spell_Nature_2
+  - prefab: {fileID: 256209769498195292, guid: 89c06b61d3b28eb49b7e02ce5401fc4c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Nature_3.prefab
+    name: Spell_Nature_3
+  - prefab: {fileID: 9020324075680731272, guid: c58ffd168250f624ea54fdd0e6101de2, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Nature_4.prefab
+    name: Spell_Nature_4
+  - prefab: {fileID: 5610294567902175312, guid: 2d9985a1d97581a458964262d55155c8, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Nature_5.prefab
+    name: Spell_Nature_5
+  - prefab: {fileID: 1398860866490179543, guid: f519265e016ffe448ab62c16e8b30876, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Nature_6.prefab
+    name: Spell_Nature_6
+  - prefab: {fileID: 4921346081555748454, guid: d06c1abebe2d8444a829082abe5af4c4, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Nature_7.prefab
+    name: Spell_Nature_7
+  - prefab: {fileID: 7970835593044432739, guid: 9f3d6422b3e69574f842d98b34931ffd, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Nature_8.prefab
+    name: Spell_Nature_8
+  - prefab: {fileID: 4456363377978245966, guid: d6bdc335ccb9bbb4c9e8e8dec71061f5, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Nature_9.prefab
+    name: Spell_Nature_9
+  - prefab: {fileID: 213744739810403217, guid: 0c3a3487426f84449a08ae8989ff4fe6, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Storm.prefab
+    name: Spell_Storm
+  - prefab: {fileID: 8985130445103862870, guid: 96a93f4ede8a7634fa50b0a07d9ebdf2, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Storm_10.prefab
+    name: Spell_Storm_10
+  - prefab: {fileID: 4008375513562241435, guid: 3b963600b5a55734bb36413b67e77dd1, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Storm_2.prefab
+    name: Spell_Storm_2
+  - prefab: {fileID: 8812217087939368807, guid: afe186c8af00d3c4cb612cca65d092ad, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Storm_3.prefab
+    name: Spell_Storm_3
+  - prefab: {fileID: 3144161684805450049, guid: 94492c53d47b24946bb38e7725604299, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Storm_4.prefab
+    name: Spell_Storm_4
+  - prefab: {fileID: 1442882265098258601, guid: ad24aeef81f003c449463f1a1fdb037a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Storm_5.prefab
+    name: Spell_Storm_5
+  - prefab: {fileID: 8335548075806000300, guid: cdf23e11c5b534740bca51acca6759c7, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Storm_6.prefab
+    name: Spell_Storm_6
+  - prefab: {fileID: 6109584215529281666, guid: 904d854372db76b4fac7abc8311d9c34, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Storm_7.prefab
+    name: Spell_Storm_7
+  - prefab: {fileID: 5939827306621338363, guid: 908ff3c1edf15ba4c8340ca61c6d8851, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Storm_8.prefab
+    name: Spell_Storm_8
+  - prefab: {fileID: 2650913638476504773, guid: a62907dcf24dd4a4597140d607516a48, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Storm_9.prefab
+    name: Spell_Storm_9
+  - prefab: {fileID: 4481016786662364578, guid: 596395d4f3f078e439864f7f3c873a22, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Tomes/Tome_Arcane.prefab
+    name: Tome_Arcane
+  - prefab: {fileID: 5590774191740999026, guid: 2834329db626c98469d249c118aeb07b, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Tomes/Tome_Dark.prefab
+    name: Tome_Dark
+  - prefab: {fileID: 3731771362840380781, guid: c5cc508b82d8d264f9e53284036e715a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Tomes/Tome_Fire.prefab
+    name: Tome_Fire
+  - prefab: {fileID: 3224037477293475496, guid: 3cc16abcdcd1a9548afbef97e9f3ef6f, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Tomes/Tome_Ice.prefab
+    name: Tome_Ice
+  - prefab: {fileID: 1126076040059098981, guid: 3044a2ff3c5dcf24c99a93ac283d5b09, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Tomes/Tome_Light.prefab
+    name: Tome_Light
+  - prefab: {fileID: 1353488924439060747, guid: fb49b44c8ad3bf04dbd0a9fa71a0944e, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Tomes/Tome_Nature.prefab
+    name: Tome_Nature
+  - prefab: {fileID: 4791549004513948232, guid: f09ffa69d319ab044b247eeafbc8a4a1, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Tomes/Tome_Storm.prefab
+    name: Tome_Storm
+  - prefab: {fileID: 6383136425764089353, guid: 6f6651577e133754c8404f3ad9cfc2c4, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_10_Blue
+      Variant.prefab
+    name: Spell_Arcane_10_Blue Variant
+  - prefab: {fileID: 7107917583201019481, guid: b8e2df2a163ab8046859120a87268ff8, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_10_Green
+      Variant.prefab
+    name: Spell_Arcane_10_Green Variant
+  - prefab: {fileID: 6631010401944536674, guid: c845f3891a131e9479c1fb1675828173, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_10_Red
+      Variant.prefab
+    name: Spell_Arcane_10_Red Variant
+  - prefab: {fileID: 8914368563060876622, guid: d05f7daeac47964458ce5afe9cc95f8b, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_10_Yellow
+      Variant.prefab
+    name: Spell_Arcane_10_Yellow Variant
+  - prefab: {fileID: 2428327858358617656, guid: d5088f4ca308add4fb7aa6cceef4874c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_11_Blue
+      Variant.prefab
+    name: Spell_Arcane_11_Blue Variant
+  - prefab: {fileID: 3256460248926023387, guid: 6fe746781adc2684081090585e22eaa9, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_11_Green
+      Variant.prefab
+    name: Spell_Arcane_11_Green Variant
+  - prefab: {fileID: 85923591967125728, guid: c2b0b73f14520e3499a8ac5924a5b480, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_11_Red
+      Variant.prefab
+    name: Spell_Arcane_11_Red Variant
+  - prefab: {fileID: 8962850592153886932, guid: 1fe863bf6d7c21b41afed50d8d0339b7, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_11_Yellow
+      Variant.prefab
+    name: Spell_Arcane_11_Yellow Variant
+  - prefab: {fileID: 1576082643227020540, guid: aa6823edbbb769b4e9516c5798ace3d9, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_2_Blue
+      Variant.prefab
+    name: Spell_Arcane_2_Blue Variant
+  - prefab: {fileID: 5872938619372996654, guid: c7ae42875a378c641ace1b5bcf16074f, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_2_Green
+      Variant.prefab
+    name: Spell_Arcane_2_Green Variant
+  - prefab: {fileID: 29760519277293571, guid: a4923cea676ad1f4a856db8b9d7db270, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_2_Red
+      Variant.prefab
+    name: Spell_Arcane_2_Red Variant
+  - prefab: {fileID: 2786950444504660086, guid: 3a6203b8c084a604d8dec0977ecbae00, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_2_Yellow
+      Variant.prefab
+    name: Spell_Arcane_2_Yellow Variant
+  - prefab: {fileID: 1652625741704673537, guid: 7520324b066ce384e858c67b0a99c186, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_3_Blue
+      Variant.prefab
+    name: Spell_Arcane_3_Blue Variant
+  - prefab: {fileID: 5091017141860534715, guid: 1265ee9a26d5d0740b1560fa80d136df, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_3_Green
+      Variant.prefab
+    name: Spell_Arcane_3_Green Variant
+  - prefab: {fileID: 6940897305920270628, guid: 796b0fe1509956149abe451d6e831b80, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_3_Red
+      Variant.prefab
+    name: Spell_Arcane_3_Red Variant
+  - prefab: {fileID: 8380722381257410701, guid: 5a0d72b3808898345b2a3353fa8044dc, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_3_Yellow
+      Variant.prefab
+    name: Spell_Arcane_3_Yellow Variant
+  - prefab: {fileID: 9109462144444473723, guid: 5bce7f7e414fbd748af1f3341b05535c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_4_Blue
+      Variant.prefab
+    name: Spell_Arcane_4_Blue Variant
+  - prefab: {fileID: 6181900719137573625, guid: 2ac026e52f1d9cd428ddb2b925fb4d76, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_4_Green
+      Variant.prefab
+    name: Spell_Arcane_4_Green Variant
+  - prefab: {fileID: 5310359079381780238, guid: 61bde54d495cb0f4aab7156bc852d4d8, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_4_Red
+      Variant.prefab
+    name: Spell_Arcane_4_Red Variant
+  - prefab: {fileID: 4376783128549146675, guid: e48bc97a5b4443a4aab62903dd6631e4, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_4_Yellow
+      Variant.prefab
+    name: Spell_Arcane_4_Yellow Variant
+  - prefab: {fileID: 5682820029443435506, guid: e1105af918946024bab68a140c5edc5f, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_5_Blue
+      Variant.prefab
+    name: Spell_Arcane_5_Blue Variant
+  - prefab: {fileID: 7264312299912825936, guid: ad8e6397c341c894ca0299f09d39bda0, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_5_Green
+      Variant.prefab
+    name: Spell_Arcane_5_Green Variant
+  - prefab: {fileID: 7930319343330862390, guid: 048e8f013b99c3e4381617e3510b60d9, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_5_Red
+      Variant.prefab
+    name: Spell_Arcane_5_Red Variant
+  - prefab: {fileID: 6395369174248639582, guid: c9b543e63973d704ca62564b38f2635d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_5_Yellow
+      Variant.prefab
+    name: Spell_Arcane_5_Yellow Variant
+  - prefab: {fileID: 4777987529292627545, guid: d1a6474578beaac49b9424965507dc04, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_6_Blue
+      Variant.prefab
+    name: Spell_Arcane_6_Blue Variant
+  - prefab: {fileID: 3855626087849091469, guid: f18ccafc73f8ed6458b3b5fa2b217c89, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_6_Green
+      Variant.prefab
+    name: Spell_Arcane_6_Green Variant
+  - prefab: {fileID: 2536087477363584167, guid: 23d9de927a33d9f4c8a82a60a898d3a9, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_6_Red
+      Variant.prefab
+    name: Spell_Arcane_6_Red Variant
+  - prefab: {fileID: 8482090706209393556, guid: cf12e2ed236070b4f981234ffbab52e0, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_6_Yellow
+      Variant.prefab
+    name: Spell_Arcane_6_Yellow Variant
+  - prefab: {fileID: 4940613822149095506, guid: d3d1eb2e79ceabd4e948724540c9e073, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_7_Blue
+      Variant.prefab
+    name: Spell_Arcane_7_Blue Variant
+  - prefab: {fileID: 8278995212661121523, guid: eb920973ab9ffa1488b31ec632b3471e, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_7_Green
+      Variant.prefab
+    name: Spell_Arcane_7_Green Variant
+  - prefab: {fileID: 1232283060635308094, guid: fa5a77c762803284bb83dd3236c191f3, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_7_Red
+      Variant.prefab
+    name: Spell_Arcane_7_Red Variant
+  - prefab: {fileID: 7098324365383622573, guid: 237c8bb5e05f9454193a011223d2afa9, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_7_Yellow
+      Variant.prefab
+    name: Spell_Arcane_7_Yellow Variant
+  - prefab: {fileID: 5720804539205793907, guid: cb7ab6e2ed4072d4c9da84068de24aa9, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_8_Blue
+      Variant.prefab
+    name: Spell_Arcane_8_Blue Variant
+  - prefab: {fileID: 7647371880886682803, guid: d4542661e2c44ed4c89c9feacfda85f4, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_8_Green
+      Variant.prefab
+    name: Spell_Arcane_8_Green Variant
+  - prefab: {fileID: 4666026271520427512, guid: 2ebda2df6035ba14d8baff98b959522f, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_8_Red
+      Variant.prefab
+    name: Spell_Arcane_8_Red Variant
+  - prefab: {fileID: 8593244598262436986, guid: da0ecf9168814b84fa61105824058b1b, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_8_Yellow
+      Variant.prefab
+    name: Spell_Arcane_8_Yellow Variant
+  - prefab: {fileID: 194806782592584722, guid: 88b1ed878c754654fb31f7662572fd55, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_9_Blue
+      Variant.prefab
+    name: Spell_Arcane_9_Blue Variant
+  - prefab: {fileID: 5253098150311997251, guid: fb01ca6b035c2ed4f8f8961754f20c63, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_9_Green
+      Variant.prefab
+    name: Spell_Arcane_9_Green Variant
+  - prefab: {fileID: 9013599326887329597, guid: 22d3a8a1f2f16d24e938e64188f50b95, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_9_Red
+      Variant.prefab
+    name: Spell_Arcane_9_Red Variant
+  - prefab: {fileID: 6387342048079686466, guid: 8a1c2d0b6be95d94ca2fa894dab4282a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_9_Yellow
+      Variant.prefab
+    name: Spell_Arcane_9_Yellow Variant
+  - prefab: {fileID: 4323153174539164565, guid: f24872c2629f17b43b52e14a5f7e6594, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_Blue
+      Variant.prefab
+    name: Spell_Arcane_Blue Variant
+  - prefab: {fileID: 3441709527395842867, guid: 1168421f1074a6e409900493097694e4, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_Green
+      Variant.prefab
+    name: Spell_Arcane_Green Variant
+  - prefab: {fileID: 8600527048454551533, guid: 78a9d1d1830ca3e4991711909c6c2b70, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_Red
+      Variant.prefab
+    name: Spell_Arcane_Red Variant
+  - prefab: {fileID: 428685447604548325, guid: d8fa80c995b98bb46b164f6baf750515, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Arcane/Spell_Arcane_Yellow
+      Variant.prefab
+    name: Spell_Arcane_Yellow Variant
+  - prefab: {fileID: 2700324461306918519, guid: 84a0ab2c111392644b6facb09fc39ae4, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_10_Purple_Yellow
+      Variant.prefab
+    name: Spell_Dark_10_Purple_Yellow Variant
+  - prefab: {fileID: 8066907497700838959, guid: b915115b13a912245a56143115b70db5, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_10_Red_Blue
+      Variant.prefab
+    name: Spell_Dark_10_Red_Blue Variant
+  - prefab: {fileID: 2844255677177777652, guid: 92ab6d591aebb5d4284ac34a281656cf, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_2_Blue
+      Variant.prefab
+    name: Spell_Dark_2_Blue Variant
+  - prefab: {fileID: 912848397977710908, guid: 22d60421112fbad4a8a14a8ade4618b1, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_2_Purple
+      Variant.prefab
+    name: Spell_Dark_2_Purple Variant
+  - prefab: {fileID: 4697589430051732867, guid: 162f1fedf55355b41bf5705281bf8ec8, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_2_Red
+      Variant.prefab
+    name: Spell_Dark_2_Red Variant
+  - prefab: {fileID: 6545361230567155492, guid: d868170e589847143921496eb3a343a4, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_2_Yellow
+      Variant.prefab
+    name: Spell_Dark_2_Yellow Variant
+  - prefab: {fileID: 4489739397169103904, guid: d529c392693efbd4dafec686cb987213, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_3_Blue
+      Variant.prefab
+    name: Spell_Dark_3_Blue Variant
+  - prefab: {fileID: 4084250619725872891, guid: 4b0c770b0c4a6464dac36d863e8f4afe, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_3_Purple
+      Variant.prefab
+    name: Spell_Dark_3_Purple Variant
+  - prefab: {fileID: 3197265153014558824, guid: 823ab87500bd83041bacc48e70776404, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_3_Red
+      Variant.prefab
+    name: Spell_Dark_3_Red Variant
+  - prefab: {fileID: 7091609451377498809, guid: 2b075e9b108550143b352f8e22022a88, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_3_Yellow
+      Variant.prefab
+    name: Spell_Dark_3_Yellow Variant
+  - prefab: {fileID: 5967327256412140170, guid: 503189a797b727b4cbdf6cea96477c6f, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_4_Blue
+      Variant.prefab
+    name: Spell_Dark_4_Blue Variant
+  - prefab: {fileID: 6640501052880962967, guid: a241e973d1a1f6b419aa80c6a5f52834, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_4_Purple
+      Variant.prefab
+    name: Spell_Dark_4_Purple Variant
+  - prefab: {fileID: 717237780505805418, guid: f3827be51c8f60440851286ff55ee7fa, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_4_Red
+      Variant.prefab
+    name: Spell_Dark_4_Red Variant
+  - prefab: {fileID: 8155798301100604640, guid: e06a3fce800fd0b4c82aadec1deb2eb8, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_4_Yellow
+      Variant.prefab
+    name: Spell_Dark_4_Yellow Variant
+  - prefab: {fileID: 5758982181828796501, guid: 30d1bb02d9b71f144a78914f8ef1cce8, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_5_Blue
+      Variant.prefab
+    name: Spell_Dark_5_Blue Variant
+  - prefab: {fileID: 1086863768321649830, guid: efe2875c8ad83a1498f77ac0c126aa4f, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_5_Purple
+      Variant.prefab
+    name: Spell_Dark_5_Purple Variant
+  - prefab: {fileID: 4710510869651512501, guid: 6a5cc756e7a51894fbb1c4fdf1f84ff2, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_5_Red
+      Variant.prefab
+    name: Spell_Dark_5_Red Variant
+  - prefab: {fileID: 9009507887802861438, guid: 12a836716c4aa1944bbbfaccbad6c9ff, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_5_Yellow
+      Variant.prefab
+    name: Spell_Dark_5_Yellow Variant
+  - prefab: {fileID: 6618415756239120960, guid: a3d448c9702d7334cb10e2acd27c61cc, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_6_Blue
+      Variant.prefab
+    name: Spell_Dark_6_Blue Variant
+  - prefab: {fileID: 8231660227710219407, guid: 29e4b49d70502334d9edf9d7137adab7, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_6_Purple
+      Variant.prefab
+    name: Spell_Dark_6_Purple Variant
+  - prefab: {fileID: 3670688528037625733, guid: bcb1ea9f40f128448a0762325a81a298, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_6_Red
+      Variant.prefab
+    name: Spell_Dark_6_Red Variant
+  - prefab: {fileID: 4502745686226852331, guid: 0304415b3365e824196a2c1c7e240bf6, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_6_Yellow
+      Variant.prefab
+    name: Spell_Dark_6_Yellow Variant
+  - prefab: {fileID: 7219364562046907306, guid: 1d388fb79c2260d44859230f2d50c35d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_7_Blue
+      Variant.prefab
+    name: Spell_Dark_7_Blue Variant
+  - prefab: {fileID: 7022335766318524333, guid: 34792672acabea04d84bc9ba46970ec4, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_7_Purple
+      Variant.prefab
+    name: Spell_Dark_7_Purple Variant
+  - prefab: {fileID: 7632951607692780587, guid: baa6dcc045fe783458d5118954db1d14, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_7_Red
+      Variant.prefab
+    name: Spell_Dark_7_Red Variant
+  - prefab: {fileID: 7549008925131011784, guid: 5e1e80653a829594cb98dbebe48d6d86, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_7_Yellow
+      Variant.prefab
+    name: Spell_Dark_7_Yellow Variant
+  - prefab: {fileID: 4185619755395735500, guid: a128eab6f17f91c4ca378ef401f8373c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_8_Blue
+      Variant.prefab
+    name: Spell_Dark_8_Blue Variant
+  - prefab: {fileID: 9184588473200891680, guid: ce984c1e1101fc14f83aeafca41599d4, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_8_Purple
+      Variant.prefab
+    name: Spell_Dark_8_Purple Variant
+  - prefab: {fileID: 8823671999207468081, guid: 7acb7d5aac5a1f444a6732aa2cb79843, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_8_Red
+      Variant.prefab
+    name: Spell_Dark_8_Red Variant
+  - prefab: {fileID: 6551600588776452441, guid: d48b9d02068751145b7b35fda43b740c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_8_Yellow
+      Variant.prefab
+    name: Spell_Dark_8_Yellow Variant
+  - prefab: {fileID: 296253245312744608, guid: 003fae738cd2d704eafe0ba04d07fc79, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_9_Blue
+      Variant.prefab
+    name: Spell_Dark_9_Blue Variant
+  - prefab: {fileID: 6008240087419672833, guid: da4c053d6d3e6d6459c341f9e467be47, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_9_Purple
+      Variant.prefab
+    name: Spell_Dark_9_Purple Variant
+  - prefab: {fileID: 118877916044138391, guid: 9fd88fe956fad2543895ed0e7baa1913, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_9_Red
+      Variant.prefab
+    name: Spell_Dark_9_Red Variant
+  - prefab: {fileID: 852614317948794293, guid: bcfc81c26700ed94e8b15a209f32c6e0, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_9_Yellow
+      Variant.prefab
+    name: Spell_Dark_9_Yellow Variant
+  - prefab: {fileID: 5534092096343512084, guid: 82c523c5e0090b34a83806e1c05da6c8, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_Blue
+      Variant.prefab
+    name: Spell_Dark_Blue Variant
+  - prefab: {fileID: 5642918064509639144, guid: c41cc30c8782c9348a19ca68649d39cb, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_Purple
+      Variant.prefab
+    name: Spell_Dark_Purple Variant
+  - prefab: {fileID: 3815600893480570196, guid: 2656664bb4e8bb241928ffd97da5fd62, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_Red
+      Variant.prefab
+    name: Spell_Dark_Red Variant
+  - prefab: {fileID: 356254794358836815, guid: 72b0a558a49ea1b41b99d6aeb2d01a4a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Dark/Spell_Dark_Yellow
+      Variant.prefab
+    name: Spell_Dark_Yellow Variant
+  - prefab: {fileID: 3163519540582953996, guid: 51f02d281bba9ec41b85721eac5e00bb, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_10_Blue
+      Variant.prefab
+    name: Spell_Fire_10_Blue Variant
+  - prefab: {fileID: 7573276342842340454, guid: 4c34bb9b000aafe4083affa60962285c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_10_Green
+      Variant.prefab
+    name: Spell_Fire_10_Green Variant
+  - prefab: {fileID: 5871410133686381925, guid: c1676161acae7554d9f81add5acab05a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_10_Purple
+      Variant.prefab
+    name: Spell_Fire_10_Purple Variant
+  - prefab: {fileID: 3363799856337468282, guid: 94ed4b89bc4f7184aab2076dfb454b1b, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_10_Yellow
+      Variant.prefab
+    name: Spell_Fire_10_Yellow Variant
+  - prefab: {fileID: 7281313383032336684, guid: eb54413fe0e5c0a4bba175a096a289a3, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_11_Blue
+      Variant.prefab
+    name: Spell_Fire_11_Blue Variant
+  - prefab: {fileID: 2519123072749948664, guid: acba2272a07cb754cb5c51992829659a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_11_Green
+      Variant.prefab
+    name: Spell_Fire_11_Green Variant
+  - prefab: {fileID: 2571854278145933418, guid: ca3e29d61253cd945b5e36effe29717e, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_11_Purple
+      Variant.prefab
+    name: Spell_Fire_11_Purple Variant
+  - prefab: {fileID: 7043312822079218309, guid: 14865cb602ff9a349b5e1af5f6621af1, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_11_Yellow
+      Variant.prefab
+    name: Spell_Fire_11_Yellow Variant
+  - prefab: {fileID: 7355916059740625626, guid: 1e8fd8382c97cda40be3b8a414e6ac49, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_12_Blue
+      Variant.prefab
+    name: Spell_Fire_12_Blue Variant
+  - prefab: {fileID: 3857593720499380288, guid: 6d6e6af5a1b595f449b8f39097fe0e7b, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_12_Green
+      Variant.prefab
+    name: Spell_Fire_12_Green Variant
+  - prefab: {fileID: 643029524817689830, guid: a71ac71487b4aeb4f8c1aa5ddecbf209, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_12_Purple
+      Variant.prefab
+    name: Spell_Fire_12_Purple Variant
+  - prefab: {fileID: 543198002780268173, guid: 2502b2e5e478f504182964bfaa4ee229, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_12_Yellow
+      Variant.prefab
+    name: Spell_Fire_12_Yellow Variant
+  - prefab: {fileID: 590555507648280963, guid: d7ea0e8e244093c48b34b9b55d05b670, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_2_Blue
+      Variant.prefab
+    name: Spell_Fire_2_Blue Variant
+  - prefab: {fileID: 902109157751506162, guid: 283d7c6563407bf4ab67e0579fa1baa2, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_2_Green
+      Variant.prefab
+    name: Spell_Fire_2_Green Variant
+  - prefab: {fileID: 8479975350431815833, guid: 09391327e8114a54dbfa71ef59bb3006, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_2_Purple
+      Variant.prefab
+    name: Spell_Fire_2_Purple Variant
+  - prefab: {fileID: 5288399698508212531, guid: fb627e651be4bd348a6eb76097719c7d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_2_Yellow
+      Variant.prefab
+    name: Spell_Fire_2_Yellow Variant
+  - prefab: {fileID: 5706881719347326902, guid: 3c9271ef1e2eb124babd1c7c4d5c4999, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_3_Blue
+      Variant.prefab
+    name: Spell_Fire_3_Blue Variant
+  - prefab: {fileID: 860657181146827808, guid: a254a78f5fbf0d04c8c4746da280188d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_3_Green
+      Variant.prefab
+    name: Spell_Fire_3_Green Variant
+  - prefab: {fileID: 2762193329617636043, guid: cb5473d5052cebd48a838efeda97a59a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_3_Purple
+      Variant.prefab
+    name: Spell_Fire_3_Purple Variant
+  - prefab: {fileID: 6485622457219416768, guid: dd6cee027f5c4cf4d90ed0f5f5efc5b2, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_3_Yellow
+      Variant.prefab
+    name: Spell_Fire_3_Yellow Variant
+  - prefab: {fileID: 5184608765801129230, guid: 033d2783a92a47e40a05d82054464a8a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_4_Blue
+      Variant.prefab
+    name: Spell_Fire_4_Blue Variant
+  - prefab: {fileID: 5432145496124383223, guid: 75d0812bd2f340e44b98507961b5e4d9, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_4_Green
+      Variant.prefab
+    name: Spell_Fire_4_Green Variant
+  - prefab: {fileID: 8412421486722866200, guid: b3ff99e4ab545094ca426769b2c420d4, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_4_Purple
+      Variant.prefab
+    name: Spell_Fire_4_Purple Variant
+  - prefab: {fileID: 5769893528781268710, guid: 73fd6e9ed6502704488d9cf2caf4285a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_4_Yellow
+      Variant.prefab
+    name: Spell_Fire_4_Yellow Variant
+  - prefab: {fileID: 5904665705659056853, guid: a78d5edaf04cc5e428e99852b9017780, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_5_Blue
+      Variant.prefab
+    name: Spell_Fire_5_Blue Variant
+  - prefab: {fileID: 5437603042263838033, guid: 61f2fbf1655cadd4895558473f18478c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_5_Green
+      Variant.prefab
+    name: Spell_Fire_5_Green Variant
+  - prefab: {fileID: 2193508008147108958, guid: bd712e7692710434e9ceddcd9d9ff53f, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_5_Purple
+      Variant.prefab
+    name: Spell_Fire_5_Purple Variant
+  - prefab: {fileID: 4172336883154995105, guid: aace47f93fb2954419666755ac3331c5, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_5_Yellow
+      Variant.prefab
+    name: Spell_Fire_5_Yellow Variant
+  - prefab: {fileID: 8390402473927445518, guid: ed8c00054d260354ab1bd062fbab900b, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_6_Blue
+      Variant.prefab
+    name: Spell_Fire_6_Blue Variant
+  - prefab: {fileID: 2416032027905177149, guid: b633af096b3b21e42acfd40c3c60b9f7, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_6_Green
+      Variant.prefab
+    name: Spell_Fire_6_Green Variant
+  - prefab: {fileID: 3627889893378146233, guid: 94b45792026e9774fa523d2ce94abe5d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_6_Purple
+      Variant.prefab
+    name: Spell_Fire_6_Purple Variant
+  - prefab: {fileID: 8233957507702950180, guid: 37e596fcee17f5e4faa86767708c290f, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_6_Yellow
+      Variant.prefab
+    name: Spell_Fire_6_Yellow Variant
+  - prefab: {fileID: 5696144357051327840, guid: 7f6535dc4336fff45b8955692f388bf6, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_7_Blue
+      Variant.prefab
+    name: Spell_Fire_7_Blue Variant
+  - prefab: {fileID: 7276989636391544251, guid: 6c96b4b8eb9a9f746b4fd0b0727d1562, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_7_Green
+      Variant.prefab
+    name: Spell_Fire_7_Green Variant
+  - prefab: {fileID: 6251967774971628038, guid: 5aa1ac43ac7a85d4cb20b292630d6499, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_7_Purple
+      Variant.prefab
+    name: Spell_Fire_7_Purple Variant
+  - prefab: {fileID: 7086439605558290233, guid: 71207b07ac2d3fb46a84854972657c54, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_7_Yellow
+      Variant.prefab
+    name: Spell_Fire_7_Yellow Variant
+  - prefab: {fileID: 8997349387751512883, guid: 0973f18e467d4574fb625bbc77022c58, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_8_Blue
+      Variant.prefab
+    name: Spell_Fire_8_Blue Variant
+  - prefab: {fileID: 8815689578657792510, guid: fca8cb90b02e2044e8e4323233d2fedc, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_8_Green
+      Variant.prefab
+    name: Spell_Fire_8_Green Variant
+  - prefab: {fileID: 1375849720220907484, guid: 6aabd80fbef8c4243a7da997cae33808, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_8_Purple
+      Variant.prefab
+    name: Spell_Fire_8_Purple Variant
+  - prefab: {fileID: 6584063007332429539, guid: d5ac4ac465b73ad43a1ecc39b3188f92, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_8_Yellow
+      Variant.prefab
+    name: Spell_Fire_8_Yellow Variant
+  - prefab: {fileID: 1947228792866110512, guid: b633cd7ce687a6d4b824c9bbc47b481e, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_9_Blue
+      Variant.prefab
+    name: Spell_Fire_9_Blue Variant
+  - prefab: {fileID: 5764162955517541815, guid: 8827c440f12a6f148a7b4d984a16e189, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_9_Green
+      Variant.prefab
+    name: Spell_Fire_9_Green Variant
+  - prefab: {fileID: 3701952421705415315, guid: d32bc6b2fbe58ad429b6131866563234, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_9_Purple
+      Variant.prefab
+    name: Spell_Fire_9_Purple Variant
+  - prefab: {fileID: 742458133976590522, guid: 2ce6b9812587874469026e5be4f10490, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_9_Yellow
+      Variant.prefab
+    name: Spell_Fire_9_Yellow Variant
+  - prefab: {fileID: 2839371626633723734, guid: cd4232b0d19ca114f98babb7bb88fc59, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_Blue
+      Variant.prefab
+    name: Spell_Fire_Blue Variant
+  - prefab: {fileID: 7147382204980509464, guid: ec7d0587945ee5b43b00e09317b9a357, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_Green
+      Variant.prefab
+    name: Spell_Fire_Green Variant
+  - prefab: {fileID: 1167327497049125220, guid: c47712dba9bc6854a9a39940cda58d7d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_Purple
+      Variant.prefab
+    name: Spell_Fire_Purple Variant
+  - prefab: {fileID: 9157671287849740719, guid: 8a04216eb90f3a643b6408e931208986, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Fire/Spell_Fire_Yellow
+      Variant.prefab
+    name: Spell_Fire_Yellow Variant
+  - prefab: {fileID: 2969792062074638047, guid: c12e7ef6b495f9741bb0d6ca07480a41, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_10_Green
+      Variant.prefab
+    name: Spell_Ice_10_Green Variant
+  - prefab: {fileID: 8065585220673194594, guid: 87ee94218cce5d44abd0cae27455507b, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_10_Purple
+      Variant.prefab
+    name: Spell_Ice_10_Purple Variant
+  - prefab: {fileID: 4979852199313406330, guid: 9fd765b718974fd4a8eedbb8ee0ae79d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_10_Red
+      Variant.prefab
+    name: Spell_Ice_10_Red Variant
+  - prefab: {fileID: 7932256360812931475, guid: 124982681d81457439aaee30aee588c9, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_11_Green
+      Variant.prefab
+    name: Spell_Ice_11_Green Variant
+  - prefab: {fileID: 8637491758963422669, guid: 65aab483a25da9a4094dc1672a614799, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_11_Purple
+      Variant.prefab
+    name: Spell_Ice_11_Purple Variant
+  - prefab: {fileID: 1585135275595710576, guid: b02c52c6c4999ee49bc72ca93c895697, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_11_Red
+      Variant.prefab
+    name: Spell_Ice_11_Red Variant
+  - prefab: {fileID: 2081750775767184343, guid: 7c048e32dec53054d896c2ea3227301a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_11_Yellow
+      Variant.prefab
+    name: Spell_Ice_11_Yellow Variant
+  - prefab: {fileID: 1929862006601220724, guid: f62eaa15efad40a44b232b494a2427c8, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_12_Green
+      Variant.prefab
+    name: Spell_Ice_12_Green Variant
+  - prefab: {fileID: 7191929687123140894, guid: 95e917cc1312a7d4683cd06cd70bee5d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_12_Purple
+      Variant.prefab
+    name: Spell_Ice_12_Purple Variant
+  - prefab: {fileID: 701135111591482961, guid: 9ae096d6bd7f2d44a838bc5389b6d360, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_12_Red
+      Variant.prefab
+    name: Spell_Ice_12_Red Variant
+  - prefab: {fileID: 8497989900074267638, guid: 09a4af3bf13b8ad45b97fb81ce068768, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_12_Yellow
+      Variant.prefab
+    name: Spell_Ice_12_Yellow Variant
+  - prefab: {fileID: 409225675808302192, guid: 61fd651a137b19f4abd242d2a432150c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_2_Green
+      Variant.prefab
+    name: Spell_Ice_2_Green Variant
+  - prefab: {fileID: 6981492773179368170, guid: b14f621a3c2af3d4a8fd7057bf528dab, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_2_Purple
+      Variant.prefab
+    name: Spell_Ice_2_Purple Variant
+  - prefab: {fileID: 5543394946385606857, guid: 02966166801c29e4b9a416e769d1f6d4, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_2_Red
+      Variant.prefab
+    name: Spell_Ice_2_Red Variant
+  - prefab: {fileID: 2747706206789702094, guid: 50d3b77bf2637654e87669e277b5df80, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_2_Yellow
+      Variant.prefab
+    name: Spell_Ice_2_Yellow Variant
+  - prefab: {fileID: 2020885155718890282, guid: 71e666ea000e4d744885ee36186cfa93, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_3_Green
+      Variant.prefab
+    name: Spell_Ice_3_Green Variant
+  - prefab: {fileID: 1278147000626526241, guid: 0f9deca0371f49f40be9bc6bc305352b, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_3_Purple
+      Variant.prefab
+    name: Spell_Ice_3_Purple Variant
+  - prefab: {fileID: 888192018018647266, guid: 3d55cb78c8480c34f96c0fc734dc6b6b, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_3_Red
+      Variant.prefab
+    name: Spell_Ice_3_Red Variant
+  - prefab: {fileID: 6809830473878160071, guid: 0ba4684ff33d8414ab395c1f92fd4854, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_3_Yellow
+      Variant.prefab
+    name: Spell_Ice_3_Yellow Variant
+  - prefab: {fileID: 5426584003807374311, guid: ddb8247b6710d344fa2fce7daba93a54, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_4_Green
+      Variant.prefab
+    name: Spell_Ice_4_Green Variant
+  - prefab: {fileID: 3768828553211962399, guid: 5ce4bc18f87d95043b540ef3e306b004, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_4_Purple
+      Variant.prefab
+    name: Spell_Ice_4_Purple Variant
+  - prefab: {fileID: 1672169725477599806, guid: 4362ed35bbfbaff4ba1c9cdba2aa64a0, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_4_Red
+      Variant.prefab
+    name: Spell_Ice_4_Red Variant
+  - prefab: {fileID: 9064377614346364320, guid: 80d8da4d86cffd047bb01213fc1cc313, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_4_Yellow
+      Variant.prefab
+    name: Spell_Ice_4_Yellow Variant
+  - prefab: {fileID: 7454146927714813258, guid: 6c9ce59c1e932b24b9ca28e38b2f2d5b, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_5_Green
+      Variant.prefab
+    name: Spell_Ice_5_Green Variant
+  - prefab: {fileID: 2817011569102100124, guid: 592ac3c9cc02abf4087e852e49ee2bc3, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_5_Purple
+      Variant.prefab
+    name: Spell_Ice_5_Purple Variant
+  - prefab: {fileID: 234668393353315093, guid: 02ded694a4aff0445bdbfdb57ff0b70d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_5_Red
+      Variant.prefab
+    name: Spell_Ice_5_Red Variant
+  - prefab: {fileID: 6471231454256360864, guid: 565212389eeecd24ba7b3462f9569c32, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_5_Yellow
+      Variant.prefab
+    name: Spell_Ice_5_Yellow Variant
+  - prefab: {fileID: 2744484611233270175, guid: 6b9986b51e79b71428f1fa52d0ad3313, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_6_Green
+      Variant.prefab
+    name: Spell_Ice_6_Green Variant
+  - prefab: {fileID: 7669503568633614582, guid: a89de8cbdcacc634db3791c4a0000658, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_6_Purple
+      Variant.prefab
+    name: Spell_Ice_6_Purple Variant
+  - prefab: {fileID: 5781105231969241256, guid: a64f9ecf4bc56b043aa1fa869f331745, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_6_Red
+      Variant.prefab
+    name: Spell_Ice_6_Red Variant
+  - prefab: {fileID: 8126231074301476587, guid: ddaf4620f5b6c4d47866083e929d9db5, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_6_Yellow
+      Variant.prefab
+    name: Spell_Ice_6_Yellow Variant
+  - prefab: {fileID: 7388616390521000996, guid: 5062f23e3a4a63c499fe73ae79eb99d5, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_7_Green
+      Variant.prefab
+    name: Spell_Ice_7_Green Variant
+  - prefab: {fileID: 3325704343120544623, guid: 7573cdec50dd4f34692165c20bc0bccf, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_7_Purple
+      Variant.prefab
+    name: Spell_Ice_7_Purple Variant
+  - prefab: {fileID: 3833726146086658259, guid: cd0fc3cea4691b5488d34761c8b78022, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_7_Red
+      Variant.prefab
+    name: Spell_Ice_7_Red Variant
+  - prefab: {fileID: 2529585521200193783, guid: 2367591051e0ebd46830b3de542536e4, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_7_Yellow
+      Variant.prefab
+    name: Spell_Ice_7_Yellow Variant
+  - prefab: {fileID: 4559306602762640289, guid: 289909ee8936f6743931f9d0bcf40c56, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_8_Green
+      Variant.prefab
+    name: Spell_Ice_8_Green Variant
+  - prefab: {fileID: 128029144140123473, guid: 587371548d8f98d4da4b4e6be32338ee, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_8_Purple
+      Variant.prefab
+    name: Spell_Ice_8_Purple Variant
+  - prefab: {fileID: 6900590153281619936, guid: 8b2389ef064ea3d4e9021d9f10352f13, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_8_Red
+      Variant.prefab
+    name: Spell_Ice_8_Red Variant
+  - prefab: {fileID: 3299571728536484819, guid: 616fa83269c3d4d46abcafa8230e61e8, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_8_Yellow
+      Variant.prefab
+    name: Spell_Ice_8_Yellow Variant
+  - prefab: {fileID: 5306854924330617927, guid: 50379761c553e764595375329d4e1dc9, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_9_Green
+      Variant.prefab
+    name: Spell_Ice_9_Green Variant
+  - prefab: {fileID: 2993027110205446144, guid: 754c432be63164d46acdf0817f7f168d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_9_Purple
+      Variant.prefab
+    name: Spell_Ice_9_Purple Variant
+  - prefab: {fileID: 862611524244464502, guid: a92122c6ff5e15845a70d2a9fa928b8d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_9_Red
+      Variant.prefab
+    name: Spell_Ice_9_Red Variant
+  - prefab: {fileID: 229476516811443803, guid: 82bb923e4a168bf4788512a708a68bc0, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_9_Yellow
+      Variant.prefab
+    name: Spell_Ice_9_Yellow Variant
+  - prefab: {fileID: 2752285666411414495, guid: 6319535b8967a934dbbfc58ebd08ac8d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_Green
+      Variant.prefab
+    name: Spell_Ice_Green Variant
+  - prefab: {fileID: 1711967668301716586, guid: f0578b2c6b5037946916063287c8204d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_Purple
+      Variant.prefab
+    name: Spell_Ice_Purple Variant
+  - prefab: {fileID: 8350053596045271153, guid: dd569b1025df1324c816c2004888d881, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_Red
+      Variant.prefab
+    name: Spell_Ice_Red Variant
+  - prefab: {fileID: 6917489221719630721, guid: 47612211d81c4fb49bd1534936b0a9bc, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Ice/Spell_Ice_Yellow
+      Variant.prefab
+    name: Spell_Ice_Yellow Variant
+  - prefab: {fileID: 6695342208296591826, guid: 56f67062605932d4c97c4cc26e72237f, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_10_Blue
+      Variant.prefab
+    name: Spell_Light_10_Blue Variant
+  - prefab: {fileID: 3238031234401883018, guid: 5b418a16e50e58745bc19e2ef7597cdc, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_10_Green
+      Variant.prefab
+    name: Spell_Light_10_Green Variant
+  - prefab: {fileID: 9206348617169779875, guid: 65054d7bac95a04499d5ca6217f68abf, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_10_Purple
+      Variant.prefab
+    name: Spell_Light_10_Purple Variant
+  - prefab: {fileID: 3101902302681384763, guid: bfa45b83c9bb8e14ab877dbf3ee67b00, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_10_Red
+      Variant.prefab
+    name: Spell_Light_10_Red Variant
+  - prefab: {fileID: 5145652478811052356, guid: 27632510e9a02a94ba523326f314a507, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_11_Blue
+      Variant.prefab
+    name: Spell_Light_11_Blue Variant
+  - prefab: {fileID: 6704328953843862535, guid: 7818a7a37964dcb44887c8df53ffcad6, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_11_Green
+      Variant.prefab
+    name: Spell_Light_11_Green Variant
+  - prefab: {fileID: 4533748409604109185, guid: 9d78642cb70b7bd4893afcd6c59da037, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_11_Purple
+      Variant.prefab
+    name: Spell_Light_11_Purple Variant
+  - prefab: {fileID: 965679607730505696, guid: 000b67f4d638f1b4990a3a4849830c29, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_11_Red
+      Variant.prefab
+    name: Spell_Light_11_Red Variant
+  - prefab: {fileID: 5219363825164828678, guid: f27394ad00379f8469d274e8cb9c8aa1, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_2_Blue
+      Variant.prefab
+    name: Spell_Light_2_Blue Variant
+  - prefab: {fileID: 680525065869559244, guid: 8b64795dc1483e0438a9e6aee69ffaca, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_2_Green
+      Variant.prefab
+    name: Spell_Light_2_Green Variant
+  - prefab: {fileID: 5029078844425026852, guid: 8758fdea775a7634b8b18899db184534, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_2_Purple
+      Variant.prefab
+    name: Spell_Light_2_Purple Variant
+  - prefab: {fileID: 395279137003387362, guid: 923060434a721e349806c335a2e87a6d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_2_Red
+      Variant.prefab
+    name: Spell_Light_2_Red Variant
+  - prefab: {fileID: 9215175158521426105, guid: a13be43ed1ab0c54aa32d4b1bc3b8755, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_3_Blue
+      Variant.prefab
+    name: Spell_Light_3_Blue Variant
+  - prefab: {fileID: 4329470968826164975, guid: 79e413b5654a3d149b9bd0903885f0bc, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_3_Green
+      Variant.prefab
+    name: Spell_Light_3_Green Variant
+  - prefab: {fileID: 3133136660071441384, guid: 71563a33178ca8f429af30d9dd74e8a5, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_3_Purple
+      Variant.prefab
+    name: Spell_Light_3_Purple Variant
+  - prefab: {fileID: 123215553558076561, guid: 48f2535402b7f5348b5e2f6fa5c74576, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_3_Red
+      Variant.prefab
+    name: Spell_Light_3_Red Variant
+  - prefab: {fileID: 7709290098617277677, guid: a13d4b27679b9b841b47d6a9cd9d73ee, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_4_Blue
+      Variant.prefab
+    name: Spell_Light_4_Blue Variant
+  - prefab: {fileID: 1728954356910714757, guid: 3cbc84d275f43144798df84aad658490, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_4_Green
+      Variant.prefab
+    name: Spell_Light_4_Green Variant
+  - prefab: {fileID: 4260755810789883626, guid: 41c97fea989d7c241a479ebd6eafcb2f, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_4_Purple
+      Variant.prefab
+    name: Spell_Light_4_Purple Variant
+  - prefab: {fileID: 8815486092014270857, guid: 6f9bedc4e56e43f4cab961684ddec888, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_4_Red
+      Variant.prefab
+    name: Spell_Light_4_Red Variant
+  - prefab: {fileID: 413502064542095811, guid: df22cddbacc9f1a48ade693b9c46e6fb, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_5_Blue
+      Variant.prefab
+    name: Spell_Light_5_Blue Variant
+  - prefab: {fileID: 4087505747970192519, guid: e07c32fa9b5aece49bc7ba8a5dcd58f3, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_5_Green
+      Variant.prefab
+    name: Spell_Light_5_Green Variant
+  - prefab: {fileID: 5830382682808652018, guid: cd57a0e5cf345d5409a30e874ed30706, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_5_Purple
+      Variant.prefab
+    name: Spell_Light_5_Purple Variant
+  - prefab: {fileID: 2954876338334919252, guid: 0e6067d3ed3703748abd955e5bc63bf8, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_5_Red
+      Variant.prefab
+    name: Spell_Light_5_Red Variant
+  - prefab: {fileID: 2901277763813644594, guid: 5845199cf4a90634dbedb5bfd9e91249, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_6_Blue
+      Variant.prefab
+    name: Spell_Light_6_Blue Variant
+  - prefab: {fileID: 2229756935934885292, guid: d0d6839804b86f14eb1ce3ab778d2b14, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_6_Green
+      Variant.prefab
+    name: Spell_Light_6_Green Variant
+  - prefab: {fileID: 1052012763586651852, guid: b3a215b6ef7c8074c8f7a5936620d345, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_6_Purple
+      Variant.prefab
+    name: Spell_Light_6_Purple Variant
+  - prefab: {fileID: 7005398997111393196, guid: a0ddb126e051fdc499150129e2f482c5, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_6_Red
+      Variant.prefab
+    name: Spell_Light_6_Red Variant
+  - prefab: {fileID: 2926049150324927840, guid: 155e3ccba06b3c048a40934e1703c32e, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_7_Blue
+      Variant.prefab
+    name: Spell_Light_7_Blue Variant
+  - prefab: {fileID: 8686703965090304417, guid: 2992189efc979184ca2ad19627ff9ff5, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_7_Green
+      Variant.prefab
+    name: Spell_Light_7_Green Variant
+  - prefab: {fileID: 8141250877281467539, guid: 7c6fa287ac330684a9ae714e8592cea1, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_7_Purple
+      Variant.prefab
+    name: Spell_Light_7_Purple Variant
+  - prefab: {fileID: 6224943717879446758, guid: 65547030475746b42a5f43e9751675b9, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_7_Red
+      Variant.prefab
+    name: Spell_Light_7_Red Variant
+  - prefab: {fileID: 7368451852145981949, guid: 25e698884ca974646bc7e17ae7dccf8d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_8_Blue
+      Variant.prefab
+    name: Spell_Light_8_Blue Variant
+  - prefab: {fileID: 6018485219208824380, guid: 62183261c2889124c812595254eb1d0c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_8_Green
+      Variant.prefab
+    name: Spell_Light_8_Green Variant
+  - prefab: {fileID: 1103033865252924943, guid: dd4e2dec0d16bb64d9353a23ac7e864c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_8_Purple
+      Variant.prefab
+    name: Spell_Light_8_Purple Variant
+  - prefab: {fileID: 4457170566054107993, guid: 9d16d53490f3548409f2b09f33387679, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_8_Red
+      Variant.prefab
+    name: Spell_Light_8_Red Variant
+  - prefab: {fileID: 8172181815692331951, guid: c532c3190fe075543b4bcab684ff2cc5, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_9_Blue
+      Variant.prefab
+    name: Spell_Light_9_Blue Variant
+  - prefab: {fileID: 4603356210277611544, guid: a8627e556d1652c4fa664c0f018ebbf0, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_9_Green
+      Variant.prefab
+    name: Spell_Light_9_Green Variant
+  - prefab: {fileID: 7288271977313776558, guid: f7312d80e1291a940bfe1a9d7da23a34, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_9_Purple
+      Variant.prefab
+    name: Spell_Light_9_Purple Variant
+  - prefab: {fileID: 6917989470306757729, guid: c97c19b01082de34e9445a6242771720, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_9_Red
+      Variant.prefab
+    name: Spell_Light_9_Red Variant
+  - prefab: {fileID: 2558288993275072893, guid: 76d4f35bc8674d248b8240c96258ee31, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_Blue
+      Variant.prefab
+    name: Spell_Light_Blue Variant
+  - prefab: {fileID: 2900841472803674377, guid: 468498d9538ffdb41bc9e4aad6e262ae, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_Green
+      Variant.prefab
+    name: Spell_Light_Green Variant
+  - prefab: {fileID: 3753692401915913601, guid: b618306374d635943960d0eb888c10ab, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_Purple
+      Variant.prefab
+    name: Spell_Light_Purple Variant
+  - prefab: {fileID: 1155982613047206069, guid: 17269993c23f3ad4ab0ea715a19f861a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Light/Spell_Light_Red
+      Variant.prefab
+    name: Spell_Light_Red Variant
+  - prefab: {fileID: 4065050219845125447, guid: 8e696e1db46f34146acf6f65a947774e, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_10_Blue
+      Variant.prefab
+    name: Spell_Nature_10_Blue Variant
+  - prefab: {fileID: 8732462874606394974, guid: 3e4c4ff36a486ac4cb16b9641b180f91, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_10_Purple
+      Variant.prefab
+    name: Spell_Nature_10_Purple Variant
+  - prefab: {fileID: 3169642438747890692, guid: 808c77ade7359a546a768ec56d645dea, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_10_Red
+      Variant.prefab
+    name: Spell_Nature_10_Red Variant
+  - prefab: {fileID: 611837961234870758, guid: dd50ce57247dcb849a974a392d7b05f7, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_10_Yellow
+      Variant.prefab
+    name: Spell_Nature_10_Yellow Variant
+  - prefab: {fileID: 2687818391407577002, guid: 6cb83a9fff573aa40b175e1dc7909a7a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_2_Blue
+      Variant.prefab
+    name: Spell_Nature_2_Blue Variant
+  - prefab: {fileID: 7798317972306338544, guid: 857b0ad3d5093af478a3c817782acb04, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_2_Green
+      Variant.prefab
+    name: Spell_Nature_2_Green Variant
+  - prefab: {fileID: 9211783396317825541, guid: e8268e3c33aa85d40863a178eae812a2, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_2_Purple
+      Variant.prefab
+    name: Spell_Nature_2_Purple Variant
+  - prefab: {fileID: 7495384815103463125, guid: ca0b89442d948ab41801777acba220ff, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_2_Red
+      Variant.prefab
+    name: Spell_Nature_2_Red Variant
+  - prefab: {fileID: 8046427886853100264, guid: 6b864e19b46ccf844a755ea763808ffb, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_3_Blue
+      Variant.prefab
+    name: Spell_Nature_3_Blue Variant
+  - prefab: {fileID: 3233701515643345444, guid: 190fcb514cf7d4949a817f4e67e7b9df, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_3_Green
+      Variant.prefab
+    name: Spell_Nature_3_Green Variant
+  - prefab: {fileID: 4512019445440438909, guid: a0d6a2ceb38e217408d34066bc378901, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_3_Purple
+      Variant.prefab
+    name: Spell_Nature_3_Purple Variant
+  - prefab: {fileID: 3291184734840262596, guid: 0b5d6e01f05d96f479435cb1b160cd3f, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_3_Red
+      Variant.prefab
+    name: Spell_Nature_3_Red Variant
+  - prefab: {fileID: 2681140153988582069, guid: 71e1a67a8367b254c998a54150d0469b, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_4_Blue
+      Variant.prefab
+    name: Spell_Nature_4_Blue Variant
+  - prefab: {fileID: 1623765393535239316, guid: 32c8fd3925dd1544ca654e3106d1f2a8, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_4_Green
+      Variant.prefab
+    name: Spell_Nature_4_Green Variant
+  - prefab: {fileID: 7513052339016962008, guid: d79224386d5345642a81e175b4fc8fee, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_4_Red
+      Variant.prefab
+    name: Spell_Nature_4_Red Variant
+  - prefab: {fileID: 2918894225005758120, guid: 1ac35b3a140308a4ca8842bdcd9a141d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_4_Yellow
+      Variant.prefab
+    name: Spell_Nature_4_Yellow Variant
+  - prefab: {fileID: 8271968093348565041, guid: b1294c82c596b8649ad21267680ae4e6, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_5_Blue
+      Variant.prefab
+    name: Spell_Nature_5_Blue Variant
+  - prefab: {fileID: 3082132231701477581, guid: f902b10bd4d31d44395b37769565c531, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_5_Green
+      Variant.prefab
+    name: Spell_Nature_5_Green Variant
+  - prefab: {fileID: 8359752788917834963, guid: ce1eaca27b6a93041bff946150904aa4, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_5_Purple
+      Variant.prefab
+    name: Spell_Nature_5_Purple Variant
+  - prefab: {fileID: 6569640068399283157, guid: c7495c06694269b4eb3f8f0a1ac97aa1, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_5_Red
+      Variant.prefab
+    name: Spell_Nature_5_Red Variant
+  - prefab: {fileID: 7653591954432618975, guid: e68ff681d6e3d3a4f9e31e85071c87c6, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_6_Blue
+      Variant.prefab
+    name: Spell_Nature_6_Blue Variant
+  - prefab: {fileID: 5430502038840884327, guid: bb89dc86805bf7546bc109d28aabc817, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_6_Purple
+      Variant.prefab
+    name: Spell_Nature_6_Purple Variant
+  - prefab: {fileID: 2280964172750506685, guid: 2c0ed2685bedeaa4fbcea009507b8dec, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_6_Red
+      Variant.prefab
+    name: Spell_Nature_6_Red Variant
+  - prefab: {fileID: 6032874095327427413, guid: 9495b11fe9869c545a41e05395e564ad, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_6_Yellow
+      Variant.prefab
+    name: Spell_Nature_6_Yellow Variant
+  - prefab: {fileID: 564782445532091959, guid: cd97c53e99714fe4e989e7600469a548, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_7_Blue
+      Variant.prefab
+    name: Spell_Nature_7_Blue Variant
+  - prefab: {fileID: 7188210188617293074, guid: 9e7adabefb477b643bbed3ae4df31310, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_7_Purple
+      Variant.prefab
+    name: Spell_Nature_7_Purple Variant
+  - prefab: {fileID: 1645600300927671141, guid: 7d60dea3d6eafb347801bd4951eb4d1c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_7_Red
+      Variant.prefab
+    name: Spell_Nature_7_Red Variant
+  - prefab: {fileID: 4507638884071879633, guid: 03f962e4426e0e740b70c6034705d55f, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_7_Yellow
+      Variant.prefab
+    name: Spell_Nature_7_Yellow Variant
+  - prefab: {fileID: 3592694667581134858, guid: e6b91f58cb079b44e971300877a5b5e1, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_8_Green
+      Variant.prefab
+    name: Spell_Nature_8_Green Variant
+  - prefab: {fileID: 1785964752205288874, guid: 6eebae1aa4ddcfe40bc6fdd754fe5d04, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_8_Purple
+      Variant.prefab
+    name: Spell_Nature_8_Purple Variant
+  - prefab: {fileID: 3334786876636227082, guid: 664b88528fcb4644294b9530ddac1349, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_8_Red
+      Variant.prefab
+    name: Spell_Nature_8_Red Variant
+  - prefab: {fileID: 6718754565560626963, guid: 5383c34446eb8544abdfc635302bec14, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_8_Yellow
+      Variant.prefab
+    name: Spell_Nature_8_Yellow Variant
+  - prefab: {fileID: 3482868889608105953, guid: 466ac2df9e7cd684583c77ded8d62a07, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_9_Blue
+      Variant.prefab
+    name: Spell_Nature_9_Blue Variant
+  - prefab: {fileID: 4568439371886823589, guid: f6049732eeaea274b9959ba1daf3fd4c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_9_Purple
+      Variant.prefab
+    name: Spell_Nature_9_Purple Variant
+  - prefab: {fileID: 7699042358539522147, guid: 2349594941008004a874ee46781cc210, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_9_Red
+      Variant.prefab
+    name: Spell_Nature_9_Red Variant
+  - prefab: {fileID: 5376032905262130346, guid: 427939aa30bd02e40a6830dbf7b7fe96, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_9_Yellow
+      Variant.prefab
+    name: Spell_Nature_9_Yellow Variant
+  - prefab: {fileID: 7806574771066727820, guid: 1bcb92c7ccda10747a7593f99ccd266b, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_Blue
+      Variant.prefab
+    name: Spell_Nature_Blue Variant
+  - prefab: {fileID: 8095460440659997542, guid: ed369d83c9e834047946c9fb61c3cd2a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_Green
+      Variant.prefab
+    name: Spell_Nature_Green Variant
+  - prefab: {fileID: 6807095125011862111, guid: 87cceaf63db50e545bb1901b7c490319, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_Purple
+      Variant.prefab
+    name: Spell_Nature_Purple Variant
+  - prefab: {fileID: 338562613658784744, guid: ea244ecb8fb7e8746ba6aeef27cc895a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_Red
+      Variant.prefab
+    name: Spell_Nature_Red Variant
+  - prefab: {fileID: 7495617450090038333, guid: 9c72955b8bd6ccf4c8d4d8efd3f69634, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_10_Green
+      Variant.prefab
+    name: Spell_Storm_10_Green Variant
+  - prefab: {fileID: 8273190184864084955, guid: aa143dfe69a53c44abfbc192b8f644b9, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_10_Purple
+      Variant.prefab
+    name: Spell_Storm_10_Purple Variant
+  - prefab: {fileID: 1763087392236651066, guid: 43fdc92e4c1221242b612e4badd3900a, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_10_Red
+      Variant.prefab
+    name: Spell_Storm_10_Red Variant
+  - prefab: {fileID: 4587746809206022347, guid: 6527735172b480e40934e7c3a5fbd984, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_10_Yellow
+      Variant.prefab
+    name: Spell_Storm_10_Yellow Variant
+  - prefab: {fileID: 5549685252612349046, guid: c76ea4afb161da74b990f19c20d888af, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_2_Green
+      Variant.prefab
+    name: Spell_Storm_2_Green Variant
+  - prefab: {fileID: 804696375397091116, guid: 0dd908575b6a46442942f134d90c1909, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_2_Purple
+      Variant.prefab
+    name: Spell_Storm_2_Purple Variant
+  - prefab: {fileID: 964667672463674098, guid: 7cef484701732834e902a175b52f528d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_2_Red
+      Variant.prefab
+    name: Spell_Storm_2_Red Variant
+  - prefab: {fileID: 5489634780441505847, guid: 0ecd53dd38e860b49bdd58251c0f550d, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_2_Yellow
+      Variant.prefab
+    name: Spell_Storm_2_Yellow Variant
+  - prefab: {fileID: 3606119888665947560, guid: ee1f69bda9a067d4da68ebe63fadc8a8, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_3_Green
+      Variant.prefab
+    name: Spell_Storm_3_Green Variant
+  - prefab: {fileID: 3200198263666159653, guid: 54fdf67cdb0c66546ba49d60edf6f475, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_3_Purple
+      Variant.prefab
+    name: Spell_Storm_3_Purple Variant
+  - prefab: {fileID: 7937669073914873072, guid: 813351d0261aafa4b87d8858446636ab, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_3_Red
+      Variant.prefab
+    name: Spell_Storm_3_Red Variant
+  - prefab: {fileID: 2814041654140260800, guid: c54fa78cbc7a36942a88c3f2543aafee, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_3_Yellow
+      Variant.prefab
+    name: Spell_Storm_3_Yellow Variant
+  - prefab: {fileID: 7006313531653937250, guid: c3b145f5632b8824fa63e8ee3ab8e6dd, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_4_Green
+      Variant.prefab
+    name: Spell_Storm_4_Green Variant
+  - prefab: {fileID: 8303369629123279343, guid: 03d79dcf3dc439d47ac6138cb5da5930, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_4_Purple
+      Variant.prefab
+    name: Spell_Storm_4_Purple Variant
+  - prefab: {fileID: 930333615206204723, guid: c080196f7d651e2408414182f41a0e94, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_4_Red
+      Variant.prefab
+    name: Spell_Storm_4_Red Variant
+  - prefab: {fileID: 7108293050139237970, guid: 5c11fa6c32ef92940b89182838f4a894, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_4_Yellow
+      Variant.prefab
+    name: Spell_Storm_4_Yellow Variant
+  - prefab: {fileID: 7605067988540451565, guid: bc9364d0dce6e2a46999d975f188202f, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_5_Green
+      Variant.prefab
+    name: Spell_Storm_5_Green Variant
+  - prefab: {fileID: 3039641274414986059, guid: d3ee52b136b09f04dbaf44140cef3967, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_5_Purple
+      Variant.prefab
+    name: Spell_Storm_5_Purple Variant
+  - prefab: {fileID: 3957822149106656581, guid: 181b68021dc670347b3d680e04207e11, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_5_Red
+      Variant.prefab
+    name: Spell_Storm_5_Red Variant
+  - prefab: {fileID: 4293121846767384969, guid: 95b044d03985eb747a8d323ce52582c8, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_5_Yellow
+      Variant.prefab
+    name: Spell_Storm_5_Yellow Variant
+  - prefab: {fileID: 5643753087730624605, guid: 692f105148b582d45ad150e8e85ca8da, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_6_Green
+      Variant.prefab
+    name: Spell_Storm_6_Green Variant
+  - prefab: {fileID: 6168730330775984618, guid: 17a16a7714b10ba44a984fdd0ba723d6, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_6_Purple
+      Variant.prefab
+    name: Spell_Storm_6_Purple Variant
+  - prefab: {fileID: 4283025260338674664, guid: f0d4e4e2513b1ad48a5373ba245b76ad, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_6_Red
+      Variant.prefab
+    name: Spell_Storm_6_Red Variant
+  - prefab: {fileID: 6345117190339307962, guid: c446290927d844644bab5865039524d6, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_6_Yellow
+      Variant.prefab
+    name: Spell_Storm_6_Yellow Variant
+  - prefab: {fileID: 9050376284736264323, guid: d8210e2da9e23d44a831dcdd925f7a9c, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_7_Green
+      Variant.prefab
+    name: Spell_Storm_7_Green Variant
+  - prefab: {fileID: 5455849337916698677, guid: 66f7f007153bbfd4c956b03798ec0989, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_7_Purple
+      Variant.prefab
+    name: Spell_Storm_7_Purple Variant
+  - prefab: {fileID: 1338907825665493114, guid: 47a285eaa61de82438699bcadbcc69eb, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_7_Red
+      Variant.prefab
+    name: Spell_Storm_7_Red Variant
+  - prefab: {fileID: 5554218999370810157, guid: cfdf048b4784f2b4aaf648c27f989ef7, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_7_Yellow
+      Variant.prefab
+    name: Spell_Storm_7_Yellow Variant
+  - prefab: {fileID: 1951294964715308272, guid: 5449157e64f2ca84598fc606952e381e, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_8_Green
+      Variant.prefab
+    name: Spell_Storm_8_Green Variant
+  - prefab: {fileID: 2344993137201771215, guid: 999c1f0fd59ecd64c9faa9f839cd5d62, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_8_Purple
+      Variant.prefab
+    name: Spell_Storm_8_Purple Variant
+  - prefab: {fileID: 9062933733202611292, guid: bc36c7932dad1df429d573d455286df3, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_8_Red
+      Variant.prefab
+    name: Spell_Storm_8_Red Variant
+  - prefab: {fileID: 6126995895184074519, guid: e0e8c41836aa6a246bbc32acdc5e7289, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_8_Yellow
+      Variant.prefab
+    name: Spell_Storm_8_Yellow Variant
+  - prefab: {fileID: 7089663218766080311, guid: 75ad23f4a70de944b85f61c15e554dc9, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_9_Green
+      Variant.prefab
+    name: Spell_Storm_9_Green Variant
+  - prefab: {fileID: 2498449148828322562, guid: d97bc1471fb6fee4dac4832c308bfd36, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_9_Purple
+      Variant.prefab
+    name: Spell_Storm_9_Purple Variant
+  - prefab: {fileID: 1348375722414896150, guid: ddb6b73865a1e5247ae229d9f4f56fea, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_9_Red
+      Variant.prefab
+    name: Spell_Storm_9_Red Variant
+  - prefab: {fileID: 6112267050875997453, guid: 04935788d6b58be4498a610a26d77cba, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_9_Yellow
+      Variant.prefab
+    name: Spell_Storm_9_Yellow Variant
+  - prefab: {fileID: 7807322149619200866, guid: cbee422b4562764459ff9e848cd9fc90, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_Green
+      Variant.prefab
+    name: Spell_Storm_Green Variant
+  - prefab: {fileID: 656391122766732927, guid: d71d6d2f61393e546b3c67bd9c33f218, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_Purple
+      Variant.prefab
+    name: Spell_Storm_Purple Variant
+  - prefab: {fileID: 7510184531198223013, guid: bf5ef560a2dd5384996a63a33d86d0ce, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_Red
+      Variant.prefab
+    name: Spell_Storm_Red Variant
+  - prefab: {fileID: 7093119309535794908, guid: 7d7f092f1f3e30a46ab6d14cc80744eb, type: 3}
+    path: Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Storm/Spell_Storm_Yellow
+      Variant.prefab
+    name: Spell_Storm_Yellow Variant

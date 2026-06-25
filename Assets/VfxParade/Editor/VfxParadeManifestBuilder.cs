@@ -12,8 +12,10 @@
 // prefab into the player build, so the runtime overlay (VfxParadeRuntime) can
 // spawn them in a standalone exe.
 //
-// Run from the menu (Tools > VFX Parade > Build Runtime Manifest) or headless
-// via batchmode -executeMethod DeNelle.Editor.VfxParadeManifestBuilder.Build.
+// Run from the menu (Tools > VFX Parade > Build Runtime Manifest ...) or headless
+// via batchmode:
+//   -executeMethod DeNelle.Editor.VfxParadeManifestBuilder.Build     (Casting only, lean)
+//   -executeMethod DeNelle.Editor.VfxParadeManifestBuilder.BuildAll  (WHOLE Spells Pack, ~466)
 // Prints the ASCII marker "VFX_PARADE_MANIFEST_OK count=<n>" on success.
 // ASCII-only strings throughout.
 // =============================================================================
@@ -34,10 +36,16 @@ namespace DeNelle.Editor
         private const string ManifestDir = "Assets/Resources/VfxParade";
         private const string ManifestAssetPath = "Assets/Resources/VfxParade/VfxParadeManifest.asset";
 
-        [MenuItem("Tools/VFX Parade/Build Runtime Manifest")]
+        [MenuItem("Tools/VFX Parade/Build Runtime Manifest (Casting)")]
         public static void BuildMenu()
         {
             Build();
+        }
+
+        [MenuItem("Tools/VFX Parade/Build Runtime Manifest (FULL Spells Pack)")]
+        public static void BuildAllMenu()
+        {
+            BuildAll();
         }
 
         /// <summary>Batchmode entry point. Scans the source folder for prefabs whose
@@ -45,6 +53,14 @@ namespace DeNelle.Editor
         public static void Build()
         {
             BuildForCategory(DefaultCategory);
+        }
+
+        /// <summary>Batchmode entry point for the WHOLE Spells Pack (~466 prefabs):
+        /// no category filter, every prefab under the source folder is baked in.
+        /// Headless: -executeMethod DeNelle.Editor.VfxParadeManifestBuilder.BuildAll.</summary>
+        public static void BuildAll()
+        {
+            BuildForCategory(null);
         }
 
         /// <summary>Scan + bake for an explicit category substring (empty/null = all
