@@ -1111,6 +1111,17 @@ namespace DeNelle.Village.Arena
             if (_current != null)
                 WarpHero(returnPos, Quaternion.Euler(0f, returnYaw, 0f));
 
+            // RETURN HEAL (owner felt-test 2026-06-24): back in town between fights, top the
+            // hero off to FULL HP — the "rest up at home base" beat. Covers BOTH win and
+            // loss/flee (every end funnels through this Resolve return). Null-safe; no-op on a
+            // downed hero (Respawn owns that restore). Touches HP only — no combat/damage logic.
+            Guard.Try("BattleArena", "return heal hero to full", () =>
+            {
+                var hh = HeroHealth.Instance;
+                if (hh != null) hh.RestoreToFull();
+            });
+            FlowTrace.Step("BattleArena", "RETURN heal: hero restored to full HP on town return.");
+
             // BATTLE ISOLATION: the fight is over — let home reps roam/chase/aggro again. (On a
             // loss the post-loss grace above still suppresses ENGAGE for a few seconds even though
             // the pause is lifted, so the hero recovers; a win lifts both gates cleanly.)

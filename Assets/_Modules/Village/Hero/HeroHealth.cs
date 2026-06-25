@@ -342,6 +342,33 @@ namespace DeNelle.Village
             VFXManager.Play(VFXType.Impact_Heal, transform.position + Vector3.up * 1.0f);
         }
 
+        /// <summary>
+        /// Restores the hero to FULL HP (the "heal up between fights at home base" beat —
+        /// called when the hero returns to town after an arena battle, win, flee, OR death).
+        /// Works from ANY HP including 0: a hero that DIED in the arena must come back to town
+        /// at full HP, not 0 (which one-shot it on the next fight). Also clears the death latch
+        /// so contact damage + control resume, mirroring Respawn's revive (without moving the
+        /// hero — the arena owns the town warp). Fires the HP-changed event the HUD/bar listen
+        /// to + the heal VFX so the top-off reads on screen.
+        /// </summary>
+        public void RestoreToFull()
+        {
+            bool wasDown = _isDead || _hp <= 0f;
+            _hp = _maxHp;
+            // If the hero had gone down, clear the death state so it isn't stuck "dead" on the
+            // town return (Respawn does this on its own path; we mirror it here without warping).
+            if (wasDown)
+            {
+                _isDead = false;
+                _cooldown = 0f;
+                ClearDeathAnim();
+                if (_locomotion != null) _locomotion.enabled = true;
+                if (_abilities  != null) _abilities.enabled  = true;
+            }
+            OnHealthChanged?.Invoke(_hp, _maxHp);
+            VFXManager.Play(VFXType.Impact_Heal, transform.position + Vector3.up * 1.0f);
+        }
+
         // ── WO-493 #5 / WO-497: HERO injured stance ───────────────────────────
         // Single source of truth for "wounded": HP fraction vs the cutoff. On a
         // threshold CROSS it drives the animator's Injured swap, toggles the red
