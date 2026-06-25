@@ -114,6 +114,14 @@ namespace DeNelle.Village
         /// </summary>
         public void SetTactics(TacticalData t) { if (t != null) _tactics = t; }
 
+        /// <summary>
+        /// WO-482 (arena): mark this brain as a HERO-ONLY duelist (isolated BattleArena).
+        /// Target selection then always picks the hero and never falls back to the far-off
+        /// HeartOfElarion (there is no base to siege in the arena). No effect on
+        /// village/overworld enemies, which never call this.
+        /// </summary>
+        public void SetHeroOnlyTarget(bool on) { _heroOnlyTarget = on; }
+
         // Shared runtime Kiter config (WO-145 Tactic B): hold ~10 m, back off inside 6 m,
         // gentle weave, fire ranged every 1.6 s. ONE instance reused across all caster
         // enemies — DPS-mage behaviour: "casts from a distance, AI keeps its distance"
@@ -162,6 +170,11 @@ namespace DeNelle.Village
         private Enemy    _enemy;
         private Transform _heartTransform;
         private Transform _heroTransform;
+        // WO-482 (arena): when set, this brain belongs to an ISOLATED duel (BattleArena) where
+        // there is NO base to siege. Target selection then ALWAYS resolves to the hero and the
+        // HeartOfElarion (village-siege) win-condition fallback is suppressed. Off by default, so
+        // village/overworld enemies keep their normal heart-siege behaviour unchanged.
+        private bool      _heroOnlyTarget;
         private Transform _petTransform;        // WO-145: resolved by "PetTarget" tag (null-safe).
         private float     _healCooldown;
         private float     _suppressTimer;
@@ -855,6 +868,17 @@ namespace DeNelle.Village
 
         private Transform ChooseTarget()
         {
+            // WO-482 (arena): isolated duel -> the hero is the ONLY valid target. Never score
+            // structures, never fall back to the (7000m-away, out-of-scene) HeartOfElarion, which
+            // is what produced the "no COMPLETE path to 'HeartOfElarion'" milling. Re-acquire the
+            // hero if the cached ref went stale so a late-streamed hero still engages.
+            if (_heroOnlyTarget)
+            {
+                bool valid = _heroTransform != null && _heroTransform.gameObject.activeInHierarchy;
+                if (!valid) _heroTransform = FindHeroTransform();
+                return _heroTransform;
+            }
+
             switch (Role)
             {
                 case EnemyRole.Tank:

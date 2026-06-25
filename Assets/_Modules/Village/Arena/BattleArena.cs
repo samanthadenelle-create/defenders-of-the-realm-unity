@@ -735,6 +735,12 @@ namespace DeNelle.Village.Arena
                     var brain = enemy.gameObject.AddComponent<EnemyBrain>();
                     EnemyRole role = RoleForId(id);
                     brain.Role = role;
+                    // WO-482 (felt-fix 2026-06-24): the arena is an ISOLATED duel -- there is NO
+                    // base to siege here. Mark the brain hero-only so target selection ALWAYS
+                    // picks the hero and never falls back to the home-scene HeartOfElarion (~7000m
+                    // away), which is what made the orcs mill ("no COMPLETE path to HeartOfElarion").
+                    brain.SetHeroOnlyTarget(true);
+                    FlowTrace.Step("BattleArena", $"ARENA orc '{id}' target = hero-only (no heart siege).");
                     // TACTICAL ROLES (felt-fix 2026-06-24): without _tactics every orc just
                     // melee-charged (mage never kited, nobody flanked). Assign the SHARED runtime
                     // archetypes via SetTactics right after the brain is added (the Enemy.Configure
