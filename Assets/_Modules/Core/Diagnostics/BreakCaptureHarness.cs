@@ -42,7 +42,10 @@ namespace DeNelle.Core.Diagnostics
     public sealed class BreakCaptureHarness : MonoBehaviour
     {
         // ---- tunables ----------------------------------------------------------
-        const float SoftlockSeconds   = 75f;   // no movement AND no progress this long => "possible softlock"
+        const float SoftlockSeconds   = 180f;  // no movement AND no progress this long => "possible softlock"
+                                               // (raised 75->180 2026-06-24: 75s false-fired on casual AFK/
+                                               //  reading during manual felt-tests; a real stuck-state the
+                                               //  player would F8-flag anyway. Dialogue already suppressed.)
         const float HeroMoveEpsilon   = 0.75f; // metres of movement that counts as "still progressing"
         const float WatchdogInterval  = 2f;    // how often the softlock watchdog samples
         const int   MaxScreenshots    = 25;    // per session, so an error storm can't fill the disk
