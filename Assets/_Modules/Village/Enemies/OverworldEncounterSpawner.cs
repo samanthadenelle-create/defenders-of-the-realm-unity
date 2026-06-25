@@ -43,7 +43,17 @@ namespace DeNelle.Village
         // "means something" if you wandered into one too strong. Contact damage ZERO
         // (hook, not a combatant) -- engagement, not death, is what the rep delivers.
         private const float RepChaseSpeed = 6.3f;   // ~+5% over the hero's 6.0
-        private const int   RepCount      = 8;   // owner 2026-06-23: scatter roaming reps (8 for the verify lap; proximity-realization next so this can scale to 20+ cheaply)
+        // CONCURRENT roaming rep count. Owner 2026-06-24 FELT: "drop those 20 spawns down to like 6"
+        // / "there are a lot" — the world holds ~6 reps at once (was 8), NOT a 20-up-front swarm.
+        // Nudge this to retune crowding.
+        private const int   RepCount      = 6;   // owner 2026-06-24: concurrent reps (was 8) — keep the world populated, not crowded
+
+        // RESPAWN/MAINTAIN tuning (owner 2026-06-24 "just set a respawn"): reps are CONSUMED when
+        // engaged (Engage() destroys the rep -> the family fights in the BattleArena), so without a
+        // maintain loop the world depletes to empty. A repeating maintain loop re-tops the world back
+        // to RepCount, but only after a delay so a fresh replacement doesn't pop in instantly on top of
+        // the hero. RespawnCheckInterval = how often we re-evaluate the live count; tune both.
+        private const float RespawnCheckInterval = 10f;  // owner 2026-06-24: re-top-up cadence (~8-15s feel)
 
         // BUFFER tuning (owner 2026-06-24 FELT values — dial these): give the hero room to cross
         // out of the castle and walk a bit into OuterWorld before any rep is on top of her.
@@ -144,6 +154,45 @@ namespace DeNelle.Village
             int spawned = 0;
             for (int i = _reps.Count; i < RepCount; i++) { SpawnRep(i); spawned++; }
             FlowTrace.Step("Encounter", $"PopulateAfterDelay: ensured {_reps.Count}/{RepCount} reps live (spawned {spawned} this pass).");
+
+            // RESPAWN/MAINTAIN: keep the world topped at RepCount. Reps are CONSUMED on engage
+            // (Engage() Destroy()s them), so this loop replaces any that died/engaged after a delay
+            // (RespawnCheckInterval) — the world stays populated at ~RepCount without a 20-up-front
+            // swarm. Idempotent: only one maintain loop runs (guarded by _maintaining).
+            if (!_maintaining)
+            {
+                _maintaining = true;
+                StartCoroutine(MaintainLoop());
+            }
+        }
+
+        private bool _maintaining;
+
+        // Perpetual top-up: every RespawnCheckInterval, while OuterWorld is loaded + no battle is
+        // staged + the hero is in OuterWorld, re-spawn replacements until the live count is back at
+        // RepCount. The respawn DELAY is the interval itself (a consumed rep is replaced on the next
+        // tick, not instantly), so a replacement never pops in on top of a freshly-returned hero.
+        // Spawns stay spread out — SpawnRep scatters each onto a random reachable ring point.
+        private System.Collections.IEnumerator MaintainLoop()
+        {
+            var wait = new WaitForSeconds(RespawnCheckInterval);
+            while (true)
+            {
+                yield return wait;
+
+                if (!FeatureFlags.OverworldEncounter) continue;                 // dormant
+                if (BattleArena.Instance != null && BattleArena.Instance.BattleInProgress) continue; // not mid-battle
+                if (!OuterWorldLoaded()) continue;                              // OuterWorld only
+                if (!HeroInOuterWorld()) continue;                              // anchor to the hero only once she is out
+
+                _reps.RemoveAll(r => r == null);   // drop consumed/destroyed reps
+                if (_reps.Count >= RepCount) continue;
+
+                int spawned = 0;
+                for (int i = _reps.Count; i < RepCount; i++) { SpawnRep(i); spawned++; }
+                if (spawned > 0)
+                    FlowTrace.Step("Encounter", $"respawn rep -> {_reps.Count}/{RepCount} live (respawned {spawned} this tick).");
+            }
         }
 
         // The hero is "in" OuterWorld once it is physically inside an outer region (ZoneManager
