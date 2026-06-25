@@ -50,8 +50,14 @@ namespace DeNelle.Village.Arena
     public sealed class ArenaNavMeshBaker : MonoBehaviour
     {
         // -- Walkable floor sizing (a Unity Plane is 10 m per unit of scale) -----
-        // ~5 => ~50 m square: generous cover for the realized fort footprint.
-        private const float FloorPlaneScale = 5f;
+        // ~5 => ~50 m square: generous cover for the realized fort footprint. This is
+        // the DEFAULT for the WO-388 castle path; a caller (BattleArena) may pass a larger
+        // scale via BakeForCastle so the bigger open kite floor is fully covered without
+        // mutating the verified castle default.
+        private const float DefaultFloorPlaneScale = 5f;
+
+        // Set per-bake from the BakeForCastle argument; defaults to the castle scale.
+        private float _floorPlaneScale = DefaultFloorPlaneScale;
 
         // -- Surface overrides (the agent radius/height/climb/slope/step come from
         //    the default agent type 0; only the voxel/region knobs are tunable here) --
@@ -68,13 +74,16 @@ namespace DeNelle.Village.Arena
         /// <paramref name="root"/> (the Arena outpost host). Safe to call right after
         /// EnemyOutpost.ConfigureArena - it waits for the fort to realize first.
         /// </summary>
-        public void BakeForCastle(Transform root)
+        public void BakeForCastle(Transform root, float floorPlaneScale = DefaultFloorPlaneScale)
         {
             if (root == null)
             {
                 Debug.LogWarning("[ArenaNavMeshBaker] null root - bake skipped.");
                 return;
             }
+            // The WO-388 castle path calls this with no arg -> keeps the verified 5f scale.
+            // BattleArena passes ~8f so the larger open kite floor is fully baked.
+            _floorPlaneScale = floorPlaneScale > 0f ? floorPlaneScale : DefaultFloorPlaneScale;
             StartCoroutine(BakeRoutine(root));
         }
 
@@ -95,7 +104,7 @@ namespace DeNelle.Village.Arena
 
             // 2. INVISIBLE WALKABLE FLOOR under the footprint (renderer off, collider
             // kept). The carving wall-obstacles cut the walls out of this floor.
-            AddWalkableFloor(root);
+            AddWalkableFloor(root, _floorPlaneScale);
 
             // 3. CONFIGURE + BAKE the local surface (SYNC).
             _surface = root.gameObject.GetComponent<NavMeshSurface>();
@@ -114,19 +123,19 @@ namespace DeNelle.Village.Arena
             _surface.BuildNavMesh();
 
             Debug.Log("[ArenaNavMeshBaker] Baked local NavMesh for player-castle defender base " +
-                      $"(floor scale {FloorPlaneScale}, voxel {VoxelSize}).");
+                      $"(floor scale {_floorPlaneScale}, voxel {VoxelSize}).");
         }
 
         // An invisible, walkable floor plane sized to the fort footprint, sitting at
         // the root's y. Renderer OFF (invisible) but the MeshCollider is kept so the
         // PhysicsColliders bake picks it up - the CastleHubBuilder nav-floor pattern.
-        private static void AddWalkableFloor(Transform root)
+        private static void AddWalkableFloor(Transform root, float floorPlaneScale)
         {
             var plane = GameObject.CreatePrimitive(PrimitiveType.Plane); // MeshFilter + MeshRenderer + MeshCollider
             plane.name = "ArenaNavFloor_Invisible_Walkable";
             plane.transform.SetParent(root, false);
             plane.transform.localPosition = Vector3.zero;               // sit at the root y (the fort base)
-            plane.transform.localScale = new Vector3(FloorPlaneScale, 1f, FloorPlaneScale);
+            plane.transform.localScale = new Vector3(floorPlaneScale, 1f, floorPlaneScale);
 
             // Invisible but bakeable: hide the renderer; the NavMesh bakes from the
             // MeshCollider (useGeometry = PhysicsColliders), so visibility is moot.

@@ -137,6 +137,26 @@ namespace DeNelle.Village
             }
         }
 
+        // Shared runtime Flanker config: arcs ~90 deg off the direct path so the unit
+        // approaches from the side/rear instead of charging straight in. ONE instance
+        // reused across all flanker enemies (e.g. the arena warrior). Built lazily;
+        // Date/Random-free so it's deterministic. Mirrors the KiterTactics pattern.
+        private static TacticalData s_flankerTactics;
+        public static TacticalData FlankerTactics
+        {
+            get
+            {
+                if (s_flankerTactics == null)
+                {
+                    s_flankerTactics = ScriptableObject.CreateInstance<TacticalData>();
+                    s_flankerTactics.name = "TacticalData_Flanker(runtime)";
+                    s_flankerTactics.Archetype = EnemyArchetype.Flanker;
+                    s_flankerTactics.FlankAngleOffset = 90f;
+                }
+                return s_flankerTactics;
+            }
+        }
+
         // ── Runtime ───────────────────────────────────────────────────────────
 
         private Enemy    _enemy;

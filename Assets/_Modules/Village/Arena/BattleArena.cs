@@ -240,10 +240,38 @@ namespace DeNelle.Village.Arena
             //    children colliders). The far-offset arena has no pre-baked mesh, so this is
             //    the genuine need the baker was built for (the WO-388 castle path).
             var baker = _arenaRoot.AddComponent<ArenaNavMeshBaker>();
-            Guard.Try("BattleArena", "bake arena navmesh", () => baker.BakeForCastle(_arenaRoot.transform));
+            // Bigger floor plane than the castle default (8f => ~80m plane) so it comfortably
+            // covers the 60x48 kite floor + the wider ground/treeline with margin. Far orcs
+            // could not reach the hero because the default ~50m plane under-covered the kite
+            // footprint (captured: "[Flow:EnemyAggro] no COMPLETE path to Hero -> ... last
+            // reachable corner"). The castle path is untouched (it calls BakeForCastle with no arg).
+            Guard.Try("BattleArena", "bake arena navmesh", () => baker.BakeForCastle(_arenaRoot.transform, 8f));
             // Give the (synchronous) bake + the floor realize a couple frames to settle.
             yield return null;
             yield return null;
+
+            // INSTRUMENT (CLAUDE.md S12): PROVE the bake covers the kite corners instead of
+            // re-guessing. Sample the four kite corners (just inside the boundary walls) and log
+            // each corner's on-mesh result so the next headless/felt run shows coverage in the
+            // trace. ASCII-only.
+            Guard.Try("BattleArena", "probe arena navmesh corners", () =>
+            {
+                Vector3[] corners =
+                {
+                    ArenaCentre + new Vector3( 28f, 0f,  22f),
+                    ArenaCentre + new Vector3( 28f, 0f, -22f),
+                    ArenaCentre + new Vector3(-28f, 0f,  22f),
+                    ArenaCentre + new Vector3(-28f, 0f, -22f),
+                };
+                foreach (var c in corners)
+                {
+                    bool onMesh = NavMesh.SamplePosition(c, out NavMeshHit chit, 3f, NavMesh.AllAreas);
+                    Vector3 rel = c - ArenaCentre;
+                    FlowTrace.Step("BattleArena",
+                        $"ARENA navmesh corner ({rel.x:0},{rel.z:0}): onMesh={onMesh}" +
+                        (onMesh ? $" snapDist={Vector3.Distance(c, chit.position):0.00}" : ""));
+                }
+            });
 
             // 3) Warp the hero to the SOUTH stance, facing north toward the enemies.
             Vector3 heroStance = ArenaCentre + new Vector3(0f, 0f, -ArenaHalfDepth + 2f);
@@ -705,7 +733,27 @@ namespace DeNelle.Village.Arena
                     enemy.gameObject.name = $"ArenaEnemy_{id}_{idx}";
                     enemy.Configure($"encounter-{id}-{idx}", def, heart);
                     var brain = enemy.gameObject.AddComponent<EnemyBrain>();
-                    brain.Role = RoleForId(id);
+                    EnemyRole role = RoleForId(id);
+                    brain.Role = role;
+                    // TACTICAL ROLES (felt-fix 2026-06-24): without _tactics every orc just
+                    // melee-charged (mage never kited, nobody flanked). Assign the SHARED runtime
+                    // archetypes via SetTactics right after the brain is added (the Enemy.Configure
+                    // Role="caster" data path can't be used here because Configure runs BEFORE the
+                    // brain is attached in this spawn order). Reuses the existing Kiter/Flanker
+                    // archetypes -- NO new coordinator/formation system.
+                    //  - Ranged (mage) -> Kiter: holds ~10m standoff and pokes ranged, never charges.
+                    //  - DPS warrior   -> Flanker: arcs ~90deg to a side/rear approach.
+                    //  - Tank stays a front-closer (default Rush, no tactics) -- a clean front line.
+                    if (role == EnemyRole.Ranged)
+                    {
+                        brain.SetTactics(EnemyBrain.KiterTactics);
+                        FlowTrace.Step("BattleArena", $"ROLE '{id}': Kiter tactics (hold range + ranged poke).");
+                    }
+                    else if (role == EnemyRole.DPS)
+                    {
+                        brain.SetTactics(EnemyBrain.FlankerTactics);
+                        FlowTrace.Step("BattleArena", $"ROLE '{id}': Flanker tactics (arc to a flank).");
+                    }
                     // MonsterFamily wiring: first unit leads; the rest follow in formation.
                     if (idx == 0)
                         _familyLeader = enemy.gameObject.AddComponent<FamilyLeader>();
