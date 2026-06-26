@@ -172,6 +172,18 @@ namespace DeNelle.Core
         /// PlayerPrefs "ff.enemyrootedcast" = 0 to disable.</summary>
         public static bool EnemyRootedCast => Get("enemyrootedcast", defaultOn: true);
 
+        /// <summary>WO (enemy structure awareness) — DATA-PROVEN fix (headless [Flow:EnemyAggro] run:
+        /// wave / overworld-rep enemies spawn with NO EnemyBrain, so their ONLY structure-targeting was
+        /// <c>Enemy.ProbeForStructure</c>'s forward-only SphereCast, which missed ~99.7% — they march to
+        /// the Heart / roam past defences instead of attacking them). When ON (default),
+        /// <see cref="DeNelle.Village.Enemy"/> ALSO runs a short all-direction sweep that lets a brain-less
+        /// enemy lock + attack a nearby live structure (a side tower/wall, or the Heart tree) it would
+        /// otherwise walk straight past. HERO-PRIMARY is preserved: the sweep is suppressed while the hero
+        /// is within aggro range (the verified hero-chase path wins) and it never targets the hero. When
+        /// OFF, the exact legacy forward-only probe runs (fully reversible, no rebuild). PlayerPrefs
+        /// "ff.enemystructureaware".</summary>
+        public static bool EnemyStructureAwareness => Get("enemystructureaware", defaultOn: true);
+
         /// <summary>WO-498 — when ON, the new 9-zone mobile battle HUD (<see cref="DeNelle.Village.Arena.BattleHud9Zone"/>)
         /// spawns alongside <see cref="DeNelle.Village.Arena.BattleArenaHud"/> when a battle stages: a 3x3
         /// tic-tac-toe layout (TL Knight HP+resources, TC enemy family role overview, TR timer+pause,

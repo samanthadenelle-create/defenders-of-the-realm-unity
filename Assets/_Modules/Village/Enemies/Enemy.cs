@@ -88,6 +88,13 @@ namespace DeNelle.Village
         [Tooltip("Distance ahead the enemy probes for an attackable structure (world units).")]
         [SerializeField] private float _contactProbeDistance = 1.1f;
 
+        [Tooltip("Structure-awareness fix (ff.enemystructureaware): radius of the all-direction sweep a " +
+                 "BRAIN-LESS enemy uses to acquire a nearby live structure (side tower/wall, or the Heart " +
+                 "tree) it would otherwise march past — the forward-only probe missed ~99.7% of them. " +
+                 "Kept short so a locked structure is within striking range. Suppressed while the hero is " +
+                 "in aggro range (hero stays primary).")]
+        [SerializeField, Range(1f, 8f)] private float _structureSweepRadius = 3f;
+
         [Tooltip("Distance from the Heart at which the enemy considers itself 'arrived'.")]
         [SerializeField] private float _heartArrivalRadius = 2.5f;
 
@@ -216,6 +223,10 @@ namespace DeNelle.Village
         private Transform _heroTransform;
         private bool      _heroAggroEngaged;     // sticky once in range (hysteresis)
         private float     _heroResolveTimer;     // periodic re-resolve (hero may spawn late / respawn)
+
+        // Structure-awareness fix (ff.enemystructureaware): reused buffer for the brain-less
+        // all-direction structure sweep (OverlapSphereNonAlloc) so it never allocs per tick.
+        private readonly Collider[] _structureScanBuffer = new Collider[16];
 
         // ── DEF-56: path throttle ─────────────────────────────────────────────
         // SetDestination is O(navmesh) — calling it every frame for 20+ enemies
@@ -1273,11 +1284,42 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Casts a short sphere ahead of the enemy and returns the first
-        /// <see cref="IDamageableStructure"/> it hits, or null when the lane is
-        /// clear. Skirmishers probe slightly wider so they peel toward walls.
+        /// Acquires the structure (or hero) this enemy should stop and strike.
+        /// 1. FORWARD probe (legacy): the short SphereCast ahead — this is ALSO how a
+        ///    brain-less enemy lands contact damage on the HERO (HeroHealth implements
+        ///    IDamageableStructure), so it always runs and is returned first.
+        /// 2. STRUCTURE-AWARENESS sweep (ff.enemystructureaware, DATA-PROVEN fix): when the
+        ///    forward lane is clear AND the hero is NOT in aggro range, a short all-direction
+        ///    sweep returns the nearest live SIEGE structure (side tower/wall, or the Heart
+        ///    tree) so a brain-less enemy attacks a defence it would otherwise march straight
+        ///    past — the [Flow:EnemyAggro] "no brain => forward ProbeForStructure only" root,
+        ///    where the forward-only cast missed ~99.7%. HERO-PRIMARY is preserved: the sweep
+        ///    is suppressed while the hero is engageable, and it never targets the hero.
         /// </summary>
         private IDamageableStructure ProbeForStructure()
+        {
+            // 1. Legacy forward probe — keeps hero contact damage + path-blocking structures.
+            IDamageableStructure forward = ProbeForStructureForward();
+            if (forward != null) return forward;
+
+            // Flag OFF => exact legacy (forward-only) behaviour — fully reversible.
+            if (!DeNelle.Core.FeatureFlags.EnemyStructureAwareness) return null;
+
+            // HERO-PRIMARY: while the hero is near, keep chasing it — do NOT peel onto a
+            // side structure. (A structure literally ahead was already returned above.)
+            if (IsHeroWithinAggro()) return null;
+
+            // 2. Hero not near => short all-direction sweep for the nearest live structure.
+            return SweepForNearestStructure();
+        }
+
+        /// <summary>
+        /// Legacy forward SphereCast (extracted): the first live
+        /// <see cref="IDamageableStructure"/> directly ahead, or null. Skirmishers probe
+        /// slightly wider so they peel toward walls. This is the flag-OFF path AND the
+        /// hero-chase path (the cast hits the hero's collider so contact damage lands).
+        /// </summary>
+        private IDamageableStructure ProbeForStructureForward()
         {
             Vector3 origin = transform.position + Vector3.up * 0.5f;
             Vector3 forward = transform.forward;
@@ -1293,6 +1335,64 @@ namespace DeNelle.Village
                     return structure;
             }
             return null;
+        }
+
+        /// <summary>
+        /// True when the hero is currently within this enemy's aggro range (generous: out
+        /// to the drop margin so we don't peel onto a structure right at the chase edge).
+        /// Reads the cached hero ref (refreshed by DriveNav.ResolveHeroTransform ~1/sec);
+        /// re-resolves cheaply if it's gone so a late/streamed hero still suppresses the
+        /// sweep. Used to keep the hero the PRIMARY target over the structure sweep.
+        /// </summary>
+        private bool IsHeroWithinAggro()
+        {
+            if (_heroAggroRadius <= 0f) return false;          // aggro disabled => sweep is free to fire
+            if (_heroTransform == null) ResolveHeroTransform();
+            if (_heroTransform == null || !_heroTransform.gameObject.activeInHierarchy) return false;
+
+            float r = _heroAggroRadius + _heroAggroDropMargin; // don't peel near the chase edge
+            float planarSqr = Vector3.ProjectOnPlane(
+                _heroTransform.position - transform.position, Vector3.up).sqrMagnitude;
+            return planarSqr <= r * r;
+        }
+
+        /// <summary>
+        /// Structure-awareness fix: nearest live SIEGE <see cref="IDamageableStructure"/>
+        /// within <see cref="_structureSweepRadius"/> in ANY direction (the "short sweep"
+        /// that replaces the forward-only miss). Excludes the hero (handled by the aggro
+        /// path) so the enemy never treats the hero as a siege target here. Reuses
+        /// <see cref="_structureScanBuffer"/> (no per-tick alloc). Traces the acquire on
+        /// [Flow:EnemyAggro] so a capture PROVES the fix (probe-fail count drops + a
+        /// "ranged sweep acquired" line appears).
+        /// </summary>
+        private IDamageableStructure SweepForNearestStructure()
+        {
+            float radius = Mathf.Max(_contactProbeDistance, _structureSweepRadius);
+            Vector3 origin = transform.position + Vector3.up * 0.5f;
+            int count = Physics.OverlapSphereNonAlloc(
+                origin, radius, _structureScanBuffer, ~0, QueryTriggerInteraction.Ignore);
+
+            IDamageableStructure nearest = null;
+            float nearestSqr = float.MaxValue;
+            for (int i = 0; i < count; i++)
+            {
+                var c = _structureScanBuffer[i];
+                if (c == null) continue;
+                var structure = c.GetComponentInParent<IDamageableStructure>();
+                if (structure == null || !structure.IsAlive) continue;
+                // The hero implements IDamageableStructure — never grab it via the siege
+                // sweep (the verified hero-aggro path owns hero engagement).
+                if (structure is HeroHealth) continue;
+                float sqr = (c.transform.position - transform.position).sqrMagnitude;
+                if (sqr < nearestSqr) { nearestSqr = sqr; nearest = structure; }
+            }
+
+            if (nearest != null)
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"sweep-{_enemyId}", 1f,
+                    $"{_enemyId}: ranged sweep acquired structure '{(nearest as MonoBehaviour)?.name}' " +
+                    $"within {radius:F1}m (hero not in aggro) -> stopping to attack " +
+                    "(was: ProbeForStructure forward-only miss)");
+            return nearest;
         }
 
         // ---------------------------------------------------------------------
