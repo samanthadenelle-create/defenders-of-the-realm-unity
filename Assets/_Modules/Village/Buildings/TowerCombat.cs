@@ -110,6 +110,27 @@ namespace DeNelle.Village
                 return;
             }
 
+            // ── TowerAI OBSERVABILITY (behavior-NEUTRAL — adds NO selection logic) ──
+            // Records, per acquisition: chosen target name, distance, and whether a
+            // wall/structure sits on the line tower->target. The Linecast is computed
+            // ONLY for this trace boolean and is NOT used to pick/reject the target —
+            // targeting today is pure closest-living-hostile (no LoS / no defense
+            // priority). Gated on FlowTrace.Enabled (cheap when off) and only runs on
+            // the fire tick (not every frame). Throttled ~1/sec per tower (hot loop).
+            if (FlowTrace.Enabled)
+            {
+                Vector3 fPos = _firePoint != null ? _firePoint.position : transform.position;
+                Vector3 tPos = target.WorldPosition;
+                float dist = Vector3.Distance(fPos, tPos);
+                bool structureBetween =
+                    Physics.Linecast(fPos, tPos, out RaycastHit losHit, ~0, QueryTriggerInteraction.Ignore)
+                    && losHit.collider != null
+                    && losHit.collider.GetComponentInParent<IDamageableStructure>() != null;
+                string tName = (target as MonoBehaviour) != null ? (target as MonoBehaviour).name : "(boss/seam)";
+                FlowTrace.Throttle("TowerAI", "acquire", 1f,
+                    $"'{(_tower != null && _tower.Data != null ? _tower.Data.towerName : name)}' picked target='{tName}' dist={dist:F1} structureBetween={structureBetween} (pure closest-pick; NO line-of-sight gate, NO defense/Heart priority today)");
+            }
+
             FireAt(target, secondary);
             float level = _tower != null ? Mathf.Max(1, _tower.CurrentLevel) : 1;
             _nextAttackTime = Time.time + (_baseCooldown / level);

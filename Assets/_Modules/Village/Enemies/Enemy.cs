@@ -511,6 +511,16 @@ namespace DeNelle.Village
             _lastPathedDestination = Vector3.zero;
             if (_agent != null && _heart != null)
                 NavPathCoordinator.RequestInitialPath(_agent, _heart.position);
+
+            // EnemyAggro observability (no-brain hypothesis): record at init whether this
+            // enemy carries an EnemyBrain (ranged tower/structure awareness) or is a plain
+            // wave/roamer relying ONLY on the narrow forward contact probe. The spawner wires
+            // the brain before Configure, so GetComponent here is authoritative.
+            var aggroBrain = GetComponent<EnemyBrain>();
+            DeNelle.Core.Diagnostics.FlowTrace.Once("EnemyAggro", $"brain-{_enemyId}",
+                $"{_enemyId}: init hasEnemyBrain={(aggroBrain != null)} " +
+                $"role={(def != null ? def.Role : "<no-def>")} ai={_ai} " +
+                $"(no brain => structure awareness = forward ProbeForStructure only)");
         }
 
         // ---------------------------------------------------------------------
@@ -1068,7 +1078,19 @@ namespace DeNelle.Village
             }
 
             if (_currentTarget == null)
+            {
                 _currentTarget = ProbeForStructure();
+
+                // EnemyAggro observability: trace BOTH outcomes of structure acquisition so a
+                // headless run shows whether the forward-only SphereCast ever finds defenses /
+                // the Heart, or returns null (off-axis miss) leaving the enemy on a Heart-march.
+                if (_currentTarget == null)
+                    DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"probe-fail-{_enemyId}", 1f,
+                        $"{_enemyId}: ProbeForStructure null -> no structure target (Heart-march / roam only)");
+                else
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("EnemyAggro",
+                        $"{_enemyId}: ProbeForStructure hit '{(_currentTarget as MonoBehaviour)?.name}' -> stopping agent to attack");
+            }
 
             if (_currentTarget == null)
             {
