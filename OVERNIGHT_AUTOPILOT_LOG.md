@@ -34,6 +34,190 @@ Run them **longer/bigger** (no cost).
    `run-autopilot-fleet.ps1 -Count 12 -SeedStart <cycle#*1000 + offset> -TimeoutMin 15` in the
    background with fresh seeds (different scenarios/corner cases). Go dormant.
 
+## ★★ RUN 2 — started 2026-06-20 23:15 CDT (CURRENT; owner OFFLINE, CLI authoritative) ★★
+
+**Owner directive (2026-06-20):** owner offline overnight; CLI takes authoritative control and
+decides design/architecture by the **North Star + canons** (right-not-easy). Fleet every 30 min for
+~6h (~12 cycles), **subtle-random seeds**. ~20 min after each launch: harvest logs, filter errors,
+triage, **read-only RCA** agents return to CLI; **CLI confirms BY DATA, never suspicion** (the new
+binding `never-inference-fix` rule). Fix → compile-gate → commit local by explicit path → **NEVER push.**
+
+**Pre-run local commits (NOT pushed):**
+- `d7081a43` fix(hud): revert TKT-15 coin → Talk icon; Talk fires vendor Buy/Sell/Leave dialogue.
+- `91cbc45f` chore(talk): FlowTrace data-verify on the Talk routing path (proves the branch headless).
+
+**Scope:** validate the talk-routing fix from `[Flow:Village]`/`[Flow:HUD]` capture; hunt logic/flow/
+crash regressions across the WO backlog; clear what the DATA confirms.
+**Headless limits (won't claim "confirmed" off this):** `-nographics` cannot reproduce MAGENTA
+(render) or DIALOGUE-PANEL (UITK) defects → Tasks #4 (Village2 magenta) and #5 (Title dialogue)
+stay PARKED for a graphical/F8 capture. Task #2 (warp pill/troll) — owner says last playthrough was
+fine → likely STALE; needs a graphical reconfirm, not a headless guess.
+
+**Per-cycle SOP:** cron fires every 30 min (`7,37 * * * *`); each fire harvests the prior fleet's
+break-logs (≥30 min old = complete), triages NEW vs known, runs read-only RCA, confirms by data,
+fixes+gates+commits-local, relaunches the fleet with fresh subtle-random seeds. Self-terminate after
+≥12 cycles AND ≥6h: write FINAL SUMMARY (RUN 2) + CronDelete.
+
+_Cron fire 23:48 — NO-OP (guards working): fleet#3 in flight (launched 23:47) → overlap guard skipped launch; logs <20 min → harvest deferred. Fleet#3 completion (or the next fire) harvests the talk-fix verdict._
+
+## ★ RUN 2 FINAL SUMMARY (terminated 2026-06-21 05:18 CDT — ≥12 cycles + ≥6h) ★
+
+**Ran:** 2026-06-20 23:15 → 2026-06-21 05:18 (~6h), **15 cycles (0–14)**, **~168 completed bot runs**
+(14 fleets × 12). Cron self-deleted. Owner was offline; CLI authoritative, decisions to the North Star +
+canons, **confirm-by-data / never-inference-fix**, commit local by explicit path, **NOTHING PUSHED**.
+
+**FIXED + DATA-VERIFIED (the win) — 6 local commits, NOT pushed:**
+- `d7081a43` **TALK FIX** (owner top-priority, "breaks the loop"): coin → `hud_talk.jpg` icon; Talk fires the
+  vendor **Buy/Sell/Leave dialogue**; the upgrade short-circuit gated to **upgrade-only** buildings so
+  shoppable vendors (forge/armorer/market/jeweler) are no longer hijacked to the upgrade panel.
+  **VERIFIED ×12 fleets:** 0 talk-route violations, every run "9 castle vendors (4 shoppable), 0 violation(s)".
+  *(Actual Buy/Sell UX = owner felt-verify before push.)*
+- `91cbc45f` FlowTrace data-verify on the talk path · `def18dbb` `AssertVendorTalkRoute` oracle (closed the
+  castle-vendor headless coverage hole) · `9395fd1f` route test-seam (caught the oracle's own false-negative)
+  · `52c8b677` shared `ResolveRoute` single-source-of-truth + **oracle de-noise** (eliminated 60 self-inflicted
+  No-node exceptions/cycle — the RUN-1 harness-integrity discipline, applied to my own instrument).
+
+**Every commit `COMPILE_GATE_OK`. Tree stayed green all 14 cycles after the talk fix landed.**
+
+**DEFERRED / PARKED (honest — headless `-nographics` cannot confirm; need a GRAPHICAL/F8 capture):**
+- **#5 Title dialogue No-node race** — RCA'd, bounded fix known (`<<stop>>` after `Intro_Screen9`'s
+  `transition_to` + remove the in-command `_runner.Stop()`). Owner-gated runner-lifecycle, not blind-fixed.
+- **#4 Village2 magenta cluster** (pink/purple people + pill) — RCA'd (MagentaGuard one-shot sweep races
+  runtime injectors); bounded fix = deferred re-sweep. Render-class, not headless-confirmable.
+- **#6 stray magenta Capsule in MainCastle_Hall** — guard detects+hides it (handled); source RCA pending.
+- **#7 ATB Ranger T-pose on swap** — 1/12 below threshold; likely headless anim artifact; graphical confirm.
+- **#2 south-warp pill / troll y+90** — owner said last playthrough was fine → treated STALE; my speculative
+  Troll-yaw fix was REVERTED (no blind change).
+
+**COVERAGE NOTE (owner AM):** all 168 runs are HUB-concentrated — WO-453 blocks outpost/combat/walk
+headless. The hub loop (boot, vendors, economy, equip, HUD, wave, exit) is GREEN + re-verified clean every
+cycle. To find MORE, the RIGHT next step is adding **build-mode / dungeon / ATB coverage phases** to
+AutoPilotDriver — deliberately NOT done unattended (harness-integrity risk); do it validated WITH you.
+**Observation (not a ticket):** every fleet logs Unity VideoDecode/VideoComposite errors (filtered as
+-nographics artifacts) → an ACTIVE VideoPlayer in the hub/OuterWorld (possibly the dormant
+ATBBackgroundController orphan left enabled) — worth a graphical perf check.
+
+**OWNER ACTION:** review the 6 local commits → felt-verify the talk button (walk to Blacksmith/Forge →
+Talk icon → Buy/Sell dialogue opens) → push the ones that pass. Parked items need a graphical/F8 session.
+
+---
+
+### RUN 2 cycle table
+| Cycle | Local time | Bot runs | Cumul. | New/known | RCAs | Fixes (hash) | Build |
+|------:|-----------|---------:|-------:|-----------|-----:|--------------|:-----:|
+| 0 (setup) | 23:21 | fleet#1: 12 instances VALIDATED running (seeds 100-111) | — | — | — | d7081a43 talk-fix; 91cbc45f talk-debug | yes (23:20, HEAD 91cbc45f) |
+| 1 (hand-run) | 23:35 | fleet#1 harvested (12/12) | 1 new (MagentaGuard castle pill) / WO-453 known | 1 (data: talk path NOT exercised — coverage hole) | def18dbb AssertVendorTalkRoute oracle | yes (rebuild w/ oracle) |
+
+| 2 (hand-run) | 23:45 | fleet#2 harvested (12/12) | 48 oracle "violations" = AMBIGUOUS (instrument flaw, not a fix bug) | 1 (route signal) | 9395fd1f route test-seam | yes (rebuild) |
+
+| 3 (hand-run) | 23:55 | fleet#3 harvested (12/12) | TALK FIX ✅ VERIFIED (0 violations); 1 self-inflicted (oracle No-node noise) | 0 (data conclusive) | 52c8b677 ResolveRoute + de-noise | yes (rebuild) |
+
+| 4 (hand-run) | 00:16 | fleet#4 harvested (12/12) | 0 real (talk 0 / No-node 0); video = already-filtered artifacts | 0 | none (clean) | no (HEAD unchanged) |
+
+| 5 (cron) | 00:18 | fleet#5 (12/12) harvested CLEAN | 0 real (talk 0 ×3rd / No-node 0); castle pill guard-handled | 0 | none | no (HEAD 52c8b677 == build) |
+
+| 6 (cron) | 00:48 | fleet#6 (12/12) harvested CLEAN | 0 real (talk 0 ×4th / No-node 0) | 0 | none | no (HEAD 52c8b677 == build) |
+
+| 7 (cron) | 01:19 | fleet#7 (12/12) harvested CLEAN | 0 real (talk 0 ×5th / No-node 0) | 0 | none | no (HEAD 52c8b677 == build) |
+
+| 8 (cron) | 01:49 | fleet#8 (12/12) | talk 0 ×6; 3 below-threshold (1/12) ATB render/anim | 0 (below threshold) | none (parked) | no |
+
+| 9 (cron) | 02:18 | fleet#9 (12/12) harvested CLEAN | 0 real (talk 0 ×7); cycle-8 ATB blips did NOT recur (flukes) | 0 | none | no (HEAD 52c8b677 == build) |
+| 10 (cron) | 02:48 | fleet#10 (12/12) harvested CLEAN | 0 real (talk 0 ×8) | 0 | none | no (HEAD 52c8b677 == build) |
+| 11 (cron) | 03:18 | fleet#11 (12/12) harvested CLEAN | 0 real (talk 0 ×9) | 0 | none | no (HEAD 52c8b677 == build) |
+| 12 (cron) | 03:48 | fleet#12 (12/12) harvested CLEAN | 0 real (talk 0 ×10) | 0 | none | no (HEAD 52c8b677 == build) |
+| 13 (cron) | 04:18 | fleet#13 (12/12) harvested CLEAN | 0 real (talk 0 ×11) | 0 | none | no (HEAD 52c8b677 == build) |
+| 14 (cron) | 04:48 | fleet#14 (12/12) harvested CLEAN | 0 real (talk 0 ×12) | 0 | none | no (HEAD 52c8b677 == build) |
+| 15 (TERMINATE) | 05:18 | — | ≥12 cycles + ≥6h → FINAL SUMMARY written, cron c19b4837 deleted | — | — | — |
+
+**Cycle 8 below-threshold (1/12 each, PARKED — not confirmed, headless render/anim class):** `[Flow:EnvTreeFix]
+VERIFY FAILED` on `Skeleton_Warrior_Helmet`/`Cloak` (URP/Lit reads non-URP after fix — the tree-fix system
+mis-targeting an ENEMY renderer, render-class stripped in -nographics) + `[Flow:AtbSwap] VerifyPose
+'hero:Ranger': animated model never posed (T-pose, lastClipCount=-1) -> rolled back to capsule` (ATB hero
+swap didn't animate). All 1/12 (below ≥2 repro) + need a GRAPHICAL capture to confirm real-vs-headless-artifact.
+The Ranger ATB T-pose is the most worth an owner graphical check (gameplay-facing); not blind-fixed (unconfirmed).
+
+**Design call — NOT gambling the harness unattended (right-vs-easy, named):** the fleet is hub-capped
+(WO-453) and green; finding MORE would need NEW coverage phases (dungeon load / ATB battle / build-mode
+placement — all headless-decidable). That IS the high-value next step, BUT adding probe code unattended
+risks the harness-integrity trap (a buggy probe → false tickets / wasted cycles; I already burned 3 probe
+iterations tonight). So I am deliberately NOT blind-expanding coverage at 1am — the stable green watch
+protects the verified state. RECOMMEND (owner AM): add build-mode + dungeon + ATB coverage phases to
+AutoPilotDriver, validated with you present. The "easy" path (idle green cycles) and the "right" path
+(more coverage) are named; I chose to protect the verified harness over an unvalidated 1am gamble.
+
+**Steady-state note (owner AM):** the loop is now in pure regression-watch — hub coverage (the only
+coverage headless; outpost/combat/walk blocked by WO-453) is GREEN and re-verifying clean each cycle
+(talk fix 3×, no new real findings). The REMAINING backlog is NOT headless-actionable and is correctly
+NOT being blind-worked overnight: the parked items (#4 magenta, #5 Title dialogue, #6 castle pill) need a
+GRAPHICAL/F8 capture; the READY WOs are mostly NEW FEATURES (route to PO per pipeline) or need felt-verify.
+I am deliberately NOT implementing unverified WOs unattended (deliver-complete-verified, not piecemeal).
+**OBSERVATION (not a ticket — headless can't confirm it's real):** every fleet logs Unity VideoDecode/
+VideoComposite shader-pass errors (filtered as -nographics artifacts), which implies an ACTIVE VideoPlayer
+in the hub/OuterWorld scene graph. If that's the dormant ATBBackgroundController orphan (MASTER_CATALOG:
+ATB/Video/*.mp4 "unused") left enabled, it may be an unintended decode cost on mobile — worth your eye in
+a graphical session; I can RCA the exact VideoPlayer object on request. Not auto-fixed (render-class, unconfirmable headless).
+
+_Harvest cadence note (CLI design call, to honor owner's "every 30 min + check ~20 min after"): I harvest
+each fleet on its COMPLETION notification (~15-20 min post-launch = complete logs, no data lost), and the
+cron drives the ~30-min RELAUNCH cadence. The cron's own ">=20 min old" harvest guard is a no-op backup
+since completion-harvest already ran — this avoids the flaw where a 15-min fleet is <20 min old at the next
+30-min fire and would be wiped unharvested. Net: 30-min launch spacing + reliable harvest-on-complete._
+
+**Cycle 4 narrative — clean steady-state; talk fix HOLDS + oracle noise GONE (both data-confirmed):**
+fleet#4 (de-noised oracle): talk-route violations **0**, No-node exceptions **0** (was 60/cycle — my
+oracle de-noise verified working). Remaining break-log errors are ALL headless `-nographics` video/shader
+artifacts (`VideoDecode`/`VideoComposite`/`video decode shader pass`/`custom render path shader`), which
+`AutoPilotTickets.IsRenderArtifact` ALREADY filters from the ranked tickets (verified the needle list) —
+so 0 real tickets. Castle pill = guard-handled (Task #6). **HANDOFF:** critical goal complete (talk fix
+verified, oracle clean, harness validated by 4 hand-run cycles). Loop now handed to the **cron 30-min
+cadence** (owner's spec) for the remaining ~6h — each fire harvests prior + relaunches with fresh seeds.
+No manual relaunch from here; I respond to cron fires + terminate at 12 cycles + 6h.
+
+**Cycle 3 narrative — TALK FIX DATA-VERIFIED + oracle de-noised:** fleet#3 (corrected route oracle) =
+**0 talk-route violations**, detail "9 castle vendors (4 shoppable), 0 violation(s)" in all 12 runs →
+forge/armorer/market/jeweler all resolve `route='talk-dialogue'`. **The owner's top-priority talk fix is
+PROVEN correct by data** (the routing decision; actual Buy/Sell UX still owner felt-verify). Harvest also
+showed 60 `No node has been selected` in **MainCastle_Hall** (not Title) — traced to MY oracle:
+reflect-invoking `Interact()` hosted a Yarn dialogue whose teardown `Stop()` raced the known No-node bug
+→ self-inflicted break-log pollution (RUN-1 harness-integrity trap). FIX (`52c8b677`): extracted the PURE
+`CastleNpcInteractable.ResolveRoute(id)` as the single source of truth Interact() branches on, and the
+oracle now asserts it directly (no invoke, no Yarn, no Stop()-race). Talk fix proven AND oracle clean.
+**Parked (headless render artifacts, NOT real):** `VideoDecode`/`custom render path shader needs ≥1 passes`
+(×12 each) = -nographics video/shader passes (ATB background / cinematic) — only occur headless. The
+Title-scene No-node (Task #5) remains the genuine deferred dialogue race for a graphical capture.
+
+**Cycle 2 narrative — caught my OWN instrument lying (the never-inference-fix discipline working):**
+fleet#2 ran `AssertVendorTalkRoute` and reported 48 violations (12 runs × forge/armorer/market/jeweler:
+"did NOT open Buy/Sell dialogue, openPanel='<none>', IsRunning=false"). I did **NOT** conclude the talk
+fix was broken. Cross-checked the data: `Player.log` is stale (21:41, pre-session) + the fleet doesn't
+redirect per-run logs, so `Step`-level `route=` traces are lost; only `Fail` reaches break-log. And in
+`-nographics` BOTH the Yarn dialogue AND the UITK upgrade panel are invisible → `openPanel='<none>' /
+IsRunning=false` happens for EITHER route. So the oracle's surface-observation could not distinguish
+routes → the 48 "violations" were **ambiguous false-negatives, not proof of a broken fix.** ROOT (of the
+instrument): I asserted on the rendered surface, which is headless-invisible. FIX (`9395fd1f`): exposed the
+routing DECISION as a `public static` test seam (`CastleNpcInteractable.LastInteractRoute`), set at the
+branch in `Interact()`; the oracle now asserts `route=='talk-dialogue'` for shoppable vendors —
+rendering-independent + deterministic. Rebuilding; fleet#3 will give the FIRST real data-verify of the
+talk fix. Lesson reinforced: validate the instrument before trusting its metric (same class as the RUN-1
+stale-log catch).
+
+**Cycle 1 narrative (hand-run, validating the harness before trusting it):** fleet#1 = 12/12 clean
+runs through MainCastle_Hall (vendors/economy/equip/HUD/wave all ok; crossed to Village2; outpost
+"not realized" = known WO-453). **DATA finding (not inference):** zero `CastleNpc.Interact` /
+`Talk button` traces → the talk-routing fix was NOT exercised, because `OpenEachVendor` scans for
+`BuildingInteractable` but castle vendors are `CastleNpcInteractable` (a headless coverage HOLE). So
+the top-priority talk fix could not be data-verified. RIGHT FIX (my call, to canon — build for what
+you'll query): added the **`AssertVendorTalkRoute`** oracle (`def18dbb`) — reflect-invokes each castle
+vendor's real `Interact()` and asserts SHOPPABLE vendors open the Buy/Sell dialogue, not the upgrade
+panel; violation → ranked ticket. Rebuilding so fleet#2 runs it → data-verifies the talk fix next harvest.
+**One BUG ticket (12/12):** `[Flow:MagentaGuard] hid stray MAGENTA placeholder 'Capsule' (MainCastle_Hall)`
+— the guard DETECTS by shader-name (works headless) and HIDES it (functionally handled); the source
+(a placeholder capsule spawned in the castle) is unfixed → PARKED for an RCA cycle (low priority: guard covers it).
+
+
+---
+
 ## Coverage metrics (cumulative)
 - **Cumulative completed bot runs:** 168 ✅ _(final — see FINAL SUMMARY above)_
 - **Cycles completed:** 13 — **LOOP TERMINATED 06:46 (≥12 cycles + ≥6h); cron 3d739170 deleted.**

@@ -95,3 +95,138 @@ New `region-gates.json` (StreamingAssets + Resources dual copy, like `garrison-r
   `AutoPilotProbes` PROBE 5 (no edits required to ship v1).
 - Reference donor: `Assets/Editor/CastleHubBuilder.cs` `AddCastleBridgeSeam` / `RelocateExitSeamToBridge`
   / `BuildBridgeNavLink` (the last is DROPPED — no link in the generalized builder).
+
+---
+
+# Runtime auto-seam (2026-06-23) — QUEUED BEHIND THE KNIGHT
+
+**Owner ask (2026-06-23, felt-test flag):** "world seam issue — can we apply the same scripting
+logic from Grok to auto-seam from script at RUNTIME?" **Yes.** This section supersedes the
+editor-bake delivery above for the world seam: instead of an editor `BuildFromRecipe` that bakes a
+crossing into `MainCastle_Hall.unity` at author time, the SAME RegionGate primitive is constructed
+**from a recipe at RUNTIME, on scene/seam load** — no editor bake, no scene hand-edit. The recipe
+schema, the design law (tunnel default, occluder, no cross-scene link), and the SEAM-REACHABLE
+oracle from above all carry over unchanged. The only new piece is the **runtime recipe → build
+path** — it mirrors Grok's runtime-dungeon idea, but built on OUR proven RegionGate machinery, not
+a greenfield generator.
+
+**Status: QUEUED BEHIND THE KNIGHT** (single-Knight north-star is the active V1 slice; fold this in
+after the Knight is felt-verified — memory `combat-pivot-single-hero-northstar`).
+**Lane:** World/Environment (architect lane). Touches a NEW runtime component + the recipe asset;
+does NOT touch combat/AI silos — parallel-safe per §9.
+
+## Why runtime, not bake
+The editor-bake `RegionGateBuilder` (above) writes the deck + trigger into the `.unity` scene and
+bakes the navmesh offline. That works, but: (1) it re-touches a hand-dialed scene file every time the
+geometry moves (the −572 → origin re-center, WO-483, just invalidated every baked coord); (2) it
+can't react to runtime state (progression-scaled dungeons, GUID-keyed pairings, additive-load
+timing); (3) a bake is a serial editor-closed bottleneck. **A runtime builder reads the recipe and
+assembles the crossing in `Awake`/`AfterSceneLoad` from primitives + a `NavMeshSurface` runtime
+re-bake (or `NavMeshLink` weld) — so a coord change is a data edit, never a re-bake.** This is the
+direct analogue of Grok's runtime dungeon construction, kept on the RegionGate spine.
+
+## The runtime builder — `RuntimeRegionGate.cs` (NEW, `DeNelle.Village`, runtime asmdef)
+A runtime component (NOT editor) that, on load, constructs ONE crossing from a `region-gates.json`
+row. Self-bootstrapping like `WorldSceneLoader` (`[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` +
+`sceneLoaded` subscription, with the same domain-reload-off guard reset) so no scene wiring is
+needed. For each recipe row whose `from` == the active hub scene, it builds the five parts below.
+Instrumented per §12 (`[Flow:RuntimeSeam] Step/Warn/Fail`; `Guard.Try` around every risky op).
+Idempotent — destroy a prior `__RuntimeSeam_<id>` subtree first; safe no-op off a hub scene.
+
+### The five parts the runtime recipe → build path constructs
+1. **Walkable approach deck welded to the source navmesh.** Lift the body of
+   `CastleHubBuilder.CreateInvisibleFloor` (Plane + MeshCollider, renderer disabled,
+   `NavMeshModifier overrideArea=Walkable` so the gate arch can't carve it) into a runtime helper.
+   The deck spans `from-gate-Z → threshold-Z` with the proven **+6 m overlap into the courtyard** so
+   it FUSES with the source navmesh — then a runtime `NavMeshSurface.BuildNavMesh()` (or `UpdateNavMesh`)
+   re-bakes JUST the additive source surface so the deck is on-mesh without an editor bake. (The
+   2026-06-19 lesson: a deck that floats only at the far Z leaves a void to the gate and reads
+   off-mesh — keep the continuous gate→threshold strip + overlap.)
+2. **`SceneTransitionTrigger` seated at the threshold** (deck level, NOT floating). REUSE the
+   component verbatim — set ONLY `transform.position`, `targetSceneName`, `targetPosition`,
+   `loadAdditive`, `ProximityRadius` (per §"do not change its field wiring"). Confirm-to-cross is
+   already unconditional; the wide `ConfirmMinRadius` already reaches the hero at the navmesh edge.
+3. **Narrow `NavMeshLink`(s) across the two additive navmeshes** so AI (reps, troops) can PATH the
+   crossing once BOTH scenes are loaded additively — this is the runtime-only capability the
+   editor bake could never have (the far endpoint exists at runtime). REUSE `BuildBridgeNavLink`'s
+   body (direct `Unity.AI.Navigation.NavMeshLink`, `bidirectional`, width = arch width). Build the
+   link ONLY after `WorldSceneLoader` confirms OuterWorld is loaded (subscribe to its `sceneLoaded`)
+   so the end endpoint lands on a live navmesh — NOT the dead-end dangling link the editor bake hit.
+   *(This is the ONE place the §"NEVER a cross-scene NavMeshLink" law relaxes: it was impossible at
+   BAKE time because the far scene wasn't loaded; at RUNTIME both are additive, so the link is valid.
+   The masked-warp `SceneTransitionTrigger` remains the HERO path; the link is the AI path.)*
+4. **`HeroLinkCrossing` paired-warp for the input-driven hero**, GUID-keyed per WO-479. Place TWO
+   `HeroLinkCrossing` markers sharing one `crossingId` (= the gate GUID): entry on the source deck,
+   destination at the OuterWorld landing. REUSE the component verbatim (it already does id-paired
+   distance-independent warp via `Partner()`). This is the deliberate spawn-pair the owner asked for
+   (memory `region-gate-crossing-primitive`), keyed by the stable GUID backbone (WO-479 §GUID).
+5. **Gate-funnel blocker panels (WO-479 §gate-refinement).** Two thin vertical panels
+   (BoxCollider + `NavMeshObstacle` carve, invisible) at the inner edges of the arch, auto-fit from
+   the arch width, so navmesh + physics route ONLY through the opening — kills "slip around the
+   gate side" and makes the gate a real threshold/choke. Auto-placed from the recipe arch bounds,
+   never hand-dialed.
+
+## New geometry coords — origin-centered OuterWorld (replaces the stale −572 coords)
+**The old seam coords are DEAD.** The donor `AddCastleBridgeSeam` warped to `(gateX, 0.5, -66)` and
+the legacy gate wiring to `(0, 0.5, -12)` — both authored against the OLD `ExteriorTerrainBuilder`
+terrain centered at **Z = −572** (1000×1000). WO-483 re-centers that terrain to **origin (0,0,0),
+shrunk to ~460u**, with a single `DeNelle.Core.World.WorldGeometry` constant as the shared truth
+(`ZoneManager`/`OuterWorldBuilder`/`ExteriorTerrainBuilder`/`CastleHubBuilder` all read it). The
+runtime seam MUST read its coords from `WorldGeometry`, never hardcode them. Derive from where the
+hero EXITS the castle now:
+
+| Coord | Source of truth (read at runtime) | Notes |
+|---|---|---|
+| `gateX` (lane centre) | `CastleHubBuilder.ReadSouthGatePos().x` (≈ −4.37, the recipe Gate_South) | unchanged by re-center (castle is local) |
+| `gateZ` (deck weld start) | `ReadSouthGatePos().z` (≈ −40.6) | castle-local, unchanged |
+| `thresholdZ` (trigger + entry marker) | `gateZ − ~22` (the deck far end, ≈ −63 deck-local) | on the castle deck, on-mesh |
+| **`targetPosition` (OuterWorld landing)** | **`WorldGeometry.SouthGateSeamLanding`** (origin-centered) | **REPLACES `(gateX,0.5,−66)` / `(0,0.5,−12)`** — must land inside the new ~460u origin terrain, just inside its south edge (≈ `(0, 0.5, −40…−60)` band, final value owned by WorldGeometry, NOT this WO) |
+| arch width (funnel + link width) | recipe `approach.width` (≈ 7) | drives panels 5 + link 3 |
+
+> **Hard rule:** do NOT mint a literal landing Z here. The single source is `WorldGeometry`
+> (WO-483). If WO-483 hasn't landed when this is built, BLOCK on it — a hardcoded landing re-creates
+> the exact −572 desync this is fixing.
+
+## Reachability validation (SEAM-REACHABLE oracle)
+Same repeatable test as the editor variant — no bespoke verification:
+- **On build (runtime):** after the deck weld + runtime re-bake, assert `PATH-COMPLETE` from a
+  source-courtyard point to the threshold trigger ON the source navmesh (tight ≤1.0 m end
+  tolerance so a snap onto a stacked far-scene navmesh can't false-green — the 2026-06-19 lesson).
+  Emit `RUNTIME_SEAM_NAV_OK` / `..._FAIL` via FlowTrace.
+- **On AI link (runtime):** once OuterWorld is additive, assert a cross-link `PATH-COMPLETE` from
+  the source deck to the OuterWorld landing through the `NavMeshLink` (this is the runtime-only
+  check the bake couldn't run).
+- **Fleet:** `AutoPilotProbes` PROBE 5 (**SEAM-REACHABLE**) regression-guards it on a headless run —
+  the same oracle that guards every other gate. This is also the fix for the WO-453
+  `AttemptExitCastle` fleet timeout (WO-483 notes it as "THIS unfixed seam").
+
+## Reuse vs. new
+| Piece | Reuse (verbatim / lift body) | NEW |
+|---|---|---|
+| Walkable approach deck | `CastleHubBuilder.CreateInvisibleFloor` + `AddWalkableNavMeshModifier` (lift to runtime helper) | runtime `NavMeshSurface.BuildNavMesh()` re-bake (no editor bake) |
+| Threshold crossing | `SceneTransitionTrigger` (verbatim — set transform + 4 fields only) | — |
+| AI cross-path | `BuildBridgeNavLink` body (direct `NavMeshLink`) | runtime build gated on OuterWorld-additive-loaded |
+| Hero paired warp | `HeroLinkCrossing` (verbatim, GUID `crossingId`) | place the pair from the recipe |
+| Gate funnel panels | WO-479 §gate-refinement design | auto-fit panel builder from arch bounds |
+| Recipe schema + tunnel/occluder law | `region-gates.json` + design law (this WO, above) | runtime loader of the same JSON |
+| Additive load timing | `WorldSceneLoader` (subscribe to its `sceneLoaded`) | — |
+| Coords | `WorldGeometry` (WO-483) + `ReadSouthGatePos` | — (NEVER hardcode) |
+| Reachability | `AutoPilotProbes` PROBE 5 SEAM-REACHABLE | runtime `PATH-COMPLETE` asserts (build-time + cross-link) |
+| Instrumentation | `FlowTrace` / `Guard` (§12) | `[Flow:RuntimeSeam]` tag |
+
+## Files (runtime variant)
+- NEW `Assets/_Modules/Village/World/RuntimeRegionGate.cs` (`DeNelle.Village`, runtime asmdef —
+  references `Unity.AI.Navigation`, like `EnemyStrongholdBuilder` proves compiles).
+- REUSE `region-gates.json` (the same recipe asset as the editor variant).
+- REUSE (no edits): `SceneTransitionTrigger`, `HeroLinkCrossing`, `WorldSceneLoader`,
+  `AutoPilotProbes` PROBE 5.
+- DEPENDS ON: `DeNelle.Core.World.WorldGeometry` (WO-483) for the origin-centered landing coord.
+- Donor bodies to lift: `CastleHubBuilder.CreateInvisibleFloor`, `AddWalkableNavMeshModifier`,
+  `BuildBridgeNavLink`.
+
+## What NOT to touch (runtime variant)
+- Do NOT hardcode the OuterWorld landing Z — read `WorldGeometry`; block on WO-483 if absent.
+- Do NOT change `SceneTransitionTrigger`'s field wiring (transform + the 4 public fields only).
+- Do NOT build the cross-scene `NavMeshLink` before OuterWorld is additive-loaded (dangling endpoint).
+- Do NOT hand-edit any `.unity` scene — this is a pure runtime build, NO bake.
+- Do NOT start until the single-Knight V1 slice is felt-verified (QUEUED BEHIND THE KNIGHT).

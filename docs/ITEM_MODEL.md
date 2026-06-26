@@ -165,11 +165,17 @@ keep the Resources/StreamingAssets copies in sync (the `CanonicalJson` law).
   is generated from the Blink RPG bundle via Addressables (`BlinkGearSource` + the "Gear"
   Addressables group); see [[blink-canonical-art-foundation]] / `docs/BLINK_NOTES.md`. 400
   weapons + 25 outfit sets loaded, addressable-keyed in `prefabPath` with `loadVia:"addressable"`.
-- **Display gating — OPEN (owner 2026-06-18, "how to show low-level gear").** With ~460 items
-  the store/inventory must filter what's shown. The data already carries the hook: `req.level`
-  + `rarity`/tier. Decide the rule — **level-range-bound** (show within ±N of player level) vs
-  **milestone-bound** (unlock at tiers/milestones). It's a PRESENTATION filter (reads the data),
-  not a data change; set it when wiring the native store panel.
+- **Store-presentation filter — OPEN (owner 2026-06-18).** With ~460 items the store/inventory/
+  equip list must filter to what's RELEVANT to the **selected hero** (also fixes the silent
+  weight-class rejection — never show gear you can't wear). All three filters read data ALREADY
+  in the catalog (no data change, pure presentation):
+  1. **By selected hero class/weight** — weapons by `job` match; armor by `weight` (`ArmorFitsClass`:
+     Knight/Cleric=heavy, Ranger/Mage=light). The hero only sees/equips what fits.
+  2. **By level** — `req.level`. Decide the rule: **level-range-bound** (within ±N of player level)
+     vs **milestone-bound** (unlock at tiers). Owner's call.
+  3. **Optional** rarity/category tabs.
+  Set when wiring the native store/equip panel. UX note: an equip that IS rejected (e.g. a
+  forced case) must give feedback, never a silent no-op.
 - **Per-slot vs full-body armor** — today armor is modeled as full-body outfit (`slot` is
   effectively one). Decide if Gear gets head/chest/legs slots before the generator runs (it
   changes the entry granularity).

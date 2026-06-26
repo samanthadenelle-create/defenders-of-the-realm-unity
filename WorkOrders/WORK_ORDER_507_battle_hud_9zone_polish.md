@@ -14,6 +14,22 @@ readability, dynamic ability arc with radial cooldowns — without breaking the 
 - `Assets/_Modules/Village/Arena/BattleArenaHud.cs` — the current minimal LIVE overlay (title + enemy HP + Flee
   + victory/defeat banner + stars). Decision needed: does the 9-zone REPLACE this, or layer over it? (see 5d)
 
+## ★ AUTHORITATIVE MOCKUP (owner 2026-06-24 — sketch + Grok style render) ★
+This supersedes the generic zone list below where they differ. Build the LAYOUT BONES to this.
+**Core rules:** dark semi-transparent panels · **anchored TIGHT to screen edges/corners, compact** ·
+**NO overlap** with the center or each other · the **center stays clear** (the fight/backdrop shows through).
+- **Top-Left** — Player stats (HP red bar + a second resource/level bar) + **BUFFS** row (gear/consumable buff icons).
+- **Top-Center** — **TARGET** enemy name + **lock state** (Locked/Unlocked) + a lock toggle button.
+- **Top-Right** — **Settings** gear + **FLEE** (Flee lives here now, top-right — move it from BattleArenaHud's top-left).
+- **Mid-Left** — **TARGET CYCLE** list: a vertical list of the enemies (portrait + name + HP bar each) to cycle/select targets. Dynamic from the spawned family (Tank/DPS/DPS/Healer).
+- **Mid-Center** — EMPTY (fight shows through).
+- **Mid-Right** — **FOCUS AREA**: heal-toggle (toggle 1-2 skills to healing), Attack, and a mode switch (attack / ranged / spell, "off-tree"). [NEW systems — placeholder buttons for now.]
+- **Bottom-Left** — **Virtual D-PAD / joystick** (movement) + a couple small utility icons.
+- **Bottom-Center** — utility row: **Potion · Rapid Heal · Desperate WS** + **Stars earned + timer-to-keep-star-level**. [Potion/heal/desperate = NEW consumables, placeholder; stars+timer = wire to BattleStarRating/the time-box.]
+- **Bottom-Right** — **ABILITY ARC** (NOT a 12-slot grid — owner: "we don't need all those slots"): big **THRUST** anchor at the far-right (basic attack), the actual unlocked abilities (Q/W/E/R, skill-tree-driven) **arcing up-left** from it, each a disc + icon + radial cooldown ring.
+**Wire-now (has data):** HP bar, target+lock, the ability arc (THRUST + unlocked abilities), settings, Flee, d-pad, stars+timer.
+**Placeholder (new systems to build later):** buffs row, full target-cycle interactivity, focus-area mode-switch, Potion/Rapid Heal/Desperate WS consumables.
+
 ## 3. The 9 zones (per WO-498 — implement as anchored RectTransforms)
 1 Top-Left Knight plate (name + green HP + shield + resource pips) · 2 Top-Center enemy family overview (role
 chips Tank/Healer/Wizard/DPS + mini HP + icons, dim-on-death) · 3 Top-Right timer + pause · 4 Mid-Left current
