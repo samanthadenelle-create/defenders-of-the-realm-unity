@@ -110,7 +110,7 @@ namespace DeNelle.Village
                 var gate = host.AddComponent<RuntimeRegionGate>();
                 gate._recipe = row;
                 FlowTrace.Step("RuntimeSeam",
-                    $"({via}) building runtime crossing '{row.id}' on '{scene.name}' -> '{row.to}' (type={row.type}, loadMode={row.loadMode}).");
+                    $"({via}) building runtime crossing '{row.id}' [{SideName(row.facingYaw)} facingYaw={row.facingYaw:F0}] on '{scene.name}' -> '{row.to}' (type={row.type}, loadMode={row.loadMode}).");
             }
         }
 
@@ -118,23 +118,49 @@ namespace DeNelle.Village
         //  INSTANCE BUILD
         // --------------------------------------------------------------------
         private GateRecipeRow _recipe;
-        private Vector3 _gatePos;          // recipe south gate (castle-local, unchanged by re-center)
-        private float   _thresholdZ;       // deck far end (trigger + entry marker)
-        private Vector3 _landing;          // OuterWorld landing (from WorldGeometry, else fallback)
+        private Vector3 _gatePos;          // recipe SOUTH-FRAME gate (castle-local, unchanged by re-center). NOT pre-rotated.
+        private float   _thresholdZ;       // deck far end (trigger + entry marker), SOUTH-FRAME Z
+        private Vector3 _landing;          // OuterWorld landing (SOUTH-FRAME; from WorldGeometry, else fallback)
         private bool    _aiLinkBuilt;
+
+        // 4-SIDE SUPPORT (host-rotation about origin). All south math is authored in the SOUTH frame
+        // and converted to world by ToWorld() = _yawRot * southPoint (host sits at origin, so a yaw
+        // rotation about Y == rotation about the castle centre). facingYaw maps south onto each side:
+        //   South yaw=0  | West yaw=90 | North yaw=180 | East yaw=270.  REGRESSION GUARD: at yaw=0,
+        // _yawRot == identity so ToWorld(p) == p exactly (identity*vector is a bit-exact passthrough)
+        // and every oriented child gets identity rotation — the build is mathematically identical to
+        // the pre-4-side south-only build.
+        private float      _facingYaw;
+        private Quaternion _yawRot = Quaternion.identity;
+
+        // Convert a SOUTH-FRAME point to world by rotating it about the castle origin by facingYaw.
+        private Vector3 ToWorld(Vector3 southLocal) => _yawRot * southLocal;
+
+        private static string SideName(float yaw)
+        {
+            int y = Mathf.RoundToInt(yaw) % 360; if (y < 0) y += 360;
+            switch (y) { case 0: return "South"; case 90: return "West"; case 180: return "North"; case 270: return "East"; default: return "yaw" + yaw.ToString("F0"); }
+        }
 
         private void Start()
         {
             using var _ = FlowTrace.Enter("RuntimeSeam", $"Build crossing '{_recipe?.id}'");
             if (_recipe == null) { FlowTrace.Fail("RuntimeSeam", "no recipe on host — abort."); return; }
 
-            // 1) Source coords at runtime — NEVER hardcode the source gate or the landing.
+            // 0) Side selection — host-rotation about origin. facingYaw rotates the proven SOUTH build
+            //    onto this gate's side (S=0/W=90/N=180/E=270). yaw=0 => identity => south build unchanged.
+            _facingYaw = _recipe.facingYaw;
+            _yawRot    = Quaternion.Euler(0f, _facingYaw, 0f);
+            string side = SideName(_facingYaw);
+
+            // 1) Source coords at runtime — NEVER hardcode the source gate or the landing. These stay in
+            //    the SOUTH FRAME; ToWorld() rotates each authored point onto this side at placement time.
             _gatePos = ReadSouthGatePos();
             float backFromGate = _recipe.thresholdBackFromGate > 0.01f ? _recipe.thresholdBackFromGate : 22f;
             _thresholdZ = _gatePos.z - backFromGate;       // out past the gate, on the castle deck
             _landing = ResolveOuterWorldLanding();
             FlowTrace.Step("RuntimeSeam",
-                $"coords: gate={_gatePos} thresholdZ={_thresholdZ:F1} landing={_landing} (gate=recipe, landing=WorldGeometry-or-fallback).");
+                $"coords[{side} facingYaw={_facingYaw:F0}]: gateSouth={_gatePos} thresholdZ={_thresholdZ:F1} landingSouth={_landing} -> WORLD gate={ToWorld(_gatePos)} landing={ToWorld(_landing)} (gate=recipe, landing=WorldGeometry-or-fallback, rotated about castle origin).");
 
             float width = _recipe.approachWidth > 0.01f ? _recipe.approachWidth : 7f;
 
@@ -218,7 +244,7 @@ namespace DeNelle.Village
                 // probe per the external review: sample 10m inside the gate, lifted +2m, radius 15 — lands
                 // squarely on the courtyard navmesh body (not the gate-edge fringe) so the deck Y matches.
                 float deckY = _gatePos.y;
-                var probe = new Vector3(_gatePos.x, _gatePos.y + 2f, _gatePos.z + 10f);   // deep inside the courtyard
+                var probe = ToWorld(new Vector3(_gatePos.x, _gatePos.y + 2f, _gatePos.z + 10f));   // deep inside the courtyard (WORLD, this side)
                 if (NavMesh.SamplePosition(probe, out NavMeshHit pHit, 15f, NavMesh.AllAreas))
                     deckY = pHit.position.y;
 
@@ -230,12 +256,14 @@ namespace DeNelle.Village
                 float southEndZ     = _thresholdZ;                 // south end, at the trigger
                 float centreZ       = (courtyardEndZ + southEndZ) * 0.5f;
                 float lenZ          = Mathf.Abs(courtyardEndZ - southEndZ);
-                // Unity plane = 10m/unit: scale.z = len/10, scale.x = width/10.
+                // Unity plane = 10m/unit: scale.z = len/10, scale.x = width/10. The plane is ROTATED by
+                // _yawRot so its long (Z) axis points along this gate's true outward axis (yaw=0 => identity).
                 deck = CreateInvisibleWalkableFloor(transform, "RuntimeSeam_Deck_Nav",
-                    new Vector3(_gatePos.x, deckY, centreZ),
-                    new Vector3(width / 10f, 1f, lenZ / 10f));
+                    ToWorld(new Vector3(_gatePos.x, deckY, centreZ)),
+                    new Vector3(width / 10f, 1f, lenZ / 10f),
+                    _yawRot);
                 FlowTrace.Step("RuntimeSeam",
-                    $"deck: centre=({_gatePos.x:F2},{deckY:F2},{centreZ:F1}) len≈{lenZ:F1}m width={width}m " +
+                    $"deck[{SideName(_facingYaw)}]: centreSouth=({_gatePos.x:F2},{deckY:F2},{centreZ:F1})->world{ToWorld(new Vector3(_gatePos.x, deckY, centreZ))} len≈{lenZ:F1}m width={width}m " +
                     $"(threshold {_thresholdZ:F1} → courtyardEnd {courtyardEndZ:F1}, +{overlap:F0}m FULL deck/courtyard overlap north of gate {_gatePos.z:F1}, deckY snapped to courtyard navmesh — overlap is the connect with the Children-only bake).");
             });
             if (deck == null)
@@ -247,12 +275,13 @@ namespace DeNelle.Village
         // a Plane (MeshCollider), renderer disabled, NavMeshModifier overrideArea=Walkable so the gate
         // arch can't carve it. Runtime can reference Unity.AI.Navigation directly (asmdef ref).
         private static GameObject CreateInvisibleWalkableFloor(Transform parent, string name,
-            Vector3 worldPos, Vector3 localScale)
+            Vector3 worldPos, Vector3 localScale, Quaternion worldRot)
         {
             var plane = GameObject.CreatePrimitive(PrimitiveType.Plane); // MeshFilter + MeshRenderer + MeshCollider
             plane.name = name;
             plane.transform.SetParent(parent, false);
             plane.transform.position = worldPos;
+            plane.transform.rotation = worldRot;   // orient long axis along this gate's outward axis (yaw=0 => identity, unchanged)
             plane.transform.localScale = localScale;
 
             var r = plane.GetComponent<MeshRenderer>();
@@ -289,12 +318,12 @@ namespace DeNelle.Village
                 float deckCentreZ = (deckNorthZ + _thresholdZ) * 0.5f;   // centre of the approach deck
                 var go = new GameObject("RuntimeSeam_Trigger");
                 go.transform.SetParent(transform, false);
-                go.transform.position = new Vector3(_gatePos.x, _gatePos.y, deckCentreZ);
+                go.transform.position = ToWorld(new Vector3(_gatePos.x, _gatePos.y, deckCentreZ));   // WORLD, this side
 
                 var trig = go.AddComponent<SceneTransitionTrigger>();
                 trig.suppressPrompt  = true;   // passive walk-across seam: HeroLinkCrossing crosses; no "Travel to..." button (owner 2026-06-23).
                 trig.targetSceneName = _recipe.to;
-                trig.targetPosition  = _landing;
+                trig.targetPosition  = ToWorld(_landing);   // WORLD landing for this side (yaw=0 => south value unchanged)
                 trig.loadAdditive    = !string.Equals(_recipe.loadMode, "single", System.StringComparison.OrdinalIgnoreCase);
                 // WO-497 seam slim-down: the 44m radius was a FINDABILITY band-aid for the (now-
                 // suppressed) "Travel to..." tap-prompt. With suppressPrompt=true the actual crossing
@@ -304,7 +333,7 @@ namespace DeNelle.Village
                 // floor the effective radius internally; that's fine for a suppressed-prompt backstop.
                 trig.ProximityRadius = _recipe.triggerRadius > 0.01f ? _recipe.triggerRadius : 6f;
                 FlowTrace.Step("RuntimeSeam",
-                    $"trigger seated @DECK-CENTRE ({_gatePos.x:F2},{_gatePos.y:F2},{deckCentreZ:F1}) [was far-threshold z={_thresholdZ:F1}] -> '{_recipe.to}'@{_landing} additive={trig.loadAdditive} r={trig.ProximityRadius} (EffRadius=Max(r,40m)) — sphere blankets the {overlap + (_gatePos.z - _thresholdZ):F0}m approach deck so the prompt is FORGIVING (fires on the whole south approach, not just the exact spot).");
+                    $"trigger[{SideName(_facingYaw)}] seated @DECK-CENTRE world{ToWorld(new Vector3(_gatePos.x, _gatePos.y, deckCentreZ))} (southZ={deckCentreZ:F1}) -> '{_recipe.to}'@{ToWorld(_landing)} additive={trig.loadAdditive} r={trig.ProximityRadius} (EffRadius=Max(r,40m)) — sphere blankets the {overlap + (_gatePos.z - _thresholdZ):F0}m approach deck so the prompt is FORGIVING (fires on the whole approach, not just the exact spot).");
             });
         }
 
@@ -320,14 +349,14 @@ namespace DeNelle.Village
 
                 var entry = new GameObject("RuntimeSeam_HeroLink_Entry");
                 entry.transform.SetParent(transform, false);
-                entry.transform.position = new Vector3(_gatePos.x, _gatePos.y, _thresholdZ);
+                entry.transform.position = ToWorld(new Vector3(_gatePos.x, _gatePos.y, _thresholdZ));   // WORLD, this side
                 var ec = entry.AddComponent<HeroLinkCrossing>();
                 ec.crossingId = id;
                 ec.bidirectional = true;
 
                 var dest = new GameObject("RuntimeSeam_HeroLink_Dest");
                 dest.transform.SetParent(transform, false);
-                dest.transform.position = _landing;
+                dest.transform.position = ToWorld(_landing);   // WORLD landing, this side
                 var dc = dest.AddComponent<HeroLinkCrossing>();
                 dc.crossingId = id;
                 dc.bidirectional = true;
@@ -356,18 +385,21 @@ namespace DeNelle.Village
                 // pinch the welded weld-tongue lane.
                 float panelOffset = half + 2.5f;
                 float panelZ = _gatePos.z;
-                BuildPanel($"RuntimeSeam_Funnel_L", new Vector3(_gatePos.x - panelOffset, _gatePos.y + 1.5f, panelZ));
-                BuildPanel($"RuntimeSeam_Funnel_R", new Vector3(_gatePos.x + panelOffset, _gatePos.y + 1.5f, panelZ));
+                // Panels are placed in WORLD via ToWorld and ROTATED by _yawRot so their thin (X) sealing
+                // axis flanks this gate's opening along its true tangential axis (yaw=0 => identity, unchanged).
+                BuildPanel($"RuntimeSeam_Funnel_L", ToWorld(new Vector3(_gatePos.x - panelOffset, _gatePos.y + 1.5f, panelZ)), _yawRot);
+                BuildPanel($"RuntimeSeam_Funnel_R", ToWorld(new Vector3(_gatePos.x + panelOffset, _gatePos.y + 1.5f, panelZ)), _yawRot);
                 FlowTrace.Step("RuntimeSeam",
                     $"funnel panels at ±{panelOffset:F1}m of gate x={_gatePos.x:F2} (inner carve face ±{half + 2.0f:F1}, 2.0m clear of deck edge ±{half:F1}) — route through opening, lane WIDENED/unpinched (forgiving off-centre approach).");
             });
         }
 
-        private void BuildPanel(string name, Vector3 worldPos)
+        private void BuildPanel(string name, Vector3 worldPos, Quaternion worldRot)
         {
             var go = new GameObject(name);
             go.transform.SetParent(transform, false);
             go.transform.position = worldPos;
+            go.transform.rotation = worldRot;   // orient thin sealing axis along this gate's tangent (yaw=0 => identity)
 
             var box = go.AddComponent<BoxCollider>();
             // thin X, tall Y, modest Z (seals the side gap AT the gate line without carving deep along
@@ -395,11 +427,11 @@ namespace DeNelle.Village
             {
                 // Seat the beacon AT the gate opening (NOT on the deck lane — offset to the
                 // gate centre so it marks the threshold without obstructing the walk).
-                Vector3 beaconBase = new Vector3(_gatePos.x, _gatePos.y, _gatePos.z);
+                Vector3 beaconBase = ToWorld(new Vector3(_gatePos.x, _gatePos.y, _gatePos.z));   // WORLD gate, this side
 
                 var root = new GameObject("RuntimeSeam_GateBeacon");
                 root.transform.SetParent(transform, false);
-                root.transform.position = beaconBase;
+                root.transform.position = beaconBase;   // pillar/light are Y-axis symmetric — no rotation needed
 
                 // Warm portal-blue, like WardStone's lit ward-glow — reads as a "go here" cue.
                 Color glowColor = new Color(0.40f, 0.75f, 1.00f);
@@ -502,8 +534,10 @@ namespace DeNelle.Village
             Guard.Try("RuntimeSeam", "assert deck welded to source navmesh", () =>
             {
                 // Source courtyard reference point (origin = castle centre) → the threshold trigger.
-                var courtyard = new Vector3(0f, _gatePos.y, _gatePos.z + 4f);     // just inside the gate
-                var threshold = new Vector3(_gatePos.x, _gatePos.y, _thresholdZ);
+                // Both rotated to WORLD for this side so the per-gate reachability check samples the
+                // real navmesh (yaw=0 => south values unchanged).
+                var courtyard = ToWorld(new Vector3(0f, _gatePos.y, _gatePos.z + 4f));     // just inside the gate
+                var threshold = ToWorld(new Vector3(_gatePos.x, _gatePos.y, _thresholdZ));
 
                 bool sStart = NavMesh.SamplePosition(courtyard, out NavMeshHit hStart, 5f, NavMesh.AllAreas);
                 bool sEnd   = NavMesh.SamplePosition(threshold, out NavMeshHit hEnd, 1.0f, NavMesh.AllAreas);
@@ -518,10 +552,10 @@ namespace DeNelle.Village
                 NavMesh.CalculatePath(hStart.position, hEnd.position, NavMesh.AllAreas, path);
                 if (path.status == NavMeshPathStatus.PathComplete)
                     FlowTrace.Step("RuntimeSeam",
-                        $"RUNTIME_SEAM_NAV_OK — PATH-COMPLETE courtyard→threshold({_gatePos.x:F2},{_gatePos.y:F2},{_thresholdZ:F1}); deck welds to source navmesh, hero walks to the trigger.");
+                        $"RUNTIME_SEAM_NAV_OK [{SideName(_facingYaw)} facingYaw={_facingYaw:F0}] — PATH-COMPLETE courtyard→threshold world{threshold}; deck welds to source navmesh, hero walks to the trigger.");
                 else
                     FlowTrace.Fail("RuntimeSeam",
-                        $"RUNTIME_SEAM_NAV_FAIL — courtyard→threshold path is {path.status}; deck did NOT weld (gap between gate and deck). " +
+                        $"RUNTIME_SEAM_NAV_FAIL [{SideName(_facingYaw)} facingYaw={_facingYaw:F0}] — courtyard→threshold path is {path.status}; deck did NOT weld (gap between gate and deck). " +
                         "FIX: widen approachOverlap so the runtime bake fuses them into one surface (SEAM-OFF-MESH).");
             });
         }
@@ -540,12 +574,14 @@ namespace DeNelle.Village
                 var hostGo = new GameObject("RuntimeSeam_AiNavLink");
                 hostGo.transform.SetParent(transform, false);
                 hostGo.transform.position = Vector3.zero;     // endpoints absolute (link space == host @ origin)
+                hostGo.transform.rotation = Quaternion.identity;   // keep link space == WORLD so the rotated endpoints below are used verbatim (Unity auto-orients the band perpendicular to the segment)
 
                 var link = hostGo.AddComponent<NavMeshLink>();
                 if (link == null) throw new System.Exception("AddComponent<NavMeshLink> returned null.");
-                // Start on the source deck just past the threshold; end at the OuterWorld landing.
-                link.startPoint    = new Vector3(_gatePos.x, _gatePos.y, _thresholdZ);
-                link.endPoint      = _landing;
+                // Start on the source deck just past the threshold; end at the OuterWorld landing — both
+                // rotated to WORLD for this side (yaw=0 => south values unchanged).
+                link.startPoint    = ToWorld(new Vector3(_gatePos.x, _gatePos.y, _thresholdZ));
+                link.endPoint      = ToWorld(_landing);
                 link.width         = width;
                 link.bidirectional = true;
                 link.area          = 0;                       // Walkable
@@ -656,6 +692,7 @@ namespace DeNelle.Village
             public float  thresholdBackFromGate;
             public float  triggerRadius;
             public bool   occluder;
+            public float  facingYaw;            // Y-rotation that maps the proven SOUTH build onto this gate's side: S=0 W=90 N=180 E=270 (default 0 = south)
         }
 
         [System.Serializable] private class SouthPiece  { public string name; public string prefab; public float[] pos; public float[] rot; public float[] scale; }
