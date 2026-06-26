@@ -61,6 +61,7 @@ namespace DeNelle.Core.State
                 { 22, MigrateToV22 },
                 { 23, MigrateToV23 },
                 { 24, MigrateToV24 },
+                { 25, MigrateToV25 },
             };
 
         /// <summary>
@@ -365,6 +366,18 @@ namespace DeNelle.Core.State
         {
             if (s.OwnedBuildingPerks == null)
                 s.OwnedBuildingPerks = new System.Collections.Generic.List<string>();
+            return s;
+        }
+
+        // v25 — Echo Workforce V1 (ECHO_WORKFORCE_SPEC). An existing player should keep their
+        // starter Echo on first load of this build, so seed echoCount = 1 when absent (a fresh
+        // PersistedState leaves it null). siloResources + wavesCompleted are additive-default-on-read
+        // (null → 0 on load), so they need no explicit seed; we set them for clarity/round-trip.
+        private static PersistedState MigrateToV25(PersistedState s)
+        {
+            if (!s.EchoCount.HasValue) s.EchoCount = 1;
+            if (!s.SiloResources.HasValue) s.SiloResources = 0;
+            if (!s.WavesCompleted.HasValue) s.WavesCompleted = 0;
             return s;
         }
 

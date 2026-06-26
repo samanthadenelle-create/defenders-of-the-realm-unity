@@ -27,7 +27,7 @@ namespace DeNelle.Core.State
     {
         // ── Versioning ───────────────────────────────────────────────────────
         /// <summary>CURRENT_SCHEMA_VERSION — bumped whenever the persisted shape changes.</summary>
-        public const int CurrentVersion = 24;  // v24 — Village/Stronghold tier + owned building-research perks (WO-432: WC3 tech-gate at the Heart + per-building Gold-cost research survives save/load → compiled into GameModifiers); v23 — building upgrade tiers (WO-430: per-building tier 0-4 survives save/load → compiled into GameModifiers + dialogue level title); v22 — army roster persistence (WO-453: owned troops + cap + wounded/recovery/veterancy survive save/load); v21 — node-settlement persistence (WO-159: claim/HP/phase + 3-day razed lockout survive save/load); v20 — gear inventory persistence (shop purchases survive reload + Neon sync); v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
+        public const int CurrentVersion = 25;  // v25 — Echo Workforce V1 (ECHO_WORKFORCE_SPEC): echoCount + siloResources + wavesCompleted survive save/load → the farm faucet (Echoes auto-fill a pooled silo online+offline via OfflineHarvestService's clock, Dump banks to bins, beating 5 waves unlocks the next Echo ≤4); v24 — Village/Stronghold tier + owned building-research perks (WO-432: WC3 tech-gate at the Heart + per-building Gold-cost research survives save/load → compiled into GameModifiers); v23 — building upgrade tiers (WO-430: per-building tier 0-4 survives save/load → compiled into GameModifiers + dialogue level title); v22 — army roster persistence (WO-453: owned troops + cap + wounded/recovery/veterancy survive save/load); v21 — node-settlement persistence (WO-159: claim/HP/phase + 3-day razed lockout survive save/load); v20 — gear inventory persistence (shop purchases survive reload + Neon sync); v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
         /// <summary>SaveExport.format — bumped only if the envelope shape changes.</summary>
         public const int FileFormat = 1;
 
@@ -277,6 +277,27 @@ namespace DeNelle.Core.State
             /// <summary>WO-432 (v24) — owned building-research perks, keyed "buildingId:perkId". Absent
             /// on older saves → the v23→v24 migration seeds an empty list. Append-only at the END.</summary>
             [JsonProperty("ownedBuildingPerks")] public System.Collections.Generic.List<string> OwnedBuildingPerks;
+
+            // ── v25 — Echo Workforce V1 (ECHO_WORKFORCE_SPEC) ────────────────────
+            /// <summary>
+            /// Number of owned Echo workers (the farm faucet). Nullable per the
+            /// <c>.partial()</c> convention; absent on an older save → defaults to 1 on
+            /// load (the starter Echo) via the v24→v25 migration. The silo clock reuses
+            /// <c>lastHarvestClaimMs</c>. Append-only at the END so older saves stay loadable.
+            /// </summary>
+            [JsonProperty("echoCount")] public double? EchoCount;
+
+            /// <summary>
+            /// Pooled silo buffer (fractional resources accrued, pre-Dump). Nullable;
+            /// absent on an older save → defaults to 0 on load (empty silo). Append-only.
+            /// </summary>
+            [JsonProperty("siloResources")] public double? SiloResources;
+
+            /// <summary>
+            /// Total waves cleared across the save (the Echo-unlock counter). Nullable;
+            /// absent on an older save → defaults to 0 on load. Append-only at the END.
+            /// </summary>
+            [JsonProperty("wavesCompleted")] public double? WavesCompleted;
         }
 
         // =====================================================================
@@ -425,6 +446,14 @@ namespace DeNelle.Core.State
                     raw.LastInboxSyncAt = FiniteInt(raw.LastInboxSyncAt.Value, "lastInboxSyncAt");
                 if (raw.LastHarvestClaimMs.HasValue)
                     raw.LastHarvestClaimMs = FiniteInt(raw.LastHarvestClaimMs.Value, "lastHarvestClaimMs");
+
+                // ── Echo Workforce (v25) → counts nonNegInt; silo finite (float pool) ─
+                if (raw.EchoCount.HasValue)
+                    raw.EchoCount = NonNegInt(raw.EchoCount.Value, "echoCount");
+                if (raw.SiloResources.HasValue)
+                    RequireFinite(raw.SiloResources.Value, "siloResources");
+                if (raw.WavesCompleted.HasValue)
+                    raw.WavesCompleted = NonNegInt(raw.WavesCompleted.Value, "wavesCompleted");
 
                 // ── Build jobs (WO-172) → startMs/durationMs finiteInt; counter nonNegInt ─
                 if (raw.BuildJobs != null)

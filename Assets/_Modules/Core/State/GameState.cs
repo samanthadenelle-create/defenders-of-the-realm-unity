@@ -155,6 +155,33 @@ namespace DeNelle.Core.State
         /// </summary>
         public double LastHarvestClaimMs;
 
+        // ── Echo Workforce V1 (ECHO_WORKFORCE_SPEC) ──────────────────────────
+        /// <summary>
+        /// Number of Echo workers the player owns (the farm faucet). Starts at 1,
+        /// unlocks +1 every 5 waves cleared, hard-capped at 4. Reuses
+        /// <see cref="LastHarvestClaimMs"/> as the silo clock (the same persisted
+        /// Unix-ms accrual timestamp OfflineHarvestService advances), so EchoService
+        /// integrates echoCount x ratePerHour over (now - LastHarvestClaimMs).
+        /// Round-trips through SaveSchema v25 (additive at the END).
+        /// </summary>
+        public int EchoCount = 1;
+
+        /// <summary>
+        /// Pooled silo buffer — fractional resources accrued by the Echoes but not yet
+        /// dumped into the spendable wallet (one shared pool for V1). DumpSilos() splits
+        /// this across the configured resource types via EconomyService.GrantSpendable
+        /// then resets it to 0. Clamped to the silo HOUR cap. Append-only at the END.
+        /// </summary>
+        public double SiloResources;
+
+        /// <summary>
+        /// Total waves cleared across the save (the Echo-unlock counter). Distinct from
+        /// <see cref="BestWave"/> (highest reached in one run) — this counts EVERY wave
+        /// clear, so it survives a defeat+retry and drives "+1 Echo every 5 waves".
+        /// Append-only at the END.
+        /// </summary>
+        public int WavesCompleted;
+
         // ── Build/upgrade timers + ad-skip (WO-172) ──────────────────────────
         /// <summary>
         /// In-flight construction/upgrade jobs (WO-172) — the CoC time-sink. Each

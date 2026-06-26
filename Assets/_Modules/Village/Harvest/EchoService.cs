@@ -1,0 +1,328 @@
+// =============================================================================
+// EchoService -- the Echo Workforce V1 faucet (ECHO_WORKFORCE_SPEC).
+// -----------------------------------------------------------------------------
+// Assembly: DeNelle.Village   Namespace: DeNelle.Village
+//
+// THE FARM PILLAR'S PLAYER-FACING LOOP (owner-resolved 2026-06-26):
+//   - Start with 1 Echo; beating 5 waves unlocks the next (cap 4). Unlocks feel
+//     EARNED via the defense/wave pillar (the wave hook below).
+//   - Each Echo auto-harvests at BaseRatePerHour; rate = echoCount x BaseRatePerHour.
+//   - A pooled SILO buffers the haul (shared, V1). Capacity in HOURS (4h -> 6h/8h
+//     via upgrades). Fills while ONLINE (per-frame tick) + OFFLINE (the existing
+//     OfflineHarvestService clock), CAPPED. Idle waste past the cap is fair, not
+//     punishing.
+//   - "Dump" (DumpSilos) is the come-back-claim-reset loop: one tap transfers the
+//     silo into the spendable wallet (EconomyService.GrantSpendable -> persists +
+//     reaches the building-upgrade ledger), resets the silo, advances the clock.
+//
+// INTEGRATION TO THE REAL CODE (no placeholder APIs):
+//   - OFFLINE accrual reuses OfflineHarvestService's persisted clock,
+//     GameState.LastHarvestClaimMs (Unix-ms, advanced atomically on every OHS
+//     claim). On a deferred Start we integrate echoCount x ratePerSec over
+//     (TimeSource.NowUnixMs() - LastHarvestClaimMs), CLAMPED to the silo HOUR cap,
+//     into the silo. NO Time.time (that resets per session = wrong for offline).
+//     The Echo silo is a SEPARATE faucet from OHS's worker/settlement/pet nodes
+//     (which bank to the wallet) -- they share only the CLOCK, never a node, so
+//     there is no double-grant: OHS banks node haul to the wallet; Echo only fills
+//     its OWN silo, and the silo reaches the wallet ONLY via Dump.
+//   - DUMP banks through EconomyService.GrantSpendable (the persisting path -- the
+//     Wood/Iron routing fix), so claimed resources stick + reach upgrades.
+//   - PERSISTED via GameState (EchoCount / SiloResources / WavesCompleted, schema
+//     v25) -- NOT a side-band PlayerPrefs key.
+//   - WorkerManager's harvest ROLE is retired for V1 (UseOfflineCatchUp already off;
+//     ClickToDispatch disabled by EchoWorkforceBootstrap so the two systems never
+//     bank the same nodes). The Echo model is the V1 workforce abstraction.
+//
+// Self-bootstrapping DDOL (see EchoWorkforceBootstrap) -- no scene authoring,
+// mirroring OfflineHarvestService.
+// =============================================================================
+using System;
+using UnityEngine;
+using DeNelle.Core.Diagnostics;
+using DeNelle.Core.State;
+
+namespace DeNelle.Village
+{
+    /// <summary>
+    /// Owns the Echo workforce: echo count (1..4), the pooled silo fill (online +
+    /// offline, capped in hours), the Dump-to-wallet transfer, and the wave-driven
+    /// Echo unlocks. Persisted via <see cref="GameState"/> (schema v25).
+    /// </summary>
+    [DisallowMultipleComponent]
+    public sealed class EchoService : MonoBehaviour
+    {
+        public static EchoService Instance { get; private set; }
+
+        // -- Tunables (owner-tunable in playtest) ------------------------------
+        [Header("Workforce")]
+        [Tooltip("Hard cap on owned Echoes (owner model: 4 = Wave 15 unlock).")]
+        [Min(1)] public int MaxEchoes = 4;
+
+        [Tooltip("Waves cleared per Echo unlock (owner model: every 5 = 4 normal + 1 boss).")]
+        [Min(1)] public int WavesPerEcho = 5;
+
+        [Header("Harvest")]
+        [Tooltip("Base resources/hour PER Echo. Total rate = echoCount x this. Owner-tunable.")]
+        [Min(0f)] public float BaseRatePerHour = 120f;
+
+        [Header("Silo")]
+        [Tooltip("Silo capacity in HOURS of accrual (base 4h; upgrades 6h/8h). The buffer/" +
+                 "engagement cap -- fills online+offline then idles until Dumped.")]
+        [Min(0.1f)] public float SiloCapHours = 4f;
+
+        /// <summary>Raised after the silo balance or echo count changes (HUD listens).</summary>
+        public event Action Changed;
+
+        /// <summary>Raised when a new Echo is unlocked (count, total) -- the "New Echo joined!" toast.</summary>
+        public event Action<int> EchoUnlocked;
+
+        // Guard so the one-time offline catch-up runs once per session (not on every
+        // re-enable). The clock advance is owned by OfflineHarvestService; we only READ.
+        private bool _offlineClaimedThisSession;
+
+        // -- Convenience accessors over the persisted state --------------------
+        private static GameState State => GameStateService.Instance != null ? GameStateService.Instance.State : null;
+
+        /// <summary>Owned Echo count (>=1). Reads the persisted state; 1 when state is absent.</summary>
+        public int EchoCount
+        {
+            get { var s = State; return s != null ? Mathf.Max(1, s.EchoCount) : 1; }
+        }
+
+        /// <summary>Pooled silo balance (resources accrued, pre-Dump). 0 when state is absent.</summary>
+        public double Silo
+        {
+            get { var s = State; return s != null ? s.SiloResources : 0.0; }
+        }
+
+        /// <summary>Total resources/sec the workforce produces right now (echoCount x base).</summary>
+        public double RatePerSecond => EchoCount * (BaseRatePerHour / 3600.0);
+
+        /// <summary>The silo's absolute capacity in resources = capHours x ratePerHour x echoCount.</summary>
+        public double SiloCapacity => SiloCapHours * BaseRatePerHour * EchoCount;
+
+        /// <summary>Silo fill fraction 0..1 (silo / capacity). 0 when capacity is 0.</summary>
+        public float FillFraction
+        {
+            get { double cap = SiloCapacity; return cap > 0.0 ? Mathf.Clamp01((float)(Silo / cap)) : 0f; }
+        }
+
+        // =====================================================================
+        //  Lifecycle
+        // =====================================================================
+
+        private void Awake()
+        {
+            // Destroy(this) -- NOT Destroy(gameObject): may share a host
+            // (CLAUDE.md memory: singleton-dedup-destroys-host).
+            if (Instance != null && Instance != this) { Destroy(this); return; }
+            Instance = this;
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
+
+        private void Start()
+        {
+            // Deferred one frame so GameStateService (loads the save in its Awake) and
+            // OfflineHarvestService are up before we read LastHarvestClaimMs.
+            StartCoroutine(OfflineCatchUpNextFrame());
+        }
+
+        private System.Collections.IEnumerator OfflineCatchUpNextFrame()
+        {
+            yield return null;
+            ClaimOffline();
+        }
+
+        // =====================================================================
+        //  Offline fill -- reuse OfflineHarvestService's persisted clock
+        // =====================================================================
+
+        /// <summary>
+        /// One-time-per-session offline accrual: integrate echoCount x ratePerSec over
+        /// (now - GameState.LastHarvestClaimMs), CLAMPED to the silo HOUR cap, and add it
+        /// to the silo. Reuses the SAME persisted Unix-ms clock OfflineHarvestService owns
+        /// (it advances the clock atomically on its own claim) -- we only READ the delta, so
+        /// there is no double-grant: OHS banks NODE haul to the wallet; the Echo silo is a
+        /// separate faucet that reaches the wallet only via Dump. Fresh save (clock 0) ->
+        /// nothing accrues (OHS seeds the clock to now on its first claim).
+        /// </summary>
+        public void ClaimOffline()
+        {
+            if (_offlineClaimedThisSession) return;
+            var s = State;
+            if (s == null) return;
+            _offlineClaimedThisSession = true;
+
+            double nowMs = TimeSource.NowUnixMs();
+            double lastMs = s.LastHarvestClaimMs;
+            if (lastMs <= 0)
+            {
+                // Fresh save: OHS seeds the clock to now this launch; nothing to back-fill.
+                FlowTrace.Step("Echo", "ClaimOffline: fresh clock (LastHarvestClaimMs<=0) -- no offline fill this launch.");
+                return;
+            }
+
+            double elapsedSec = Math.Max(0.0, (nowMs - lastMs) / 1000.0);   // monotonic guard (clock-back -> 0)
+            double capSec = Math.Max(0.0, SiloCapHours) * 3600.0;
+            double cappedSec = Math.Min(elapsedSec, capSec);
+
+            double gained = RatePerSecond * cappedSec;
+            if (gained <= 0.0)
+            {
+                FlowTrace.Step("Echo", $"ClaimOffline: away {elapsedSec:F0}s, gained 0 (rate {RatePerSecond:F3}/s, echoes {EchoCount}).");
+                return;
+            }
+
+            AddToSilo(gained);
+            FlowTrace.Step("Echo",
+                $"ClaimOffline: +{gained:F0} to silo over {cappedSec:F0}s away" +
+                (elapsedSec > capSec ? " (capped)" : "") +
+                $" -> silo {Silo:F0}/{SiloCapacity:F0} (echoes {EchoCount}).");
+        }
+
+        // =====================================================================
+        //  Online fill -- per-frame accrual up to the cap
+        // =====================================================================
+
+        private void Update()
+        {
+            // Online ticking does NOT advance LastHarvestClaimMs (OfflineHarvestService
+            // owns that clock) -- it only tops the silo up in real-time while playing,
+            // clamped to the HOUR cap. The offline path covers any away-gap.
+            double add = RatePerSecond * Time.deltaTime;
+            if (add > 0.0) AddToSilo(add);
+        }
+
+        /// <summary>Add <paramref name="amount"/> to the silo, clamped to the HOUR cap, and persist+notify.</summary>
+        private void AddToSilo(double amount)
+        {
+            var s = State;
+            if (s == null || amount <= 0.0) return;
+            double cap = SiloCapacity;
+            double before = s.SiloResources;
+            double next = Math.Min(cap, before + amount);
+            if (next <= before) return;            // already at cap -> idle waste (fair), no churn
+            s.SiloResources = next;
+            // Online ticks persist coarsely (the dump + offline path are the durable claims);
+            // we avoid a PlayerPrefs write every frame -- the silo is re-derivable offline and
+            // is saved on Dump / unlock / quit. Notify the HUD every tick for a live fill bar.
+            Changed?.Invoke();
+        }
+
+        // =====================================================================
+        //  Dump -- the come-back-claim-reset hook
+        // =====================================================================
+
+        /// <summary>
+        /// Transfer the pooled silo into the spendable wallet (split across resource
+        /// types), reset the silo, advance the clock + Save. Banks through
+        /// <see cref="EconomyService.GrantSpendable"/> so Wood/Iron persist into
+        /// GameState + reach the building-upgrade ledger (NOT plain Grant). Returns the
+        /// integer total banked (0 when the silo was empty).
+        /// </summary>
+        public int DumpSilos()
+        {
+            using var _t = FlowTrace.Enter("Echo", "DumpSilos");
+            var gs = GameStateService.Instance;
+            var s = gs != null ? gs.State : null;
+            if (s == null) { FlowTrace.Warn("Echo", "DumpSilos: no GameState -- no-op."); return 0; }
+
+            int pool = (int)Math.Floor(s.SiloResources);
+            if (pool <= 0)
+            {
+                FlowTrace.Step("Echo", "DumpSilos: silo empty -- nothing to bank.");
+                return 0;
+            }
+
+            // V1 split: the pooled silo divides evenly across Wood / Iron / Food (the
+            // three build harvestables; Crystals stays a premium/reward currency). The
+            // remainder lands in Wood so no fraction is lost.
+            int third = pool / 3;
+            int wood = third + (pool - third * 3);   // remainder -> wood
+            int iron = third;
+            int food = third;
+
+            var eco = EconomyService.Instance;
+            if (eco != null)
+            {
+                // GrantSpendable persists Wood/Iron into GameState (upgrade ledger) AND
+                // fills the in-session pool + routes Food through GameState. The single
+                // banking path -- no double-grant (the silo is the ONLY source here).
+                eco.GrantSpendable(wood: wood, food: food, iron: iron);
+            }
+            else
+            {
+                FlowTrace.Warn("Echo", "DumpSilos: EconomyService absent -- writing Wood/Iron directly to GameState as fallback.");
+                s.Wood = Mathf.Max(0, s.Wood + wood);
+                s.Iron = Mathf.Max(0, s.Iron + iron);
+            }
+
+            // Reset the silo (keep the sub-1 fractional remainder so slow rates aren't lost).
+            s.SiloResources -= pool;
+            if (s.SiloResources < 0) s.SiloResources = 0;
+
+            // Advance the silo clock to now so the next offline window starts fresh (reusing
+            // the OfflineHarvestService clock = the come-back-RESET) and persist atomically.
+            s.LastHarvestClaimMs = TimeSource.NowUnixMs();
+            if (gs != null) gs.Save();
+
+            FlowTrace.Step("Echo", $"DumpSilos: banked +{wood} wood, +{iron} iron, +{food} food (pool {pool}); silo reset, clock advanced.");
+            Changed?.Invoke();
+            return pool;
+        }
+
+        // =====================================================================
+        //  Wave unlock -- mirror WaveXpBridge's OnWaveCleared hook
+        // =====================================================================
+
+        /// <summary>
+        /// Record a wave clear (the Echo-unlock counter) and, on every multiple of
+        /// <see cref="WavesPerEcho"/>, unlock the next Echo (up to <see cref="MaxEchoes"/>).
+        /// Called by EchoWaveUnlockBridge listening to WaveManager.OnWaveCleared.
+        /// </summary>
+        public void OnWaveCleared(int waveNumber)
+        {
+            var gs = GameStateService.Instance;
+            var s = gs != null ? gs.State : null;
+            if (s == null) return;
+
+            s.WavesCompleted += 1;
+            bool unlockTick = (s.WavesCompleted % Mathf.Max(1, WavesPerEcho)) == 0;
+            FlowTrace.Step("Echo",
+                $"OnWaveCleared(wave {waveNumber}): wavesCompleted={s.WavesCompleted}, " +
+                $"echoes={s.EchoCount}/{MaxEchoes}, unlockTick={unlockTick}.");
+
+            if (unlockTick && s.EchoCount < MaxEchoes)
+            {
+                s.EchoCount += 1;
+                if (gs != null) gs.Save();
+                FlowTrace.Step("Echo", $"New Echo joined! count now {s.EchoCount}/{MaxEchoes} (at {s.WavesCompleted} waves).");
+                EchoUnlocked?.Invoke(s.EchoCount);
+                Changed?.Invoke();
+            }
+            else
+            {
+                if (gs != null) gs.Save();   // persist the wave-count progress either way
+            }
+        }
+
+        // =====================================================================
+        //  Silo upgrades (V1 hook -- 4h -> 6h -> 8h)
+        // =====================================================================
+
+        /// <summary>Set the silo capacity in hours (owner model: 4 -> 6 -> 8 via upgrades). Notifies the HUD.</summary>
+        public void SetSiloCapHours(float hours)
+        {
+            SiloCapHours = Mathf.Max(0.1f, hours);
+            // Re-clamp the silo to the new cap (a downgrade trims; an upgrade just lifts the ceiling).
+            var s = State;
+            if (s != null && s.SiloResources > SiloCapacity) s.SiloResources = SiloCapacity;
+            FlowTrace.Step("Echo", $"SetSiloCapHours: {SiloCapHours}h -> capacity {SiloCapacity:F0}.");
+            Changed?.Invoke();
+        }
+    }
+}

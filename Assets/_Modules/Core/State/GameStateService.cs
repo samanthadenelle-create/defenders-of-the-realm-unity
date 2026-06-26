@@ -371,6 +371,9 @@ namespace DeNelle.Core.State
                 BuildingTiers = s.BuildingTiers,   // WO-430 — per-building upgrade tiers (v23); serialized straight to JSON
                 VillageTier = s.VillageTier,   // WO-432 — global tech-gate tier (v24)
                 OwnedBuildingPerks = s.OwnedBuildingPerks != null ? new List<string>(s.OwnedBuildingPerks) : null,   // WO-432 — owned research perks (v24)
+                EchoCount = s.EchoCount,             // ECHO_WORKFORCE_SPEC — owned Echo workers (v25)
+                SiloResources = s.SiloResources,     // ECHO_WORKFORCE_SPEC — pooled silo buffer (v25)
+                WavesCompleted = s.WavesCompleted,   // ECHO_WORKFORCE_SPEC — Echo-unlock wave counter (v25)
             };
         }
 
@@ -440,6 +443,9 @@ namespace DeNelle.Core.State
             s.BuildingTiers = p.BuildingTiers ?? new System.Collections.Generic.Dictionary<string, int>();   // WO-430 — building tiers (v23); never null
             s.VillageTier = p.VillageTier;   // WO-432 — tech-gate tier (v24); 0 on older saves
             s.OwnedBuildingPerks = p.OwnedBuildingPerks ?? new System.Collections.Generic.List<string>();   // WO-432 — owned research perks (v24); never null
+            if (p.EchoCount.HasValue) s.EchoCount = (int)p.EchoCount.Value;             // ECHO_WORKFORCE_SPEC — owned Echoes (v25); absent → migrator seeds 1
+            if (p.SiloResources.HasValue) s.SiloResources = p.SiloResources.Value;     // ECHO_WORKFORCE_SPEC — silo buffer (v25); absent → keep 0
+            if (p.WavesCompleted.HasValue) s.WavesCompleted = (int)p.WavesCompleted.Value;  // ECHO_WORKFORCE_SPEC — wave counter (v25); absent → keep 0
             EnsureZoneGraph(s);                       // backfill a pre-v17 / empty save's zone graph
         }
 
@@ -762,6 +768,9 @@ namespace DeNelle.Core.State
             s.VillageTier = 0;   // WO-432 — New Game: village tier 0 (no research gated open yet).
             s.OwnedBuildingPerks = new System.Collections.Generic.List<string>();   // WO-432 — New Game: no research perks owned.
             s.Magic = 0;                                      // DEF-121 — tech-axis currency resets on New Game.
+            s.EchoCount = 1;                                  // ECHO_WORKFORCE_SPEC — New Game starts with the 1 starter Echo.
+            s.SiloResources = 0;                              // ECHO_WORKFORCE_SPEC — empty silo on New Game.
+            s.WavesCompleted = 0;                             // ECHO_WORKFORCE_SPEC — no waves cleared yet.
             s.PartyMemberIds = new List<string>();            // WO-301 — start alone; the first companion joins on tutorial complete.
             EnsureZoneGraph(s);                               // WO-164 — seed the default zone graph (5 zones) on New Game.
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately
