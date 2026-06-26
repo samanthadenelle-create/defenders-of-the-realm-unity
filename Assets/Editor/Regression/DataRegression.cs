@@ -15,6 +15,7 @@
 // =============================================================================
 using System.Collections.Generic;
 using System.Text;
+using System.Reflection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using UnityEngine;
@@ -154,6 +155,15 @@ namespace DeNelle.Editor
             // the exact colors later; this gates the MAPPING, not the aesthetic.
             CheckWeaponVfx(failures, log);
 
+            // --- ENEMY STRUCTURE-AWARE SWEEP (ff.enemystructureaware) ---------------
+            // Closes the UNVERIFIED targeting item (commit 8aa24c32): the verify-capture
+            // showed 0 sweep acquires. Construct a REAL Enemy + a side structure (so the
+            // forward probe misses and only the all-direction sweep can catch it) and drive
+            // the REAL ProbeForStructure across three cases — proving from data, not faith,
+            // that the sweep fires (no hero), stays suppressed (hero in aggro), and is inert
+            // when the flag is off (reversible).
+            CheckEnemyStructureSweep(failures, log);
+
             // --- verdict -----------------------------------------------------------
             log.AppendLine("=== verdict ===");
             if (failures.Count == 0)
@@ -167,6 +177,106 @@ namespace DeNelle.Editor
                 foreach (var f in failures) log.AppendLine("  - " + f);
                 // LogError so it also lands in break-log.jsonl and fails loudly in the log scan.
                 Debug.LogError(log.ToString());
+            }
+        }
+
+        // =====================================================================
+        //  ENEMY STRUCTURE-AWARE SWEEP — real Enemy.ProbeForStructure, 3 cases
+        // =====================================================================
+        // A minimal live IDamageableStructure stand-in (a "tower/wall") for the sweep to
+        // acquire. Only the two interface members + a collider are needed.
+        private sealed class OracleStructure : MonoBehaviour, DeNelle.Core.Combat.IDamageableStructure
+        {
+            public bool Alive = true;
+            public bool IsAlive => Alive;
+            public void ApplyContactDamage(float amount) { }
+        }
+
+        private static void SetPrivateField(object obj, string field, object value)
+        {
+            var f = obj.GetType().GetField(field, BindingFlags.NonPublic | BindingFlags.Instance);
+            if (f != null) f.SetValue(obj, value);
+        }
+
+        private static void CheckEnemyStructureSweep(List<string> failures, StringBuilder log)
+        {
+            log.AppendLine("--- ENEMY STRUCTURE SWEEP (ff.enemystructureaware) ---");
+
+            // FeatureFlags are read-only properties backed by PlayerPrefs ("ff.<name>":
+            // 0=off, 1=on, -1=default). Drive the flag via the SAME key Get() reads, and
+            // restore the prior pref exactly (delete if it was unset).
+            const string FlagKey = "ff.enemystructureaware";
+            int prevPref = PlayerPrefs.GetInt(FlagKey, -1);
+            var created = new List<GameObject>();
+            try
+            {
+                PlayerPrefs.SetInt(FlagKey, 1);   // force ON
+
+                // Enemy at origin facing +Z. Structure 2.5m to the +X SIDE so the forward
+                // probe (a short SphereCast along +Z) misses — only the all-direction sweep
+                // can acquire it. This models a marching enemy with a tower off to the side.
+                var enemyGo = new GameObject("OracleEnemy");
+                created.Add(enemyGo);
+                enemyGo.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+                var enemy = enemyGo.AddComponent<Enemy>();   // auto-adds NavMeshAgent + EnemyDamageable
+
+                var structGo = new GameObject("OracleTower");
+                created.Add(structGo);
+                structGo.transform.position = new Vector3(2.5f, 0f, 0f);
+                structGo.AddComponent<BoxCollider>().size = Vector3.one;
+                var structure = structGo.AddComponent<OracleStructure>();
+
+                SetPrivateField(enemy, "_enemyId", "oracle-enemy");
+                SetPrivateField(enemy, "_structureSweepRadius", 5f);
+                SetPrivateField(enemy, "_contactProbeDistance", 1.1f);
+                SetPrivateField(enemy, "_heroAggroRadius", 7f);
+                SetPrivateField(enemy, "_heroAggroDropMargin", 2.5f);
+                // _structureScanBuffer is a field initializer (non-null); ensure anyway.
+                var bufF = typeof(Enemy).GetField("_structureScanBuffer", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (bufF != null && bufF.GetValue(enemy) == null) bufF.SetValue(enemy, new Collider[16]);
+
+                Physics.SyncTransforms();
+
+                var probe = typeof(Enemy).GetMethod("ProbeForStructure", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (probe == null) { failures.Add("structure sweep: Enemy.ProbeForStructure not found (renamed?)"); return; }
+
+                // CASE A — no hero present -> the sweep MUST acquire the side structure.
+                var a = probe.Invoke(enemy, null) as DeNelle.Core.Combat.IDamageableStructure;
+                if (!ReferenceEquals(a, structure))
+                    failures.Add($"structure sweep CASE A (no hero): expected to acquire the side structure, got '{(a as MonoBehaviour)?.name ?? "null"}' — the ff.enemystructureaware sweep did NOT fire");
+                else
+                    log.AppendLine("  CASE A no-hero: sweep acquired side structure OK");
+
+                // CASE B — hero within aggro -> sweep SUPPRESSED (hero stays primary).
+                var heroGo = new GameObject("OracleHero");
+                created.Add(heroGo);
+                heroGo.transform.position = new Vector3(0f, 0f, 1.5f);   // inside aggro radius
+                SetPrivateField(enemy, "_heroTransform", heroGo.transform);
+                Physics.SyncTransforms();
+                var b = probe.Invoke(enemy, null) as DeNelle.Core.Combat.IDamageableStructure;
+                if (b != null)
+                    failures.Add($"structure sweep CASE B (hero in aggro): should SUPPRESS, but returned '{(b as MonoBehaviour)?.name}' — hero-primary gate broken");
+                else
+                    log.AppendLine("  CASE B hero-in-aggro: sweep suppressed OK");
+
+                // CASE C — flag OFF -> legacy forward-only; sweep must be inert (reversible).
+                SetPrivateField(enemy, "_heroTransform", null);
+                PlayerPrefs.SetInt(FlagKey, 0);   // force OFF (legacy)
+                var c = probe.Invoke(enemy, null) as DeNelle.Core.Combat.IDamageableStructure;
+                if (c != null)
+                    failures.Add($"structure sweep CASE C (flag off): should be legacy forward-only, but sweep returned '{(c as MonoBehaviour)?.name}' — not reversible");
+                else
+                    log.AppendLine("  CASE C flag-off: sweep inert (legacy) OK");
+            }
+            catch (System.Exception ex)
+            {
+                failures.Add($"structure sweep oracle threw: {ex.GetType().Name}: {ex.Message}");
+            }
+            finally
+            {
+                if (prevPref == -1) PlayerPrefs.DeleteKey(FlagKey);
+                else PlayerPrefs.SetInt(FlagKey, prevPref);
+                foreach (var go in created) if (go != null) UnityEngine.Object.DestroyImmediate(go);
             }
         }
 
