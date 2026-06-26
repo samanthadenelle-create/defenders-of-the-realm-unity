@@ -144,6 +144,9 @@ namespace DeNelle.Village.World.Camps
             // Flag OFF = today's behavior (the outpost system is gated, not deleted — reversible).
             if (DeNelle.Core.FeatureFlags.OverworldEncounter) return;
             if (!Enabled) return;   // SHIPS DARK: do nothing at all.
+            // V1 DESCOPE (2026-06-26): arena CUT -> OverworldEncounter OFF -> this guard no longer
+            // early-returns, so the walk-to raid outposts are ACTIVE for the V1 raid loop.
+            FlowTrace.Step("V1Descope", "arena off (ff.overworldencounter=false) -> RaidOutpostSystem active; cardinal raid outposts will spawn.");
             SpawnNow();
         }
 

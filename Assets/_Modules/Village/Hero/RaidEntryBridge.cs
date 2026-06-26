@@ -138,16 +138,75 @@ namespace DeNelle.Village.Hero
             // WO-449 — continuous-walk loop: the raid target is a LIVE outpost out in the OuterWorld
             // (RaidOutpostSystem spawns it ~70m past each gate). There is NO selection/deploy screen
             // and NO teleport — the player just walks out a gate to it and combat starts on approach.
-            // So the raid icon is a deliberate no-op here (a nudge, not a portal). Flip ff.raidwalk OFF
-            // to restore the legacy RaidSelectionScreen->Deploy->GoRaid teleport path below verbatim.
+            // V1 DESCOPE (2026-06-26): the icon used to be a dead no-op here. Now it POINTS the player
+            // at the nearest live raid: it finds the closest uncleared EnemyOutpost and logs a
+            // "head <direction>" hint relative to the hero. Simple + null-safe; no portal/teleport.
+            // Flip ff.raidwalk OFF to restore the legacy RaidSelectionScreen->Deploy->GoRaid path.
             if (DeNelle.Core.FeatureFlags.RaidContinuousWalk)
             {
-                FlowTrace.Step("Raid", "continuous-walk mode: raid icon no-op; walk out a gate to the outpost (~70m).");
+                PingNearestRaidOutpost();
                 return;
             }
 
             FlowTrace.Step("Raid", "raid icon fired — opening RaidSelectionScreen.");
             RaidSelectionScreen.Open();
+        }
+
+        // -- V1 raid-icon ping: point the player at the nearest live raid outpost --
+        // Continuous-walk has no portal; tapping the icon nudges the player toward the
+        // closest uncleared EnemyOutpost (a "head <direction>" hint), so the icon is
+        // useful instead of dead. Fully null-safe — degrades to a soft hint if no live
+        // outpost is found yet (they spawn ~10s after entering the OuterWorld).
+        private static void PingNearestRaidOutpost()
+        {
+            DeNelle.Village.World.Camps.EnemyOutpost[] outposts = null;
+            Guard.Try("Raid", "resolve live raid outposts", () =>
+            {
+                outposts = DeNelle.Village.World.Camps.RaidOutpostSystem.Outposts;
+            });
+
+            // Hero origin for the direction hint (component lookup per canon §7; no HeroTarget tag).
+            Vector3 origin = Vector3.zero;
+            var hero = FindFirstObjectByType<HeroLocomotion>();
+            if (hero != null) origin = hero.transform.position;
+
+            DeNelle.Village.World.Camps.EnemyOutpost nearest = null;
+            float bestSqr = float.MaxValue;
+            if (outposts != null)
+            {
+                for (int i = 0; i < outposts.Length; i++)
+                {
+                    var o = outposts[i];
+                    if (o == null) continue;          // not realized yet
+                    if (o.Cleared) continue;          // skip cleared raids
+                    float d = (o.transform.position - origin).sqrMagnitude;
+                    if (d < bestSqr) { bestSqr = d; nearest = o; }
+                }
+            }
+
+            if (nearest == null)
+            {
+                FlowTrace.Step("Raid", "raid icon: no live outpost yet (they spawn ~10s into the OuterWorld) — walk out a gate.");
+                return;
+            }
+
+            Vector3 to = nearest.transform.position - origin;
+            string dir = CompassHint(to);
+            float dist = new Vector2(to.x, to.z).magnitude;
+            FlowTrace.Step("Raid",
+                $"raid icon -> nearest outpost '{nearest.OutpostId}' ({nearest.Region}) ~{dist:0}m to the {dir}; head that way to raid.");
+            Debug.Log($"[RaidEntryBridge] Raid this way: {nearest.Region} outpost ~{dist:0}m to the {dir}.");
+        }
+
+        // 8-point compass label from a world-space XZ direction (Z+ = North, X+ = East).
+        private static string CompassHint(Vector3 to)
+        {
+            if (to.x * to.x + to.z * to.z < 0.01f) return "here";
+            float ang = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg;   // 0 = North, 90 = East
+            if (ang < 0f) ang += 360f;
+            string[] pts = { "north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west" };
+            int idx = Mathf.RoundToInt(ang / 45f) % 8;
+            return pts[idx];
         }
     }
 }

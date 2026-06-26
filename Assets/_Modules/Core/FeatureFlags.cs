@@ -25,7 +25,12 @@ namespace DeNelle.Core
     public static class FeatureFlags
     {
         public static bool Raid  => Get("raid",  defaultOn: true);
-        public static bool Arena => Get("arena", defaultOn: true);
+
+        /// <summary>V1 DESCOPE (2026-06-26): the isolated battle Arena is CUT from the V1 build —
+        /// V1 is the farm-&gt;build-&gt;level-&gt;raid loop (base = Village2, raid = walk-to EnemyOutpost),
+        /// so the Arena entry/reward path ships OFF. Default flipped to false (was true). The Arena
+        /// code is gated, NOT deleted — re-enable for V2 via PlayerPrefs "ff.arena" = 1.</summary>
+        public static bool Arena => Get("arena", defaultOn: false);
 
         /// <summary>PIVOT (owner 2026-06-22): SINGLE-HERO combat. When ON, the ATB battle party is
         /// JUST the hero — no pets/companions are surfaced as combatants (see
@@ -124,7 +129,7 @@ namespace DeNelle.Core
         /// were. Separate from ATB (its own system). Default OFF until the vertical is felt-verified
         /// ("unflag when proven"). PlayerPrefs "ff.overworldencounter". Spec: WORK_ORDER_482. See
         /// docs/COMBAT_PIVOT_NORTHSTAR.md + memory overworld-encounter-isolated-battle.</summary>
-        public static bool OverworldEncounter => Get("overworldencounter", defaultOn: true);  // PROVEN 2026-06-23: full loop felt-verified (walk->engage rep->isolated BattleArena->fight orc family->resolve->warp home). "Unflag when proven." PlayerPrefs "ff.overworldencounter"=0 to disable.
+        public static bool OverworldEncounter => Get("overworldencounter", defaultOn: false);  // V1 DESCOPE 2026-06-26: arena CUT for V1; V1 raid = walk-to EnemyOutpost (RaidOutpostSystem), NOT the isolated BattleArena. Default flipped to OFF so the cardinal outposts/camps un-suppress + the walk-to raid is live. Code gated-not-deleted; PlayerPrefs "ff.overworldencounter"=1 to restore the V2 arena encounter loop.
 
         /// <summary>WO-473 / PIVOT (owner 2026-06-22): SINGLE-HERO V1 onboarding has NO pet step. When ON
         /// (default), the intro flow skips the PetSelect screen entirely — after the hero pick (Title in-flow
@@ -178,8 +183,10 @@ namespace DeNelle.Core
         /// APPLIED 2026-06-23 (owner: "the new 9-slice HUD should be applied"): default flipped ON
         /// so the 9-zone bones spawn on every BattleArena fight via BattleArenaHud.Create ->
         /// BattleHud9Zone.Create. The owner finesses look/feel on top (WO-507). To revert to the
-        /// legacy overlay only: PlayerPrefs "ff.battlehud9zone" = 0.</summary>
-        public static bool BattleHud9Zone => Get("battlehud9zone", defaultOn: true);
+        /// legacy overlay only: PlayerPrefs "ff.battlehud9zone" = 0.
+        /// V1 DESCOPE 2026-06-26: the 9-zone HUD belongs to the CUT BattleArena loop, so it ships
+        /// OFF for V1. Default flipped to false; PlayerPrefs "ff.battlehud9zone" = 1 to preview (V2).</summary>
+        public static bool BattleHud9Zone => Get("battlehud9zone", defaultOn: false);
 
         /// <summary>Global runtime kill-switch for ALL dev keyboard hotkeys (DevPanel F1, DebugCanvas
         /// F12, AdminOverlay Ctrl+Shift+A, the test spawners J/K/L, the tower dev harness B/J/K/N/U,
