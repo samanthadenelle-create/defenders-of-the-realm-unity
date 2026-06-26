@@ -1,0 +1,13 @@
+name = "pi-payment-backend"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+
+# Create the KV namespace, then paste its id here:
+#   wrangler kv namespace create PAYMENT_KV
+[[kv_namespaces]]
+binding = "PAYMENT_KV"
+id = "YOUR_KV_ID_HERE"
+
+# Secrets (do NOT put these in this file — set via wrangler):
+#   wrangler secret put PI_API_KEY     # your Pi app's SERVER API key (from the Pi Developer Portal)
+#   wrangler secret put PI_APP_ID      # your Pi app id

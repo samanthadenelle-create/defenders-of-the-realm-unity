@@ -43,6 +43,19 @@
 
 ---
 
+## 0.5 FUNNEL ARCHITECTURE — the game is the hook, the method is the offer (owner insight 2026-06-26)
+The game and the methodology are NOT two products — they're one funnel:
+- **Top (get in the door):** the **playable game** — proof + something people enjoy. "A PM who can't code shipped
+  a real game with AI agents — play it." The game earns attention AND credibility in one click.
+- **The offer (the real hook):** **"here's the PM mindset/system I used to make it actually work for me."**
+  That's what they pay for.
+- **Why it wins:** almost every "AI dev tips" seller has NO shipping artifact — they sell theory. You have a
+  playable game (live on itch). That's the un-fakeable proof that instantly kills "is this just prompt
+  engineering / does it really ship?" So **polishing the game = investing in the product's proof** — they
+  reinforce, not compete.
+- **In practice:** lead content with the PAIN (resonance); hold the GAME as the mic-drop proof when anyone
+  doubts ("here's the playable result -> link"). Skeptic -> proof -> offer, automatically.
+
 ## 1. The thesis (one breath)
 Everyone is suddenly managing AI coding agents and **almost nobody knows how to keep them on the rails.**
 You do — you're a PM who has actually run an agent fleet to build a real, shipping Unity game, with a real
