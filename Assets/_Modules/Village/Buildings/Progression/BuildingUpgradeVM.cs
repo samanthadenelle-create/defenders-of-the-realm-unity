@@ -40,6 +40,12 @@ namespace DeNelle.Village.Buildings.Progression
     /// </summary>
     public sealed class BuildingUpgradeVM : IPanelViewModel, IDisposable
     {
+        /// <summary>Row id for the synthetic "Upgrade Village Tier" affordance (the Heart-of-Elarion
+        /// tech-gate). Injected at the TOP of every city/resource building's upgrade list so the player
+        /// has ONE place to raise the global Village/Stronghold Tier that unlocks the WO-432 tier-2+
+        /// building upgrades + research perks. Tapping it routes to VillageTierService.TryUpgrade().</summary>
+        public const string VillageTierRowId = "villagetier";
+
         /// <summary>Icon role key on each tier's ItemVM (the View maps it to art; no game state).</summary>
         public const string IconRoleTier = "tier";
         /// <summary>Icon role key on each research-perk row (the View maps it to the perk's
@@ -201,6 +207,40 @@ namespace DeNelle.Village.Buildings.Progression
         public void Select(string tierId)
         {
             if (string.IsNullOrEmpty(tierId)) return;
+            // WO-481 — the "Upgrade Village Tier" row (the Heart-of-Elarion tech-gate). Raise the
+            // global Village/Stronghold Tier with Crystals via VillageTierService; on success the
+            // newly-gated tier-2+ building upgrades + research perks open immediately (Rebuild repaints
+            // the now-unlocked rows because the per-tier RequiresVillageTier gate now passes).
+            if (tierId == VillageTierRowId)
+            {
+                if (VillageTierService.IsMax)
+                {
+                    Status = "Village Tier is already at its highest level.";
+                    Raise();
+                    return;
+                }
+                int crystals = _economy?.Crystals ?? 0;
+                int cost = VillageTierService.NextCost();
+                if (crystals < cost)
+                {
+                    Status = "Need " + cost + " Crystals to raise the Village Tier (you have " + crystals + ").";
+                    Raise();
+                    return;
+                }
+                if (VillageTierService.TryUpgrade())
+                {
+                    int n = VillageTierService.Current;
+                    FlowTrace.Step("Progression", "village tier -> " + n + " (unlocks tier-" + n + "+ upgrades).");
+                    Status = "Village Tier raised to " + n + " — higher building tiers unlocked.";
+                }
+                else
+                {
+                    Status = "Couldn't raise the Village Tier right now.";
+                }
+                Rebuild();
+                Raise();
+                return;
+            }
             // WO-432 — a research-perk row ("perk:<perkId>"): buy it with Gold (Coins).
             if (tierId.StartsWith("perk:", StringComparison.Ordinal))
             {
@@ -231,6 +271,37 @@ namespace DeNelle.Village.Buildings.Progression
             if (_isCity) BuildCity();
             else if (_isResource) BuildResource();
             else BuildUnknown();
+
+            // WO-481 — surface the Heart-of-Elarion Village Tier control as the FIRST row of every
+            // building's upgrade list (the building-upgrade panel is the surface the player already
+            // opens with F at any upgrade building, so this needs zero new UI). This is the SOLE
+            // caller of VillageTierService.TryUpgrade — without it GameState.VillageTier is stuck at
+            // 0 and every RequiresVillageTier > 0 building tier / research perk is permanently locked.
+            PrependVillageTierRow();
+        }
+
+        /// <summary>
+        /// Inserts the synthetic "Upgrade Village Tier" row at the top of <see cref="_upgrades"/>.
+        /// Cost source = VillageTierService.NextCost() (Crystals, the premium progression currency;
+        /// felt-tunable in VillageTierService). The View renders it like any tier row; tapping it
+        /// routes to <see cref="Select"/> which calls VillageTierService.TryUpgrade().
+        /// </summary>
+        private void PrependVillageTierRow()
+        {
+            int cur = VillageTierService.Current;
+            bool maxed = VillageTierService.IsMax;
+            int cost = VillageTierService.NextCost();
+            int crystals = _economy?.Crystals ?? 0;
+            bool affordable = !maxed && crystals >= cost;
+
+            string name = maxed
+                ? "Village Tier " + cur + " (Max)"
+                : "Upgrade Village Tier " + cur + " -> " + (cur + 1);
+            _costById[VillageTierRowId] = maxed ? "Maxed" : (cost + " Crystals");
+
+            // equipped=maxed -> renders the OWNED chip + gilt; locked=false so a non-max row is always tappable.
+            _upgrades.Insert(0, new ItemVM(VillageTierRowId, name, IconRoleTier, VillageTierRowId, 0, "",
+                                           affordable, rarity: null, equipped: maxed, locked: false));
         }
 
         private void BuildCity()
