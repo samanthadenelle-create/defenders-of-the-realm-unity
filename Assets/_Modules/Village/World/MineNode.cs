@@ -480,8 +480,23 @@ namespace DeNelle.Village
             {
                 switch (Resource)
                 {
-                    case MineResource.Iron:          econ.Grant(iron: amount); break;
-                    case MineResource.Wood:          econ.Grant(wood: amount); break;
+                    // V1 farm-offline fix: Wood/Iron MUST persist + be visible to the
+                    // building-upgrade ResourceLedger. Plain Grant() only fills the
+                    // non-persisted in-session pool, so offline/worker/player-banked
+                    // Wood/Iron was lost on reload and invisible to upgrades. Route
+                    // through GrantSpendable() which writes BOTH the in-session pool
+                    // (HUD/shop) AND GameState.Wood/Iron (persisted + upgrade ledger).
+                    case MineResource.Iron:
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("Eco",
+                            $"MineNode routing +{amount} Iron via GrantSpendable -> persistent GameState.Iron + ledger");
+                        econ.GrantSpendable(iron: amount);
+                        break;
+                    case MineResource.Wood:
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("Eco",
+                            $"MineNode routing +{amount} Wood via GrantSpendable -> persistent GameState.Wood + ledger");
+                        econ.GrantSpendable(wood: amount);
+                        break;
+                    // Food/Crystals are already GameState-backed (single wallet) — plain Grant is correct.
                     case MineResource.Food:          econ.Grant(food: amount); break;
                     case MineResource.AetherCrystal: econ.Grant(crystals: amount); break;
                 }
