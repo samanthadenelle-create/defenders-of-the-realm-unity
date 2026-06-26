@@ -347,6 +347,17 @@ namespace DeNelle.Onboarding
         {
             if (!_splashActive) return;
             _splashActive = false;
+            // START-FLOW GUARANTEE: Continue routes straight to the castle (no hero-select), so if a
+            // loaded/stale save has no HeroClass persisted, the body builder would reach build with an
+            // unset class. Set it HERE at the source (load layer) before routing — ChooseHero persists
+            // + saves it. V1 is single-hero (Knight); ChooseHero also applies the KnightOnly force.
+            var svc = GameStateService.Instance;
+            if (svc != null && (svc.State == null || !svc.State.HeroClass.ToNullable().HasValue))
+            {
+                FlowTrace.Warn("Onboarding",
+                    "OnContinue: loaded save had no HeroClass — persisting Knight (V1) at the load source before GoCastle.");
+                svc.ChooseHero(HeroClass.Knight);
+            }
             SceneRouter.GoCastle();
         }
 

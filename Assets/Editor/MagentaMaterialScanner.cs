@@ -39,6 +39,7 @@ namespace DeNelle.Editor
             // header
             rows.Add("Source,AssetPath,GameObjectPath,RendererType,RendererName,MaterialSlot,Reason,ShaderName,MaterialName");
 
+            int matOffenders = ScanMaterialAssets(rows);
             int prefabOffenders = ScanPrefabs(rows);
             int sceneOffenders = ScanScenes(rows);
 
@@ -46,9 +47,90 @@ namespace DeNelle.Editor
             string outPath = Path.Combine(OutDir, "magenta_scan.csv");
             File.WriteAllText(outPath, string.Join("\n", rows), new UTF8Encoding(false));
 
-            int total = prefabOffenders + sceneOffenders;
+            int total = matOffenders + prefabOffenders + sceneOffenders;
             Debug.Log($"[MagentaMaterialScanner] DONE — {total} offending material slot(s) " +
-                      $"({prefabOffenders} in prefabs, {sceneOffenders} in scenes). Report: {outPath}");
+                      $"({matOffenders} material assets, {prefabOffenders} in prefabs, {sceneOffenders} in scenes). Report: {outPath}");
+        }
+
+        // ---- DEEP entry: material assets + prefabs + ALL project scenes ------
+        // The default Run() scene pass only covers ENABLED Build-Settings scenes, so a
+        // pink floor in a non-build / disabled scene (e.g. MainCastle_Hall) is invisible.
+        // RunDeep scans every .unity under Assets/ (read-only; never saves), skipping the
+        // corruption-cursed Village.unity (HANDOVER §2.5 — never open/re-save it).
+        // Run (batchmode): -executeMethod DeNelle.Editor.MagentaMaterialScanner.RunDeep
+        public static void RunDeep()
+        {
+            var rows = new List<string>();
+            rows.Add("Source,AssetPath,GameObjectPath,RendererType,RendererName,MaterialSlot,Reason,ShaderName,MaterialName");
+
+            int matOffenders = ScanMaterialAssets(rows);
+            int prefabOffenders = ScanPrefabs(rows);
+            int sceneOffenders = ScanAllProjectScenes(rows);
+
+            Directory.CreateDirectory(OutDir);
+            string outPath = Path.Combine(OutDir, "magenta_scan_deep.csv");
+            File.WriteAllText(outPath, string.Join("\n", rows), new UTF8Encoding(false));
+
+            int total = matOffenders + prefabOffenders + sceneOffenders;
+            Debug.Log($"[MagentaMaterialScanner] DEEP DONE — {total} offending material slot(s) " +
+                      $"({matOffenders} material assets, {prefabOffenders} in prefabs, {sceneOffenders} in ALL project scenes). Report: {outPath}");
+        }
+
+        private static int ScanAllProjectScenes(List<string> rows)
+        {
+            int offenders = 0;
+            string activeBefore = SceneManager.GetActiveScene().path;
+
+            foreach (var guid in AssetDatabase.FindAssets("t:Scene"))
+            {
+                string scenePath = AssetDatabase.GUIDToAssetPath(guid);
+                if (string.IsNullOrEmpty(scenePath) || !scenePath.StartsWith("Assets/")) continue;
+                if (scenePath.EndsWith("/Village.unity") || scenePath.EndsWith("Village.unity")) continue; // §2.5 cursed
+                if (!File.Exists(scenePath)) continue;
+
+                Scene scene;
+                try { scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single); }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning($"[MagentaMaterialScanner] could not open scene {scenePath}: {e.Message}");
+                    continue;
+                }
+
+                foreach (var go in scene.GetRootGameObjects())
+                    foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                        offenders += InspectRenderer("Scene:" + scenePath, scenePath, r, rows);
+            }
+
+            if (!string.IsNullOrEmpty(activeBefore) && File.Exists(activeBefore))
+            {
+                try { EditorSceneManager.OpenScene(activeBefore, OpenSceneMode.Single); }
+                catch { /* best-effort restore */ }
+            }
+            return offenders;
+        }
+
+        // ---- material-asset pass --------------------------------------------
+        // Names every offending .mat directly (built-in/error/null shader), independent
+        // of which scene or prefab references it — so a pink floor whose scene isn't in
+        // Build Settings still gets named by its material asset.
+        private static int ScanMaterialAssets(List<string> rows)
+        {
+            int offenders = 0;
+            string[] guids = AssetDatabase.FindAssets("t:Material");
+            foreach (var g in guids)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(g);
+                if (!path.StartsWith("Assets/")) continue;   // skip package/read-only
+                var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+                string reason = ClassifyMaterial(m, out string shaderName, out string matName);
+                if (reason != null)
+                {
+                    rows.Add($"{Csv("MaterialAsset")},{Csv(path)},,,{Csv(matName)},0," +
+                             $"{Csv(reason)},{Csv(shaderName)},{Csv(matName)}");
+                    offenders++;
+                }
+            }
+            return offenders;
         }
 
         // ---- prefab pass ----------------------------------------------------
@@ -154,6 +236,15 @@ namespace DeNelle.Editor
                 shaderName.Contains("Hidden/InternalError") ||
                 sh == Shader.Find("Hidden/InternalErrorShader"))
                 return "INTERNAL_ERROR_SHADER";
+
+            // The classic URP magenta: a material still on the BUILT-IN render pipeline's
+            // Standard / Specular / Legacy shaders. These compile but cannot draw under URP,
+            // so they render magenta/pink. The fixer already swaps these to URP/Lit; the
+            // scanner must NAME them too (this was the blind spot that hid the pink floor).
+            if (shaderName == "Standard" ||
+                shaderName == "Standard (Specular setup)" ||
+                shaderName.StartsWith("Legacy Shaders/"))
+                return "BUILTIN_STANDARD_SHADER";
 
             return null;
         }

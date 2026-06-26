@@ -164,6 +164,93 @@ namespace DeNelle.Editor
             Debug.Log($"SCREENSHOT_OK {desktopPath} bounds=center{center}/size{bounds.size}");
         }
 
+        /// <summary>
+        /// Opens Village2.unity and renders a straight TOP-DOWN orthographic plan PNG
+        /// (bird's-eye), bounds-fit, for the owner to hand a layout reference to an
+        /// external tool. Read-only on the scene (OpenScene + render, never saves).
+        /// Run WITHOUT -nographics: -executeMethod DeNelle.Editor.SceneScreenshot.CaptureVillage2TopDown
+        /// </summary>
+        [MenuItem("Defenders/Sandbox/Screenshot Village2 TopDown")]
+        public static void CaptureVillage2TopDown()
+        {
+            const string scenePath = "Assets/Scenes/Village2.unity";
+            const string desktopPath = "C:/Users/Kayden-Laptop/Desktop/village2_topdown.png";
+            const string repoPath = "docs/issues/village2_topdown.png";
+            const int w = 2048, h = 2048; // square — true plan view
+
+            if (!File.Exists(scenePath)) { Debug.LogError($"SCREENSHOT_FAIL missing scene: {scenePath}"); return; }
+            EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+
+            // Union of active renderer bounds.
+            var renderers = UnityEngine.Object.FindObjectsByType<Renderer>(
+                FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            Bounds bounds = default; bool any = false;
+            foreach (var r in renderers)
+            {
+                if (r == null || !r.enabled || !r.gameObject.activeInHierarchy) continue;
+                if (!any) { bounds = r.bounds; any = true; } else bounds.Encapsulate(r.bounds);
+            }
+            if (!any) { Debug.LogError($"SCREENSHOT_FAIL no active renderers in {scenePath}"); return; }
+
+            // Ensure lighting so the plan isn't black.
+            bool hasDir = false;
+            foreach (var l in UnityEngine.Object.FindObjectsByType<Light>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                if (l != null && l.enabled && l.type == LightType.Directional) { hasDir = true; break; }
+            GameObject tempLight = null;
+            if (!hasDir)
+            {
+                tempLight = new GameObject("__V2ScreenshotSun");
+                var l = tempLight.AddComponent<Light>();
+                l.type = LightType.Directional; l.intensity = 1.1f; l.color = Color.white;
+                tempLight.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+            }
+            if (RenderSettings.ambientLight.maxColorComponent < 0.05f)
+                RenderSettings.ambientLight = new Color(0.5f, 0.5f, 0.55f, 1f);
+
+            // Top-down orthographic camera, bounds-fit (square RT -> fit the larger of X/Z extent).
+            Vector3 center = bounds.center;
+            float orthoSize = Mathf.Max(bounds.extents.x, bounds.extents.z) * 1.08f;
+            float camHeight = center.y + bounds.extents.y + 50f;
+            var camGo = new GameObject("__V2ScreenshotCam");
+            var cam = camGo.AddComponent<Camera>();
+            camGo.transform.position = new Vector3(center.x, camHeight, center.z);
+            camGo.transform.rotation = Quaternion.Euler(90f, 0f, 0f); // straight down
+            cam.orthographic = true; cam.orthographicSize = orthoSize;
+            cam.nearClipPlane = 0.1f; cam.farClipPlane = camHeight + bounds.size.y + 100f;
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = new Color(0.12f, 0.13f, 0.16f, 1f);
+            var urpDataType = Type.GetType(
+                "UnityEngine.Rendering.Universal.UniversalAdditionalCameraData, Unity.RenderPipelines.Universal.Runtime");
+            if (urpDataType != null && camGo.GetComponent(urpDataType) == null) camGo.AddComponent(urpDataType);
+
+            var rt = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32) { antiAliasing = 4 };
+            rt.Create();
+            var prevActive = RenderTexture.active; Texture2D tex = null; byte[] png = null;
+            try
+            {
+                cam.targetTexture = rt; cam.Render(); cam.Render();
+                RenderTexture.active = rt;
+                tex = new Texture2D(w, h, TextureFormat.RGB24, false);
+                tex.ReadPixels(new Rect(0, 0, w, h), 0, 0); tex.Apply();
+                png = tex.EncodeToPNG();
+            }
+            finally { cam.targetTexture = null; RenderTexture.active = prevActive; }
+
+            if (png != null && png.Length > 0)
+            {
+                TryWriteBytes(desktopPath, png);
+                TryWriteBytes(Path.GetFullPath(Path.Combine(Application.dataPath, "..", repoPath)), png);
+            }
+            else Debug.LogError("SCREENSHOT_FAIL EncodeToPNG produced no data");
+
+            if (tex != null) UnityEngine.Object.DestroyImmediate(tex);
+            if (rt != null) { rt.Release(); UnityEngine.Object.DestroyImmediate(rt); }
+            if (camGo != null) UnityEngine.Object.DestroyImmediate(camGo);
+            if (tempLight != null) UnityEngine.Object.DestroyImmediate(tempLight);
+            Debug.Log($"SCREENSHOT_OK village2 topdown bounds=center{center}/size{bounds.size} ortho={orthoSize}");
+        }
+
         private static void TryWriteBytes(string path, byte[] data)
         {
             try
