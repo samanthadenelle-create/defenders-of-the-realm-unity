@@ -1307,10 +1307,23 @@ namespace DeNelle.Village
 
             // HERO-PRIMARY: while the hero is near, keep chasing it — do NOT peel onto a
             // side structure. (A structure literally ahead was already returned above.)
-            if (IsHeroWithinAggro()) return null;
+            // SKIP-REASON instrumentation (§12, behaviour-NEUTRAL): the verify-capture showed
+            // 0 sweep acquires; these traces PROVE which branch suppressed it so we read data,
+            // not theory — "hero in aggro" vs "swept but nothing in range".
+            if (IsHeroWithinAggro())
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"skip-heroaggro-{_enemyId}", 1f,
+                    $"{_enemyId}: structure sweep SUPPRESSED — hero within aggro (hero stays primary); forward-probe lane was clear");
+                return null;
+            }
 
             // 2. Hero not near => short all-direction sweep for the nearest live structure.
-            return SweepForNearestStructure();
+            var swept = SweepForNearestStructure();
+            if (swept == null)
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"skip-norange-{_enemyId}", 1f,
+                    $"{_enemyId}: structure sweep RAN (hero not in aggro) but found NO live structure within " +
+                    $"{Mathf.Max(_contactProbeDistance, _structureSweepRadius):F1}m");
+            return swept;
         }
 
         /// <summary>
