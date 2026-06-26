@@ -4,21 +4,28 @@ How to navigate the ~370 markdown files at project root without reading them all
 Code map: `Assets/_Modules/README.md`. Assets map: `Assets/README.md`.
 Docs index: `docs/README.md`.
 
+> **Branch = `wip/village2-and-f8-tickets`** (HEAD `8aa24c32`). The live anchor of current reality is
+> `CANON_GROUND_TRUTH_2026-06-26.md`. Several files this index historically called "living/current" are now
+> STALE (pre-pivot: tower-defense + Solana + party-of-4 + Blink) — corrected per `CANON_READINESS_LEDGER_2026-06-26.md`.
+
 ## Living documents (read these; they are current)
 
 | File | Purpose |
 |---|---|
-| `CLAUDE.md` | **Agent rules — read first, non-negotiable** |
-| `PIPELINE_STATE.md` | Current pipeline/build state quick reference |
-| `SESSION_START_HERE.md` | Session onboarding for agents |
-| `ARCHITECTURE_REFERENCE.md` | Architecture reference (earlier phase) |
-| `CORE_ARCHITECTURE_PLAN.md` | **Core architecture plan** — professional structure, modules, recommended folders, feature mapping (TD + dungeon + Solana + mobile + monetization) |
+| `CANON_GROUND_TRUTH_2026-06-26.md` | **The single live anchor of current reality — read FIRST** |
+| `CLAUDE.md` | **Agent rules — read first, non-negotiable** (§15 = canon maintenance) |
+| `SESSION_CANON_LOADER.md` | At-a-glance SME primer (current state + key files) |
+| `docs/HANDOVER.md` | Operator's manual + newest 2026-06-26 session block |
+| `PIPELINE_STATE.md` | Pipeline/build state (2026-06-26 block at top) |
+| `docs/COMBAT_PIVOT_NORTHSTAR.md` | Single-Knight pivot — supersedes Blink/party-of-4 canon |
+| `docs/MASTER_CATALOG.md` | Verified-from-code SME catalog (code mechanics current) |
 | `PARALLEL_LANES.md` | Which work lanes can run simultaneously |
-| `BUG_LIST.md` + `BUG_WORKFLOW.md` | Open bugs + how bugs flow |
 | `PUNCHLIST.md` | Outstanding punch-list items |
-| `PIPELINE.md` | Pipeline overview |
-| `CLI_GATEKEEPER_PLAYBOOK.md` | CLI agent playbook |
 | `AGENT_OPENERS.md` | Prompt openers for spawning agents |
+
+> ⚠ **Demoted as STALE (do not treat as current — see ledger):** `SESSION_START_HERE.md`,
+> `ARCHITECTURE_REFERENCE.md`, `CORE_ARCHITECTURE_PLAN.md` (TD+Solana framing), `BUG_LIST.md` +
+> `BUG_WORKFLOW.md` (Linear-era), `PIPELINE.md`, `CLI_GATEKEEPER_PLAYBOOK.md` (stale branch/path).
 
 ## Work orders — `WorkOrders/WORK_ORDER_NNN_name.md`
 

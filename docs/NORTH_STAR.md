@@ -1,3 +1,5 @@
+> ⚠ **STALE — predates the 2026-06-22 single-Knight pivot.** Treat its Blink-hero / party-of-4 / tower-defense-pillar framing as SUPERSEDED (hero = single Tripo "Grom", Blink rig junked, base-defense V2-gated); some architecture/monetization content may still hold. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md` + `docs/COMBAT_PIVOT_NORTHSTAR.md`.
+
 # Defenders of the Realm — NORTH STAR
 
 > Captured 2026-05-29 from the owner's origin vision, after recognizing it had drifted.

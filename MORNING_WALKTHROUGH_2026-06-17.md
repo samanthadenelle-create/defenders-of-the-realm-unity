@@ -1,3 +1,5 @@
+> ⚠ **HISTORICAL (dated record) — reads as live but predates current state.** Branch is now `wip/village2-and-f8-tickets` (nothing pushed); hero = single Tripo Knight (Blink junked 06-22). Kept for history. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # Morning walkthrough — review these (session of 2026-06-16, pushed)
 
 11 commits on `feat/tower-core-loop`, all `COMPILE_GATE_OK`, pushed (`3cf63df3..7e6ce088`).

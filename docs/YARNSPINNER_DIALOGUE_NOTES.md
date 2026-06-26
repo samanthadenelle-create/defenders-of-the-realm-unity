@@ -1,3 +1,5 @@
+> ⚠ **STALE — Yarn Spinner is being DROPPED for custom MVVM dialogue (WO-455).** Guidance here is for a system being removed. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # Yarn Spinner 3 (Unity) — Dialogue Advancing & Customization Notes
 
 Distilled from the official docs (docs.yarnspinner.dev) + the installed package source

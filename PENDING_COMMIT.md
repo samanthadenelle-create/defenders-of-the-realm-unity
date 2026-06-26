@@ -1,3 +1,5 @@
+> ⚠ **OBSOLETE working scratch — retained only as history; do not action.** Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # Pending Commits — run in order, then delete this file
 
 Branch: `feat/tower-core-loop`

@@ -332,3 +332,29 @@ line + screenshot) instead of waiting to be told.
   to ask "did the data show that" — the look is structural, not something the owner triggers.
 - Then RCA from the data + screenshot, and route per §13 (CLI implements + headless-verifies; PO
   felt-verifies + closes). The owner just plays and F8s.
+
+---
+
+## 15. Canon Maintenance — keep the docs from going stale (WO-520, BINDING)
+
+Owner directive (2026-06-26): we did one painful fleet-scale audit of all 1090 `.md` files
+(`CANON_READINESS_LEDGER_2026-06-26.md`) because the canon had drifted weeks behind reality. **Never
+again at that scale.** The standing rule, so canon updates stay 5-minute tasks:
+
+- **The single live anchor = `CANON_GROUND_TRUTH_<date>.md` at repo root.** It states current reality
+  (branch, hero rig, combat model, world/seam, in-flight status). Keep exactly ONE current; supersede the
+  old one by date. Every session and every agent checks docs against it.
+- **Update canon in the same breath as the change.** Any commit that changes architecture/state (branch,
+  hero rig, a pillar's scope, a scene's role, a removed/added system, a creative-canon decision) MUST update
+  the relevant load-bearing doc in the SAME commit/PR — or, if deferred, add a one-line `STALE:` flag at the
+  top of that doc naming what's now wrong. A state change with no canon update is an incomplete change.
+- **Load-bearing set (the read-first canon) — keep these green:** `SESSION_CANON_LOADER.md`,
+  `docs/HANDOVER.md`, `PIPELINE_STATE.md`, `docs/MASTER_CATALOG.md`, `PROJECT_INDEX.md`, the relevant
+  `docs/*ARCHITECTURE*` / `docs/COMBAT_PIVOT_NORTHSTAR.md`, and this file.
+- **Frozen, never rewrite:** dated point-in-time ledgers (OVERNIGHT_*, MORNING_*, dated HANDOVER_*,
+  RESULT files, dated session reports). If one reads as current, add a `⚠ SUPERSEDED <date>` banner — do
+  not rewrite the body. Backlog WOs are frozen by their date; an UNDATED WO asserting current state
+  (branch / "#1 priority now" / "fix before go-live") is STALE and must be banner-fixed or dated.
+- **Weekly 5-minute audit:** skim the load-bearing set above against the ground-truth anchor; fix or flag.
+- **Never guess** — every canon update is sourced from HEAD commits / working tree / the live auto-memory
+  index / verified summaries, never from assumption (§12 discipline applies to docs too).

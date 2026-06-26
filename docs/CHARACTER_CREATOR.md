@@ -1,3 +1,5 @@
+> ⚠ **SUPERSEDED — replaced by the Tripo self-rigged roster pivot** (Knight/Ranger/Wizard + orc/skeleton/troll families). Kept for history. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # Create Your Hero — the character pillar (presets → creator)
 
 > Owner (2026-05-30): *"go from these 3 heroes to create-your-hero."* The fixed roster (Knight / Mage /

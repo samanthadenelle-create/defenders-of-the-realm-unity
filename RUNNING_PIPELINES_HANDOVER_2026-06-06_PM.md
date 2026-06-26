@@ -1,3 +1,5 @@
+> ⚠ **HISTORICAL (dated record) — reads as live but predates current state.** Branch is now `wip/village2-and-f8-tickets` (nothing pushed); hero = single Tripo Knight (Blink junked 06-22). Kept for history. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # Running Pipelines — Handover (2026-06-06 PM)
 
 Branch: **feat/tower-core-loop**. This captures every live workstream as of this session,

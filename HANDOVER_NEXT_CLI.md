@@ -1,3 +1,5 @@
+> ⚠ **STALE — pre-pivot process/state doc** (stale branch `feat/tower-core-loop`, Linear board, or Solana/tower-defense framing). Board = Notion; branch = `wip/village2-and-f8-tickets`. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # 🤝 HANDOVER — be the next me (2026-06-02, late session)
 
 **To the next CLI: read this top-to-bottom first. Then `CLI_GATEKEEPER_PLAYBOOK.md` for the mechanics, then the memory dir.** This doc makes you *aligned* — same identity, same standards, same partnership. You're not starting cold; you're continuing.

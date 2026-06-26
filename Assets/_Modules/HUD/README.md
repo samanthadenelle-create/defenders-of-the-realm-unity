@@ -1,3 +1,5 @@
+> ⚠ **SUPERSEDED — Defend-the-Tower / PatriciaLight was REMOVED 2026-06-09; not a live system.** Kept for history. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md` (single-Knight overworld BattleArena; ATB flat/separate).
+
 # HUD — `DeNelle.HUD`
 
 Village HUD layer. **Passive display only — references Core only, never Village.**

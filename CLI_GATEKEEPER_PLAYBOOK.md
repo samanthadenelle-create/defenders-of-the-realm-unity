@@ -1,3 +1,5 @@
+> ⚠ **STALE — pre-pivot process/state doc** (stale branch `feat/tower-core-loop`, Linear board, or Solana/tower-defense framing). Board = Notion; branch = `wip/village2-and-f8-tickets`. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # CLI GATEKEEPER PLAYBOOK — READ THIS FIRST
 
 > **Owner:** tell a fresh CLI session *"read CLI_GATEKEEPER_PLAYBOOK.md, then CLAUDE.md and SESSION_START_HERE.md"* and it will operate like the previous session within one read. The auto-memory dir (below) loads on its own.

@@ -1,3 +1,5 @@
+> ⚠ **STALE — pre-pivot process/state doc** (stale branch `feat/tower-core-loop`, Linear board, or Solana/tower-defense framing). Board = Notion; branch = `wip/village2-and-f8-tickets`. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # Backlog Silos — Defenders of the Realm
 **Last updated:** 2026-06-03T13:05Z (manual priority sequencing pass)
 **Active backlog:** 71 issues across 5 lanes + 9 Legacy/Misc

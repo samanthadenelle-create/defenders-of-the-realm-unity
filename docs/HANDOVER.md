@@ -7,10 +7,48 @@
 > ledger + open findings) and the auto-memory index `MEMORY.md` (esp.
 > `world-architecture-gated-regions-playable-connectors.md` and
 > `autopilot-chaos-not-one-scripted-path.md`). The code wins on truth — comments lie.
+>
+> **Canon maintenance (WO-520, BINDING — CLAUDE.md §15):** the single live anchor is
+> `CANON_GROUND_TRUTH_<date>.md` at repo root. Update the relevant load-bearing doc in the SAME
+> change as any architecture/state/canon shift (or add a top-of-file `STALE:` flag). Weekly 5-minute
+> skim of the read-first set against the anchor. Dated ledgers are frozen — banner, never rewrite.
 
 ---
 
-## ★★ SESSION HANDOVER — 2026-06-19 (READ FIRST, owner rebooting to apply an OS/audio patch) ★★
+## ★★ SESSION HANDOVER — 2026-06-26 (READ FIRST — anchored to `CANON_GROUND_TRUTH_2026-06-26.md`) ★★
+
+**WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`, HEAD `8aa24c32`, **nothing pushed**. A long
+single-Knight-pivot arc (06-24→26) landed: overworld real-time **BattleArena** (lock-on WO-512, 9-zone HUD,
+victory/defeat + star rating), **Echo workforce** wired (1–4 echoes, offline real-clock, save v25),
+**village-tier upgrade** unlocking the WO-432 building tree, **store redesign** (WO-501) + **gear balance**
+(WO-500), **Offset Forge** offsets on weapon attach (WO-490/510), **castle moat + 4 drawbridges**
+(`ff.castlemoat`) + **four-side warp gates** (RuntimeRegionGate) + **tree aura/tower glow**
+(`ff.hubambientvfx`). itch web build is LIVE; Vercel parked.
+
+**IN-FLIGHT / DO NOT PUSH:** HEAD `8aa24c32` = **UNVERIFIED** hero-priority structure sweep
+(`ff.enemystructureaware`) — verify-capture showed **0 sweep acquires**. NEXT: skip-reason FlowTrace
+(hero-in-aggro vs no-structure-in-range) + a headless capture of the no-hero-near-structure case BEFORE
+claiming fixed. Two untracked `.cs` await triage: `Assets/Editor/CastlePlaceCrossing.cs`,
+`Assets/_Modules/Village/Hero/RumorBoardPanelBootstrap.cs`.
+
+**CANON STATE (the corrections that supersede everything older):** hero = **single Tripo self-rigged
+Knight ("Grom")**, static armor, no mesh-swap — **Blink hero rig JUNKED 06-22** (Blink = UI re-skin only).
+**ATB is flat/static**; animated combat lives in the **overworld BattleArena**. Base-defense/tower-defense
+= **V2-gated** (`ff.basebuilding`). **Defend-the-Tower/PatriciaLight REMOVED 06-09.** Yarn being dropped
+(WO-455). Home = `MainCastle_Hall`; `Village2` = raid target; `Village.unity` ABANDONED.
+
+**QUEUED (captured, not built):** WO-509 functional N/E/W moat seams · WO-513 coordinated orc family ·
+WO-514 tower cap + Population→Saved-Echoes→SP + siege-AI (mobs target towers) · WO-430 offline-garrison.
+
+**⚠️ OPEN CREATIVE FORK (owner's call):** Cathedral Spire vs living world-Tree (STORYLINE/DESIGN-DECISIONS
+say Spire replaces the Tree; combat-pivot canon keeps the living Tree). See `CANON_READINESS_LEDGER_2026-06-26.md`.
+
+**RESUME POINT:** finish the targeting proof on HEAD → triage the two untracked `.cs` → then WO-509/513/514.
+Full doc-canon reconciliation = **WO-520** (`CANON_READINESS_LEDGER_2026-06-26.md`).
+
+---
+
+## ★ SESSION HANDOVER — 2026-06-19 (⚠ SUPERSEDED by the 2026-06-26 block above — kept for history) ★
 
 **WHERE WE ARE:** A long session (architecture + core-loop fixes + an overnight autopilot run).
 Owner is rebooting her PC (an OS/audio patch — her machine audio, NOT a game bug; she has working

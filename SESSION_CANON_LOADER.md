@@ -29,20 +29,34 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   (implement + headless-verify) → PO (felt-verify + close). Shared board = the Task list; log
   every hand-off. Full spec: `docs/TICKET_PIPELINE.md`.
 
-## Current State
-- **Game:** Defenders of the Realm (Unity 6 / URP, Solana integration, tower-defense + dungeon-crawler).
-- **Hero Rig:** Blink full-body models + EquipmentController weapon seating (head/armor sync being tuned).
-- **Tech Tree:** BuildingUpgradeVM + PanelMvvm (Warcraft 3-style perks, tier gate at the Heart of Elarion).
-- **Raids:** Village2 + Outpost systems (GarrisonController, RaidGarrisonSpawner).
-- **UI:** ElarionUiKit + BlinkChrome flag for re-skin.
-- **Economy:** Gold on kills (small but meaningful), research costs.
+## Current State (2026-06-26 — anchored to `CANON_GROUND_TRUTH_2026-06-26.md`)
+- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). HEAD `8aa24c32`, nothing pushed.
+- **Game:** Echoes of Elarion / Defenders of the Realm (Unity 6 / URP). **V1 = ONE controllable hero
+  (Knight "Grom") in an overworld with isolated real-time BattleArena combat.** Base-defense/tower-defense
+  is V2-gated behind `ff.basebuilding`. (itch web build LIVE; Solana→Pi/Cloudflare backend; Vercel parked.)
+- **Hero Rig:** a **single Tripo self-rigged model**, static armor, **NO mesh-swap**. *Blink full-body rig
+  is JUNKED (06-22)* — Blink survives only as a **UI re-skin kit** (`BlinkChrome` flag), not the hero body.
+- **Combat:** animated real-time battle = the **OVERWORLD BattleArena** (lock-on WO-512, 9-zone HUD).
+  **ATB is separate** (flat/static, single hero vs static enemies). Arena trio = OFF/gated.
+- **Tech Tree:** BuildingUpgradeVM + PanelMvvm (Warcraft 3-style perks, tier gate at the Heart of Elarion);
+  unlocked this arc by the wired village-tier upgrade (WO-432).
+- **World:** home hub `MainCastle_Hall`; `OuterWorld` streams additively; `Village2` = raid target
+  (`Village.unity` ABANDONED). Castle↔OuterWorld = four-side warp gates (RuntimeRegionGate); moat +
+  4 drawbridges (`ff.castlemoat`); tree aura + tower glow (`ff.hubambientvfx`).
+- **Economy:** Echo workforce wired (1–4 echoes, offline real-clock, save v25); gold on kills; research costs.
+- **In-flight:** HEAD targeting sweep (`ff.enemystructureaware`) is **UNVERIFIED** — do not push until proven.
 
 ## Key Files to Remember
-- `docs/UI_MVVM_BINDING_MAP.md`
-- `docs/BLINK_UI.md`
-- `docs/ARCHITECTURE_PRINCIPLES.md`
+- `CANON_GROUND_TRUTH_2026-06-26.md` (the single live anchor of current reality — read FIRST)
+- `docs/COMBAT_PIVOT_NORTHSTAR.md` (single-Knight pivot — supersedes all "Blink/party-of-4" canon)
+- `docs/ARCHITECTURE_PRINCIPLES.md` · `docs/ARCHITECTURE.md` (hub)
 - `docs/TICKET_PIPELINE.md` (QA→CLI→PO ticket lifecycle, BINDING)
+- `docs/PATH_TO_V1.md` · `V1_ASSEMBLY_MAP.md` · `ECHO_WORKFORCE_SPEC.md`
+- `docs/UI_MVVM_BINDING_MAP.md` · `docs/BLINK_UI.md` (UI re-skin only)
 - `WORK_ORDER_432` / `WORK_ORDER_433`
+
+> **Maintenance (WO-520):** after any commit that changes architecture/state, update the relevant canon
+> doc in the same breath, and keep `CANON_GROUND_TRUTH_<date>.md` current. See CLAUDE.md §15.
 
 ---
 *Maintained by the owner. Keep it current; it is the at-a-glance SME primer pasted at the

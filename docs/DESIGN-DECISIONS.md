@@ -1,3 +1,5 @@
+> ⚠ **STALE NARRATIVE — the Cathedral Spire replacing the world-Tree was REVERSED (owner ruling 2026-06-26): the living world-Tree is canon.** Treat any "Spire replaces the Tree" / "Heart-Tree burned" entries as superseded; other entries may still hold. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md` + `docs/COMBAT_PIVOT_NORTHSTAR.md`.
+
 # Design Decisions — Defenders of the Realm v2 Unity port
 
 Source-of-truth changelog for what has shifted away from the board-game original

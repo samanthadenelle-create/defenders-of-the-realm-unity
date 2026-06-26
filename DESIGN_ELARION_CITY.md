@@ -1,3 +1,5 @@
+> ⚠ **STALE — targets the ABANDONED `Village.unity` / VillageSceneBuilder home.** Home hub is now `MainCastle_Hall`; `Village2` = raid target. Kept for history. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # DESIGN — Elarion City Layout & Persistent Populate Manifest
 
 **Status:** CANONICAL (owner-driven, 2026-05-31). The city is **empty repeatedly** — this doc + WO-189 fix it durably.

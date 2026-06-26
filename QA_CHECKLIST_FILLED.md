@@ -1,3 +1,5 @@
+> ⚠ **STALE — pre-pivot process/state doc** (stale branch `feat/tower-core-loop`, Linear board, or Solana/tower-defense framing). Board = Notion; branch = `wip/village2-and-f8-tickets`. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # Defenders of the Realm - QA Checklist (Filled - Based on Code Inspection)
 
 **Date of Review:** Current session (post Chunk 10 implementations)

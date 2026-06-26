@@ -1,3 +1,5 @@
+> ⚠ **SUPERSEDED — retired "Avalon"/"Keep"/"Blaise" naming + the abandoned Village.unity scene.** Kept for history. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # Avalon Dungeons — 3D Unity Layout Spec (KayKit Dungeon Remastered)
 
 **Status:** Canonical construction spec for the 7 Avalon dungeon scenes in Unity. Supplements the existing narrative-and-lore dungeon designs (`docs/dungeon-3d-healers-cottage-design.md` and the six v1.1 dungeon design docs from the agent run). This spec is the **how-to-build-in-Unity** layer; the existing specs are the **what-the-player-feels** layer.

@@ -1,3 +1,5 @@
+> ⚠ **STALE — pre-pivot process/state doc** (stale branch `feat/tower-core-loop`, Linear board, or Solana/tower-defense framing). Board = Notion; branch = `wip/village2-and-f8-tickets`. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # Bug Workflow — how bugs flow (for CLI)
 
 > How playtest bugs move from sighting → fix → verified. Read this so the bug list + Linear issues make

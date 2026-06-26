@@ -1,3 +1,5 @@
+> ⚠ **SUPERSEDED — Defend-the-Tower / PatriciaLight was REMOVED 2026-06-09; not a live system.** Kept for history. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md` (single-Knight overworld BattleArena; ATB flat/separate).
+
 # Defend-the-Tower — Spell Book Design (living doc)
 
 Owner brainstorm 2026-05-29. Owner drives creative; agent implements. The hero is a

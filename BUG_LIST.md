@@ -1,3 +1,5 @@
+> ⚠ **STALE — pre-pivot process/state doc** (stale branch `feat/tower-core-loop`, Linear board, or Solana/tower-defense framing). Board = Notion; branch = `wip/village2-and-f8-tickets`. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # Bug List — tagged to user stories, assigned to Claude (CLI)
 
 > Live punch-list of open playtest bugs. Each is tagged to a **user story** ("As a player, I want…")

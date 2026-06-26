@@ -1,3 +1,5 @@
+> ⚠ **HISTORICAL — describes the retired React v1 client (decommissioned in the Unity port).** Not an active mandate. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # Architectural Refactor — Feature Modules + Prototype Branch
 
 **Status:** Architectural plan. The owner has explicitly stated this is the right structure for the codebase and the prior single-megafile pattern was the wrong call. The work runs on a long-lived prototype branch, gets validated before merge, and replaces the current sprawl with isolated feature modules.

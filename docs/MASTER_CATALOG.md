@@ -4,12 +4,20 @@ The single master index a new session reads to understand the whole project
 **without operating on assumptions**. Each area below has a deep section catalog
 under `docs/MASTER_CATALOG/<id>.md`, verified file-by-file (read, not from comments).
 
-Compiled 2026-06-12 · branch `feat/tower-core-loop` · 18 section files.
+Section catalogs compiled **2026-06-12** (verified-from-code; "how it actually works" is still accurate).
+Current branch = **`wip/village2-and-f8-tickets`** (HEAD `8aa24c32`) — the `feat/tower-core-loop` label
+here and in the section files is STALE metadata only.
 
-> READ ORDER for a cold start: this file → the relevant section file → `CLAUDE.md`
-> (binding rules) → `docs/ARCHITECTURE_PRINCIPLES.md` (architecture law) →
-> `PIPELINE_STATE.md` top block (ground truth) → `HANDOVER_2026-06-10.md` (newest state).
-> Trust the newest handover for live state; trust the section files for "how it actually works."
+> ⚠ **STALE top-level framing (2026-06-12, pre-pivot):** the section files describe the hero as **"Blaise"
+> + Blink/class bodies** and a **party-of-4** — both SUPERSEDED by the 06-22 single-Knight pivot (hero =
+> single Tripo self-rigged "Grom", Blink hero rig JUNKED, everything else autonomous). For LIVE state read
+> `CANON_GROUND_TRUTH_2026-06-26.md` + `docs/COMBAT_PIVOT_NORTHSTAR.md`. The per-area code mechanics below
+> remain trustworthy; the hero-identity / party / Defend-the-Tower framing does not.
+
+> READ ORDER for a cold start: `CANON_GROUND_TRUTH_2026-06-26.md` (live anchor) → this file → the relevant
+> section file → `CLAUDE.md` (binding rules) → `docs/ARCHITECTURE_PRINCIPLES.md` (architecture law) →
+> `docs/HANDOVER.md` (newest 2026-06-26 block). Trust the ground-truth anchor + newest handover for live
+> state; trust the section files for "how it actually works."
 
 ---
 

@@ -1,3 +1,5 @@
+> ⚠ **STALE — pre-pivot process/state doc** (stale branch `feat/tower-core-loop`, Linear board, or Solana/tower-defense framing). Board = Notion; branch = `wip/village2-and-f8-tickets`. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # Defenders of the Realm — CC Overnight Handover
 **Date:** 2026-05-26 | **Project:** Defenders of the Realm (Unity 6000.4.8f1 / URP)  
 **Repo:** `defenders-unity` | **Linear:** https://linear.app/defenders-of-the-realm

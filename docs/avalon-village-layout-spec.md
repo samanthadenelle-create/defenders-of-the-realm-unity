@@ -1,3 +1,5 @@
+> ⚠ **SUPERSEDED — retired "Avalon"/"Keep"/"Blaise" naming + the abandoned Village.unity scene.** Kept for history. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # Avalon Village — Interior Layout Spec (Unity / KayKit Hexagon Pack)
 
 **Status:** Canonical design for the Avalon village close-up scene in the Unity port. Replaces the previous "rigid square" placeholder with a shaped castle-town built from KayKit Medieval Hexagon Pack assets.

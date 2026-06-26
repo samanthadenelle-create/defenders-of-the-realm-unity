@@ -1,3 +1,5 @@
+> ⚠ **STALE — predates the 2026-06-22 single-Knight pivot.** Treat its Blink-hero / party-of-4 / tower-defense-pillar framing as SUPERSEDED (hero = single Tripo "Grom", Blink rig junked, base-defense V2-gated); some architecture/monetization content may still hold. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md` + `docs/COMBAT_PIVOT_NORTHSTAR.md`.
+
 # Store + Equip System — owner spec (2026-06-18)
 
 Owner-directed, BINDING. Follows `docs/ITEM_MODEL.md` (data-driven catalog),

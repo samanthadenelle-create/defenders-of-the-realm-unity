@@ -1,3 +1,5 @@
+> ⚠ **SUPERSEDED — Defend-the-Tower / PatriciaLight was REMOVED 2026-06-09; not a live system.** Kept for history. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md` (single-Knight overworld BattleArena; ATB flat/separate).
+
 # Dark Fantasy Mobile HUD (HUD-001) — README
 
 Production-ready, code-built uGUI dark fantasy mobile portrait HUD for Defenders of the Realm (Unity 6 LTS + URP, 1080x1920 ref resolution).

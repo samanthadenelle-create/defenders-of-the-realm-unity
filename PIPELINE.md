@@ -1,3 +1,5 @@
+> ⚠ **OBSOLETE working scratch — retained only as history; do not action.** Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # PIPELINE — CLI Work Queue (pull from here)
 
 > **CLI: this is your queue. Execute the ACTIVE QUEUE top-to-bottom.**
