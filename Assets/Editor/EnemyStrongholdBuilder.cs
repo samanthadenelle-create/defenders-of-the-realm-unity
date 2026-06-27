@@ -184,27 +184,23 @@ namespace DeNelle.Editor
 
             int placed = 0;
 
-            // 6) LAYER 1 — outer courtyard: stone wall ring with a front MAIN gate gap +
-            //    4 corner towers. Destruction swaps a fraction of walls to rubble piles.
-            placed += BuildWallRing(environment.transform, courtyardHalf, 0f,
-                wallRole: (layout.Courtyard?.Walls == "wood" ? "wall_wood" : "wall_stone"),
-                frontGateHalf: gateWidth, destruction: recipe.Destruction, label: "Outer");
+            // 6) FLAT-WALL MAZE (owner 2026-06-27: "remove the ornate walls, do flat walls and
+            //    just a maze with chokepoints" — FUNCTIONAL, not difficulty-tuned). The old ornate
+            //    Quaternius wall-ring props (~15.75m wide, center y~4.26) baked an IMPERFECT carve that
+            //    let the INPUT-DRIVEN hero NavMeshAgent (Move(), ~0.5m/frame) tunnel through thin carve
+            //    gaps — that was the "walk through walls" report. Replaced with SOLID thick (>=1.5m)
+            //    flat box walls that carve the navmesh cleanly at the wall line so the agent cannot
+            //    tunnel. ONE main path, ONE entrance, 3 chokepoints (entrance gap -> internal baffle
+            //    gap -> raised-keep ramp). maze.chokepoints feeds traps + defender spawns.
+            var maze = BuildFlatMazeWalls(environment.transform, courtyardHalf, gateWidth);
+            placed += maze.placed;
+
+            // Decorative main-gate arch at the entrance gap (colliders stripped — the wall gap is the
+            // real opening) + corner towers for the fort silhouette (off the path, decorative).
             placed += PlaceOneCounted(environment.transform, "gate",
                 new Vector3(0f, 0f, -courtyardHalf), 0f, "MainGate");
             placed += BuildCornerTowers(environment.transform, courtyardHalf,
                 count: layout.Courtyard?.Towers ?? 4);
-
-            // 7) LAYER 2 — chokepoint: an INNER wall ring with a NARROW front gate.
-            //    Traps cluster in the chokepoint lane (between outer gate and inner gate).
-            // WO-480 (pass 2, C): widen the inner gate gap to the FULL gateWidth (was gateWidth*0.6 ~0.6
-            // tiles). After the bake erodes the opening by the navmesh agent radius, a 0.6-tile half-gap
-            // is too narrow for the agent to fit through, so courtyard<->chokepoint stayed split even with
-            // the gate collider stripped (Edit A). Match the outer ring's half-gap so the agent fits.
-            placed += BuildWallRing(environment.transform, chokeHalf, 0f,
-                wallRole: "wall_stone", frontGateHalf: gateWidth,
-                destruction: recipe.Destruction, label: "Inner", carve: false);   // WO-480 (A): no carve — keep courtyard+chokepoint connected
-            placed += PlaceOneCounted(environment.transform, "gate",
-                new Vector3(0f, 0f, -chokeHalf), 0f, "ChokepointGate");
 
             // 8) LAYER 3 — RAISED inner keep on a foundation platform, reached by STAIRS.
             placed += BuildRaisedKeep(environment.transform, links.transform,
@@ -219,8 +215,9 @@ namespace DeNelle.Editor
             //     chests/rubble/bones) across the courtyard.
             placed += ScatterDecorProps(props.transform, recipe, courtyardHalf);
 
-            // 11) Traps — spike/arrow tiles in the courtyard + chokepoint.
-            placed += BuildTraps(traps.transform, recipe, courtyardHalf, chokeHalf, gateWidth);
+            // 11) Traps — spike/arrow tiles clustered AT the maze chokepoints (owner: put the trap
+            //     zones at the chokepoints). Visual/trigger only — they never carve the path navmesh.
+            placed += BuildTraps(traps.transform, recipe, maze.chokepoints);
 
             // 12) Baked-light-ready torch anchors at the gates + keep corners.
             BuildTorchAnchors(props.transform, courtyardHalf, keepHalf, platH);
@@ -231,12 +228,16 @@ namespace DeNelle.Editor
             else
                 FlowTrace.Step("Stronghold", $"placed {placed} stronghold piece(s).");
 
-            // 13) Enemy spawn posts (guard posts) + GarrisonController wired to the recipe.
-            var spawns = BuildSpawnPoints(spawnGroup.transform, courtyardHalf, chokeHalf, keepHalf, platH);
+            // 13) Enemy spawn posts (guard posts along the path / at the chokepoints) + GarrisonController.
+            var spawns = BuildSpawnPoints(spawnGroup.transform, courtyardHalf, keepHalf, platH, maze.chokepoints);
             WireGarrisonController(root, spawns, recipe);
 
-            // 14) Bake the navmesh (the stair NavMeshLinks bridge the raised tiers).
+            // 14) Bake the navmesh (walkable keep ramp carries verticality; flat walls carve the maze).
             BakeNavMesh(root.transform);
+
+            // 14b) Headless verify (CLAUDE.md §12 — data, not faith): the maze must be SOLVABLE
+            //      (PathComplete spawn->keep) and the flat walls must BLOCK (no navmesh thru a wall).
+            VerifyTraversal(entryPos, spawns, courtyardHalf);
 
             // 15) Save the scene to the Village2 path (keeps the name).
             SaveScene(scene);
@@ -528,47 +529,35 @@ namespace DeNelle.Editor
             return placed;
         }
 
-        // Traps: spike/arrow tiles. Up to traps.max, biased to the courtyard + the chokepoint
-        // lane (between the outer gate and the inner gate). spike -> a spikes prop; arrow ->
-        // a tinted floor tile marker (arrow-trap trigger volume).
-        private static int BuildTraps(Transform parent, StrongholdRecipe recipe,
-            float courtyardHalf, float chokeHalf, float gateWidth)
+        // Traps: spike/arrow tiles CLUSTERED at the maze chokepoints (owner 2026-06-27: "put the
+        // trap zones at the chokepoints"). spike -> a VISUAL-ONLY spikes prop (colliders stripped so
+        // it never carves/pinches the chokepoint navmesh); arrow -> a tinted TRIGGER floor tile
+        // (trigger colliders are excluded from the PhysicsColliders bake, so they never block either).
+        // Both are non-blocking — the maze stays solvable; trap DAMAGE logic is wired at runtime later.
+        private static int BuildTraps(Transform parent, StrongholdRecipe recipe, List<Vector3> chokepoints)
         {
             int placed = 0;
             int max = recipe.Traps != null ? Mathf.Max(0, recipe.Traps.Max) : 0;
-            if (max <= 0) return 0;
+            if (max <= 0 || chokepoints == null || chokepoints.Count == 0) return 0;
 
             var rng = new System.Random("traps".GetHashCode());
-            bool inCourtyard = recipe.Traps == null || recipe.Traps.Courtyard;
-            bool inChoke     = recipe.Traps == null || recipe.Traps.Chokepoint;
-
             for (int i = 0; i < max; i++)
             {
-                // Alternate spike/arrow.
+                Vector3 cp = chokepoints[i % chokepoints.Count];
+                float jx = ((float)rng.NextDouble() * 2f - 1f) * 1.6f;
+                float jz = ((float)rng.NextDouble() * 2f - 1f) * 1.6f;
+                Vector3 pos = new Vector3(cp.x + jx, 0.02f, cp.z + jz);
                 bool spike = (i % 2 == 0);
-                Vector3 pos;
-                if (inChoke && (!inCourtyard || i % 2 == 1))
-                {
-                    // chokepoint lane: between -courtyardHalf and -chokeHalf on the centre corridor
-                    float z = Mathf.Lerp(-courtyardHalf + 1f, -chokeHalf - 1f, (float)rng.NextDouble());
-                    float x = ((float)rng.NextDouble() * 2f - 1f) * (gateWidth * 0.8f);
-                    pos = new Vector3(x, 0.02f, z);
-                }
-                else
-                {
-                    float x = ((float)rng.NextDouble() * 2f - 1f) * chokeHalf * 0.9f;
-                    float z = ((float)rng.NextDouble() * 2f - 1f) * chokeHalf * 0.9f;
-                    pos = new Vector3(x, 0.02f, z);
-                }
 
                 if (spike)
                 {
-                    if (PlaceOneCounted(parent, "spikes", pos, (float)(rng.NextDouble() * 360.0), $"Trap_Spike_{i}") > 0)
+                    // VISUAL ONLY — PlaceVisualOnly strips colliders + NOT NavigationStatic (never carves).
+                    if (PlaceVisualOnly(parent, "spikes", pos, (float)(rng.NextDouble() * 360.0), $"Trap_Spike_{i}") > 0)
                         placed++;
                 }
                 else
                 {
-                    // arrow trap = a tinted floor marker tile (trigger volume added at runtime later).
+                    // arrow trap = a tinted TRIGGER floor marker tile (trigger volume; excluded from bake).
                     var tile = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     tile.name = $"Trap_Arrow_{i}";
                     tile.transform.SetParent(parent, false);
@@ -579,8 +568,196 @@ namespace DeNelle.Editor
                     placed++;
                 }
             }
-            FlowTrace.Step("Stronghold", $"placed {placed} trap(s) (max={max}, courtyard={inCourtyard}, choke={inChoke}).");
+            FlowTrace.Step("Stronghold", $"placed {placed} trap(s) at {chokepoints.Count} chokepoint(s) (max={max}).");
             return placed;
+        }
+
+        // ===================================================================
+        //  FLAT-WALL MAZE — SOLID thick box walls (no ornate prefab props) that carve the navmesh
+        //  cleanly so the input-driven hero agent cannot tunnel. ONE entrance + a single internal
+        //  baffle gap + the inherent raised-keep-ramp choke = 3 chokepoints on one main path.
+        // ===================================================================
+        private struct MazeResult { public int placed; public List<Vector3> chokepoints; }
+
+        private static MazeResult BuildFlatMazeWalls(Transform env, float half, float gateWidth)
+        {
+            var result = new MazeResult { placed = 0, chokepoints = new List<Vector3>() };
+            const float T  = 2.0f;          // wall thickness (>1.5m -> agent can't tunnel a ~0.5m step)
+            const float WH = 4.0f;          // wall height
+            float yC = WH * 0.5f;           // sit the box on the ground (base at y=0)
+            float entranceHalf = Mathf.Max(3f, gateWidth * 1.25f);   // south entrance opening half-width
+
+            void Wall(Vector3 c, Vector3 s, string nm) { BuildFlatWall(env, c, s, nm); result.placed++; }
+
+            // --- OUTER PERIMETER with ONE south entrance gap (chokepoint 1) ---
+            // South: two segments leaving a centre gap x in [-entranceHalf, entranceHalf].
+            float southWLen = half - entranceHalf;
+            if (southWLen > 0.5f)
+            {
+                float cx = (half + entranceHalf) * 0.5f;
+                Wall(new Vector3(-cx, yC, -half), new Vector3(southWLen, WH, T), "OuterWall_Front_W");
+                Wall(new Vector3( cx, yC, -half), new Vector3(southWLen, WH, T), "OuterWall_Front_E");
+            }
+            // North / West / East: full solid runs (corner overlap via +T length).
+            Wall(new Vector3(0f,    yC, half),  new Vector3(half * 2f + T, WH, T),          "OuterWall_Back");
+            Wall(new Vector3(-half, yC, 0f),    new Vector3(T, WH, half * 2f + T),          "OuterWall_Left");
+            Wall(new Vector3( half, yC, 0f),    new Vector3(T, WH, half * 2f + T),          "OuterWall_Right");
+            result.chokepoints.Add(new Vector3(0f, 0f, -half));   // CP1: the entrance gap
+
+            // --- INTERNAL BAFFLE (chokepoint 2): a horizontal wall across the southern band with ONE
+            //     off-centre (east) gap, forcing the raider to detour east, then back west to the ramp. ---
+            float zInner  = -half * 0.68f;
+            float xGap    = half * 0.55f;
+            float gapHalf = Mathf.Max(2.5f, entranceHalf * 0.85f);
+            float wEnd = xGap - gapHalf;            // west segment ends here
+            float wLen = wEnd - (-half);
+            if (wLen > 0.5f)
+                Wall(new Vector3((-half + wEnd) * 0.5f, yC, zInner), new Vector3(wLen, WH, T), "InnerWall_Baffle_W");
+            float eStart = xGap + gapHalf;          // east segment starts here
+            float eLen = half - eStart;
+            if (eLen > 0.5f)
+                Wall(new Vector3((eStart + half) * 0.5f, yC, zInner), new Vector3(eLen, WH, T), "InnerWall_Baffle_E");
+            result.chokepoints.Add(new Vector3(xGap, 0f, zInner));   // CP2: the baffle gap
+
+            // CP3 is INHERENT: the keep platform is raised (platH cliff, agentClimb < platH) so the ONLY
+            // way up is the narrow walkable ramp at the south face of the keep (x=0, z~-half*0.5).
+            result.chokepoints.Add(new Vector3(0f, 0f, -half * 0.5f));
+
+            FlowTrace.Step("Stronghold",
+                $"flat-wall maze: {result.placed} solid wall(s); entrance gap +-{entranceHalf:F1} @ z={-half:F1}; " +
+                $"baffle gap x={xGap:F1} (+-{gapHalf:F1}) @ z={zInner:F1}; keep-ramp choke @ (0,{-half * 0.5f:F1}).");
+            return result;
+        }
+
+        // A single SOLID flat box wall: thick (>=1.5m), BoxCollider (primitive cube has one), on the
+        // "Structure" layer (LoS occlusion), MarkStatic + MarkNotWalkable (carves the floor at the wall
+        // line, bakes no walkable top), tinted stone-grey. Mirrors PlaceOneCounted's wall treatment.
+        private static void BuildFlatWall(Transform parent, Vector3 center, Vector3 size, string name)
+        {
+            var w = GameObject.CreatePrimitive(PrimitiveType.Cube);   // carries a BoxCollider already
+            w.name = name;
+            w.transform.SetParent(parent, false);
+            w.transform.localPosition = center;
+            w.transform.localScale = size;
+            TintMesh(w, new Color(0.34f, 0.33f, 0.32f));              // stone-grey
+            int structureLayer = LayerMask.NameToLayer("Structure");
+            if (structureLayer >= 0) SetLayerRecursively(w, structureLayer);
+            MarkStatic(w);          // NavigationStatic + batching/occluder
+            // IMPORTANT: do NOT MarkNotWalkable. Proven by the build VERIFY(b) probe (CLAUDE.md §12):
+            // a NavMeshModifier area=1 ("Not Walkable") DROPS the wall geometry from the bake entirely,
+            // so the floor stays continuous THROUGH the wall (= the "walk through walls" bug). Leaving the
+            // wall as SOLID WALKABLE geometry rasterizes it as an obstacle, so agent-radius erosion carves
+            // a clean gap in the floor navmesh at the wall line. The wall TOP bakes a separate island at
+            // y=4 (4m above the floor, >> agentClimb) which is unreachable + disconnected = harmless.
+            VerifyRenders(w, "wall_flat", name);
+        }
+
+        // Headless verify — PROVE solvable + blocking from captured navmesh data (CLAUDE.md §12).
+        private static void VerifyTraversal(Vector3 entryPos, List<Transform> spawns, float half)
+        {
+            // (a) PathComplete from the hero spawn to the keep (Spawn_Keep) — the maze must be solvable.
+            Transform keep = null;
+            if (spawns != null)
+                foreach (var s in spawns) if (s != null && s.name == "Spawn_Keep") { keep = s; break; }
+
+            if (keep == null)
+            {
+                FlowTrace.Fail("Stronghold", "VerifyTraversal: Spawn_Keep not found — cannot verify solvability.");
+            }
+            else if (NavMesh.SamplePosition(entryPos, out var hA, 4f, NavMesh.AllAreas)
+                  && NavMesh.SamplePosition(keep.position, out var hB, 1.2f, NavMesh.AllAreas))
+            {
+                var path = new NavMeshPath();
+                bool ok = NavMesh.CalculatePath(hA.position, hB.position, NavMesh.AllAreas, path);
+                var last = path.corners.Length > 0 ? path.corners[path.corners.Length - 1] : Vector3.zero;
+                Log($"VERIFY(a) Path spawn{hA.position}->keep{hB.position}: status={path.status} ok={ok} " +
+                    $"corners={path.corners.Length} lastCorner={last}" +
+                    (path.status == NavMeshPathStatus.PathComplete ? "  PATHCOMPLETE-OK" : "  *** NOT COMPLETE ***"));
+            }
+            else
+            {
+                FlowTrace.Fail("Stronghold", "VerifyTraversal: spawn or keep point is OFF navmesh — path undefined.");
+            }
+
+            // Staged connectivity probes — find WHERE the path dies (gate / baffle / ramp).
+            StagePath("spawn->just inside gate", entryPos, new Vector3(0f, 0f, -half + 2.5f));
+            StagePath("spawn->baffle gap",       entryPos, new Vector3(half * 0.55f, 0f, -half * 0.68f));
+            StagePath("spawn->ramp base",        entryPos, new Vector3(0f, 0f, -half * 0.5f));
+            StagePath("spawn->keep top (S edge)", entryPos, new Vector3(0f, 1.5f, -1.6f));
+            StagePath("spawn->keep top (center)", entryPos, new Vector3(0f, 1.5f, 1.6f));
+
+            // Seam finder: pairwise CalculatePath between adjacent x=0 points — names the exact z where
+            // two coplanar navmesh regions fail to connect.
+            for (float z = -21f; z < -10f; z += 1f)
+            {
+                if (NavMesh.SamplePosition(new Vector3(0f, 0.2f, z), out var pa, 1f, NavMesh.AllAreas)
+                 && NavMesh.SamplePosition(new Vector3(0f, 0.2f, z + 1f), out var pb, 1f, NavMesh.AllAreas))
+                {
+                    var pp = new NavMeshPath();
+                    NavMesh.CalculatePath(pa.position, pb.position, NavMesh.AllAreas, pp);
+                    if (pp.status != NavMeshPathStatus.PathComplete)
+                        Log($"VERIFY(seam) DISCONNECT at x=0 between z={z:F1}(y{pa.position.y:F2}) and z={z + 1f:F1}(y{pb.position.y:F2}) status={pp.status}");
+                }
+            }
+
+            // (b) Walls BLOCK (authoritative): a path from OUTSIDE a solid wall to just INSIDE it must
+            //     DETOUR the long way to a gap (path length >> the straight-line distance). A short path
+            //     == a leak. East perimeter wall (x=14) and the baffle west segment.
+            BlockProof("east perimeter wall", new Vector3(half + 4f, 0f, 0f), new Vector3(half - 3f, 0f, 0f));
+            BlockProof("baffle west segment", new Vector3(-4f, 0f, -half * 0.68f - 2.5f), new Vector3(-4f, 0f, -half * 0.68f + 2.5f));
+
+            // Navmesh presence lines (visual): a SOLID south-wall line (x=8) shows a no-navmesh band; the
+            // entrance (x=0) is continuous. Same for the internal baffle wall (x=-4) vs its gap (x=half*0.55).
+            LogNavLine("BLOCK  x=8.0  (thru solid south wall)", 8f, -17f, -11f);
+            LogNavLine("OPEN   x=0.0  (thru entrance gap)",     0f, -17f, -11f);
+            float zInner = -half * 0.68f;
+            LogNavLine($"BLOCK  x=-4.0 (thru baffle wall z~{zInner:F1})", -4f, zInner - 2.5f, zInner + 2.5f);
+            LogNavLine($"OPEN   x={half * 0.55f:F1}  (thru baffle gap)",  half * 0.55f, zInner - 2.5f, zInner + 2.5f);
+        }
+
+        private static void StagePath(string label, Vector3 from, Vector3 to)
+        {
+            if (NavMesh.SamplePosition(from, out var a, 4f, NavMesh.AllAreas)
+             && NavMesh.SamplePosition(to,   out var b, 4f, NavMesh.AllAreas))
+            {
+                var p = new NavMeshPath();
+                NavMesh.CalculatePath(a.position, b.position, NavMesh.AllAreas, p);
+                var last = p.corners.Length > 0 ? p.corners[p.corners.Length - 1] : Vector3.zero;
+                Log($"VERIFY(stage) {label}: from{a.position}->to{b.position} status={p.status} last={last}");
+            }
+            else Log($"VERIFY(stage) {label}: an endpoint OFF navmesh (from-on={from} to-on={to}).");
+        }
+
+        // A path from `outside` to `inside` (straddling a solid wall). If the wall BLOCKS, the only
+        // route is a long detour to a gap, so pathLen >> straight-line dist. A near-straight path = leak.
+        private static void BlockProof(string label, Vector3 outside, Vector3 inside)
+        {
+            if (NavMesh.SamplePosition(outside, out var a, 3f, NavMesh.AllAreas)
+             && NavMesh.SamplePosition(inside,  out var b, 3f, NavMesh.AllAreas))
+            {
+                var p = new NavMeshPath();
+                NavMesh.CalculatePath(a.position, b.position, NavMesh.AllAreas, p);
+                float len = 0f;
+                for (int i = 1; i < p.corners.Length; i++) len += Vector3.Distance(p.corners[i - 1], p.corners[i]);
+                float straight = Vector3.Distance(a.position, b.position);
+                float ratio = straight > 0.01f ? len / straight : 0f;
+                string verdict = (p.status != NavMeshPathStatus.PathComplete || ratio > 2.5f) ? "BLOCKS-OK (detour/none)" : "*** LEAK (near-straight) ***";
+                Log($"VERIFY(block) {label}: status={p.status} straight={straight:F1} pathLen={len:F1} ratio={ratio:F1} corners={p.corners.Length}  {verdict}");
+            }
+            else Log($"VERIFY(block) {label}: an endpoint OFF navmesh.");
+        }
+
+        private static void LogNavLine(string label, float x, float z0, float z1)
+        {
+            var sb = new System.Text.StringBuilder();
+            var ys = new System.Text.StringBuilder();
+            for (float z = z0; z <= z1 + 0.001f; z += 0.5f)
+            {
+                bool on = NavMesh.SamplePosition(new Vector3(x, 0.3f, z), out var h, 0.45f, NavMesh.AllAreas);
+                sb.Append(on ? "#" : ".");
+                if (on) ys.Append($" z{z:F1}=y{h.position.y:F1}");
+            }
+            Log($"VERIFY(b) {label}  [z {z0:F1}..{z1:F1}]: {sb}  (#=navmesh .=blocked){ys}");
         }
 
         // Baked-light-ready torch ANCHORS: a torch prop + an empty light-anchor marker. We do
@@ -612,9 +789,16 @@ namespace DeNelle.Editor
 
         // WO-480 (B + F): ONE continuous interior floor covering the FULL traversed interior:
         // the arrival point at z = -(half + 6), the keep base, and the OuterWorld CavePortal warp
-        // target (20.6, 0.1, -38.3). The plane must reach every walked point so the NavMeshSurface
+        // target (20.6, 0.1, -38.3). The floor must reach every walked point so the NavMeshSurface
         // bakes a single connected patch (no off-mesh arrival, no keep gap).
         // *** The CavePortal target (20.6, -38.3) MUST stay on this floor — if it moves, re-size here. ***
+        //
+        // 2026-06-27 (flat-maze pass): the floor is a flat BOX (Cube), not a Plane. PROVEN by the bake
+        // diag (CLAUDE.md §12): the old Plane baked FRAGMENTED, overlapping coplanar navmesh sheets
+        // (SamplePosition found navmesh everywhere but CalculatePath dead-ended at z~-18 — the spawn
+        // island never connected to the keep). A Plane's 11x11 subdivided mesh + coplanar voxel z-fight
+        // produced disconnected regions. A single flat box TOP face (2 triangles) bakes ONE connected
+        // navmesh region — the maze becomes path-solvable. Top face sits at y=0 (everything else bases there).
         private static void BuildGroundFloor(Transform parent, float half)
         {
             const float CavePortalZ = -38.3f;   // OuterWorld CavePortal warp Z (arrival must be on-mesh)
@@ -627,11 +811,11 @@ namespace DeNelle.Editor
                 Mathf.Abs(CavePortalZ) + 6f,    // CavePortal Z + margin
                 Mathf.Abs(CavePortalX) + 6f);   // CavePortal X + margin
 
-            var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);   // flat box -> ONE connected navmesh
             ground.name = "Floor_Stronghold";
             ground.transform.SetParent(parent, false);
-            float planeScale = reqExtent / 5f;   // Unity plane is 10m => /5 per half-extent
-            ground.transform.localScale = new Vector3(planeScale, 1f, planeScale);
+            ground.transform.localPosition = new Vector3(0f, -0.25f, 0f);  // top face at y=0
+            ground.transform.localScale = new Vector3(reqExtent * 2f, 0.5f, reqExtent * 2f);
             TintMesh(ground, new Color(0.22f, 0.21f, 0.20f));   // dark stone
             MarkStatic(ground);   // NavigationStatic — the NavMeshSurface bakes the connected surface on this floor
         }
@@ -684,21 +868,22 @@ namespace DeNelle.Editor
             Log("Return seam wired: SceneTransitionTrigger -> OuterWorld (single load), proximity 16m.");
         }
 
-        // Enemy guard posts: front approach, courtyard, chokepoint, and atop the keep platform.
+        // Enemy guard posts: defenders staged ALONG the path / AT the chokepoints, plus the keep top.
         private static List<Transform> BuildSpawnPoints(Transform group, float courtyardHalf,
-            float chokeHalf, float keepHalf, float platH)
+            float keepHalf, float platH, List<Vector3> chokepoints)
         {
-            var positions = new List<(Vector3 pos, string nm)>
-            {
-                (new Vector3( 0f, 0f, -courtyardHalf + 3f), "Spawn_Gate"),
-                (new Vector3(-courtyardHalf * 0.6f, 0f, -2f), "Spawn_CourtyardW"),
-                (new Vector3( courtyardHalf * 0.6f, 0f, -2f), "Spawn_CourtyardE"),
-                (new Vector3( 0f, 0f, -chokeHalf + 1f), "Spawn_Chokepoint"),
-                (new Vector3(-chokeHalf * 0.5f, 0f, chokeHalf * 0.4f), "Spawn_InnerW"),
-                (new Vector3( chokeHalf * 0.5f, 0f, chokeHalf * 0.4f), "Spawn_InnerE"),
-                (new Vector3( 0f, platH, keepHalf * 0.4f), "Spawn_Keep"),
-                (new Vector3( 0f, 0f, courtyardHalf * 0.7f), "Spawn_Rear"),
-            };
+            var positions = new List<(Vector3 pos, string nm)>();
+            // A defender just past each chokepoint (so the raider meets a guard at every gate).
+            if (chokepoints != null)
+                for (int i = 0; i < chokepoints.Count; i++)
+                {
+                    var c = chokepoints[i];
+                    positions.Add((new Vector3(c.x, 0f, c.z + 2f), $"Spawn_Choke{i}"));
+                }
+            // Two roaming the open courtyard band + the keep top (Spawn_Keep preserved by name).
+            positions.Add((new Vector3(-courtyardHalf * 0.5f, 0f, -courtyardHalf * 0.4f), "Spawn_CourtyardW"));
+            positions.Add((new Vector3( courtyardHalf * 0.5f, 0f, -courtyardHalf * 0.4f), "Spawn_CourtyardE"));
+            positions.Add((new Vector3( 0f, platH, keepHalf * 0.4f), "Spawn_Keep"));
 
             var list = new List<Transform>();
             for (int i = 0; i < positions.Count; i++)
@@ -750,6 +935,20 @@ namespace DeNelle.Editor
             surface.collectObjects = CollectObjects.All;
             surface.useGeometry = NavMeshCollectGeometry.PhysicsColliders;
             surface.layerMask = ~0;
+            // 2026-06-27 (flat-maze pass): bake the WHOLE floor as ONE tile. PROVEN by the seam probe
+            // (CLAUDE.md §12): with default tileSize=256 (~42m) the big flat floor baked into adjacent
+            // tiles whose shared-border vertices DID NOT WELD (the navmesh y oscillated 0.01<->0.03 in
+            // ~1m bands and CalculatePath dead-ended at every band edge — spawn never reached the keep).
+            // A single tile (1024 voxels * 0.1667 = ~170m > the ~89m floor) has NO internal tile borders,
+            // so the floor bakes as ONE connected navmesh region and the maze becomes path-solvable.
+            surface.overrideTileSize = true;
+            surface.tileSize = 1024;
+            // Clear any STALE navmesh instance first. Opening Village2 registers the previously-saved
+            // NavMesh-Village2 asset as an ACTIVE runtime instance (NavMeshSurface.OnEnable); the freshly
+            // built mesh then OVERLAPS it, producing two coplanar sheets ~0.02m apart that SamplePosition
+            // merges but CalculatePath cannot cross (the spawn-island never reaches the keep). Removing all
+            // navmesh data before BuildNavMesh guarantees ONE clean instance.
+            NavMesh.RemoveAllNavMeshData();
             surface.BuildNavMesh();
 
             var data = surface.navMeshData;
