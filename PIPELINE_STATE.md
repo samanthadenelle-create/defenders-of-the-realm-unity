@@ -44,8 +44,14 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
   both onboarding and returning-player route there. Built entirely from script by
   `Assets/Editor/CastleHubBuilder.cs`. Ground level is owner-verified walkable; the L2 ramp +
   castle camera are pending playtest.
-- **`Village2` = raid-target stronghold** (repurposed from the old town). **`Village.unity` =
-  ABANDONED** — it was never canonical and is corruption-cursed; do not use it.
+- **`Village2` = raid-target stronghold** (repurposed from the old town). Built by
+  `EnemyStrongholdBuilder.Build()` (menu `Defenders/World/Build Village2 Enemy Stronghold`);
+  garrison enemies come from `garrison-recipes.json` recipe `village2_stronghold` →
+  `GarrisonController` → `EnemyFactory` (NOT `waves.json`). 2026-06-27: garrison de-skeletoned
+  (now all-orc warband + troll) and walls rebuilt as a **flat-wall maze with chokepoints**
+  (functional V1; flat box walls carve the navmesh cleanly so the input-driven NavMeshAgent
+  hero can't tunnel them; difficulty design deferred). **`Village.unity` = ABANDONED** — it was
+  never canonical and is corruption-cursed; do not use it.
 - **`OuterWorld` streams in additively** over the castle hub via `WorldSceneLoader` (which lists
   `MainCastle_Hall` as a hub). Both `MainCastle_Hall.unity` and `OuterWorld.unity` are in Build Settings.
 - **Castle ↔ OuterWorld seam: WIRED** (commits `b3b5cef`, `9c8c64f`, `e213e25`, `53640cf`).
