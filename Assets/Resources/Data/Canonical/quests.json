@@ -3,6 +3,7 @@
   "quests": [
     {
       "id": "elarion.welcome",
+      "type": "main",
       "title": "A New Defender",
       "stages": [
         {
@@ -23,6 +24,7 @@
     },
     {
       "id": "forgemaster.first-commission",
+      "type": "gear",
       "title": "The Forgemaster's Request",
       "stages": [
         {
@@ -43,6 +45,7 @@
     },
     {
       "id": "vendor.supply-run",
+      "type": "side",
       "title": "Supply Run",
       "stages": [
         {
@@ -57,6 +60,7 @@
 
     {
       "id": "vendor.forge",
+      "type": "gear",
       "title": "The Last Ember",
       "stages": [
         {
@@ -84,6 +88,7 @@
     },
     {
       "id": "vendor.armorer",
+      "type": "gear",
       "title": "Shields of the Fallen",
       "stages": [
         {
@@ -111,6 +116,7 @@
     },
     {
       "id": "vendor.lumbermill",
+      "type": "side",
       "title": "Roots Run Deep",
       "stages": [
         {
@@ -138,6 +144,7 @@
     },
     {
       "id": "vendor.granary",
+      "type": "side",
       "title": "Full Bellies, Full Ranks",
       "stages": [
         {
@@ -165,6 +172,7 @@
     },
     {
       "id": "vendor.jeweler",
+      "type": "side",
       "title": "Aether's Facet",
       "stages": [
         {
@@ -192,6 +200,7 @@
     },
     {
       "id": "vendor.market",
+      "type": "side",
       "title": "The Glimmer Road",
       "stages": [
         {
@@ -219,6 +228,7 @@
     },
     {
       "id": "vendor.inn",
+      "type": "side",
       "title": "Last Call",
       "stages": [
         {
@@ -239,6 +249,7 @@
     },
     {
       "id": "vendor.stable",
+      "type": "side",
       "title": "Wild Hearts",
       "stages": [
         {
@@ -266,6 +277,7 @@
     },
     {
       "id": "vendor.steward",
+      "type": "main",
       "title": "Rebuild Elarion",
       "stages": [
         {
@@ -301,6 +313,7 @@
 
     {
       "id": "forgemasters_act1",
+      "type": "main",
       "title": "Honest Steel",
       "stages": [
         {
@@ -314,6 +327,7 @@
     },
     {
       "id": "forgemasters_act2",
+      "type": "main",
       "title": "The Old Fire",
       "stages": [
         {
@@ -348,6 +362,7 @@
     },
     {
       "id": "forgemasters_act3",
+      "type": "endgame",
       "title": "What Was Lost",
       "stages": [
         {
@@ -368,6 +383,7 @@
     },
     {
       "id": "forgemasters_act4",
+      "type": "endgame",
       "title": "The Reforging",
       "stages": [
         {
@@ -382,6 +398,7 @@
 
     {
       "id": "petbond.sproutling",
+      "type": "side",
       "title": "Wild Hearts: Sproutling",
       "stages": [
         {
@@ -409,6 +426,7 @@
     },
     {
       "id": "petbond.craghound",
+      "type": "side",
       "title": "Wild Hearts: Craghound",
       "stages": [
         {
@@ -436,6 +454,7 @@
     },
     {
       "id": "petbond.frostkit",
+      "type": "side",
       "title": "Wild Hearts: Frostkit",
       "stages": [
         {
@@ -463,6 +482,7 @@
     },
     {
       "id": "petbond.emberpup",
+      "type": "side",
       "title": "Wild Hearts: Emberpup",
       "stages": [
         {
@@ -490,6 +510,7 @@
     },
     {
       "id": "petbond.mirewing",
+      "type": "side",
       "title": "Wild Hearts: Mirewing",
       "stages": [
         {
@@ -517,6 +538,7 @@
     },
     {
       "id": "petbond.glimmermoth",
+      "type": "side",
       "title": "Wild Hearts: Glimmermoth",
       "stages": [
         {
@@ -544,6 +566,7 @@
     },
     {
       "id": "petbond.stoneback",
+      "type": "side",
       "title": "Wild Hearts: Stoneback Calf",
       "stages": [
         {
@@ -564,6 +587,7 @@
     },
     {
       "id": "petbond.aetherfox",
+      "type": "side",
       "title": "Wild Hearts: Aether Fox",
       "stages": [
         {

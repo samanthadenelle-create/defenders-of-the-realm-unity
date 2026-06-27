@@ -45,6 +45,13 @@ namespace DeNelle.Village.Hero
         private TMPro.TextMeshProUGUI _statusText;
         private bool _subscribed;
 
+        // WO-454 Phase 2: board tab filter. Story/Gear/Endgame read QuestCatalog by Type;
+        // Daily reads DailyQuestService. "all" = the original ungrouped catalog view.
+        private GameObject _tabStrip;
+        private string _activeTab = "all";
+        private static readonly string[] TabKeys    = { "all", "story", "daily", "gear", "endgame" };
+        private static readonly string[] TabLabels  = { "All", "Story", "Daily", "Gear", "Endgame" };
+
         // WO-437: this panel used to bypass the modal arbiter (open via backdrop only),
         // so it could stack on top of another panel AND open mid-battle. Register a
         // PanelHandle so it routes through PanelManager: one-panel-at-a-time + battle-lock.
@@ -100,6 +107,9 @@ namespace DeNelle.Village.Hero
             CreateBigButton(panel.transform, "Close", new Vector2(0.5f, 0.94f), Close,
                 new Color(ElarionUi.Danger.r, ElarionUi.Danger.g, ElarionUi.Danger.b, 0.55f));
 
+            // WO-454 Phase 2: tab strip (All / Story / Daily / Gear / Endgame) just under the header.
+            BuildTabStrip(panel.transform);
+
             // SCROLLABLE content area (TKT-3): the board overflowed because rows were placed by
             // normalized anchor math with no clipping/scroll. Now a uGUI ScrollRect — Viewport
             // (RectMask2D clips to the panel) + a vertically-laid-out Content (VerticalLayoutGroup +
@@ -109,7 +119,7 @@ namespace DeNelle.Village.Hero
             viewportGo.transform.SetParent(panel.transform, false);
             var vpr = viewportGo.GetComponent<RectTransform>();
             vpr.anchorMin = new Vector2(0.03f, 0.08f);
-            vpr.anchorMax = new Vector2(0.97f, 0.87f);
+            vpr.anchorMax = new Vector2(0.97f, 0.82f); // WO-454: leave room for the tab strip above
             vpr.offsetMin = Vector2.zero;
             vpr.offsetMax = Vector2.zero;
             viewportGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f); // near-invisible catcher so drags scroll
@@ -180,6 +190,7 @@ namespace DeNelle.Village.Hero
             _ui = null;
             _contentRoot = null;
             _statusText = null;
+            _tabStrip = null;
             PanelManager.NotifyClosed(_handle);
         }
 
@@ -198,10 +209,14 @@ namespace DeNelle.Village.Hero
             if (_contentRoot == null) return;
             ClearContent();
 
+            // WO-454: the Daily tab is a reader over DailyQuestService (different runtime), not
+            // the story catalog — render its slots and bail before the catalog grouping below.
+            if (_activeTab == "daily") { RepaintDaily(); return; }
+
             var svc = QuestService.Instance;
             var catalog = QuestCatalog.Quests; // empty list if json missing — safe to enumerate
 
-            // Bucket the catalog: active vs available (not active, not completed).
+            // Bucket the catalog: active vs available (not active, not completed), filtered by tab.
             var active = new List<QuestDef>();
             var available = new List<QuestDef>();
             if (catalog != null)
@@ -209,6 +224,7 @@ namespace DeNelle.Village.Hero
                 foreach (var def in catalog)
                 {
                     if (def == null || string.IsNullOrEmpty(def.Id)) continue;
+                    if (!MatchesTab(def, _activeTab)) continue; // WO-454: tab filter by Type
                     if (svc != null && svc.IsActive(def.Id)) { active.Add(def); continue; }
                     if (svc != null && svc.IsCompleted(def.Id)) continue; // done — off the board
                     available.Add(def);
@@ -226,6 +242,121 @@ namespace DeNelle.Village.Hero
                 CreateFlavorRow(_contentRoot.transform, "You've answered every call. For now.");
             foreach (var def in available)
                 CreateAvailableRow(_contentRoot.transform, def);
+        }
+
+        // ── Tabs (WO-454 Phase 2) ─────────────────────────────────────────────────
+
+        // Normalize a quest's free-string Type → a lowercase bucket; empty/null = "story"
+        // so legacy quests with no Type field stay in the Story tab.
+        private static string NormalizedType(QuestDef def)
+        {
+            if (def == null || string.IsNullOrEmpty(def.Type)) return "story";
+            return def.Type.Trim().ToLowerInvariant();
+        }
+
+        // Does this quest belong under the given tab? "all" shows everything; "story" also
+        // catches "main"/"side"/unknown (the default narrative bucket); gear/endgame are exact.
+        private static bool MatchesTab(QuestDef def, string tab)
+        {
+            if (tab == "all") return true;
+            string ty = NormalizedType(def);
+            switch (tab)
+            {
+                case "gear":    return ty == "gear";
+                case "endgame": return ty == "endgame";
+                case "story":   return ty != "gear" && ty != "endgame"; // story/main/side/unknown
+                default:        return true;
+            }
+        }
+
+        // Builds (or rebuilds) the horizontal tab strip below the header; the active tab is gilt.
+        private void BuildTabStrip(Transform parent)
+        {
+            if (_tabStrip != null) { Destroy(_tabStrip); _tabStrip = null; }
+
+            _tabStrip = new GameObject("TabStrip", typeof(RectTransform));
+            _tabStrip.transform.SetParent(parent, false);
+            var sr = _tabStrip.GetComponent<RectTransform>();
+            sr.anchorMin = new Vector2(0.03f, 0.83f);
+            sr.anchorMax = new Vector2(0.97f, 0.885f);
+            sr.offsetMin = Vector2.zero;
+            sr.offsetMax = Vector2.zero;
+
+            int n = TabKeys.Length;
+            float gap = 0.01f;
+            float w = (1f - gap * (n - 1)) / n;
+            for (int i = 0; i < n; i++)
+            {
+                string key = TabKeys[i];
+                bool isActive = key == _activeTab;
+
+                var btnGo = new GameObject("Tab_" + key, typeof(Button), typeof(Image));
+                btnGo.transform.SetParent(_tabStrip.transform, false);
+                var br = btnGo.GetComponent<RectTransform>();
+                float x0 = i * (w + gap);
+                br.anchorMin = new Vector2(x0, 0f);
+                br.anchorMax = new Vector2(x0 + w, 1f);
+                br.offsetMin = Vector2.zero;
+                br.offsetMax = Vector2.zero;
+                btnGo.GetComponent<Image>().color = isActive
+                    ? new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.92f)
+                    : new Color(ElarionUi.PanelStone.r, ElarionUi.PanelStone.g, ElarionUi.PanelStone.b, 0.85f);
+                string tabKey = key;
+                btnGo.GetComponent<Button>().onClick.AddListener(() => SetTab(tabKey));
+
+                var lbl = new GameObject("L", typeof(TMPro.TextMeshProUGUI));
+                lbl.transform.SetParent(btnGo.transform, false);
+                var lr = lbl.GetComponent<RectTransform>();
+                lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
+                lr.offsetMin = Vector2.zero; lr.offsetMax = Vector2.zero;
+                var lt = lbl.GetComponent<TMPro.TextMeshProUGUI>();
+                ElarionUiKit.EnsureFont(lt);
+                lt.text = TabLabels[i];
+                lt.fontSize = 12;
+                lt.fontStyle = isActive ? TMPro.FontStyles.Bold : TMPro.FontStyles.Normal;
+                lt.color = isActive ? ElarionUi.Ink : ElarionUi.Parchment;
+                lt.alignment = TMPro.TextAlignmentOptions.Center;
+            }
+        }
+
+        private void SetTab(string tab)
+        {
+            if (_activeTab == tab) return;
+            _activeTab = tab;
+            if (_ui != null) BuildTabStrip(_ui.transform.Find("Panel") ?? _ui.transform);
+            Repaint();
+        }
+
+        // Daily tab: read-only view of DailyQuestService's rolled slots (its own runtime — the
+        // board is just a unified READER; the daily runtime stays in DailyQuestService).
+        private void RepaintDaily()
+        {
+            CreateSectionLabel(_contentRoot.transform, "— Daily Quests —");
+            var dq = DailyQuestService.Instance;
+            var set = dq != null ? dq.Today : null;
+            if (set == null || set.Quests == null || set.Quests.Count == 0)
+            {
+                CreateFlavorRow(_contentRoot.transform, "No daily quests rolled yet. Check back later.");
+                return;
+            }
+            foreach (var q in set.Quests)
+            {
+                if (q == null) continue;
+                CreateDailyRow(_contentRoot.transform, q);
+            }
+        }
+
+        private void CreateDailyRow(Transform parent, DailyQuestInstance q)
+        {
+            var row = MakeRowFrame(parent, "Daily_" + q.Id,
+                new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.85f), 120f);
+
+            CreateTitle(row.transform, q.Label ?? q.TemplateId ?? q.Slot);
+
+            string progress = q.Completed
+                ? $"Complete  ({q.Target}/{q.Target})"
+                : $"{q.Progress}/{q.Target}";
+            CreateHook(row.transform, progress, q.Completed ? ElarionUi.Gilt : ElarionUi.ParchmentDim);
         }
 
         // ── Row builders ─────────────────────────────────────────────────────────

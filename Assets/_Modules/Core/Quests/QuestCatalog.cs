@@ -52,6 +52,11 @@ namespace DeNelle.Core.Quests
     {
         [JsonProperty("id")] public string Id;
         [JsonProperty("title")] public string Title;
+        // WO-454 Phase 2: quest category/source — a free string parsed case-insensitively
+        // (e.g. "main"/"story"/"side"/"gear"/"endgame"). Empty/null = a normal Story/Side
+        // quest. Drives the board's tab filter + the HUD pin's type-aware fallback. No enum
+        // churn — the board normalizes (NormalizedType) so unknown values fall back to "story".
+        [JsonProperty("type")] public string Type;
         [JsonProperty("stages")] public List<QuestStage> Stages = new List<QuestStage>();
     }
 

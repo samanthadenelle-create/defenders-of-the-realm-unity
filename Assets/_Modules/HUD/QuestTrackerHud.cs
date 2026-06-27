@@ -101,12 +101,25 @@ namespace DeNelle.HUD
             var ids = svc.ActiveQuestIds();
             if (ids == null || ids.Count == 0) { _card.gameObject.SetActive(false); return; }
 
-            // Player-tracked quest; fall back to the first active until one is chosen.
+            // Player-tracked quest; fall back to an active quest until one is chosen.
             string tracked = svc.TrackedId;
             if (string.IsNullOrEmpty(tracked) || !svc.IsActive(tracked))
             {
+                // WO-454 Phase 2: type-aware fallback — prefer a main/story quest over the
+                // rest, otherwise the first active. Empty Type normalizes to "story", so a
+                // catalog with no type data keeps the old "first active" behavior.
                 tracked = null;
-                foreach (var id in ids) { if (!string.IsNullOrEmpty(id)) { tracked = id; break; } }
+                string firstActive = null;
+                foreach (var id in ids)
+                {
+                    if (string.IsNullOrEmpty(id)) continue;
+                    if (firstActive == null) firstActive = id;
+                    var d = QuestCatalog.FindQuest(id);
+                    string ty = (d != null && !string.IsNullOrEmpty(d.Type))
+                        ? d.Type.Trim().ToLowerInvariant() : "story";
+                    if (ty == "main" || ty == "story") { tracked = id; break; }
+                }
+                if (tracked == null) tracked = firstActive;
             }
             if (tracked == null) { _card.gameObject.SetActive(false); return; }
 
