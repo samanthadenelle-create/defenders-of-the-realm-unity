@@ -346,6 +346,7 @@ namespace DeNelle.Village
             if (amount <= 0f) return;
             _hp = Mathf.Min(_maxHp, _hp + amount);
             OnHealthChanged?.Invoke(_hp, _maxHp);
+            UpdateInjuredState();   // T-HP fix (owner 2026-06-27): clear the limp/injured stance once healed back above the cutoff
             VFXManager.Play(VFXType.Impact_Heal, transform.position + Vector3.up * 1.0f);
         }
 
@@ -373,6 +374,7 @@ namespace DeNelle.Village
                 if (_abilities  != null) _abilities.enabled  = true;
             }
             OnHealthChanged?.Invoke(_hp, _maxHp);
+            UpdateInjuredState();   // T-HP fix (owner 2026-06-27): a town-return restore to full must CLEAR the limp/injured stance carried out of the fight (was lingering -> "health full but still limping")
             VFXManager.Play(VFXType.Impact_Heal, transform.position + Vector3.up * 1.0f);
         }
 
