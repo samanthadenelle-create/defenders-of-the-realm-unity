@@ -194,6 +194,13 @@ namespace DeNelle.Village
         /// <summary>Applies <paramref name="amount"/> damage; fires events; handles death.</summary>
         public void TakeDamage(float amount)
         {
+            // WO-triage 2026-06-27 (HP-desync): owner saw stagger/limp + DEFEAT while the HUD read
+            // 100/100. Log WHICH HeroHealth instance + scene actually takes damage — if this id/scene
+            // differs from the one the HUD binds (the [Flow:HUD] HP line), the arena spawns a SECOND
+            // hero and the overworld HUD stays bound to the untouched 100/100 body. Proves it from data.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HeroHealth",
+                $"TakeDamage id={GetInstanceID()} scene='{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}' " +
+                $"amount={amount:F1} hpBefore={_hp:F1}/{_maxHp:F1} invuln={(Time.time < _invulnUntil)}");
             if (_hp <= 0f || amount <= 0f) return;
             // DEF-102: post-respawn grace — ignore damage during the invuln window
             // so a hero respawning into a lingering melee isn't instantly re-killed.

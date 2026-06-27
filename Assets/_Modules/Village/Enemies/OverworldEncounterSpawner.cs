@@ -295,7 +295,7 @@ namespace DeNelle.Village
                 Hp = 9999f,                 // the rep is a HOOK, not a kill -- it transitions on touch/hit
                 MoveSpeed = RepChaseSpeed,  // ~+5% over the hero so it can run you down
                 ContactDamage = 0f,         // never hurts the hero in-world (hook only)
-                AttackInterval = 1.5f, Height = 2.0f, AggroRadius = 22f, // wide aggro / wide leash
+                AttackInterval = 1.5f, Height = 2.0f, AggroRadius = 8f, // notice radius (owner 2026-06-27: 22->8, reconciled to RepEngageWatcher.AggroRange)
                 XpReward = 0, GlimmerReward = 0,
             };
 
@@ -366,7 +366,7 @@ namespace DeNelle.Village
         // (owner 2026-06-24 FELT buffer) so a rep doesn't spot the hero from across the map / reach
         // back across the seam — the hero gets a buffer after crossing before being hunted. Once
         // aggro'd, the chase/leash/engage behaviour below is UNCHANGED (owner loves the chase).
-        private const float AggroRange  = 14f;  // was 22f — shorter notice radius for the cross-in buffer
+        private const float AggroRange  = 8f;   // owner 2026-06-27: 14->8 (chase starts at 8m; fight still only at contact/TouchDistance)
         private const float EngageRange = 2.6f; // contact -> transition
         private const float LeashRadius = 14f;  // wander this far from spawn until aggro
 
