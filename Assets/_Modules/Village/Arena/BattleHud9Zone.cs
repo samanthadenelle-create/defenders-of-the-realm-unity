@@ -49,6 +49,8 @@ using UnityEngine.EventSystems;
 using DeNelle.Core;
 using DeNelle.Core.UI;
 using DeNelle.Core.Combat;
+using DeNelle.Core.HudModel;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.Arena
 {
@@ -157,6 +159,11 @@ namespace DeNelle.Village.Arena
 
         // -- live system refs (self-resolved; read-only pulls) -----------------
         private Canvas _canvas;
+        // WO-541 Stage 3a: context gate. This battle HUD is BATTLE-only; today it relies on
+        // spawn lifecycle and can linger into Town/Overworld. We read the live Core
+        // HudContextModel (CoreServices.HudModel, registered by HudModelHost AFTER scene load —
+        // may be null when this view spawns) and show our canvas ONLY when Context == Battle.
+        private IHudModel _hookedModel;
         private HeroHealth _health;
         private HeroAbilities _abilities;
         private HeroTargetIndicator _target;
@@ -274,6 +281,7 @@ namespace DeNelle.Village.Arena
 
         private void Update()
         {
+            HookContext();   // WO-541 Stage 3a: subscribe to the Core HUD context once available
             ResolveSystems();
             PushPlayerStats();
             PushTarget();
@@ -281,6 +289,44 @@ namespace DeNelle.Village.Arena
             PushStarConditions();
             PushBottomCenter();
             PushAbilityCooldowns();
+        }
+
+        // WO-541 Stage 3a: CoreServices.HudModel registers AFTER scene load; this HUD may
+        // spawn first. Poll until available, then subscribe + apply once. Re-hook if the
+        // model instance is ever replaced (host re-spawn). Cheap (one ref compare/frame).
+        private void HookContext()
+        {
+            var hm = CoreServices.HudModel;
+            if (hm != null && !ReferenceEquals(hm, _hookedModel))
+            {
+                if (_hookedModel != null) _hookedModel.Context.Changed -= OnContextChanged;
+                _hookedModel = hm;
+                _hookedModel.Context.Changed += OnContextChanged;
+                ApplyContextGate();   // apply-immediately so a mid-battle spawn gates on frame one
+            }
+        }
+
+        private void OnContextChanged() => ApplyContextGate();
+
+        // Show this battle HUD ONLY in the Battle context; hide (canvas off, widget alive)
+        // in Town/Overworld/Modal so it can no longer linger after a fight. Degrades to the
+        // old spawn-lifecycle behaviour (canvas stays on) when the model is unavailable.
+        private void ApplyContextGate()
+        {
+            var hm = CoreServices.HudModel;
+            if (hm == null || _canvas == null) return;
+            bool show = hm.Context.Context == HudContext.Battle;
+            if (_canvas.enabled != show) _canvas.enabled = show;
+            FlowTrace.Step("HUD", $"BattleHud9Zone gate context={hm.Context.Context} show={show}");
+        }
+
+        private void OnDestroy()
+        {
+            if (_hookedModel != null)
+            {
+                _hookedModel.Context.Changed -= OnContextChanged;
+                _hookedModel = null;
+            }
         }
 
         private void ResolveSystems()

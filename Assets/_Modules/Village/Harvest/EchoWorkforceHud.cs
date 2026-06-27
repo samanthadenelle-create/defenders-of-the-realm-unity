@@ -18,6 +18,9 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using DeNelle.Core;
+using DeNelle.Core.HudModel;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -30,6 +33,13 @@ namespace DeNelle.Village
         private Text _siloLabel;
         private Image _fill;
         private Text _dumpLabel;
+
+        // WO-541 Stage 3a: context gate. The Echo widget is TOWN-only chrome; it must not
+        // bleed into Overworld/Battle/Modal. We read the live Core HudContextModel via
+        // CoreServices.HudModel (registered by HudModelHost AFTER scene load, so it may be
+        // null when this view mounts) and toggle our OWN canvas accordingly. Degrades to the
+        // old always-on behaviour when the model is unavailable.
+        private IHudModel _hookedModel;
 
         private static readonly Color Dark  = new Color(0.06f, 0.07f, 0.10f, 0.82f);
         private static readonly Color Gold  = new Color(0.92f, 0.78f, 0.36f);
@@ -61,6 +71,38 @@ namespace DeNelle.Village
                 EchoService.Instance.Changed -= Refresh;
                 EchoService.Instance.EchoUnlocked -= OnEchoUnlocked;
             }
+            if (_hookedModel != null)
+            {
+                _hookedModel.Context.Changed -= OnContextChanged;
+                _hookedModel = null;
+            }
+        }
+
+        // -- WO-541 Stage 3a: context gate (TOWN-only) ----------------------------
+        // CoreServices.HudModel registers AFTER scene load; this view may exist first.
+        // Poll each frame until it's available, then subscribe + apply once. Re-hook if
+        // the model instance is ever replaced (host re-spawn). Cheap (one ref compare/frame).
+        private void Update()
+        {
+            var hm = CoreServices.HudModel;
+            if (hm != null && !ReferenceEquals(hm, _hookedModel))
+            {
+                if (_hookedModel != null) _hookedModel.Context.Changed -= OnContextChanged;
+                _hookedModel = hm;
+                _hookedModel.Context.Changed += OnContextChanged;
+                ApplyContextGate();   // apply-immediately so a mid-context mount gates on frame one
+            }
+        }
+
+        private void OnContextChanged() => ApplyContextGate();
+
+        private void ApplyContextGate()
+        {
+            var hm = CoreServices.HudModel;
+            if (hm == null || _canvas == null) return;   // degrade: stay visible (old behaviour)
+            bool show = hm.Context.Context == HudContext.Town;
+            if (_canvas.enabled != show) _canvas.enabled = show;
+            FlowTrace.Step("HUD", $"EchoWorkforceHud gate context={hm.Context.Context} show={show}");
         }
 
         // -- build ----------------------------------------------------------------

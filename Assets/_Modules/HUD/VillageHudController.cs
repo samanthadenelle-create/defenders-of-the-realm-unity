@@ -136,6 +136,15 @@ namespace DeNelle.HUD
         private Image _manaFill;
         private TextMeshProUGUI _manaText;
         private float _hpCurrent, _hpMax = 1f;
+
+        // ── WO-541 Stage 3a: live Core HUD-context gate ──────────────────────────
+        // Hide the party-frame stack (the Knight HP/MP card) in the Battle context so it
+        // no longer DUPLICATES BattleHud9Zone's own canonical battle hero card. Read from
+        // the live HudContextModel via CoreServices.HudModel (registered by HudModelHost
+        // AFTER scene load — may be null when this HUD builds). Degrades to the existing
+        // ApplyCombatGate behaviour when the model is unavailable.
+        private DeNelle.Core.HudModel.IHudModel _hookedHudModel;
+        private DeNelle.Core.HudModel.HudContext _hudCtx = DeNelle.Core.HudModel.HudContext.Town;
         // WO-410: change-gate per-frame HUD string rebuilds (timer + enemy count) so the
         // TMP mesh only regenerates when the displayed integer actually changes.
         private int _lastTimerTotal = int.MinValue, _lastLive = int.MinValue, _lastTotal = int.MinValue;
@@ -634,6 +643,38 @@ namespace DeNelle.HUD
         private void OnDestroy()
         {
             CoreServices.UnregisterHud(this);
+            if (_hookedHudModel != null)
+            {
+                _hookedHudModel.Context.Changed -= OnHudContextChanged;
+                _hookedHudModel = null;
+            }
+        }
+
+        // WO-541 Stage 3a: CoreServices.HudModel registers AFTER scene load; this HUD may
+        // build first. Poll until available, then subscribe + apply once. Re-hook if the
+        // model instance is replaced (host re-spawn). Cheap (one ref compare/frame).
+        private void HookHudContext()
+        {
+            var hm = CoreServices.HudModel;
+            if (hm != null && !ReferenceEquals(hm, _hookedHudModel))
+            {
+                if (_hookedHudModel != null) _hookedHudModel.Context.Changed -= OnHudContextChanged;
+                _hookedHudModel = hm;
+                _hookedHudModel.Context.Changed += OnHudContextChanged;
+                OnHudContextChanged();   // apply-immediately so a mid-context build gates correctly
+            }
+        }
+
+        private void OnHudContextChanged()
+        {
+            var hm = CoreServices.HudModel;
+            if (hm == null) return;
+            _hudCtx = hm.Context.Context;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HUD",
+                $"VillageHudController gate context={_hudCtx} partyFrameHiddenInBattle={(_hudCtx == DeNelle.Core.HudModel.HudContext.Battle)}");
+            // Re-apply the combat gate now so the party stack flips the instant context changes
+            // (don't wait for the next UpdateTownHud tick).
+            ApplyCombatGate();
         }
 
         private void Start()
@@ -689,7 +730,7 @@ namespace DeNelle.HUD
             Check("castleFill", _castleFill);
             Check("waveText", _waveText);
             Check("hpFill", _hpFill);
-            Check("manaFill", _manaFill);
+            // manaFill intentionally null since WO-541 Stage 3a removed the MP box — not checked.
             Check("skillBar", _skillBar);
             Check("partyFrame", _partyFrame);
             Check("resourceTexts", _resourceTexts);
@@ -723,6 +764,9 @@ namespace DeNelle.HUD
                 _contextPollTimer = ContextPollInterval;
                 ApplyContext(force: false);
             }
+
+            // WO-541 Stage 3a: hook the live Core HUD context once HudModelHost registers it.
+            HookHudContext();
 
             AnimateMomentumBadge();
             AnimateLookoutBell();
@@ -915,6 +959,11 @@ namespace DeNelle.HUD
             // Show the party stack (HP bars/portraits) in the hub OR combat (incl. raids); keep the
             // bottom-left vitals cluster (mana/XP — the context-free bit T-004 hid) combat-only.
             bool showParty = (InVillage || show) && _combatHudVisible;
+            // WO-541 Stage 3a: in the BATTLE context, BattleHud9Zone owns the canonical battle
+            // hero card — hiding the base-canvas party frame here kills the DUPLICATE Knight card.
+            // Town/Overworld/Modal keep the party frame (companion HP bars) as before. When the
+            // Core HUD model is unavailable, _hudCtx stays Town so behaviour is unchanged.
+            if (_hudCtx == DeNelle.Core.HudModel.HudContext.Battle) showParty = false;
             if (show == _lastCombatGate
                 && _vitalsCluster != null && _vitalsCluster.gameObject.activeSelf == show
                 && _partyStack != null && _partyStack.gameObject.activeSelf == showParty) return;
@@ -2089,38 +2138,10 @@ namespace DeNelle.HUD
             _xpLineFill.fillAmount = 0f;
             _xpLineFill.raycastTarget = false;
 
-            // Mana bar (bottom half)
-            var mTrack = NewRect("ManaTrack", _vitalsCluster, new Vector2(0.05f, 0.10f), new Vector2(0.95f, 0.48f));
-            StyleWellLight(mTrack.gameObject);
-            var mFill = NewRect("ManaFill", mTrack, Vector2.zero, Vector2.one);
-            mFill.offsetMin = new Vector2(1.5f, 1.5f); mFill.offsetMax = new Vector2(-1.5f, -1.5f);
-            _manaFill = mFill.gameObject.AddComponent<Image>();
-            _manaFill.color = HudTheme.ManaBlue;
-            _manaFill.sprite = HudTheme.RoundedFrame;
-            _manaFill.type = HudTheme.RoundedFrame != null ? Image.Type.Filled : Image.Type.Filled;
-            _manaFill.fillMethod = Image.FillMethod.Horizontal;
-            _manaFill.fillOrigin = 0;
-            _manaFill.fillAmount = 1f;
-            _manaFill.raycastTarget = false;
-
-            // Sprite-FIRST ornate dressing for the mana bar — the pack's gilded gem-socket
-            // frame + a blue-tinted glossy fill (mana has no dynamic colour change, so
-            // tinting the pack fill blue is safe). No-op when the pack isn't imported.
-            TryDressBar(mTrack, _manaFill, RpgUiCatalog.BarFrameBlue, RpgUiCatalog.BarFillBlue,
-                HudTheme.ManaBlue, true);
-            // Value over the blue mana fill — cream + dark halo keeps it crisp on the
-            // saturated blue (and on the light empty track the dark halo still reads).
-            _manaText = AddText(mTrack, "", 13, HudTheme.Text, TextAlignmentOptions.Center);
-            _manaText.fontStyle = FontStyles.Bold;
-            _manaText.outlineColor = new Color32(10, 18, 44, 200); _manaText.outlineWidth = 0.14f;
-
-            // T-004: small "MP" caption so the mana bar is never context-free (the owner
-            // saw a bare "10/10" with no label). Gilt mini-label pinned to the bar's left.
-            var mpCap = NewRect("MPCaption", mTrack, new Vector2(0.02f, 0f), new Vector2(0.22f, 1f));
-            var mpc = AddText(mpCap, "MP", 11, HudTheme.Gilt, TextAlignmentOptions.MidlineLeft);
-            mpc.fontStyle = FontStyles.Bold; mpc.characterSpacing = 1f;
-            mpc.outlineColor = new Color32(10, 18, 44, 200); mpc.outlineWidth = 0.14f;
-            mpc.raycastTarget = false;
+            // Mana bar (bottom half) — REMOVED (WO-541 Stage 3a): the bottom-left blue/green
+            // "MP 10/10" box was redundant with the hero card's own MP readout (the owner
+            // flagged it as a context-free duplicate). _manaFill/_manaText stay null by design;
+            // SetMana() null-guards them and no-ops. The XP line above is unique and kept.
         }
 
         // ── Bottom-RIGHT ability cluster — 2×2 grid of skill cells (RIGHT thumb). ─
@@ -3228,8 +3249,9 @@ namespace DeNelle.HUD
         /// <summary>Live mana bar — pushed every frame by HeroAbilitiesHudBridge.</summary>
         public void SetMana(float current, float max)
         {
-            if (_manaFill == null && _manaText == null)
-                ReportMissingTarget("SetMana", "_manaFill/_manaText");
+            // WO-541 Stage 3a: the bottom-left MP box was removed (redundant with the hero
+            // card's MP). The fields are null BY DESIGN now — null-guard + no-op cleanly (no
+            // false "dropped push" trace). Kept on IVillageHud so existing callers don't break.
             if (_manaFill != null) _manaFill.fillAmount = max > 0f ? Mathf.Clamp01(current / max) : 0f;
             if (_manaText != null) _manaText.text = Mathf.RoundToInt(current) + "/" + Mathf.RoundToInt(max);
         }
