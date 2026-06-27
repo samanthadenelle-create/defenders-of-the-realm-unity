@@ -102,7 +102,7 @@ namespace DeNelle.Village
         [SerializeField, Min(1f)] private float _starIntervalMin = 8f;
 
         [Tooltip("Maximum seconds between automatic shooting stars (0 = disabled — manual only).")]
-        [SerializeField, Min(0f)] private float _starIntervalMax = 25f;
+        [SerializeField, Min(0f)] private float _starIntervalMax = 0f; // WO-451: 0 = disabled (shooting stars removed — distracting)
 
         [Tooltip("Probability that a shooting star is a bright 'super star' (0-1).")]
         [SerializeField, Range(0f, 1f)] private float _superStarChance = 0.12f;

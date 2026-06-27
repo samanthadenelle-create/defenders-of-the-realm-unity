@@ -27,7 +27,8 @@ namespace DeNelle.Onboarding
         private void Awake()
         {
             BuildStars();
-            BuildComets();
+            // WO-451: comets/shooting-stars removed (owner: distracting). Static starfield only.
+            // BuildComets();
         }
 
         private void BuildStars()
