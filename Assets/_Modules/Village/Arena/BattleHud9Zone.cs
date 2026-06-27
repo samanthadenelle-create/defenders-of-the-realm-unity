@@ -147,7 +147,7 @@ namespace DeNelle.Village.Arena
 
         // -- Bottom-Right: 1 big SLASH anchor + a cluster of ~3 round utility buttons --
         private static readonly Vector2 BR_SlashPos = new Vector2(-104f, 104f); // big basic-attack anchor from bottom-right
-        private const float BR_SlashSize = 128f;
+        private const float BR_SlashSize = 146f;   // owner 2026-06-27: a little bigger (was 128)
         private const float BR_UtilSize  = 60f;
         // The 3 small utility discs cluster UP-LEFT of the SLASH anchor (lock / dash / aim).
         private static readonly Vector2[] BR_UtilCluster =
@@ -164,7 +164,7 @@ namespace DeNelle.Village.Arena
         // (class-kit default when a slot is unequipped) so all four are ALWAYS present.
         //   The player-ASSIGNABLE skill-tree EXTRAS live in the bottom-MIDDLE (separate bar +
         //   store; BC_Pos / BC_AbilitySize / BC_AbilityGap). The two bars are distinct.
-        private const float BR_SatSize    = 72f;    // the 3 arc satellites (parry/heal/charge)
+        private const float BR_SatSize    = 84f;    // the 3 arc satellites (parry/heal/charge) — owner 2026-06-27: a little bigger (was 72)
         private const float BR_ArcRadius  = 135f;   // arc radius around the big thrust button's centre
         // Arc angles (degrees, standard math: 0 = +x/right, 90 = +y/up). Upper-left fan so the
         // satellites curve up-and-left away from the bottom-right corner. Tunable.
@@ -832,6 +832,8 @@ namespace DeNelle.Village.Arena
                 b.targetGraphic = btn;
                 if (big) b.onClick.AddListener(BasicAttack);          // auto-melee swing, NOT a Q cast
                 else     b.onClick.AddListener(() => Cast(slot));     // cooldown ability cast
+                var punchRt = btn.rectTransform;
+                b.onClick.AddListener(() => StartCoroutine(PunchScale(punchRt)));  // press juice
                 MakeCircle(btn);
                 Frame(btn);
 
@@ -1527,8 +1529,29 @@ namespace DeNelle.Village.Arena
         private static void MakeCircle(Image img)
         {
             if (img == null) return;
-            var disc = RpgUiCatalog.Get(RpgUiCatalog.RoleBadge);
+            // owner 2026-06-27 "square feels wrong": the badge disc was the ONLY source, so a
+            // missing/​un-imported badge sprite left the button as the square panel plate. Fall back
+            // to the always-available procedural disc (ElarionUiKit.CircleSprite) so it is NEVER square.
+            var disc = RpgUiCatalog.Get(RpgUiCatalog.RoleBadge) ?? ElarionUiKit.CircleSprite;
             if (disc != null) { img.sprite = disc; img.type = Image.Type.Simple; img.preserveAspect = true; }
+        }
+
+        // Light press juice (owner 2026-06-27 "add a little extra vfx so the controller HUD feels
+        // better"): a quick squash-and-settle on tap. Self-contained, unscaled-time (works while
+        // combat time-scales), and always restores scale on finish so nothing drifts.
+        private System.Collections.IEnumerator PunchScale(RectTransform rt)
+        {
+            if (rt == null) yield break;
+            const float dur = 0.13f;
+            float t = 0f;
+            while (t < dur)
+            {
+                t += Time.unscaledDeltaTime;
+                float s = Mathf.Lerp(0.88f, 1f, t / dur);
+                rt.localScale = new Vector3(s, s, 1f);
+                yield return null;
+            }
+            rt.localScale = Vector3.one;
         }
 
         private static void FillBarLeft(Image fill)
