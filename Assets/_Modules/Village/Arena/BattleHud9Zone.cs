@@ -157,6 +157,12 @@ namespace DeNelle.Village.Arena
             new Vector2(-150f, 200f),   // aim/move
         };
 
+        // Owner 2026-06-27 (final): the bottom-RIGHT is the FIXED CORE = the single big
+        // REGULAR ATTACK button (slot Q at BR_SlashPos), always present + static. The three
+        // skill abilities (W/E/R) moved to the bottom-MIDDLE assignable bar (the player fills
+        // them from the Skill Tree) — so the old BR_SatCluster satellites were dropped to avoid
+        // duplicating that bar. The middle bar uses BC_Pos / BC_AbilitySize / BC_AbilityGap.
+
         // -- live system refs (self-resolved; read-only pulls) -----------------
         private Canvas _canvas;
         // WO-541 Stage 3a: context gate. This battle HUD is BATTLE-only; today it relies on
@@ -215,6 +221,7 @@ namespace DeNelle.Village.Arena
             public Image CdRing;
             public Text  CdText;
             public Text  Label;
+            public Text  Plus;        // "+" placeholder shown when an assignable W/E/R slot is empty
             public string BoundId;    // the abilityId currently shown (to detect a loadout swap)
         }
         private readonly AbilityBtn[] _abilityBtns = new AbilityBtn[4];
@@ -276,7 +283,10 @@ namespace DeNelle.Village.Arena
             BuildMidRightFocusArea();
             BuildBottomLeftDPad();
             BuildBottomCenterAbilityRow();
-            BuildBottomRightSlashCluster();
+            BuildBottomCenterTemplate();      // owner 2026-06-27: blank assignable slots (fill from Skill Tree)
+            // BuildBottomRightSlashCluster();  // REPLACED (owner 2026-06-27): the bottom-right is now the
+            //   static ability cluster — big regular-attack (Q) + 3 satellites (W/E/R) — built in
+            //   BuildBottomCenterAbilityRow. The old SLASH was a duplicate Q; its util discs were placeholders.
         }
 
         private void Update()
@@ -768,10 +778,18 @@ namespace DeNelle.Village.Arena
             for (int i = 0; i < 4; i++)
             {
                 var slot = (AbilitySlot)i;
-                Vector2 pos = BC_Pos + new Vector2((i - 1.5f) * BC_AbilityGap, 0f);
+                // Owner 2026-06-27 (final): Q (i==0) = the BIG REGULAR ATTACK, fixed in the BOTTOM-RIGHT
+                // (always present + static). W/E/R (i==1..3) = the player-ASSIGNABLE bar in the
+                // BOTTOM-MIDDLE, filled from the Skill Tree (HeroLoadout W/E/R). An empty W/E/R slot
+                // shows a "+" placeholder instead of hiding (see PushAbilityCooldowns).
+                bool big = (i == 0);
+                Vector2 anchor = big ? new Vector2(1f, 0f) : new Vector2(0.5f, 0f);
+                // Middle index 0,1,2 for W/E/R, centred around BC_Pos.
+                Vector2 pos  = big ? BR_SlashPos : (BC_Pos + new Vector2(((i - 1) - 1f) * BC_AbilityGap, 0f));
+                float   size = big ? BR_SlashSize : BC_AbilitySize;
 
-                var btn = AddPanel(transform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), pos,
-                                   new Vector2(BC_AbilitySize, BC_AbilitySize), PanelDim);
+                var btn = AddPanel(transform, anchor, anchor, pos,
+                                   new Vector2(size, size), big ? PanelDark : PanelDim);
                 var b = btn.gameObject.AddComponent<Button>();
                 b.targetGraphic = btn;
                 b.onClick.AddListener(() => Cast(slot));
@@ -782,7 +800,7 @@ namespace DeNelle.Village.Arena
                 var icon = AddImage(btn.transform, new Color(1f, 1f, 1f, 0f));
                 var ir = icon.rectTransform;
                 ir.anchorMin = new Vector2(0.5f, 0.5f); ir.anchorMax = new Vector2(0.5f, 0.5f); ir.pivot = new Vector2(0.5f, 0.5f);
-                ir.sizeDelta = new Vector2(BC_AbilitySize, BC_AbilitySize) * 0.74f; ir.anchoredPosition = Vector2.zero;
+                ir.sizeDelta = new Vector2(size, size) * 0.74f; ir.anchoredPosition = Vector2.zero;
                 icon.raycastTarget = false;
 
                 var ring = AddImage(btn.transform, RingTrack);
@@ -803,8 +821,16 @@ namespace DeNelle.Village.Arena
                 Anchor(label.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, -16f), new Vector2(0f, 14f), new Vector2(0.5f, 1f));
                 label.raycastTarget = false;
 
+                // "+" placeholder for an empty assignable W/E/R slot (the bottom-middle bar). Q is
+                // always equipped so its plus never shows. Toggled by PushAbilityCooldowns.
+                var plus = AddText(btn.transform, "+", 30, new Color(1f, 1f, 1f, 0.6f), TextAnchor.MiddleCenter);
+                Stretch(plus.rectTransform);
+                plus.raycastTarget = false;
+                plus.gameObject.SetActive(false);
+
                 _abilityBtns[i] = new AbilityBtn { Slot = slot, Root = btn.gameObject, Disc = btn,
-                                                   Icon = icon, CdRing = ring, CdText = cdText, Label = label, BoundId = null };
+                                                   Icon = icon, CdRing = ring, CdText = cdText, Label = label,
+                                                   Plus = plus, BoundId = null };
             }
 
             // Placeholder consumables (Potion / Rapid Heal / Desperate WS) to the right of the row.
@@ -829,6 +855,19 @@ namespace DeNelle.Village.Arena
             Anchor(_starsText.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), BC_UtilPos + new Vector2(BC_ConsumeGap * 3f + 30f, 24f), new Vector2(120f, 32f), new Vector2(0.5f, 0f));
             _keepTimerText = AddText(transform, "0:00", 13, Parchment, TextAnchor.MiddleCenter);
             Anchor(_keepTimerText.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), BC_UtilPos + new Vector2(BC_ConsumeGap * 3f + 30f, 2f), new Vector2(120f, 16f), new Vector2(0.5f, 0f));
+        }
+
+        // Owner 2026-06-27 (final): the bottom-MIDDLE assignable bar is now rendered by the REAL
+        // W/E/R ability buttons (BuildBottomCenterAbilityRow, data-driven from HeroLoadout) — the
+        // player fills it from the Skill Tree, and an empty slot shows a "+" placeholder. This method
+        // now only draws the "SKILL TREE" caption under that bar (the dumb placeholder cells were
+        // removed so they no longer overlap the live buttons).
+        private void BuildBottomCenterTemplate()
+        {
+            var cap = AddText(transform, "SKILL TREE", 11, Parchment, TextAnchor.UpperCenter);
+            Anchor(cap.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                   BC_Pos + new Vector2(0f, -18f), new Vector2(3f * BC_AbilityGap, 14f), new Vector2(0.5f, 1f));
+            cap.raycastTarget = false;
         }
 
         private void PushBottomCenter()
@@ -905,9 +944,22 @@ namespace DeNelle.Village.Arena
                 var def = ResolveSlotDef(b.Slot, out string boundId);
                 bool equipped = def != null;
 
-                // Empty W/E/R slot -> hide the button entirely (no placeholder ability).
-                if (b.Root != null && b.Root.activeSelf != equipped) b.Root.SetActive(equipped);
-                if (!equipped) { b.BoundId = null; continue; }
+                // Assignable W/E/R slots stay VISIBLE: an empty slot shows the "+" placeholder (the
+                // player fills it from the Skill Tree) rather than vanishing. Q is always equipped.
+                if (b.Root != null && !b.Root.activeSelf) b.Root.SetActive(true);
+                if (b.Plus != null && b.Plus.gameObject.activeSelf == equipped) b.Plus.gameObject.SetActive(!equipped);
+                if (!equipped)
+                {
+                    // Only trace the bound -> empty transition (a clear/swap), not every frame.
+                    if (b.BoundId != null) FlowTrace.Step("Hud", "battle bar slot " + b.Slot + " rendered EMPTY (+)");
+                    b.BoundId = null;
+                    if (b.Icon != null) b.Icon.color = new Color(1f, 1f, 1f, 0f);
+                    if (b.CdRing != null) b.CdRing.fillAmount = 0f;
+                    if (b.CdText != null) b.CdText.text = "";
+                    if (b.Label != null) b.Label.text = "";
+                    if (b.Disc != null) { var c = b.Disc.color; b.Disc.color = new Color(c.r, c.g, c.b, 0.4f); }
+                    continue;
+                }
 
                 // Re-bind icon/label/disc-color only when the equipped ability CHANGED (a swap).
                 if (!string.Equals(b.BoundId, boundId, System.StringComparison.OrdinalIgnoreCase))
@@ -924,6 +976,8 @@ namespace DeNelle.Village.Arena
                         else { b.Icon.sprite = null; b.Icon.color = new Color(1f, 1f, 1f, 0f); }
                     }
                     if (b.Label != null) b.Label.text = AbilityName(def, (int)b.Slot);
+                    // §12 instrument-first: prove the saved loadout reached the rendered widget.
+                    FlowTrace.Step("Hud", "battle bar slot " + b.Slot + " rendered id=" + boundId + " (icon bound)");
                 }
 
                 float total = def.Cooldown;

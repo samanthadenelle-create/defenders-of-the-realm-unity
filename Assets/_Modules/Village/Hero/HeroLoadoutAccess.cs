@@ -71,7 +71,8 @@ namespace DeNelle.Village
 
         /// <summary>
         /// Equip <paramref name="abilityId"/> into <paramref name="slot"/> on the live hero.
-        /// Returns HeroLoadout.Equip's result (false when no hero / Q / duplicate / unchanged).
+        /// Returns HeroLoadout.Equip's result (false when no hero / Q / duplicate / unchanged
+        /// / battle-locked).
         /// </summary>
         public static bool Equip(AbilitySlot slot, string abilityId)
         {
@@ -79,5 +80,24 @@ namespace DeNelle.Village
             if (lo == null) return false;
             return lo.Equip(slot, abilityId);
         }
+
+        /// <summary>Assign to a specific slot on the live hero (battle-locked alias of Equip).</summary>
+        public static bool Assign(AbilitySlot slot, string abilityId)
+        {
+            var lo = Current;
+            if (lo == null) return false;
+            return lo.Assign(slot, abilityId);
+        }
+
+        /// <summary>Add to the first free W/E/R slot on the live hero (battle-locked).</summary>
+        public static bool TryAdd(string abilityId)
+        {
+            var lo = Current;
+            if (lo == null) return false;
+            return lo.TryAdd(abilityId);
+        }
+
+        /// <summary>True while a battle is live — loadout edits are rejected (see HeroLoadout.EditsLocked).</summary>
+        public static bool EditsLocked => HeroLoadout.EditsLocked;
     }
 }

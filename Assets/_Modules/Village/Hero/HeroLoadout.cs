@@ -21,6 +21,9 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core;               // CoreServices (battle-context lock signal)
+using DeNelle.Core.HudModel;      // HudContext
+using DeNelle.Core.Diagnostics;   // FlowTrace (§12 instrument-first)
 
 namespace DeNelle.Village
 {
@@ -40,6 +43,25 @@ namespace DeNelle.Village
 
         /// <summary>Raised whenever the loadout changes (equip / clear / load).</summary>
         public event Action Changed;
+
+        /// <summary>
+        /// True while a battle is LIVE (the Core HUD context == Battle). The assignable
+        /// battle bar is an OUT-OF-COMBAT editor: <see cref="Equip"/> (and therefore
+        /// <see cref="Assign"/>/<see cref="TryAdd"/>) is rejected while this is true so a
+        /// player can't re-slot mid-fight. Degrades to UNLOCKED when no HUD model is
+        /// registered (headless / menus / pre-battle) so tests + the normal town flow are
+        /// unaffected. Reads the SAME signal BattleHud9Zone gates its canvas on.
+        /// </summary>
+        public static bool EditsLocked
+        {
+            get
+            {
+                var hm = CoreServices.HudModel;
+                if (hm == null) return false;
+                var ctx = hm.Context;
+                return ctx != null && ctx.Context == HudContext.Battle;
+            }
+        }
 
         private void Awake()
         {
@@ -80,12 +102,23 @@ namespace DeNelle.Village
             if (slot == AbilitySlot.Q) return false;            // Q is the locked basic attack
             if (string.IsNullOrEmpty(abilityId)) return false;
 
+            // §12 instrument-first: prove each step. Battle-lock is the single invariant the
+            // model owns (every assign path funnels through Equip), so no UI/path can bypass it.
+            if (EditsLocked)
+            {
+                FlowTrace.Warn("Loadout", "Equip REJECTED — battle-locked (slot=" + slot + " id=" + abilityId + ")");
+                return false;
+            }
+
             // Reject a duplicate equip — the same ability can't sit in two slots.
             foreach (var kvp in _slots)
             {
                 if (kvp.Key == slot) continue;
                 if (string.Equals(kvp.Value, abilityId, StringComparison.OrdinalIgnoreCase))
+                {
+                    FlowTrace.Warn("Loadout", "Equip REJECTED — '" + abilityId + "' already in slot " + kvp.Key);
                     return false;
+                }
             }
 
             // No-op if it's already exactly here (avoid a redundant save / event).
@@ -95,8 +128,54 @@ namespace DeNelle.Village
 
             _slots[slot] = abilityId;
             Save();
+            FlowTrace.Step("Loadout", "Equip slot=" + slot + " id=" + abilityId + " SAVED (" + PrefsKey + ")");
             Changed?.Invoke();
             return true;
+        }
+
+        /// <summary>
+        /// Assign <paramref name="abilityId"/> to <paramref name="slot"/> on the assignable
+        /// battle bar — a named alias of <see cref="Equip"/> over the SAME persisted W/E/R
+        /// model (no parallel store). Battle-locked + instrumented. Returns false when the
+        /// slot is Q, the id is empty, a battle is live, the id is already equipped elsewhere,
+        /// or it's already exactly there.
+        /// </summary>
+        public bool Assign(AbilitySlot slot, string abilityId)
+        {
+            FlowTrace.Step("Loadout", "Assign requested slot=" + slot + " id=" + abilityId);
+            return Equip(slot, abilityId);
+        }
+
+        /// <summary>
+        /// Add <paramref name="abilityId"/> to the FIRST empty assignable slot (W → E → R).
+        /// The Skill-Tree "add to battle bar" one-tap action. Battle-locked + instrumented.
+        /// Returns false when the id is empty/already-on-the-bar, a battle is live, or every
+        /// W/E/R slot is full. Icon is NOT stored here — it derives from the slot at render
+        /// (BattleHud9Zone.AbilitySprite), so this stays a single-source slot→id model.
+        /// </summary>
+        public bool TryAdd(string abilityId)
+        {
+            if (string.IsNullOrEmpty(abilityId)) return false;
+            FlowTrace.Step("Loadout", "TryAdd requested id=" + abilityId);
+
+            AbilitySlot? firstEmpty = null;
+            foreach (var slot in new[] { AbilitySlot.W, AbilitySlot.E, AbilitySlot.R })
+            {
+                string id = AbilityIdForSlot(slot);
+                if (!string.IsNullOrEmpty(id) &&
+                    string.Equals(id, abilityId, StringComparison.OrdinalIgnoreCase))
+                {
+                    FlowTrace.Warn("Loadout", "TryAdd no-op — '" + abilityId + "' already on the bar (slot " + slot + ")");
+                    return false;
+                }
+                if (firstEmpty == null && string.IsNullOrEmpty(id)) firstEmpty = slot;
+            }
+            if (firstEmpty == null)
+            {
+                FlowTrace.Warn("Loadout", "TryAdd — no free W/E/R slot for id=" + abilityId);
+                return false;
+            }
+            return Equip(firstEmpty.Value, abilityId);
         }
 
         /// <summary>
