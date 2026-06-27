@@ -180,20 +180,21 @@ namespace DeNelle.Village.Talents
         public void OnSlotTapped(AbilitySlot slot) => Equip(slot);
 
         /// <summary>
-        /// Skill-Tree "add to battle bar" one-tap: auto-assign the selected skill (or an
-        /// explicit <paramref name="abilityId"/>) into the first free W/E/R slot via
-        /// HeroLoadout.TryAdd. Battle-locked + persisted; surfaces the outcome on Status.
-        /// This is the assign hook the Skill-Tree select action routes through.
+        /// Skill-Tree "add to battle bar" one-tap: auto-assign the selected skill (or an explicit
+        /// <paramref name="abilityId"/>) into the first free slot of the player-ASSIGNABLE EXTRA
+        /// bar (the bottom-middle HUD row), via <see cref="AssignableSkillBarAccess.TryAdd"/>. This
+        /// is SEPARATE from the W/E/R default loadout (which <see cref="Equip"/> fills) — the extras
+        /// bar holds skill-tree-added EXTRA skills. Battle-locked + persisted; surfaces on Status.
         /// </summary>
         public void TryAdd(string abilityId = null)
         {
             string id = string.IsNullOrEmpty(abilityId) ? SelectedAbilityId : abilityId;
             if (string.IsNullOrEmpty(id)) { Status = "Pick a skill first."; Raise(); return; }
-            if (HeroLoadoutAccess.Current == null) { Status = "No hero to equip."; Raise(); return; }
-            if (HeroLoadoutAccess.EditsLocked) { Status = "Can't change skills during battle."; Raise(); return; }
+            if (AssignableSkillBarAccess.Current == null) { Status = "No hero to equip."; Raise(); return; }
+            if (AssignableSkillBarAccess.EditsLocked) { Status = "Can't change skills during battle."; Raise(); return; }
 
-            bool ok = HeroLoadoutAccess.TryAdd(id);
-            Status = ok ? "Added to your battle bar." : "No free slot (or already equipped).";
+            bool ok = AssignableSkillBarAccess.TryAdd(id);
+            Status = ok ? "Added to your battle bar." : "No free slot (or already on the bar).";
             if (ok) SelectedAbilityId = "";
             Rebuild();
             Raise();

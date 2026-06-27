@@ -157,11 +157,18 @@ namespace DeNelle.Village.Arena
             new Vector2(-150f, 200f),   // aim/move
         };
 
-        // Owner 2026-06-27 (final): the bottom-RIGHT is the FIXED CORE = the single big
-        // REGULAR ATTACK button (slot Q at BR_SlashPos), always present + static. The three
-        // skill abilities (W/E/R) moved to the bottom-MIDDLE assignable bar (the player fills
-        // them from the Skill Tree) — so the old BR_SatCluster satellites were dropped to avoid
-        // duplicating that bar. The middle bar uses BC_Pos / BC_AbilitySize / BC_AbilityGap.
+        // Owner 2026-06-27 (F8 layout correction): the bottom-RIGHT holds the 4 STATIC DEFAULT
+        // hero abilities (thrust/parry/heal/charge) — the big one (THRUST = slot Q at BR_SlashPos)
+        // with the other three (PARRY/HEAL/CHARGE = W/E/R) fanned in a ROUNDED ARC around it
+        // (curving up-and-left, away from the screen corner). These render from the live loadout
+        // (class-kit default when a slot is unequipped) so all four are ALWAYS present.
+        //   The player-ASSIGNABLE skill-tree EXTRAS live in the bottom-MIDDLE (separate bar +
+        //   store; BC_Pos / BC_AbilitySize / BC_AbilityGap). The two bars are distinct.
+        private const float BR_SatSize    = 72f;    // the 3 arc satellites (parry/heal/charge)
+        private const float BR_ArcRadius  = 135f;   // arc radius around the big thrust button's centre
+        // Arc angles (degrees, standard math: 0 = +x/right, 90 = +y/up). Upper-left fan so the
+        // satellites curve up-and-left away from the bottom-right corner. Tunable.
+        private static readonly float[] BR_ArcAnglesDeg = { 120f, 160f, 200f };
 
         // -- live system refs (self-resolved; read-only pulls) -----------------
         private Canvas _canvas;
@@ -226,6 +233,22 @@ namespace DeNelle.Village.Arena
         }
         private readonly AbilityBtn[] _abilityBtns = new AbilityBtn[4];
 
+        // -- Bottom-Center ASSIGNABLE EXTRA bar (skill-tree extras, separate store) -----
+        // The player fills these from the Skill Tree (HeroLoadout-pattern persistence via
+        // AssignableSkillBar). Distinct from the 4 STATIC defaults (bottom-right). Empty =
+        // a "+" placeholder; filled = the assigned skill's glyph + name. Data-driven each
+        // frame from AssignableSkillBarAccess.Current (PushExtraBar).
+        private sealed class ExtraBtn
+        {
+            public int   Slot;
+            public Image Disc;
+            public Text  Glyph;   // assigned ability glyph/initials (no abilityId->sprite map yet)
+            public Text  Plus;    // "+" when the slot is empty
+            public Text  Label;   // ability name under the disc
+            public string BoundId;
+        }
+        private readonly ExtraBtn[] _extraBtns = new ExtraBtn[AssignableSkillBar.SlotCount];
+
         // Optional external flee handler; defaults to BattleArena.Existing.Flee().
         private System.Action _onFlee;
 
@@ -282,11 +305,10 @@ namespace DeNelle.Village.Arena
             // Mid-Center is intentionally EMPTY - the fight shows through.
             BuildMidRightFocusArea();
             BuildBottomLeftDPad();
-            BuildBottomCenterAbilityRow();
-            BuildBottomCenterTemplate();      // owner 2026-06-27: blank assignable slots (fill from Skill Tree)
-            // BuildBottomRightSlashCluster();  // REPLACED (owner 2026-06-27): the bottom-right is now the
-            //   static ability cluster — big regular-attack (Q) + 3 satellites (W/E/R) — built in
-            //   BuildBottomCenterAbilityRow. The old SLASH was a duplicate Q; its util discs were placeholders.
+            BuildBottomCenterAbilityRow();    // bottom-RIGHT: 4 STATIC defaults (thrust big + parry/heal/charge arc)
+            BuildBottomCenterTemplate();      // bottom-MIDDLE: player-ASSIGNABLE skill-tree extras ("+" until filled)
+            // BuildBottomRightSlashCluster();  // RETIRED: the old SLASH was a duplicate Q; the bottom-right is
+            //   now the 4 default abilities (big thrust + arc), built in BuildBottomCenterAbilityRow.
         }
 
         private void Update()
@@ -299,6 +321,7 @@ namespace DeNelle.Village.Arena
             PushStarConditions();
             PushBottomCenter();
             PushAbilityCooldowns();
+            PushExtraBar();
         }
 
         // WO-541 Stage 3a: CoreServices.HudModel registers AFTER scene load; this HUD may
@@ -778,15 +801,25 @@ namespace DeNelle.Village.Arena
             for (int i = 0; i < 4; i++)
             {
                 var slot = (AbilitySlot)i;
-                // Owner 2026-06-27 (final): Q (i==0) = the BIG REGULAR ATTACK, fixed in the BOTTOM-RIGHT
-                // (always present + static). W/E/R (i==1..3) = the player-ASSIGNABLE bar in the
-                // BOTTOM-MIDDLE, filled from the Skill Tree (HeroLoadout W/E/R). An empty W/E/R slot
-                // shows a "+" placeholder instead of hiding (see PushAbilityCooldowns).
+                // Owner 2026-06-27 (F8 correction): the 4 STATIC DEFAULTS sit in the BOTTOM-RIGHT.
+                // Slot 0 (Q = THRUST) is the BIG button at BR_SlashPos; slots 1..3 (PARRY/HEAL/CHARGE
+                // = W/E/R) fan in a rounded ARC around it (BR_ArcRadius / BR_ArcAnglesDeg), all
+                // anchored to the bottom-right corner. Always present (class-kit default fallback in
+                // ResolveSlotDef), so no "+" ever shows here — that's the bottom-MIDDLE bar's job.
                 bool big = (i == 0);
-                Vector2 anchor = big ? new Vector2(1f, 0f) : new Vector2(0.5f, 0f);
-                // Middle index 0,1,2 for W/E/R, centred around BC_Pos.
-                Vector2 pos  = big ? BR_SlashPos : (BC_Pos + new Vector2(((i - 1) - 1f) * BC_AbilityGap, 0f));
-                float   size = big ? BR_SlashSize : BC_AbilitySize;
+                Vector2 anchor = new Vector2(1f, 0f);   // all four hug the bottom-right corner
+                Vector2 pos;
+                float   size;
+                if (big)
+                {
+                    pos = BR_SlashPos; size = BR_SlashSize;
+                }
+                else
+                {
+                    float ang = BR_ArcAnglesDeg[i - 1] * Mathf.Deg2Rad;
+                    pos  = BR_SlashPos + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * BR_ArcRadius;
+                    size = BR_SatSize;
+                }
 
                 var btn = AddPanel(transform, anchor, anchor, pos,
                                    new Vector2(size, size), big ? PanelDark : PanelDim);
@@ -857,17 +890,113 @@ namespace DeNelle.Village.Arena
             Anchor(_keepTimerText.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), BC_UtilPos + new Vector2(BC_ConsumeGap * 3f + 30f, 2f), new Vector2(120f, 16f), new Vector2(0.5f, 0f));
         }
 
-        // Owner 2026-06-27 (final): the bottom-MIDDLE assignable bar is now rendered by the REAL
-        // W/E/R ability buttons (BuildBottomCenterAbilityRow, data-driven from HeroLoadout) — the
-        // player fills it from the Skill Tree, and an empty slot shows a "+" placeholder. This method
-        // now only draws the "SKILL TREE" caption under that bar (the dumb placeholder cells were
-        // removed so they no longer overlap the live buttons).
+        // Owner 2026-06-27 (F8 correction): the bottom-MIDDLE is the player-ASSIGNABLE skill bar —
+        // a row of slots the player fills from the Skill Tree with EXTRA (non-default) skills. Each
+        // cell is an empty "+" placeholder until assigned; when filled it shows the assigned skill's
+        // glyph + name. Backed by AssignableSkillBar (its OWN persisted, battle-locked store —
+        // SEPARATE from the 4 static defaults in the bottom-right). PushExtraBar binds it each frame.
         private void BuildBottomCenterTemplate()
         {
+            int n = _extraBtns.Length;
+            for (int i = 0; i < n; i++)
+            {
+                Vector2 pos = BC_Pos + new Vector2((i - (n - 1) / 2f) * BC_AbilityGap, 0f);
+                var cell = AddPanel(transform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), pos,
+                                    new Vector2(BC_AbilitySize, BC_AbilitySize), PanelDim);
+                MakeCircle(cell);
+                Frame(cell);
+                if (cell.TryGetComponent<UnityEngine.UI.Image>(out var cimg))
+                    cimg.color = new Color(cimg.color.r, cimg.color.g, cimg.color.b, 0.40f);
+
+                var glyph = AddText(cell.transform, "", 22, Color.white, TextAnchor.MiddleCenter);
+                Stretch(glyph.rectTransform);
+                glyph.raycastTarget = false;
+
+                var plus = AddText(cell.transform, "+", 30, new Color(1f, 1f, 1f, 0.6f), TextAnchor.MiddleCenter);
+                Stretch(plus.rectTransform);
+                plus.raycastTarget = false;
+
+                var label = AddText(cell.transform, "", 10, Parchment, TextAnchor.UpperCenter);
+                Anchor(label.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, -14f), new Vector2(0f, 12f), new Vector2(0.5f, 1f));
+                label.raycastTarget = false;
+
+                int idx = i;
+                var b = cell.gameObject.AddComponent<Button>();
+                b.targetGraphic = cell;
+                b.onClick.AddListener(() => OnExtraTapped(idx));
+
+                _extraBtns[i] = new ExtraBtn { Slot = i, Disc = cell, Glyph = glyph, Plus = plus, Label = label, BoundId = null };
+            }
+
             var cap = AddText(transform, "SKILL TREE", 11, Parchment, TextAnchor.UpperCenter);
             Anchor(cap.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                   BC_Pos + new Vector2(0f, -18f), new Vector2(3f * BC_AbilityGap, 14f), new Vector2(0.5f, 1f));
+                   BC_Pos + new Vector2(0f, -18f), new Vector2(n * BC_AbilityGap, 14f), new Vector2(0.5f, 1f));
             cap.raycastTarget = false;
+        }
+
+        // Bind the assignable EXTRA bar to its persisted store each frame (dumb copy: store -> widget).
+        private void PushExtraBar()
+        {
+            var bar = AssignableSkillBarAccess.Current;
+            for (int i = 0; i < _extraBtns.Length; i++)
+            {
+                var b = _extraBtns[i];
+                if (b == null) continue;
+                string id = bar != null ? bar.AbilityIdForSlot(b.Slot) : null;
+                bool filled = !string.IsNullOrEmpty(id);
+
+                if (b.Plus != null && b.Plus.gameObject.activeSelf == filled) b.Plus.gameObject.SetActive(!filled);
+                if (!filled)
+                {
+                    if (b.BoundId != null) FlowTrace.Step("Hud", "skill bar slot " + b.Slot + " rendered EMPTY (+)");
+                    b.BoundId = null;
+                    if (b.Glyph != null) b.Glyph.text = "";
+                    if (b.Label != null) b.Label.text = "";
+                    if (b.Disc != null) { var c = b.Disc.color; b.Disc.color = new Color(c.r, c.g, c.b, 0.40f); }
+                    continue;
+                }
+
+                if (!string.Equals(b.BoundId, id, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    b.BoundId = id;
+                    var def = AbilityCatalog.FindById(id);
+                    if (b.Disc != null)
+                    {
+                        Color c = AbilityColor(def, b.Slot);
+                        b.Disc.color = new Color(c.r, c.g, c.b, 0.85f);
+                    }
+                    if (b.Glyph != null) b.Glyph.text = ExtraGlyph(def, id);
+                    if (b.Label != null) b.Label.text = def != null && !string.IsNullOrEmpty(def.Name) ? def.Name : id;
+                    FlowTrace.Step("Hud", "skill bar slot " + b.Slot + " rendered id=" + id + " (assigned)");
+                }
+            }
+        }
+
+        // Tap an assignable slot: a filled extra would CAST, but HeroAbilities is a 4-slot engine
+        // (Q/W/E/R) — casting a 5th+ assigned skill is not yet wired, so we trace the intent. An
+        // empty slot cues the player to assign from the Skill Tree (assignment is out-of-battle).
+        private void OnExtraTapped(int idx)
+        {
+            if (idx < 0 || idx >= _extraBtns.Length) return;
+            var b = _extraBtns[idx];
+            if (b != null && !string.IsNullOrEmpty(b.BoundId))
+                FlowTrace.Step("Hud", "assignable skill slot " + idx + " tapped (cast for id=" + b.BoundId + " not yet wired — 4-slot engine)");
+            else
+                FlowTrace.Step("Hud", "assignable skill slot " + idx + " tapped EMPTY — assign from the Skill Tree (out of battle)");
+        }
+
+        // A compact display token for an assigned extra ability (no abilityId->sprite map exists; the
+        // default-bar icons are class/slot-keyed). Prefer the def's HUD glyph, else the name initials.
+        private static string ExtraGlyph(AbilityDef def, string id)
+        {
+            if (def != null && !string.IsNullOrEmpty(def.Icon)) return def.Icon;
+            string src = def != null && !string.IsNullOrEmpty(def.Name) ? def.Name : (id ?? "");
+            src = src.Trim();
+            if (src.Length == 0) return "?";
+            // First letter of up to the first two words (e.g. "Snare Arrow" -> "SA").
+            var parts = src.Split(new[] { ' ', '-', '_', '.' }, System.StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2) return ("" + char.ToUpperInvariant(parts[0][0]) + char.ToUpperInvariant(parts[1][0]));
+            return char.ToUpperInvariant(src[0]).ToString();
         }
 
         private void PushBottomCenter()
@@ -1009,9 +1138,15 @@ namespace DeNelle.Village.Arena
             }
             var lo = HeroLoadoutAccess.Current;
             string id = lo != null ? lo.AbilityIdForSlot(slot) : null;
-            if (string.IsNullOrEmpty(id)) { boundId = null; return null; }
-            boundId = id;
-            return AbilityCatalog.FindById(id);
+            if (!string.IsNullOrEmpty(id))
+            {
+                boundId = id;
+                return AbilityCatalog.FindById(id);
+            }
+            // STATIC DEFAULT: the class-kit ability for this slot. The bottom-right defaults bar is
+            // always-present (4 abilities), so an unequipped W/E/R shows the class default, never empty.
+            boundId = "default:" + HeroClassId() + ":" + slot;
+            return AbilityCatalog.Find(HeroClassId(), slot);
         }
 
         // ---------------------------------------------------------------------
