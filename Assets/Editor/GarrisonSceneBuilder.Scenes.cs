@@ -824,8 +824,26 @@ namespace DeNelle.Editor
             inst.transform.localPosition = localPos;
             inst.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
             inst.name = name;
+            // WO-449/LoS (owner 2026-06-27): perimeter wall geometry → "Structure" layer so the hero
+            // target-lock + tower-fire LoS linecasts occlude through garrison walls (were on Default →
+            // lock/fire passed through). Name-keyed ("Wall_*") so only walls, not floor/decor. Layer
+            // != navmesh — the bake is unaffected.
+            if ((name ?? "").StartsWith("Wall", System.StringComparison.OrdinalIgnoreCase))
+            {
+                int structureLayer = LayerMask.NameToLayer("Structure");
+                if (structureLayer >= 0) SetLayerRecursively(inst, structureLayer);
+            }
             MarkStatic(inst);
             return inst;
+        }
+
+        // WO-449/LoS: recursively set a layer on placed wall geometry (mirrors CastleHubBuilder).
+        private static void SetLayerRecursively(GameObject go, int layer)
+        {
+            if (go == null) return;
+            go.layer = layer;
+            foreach (Transform child in go.transform)
+                SetLayerRecursively(child.gameObject, layer);
         }
 
         private static void ScatterRole(Transform parent, string role, int count, int seed,

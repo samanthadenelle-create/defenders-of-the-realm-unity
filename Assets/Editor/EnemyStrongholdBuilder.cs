@@ -787,6 +787,16 @@ namespace DeNelle.Editor
         // ===================================================================
 
         // Place one role + render-verify. Returns 1 on a placed piece, 0 if nothing placed.
+        // WO-449/LoS: recursively set a layer on a placed structure (mirrors CastleHubBuilder) so the
+        // hero target-lock + tower-fire LoS linecasts occlude through garrison/stronghold walls.
+        private static void SetLayerRecursively(GameObject go, int layer)
+        {
+            if (go == null) return;
+            go.layer = layer;
+            foreach (Transform child in go.transform)
+                SetLayerRecursively(child.gameObject, layer);
+        }
+
         private static int PlaceOneCounted(Transform parent, string role, Vector3 localPos, float yaw, string name)
         {
             var prefab = ResolveRole(role);
@@ -806,6 +816,16 @@ namespace DeNelle.Editor
             inst.transform.localPosition = localPos;
             inst.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
             inst.name = name;
+
+            // WO-449/LoS (owner 2026-06-27): wall geometry goes on the "Structure" layer so the hero
+            // target-lock + tower-fire LoS linecasts occlude through it. Garrison/stronghold walls were
+            // on Default → lock/fire passed through. Walls only (gate gaps/towers/decor untouched).
+            // Layer != navmesh — the bake is unaffected.
+            if ((role ?? "").StartsWith("wall", System.StringComparison.OrdinalIgnoreCase))
+            {
+                int structureLayer = LayerMask.NameToLayer("Structure");
+                if (structureLayer >= 0) SetLayerRecursively(inst, structureLayer);
+            }
 
             // WO-480 (pass 2, A): a GATE prop is purely DECORATIVE — the wall-ring gap defines the
             // actual opening. Left intact, the gate prop's blocking MeshCollider re-seals its own gap

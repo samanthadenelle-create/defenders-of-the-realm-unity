@@ -28,6 +28,7 @@
 // is proven to render in WebGL builds (URP/Unlit transparent, double-sided).
 // =============================================================================
 
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -132,6 +133,17 @@ namespace DeNelle.Village
             string nm = mb != null ? mb.gameObject.name.Replace("(Clone)", "").Trim() : "target";
             DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena", "LOCKON engage target='" + nm + "'.");
             DriveLockFace(target);   // WO-512 slice 3: auto-face + strafe around the locked enemy
+
+            // WO-532: lock-on CONFIRM feedback (additive, gated). A UI confirm ping (the shared
+            // CoreServices.Audio UI blip - the only one-shot exposed by IAudioService from this
+            // assembly) + a brief reticle scale-punch so the lock READS as committed. Flag-off
+            // skips all of it, so EngageLock stays byte-identical to today when LockOn is OFF.
+            if (DeNelle.Core.FeatureFlags.LockOn)
+            {
+                DeNelle.Core.CoreServices.Audio?.PlayUiClick();
+                PunchReticle(1.6f, 0.18f);   // pop UP then settle to base
+                DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena", "LOCKON confirm feedback (ping+pop) fired.");
+            }
         }
 
         /// <summary>
@@ -144,6 +156,15 @@ namespace DeNelle.Village
             LockEngaged = false;
             ClearLock();   // drops _locked, aim override, prev-target bar; reticle reverts to auto/gold
             DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena", "LOCKON release -> free-look.");
+
+            // WO-532: subtler UNLOCK feedback (gated). The reticle tint already reverts to auto/gold
+            // in LateUpdate; add only a small, quick scale dip (no hard confirm ping) so the release
+            // reads as softer than the lock. Flag-off skips it (byte-identical to today).
+            if (DeNelle.Core.FeatureFlags.LockOn)
+            {
+                PunchReticle(0.7f, 0.14f);   // dip DOWN then return to base - subtle
+                DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena", "LOCKON unlock feedback (subtle dip) fired.");
+            }
         }
 
         /// <summary>
@@ -504,16 +525,16 @@ namespace DeNelle.Village
         }
 
         // WO-497: raycast a screen point into the world and, if it strikes an alive Hostile
-        // IDamageable, set it as the MANUAL lock directly (bypassing the AUTO forward-arc/LoS
-        // gates, like a Tab/shoulder cycle). Returns true when an enemy was locked. The raycast
-        // uses the Enemy layer mask so terrain/walls between the camera and the foe don't eat the
-        // pick; the ray length is bounded by the acquire range (no sniping off-screen mobs).
+        // IDamageable, set it as the MANUAL lock directly (bypassing the AUTO forward-ARC gate,
+        // like a Tab/shoulder cycle — but LoS IS enforced now, owner 2026-06-27: no through-wall
+        // lock). Returns true when an enemy was locked. The raycast uses the Enemy layer mask so
+        // terrain between the camera and the foe doesn't eat the pick; range-bounded (no off-screen snipe).
         private bool TryLockAtScreenPoint(Vector2 screenPos)
         {
             var d = PickEnemyAtScreenPoint(screenPos);
             if (d == null) return false;
 
-            _locked = d;   // direct manual lock — bypasses AUTO arc/LoS, like Tab
+            _locked = d;   // direct manual lock — bypasses AUTO arc; LoS enforced in PickEnemyAtScreenPoint
             LockEngaged = true;   // WO-512: a direct tap-lock engages the lock-on flag
             return true;
         }
@@ -536,6 +557,10 @@ namespace DeNelle.Village
 
             var d = hit.collider != null ? hit.collider.GetComponentInParent<IDamageable>() : null;
             if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) return null;
+            // Owner 2026-06-27: a MANUAL lock must also respect line-of-sight — no locking a foe
+            // THROUGH a wall (the flagged bug). Previously WO-497/512 deliberately bypassed HasLoS;
+            // now the same Structure-layer linecast that gates the AUTO scan gates the manual pick.
+            if (!HasLoS(d)) return null;
             return d;
         }
 
@@ -545,10 +570,70 @@ namespace DeNelle.Village
             // list only contains hostiles with a clear line-of-sight — a manual Tab/shoulder
             // cycle can no longer lock a target through a wall either.
             RebuildCandidates();
+
+            // WO-532: CAMERA-VISIBILITY gate on CYCLE. The shoulder/right-click cycle may only
+            // land on a target that is currently ON-SCREEN (and in front of the camera) - you
+            // can't cycle-lock a foe across the arena or behind you. The explicit raycast pick
+            // (middle-click / tap) is inherently on-screen, so this gates ONLY the cycle path.
+            // Range + LoS (RebuildCandidates) still apply. Flag-off = no filtering (byte-identical).
+            if (DeNelle.Core.FeatureFlags.LockOn) FilterCandidatesToOnScreen();
+
             if (_candidates.Count == 0) { _locked = null; return; }
             int idx = _locked != null ? _candidates.IndexOf(_locked) : -1;
             idx = (idx + 1) % _candidates.Count;
             _locked = _candidates[idx];
+        }
+
+        // WO-532: drop every candidate that is NOT on-screen (off the viewport rect or behind the
+        // camera) so a CYCLE can only land on a visible enemy. Uses the robustly-resolved camera
+        // (Camera.main can be untagged here - ResolveCamera mirrors the rest of this file) and the
+        // standard viewport test: 0<=x<=1, 0<=y<=1, z>0. Degrades safe: no camera => no filtering.
+        private void FilterCandidatesToOnScreen()
+        {
+            var cam = (_cam != null && _cam.isActiveAndEnabled) ? _cam : ResolveCamera();
+            _cam = cam;
+            if (cam == null) return;   // can't determine visibility => don't filter
+
+            for (int i = _candidates.Count - 1; i >= 0; i--)
+            {
+                var d = _candidates[i];
+                if (d == null) { _candidates.RemoveAt(i); continue; }
+                Vector3 vp = cam.WorldToViewportPoint(d.WorldPosition);
+                bool onScreen = vp.z > 0f && vp.x >= 0f && vp.x <= 1f && vp.y >= 0f && vp.y <= 1f;
+                if (!onScreen) _candidates.RemoveAt(i);
+            }
+        }
+
+        // WO-532: brief reticle "pop" punch for lock/unlock confirm. Animates ONLY localScale (the
+        // billboard's per-frame writer touches position/rotation, never scale, so this never fights
+        // LateUpdate), settling back to the base _size. Gated by FeatureFlags.LockOn so flag-off is a
+        // no-op. Cheap: one coroutine, unscaled time (still reads when combat slows time).
+        private Coroutine _popCo;
+
+        private void PunchReticle(float startScaleMul, float duration)
+        {
+            if (!DeNelle.Core.FeatureFlags.LockOn) return;
+            if (_reticle == null) return;
+            if (_popCo != null) StopCoroutine(_popCo);
+            _popCo = StartCoroutine(PopRoutine(startScaleMul, duration));
+        }
+
+        private IEnumerator PopRoutine(float startScaleMul, float duration)
+        {
+            float baseS = _size;
+            float startS = baseS * startScaleMul;
+            float t = 0f;
+            while (t < duration)
+            {
+                if (_reticle == null) { _popCo = null; yield break; }
+                t += Time.unscaledDeltaTime;
+                float u = Mathf.Clamp01(duration > 0f ? t / duration : 1f);
+                float s = Mathf.Lerp(startS, baseS, u);   // punch from start scale back to base
+                _reticle.localScale = new Vector3(s, s, s);
+                yield return null;
+            }
+            if (_reticle != null) _reticle.localScale = new Vector3(baseS, baseS, baseS);
+            _popCo = null;
         }
 
         private void RebuildCandidates()

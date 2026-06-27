@@ -36,6 +36,7 @@ namespace DeNelle.Village
 
         private Tower _tower;
         private Transform _firePoint;
+        private int _structureMask = -1;   // lazily-resolved "Structure" LoS mask (0 = layer absent -> degrade open)
         private WaveManager _wave;
         private float _nextAttackTime;
 
@@ -128,7 +129,7 @@ namespace DeNelle.Village
                     && losHit.collider.GetComponentInParent<IDamageableStructure>() != null;
                 string tName = (target as MonoBehaviour) != null ? (target as MonoBehaviour).name : "(boss/seam)";
                 FlowTrace.Throttle("TowerAI", "acquire", 1f,
-                    $"'{(_tower != null && _tower.Data != null ? _tower.Data.towerName : name)}' picked target='{tName}' dist={dist:F1} structureBetween={structureBetween} (pure closest-pick; NO line-of-sight gate, NO defense/Heart priority today)");
+                    $"'{(_tower != null && _tower.Data != null ? _tower.Data.towerName : name)}' picked target='{tName}' dist={dist:F1} structureBetween={structureBetween} (LoS gate ACTIVE: Structure-layer walls block fire; selection still closest-first, no Heart-priority)");
             }
 
             FireAt(target, secondary);
@@ -159,6 +160,19 @@ namespace DeNelle.Village
             return TowerData.CanTarget(targets, layer);
         }
 
+        // LoS gate (owner 2026-06-27 — "walls block tower fire"): true when a wall on the "Structure"
+        // layer sits between the fire point and the target, so the shot is blocked. DEGRADE OPEN: if the
+        // Structure layer is absent (mask 0) or there's no fire point, never block — a misconfigured
+        // scene must not make towers inert. Mirrors the LoS layer the castle/stronghold walls carry.
+        private bool BlockedByWall(IDamageable target)
+        {
+            if (target == null) return true;
+            if (_structureMask < 0) _structureMask = LayerMask.GetMask("Structure");
+            if (_structureMask == 0) return false;
+            Vector3 fPos = _firePoint != null ? _firePoint.position : transform.position;
+            return Physics.Linecast(fPos, target.WorldPosition, _structureMask, QueryTriggerInteraction.Ignore);
+        }
+
         private IDamageable FindNearestTarget(float range)
         {
             if (_wave == null) { ResolveWave(); if (_wave == null) return null; }
@@ -181,6 +195,8 @@ namespace DeNelle.Village
                 if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
                 // Air/ground matrix: skip an enemy this tower's layer can't reach.
                 if (!CanHit(dmg)) continue;
+                // LoS gate: a wall between the tower and the enemy blocks the shot.
+                if (BlockedByWall(dmg)) continue;
                 bestSq = sq;
                 best = dmg;
             }
@@ -191,7 +207,8 @@ namespace DeNelle.Village
             // see it. Consider it here through the Core seam (Village->Core is allowed).
             var boss = _wave?.LiveApexBoss;
             if (boss != null && boss.IsAlive && ((IDamageable)boss).Faction == CombatFaction.Hostile
-                && CanHit(boss))   // air/ground matrix: the dragon flies — anti-air / both only
+                && CanHit(boss)   // air/ground matrix: the dragon flies — anti-air / both only
+                && !BlockedByWall((IDamageable)boss))   // LoS: don't shoot the boss through a wall
             {
                 float bsq = (((IDamageable)boss).WorldPosition - myPos).sqrMagnitude;
                 if (bsq <= maxSq && bsq < bestSq)
@@ -232,6 +249,8 @@ namespace DeNelle.Village
                 if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
                 // Air/ground matrix: don't pick a target this tower can't actually hit.
                 if (!CanHit(dmg)) continue;
+                // LoS gate: a wall between the tower and the enemy blocks the shot.
+                if (BlockedByWall(dmg)) continue;
                 if (dmg.Hp > bestHp) { bestHp = dmg.Hp; best = dmg; }
             }
 
@@ -435,6 +454,8 @@ namespace DeNelle.Village
                     if (dmg == null || !dmg.IsAlive) continue;
                     // Air/ground matrix: a ground tower can't field-slow a flyer.
                     if (!CanHit(dmg)) continue;
+                    // LoS gate: a wall between the tower and the enemy blocks the slow field.
+                    if (BlockedByWall(dmg)) continue;
                     dmg.ApplyStatus(StatusEffect.Slow, GlacialSlowDuration);
                 }
             }
