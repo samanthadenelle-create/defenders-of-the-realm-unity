@@ -1,24 +1,48 @@
 // =============================================================================
 // DialogueCommandSink (DeNelle.Village) — wires OUR dialogue's commands + conditions
 // to the game, registered at boot (WO-455). Verbs route DIRECTLY to PanelRouter /
-// QuestService — no Yarn, no source generator, no register-once-globally constraint.
+// QuestService / the live gameplay systems — no Yarn, no source generator, no
+// register-once-globally constraint.
 // -----------------------------------------------------------------------------
-// PHASED: the common panel + quest verbs are wired here; the full ~40-verb parity
-// (camera/audio/movement/combat/pets) lands as narrative is converted off Yarn.
-// Unknown verbs FlowTrace.Warn (no silent failure). Flag-gated on CustomDialogue.
+// ENGINE/INFRA PARITY (WO-455, this pass): every CUSTOM verb the existing Yarn
+// content actually fires is now routed here to the SAME service the Yarn
+// DialogueCommandBridge delegates to, so when the owner converts the narrative
+// content off Yarn the verbs already work. The routing idiom mirrors the bridge
+// exactly (PanelRouter / QuestService / GameStateService / SmartMobileCamera /
+// TutorialHudOverlay / PetDeployer / TroopDialogueCommands / BuildingUpgradeService).
+//
+// This sink is a PLAIN C# object (no MonoBehaviour) driven by the synchronous
+// DialogueRunner, so verbs map to the SYNCHRONOUS action behind each Yarn handler;
+// the bridge's coroutine niceties (camera auto-restore hold, autowalk arrival
+// gating, blocking waits) have no equivalent in the tap-to-continue runner and are
+// intentionally omitted — camera_return_to_hero / stop_autowalk cover the manual
+// counterparts. Verbs with NO backing service (Yarn-var seeding, narrative stubs,
+// timed waits) stay on the logged Warn-default — never faked.
+//
+// Unknown verbs/conditions FlowTrace.Warn (no silent failure). Flag-gated on
+// CustomDialogue (default off).
 // =============================================================================
 
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core;
 using DeNelle.Core.Dialogue;
 using DeNelle.Core.UI;
 using DeNelle.Core.Quests;
+using DeNelle.Core.State;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Pets;
+using Prog = DeNelle.Village.Buildings.Progression;
 
 namespace DeNelle.Village
 {
     public sealed class DialogueCommandSink : IDialogueCommandSink, IDialogueConditionSource
     {
+        // Lazily-created host for the scene helper components (autowalk / HUD overlay).
+        private GameObject _host;
+        private TutorialAutoWalk _autoWalk;
+        private TutorialHudOverlay _overlay;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Register()
         {
@@ -30,13 +54,18 @@ namespace DeNelle.Village
             FlowTrace.Step("Dialogue", "Custom dialogue command sink registered (Yarn-free).");
         }
 
-        // ── Commands → direct panel/quest calls ──────────────────────────────────
+        // ── Commands → direct service calls (mirrors DialogueCommandBridge routing) ──
         public void Run(string verb, IReadOnlyList<string> args)
         {
             if (string.IsNullOrEmpty(verb)) return;
-            string a0 = (args != null && args.Count > 0) ? args[0] : null;
+            int n = args != null ? args.Count : 0;
+            string a0 = n > 0 ? args[0] : null;
+            string a1 = n > 1 ? args[1] : null;
+            string a2 = n > 2 ? args[2] : null;
+
             switch (verb)
             {
+                // ── Panels via PanelRouter (cross-assembly, reflection-free) ──────
                 case "OpenRumorBoard": PanelRouter.Open(PanelId.RumorBoard); break;
                 case "OpenUpgrade":    PanelRouter.Open(PanelId.BuildingUpgrade, a0); break;
                 case "OpenShop":       PanelRouter.Open(PanelId.PartyShop, a0); break;
@@ -45,33 +74,281 @@ namespace DeNelle.Village
                 case "OpenCosmetics":  PanelRouter.Open(PanelId.CosmeticShop); break;
                 case "OpenPetSkills":  PanelRouter.Open(PanelId.PetSkillTree); break;
 
+                // ── Panels via find-or-spawn (no PanelId opener of their own) ──────
+                case "OpenEquip": OpenEquipPanel(); break;
+                case "OpenArena": OpenArenaPanel(); break;
+
+                // ── Quests → QuestService ─────────────────────────────────────────
                 case "StartQuest":   { var q = QuestService.Instance; if (q != null && a0 != null) q.StartQuest(a0); } break;
                 case "AdvanceQuest": { var q = QuestService.Instance; if (q != null && a0 != null) q.AdvanceQuest(a0); } break;
+                case "CompleteQuest":{ var q = QuestService.Instance; if (q != null && a0 != null) q.CompleteQuest(a0); } break;
                 case "GiveKeystone": { var q = QuestService.Instance; if (q != null && a0 != null) q.GiveKeystone(a0); } break;
-                case "SetFlag":      { var q = QuestService.Instance; if (q != null && args != null && args.Count >= 2) q.SetFlag(args[0], args[1]); } break;
+                // Yarn fires <<SetQuestFlag id flag>>; "SetFlag" kept as the existing alias.
+                case "SetFlag":
+                case "SetQuestFlag": { var q = QuestService.Instance; if (q != null && n >= 2) q.SetFlag(args[0], args[1]); } break;
+                // Enrol a companion class into the persisted party roster (same join API the
+                // wave/return joins use; fires PlayerChanged → StoryCompanionInjector spawns it).
+                case "RecruitCompanion": if (!string.IsNullOrEmpty(a0)) GameStateService.Instance?.AddToParty(a0); break;
+
+                // ── Building upgrades ─────────────────────────────────────────────
+                // <<TryUpgradeBuilding "arcane-tower" 2>> — city tier tree (WO-430).
+                case "TryUpgradeBuilding": if (!string.IsNullOrEmpty(a0)) Prog.BuildingUpgradeService.TryUpgrade(a0, ParseInt(a1)); break;
+                // <<structure_upgrade $id>> — resource-building level-up (spend + level).
+                case "structure_upgrade": if (!string.IsNullOrEmpty(a0)) Prog.ResourceBuildingState.TryUpgrade(a0); break;
+
+                // ── Audio ─────────────────────────────────────────────────────────
+                case "play_sfx": PlaySfx(a0); break;
+
+                // ── Economy / meta ────────────────────────────────────────────────
+                case "save_game": GameStateService.Instance?.Save(); break;
+                case "grant_resources_for_towers":
+                    GameStateService.Instance?.AddCrystals(Mathf.Max(0, ParseInt(a0)) * TowerCrystalCost);
+                    break;
+
+                // ── Barracks troop training (WO-453) → TroopDialogueCommands ───────
+                case "ShowTrainingUI": TroopDialogueCommands.ShowTrainingUI(); break;
+                case "StartTraining":  if (!string.IsNullOrEmpty(a0)) TroopDialogueCommands.StartTraining(a0, ParseInt(a1)); break;
+
+                // ── Pets → PetDeployer / PetAcquisitionService ────────────────────
+                case "spawn_starting_pet": EnsurePetDeployer()?.DeployStarterPets(); break;
+                case "spawn_named_pet":    SpawnNamedPet(a0); break;
+
+                // ── Camera → SmartMobileCamera (synchronous; no auto-restore hold) ─
+                case "camera_focus":
+                case "camera_glance":         CameraFocus(a0); break;
+                case "camera_shake":          SmartMobileCamera.Instance?.Shake(Mathf.Clamp(ParseFloat(a0), 0.05f, 0.6f), 0.45f); break;
+                case "camera_show_all_gates": SmartMobileCamera.Instance?.Shake(0.08f, 0.3f); break;
+                case "camera_return_to_hero": { var h = HeroTransform(); if (h != null) SmartMobileCamera.Instance?.SetTarget(h); } break;
+
+                // ── HUD objective / hint / highlight → TutorialHudOverlay ─────────
+                case "set_hud_objective": EnsureOverlay()?.SetObjective(a0, ParseInt(a1), ParseInt(a2)); break;
+                case "set_hud_hint":      EnsureOverlay()?.SetHint(a0); break;
+                case "highlight_ui":      EnsureOverlay()?.Highlight(a0, true); break;
+                case "unhighlight_ui":    EnsureOverlay()?.Highlight(a0, false); break;
+
+                // ── Movement / control → TutorialAutoWalk / onboarding handoff ────
+                case "start_autowalk": StartAutowalk(a0); break;
+                case "stop_autowalk":  _autoWalk?.Stop(); break;
+                case "enable_full_controls": EnableFullControls(); break;
+
+                // ── Speaker portrait ──────────────────────────────────────────────
+                case "portrait": DeNelle.Core.DialoguePortrait.Forced = a0; break;
 
                 default:
                     FlowTrace.Warn("Dialogue",
-                        $"command sink: verb '{verb}' not yet wired (custom-dialogue migration — Phase 2/3).");
+                        $"command sink: verb '{verb}' has no backing service yet (custom-dialogue migration). " +
+                        "Stub/Yarn-var/timed-wait verbs intentionally no-op here.");
                     break;
             }
         }
 
-        // ── Conditions → quest/keystone state ────────────────────────────────────
-        // Keys: quest_<id>_active · quest_<id>_done · keystone_<name>. Unknown => false.
+        // Crystals granted per "tower" by grant_resources_for_towers N (mirrors the bridge).
+        private const int TowerCrystalCost = 50;
+
+        // ── Panels (find-or-spawn) ───────────────────────────────────────────────
+
+        private static void OpenEquipPanel()
+        {
+            if (PanelBlockedByBattle("OpenEquip")) return;
+            var panel = Object.FindObjectOfType<DeNelle.Village.Hero.EquipmentPanel>();
+            if (panel == null) panel = new GameObject("EquipmentPanelHost").AddComponent<DeNelle.Village.Hero.EquipmentPanel>();
+            panel.Open();
+        }
+
+        private static void OpenArenaPanel()
+        {
+            if (PanelBlockedByBattle("OpenArena")) return;
+            var panel = Object.FindObjectOfType<DeNelle.Village.Arena.ArenaPanel>();
+            if (panel == null) panel = new GameObject("ArenaPanelHost").AddComponent<DeNelle.Village.Arena.ArenaPanel>();
+            panel.Open();
+        }
+
+        // A dialogue verb must NOT pop a gameplay panel mid-battle (WO-437).
+        private static bool PanelBlockedByBattle(string verb)
+        {
+            if (!DeNelle.Core.Combat.BattleLock.IsInBattle()) return false;
+            FlowTrace.Warn("Input", "battle-lock: dialogue verb '" + verb + "' skipped (in battle)");
+            return true;
+        }
+
+        // ── Audio ────────────────────────────────────────────────────────────────
+
+        private static void PlaySfx(string id)
+        {
+            switch (id)
+            {
+                case "horn_warning": GameSfx.PlayLookoutHorn(); break;
+                default:             CoreServices.Audio?.PlayUiClick(); break;
+            }
+        }
+
+        // ── Camera ───────────────────────────────────────────────────────────────
+
+        private void CameraFocus(string targetName)
+        {
+            Transform t = ResolveTransform(targetName);
+            if (t == null) { FlowTrace.Warn("Dialogue", $"camera_focus '{targetName}' unresolved — skipping."); return; }
+            SmartMobileCamera.Instance?.SetTarget(t);
+        }
+
+        // ── HUD overlay (lazily hosted) ──────────────────────────────────────────
+
+        private GameObject EnsureHost()
+        {
+            if (_host == null) _host = new GameObject("DialogueSinkHost");
+            return _host;
+        }
+
+        private TutorialHudOverlay EnsureOverlay()
+        {
+            if (_overlay == null) _overlay = EnsureHost().AddComponent<TutorialHudOverlay>();
+            return _overlay;
+        }
+
+        // ── Movement / control ───────────────────────────────────────────────────
+
+        private void StartAutowalk(string destName)
+        {
+            if (_autoWalk == null) _autoWalk = EnsureHost().AddComponent<TutorialAutoWalk>();
+            var hero = Object.FindObjectOfType<HeroLocomotion>();
+            if (hero != null) _autoWalk.SetHero(hero);
+            Transform t = ResolveTransform(destName);
+            if (t != null) _autoWalk.WalkTo(t.position);
+            else FlowTrace.Warn("Dialogue", $"start_autowalk '{destName}' unresolved — staying put.");
+        }
+
+        private void EnableFullControls()
+        {
+            _autoWalk?.Stop();
+            // Finish onboarding (opens the wave loop) exactly once, at the END of the narrative.
+            var svc = GameStateService.Instance;
+            if (svc != null && svc.State != null && !svc.State.Onboarded) svc.FinishOnboarding();
+        }
+
+        // ── Pets ─────────────────────────────────────────────────────────────────
+
+        private void SpawnNamedPet(string species)
+        {
+            if (string.IsNullOrWhiteSpace(species))
+            { FlowTrace.Warn("Dialogue", "spawn_named_pet — empty species arg; skipping."); return; }
+
+            var deployer = EnsurePetDeployer();
+            if (deployer == null) { FlowTrace.Warn("Dialogue", "spawn_named_pet — could not create a PetDeployer."); return; }
+
+            // Record ownership exactly once (idempotent); PetAcquisitionService bootstraps itself.
+            var acq = PetAcquisitionService.Instance;
+            if (acq != null) acq.Acquire(species, PetAcquisitionSource.Gift);
+            deployer.DeployChosen(species);
+        }
+
+        // Self-heal a PetDeployer if the scene ships none (mirrors DialogueCommandBridge.EnsurePetDeployer).
+        private PetDeployer EnsurePetDeployer()
+        {
+            var deployer = Object.FindObjectOfType<PetDeployer>();
+            if (deployer != null) return deployer;
+
+            var go = new GameObject("PetDeployer");
+            deployer = go.AddComponent<PetDeployer>();
+
+            Vector3 heartPos = Vector3.zero;
+            var heart = Object.FindObjectOfType<HeartController>();
+            if (heart != null) heartPos = heart.transform.position;
+            deployer.SetHeartPosition(heartPos);
+
+            int enemyLayer = LayerMask.NameToLayer("Enemy");
+            deployer.SetEnemyMask(enemyLayer >= 0 ? (1 << enemyLayer) : ~0);
+
+            var svc = GameStateService.Instance;
+            if (svc != null && svc.State != null && svc.State.PetBonds != null)
+            {
+                var b = svc.State.PetBonds;
+                int aether = b.Count > 0 ? b[0] : 0;
+                int flame  = b.Count > 1 ? b[1] : 0;
+                int ice    = b.Count > 2 ? b[2] : 0;
+                deployer.SetBondRanks(aether, flame, ice);
+            }
+            return deployer;
+        }
+
+        // ── Target resolution (camera / autowalk) ────────────────────────────────
+
+        private Transform ResolveTransform(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            string n = name.ToLowerInvariant();
+            switch (n)
+            {
+                case "companion":
+                    return StoryCompanionInjector.Instance != null ? StoryCompanionInjector.Instance.CompanionTransform : null;
+                case "pet":
+                {
+                    var pet = Object.FindObjectOfType<Pet>();
+                    return pet != null ? pet.transform : null;
+                }
+                case "hero":
+                case "player":
+                    return HeroTransform();
+                case "village_tour":
+                {
+                    var heart = Object.FindObjectOfType<HeartController>();
+                    return heart != null ? heart.transform : HeroTransform();
+                }
+            }
+            var go = GameObject.Find(name) ?? GameObject.Find(name.Replace('_', ' '));
+            return go != null ? go.transform : null;
+        }
+
+        private Transform HeroTransform()
+        {
+            var loco = Object.FindObjectOfType<HeroLocomotion>();
+            if (loco != null) return loco.transform;
+            var tagged = GameObject.FindWithTag("Player");
+            return tagged != null ? tagged.transform : null;
+        }
+
+        // ── Parsing ──────────────────────────────────────────────────────────────
+
+        private static int ParseInt(string s) => int.TryParse(s, out int v) ? v : 0;
+        private static float ParseFloat(string s) => float.TryParse(s, out float v) ? v : 0f;
+
+        // ── Conditions → live game state ─────────────────────────────────────────
+        // Keys: !<key> (negation) · quest_<id>_active · quest_<id>_done ·
+        //       keystone_<name> · keystone_count_min_<n> · pet_owned_<species> ·
+        //       onboarded. Unknown => false (logged).
         public bool Check(string condition)
         {
             if (string.IsNullOrEmpty(condition)) return true;
+
+            // Negation infra (mirrors Yarn's `not`/`== false` content).
+            if (condition[0] == '!') return !Check(condition.Substring(1));
+
             var svc = QuestService.Instance;
-            if (svc == null) return false;
 
             const string qp = "quest_";
-            if (condition.StartsWith(qp) && condition.EndsWith("_active"))
+            if (svc != null && condition.StartsWith(qp) && condition.EndsWith("_active"))
                 return svc.IsActive(condition.Substring(qp.Length, condition.Length - qp.Length - "_active".Length));
-            if (condition.StartsWith(qp) && condition.EndsWith("_done"))
+            if (svc != null && condition.StartsWith(qp) && condition.EndsWith("_done"))
                 return svc.IsCompleted(condition.Substring(qp.Length, condition.Length - qp.Length - "_done".Length));
+
+            // keystone_count_min_<n> MUST be tested before the keystone_ prefix.
+            const string kc = "keystone_count_min_";
+            if (condition.StartsWith(kc))
+                return svc != null && svc.KeystoneCount >= ParseInt(condition.Substring(kc.Length));
             if (condition.StartsWith("keystone_"))
-                return svc.HasKeystone(condition.Substring("keystone_".Length));
+                return svc != null && svc.HasKeystone(condition.Substring("keystone_".Length));
+
+            const string po = "pet_owned_";
+            if (condition.StartsWith(po))
+            {
+                var acq = PetAcquisitionService.Instance;
+                return acq != null && acq.Owns(condition.Substring(po.Length));
+            }
+
+            if (condition == "onboarded")
+            {
+                var gs = GameStateService.Instance;
+                return gs != null && gs.State != null && gs.State.Onboarded;
+            }
 
             FlowTrace.Warn("Dialogue", $"condition '{condition}' unknown — treated false.");
             return false;
