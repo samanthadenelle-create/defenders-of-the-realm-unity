@@ -432,6 +432,15 @@ namespace DeNelle.Village
         private Vector3 _leashCenter;           // spawn point -- centre of the wander leash
         private float   _roamRepathAt;          // next time to pick a new roam point
 
+        // CONTACT ENGAGE (owner 2026-06-27): the battle triggers on near-CONTACT with the HERO,
+        // not the old generous 2.6m EngageRange. touchDist = heroRadius + repRadius + 0.2f, resolved
+        // once from the actual colliders (CharacterController / CapsuleCollider / NavMeshAgent radius).
+        // Falls back to a small 0.7m constant (NOT 2.6f) if a radius can't be read. Cached after the
+        // first successful resolve. Aggro/chase still use AggroRange — ONLY engage becomes contact.
+        private const float TouchPadding      = 0.2f;   // owner: "+.2f difference radius"
+        private const float TouchFallbackDist = 0.7f;   // used only if a collider radius can't be resolved
+        private float _touchDist = -1f;                 // <0 until resolved from real colliders
+
         public void Init(string[] family, int threat)
         {
             _family = (family != null && family.Length > 0) ? family : new[] { "orc-warrior" };
@@ -446,7 +455,7 @@ namespace DeNelle.Village
             if (_enemy != null) _enemy.Damaged -= OnRepDamaged;
         }
 
-        private void OnRepDamaged(Vector3 _) => Engage();
+        private void OnRepDamaged(Vector3 _) => Engage("hero-attacked-rep");
 
         private void Update()
         {
@@ -504,7 +513,11 @@ namespace DeNelle.Village
                 }
             }
 
-            if (d <= EngageRange) Engage();
+            // CONTACT ENGAGE (owner 2026-06-27): proximity battle fires only at near-TOUCH of the
+            // HERO (heroR+repR+0.2f), not the old generous EngageRange. Aggro/chase above are
+            // UNCHANGED — only this engage threshold became contact-based.
+            float touchDist = TouchDistance(hero);
+            if (d <= touchDist) Engage($"rep-touched-hero d={d:0.0}m touch={touchDist:0.0}m");
         }
 
         // THREAT CUE (encounter feedback): build a world-space "!" alert + foe name floating above
@@ -582,6 +595,46 @@ namespace DeNelle.Village
             return t;
         }
 
+        // CONTACT-ENGAGE threshold (owner 2026-06-27 "has to TOUCH the hero or +.2f difference
+        // radius"): touchDist = heroRadius + repRadius + 0.2f, read from the REAL colliders so the
+        // battle only fires at near-contact with the HERO. Cached after the first successful resolve
+        // (colliders don't change at runtime). If neither radius can be read, falls back to a small
+        // 0.7m constant — never the old generous 2.6m. Pure read; no behavior beyond the threshold.
+        private float TouchDistance(GameObject hero)
+        {
+            if (_touchDist > 0f) return _touchDist;   // cached
+            float heroR = ColliderRadius(hero);
+            float repR  = ColliderRadius(gameObject);
+            if (heroR <= 0f && repR <= 0f)
+                return TouchFallbackDist;             // neither resolved yet — don't cache, retry next frame
+            float hr = heroR > 0f ? heroR : TouchFallbackDist * 0.5f;
+            float rr = repR  > 0f ? repR  : TouchFallbackDist * 0.5f;
+            _touchDist = hr + rr + TouchPadding;
+            FlowTrace.Step("Encounter",
+                $"touchDist resolved for rep '{gameObject.name}': heroR={hr:0.00} repR={rr:0.00} +pad {TouchPadding:0.00} => {_touchDist:0.00}m.");
+            return _touchDist;
+        }
+
+        // Best-effort horizontal radius of a character: CharacterController, then CapsuleCollider,
+        // then NavMeshAgent.radius, then any Collider's bounds extent. Returns 0 if nothing readable.
+        private static float ColliderRadius(GameObject go)
+        {
+            if (go == null) return 0f;
+            float r = 0f;
+            Guard.Try("Encounter", "collider radius", () =>
+            {
+                var cc = go.GetComponent<CharacterController>();
+                if (cc != null) { r = cc.radius * Mathf.Max(go.transform.lossyScale.x, go.transform.lossyScale.z); return; }
+                var cap = go.GetComponentInChildren<CapsuleCollider>();
+                if (cap != null) { r = cap.radius * Mathf.Max(go.transform.lossyScale.x, go.transform.lossyScale.z); return; }
+                var agent = go.GetComponent<UnityEngine.AI.NavMeshAgent>();
+                if (agent != null) { r = agent.radius; return; }
+                var col = go.GetComponentInChildren<Collider>();
+                if (col != null) { r = Mathf.Max(col.bounds.extents.x, col.bounds.extents.z); }
+            });
+            return r;
+        }
+
         // Random navmesh point within the leash of the spawn -- the wander target while idle.
         private Vector3 PickRoamPoint()
         {
@@ -596,7 +649,7 @@ namespace DeNelle.Village
             return p;
         }
 
-        private void Engage()
+        private void Engage(string cause)
         {
             if (_engaged) return;
             if (BattleArena.Instance != null && BattleArena.Instance.BattleInProgress) return;
@@ -605,6 +658,17 @@ namespace DeNelle.Village
             // must hold or a single stray swing re-starts the fight inside the grace window.
             if (EngagementSuppressed) return;
             _engaged = true;
+
+            // TRIGGER PROOF (instrumentation only — no behavior change): capture exactly WHY this
+            // battle began — which rep, the hero distance, whether the hero attacked vs proximity,
+            // and the suppression/flag state — so the next F8 capture pinpoints the cause.
+            var heroGo = GameObject.FindWithTag("Player");
+            float heroDist = heroGo != null ? Vector3.Distance(heroGo.transform.position, transform.position) : -1f;
+            FlowTrace.Step("Encounter",
+                $"TRIGGER cause='{cause}' rep='{gameObject.name}' heroDist={heroDist:0.0}m " +
+                $"aggroRange={AggroRange} engageRange={EngageRange} touchDist={(_touchDist > 0f ? _touchDist : -1f):0.00}m " +
+                $"heroAttacked={cause.StartsWith("hero-attacked")} " +
+                $"suppressed={EngagementSuppressed} ff={FeatureFlags.OverworldEncounter}");
 
             var hero = GameObject.FindWithTag("Player");
             string scene = SceneManager.GetActiveScene().name;
