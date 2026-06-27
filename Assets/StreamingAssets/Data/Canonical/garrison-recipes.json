@@ -71,7 +71,7 @@
       "size": "large",
       "theme": "ruined",
       "lighting": "stronghold",
-      "enemies": ["orc-berserker", "orc-shaman", "orc-raider", "troll", "hollow-warrior", "hollow-walker"],
+      "enemies": ["orc-berserker", "orc-shaman", "orc-raider", "troll", "orc-necromancer", "orc-berserker"],
       "levelRange": [8, 14],
       "threat": 3,
       "boss": null,
