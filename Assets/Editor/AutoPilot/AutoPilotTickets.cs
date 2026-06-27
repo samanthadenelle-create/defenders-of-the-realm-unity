@@ -63,6 +63,8 @@ namespace DeNelle.Editor
             public string utc;
             public float totalSeconds;
             public bool aborted;
+            public int seed;        // WO-452 tranche E — the run's seed (for replay)
+            public string runId;    // WO-452 tranche E — the run id
             public PhaseResult[] phases;
         }
 
@@ -170,7 +172,7 @@ namespace DeNelle.Editor
                 log.AppendLine("no fleet runs found — " +
                     $"'{Path.Combine(dir, "autopilot-runs")}' has zero run folders. " +
                     "Nothing to triage (root break-log.jsonl is intentionally NOT scanned).");
-                try { WriteMarkdown(new List<Ticket>(), default, false, 0, 0, 0, 0, minRuns); WriteJson(new List<Ticket>(), 0); }
+                try { WriteMarkdown(new List<Ticket>(), default, false, 0, 0, 0, 0, minRuns, new Dictionary<string, int>(), new Dictionary<string, string>()); WriteJson(new List<Ticket>(), 0, new Dictionary<string, int>(), new Dictionary<string, string>()); }
                 catch (Exception ex) { log.AppendLine("write error: " + ex.Message); }
                 log.AppendLine("=== verdict ===");
                 log.AppendLine("AUTOPILOT_TICKETS_OK: 0 (0 confirmed, 0 below-threshold)");
@@ -179,6 +181,11 @@ namespace DeNelle.Editor
             }
 
             var tickets = new Dictionary<string, Ticket>();
+            // WO-452 tranche E (reproducibility): per-run seed + ordered action trace, keyed by
+            // run id, so every ticket can print "replay: --seed=<n> --run=<id>" + the action path
+            // that led to the failure. A break already carries its triggering Flow line (Sample).
+            var runSeeds = new Dictionary<string, int>();
+            var runTraces = new Dictionary<string, string>();
             int parsedLines = 0, badLines = 0, filteredArtifacts = 0;
             int runsWithSummary = 0, runsWithBreakLog = 0;
             // The "representative" summary shown in the report header: the first fleet
@@ -199,6 +206,17 @@ namespace DeNelle.Editor
                         runHasSummary = true;
                         runsWithSummary++;
                         if (!haveSummary) { summary = runSummary; haveSummary = true; }
+
+                        // WO-452 tranche E: record this run's seed + ordered action trace so every
+                        // ticket can be replayed (--seed=<n> --run=<id>) with its action path shown.
+                        runSeeds[run.Id] = runSummary.seed;
+                        if (runSummary.phases != null && runSummary.phases.Length > 0)
+                        {
+                            var parts = new List<string>(runSummary.phases.Length);
+                            foreach (var ph in runSummary.phases)
+                                parts.Add(ph.phase + "(" + ph.status + ")");
+                            runTraces[run.Id] = string.Join(" > ", parts);
+                        }
                     }
                 }
                 catch (Exception ex) { log.AppendLine($"summary parse error [{run.Id}]: " + ex.Message); }
@@ -270,7 +288,7 @@ namespace DeNelle.Editor
                 return b.Count.CompareTo(a.Count);
             });
 
-            try { WriteMarkdown(sorted, summary, haveSummary, totalRuns, runsWithSummary, runs.Count, filteredArtifacts, minRuns); WriteJson(sorted, totalRuns); }
+            try { WriteMarkdown(sorted, summary, haveSummary, totalRuns, runsWithSummary, runs.Count, filteredArtifacts, minRuns, runSeeds, runTraces); WriteJson(sorted, totalRuns, runSeeds, runTraces); }
             catch (Exception ex) { log.AppendLine("write error: " + ex.Message); }
 
             int bugs = 0, hangs = 0, warns = 0, notes = 0;
@@ -386,7 +404,8 @@ namespace DeNelle.Editor
 
         private static void WriteMarkdown(List<Ticket> tickets, RunSummary summary, bool haveSummary,
                                           int totalRuns, int runsWithSummary, int sourceCount, int filteredArtifacts,
-                                          int minRuns)
+                                          int minRuns,
+                                          Dictionary<string, int> runSeeds, Dictionary<string, string> runTraces)
         {
             Directory.CreateDirectory("Builds");
             var sb = new StringBuilder();
@@ -449,7 +468,7 @@ namespace DeNelle.Editor
                         sb.AppendLine($"### {t.Category.ToUpperInvariant()}");
                         sb.AppendLine();
                     }
-                    AppendTicket(sb, t, totalRuns);
+                    AppendTicket(sb, t, totalRuns, runSeeds, runTraces);
                 }
             }
 
@@ -462,26 +481,58 @@ namespace DeNelle.Editor
                               "a deterministic 1/N bug can still be real._");
                 sb.AppendLine();
                 foreach (var t in below)
-                    AppendTicket(sb, t, totalRuns);
+                    AppendTicket(sb, t, totalRuns, runSeeds, runTraces);
             }
 
             File.WriteAllText(Path.Combine("Builds", "autopilot-tickets.md"), sb.ToString());
         }
 
         // Renders one ticket bullet (shared by the confirmed + below-threshold sections).
-        private static void AppendTicket(StringBuilder sb, Ticket t, int totalRuns)
+        // WO-452 tranche E: each ticket carries its seed(s) + run id(s) + the ordered action
+        // trace + the triggering Flow line (Sample) so a failure is replayable end-to-end.
+        private static void AppendTicket(StringBuilder sb, Ticket t, int totalRuns,
+                                         Dictionary<string, int> runSeeds, Dictionary<string, string> runTraces)
         {
             int k = t.Runs.Count;
             sb.AppendLine($"- **[{t.Kind}] x{t.Count}** — reproduced in {k}/{totalRuns} runs (scene: {t.Scene})");
-            sb.AppendLine($"  - {t.Sample}");
+            sb.AppendLine($"  - _flow line:_ {t.Sample}");
             if (!string.IsNullOrEmpty(t.Stack))
             {
                 string firstLine = t.Stack.Split('\n')[0];
                 sb.AppendLine($"  - _stack:_ `{firstLine}`");
             }
+
+            // Reproducibility: seed(s) + run id(s) + replay hint.
+            var seeds = SeedsFor(t, runSeeds);
+            string seedStr = seeds.Count > 0 ? string.Join(",", seeds) : "?";
+            sb.AppendLine($"  - _repro:_ seed(s)=[{seedStr}] run(s)=[{string.Join(",", t.Runs)}] — replay: `--seed=<n> --run=<id>`");
+
+            // Ordered action trace (the first reproducing run that recorded one).
+            string trace = TraceFor(t, runTraces);
+            if (!string.IsNullOrEmpty(trace))
+                sb.AppendLine($"  - _action trace:_ {trace}");
         }
 
-        private static void WriteJson(List<Ticket> tickets, int totalRuns)
+        // The distinct seeds of the runs that reproduced this ticket (sorted, deduped).
+        private static List<int> SeedsFor(Ticket t, Dictionary<string, int> runSeeds)
+        {
+            var set = new SortedSet<int>();
+            foreach (var r in t.Runs)
+                if (runSeeds != null && runSeeds.TryGetValue(r, out int sd)) set.Add(sd);
+            return new List<int>(set);
+        }
+
+        // The ordered action trace of the first reproducing run that recorded one.
+        private static string TraceFor(Ticket t, Dictionary<string, string> runTraces)
+        {
+            if (runTraces == null) return null;
+            foreach (var r in t.Runs)
+                if (runTraces.TryGetValue(r, out var tr) && !string.IsNullOrEmpty(tr)) return tr;
+            return null;
+        }
+
+        private static void WriteJson(List<Ticket> tickets, int totalRuns,
+                                      Dictionary<string, int> runSeeds, Dictionary<string, string> runTraces)
         {
             Directory.CreateDirectory("Builds");
             // Hand-roll the JSON array (JsonUtility can't serialize a bare List<T>
@@ -499,11 +550,44 @@ namespace DeNelle.Editor
                 sb.Append("\"reproducedInRuns\":").Append(t.Runs.Count).Append(",");
                 sb.Append("\"totalRuns\":").Append(totalRuns).Append(",");
                 sb.Append("\"scene\":").Append(JsonStr(t.Scene)).Append(",");
-                sb.Append("\"message\":").Append(JsonStr(t.Sample));
+                sb.Append("\"message\":").Append(JsonStr(t.Sample)).Append(",");
+                // WO-452 tranche E — reproducibility fields (replay handle + action path).
+                sb.Append("\"flowLine\":").Append(JsonStr(t.Sample)).Append(",");
+                sb.Append("\"seeds\":").Append(JsonIntArray(SeedsFor(t, runSeeds))).Append(",");
+                sb.Append("\"runIds\":").Append(JsonStrArray(t.Runs)).Append(",");
+                sb.Append("\"actionTrace\":").Append(JsonStr(TraceFor(t, runTraces) ?? ""));
                 sb.Append("}");
             }
             sb.Append("]");
             File.WriteAllText(Path.Combine("Builds", "autopilot-tickets.json"), sb.ToString());
+        }
+
+        // Renders a JSON array of ints, e.g. [12345,7].
+        private static string JsonIntArray(List<int> values)
+        {
+            var sb = new StringBuilder("[");
+            for (int i = 0; i < values.Count; i++)
+            {
+                if (i > 0) sb.Append(",");
+                sb.Append(values[i]);
+            }
+            sb.Append("]");
+            return sb.ToString();
+        }
+
+        // Renders a JSON array of (escaped) strings.
+        private static string JsonStrArray(IEnumerable<string> values)
+        {
+            var sb = new StringBuilder("[");
+            bool first = true;
+            foreach (var v in values)
+            {
+                if (!first) sb.Append(",");
+                first = false;
+                sb.Append(JsonStr(v));
+            }
+            sb.Append("]");
+            return sb.ToString();
         }
 
         private static string JsonStr(string s)

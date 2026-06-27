@@ -175,6 +175,16 @@ namespace DeNelle.DevTools
             }
             catch (Exception ex) { FlowTrace.Warn("Auto", "Failed to arm AutoPilotProbes: " + ex.Message); }
 
+            // WO-452 §A (tranche 3): arm the UI panel-health guard alongside the probes —
+            // it watches for duplicate UIDocument / onboarding-panel-in-gameplay-scene
+            // defects (the dev-tools-dead-after-Yarn class) and Fails to break-log.jsonl.
+            try
+            {
+                var guards = gameObject.AddComponent<AutoPilotLogGuards>();
+                guards.Arm();
+            }
+            catch (Exception ex) { FlowTrace.Warn("Auto", "Failed to arm AutoPilotLogGuards: " + ex.Message); }
+
             // Skip Yarn: a background suppressor dismisses any dialogue that auto-starts
             // (e.g. the companion intro SylasFirstMeeting on entering MainCastle_Hall) so a
             // headless bot never stalls inside a conversation it can't read. This is the
@@ -212,6 +222,11 @@ namespace DeNelle.DevTools
                 // inventory, and that equipping actually changes the hero's loadout/stat.
                 yield return RunPhase("AssertEconomyDeduct", AssertEconomyDeduct());
                 yield return RunPhase("AssertEquip", AssertEquip());
+                // WO-452 tranche D: live play -> quicksave -> reload round-trip oracle. Mutate
+                // wallet (resources), party roster and the tracked quest id, GameStateService
+                // Save()->Load(), and assert all three survived. Complements the headless
+                // SessionRegression schema round-trip by guarding the LIVE play->save->reload path.
+                yield return RunPhase("AssertSaveRoundTrip", AssertSaveRoundTrip());
                 // DETERMINISTIC GARRISON-ROSTER DIAG (tickets #2 troll-orientation + #4 magenta): the chaos
                 // walk cannot reliably reach Village2's garrison before the time budget, so the orc/troll
                 // roster never spawns to be inspected. Build the EXACT village2_stronghold roster HERE via the
@@ -221,6 +236,11 @@ namespace DeNelle.DevTools
                 yield return RunPhase("DiagGarrisonRoster", DiagGarrisonRoster());
                 yield return RunPhase("OpenEachHUDPanel", OpenEachHUDPanel());
                 yield return RunPhase("TriggerWave", TriggerWave());
+                // WO-452 tranche C: combat invariants during the (just-triggered) wave — hero HP
+                // never goes negative while still alive, >=1 placed tower actually fired in the
+                // defense window, and >=2 distinct enemy types appeared. N/A (skipped) in a scene
+                // with no wave loop (e.g. the MainCastle_Hall hub).
+                yield return RunPhase("AssertCombatInvariants", AssertCombatInvariants());
                 // AttemptExitCastle deliberately crosses a scene seam, so tell the
                 // UNEXPECTED-CROSS probe this load is intentional (else it would flag
                 // the bot's own exit). Clear it again right after.
@@ -688,6 +708,8 @@ namespace DeNelle.DevTools
                 case "AssertVendorTalkRoute": return ContractTimeout * 8f; // one Interact() per castle vendor
                 case "AssertEconomyDeduct": return EconomyDeductTimeout;
                 case "AssertEquip":       return EquipTimeout;
+                case "AssertSaveRoundTrip": return 20f;       // WO-452 D — save/load round-trip
+                case "AssertCombatInvariants": return 20f;    // WO-452 C — ~12s defense window + slack
                 case "OpenEachHUDPanel":  return HudPanelTimeout * 8f;
                 case "TriggerWave":       return WaveTimeout;
                 case "AttemptExitCastle": return ExitTimeout;
@@ -1415,6 +1437,239 @@ namespace DeNelle.DevTools
         }
 
         // =====================================================================
+        //  PHASE: AssertSaveRoundTrip  (WO-452 tranche D)
+        //  Live play -> quicksave -> reload oracle. Mutate three asserted domains
+        //  (wallet/Resources, party roster, tracked quest id) to KNOWN marker values,
+        //  GameStateService.Save(), PERTURB the live SO away from those values, then
+        //  Load() and assert all three were restored. This guards the LIVE
+        //  serialize->PlayerPrefs->migrate->validate->apply path the headless
+        //  SessionRegression data round-trip can't see. Restores the player's original
+        //  save at the end so the probe leaves no trace.
+        // =====================================================================
+        private IEnumerator AssertSaveRoundTrip()
+        {
+            const string Tag = "Auto";
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            if (svc == null || svc.State == null)
+            {
+                FlowTrace.Warn(Tag, "AssertSaveRoundTrip: GameStateService/State unavailable — skipping.");
+                _lastDetail = "no GameStateService — skipped";
+                yield break;
+            }
+
+            var state = svc.State;
+            string key = DeNelle.Core.State.SaveSchema.PlayerPrefsKey;
+
+            // Preserve the existing save so the probe never corrupts a real player save.
+            string origSave = PlayerPrefs.HasKey(key) ? PlayerPrefs.GetString(key) : null;
+
+            string probeRosterId = "AutoPilotSaveProbe-" + _seed;
+            string probeQuestId  = "autopilot-quest-" + _seed;
+            const int ProbeCrystals = 4242;
+
+            // 1) Set KNOWN marker state across wallet/roster/quest.
+            bool ok = true; string err = null;
+            try
+            {
+                var res = state.Resources; res.Crystals = ProbeCrystals; state.Resources = res;
+                if (state.PartyMemberIds == null) state.PartyMemberIds = new List<string>();
+                if (!state.PartyMemberIds.Contains(probeRosterId)) state.PartyMemberIds.Add(probeRosterId);
+                if (state.Quests == null) state.Quests = DeNelle.Core.State.QuestProgress.Empty();
+                state.Quests.TrackedId = probeQuestId;
+            }
+            catch (Exception ex) { ok = false; err = ex.Message; }
+            if (!ok)
+            {
+                FlowTrace.Fail(Tag, "AssertSaveRoundTrip: failed to set marker state — " + err);
+                _lastDetail = "set-marker threw";
+                RestoreSave(key, origSave, svc);
+                yield break;
+            }
+
+            // 2) QUICKSAVE.
+            try { svc.Save(); } catch (Exception ex) { ok = false; err = ex.Message; }
+            if (!ok)
+            {
+                FlowTrace.Fail(Tag, "AssertSaveRoundTrip: Save() threw — " + err);
+                _lastDetail = "Save threw";
+                RestoreSave(key, origSave, svc);
+                yield break;
+            }
+            yield return null;
+
+            // 3) PERTURB the live SO away from the saved values (without persisting) so the
+            //    reload has something to actually restore.
+            try
+            {
+                var res2 = state.Resources; res2.Crystals = 0; state.Resources = res2;
+                if (state.PartyMemberIds != null) state.PartyMemberIds.Remove(probeRosterId);
+                if (state.Quests != null) state.Quests.TrackedId = "perturbed-" + _seed;
+            }
+            catch (Exception ex) { FlowTrace.Warn(Tag, "AssertSaveRoundTrip: perturb threw — " + ex.Message); }
+            yield return null;
+
+            // 4) RELOAD from the saved PlayerPrefs.
+            try { svc.Load(); } catch (Exception ex) { ok = false; err = ex.Message; }
+            if (!ok)
+            {
+                FlowTrace.Fail(Tag, "AssertSaveRoundTrip: Load() threw — " + err);
+                _lastDetail = "Load threw";
+                RestoreSave(key, origSave, svc);
+                yield break;
+            }
+            yield return null;
+
+            // 5) ASSERT the three domains survived the round-trip.
+            int crystalsAfter = state.Resources.Crystals;
+            bool rosterAfter = state.PartyMemberIds != null && state.PartyMemberIds.Contains(probeRosterId);
+            string questAfter = state.Quests != null ? state.Quests.TrackedId : null;
+
+            bool walletOk = crystalsAfter == ProbeCrystals;
+            bool rosterOk = rosterAfter;
+            bool questOk  = questAfter == probeQuestId;
+
+            if (!walletOk)
+                FlowTrace.Fail(Tag, $"AssertSaveRoundTrip: WALLET drift — crystals {crystalsAfter} after reload, expected {ProbeCrystals}.");
+            if (!rosterOk)
+                FlowTrace.Fail(Tag, $"AssertSaveRoundTrip: ROSTER drift — '{probeRosterId}' missing after reload " +
+                    $"(roster=[{(state.PartyMemberIds != null ? string.Join(",", state.PartyMemberIds) : "<null>")}]).");
+            if (!questOk)
+                FlowTrace.Fail(Tag, $"AssertSaveRoundTrip: QUEST drift — tracked id '{questAfter ?? "<null>"}' after reload, expected '{probeQuestId}'.");
+
+            bool pass = walletOk && rosterOk && questOk;
+            if (pass)
+                FlowTrace.Step(Tag, $"AssertSaveRoundTrip: PASS — wallet+roster+quest all survived Save()->Load() (crystals={crystalsAfter}, roster has probe, quest='{questAfter}').");
+            _lastDetail = $"wallet={walletOk} roster={rosterOk} quest={questOk} -> {(pass ? "PASS" : "FAIL")}";
+
+            // Restore the player's original save so the probe leaves no marker behind.
+            RestoreSave(key, origSave, svc);
+        }
+
+        // Restore the save string captured before AssertSaveRoundTrip (or clear it if there
+        // was none) and re-apply it onto the live SO, so the rest of the run continues from
+        // the player's real state rather than the probe markers. Never throws.
+        private static void RestoreSave(string key, string origSave, DeNelle.Core.State.GameStateService svc)
+        {
+            try
+            {
+                if (origSave != null) { PlayerPrefs.SetString(key, origSave); PlayerPrefs.Save(); }
+                else PlayerPrefs.DeleteKey(key);
+                if (svc != null && origSave != null) svc.Load();
+            }
+            catch (Exception ex) { FlowTrace.Warn("Auto", "AssertSaveRoundTrip: restore threw — " + ex.Message); }
+        }
+
+        // =====================================================================
+        //  PHASE: AssertCombatInvariants  (WO-452 tranche C)
+        //  Runs during the triggered wave and asserts three combat invariants:
+        //    (1) HERO HP never < 0 while still alive (not defeated) — a clamp regression.
+        //    (2) A placed TOWER actually fired in the defense window — detected via the
+        //        existing TowerAI "picked target" acquire trace (emitted on the fire tick
+        //        when FlowTrace.Enabled). We assert the event APPEARED, not damage math.
+        //    (3) >=2 distinct enemy type ids appeared (read off WaveManager.LiveEnemies).
+        //  N/A (skipped, success) when the scene has no WaveManager (e.g. the hub). To
+        //  avoid false tickets: a single-type wave is a Warn (early waves are 1 type),
+        //  and the tower check downgrades to a Warn when FlowTrace is disabled.
+        // =====================================================================
+        private IEnumerator AssertCombatInvariants()
+        {
+            const string Tag = "Auto";
+            var wm = WaveManager.Instance ?? UnityEngine.Object.FindAnyObjectByType<WaveManager>();
+            if (wm == null)
+            {
+                FlowTrace.Step(Tag, "AssertCombatInvariants: no WaveManager in scene — N/A (no wave loop), skipping.");
+                _lastDetail = "no WaveManager — N/A (skipped)";
+                yield break;
+            }
+
+            var hero = HeroHealth.Instance;
+
+            // Detect a REAL tower fire via the existing TowerAI acquire trace ("picked target"
+            // is logged on the fire tick, immediately before FireAt). Subscribe for the window.
+            bool towerFired = false;
+            Application.LogCallback onLog = (msg, st, type) =>
+            {
+                if (string.IsNullOrEmpty(msg)) return;
+                if (msg.IndexOf("[Flow:TowerAI]", StringComparison.OrdinalIgnoreCase) >= 0
+                    && msg.IndexOf("picked target", StringComparison.OrdinalIgnoreCase) >= 0)
+                    towerFired = true;
+            };
+            Application.logMessageReceived += onLog;
+
+            var seenTypes = new HashSet<string>();
+            bool heroHpNegative = false;
+            float heroHpAtFault = 0f;
+
+            // Make sure a wave is running so towers have something to shoot.
+            if (wm.Phase == WavePhase.Idle)
+            {
+                try { wm.ForceSpawnNextWaveNow(); }
+                catch (Exception ex) { FlowTrace.Warn(Tag, "AssertCombatInvariants: ForceSpawnNextWaveNow threw " + ex.Message); }
+            }
+
+            bool towersExist = UnityEngine.Object.FindObjectsByType<TowerCombat>(FindObjectsSortMode.None).Length > 0;
+
+            const float Window = 12f;   // defense window
+            float t0 = Time.realtimeSinceStartup;
+            while (Time.realtimeSinceStartup - t0 < Window)
+            {
+                // (1) hero HP invariant — never negative while still alive.
+                if (hero != null && hero.Hp < 0f && hero.IsAlive)
+                {
+                    heroHpNegative = true;
+                    heroHpAtFault = hero.Hp;
+                }
+
+                // (3) enemy variety — collect distinct type ids from the live roster.
+                var live = wm.LiveEnemies;
+                if (live != null)
+                {
+                    for (int i = 0; i < live.Count; i++)
+                    {
+                        var e = live[i];
+                        if (e == null || e.IsDead) continue;
+                        string id = !string.IsNullOrEmpty(e.EnemyDefId) ? e.EnemyDefId : e.EnemyId;
+                        if (!string.IsNullOrEmpty(id)) seenTypes.Add(id);
+                    }
+                }
+                yield return null;
+            }
+
+            Application.logMessageReceived -= onLog;
+
+            // (1) hero HP verdict
+            if (heroHpNegative)
+                FlowTrace.Fail(Tag, $"AssertCombatInvariants: hero HP went NEGATIVE ({heroHpAtFault:0.0}) while still alive (not defeated) — HP-clamp regression.");
+
+            // (2) tower-fired verdict
+            if (towersExist)
+            {
+                if (towerFired)
+                    FlowTrace.Step(Tag, "AssertCombatInvariants: a tower fired during the defense window (TowerAI acquire trace seen).");
+                else if (FlowTrace.Enabled)
+                    FlowTrace.Fail(Tag, "AssertCombatInvariants: NO tower fired during the ~12s defense window though tower(s) are placed (no TowerAI acquire trace) — towers inert.");
+                else
+                    FlowTrace.Warn(Tag, "AssertCombatInvariants: tower-fire check skipped (FlowTrace disabled — no acquire trace to read).");
+            }
+            else
+            {
+                FlowTrace.Step(Tag, "AssertCombatInvariants: no towers placed — tower-fire invariant N/A.");
+            }
+
+            // (3) enemy-variety verdict
+            if (seenTypes.Count >= 2)
+                FlowTrace.Step(Tag, $"AssertCombatInvariants: {seenTypes.Count} distinct enemy type(s) observed [{string.Join(",", seenTypes)}].");
+            else if (seenTypes.Count == 0)
+                FlowTrace.Warn(Tag, "AssertCombatInvariants: no enemies spawned during the window — variety check N/A.");
+            else
+                FlowTrace.Warn(Tag, $"AssertCombatInvariants: only 1 enemy type observed [{string.Join(",", seenTypes)}] — wave lacked variety (early single-type waves are expected; warning, not a hard fail).");
+
+            bool towerOk = !towersExist || towerFired || !FlowTrace.Enabled;
+            bool pass = !heroHpNegative && towerOk;
+            _lastDetail = $"heroHpNeg={heroHpNegative} towerFired={towerFired} (towers={towersExist}) enemyTypes={seenTypes.Count} -> {(pass ? "PASS" : "FAIL")}";
+        }
+
+        // =====================================================================
         //  PHASE: OpenEachHUDPanel
         //  For every PanelId registered with PanelRouter: open, assert AnyOpen,
         //  actuate the clickables on the open surface, then CloseOpen.
@@ -1881,6 +2136,8 @@ namespace DeNelle.DevTools
                     utc = DateTime.UtcNow.ToString("o"),
                     totalSeconds = Time.realtimeSinceStartup - _runStartRealtime,
                     aborted = _abortRun,
+                    seed = _seed,                       // WO-452 tranche E: reproducibility
+                    runId = _runId ?? "",               // WO-452 tranche E: replay handle
                     phases = _phases.ToArray(),
                 };
                 // Fleet mode: write into persistentDataPath/autopilot-runs/<id>/ so it
@@ -1948,6 +2205,8 @@ namespace DeNelle.DevTools
             public string utc;
             public float totalSeconds;
             public bool aborted;
+            public int seed;        // WO-452 tranche E — the run's seed (for replay)
+            public string runId;    // WO-452 tranche E — the run id (namespaces output)
             public PhaseResult[] phases;
         }
     }
