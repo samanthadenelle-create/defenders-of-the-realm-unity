@@ -1,5 +1,9 @@
 # Backlog Reconciliation — 2026-06-21 (overnight closing task)
 
+> ⚠ **SUPERSEDED 2026-06-27** by `BACKLOG_RECONCILIATION_2026-06-27.md` (re-verified at a later
+> HEAD; close-list re-confirmed + 8 new frontier closes added). This doc remains valid as the
+> 2026-06-21 point-in-time snapshot — read the 06-27 doc for current state.
+
 **Owner directive (2026-06-21):** reconcile all open tickets + sync as much as possible;
 **Defend-the-Tower = deprecated → CLOSE**; **Dungeon = FUTURE WORK**; cross-check Notion ↔
 the pipeline backlog and **confirm against the actual code (code wins on truth)**.
