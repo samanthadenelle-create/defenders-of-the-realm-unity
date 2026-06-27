@@ -132,6 +132,7 @@ namespace DeNelle.BattleATB
         private GameObject _partyPanel;
         private GameObject _infoPanel;
         private GameObject _skillsSubPanel;
+        private GameObject _logPanel;
 
         // Buttons
         private Button _attackBtn;
@@ -143,6 +144,13 @@ namespace DeNelle.BattleATB
         private TextMeshProUGUI _titleText;
         private TextMeshProUGUI _waveText;
         private TextMeshProUGUI _turnText;
+
+        // Battle log (last-N rolling text panel). Mirrors the engine's append-only
+        // state.Log; only entries past _lastShownLogIndex are appended each Render().
+        private TextMeshProUGUI _logText;
+        private int _lastShownLogIndex;
+        private readonly List<string> _logLines = new List<string>();
+        private const int MaxLogLines = 4;
 
         // Party slots (4 as per spec)
         private readonly List<PartySlot> _partySlots = new List<PartySlot>();
@@ -358,6 +366,45 @@ namespace DeNelle.BattleATB
             subVlg.padding = new RectOffset(8, 8, 8, 8);
 
             _skillsSubPanel.SetActive(false);
+
+            // Battle log — a small last-N rolling text panel above the command box.
+            CreateLogPanel();
+        }
+
+        /// <summary>Small dark-glass battle-log panel above the command box. Shows the
+        /// last few engine log lines (state.Log), filled incrementally in Render().</summary>
+        private void CreateLogPanel()
+        {
+            _logPanel = new GameObject("BattleLogPanel");
+            var rt = _logPanel.AddComponent<RectTransform>();
+            rt.SetParent(_canvas.transform, false);
+            rt.anchorMin = new Vector2(0, 0);
+            rt.anchorMax = new Vector2(0, 0);
+            rt.pivot = new Vector2(0, 0);
+            rt.anchoredPosition = new Vector2(30, 246); // sits just above the 208-tall command box (bottom-left)
+            rt.sizeDelta = new Vector2(272, 92);
+
+            _logPanel.AddComponent<Image>();
+            DressGlassPanel(_logPanel, deep: false);
+
+            PanelHeader(_logPanel, "LOG");
+
+            var txtGO = new GameObject("LogText");
+            txtGO.transform.SetParent(_logPanel.transform, false);
+            var txtRt = txtGO.AddComponent<RectTransform>();
+            txtRt.anchorMin = new Vector2(0, 0);
+            txtRt.anchorMax = new Vector2(1, 1);
+            txtRt.offsetMin = new Vector2(10, 8);
+            txtRt.offsetMax = new Vector2(-10, -28); // clear the header crest at the top
+
+            _logText = txtGO.AddComponent<TextMeshProUGUI>();
+            _logText.text = "";
+            _logText.fontSize = ElarionUi.FontMicro;
+            _logText.color = ElarionUi.ParchmentDim;
+            _logText.alignment = TextAlignmentOptions.BottomLeft; // newest line at the bottom
+            _logText.enableWordWrapping = true;
+            _logText.overflowMode = TextOverflowModes.Truncate;
+            _logText.raycastTarget = false;
         }
 
         /// <summary>One command/skill button, skinned through the shared kit (rounded glass
@@ -428,10 +475,7 @@ namespace DeNelle.BattleATB
 
         private void OnAttackClicked() => SubmitAction(new BattleAction { Kind = ActionKind.Attack });
         private void OnSkillsClicked() => ShowSkillsSubmenu();
-        private void OnItemClicked()
-        {
-            /* populate item submenu similarly */
-        }
+        private void OnItemClicked() => ShowItemSubmenu();
         private void OnDefendClicked() => SubmitAction(new BattleAction { Kind = ActionKind.Defend });
 
         private void ShowSkillsSubmenu()
@@ -498,6 +542,54 @@ namespace DeNelle.BattleATB
         private void SubmitAbility(AbilitySlot slot)
         {
             var action = BattleAction.MakeAbility(slot);
+            OnAction?.Invoke(action);
+            _skillsSubPanel.SetActive(false);
+        }
+
+        /// <summary>Item submenu — mirrors <see cref="ShowSkillsSubmenu"/>: reuses the same
+        /// sub-window, populating it from the battle's shared inventory (usable items only).
+        /// Each chosen item routes through the SAME BattleAction path as skills.</summary>
+        private void ShowItemSubmenu()
+        {
+            _skillsSubPanel.SetActive(true);
+            foreach (Transform t in _skillsSubPanel.transform) Destroy(t.gameObject);
+            _skillButtons.Clear();
+
+            var items = GetUsableItems();
+            // TGVRU V: no usable items builds an EMPTY submenu (a blank panel, no way out).
+            // Self-report so an empty inventory is a known data state, not an invisible dead-end.
+            if (items == null || items.Count == 0)
+                FlowTrace.Warn("UI", "ShowItemSubmenu: 0 usable items in inventory — Item submenu opens EMPTY.");
+            foreach (var kv in items)
+            {
+                var kind = kv.Key;      // capture for the closure (avoid modified-closure on the loop var)
+                int count = kv.Value;
+                string name = DeNelle.BattleATB.Engine.Defs.ITEM_DEFS.TryGetValue(kind, out var def)
+                    ? def.Name
+                    : kind.ToString();
+                var b = CreateMenuButton($"{name} (x{count})", () => SubmitItem(kind));
+                b.transform.SetParent(_skillsSubPanel.transform, false);
+                _skillButtons.Add(b);
+            }
+        }
+
+        /// <summary>Usable items (count &gt; 0) from the active battle's shared inventory.</summary>
+        private List<KeyValuePair<ItemKind, int>> GetUsableItems()
+        {
+            var result = new List<KeyValuePair<ItemKind, int>>();
+            if (_lastState?.Inventory == null) return result;
+            foreach (var kv in _lastState.Inventory)
+                if (kv.Value > 0) result.Add(kv);
+            return result;
+        }
+
+        private void SubmitItem(ItemKind item)
+        {
+            _pendingKind = PickKind.Item;
+            _pendingItem = item;
+            // Null target → the engine's ResolveItem falls back to the acting unit (self-heal/restore),
+            // matching the AI item path; ability submit likewise passes no explicit target.
+            var action = BattleAction.MakeItem(item, null);
             OnAction?.Invoke(action);
             _skillsSubPanel.SetActive(false);
         }
@@ -691,6 +783,10 @@ namespace DeNelle.BattleATB
             // Floor at 1 so a dungeon/dev battle (Wave 0) still reads "WAVE 1" rather than "WAVE 0".
             if (_waveText) _waveText.text = "WAVE " + Mathf.Max(1, state.Wave);
 
+            // Battle log — append only entries added since the last shown index (the engine's
+            // Log is append-only; mirrors BattleController's _lastProcessedLogIndex cursor).
+            AppendNewLogEntries(state);
+
             // Party slots (first 4 party members)
             // TGVRU V: if the slot widgets were never built, the loop below silently fills nothing —
             // the party panel reads blank. Self-report once so a missing CreatePartyPanel is visible.
@@ -715,6 +811,34 @@ namespace DeNelle.BattleATB
                         ? ElarionUi.Gilt
                         : new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f);
             }
+        }
+
+        /// <summary>Append battle-log entries added since the last shown index, keeping the
+        /// last <see cref="MaxLogLines"/> lines. Resets the cursor if a fresh (shorter) log
+        /// appears — e.g. a new battle reuses the same HUD instance.</summary>
+        private void AppendNewLogEntries(BattleState state)
+        {
+            if (_logText == null || state?.Log == null) return;
+
+            int count = state.Log.Count;
+            if (_lastShownLogIndex > count) // new/replaced battle — log shrank, re-baseline
+            {
+                _lastShownLogIndex = 0;
+                _logLines.Clear();
+            }
+
+            for (int i = _lastShownLogIndex; i < count; i++)
+            {
+                var entry = state.Log[i];
+                if (entry != null && !string.IsNullOrEmpty(entry.Text))
+                    _logLines.Add(entry.Text);
+            }
+            _lastShownLogIndex = count;
+
+            if (_logLines.Count > MaxLogLines)
+                _logLines.RemoveRange(0, _logLines.Count - MaxLogLines);
+
+            _logText.text = string.Join("\n", _logLines);
         }
 
         private void UpdateSlot(PartySlot slot, BattleUnit u)
@@ -791,6 +915,9 @@ namespace DeNelle.BattleATB
             _skillsSubPanel?.SetActive(false);
             _pendingKind = PickKind.None;
             _visualAtb.Clear();
+            _lastShownLogIndex = 0;
+            _logLines.Clear();
+            if (_logText != null) _logText.text = "";
         }
     }
 }
