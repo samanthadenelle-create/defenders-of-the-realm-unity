@@ -53,23 +53,28 @@ namespace DeNelle.Core.UI
         // ONE ElarionUi source (warm stone/wood) at the kit's own translucency alphas — so the HUD
         // keeps its see-through depth but reads dark-WOOD, not cool-glass. Tune the wood in ONE
         // place (ElarionUi.PanelStone / PanelStoneDark) and it propagates through every kit screen.
+        // PHASE (b) ROUTING: these tokens are no longer hardcoded here — they RESOLVE FROM UiStyle.Theme
+        // (the single style authority). The values are identical (UiTheme seeds them with these exact
+        // literals), so this is a pure internal rewire with ZERO visual change; the public read API
+        // (`ElarionUiKit.Glass` etc.) is unchanged for every call site. Swap the active UiTheme and the
+        // whole kit's surface language reskins at once.
         /// <summary>Primary panel fill — dark translucent WOOD (play area shows through).</summary>
-        public static readonly Color Glass      = new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.66f);
+        public static Color Glass      => UiStyle.Theme.Glass;
         /// <summary>Deeper wood for heavier panels / modal backboards.</summary>
-        public static readonly Color GlassDeep  = new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.86f);
+        public static Color GlassDeep  => UiStyle.Theme.GlassDeep;
         /// <summary>Recessed near-black well / track behind a value or bar.</summary>
-        public static readonly Color Track      = new Color(0.0f,  0.0f,  0.0f,  0.45f);
+        public static Color Track      => UiStyle.Theme.Track;
         /// <summary>Cell rest fill — warm wood a touch lighter than the tray.</summary>
-        public static readonly Color Cell       = new Color(ElarionUi.PanelStone.r, ElarionUi.PanelStone.g, ElarionUi.PanelStone.b, 0.84f);
+        public static Color Cell       => UiStyle.Theme.Cell;
         /// <summary>Selected cell fill — brighter warm wood than the rest cell.</summary>
-        public static readonly Color CellSelected = new Color(0.26f, 0.20f, 0.13f, 0.95f);
+        public static Color CellSelected => UiStyle.Theme.CellSelected;
         /// <summary>Warm stone backboard behind a hero / display niche.</summary>
-        public static readonly Color StoneNiche = new Color(0.075f, 0.060f, 0.048f, 0.96f);
+        public static Color StoneNiche => UiStyle.Theme.StoneNiche;
 
         /// <summary>Thin gold accent line (a hint of runic gold, not a heavy frame).</summary>
-        public static readonly Color Accent     = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f);
+        public static Color Accent     => UiStyle.Theme.AccentLine;
         /// <summary>Even fainter gold for inner rims / soft underlines.</summary>
-        public static readonly Color AccentSoft = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.30f);
+        public static Color AccentSoft => UiStyle.Theme.AccentSoft;
 
         // ── Canonical button kinds (consolidates StyleButtonColors variants) ──
         /// <summary>Button intent. Gold = primary CTA (dark-ink text); Confirm = green;
@@ -826,8 +831,8 @@ namespace DeNelle.Core.UI
             return new PortraitHandle { image = disc, ring = ring };
         }
 
-        /// <summary>Warm tan placeholder fill for a portrait disc with no class art yet.</summary>
-        public static readonly Color PortraitPlaceholder = new Color(0.74f, 0.66f, 0.50f, 1f);
+        /// <summary>Warm tan placeholder fill for a portrait disc with no class art yet (resolves from UiStyle.Theme).</summary>
+        public static Color PortraitPlaceholder => UiStyle.Theme.PortraitPlaceholder;
 
         /// <summary>
         /// ONE shared class-portrait resolver (consolidates BattleHudUgui.PortraitFor +

@@ -87,7 +87,10 @@ namespace DeNelle.Core.UI
         public UColor Affordable  = ElarionUi.Affordable;
         public UColor DisabledCol = ElarionUi.Disabled;
         // State base tints (alpha applied per-state by StatePlate; centralises the old magic alphas)
-        public UColor LockedBase     = ElarionUiKit.Cell;
+        // NOTE: seeded from the SAME literal as the kit's Cell token below (warm wood @0.84a). Kept as a
+        // direct literal (not `Cell`) to avoid a static-init back-reference now that ElarionUiKit.Cell
+        // RESOLVES FROM this record — reading the kit during this record's own construction would NRE.
+        public UColor LockedBase     = new UColor(ElarionUi.PanelStone.r, ElarionUi.PanelStone.g, ElarionUi.PanelStone.b, 0.84f);
         public UColor OwnedBase      = ElarionUi.Affordable;
         public UColor UnlockableBase = ElarionUi.Gold;
         public UColor SelectedBase   = ElarionUi.Gold;
@@ -95,6 +98,20 @@ namespace DeNelle.Core.UI
 
         // ── Solid panel fill behind the frame (neutralised to alpha-0 when Chrome) ──
         public UColor PanelFillSolid = ElarionUi.PanelStone;
+
+        // ── Kit surface tokens (the dark-glass/wood language ElarionUiKit exposes) ──
+        // Seeded with ElarionUiKit's EXACT current literals so routing the kit through this record is a
+        // pure no-op visually. The kit's static color tokens now RESOLVE FROM these fields → UiStyle is
+        // the single source of truth for the surface language; swap the record to reskin every surface.
+        public UColor Glass         = new UColor(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.66f);
+        public UColor GlassDeep     = new UColor(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.86f);
+        public UColor Track         = new UColor(0.0f, 0.0f, 0.0f, 0.45f);
+        public UColor Cell          = new UColor(ElarionUi.PanelStone.r, ElarionUi.PanelStone.g, ElarionUi.PanelStone.b, 0.84f);
+        public UColor CellSelected  = new UColor(0.26f, 0.20f, 0.13f, 0.95f);
+        public UColor StoneNiche    = new UColor(0.075f, 0.060f, 0.048f, 0.96f);
+        public UColor AccentLine    = new UColor(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f);
+        public UColor AccentSoft    = new UColor(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.30f);
+        public UColor PortraitPlaceholder = new UColor(0.74f, 0.66f, 0.50f, 1f);
 
         // ── Typography (re-export of ElarionUi ladder — kills magic +4/+2 deltas) ──
         public int FontTitle   = ElarionUi.FontTitle;
