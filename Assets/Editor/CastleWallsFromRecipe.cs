@@ -83,6 +83,13 @@ namespace DeNelle.Editor
             // fillers mirror x4 and every side closes identically. Does NOT move any authored piece.
             CloseSouthWallSeams(parent.transform, recipe);
 
+            // T-WALLCOL (owner 2026-06-27): the seam fill leaves the FULL ±GateClearHalf gate span
+            // collider-free, so the hero walks through the whole arch AND the WO-449 LoS linecast
+            // passes through it (targeting through the wall). Close the gate MASONRY with two invisible
+            // flank colliders — extend to the arch centre, back off 1/3 of the half (DoorwayHalf) each
+            // side — leaving only the central doorway open. Pre-mirror so all 4 sides inherit it.
+            ExtendWallCollidersToGate(parent.transform, recipe);
+
             // WO-449: put the whole SOUTH wall side (authored pieces + seam fillers, incl. their
             // MeshCollider children) on the "Structure" layer BEFORE the mirror, so the LoS gate's
             // linecast occludes targeting through walls. Done pre-mirror so the x4 clones inherit it.
@@ -108,6 +115,87 @@ namespace DeNelle.Editor
                       "Save the scene, then re-bake the castle NavMesh (select the NavMeshSurface > Bake).");
         }
 
+        // =====================================================================
+        //  T-WALLCOL APPLY (headless, owner 2026-06-27 "do it from script without me touching"):
+        //  SURGICAL — does NOT delete/rebuild the walls (no clobber of the saved scene). Opens
+        //  MainCastle_Hall, adds the 2 doorjamb colliders to EACH existing CastleSide_* (idempotent),
+        //  SAVES, then runs the PROVEN castle bake (CastleHubBuilder.BatchAddFloorAndBakeCastle —
+        //  useGeometry=PhysicsColliders, collectObjects=All) which COLLECTS the new Structure-layer
+        //  box colliders and carves the navmesh down to the central 5m doorway. The hero is a
+        //  NavMeshAgent, so this bake is what actually stops it walking through the masonry; the LoS
+        //  linecast is fixed the moment the colliders exist. Verify after with Defenders/Castle/Verify
+        //  Gate Nav. The doorjamb names carry NO "Gate" substring so ExcludeGatesFromNavBake does NOT
+        //  exclude them from the bake (that exclusion is only for the arch mesh).
+        // =====================================================================
+        [MenuItem("Defenders/Castle/Apply Gate DoorJambs + Bake (T-WALLCOL, headless)")]
+        public static void ApplyGateDoorJambsAndBake()
+        {
+            const string scenePath = "Assets/Scenes/MainCastle_Hall.unity";
+            var scene = UnityEditor.SceneManagement.EditorSceneManager.OpenScene(
+                scenePath, UnityEditor.SceneManagement.OpenSceneMode.Single);
+            int added = AddDoorJambsToOpenScene();
+            if (added == 0) { Debug.LogError("[CastleWallsFromRecipe] T-WALLCOL apply: 0 doorjambs added — aborting before bake."); return; }
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(scene);
+            UnityEditor.SceneManagement.EditorSceneManager.SaveOpenScenes();
+            Debug.Log($"[CastleWallsFromRecipe] T-WALLCOL apply: added {added} doorjamb collider(s) + saved scene — now baking…");
+
+            CastleHubBuilder.BatchAddFloorAndBakeCastle();   // re-opens the saved scene, bakes the new colliders in
+            UnityEditor.SceneManagement.EditorSceneManager.SaveOpenScenes();
+            Debug.Log("[CastleWallsFromRecipe] T-WALLCOL apply DONE: 5m doorway baked. Verify with Defenders/Castle/Verify Gate Nav (path spawn -> exit trigger).");
+        }
+
+        // Add the 2 doorjamb colliders to each existing CastleSide_* in the OPEN scene (idempotent).
+        // Returns the count added. Measures wall height/thickness from the unrotated South side and
+        // reuses it for all 4 (the sides are identical mirrored clones), placing in each side's LOCAL
+        // space so the rotated clones land correctly.
+        private static int AddDoorJambsToOpenScene()
+        {
+            var ta = Resources.Load<TextAsset>("Data/castle-south-recipe");
+            if (ta == null) { Debug.LogError("[CastleWallsFromRecipe] doorjamb apply: recipe not found."); return 0; }
+            var recipe = JsonUtility.FromJson<Recipe>(ta.text);
+
+            float gateX = 0f, lineZ = -40.6f;
+            if (recipe != null && recipe.pieces != null)
+                foreach (var p in recipe.pieces)
+                    if (p != null && p.name == "Gate_South" && p.pos != null && p.pos.Length == 3)
+                    { gateX = p.pos[0]; lineZ = p.pos[2]; }
+
+            float wallH = 6f, wallT = 1f;
+            var south = GameObject.Find(SouthName);
+            if (south != null)
+                foreach (Transform child in south.transform)
+                {
+                    if (!child.name.StartsWith("Wall_South")) continue;
+                    var rends = child.GetComponentsInChildren<MeshRenderer>(true);
+                    if (rends.Length == 0) continue;
+                    Bounds b = rends[0].bounds;
+                    for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+                    wallH = Mathf.Max(2f, b.size.y);
+                    wallT = Mathf.Max(0.4f, b.size.z);
+                    break;
+                }
+
+            float flankLen  = GateClearHalf - DoorwayHalf;
+            float centerOff = (GateClearHalf + DoorwayHalf) * 0.5f;
+            int structureLayer = LayerMask.NameToLayer(StructureLayerName);
+            int added = 0;
+            foreach (var side in new[] { SouthName, "CastleSide_West", "CastleSide_North", "CastleSide_East" })
+            {
+                var root = GameObject.Find(side);
+                if (root == null) { Debug.LogWarning($"[CastleWallsFromRecipe] doorjamb apply: {side} not found — skipped."); continue; }
+                AddGateFlankCollider(root.transform, "Wall_South_DoorJamb_L", gateX - centerOff, lineZ, flankLen, wallH, wallT);
+                AddGateFlankCollider(root.transform, "Wall_South_DoorJamb_R", gateX + centerOff, lineZ, flankLen, wallH, wallT);
+                if (structureLayer >= 0)
+                {
+                    var l = root.transform.Find("Wall_South_DoorJamb_L"); if (l != null) l.gameObject.layer = structureLayer;
+                    var r = root.transform.Find("Wall_South_DoorJamb_R"); if (r != null) r.gameObject.layer = structureLayer;
+                }
+                added += 2;
+            }
+            Debug.Log($"[CastleWallsFromRecipe] doorjamb apply: {added} collider(s) (5m doorway, h={wallH:F1}) across the castle sides.");
+            return added;
+        }
+
         private static Vector3 V(float[] a, Vector3 fallback = default)
             => (a != null && a.Length == 3) ? new Vector3(a[0], a[1], a[2]) : fallback;
 
@@ -129,6 +217,10 @@ namespace DeNelle.Editor
         // =====================================================================
         private const float GateClearHalf = 7.5f;  // keep ~15m clear around the gate centre (4 gates)
         private const float MinGap        = 1.0f;   // ignore hairline seams below this
+        // T-WALLCOL: central open doorway half-width = 1/3 of the gate half (owner 2026-06-27, "back
+        // off 1/3 each side"). 2.5m -> a 5m walkable doorway; the masonry from 2.5m..7.5m each side is
+        // closed by an invisible collider on the Structure layer (passage + LoS occlusion).
+        private const float DoorwayHalf   = GateClearHalf / 3f;  // 2.5m central open half-width
 
         private static void CloseSouthWallSeams(Transform southParent, Recipe recipe)
         {
@@ -234,6 +326,66 @@ namespace DeNelle.Editor
             go.transform.localScale       = new Vector3(scaleX, 1f, 1f);
             Undo.RegisterCreatedObjectUndo(go, "Recreate Castle Walls");
             fillers++;
+        }
+
+        // =====================================================================
+        //  T-WALLCOL — close the gate MASONRY (not the doorway) with two invisible flank colliders.
+        //  Owner rule (2026-06-27): "extend the straight wall to the halfway point then back off 1/3
+        //  each side." halfway = gate centre; back-off = DoorwayHalf (1/3 of the 7.5 gate half = 2.5m).
+        //  So each flank collider spans DoorwayHalf..GateClearHalf (2.5..7.5m) off the gate centre — a
+        //  5m box — leaving the central 2*DoorwayHalf (5m) doorway open. Collider-ONLY (no renderer):
+        //  it sits invisibly inside the gate's existing arch art, and on the Structure layer (set by
+        //  the caller pre-mirror) it BOTH blocks passage AND occludes the WO-449 LoS targeting linecast
+        //  through the masonry. The open central doorway stays passable + see-through (correct).
+        // =====================================================================
+        private static void ExtendWallCollidersToGate(Transform southParent, Recipe recipe)
+        {
+            // gate centre + wall line (local X / Z) from the recipe — same source as the seam fill.
+            float gateX = 0f, lineZ = -40.6f; bool gotGate = false;
+            if (recipe.pieces != null)
+                foreach (var p in recipe.pieces)
+                    if (p != null && p.name == "Gate_South" && p.pos != null && p.pos.Length == 3)
+                    { gateX = p.pos[0]; lineZ = p.pos[2]; gotGate = true; }
+            if (!gotGate) Debug.LogWarning("[CastleWallsFromRecipe] T-WALLCOL: Gate_South not in recipe — using gate centre 0.");
+
+            // wall height + thickness MEASURED from a placed south wall (never guessed).
+            float wallH = 6f, wallT = 1f;
+            foreach (Transform child in southParent)
+            {
+                if (!child.name.StartsWith("Wall_South")) continue;
+                var rends = child.GetComponentsInChildren<MeshRenderer>(true);
+                if (rends.Length == 0) continue;
+                Bounds b = rends[0].bounds;
+                for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+                wallH = Mathf.Max(2f, b.size.y);
+                wallT = Mathf.Max(0.4f, b.size.z);
+                break;
+            }
+
+            float flankLen  = GateClearHalf - DoorwayHalf;          // 5m collider each flank
+            float centerOff = (GateClearHalf + DoorwayHalf) * 0.5f; // 5m off the gate centre
+            AddGateFlankCollider(southParent, "Wall_South_DoorJamb_L", gateX - centerOff, lineZ, flankLen, wallH, wallT);
+            AddGateFlankCollider(southParent, "Wall_South_DoorJamb_R", gateX + centerOff, lineZ, flankLen, wallH, wallT);
+
+            Debug.Log($"[CastleWallsFromRecipe] T-WALLCOL: 2x {flankLen:F1}m flank colliders @x={gateX - centerOff:F1}/{gateX + centerOff:F1} " +
+                      $"z={lineZ:F1} h={wallH:F1}m — central {2f * DoorwayHalf:F1}m doorway left open (passable + targetable).");
+        }
+
+        // One invisible, idempotent gate-flank box collider on the south side (mirrored x4 by the caller).
+        private static void AddGateFlankCollider(Transform parent, string name, float centerX, float lineZ,
+                                                 float lenX, float height, float thickness)
+        {
+            var existing = parent.Find(name);                // idempotent — don't stack on a re-run
+            if (existing != null) Undo.DestroyObjectImmediate(existing.gameObject);
+
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition    = new Vector3(centerX, 0f, lineZ);
+            go.transform.localEulerAngles = Vector3.zero;
+            var box = go.AddComponent<BoxCollider>();
+            box.size   = new Vector3(lenX, height, thickness);
+            box.center = new Vector3(0f, height * 0.5f, 0f);  // base at y=0, like the wall pieces
+            Undo.RegisterCreatedObjectUndo(go, "Recreate Castle Walls");
         }
     }
 }
