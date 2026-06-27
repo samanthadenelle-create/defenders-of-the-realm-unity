@@ -133,15 +133,62 @@ namespace DeNelle.Editor
             const string scenePath = "Assets/Scenes/MainCastle_Hall.unity";
             var scene = UnityEditor.SceneManagement.EditorSceneManager.OpenScene(
                 scenePath, UnityEditor.SceneManagement.OpenSceneMode.Single);
+            // owner F8 2026-06-27 "you added walls inside, not at the gates": a prior apply used the
+            // HEAVY CastleHubBuilder.BatchAddFloorAndBakeCastle, which ALSO runs BuildInnerWallRing
+            // (a visible concentric Wall ring 18m from centre — the "walls inside"). Remove that stray
+            // ring; we only want the INVISIBLE gate doorjambs + a LEAN navmesh re-bake (no structure rebuild).
+            var stray = GameObject.Find("InnerWallRing_CoC");
+            if (stray != null) { UnityEngine.Object.DestroyImmediate(stray); Debug.Log("[CastleWallsFromRecipe] removed stray InnerWallRing_CoC (owner F8: walls inside)."); }
+
             int added = AddDoorJambsToOpenScene();
             if (added == 0) { Debug.LogError("[CastleWallsFromRecipe] T-WALLCOL apply: 0 doorjambs added — aborting before bake."); return; }
+
+            LeanBakeNavMeshSurfaces();   // bake-only: collects the doorjamb colliders, NO BuildInnerWallRing / floor / structure rebuild
+
             UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(scene);
             UnityEditor.SceneManagement.EditorSceneManager.SaveOpenScenes();
-            Debug.Log($"[CastleWallsFromRecipe] T-WALLCOL apply: added {added} doorjamb collider(s) + saved scene — now baking…");
+            AssetDatabase.SaveAssets();
+            Debug.Log("[CastleWallsFromRecipe] T-WALLCOL apply DONE (clean, no inner ring): invisible gate doorjambs + lean re-bake. 5m doorway.");
+        }
 
-            CastleHubBuilder.BatchAddFloorAndBakeCastle();   // re-opens the saved scene, bakes the new colliders in
-            UnityEditor.SceneManagement.EditorSceneManager.SaveOpenScenes();
-            Debug.Log("[CastleWallsFromRecipe] T-WALLCOL apply DONE: 5m doorway baked. Verify with Defenders/Castle/Verify Gate Nav (path spawn -> exit trigger).");
+        // Lean NavMeshSurface bake (replicates CastleHubBuilder.BakeAllCastleSurfacesAndPersist, which
+        // is private): configure every surface to Physics Colliders / All, BuildNavMesh, persist the
+        // data asset. NO floor/inner-ring/structure rebuild — just re-bake what's in the scene now.
+        private static void LeanBakeNavMeshSurfaces()
+        {
+            System.Type surfType = null;
+            foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
+            {
+                surfType = asm.GetType("Unity.AI.Navigation.NavMeshSurface");
+                if (surfType != null) break;
+            }
+            if (surfType == null) { Debug.LogError("[CastleWallsFromRecipe] LeanBake: NavMeshSurface type not found — bake skipped."); return; }
+
+            var surfaces = UnityEngine.Object.FindObjectsByType(surfType, FindObjectsSortMode.None);
+            Debug.Log("[CastleWallsFromRecipe] LeanBake: NavMeshSurface count = " + surfaces.Length);
+            foreach (var s in surfaces)
+            {
+                var ug = surfType.GetProperty("useGeometry");
+                if (ug != null) ug.SetValue(s, System.Enum.ToObject(ug.PropertyType, 1)); // PhysicsColliders
+                var co = surfType.GetProperty("collectObjects");
+                if (co != null) co.SetValue(s, System.Enum.ToObject(co.PropertyType, 0)); // All
+
+                var build = surfType.GetMethod("BuildNavMesh", System.Type.EmptyTypes);
+                if (build != null) { build.Invoke(s, null); Debug.Log("[CastleWallsFromRecipe] LeanBake: BuildNavMesh() invoked."); }
+
+                var dataProp = surfType.GetProperty("navMeshData");
+                var data = dataProp != null ? dataProp.GetValue(s) as UnityEngine.Object : null;
+                if (data != null && !AssetDatabase.Contains(data))
+                {
+                    if (!System.IO.Directory.Exists("Assets/Scenes/MainCastle_Hall"))
+                        AssetDatabase.CreateFolder("Assets/Scenes", "MainCastle_Hall");
+                    string assetPath = "Assets/Scenes/MainCastle_Hall/NavMesh-NavMeshSurface.asset";
+                    var existing = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath);
+                    if (existing != null) AssetDatabase.DeleteAsset(assetPath);
+                    AssetDatabase.CreateAsset(data, assetPath);
+                    Debug.Log("[CastleWallsFromRecipe] LeanBake: navmesh asset written -> " + assetPath);
+                }
+            }
         }
 
         // Add the 2 doorjamb colliders to each existing CastleSide_* in the OPEN scene (idempotent).
