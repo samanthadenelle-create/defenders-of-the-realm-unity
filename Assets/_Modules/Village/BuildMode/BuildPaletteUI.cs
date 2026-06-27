@@ -55,7 +55,7 @@ namespace DeNelle.Village
         public event Action<string> OnOrientRequested;
 
         [Tooltip("Catalog types the palette lists. Default = Tower (the registered content).")]
-        [SerializeField] private CatalogType[] _types = { CatalogType.Tower, CatalogType.Wall, CatalogType.Gate, CatalogType.Resource };
+        [SerializeField] private CatalogType[] _types = { CatalogType.Tower, CatalogType.Wall, CatalogType.Gate };
 
         // Catalog ids defined-but-not-yet-buildable. They stay in the catalog (ready
         // to unlock + referenced elsewhere) but are filtered out of the build palette

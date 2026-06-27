@@ -171,7 +171,7 @@
     },
     "maxLevel": 3,
     "navSurface": "Blocker",
-    "visualHeight": 6.0,
+    "visualHeight": 2.0,
     "range": 28.0,
     "damage": 24.0,
     "fireRate": 0.8,
