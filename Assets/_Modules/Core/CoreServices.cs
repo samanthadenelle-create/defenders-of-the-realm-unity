@@ -17,6 +17,7 @@
 
 using DeNelle.Core.Audio;
 using DeNelle.Core.HUD;
+using DeNelle.Core.HudModel;
 using DeNelle.Core.Web3;
 using UnityEngine;
 
@@ -41,6 +42,24 @@ namespace DeNelle.Core
 
         /// <summary>Unregisters the village HUD. Called by VillageHudController.OnDestroy.</summary>
         public static void UnregisterHud(IVillageHud hud) { if (ReferenceEquals(Hud, hud)) Hud = null; }
+
+        // ── HUD model layer (WO-541) ──────────────────────────────────────────
+        /// <summary>
+        /// The active HUD model facade (read-only data + Changed events), or null
+        /// when no HudModelHost is present in the loaded scenes. Producers write the
+        /// models; views read them. Always null-check before use.
+        /// </summary>
+        public static IHudModel HudModel { get; private set; }
+
+        /// <summary>Registers the HUD model facade. Called by HudModelHost.Awake (WO-541 Stage 2).</summary>
+        public static void RegisterHudModel(IHudModel m)
+        {
+            HudModel = m;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HUD", "HudModel registered");
+        }
+
+        /// <summary>Unregisters the HUD model facade. Called by HudModelHost.OnDestroy.</summary>
+        public static void UnregisterHudModel(IHudModel m) { if (ReferenceEquals(HudModel, m)) HudModel = null; }
 
         // ── Audio (WO-41) ─────────────────────────────────────────────────────
         /// <summary>
