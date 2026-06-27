@@ -277,3 +277,253 @@ New `concept-icons.json` rows to add alongside the art: `skill`/`spell` → `ico
 - Order of work: (1) mirror missing art + concept-icons rows; (2) skill-tree node plate →
   `slot_talent` + node icons via resolver; (3) inventory portrait niche → `PanelPortrait`,
   confirm `slot_item`/`PanelGrid` cell path; (4) verify both flag states headless.
+
+---
+
+## 6. UiStyle — single theme singleton (one style for everything)
+
+> Owner directive (extends this design): "make a styling-type SINGLETON for ONE UI style for
+> EVERYTHING — not piece this and piece that." This is her One-Model method applied to
+> PRESENTATION: ONE style authority every dumb View pulls from; styling is never decided
+> per-screen. DESIGN ONLY below — no code. This supersedes the per-region tables in §2.2 / §3.2
+> as the *mechanism* (those tables become the DEFAULT VALUES inside the one theme record).
+
+### 6.1 Inventory of style decided piecemeal TODAY (the "piece this/piece that")
+
+There already IS a partial authority — `ElarionUi` (`ElarionUi.cs:38`, "the ONE in-game UI
+theme", Core so HUD+Village both read it) holds the **palette + font scale + spacing**. That is
+the seed of the singleton. But it stops at colours/fonts; **frames, slot sprites, button
+sprites, state-tints, and the chrome gate are each re-decided at every call site**, and a SECOND
+palette (`ShopTheme.cs:39-81`) duplicates it. Where style is independently decided today:
+
+| Style concern | Authority today? | Piecemeal decision sites (file:line) |
+|---|---|---|
+| Palette (gold/parchment/danger/affordable/aether/disabled) | `ElarionUi.cs:44-99` ✅ | DUPLICATED by `ShopTheme.cs:39-81` (re-aliases the same colours); kit re-derives `Glass/Cell/CellSelected/Accent` `ElarionUiKit.cs:57-72` |
+| Font sizes (Title/Head/Body/Label/Micro) | `ElarionUi.cs:87-91` ✅ | consumed ad-hoc; some call sites pass `FontTitle + 4` (`InventoryGrid.cs:276`), `FontMicro + 2` (`:281`) — magic deltas |
+| Spacing / radius / tap target | `ElarionUi.cs:94-99` ✅ | but cell SIZE is a literal `new Vector2(78f,72f)`, spacing `(6f,6f)`, padding `RectOffset(4..)` in `InventoryGrid.cs:56-58` — not in the authority |
+| **Window frame sprite** | ❌ none | each panel names it: skill tree `PanelWindowDark` (`HeroSkillTreePanelMvvm.cs:161`), inventory `PanelWindowDark` (`InventoryUIBuilder.cs:50`) — chosen independently, was wrong once (`PanelVendor` bug, `:47-50`) |
+| **Slot / cell sprite** | ❌ none | inventory cell decides `SlotItem` vs `PanelGrid` vs `PanelInventory` inline (`InventoryGrid.cs:252-256`); skill node uses NO sprite, raw `ApplyRounded` (`HeroSkillTreePanelMvvm.cs:296-304`) |
+| **Button frame sprite** | ❌ none | each call passes `packSpriteName`: `ButtonGold`/`ButtonConfirm` (skilltree `:198`), `ButtonFrame` (`:210`, inv `:73,106`) — per call |
+| **State tint: Locked/Owned/Unlock/Equipped** | ❌ none | skill node hardcodes the gold-rim/green/dim plate (`HeroSkillTreePanelMvvm.cs:301-304,332-346`); inventory cell hardcodes selected-gold/equipped-green/locked-veil (`InventoryGrid.cs:195-197,244-246,287-304`) — SAME semantic states, two independent literal sets |
+| **Tab fill / icon** | ❌ none | `InventoryUIBuilder.cs:185-225` literal `inactive` colour + `Resources.Load("Tech hud elements/...")` then `PanelTab` fallback |
+| **ff.blinkchrome on/off branch** | ❌ none | branched in ≥4 places: `HeroSkillTreePanelMvvm.cs:165,198`; `InventoryUIBuilder.cs:52`; `InventoryGrid.cs:253`; `ElarionUiKit.cs:154-205` |
+
+**Count:** ~9 style concerns, of which only 3 (palette/font/spacing) have an authority, and even
+those are duplicated (`ShopTheme`) and bypassed (literal cell sizes, magic font deltas). Frames,
+slots, buttons, state-tints and the chrome gate are decided **per panel, ~12+ independent sites**.
+That spread is exactly what the singleton removes.
+
+### 6.2 The single authority — `DeNelle.Core.UI.UiStyle`
+
+A static facade in **`DeNelle.Core.UI`** (same assembly as `ElarionUi`/`RpgUiCatalog`/
+`ConceptIconResolver`, so HUD + Village + Audio all read it with NO forbidden edge — CLAUDE.md
+§5). It OWNS nothing new conceptually — it *composes* the three existing primitives
+(`RpgUiCatalog` sprites + `ConceptIconResolver` icons + a single `UiTheme` record of values) and
+exposes them as **semantic tokens**. Views and `ElarionUiKit` call ONLY `UiStyle.*`; no raw hex,
+no `RpgUiCatalog.PanelX`, no `ff.blinkchrome` branch survives at a call site.
+
+Facade shape (semantic accessors — illustrative names, not code):
+
+```
+DeNelle.Core.UI.UiStyle           // static facade; reads UiStyle.Theme (a UiTheme record)
+  Theme        : UiTheme          // the ONE swappable record (§6.5). Set once at boot.
+  Chrome       : bool             // == FeatureFlags.BlinkChrome, read in ONE place
+
+  Frame.Window / .Vendor / .Grid / .Portrait / .Quest   -> Sprite (RpgUiCatalog panel role)
+  Slot(SlotState)                 -> Sprite  (Empty/Filled/Selected/Equipped/Locked -> slot_item/slot_talent...)
+  Button(ButtonRole)              -> Sprite  (Primary->ButtonGold|ButtonConfirm[chrome], Neutral->ButtonFrame, Close->ButtonExit)
+
+  Color.Locked / .Owned / .Unlockable / .Selected / .Equipped / .Disabled
+  Color.TextPrimary / .TextDim / .Accent / .Danger / .Affordable / .Aether
+  Color.PanelFill(bool chromeAware)        // returns alpha-0 when Chrome, solid otherwise — gate lives HERE
+
+  Font.Title / .Header / .Body / .Caption / .Micro   -> int (size)
+  Pad.Sm / .Md / .Lg ; Radius.Sm/.Md/.Lg ; CellSize ; TapTarget   -> float/Vector2
+
+  Icon(conceptId, fallbackConcept...)      -> Sprite  (wraps ConceptIconResolver.ResolveAny)
+  StatePlate(state)                        -> (Sprite slot, Color tint)  // the node/cell state in ONE call
+```
+
+Mapping the §6.1 concerns into tokens (the authority's defaults = today's correct values):
+
+- `Frame.Window` → `RpgUiCatalog.Get(RolePanel, theme.WindowPanel)` where `theme.WindowPanel =
+  PanelWindowDark`. `Frame.Vendor/Grid/Portrait` → `PanelVendor/PanelGrid/PanelPortrait`.
+- `Slot(state)` → `slot_item` (inventory) / `slot_talent` (tree) per `theme.SlotByState`; null-safe
+  so the kit keeps its procedural plate.
+- `Button(role)` → `theme.ButtonPrimary` resolves to `ButtonConfirm` when `Chrome` else
+  `ButtonGold`; `Neutral`→`ButtonFrame`; `Close`→`ButtonExit`. The chrome branch dies here.
+- `Color.Locked/Owned/Unlockable/Selected/Equipped` → the semantic tints (today's
+  `ElarionUiKit.Cell α0.40` / `Affordable` / `Gold` / `Gold rim` / `Affordable`), named ONCE.
+- `Font.*`/`Pad.*`/`CellSize` → re-export `ElarionUi.Font*`/`Pad*` + the cell size literal,
+  killing the magic `+4`/`+2` deltas and the inline `Vector2(78,72)`.
+- `Icon(conceptId)` → `ConceptIconResolver.ResolveAny(...)` — a View asks "icon for concept X",
+  never names a sprite.
+
+`ElarionUi` is NOT deleted — it becomes the *default value provider* the `UiTheme` record reads
+(palette/fonts). `ShopTheme` collapses into `UiStyle.Color.*` (its 20 aliases are duplicates).
+
+### 6.3 ElarionUiKit + Views consume ONLY UiStyle — before/after
+
+**(a) Skill node plate** — `HeroSkillTreePanelMvvm.cs:299-304`
+```
+// BEFORE (literal state tints, no sprite, decided in the View):
+if (node.Owned)        plate = new Color(ElarionUi.Affordable.r, .g, .b, 0.22f);
+else if (node.CanUnlock) plate = new Color(ElarionUi.Gold.r, .g, .b, 0.20f);
+else                   plate = new Color(ElarionUiKit.Cell.r, .g, .b, 0.40f);
+img.color = plate;
+
+// AFTER (one semantic call; sprite + tint from the authority):
+var (slot, tint) = UiStyle.StatePlate(node.Owned ? SlotState.Owned
+                    : node.CanUnlock ? SlotState.Unlockable : SlotState.Locked);
+ElarionUiKit.ApplySlot(img, slot, tint);   // kit applies 9-slice; null slot -> procedural
+```
+
+**(b) Inventory cell selected/equipped** — `InventoryGrid.cs:195-260`
+```
+// BEFORE: gold-rim literal + SlotItem-vs-PanelGrid-vs-PanelInventory inline + chrome branch.
+Color frameCol = selected ? new Color(ElarionUi.Gold..., 1f) : new Color(rc.r..., frameAlpha);
+Sprite cellTile = FeatureFlags.BlinkChrome ? RpgUiCatalog.Get(RoleSlot, SlotItem) : null;
+if (cellTile == null) cellTile = RpgUiCatalog.Get(RolePanel, PanelInventory);
+
+// AFTER: state -> (sprite,tint) from the authority; rarity stays a data overlay.
+var (tile, tint) = UiStyle.StatePlate(selected ? SlotState.Selected
+                    : equipped ? SlotState.Equipped : SlotState.Filled);
+ElarionUiKit.ApplySlot(img, tile, RarityBlend(tint, rarity));
+```
+
+**(c) Button** — any `ButtonPack` call (`HeroSkillTreePanelMvvm.cs:198`, `InventoryUIBuilder.cs:73`)
+```
+// BEFORE: each caller picks the sprite + branches on chrome:
+packSpriteName: FeatureFlags.BlinkChrome ? RpgUiCatalog.ButtonConfirm : RpgUiCatalog.ButtonGold
+// AFTER: ask for the ROLE; the authority resolves sprite + chrome:
+sprite: UiStyle.Button(ButtonRole.Primary)
+```
+
+`ElarionUiKit` itself changes its constructors to read defaults from `UiStyle`: `PanelFramed`'s
+default `packSpriteName` → `UiStyle.Frame.Window`; `Glass/Cell/CellSelected/Accent` (`:57-72`)
+→ `UiStyle.Color.*`; `ButtonPack` default sprite → `UiStyle.Button(Neutral)`. Then a View that
+passes nothing gets the themed default automatically.
+
+### 6.4 Feasibility ("if possible") + migration
+
+**Verdict: VIABLE.** The hard prerequisite is already met — `ElarionUi` proves a Core-resident
+style authority that HUD (`DeNelle.HUD`) and Village (`DeNelle.Village`) both legally read
+without a HUD↔Village edge (`ElarionUi.cs:9-12`). `UiStyle` sits beside it in `DeNelle.Core.UI`,
+reads `RpgUiCatalog` + `ConceptIconResolver` (both Core), so EVERY assembly can consume it.
+Sprite-first null-safety (`RpgUiCatalog.cs:12-16`) means a missing themed sprite degrades to the
+kit's procedural look — the migration can't blank a screen.
+
+Phased, non-breaking (each phase ships + headless-verifies green before the next):
+- **(a) Introduce `UiStyle` + `UiTheme`** reading default values from `ElarionUi` + the §2/§3
+  frame choices. Nothing consumes it yet — pure addition, zero risk.
+- **(b) Route `ElarionUiKit` through it** — kit color/frame/button defaults pull from `UiStyle`.
+  Visual no-op (defaults == today's values); proven by screenshot diff.
+- **(c) Migrate panels to semantic tokens** — replace the per-site literals in
+  `HeroSkillTreePanelMvvm` / `InventoryUIBuilder` / `InventoryGrid` (and later ShopPanel,
+  EquipmentPanel) with `UiStyle.*`. One panel per commit (file-disjoint lanes, §9).
+- **(d) Delete dead style literals** — fold `ShopTheme` into `UiStyle.Color.*`; remove the magic
+  font deltas and inline cell-size; assert no `ff.blinkchrome` branch remains outside `UiStyle`.
+
+**Honest blockers / things that resist semantic tokens:**
+- **Rarity tint** is genuinely DATA (per-item, `RarityColor` from the item's rarity key,
+  `InventoryGrid.cs:191`) — it is a *data overlay on top of* the state plate, not a theme token.
+  Keep it as data; `UiStyle.StatePlate` returns the base, rarity blends over it (shown in 6.3b).
+- **Gitignored Tech-pack `Resources.Load("Tech hud elements/...")` primaries**
+  (`InventoryUIBuilder.cs:209`, `InventoryGrid.cs:204`) are clean-build-absent; the migration
+  should DROP those primaries and let `UiStyle.Frame/Slot` (committed `RpgUi`) be the source —
+  this also removes a fragile path, but it is a deliberate look change to confirm with the owner.
+- **HUD bars / orbs** (HP/MP fill colours, `ElarionUi.cs:80-83`) are semantic already; fold in,
+  but the live HUD is the riskiest surface — migrate it LAST (phase c tail), felt-verify.
+
+### 6.5 The theme record — the "one style" you can swap to A/B a whole look
+
+`UiStyle.Theme` is ONE data object (`UiTheme`) holding EVERY token value: the panel/slot/button
+sprite NAMES (strings resolved through `RpgUiCatalog`), the semantic colours, the font sizes, the
+spacing/cell scale, and the icon default. Swap that one record → the whole game reskins. This is
+literally the owner's "try() it" — A/B an Obsidian look vs a parchment look by assigning a
+different record at boot.
+
+**Recommendation: a code-default `UiTheme` record NOW, JSON-backed LATER (not a ScriptableObject).**
+- A **code-default record** (a plain `[Serializable]` struct/class with the current values) is the
+  zero-risk phase-(a) form — no asset wiring, no inspector drag-drop (which is BANNED, memory
+  `never-dragdrop-or-manual-playtest`), compiles into every build, WebGL-safe.
+- Promote to **JSON in `Resources/Data/Canonical/ui-theme.json`** loaded via `CanonicalJson`
+  (exactly how `concept-icons.json` loads, `ConceptIconResolver.cs:42,172`) once more than one
+  theme exists. This matches the project's data-driven canon (memory
+  `owner-thinks-in-data-structures`) and the WebGL-safe Resources convention, and lets the owner
+  A/B by editing data, no recompile.
+- **Avoid a ScriptableObject:** it needs inspector authoring/drag-drop (banned) and doesn't fit
+  the JSON-catalog pattern the rest of the data uses. The sprite NAMES stay strings the JSON
+  holds; `RpgUiCatalog`/`ConceptIconResolver` already resolve string→Sprite null-safely.
+
+This is a separate WO from the Obsidian reskin (§1-5): the reskin can land FIRST against today's
+per-panel sites, then phase (c) migrates those same sites onto `UiStyle` — or, cleaner, introduce
+`UiStyle` (phase a/b) BEFORE the reskin so the Obsidian values are authored ONCE in the record.
+
+### 6.6 SCOPE — every screen consumes the ONE style (the full offender roster)
+
+The singleton is NOT scoped to skill-tree + inventory. EVERY player-facing surface is a current
+"piece this/piece that" offender (each picks its own frame/colours/fonts today) and EVERY one
+becomes a `UiStyle.*` consumer. The real screens + their style touchpoints:
+
+| Screen | Real file:line | Style it decides itself TODAY → after |
+|---|---|---|
+| **Shop (party)** | `PartyShopPanelMvvm.cs:40` (+ `PartyShopVM.cs`) | own panel frame + row plates + buttons → `UiStyle.Frame.Vendor` / `UiStyle.Slot(state)` / `UiStyle.Button(Primary)` |
+| **Shop (legacy/base)** | `ShopPanel.cs:29` (+ `ShopVM.cs`), `ShopTheme.cs:39-81` | `ShopTheme` is a DUPLICATE palette → folds into `UiStyle.Color.*`; frame → `UiStyle.Frame.Vendor` |
+| **Cosmetic shop / packs** | `CosmeticShopPanel.cs`, `PackStore.cs:38` | own card frames/price chips → `UiStyle.Frame.Grid` + `UiStyle.Slot` + `UiStyle.Color.Accent` |
+| **Building upgrade** | `BuildingUpgradePanelMvvm.cs:30` (+ `BuildingUpgradeVM.cs`) | own window + tier rows + Affordable/Disabled tints → `UiStyle.Frame.Window` + `UiStyle.Color.Unlockable/Disabled` |
+| **Tower manager / swap** | `TowerManagerPanel.cs:20`, `TowerSwapMenu.cs`, `TowerEmpowerButton.cs` | own plates + buttons → `UiStyle.Frame.*` + `UiStyle.Button(...)` |
+| **Build menu** | `BuildMenu.cs:50` | own button strip + cost colours → `UiStyle.Button` + `UiStyle.Color.Affordable/Danger` |
+| **Inventory** | `InventoryUIBuilder.cs` / `InventoryGrid.cs` (bound `InventoryVM.cs`) | §3 — cell/frame/tab → `UiStyle.Slot(state)` / `UiStyle.Frame.Grid` |
+| **Equipment / gear** | `EquipmentPanel.cs:41`, `GearLoadout.cs:29`, `HeroLoadoutPanelMvvm.cs` | own paper-doll slots + chrome branch (`EquipmentPanel.cs:113-114,475-600`) → `UiStyle.Slot` + `UiStyle.Frame.Portrait`; chrome branch dies in `UiStyle` |
+| **Consumables** | inventory Consumables tab (`InventoryVM.cs:354`, `InventoryGrid` potion path), `ConsumableUseService.cs` | potion cell/icon → `UiStyle.Slot` + `UiStyle.Icon("potion"/id)` |
+| **Skill tree** | `HeroSkillTreePanelMvvm.cs:34` (+ `HeroSkillTreeVM.cs`) | §2 — node plate → `UiStyle.StatePlate(state)` |
+| **Dialogue** | `DialogueView.cs:20` (+ `DialogueViewModel.cs`) | own panel/name plate + body font → `UiStyle.Frame.Window` + `UiStyle.Font.Body/Header` |
+| **Battle HUD** | `DeNelle.HUD` (`VillageHudController`, bars `ElarionUi.cs:80-83`) | HP/MP fill + frame → `UiStyle.Color.*` + `UiStyle.Frame` (migrate LAST — riskiest, felt-verify) |
+| **Modals / scrim / buttons** | `ElarionUiKit.BuildModalCanvas`, `Scrim`, `ButtonPack` | kit defaults → read from `UiStyle` so EVERY modal inherits the theme with no per-call sprite |
+
+Because they ALL read the one `UiStyle`, a single theme swap restyles the whole game in one move
+— which is the point of §6.7.
+
+### 6.7 `UiStyle.Try(Style.Obsidian)` — the named, typed, try-able theme lever
+
+The owner wants a NAMED theme you can TRY at the whole-UI level: `UiStyle.Try(Style.Obsidian)`
+swaps the ACTIVE theme record and reskins EVERYTHING at once (every screen in §6.6, because they
+all read `UiStyle`). The `Style` sits ABOVE the per-concept icon map — frames/palette/fonts/
+spacing come from the `Style`'s record; icons still resolve through `ConceptIconResolver` +
+`concept-icons.json` underneath (unchanged).
+
+```
+enum Style { Default, Obsidian /*, Parchment, … extensible */ }
+
+UiStyle.Active : Style                         // current style (read)
+UiStyle.Try(Style s)                           // load that style's UiTheme record -> set active -> raise Changed
+UiStyle.Theme  : UiTheme                        // the active record the tokens read (§6.5)
+event UiStyle.Changed                           // fired by Try(); live screens re-skin / next-open applies
+```
+
+Flow:
+1. **Each `Style` maps to ONE `UiTheme` record** — the token bundle (frame sprite names, palette,
+   fonts, spacing, default icon). `Style.Default` = today's parchment/stone values
+   (`ElarionUi`); `Style.Obsidian` = the §2-§5 Obsidian token set (PanelWindowDark, slot_talent,
+   ButtonConfirm-when-chrome, gold-rim states).
+2. **`UiStyle.Try(s)`** = resolve `s` → its `UiTheme` (code-default record now, JSON
+   `ui-theme.<style>.json` later, §6.5) → assign `UiStyle.Theme` → set `Active = s` → raise
+   `Changed`. One call, whole-UI swap. This IS her "try() it" lever at the global level.
+3. **Restyle propagation via `Changed`:** the open panel(s) subscribe in their `Open()` and, on
+   `Changed`, re-run their existing `Render()`/`Rebuild` (skill tree `HeroSkillTreePanelMvvm.cs:103`,
+   inventory `InventoryGrid.RebuildGrid`) — they already fully rebuild from VM + tokens, so a
+   rebuild repaints with the new theme for free. Closed panels simply pick it up on next `Open()`
+   (no live subscription needed). No new per-screen state — the Views stay dumb.
+4. **Icon override stays underneath:** `UiStyle.Icon(conceptId)` still calls
+   `ConceptIconResolver.ResolveAny` (`ConceptIconResolver.cs:102`); a `Style` can OPTIONALLY name
+   a different `concept-icons.json` variant in its record, but by default all styles share the one
+   concept map — the Style governs frames/palette/fonts, not per-concept icon identity.
+5. **`ff.blinkchrome` becomes an input to the active record, not a call-site branch:** `UiStyle`
+   reads `FeatureFlags.BlinkChrome` in ONE place (`UiStyle.Chrome`) and the Obsidian record's
+   `Button(Primary)` / `Color.PanelFill` resolve accordingly. Flipping the flag is effectively a
+   sub-variant of the Obsidian style; no screen branches on it.
+
+A debug menu item (`Defenders/Debug/UI Style ▸ Obsidian|Default`) calling `UiStyle.Try(...)` lets
+the owner A/B the entire UI live — no recompile, no per-screen edit. That is the singleton's
+payoff: ONE lever, every screen.
