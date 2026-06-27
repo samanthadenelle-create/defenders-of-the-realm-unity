@@ -44,6 +44,7 @@ using DeNelle.Core;
 using DeNelle.Core.Audio;
 using DeNelle.Core.Combat;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Village.UI;                // ScreenFader — masks the ~7km arena warps (encounter feedback)
 
 namespace DeNelle.Village.Arena
 {
@@ -76,6 +77,16 @@ namespace DeNelle.Village.Arena
         private const float ArenaHalfDepth = 24f;   // Z half-extent (~48 deep) — open kite space, not a square
 
         private const float BattleTimeoutSeconds = 240f; // generous; a stuck fight ends, never soft-locks
+
+        // ENCOUNTER FEEDBACK (2026-06-27): both ~7km WarpHero transitions (into the arena, back
+        // home) were unmasked hard cuts. We now bracket each with a black ScreenFader fade so the
+        // camera snap reads as an intentional transition. Snappy by design (a flicker of black, not
+        // a load screen). Owner-tunable.
+        private const float StageFadeOutSeconds = 0.35f;  // to black before the warp-in
+        private const float StageFadeInSeconds  = 0.45f;  // reveal the staged arena
+        private const float HomeFadeOutSeconds  = 0.35f;  // to black before the home warp
+        private const float HomeFadeInSeconds   = 0.45f;  // reveal home on return
+        private const float IntroCardSeconds    = 1.6f;   // the "<foe> - Battle!" centre card hold
 
         // WO-505 "battle closing": the wall-clock time the fight went live (set in
         // BeginEncounter). Resolve subtracts it to get the duration the star rating reads.
@@ -273,7 +284,16 @@ namespace DeNelle.Village.Arena
                 }
             });
 
-            // 3) Warp the hero to the SOUTH stance, facing north toward the enemies.
+            // 3) MASK THE WARP-IN (encounter feedback): fade to black BEFORE the ~7km warp so the
+            //    camera snap reads as an intentional transition, not a hard cut. Reuses the project's
+            //    ISceneFader contract — ScreenFader installs the long-declared-but-never-wired
+            //    SceneRouter.Fader. Unscaled-time fade -> timescale-safe. Held in `fader` for the
+            //    fade-in once the arena is staged + HUD up.
+            var fader = ScreenFader.EnsureInstalled();
+            FlowTrace.Step("BattleArena", "FADE OUT before arena warp-in (mask the 7km hard-cut).");
+            if (fader != null) yield return StartCoroutine(fader.FadeOutCo(StageFadeOutSeconds));
+
+            // Warp the hero to the SOUTH stance, facing north toward the enemies (under black).
             Vector3 heroStance = ArenaCentre + new Vector3(0f, 0f, -ArenaHalfDepth + 2f);
             WarpHero(heroStance, Quaternion.LookRotation(Vector3.forward));
 
@@ -319,7 +339,13 @@ namespace DeNelle.Village.Arena
                 _hud = BattleArenaHud.Create();
                 _hud.SetFleeHandler(Flee);
                 _hud.SetPrimary("Orc Warband", 1f, _liveEnemies.Count);
+                // ENGAGE INTRO CARD (encounter feedback): a centre overlay naming the foe, so the
+                // pull-into-the-fight has an on-screen cause. Built on the HUD's own canvas (NOT the
+                // suppressed top-centre primary panel) so it shows EVEN when the 9-zone HUD owns the
+                // top. Derived from the family ids; self-destructs after IntroCardSeconds.
+                _hud.ShowIntro(FoeLabel(p) + " - Battle!", IntroCardSeconds);
             });
+            FlowTrace.Step("BattleArena", $"INTRO card '{FoeLabel(p)} - Battle!' shown (visible even under the 9-zone HUD).");
             CoreServices.Audio?.PlayMusic(MusicTrack.Arena);
 
             // WO-504 #2: force the combat camera's post-processing + HDR ON so the arena Volume's
@@ -327,6 +353,11 @@ namespace DeNelle.Village.Arena
             EnableCombatBloomCamera();
 
             FlowTrace.Step("BattleArena", $"StageRoutine: staged {_liveEnemies.Count} enemies; fight live.");
+
+            // REVEAL (encounter feedback): fade back in now that the hero is in, the family is
+            // spawned and the HUD + intro card are up — completing the masked warp-in.
+            FlowTrace.Step("BattleArena", "FADE IN: arena staged + HUD up (masked warp-in complete).");
+            if (fader != null) yield return StartCoroutine(fader.FadeInCo(StageFadeInSeconds));
 
             // 6) Watch to resolution.
             yield return StartCoroutine(WatchToResolution());
@@ -784,12 +815,31 @@ namespace DeNelle.Village.Arena
             if (_familyEngaged || _familyLeader == null) return;
             var heroGo = GameObject.FindWithTag("Player");
             if (heroGo == null) return;
-            if (Vector3.Distance(_familyLeader.transform.position, heroGo.transform.position) <= 6f)
+            float dist = Vector3.Distance(_familyLeader.transform.position, heroGo.transform.position);
+            FlowTrace.Throttle("BattleArena", "march-dist", 1f, $"MARCH leader dist={dist:0.0}m to hero (6m gate).");
+            if (dist <= 6f)
             {
                 _familyEngaged = true;
                 _familyLeader.enabled = false;   // triggers Disband(): the pack breaks to fight
                 FlowTrace.Step("BattleArena", "family reached the hero -> DISBAND (formation -> 1vN melee).");
             }
+        }
+
+        // ENCOUNTER FEEDBACK: a player-facing label for the engaged family, derived from the
+        // EncounterParams ids (presentation only — no logic). An all-orc family reads "Orc Warband"
+        // (matching the rep's DisplayName); otherwise the leader id is humanised. ASCII-only (the
+        // legacy runtime font is ASCII).
+        private static string FoeLabel(EncounterParams p)
+        {
+            if (p == null || p.EnemyIds == null || p.EnemyIds.Length == 0) return "Foes";
+            bool allOrc = true;
+            foreach (var id in p.EnemyIds)
+                if (id == null || id.IndexOf("orc", StringComparison.OrdinalIgnoreCase) < 0) { allOrc = false; break; }
+            if (allOrc) return "Orc Warband";
+            string lead = p.EnemyIds[0] ?? "Foes";
+            lead = lead.Replace('-', ' ').Replace('_', ' ').Trim();
+            if (lead.Length == 0) return "Foes";
+            return char.ToUpperInvariant(lead[0]) + (lead.Length > 1 ? lead.Substring(1) : "");
         }
 
         // Map a family id -> an EnemyBrain role (logic). The orc family: leader=DPS,
@@ -1082,11 +1132,17 @@ namespace DeNelle.Village.Arena
             // (the Volume itself tears down with _arenaRoot below).
             RestoreCombatBloomCamera();
 
-            // Tear the stage down: kill any survivors + destroy the arena root.
-            foreach (var e in _liveEnemies) if (e != null) Guard.Try("BattleArena", "despawn enemy", () => Destroy(e.gameObject));
-            _liveEnemies.Clear();
-            if (_arenaRoot != null) Destroy(_arenaRoot);
+            // ENCOUNTER FEEDBACK: the stage teardown + the ~7km home WarpHero are now deferred into
+            // ReturnHomeWithFade (below) so a black fade MASKS them — without that, fading out from a
+            // live arena would flash the empty void at 5000,5000 once the stage is destroyed. We CAPTURE
+            // the stage + survivors into locals and null the fields NOW (so a fresh BeginEncounter can
+            // never collide with the still-standing far arena), and the coroutine destroys the captured
+            // references under black. (The audio/stars/reward/banner above stay synchronous — the
+            // headless ArenaCombatOracle reads those FlowTrace lines on this same call.)
+            var capturedStage = _arenaRoot;
             _arenaRoot = null;
+            var capturedSurvivors = new List<Enemy>(_liveEnemies);
+            _liveEnemies.Clear();
 
             // LOSE-FLOW (owner TOP priority): make a LOSS RECOVERABLE — no instant re-engage.
             //   1) Despawn the triggering rep NOW (DestroyImmediate) if it somehow still exists,
@@ -1107,32 +1163,28 @@ namespace DeNelle.Village.Arena
             if (!won && _current != null)
                 returnPos = SafeLossReturnPosition(_current.ReturnPosition, _current.ReturnYaw);
 
-            // Warp the hero home (the open world stayed in memory).
-            if (_current != null)
-                WarpHero(returnPos, Quaternion.Euler(0f, returnYaw, 0f));
-
-            // RETURN HEAL (owner felt-test 2026-06-24): back in town between fights, top the
-            // hero off to FULL HP — the "rest up at home base" beat. Covers BOTH win and
-            // loss/flee (every end funnels through this Resolve return). Null-safe; no-op on a
-            // downed hero (Respawn owns that restore). Touches HP only — no combat/damage logic.
-            Guard.Try("BattleArena", "return heal hero to full", () =>
+            // MASKED RETURN (encounter feedback): hand the stage teardown + the ~7km home warp +
+            // the camera re-lock to a short coroutine that brackets them in a black fade (mirrors the
+            // RestoreAmbientAfter coroutine pattern). Resolve is synchronous, so this is how the
+            // home hard-cut becomes an intentional fade. Only fires when a battle was actually staged
+            // (_current set) — the headless ResolveForTest seam passes a synthetic _current.
+            bool hadEncounter = _current != null;
+            if (hadEncounter)
+                Guard.Try("BattleArena", "schedule masked return",
+                    () => StartCoroutine(ReturnHomeWithFade(returnPos, returnYaw, won, capturedStage, capturedSurvivors)));
+            else
             {
-                var hh = HeroHealth.Instance;
-                if (hh != null) hh.RestoreToFull();
-            });
-            FlowTrace.Step("BattleArena", "RETURN heal: hero restored to full HP on town return.");
+                // No params (defensive): tear down + heal immediately, no warp/fade needed.
+                foreach (var e in capturedSurvivors) if (e != null) Guard.Try("BattleArena", "despawn enemy", () => Destroy(e.gameObject));
+                if (capturedStage != null) Destroy(capturedStage);
+            }
 
             // BATTLE ISOLATION: the fight is over — let home reps roam/chase/aggro again. (On a
             // loss the post-loss grace above still suppresses ENGAGE for a few seconds even though
-            // the pause is lifted, so the hero recovers; a win lifts both gates cleanly.)
+            // the pause is lifted, so the hero recovers; a win lifts both gates cleanly.) The reps
+            // live in the home scene; while the masked return fades, the hero is still at the far
+            // arena, so a resumed rep reads a ~7km distance and cannot aggro until the warp lands.
             RepEngageWatcher.ResumeAll();
-
-            // CAMERA RE-LOCK (loss especially): the death-cam released SmartMobileCamera, but the
-            // hero was warped AFTER that and the stale target lock was never cleared. Re-enable the
-            // follow camera + snap it to the hero, and clear the reticle's manual lock so the next
-            // engagement starts clean.
-            ReacquireFollowCamera();
-            ClearHeroTargetLock();
 
             // WO-505: restore explore BGM AFTER the victory/defeat cue has had its beat, so
             // the climax is not cut to silence (the banner shows for ~2.5s; we let the sting
@@ -1155,6 +1207,47 @@ namespace DeNelle.Village.Arena
         {
             yield return new WaitForSecondsRealtime(Mathf.Max(0f, seconds));
             CoreServices.Audio?.PlayMusic(MusicTrack.Overworld);
+        }
+
+        // ENCOUNTER FEEDBACK (2026-06-27): the masked home return. Fades to black, then UNDER black
+        // tears down the captured far arena + survivors, warps the hero home, heals, and re-locks the
+        // follow camera, then fades back in — so the ~7km return reads as an intentional transition,
+        // not a hard cut. The stage + survivors are passed in (captured + fields-nulled in Resolve) so
+        // a fresh battle can never collide with the still-standing arena. Unscaled fade -> timescale-
+        // safe under a slow-mo death-cam. Guarded throughout; never throws into the return.
+        private System.Collections.IEnumerator ReturnHomeWithFade(
+            Vector3 returnPos, float returnYaw, bool won, GameObject stage, List<Enemy> survivors)
+        {
+            var fader = ScreenFader.EnsureInstalled();
+            FlowTrace.Step("BattleArena", "FADE OUT before home warp (mask the 7km return).");
+            if (fader != null) yield return StartCoroutine(fader.FadeOutCo(HomeFadeOutSeconds));
+
+            // Under black: tear the far arena down (no void flash), then warp the hero home.
+            if (survivors != null)
+                foreach (var e in survivors) if (e != null) Guard.Try("BattleArena", "despawn enemy", () => Destroy(e.gameObject));
+            if (stage != null) Destroy(stage);
+
+            WarpHero(returnPos, Quaternion.Euler(0f, returnYaw, 0f));
+
+            // RETURN HEAL (owner felt-test 2026-06-24): top the hero off to FULL HP — the "rest up at
+            // home base" beat. Null-safe; no-op on a downed hero (Respawn owns that). HP only.
+            Guard.Try("BattleArena", "return heal hero to full", () =>
+            {
+                var hh = HeroHealth.Instance;
+                if (hh != null) hh.RestoreToFull();
+            });
+            FlowTrace.Step("BattleArena", "RETURN heal: hero restored to full HP on town return.");
+
+            // CAMERA RE-LOCK: the death-cam released SmartMobileCamera and the warp moved the hero —
+            // re-enable + snap the follow camera and clear the stale reticle lock, all under black so
+            // the snap is invisible. (Unchanged behaviour; only the timing moved under the fade.)
+            ReacquireFollowCamera();
+            ClearHeroTargetLock();
+
+            yield return null;   // let the camera snap settle one frame under black
+
+            FlowTrace.Step("BattleArena", "FADE IN: home arrival (masked return complete).");
+            if (fader != null) yield return StartCoroutine(fader.FadeInCo(HomeFadeInSeconds));
         }
 
         // Win reward (C2 — close the FELT reward loop): a staged-family/threat-scaled

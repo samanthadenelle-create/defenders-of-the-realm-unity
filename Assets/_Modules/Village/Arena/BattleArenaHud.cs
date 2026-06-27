@@ -95,6 +95,30 @@ namespace DeNelle.Village.Arena
 
         public void SetFleeHandler(Action onFlee) => _onFlee = onFlee;
 
+        /// <summary>
+        /// ENGAGE INTRO CARD (encounter feedback): a brief centre overlay naming the engaged foe
+        /// (e.g. "Orc Warband - Battle!") so the pull-into-the-fight has an on-screen cause. Built
+        /// on the HUD's OWN canvas (a sibling of the live group), NOT inside the top-centre primary
+        /// panel — so SuppressPrimaryForHud9 (which hides only that panel) does NOT hide this card.
+        /// Self-destructs after <paramref name="seconds"/>. ASCII-only text (legacy runtime font).
+        /// </summary>
+        public void ShowIntro(string foeLabel, float seconds = 1.6f)
+        {
+            if (_canvas == null) return;
+            var card = AddPanel(_canvas.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                                new Vector2(0f, 150f), new Vector2(720f, 96f), Dark);
+            var label = AddText(card.transform, string.IsNullOrEmpty(foeLabel) ? "Battle!" : foeLabel,
+                                34, Gold, TextAnchor.MiddleCenter);
+            Stretch(label.rectTransform);
+            StartCoroutine(DestroyAfter(card.gameObject, seconds));
+        }
+
+        private System.Collections.IEnumerator DestroyAfter(GameObject go, float s)
+        {
+            yield return new WaitForSeconds(Mathf.Max(0f, s));
+            if (go != null) Destroy(go);
+        }
+
         /// <summary>Push the primary-target state (frac 0..1, foes remaining). Logic -> view.</summary>
         public void SetPrimary(string title, float frac, int remaining)
         {

@@ -23,10 +23,12 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;                 // world-space threat nameplate ("!" alert) on the engaging rep
 using UnityEngine.SceneManagement;
 using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Village.Arena;
+using DeNelle.Village.UI;             // Billboard — keeps the rep's threat cue facing the camera
 
 namespace DeNelle.Village
 {
@@ -358,6 +360,7 @@ namespace DeNelle.Village
         private bool _engaged;
         private bool _stung;
         private Enemy _enemy;
+        private GameObject _threatCue;   // world-space "!" nameplate raised on aggro (child of the rep)
 
         // AggroRange = how far a rep can NOTICE the hero and start the chase. Lowered from 22f
         // (owner 2026-06-24 FELT buffer) so a rep doesn't spot the hero from across the map / reach
@@ -478,7 +481,11 @@ namespace DeNelle.Village
             {
                 _stung = true;
                 Guard.Try("Encounter", "chase sting", () => AbilityAudioBridge.PlayDangerSting());
-                FlowTrace.Step("Encounter", "rep aggro -> chase sting ('they see us').");
+                // THREAT CUE (encounter feedback): raise a visible "!" nameplate over the rep the
+                // instant it aggros, so the player connects "that orc is hunting me -> contact starts
+                // the fight" — the missing pre-engage telegraph. Pairs the audio sting with a visual.
+                RaiseThreatCue();
+                FlowTrace.Step("Encounter", "rep aggro -> chase sting + threat nameplate ('they see us').");
             }
 
             // ROAM until aggro, then CHASE -- "a wandering leash till it goes to battle" (owner 2026-06-23).
@@ -498,6 +505,81 @@ namespace DeNelle.Village
             }
 
             if (d <= EngageRange) Engage();
+        }
+
+        // THREAT CUE (encounter feedback): build a world-space "!" alert + foe name floating above
+        // the rep when it aggros, so the rep reads as a THREAT pre-engage. A child of the rep, so it
+        // moves with it and is auto-destroyed when Engage() Destroy()s the rep (no manual cleanup).
+        // Billboard-faced to the camera. Presentation only; reuses the legacy uGUI + Billboard.
+        private void RaiseThreatCue()
+        {
+            if (_threatCue != null) return;
+            Guard.Try("Encounter", "rep threat nameplate", () =>
+            {
+                var root = new GameObject("RepThreatCue");
+                root.transform.SetParent(transform, false);
+                root.transform.localPosition = new Vector3(0f, 3.0f, 0f);   // above a ~2m orc
+                root.transform.localScale = Vector3.one * 0.01f;            // world-space UI scale
+
+                var canvas = root.AddComponent<Canvas>();
+                canvas.renderMode = RenderMode.WorldSpace;
+                var crt = canvas.GetComponent<RectTransform>();
+                crt.sizeDelta = new Vector2(260f, 150f);                    // -> ~2.6 x 1.5 world units
+                root.AddComponent<DeNelle.Village.UI.Billboard>();         // keep it facing the camera
+
+                var panel = AddCuePanel(canvas.transform, new Vector2(260f, 150f), new Color(0.08f, 0.02f, 0.02f, 0.78f));
+
+                var bang = AddCueText(panel.transform, "!", 96, new Color(0.95f, 0.25f, 0.20f), TextAnchor.UpperCenter);
+                var br = bang.rectTransform;
+                br.anchorMin = new Vector2(0f, 0.35f); br.anchorMax = new Vector2(1f, 1f);
+                br.offsetMin = Vector2.zero; br.offsetMax = Vector2.zero;
+
+                var foeLabel = AddCueText(panel.transform, FoeName(), 34, new Color(0.95f, 0.85f, 0.40f), TextAnchor.LowerCenter);
+                var nr = foeLabel.rectTransform;
+                nr.anchorMin = new Vector2(0f, 0f); nr.anchorMax = new Vector2(1f, 0.35f);
+                nr.offsetMin = Vector2.zero; nr.offsetMax = Vector2.zero;
+
+                _threatCue = root;
+                FlowTrace.Step("Encounter", $"threat nameplate raised on rep '{gameObject.name}' ('! {FoeName()}').");
+            });
+        }
+
+        // A player-facing label for the rep's family (ASCII-only, legacy runtime font). An all-orc
+        // family reads "Orc Warband" (matching the rep DisplayName); else the leader id is humanised.
+        private string FoeName()
+        {
+            if (_family == null || _family.Length == 0) return "Foes";
+            foreach (var id in _family)
+                if (id != null && id.IndexOf("orc", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    return "Orc Warband";
+            var lead = _family[0] ?? "Foes";
+            lead = lead.Replace('-', ' ').Replace('_', ' ').Trim();
+            return lead.Length == 0 ? "Foes" : (char.ToUpperInvariant(lead[0]) + (lead.Length > 1 ? lead.Substring(1) : ""));
+        }
+
+        private static Image AddCuePanel(Transform parent, Vector2 size, Color col)
+        {
+            var go = new GameObject("CuePanel");
+            go.transform.SetParent(parent, false);
+            var img = go.AddComponent<Image>();
+            img.color = col;
+            var rt = img.rectTransform;
+            rt.anchorMin = new Vector2(0.5f, 0.5f); rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f); rt.anchoredPosition = Vector2.zero; rt.sizeDelta = size;
+            return img;
+        }
+
+        private static Text AddCueText(Transform parent, string s, int size, Color col, TextAnchor anchor)
+        {
+            var go = new GameObject("CueText");
+            go.transform.SetParent(parent, false);
+            var t = go.AddComponent<Text>();
+            t.text = s; t.fontSize = size; t.color = col; t.alignment = anchor;
+            t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
+                  ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
+            t.horizontalOverflow = HorizontalWrapMode.Overflow;
+            t.verticalOverflow = VerticalWrapMode.Overflow;
+            return t;
         }
 
         // Random navmesh point within the leash of the spawn -- the wander target while idle.
