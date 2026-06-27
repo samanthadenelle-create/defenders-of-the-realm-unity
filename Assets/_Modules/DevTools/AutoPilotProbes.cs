@@ -198,8 +198,14 @@ namespace DeNelle.DevTools
             if (now >= _nextWallClip)
             {
                 _nextWallClip = now + WallClipInterval;
-                try { CheckWallClip(); }
-                catch (Exception ex) { FlowTrace.Warn(Tag, "WALL-CLIP check threw: " + ex.Message); }
+                // WO-530: skip the position-sensitive wall-clip probe while an autopilot phase has
+                // DELIBERATELY displaced the hero (AssertHeroCrossing etc.) — it's restored at phase
+                // end, so a tick mid-displacement was a false "hero inside wall" flag.
+                if (!_intentionalCrossPhase)
+                {
+                    try { CheckWallClip(); }
+                    catch (Exception ex) { FlowTrace.Warn(Tag, "WALL-CLIP check threw: " + ex.Message); }
+                }
             }
 
             if (now >= _nextCoplanar)
@@ -226,8 +232,16 @@ namespace DeNelle.DevTools
             if (now >= _nextSeamReach)
             {
                 _nextSeamReach = now + SeamReachInterval;
-                try { CheckSeamReachable(); }
-                catch (Exception ex) { FlowTrace.Warn(Tag, "SEAM-REACHABLE check threw: " + ex.Message); }
+                // WO-530: skip the seam-reachability probe while the hero is intentionally displaced
+                // (restored at phase end). NOTE: this does NOT cover the hero legitimately roaming a
+                // far additive region (~7000m from a cross-region seam) — that residual SEAM-UNREACHABLE
+                // is the genuine unlinked-seam gap (NAVMESH-LINK MISSING), tracked on the V2 seam lane;
+                // the probe should additionally be scoped to the seam's own region (follow-up).
+                if (!_intentionalCrossPhase)
+                {
+                    try { CheckSeamReachable(); }
+                    catch (Exception ex) { FlowTrace.Warn(Tag, "SEAM-REACHABLE check threw: " + ex.Message); }
+                }
             }
 
             if (now >= _nextMagenta)
@@ -767,9 +781,23 @@ namespace DeNelle.DevTools
                     FlowTrace.Fail(Tag, $"SEAM-OFF-MESH: '{seam.gameObject.name}' in '{seam.gameObject.scene.name}' at {seamPos} " +
                         $"is not within {SeamSampleTol}m of any baked navmesh — the hero can never walk up to it; the seam can't fire.");
                 else
+                {
+                    // WO-530: behavior-neutral enrichment. The earlier "navmesh empty" theory is
+                    // DISPROVEN (baked surfaces exist), so dump the raw navmesh geometry the path
+                    // query is reading from, so the next fleet run shows WHY the path stays partial:
+                    // placement red-herring (trigger far from where the hero stands) vs off-mesh hero
+                    // vs trigger not snapping to the baked mesh vs a real bake gap/blocker.
+                    float heroSnap = Vector3.Distance(heroPos, hHero.position);  // how far hero is off the baked mesh
+                    float seamSnap = Vector3.Distance(seamPos, hSeam.position);  // how far the trigger is off the baked mesh
+                    string heroOnMesh = _heroAgent != null ? _heroAgent.isOnNavMesh.ToString() : "no-agent";
+                    FlowTrace.Step(Tag, $"SEAM-UNREACHABLE diag: heroPos={heroPos} seamPos={seamPos} straightLine={Vector3.Distance(heroPos, seamPos):0.0}m | " +
+                        $"heroAgent.isOnNavMesh={heroOnMesh} heroNavSample(hit @ {hHero.position}, snap {heroSnap:0.00}m, tol {(SeamSampleTol + 1f):0.0}m) | " +
+                        $"seamNavSample(onMesh={seamOnMesh}, hit @ {hSeam.position}, snap {seamSnap:0.00}m, tol {SeamSampleTol:0.0}m) | " +
+                        $"path[hero->seam] status={status} closest={approach:0.0}m vs ProximityRadius={seam.ProximityRadius:0.0}m (+{SeamReachMargin:0.0}m margin).");
                     FlowTrace.Fail(Tag, $"SEAM-UNREACHABLE: '{seam.gameObject.name}' in '{seam.gameObject.scene.name}' — the hero cannot get within " +
                         $"firing range (closest {approach:0.0}m > ProximityRadius {seam.ProximityRadius:0.0}m + {SeamReachMargin:0.0}m, path={status}). " +
                         "Bake gap or blocker keeps the hero too far from the seam to ever trip its proximity; the crossing never fires.");
+                }
             }
         }
 
