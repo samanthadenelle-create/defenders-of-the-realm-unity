@@ -179,6 +179,7 @@ namespace DeNelle.Village.Arena
         private IHudModel _hookedModel;
         private HeroHealth _health;
         private HeroAbilities _abilities;
+        private PlayerAttackController _attack;   // the auto-melee combo behind the big BASIC-ATTACK button
         private HeroTargetIndicator _target;
         private float _battleStart;
 
@@ -222,6 +223,7 @@ namespace DeNelle.Village.Arena
         private sealed class AbilityBtn
         {
             public AbilitySlot Slot;
+            public bool IsBasic;      // index 0 = the big BASIC-ATTACK button (auto-melee, not a Q/W/E/R cast)
             public GameObject Root;   // hidden when the slot is empty (W/E/R unequipped)
             public Image Disc;
             public Image Icon;        // the equipped ability's icon (re-bound on loadout change)
@@ -367,6 +369,7 @@ namespace DeNelle.Village.Arena
         {
             if (_health == null) _health = HeroHealth.Instance;
             if (_abilities == null) _abilities = Object.FindFirstObjectByType<HeroAbilities>();
+            if (_attack == null) _attack = Object.FindFirstObjectByType<PlayerAttackController>();
             if (_target == null) _target = Object.FindFirstObjectByType<HeroTargetIndicator>();
         }
 
@@ -792,22 +795,23 @@ namespace DeNelle.Village.Arena
         // ---------------------------------------------------------------------
         private void BuildBottomCenterAbilityRow()
         {
-            // The ability row is SKILL-TREE / LOADOUT driven (NOT hardcoded Q/W/E/R):
-            //   Q     = the class BASIC ATTACK (always present).
-            //   W/E/R = whatever the player has EQUIPPED in the skill-tree loadout; an
-            //           unequipped slot renders EMPTY (the button hides).
-            // We build all four slot bones here; PushAbilityCooldowns() re-reads the live
-            // HeroLoadout each frame and (re)binds icon/label/visibility, so a weapon-skill
-            // swap updates the bar without a rebuild.
+            // Bottom-RIGHT cluster (owner 2026-06-27, F8): one BIG basic-attack button + a 3-satellite arc.
+            //   big (i==0) = BASIC ATTACK — the Knight's repeating auto-melee combo via PlayerAttackController
+            //                (the most-used, most authentic attack). NOT a Q/W/E/R cast; no cooldown ring.
+            //   arc (i=1..3) = cooldown abilities Q/W/E (Heroic Leap / Shield Bash / Defender's Call),
+            //                  rendered + cooled by PushAbilityCooldowns from the live class kit + loadout.
+            // Owner 2026-06-27 (F8 — the big button is the MOST-USED basic): the BIG bottom-right
+            // button (i == 0) is the BASIC ATTACK — the Knight's repeating 3-swing auto-melee combo,
+            // fired through PlayerAttackController (the only path with an authentic cycling swing
+            // animation; HeroAbilities' Q "Heroic Leap" is a 6s-cooldown dash, NOT a basic). The 3
+            // ARC satellites (i = 1..3) are the cooldown abilities: Heroic Leap (Q / "charge"),
+            // Shield Bash (W / "parry"), Defender's Call (E / "heal"). Heroic Leap therefore stays
+            // reachable on the arc. The ultimate Radiant Strike (R) keeps its keyboard cast.
+            AbilitySlot[] arcSlots = { AbilitySlot.Q, AbilitySlot.W, AbilitySlot.E };
             for (int i = 0; i < 4; i++)
             {
-                var slot = (AbilitySlot)i;
-                // Owner 2026-06-27 (F8 correction): the 4 STATIC DEFAULTS sit in the BOTTOM-RIGHT.
-                // Slot 0 (Q = THRUST) is the BIG button at BR_SlashPos; slots 1..3 (PARRY/HEAL/CHARGE
-                // = W/E/R) fan in a rounded ARC around it (BR_ArcRadius / BR_ArcAnglesDeg), all
-                // anchored to the bottom-right corner. Always present (class-kit default fallback in
-                // ResolveSlotDef), so no "+" ever shows here — that's the bottom-MIDDLE bar's job.
                 bool big = (i == 0);
+                AbilitySlot slot = big ? AbilitySlot.Q : arcSlots[i - 1];   // slot unused for the basic button
                 Vector2 anchor = new Vector2(1f, 0f);   // all four hug the bottom-right corner
                 Vector2 pos;
                 float   size;
@@ -826,7 +830,8 @@ namespace DeNelle.Village.Arena
                                    new Vector2(size, size), big ? PanelDark : PanelDim);
                 var b = btn.gameObject.AddComponent<Button>();
                 b.targetGraphic = btn;
-                b.onClick.AddListener(() => Cast(slot));
+                if (big) b.onClick.AddListener(BasicAttack);          // auto-melee swing, NOT a Q cast
+                else     b.onClick.AddListener(() => Cast(slot));     // cooldown ability cast
                 MakeCircle(btn);
                 Frame(btn);
 
@@ -862,7 +867,7 @@ namespace DeNelle.Village.Arena
                 plus.raycastTarget = false;
                 plus.gameObject.SetActive(false);
 
-                _abilityBtns[i] = new AbilityBtn { Slot = slot, Root = btn.gameObject, Disc = btn,
+                _abilityBtns[i] = new AbilityBtn { Slot = slot, IsBasic = big, Root = btn.gameObject, Disc = btn,
                                                    Icon = icon, CdRing = ring, CdText = cdText, Label = label,
                                                    Plus = plus, BoundId = null };
             }
@@ -1107,9 +1112,12 @@ namespace DeNelle.Village.Arena
                 var b = _abilityBtns[i];
                 if (b == null) continue;
 
-                // LIVE LOADOUT: resolve THIS slot's equipped def each frame. Q = the class
-                // basic attack (always present); W/E/R = the equipped skill-tree ability, or
-                // null when the slot is unequipped (the button then hides).
+                // The big BASIC-ATTACK button is bound separately (auto-melee icon, no cooldown ring).
+                if (b.IsBasic) { BindBasicButton(b); continue; }
+
+                // LIVE LOADOUT: resolve THIS slot's equipped def each frame. The arc satellites hold
+                // the cooldown abilities (Q Heroic Leap / W Shield Bash / E Defender's Call); an
+                // unequipped W/E shows its class default (never empty here).
                 var def = ResolveSlotDef(b.Slot, out string boundId);
                 bool equipped = def != null;
 
@@ -1195,6 +1203,26 @@ namespace DeNelle.Village.Arena
             return AbilityCatalog.Find(HeroClassId(), slot);
         }
 
+        // The big BASIC-ATTACK button: bound ONCE to the class basic-attack icon, with NO cooldown
+        // ring (the auto-melee is a fast, repeating swing). It never goes empty, so no "+" placeholder.
+        private void BindBasicButton(AbilityBtn b)
+        {
+            if (b.Plus != null && b.Plus.gameObject.activeSelf) b.Plus.gameObject.SetActive(false);
+            if (b.CdRing != null) b.CdRing.fillAmount = 0f;
+            if (b.CdText != null) b.CdText.text = "";
+            if (string.Equals(b.BoundId, "basic", System.StringComparison.Ordinal)) return;   // bind once
+            b.BoundId = "basic";
+            if (b.Icon != null)
+            {
+                var sp = BasicAttackSprite();
+                if (sp != null) { b.Icon.sprite = sp; b.Icon.color = Color.white; }
+                else { b.Icon.sprite = null; b.Icon.color = new Color(1f, 1f, 1f, 0f); }
+            }
+            if (b.Label != null) b.Label.text = "Attack";
+            if (b.Disc != null) { var c = b.Disc.color; b.Disc.color = new Color(c.r, c.g, c.b, 1f); }
+            FlowTrace.Step("Hud", "big bottom-right button bound to BASIC ATTACK (auto-melee combo)");
+        }
+
         // ---------------------------------------------------------------------
         //  Cast intent (the only writes - fire the existing public cast path)
         // ---------------------------------------------------------------------
@@ -1202,6 +1230,32 @@ namespace DeNelle.Village.Arena
         {
             if (_abilities == null) _abilities = Object.FindFirstObjectByType<HeroAbilities>();
             if (_abilities != null) _abilities.TryCast(slot);
+        }
+
+        // The big bottom-right BASIC ATTACK: fire one auto-melee swing through PlayerAttackController
+        // (the Knight's repeating 3-swing combo — the most authentic, most-used attack), exactly as a
+        // Space/LMB press. Same gates apply inside TriggerBasicAttack (in-battle, off swing cooldown).
+        private void BasicAttack()
+        {
+            if (_attack == null) _attack = Object.FindFirstObjectByType<PlayerAttackController>();
+            if (_attack != null) { _attack.TriggerBasicAttack(); return; }
+            FlowTrace.Warn("Hud", "basic-attack button pressed but no PlayerAttackController on the hero rig");
+        }
+
+        // Per-class BASIC-ATTACK icon, resolved through the SAME Resources HudIcons path AbilitySprite
+        // uses (icon system intact). Knight basic = the "thrust" swing (the owner's word for it).
+        private Sprite BasicAttackSprite()
+        {
+            string cls = (HeroClassId() ?? "knight").ToLowerInvariant();
+            string sub;
+            switch (cls)
+            {
+                case "mage":   sub = "Wizard/Wizard_Plasma";        break;
+                case "ranger": sub = "Ranger/Ranger_Ranged_Attack"; break;
+                case "cleric": sub = "Healer/Healer_Smite";         break;
+                default:       sub = "Knight/knight_thrust";        break;   // knight basic swing = "thrust"
+            }
+            return SafeLoad("HudIcons/" + sub);
         }
 
         // ---------------------------------------------------------------------

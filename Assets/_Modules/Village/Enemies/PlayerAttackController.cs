@@ -374,6 +374,22 @@ namespace DeNelle.Village
 
         // ── Attack flow ───────────────────────────────────────────────────────
 
+        /// <summary>
+        /// HUD seam (Option 1, owner 2026-06-27): fire ONE basic-attack swing from a UI button —
+        /// the big bottom-right "basic attack" button — exactly as a Space / LMB / gamepad-South
+        /// press would in <see cref="Update"/>. Honors the SAME gates: only while a battle is live
+        /// (BattleLock.IsInBattle), input not suppressed, not already mid-swing, and off the swing
+        /// cooldown. Returns true when a swing actually started. The keyboard/mouse path is untouched.
+        /// </summary>
+        public bool TriggerBasicAttack()
+        {
+            if (HeroLocomotion.InputSuppressed) return false;
+            if (!BattleLock.IsInBattle()) return false;
+            if (_isInSwing || Time.time < _nextAttackTime) return false;
+            StartAttack();
+            return true;
+        }
+
         private void StartAttack()
         {
             _nextAttackTime = Time.time + _attackCooldown;
