@@ -211,7 +211,12 @@ namespace DeNelle.Village
             if (DeNelle.Core.State.BuildingTierCatalog.IsUpgradable(hookId))
                 return DeNelle.Core.State.ModifierService.TierOf(hookId)
                      < DeNelle.Core.State.BuildingTierCatalog.MaxTier(hookId);
-            return Buildings.Progression.ResourceBuildingProgression.IsResourceBuilding(hookId);
+            // Legacy resource building: upgradable ONLY while not at max level. Without the
+            // !IsMaxLevel gate a maxed Farm/Lumbermill/Forge kept HudBuildingFocus set, so the
+            // HUD context button stayed in Upgrade mode (comet ring/"circle") instead of reverting
+            // to the Quest face. (City-tier branch above already reverts correctly.)
+            return Buildings.Progression.ResourceBuildingProgression.IsResourceBuilding(hookId)
+                && !Buildings.Progression.ResourceBuildingState.IsMaxLevel(hookId);
         }
 
         // ── Prompt ──────────────────────────────────────────────────────────

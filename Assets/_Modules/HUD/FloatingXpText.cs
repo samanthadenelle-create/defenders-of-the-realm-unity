@@ -118,8 +118,11 @@ namespace DeNelle.HUD
         {
             if (_prog != null) return;
 
-            var heroGo = GameObject.FindWithTag("Player")
-                      ?? SafeFindWithTag("HeroTarget");
+            // §7: the hero carries the "Player" tag and is resolved by it. The old
+            // `?? SafeFindWithTag("HeroTarget")` fallback referenced a tag that was NEVER
+            // declared — it only threw a UnityException + logged noise. Update() retries
+            // TryHook() until the hero exists, so the Player-tag lookup alone is sufficient.
+            var heroGo = GameObject.FindWithTag("Player");
 
             Component prog = heroGo != null
                 ? heroGo.GetComponent("HeroProgression")

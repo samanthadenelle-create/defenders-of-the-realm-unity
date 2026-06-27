@@ -628,6 +628,10 @@ namespace DeNelle.DevTools
             Vector3 destPos = entry.Partner().transform.position;
             FlowTrace.Step("Auto", $"AssertHeroCrossing: nearest crossing '{entry.crossingId}' @ {entry.transform.position} " +
                                    $"(d={best:F1}); walking hero {_hero.transform.position} into it; partner @ {destPos}.");
+            // WO-530: capture pre-test pose + flag this as an INTENTIONAL warp phase so the continuous
+            // SEAM/wall probes don't false-fire while the hero is deliberately displaced ~7km.
+            Vector3 home = _hero.transform.position; Quaternion homeRot = _hero.transform.rotation;
+            _probes?.SetIntentionalCrossPhase(true);
             _hero.SetAutoWalk(entry.transform);
 
             // A REAL warp = a single-frame position JUMP far larger than a walk step (not mere proximity).
@@ -664,6 +668,14 @@ namespace DeNelle.DevTools
             }
             else
             { FlowTrace.Fail("Auto", $"AssertHeroCrossing: NO warp on '{entry.crossingId}' — reachedEntry={reachedEntry}, hero {(_hero != null ? _hero.transform.position.ToString() : "<null>")}. If reachedEntry=false the marker is unreachable on the hero's navmesh island."); _lastDetail = "crossing FAILED"; }
+
+            // WO-530: restore the hero to its pre-test position before the next phase. Leaving it at the
+            // ~7km partner-region landing made WalkToEachGate + the continuous SEAM/wall probes measure
+            // from 7045m on a different navmesh island — the false SEAM-UNREACHABLE / wall-clip / 0-of-5
+            // report. Restore + drop the intentional-cross flag.
+            if (_hero != null) _hero.WarpTo(home, homeRot);
+            _probes?.SetIntentionalCrossPhase(false);
+            FlowTrace.Step("Auto", "AssertHeroCrossing: restored hero to pre-test position.");
         }
 
         private static float TimeoutFor(string phase)

@@ -1320,7 +1320,10 @@ namespace DeNelle.Village
             // 2. Hero not near => short all-direction sweep for the nearest live structure.
             var swept = SweepForNearestStructure();
             if (swept == null)
-                DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"skip-norange-{_enemyId}", 1f,
+                // Once (not Throttle 1/sec): this inert-sweep signal was emitting ~3000 lines/run
+                // (one per rep per second). Once collapses it to one line per enemy while keeping the
+                // "feature still acquires nothing" diagnostic needed to finish verifying ff.enemystructureaware.
+                DeNelle.Core.Diagnostics.FlowTrace.Once("EnemyAggro", $"skip-norange-{_enemyId}",
                     $"{_enemyId}: structure sweep RAN (hero not in aggro) but found NO live structure within " +
                     $"{Mathf.Max(_contactProbeDistance, _structureSweepRadius):F1}m");
             return swept;
@@ -1702,6 +1705,13 @@ namespace DeNelle.Village
             _dead = true;
             _telegraphing = false;   // audit 2026-05-30: clear the wind-up latch on death (safe for future pooling)
             if (_agent != null && _agent.isOnNavMesh) _agent.isStopped = true;
+
+            // WO-531: snap the body down to the ground the instant it dies so the corpse
+            // (and every position-derived effect below — deathPos VFX, scorch decal,
+            // CombatFeedbackManager.Kill) sits ON the ground instead of floating at the
+            // Y it died at (e.g. mid-air over a wall top). Done FIRST so all downstream
+            // transform.position reads pick up the grounded position.
+            SnapBodyToGround();
             _currentTarget = null;
             TargetManager.Unregister(this);   // drop from targeting the instant it dies
 
@@ -1873,6 +1883,56 @@ namespace DeNelle.Village
         private void EnsureAgent()
         {
             if (_agent == null) _agent = GetComponent<NavMeshAgent>();
+        }
+
+        /// <summary>
+        /// WO-531: snap the dead body straight down onto the ground so a corpse never
+        /// floats at the Y it died at (e.g. mid-air over a wall top). Owner directive:
+        /// on death the body falls/snaps to ground regardless of where it died.
+        /// (DragonBoss is its OWN class with its own death spiral and never runs this
+        /// <see cref="Die"/>, so apex bosses are already excluded.)
+        ///
+        /// Primary: raycast DOWN against the ground/terrain layers and snap Y to the hit.
+        /// Fallback: <see cref="NavMesh.SamplePosition"/> and snap Y to the sampled point.
+        /// If neither resolves, the position is left unchanged and a Warn is logged.
+        /// </summary>
+        private void SnapBodyToGround()
+        {
+            try
+            {
+                Vector3 pos = transform.position;
+
+                // Ground/terrain/default layers only — this naturally excludes the
+                // enemy's own collider (on the "Enemy" layer) so the ray never self-hits.
+                int groundMask = LayerMask.GetMask("Default", "Terrain", "Ground");
+                if (groundMask == 0) groundMask = Physics.DefaultRaycastLayers;
+
+                Vector3 origin = pos + Vector3.up * 2f;
+                if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 50f,
+                                    groundMask, QueryTriggerInteraction.Ignore))
+                {
+                    pos.y = hit.point.y;
+                    transform.position = pos;
+                    return;
+                }
+
+                // Fallback: nearest point on the navmesh (the walkable surface the enemy
+                // traverses) when no physics ground collider answered.
+                if (NavMesh.SamplePosition(pos, out NavMeshHit navHit, 5f, NavMesh.AllAreas))
+                {
+                    pos.y = navHit.position.y;
+                    transform.position = pos;
+                    return;
+                }
+
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Enemy",
+                    $"SnapBodyToGround({gameObject.name}) found no ground (raycast + navmesh both missed) at {pos} — body left in place");
+            }
+            catch (Exception e)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Enemy",
+                    $"SnapBodyToGround({gameObject.name}) threw (best-effort, death path unaffected): {e.GetType().Name}: {e.Message}");
+            }
         }
 
         // ── Glimmer reflection bridge (DEF-32) ───────────────────────────────
