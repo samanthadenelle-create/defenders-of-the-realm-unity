@@ -242,7 +242,8 @@ namespace DeNelle.Village.Arena
         {
             public int   Slot;
             public Image Disc;
-            public Text  Glyph;   // assigned ability glyph/initials (no abilityId->sprite map yet)
+            public Image Icon;    // DATA-driven concept icon (ConceptIconResolver); transparent when none resolves
+            public Text  Glyph;   // assigned ability glyph/initials — fallback when no concept icon resolves
             public Text  Plus;    // "+" when the slot is empty
             public Text  Label;   // ability name under the disc
             public string BoundId;
@@ -908,6 +909,14 @@ namespace DeNelle.Village.Arena
                 if (cell.TryGetComponent<UnityEngine.UI.Image>(out var cimg))
                     cimg.color = new Color(cimg.color.r, cimg.color.g, cimg.color.b, 0.40f);
 
+                // DATA-driven concept icon: transparent until PushExtraBar resolves one from
+                // concept-icons.json. When it resolves, the glyph is cleared and this shows instead.
+                var icon = AddImage(cell.transform, new Color(1f, 1f, 1f, 0f));
+                var ir = icon.rectTransform;
+                ir.anchorMin = new Vector2(0.18f, 0.18f); ir.anchorMax = new Vector2(0.82f, 0.82f);
+                ir.offsetMin = Vector2.zero; ir.offsetMax = Vector2.zero;
+                icon.raycastTarget = false;
+
                 var glyph = AddText(cell.transform, "", 22, Color.white, TextAnchor.MiddleCenter);
                 Stretch(glyph.rectTransform);
                 glyph.raycastTarget = false;
@@ -925,7 +934,7 @@ namespace DeNelle.Village.Arena
                 b.targetGraphic = cell;
                 b.onClick.AddListener(() => OnExtraTapped(idx));
 
-                _extraBtns[i] = new ExtraBtn { Slot = i, Disc = cell, Glyph = glyph, Plus = plus, Label = label, BoundId = null };
+                _extraBtns[i] = new ExtraBtn { Slot = i, Disc = cell, Icon = icon, Glyph = glyph, Plus = plus, Label = label, BoundId = null };
             }
 
             var cap = AddText(transform, "SKILL TREE", 11, Parchment, TextAnchor.UpperCenter);
@@ -950,6 +959,7 @@ namespace DeNelle.Village.Arena
                 {
                     if (b.BoundId != null) FlowTrace.Step("Hud", "skill bar slot " + b.Slot + " rendered EMPTY (+)");
                     b.BoundId = null;
+                    if (b.Icon != null) { b.Icon.sprite = null; b.Icon.color = new Color(1f, 1f, 1f, 0f); }
                     if (b.Glyph != null) b.Glyph.text = "";
                     if (b.Label != null) b.Label.text = "";
                     if (b.Disc != null) { var c = b.Disc.color; b.Disc.color = new Color(c.r, c.g, c.b, 0.40f); }
@@ -965,9 +975,18 @@ namespace DeNelle.Village.Arena
                         Color c = AbilityColor(def, b.Slot);
                         b.Disc.color = new Color(c.r, c.g, c.b, 0.85f);
                     }
-                    if (b.Glyph != null) b.Glyph.text = ExtraGlyph(def, id);
+                    // DATA-FIRST icon: resolve a real sprite from concept-icons.json by the def's own
+                    // ids; only fall back to the letter-glyph when nothing maps / the art is absent.
+                    var sp = ConceptIconResolver.ResolveAny(ConceptIdsFor(def, id));
+                    if (b.Icon != null)
+                    {
+                        if (sp != null) { b.Icon.sprite = sp; b.Icon.color = Color.white; }
+                        else { b.Icon.sprite = null; b.Icon.color = new Color(1f, 1f, 1f, 0f); }
+                    }
+                    if (b.Glyph != null) b.Glyph.text = sp != null ? "" : ExtraGlyph(def, id);
                     if (b.Label != null) b.Label.text = def != null && !string.IsNullOrEmpty(def.Name) ? def.Name : id;
-                    FlowTrace.Step("Hud", "skill bar slot " + b.Slot + " rendered id=" + id + " (assigned)");
+                    FlowTrace.Step("Hud", "skill bar slot " + b.Slot + " rendered id=" + id +
+                        (sp != null ? " (icon)" : " (glyph)"));
                 }
             }
         }
@@ -997,6 +1016,27 @@ namespace DeNelle.Village.Arena
             var parts = src.Split(new[] { ' ', '-', '_', '.' }, System.StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length >= 2) return ("" + char.ToUpperInvariant(parts[0][0]) + char.ToUpperInvariant(parts[1][0]));
             return char.ToUpperInvariant(src[0]).ToString();
+        }
+
+        // Build the ordered concept-id candidates for an ability from its OWN data — the unique
+        // id, the bound key, the gameplay effect, then the first name word. NO icon names appear
+        // here; concept-icons.json maps whichever candidate it knows (ConceptIconResolver picks the
+        // first that resolves to real art). This is how the HUD stays dumb + data-driven.
+        private static string[] ConceptIdsFor(AbilityDef def, string boundId)
+        {
+            string nameTok = null;
+            if (def != null && !string.IsNullOrEmpty(def.Name))
+            {
+                var parts = def.Name.Split(new[] { ' ', '-', '_', '.' }, System.StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0) nameTok = parts[0];
+            }
+            return new[]
+            {
+                def != null ? def.Id : null,
+                boundId,
+                def != null ? def.Effect : null,
+                nameTok,
+            };
         }
 
         private void PushBottomCenter()
@@ -1098,9 +1138,15 @@ namespace DeNelle.Village.Arena
                     if (b.Disc != null) b.Disc.color = disc;
                     if (b.Icon != null)
                     {
-                        // Per-class slot art (the map keys on the slot index, which matches the
-                        // equipped W/E/R slot the def now occupies).
-                        var sp = AbilitySprite(b.Slot);
+                        // Static-defaults priority (all DATA-decided; the HUD picks NO icon name):
+                        //   1) override  — a concept the owner flagged override:true FORCES its Obsidian icon
+                        //   2) class art — else our rich per-class slot art (HudIcons/Knight_*) wins
+                        //   3) gap-fill  — else the concept->icon table fills a gap when a class has no art
+                        //   4) invisible
+                        var ids = ConceptIdsFor(def, boundId);
+                        var sp = ConceptIconResolver.ResolveAnyOverride(ids);
+                        if (sp == null) sp = AbilitySprite(b.Slot);
+                        if (sp == null) sp = ConceptIconResolver.ResolveAny(ids);
                         if (sp != null) { b.Icon.sprite = sp; b.Icon.color = Color.white; }
                         else { b.Icon.sprite = null; b.Icon.color = new Color(1f, 1f, 1f, 0f); }
                     }
