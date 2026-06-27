@@ -731,12 +731,27 @@ namespace DeNelle.Village
 
             var upgrade = new Button(() =>
             {
-                // WO-127: real upgrade — mutate the live tower, then re-render so the
-                // screen re-reads CurrentLevel immediately (mirrors TowerManagerPanel).
-                bool ok = _selectedTowerForUpgrade?.Upgrade() ?? false;
-                SetStatus(ok
-                    ? $"Upgraded to Lvl {_selectedTowerForUpgrade?.CurrentLevel}."
-                    : "Tower already at max level.", isError: false);
+                // DEPRECATED (owner 2026-06-27, tower-upgrade CONSOLIDATION): this menu
+                // screen was one of three duplicate upgrade paths and called the FREE
+                // Tower.Upgrade() (cost displayed, NOT enforced — see the cost-block stub
+                // comment above). The canonical surface is now the proximity HUD context
+                // button (TowerInteractable -> HudBuildingFocus). This button is no longer
+                // free — it routes through the single cost-enforced Tower.TryUpgrade so it
+                // can never bypass the economy. Prefer the on-approach context button.
+                var res = _selectedTowerForUpgrade != null
+                    ? _selectedTowerForUpgrade.TryUpgrade()
+                    : Tower.UpgradeResult.Uninitialized;
+                bool ok = res == Tower.UpgradeResult.Success;
+                string msg = res switch
+                {
+                    Tower.UpgradeResult.Success     => $"Upgraded to Lvl {_selectedTowerForUpgrade?.CurrentLevel}.",
+                    Tower.UpgradeResult.Maxed       => "Tower already at max level.",
+                    Tower.UpgradeResult.CantAfford  => "Not enough resources to upgrade.",
+                    Tower.UpgradeResult.UnknownCost => "Upgrade cost not set for this tower.",
+                    Tower.UpgradeResult.NoEconomy   => "Economy unavailable — cannot upgrade.",
+                    _                               => "Cannot upgrade this tower.",
+                };
+                SetStatus(msg, isError: !ok);
                 Render();
             })
             { text = "Upgrade" };

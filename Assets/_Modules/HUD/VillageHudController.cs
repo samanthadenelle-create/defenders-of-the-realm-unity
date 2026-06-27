@@ -1646,7 +1646,16 @@ namespace DeNelle.HUD
         private void OnContextActionTapped()
         {
             string id = DeNelle.Core.UI.HudBuildingFocus.CurrentBuildingId;
-            if (!string.IsNullOrEmpty(id))
+            var customUpgrade = DeNelle.Core.UI.HudBuildingFocus.CurrentUpgradeAction;
+            if (customUpgrade != null)
+            {
+                // Tower-upgrade consolidation (owner 2026-06-27): a focused TOWER injects its
+                // cost-enforced Tower.TryUpgrade through HudBuildingFocus, so the SAME context
+                // button runs the tower transaction (no HUD->Village coupling, no panel).
+                FlowTrace.Step("HUD", "Context button -> custom upgrade action (focus='" + (id ?? "<none>") + "').");
+                customUpgrade();
+            }
+            else if (!string.IsNullOrEmpty(id))
             {
                 FlowTrace.Step("HUD", "Context button -> Building Upgrade (focus='" + id + "').");
                 PanelRouter.Open(PanelId.BuildingUpgrade, id);

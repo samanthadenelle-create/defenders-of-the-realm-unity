@@ -174,9 +174,15 @@ namespace DeNelle.Village.UI
             var row = new VisualElement();
             row.style.flexDirection = FlexDirection.Row;
 
+            // DEPRECATED (owner 2026-06-27, tower-upgrade CONSOLIDATION): this Upgrade
+            // button was one of three duplicate paths and called the FREE Tower.Upgrade().
+            // The canonical surface is now the proximity HUD context button
+            // (TowerInteractable -> HudBuildingFocus -> Tower.TryUpgrade). This button is
+            // no longer free — it routes through the single cost-enforced Tower.TryUpgrade.
+            // RAZE + tower SELECTION below are PRESERVED (this panel is their only home).
             var up = Btn("Upgrade", ElarionUi.ButtonKind.Confirm, () =>
             {
-                if (_selected != null) { _selected.Upgrade(); Refresh(); }
+                if (_selected != null) { _selected.TryUpgrade(); Refresh(); }
             });
             up.style.flexGrow = 1f; up.style.marginRight = 4f;
             row.Add(up);

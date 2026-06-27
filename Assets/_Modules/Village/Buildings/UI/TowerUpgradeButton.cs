@@ -66,21 +66,18 @@ namespace DeNelle.Village.UI
         }
 
         /// <summary>
-        /// Spec logic: re-check affordability for the NEXT level's cost, spend, then
-        /// Upgrade(). No-op if no tower, already at max, or unaffordable.
+        /// Routes to the single cost-enforced transaction (owner 2026-06-27, tower-upgrade
+        /// CONSOLIDATION): the cost gate now lives INSIDE Tower.TryUpgrade so it can never
+        /// be bypassed regardless of caller. This dumb view just calls it and reflects the
+        /// result. NOTE: this per-tower button is NO LONGER the canonical surface — the
+        /// canonical upgrade affordance is the shared proximity HUD context button
+        /// (TowerInteractable -> HudBuildingFocus -> Tower.TryUpgrade). Kept (cost-enforced)
+        /// only so an authored upgradeUIPrefab, if re-introduced, stays safe.
         /// </summary>
         public void OnUpgradeClicked()
         {
-            if (_selectedTower == null || _selectedTower.Data == null) return;
-
-            int nextLevel = _selectedTower.CurrentLevel + 1;
-            if (nextLevel > Tower.MaxLevel) return;
-
-            int cost = NextUpgradeCost(nextLevel);
-            if (EconomyService.Instance == null || !EconomyService.Instance.CanAfford(cost)) return;
-
-            EconomyService.Instance.Spend(cost);
-            _selectedTower.Upgrade();
+            if (_selectedTower == null) return;
+            _selectedTower.TryUpgrade();   // cost gate is internal — never free
             UpdateUI();
         }
 

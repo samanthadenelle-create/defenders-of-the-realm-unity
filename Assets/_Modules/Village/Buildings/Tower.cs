@@ -176,26 +176,32 @@ namespace DeNelle.Village
             ApplyVisualForLevel(_currentLevel);
             EnsureCombat();   // WO-82 — auto-fire once the tower is built
 
-            // DEF-87 — spawn per-tower world-space upgrade UI
-            if (data.upgradeUIPrefab != null)
-            {
-                if (_activeUpgradeUI != null) Destroy(_activeUpgradeUI);
-                Guard.Try("Tower", "instantiate upgrade UI", () =>
-                {
-                    _activeUpgradeUI = Instantiate(
-                        data.upgradeUIPrefab,
-                        transform.position + Vector3.up * 4f,
-                        Quaternion.identity,
-                        transform
-                    );
-                    var btn = _activeUpgradeUI.GetComponentInChildren<UnityEngine.UI.Button>();
-                    if (btn != null)
-                    {
-                        btn.onClick.RemoveAllListeners();
-                        btn.onClick.AddListener(() => Upgrade());
-                    }
-                });
-            }
+            // Canonical upgrade surface (owner 2026-06-27, tower-upgrade CONSOLIDATION):
+            // every placed tower gets the SAME proximity context-button affordance the
+            // buildings use — the hero approaches an upgradable tower, the HUD's bottom
+            // context (diamond) button swaps Quest -> Upgrade, and the tap runs the
+            // cost-enforced Tower.TryUpgrade. No hand-authored prefab required; the
+            // affordance is a code component added to every tower so deprecating the
+            // menus never leaves a tower un-upgradable.
+            EnsureUpgradeInteractable();
+
+            // DEPRECATED (owner 2026-06-27): the DEF-87 per-tower world-space upgrade UI
+            // (data.upgradeUIPrefab) wired its button straight to the FREE Upgrade() —
+            // one of the three duplicate, cost-bypassing upgrade paths. It is no longer
+            // spawned; the canonical surface is the proximity context button above,
+            // routed through the cost-gated Tower.TryUpgrade. If a prefab is ever
+            // authored again it must call TryUpgrade(), never Upgrade(), to stay enforced.
+        }
+
+        /// <summary>
+        /// Adds the shared-with-buildings proximity upgrade affordance to this tower
+        /// (idempotent). Mirrors BuildingInteractable: while the hero is near and the
+        /// tower is upgradable it claims the HUD context button via HudBuildingFocus.
+        /// </summary>
+        private void EnsureUpgradeInteractable()
+        {
+            if (GetComponent<TowerInteractable>() == null)
+                gameObject.AddComponent<TowerInteractable>();
         }
 
         // Empty — Initialize() does the level-1 visual (DEF-74 CP1 Issue 2).
@@ -733,6 +739,105 @@ namespace DeNelle.Village
                     ActivateSpecialAbility(u.ability);
             }
             return true;
+        }
+
+        /// <summary>Outcome of <see cref="TryUpgrade"/> — lets dumb UI reflect the result.</summary>
+        public enum UpgradeResult
+        {
+            Success,        // paid + leveled
+            Maxed,          // already at MaxLevel — no action
+            Uninitialized,  // no TowerData — no action
+            UnknownCost,    // next level's cost is not authored — refuse (never free)
+            CantAfford,     // economy short — no action
+            NoEconomy,      // EconomyService missing — cannot charge, no action
+        }
+
+        /// <summary>True when this tower can still be upgraded AND its next cost is known.</summary>
+        public bool CanUpgrade =>
+            _data != null && _currentLevel < MaxLevel && NextUpgradeCost != int.MaxValue;
+
+        /// <summary>
+        /// Cost (Wood) to upgrade INTO the next level, read from
+        /// <c>TowerData.upgrades[currentLevel].upgradeCost</c>. Returns
+        /// <see cref="int.MaxValue"/> (treated as "unaffordable, never free") when the
+        /// tower is maxed or the next level's cost is not authored.
+        /// </summary>
+        public int NextUpgradeCost
+        {
+            get
+            {
+                if (_data == null || _data.upgrades == null) return int.MaxValue;
+                int idx = _currentLevel;   // upgrades[nextLevel-1] == upgrades[currentLevel]
+                if (idx < 0 || idx >= _data.upgrades.Length || _data.upgrades[idx] == null)
+                    return int.MaxValue;
+                return _data.upgrades[idx].upgradeCost;
+            }
+        }
+
+        /// <summary>
+        /// THE single, cost-enforced upgrade transaction (owner 2026-06-27 — tower-upgrade
+        /// CONSOLIDATION). All upgrade callers route here, so cost can never be bypassed:
+        /// reads the next level's cost from <see cref="TowerData"/>, gates on
+        /// <see cref="EconomyService"/> (CanAfford → atomic TrySpend), then performs the
+        /// existing <see cref="Upgrade"/> level-up. Blocks at <see cref="MaxLevel"/> and
+        /// when the cost is unknown or the economy is missing. UI stays dumb — it calls
+        /// this and reflects the returned <see cref="UpgradeResult"/>.
+        /// </summary>
+        public UpgradeResult TryUpgrade()
+        {
+            using var _ = FlowTrace.Enter("Tower",
+                $"TryUpgrade '{(_data != null ? _data.towerName : name)}' L{_currentLevel}");
+
+            if (_data == null)
+            {
+                FlowTrace.Fail("Tower", "TryUpgrade on uninitialised tower — refused.");
+                return UpgradeResult.Uninitialized;
+            }
+            if (_currentLevel >= MaxLevel)
+            {
+                FlowTrace.Step("Tower", $"TryUpgrade: already MAXED (L{_currentLevel}/{MaxLevel}) — refused.");
+                return UpgradeResult.Maxed;
+            }
+
+            int cost = NextUpgradeCost;
+            if (cost == int.MaxValue)
+            {
+                FlowTrace.Warn("Tower", $"TryUpgrade: next-level cost not authored for '{_data.towerName}' — refused (never free).");
+                return UpgradeResult.UnknownCost;
+            }
+
+            var economy = EconomyService.Instance;
+            if (economy == null)
+            {
+                FlowTrace.Warn("Tower", "TryUpgrade: EconomyService.Instance is null — cannot charge, refused.");
+                return UpgradeResult.NoEconomy;
+            }
+
+            // Wood-priced (preserves the original cost-enforced TowerUpgradeButton semantics),
+            // spent atomically through the multi-resource API (no obsolete Wood-only calls).
+            var price = ResourceCost.WoodOnly(cost);
+            if (!economy.CanAfford(price))
+            {
+                FlowTrace.Step("Tower", $"TryUpgrade: CANT-AFFORD next level (cost={cost} Wood, have={economy.Wood}).");
+                return UpgradeResult.CantAfford;
+            }
+            if (!economy.TrySpend(price))
+            {
+                // Race: balance changed between CanAfford and TrySpend. No mutation occurred.
+                FlowTrace.Warn("Tower", $"TryUpgrade: TrySpend failed for cost={cost} Wood (balance changed) — refused.");
+                return UpgradeResult.CantAfford;
+            }
+
+            bool leveled = Upgrade();   // performs the visual swap + VFX + ability dispatch
+            if (!leveled)
+            {
+                // Should not happen (we re-checked max above), but never leave a silent spend.
+                FlowTrace.Fail("Tower", $"TryUpgrade: spent {cost} Wood but Upgrade() no-opped — leveled={leveled}.");
+                return UpgradeResult.Maxed;
+            }
+
+            FlowTrace.Step("Tower", $"TryUpgrade: SPENT {cost} Wood + LEVELED -> L{_currentLevel}/{MaxLevel}.");
+            return UpgradeResult.Success;
         }
 
         /// <summary>

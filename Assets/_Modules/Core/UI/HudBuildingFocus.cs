@@ -25,20 +25,48 @@ namespace DeNelle.Core.UI
         /// <summary>The in-range upgradable building's hook id, or null.</summary>
         public static string CurrentBuildingId { get; private set; }
 
-        /// <summary>Claim focus for <paramref name="buildingId"/> (last writer wins).</summary>
+        /// <summary>
+        /// Optional custom upgrade action for the focused subject (owner 2026-06-27 —
+        /// tower-upgrade consolidation). Buildings leave this null and the HUD context
+        /// button opens the BuildingUpgrade panel by id; a TOWER sets this to its
+        /// cost-enforced <c>Tower.TryUpgrade</c> so the SAME context button runs the
+        /// tower transaction (HUD assembly may not reference Village/Tower, so the
+        /// action is injected through this Core signal). Null = panel-by-id path.
+        /// </summary>
+        public static System.Action CurrentUpgradeAction { get; private set; }
+
+        /// <summary>Claim focus for <paramref name="buildingId"/> (last writer wins).
+        /// Clears any custom upgrade action — the building path opens the panel by id.</summary>
         public static void Set(string buildingId)
         {
             CurrentBuildingId = string.IsNullOrEmpty(buildingId) ? null : buildingId;
+            CurrentUpgradeAction = null;
+        }
+
+        /// <summary>
+        /// Claim focus for <paramref name="buildingId"/> AND attach a custom upgrade
+        /// action (tower path — last writer wins). When the hero taps the HUD context
+        /// button this action runs instead of the BuildingUpgrade panel open.
+        /// </summary>
+        public static void Set(string buildingId, System.Action upgradeAction)
+        {
+            CurrentBuildingId = string.IsNullOrEmpty(buildingId) ? null : buildingId;
+            CurrentUpgradeAction = CurrentBuildingId != null ? upgradeAction : null;
         }
 
         /// <summary>
         /// Release focus, but ONLY if <paramref name="buildingId"/> is the one that
         /// currently holds it — so a non-focused building (or a null/empty caller)
         /// leaving range never clobbers the building the hero is actually next to.
+        /// Also drops any custom upgrade action so a stale tower action can't linger.
         /// </summary>
         public static void Clear(string buildingId)
         {
-            if (CurrentBuildingId == buildingId) CurrentBuildingId = null;
+            if (CurrentBuildingId == buildingId)
+            {
+                CurrentBuildingId = null;
+                CurrentUpgradeAction = null;
+            }
         }
     }
 }
