@@ -88,9 +88,13 @@ namespace DeNelle.Village.Buildings.Progression
             Close();
             _buildingId = string.IsNullOrEmpty(buildingId) ? DefaultBuildingId() : buildingId;
 
+            // Construct the VM FIRST so the chrome's title (and its drop-shadow) can be composed
+            // ONCE from the live building name — single clean string, no stale "Upgrade Building"
+            // shadow showing through the building-name title (the old overlap bug).
+            _vm = new BuildingUpgradeVM(_buildingId, EconomyService.Instance, Close);
+
             BuildChrome();
 
-            _vm = new BuildingUpgradeVM(_buildingId, EconomyService.Instance, Close);
             Bind(_vm);
 
             // Arbiter closes any other open panel first (DEF-212) + applies the battle-lock.
@@ -125,7 +129,9 @@ namespace DeNelle.Village.Buildings.Progression
         {
             if (_vm == null) return;
 
-            if (_headerLabel != null) _headerLabel.text = _vm.Title;
+            // Header text is composed ONCE in BuildChrome ("Upgrade: <Building>") so the gilt title and
+            // its drop-shadow stay in sync — deliberately NOT re-texted here (re-texting only the gilt
+            // label left the shadow reading the stale "Upgrade Building", the title-overlap bug).
 
             if (_walletText != null)
                 _walletText.text = $"Wood: {_vm.Wood}   Food: {_vm.Food}   Iron: {_vm.Iron}   Crystals: {_vm.Crystals}";
@@ -133,7 +139,11 @@ namespace DeNelle.Village.Buildings.Progression
             if (_statusText != null) _statusText.text = _vm.Status;
 
             if (_mainBtnLabel != null) _mainBtnLabel.text = _vm.MainButtonLabel;
-            if (_mainBtn != null) _mainBtn.interactable = _vm.MainButtonEnabled;
+            if (_mainBtn != null)
+            {
+                _mainBtn.interactable = _vm.MainButtonEnabled;
+                ApplyMainButtonState(_vm.IsMaxed);
+            }
 
             RebuildList();
         }
@@ -149,6 +159,30 @@ namespace DeNelle.Village.Buildings.Progression
             FinalizeScroll();
         }
 
+        // ── Main button state: FULLY INERT when maxed, live gold CTA otherwise ─────
+        // Maxed (no upgrade left): kill the Selectable transition so there is NO hover/
+        // selection highlight "circle", and dim the plate + label so it reads as a settled
+        // "Maxed" chip — not a clickable CTA. Otherwise restore the standard gold-button
+        // feedback (ColorTint); the merely-unaffordable case stays a live CTA that simply
+        // greys via the disabled colour, so the upgrade path is never broken.
+        private void ApplyMainButtonState(bool inert)
+        {
+            if (_mainBtn == null) return;
+            var img = _mainBtn.targetGraphic as Image;
+            if (inert)
+            {
+                _mainBtn.transition = Selectable.Transition.None;
+                if (img != null) img.color = new Color(0.30f, 0.27f, 0.22f, 0.85f);   // dim, settled
+                if (_mainBtnLabel != null) _mainBtnLabel.color = ElarionUi.ParchmentDim;
+            }
+            else
+            {
+                ElarionUiKit.StyleButtonColors(_mainBtn);   // restore ColorTint + colour block
+                if (img != null) img.color = Color.white;   // gold pack sprite shows at full
+                if (_mainBtnLabel != null) _mainBtnLabel.color = ElarionUi.Parchment;
+            }
+        }
+
         // ── Chrome (presentation only; mirrors ShopPanel.BuildChrome) ─────────────
 
         private void BuildChrome()
@@ -159,7 +193,10 @@ namespace DeNelle.Village.Buildings.Progression
             ElarionUiKit.Scrim(_ui.transform, onTapClose: () => _vm?.Close());
 
             // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header + ONE Close.
-            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Upgrade Building",
+            // Compose the title ONCE here ("Upgrade: <Building>") so the gilt title and its drop-shadow
+            // carry the SAME text — Render no longer re-texts the header (that left the shadow stale).
+            string titleText = "Upgrade: " + (_vm != null ? _vm.Title : "Building");
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, titleText,
                 new Vector2(0.14f, 0.07f), new Vector2(0.86f, 0.93f), () => _vm?.Close(),
                 headerX0: 0.04f, headerX1: 0.96f);
             var panel = chrome.content.transform;
@@ -303,6 +340,9 @@ namespace DeNelle.Village.Buildings.Progression
             rowBtn.targetGraphic = rowImg;
             ElarionUiKit.StyleButtonColors(rowBtn);
             rowBtn.interactable = !item.Locked && !item.Equipped;
+            // Owned/locked rows are non-actionable -> drop the Selectable transition so they show no
+            // hover/selection highlight either (consistent with the inert main button when maxed).
+            if (!rowBtn.interactable) rowBtn.transition = Selectable.Transition.None;
             string id = item.Id;
             rowBtn.onClick.AddListener(() => _vm?.Select(id));
 

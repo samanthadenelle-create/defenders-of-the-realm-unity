@@ -127,6 +127,11 @@ namespace DeNelle.Village.Buildings.Progression
         /// <summary>Whether the main "Upgrade Building" button is enabled (affordable next tier exists).</summary>
         public bool MainButtonEnabled { get; private set; }
 
+        /// <summary>True when there is NO further upgrade possible (fully maxed, or a building with no
+        /// upgrades). The View uses this to render the main button as a FULLY INERT, dimmed "Maxed"
+        /// chip — no hover/selection highlight — vs. the merely-unaffordable case (still a live CTA).</summary>
+        public bool IsMaxed { get; private set; }
+
         /// <summary>Last action / hint line for the status row.</summary>
         public string Status { get; private set; }
 
@@ -360,6 +365,7 @@ namespace DeNelle.Village.Buildings.Progression
             }
 
             bool maxed = CurrentTier >= MaxTier;
+            IsMaxed = maxed;
             if (maxed)
             {
                 MainButtonLabel = "Maxed";
@@ -420,6 +426,7 @@ namespace DeNelle.Village.Buildings.Progression
             }
 
             bool maxed = ResourceBuildingState.IsMaxLevel(_buildingId);
+            IsMaxed = maxed;
             if (maxed)
             {
                 MainButtonLabel = "Maxed";
@@ -444,6 +451,7 @@ namespace DeNelle.Village.Buildings.Progression
             MaxTier = 0;
             MainButtonLabel = "Nothing to upgrade";
             MainButtonEnabled = false;
+            IsMaxed = true;   // no upgrade path -> render the main button fully inert
             if (string.IsNullOrEmpty(Status)) Status = "This building has no upgrades.";
         }
 
