@@ -72,9 +72,10 @@ namespace DeNelle.Village.Arena
         public static bool IsArenaPosition(Vector3 worldPos)
             => (worldPos - ArenaCentre).sqrMagnitude <= ArenaWorldRadius * ArenaWorldRadius;
 
-        // Open kite arena footprint (owner doc ~28-35 x 18-22) -- big enough to kite.
-        private const float ArenaHalfWidth = 30f;   // X half-extent (~60 wide) — owner 2026-06-23: bigger to KITE + lure one away
-        private const float ArenaHalfDepth = 24f;   // Z half-extent (~48 deep) — open kite space, not a square
+        // Open kite arena footprint. Tightened -25% (owner 2026-06-28: a tighter battle forces
+        // better engagement — less open kiting, enemies close sooner). Was 30 x 24.
+        private const float ArenaHalfWidth = 22.5f;  // X half-extent (~45 wide) — -25% from 30
+        private const float ArenaHalfDepth = 18f;    // Z half-extent (~36 deep) — -25% from 24
 
         private const float BattleTimeoutSeconds = 240f; // generous; a stuck fight ends, never soft-locks
 
@@ -256,7 +257,7 @@ namespace DeNelle.Village.Arena
             // could not reach the hero because the default ~50m plane under-covered the kite
             // footprint (captured: "[Flow:EnemyAggro] no COMPLETE path to Hero -> ... last
             // reachable corner"). The castle path is untouched (it calls BakeForCastle with no arg).
-            Guard.Try("BattleArena", "bake arena navmesh", () => baker.BakeForCastle(_arenaRoot.transform, 8f));
+            Guard.Try("BattleArena", "bake arena navmesh", () => baker.BakeForCastle(_arenaRoot.transform, 6f));
             // Give the (synchronous) bake + the floor realize a couple frames to settle.
             yield return null;
             yield return null;
@@ -269,10 +270,10 @@ namespace DeNelle.Village.Arena
             {
                 Vector3[] corners =
                 {
-                    ArenaCentre + new Vector3( 28f, 0f,  22f),
-                    ArenaCentre + new Vector3( 28f, 0f, -22f),
-                    ArenaCentre + new Vector3(-28f, 0f,  22f),
-                    ArenaCentre + new Vector3(-28f, 0f, -22f),
+                    ArenaCentre + new Vector3( 21f, 0f,  16.5f),
+                    ArenaCentre + new Vector3( 21f, 0f, -16.5f),
+                    ArenaCentre + new Vector3(-21f, 0f,  16.5f),
+                    ArenaCentre + new Vector3(-21f, 0f, -16.5f),
                 };
                 foreach (var c in corners)
                 {
@@ -816,8 +817,8 @@ namespace DeNelle.Village.Arena
             var heroGo = GameObject.FindWithTag("Player");
             if (heroGo == null) return;
             float dist = Vector3.Distance(_familyLeader.transform.position, heroGo.transform.position);
-            FlowTrace.Throttle("BattleArena", "march-dist", 1f, $"MARCH leader dist={dist:0.0}m to hero (6m gate).");
-            if (dist <= 6f)
+            FlowTrace.Throttle("BattleArena", "march-dist", 1f, $"MARCH leader dist={dist:0.0}m to hero (4.5m gate).");
+            if (dist <= 4.5f)
             {
                 _familyEngaged = true;
                 _familyLeader.enabled = false;   // triggers Disband(): the pack breaks to fight
