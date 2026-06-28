@@ -520,14 +520,19 @@ namespace DeNelle.Village
             GameObject vis = null;
             Guard.Try("Roster", $"VisualFactory.Skin Heroes/{slug}", () =>
             {
-                vis = VisualFactory.Skin(go.transform, "Heroes/" + slug,
-                    new SkinOptions
-                    {
-                        FitHeight = 1.8f,
-                        StripColliders = true,
-                        FixTripoMaterials = true,
-                        LocalRotation = Quaternion.Euler(0f, -90f, 0f),
-                    });
+                // WO-545 Tier-1 seam: pull the hero prefab Addressables-first / Resources-fallback
+                // (V1-safe), then skin via the GameObject overload. A null prefab (missing both)
+                // makes Skin return null -> the tinted-capsule fallback below, identical to before.
+                var heroPrefab = DeNelle.Core.HeroAssetLoader.LoadHeroPrefab(slug);
+                if (heroPrefab != null)
+                    vis = VisualFactory.Skin(go.transform, heroPrefab,
+                        new SkinOptions
+                        {
+                            FitHeight = 1.8f,
+                            StripColliders = true,
+                            FixTripoMaterials = true,
+                            LocalRotation = Quaternion.Euler(0f, -90f, 0f),
+                        });
             });
             if (vis != null)
             {
@@ -555,7 +560,8 @@ namespace DeNelle.Village
                 RuntimeAnimatorController ctrl = null;
                 Guard.Try("Roster", $"load controller Heroes/{slug}", () =>
                 {
-                    ctrl = Resources.Load<RuntimeAnimatorController>("Heroes/" + slug);
+                    // WO-545 Tier-1 seam: Addressables-first, Resources-fallback (V1-safe).
+                    ctrl = DeNelle.Core.HeroAssetLoader.LoadHeroController(slug);
                 });
                 if (ctrl != null) anim.runtimeAnimatorController = ctrl;   // idle/walk, not a T-pose
                 else FlowTrace.Fail("Roster",

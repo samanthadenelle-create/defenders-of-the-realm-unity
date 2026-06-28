@@ -184,9 +184,11 @@ namespace DeNelle.Village
             // body bailed SILENTLY — the playable hero went bodyless with no self-report. Guard both
             // and Fail-loud on null so a run pinpoints WHICH step left the hero without a body.
             GameObject prefab = null;
-            Guard.Try("HeroBody", $"Resources.Load Heroes/{slug}", () =>
+            // WO-545 Tier-1 seam: Addressables-first, Resources-fallback (V1-safe — an unregistered
+            // hero address degrades to the exact same Resources/Heroes/<slug> load as before).
+            Guard.Try("HeroBody", $"HeroAssetLoader.LoadHeroPrefab {slug}", () =>
             {
-                prefab = Resources.Load<GameObject>("Heroes/" + slug);
+                prefab = DeNelle.Core.HeroAssetLoader.LoadHeroPrefab(slug);
             });
             if (prefab == null)
             {
@@ -266,7 +268,8 @@ namespace DeNelle.Village
             // leaving the hero un-animated (the "sliding statue"). Load the
             // controller directly from Resources/Heroes/<slug>.controller instead;
             // fall back to any carried-over snapshot only if that asset is absent.
-            var controller = Resources.Load<RuntimeAnimatorController>("Heroes/" + slug)
+            // WO-545 Tier-1 seam: Addressables-first, Resources-fallback (V1-safe).
+            var controller = DeNelle.Core.HeroAssetLoader.LoadHeroController(slug)
                              ?? controllerSnapshot;
 
             var anim = body.GetComponentInChildren<Animator>();

@@ -130,7 +130,9 @@ namespace DeNelle.BattleATB
             if (capsule.Find("AtbHeroModel") != null) return;   // already swapped
 
             string slug = ResolveHeroSlug();
-            var prefab = Resources.Load<GameObject>("Heroes/" + slug);
+            // WO-545 Tier-1 seam: Addressables-first, Resources-fallback (V1-safe — when no hero
+            // address is registered this resolves to the exact same Resources/Heroes/<slug> as before).
+            var prefab = DeNelle.Core.HeroAssetLoader.LoadHeroPrefab(slug);
             if (prefab == null)
             {
                 // No class FBX in Resources — keep the capsule pill shown (never an empty slot).
@@ -597,7 +599,8 @@ namespace DeNelle.BattleATB
                 var anim = model.GetComponentInChildren<Animator>();
                 if (anim == null) anim = model.AddComponent<Animator>();
                 anim.applyRootMotion = false; // turn-based stage: no locomotion drift
-                var ctrl = Resources.Load<RuntimeAnimatorController>("Heroes/" + slug);
+                // WO-545 Tier-1 seam: Addressables-first, Resources-fallback (V1-safe).
+                var ctrl = DeNelle.Core.HeroAssetLoader.LoadHeroController(slug);
                 if (ctrl != null)
                 {
                     anim.runtimeAnimatorController = ctrl;
