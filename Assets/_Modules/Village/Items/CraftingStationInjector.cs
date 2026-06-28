@@ -172,17 +172,22 @@ namespace DeNelle.Village
                 // every other hub structure gets via HubStructureVisualInjector: pitch -90 (stand
                 // up) + yaw 90 (face the plaza), matching the 'store' swap row. This path was the
                 // lone hub structure that skinned at identity and bypassed the convention.
-                var opts = SkinOptions.Structure(6f);
+                //
+                // SEATING (owner F8 "apothecary is right way now, just everything is off ground"):
+                // Structure(..) already sets SeatOnGround=true, which Skin runs AFTER applying
+                // LocalRotation + Fit — so the upright model's bounds-BASE lands exactly on the
+                // holder's ground y. The prior post-Skin `localScale *= 0.7` + `localPosition.y = 0`
+                // UNDID that seat (scaling lifts the bounds-base off the pivot; y=0 wipes the seat
+                // offset) → the model floated. Fix = bake the 0.7 size into the FIT (6 * 0.7 = 4.2)
+                // so SeatOnGround measures the final size, and do NOT touch the transform afterwards.
+                var opts = SkinOptions.Structure(6f * 0.7f);
                 opts.LocalRotation = Quaternion.Euler(-90f, 90f, 0f);
                 visual = Guard.Try("Crafting", $"skin apothecary visual '{path}'",
                     () => VisualFactory.Skin(holder.transform, path, opts),
                     fallback: null);
                 if (visual != null)
                 {
-                    visual.transform.localScale *= 0.7f;                  // owner F8: resize to 70%
-                    var lp = visual.transform.localPosition; lp.y = 0f;   // owner F8: set Y pos to 0
-                    visual.transform.localPosition = lp;
-                    FlowTrace.Step("Crafting", $"apothecary visual resolved from '{path}' (upright +90, 0.7x, y=0).");
+                    FlowTrace.Step("Crafting", $"apothecary visual resolved from '{path}' (upright -90/+90, fit 4.2m, seated on ground).");
                     return;
                 }
             }

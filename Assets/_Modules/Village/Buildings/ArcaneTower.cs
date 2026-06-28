@@ -98,13 +98,13 @@ namespace DeNelle.Village
             foreach (var d in FindObjectsByType<EnemyDamageable>(FindObjectsSortMode.None))
             {
                 if (d == null || d.Faction != CombatFaction.Hostile) continue;
-                // SKIP the un-killable OVERWORLD ENCOUNTER HOOKS (mirrors DefenseTower): these
-                // reps carry a RepEngageWatcher marker and have Hp=9999 (roaming encounter
-                // triggers, not town attackers). Without this guard the tower wastes every
-                // blast on a 9999-HP hook that never dies -> reads as "0 damage", and the hit
-                // re-triggers the encounter battle loop. Real enemies (normal HP, no marker)
-                // are still acquired + damaged across ALL hostile factions in range.
-                if (d.GetComponentInParent<RepEngageWatcher>() != null) continue;
+                // TOWERS DEFEND THE TOWN AUTONOMOUSLY (owner 2026-06-28, mirrors DefenseTower):
+                // roaming encounter reps (RepEngageWatcher) are no longer skipped — they are now
+                // killable (Hp=150) and tower damage does NOT trigger the arena
+                // (RangedHitsEngage=false; only near-CONTACT with the HERO pops the battle). So
+                // the arcane spire SHOULD blast + kill reps in range as automated town defense;
+                // the arena still fires only when a rep engages the hero. No skip — every hostile
+                // faction in range is acquired.
                 _hostiles.Add(d);
             }
             foreach (var d in FindObjectsByType<DragonBoss>(FindObjectsSortMode.None))
