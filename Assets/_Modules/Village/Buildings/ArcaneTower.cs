@@ -91,8 +91,17 @@ namespace DeNelle.Village
             // enemy bodies + the dragon). Identical target set; no full-scene enumeration.
             _hostiles.Clear();
             foreach (var d in FindObjectsByType<EnemyDamageable>(FindObjectsSortMode.None))
-                if (d != null && d.Faction == CombatFaction.Hostile)
-                    _hostiles.Add(d);
+            {
+                if (d == null || d.Faction != CombatFaction.Hostile) continue;
+                // SKIP the un-killable OVERWORLD ENCOUNTER HOOKS (mirrors DefenseTower): these
+                // reps carry a RepEngageWatcher marker and have Hp=9999 (roaming encounter
+                // triggers, not town attackers). Without this guard the tower wastes every
+                // blast on a 9999-HP hook that never dies -> reads as "0 damage", and the hit
+                // re-triggers the encounter battle loop. Real enemies (normal HP, no marker)
+                // are still acquired + damaged across ALL hostile factions in range.
+                if (d.GetComponentInParent<RepEngageWatcher>() != null) continue;
+                _hostiles.Add(d);
+            }
             foreach (var d in FindObjectsByType<DragonBoss>(FindObjectsSortMode.None))
                 if (d != null && d.Faction == CombatFaction.Hostile)
                     _hostiles.Add(d);

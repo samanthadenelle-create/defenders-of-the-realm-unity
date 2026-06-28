@@ -209,8 +209,21 @@ namespace DeNelle.Village
             // enumeration. Same Faction==Hostile gate preserved.
             _hostiles.Clear();
             foreach (var d in FindObjectsByType<EnemyDamageable>(FindObjectsSortMode.None))
-                if (d != null && d.Faction == CombatFaction.Hostile)
-                    _hostiles.Add(d);
+            {
+                if (d == null || d.Faction != CombatFaction.Hostile) continue;
+                // SKIP the un-killable OVERWORLD ENCOUNTER HOOKS: these reps carry a
+                // RepEngageWatcher marker and have Hp=9999 (they are roaming encounter
+                // triggers, not town attackers). Without this guard the tower wastes every
+                // shot on a 9999-HP hook that never dies -> reads as "0 damage". Real
+                // enemies (normal HP, no marker) are still acquired and damaged.
+                if (d.GetComponentInParent<RepEngageWatcher>() != null)
+                {
+                    FlowTrace.Throttle("DefenseTower", $"skiprep:{GetInstanceID()}", 1f,
+                        $"Skipped encounter-rep hook '{d.name}' (RepEngageWatcher, un-killable Hp=9999) — not a town attacker.");
+                    continue;
+                }
+                _hostiles.Add(d);
+            }
             foreach (var d in FindObjectsByType<DragonBoss>(FindObjectsSortMode.None))
                 if (d != null && d.Faction == CombatFaction.Hostile)
                     _hostiles.Add(d);
