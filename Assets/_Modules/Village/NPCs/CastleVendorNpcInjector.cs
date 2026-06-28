@@ -524,7 +524,19 @@ namespace DeNelle.Village
             {
                 _openedStructure = true;
                 Debug.Log($"[CastleNpcInteractable] {_label} -> structure dialogue '{_structureId}'.");
+                return;
             }
+
+            // WO-576: PlayStructure returned false — no conversation authored AND not a shoppable vendor
+            // (the deleted-Yarn hole). NEVER dead-end the Talk: fall back to this building's upgrade panel
+            // if it has one (mirrors BuildingInteractable's TryPanelFor fallback), else self-report. This
+            // is the safety net behind the flavor-dialogue fix, so a future content gap can't silently no-op.
+            if (IsUpgradableId(_structureId) && PanelRouter.Open(PanelId.BuildingUpgrade, _structureId))
+            {
+                FlowTrace.Step("Village", $"CastleNpc '{_label}' -> Building Upgrade (no conversation/shop fallback, focus='{_structureId}').");
+                return;
+            }
+            FlowTrace.Warn("Village", $"CastleNpc '{_label}' id='{_structureId}': Talk had no conversation, shop, or upgrade panel — nothing to open.");
         }
 
         // Upgradable = city tiers (BuildingTierCatalog) OR legacy resource buildings — same test
@@ -552,14 +564,24 @@ namespace DeNelle.Village
         public static bool HasTalkFunctionId(string id) =>
             !string.IsNullOrEmpty(id) && TalkFunctionIds.Contains(id);
 
+        // True if a CONVERSATION is authored for this structure in dialogues.json (WO-576). A
+        // resource/upgrade-only NPC with a flavor line (farm/lumbermill/arcane-tower) is a Talk
+        // target FIRST — its upgrade rides the HUD context/Upgrade button (HudBuildingFocus),
+        // never the Talk press. Without this, the upgrade short-circuit stole the Talk and the
+        // farmer/woodcutter/arcanist "Talk" went nowhere (the deleted Yarn StructureMenu's hole).
+        private static bool HasConversation(string id) =>
+            DeNelle.Core.Dialogue.DialogueCatalog.Find(id) != null;
+
         // SHARED routing decision — the SINGLE source of truth for Interact()'s branch AND the headless
         // oracle (AssertVendorTalkRoute), so the test can never drift from the real route. PURE, no side
-        // effects: route to the upgrade panel ONLY when upgrade is the building's ONLY function (upgradable,
-        // NOT shoppable, and no other talk function); everything else — a SHOPPABLE+upgradable forge/armorer
-        // OR a TALK-FUNCTION building like the barracks — opens the Talk dialogue (its primary function).
-        // Upgrade for those is the HUD context button (owner 2026-06-21). Verifiable headless WITHOUT rendering.
+        // effects: a structure with an authored CONVERSATION, a SHOPPABLE vendor, or a TALK-FUNCTION
+        // building opens the Talk dialogue (its primary function); the upgrade panel is reached ONLY when
+        // upgrade is the building's ONLY function (upgradable, NOT shoppable, no conversation, no talk
+        // function). Upgrade for the talk-first ones is the HUD context button (owner 2026-06-21).
+        // Verifiable headless WITHOUT rendering.
         public static string ResolveRoute(string structureId) =>
-            (IsUpgradableId(structureId) && !IsShoppableId(structureId) && !HasTalkFunctionId(structureId))
+            (IsUpgradableId(structureId) && !IsShoppableId(structureId)
+                && !HasTalkFunctionId(structureId) && !HasConversation(structureId))
                 ? "upgrade-panel" : "talk-dialogue";
 
         private void ResolveHero()

@@ -221,6 +221,86 @@
           ]
         }
       ]
+    },
+    {
+      "id": "farm",
+      "startNode": "portrait",
+      "nodes": [
+        {
+          "id": "portrait",
+          "commands": [
+            { "verb": "portrait", "args": ["Portraits/farm"] }
+          ],
+          "next": "talk"
+        },
+        {
+          "id": "talk",
+          "lines": [
+            { "speaker": "Miller", "text": "The grain comes slow in the Dimming, Keeper - but it comes. Drive the dark back and the fields will answer." },
+            { "speaker": "Miller", "text": "Stop by the build menu when you've crystal to spare and we'll raise what this mill can yield." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lumbermill",
+      "startNode": "portrait",
+      "nodes": [
+        {
+          "id": "portrait",
+          "commands": [
+            { "verb": "portrait", "args": ["Portraits/lumbermill"] }
+          ],
+          "next": "talk"
+        },
+        {
+          "id": "talk",
+          "lines": [
+            { "speaker": "Woodcutter", "text": "Timber for the walls, timber for the fires. The forest gives what the Heart can spare, and no more." },
+            { "speaker": "Woodcutter", "text": "Care to grow the cut? The upgrade's yours to call when the coin's in hand." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "arcane-tower",
+      "startNode": "portrait",
+      "nodes": [
+        {
+          "id": "portrait",
+          "commands": [
+            { "verb": "portrait", "args": ["Portraits/arcane-tower"] }
+          ],
+          "next": "talk"
+        },
+        {
+          "id": "talk",
+          "lines": [
+            { "speaker": "Arcanist", "text": "The runes hum louder since you came, Keeper. The Heart's light feeds them, and through them the towers see far." },
+            { "speaker": "Arcanist", "text": "When you would deepen the weave, the tower stands ready to learn." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "barracks",
+      "startNode": "portrait",
+      "nodes": [
+        {
+          "id": "portrait",
+          "commands": [
+            { "verb": "portrait", "args": ["Portraits/barracks"] }
+          ],
+          "next": "talk"
+        },
+        {
+          "id": "talk",
+          "lines": [
+            { "speaker": "Drillmaster", "text": "Recruits sharpen by the hour, Keeper. Give the word and they'll march - Elarion's walls won't hold themselves." },
+            { "speaker": "Drillmaster", "text": "Strengthen the barracks and I'll turn out steadier blades for the line." }
+          ]
+        }
+      ]
     }
   ]
 }
