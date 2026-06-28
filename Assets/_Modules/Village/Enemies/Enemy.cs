@@ -1232,6 +1232,16 @@ namespace DeNelle.Village
         // (and the TickContactAttack telegraph) from overlapping it.
         private bool _casting;
 
+        // Visible-cast VFX for ranged/mage casters (owner F8: "could not tell he was casting").
+        // Lazily added so the enemy fires a real arcane orb that the player SEES leave + land.
+        private RangedAttackVFX _castVfx;
+        private RangedAttackVFX EnsureCastVfx()
+        {
+            if (_castVfx == null)
+                _castVfx = GetComponent<RangedAttackVFX>() ?? gameObject.AddComponent<RangedAttackVFX>();
+            return _castVfx;
+        }
+
         /// <summary>
         /// WO-491: rooted, telegraphed ranged cast (mirrors <see cref="TelegraphThenAttack"/>'s
         /// shape). Stops the agent, plays WindUp -> charge audio -> Cast, waits the wind-up,
@@ -1244,7 +1254,11 @@ namespace DeNelle.Village
             // Telegraph window — readable wind-up before the strike. Reuse the type-set's
             // configured telegraph duration when present, else a sane default.
             float windUp = (_typeVfxSet != null && _typeVfxSet.TelegraphDuration > 0f)
-                ? _typeVfxSet.TelegraphDuration : 0.5f;
+                ? _typeVfxSet.TelegraphDuration : 1.2f;
+            // Readable-telegraph floor (owner F8: "animations from enemy very boring, could
+            // not tell he was casting"). A sub-second wind-up doesn't register; hold >=1.0s so
+            // the WindUp pose reads as a deliberate, reactable channel before the strike.
+            windUp = Mathf.Max(windUp, 1.0f);
 
             // Root the agent for the cast (commit to it — no slide while casting).
             bool wasStopped = false;
@@ -1265,15 +1279,26 @@ namespace DeNelle.Village
 
             yield return new WaitForSeconds(windUp * 0.4f);
 
-            // Land the damage if the target is still alive/valid after the wind-up.
+            // Release: fire a VISIBLE arcane orb from the caster to the target so the cast
+            // READS (owner F8: "could not tell he was casting"). Damage lands on orb ARRIVAL
+            // (re-checked for viability), syncing the hit to the visible impact. Falls back to
+            // instant damage only if the VFX component can't be resolved.
             if (!_dead && target != null)
             {
-                var structure = target.GetComponentInParent<IDamageableStructure>();
-                if (structure != null && structure.IsAlive)
+                Vector3 aim = target.position + Vector3.up * 1.0f;
+                var vfx = EnsureCastVfx();
+                System.Action land = () =>
                 {
-                    structure.ApplyContactDamage(damage);
-                    PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
-                }
+                    if (_dead || target == null) return;
+                    var s = target.GetComponentInParent<IDamageableStructure>();
+                    if (s != null && s.IsAlive)
+                    {
+                        s.ApplyContactDamage(damage);
+                        PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
+                    }
+                };
+                if (vfx != null) vfx.FireSpellOrb(aim, land);
+                else land();
             }
 
             // Resume movement (only if WE rooted it — don't un-stop a contact-locked agent).
