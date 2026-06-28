@@ -225,20 +225,33 @@ namespace DeNelle.Village.Talents
             }
         }
 
-        /// <summary>True when CONFIRM should be available: either there is a committable plan
-        /// (unowned, affordable nodes staged) OR the currently selected node is an owned,
-        /// assignable skill (CONFIRM then drops it onto the quick-swap bar). Owner 2026-06-28:
-        /// "selecting any skill should allow CONFIRM to confirm or learn."</summary>
-        public bool CanConfirm => CanCommit || SelectedIsAssignable;
+        /// <summary>True when the selected owned active skill is ALREADY sitting in a quick-swap slot.</summary>
+        public bool SelectedAlreadyOnBar => AssignableSkillBarAccess.SlotOf(SelectedAssignAbilityId) >= 0;
 
-        /// <summary>The CONFIRM action: commit the staged plan when there is one; otherwise, if an
-        /// owned assignable skill is selected, assign it into the first open quick-swap slot
-        /// (or slot 1 if all are full). Mirrors the slot-tap assign — the instant slot-tap path
-        /// is unchanged; this just makes CONFIRM work too.</summary>
+        /// <summary>True when CONFIRM has a REAL action to perform: either a committable learn-plan
+        /// (unowned, affordable nodes staged) OR an owned, assignable ACTIVE skill that is not yet
+        /// on the quick-swap bar (CONFIRM then drops it into the first open slot). A passive talent
+        /// or an already-equipped skill leaves CONFIRM disabled — we never light a CONFIRM that does
+        /// nothing (owner 2026-06-28: don't fake a confirm; selecting a node still EXPLAINS itself
+        /// via the detail strip). Honours the intent "selecting a skill lets you confirm/learn".</summary>
+        public bool CanConfirm => CanCommit || (SelectedIsAssignable && !SelectedAlreadyOnBar);
+
+        /// <summary>The CONFIRM action: commit the staged learn-plan when there is one; otherwise, if an
+        /// owned assignable skill is selected, assign it into the first open quick-swap slot. When that
+        /// skill is already on the bar, report WHERE instead of silently dead-ending (the old bug —
+        /// FirstAssignSlot picked a different empty slot and the bar rejected the duplicate). The
+        /// instant slot-tap path is unchanged; this just makes CONFIRM work + speak.</summary>
         public void ConfirmOrAssign()
         {
             if (CanCommit) { Commit(); return; }
             if (!SelectedIsAssignable) return;
+            int existing = AssignableSkillBarAccess.SlotOf(SelectedAssignAbilityId);
+            if (existing >= 0)
+            {
+                QuickSwapStatus = SelectedNodeName + " is already in quick-swap " + (existing + 1) + " — tap a slot to move it.";
+                Raise();
+                return;
+            }
             AssignSelectedToSlot(FirstAssignSlot());
         }
 
@@ -607,7 +620,20 @@ namespace DeNelle.Village.Talents
                 if (n == null) return "";
                 var svc = WisdomCurrencyService.Instance;
                 var owned = BuildUnlockedSet(svc);
-                if (owned.Contains(n.Id)) return "Owned";
+                if (owned.Contains(n.Id))
+                {
+                    // Owner 2026-06-28: make an owned node EXPLAIN itself so the screen isn't
+                    // a wall of dead "Owned". An ACTIVE skill is slottable on the quick-swap
+                    // bar; everything else is a PASSIVE talent that's always on (no slot).
+                    if (SelectedIsAssignable)
+                    {
+                        int at = AssignableSkillBarAccess.SlotOf(SelectedAssignAbilityId);
+                        return at >= 0
+                            ? "Owned · Active — equipped in quick-swap " + (at + 1) + " (tap a slot to move)"
+                            : "Owned · Active — tap a slot (1-4) to equip";
+                    }
+                    return "Owned · Passive — always active (no slot needed)";
+                }
                 if (_pending.Contains(n.Id)) return "Planned  ·  -" + n.Cost + " Wisdom";
                 int budget = (svc != null ? svc.Wisdom : 0) - PendingCost;
                 var effective = Effective(owned);
@@ -677,9 +703,12 @@ namespace DeNelle.Village.Talents
                 return;
             }
             if (AssignableSkillBarAccess.EditsLocked) { QuickSwapStatus = "Can't change skills during battle."; Raise(); return; }
+            // Assign now MOVES a skill already on the bar (WO-574), so a false result here means
+            // it's already sitting in exactly this slot — report that rather than a stale "already
+            // on the bar" dead-end.
             bool ok = AssignableSkillBarAccess.Assign(slotIndex, id);
             QuickSwapStatus = ok ? SelectedNodeName + " → quick-swap " + (slotIndex + 1) + "."
-                                 : "That skill is already on the bar.";
+                                 : SelectedNodeName + " is already in quick-swap " + (slotIndex + 1) + ".";
             FlowTrace.Step("SkillTree", "quickswap assign " + id + " -> slot " + slotIndex + " => " + ok);
             Rebuild(); Raise();
         }

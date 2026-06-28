@@ -1036,17 +1036,25 @@ namespace DeNelle.Village.Arena
             }
         }
 
-        // Tap an assignable slot: a filled extra would CAST, but HeroAbilities is a 4-slot engine
-        // (Q/W/E/R) — casting a 5th+ assigned skill is not yet wired, so we trace the intent. An
-        // empty slot cues the player to assign from the Skill Tree (assignment is out-of-battle).
+        // Tap an assignable slot: a FILLED extra slot CASTS its assigned skill via the
+        // HeroAbilities EXTRA-bar path (WO-574 — TryCastExtra resolves the def by id, gates
+        // on its own per-id cooldown + mana, and runs the same cast core as Q/W/E/R). This
+        // is what makes a hot-swapped talent skill genuinely usable in battle instead of a
+        // dead decoration. An empty slot cues the player to assign from the Skill Tree
+        // (assignment is an out-of-battle action).
         private void OnExtraTapped(int idx)
         {
             if (idx < 0 || idx >= _extraBtns.Length) return;
             var b = _extraBtns[idx];
-            if (b != null && !string.IsNullOrEmpty(b.BoundId))
-                FlowTrace.Step("Hud", "assignable skill slot " + idx + " tapped (cast for id=" + b.BoundId + " not yet wired — 4-slot engine)");
-            else
+            if (b == null || string.IsNullOrEmpty(b.BoundId))
+            {
                 FlowTrace.Step("Hud", "assignable skill slot " + idx + " tapped EMPTY — assign from the Skill Tree (out of battle)");
+                return;
+            }
+            if (_abilities == null) _abilities = Object.FindFirstObjectByType<HeroAbilities>();
+            bool fired = _abilities != null && _abilities.TryCastExtra(b.BoundId);
+            FlowTrace.Step("Hud", "assignable skill slot " + idx + " tapped id=" + b.BoundId +
+                " cast fired=" + fired + (_abilities == null ? " (no HeroAbilities on rig)" : ""));
         }
 
         // A compact display token for an assigned extra ability (no abilityId->sprite map exists; the

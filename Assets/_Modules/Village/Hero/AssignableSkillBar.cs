@@ -62,11 +62,22 @@ namespace DeNelle.Village
             return _slots[slot];
         }
 
+        /// <summary>The slot <paramref name="abilityId"/> currently occupies, or -1 when it's not on the bar.</summary>
+        public int SlotOf(string abilityId)
+        {
+            if (string.IsNullOrEmpty(abilityId)) return -1;
+            for (int i = 0; i < SlotCount; i++)
+                if (string.Equals(_slots[i], abilityId, StringComparison.OrdinalIgnoreCase)) return i;
+            return -1;
+        }
+
         /// <summary>
         /// Assign <paramref name="abilityId"/> to <paramref name="slot"/>. Returns false when:
-        /// the slot is out of range, the id is null/empty, a battle is LIVE (battle-locked), the
-        /// id is already on the bar in another slot, or it's already exactly there. On success,
-        /// persists + raises <see cref="Changed"/>.
+        /// the slot is out of range, the id is null/empty, a battle is LIVE (battle-locked), or
+        /// it's already exactly there. WO-574: a skill already on the bar in ANOTHER slot is
+        /// MOVED here (its old slot is cleared) rather than rejected — so tap-to-move works and
+        /// CONFIRM never silently dead-ends on "already on the bar". On success, persists +
+        /// raises <see cref="Changed"/>.
         /// </summary>
         public bool Assign(int slot, string abilityId)
         {
@@ -78,17 +89,20 @@ namespace DeNelle.Village
                 return false;
             }
 
+            if (string.Equals(_slots[slot], abilityId, StringComparison.OrdinalIgnoreCase))
+                return false;   // already exactly here — no-op
+
+            // MOVE semantics: if the skill sits in another slot, vacate it so the same id is
+            // never duplicated across the bar (and re-tapping a new slot relocates the skill).
             for (int i = 0; i < SlotCount; i++)
             {
                 if (i == slot) continue;
                 if (string.Equals(_slots[i], abilityId, StringComparison.OrdinalIgnoreCase))
                 {
-                    FlowTrace.Warn("SkillBar", "Assign REJECTED — '" + abilityId + "' already on the bar (slot " + i + ")");
-                    return false;
+                    _slots[i] = null;
+                    FlowTrace.Step("SkillBar", "Assign MOVE — '" + abilityId + "' vacated slot " + i);
                 }
             }
-            if (string.Equals(_slots[slot], abilityId, StringComparison.OrdinalIgnoreCase))
-                return false;
 
             _slots[slot] = abilityId;
             Save();

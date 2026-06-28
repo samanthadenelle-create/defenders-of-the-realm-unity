@@ -75,6 +75,16 @@ namespace DeNelle.Village
         private float _mana;
         private readonly float[] _cooldownRemaining = new float[4]; // indexed by AbilitySlot
 
+        // WO-574: per-ability cooldowns for the player-assignable EXTRA skill bar
+        // (AssignableSkillBar, bottom-middle HUD). The 4 Q/W/E/R slots use the fixed
+        // array above; an assigned hot-swap skill is keyed by its abilityId here, so a
+        // 5th+ talent skill is castable in battle without growing the slot enum. Ticks
+        // down in Update; cleared on expiry. _extraKeys is a reusable scratch list so the
+        // tick never allocates and never mutates the dictionary while enumerating it.
+        private readonly Dictionary<string, float> _extraCooldown =
+            new Dictionary<string, float>(System.StringComparer.OrdinalIgnoreCase);
+        private readonly List<string> _extraKeys = new List<string>();
+
         // Reusable overlap buffer — avoids per-cast GC (Physics.OverlapSphereNonAlloc).
         private readonly Collider[] _overlap = new Collider[64];
 
@@ -217,6 +227,26 @@ namespace DeNelle.Village
             _mana = Mathf.Min(_maxMana, _mana + _manaRegenPerSecond * dt * _manaRegenMultiplier);
             for (int i = 0; i < _cooldownRemaining.Length; i++)
                 _cooldownRemaining[i] = Mathf.Max(0f, _cooldownRemaining[i] - dt);
+
+            // WO-574: tick the assignable EXTRA-skill cooldowns (keyed by abilityId).
+            if (_extraCooldown.Count > 0)
+            {
+                _extraKeys.Clear();
+                _extraKeys.AddRange(_extraCooldown.Keys);
+                for (int i = 0; i < _extraKeys.Count; i++)
+                {
+                    string k = _extraKeys[i];
+                    float v = _extraCooldown[k] - dt;
+                    if (v <= 0f) _extraCooldown.Remove(k);
+                    else _extraCooldown[k] = v;
+                }
+            }
+        }
+
+        /// <summary>WO-574: seconds of cooldown left on an assigned EXTRA-bar skill (0 = ready).</summary>
+        public float ExtraCooldownRemaining(string abilityId)
+        {
+            return !string.IsNullOrEmpty(abilityId) && _extraCooldown.TryGetValue(abilityId, out var v) ? v : 0f;
         }
 
         /// <summary>
@@ -252,6 +282,50 @@ namespace DeNelle.Village
             // belt-and-braces fallback also check this GO (in case someone collocates).
             GetComponent<AbilityCooldownUI>()?.StartCooldown(scaledCooldown);
 
+            // PER-SPELL ANIMATION: pass the slot as the cast variant (q/w/e/r → 1..4).
+            CastResolved(def, (int)slot + 1);
+            return true;
+        }
+
+        /// <summary>
+        /// WO-574: cast an assigned EXTRA-bar skill (the player-assignable hot-swap bar,
+        /// <see cref="AssignableSkillBar"/>) by its <paramref name="abilityId"/>. The 4-slot
+        /// Q/W/E/R engine could never fire a 5th+ talent skill — that left every hot-swap
+        /// assignment cosmetic ("nothing happens"). This resolves the def from the catalog,
+        /// gates on a per-id cooldown + mana, then runs the SAME cast core (anim + facing +
+        /// effect) the Q/W/E/R path uses, so an assigned skill is genuinely usable in battle.
+        /// Returns true when the cast fired. Additive — Q/W/E/R behaviour is unchanged.
+        /// </summary>
+        public bool TryCastExtra(string abilityId)
+        {
+            if (string.IsNullOrEmpty(abilityId)) return false;
+            var def = AbilityCatalog.FindById(abilityId);
+            if (def == null)
+            {
+                Debug.LogWarning($"[HeroAbilities] Extra skill '{abilityId}' not found in abilities.json.");
+                return false;
+            }
+            if (ExtraCooldownRemaining(abilityId) > 0f || _mana < def.ManaCost) return false;
+
+            float scaledCooldown = def.Cooldown * HeroTalentModifiers.CooldownMultiplier(_heroClass);
+            _extraCooldown[abilityId] = scaledCooldown;
+            _mana -= def.ManaCost;
+
+            // Variant 0 = the generic cast clip (the per-variant Q/W/E/R clips are slot-keyed).
+            CastResolved(def, 0);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Hero", "extra-skill cast " + abilityId + " FIRED");
+            return true;
+        }
+
+        /// <summary>
+        /// WO-574: the shared cast core (anim trigger + timing bonus + face-target + effect)
+        /// invoked once the caller has passed its cooldown/mana gate and charged its own
+        /// cooldown store. <paramref name="castVariant"/> selects the per-variant cast clip
+        /// (1..4 = Q/W/E/R; 0 = generic). Extracted from <see cref="TryCast"/> so the
+        /// EXTRA-bar path (<see cref="TryCastExtra"/>) reuses the exact same resolution.
+        /// </summary>
+        private void CastResolved(AbilityDef def, int castVariant)
+        {
             // Play the hero's cast animation in sync with the ability resolving.
             // Self-heal the reference: Awake() caches it before HeroBodySwapper
             // swaps the real FBX body in, so the Awake cache is stale/null.
@@ -290,8 +364,7 @@ namespace DeNelle.Village
             // ability can play its own cast clip via the HeroAnimatorFactory's per-variant Cast
             // states. Variant 0 stays the generic cast for any caller using the no-arg overload.
             // A controller without CastVariant / per-variant states falls back to the default
-            // Cast state, so this is fully backward-compatible.
-            int castVariant = (int)slot + 1;
+            // Cast state, so this is fully backward-compatible (castVariant is the caller's arg).
             actor?.PlayAttack(0);
             actor?.PlayCast(castVariant);
 
@@ -309,7 +382,6 @@ namespace DeNelle.Village
             FaceCastTarget(def, origin);
 
             ResolveEffect(def, origin);
-            return true;
         }
 
         // =====================================================================

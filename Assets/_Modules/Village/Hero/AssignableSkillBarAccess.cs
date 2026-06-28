@@ -69,6 +69,14 @@ namespace DeNelle.Village
             return bar.Clear(slot);
         }
 
+        /// <summary>The slot index <paramref name="abilityId"/> occupies on the live bar, or -1 when absent / no hero.</summary>
+        public static int SlotOf(string abilityId)
+        {
+            if (string.IsNullOrEmpty(abilityId)) return -1;
+            var bar = Current;
+            return bar == null ? -1 : bar.SlotOf(abilityId);
+        }
+
         /// <summary>True when <paramref name="abilityId"/> is on the bar in any slot.</summary>
         public static bool IsAssigned(string abilityId)
         {
