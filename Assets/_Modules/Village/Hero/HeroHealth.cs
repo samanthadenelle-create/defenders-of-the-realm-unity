@@ -52,6 +52,36 @@ namespace DeNelle.Village
         private bool  _isDead;
         private readonly Collider[] _buf = new Collider[24];
 
+        // ── v2 talent behavioural state (WO-566 effect interpreter) ───────────────
+        // Reusable buffer of the enemies struck this contact tick — the reflect handler
+        // bounces a share of the damage taken back to them. Sized to match _buf.
+        private readonly Enemy[] _attackerBuf = new Enemy[24];
+
+        // Last Stand capstone: an active low-HP defensive window (+DR +reflect) on cd.
+        private bool  _lastStandActive;
+        private float _lastStandUntil;     // Time.time the active window ends
+        private float _lastStandReadyAt;   // Time.time the cooldown frees the next trigger
+        private float _lastStandDr;        // extra fractional DR during the window
+        private float _lastStandReflect;   // extra reflect fraction during the window
+
+        // Eternal Aegis capstone: an auto-emergency full-invuln window on a long cd.
+        // (Capstone exclusivity means a Knight holds Last Stand OR Eternal Aegis, never both.)
+        private float _aegisReadyAt;       // Time.time the cooldown frees the next trigger
+        private const float AegisAutoThreshold = 0.25f;  // auto-fires below this projected HP fraction
+
+        // Legendary Resolve (shared): one cheat-death per run.
+        private bool _revivedThisRun;
+
+        /// <summary>True while the Last Stand window is live (auto-expires when the timer passes).</summary>
+        private bool LastStandActive
+        {
+            get
+            {
+                if (_lastStandActive && Time.time >= _lastStandUntil) _lastStandActive = false;
+                return _lastStandActive;
+            }
+        }
+
         // ── Respawn (DEF-102) ─────────────────────────────────────────────────
         // The hero is NOT the lose condition — the Heart is (a Heart breach
         // escalates to the ATB / Defend-the-Tower flow; there is no game-over
@@ -226,7 +256,11 @@ namespace DeNelle.Village
             for (int i = 0; i < n; i++)
             {
                 var en = _buf[i] != null ? _buf[i].GetComponentInParent<Enemy>() : null;
-                if (en != null && !en.IsDead) attackers++;
+                if (en != null && !en.IsDead)
+                {
+                    if (attackers < _attackerBuf.Length) _attackerBuf[attackers] = en;
+                    attackers++;
+                }
             }
 
             if (attackers > 0)
@@ -239,8 +273,46 @@ namespace DeNelle.Village
                 DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", "hero-hit", 1f,
                     $"hero struck by {attackers} adjacent enemy(s) within {EngageRadius:F2}m " +
                     $"(scene='{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}').");
+                float hpBeforeTick = _hp;
                 TakeDamage(DamagePerEnemy * Mathf.Min(attackers, MaxEnemiesPerTick));
+                // WO-566: v2 talent reflect (Retaliation Surge) + the Last Stand reflect portion
+                // bounce a fraction of the damage ACTUALLY taken (post block/DR) back onto the
+                // contact attackers. Identity (0) until a reflect node is learned.
+                ApplyReflect(hpBeforeTick - _hp, Mathf.Min(attackers, _attackerBuf.Length));
             }
+        }
+
+        /// <summary>
+        /// WO-566: bounce a fraction of the damage just taken back to the contact attackers
+        /// (Retaliation Surge reflect + Last Stand reflect window). Data-driven — the fraction
+        /// comes from <see cref="HeroTalentModifiers.ReflectFraction"/> (+ the active Last Stand
+        /// reflect), so a hero with no reflect node reflects nothing. Split evenly across the
+        /// enemies that struck this tick; each share routes through Enemy.TakeDamageFrom so the
+        /// hit shows a number + flinches toward the hero.
+        /// </summary>
+        private void ApplyReflect(float damageTaken, int attackerCount)
+        {
+            if (damageTaken <= 0f || attackerCount <= 0) return;
+            string heroClass = HeroClassOrDefault;
+            float frac = DeNelle.Village.Talents.HeroTalentModifiers.ReflectFraction(heroClass);
+            if (LastStandActive) frac += _lastStandReflect;
+            if (frac <= 0f) return;
+            float total = damageTaken * frac;
+            if (total <= 0f) return;
+            float share = total / attackerCount;
+            int reflectedTo = 0;
+            for (int i = 0; i < attackerCount; i++)
+            {
+                var en = _attackerBuf[i];
+                _attackerBuf[i] = null;   // release the reference
+                if (en == null || en.IsDead) continue;
+                en.TakeDamageFrom(share, transform.position + Vector3.up * 1.0f);
+                reflectedTo++;
+            }
+            if (reflectedTo > 0)
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroTalents", "reflect", 1f,
+                    $"reflected {total:F0} dmg ({frac:P0} of {damageTaken:F0}) across {reflectedTo} attacker(s)" +
+                    (LastStandActive ? " [Last Stand window]" : "") + ".");
         }
 
         /// <summary>Applies <paramref name="amount"/> damage; fires events; handles death.</summary>
@@ -278,6 +350,15 @@ namespace DeNelle.Village
             // Resilience / defense nodes reduce the rest. Identity (no block, 0 DR) until a
             // defensive node is learned, so combat is unchanged at baseline.
             string heroClass = HeroClassOrDefault;
+
+            // WO-566: arm the emergency low-HP capstones (Last Stand / Eternal Aegis) BEFORE the
+            // hit lands so their window protects against this very blow. Capstone exclusivity
+            // means at most one of these is ever owned at a time, so they never stack.
+            UpdateEmergencyTalents(heroClass, amount);
+
+            // An Eternal Aegis (or respawn) invuln window may have just opened above — re-honor it.
+            if (Time.time < _invulnUntil) return;
+
             if (DeNelle.Village.Talents.HeroTalentModifiers.RollBlock(heroClass))
             {
                 DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroTalents", "block", 1f,
@@ -286,10 +367,29 @@ namespace DeNelle.Village
                 return;
             }
             float talentDr = DeNelle.Village.Talents.HeroTalentModifiers.IncomingDamageReduction(heroClass);
+            // WO-566: Last Stand folds an extra DR slice on top while its window is live.
+            if (LastStandActive) talentDr += _lastStandDr;
+            talentDr = Mathf.Clamp(talentDr, 0f, 0.95f);
             if (talentDr > 0f) amount *= (1f - talentDr);
 
             _hp = Mathf.Max(0f, _hp - amount);
             OnHealthChanged?.Invoke(_hp, MaxHp);
+
+            // WO-566: Legendary Resolve (shared) — cheat death ONCE per run. When a hit would drop
+            // the hero to 0 and the revive is still available, restore to a fraction of max HP with
+            // a brief grace window instead of dying. Identity until the node is learned.
+            if (_hp <= 0f && !_isDead && !_revivedThisRun
+                && DeNelle.Village.Talents.HeroTalentModifiers.TryGetRevive(heroClass, out float reviveFrac))
+            {
+                _revivedThisRun = true;
+                _hp = MaxHp * reviveFrac;
+                _invulnUntil = Time.time + 1.5f;   // brief grace so the revive isn't instantly re-killed
+                DeNelle.Core.Diagnostics.FlowTrace.Step("HeroTalents",
+                    $"Legendary Resolve REVIVE: cheat death — restored to {reviveFrac:P0} HP (once per run).");
+                VFXManager.Play(VFXType.Impact_Heal, transform.position + Vector3.up * 1.0f);
+                OnHealthChanged?.Invoke(_hp, MaxHp);
+                return;
+            }
 
             // ── Combat feel (additive) ────────────────────────────────────────
             // VFXManager.Play and HitStopManager.DoImpact are static + null-safe,
@@ -315,6 +415,77 @@ namespace DeNelle.Village
             {
                 HitStopManager.DoImpact(HitTier.Light);   // subtle shake per hit
             }
+        }
+
+        /// <summary>
+        /// WO-566: arm the low-HP EMERGENCY capstones just before a hit resolves.
+        /// <para>
+        /// Last Stand — when the projected post-hit HP drops below its threshold and the
+        /// cooldown is free, opens a window granting extra DR + reflect (consumed in TakeDamage
+        /// / ApplyReflect). Eternal Aegis — an "active" capstone modelled in V1 as an AUTO
+        /// emergency: below a small projected HP fraction it triggers a full-invuln window on a
+        /// long cooldown (reuses the existing _invulnUntil grace). Both are data-driven (params
+        /// from the node) and identity (no-op) until the respective capstone is learned.
+        /// </para>
+        /// OWNER-DECISION FLAG: Eternal Aegis is authored as a PLAYER-ACTIVATED active. V1 has no
+        /// free hotkey / HUD button for a non-slot capstone (keyboard 1-4 are removed, mobile-first),
+        /// so it auto-fires here. If the owner wants player-activation, call <see cref="ActivateInvuln"/>
+        /// from a HUD button / bound input instead and drop the auto-trigger branch.
+        /// </summary>
+        private void UpdateEmergencyTalents(string heroClass, float incomingApprox)
+        {
+            float maxHp = MaxHp;
+            if (maxHp <= 0f) return;
+            float projectedFrac = Mathf.Clamp01((_hp - Mathf.Max(0f, incomingApprox)) / maxHp);
+
+            // Last Stand
+            if (!LastStandActive && Time.time >= _lastStandReadyAt
+                && DeNelle.Village.Talents.HeroTalentModifiers.TryGetLastStand(
+                       heroClass, out float lsTh, out float lsDr, out float lsRef, out float lsDur, out float lsCd)
+                && projectedFrac < lsTh)
+            {
+                _lastStandActive  = true;
+                _lastStandDr      = lsDr;
+                _lastStandReflect = lsRef;
+                _lastStandUntil   = Time.time + lsDur;
+                _lastStandReadyAt = Time.time + lsCd;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("HeroTalents",
+                    $"Last Stand TRIGGERED: -{lsDr:P0} dmg + reflect {lsRef:P0} for {lsDur:F0}s (cd {lsCd:F0}s).");
+                VFXManager.Play(VFXType.Impact_ShockwaveRing, transform.position + Vector3.up * 1.0f);
+            }
+
+            // Eternal Aegis (auto-emergency invuln; capstone-exclusive with Last Stand)
+            if (Time.time >= _aegisReadyAt
+                && DeNelle.Village.Talents.HeroTalentModifiers.TryGetInvuln(heroClass, out float aeDur, out float aeCd)
+                && projectedFrac < AegisAutoThreshold)
+            {
+                _aegisReadyAt = Time.time + aeCd;
+                ActivateInvuln(aeDur);
+                DeNelle.Core.Diagnostics.FlowTrace.Step("HeroTalents",
+                    $"Eternal Aegis TRIGGERED: {aeDur:F0}s invulnerability (cd {aeCd:F0}s).");
+                VFXManager.Play(VFXType.Impact_Heal, transform.position + Vector3.up * 1.0f);
+            }
+        }
+
+        /// <summary>
+        /// WO-566: open a damage-immunity window for <paramref name="seconds"/> (reuses the same
+        /// _invulnUntil grace the respawn flow uses — every TakeDamage early-returns while it is
+        /// live). Public so a future HUD button / bound input can drive Eternal Aegis as a
+        /// player-activated active. Extends (never shortens) any existing window.
+        /// </summary>
+        public void ActivateInvuln(float seconds)
+        {
+            if (seconds <= 0f) return;
+            _invulnUntil = Mathf.Max(_invulnUntil, Time.time + seconds);
+        }
+
+        /// <summary>WO-566: clear the per-run talent state — re-arms Legendary Resolve's one
+        /// cheat-death and ends any lingering Last Stand window. Cooldowns (Last Stand / Eternal
+        /// Aegis) are intentionally NOT reset here; they free on their own timers.</summary>
+        private void ResetTalentRunState()
+        {
+            _revivedThisRun  = false;
+            _lastStandActive = false;
         }
 
         /// <summary>Event fired the moment the hero dies (before the coroutine delay).</summary>
@@ -384,6 +555,7 @@ namespace DeNelle.Village
             _isDead   = false;
             _hp       = MaxHp * Mathf.Clamp01(_respawnHpFraction <= 0f ? 1f : _respawnHpFraction);
             _cooldown = 0f;
+            ResetTalentRunState();   // WO-566: a fresh life re-arms revive / clears Last Stand
             // DEF-102: short grace so the hero isn't re-killed the instant it lands
             // back in a melee. Consumed in TakeDamage.
             _invulnUntil = Time.time + Mathf.Max(0f, _respawnInvulnSeconds);
@@ -430,6 +602,7 @@ namespace DeNelle.Village
             bool wasDown = _isDead || _hp <= 0f;
             _appliedGearHpBonus = EffectiveBonus;   // re-sync so SyncGearHp doesn't double-apply after a full restore
             _hp = MaxHp;
+            ResetTalentRunState();   // WO-566: town return = a fresh run — re-arm revive / clear Last Stand
             // If the hero had gone down, clear the death state so it isn't stuck "dead" on the
             // town return (Respawn does this on its own path; we mirror it here without warping).
             if (wasDown)

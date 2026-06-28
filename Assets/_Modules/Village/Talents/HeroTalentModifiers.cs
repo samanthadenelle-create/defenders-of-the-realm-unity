@@ -18,9 +18,22 @@
 // Knight ALLY-dependent effects (auras / Oathweld / Knight-Eternal ally portion /
 // Champion) are NO-OP in solo V1 — there are no combat allies — and their SELF
 // portion (e.g. Knight Eternal's +45% defense) still applies because it is the
-// node's `effect.value`. Behavioural handlers tagged "(… — V-later)" in the data
-// (reflect / dot / invuln / laststand / taunt-on-enemies / summon / stun) are not
-// yet built; their nodes are takeable + scored but inert until those land.
+// node's `effect.value`.
+//
+// WO-566 (effect interpreter): the SELF/DEFENSIVE/COMBAT behavioural handlers are now
+// LIVE — this class exposes data-driven queries (ReflectFraction, TryGetLastStand,
+// TryGetInvuln, TryGetRevive, ForEachOnHitProc) that the runtime consumers honor:
+//   • reflect    → HeroHealth.ApplyReflect      (Retaliation Surge)
+//   • laststand  → HeroHealth emergency window   (Last Stand: DR + reflect)
+//   • invuln     → HeroHealth auto-emergency     (Eternal Aegis; owner-flag: auto vs player-active)
+//   • proc       → PlayerAttackController on-hit  (Emberbrand Strike burn DoT)
+//   • revive     → HeroHealth cheat-death once    (shared Legendary Resolve)
+// STILL DEFERRED under the owner V1-solo-vs-ally phasing question: ally auras / ally
+// onEvent (Oathweld, Champion, Shield Wall, Honored Warden, Bulwark Command, Knight
+// Eternal ally portion), summon (Beast Companion), enemy stun (Charge Impact),
+// shieldStrength absorb (no absorb system), and the taunt-node param-tuning (the
+// Defender's Call / Suppressing Volley taunt ABILITIES already function via
+// HeroAbilities.ResolveTaunt; only the node's targets/radius/cd overrides are unread).
 // Mage/Ranger are STORED-not-wired: their nodes load as data+icons; their effects
 // would only apply if that class were ever the active hero (it is not in V1).
 //
@@ -118,6 +131,108 @@ namespace DeNelle.Village.Talents
                     acc += n.Effect.Value;
             });
             return acc;
+        }
+
+        // ── Behavioural effect queries (WO-566 — V1 effect interpreter) ───────────
+        // Data-driven readers the runtime consumers (HeroHealth / PlayerAttackController)
+        // use to honor the SELF/DEFENSIVE/COMBAT behavioural effect types that StatSum
+        // can't express as a flat multiplier: reflect, laststand, invuln, revive, proc.
+        // Each returns the IDENTITY (0 / false / empty) until a matching node is learned,
+        // so combat is unchanged at baseline. ALLY-dependent types (aura / ally-flagged
+        // onEvent / summon) are deliberately NOT read here — deferred under the owner's
+        // V1-solo-vs-ally phasing question (see WorkOrders/WORK_ORDER_566_*).
+
+        /// <summary>Σ(reflect) over unlocked "reflect"-type nodes (Retaliation Surge = 0.30).
+        /// Fraction of incoming melee damage bounced back to the attacker. 0 baseline.</summary>
+        public static float ReflectFraction(string heroClass)
+        {
+            return Mathf.Clamp01(StatSum(heroClass, "reflect"));
+        }
+
+        /// <summary>One on-hit proc (Knight Emberbrand Strike burn; ranger Poison Tip bleed):
+        /// a DoT applied to a struck enemy. Carries dps (effect.value), duration, and chance
+        /// (1 when unauthored). A readonly struct so the per-swing query allocates nothing.</summary>
+        public readonly struct ProcSpec
+        {
+            public readonly string NodeId;
+            public readonly float Dps;
+            public readonly float Duration;
+            public readonly float Chance;
+            public ProcSpec(string nodeId, float dps, float duration, float chance)
+            { NodeId = nodeId; Dps = dps; Duration = duration; Chance = Mathf.Clamp01(chance); }
+            public bool IsValid => Dps > 0f && Duration > 0f;
+        }
+
+        /// <summary>Invoke <paramref name="visit"/> for every unlocked "proc"-type node describing
+        /// a SELF on-hit DoT (dps + duration). Skips ally-flagged procs (none today). Data-driven
+        /// so a ranger/mage proc reuses it verbatim when those classes go live in V2.</summary>
+        public static void ForEachOnHitProc(string heroClass, Action<ProcSpec> visit)
+        {
+            if (visit == null) return;
+            ForEachUnlocked(heroClass, n =>
+            {
+                var e = n.Effect;
+                if (e == null) return;
+                if (!string.Equals(e.Type, "proc", StringComparison.OrdinalIgnoreCase)) return;
+                if (e.Ally) return;                               // ally proc — deferred (V2)
+                float chance = e.Chance > 0f ? e.Chance : 1f;     // unauthored chance = always
+                var spec = new ProcSpec(n.Id, e.Value, e.Duration, chance);
+                if (spec.IsValid) visit(spec);
+            });
+        }
+
+        /// <summary>Last Stand capstone: below the HP threshold, gain extra damage reduction +
+        /// reflect for a window, on cooldown. Returns false (all zero) when not learned.</summary>
+        public static bool TryGetLastStand(string heroClass, out float threshold, out float damageReduction,
+                                           out float reflect, out float duration, out float cooldown)
+        {
+            threshold = damageReduction = reflect = duration = cooldown = 0f;
+            var e = FirstUnlockedEffect(heroClass, "laststand");
+            if (e == null) return false;
+            threshold       = e.Threshold > 0f ? e.Threshold : 0.2f;
+            damageReduction = Mathf.Clamp01(e.Value);
+            reflect         = Mathf.Clamp01(e.Reflect);
+            duration        = e.Duration > 0f ? e.Duration : 5f;
+            cooldown        = e.Cooldown  > 0f ? e.Cooldown  : 120f;
+            return true;
+        }
+
+        /// <summary>Eternal Aegis capstone: a window of full invulnerability on a long cooldown.
+        /// Returns false when not learned.</summary>
+        public static bool TryGetInvuln(string heroClass, out float duration, out float cooldown)
+        {
+            duration = cooldown = 0f;
+            var e = FirstUnlockedEffect(heroClass, "invuln");
+            if (e == null) return false;
+            duration = e.Duration > 0f ? e.Duration : 8f;
+            cooldown = e.Cooldown  > 0f ? e.Cooldown  : 90f;
+            return true;
+        }
+
+        /// <summary>Legendary Resolve (shared): revive once per run at a fraction of max HP.
+        /// Returns false (0) when not learned.</summary>
+        public static bool TryGetRevive(string heroClass, out float hpFraction)
+        {
+            hpFraction = 0f;
+            var e = FirstUnlockedEffect(heroClass, "revive");
+            if (e == null) return false;
+            hpFraction = Mathf.Clamp(e.Value <= 0f ? 0.4f : e.Value, 0.05f, 1f);
+            return true;
+        }
+
+        /// <summary>The effect payload of the FIRST unlocked node (hero tree + shared) whose
+        /// effect.type matches, or null. Used by the single-instance behavioural capstones.</summary>
+        public static HeroTalentEffectDef FirstUnlockedEffect(string heroClass, string effectType)
+        {
+            if (string.IsNullOrEmpty(effectType)) return null;
+            HeroTalentEffectDef found = null;
+            ForEachUnlocked(heroClass, n =>
+            {
+                if (found != null) return;
+                if (n.Effect != null && string.Equals(n.Effect.Type, effectType, StringComparison.OrdinalIgnoreCase))
+                    found = n.Effect;
+            });
+            return found;
         }
 
         // ── Internals ─────────────────────────────────────────────────────────────

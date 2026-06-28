@@ -1562,6 +1562,32 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// WO-566: talent on-hit DoT (Knight Emberbrand Strike burn / ranger Poison Tip bleed).
+        /// Applies <paramref name="dps"/> damage per second for <paramref name="duration"/> seconds
+        /// as 1-second ticks, each routed through <see cref="TakeDamageFrom"/> so every tick shows a
+        /// number + flinches toward the source. Data-driven (the caller passes the node's value /
+        /// duration). No-op on a dead enemy / non-positive params. A re-proc simply runs a second
+        /// concurrent burn (cheap; bounded by duration).
+        /// </summary>
+        public void ApplyDamageOverTime(float dps, float duration, Vector3 sourceWorldPos)
+        {
+            if (_dead || dps <= 0f || duration <= 0f) return;
+            StartCoroutine(DamageOverTimeRoutine(dps, duration, sourceWorldPos));
+        }
+
+        private System.Collections.IEnumerator DamageOverTimeRoutine(float dps, float duration, Vector3 sourceWorldPos)
+        {
+            float remaining = duration;
+            while (remaining > 0f && !_dead)
+            {
+                yield return new WaitForSeconds(1f);
+                if (_dead) yield break;
+                remaining -= 1f;
+                TakeDamageFrom(dps, sourceWorldPos);
+            }
+        }
+
+        /// <summary>
         /// DEF-46: Maps a world-space source position onto the enemy's local axes
         /// to determine which of the four cardinal quadrants the hit came from.
         /// </summary>

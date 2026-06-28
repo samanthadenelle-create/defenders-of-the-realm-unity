@@ -561,6 +561,23 @@ namespace DeNelle.Village
                 anyHit = true;
                 lastHitDamage = damage;
 
+                // WO-566: v2 talent on-hit procs (Knight Emberbrand Strike burn). Apply each owned
+                // proc as a DoT on the struck enemy, rolling its chance. Data-driven + identity
+                // (no procs) until the node is learned. Enemy is the only hostile melee target.
+                var procEnemy = col.GetComponentInParent<Enemy>();
+                if (procEnemy != null && !procEnemy.IsDead)
+                {
+                    string procClass = _abilities != null ? _abilities.HeroClass : "knight";
+                    Vector3 procSource = transform.position + Vector3.up * 1.0f;
+                    DeNelle.Village.Talents.HeroTalentModifiers.ForEachOnHitProc(procClass, spec =>
+                    {
+                        if (Random.value > spec.Chance) return;
+                        procEnemy.ApplyDamageOverTime(spec.Dps, spec.Duration, procSource);
+                        FlowTrace.Throttle("HeroTalents", "proc-" + spec.NodeId, 1f,
+                            $"on-hit proc {spec.NodeId}: {spec.Dps:F0} dps for {spec.Duration:F0}s applied to enemy.");
+                    });
+                }
+
                 if (isPerfect)
                     TriggerPerfectHitFeedback(hitPos);
             }
