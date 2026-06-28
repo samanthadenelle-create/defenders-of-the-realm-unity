@@ -1503,14 +1503,24 @@ namespace DeNelle.Village
                 if (kb.aKey.isPressed || kb.leftArrowKey.isPressed)  move.x -= 1f;
             }
 
-            // Edge-scroll — pointer near a screen border nudges the view that way.
-            if (mouse != null && _camEdgeBand > 0f)
+            // Edge-scroll — pointer near a screen border nudges the view that way. DESKTOP ONLY:
+            // on touch (incl. WebGL on iPad) there is no hover, and the synthesized mouse reports
+            // position (0,0) — which sits in BOTH the left and bottom edge bands and would drift the
+            // view to the bottom-left every frame (owner repro: itch WebGL on iPad, building towers).
+            // Touch pans via the drag driver, so skip edge-scroll when a touchscreen is present, and
+            // guard the (0,0) null-pointer regardless.
+            bool touchActive = UnityEngine.InputSystem.Touchscreen.current != null;
+            if (mouse != null && _camEdgeBand > 0f && !touchActive)
             {
                 Vector2 p = mouse.position.ReadValue();
-                if (p.x <= _camEdgeBand)                    move.x -= 1f;
-                else if (p.x >= Screen.width - _camEdgeBand) move.x += 1f;
-                if (p.y <= _camEdgeBand)                    move.y -= 1f;
-                else if (p.y >= Screen.height - _camEdgeBand) move.y += 1f;
+                bool realPointer = p.x > 0.5f || p.y > 0.5f;   // (0,0) == no hover → don't edge-scroll
+                if (realPointer)
+                {
+                    if (p.x <= _camEdgeBand)                    move.x -= 1f;
+                    else if (p.x >= Screen.width - _camEdgeBand) move.x += 1f;
+                    if (p.y <= _camEdgeBand)                    move.y -= 1f;
+                    else if (p.y >= Screen.height - _camEdgeBand) move.y += 1f;
+                }
             }
 
             if (move.sqrMagnitude > 1e-4f)
