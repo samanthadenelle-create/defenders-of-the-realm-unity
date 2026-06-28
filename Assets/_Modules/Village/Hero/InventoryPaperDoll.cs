@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Village.Items;
 
 namespace DeNelle.Village
@@ -25,66 +26,108 @@ namespace DeNelle.Village
             string job = HeroJob;
             int level = HeroLevel();
 
-            // ── Heavy Tech hud elements paper-doll medallion for weapons/armor (no Rpg, no _profileFrameSprite).
-            // Profile tabs P1/fill.png (pack's ornate player tab style) as frame. Crest + name + Tech bars.
-            // Redesigned left portrait area to match the mockup: ornate gold frame (Profile tab P1), inner portrait area with hero face (large glyph or loaded portrait), Lvl, name, colored bars for HP/MP, and stats.
-            // Elegant circular/oval frame for mobile RPG raid style hero portrait.
+            // ── WO-573 FIX (owner felt-bug: "giant gold OVAL blob").
+            // The card used to load a Tech/Rpg medallion sprite as its FULL-CARD background;
+            // on the live build the chain fell through to RpgUiCatalog.PanelProfile ("profile_frame"
+            // = a gold sunburst portrait medallion) which, stretched across this narrow/tall card,
+            // read as a giant gold oval — and NO real portrait art was ever loaded (just a tinted
+            // disc + gold AddCircleRim + a class glyph). Now: a flat OBSIDIAN card (black + thin gold
+            // inner rim — the WO-554 chrome), with the REAL hero portrait art framed cleanly inside
+            // (fixed region, preserveAspect → never an ellipse). No portrait on disk → a clean dark
+            // placeholder + class crest, never a raw gold blob.
             var medBand = AddImage(_paperDoll.transform, "MedBand",
-                                   new Vector2(0.0f, 0.04f), new Vector2(1.0f, 0.99f), Color.white);
+                                   new Vector2(0.0f, 0.04f), new Vector2(1.0f, 0.99f),
+                                   new Color(0.03f, 0.03f, 0.045f, 0.96f));
             var mbImg = medBand.GetComponent<Image>();
             if (mbImg != null)
             {
-                var techFrame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P1/fill.png");
-                if (techFrame == null) techFrame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P1/bg.png");
-                if (techFrame == null) techFrame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P2/fill.png");
-                // Clean-build fallback (Tech pack gitignored): committed RpgUi profile medallion frame.
-                // Use the ornate wood portrait frame so it doesn't stretch into a gold blob.
-                if (techFrame == null) techFrame = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelPortrait);
-                if (techFrame == null) techFrame = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelProfile);
-                if (techFrame != null)
-                {
-                    mbImg.sprite = techFrame; mbImg.type = Image.Type.Sliced;
-                    mbImg.color = Color.white; mbImg.preserveAspect = true; mbImg.raycastTarget = false;
-                    AddInnerRim(medBand, new Color(0.85f, 0.75f, 0.55f, 0.6f));
-                }
-                else
-                {
-                    mbImg.color = StoneNiche; ApplyRounded(mbImg);
-                }
+                ApplyRounded(mbImg);
+                mbImg.raycastTarget = false;
+                AddInnerRim(medBand, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f));
             }
 
-            // Inner portrait circle for hero face (elegant like mockup blue inner with gold border).
-            // Use large crest or hero glyph for the face; in full impl load hero portrait sprite from Resources/HeroPortraits.
-            var portrait = AddCircle(medBand.transform, "HeroPortrait", 0.32f, 0.72f, 0.28f, new Color(0.1f, 0.15f, 0.35f, 1f)); // blue inner like mockup
-            AddCircleRim(portrait, new Color(0.85f, 0.7f, 0.3f, 1f)); // gold rim
+            // Real hero portrait — TOP of the card, full width, in a thin gold-rimmed obsidian frame.
+            // preserveAspect keeps the bust un-stretched; the frame clips letterbox to the rounded card.
+            var portraitFrame = AddImage(medBand.transform, "PortraitFrame",
+                                         new Vector2(0.08f, 0.52f), new Vector2(0.92f, 0.97f),
+                                         new Color(0.015f, 0.015f, 0.02f, 1f));
+            NoRaycast(portraitFrame);
+            AddInnerRim(portraitFrame, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.70f));
 
-            // Large hero glyph in the portrait (or face).
-            AddLabel(portrait.transform, ClassCrest(job), 0.0f, 1.0f, GiltInk,
-                     ElarionUi.FontTitle + 40, TMPro.TextAlignmentOptions.Center, 0.1f, 0.9f, bold: true);
+            var artSprite = LoadHeroPortrait(job);
+            if (artSprite != null)
+            {
+                var art = AddImage(portraitFrame.transform, "PortraitArt",
+                                   new Vector2(0.05f, 0.05f), new Vector2(0.95f, 0.95f), Color.white);
+                var aImg = art.GetComponent<Image>();
+                if (aImg != null)
+                {
+                    aImg.sprite = artSprite;
+                    aImg.type = Image.Type.Simple;
+                    aImg.preserveAspect = true;     // <- the fix: never stretch into an ellipse/blob
+                    aImg.raycastTarget = false;
+                }
+            }
+            else
+            {
+                // Clean framed placeholder (NOT a raw gold ellipse): a class crest on the dark frame.
+                AddLabel(portraitFrame.transform, ClassCrest(job), 0f, 1f, GiltInk,
+                         ElarionUi.FontTitle + 30, TMPro.TextAlignmentOptions.Center, 0.1f, 0.9f, bold: true);
+            }
 
-            // "Lvl" and hero info like mockup.
-            AddLabel(medBand.transform, "Lvl", 0.05f, 0.25f, InkMicro,
-                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.05f, 0.3f);
-            AddLabel(medBand.transform, "Hero", 0.05f, 0.18f, Ink,
-                     ElarionUi.FontMicro + 4, TMPro.TextAlignmentOptions.Left, 0.05f, 0.3f);
-
-            // Name and class like mockup (Grom Ironhand).
-            AddLabel(medBand.transform, HeroDisplayName(job), 0.55f, 0.92f, Ink,
-                     ElarionUi.FontHead, TMPro.TextAlignmentOptions.Left, 0.32f, 0.98f, spacing: 1f);
-            AddLabel(medBand.transform, Cap(job).ToUpperInvariant() + "  LV " + level, 0.42f, 0.58f,
-                     InkMicro, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.32f, 0.98f, spacing: 2f);
+            // Name + class • level — centered band just under the portrait (no overlap with the art).
+            AddLabel(medBand.transform, HeroDisplayName(job), 0.44f, 0.515f, Ink,
+                     ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 1f, bold: true);
+            AddLabel(medBand.transform, Cap(job).ToUpperInvariant() + "   LV " + level, 0.385f, 0.44f,
+                     InkMicro, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 2f);
 
             // Colored bars in NON-overlapping vertical bands (HP red / MP blue / LVL green),
-            // sized to sit cleanly inside the now full-height card. Single HP bar (dup removed).
-            PaperDollBarTech("HP", 0.34f, 0.44f, new Color(0.62f, 0.16f, 0.14f, 1f), medBand.transform);
-            PaperDollBarTech("MP", 0.20f, 0.30f, new Color(0.18f, 0.33f, 0.62f, 1f), medBand.transform);
+            // full card width below the name. Single HP bar (dup removed).
+            PaperDollBarTech("HP", 0.27f, 0.36f, new Color(0.62f, 0.16f, 0.14f, 1f), medBand.transform);
+            PaperDollBarTech("MP", 0.165f, 0.255f, new Color(0.18f, 0.33f, 0.62f, 1f), medBand.transform);
             // Additional bar for "Till Next Level" or other, using green.
-            PaperDollBarTech("LVL", 0.06f, 0.16f, new Color(0.2f, 0.6f, 0.2f, 1f), medBand.transform);
+            PaperDollBarTech("LVL", 0.06f, 0.15f, new Color(0.2f, 0.6f, 0.2f, 1f), medBand.transform);
 
-            // No EQUIPMENT list / slots in left panel to exactly match the mockup's left side (portrait + name + bars + stats only).
-            // The left is pure character details as in the provided mockup image.
-            // Equipped status is shown via grid cell highlights/marks and the hero portrait/glyph.
-            // Equipping functionality preserved (tap a grid cell to equip; selection/rebuilt grid works).
+            // No EQUIPMENT list / slots in left panel — portrait + name + bars only. Equipped status
+            // is shown via grid cell highlights/marks. Equipping is preserved (tap a grid cell).
+        }
+
+        // WO-573 — load the active hero's portrait art for the inventory card. The portraits in
+        // Resources/HeroPortraits are imported as DEFAULT textures (spriteMode:0), so
+        // Resources.Load<Sprite> returns NULL — we try Sprite first (future-proof if the import flips)
+        // then load the Texture2D and wrap it in a Sprite (mirrors TitleController.FramePortrait's
+        // Texture2D fallback). Returns null when no art exists for the class (caller shows a crest).
+        private static Sprite LoadHeroPortrait(string job)
+        {
+            string slug = PortraitSlug(job);
+            if (string.IsNullOrEmpty(slug)) return null;
+
+            var sp = Resources.Load<Sprite>("HeroPortraits/" + slug);
+            if (sp != null) return sp;
+
+            var tex = Resources.Load<Texture2D>("HeroPortraits/" + slug);
+            if (tex != null)
+                return Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height),
+                                     new Vector2(0.5f, 0.5f), 100f);
+
+            FlowTrace.Warn("Inventory",
+                $"LoadHeroPortrait: no Resources/HeroPortraits/{slug} sprite or texture for job '{job}' — using class-crest placeholder.");
+            return null;
+        }
+
+        // Map a hero class to its portrait file slug (the first token of the canon display name:
+        // Grom / Thrain / Sylas / Elara), so the inventory card stays in sync with HeroDisplayName.
+        private static string PortraitSlug(string job)
+        {
+            switch ((job ?? "").ToLowerInvariant())
+            {
+                case "knight": return "Grom";
+                case "mage":   return "Thrain";
+                case "ranger": return "Sylas";
+                case "healer":
+                case "cleric": return "Elara";
+                default:        return null;
+            }
         }
 
         private void PaperDollRow(int slot, float top, float rowH, float gap, string label,
@@ -128,7 +171,8 @@ namespace DeNelle.Village
 
         private void PaperDollBarTech(string caps, float y0, float y1, Color fallbackFill, Transform host)
         {
-            const float x0 = 0.50f, x1 = 0.97f;
+            // WO-573: full card width (was 0.50–0.97 = right half, which crowded the old portrait).
+            const float x0 = 0.08f, x1 = 0.92f;
             var frameGo = AddImage(host, "Bar_" + caps + "_frame",
                                    new Vector2(x0, y0), new Vector2(x1, y1), Color.white, rounded: false);
             var fImg = frameGo.GetComponent<Image>();

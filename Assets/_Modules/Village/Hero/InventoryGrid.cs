@@ -25,6 +25,32 @@ namespace DeNelle.Village
             for (int i = _gridRoot.transform.childCount - 1; i >= 0; i--)
                 Destroy(_gridRoot.transform.GetChild(i).gameObject);
 
+            // ── WO-573 INSTRUMENTATION (§12) — the decisive data-empty vs render-broken capture.
+            // Logs the whole chain at one line: store/inventory presence, the raw owned-count size
+            // (GameState.GearInventory), the active tab, and the projected slot count. If owned=0
+            // across tabs the grid is DATA-EMPTY (no owned-item model — see header data gap), NOT a
+            // build failure; if owned>0 but slots=0 the projection is broken; if slots>0 but no
+            // content children get built (logged after the grid pass) it is built-but-invisible.
+            int owned = -1;
+            bool invPresent = DeNelle.Village.Crafting.VillageInventory.Instance != null;
+            try { owned = _store != null ? _store.OwnedCounts.Count : -1; } catch { owned = -2; }
+            int slotCount = (_vm != null && _vm.Slots != null) ? _vm.Slots.Count : -1;
+            FlowTrace.Step("Inventory",
+                $"RebuildGrid tab={_vm?.ActiveTab} store={(_store == null ? "NULL" : "ok")} " +
+                $"villageInventory={(invPresent ? "present" : "NULL")} ownedCounts={owned} slots={slotCount}");
+
+            // No slots → render a STYLED obsidian empty-state that FILLS the grid well, instead of the
+            // bare gray frame the owner saw. (The old BuildEmptyNote parented the note INTO the grid
+            // content, where the GridLayoutGroup forced it to a 78x72 cell → unreadable, so only the
+            // gray well showed.) Built directly into _gridRoot so no GridLayoutGroup squishes it.
+            if (_vm == null || _vm.Slots == null || _vm.Slots.Count == 0)
+            {
+                string msg = _vm != null ? EmptyTabNote(_vm.ActiveTab) : "No inventory.";
+                BuildEmptyState(_gridRoot.transform, msg);
+                FlowTrace.Step("Inventory", $"RebuildGrid: empty-state shown (slots={slotCount}).");
+                return;
+            }
+
             var viewport = AddImage(_gridRoot.transform, "Viewport",
                                     new Vector2(0.02f, 0.02f), new Vector2(0.98f, 0.98f),
                                     new Color(0, 0, 0, 0));
@@ -71,6 +97,12 @@ namespace DeNelle.Village
             var vrt = viewport.GetComponent<RectTransform>();
             if (vrt != null) LayoutRebuilder.ForceRebuildLayoutImmediate(vrt);
             LayoutRebuilder.ForceRebuildLayoutImmediate(crt);
+
+            // WO-573 (§12): how many cells actually landed in the grid content — the built-but-
+            // invisible discriminator. children>0 here with an empty-looking grid = a layout/clip
+            // issue; children==0 with slots>0 = every cell threw (BuildCellsFromVM logs Fail).
+            FlowTrace.Step("Inventory",
+                $"RebuildGrid: grid built, content children={content.transform.childCount} (slots={_vm?.Slots?.Count ?? -1}).");
         }
 
         // WO-434 Phase C — the grid is now a pure projection of vm.Slots (OWNED items in the
@@ -181,17 +213,34 @@ namespace DeNelle.Village
             return def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : id;
         }
 
-        // The empty-tab copy preserved per category (mirrors the old Build*Cells empty notes).
+        // The empty-tab copy per category. Weapons/Armor point the player at the Gear Preview —
+        // the hero's equipped gear lives there (gear is currently class+level auto-equip, so the
+        // inventory has no owned-loot list yet; see the header data gap + WO-573 owner-decision flag).
         private static string EmptyTabNote(InventoryTabKind tab)
         {
             switch (tab)
             {
-                case InventoryTabKind.Weapons:     return "No weapons owned.";
-                case InventoryTabKind.Armor:       return "No armor owned yet.";
+                case InventoryTabKind.Weapons:     return "No loose weapons in your pack.\nYour equipped weapon is shown in Gear Preview.";
+                case InventoryTabKind.Armor:       return "No loose armor in your pack.\nYour equipped armor is shown in Gear Preview.";
                 case InventoryTabKind.Outfits:     return "Outfits arrive with the cosmetics pass.\n(no owned skins yet)";
                 case InventoryTabKind.Consumables: return "No consumables.\nCraft potions at the Workshop.";
                 default:                           return "Nothing here.";
             }
+        }
+
+        // WO-573 — a STYLED obsidian empty-state that fills the grid well (black panel + thin gold
+        // inner rim, the WO-554 chrome), replacing the bare gray frame. Built directly under the
+        // grid root (NOT inside the GridLayoutGroup content), so the message renders full-size and
+        // readable instead of being squished into a single 78x72 cell.
+        private void BuildEmptyState(Transform gridRoot, string msg)
+        {
+            var box = AddImage(gridRoot, "EmptyState",
+                               new Vector2(0.06f, 0.30f), new Vector2(0.94f, 0.70f),
+                               new Color(0.02f, 0.02f, 0.03f, 0.92f));
+            AddInnerRim(box, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.45f));
+            NoRaycast(box);
+            AddLabel(box.transform, msg, 0f, 1f, InkDim, ElarionUi.FontLabel,
+                     TMPro.TextAlignmentOptions.Center, 0.08f, 0.92f);
         }
 
         private void BuildGearCell(Transform content, string icon, Sprite iconSprite, string name, string rarity,
