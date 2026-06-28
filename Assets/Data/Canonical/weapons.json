@@ -2,25 +2,672 @@
   "version": 1,
   "_note": "Gear v1 weapon catalog (data-driven, same pattern as abilities.json). damageMult joins the hero's damage chain (base x talent x level x timing x WEAPON). reach = MELEE hitbox radius in metres for MELEE jobs (knight) — overrides PlayerAttackController's fixed AttackRange (3.2) when >0; a heavier/longer blade outreaches a lighter one. Ranged jobs (mage/ranger) attack via AbilityDef.Range and leave reach 0 (unset) so their range is unchanged. req starts level-gated; add dex/arcane/might keys later. icon = emoji placeholder until real art ships (swap the field, zero code change). PRICING (buyWood/buyFood/buyIron/buyCrystals): tiered by rarity (common floor -> legendary sink, ~2.5x/tier); CRYSTALS gate rare+ (the aether/crystal arc); resource mix reflects the weapon's nature (knight=iron blade, ranger=wood bow, mage=wood staff + crystal head). Lean economy by design.",
   "weapons": [
-    { "id": "mage_starter",  "name": "Apprentice Wand",  "icon": "🪄", "job": "mage",   "rarity": "common",   "damageMult": 1.0,  "req": { "level": 1 }, "buyWood": 25, "buyCrystals": 3 },
-    { "id": "mage_oak",      "name": "Oakheart Staff",   "icon": "🪄", "job": "mage",   "rarity": "uncommon", "damageMult": 1.25, "req": { "level": 3 }, "buyWood": 100, "buyCrystals": 12 },
-    { "id": "mage_arcane",   "name": "Arcane Scepter",   "icon": "🔮", "job": "mage",   "rarity": "rare",     "damageMult": 1.6,  "req": { "level": 6 }, "buyWood": 200, "buyIron": 40, "buyCrystals": 30, "flavor": "Cut in the Bright Centuries, when an Elarion-forged head still drank the Heart's light without dimming.", "makersMark": "Last-Pressing" },
-    { "id": "mage_void",     "name": "Voidcaller Staff", "icon": "🔮", "job": "mage",   "rarity": "epic",     "damageMult": 2.1,  "req": { "level": 10 }, "buyWood": 400, "buyIron": 80, "buyCrystals": 80, "flavor": "A late-age masterwork. Pressed to the ear in a quiet room, the crystal is said to hum the old singing note.", "makersMark": "Last-Pressing" },
-
-    { "id": "knight_starter","name": "Squire's Blade",   "icon": "🗡️", "job": "knight", "rarity": "common",   "damageMult": 1.0,  "reach": 2.8, "req": { "level": 1 }, "buyWood": 20, "buyIron": 40 },
-    { "id": "knight_shield_starter", "name": "Squire's Heater", "icon": "🛡️", "job": "knight", "category": "shield", "rarity": "common", "req": { "level": 1 }, "buyWood": 30, "buyIron": 30, "flavor": "A plain iron-banded heater — the first thing a squire is taught to hold." },
-    { "id": "knight_iron",   "name": "Iron Longsword",   "icon": "🗡️", "job": "knight", "rarity": "uncommon", "damageMult": 1.25, "reach": 3.4, "req": { "level": 3 }, "buyWood": 40, "buyIron": 150 },
-    { "id": "knight_oath",   "name": "Oathkeeper",       "icon": "⚔️", "job": "knight", "rarity": "rare",     "damageMult": 1.6,  "reach": 4.0, "req": { "level": 6 }, "buyWood": 80, "buyIron": 350, "buyCrystals": 10, "flavor": "Such blades sealed the highest bonds — given at sworn-knightings, written into wills above land.", "makersMark": "Emberhand" },
-    { "id": "knight_dawn",   "name": "Dawnbreaker",      "icon": "⚔️", "job": "knight", "rarity": "epic",     "damageMult": 2.1,  "reach": 4.6, "req": { "level": 10 }, "buyWood": 150, "buyIron": 700, "buyCrystals": 40, "flavor": "Kin to the lost Dawnedge, gifted to a southern queen at her crowning. To hold one was to be someone.", "makersMark": "Emberhand" },
-
-    { "id": "ranger_starter","name": "Hunter's Shortbow","icon": "🏹", "job": "ranger", "rarity": "common",   "damageMult": 1.0,  "req": { "level": 1 }, "buyWood": 40, "buyIron": 15 },
-    { "id": "ranger_yew",    "name": "Yewwood Longbow",  "icon": "🏹", "job": "ranger", "rarity": "uncommon", "damageMult": 1.25, "req": { "level": 3 }, "buyWood": 150, "buyIron": 40 },
-    { "id": "ranger_storm",  "name": "Stormrender Bow",  "icon": "🎯", "job": "ranger", "rarity": "rare",     "damageMult": 1.6,  "req": { "level": 6 }, "buyWood": 350, "buyIron": 80, "buyCrystals": 10, "flavor": "Its limbs were grown, not cut — living wood from the Lumbermill that never wearied the arm.", "makersMark": "Heartwood" },
-    { "id": "ranger_eclipse","name": "Eclipse Recurve",  "icon": "🎯", "job": "ranger", "rarity": "epic",     "damageMult": 2.1,  "req": { "level": 10 }, "buyWood": 700, "buyIron": 150, "buyCrystals": 40, "flavor": "A true Heartwood-marked bow. Merchants who could say 'this is Elarion-marked' had already named their price.", "makersMark": "Heartwood" },
-
-    { "id": "aegis_emberbrand",       "name": "Emberbrand, the Rekindled", "icon": "⚔️", "job": "knight", "rarity": "legendary", "damageMult": 2.4, "reach": 4.8, "req": { "level": 10 }, "buyWood": 300, "buyIron": 1500, "buyCrystals": 120, "setId": "aegis", "makersMark": "Emberhand", "saga": "Borin reforged the snapped hilt with the Threefold Fold; Wren's Last Pressing let the steel drink aether without shattering. A combo finisher releases the stored aether as a shock." },
-    { "id": "aegis_heartwood_longbow","name": "Heartwood Longbow",         "icon": "🏹", "job": "ranger", "rarity": "legendary", "damageMult": 2.4, "req": { "level": 10 }, "buyWood": 1500, "buyIron": 300, "buyCrystals": 120, "setId": "aegis", "makersMark": "Heartwood", "saga": "Pell's living-wood limbs, given by the Tree rather than taken. Charged shots pierce and 'remember' the last struck foe." },
-    { "id": "aegis_aetherstaff",      "name": "Aetherstaff",               "icon": "🔮", "job": "mage",   "rarity": "legendary", "damageMult": 2.4, "req": { "level": 10 }, "buyWood": 800, "buyIron": 150, "buyCrystals": 200, "setId": "aegis", "makersMark": "Last-Pressing", "saga": "A quench-bonded crystal head set in Heartwood — Wren and Pell's craft as one. Spells cost less the closer you fight." },
-    { "id": "aegis_hallowed_censer",  "name": "The Hallowed Censer",       "icon": "🕯️", "job": "cleric", "rarity": "legendary", "damageMult": 2.2, "reach": 1.8, "req": { "level": 10 }, "buyWood": 400, "buyIron": 1200, "buyCrystals": 150, "setId": "aegis", "makersMark": "Oathweld", "saga": "Halvard's Oathweld bound to Pell's Heartwood. Its heals also seed a small ward on the Heart and the village's structures." }
+    {
+      "id": "mage_starter",
+      "name": "Apprentice Wand",
+      "icon": "🪄",
+      "job": "mage",
+      "rarity": "common",
+      "damageMult": 1.0,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 25,
+      "buyCrystals": 3,
+      "flavor": "A smooth willow rod — what the tutors hand out when they are not yet sure you are worth the crystal."
+    },
+    {
+      "id": "mage_oak",
+      "name": "Oakheart Staff",
+      "icon": "🪄",
+      "job": "mage",
+      "rarity": "uncommon",
+      "damageMult": 1.25,
+      "req": {
+        "level": 3
+      },
+      "buyWood": 100,
+      "buyCrystals": 12,
+      "flavor": "Shaped from a fallen oak at the forest's edge, before the Heartwood guild ever thought to grow such things with intention."
+    },
+    {
+      "id": "mage_arcane",
+      "name": "Arcane Scepter",
+      "icon": "🔮",
+      "job": "mage",
+      "rarity": "rare",
+      "damageMult": 1.6,
+      "req": {
+        "level": 6
+      },
+      "buyWood": 200,
+      "buyIron": 40,
+      "buyCrystals": 30,
+      "flavor": "Cut in the Bright Centuries, when an Elarion-forged head still drank the Heart's light without dimming.",
+      "makersMark": "Last-Pressing"
+    },
+    {
+      "id": "mage_void",
+      "name": "Voidcaller Staff",
+      "icon": "🔮",
+      "job": "mage",
+      "rarity": "epic",
+      "damageMult": 2.1,
+      "req": {
+        "level": 10
+      },
+      "buyWood": 400,
+      "buyIron": 80,
+      "buyCrystals": 80,
+      "flavor": "A late-age masterwork. Pressed to the ear in a quiet room, the crystal is said to hum the old singing note.",
+      "makersMark": "Last-Pressing"
+    },
+    {
+      "id": "knight_starter",
+      "name": "Squire's Blade",
+      "icon": "🗡️",
+      "job": "knight",
+      "rarity": "common",
+      "damageMult": 1.0,
+      "reach": 2.8,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 20,
+      "buyIron": 40,
+      "flavor": "Plain iron, no mark, no history — the sword they give you before you have earned one."
+    },
+    {
+      "id": "knight_shield_starter",
+      "name": "Squire's Heater",
+      "icon": "🛡️",
+      "job": "knight",
+      "category": "shield",
+      "rarity": "common",
+      "req": {
+        "level": 1
+      },
+      "buyWood": 30,
+      "buyIron": 30,
+      "flavor": "A plain iron-banded heater — the first thing a squire is taught to hold."
+    },
+    {
+      "id": "knight_iron",
+      "name": "Iron Longsword",
+      "icon": "🗡️",
+      "job": "knight",
+      "rarity": "uncommon",
+      "damageMult": 1.25,
+      "reach": 3.4,
+      "req": {
+        "level": 3
+      },
+      "buyWood": 40,
+      "buyIron": 150,
+      "flavor": "Not beautiful, not storied — just steel that has not failed anyone yet."
+    },
+    {
+      "id": "knight_oath",
+      "name": "Oathkeeper",
+      "icon": "⚔️",
+      "job": "knight",
+      "rarity": "rare",
+      "damageMult": 1.6,
+      "reach": 4.0,
+      "req": {
+        "level": 6
+      },
+      "buyWood": 80,
+      "buyIron": 350,
+      "buyCrystals": 10,
+      "flavor": "Such blades sealed the highest bonds — given at sworn-knightings, written into wills above land.",
+      "makersMark": "Emberhand"
+    },
+    {
+      "id": "knight_dawn",
+      "name": "Dawnbreaker",
+      "icon": "⚔️",
+      "job": "knight",
+      "rarity": "epic",
+      "damageMult": 2.1,
+      "reach": 4.6,
+      "req": {
+        "level": 10
+      },
+      "buyWood": 150,
+      "buyIron": 700,
+      "buyCrystals": 40,
+      "flavor": "Kin to the lost Dawnedge, gifted to a southern queen at her crowning. To hold one was to be someone.",
+      "makersMark": "Emberhand"
+    },
+    {
+      "id": "ranger_starter",
+      "name": "Hunter's Shortbow",
+      "icon": "🏹",
+      "job": "ranger",
+      "rarity": "common",
+      "damageMult": 1.0,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 40,
+      "buyIron": 15,
+      "flavor": "Field-strung and field-forgotten; the kind of bow found in a dead man's pack with no name on it."
+    },
+    {
+      "id": "ranger_yew",
+      "name": "Yewwood Longbow",
+      "icon": "🏹",
+      "job": "ranger",
+      "rarity": "uncommon",
+      "damageMult": 1.25,
+      "req": {
+        "level": 3
+      },
+      "buyWood": 150,
+      "buyIron": 40,
+      "flavor": "Yew bends where others break — the old foresters knew that before anyone thought to guild it."
+    },
+    {
+      "id": "ranger_storm",
+      "name": "Stormrender Bow",
+      "icon": "🎯",
+      "job": "ranger",
+      "rarity": "rare",
+      "damageMult": 1.6,
+      "req": {
+        "level": 6
+      },
+      "buyWood": 350,
+      "buyIron": 80,
+      "buyCrystals": 10,
+      "flavor": "Its limbs were grown, not cut — living wood from the Lumbermill that never wearied the arm.",
+      "makersMark": "Heartwood"
+    },
+    {
+      "id": "ranger_eclipse",
+      "name": "Eclipse Recurve",
+      "icon": "🎯",
+      "job": "ranger",
+      "rarity": "epic",
+      "damageMult": 2.1,
+      "req": {
+        "level": 10
+      },
+      "buyWood": 700,
+      "buyIron": 150,
+      "buyCrystals": 40,
+      "flavor": "A true Heartwood-marked bow. Merchants who could say 'this is Elarion-marked' had already named their price.",
+      "makersMark": "Heartwood"
+    },
+    {
+      "id": "cleric_starter",
+      "name": "Acolyte's Mace",
+      "icon": "🔨",
+      "job": "cleric",
+      "rarity": "common",
+      "damageMult": 1.0,
+      "reach": 1.8,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 20,
+      "buyIron": 30,
+      "flavor": "A simple iron head on a turned handle — the first thing an acolyte raises in blessing, the last thing some enemies saw."
+    },
+    {
+      "id": "aegis_emberbrand",
+      "name": "Emberbrand, the Rekindled",
+      "icon": "⚔️",
+      "job": "knight",
+      "rarity": "legendary",
+      "damageMult": 2.4,
+      "reach": 4.8,
+      "req": {
+        "level": 10
+      },
+      "buyWood": 300,
+      "buyIron": 1500,
+      "buyCrystals": 120,
+      "setId": "aegis",
+      "makersMark": "Emberhand",
+      "saga": "Borin reforged the snapped hilt with the Threefold Fold; Wren's Last Pressing let the steel drink aether without shattering. A combo finisher releases the stored aether as a shock."
+    },
+    {
+      "id": "aegis_heartwood_longbow",
+      "name": "Heartwood Longbow",
+      "icon": "🏹",
+      "job": "ranger",
+      "rarity": "legendary",
+      "damageMult": 2.4,
+      "req": {
+        "level": 10
+      },
+      "buyWood": 1500,
+      "buyIron": 300,
+      "buyCrystals": 120,
+      "setId": "aegis",
+      "makersMark": "Heartwood",
+      "saga": "Pell's living-wood limbs, given by the Tree rather than taken. Charged shots pierce and 'remember' the last struck foe."
+    },
+    {
+      "id": "aegis_aetherstaff",
+      "name": "Aetherstaff",
+      "icon": "🔮",
+      "job": "mage",
+      "rarity": "legendary",
+      "damageMult": 2.4,
+      "req": {
+        "level": 10
+      },
+      "buyWood": 800,
+      "buyIron": 150,
+      "buyCrystals": 200,
+      "setId": "aegis",
+      "makersMark": "Last-Pressing",
+      "saga": "A quench-bonded crystal head set in Heartwood — Wren and Pell's craft as one. Spells cost less the closer you fight."
+    },
+    {
+      "id": "aegis_hallowed_censer",
+      "name": "The Hallowed Censer",
+      "icon": "🕯️",
+      "job": "cleric",
+      "rarity": "legendary",
+      "damageMult": 2.2,
+      "reach": 1.8,
+      "req": {
+        "level": 10
+      },
+      "buyWood": 400,
+      "buyIron": 1200,
+      "buyCrystals": 150,
+      "setId": "aegis",
+      "makersMark": "Oathweld",
+      "saga": "Halvard's Oathweld bound to Pell's Heartwood. Its heals also seed a small ward on the Heart and the village's structures."
+    },
+    {
+      "id": "tripo_axe_a",
+      "name": "Reaver's Hatchet",
+      "icon": "🪓",
+      "kind": "Weapon",
+      "category": "axe",
+      "job": "knight",
+      "hand": "1h",
+      "damageType": "melee",
+      "rarity": "common",
+      "prefabPath": "Heroes/Props/Weapons/axe_A",
+      "generated": true,
+      "manual": true,
+      "damageMult": 1.0,
+      "reach": 3.0,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 25,
+      "buyIron": 50,
+      "buyCrystals": 0,
+      "flavor": "Small enough to throw, heavy enough to mean it — the hatchet that ended arguments before they became sieges."
+    },
+    {
+      "id": "tripo_bow_a",
+      "name": "Greenwarden Bow",
+      "icon": "🏹",
+      "kind": "Weapon",
+      "category": "bow",
+      "job": "ranger",
+      "hand": "2h",
+      "damageType": "ranged",
+      "rarity": "common",
+      "prefabPath": "Heroes/Props/Weapons/bow_A",
+      "generated": true,
+      "manual": true,
+      "damageMult": 1.0,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 40,
+      "buyIron": 15,
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_bow_a",
+      "reach": 0.0,
+      "flavor": "Grown-wood and gut-string, no guild's hand in it — honest work for honest range."
+    },
+    {
+      "id": "tripo_bow_b",
+      "name": "Forester's Recurve",
+      "icon": "🏹",
+      "kind": "Weapon",
+      "category": "bow",
+      "job": "ranger",
+      "hand": "2h",
+      "damageType": "ranged",
+      "rarity": "uncommon",
+      "prefabPath": "Heroes/Props/Weapons/bow_B",
+      "generated": true,
+      "manual": true,
+      "damageMult": 1.25,
+      "req": {
+        "level": 3
+      },
+      "buyWood": 150,
+      "buyIron": 40,
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_bow_b",
+      "reach": 0.0,
+      "flavor": "The recurve's curve was learned from coastal hunters who shot from saddle and never missed a moving thing."
+    },
+    {
+      "id": "tripo_bow_c",
+      "name": "Glade Longbow",
+      "icon": "🏹",
+      "kind": "Weapon",
+      "category": "bow",
+      "job": "ranger",
+      "hand": "2h",
+      "damageType": "ranged",
+      "rarity": "rare",
+      "prefabPath": "Heroes/Props/Weapons/bow_C",
+      "generated": true,
+      "manual": true,
+      "damageMult": 1.6,
+      "req": {
+        "level": 6
+      },
+      "buyWood": 350,
+      "buyIron": 80,
+      "buyCrystals": 10,
+      "iconPath": "ItemIcons/tripo_bow_c",
+      "reach": 0.0,
+      "makersMark": "Heartwood",
+      "flavor": "Heartwood-grown limbs; arrows trail living leaves."
+    },
+    {
+      "id": "tripo_dagger_a",
+      "name": "Bramblefang",
+      "icon": "🔪",
+      "kind": "Weapon",
+      "category": "dagger",
+      "job": "ranger",
+      "hand": "1h",
+      "damageType": "melee",
+      "rarity": "uncommon",
+      "prefabPath": "Heroes/Props/Weapons/dagger_A",
+      "generated": true,
+      "manual": true,
+      "damageMult": 1.25,
+      "reach": 0.0,
+      "req": {
+        "level": 3
+      },
+      "buyWood": 80,
+      "buyIron": 100,
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_dagger_a",
+      "flavor": "A fast Heartwood dirk; its bite is said to bleed deep."
+    },
+    {
+      "id": "tripo_hammer_a",
+      "name": "Wardstone Maul",
+      "icon": "🔨",
+      "kind": "Weapon",
+      "category": "hammer",
+      "job": "knight",
+      "hand": "2h",
+      "damageType": "melee",
+      "rarity": "epic",
+      "prefabPath": "Heroes/Props/Weapons/hammer_A",
+      "generated": true,
+      "manual": true,
+      "damageMult": 2.1,
+      "reach": 4.6,
+      "req": {
+        "level": 10
+      },
+      "buyWood": 200,
+      "buyIron": 800,
+      "buyCrystals": 50,
+      "iconPath": "ItemIcons/tripo_hammer_a",
+      "makersMark": "Emberhand",
+      "flavor": "Emberhand maul; a ground-slam stuns and throws sparks."
+    },
+    {
+      "id": "tripo_shield_a",
+      "name": "Oakband Heater",
+      "icon": "🛡",
+      "kind": "Weapon",
+      "category": "shield",
+      "job": "any",
+      "hand": "1h",
+      "damageType": "melee",
+      "rarity": "common",
+      "prefabPath": "Heroes/Props/Weapons/shield_A",
+      "generated": true,
+      "manual": true,
+      "damageMult": 1.0,
+      "reach": 0.0,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 30,
+      "buyIron": 30,
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_shield_a",
+      "flavor": "Oak-banded and unadorned — the kind of shield that has stopped arrows and never been thanked for it."
+    },
+    {
+      "id": "tripo_staff_a",
+      "name": "Emberglass Staff",
+      "icon": "🪄",
+      "kind": "Weapon",
+      "category": "staff",
+      "job": "mage",
+      "hand": "2h",
+      "damageType": "magic",
+      "rarity": "common",
+      "prefabPath": "Heroes/Props/Weapons/staff_A",
+      "generated": true,
+      "manual": true,
+      "damageMult": 1.0,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 25,
+      "buyCrystals": 3,
+      "iconPath": "ItemIcons/tripo_staff_a",
+      "reach": 0.0,
+      "flavor": "Emberglass is what happens when a furnace cracks and someone decides to sell the pieces anyway."
+    },
+    {
+      "id": "tripo_staff_b",
+      "name": "Tideglass Staff",
+      "icon": "🪄",
+      "kind": "Weapon",
+      "category": "staff",
+      "job": "mage",
+      "hand": "2h",
+      "damageType": "magic",
+      "rarity": "uncommon",
+      "prefabPath": "Heroes/Props/Weapons/staff_B",
+      "generated": true,
+      "manual": true,
+      "damageMult": 1.25,
+      "req": {
+        "level": 3
+      },
+      "buyWood": 100,
+      "buyCrystals": 12,
+      "iconPath": "ItemIcons/tripo_staff_b",
+      "reach": 0.0,
+      "flavor": "Tideglass came in on trader ships from the coast — pale blue, cold to the touch, and never quite at home this far inland."
+    },
+    {
+      "id": "tripo_staff_c",
+      "name": "Sparkwood Staff",
+      "icon": "🪄",
+      "kind": "Weapon",
+      "category": "staff",
+      "job": "mage",
+      "hand": "2h",
+      "damageType": "magic",
+      "rarity": "rare",
+      "prefabPath": "Heroes/Props/Weapons/staff_C",
+      "generated": true,
+      "manual": true,
+      "damageMult": 1.6,
+      "req": {
+        "level": 6
+      },
+      "buyWood": 200,
+      "buyIron": 40,
+      "buyCrystals": 30,
+      "iconPath": "ItemIcons/tripo_staff_c",
+      "reach": 0.0,
+      "makersMark": "Last-Pressing",
+      "flavor": "A Last-Pressing crystal head set in sparkwood; it drinks the Heart's light."
+    },
+    {
+      "id": "tripo_staff_d",
+      "name": "Heartglass Rod",
+      "icon": "🪄",
+      "kind": "Weapon",
+      "category": "staff",
+      "job": "mage",
+      "hand": "2h",
+      "damageType": "magic",
+      "rarity": "common",
+      "prefabPath": "Heroes/Props/Weapons/staff_D",
+      "generated": true,
+      "manual": true,
+      "damageMult": 1.0,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 25,
+      "buyCrystals": 3,
+      "iconPath": "ItemIcons/tripo_staff_d",
+      "reach": 0.0,
+      "flavor": "A rod, not a staff — less reach, less ceremony, and quicker to draw in a room with a low ceiling."
+    },
+    {
+      "id": "tripo_sword_a",
+      "name": "Wardens' Edge",
+      "icon": "🗡",
+      "kind": "Weapon",
+      "category": "sword",
+      "job": "knight",
+      "hand": "1h",
+      "damageType": "melee",
+      "rarity": "common",
+      "prefabPath": "Heroes/Props/Weapons/sword_A",
+      "generated": true,
+      "manual": true,
+      "damageMult": 1.0,
+      "reach": 2.8,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 20,
+      "buyIron": 40,
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_sword_a",
+      "flavor": "The edge they trained wardens on; plain enough that losing one was not a tragedy."
+    },
+    {
+      "id": "tripo_sword_d",
+      "name": "Footman's Cut",
+      "icon": "🗡",
+      "kind": "Weapon",
+      "category": "sword",
+      "job": "knight",
+      "hand": "1h",
+      "damageType": "melee",
+      "rarity": "uncommon",
+      "prefabPath": "Heroes/Props/Weapons/sword_D",
+      "generated": true,
+      "manual": true,
+      "damageMult": 1.25,
+      "reach": 3.4,
+      "req": {
+        "level": 3
+      },
+      "buyWood": 40,
+      "buyIron": 150,
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/tripo_sword_d",
+      "flavor": "A footman's blade — weighted for a full day's march and a hard ten minutes at the end of it."
+    },
+    {
+      "id": "tripo_sword_f",
+      "name": "Vigil Longsword",
+      "icon": "🗡",
+      "kind": "Weapon",
+      "category": "sword",
+      "job": "knight",
+      "hand": "1h",
+      "damageType": "melee",
+      "rarity": "rare",
+      "prefabPath": "Heroes/Props/Weapons/sword_F",
+      "generated": true,
+      "manual": true,
+      "damageMult": 1.6,
+      "reach": 4.0,
+      "req": {
+        "level": 6
+      },
+      "buyWood": 80,
+      "buyIron": 350,
+      "buyCrystals": 10,
+      "iconPath": "ItemIcons/tripo_sword_f",
+      "makersMark": "Emberhand",
+      "flavor": "An Emberhand vigil-blade; a faint ember trail follows the edge."
+    },
+    {
+      "id": "tripo_sword_g",
+      "name": "Dawnward Greatblade",
+      "icon": "🗡",
+      "kind": "Weapon",
+      "category": "sword",
+      "job": "knight",
+      "hand": "1h",
+      "damageType": "melee",
+      "rarity": "epic",
+      "prefabPath": "Heroes/Props/Weapons/sword_G",
+      "generated": true,
+      "manual": true,
+      "damageMult": 2.1,
+      "reach": 4.6,
+      "req": {
+        "level": 10
+      },
+      "buyWood": 150,
+      "buyIron": 700,
+      "buyCrystals": 40,
+      "iconPath": "ItemIcons/tripo_sword_g",
+      "makersMark": "Emberhand",
+      "flavor": "Emberhand steel of the dawn watch; a crit ignites the strike."
+    },
+    {
+      "id": "tripo_wand_a",
+      "name": "Acolyte's Wand",
+      "icon": "🪄",
+      "kind": "Weapon",
+      "category": "wand",
+      "job": "mage",
+      "hand": "1h",
+      "damageType": "magic",
+      "rarity": "common",
+      "prefabPath": "Heroes/Props/Weapons/wand_A",
+      "generated": true,
+      "manual": true,
+      "damageMult": 1.0,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 20,
+      "buyCrystals": 3,
+      "iconPath": "ItemIcons/tripo_wand_a",
+      "reach": 0.0,
+      "flavor": "The smallest form the craft takes; what a student carries before anyone trusts them with something that could burn a room."
+    }
   ]
 }
