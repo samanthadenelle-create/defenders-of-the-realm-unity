@@ -90,7 +90,28 @@ namespace DeNelle.Village
         private int GearHpBonus => _gear != null ? _gear.GearHpBonus : 0;
         private int _appliedGearHpBonus;
 
-        public float MaxHp    => _maxHp + GearHpBonus;
+        // v2 talents (WO talent-tree): Vitality / Elarion's Blessing fold a fractional max-HP
+        // bonus into the effective max, the SAME way gear HP does (so the bar grows + the hero
+        // tops up by the delta when a +HP node is learned mid-run, and clamps when respec'd).
+        private string HeroClassOrDefault
+        {
+            get
+            {
+                if (_abilities == null) _abilities = GetComponent<HeroAbilities>();
+                return _abilities != null ? _abilities.HeroClass : "knight";
+            }
+        }
+        private int TalentHpBonus
+        {
+            get
+            {
+                float m = DeNelle.Village.Talents.HeroTalentModifiers.MaxHpMultiplier(HeroClassOrDefault);
+                return Mathf.RoundToInt(_maxHp * Mathf.Max(0f, m - 1f));
+            }
+        }
+        private int EffectiveBonus => GearHpBonus + TalentHpBonus;
+
+        public float MaxHp    => _maxHp + EffectiveBonus;
         public float Hp       => _hp;
         public float Fraction => MaxHp > 0f ? Mathf.Clamp01(_hp / MaxHp) : 0f;
         public bool  IsAlive  => _hp > 0f;
@@ -150,7 +171,7 @@ namespace DeNelle.Village
             // Resolve gear up-front so the starting bar reflects any persisted HP gear, then
             // top the hero to the effective full so a +HP loadout doesn't read as "missing HP".
             if (_gear == null) _gear = GetComponent<GearLoadout>();
-            _appliedGearHpBonus = GearHpBonus;
+            _appliedGearHpBonus = EffectiveBonus;
             _hp = MaxHp;
             OnHealthChanged?.Invoke(_hp, MaxHp);
         }
@@ -161,7 +182,7 @@ namespace DeNelle.Village
         private void SyncGearHp()
         {
             if (_gear == null) _gear = GetComponent<GearLoadout>();
-            int now = GearHpBonus;
+            int now = EffectiveBonus;   // gear HP + talent HP folded together
             if (now == _appliedGearHpBonus) return;
             int delta = now - _appliedGearHpBonus;
             _appliedGearHpBonus = now;
@@ -252,6 +273,20 @@ namespace DeNelle.Village
             if (_gear == null) _gear = GetComponent<GearLoadout>();
             if (_gear != null && _gear.ArmorDefense > 0f)
                 amount *= (1f - _gear.ArmorDefense);
+
+            // v2 talents (Knight V1): Guardian Stance can fully BLOCK a hit; Iron Resolve /
+            // Resilience / defense nodes reduce the rest. Identity (no block, 0 DR) until a
+            // defensive node is learned, so combat is unchanged at baseline.
+            string heroClass = HeroClassOrDefault;
+            if (DeNelle.Village.Talents.HeroTalentModifiers.RollBlock(heroClass))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroTalents", "block", 1f,
+                    "Guardian Stance blocked a hit (full negate).");
+                VFXManager.Play(VFXType.Impact_Physical, transform.position + Vector3.up * 1.0f);
+                return;
+            }
+            float talentDr = DeNelle.Village.Talents.HeroTalentModifiers.IncomingDamageReduction(heroClass);
+            if (talentDr > 0f) amount *= (1f - talentDr);
 
             _hp = Mathf.Max(0f, _hp - amount);
             OnHealthChanged?.Invoke(_hp, MaxHp);
@@ -393,7 +428,7 @@ namespace DeNelle.Village
         public void RestoreToFull()
         {
             bool wasDown = _isDead || _hp <= 0f;
-            _appliedGearHpBonus = GearHpBonus;   // re-sync so SyncGearHp doesn't double-apply after a full restore
+            _appliedGearHpBonus = EffectiveBonus;   // re-sync so SyncGearHp doesn't double-apply after a full restore
             _hp = MaxHp;
             // If the hero had gone down, clear the death state so it isn't stuck "dead" on the
             // town return (Respawn does this on its own path; we mirror it here without warping).

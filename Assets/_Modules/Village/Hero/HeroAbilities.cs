@@ -452,11 +452,13 @@ namespace DeNelle.Village
                     // DTT routes the heal to repair the TOWER (HealHandler). Otherwise
                     // it heals the CASTER — executive call 2026-05-28: "heal hero is
                     // correct — cannot heal a tree." def.Damage carries the amount.
-                    if (HealHandler == null || !HealHandler(def.Damage))
+                    // v2 talents: Mending Oath boosts the heal amount (modifyAbility stat=heal).
+                    float healAmount = def.Damage * HeroTalentModifiers.HealAmountMultiplier(_heroClass);
+                    if (HealHandler == null || !HealHandler(healAmount))
                     {
                         var heroHp = GetComponent<HeroHealth>();
                         if (heroHp == null) heroHp = HeroHealth.Instance;
-                        if (heroHp != null) heroHp.Heal(def.Damage);
+                        if (heroHp != null) heroHp.Heal(healAmount);
                         VFXManager.Play(VFXType.Cast_Heal, origin + Vector3.up * 1.2f);
                     }
                     break;

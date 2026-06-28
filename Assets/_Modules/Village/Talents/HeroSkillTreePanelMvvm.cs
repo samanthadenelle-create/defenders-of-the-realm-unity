@@ -109,37 +109,82 @@ namespace DeNelle.Village.Talents
             RebuildColumns();
         }
 
+        // v2 layout: a 5-slot × 4-tier grid (capstones on top row) + an 8-node Shared strip
+        // along the bottom. Columns == talent slots (1..5); rows == tiers (4 at the top down
+        // to 1). Prereq is same-slot vertical, so a column reads as one unlock path.
+        private const int GridCols  = 5;
+        private const int GridTiers = 4;
+        private const float GridFloor = 0.30f;   // hero grid occupies y [GridFloor, 1]; shared strip below
+
         private void RebuildColumns()
         {
             ClearContent();
-            if (_contentRoot == null) return;
+            if (_contentRoot == null || _vm == null) return;
+            BuildHeroGrid();
+            BuildSharedStrip();
+        }
 
-            var branches = _vm.Branches;
-            int colCount = branches != null ? branches.Count : 0;
-            if (colCount <= 0) return;
+        // ── Hero grid: 5 slot columns × 4 tier rows (tier 4 capstones on top) ─────
+        private void BuildHeroGrid()
+        {
+            float colGap = 0.018f;
+            float colW = (1f - colGap * (GridCols - 1)) / GridCols;
 
-            // Group nodes by column, then bucket by tier within the column.
-            // tierBuckets[col][tier(1..3)] = list of nodes.
-            var byColumn = new List<List<SkillNodeVM>>[colCount];
-            for (int c = 0; c < colCount; c++)
-            {
-                byColumn[c] = new List<List<SkillNodeVM>>();
-                for (int t = 0; t < 3; t++) byColumn[c].Add(new List<SkillNodeVM>());
-            }
+            // Tier bands within [GridFloor, 1]: tier 4 (capstone) at top → tier 1 at bottom.
+            float bandTop = 1f, bandBot = GridFloor;
+            float bandH = (bandTop - bandBot) / GridTiers;
+            float rowGap = 0.02f;
+
             foreach (var n in _vm.Nodes)
             {
-                if (n.Column < 0 || n.Column >= colCount) continue;
-                int tIdx = Mathf.Clamp(n.Tier, 1, 3) - 1;
-                byColumn[n.Column][tIdx].Add(n);
+                int col = n.Column;
+                if (col < 0 || col >= GridCols) continue;
+                int tier = Mathf.Clamp(n.Tier, 1, GridTiers);
+
+                float x0 = col * (colW + colGap);
+                float x1 = x0 + colW;
+
+                // row index 0 == top == tier 4.
+                int row = GridTiers - tier;
+                float y1 = bandTop - row * bandH;
+                float y0 = y1 - bandH + rowGap;
+
+                // Same-slot vertical prereq connector (down to the tier below this one).
+                if (tier > 1)
+                    BuildPrereqLine((x0 + x1) * 0.5f, y0, y0 - rowGap);
+
+                BuildNodeCard(_contentRoot.transform, n, x0, x1, y0, y1 - 0.012f);
             }
 
-            float colGap = 0.02f;
-            float colW = (1f - colGap * (colCount - 1)) / colCount;
-            for (int c = 0; c < colCount; c++)
+            // Tier labels down the far-left gutter (visual aid).
+            for (int t = GridTiers; t >= 1; t--)
             {
-                float x0 = c * (colW + colGap);
-                float x1 = x0 + colW;
-                BuildColumn(branches[c], byColumn[c], x0, x1);
+                int row = GridTiers - t;
+                float y1 = bandTop - row * bandH;
+                string lbl = t == GridTiers ? "Capstone" : "Tier " + t;
+                ElarionUiKit.Label(_contentRoot.transform, lbl, y1 - 0.03f, y1,
+                    t == GridTiers ? ElarionUi.Gold : ElarionUi.ParchmentDim,
+                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.0f, 0.12f, bold: true);
+            }
+        }
+
+        // ── Shared Universal strip: 8 nodes in a row along the bottom band ─────────
+        private void BuildSharedStrip()
+        {
+            var shared = _vm.Shared;
+            if (shared == null || shared.Count == 0) return;
+
+            ElarionUiKit.Label(_contentRoot.transform, "Universal — any class", 0.235f, 0.275f,
+                ElarionUi.Gilt, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.0f, 1f, bold: true);
+
+            int n = shared.Count;
+            float gap = 0.012f;
+            float w = (1f - gap * (n - 1)) / n;
+            float y0 = 0.02f, y1 = 0.22f;
+            for (int i = 0; i < n; i++)
+            {
+                float x0 = i * (w + gap);
+                BuildNodeCard(_contentRoot.transform, shared[i], x0, x0 + w, y0, y1);
             }
         }
 
@@ -223,72 +268,30 @@ namespace DeNelle.Village.Talents
                 Debug.LogWarning("[HeroSkillTreePanelMvvm] HeroLoadout panel not registered — Equip is a no-op.");
         }
 
-        // ── Branch column: a captioned vertical stack of tier rows (top-down 3->1) ──
-
-        private void BuildColumn(string branchName, List<List<SkillNodeVM>> tierBuckets, float x0, float x1)
-        {
-            var col = ElarionUiKit.Well(_contentRoot.transform, new Vector2(x0, 0f), new Vector2(x1, 1f));
-            var colImg = col.GetComponent<Image>();
-            if (colImg != null) colImg.raycastTarget = false;
-
-            // Branch caption at the top.
-            ElarionUiKit.Label(col.transform, branchName, 0.93f, 0.99f, ElarionUi.Gilt,
-                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
-
-            // Three tier bands, tier 3 at the top (y high) down to tier 1 (y low).
-            // Band y-ranges leave a top strip for the caption.
-            float[] bandY0 = { 0.62f, 0.34f, 0.06f }; // index 0 = tier3 (top)
-            float[] bandY1 = { 0.90f, 0.60f, 0.32f };
-
-            for (int band = 0; band < 3; band++)
-            {
-                int tier = 3 - band;                 // band 0 -> tier 3
-                var nodes = tierBuckets[tier - 1];
-                float by0 = bandY0[band], by1 = bandY1[band];
-
-                // Tier caption (small, left edge of the band).
-                ElarionUiKit.Label(col.transform, "Tier " + tier, by1 - 0.04f, by1, ElarionUi.ParchmentDim,
-                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.05f, 0.5f, bold: true);
-
-                if (nodes == null || nodes.Count == 0) continue;
-
-                float nodeGap = 0.04f;
-                float nodeW = (0.92f - nodeGap * (nodes.Count - 1)) / nodes.Count;
-                for (int i = 0; i < nodes.Count; i++)
-                {
-                    float nx0 = 0.04f + i * (nodeW + nodeGap);
-                    float nx1 = nx0 + nodeW;
-                    // Connector up to the band above (only when there IS a band above and a prereq).
-                    if (band > 0 && nodes[i].Prereqs != null && nodes[i].Prereqs.Count > 0)
-                        BuildPrereqLine(col.transform, (nx0 + nx1) * 0.5f, by1, bandY0[band - 1]);
-                    BuildNodeCard(col.transform, nodes[i], nx0, nx1, by0, by1 - 0.05f);
-                }
-            }
-        }
-
-        // A thin gilt vertical connector from a node's top up into the tier band above —
-        // a column-local "prerequisite line" so the unlock path reads at a glance.
-        private void BuildPrereqLine(Transform col, float cx, float fromY, float toY)
+        // A thin gilt vertical connector from a node's bottom down to the tier below —
+        // a same-slot "prerequisite line" so the vertical unlock path reads at a glance.
+        // Parented directly to the content host (the v2 grid uses absolute cell anchors).
+        private void BuildPrereqLine(float cx, float fromY, float toY)
         {
             var go = new GameObject("PrereqLine", typeof(Image));
-            go.transform.SetParent(col, false);
+            go.transform.SetParent(_contentRoot.transform, false);
             var r = go.GetComponent<RectTransform>();
-            float w = 0.006f;
-            r.anchorMin = new Vector2(cx - w, fromY);
-            r.anchorMax = new Vector2(cx + w, toY);
+            float w = 0.004f;
+            r.anchorMin = new Vector2(cx - w, Mathf.Min(fromY, toY));
+            r.anchorMax = new Vector2(cx + w, Mathf.Max(fromY, toY));
             r.offsetMin = Vector2.zero; r.offsetMax = Vector2.zero;
             var img = go.GetComponent<Image>();
-            img.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.35f);
+            img.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.32f);
             img.raycastTarget = false;
             go.transform.SetAsFirstSibling();
         }
 
         // ── Node card (presentation; data from the bound SkillNodeVM) ─────────────
 
-        private void BuildNodeCard(Transform col, SkillNodeVM node, float x0, float x1, float y0, float y1)
+        private void BuildNodeCard(Transform parent, SkillNodeVM node, float x0, float x1, float y0, float y1)
         {
             var card = new GameObject("Node_" + node.Id, typeof(Image), typeof(Button));
-            card.transform.SetParent(col, false);
+            card.transform.SetParent(parent, false);
             var rt = card.GetComponent<RectTransform>();
             rt.anchorMin = new Vector2(x0, y0); rt.anchorMax = new Vector2(x1, y1);
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
@@ -296,12 +299,26 @@ namespace DeNelle.Village.Talents
             var img = card.GetComponent<Image>();
             ElarionUiKit.ApplyRounded(img);
 
-            // Plate colour by state: owned green, unlockable gold, locked dim.
+            // Plate colour by state: owned green, unlockable gold, locked dim. Capstones
+            // read with a richer gold wash so the ultimate row stands apart.
             Color plate;
-            if (node.Owned) plate = new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.22f);
-            else if (node.CanUnlock) plate = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.20f);
+            if (node.Owned) plate = new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.24f);
+            else if (node.CanUnlock) plate = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.22f);
             else plate = new Color(ElarionUiKit.Cell.r, ElarionUiKit.Cell.g, ElarionUiKit.Cell.b, 0.40f);
+            if (node.IsCapstone && !node.Owned && !node.CanUnlock)
+                plate = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.14f);
             img.color = plate;
+
+            // Capstone frame: a distinct gilt border behind the card.
+            if (node.IsCapstone)
+            {
+                var frame = ElarionUiKit.AddImage(card.transform, "CapstoneFrame",
+                    new Vector2(-0.04f, -0.04f), new Vector2(1.04f, 1.04f),
+                    new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f));
+                var fImg = frame.GetComponent<Image>();
+                if (fImg != null) fImg.raycastTarget = false;
+                frame.transform.SetAsFirstSibling();
+            }
 
             var btn = card.GetComponent<Button>();
             btn.targetGraphic = img;
@@ -310,21 +327,38 @@ namespace DeNelle.Village.Talents
             string id = node.Id;
             btn.onClick.AddListener(() => { if (_vm != null) _vm.Unlock(id); });
 
-            // Name.
+            // Icon (top portion of the card) — graceful when the sprite isn't sliced yet.
+            var sprite = LoadIcon(node.IconPath);
+            if (sprite != null)
+            {
+                var iconGo = new GameObject("Icon", typeof(Image));
+                iconGo.transform.SetParent(card.transform, false);
+                var ir = iconGo.GetComponent<RectTransform>();
+                ir.anchorMin = new Vector2(0.30f, 0.48f); ir.anchorMax = new Vector2(0.70f, 0.95f);
+                ir.offsetMin = Vector2.zero; ir.offsetMax = Vector2.zero;
+                var iImg = iconGo.GetComponent<Image>();
+                iImg.sprite = sprite;
+                iImg.preserveAspect = true;
+                iImg.raycastTarget = false;
+                if (!node.Owned && !node.CanUnlock) iImg.color = new Color(1f, 1f, 1f, 0.45f); // dim locked
+            }
+
+            // Name (lower-middle band, leaving room for the icon above).
             Color nameColor = node.Owned || node.CanUnlock ? ElarionUi.Parchment : ElarionUi.ParchmentDim;
-            ElarionUiKit.Label(card.transform, node.Name, 0.58f, 0.96f, nameColor,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+            float nameY1 = sprite != null ? 0.48f : 0.92f;
+            ElarionUiKit.Label(card.transform, node.Name, nameY1 - 0.18f, nameY1, nameColor,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
 
             // Kind chip (Skill / Stat) — top-left micro.
             string kindChip = node.Kind == SkillNodeKind.Skill ? "SKILL" : "STAT";
-            ElarionUiKit.Label(card.transform, kindChip, 0.80f, 0.97f,
+            ElarionUiKit.Label(card.transform, kindChip, 0.86f, 0.99f,
                 node.Kind == SkillNodeKind.Skill ? ElarionUi.Aether : ElarionUi.ParchmentDim,
-                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.06f, 0.6f, bold: true);
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.05f, 0.6f, bold: true);
 
             // Equipped chip (Skill nodes that are slotted in the loadout).
             if (node.IsEquipped)
-                ElarionUiKit.Label(card.transform, "EQUIPPED", 0.80f, 0.97f, ElarionUi.Affordable,
-                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Right, 0.4f, 0.94f, bold: true);
+                ElarionUiKit.Label(card.transform, "EQUIPPED", 0.86f, 0.99f, ElarionUi.Affordable,
+                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Right, 0.4f, 0.95f, bold: true);
 
             // State / reason line + cost.
             string stateLine;
@@ -345,8 +379,19 @@ namespace DeNelle.Village.Talents
                 stateLine = string.IsNullOrEmpty(node.LockReason) ? "Locked" : node.LockReason;
                 stateColor = ElarionUi.Danger;
             }
-            ElarionUiKit.Label(card.transform, stateLine, 0.06f, 0.50f, stateColor,
-                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
+            ElarionUiKit.Label(card.transform, stateLine, 0.04f, 0.26f, stateColor,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
+        }
+
+        // Icon cache — Resources.Load is cheap but cached avoids reloading every Render.
+        private static readonly Dictionary<string, Sprite> s_iconCache = new Dictionary<string, Sprite>();
+        private static Sprite LoadIcon(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return null;
+            if (s_iconCache.TryGetValue(path, out var cached)) return cached;
+            Sprite sp = Resources.Load<Sprite>(path);
+            s_iconCache[path] = sp;   // cache nulls too (atlas not sliced yet) so we don't retry each frame
+            return sp;
         }
 
         // ── Teardown ──────────────────────────────────────────────────────────────

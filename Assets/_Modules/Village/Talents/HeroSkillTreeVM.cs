@@ -41,12 +41,15 @@ namespace DeNelle.Village.Talents
     {
         public readonly string Id;
         public readonly string Name;
-        public readonly int Tier;            // 1..3 (parsed from "tier1".."tier3")
-        public readonly int Column;          // 0-based branch column
-        public readonly string Branch;       // branch display name (Ranged / Heal-Sustain / Control / ...)
+        public readonly int Tier;            // 1..4 (parsed from "tier1".."tier4"); 0 for shared pool nodes
+        public readonly int Column;          // 0-based grid column == Slot-1 (v2: slot 1..5)
+        public readonly string Branch;       // legacy branch label (unused by the v2 slot-grid view)
         public readonly IReadOnlyList<string> Prereqs;
         public readonly SkillNodeKind Kind;
         public readonly string AbilityId;    // non-empty for Skill-kind nodes; "" for Stat
+        public readonly string IconPath;     // Resources sprite path (Talents/<hero>/<hero>_NN), may be ""
+        public readonly bool IsCapstone;     // tier-4 capstone (distinct frame)
+        public readonly bool IsShared;       // a Shared Universal pool node
         public readonly bool Owned;
         public readonly bool CanUnlock;
         public readonly string LockReason;   // why it's locked (shown instead of bare "LOCKED")
@@ -55,6 +58,7 @@ namespace DeNelle.Village.Talents
 
         public SkillNodeVM(string id, string name, int tier, int column, string branch,
                            IReadOnlyList<string> prereqs, SkillNodeKind kind, string abilityId,
+                           string iconPath, bool isCapstone, bool isShared,
                            bool owned, bool canUnlock, string lockReason, int wisdomCost, bool isEquipped)
         {
             Id = id;
@@ -65,6 +69,9 @@ namespace DeNelle.Village.Talents
             Prereqs = prereqs ?? Array.Empty<string>();
             Kind = kind;
             AbilityId = abilityId ?? "";
+            IconPath = iconPath ?? "";
+            IsCapstone = isCapstone;
+            IsShared = isShared;
             Owned = owned;
             CanUnlock = canUnlock;
             LockReason = lockReason ?? "";
@@ -90,6 +97,7 @@ namespace DeNelle.Village.Talents
         private bool _disposed;
 
         private readonly List<SkillNodeVM> _nodes = new List<SkillNodeVM>();
+        private readonly List<SkillNodeVM> _shared = new List<SkillNodeVM>();
         // Ordered, de-duped branch column labels (index == SkillNodeVM.Column).
         private readonly List<string> _branches = new List<string>();
 
@@ -127,8 +135,11 @@ namespace DeNelle.Village.Talents
 
         // ── Read-only data the View renders ─────────────────────────────────────
 
-        /// <summary>Every node in the tree (branch column + tier row carried on each). Never null.</summary>
+        /// <summary>Every hero-tree node (slot column + tier row carried on each). Never null.</summary>
         public IReadOnlyList<SkillNodeVM> Nodes => _nodes;
+
+        /// <summary>The 8 Shared Universal pool nodes (v2 strip). Never null.</summary>
+        public IReadOnlyList<SkillNodeVM> Shared => _shared;
 
         /// <summary>Branch column display names, left-to-right (index == node.Column). Never null.</summary>
         public IReadOnlyList<string> Branches => _branches;
@@ -166,63 +177,85 @@ namespace DeNelle.Village.Talents
         private void Rebuild()
         {
             _nodes.Clear();
+            _shared.Clear();
             _branches.Clear();
 
             var tree = HeroTalentCatalog.GetTree(_heroSlug);
             Title = tree != null && !string.IsNullOrEmpty(tree.DisplayName)
                 ? tree.DisplayName + " Skills"
                 : "Skills";
-            if (tree == null || tree.Nodes == null) return;
 
             var svc = WisdomCurrencyService.Instance;
             int wisdom = svc != null ? svc.Wisdom : 0;
             var unlocked = BuildUnlockedSet(svc);
 
-            // Resolve branch columns first (stable left-to-right order from first appearance).
-            var columnIndex = new Dictionary<string, int>(StringComparer.Ordinal);
-            foreach (var n in tree.Nodes)
+            // ── Hero tree: v2 slot-grid (column == slot-1, row == tier 1..4). ───────
+            if (tree != null && tree.Nodes != null)
             {
-                if (n == null) continue;
-                string branch = BranchKey(n);
-                if (!columnIndex.ContainsKey(branch))
+                foreach (var n in tree.Nodes)
                 {
-                    columnIndex[branch] = _branches.Count;
-                    _branches.Add(BranchLabel(branch));
+                    if (n == null || string.IsNullOrEmpty(n.Id)) continue;
+                    // Column from the explicit v2 slot (1..5); fall back to legacy branch column.
+                    int col = n.Slot > 0 ? n.Slot - 1 : LegacyColumn(n);
+                    _nodes.Add(BuildNode(n, col, isShared: false, wisdom, unlocked));
                 }
             }
 
-            foreach (var n in tree.Nodes)
+            // ── Shared Universal pool (8 free-standing nodes any hero may draw). ────
+            var shared = HeroTalentCatalog.SharedNodes;
+            if (shared != null)
             {
-                if (n == null || string.IsNullOrEmpty(n.Id)) continue;
-
-                bool owned = unlocked.Contains(n.Id);
-                bool canUnlock = !owned && HeroTalentCatalog.CanUnlock(n.Id, wisdom, unlocked);
-                string reason = owned ? "" : LockReasonFor(n, wisdom, unlocked);
-
-                string branch = BranchKey(n);
-                int col = columnIndex.TryGetValue(branch, out var ci) ? ci : 0;
-
-                SkillNodeKind kind = KindOf(n);
-                string abilityId = AbilityIdOf(n);
-                bool equipped = kind == SkillNodeKind.Skill
-                                && !string.IsNullOrEmpty(abilityId)
-                                && HeroLoadoutAccess.IsEquipped(abilityId);
-
-                _nodes.Add(new SkillNodeVM(
-                    n.Id,
-                    string.IsNullOrEmpty(n.Name) ? n.Id : n.Name,
-                    TierIndex(n.Tier),
-                    col,
-                    BranchLabel(branch),
-                    n.Prerequisites != null ? new List<string>(n.Prerequisites) : null,
-                    kind,
-                    abilityId,
-                    owned,
-                    canUnlock,
-                    reason,
-                    n.Cost,
-                    equipped));
+                for (int i = 0; i < shared.Count; i++)
+                {
+                    var n = shared[i];
+                    if (n == null || string.IsNullOrEmpty(n.Id)) continue;
+                    int col = n.Slot > 0 ? n.Slot - 1 : i;
+                    _shared.Add(BuildNode(n, col, isShared: true, wisdom, unlocked));
+                }
             }
+        }
+
+        private SkillNodeVM BuildNode(HeroTalentNodeDef n, int col, bool isShared, int wisdom, HashSet<string> unlocked)
+        {
+            bool owned = unlocked.Contains(n.Id);
+            bool canUnlock = !owned && HeroTalentCatalog.CanUnlock(n.Id, wisdom, unlocked);
+            string reason = owned ? "" : LockReasonFor(n, wisdom, unlocked);
+
+            SkillNodeKind kind = KindOf(n);
+            string abilityId = AbilityIdOf(n);
+            bool equipped = kind == SkillNodeKind.Skill
+                            && !string.IsNullOrEmpty(abilityId)
+                            && HeroLoadoutAccess.IsEquipped(abilityId);
+
+            int tier = isShared ? 0 : TierIndex(n.Tier);
+
+            return new SkillNodeVM(
+                n.Id,
+                string.IsNullOrEmpty(n.Name) ? n.Id : n.Name,
+                tier,
+                col,
+                isShared ? "Shared" : BranchLabel(BranchKey(n)),
+                n.Prerequisites != null ? new List<string>(n.Prerequisites) : null,
+                kind,
+                abilityId,
+                n.IconPath,
+                !isShared && tier >= 4,   // capstone
+                isShared,
+                owned,
+                canUnlock,
+                reason,
+                n.Cost,
+                equipped);
+        }
+
+        // Legacy fallback when a node has no v2 slot: derive a column from its branch.
+        private int LegacyColumn(HeroTalentNodeDef n)
+        {
+            string branch = BranchKey(n);
+            int idx = _branches.IndexOf(BranchLabel(branch));
+            if (idx >= 0) return idx;
+            _branches.Add(BranchLabel(branch));
+            return _branches.Count - 1;
         }
 
         // ── Lock-reason (the specific "why", not bare LOCKED) ─────────────────────
@@ -311,6 +344,7 @@ namespace DeNelle.Village.Talents
         {
             switch ((tier ?? "tier1").Trim().ToLowerInvariant())
             {
+                case "tier4": return 4;
                 case "tier3": return 3;
                 case "tier2": return 2;
                 default: return 1;
