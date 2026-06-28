@@ -245,7 +245,22 @@ namespace DeNelle.Core
             if (mr != null)
             {
                 Material stone = LoadHubFloorMaterial();
-                if (stone != null) mr.sharedMaterial = stone;
+                if (stone != null)
+                {
+                    mr.sharedMaterial = stone;
+                }
+                else
+                {
+                    // WO-580: NEVER leave the bare CreatePrimitive DEFAULT material on this
+                    // 90x90 plane — under URP it renders flat WHITE (a giant white floor /
+                    // bright slab the owner would read as a "white" artifact). If no stone
+                    // material could be resolved (URP/Lit shader stripped), hide the renderer
+                    // rather than show white; the nav plane still handles walkability.
+                    mr.enabled = false;
+                    FlowTrace.Warn("GroundZFightFixer",
+                        "WO-580: hub opaque floor material unresolved — renderer DISABLED to " +
+                        "avoid a default-white slab (URP/Lit shader missing?).");
+                }
             }
 
             FlowTrace.Step("GroundZFightFixer",

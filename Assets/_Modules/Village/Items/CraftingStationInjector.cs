@@ -205,6 +205,32 @@ namespace DeNelle.Village
             // Non-blocking placeholder — the Building's own AABB blocker handles pathing.
             var col = cube.GetComponent<Collider>();
             if (col != null) col.isTrigger = true;
+            // WO-580 (owner F8 "stray white bar/box in front of me, nothing there"): a raw
+            // GameObject.CreatePrimitive leaves the renderer on Unity's DEFAULT material,
+            // which renders FLAT WHITE under URP — exactly the stray white box the owner saw
+            // on a lean / pack-missing build. Tint it a neutral warm stone so it reads as an
+            // obvious placeholder block, never a jarring white bar. Never magenta (URP/Lit).
+            TintPlaceholderStone(cube, "Apothecary_Placeholder");
+        }
+
+        // WO-580: give a fallback placeholder primitive a neutral stone material so the bare
+        // CreatePrimitive default-white material never shows as a stray white box/bar in the
+        // hub. URP/Lit (Standard fallback for non-URP editor); null-safe; FlowTrace-proven.
+        private static void TintPlaceholderStone(GameObject go, string label)
+        {
+            if (go == null) return;
+            var r = go.GetComponent<MeshRenderer>();
+            if (r == null) return;
+            var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            if (sh == null) return;
+            var mat = new Material(sh) { name = "PlaceholderStone (runtime)" };
+            var stone = new Color(0.32f, 0.30f, 0.28f, 1f); // neutral warm stone — not white
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", stone);
+            if (mat.HasProperty("_Color")) mat.SetColor("_Color", stone);
+            r.sharedMaterial = mat;
+            FlowTrace.Step("Crafting",
+                "WO-580: tinted '" + label + "' placeholder cube to neutral stone " +
+                "(was default-white CreatePrimitive material → stray white box).");
         }
     }
 }
