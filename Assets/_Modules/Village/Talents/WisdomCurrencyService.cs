@@ -27,6 +27,7 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using UnityEngine;
+using DeNelle.Core.Quests;
 
 namespace DeNelle.Village.Talents
 {
@@ -117,6 +118,8 @@ namespace DeNelle.Village.Talents
             _unlocked.Add(nodeId);
             Save();
             Changed?.Invoke();
+            // WO-558: wildcard daily-quest progress — one tick per talent learned.
+            DailyQuestService.Instance?.Report("wildcard.learn-talent", 1);
             return true;
         }
 

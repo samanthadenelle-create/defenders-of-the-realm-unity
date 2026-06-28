@@ -17,6 +17,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Quests;
 
 namespace DeNelle.Village
 {
@@ -93,6 +94,8 @@ namespace DeNelle.Village
             {
                 _gate.RequestOpen();
                 Debug.Log($"[GateProximityOpener] {_gate.GateId} opened on hero approach.");
+                // WO-558: exploration daily-quest progress — one tick per fresh gate approach.
+                DailyQuestService.Instance?.Report("explore.visit-gate", 1);
             }
         }
 

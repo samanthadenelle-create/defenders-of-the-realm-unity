@@ -29,6 +29,7 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using UnityEngine;
+using DeNelle.Core.Quests;
 
 namespace DeNelle.Cosmetics
 {
@@ -184,6 +185,8 @@ namespace DeNelle.Cosmetics
             _state.Glimmer += amount;
             Save();
             Changed?.Invoke();
+            // WO-558: wildcard daily-quest progress — "earn N glimmer" advances by the granted amount.
+            DailyQuestService.Instance?.Report("wildcard.earn-glimmer", amount);
             return true;
         }
 
