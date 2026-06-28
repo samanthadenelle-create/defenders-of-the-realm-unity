@@ -55,11 +55,15 @@ namespace DeNelle.Village.Talents
         public readonly string LockReason;   // why it's locked (shown instead of bare "LOCKED")
         public readonly int WisdomCost;
         public readonly bool IsEquipped;
+        public readonly bool IsPending;      // staged in the current plan (not yet committed)
+        public readonly float X;             // node-graph canvas position (0..1; -1 = unset/auto)
+        public readonly float Y;             // 0=top, 1=bottom
 
         public SkillNodeVM(string id, string name, int tier, int column, string branch,
                            IReadOnlyList<string> prereqs, SkillNodeKind kind, string abilityId,
                            string iconPath, bool isCapstone, bool isShared,
-                           bool owned, bool canUnlock, string lockReason, int wisdomCost, bool isEquipped)
+                           bool owned, bool canUnlock, string lockReason, int wisdomCost, bool isEquipped,
+                           bool isPending, float x, float y)
         {
             Id = id;
             Name = name;
@@ -77,6 +81,9 @@ namespace DeNelle.Village.Talents
             LockReason = lockReason ?? "";
             WisdomCost = wisdomCost;
             IsEquipped = isEquipped;
+            IsPending = isPending;
+            X = x;
+            Y = y;
         }
     }
 
@@ -100,6 +107,8 @@ namespace DeNelle.Village.Talents
         private readonly List<SkillNodeVM> _shared = new List<SkillNodeVM>();
         // Ordered, de-duped branch column labels (index == SkillNodeVM.Column).
         private readonly List<string> _branches = new List<string>();
+        // Plan→CONFIRM: nodes staged this session but not yet committed/spent.
+        private readonly HashSet<string> _pending = new HashSet<string>(StringComparer.Ordinal);
 
         public HeroSkillTreeVM(Action onClose, string heroSlug = HeroSlug)
         {
@@ -162,14 +171,144 @@ namespace DeNelle.Village.Talents
 
         // ── Commands ────────────────────────────────────────────────────────────
 
-        /// <summary>Unlock a node: spends Wisdom + validates prereqs via WisdomCurrencyService.Unlock.</summary>
+        /// <summary>Unlock a node IMMEDIATELY (legacy path): spends Wisdom + validates via the service.
+        /// The node-graph View uses the plan→CONFIRM flow (Stage/Commit) instead.</summary>
         public void Unlock(string nodeId)
         {
             if (string.IsNullOrEmpty(nodeId)) return;
             var svc = WisdomCurrencyService.Instance;
             if (svc != null) svc.Unlock(nodeId);
+            _pending.Remove(nodeId);
             Rebuild();
             Raise();
+        }
+
+        // ── Plan → CONFIRM flow (node-graph) ─────────────────────────────────────
+
+        /// <summary>Total Wisdom the current staged plan would spend.</summary>
+        public int PendingCost
+        {
+            get
+            {
+                int sum = 0;
+                foreach (var id in _pending)
+                {
+                    var n = HeroTalentCatalog.FindNode(id);
+                    if (n != null) sum += n.Cost;
+                }
+                return sum;
+            }
+        }
+
+        /// <summary>Count of nodes staged in the current plan.</summary>
+        public int PendingCount => _pending.Count;
+
+        /// <summary>True when there is a non-empty, affordable plan to commit.</summary>
+        public bool CanCommit
+        {
+            get
+            {
+                var svc = WisdomCurrencyService.Instance;
+                int wisdom = svc != null ? svc.Wisdom : 0;
+                return _pending.Count > 0 && PendingCost <= wisdom;
+            }
+        }
+
+        /// <summary>Stage a node into the plan if reachable + affordable within the remaining budget
+        /// (treats already-staged nodes as tentatively owned so a chain can be planned in one pass).</summary>
+        public void Stage(string nodeId)
+        {
+            if (string.IsNullOrEmpty(nodeId) || _pending.Contains(nodeId)) return;
+            var svc = WisdomCurrencyService.Instance;
+            if (svc == null) return;
+            var node = HeroTalentCatalog.FindNode(nodeId);
+            if (node == null) return;
+
+            var owned = BuildUnlockedSet(svc);
+            if (owned.Contains(nodeId)) return;                 // already owned
+            var effective = Effective(owned);                   // owned ∪ pending
+            int budget = svc.Wisdom - PendingCost;              // Wisdom left after the staged plan
+            if (!HeroTalentCatalog.CanUnlock(nodeId, budget, effective)) return;
+            if (node.Cost > budget) return;
+
+            _pending.Add(nodeId);
+            Rebuild();
+            Raise();
+        }
+
+        /// <summary>Remove a node from the plan, and cascade-drop any staged node that depended on it.</summary>
+        public void Unstage(string nodeId)
+        {
+            if (string.IsNullOrEmpty(nodeId) || !_pending.Remove(nodeId)) return;
+            PrunePending();
+            Rebuild();
+            Raise();
+        }
+
+        /// <summary>Commit the staged plan: unlock every pending node (tier order) via the service, then clear.</summary>
+        public void Commit()
+        {
+            var svc = WisdomCurrencyService.Instance;
+            if (svc == null || _pending.Count == 0) return;
+
+            // Dependency-safe order: shared (no prereqs) + by tier ascending, so a parent
+            // is always committed before its child.
+            var ordered = new List<string>(_pending);
+            ordered.Sort((a, b) => TierOf(a).CompareTo(TierOf(b)));
+            foreach (var id in ordered) svc.Unlock(id);   // each re-validates prereq+cost+capstone
+
+            _pending.Clear();
+            Rebuild();
+            Raise();
+        }
+
+        /// <summary>Discard the staged plan without spending.</summary>
+        public void CancelPlan()
+        {
+            if (_pending.Count == 0) return;
+            _pending.Clear();
+            Rebuild();
+            Raise();
+        }
+
+        // owned ∪ pending — the "tentatively owned" set used for staging validation + node state.
+        private HashSet<string> Effective(HashSet<string> owned)
+        {
+            var set = new HashSet<string>(owned, StringComparer.Ordinal);
+            foreach (var id in _pending) set.Add(id);
+            return set;
+        }
+
+        // Drop staged nodes whose prerequisites are no longer satisfied by owned ∪ remaining-pending
+        // (iterate to a fixpoint so a whole staged chain collapses when its root is unstaged).
+        private void PrunePending()
+        {
+            var svc = WisdomCurrencyService.Instance;
+            if (svc == null) { _pending.Clear(); return; }
+            var owned = BuildUnlockedSet(svc);
+            bool changed = true;
+            while (changed)
+            {
+                changed = false;
+                var effective = Effective(owned);
+                foreach (var id in new List<string>(_pending))
+                {
+                    var n = HeroTalentCatalog.FindNode(id);
+                    if (n == null) { _pending.Remove(id); changed = true; continue; }
+                    if (n.Prerequisites == null) continue;
+                    foreach (var pr in n.Prerequisites)
+                    {
+                        if (string.IsNullOrEmpty(pr)) continue;
+                        if (!effective.Contains(pr)) { _pending.Remove(id); changed = true; break; }
+                    }
+                }
+            }
+        }
+
+        private static int TierOf(string nodeId)
+        {
+            var n = HeroTalentCatalog.FindNode(nodeId);
+            return n != null ? TierIndex(n.Tier) : 0;   // shared (tier "shared") -> 1 via default
         }
 
         // ── Build the node rows (no Unity types) ─────────────────────────────────
@@ -187,7 +326,10 @@ namespace DeNelle.Village.Talents
 
             var svc = WisdomCurrencyService.Instance;
             int wisdom = svc != null ? svc.Wisdom : 0;
-            var unlocked = BuildUnlockedSet(svc);
+            var owned = BuildUnlockedSet(svc);
+            _pending.RemoveWhere(owned.Contains);     // drop anything committed/owned externally
+            var effective = Effective(owned);          // owned ∪ pending = tentatively owned
+            int budget = wisdom - PendingCost;          // Wisdom left after the staged plan
 
             // ── Hero tree: v2 slot-grid (column == slot-1, row == tier 1..4). ───────
             if (tree != null && tree.Nodes != null)
@@ -197,7 +339,7 @@ namespace DeNelle.Village.Talents
                     if (n == null || string.IsNullOrEmpty(n.Id)) continue;
                     // Column from the explicit v2 slot (1..5); fall back to legacy branch column.
                     int col = n.Slot > 0 ? n.Slot - 1 : LegacyColumn(n);
-                    _nodes.Add(BuildNode(n, col, isShared: false, wisdom, unlocked));
+                    _nodes.Add(BuildNode(n, col, isShared: false, budget, owned, effective));
                 }
             }
 
@@ -210,16 +352,22 @@ namespace DeNelle.Village.Talents
                     var n = shared[i];
                     if (n == null || string.IsNullOrEmpty(n.Id)) continue;
                     int col = n.Slot > 0 ? n.Slot - 1 : i;
-                    _shared.Add(BuildNode(n, col, isShared: true, wisdom, unlocked));
+                    _shared.Add(BuildNode(n, col, isShared: true, budget, owned, effective));
                 }
             }
         }
 
-        private SkillNodeVM BuildNode(HeroTalentNodeDef n, int col, bool isShared, int wisdom, HashSet<string> unlocked)
+        private SkillNodeVM BuildNode(HeroTalentNodeDef n, int col, bool isShared, int budget,
+                                      HashSet<string> owned, HashSet<string> effective)
         {
-            bool owned = unlocked.Contains(n.Id);
-            bool canUnlock = !owned && HeroTalentCatalog.CanUnlock(n.Id, wisdom, unlocked);
-            string reason = owned ? "" : LockReasonFor(n, wisdom, unlocked);
+            bool isOwned = owned.Contains(n.Id);
+            bool isPending = _pending.Contains(n.Id);
+            // "CanUnlock" for the View = can be STAGED now: not owned/pending, reachable
+            // (prereqs in owned∪pending), capstone-legal, affordable within the remaining budget.
+            bool canStage = !isOwned && !isPending
+                            && HeroTalentCatalog.CanUnlock(n.Id, budget, effective)
+                            && n.Cost <= budget;
+            string reason = (isOwned || isPending) ? "" : LockReasonFor(n, budget, effective);
 
             SkillNodeKind kind = KindOf(n);
             string abilityId = AbilityIdOf(n);
@@ -241,11 +389,14 @@ namespace DeNelle.Village.Talents
                 n.IconPath,
                 !isShared && tier >= 4,   // capstone
                 isShared,
-                owned,
-                canUnlock,
+                isOwned,
+                canStage,
                 reason,
                 n.Cost,
-                equipped);
+                equipped,
+                isPending,
+                n.X,
+                n.Y);
         }
 
         // Legacy fallback when a node has no v2 slot: derive a column from its branch.
