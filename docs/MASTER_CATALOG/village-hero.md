@@ -225,7 +225,7 @@ bonus defense; lazily attaches AegisSetEffect. **The canonical equip model the i
 ### EquipmentController `EquipmentController.cs` — `DeNelle.Village`
 **MonoBehaviour**, `[DisallowMultipleComponent]`. Visually equips REAL KayKit weapon meshes on the Humanoid rig's
 hand bones (shields→LeftHand), driven by GearLoadout.EquippedWeapon. `void Equip(weaponId)`, `void EquipBestForHero()`,
-`void Unequip()`, `void SetCombatActive(bool)` (idle-lowered ↔ combat-ready hold), `void SetArmorTier(int)` (STUB, no-op).
+`void Unequip()`, `void EquipOffHand(WeaponDef|string)` (shield→LeftHand), `void SetCombatActive(bool)` (idle-lowered ↔ combat-ready hold), `void SetArmorTier(int)` (**WO-567: tints the static hero BODY per tier via MaterialPropertyBlock — NO mesh swap, no Blink revival; coexists with HeroArmorRimLight emission via GetPropertyBlock-merge; tier table = owner-tunable BONES**).
 Maps weapon ids → KayKit mesh + grip preset (Sword/Dagger/Axe/Hammer/Staff/Wand/Bow/Shield); bounds-normalizes any FBX
 (`NormalizeInto`); **geometric sword grip-point inference** (`SeatByHandle` — vertex width-profile finds the crossguard
 spike → grips the handle; build-safe `isReadable` guard). **MESH-LOADING GAP:** loads from `Resources/Heroes/Props/Weapons/<mesh>`

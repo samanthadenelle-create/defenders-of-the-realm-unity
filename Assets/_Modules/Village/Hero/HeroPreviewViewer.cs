@@ -20,10 +20,10 @@
 // driven explicitly, so its OnEnable auto-read / WaveManager combat-pose Update never
 // run on the off-screen clone.
 //
-// ARMOR LIMITATION (honored, not faked): EquipmentController.SetArmorTier is a recorded
-// NO-OP today (body armor art unauthored). So equipping a WEAPON updates the preview;
-// equipping ARMOR does not change the body mesh yet — expected, the moment art lands the
-// same controller lights it up here with no further plumbing.
+// GEAR MIRROR (WO-567): the preview body's EquipmentController now also mirrors the OFF-HAND
+// (shield) and the ARMOR TIER. Weapon + shield show their real KayKit meshes; armor (the static
+// single-model north star — no mesh swap) shows as the tier TINT the world hero gets, so the
+// showcase reflects the full equipped look (weapon + shield + armor accent) — not just the weapon.
 //
 // GRACEFUL: if the source body / RenderTexture can't be created, Begin returns false and
 // the panel simply skips the preview (no NRE, no blank screen). Render only happens while
@@ -81,7 +81,8 @@ namespace DeNelle.Village.Hero
         /// the caller then skips the preview. <paramref name="weaponId"/> (optional) seats the
         /// initial weapon mesh; pass the active loadout's equipped weapon id.
         /// </summary>
-        public bool Begin(GameObject actorBody, int textureSize = 512, string weaponId = null)
+        public bool Begin(GameObject actorBody, int textureSize = 512, string weaponId = null,
+                          string offHandId = null, int armorTier = 0)
         {
             if (_disposed) return false;
             if (actorBody == null) return false;
@@ -153,7 +154,7 @@ namespace DeNelle.Village.Hero
             // the SAME KayKit weapon mesh the world hero uses (or the primitive fallback). It
             // is added DISABLED + driven explicitly so its OnEnable auto-read / Update combat
             // poll never run on the off-screen clone.
-            AttachWeaponDriver(weaponId);
+            AttachWeaponDriver(weaponId, offHandId, armorTier);
 
             // First draw so the texture isn't blank before the first repaint.
             _cam.Render();
@@ -166,7 +167,8 @@ namespace DeNelle.Village.Hero
         /// new body, KEEPING the existing camera / light / RenderTexture (so the bound RawImage
         /// keeps its texture). Returns false (and leaves the rig unchanged) if the body is null.
         /// </summary>
-        public bool Retarget(GameObject actorBody, string weaponId = null)
+        public bool Retarget(GameObject actorBody, string weaponId = null,
+                             string offHandId = null, int armorTier = 0)
         {
             if (!IsValid || actorBody == null) return false;
 
@@ -181,7 +183,7 @@ namespace DeNelle.Village.Hero
             StripGameplayBehaviours(_model);
 
             FrameCamera(ComputeBounds(_model));
-            AttachWeaponDriver(weaponId);
+            AttachWeaponDriver(weaponId, offHandId, armorTier);
             _cam.Render();
             return true;
         }
@@ -197,6 +199,20 @@ namespace DeNelle.Village.Hero
         {
             if (!IsValid || _equip == null) return;
             _equip.Equip(weaponId);
+            _cam.Render();
+        }
+
+        /// <summary>
+        /// WO-567: mirror the FULL equipped look onto the preview body — weapon mesh + off-hand
+        /// (shield) mesh + armor TIER tint — then repaint once. Null/empty weapon or off-hand
+        /// detaches that slot; armorTier 0 clears the tint. No-op (safe) when the rig is invalid.
+        /// </summary>
+        public void RefreshGear(string weaponId, string offHandId, int armorTier)
+        {
+            if (!IsValid || _equip == null) return;
+            _equip.Equip(weaponId);
+            _equip.EquipOffHand(offHandId);
+            _equip.SetArmorTier(armorTier);
             _cam.Render();
         }
 
@@ -248,7 +264,7 @@ namespace DeNelle.Village.Hero
         // on the off-screen body) and seat the initial weapon. The controller resolves the
         // RightHand bone off the clone's own Animator (CacheRig). Guarded so a clone without a
         // valid Humanoid avatar (e.g. a fallback capsule) just shows no weapon, never throws.
-        private void AttachWeaponDriver(string weaponId)
+        private void AttachWeaponDriver(string weaponId, string offHandId = null, int armorTier = 0)
         {
             if (_model == null) return;
             try
@@ -260,6 +276,8 @@ namespace DeNelle.Village.Hero
                     _equip.enabled = false;   // we drive Equip() explicitly; no OnEnable/Update on the clone
                 }
                 _equip.Equip(weaponId);
+                _equip.EquipOffHand(offHandId);   // WO-567: mirror the shield
+                _equip.SetArmorTier(armorTier);   // WO-567: mirror the armor tier tint
             }
             catch (System.Exception e)
             {

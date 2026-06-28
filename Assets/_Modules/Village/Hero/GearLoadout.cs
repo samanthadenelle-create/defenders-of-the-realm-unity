@@ -320,7 +320,10 @@ namespace DeNelle.Village
             _equipment.SetArmorTier(ArmorVisualTier(EquippedArmor));
         }
 
-        private static int ArmorVisualTier(ArmorDef a)
+        /// <summary>Maps an armor piece to its coarse visual tier (0 none … 5 legendary) off the
+        /// rarity ladder. Public so the Gear Preview (EquipmentPanel) drives the SAME tint tier the
+        /// world hero uses — ONE mapping, no divergence.</summary>
+        public static int ArmorVisualTier(ArmorDef a)
         {
             if (a == null) return 0;
             switch ((a.rarity ?? "common").ToLowerInvariant())

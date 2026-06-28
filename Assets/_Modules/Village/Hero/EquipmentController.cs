@@ -216,6 +216,20 @@ namespace DeNelle.Village
         private string _currentWeaponId;
         private int _armorTier;
 
+        // ── ARMOR TINT (WO-567) ──────────────────────────────────────────────────────
+        // The combat-pivot north star keeps ONE static hero model — armor is NOT a mesh swap
+        // (Blink junked). To make "equipped armor" READ on the body, higher armor tiers tint the
+        // hero BODY via a MaterialPropertyBlock accent (a base-color multiply, richer with tier).
+        // CHEAP + LEAK-FREE: an MPB never instances a material (mirrors HeroArmorRimLight). It
+        // COEXISTS with HeroArmorRimLight's emission MPB — both use the GetPropertyBlock-merge
+        // pattern, so the base-color tint (this) and the rarity rim GLOW (rim light) stack.
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        private static readonly int ColorId     = Shader.PropertyToID("_Color");
+        private MaterialPropertyBlock _armorMpb;
+        private readonly List<SkinnedMeshRenderer> _bodyRenderers = new List<SkinnedMeshRenderer>();
+        private readonly List<Color> _bodyBaseColors = new List<Color>();   // authored base color per renderer (multiply target)
+        private bool _armorTintDirty;
+
         // OFF-HAND (shield) prop — attached to the OFF hand (LeftHand) alongside the main weapon.
         // Mirrors the main-hand prop lifecycle (destroy-on-swap, no stacking). Driven off
         // GearLoadout.EquippedOffHand on the SAME OnGearChanged event the main weapon uses.
@@ -1106,6 +1120,13 @@ namespace DeNelle.Village
         /// now branch: Blink shields go through the SAME async Addressables path the main weapon uses
         /// (and seat NATIVE — trust the authored grip), Tripo/Resources shields keep the sync path.
         /// </summary>
+        /// <summary>String-id convenience: resolve the off-hand (shield) WeaponDef from the catalog
+        /// and equip it. Used by the Gear Preview to mirror the equipped shield. Null/empty detaches.</summary>
+        public void EquipOffHand(string offHandId)
+        {
+            EquipOffHand(string.IsNullOrEmpty(offHandId) ? null : GearCatalog.FindWeapon(offHandId));
+        }
+
         public void EquipOffHand(WeaponDef def)
         {
             string id = def != null ? def.id : null;
@@ -1363,6 +1384,10 @@ namespace DeNelle.Village
             // ready and the weapon/off-hand prop is actually up (companion attach-after-rebind).
             LateAttachRetry();
 
+            // ARMOR TINT (WO-567): re-apply once the body renderers come online if an early
+            // SetArmorTier landed before the HeroBody existed (cheap; clears the flag on success).
+            if (_armorTintDirty) ApplyArmorTint();
+
             if (_combatExplicit || _gripRoot == null) return;
             if (_waveManager == null) _waveManager = Object.FindObjectOfType<WaveManager>();
             bool active = _waveManager != null &&
@@ -1443,26 +1468,103 @@ namespace DeNelle.Village
             }
         }
 
-        // ── ARMOR STUB ───────────────────────────────────────────────────────────
+        // ── ARMOR VISUAL (WO-567 — static-model TINT, NOT a mesh swap) ───────────────
         /// <summary>
-        /// Entry point for armor visuals. Wired now so callers (GearLoadout, shop/equip
-        /// UI) can drive it, but visually a NO-OP today.
+        /// Drive the hero's armor look from the worn tier (0 = none … 5 = legendary). The
+        /// combat-pivot north star keeps ONE static hero model — so this does NOT swap a mesh or
+        /// revive Blink. Instead it tints the BODY with a tier accent (richer with tier) via a
+        /// MaterialPropertyBlock, so equipping better armor is VISIBLE on the static model.
+        /// Driven by GearLoadout.PushArmorTierToBody on every equip change, and by the Gear
+        /// Preview (HeroPreviewViewer) for the showcase. Cheap + leak-free (MPB, no instancing).
         /// </summary>
-        // WIRE STATUS: GearLoadout now CALLS this with the worn armor's tier on every equip
-        // change (GearLoadout.PushArmorTierToBody), so the tier flows in live. The VISUAL is
-        // still intentionally a recorded NO-OP — body armor art (textures/plate meshes) is not
-        // yet authored, and the task brief is explicit: do the paper-doll display, but do NOT
-        // force a risky body-mesh attach. The moment armor art lands, implement the swap here
-        // (material/texture on HeroBody, or plate pieces parented to Chest/Shoulder/Leg bones
-        // keyed off _armorTier) and the wire above lights it up with no further plumbing.
         public void SetArmorTier(int tier)
         {
             _armorTier = Mathf.Max(0, tier);
-            // No body visual yet (art-gated) — tier recorded for the future visual pass.
+            _armorTintDirty = true;
+            ApplyArmorTint();   // body may not be ready yet — stays dirty + retried in Update
         }
 
-        /// <summary>Current armor tier (0 = none). Exposed for the future armor visual pass.</summary>
+        /// <summary>Current armor tier (0 = none).</summary>
         public int ArmorTier => _armorTier;
+
+        // Owner-tunable BONES (OWNER-DECISION: felt-tune freely). Per-tier MULTIPLIER applied to
+        // the body's authored base color, so tier 0 restores the original EXACTLY and higher tiers
+        // add a metal sheen. Hues track ArmorVfxMap's rarity bands (cool steel → blue → violet →
+        // gold) but as an albedo multiply (armor metal), NOT the additive rim GLOW the rim light
+        // owns — the two reads compose. Kept gentle so the hero's skin/face never discolors hard.
+        private static readonly Color[] ArmorTintByTier =
+        {
+            new Color(1.00f, 1.00f, 1.00f),  // 0 none — identity (no tint)
+            new Color(0.97f, 0.98f, 1.00f),  // 1 common — faint cool steel
+            new Color(0.90f, 0.94f, 1.00f),  // 2 uncommon — light steel-blue
+            new Color(0.82f, 0.89f, 1.04f),  // 3 rare — cool blue sheen
+            new Color(0.88f, 0.80f, 1.04f),  // 4 epic — violet sheen
+            new Color(1.05f, 0.92f, 0.64f),  // 5 legendary — warm gold sheen
+        };
+
+        private static Color ArmorTintMultiplier(int tier)
+        {
+            if (tier <= 0) return Color.white;
+            int i = Mathf.Clamp(tier, 0, ArmorTintByTier.Length - 1);
+            return ArmorTintByTier[i];
+        }
+
+        // Apply (or clear) the tier tint on the hero BODY renderers via MPB. MULTIPLIES the captured
+        // authored base color by the tier accent (tier 0 = identity restore). MERGE pattern
+        // (GetPropertyBlock first) so HeroArmorRimLight's emission set is preserved. No-op (and stays
+        // dirty) until the body renderers exist, so an early SetArmorTier re-applies once the body is up.
+        private void ApplyArmorTint()
+        {
+            if (!ResolveBodyRenderers()) return;   // body not ready — stay dirty, retried in Update
+            if (_armorMpb == null) _armorMpb = new MaterialPropertyBlock();
+
+            Color mul = ArmorTintMultiplier(_armorTier);
+            int applied = 0;
+            for (int i = 0; i < _bodyRenderers.Count; i++)
+            {
+                var smr = _bodyRenderers[i];
+                if (smr == null) continue;
+                Color a = _bodyBaseColors[i];
+                Color tinted = new Color(a.r * mul.r, a.g * mul.g, a.b * mul.b, a.a);
+                smr.GetPropertyBlock(_armorMpb);          // merge — keep rim emission etc.
+                _armorMpb.SetColor(BaseColorId, tinted);
+                _armorMpb.SetColor(ColorId, tinted);      // Built-in/Standard fallback
+                smr.SetPropertyBlock(_armorMpb);
+                applied++;
+            }
+            _armorTintDirty = false;
+            FlowTrace.Step("Equip",
+                $"ApplyArmorTint on '{name}' tier={_armorTier} mul=({mul.r:0.00},{mul.g:0.00},{mul.b:0.00}) -> {applied} body renderer(s).");
+        }
+
+        // Resolve + cache the hero BODY SkinnedMeshRenderers (the static model) and snapshot each
+        // one's authored base color, so the tint MULTIPLIES (never wipes a baked tint; tier 0 restores
+        // exactly). SkinnedMeshRenderer only — the character body — so weapon/shield MeshRenderer props
+        // are never tinted. Re-scans when the cache is empty/stale (body swap). False when no body yet.
+        private bool ResolveBodyRenderers()
+        {
+            bool stale = _bodyRenderers.Count == 0;
+            for (int i = 0; i < _bodyRenderers.Count && !stale; i++)
+                if (_bodyRenderers[i] == null) stale = true;
+            if (stale)
+            {
+                _bodyRenderers.Clear();
+                _bodyBaseColors.Clear();
+                GetComponentsInChildren(true, _bodyRenderers);
+                foreach (var smr in _bodyRenderers)
+                {
+                    Color c = Color.white;
+                    var mat = smr != null ? smr.sharedMaterial : null;
+                    if (mat != null)
+                    {
+                        if (mat.HasProperty(BaseColorId)) c = mat.GetColor(BaseColorId);
+                        else if (mat.HasProperty(ColorId)) c = mat.GetColor(ColorId);
+                    }
+                    _bodyBaseColors.Add(c);
+                }
+            }
+            return _bodyRenderers.Count > 0;
+        }
 
         // ── Internals ──────────────────────────────────────────────────────────────
         private void CacheRig()

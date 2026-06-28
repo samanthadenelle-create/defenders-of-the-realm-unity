@@ -172,6 +172,25 @@ namespace DeNelle.Village.Hero
             return (idx >= 0 && idx < _targetBodies.Count) ? _targetBodies[idx] : null;
         }
 
+        // WO-567: off-hand (shield) id + armor tier for the active target, so the Gear Preview
+        // mirrors the FULL equipped look (weapon + shield + armor tint), not just the weapon.
+        private string ActiveOffHandId()
+        {
+            if (_vm == null) return null;
+            int idx = _vm.ActiveTargetIndex;
+            if (idx < 0 || idx >= _targetAdapters.Count) return null;
+            var o = _targetAdapters[idx].EquippedOffHand;
+            return o != null ? o.id : null;
+        }
+
+        private int ActiveArmorTier()
+        {
+            if (_vm == null) return 0;
+            int idx = _vm.ActiveTargetIndex;
+            if (idx < 0 || idx >= _targetAdapters.Count) return 0;
+            return GearLoadout.ArmorVisualTier(_targetAdapters[idx].EquippedArmor);
+        }
+
         private static string ResolveHeroJob(GearLoadout loadout)
         {
             var ha = loadout != null ? loadout.GetComponent<HeroAbilities>() : null;
@@ -609,17 +628,20 @@ namespace DeNelle.Village.Hero
 
             var body = ActiveBody();
             string weaponId = ActiveWeaponId();
+            string offHandId = ActiveOffHandId();
+            int armorTier = ActiveArmorTier();
             if (body == null) { HidePreview(); return; }
 
             bool ok;
             if (_preview == null)
             {
                 _preview = new HeroPreviewViewer();
-                ok = _preview.Begin(body, textureSize: 512, weaponId: weaponId);
+                ok = _preview.Begin(body, textureSize: 512, weaponId: weaponId,
+                                    offHandId: offHandId, armorTier: armorTier);
             }
             else
             {
-                ok = _preview.Retarget(body, weaponId);
+                ok = _preview.Retarget(body, weaponId, offHandId, armorTier);
                 if (!ok) ok = _preview.IsValid;
             }
 
@@ -638,7 +660,8 @@ namespace DeNelle.Village.Hero
         private void RefreshPreviewWeapon()
         {
             if (_preview == null || !_preview.IsValid) return;
-            _preview.RefreshWeapon(ActiveWeaponId());
+            // WO-567: mirror the full equipped look (weapon + shield + armor tint), not just weapon.
+            _preview.RefreshGear(ActiveWeaponId(), ActiveOffHandId(), ActiveArmorTier());
         }
 
         private void HidePreview()
