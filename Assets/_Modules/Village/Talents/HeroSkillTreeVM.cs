@@ -225,6 +225,35 @@ namespace DeNelle.Village.Talents
             }
         }
 
+        /// <summary>True when CONFIRM should be available: either there is a committable plan
+        /// (unowned, affordable nodes staged) OR the currently selected node is an owned,
+        /// assignable skill (CONFIRM then drops it onto the quick-swap bar). Owner 2026-06-28:
+        /// "selecting any skill should allow CONFIRM to confirm or learn."</summary>
+        public bool CanConfirm => CanCommit || SelectedIsAssignable;
+
+        /// <summary>The CONFIRM action: commit the staged plan when there is one; otherwise, if an
+        /// owned assignable skill is selected, assign it into the first open quick-swap slot
+        /// (or slot 1 if all are full). Mirrors the slot-tap assign — the instant slot-tap path
+        /// is unchanged; this just makes CONFIRM work too.</summary>
+        public void ConfirmOrAssign()
+        {
+            if (CanCommit) { Commit(); return; }
+            if (!SelectedIsAssignable) return;
+            AssignSelectedToSlot(FirstAssignSlot());
+        }
+
+        // First empty quick-swap slot for a CONFIRM-assign; falls back to slot 0 when full.
+        private int FirstAssignSlot()
+        {
+            var bar = AssignableSkillBarAccess.Current;
+            for (int i = 0; i < AssignableSkillBar.SlotCount; i++)
+            {
+                string id = bar != null ? bar.AbilityIdForSlot(i) : null;
+                if (string.IsNullOrEmpty(id)) return i;
+            }
+            return 0;
+        }
+
         /// <summary>Stage a node into the plan if reachable + affordable within the remaining budget
         /// (treats already-staged nodes as tentatively owned so a chain can be planned in one pass).</summary>
         public void Stage(string nodeId)

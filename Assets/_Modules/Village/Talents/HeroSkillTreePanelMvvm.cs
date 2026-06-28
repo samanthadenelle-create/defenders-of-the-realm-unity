@@ -143,8 +143,8 @@ namespace DeNelle.Village.Talents
             }
             if (_confirmBtn != null)
             {
-                _confirmBtn.interactable = _vm.CanCommit;
-                SetButtonAlpha(_confirmBtn, _vm.CanCommit ? 1f : 0.4f);
+                _confirmBtn.interactable = _vm.CanConfirm;
+                SetButtonAlpha(_confirmBtn, _vm.CanConfirm ? 1f : 0.4f);
             }
             if (_cancelBtn != null)
             {
@@ -423,16 +423,17 @@ namespace DeNelle.Village.Talents
             var bdImg = backdrop.GetComponent<Image>();
             if (bdImg != null) bdImg.raycastTarget = false;
 
-            // Obsidian talent window frame (panel_talent) when present; default frame otherwise.
-            string panelSprite = RpgUiCatalog.Get("panel", "panel_talent") != null
-                ? "panel_talent" : RpgUiCatalog.PanelWindowDark;
+            // Obsidian board frame — match the known-good EquipmentPanel sibling (PanelVendor,
+            // the proven dark obsidian board). Falls back to the neutral dark frame if absent.
+            string panelSprite = RpgUiCatalog.Get("panel", RpgUiCatalog.PanelVendor) != null
+                ? RpgUiCatalog.PanelVendor : RpgUiCatalog.PanelWindowDark;
             var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.07f, 0.05f), new Vector2(0.93f, 0.95f),
                                                    deep: true, packSpriteName: panelSprite);
             var panel = panelGo.transform;
 
             // Always keep a dark backing behind the (9-slice) Obsidian frame so the
             // graph + text stay readable — the frame is a border, not a full fill.
-            Color fillColor = new Color(0.07f, 0.055f, 0.042f, 0.985f);
+            Color fillColor = new Color(0.05f, 0.055f, 0.06f, 0.985f);
             var solidFill = ElarionUiKit.AddImage(panel, "SkillSolidFill",
                 new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f), fillColor);
             var sfImg = solidFill.GetComponent<Image>();
@@ -473,7 +474,7 @@ namespace DeNelle.Village.Talents
             // Dark backing plate for the whole right column (delineates it from the graph).
             var detailBg = ElarionUiKit.AddImage(panel, "DetailBg",
                 new Vector2(colX0, 0.40f), new Vector2(colX1, 0.84f),
-                new Color(0.04f, 0.035f, 0.03f, 0.92f));
+                new Color(0.045f, 0.05f, 0.055f, 0.92f));
             var dbImg = detailBg.GetComponent<Image>();
             if (dbImg != null) dbImg.raycastTarget = false;
 
@@ -575,7 +576,7 @@ namespace DeNelle.Village.Talents
 
             _confirmBtn = ElarionUiKit.ButtonPack(panel, "CONFIRM", ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.55f, 0.07f), new Vector2(0.80f, 0.135f),
-                () => { if (_vm != null) _vm.Commit(); },
+                () => { if (_vm != null) _vm.ConfirmOrAssign(); },
                 packSpriteName: RpgUiCatalog.Get("button", "button_confirm") != null
                     ? RpgUiCatalog.ButtonConfirm : RpgUiCatalog.ButtonGold);
             var confLbl = _confirmBtn != null ? _confirmBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
