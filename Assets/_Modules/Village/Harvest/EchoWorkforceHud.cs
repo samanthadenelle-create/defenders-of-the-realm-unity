@@ -1,67 +1,65 @@
 // =============================================================================
-// EchoWorkforceHud -- the self-contained Echo Workforce widget (ECHO_WORKFORCE_SPEC).
+// EchoWorkforceHud -- the Echo Workforce panel (ECHO_WORKFORCE_SPEC).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
-// A SELF-CONTAINED, code-built uGUI overlay (NO UXML -- UXML does not render in
-// player builds; PIPELINE_STATE S8). DELIBERATELY DISJOINT from VillageHudController
-// (another agent may be touching the main HUD): this widget owns its OWN Canvas, so
-// the two never collide. It shows:
-//   - Echo count (e.g. "Echoes  2/4")
-//   - silo fill % + a fill bar (silo / capacity)
-//   - a "Dump All" button -> EchoService.DumpSilos()
-// Mobile-friendly: anchored top-left under the safe zone, ScaleWithScreenSize, large
-// tap target. Driven by EchoService (logic) via the Changed event -- a dumb view.
+// OWNER F8 (2026-06-28, WO-555): the Echo / offline-harvest readout used to be an
+// ALWAYS-ON top-left widget (count + silo fill + Dump All, live on screen every
+// frame in town). The owner called it "a side thought, not the main idea" and asked
+// for it TUCKED AWAY behind a button next to Settings. So this is now a HIDDEN panel
+// that only appears when the player taps the harvest button in the HUD top-right
+// cluster (next to the Settings gear).
+//
+//   - The HUD button (VillageHudController, DeNelle.HUD) calls
+//     HarvestPanelGate.RequestToggle() (Core seam — HUD never references Village, §5).
+//   - This view subscribes to HarvestPanelGate.ToggleRequested and shows/hides itself.
+//
+// The HARVEST LOGIC is untouched (EchoService owns accrual / silo / Dump / unlocks);
+// this is a PRESENTATION RELOCATION only. The panel is built with the shared Obsidian
+// chrome (ElarionUiKit.BuildObsidianModal — near-black fill + gold trim + one Close)
+// so it reads as the same designed game as every other panel. Still code-built uGUI
+// (NO UXML -- UXML does not render in player builds; PIPELINE_STATE S8). It owns its
+// OWN modal canvas, DISJOINT from VillageHudController so the two never collide.
 //
 // Lives on the EchoService DDOL host (installed by EchoWorkforceBootstrap).
 // =============================================================================
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
-using DeNelle.Core;
-using DeNelle.Core.HudModel;
+using TMPro;
+using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
-    /// <summary>Top-left Echo widget: count + silo fill + Dump All. Driven by EchoService.</summary>
+    /// <summary>Tucked-away Echo panel: count + silo fill + Dump All. Opened by the HUD
+    /// harvest button (next to Settings) via <see cref="HarvestPanelGate"/>. Driven by
+    /// EchoService. Hidden by default — never persistent on-screen chrome.</summary>
     [DisallowMultipleComponent]
     public sealed class EchoWorkforceHud : MonoBehaviour
     {
-        private Canvas _canvas;
-        private Text _countLabel;
-        private Text _siloLabel;
+        private GameObject _modal;      // the whole modal canvas (toggled active/inactive)
+        private TextMeshProUGUI _countLabel;
+        private TextMeshProUGUI _siloLabel;
         private Image _fill;
-        private Text _dumpLabel;
+        private TextMeshProUGUI _dumpLabel;
+        private bool _open;
 
-        // WO-541 Stage 3a: context gate. The Echo widget is TOWN-only chrome; it must not
-        // bleed into Overworld/Battle/Modal. We read the live Core HudContextModel via
-        // CoreServices.HudModel (registered by HudModelHost AFTER scene load, so it may be
-        // null when this view mounts) and toggle our OWN canvas accordingly. Degrades to the
-        // old always-on behaviour when the model is unavailable.
-        private IHudModel _hookedModel;
-
-        private static readonly Color Dark  = new Color(0.06f, 0.07f, 0.10f, 0.82f);
-        private static readonly Color Gold  = new Color(0.92f, 0.78f, 0.36f);
-        private static readonly Color Green = new Color(0.40f, 0.78f, 0.45f);
-        private static readonly Color BarBg = new Color(0f, 0f, 0f, 0.55f);
-        private static readonly Color BtnIdle = new Color(0.22f, 0.42f, 0.26f, 0.92f);
-
-        // Top-left, below the typical resource bar / safe area. anchoredPosition is from
-        // the top-left pivot (x right, y down).
-        private static readonly Vector2 PanelPivot = new Vector2(0f, 1f);
-        private static readonly Vector2 PanelPos   = new Vector2(170f, -150f);
-        private static readonly Vector2 PanelSize  = new Vector2(280f, 118f);
+        // Life-force green for the silo fill (the resource the Echoes accrue).
+        private static readonly Color LifeGreen = new Color(0.40f, 0.78f, 0.45f, 1f);
 
         private void Start()
         {
             Build();
+            Hide();                              // tucked away: starts hidden, button-driven
             Refresh();
             if (EchoService.Instance != null)
             {
                 EchoService.Instance.Changed += Refresh;
                 EchoService.Instance.EchoUnlocked += OnEchoUnlocked;
             }
+            HarvestPanelGate.ToggleRequested += Toggle;
+            FlowTrace.Step("HUD", "EchoWorkforceHud built (hidden; opens via HarvestPanelGate / harvest button)");
         }
 
         private void OnDestroy()
@@ -71,84 +69,67 @@ namespace DeNelle.Village
                 EchoService.Instance.Changed -= Refresh;
                 EchoService.Instance.EchoUnlocked -= OnEchoUnlocked;
             }
-            if (_hookedModel != null)
-            {
-                _hookedModel.Context.Changed -= OnContextChanged;
-                _hookedModel = null;
-            }
+            HarvestPanelGate.ToggleRequested -= Toggle;
         }
 
-        // -- WO-541 Stage 3a: context gate (TOWN-only) ----------------------------
-        // CoreServices.HudModel registers AFTER scene load; this view may exist first.
-        // Poll each frame until it's available, then subscribe + apply once. Re-hook if
-        // the model instance is ever replaced (host re-spawn). Cheap (one ref compare/frame).
-        private void Update()
+        // -- open / close (button-driven) -----------------------------------------
+        private void Toggle()
         {
-            var hm = CoreServices.HudModel;
-            if (hm != null && !ReferenceEquals(hm, _hookedModel))
-            {
-                if (_hookedModel != null) _hookedModel.Context.Changed -= OnContextChanged;
-                _hookedModel = hm;
-                _hookedModel.Context.Changed += OnContextChanged;
-                ApplyContextGate();   // apply-immediately so a mid-context mount gates on frame one
-            }
+            if (_open) Hide();
+            else Show();
         }
 
-        private void OnContextChanged() => ApplyContextGate();
-
-        private void ApplyContextGate()
+        private void Show()
         {
-            var hm = CoreServices.HudModel;
-            if (hm == null || _canvas == null) return;   // degrade: stay visible (old behaviour)
-            bool show = hm.Context.Context == HudContext.Town;
-            if (_canvas.enabled != show) _canvas.enabled = show;
-            FlowTrace.Step("HUD", $"EchoWorkforceHud gate context={hm.Context.Context} show={show}");
+            if (_modal == null) return;
+            _open = true;
+            _modal.SetActive(true);
+            Refresh();
+            FlowTrace.Step("HUD", "EchoWorkforceHud OPEN");
         }
 
-        // -- build ----------------------------------------------------------------
+        private void Hide()
+        {
+            if (_modal == null) return;
+            _open = false;
+            _modal.SetActive(false);
+            FlowTrace.Step("HUD", "EchoWorkforceHud CLOSED");
+        }
+
+        // -- build (shared Obsidian chrome) ---------------------------------------
         private void Build()
         {
             EnsureEventSystem();
 
-            _canvas = gameObject.AddComponent<Canvas>();
-            _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            _canvas.sortingOrder = 4500;   // above gameplay HUD, below the battle overlay (5000)
-            var scaler = gameObject.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920f, 1080f);
-            scaler.matchWidthOrHeight = 0.5f;
-            gameObject.AddComponent<GraphicRaycaster>();
+            // The whole modal in one call: canvas + scrim (tap-outside closes) + Obsidian
+            // chrome (near-black fill + gold trim + one Close). Compact, centred panel.
+            var built = ElarionUiKit.BuildObsidianModal(
+                "EchoHarvestPanel", "ECHO HARVEST",
+                new Vector2(0.30f, 0.34f), new Vector2(0.70f, 0.66f),
+                onClose: Hide, sortingOrder: 4600);   // above gameplay HUD, below the battle overlay (5000)
+            _modal = built.canvas;
+            var content = built.chrome.content.transform;
 
-            var panel = AddPanel(transform, PanelPivot, PanelPivot, PanelPos, PanelSize, Dark);
+            // Echo count line.
+            _countLabel = ElarionUiKit.Label(content, "Echoes  1/4", 0.70f, 0.84f,
+                ElarionUi.Gilt, ElarionUi.FontHead, TextAlignmentOptions.Center,
+                0.08f, 0.92f, bold: true);
 
-            _countLabel = AddText(panel.transform, "Echoes  1/4", 20, Gold, TextAnchor.UpperLeft);
-            var cr = _countLabel.rectTransform;
-            cr.anchorMin = new Vector2(0f, 1f); cr.anchorMax = new Vector2(1f, 1f);
-            cr.pivot = new Vector2(0.5f, 1f); cr.anchoredPosition = new Vector2(0f, -8f);
-            cr.sizeDelta = new Vector2(-20f, 26f);
+            // Silo fill bar (life-force green) — Well track + Image.Type.Filled fill.
+            var bar = ElarionUiKit.Bar(content, ElarionUiKit.BarKind.Castle,
+                new Vector2(0.10f, 0.50f), new Vector2(0.90f, 0.62f), withValue: false);
+            _fill = bar.fill;
+            if (_fill != null) { _fill.color = LifeGreen; _fill.fillAmount = 0f; }
 
-            // Silo fill bar.
-            var barBg = AddPanel(panel.transform, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                                 new Vector2(132f, -44f), new Vector2(256f, 18f), BarBg);
-            _fill = AddImage(barBg.transform, Green);
-            var fr = _fill.rectTransform; Stretch(fr); fr.offsetMin = new Vector2(2f, 2f); fr.offsetMax = new Vector2(-2f, -2f);
-            _fill.type = Image.Type.Filled; _fill.fillMethod = Image.FillMethod.Horizontal;
-            _fill.fillOrigin = (int)Image.OriginHorizontal.Left; _fill.fillAmount = 0f;
+            // Silo % + raw value line under the bar.
+            _siloLabel = ElarionUiKit.Label(content, "Silo  0%", 0.36f, 0.48f,
+                new Color(0.85f, 0.85f, 0.9f, 1f), ElarionUi.FontBody, TextAlignmentOptions.Center,
+                0.08f, 0.92f, bold: false);
 
-            _siloLabel = AddText(panel.transform, "Silo  0%", 15, new Color(0.85f, 0.85f, 0.9f), TextAnchor.UpperLeft);
-            var sr = _siloLabel.rectTransform;
-            sr.anchorMin = new Vector2(0f, 1f); sr.anchorMax = new Vector2(1f, 1f);
-            sr.pivot = new Vector2(0.5f, 1f); sr.anchoredPosition = new Vector2(0f, -40f);
-            sr.sizeDelta = new Vector2(-20f, 22f);
-
-            // Dump All button (large tap target).
-            var dumpPanel = AddPanel(panel.transform, new Vector2(0f, 0f), new Vector2(1f, 0f),
-                                     new Vector2(0f, 26f), new Vector2(-20f, 40f), BtnIdle);
-            var btn = dumpPanel.gameObject.AddComponent<Button>();
-            btn.targetGraphic = dumpPanel;
-            btn.onClick.AddListener(OnDumpTapped);
-            _dumpLabel = AddText(dumpPanel.transform, "Dump All", 18, Color.white, TextAnchor.MiddleCenter);
-            Stretch(_dumpLabel.rectTransform);
+            // Dump All button (large tap target) -> EchoService.DumpSilos().
+            var dumpBtn = ElarionUiKit.Button(content, "Dump All", ElarionUiKit.ButtonKind.Confirm,
+                new Vector2(0.22f, 0.16f), new Vector2(0.78f, 0.32f), OnDumpTapped);
+            _dumpLabel = dumpBtn != null ? dumpBtn.GetComponentInChildren<TextMeshProUGUI>() : null;
         }
 
         // -- view refresh (logic -> view) -----------------------------------------
@@ -184,7 +165,7 @@ namespace DeNelle.Village
 
         private void OnEchoUnlocked(int newCount)
         {
-            // Lightweight "New Echo joined!" toast on the count label.
+            // Lightweight "New Echo joined!" toast on the count label (only meaningful when open).
             if (_countLabel != null)
             {
                 _countLabel.text = "New Echo joined!";
@@ -193,7 +174,7 @@ namespace DeNelle.Village
             }
         }
 
-        // -- tiny uGUI builders (solid sprites, WebGL-safe) -----------------------
+        // -- helpers --------------------------------------------------------------
         private static void EnsureEventSystem()
         {
             if (FindObjectOfType<EventSystem>() == null)
@@ -203,46 +184,6 @@ namespace DeNelle.Village
                 es.AddComponent<StandaloneInputModule>();
                 DontDestroyOnLoad(es);
             }
-        }
-
-        private static Image AddPanel(Transform parent, Vector2 aMin, Vector2 aMax, Vector2 pos, Vector2 size, Color col)
-        {
-            var go = new GameObject("Panel");
-            go.transform.SetParent(parent, false);
-            var img = go.AddComponent<Image>();
-            img.color = col;
-            var rt = img.rectTransform;
-            rt.anchorMin = aMin; rt.anchorMax = aMax; rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = pos; rt.sizeDelta = size;
-            return img;
-        }
-
-        private static Image AddImage(Transform parent, Color col)
-        {
-            var go = new GameObject("Img");
-            go.transform.SetParent(parent, false);
-            var img = go.AddComponent<Image>();
-            img.color = col;
-            return img;
-        }
-
-        private static Text AddText(Transform parent, string s, int size, Color col, TextAnchor anchor)
-        {
-            var go = new GameObject("Text");
-            go.transform.SetParent(parent, false);
-            var t = go.AddComponent<Text>();
-            t.text = s; t.fontSize = size; t.color = col; t.alignment = anchor;
-            t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
-                  ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
-            t.horizontalOverflow = HorizontalWrapMode.Overflow;
-            t.verticalOverflow = VerticalWrapMode.Overflow;
-            return t;
-        }
-
-        private static void Stretch(RectTransform rt)
-        {
-            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
         }
     }
 }

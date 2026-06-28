@@ -471,6 +471,7 @@ namespace DeNelle.HUD
         private const string IconIntel        = "hud_intel";    // standalone Resources/HudIcons/hud_intel (periscope/lookout)
         private const string IconRaid         = "hud_raid_2";   // standalone Resources/HudIcons/hud_raid_2 (crossed swords → enter raids)
         private const string IconHeart        = "hud_heart";    // standalone Resources/HudIcons/hud_heart (Heart-of-Elarion crest)
+        private const string IconHarvest      = "hud_harvest";  // WO-555: standalone Resources/HudIcons/hud_harvest (Echo silo); glyph fallback below
         private const string IconAbilityFrame = "hud_ability_frame";
 
         /// <summary>Widget sprite by name, or null (caller keeps its glyph fallback).</summary>
@@ -1452,6 +1453,13 @@ namespace DeNelle.HUD
             // Left = enter RAIDS (crossed-swords icon; glyph fallback until art lands).
             BuildIconButton(cluster, new Vector2(0f, 0f), new Vector2(0.31f, 1f),
                 IconRaid, "x", () => RaidRequested?.Invoke());
+            // MIDDLE = ECHO HARVEST panel toggle (owner F8 2026-06-28, WO-555). The offline/echo
+            // harvest readout used to be ALWAYS-ON top-left chrome; it's a side thought, so it now
+            // lives in a tucked-away Obsidian panel opened by this button, sat right next to the
+            // Settings gear. Routes through the Core HarvestPanelGate seam (HUD never references the
+            // Village panel that owns the UI, §5). Glyph "Y" fallback until hud_harvest art lands.
+            BuildIconButton(cluster, new Vector2(0.35f, 0f), new Vector2(0.65f, 1f),
+                IconHarvest, "Y", () => HarvestPanelGate.RequestToggle());
             // FAR top-right = SETTINGS gear → Help/Settings menu (Report bug, Controls, Dev tools[dev], Credits).
             BuildIconButton(cluster, new Vector2(0.69f, 0f), new Vector2(1f, 1f),
                 IconSettings, "*", () => HelpMenu.Instance?.ToggleOverlay());

@@ -33,7 +33,7 @@ namespace DeNelle.Village
                 Object.DontDestroyOnLoad(go);
                 go.AddComponent<EchoService>();
                 go.AddComponent<EchoWaveUnlockBridge>();       // routes WaveManager.OnWaveCleared -> Echo unlocks
-                go.AddComponent<EchoWorkforceHud>();          // self-contained HUD widget (disjoint from VillageHudController)
+                go.AddComponent<EchoWorkforceHud>();          // WO-555: hidden Echo panel, opened by the HUD harvest button (next to Settings) via HarvestPanelGate
             }
 
             // Reconcile WorkerManager: retire its competing harvest role for V1 so it
