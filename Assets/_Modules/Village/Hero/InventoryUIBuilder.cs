@@ -76,12 +76,12 @@ namespace DeNelle.Village
             AddInnerRim(tray, AccentSoft);
             AddRule(tray.transform, 0.97f, 0.02f, 0.98f);
 
-            CreamLabel(ElarionUiKit.ButtonPack(tray.transform, "Sort", ElarionUiKit.ButtonKind.Quiet,
-                      new Vector2(0.030f, 0.205f), new Vector2(0.18f, 0.82f),
-                      () => { /* TODO owned-list re-sort */ }, packSpriteName: RpgUiCatalog.ButtonFrame));
-            CreamLabel(ElarionUiKit.ButtonPack(tray.transform, "Filter", ElarionUiKit.ButtonKind.Quiet,
-                      new Vector2(0.225f, 0.400f), new Vector2(0.18f, 0.82f),
-                      () => { /* TODO owned-list filter */ }, packSpriteName: RpgUiCatalog.ButtonFrame));
+            // WO-565: the Sort + Filter buttons were wired to EMPTY lambdas — visible controls
+            // that silently did nothing. HIDDEN rather than ship a half-feature: category Filter
+            // is already provided by the tab row (Weapons/Armor/Accessories/Consumables), and a
+            // real Sort needs VM-level ordering + grid re-bind (non-trivial). Re-add here only
+            // once InventoryVM exposes a sort/filter the grid can project. The wallet wells below
+            // keep their right-aligned positions; the freed left of the footer simply stays clear.
 
             int coins = 0, crystals = 0;
             try
