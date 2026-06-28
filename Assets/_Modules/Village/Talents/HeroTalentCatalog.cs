@@ -161,7 +161,8 @@ namespace DeNelle.Village.Talents
 
         /// <summary>
         /// Returns true if the player has enough Wisdom AND every prerequisite
-        /// for <paramref name="nodeId"/> is already in <paramref name="unlocked"/>.
+        /// for <paramref name="nodeId"/> is already in <paramref name="unlocked"/>
+        /// AND the v2 capstone-exclusivity rule allows it (one Tier-4 per hero tree).
         /// </summary>
         public static bool CanUnlock(string nodeId, int wisdom, HashSet<string> unlocked)
         {
@@ -172,7 +173,52 @@ namespace DeNelle.Village.Talents
             if (unlocked == null) unlocked = new HashSet<string>();
             foreach (var pr in n.Prerequisites)
                 if (!unlocked.Contains(pr)) return false;
+            // v2 capstone exclusivity — a hero may hold AT MOST ONE Tier-4 capstone.
+            if (IsCapstone(n) && AnotherCapstoneUnlocked(nodeId, unlocked)) return false;
             return true;
+        }
+
+        /// <summary>
+        /// True when <paramref name="n"/> is a Tier-4 capstone node. The Shared Universal
+        /// pool ("shared.*", tier "shared") is explicitly EXCLUDED — shared nodes are not
+        /// capstones and are never subject to the one-capstone-per-hero rule.
+        /// </summary>
+        public static bool IsCapstone(HeroTalentNodeDef n)
+        {
+            if (n == null) return false;
+            if (!string.IsNullOrEmpty(n.Id) && n.Id.StartsWith("shared.", StringComparison.Ordinal))
+                return false;
+            return string.Equals(n.Tier, "tier4", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>The hero-tree slug a node id belongs to (prefix before the first '.'), or "".</summary>
+        private static string HeroSlugOf(string nodeId)
+        {
+            if (string.IsNullOrEmpty(nodeId)) return "";
+            int dot = nodeId.IndexOf('.');
+            return dot > 0 ? nodeId.Substring(0, dot) : "";
+        }
+
+        /// <summary>
+        /// v2 capstone exclusivity: returns true if ANY Tier-4 node in the SAME hero tree
+        /// as <paramref name="nodeId"/> — other than <paramref name="nodeId"/> itself — is
+        /// already in <paramref name="unlocked"/>. Used to dim the other capstones once one
+        /// is taken; a hero respec clears the set and re-frees the choice.
+        /// </summary>
+        public static bool AnotherCapstoneUnlocked(string nodeId, HashSet<string> unlocked)
+        {
+            if (unlocked == null || unlocked.Count == 0) return false;
+            var slug = HeroSlugOf(nodeId);
+            if (string.IsNullOrEmpty(slug)) return false;
+            var tree = GetTree(slug);
+            if (tree == null || tree.Nodes == null) return false;
+            foreach (var node in tree.Nodes)
+            {
+                if (node == null || string.IsNullOrEmpty(node.Id)) continue;
+                if (node.Id == nodeId) continue;
+                if (IsCapstone(node) && unlocked.Contains(node.Id)) return true;
+            }
+            return false;
         }
 
         public static void Reload() { _data = null; EnsureLoaded(); }

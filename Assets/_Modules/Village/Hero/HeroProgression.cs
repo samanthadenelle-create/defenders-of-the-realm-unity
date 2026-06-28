@@ -91,12 +91,18 @@ namespace DeNelle.Village
         //   L1→L2: 150   L2→L3: 1000   L3→L4: 2850   L4→L5: 5700   (first-pass — tune)
         private static float XpToNextFor(int level) => 150f + (level - 1) * 350f + (level - 1) * (level - 1) * 500f;
 
-        /// <summary>Wisdom granted for reaching <paramref name="level"/> — scales by band (owner's v3).</summary>
+        /// <summary>
+        /// Wisdom granted for reaching <paramref name="level"/> — the v2 "specialize" curve
+        /// (owner 2026-06-27). A maxed hero (~L20) earns ~50 Wisdom from levels: +2/level
+        /// through L8, then +3/level. That is ~70% of the 71 needed for a WHOLE hero tree
+        /// (hero 55 + 8 shared @2 = 16), so the player MUST pick a focus rather than buy
+        /// everything. (Prior curve 2/3/4 paid ~63 by L20 ≈ 89% — too generous.)
+        /// NOTE: levels are NOT the only Wisdom source — see file-level report; waves /
+        /// arena wins / daily quests / tier milestones also grant Wisdom.
+        /// </summary>
         private static int WisdomForLevel(int level)
         {
-            if (level <= 5) return 2;
-            if (level <= 10) return 3;
-            return 4;
+            return level <= 8 ? 2 : 3;
         }
 
         private void OnEnable()

@@ -263,6 +263,11 @@ namespace DeNelle.Village.Talents
         private static string LockReasonFor(HeroTalentNodeDef n, int wisdom, HashSet<string> unlocked)
         {
             if (n == null) return "Locked";
+            // v2 capstone exclusivity — once one Tier-4 is taken, the others read this
+            // (dominant reason so the panel dims every other capstone clearly). A hero
+            // respec clears the unlocked set and re-frees the choice.
+            if (HeroTalentCatalog.IsCapstone(n) && HeroTalentCatalog.AnotherCapstoneUnlocked(n.Id, unlocked))
+                return "One capstone per hero";
             // Prereq gate first (the structural blocker).
             if (n.Prerequisites != null)
             {
