@@ -288,7 +288,19 @@ namespace DeNelle.HUD
             // BattleArena (real-time encounter) has no ATB BattleController, but it REGISTERS a
             // BattleLock probe (BattleArena.cs:102), so BattleLock.IsInBattle() is the Core-clean
             // signal that the arena fight is live -> Battle HUD in the arena (owner 2026-06-23).
-            if (IsWaveActive() || IsInBattle() || IsRaidScene()
+            // WO-540 (observability only, no behavior change): EvaluateMode was the HUD
+            // diagnostic blind spot. Log the decision inputs (throttled ~1/s) so an OuterWorld
+            // rep-engagement / arena "old Town HUD leak" is PROVABLE from a graphics capture —
+            // the suspect is BattleLock not engaging for a roaming-rep fight -> Town fallthrough.
+            DeNelle.Core.Diagnostics.FlowTrace.Throttle("HUD", "evalmode", 1f,
+                $"EvaluateMode inputs: wave={IsWaveActive()} atb={IsInBattle()} raid={IsRaidScene()} " +
+                $"battleLock={DeNelle.Core.Combat.BattleLock.IsInBattle()} enemyScene={IsEnemyOwnedScene()} scene='{SceneManager.GetActiveScene().name}'");
+            // #7 (owner felt-test "triggering wave brings old battle ui"): a hub wave must NOT
+            // pull up the legacy wave-defense Battle HUD. In V1 the hero is not the wave defender
+            // (towers/troops auto-defend, WATCHED from the Town HUD), so a wave keeps the Town HUD
+            // — the wave still runs (enemies spawn, towers fight); only the HUD switch is removed.
+            // IsWaveActive() stays wired for the throttled diag above; it is no longer a Battle trigger.
+            if (IsInBattle() || IsRaidScene()
                 || DeNelle.Core.Combat.BattleLock.IsInBattle()) return HudMode.Battle;
 
             // WO-470 / HUD-RCA: an ENEMY-OWNED scene (e.g. Village2, the enemy
