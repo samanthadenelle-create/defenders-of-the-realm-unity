@@ -290,6 +290,21 @@ namespace DeNelle.HUD
         private float[] _townResFlash = { 0f, 0f, 0f, 0f, 0f };
         private bool[] _townResFlashUp = { false, false, false, false, false };
         private const int TownResLowThreshold = 50;
+        // ── WO-572: gain-flash THROTTLE — stop the passive-drip strobe ───────────
+        // The echo workforce / harvest faucet banks small amounts (+1..+few) very
+        // frequently; flashing the badge green on EVERY increase made the resource
+        // HUD strobe (owner F8 2026-06-28). We split increases into two classes:
+        //   • DISCRETE gain (single update ≥ ResGainBigDelta — wave reward, sell, big
+        //     node extract): flash green INSTANTLY, every time (keep the nice feedback).
+        //   • DRIP gain (small per-tick increment): COALESCE — accumulate and fire ONE
+        //     flash only when the trickle PAUSES (no new gain for ResGainCoalesceWindow).
+        //     A continuous fast faucet refreshes the window every tick → it never
+        //     expires while flowing → NO strobe; one gentle pulse once it settles.
+        // Spends (decreases) are untouched — they still flash red immediately.
+        private readonly int[] _townResGainAccum = { 0, 0, 0, 0, 0 };      // pending coalesced up-gain
+        private readonly float[] _townResGainWindow = { 0f, 0f, 0f, 0f, 0f }; // quiet-gap countdown (s)
+        private const int ResGainBigDelta = 8;            // single-update gain that flashes instantly
+        private const float ResGainCoalesceWindow = 0.6f; // quiet gap before a coalesced drip flashes once
         // Gold is the LAST town resource cell (Food/Wood/Crystal/Iron/Gold). It is a
         // currency, not a gatherable stock — it must never raise the red low-warn box
         // (it legitimately starts < 50 and otherwise paints a solid red box over the coin).
@@ -928,6 +943,25 @@ namespace DeNelle.HUD
                 {
                     _townTimerText.text = string.Empty;   // idle: clock alone, no center word (owner)
                     _lastTimerTotal = int.MinValue;
+                }
+            }
+
+            // WO-572: coalesced drip-gain flush — when a passive trickle PAUSES (no new
+            // gain for ResGainCoalesceWindow), fire ONE green flash for the net gain. A
+            // continuous faucet keeps re-arming the window in SetTownResource so this
+            // never fires while resources are actively flowing → no per-tick strobe.
+            for (int i = 0; i < _townResGainWindow.Length; i++)
+            {
+                if (_townResGainWindow[i] <= 0f) continue;
+                _townResGainWindow[i] -= dt;
+                if (_townResGainWindow[i] <= 0f && _townResGainAccum[i] > 0)
+                {
+                    _townResFlash[i] = 1f;
+                    _townResFlashUp[i] = true;
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Eco",
+                        $"ResFlash coalesced drip gain idx{i} +{_townResGainAccum[i]} -> single flash (per-tick strobe suppressed)");
+                    _townResGainAccum[i] = 0;
+                    _townResGainWindow[i] = 0f;
                 }
             }
 
@@ -2569,8 +2603,38 @@ namespace DeNelle.HUD
             int prev = _townResLast[idx];
             if (prev >= 0 && value != prev)
             {
-                _townResFlash[idx] = 1f;
-                _townResFlashUp[idx] = value > prev;
+                if (value < prev)
+                {
+                    // SPEND — flash red immediately (unchanged feel). A spend also cancels
+                    // any pending coalesced gain (the net just went the other way).
+                    _townResFlash[idx] = 1f;
+                    _townResFlashUp[idx] = false;
+                    _townResGainAccum[idx] = 0;
+                    _townResGainWindow[idx] = 0f;
+                }
+                else
+                {
+                    int delta = value - prev;
+                    if (delta >= ResGainBigDelta)
+                    {
+                        // DISCRETE gain (reward / sell / big extract) — flash green NOW,
+                        // every time; fold any pending small drip into this flash.
+                        _townResFlash[idx] = 1f;
+                        _townResFlashUp[idx] = true;
+                        _townResGainAccum[idx] = 0;
+                        _townResGainWindow[idx] = 0f;
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("Eco",
+                            $"ResFlash discrete gain idx{idx} +{delta} -> instant flash (>= {ResGainBigDelta})");
+                    }
+                    else
+                    {
+                        // DRIP gain (passive +1..+few tick) — do NOT flash now (that is the
+                        // strobe). Accumulate + (re)arm the coalesce window; UpdateTownHud
+                        // fires ONE flash once the trickle pauses.
+                        _townResGainAccum[idx] += delta;
+                        _townResGainWindow[idx] = ResGainCoalesceWindow;
+                    }
+                }
             }
             _townResLast[idx] = value;
 
