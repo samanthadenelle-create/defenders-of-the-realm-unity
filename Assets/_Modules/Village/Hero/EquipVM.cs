@@ -42,13 +42,16 @@ namespace DeNelle.Village.Hero
 
     public sealed class EquipVM : IPanelViewModel, IDisposable
     {
-        // ── Slot keys (SlotVM.SlotKey) — the model supports a weapon + an armor slot today ──
+        // ── Slot keys (SlotVM.SlotKey) — weapon + armor + WO-543 ring/amulet accessories ──
         public const string SlotMainhand = "mainhand";
         public const string SlotChest    = "chest";
+        public const string SlotRing     = "ring";    // WO-543
+        public const string SlotAmulet   = "amulet";  // WO-543
 
         // ── Icon role keys (mirror InventoryVM) ───────────────────────────────────────────
         public const string IconRoleWeapon = "weapon";
         public const string IconRoleArmor  = "armor";
+        public const string IconRoleAccessory = "accessory";   // WO-543
         public const string IconRolePortrait = "portrait";
 
         private readonly IInventoryStore _store;
@@ -188,6 +191,8 @@ namespace DeNelle.Village.Hero
             if (t == null) { Status = "No hero to equip."; Raise(); return; }
 
             if (_selectedSlotKey == SlotMainhand) t.EquipWeaponById(itemId);
+            else if (_selectedSlotKey == SlotChest) t.EquipArmorById(itemId);
+            else if (_selectedSlotKey == SlotRing || _selectedSlotKey == SlotAmulet) t.EquipAccessoryById(itemId);
             else t.EquipArmorById(itemId);
 
             Status = "Equipped.";
@@ -202,6 +207,8 @@ namespace DeNelle.Village.Hero
             if (t == null) { Status = "No hero."; Raise(); return; }
 
             if (_selectedSlotKey == SlotMainhand) t.UnequipWeapon();
+            else if (_selectedSlotKey == SlotChest) t.UnequipArmor();
+            else if (_selectedSlotKey == SlotRing || _selectedSlotKey == SlotAmulet) t.UnequipAccessory(_selectedSlotKey);
             else t.UnequipArmor();
 
             Status = "Unequipped.";
@@ -262,6 +269,26 @@ namespace DeNelle.Village.Hero
                     IconRoleArmor, a.id, 0, "gold", true, a.rarity, equipped: true);
             }
             _equipSlots.Add(new SlotVM(SlotChest, armor, highlighted: _selectedSlotKey == SlotChest));
+
+            // WO-543: ring + amulet accessory slots (below chest). Pure stat modifiers; the slot
+            // renders the accessory's iconPath sprite (View resolves by id) or the emoji fallback.
+            ItemVM? ring = null;
+            if (t?.EquippedRing != null)
+            {
+                var r = t.EquippedRing;
+                ring = new ItemVM(r.id, string.IsNullOrEmpty(r.name) ? r.id : r.name,
+                    IconRoleAccessory, r.id, 0, "gold", true, r.rarity, equipped: true);
+            }
+            _equipSlots.Add(new SlotVM(SlotRing, ring, highlighted: _selectedSlotKey == SlotRing));
+
+            ItemVM? amulet = null;
+            if (t?.EquippedAmulet != null)
+            {
+                var m = t.EquippedAmulet;
+                amulet = new ItemVM(m.id, string.IsNullOrEmpty(m.name) ? m.id : m.name,
+                    IconRoleAccessory, m.id, 0, "gold", true, m.rarity, equipped: true);
+            }
+            _equipSlots.Add(new SlotVM(SlotAmulet, amulet, highlighted: _selectedSlotKey == SlotAmulet));
         }
 
         // Damage / Defense come straight from the loadout's applied stats (the EquipmentPanel
@@ -315,6 +342,24 @@ namespace DeNelle.Village.Hero
                     string name = string.IsNullOrEmpty(w.name) ? w.id : w.name;
                     _compatible.Add(new ItemVM(w.id, name + (qty > 1 ? " x" + qty : ""),
                         IconRoleWeapon, w.id, 0, "gold", true, w.rarity, equipped: equipped));
+                }
+            }
+            else if (_selectedSlotKey == SlotRing || _selectedSlotKey == SlotAmulet)
+            {
+                // WO-543: accessory compatible list = catalog accessories whose slot matches and whose
+                // req.level <= the wearer's level (job is "any" for v1 accessories). Catalog-sourced,
+                // not owned-filtered, per the equip spec.
+                int level = t != null ? t.TargetLevel : 1;
+                string equippedId = _selectedSlotKey == SlotRing
+                    ? (t?.EquippedRing != null ? t.EquippedRing.id : null)
+                    : (t?.EquippedAmulet != null ? t.EquippedAmulet.id : null);
+                foreach (var ac in _store.AccessoriesForSlot(_selectedSlotKey, level))
+                {
+                    if (ac == null) continue;
+                    bool equipped = !string.IsNullOrEmpty(equippedId) &&
+                                    string.Equals(equippedId, ac.id, StringComparison.OrdinalIgnoreCase);
+                    string name = string.IsNullOrEmpty(ac.name) ? ac.id : ac.name;
+                    _compatible.Add(new ItemVM(ac.id, name, IconRoleAccessory, ac.id, 0, "gold", true, ac.rarity, equipped: equipped));
                 }
             }
             else

@@ -42,6 +42,13 @@ namespace DeNelle.Village.Hero
         /// <summary>Resolve an armor def by id, or null.</summary>
         ArmorDef FindArmor(string id);
 
+        /// <summary>WO-543: resolve a ring/amulet accessory def by id, or null.</summary>
+        AccessoryDef FindAccessory(string id);
+
+        /// <summary>WO-543: accessories that fit the slot ("ring"/"amulet") at the given hero level.
+        /// Catalog-sourced (not owned-filtered) per the equip spec. Never null.</summary>
+        IReadOnlyList<AccessoryDef> AccessoriesForSlot(string slot, int level);
+
         /// <summary>Owned weapons the player holds at least one of (def + owned qty).</summary>
         IReadOnlyList<(WeaponDef def, int qty)> OwnedWeapons();
 
@@ -96,6 +103,9 @@ namespace DeNelle.Village.Hero
 
         public WeaponDef FindWeapon(string id) => GearCatalog.FindWeapon(id);
         public ArmorDef FindArmor(string id) => GearCatalog.FindArmor(id);
+        public AccessoryDef FindAccessory(string id) => GearCatalog.FindAccessory(id);
+        public IReadOnlyList<AccessoryDef> AccessoriesForSlot(string slot, int level) =>
+            GearCatalog.AccessoriesForSlot(slot, level);
 
         public IReadOnlyList<(WeaponDef def, int qty)> OwnedWeapons()
         {

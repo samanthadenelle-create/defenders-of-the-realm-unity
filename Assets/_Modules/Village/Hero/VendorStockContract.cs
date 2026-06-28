@@ -38,6 +38,8 @@ namespace DeNelle.Village
         // CRAFTABLE RECIPES rather than finished gear. Additive flag — existing bitmask consumers
         // (ShopVM/AutoPilot/PartyShopVM) test Weapon/Armor/Potion explicitly, so they ignore this.
         Craftable = 8,
+        // WO-543: ACCESSORIES (rings + amulets) — sold exclusively at the Jeweler (Sable Vey).
+        Accessory = 16,
     }
 
     /// <summary>
@@ -58,10 +60,9 @@ namespace DeNelle.Village
         /// Mapping (owner intent):
         ///   • "armor" / "armory" / "armorer"            -> Armor only
         ///   • "forge" / "blacksmith" / "smith"          -> Weapon only
-        ///   • "jewel"                                   -> Armor only
-        ///       (the crystal/jewelry -> adornment arc; no dedicated "jewelry" item
-        ///        type exists yet, so jewelry is modeled as Armor for now. ASSUMPTION:
-        ///        revisit when a jewelry GearKind / item type is added.)
+        ///   • "jewel"                                   -> Accessory only
+        ///       (WO-543: the Jeweler sells rings + amulets — the GearKind.Accessory band,
+        ///        sourced from accessories.json / GearCatalog.Accessories.)
         ///   • "market" / "marketplace" / "general" /
         ///     "trader" / "apothec" / "granary" / "farm" -> Potion only
         ///       (general-goods vendors sell consumables, NOT weapons/armor — this is
@@ -100,9 +101,9 @@ namespace DeNelle.Village
             if (ctx.Contains("forge") || ctx.Contains("smith"))
                 return GearKind.Weapon;
 
-            // Jeweler — adornment arc, modeled as Armor for now (see XML-doc above).
+            // Jeweler — sells ACCESSORIES (rings + amulets), Sable Vey's specialty (WO-543).
             if (ctx.Contains("jewel"))
-                return GearKind.Armor;
+                return GearKind.Accessory;
 
             // General-goods vendors — consumables only.
             if (ctx.Contains("market") || ctx.Contains("marketplace") || ctx.Contains("general") ||

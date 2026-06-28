@@ -83,9 +83,16 @@ namespace DeNelle.Village
         private HeroImpactFeedback _impactFeedback;
         private PlayerAttackController _pac;   // perfect-parry source (same GameObject)
 
-        public float MaxHp    => _maxHp;
+        // WO-543: equipped armor + accessories add a flat HP bonus folded into the EFFECTIVE max.
+        // GearLoadout.GearHpBonus is the single source; resolved lazily + synced in Update so
+        // equipping a +HP ring grows the bar and tops the hero up by the delta (and unequipping
+        // shrinks it + clamps). 0 when no GearLoadout / no HP gear, so existing combat is unchanged.
+        private int GearHpBonus => _gear != null ? _gear.GearHpBonus : 0;
+        private int _appliedGearHpBonus;
+
+        public float MaxHp    => _maxHp + GearHpBonus;
         public float Hp       => _hp;
-        public float Fraction => _maxHp > 0f ? Mathf.Clamp01(_hp / _maxHp) : 0f;
+        public float Fraction => MaxHp > 0f ? Mathf.Clamp01(_hp / MaxHp) : 0f;
         public bool  IsAlive  => _hp > 0f;
 
         // ── WO-493 #5 / WO-497: HERO injured stance (the hero half; the ENEMY half is
@@ -138,7 +145,30 @@ namespace DeNelle.Village
 
         private void OnDestroy() { if (Instance == this) Instance = null; }
 
-        private void Start() => OnHealthChanged?.Invoke(_hp, _maxHp);
+        private void Start()
+        {
+            // Resolve gear up-front so the starting bar reflects any persisted HP gear, then
+            // top the hero to the effective full so a +HP loadout doesn't read as "missing HP".
+            if (_gear == null) _gear = GetComponent<GearLoadout>();
+            _appliedGearHpBonus = GearHpBonus;
+            _hp = MaxHp;
+            OnHealthChanged?.Invoke(_hp, MaxHp);
+        }
+
+        // WO-543: keep the effective max in sync with the equipped HP gear. On a bonus INCREASE
+        // (equipped a +HP ring), top the hero up by the delta so the new HP is usable; on a
+        // DECREASE (unequipped), clamp current HP to the smaller max. Cheap; runs each frame.
+        private void SyncGearHp()
+        {
+            if (_gear == null) _gear = GetComponent<GearLoadout>();
+            int now = GearHpBonus;
+            if (now == _appliedGearHpBonus) return;
+            int delta = now - _appliedGearHpBonus;
+            _appliedGearHpBonus = now;
+            if (delta > 0) _hp += delta;           // grow with the new max
+            _hp = Mathf.Min(_hp, MaxHp);           // clamp to the (possibly smaller) max
+            OnHealthChanged?.Invoke(_hp, MaxHp);
+        }
 
         // In Defend-the-Tower the hero is a safe turret on the stand — the TOWER is
         // what enemies attack, not the hero. Resolve once, then skip contact damage.
@@ -147,6 +177,7 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            SyncGearHp();   // WO-543: fold equipped HP gear into the effective max (top-up / clamp on change)
             if (_hp <= 0f) { UpdateInjuredState(); return; }
 
             // WO-493 #5 / WO-497: re-evaluate the wounded stance every frame off the single
@@ -223,7 +254,7 @@ namespace DeNelle.Village
                 amount *= (1f - _gear.ArmorDefense);
 
             _hp = Mathf.Max(0f, _hp - amount);
-            OnHealthChanged?.Invoke(_hp, _maxHp);
+            OnHealthChanged?.Invoke(_hp, MaxHp);
 
             // ── Combat feel (additive) ────────────────────────────────────────
             // VFXManager.Play and HitStopManager.DoImpact are static + null-safe,
@@ -316,7 +347,7 @@ namespace DeNelle.Village
                 transform.position = position;
 
             _isDead   = false;
-            _hp       = _maxHp * Mathf.Clamp01(_respawnHpFraction <= 0f ? 1f : _respawnHpFraction);
+            _hp       = MaxHp * Mathf.Clamp01(_respawnHpFraction <= 0f ? 1f : _respawnHpFraction);
             _cooldown = 0f;
             // DEF-102: short grace so the hero isn't re-killed the instant it lands
             // back in a melee. Consumed in TakeDamage.
@@ -325,7 +356,7 @@ namespace DeNelle.Village
             ClearDeathAnim();
             if (_locomotion != null) _locomotion.enabled = true;
             if (_abilities  != null) _abilities.enabled  = true;
-            OnHealthChanged?.Invoke(_hp, _maxHp);
+            OnHealthChanged?.Invoke(_hp, MaxHp);
             VFXManager.Play(VFXType.Impact_Heal, transform.position + Vector3.up * 1.0f);
             Debug.Log($"[HeroHealth] Hero respawned at {position} (hp={Mathf.CeilToInt(_hp)}, " +
                       $"invuln={_respawnInvulnSeconds:F1}s).");
@@ -344,8 +375,8 @@ namespace DeNelle.Village
         public void Heal(float amount)
         {
             if (amount <= 0f) return;
-            _hp = Mathf.Min(_maxHp, _hp + amount);
-            OnHealthChanged?.Invoke(_hp, _maxHp);
+            _hp = Mathf.Min(MaxHp, _hp + amount);
+            OnHealthChanged?.Invoke(_hp, MaxHp);
             UpdateInjuredState();   // T-HP fix (owner 2026-06-27): clear the limp/injured stance once healed back above the cutoff
             VFXManager.Play(VFXType.Impact_Heal, transform.position + Vector3.up * 1.0f);
         }
@@ -362,7 +393,8 @@ namespace DeNelle.Village
         public void RestoreToFull()
         {
             bool wasDown = _isDead || _hp <= 0f;
-            _hp = _maxHp;
+            _appliedGearHpBonus = GearHpBonus;   // re-sync so SyncGearHp doesn't double-apply after a full restore
+            _hp = MaxHp;
             // If the hero had gone down, clear the death state so it isn't stuck "dead" on the
             // town return (Respawn does this on its own path; we mirror it here without warping).
             if (wasDown)
@@ -373,7 +405,7 @@ namespace DeNelle.Village
                 if (_locomotion != null) _locomotion.enabled = true;
                 if (_abilities  != null) _abilities.enabled  = true;
             }
-            OnHealthChanged?.Invoke(_hp, _maxHp);
+            OnHealthChanged?.Invoke(_hp, MaxHp);
             UpdateInjuredState();   // T-HP fix (owner 2026-06-27): a town-return restore to full must CLEAR the limp/injured stance carried out of the fight (was lingering -> "health full but still limping")
             VFXManager.Play(VFXType.Impact_Heal, transform.position + Vector3.up * 1.0f);
         }
@@ -504,7 +536,7 @@ namespace DeNelle.Village
                 alignment = TextAnchor.MiddleCenter,
             };
             GUI.Label(new Rect(x, y, w, h),
-                      $"Hero   {Mathf.CeilToInt(_hp)} / {Mathf.CeilToInt(_maxHp)}", style);
+                      $"Hero   {Mathf.CeilToInt(_hp)} / {Mathf.CeilToInt(MaxHp)}", style);
 
             GUI.color = Color.white;
             GUI.matrix = prevMatrix;

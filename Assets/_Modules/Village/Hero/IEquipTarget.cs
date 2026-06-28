@@ -34,6 +34,9 @@ namespace DeNelle.Village.Hero
         /// <summary>Class id of the wearer (knight/mage/ranger/cleric) — for fit filtering + the label.</summary>
         string TargetClass { get; }
 
+        /// <summary>WO-543: the wearer's level — gates accessory eligibility (req.level). 1 when unknown.</summary>
+        int TargetLevel { get; }
+
         // ── Equipped state ─────────────────────────────────────────────────────────
         string EquippedWeaponName { get; }
         string EquippedArmorName  { get; }
@@ -43,6 +46,12 @@ namespace DeNelle.Village.Hero
 
         /// <summary>The equipped armor def, or null when no armor is equipped.</summary>
         ArmorDef EquippedArmor { get; }
+
+        /// <summary>WO-543: the equipped RING accessory, or null.</summary>
+        AccessoryDef EquippedRing { get; }
+
+        /// <summary>WO-543: the equipped AMULET accessory, or null.</summary>
+        AccessoryDef EquippedAmulet { get; }
 
         /// <summary>Outgoing-damage multiplier from the equipped weapon (1f when none).</summary>
         float WeaponMult { get; }
@@ -78,6 +87,12 @@ namespace DeNelle.Village.Hero
         void EquipArmorById(string id);
         void UnequipWeapon();
         void UnequipArmor();
+
+        // ── Accessory commands (WO-543) ───────────────────────────────────────────────
+        /// <summary>Equip a ring/amulet accessory by id (routes by the def's slot).</summary>
+        void EquipAccessoryById(string id);
+        /// <summary>Clear the accessory in <paramref name="slot"/> ("ring"/"amulet").</summary>
+        void UnequipAccessory(string slot);
     }
 
     /// <summary>
@@ -98,6 +113,7 @@ namespace DeNelle.Village.Hero
         // null-guarded so a wearer missing either component reports 0 rather than NRE.
         private HeroHealth _health;
         private HeroAbilities _abilities;
+        private HeroProgression _progression;
 
         private HeroHealth Health
         {
@@ -134,11 +150,23 @@ namespace DeNelle.Village.Hero
 
         public string TargetClass => _class ?? "";
 
+        public int TargetLevel
+        {
+            get
+            {
+                if (_progression == null && _loadout != null) _progression = _loadout.GetComponent<HeroProgression>();
+                return _progression != null ? _progression.Level : 1;
+            }
+        }
+
         public string EquippedWeaponName => _loadout != null ? _loadout.EquippedWeapon?.name : null;
         public string EquippedArmorName  => _loadout != null ? _loadout.EquippedArmor?.name : null;
 
         public WeaponDef EquippedWeapon => _loadout != null ? _loadout.EquippedWeapon : null;
         public ArmorDef EquippedArmor   => _loadout != null ? _loadout.EquippedArmor : null;
+
+        public AccessoryDef EquippedRing   => _loadout != null ? _loadout.EquippedRing : null;
+        public AccessoryDef EquippedAmulet => _loadout != null ? _loadout.EquippedAmulet : null;
 
         public float WeaponMult   => _loadout != null ? _loadout.WeaponMult : 1f;
         public float ArmorDefense => _loadout != null ? _loadout.ArmorDefense : 0f;
@@ -153,6 +181,9 @@ namespace DeNelle.Village.Hero
         public void EquipArmorById(string id)  { if (_loadout != null) _loadout.EquipArmorById(id); }
         public void UnequipWeapon()            { if (_loadout != null) _loadout.UnequipWeapon(); }
         public void UnequipArmor()             { if (_loadout != null) _loadout.UnequipArmor(); }
+
+        public void EquipAccessoryById(string id)  { if (_loadout != null) _loadout.EquipAccessoryById(id); }
+        public void UnequipAccessory(string slot)  { if (_loadout != null) _loadout.UnequipAccessory(slot); }
 
         private bool _disposed;
         public void Dispose()

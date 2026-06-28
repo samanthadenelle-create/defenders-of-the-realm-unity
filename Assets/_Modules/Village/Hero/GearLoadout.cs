@@ -49,6 +49,15 @@ namespace DeNelle.Village
         /// <summary>The currently-equipped OFF-HAND item (shield / off-hand), or null. For UI/debug/attach.</summary>
         public WeaponDef EquippedOffHand { get; private set; }
 
+        // ── ACCESSORY slots (WO-543) — rings + amulets, pure stat modifiers (no mesh) ──
+        /// <summary>The currently-equipped RING accessory, or null. Pure stat modifier (no mesh).</summary>
+        public AccessoryDef EquippedRing { get; private set; }
+        /// <summary>The currently-equipped AMULET accessory, or null. Pure stat modifier (no mesh).</summary>
+        public AccessoryDef EquippedAmulet { get; private set; }
+
+        /// <summary>Flat HP bonus from equipped armor + accessories (WO-543). HeroHealth folds this into max HP.</summary>
+        public int GearHpBonus { get; private set; }
+
         /// <summary>Fired after any manual or auto equip change (shop/equip UI can subscribe to refresh lists or HUD).</summary>
         public event System.Action OnGearChanged;
 
@@ -100,6 +109,8 @@ namespace DeNelle.Village
         private const string PrefWeaponKey  = "dotr-equip-weapon-";   // + <class>  (main hand)
         private const string PrefArmorKey   = "dotr-equip-armor-";    // + <class>
         private const string PrefOffHandKey = "dotr-equip-offhand-";  // + <class>  (off hand / shield)
+        private const string PrefRingKey    = "dotr-equip-ring-";     // + <class>  (WO-543 accessory)
+        private const string PrefAmuletKey  = "dotr-equip-amulet-";   // + <class>  (WO-543 accessory)
 
         // WO-434: explicit "player removed this slot" sentinel. Written to the SAME per-class
         // PlayerPrefs key the Equip methods use, so a later Refresh/level-up honours the empty
@@ -216,6 +227,23 @@ namespace DeNelle.Village
                 var a = GearCatalog.FindArmor(aId);
                 if (a != null && GearCatalog.ArmorFitsClass(a, job)) EquippedArmor = a;
             }
+
+            // WO-543: restore persisted accessories (rings/amulets are job "any" — slot match only).
+            string rId = PlayerPrefs.GetString(PrefRingKey + key, null);
+            if (rId == PrefNoneSentinel) EquippedRing = null;
+            else if (!string.IsNullOrEmpty(rId))
+            {
+                var r = GearCatalog.FindAccessory(rId);
+                if (r != null && r.IsRing) EquippedRing = r;
+            }
+
+            string mId = PlayerPrefs.GetString(PrefAmuletKey + key, null);
+            if (mId == PrefNoneSentinel) EquippedAmulet = null;
+            else if (!string.IsNullOrEmpty(mId))
+            {
+                var m = GearCatalog.FindAccessory(mId);
+                if (m != null && m.IsAmulet) EquippedAmulet = m;
+            }
         }
 
         // Lower-cased persistence key for the wearer's class — the hero (HeroAbilities) and a
@@ -240,8 +268,22 @@ namespace DeNelle.Village
                 armor   = Mathf.Clamp(armor + AegisSetDefenseBonus, 0f, 0.9f);
             }
 
+            // WO-543: accessory (ring + amulet) bonuses stack ADDITIVELY on top of weapon + armor.
+            //   • damage chain: weaponMult × (1 + ringDmg + amuletDmg)
+            //   • defense:      armor.defense + ring.defense + amulet.defense  (CAP 0.70 — never immune)
+            //   • max HP:       armor.hpBonus + ring.hpBonus + amulet.hpBonus  (folded by HeroHealth)
+            float accDamage  = (EquippedRing != null ? EquippedRing.damageMult : 0f)
+                             + (EquippedAmulet != null ? EquippedAmulet.damageMult : 0f);
+            float accDefense = (EquippedRing != null ? EquippedRing.defense : 0f)
+                             + (EquippedAmulet != null ? EquippedAmulet.defense : 0f);
+            int accHp        = (EquippedRing != null ? EquippedRing.hpBonus : 0)
+                             + (EquippedAmulet != null ? EquippedAmulet.hpBonus : 0);
+
+            weapon *= (1f + Mathf.Max(0f, accDamage));
+
             WeaponMult   = weapon;
-            ArmorDefense = armor;
+            ArmorDefense = Mathf.Clamp(armor + Mathf.Max(0f, accDefense), 0f, 0.70f);
+            GearHpBonus  = Mathf.Max(0, Mathf.RoundToInt(EquippedArmor != null ? EquippedArmor.hpBonus : 0f) + accHp);
 
             // Drive the body's armor visual tier off the equipped piece. EquipmentController
             // owns the asset-attach layer (the canonical instance); GearLoadout simply tells
@@ -253,6 +295,10 @@ namespace DeNelle.Village
 
             // Activate / refresh the Oathweld ward driver (lazily attached, self-guards).
             EnsureSetEffect().Refresh();
+
+            // WO-543: drive the rarity rim-light glow off the dominant equipped rarity
+            // (armor/ring/amulet). Lazily attached, fully guarded (no-op without a hero mesh).
+            EnsureRimLight().Refresh();
 
             // COMPANION gear: a companion body has no HeroAbilities damage chain, so push the
             // equipped weapon multiplier straight onto its StoryCompanion driver (no-op on the
@@ -297,6 +343,85 @@ namespace DeNelle.Village
                 if (!TryGetComponent(out _setEffect)) _setEffect = gameObject.AddComponent<AegisSetEffect>();
             }
             return _setEffect;
+        }
+
+        private HeroArmorRimLight _rimLight;
+
+        /// <summary>Lazily attaches the WO-543 armor/accessory rim-light applier (mirrors EnsureSetEffect).</summary>
+        private HeroArmorRimLight EnsureRimLight()
+        {
+            if (_rimLight == null)
+            {
+                if (!TryGetComponent(out _rimLight)) _rimLight = gameObject.AddComponent<HeroArmorRimLight>();
+            }
+            return _rimLight;
+        }
+
+        /// <summary>
+        /// WO-543: manually equip a ring/amulet accessory. Routes by the def's slot, persists per
+        /// class so it sticks across loads, recomputes stats (the rim-light + bonuses re-apply via
+        /// ApplyStats), and fires OnGearChanged. No-op (with a Warn) when the id isn't an accessory.
+        /// </summary>
+        public void EquipAccessoryById(string id)
+        {
+            var ac = GearCatalog.FindAccessory(id);
+            if (ac == null)
+            {
+                FlowTrace.Warn("Gear", $"EquipAccessoryById('{id}') — no AccessoryDef in catalog; equip skipped.");
+                return;
+            }
+
+            if (ac.IsRing)
+            {
+                EquippedRing = ac;
+                PlayerPrefs.SetString(PrefRingKey + PrefJobKey(), id);
+            }
+            else if (ac.IsAmulet)
+            {
+                EquippedAmulet = ac;
+                PlayerPrefs.SetString(PrefAmuletKey + PrefJobKey(), id);
+            }
+            else
+            {
+                FlowTrace.Warn("Gear", $"EquipAccessoryById('{id}') — slot '{ac.slot}' is not ring/amulet; equip skipped.");
+                return;
+            }
+
+            PlayerPrefs.Save();
+            ApplyStats(CurrentJob());
+            OnGearChanged?.Invoke();
+            FlowTrace.Step("Gear", $"EquipAccessoryById('{id}') applied — ring='{EquippedRing?.id ?? "<null>"}' " +
+                $"amulet='{EquippedAmulet?.id ?? "<null>"}' hpBonus={GearHpBonus}");
+        }
+
+        /// <summary>
+        /// WO-543: remove the accessory in <paramref name="slot"/> ("ring"/"amulet"). Persists the
+        /// "none" sentinel so a later Refresh honours the empty choice, recomputes stats, fires OnGearChanged.
+        /// </summary>
+        public void UnequipAccessory(string slot)
+        {
+            string s = (slot ?? string.Empty).Trim().ToLowerInvariant();
+            if (s == "ring")
+            {
+                EquippedRing = null;
+                PlayerPrefs.SetString(PrefRingKey + PrefJobKey(), PrefNoneSentinel);
+            }
+            else if (s == "amulet")
+            {
+                EquippedAmulet = null;
+                PlayerPrefs.SetString(PrefAmuletKey + PrefJobKey(), PrefNoneSentinel);
+            }
+            else
+            {
+                FlowTrace.Warn("Gear", $"UnequipAccessory('{slot}') — unknown accessory slot; skipped.");
+                return;
+            }
+
+            PlayerPrefs.Save();
+            ApplyStats(CurrentJob());
+            OnGearChanged?.Invoke();
+            FlowTrace.Step("Gear", $"UnequipAccessory('{s}') applied — ring='{EquippedRing?.id ?? "<null>"}' " +
+                $"amulet='{EquippedAmulet?.id ?? "<null>"}'");
         }
 
         // ── HAND-SLOT ENFORCEMENT (docs/STORE_EQUIP_SPEC.md "Equip-slot rules") ──────

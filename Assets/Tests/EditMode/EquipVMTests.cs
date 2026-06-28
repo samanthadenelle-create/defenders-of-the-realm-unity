@@ -29,6 +29,7 @@ namespace DeNelle.Tests.EditMode
             public readonly Dictionary<string, int> Counts = new Dictionary<string, int>();
             public readonly Dictionary<string, WeaponDef> Weapons = new Dictionary<string, WeaponDef>();
             public readonly Dictionary<string, ArmorDef> Armors = new Dictionary<string, ArmorDef>();
+            public readonly Dictionary<string, AccessoryDef> Accessories = new Dictionary<string, AccessoryDef>();
 
             public event Action Changed;
             public void RaiseChanged() => Changed?.Invoke();
@@ -37,6 +38,20 @@ namespace DeNelle.Tests.EditMode
             public int OwnedQuantity(string id) => Counts.TryGetValue(id, out var v) ? v : 0;
             public WeaponDef FindWeapon(string id) => Weapons.TryGetValue(id, out var w) ? w : null;
             public ArmorDef FindArmor(string id) => Armors.TryGetValue(id, out var a) ? a : null;
+            public AccessoryDef FindAccessory(string id) => Accessories.TryGetValue(id, out var ac) ? ac : null;
+            public IReadOnlyList<AccessoryDef> AccessoriesForSlot(string slot, int level)
+            {
+                var l = new List<AccessoryDef>();
+                foreach (var kv in Accessories)
+                {
+                    var ac = kv.Value;
+                    if (ac == null) continue;
+                    if (!string.Equals(ac.slot, slot, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (ac.req != null && level < ac.req.level) continue;
+                    l.Add(ac);
+                }
+                return l;
+            }
 
             public IReadOnlyList<(WeaponDef def, int qty)> OwnedWeapons()
             {
@@ -61,8 +76,11 @@ namespace DeNelle.Tests.EditMode
         {
             public string TargetName { get; set; }
             public string TargetClass { get; set; } = "knight";
+            public int TargetLevel { get; set; } = 10;
             public WeaponDef EquippedWeapon { get; set; }
             public ArmorDef EquippedArmor { get; set; }
+            public AccessoryDef EquippedRing { get; set; }
+            public AccessoryDef EquippedAmulet { get; set; }
             public string EquippedWeaponName => EquippedWeapon?.name;
             public string EquippedArmorName => EquippedArmor?.name;
             public float WeaponMult => EquippedWeapon != null ? EquippedWeapon.damageMult : 1f;
@@ -72,12 +90,26 @@ namespace DeNelle.Tests.EditMode
             public float MaxHealth { get; set; }
             public float CurrentMana { get; set; }
             public float MaxMana { get; set; }
-            public int EquipWeaponCalls, EquipArmorCalls, UnequipWeaponCalls;
+            public int EquipWeaponCalls, EquipArmorCalls, UnequipWeaponCalls, EquipAccessoryCalls, UnequipAccessoryCalls;
+            public string LastAccessoryId, LastUnequipAccessorySlot;
             public event Action EquipChanged;
             public void EquipWeaponById(string id) { EquipWeaponCalls++; EquippedWeapon = new WeaponDef { id = id, name = id, damageMult = 2f }; EquipChanged?.Invoke(); }
             public void EquipArmorById(string id) { EquipArmorCalls++; EquippedArmor = new ArmorDef { id = id, name = id, defense = 0.3f }; EquipChanged?.Invoke(); }
             public void UnequipWeapon() { UnequipWeaponCalls++; EquippedWeapon = null; EquipChanged?.Invoke(); }
             public void UnequipArmor() { EquippedArmor = null; EquipChanged?.Invoke(); }
+            public void EquipAccessoryById(string id)
+            {
+                EquipAccessoryCalls++; LastAccessoryId = id;
+                var ac = new AccessoryDef { id = id, name = id, rarity = "rare", damageMult = 0.08f, slot = id.Contains("amulet") ? "amulet" : "ring" };
+                if (ac.slot == "amulet") EquippedAmulet = ac; else EquippedRing = ac;
+                EquipChanged?.Invoke();
+            }
+            public void UnequipAccessory(string slot)
+            {
+                UnequipAccessoryCalls++; LastUnequipAccessorySlot = slot;
+                if (slot == "amulet") EquippedAmulet = null; else EquippedRing = null;
+                EquipChanged?.Invoke();
+            }
         }
 
         private static FakeStore SeedStore()
@@ -99,11 +131,54 @@ namespace DeNelle.Tests.EditMode
             var hero = new FakeEquip { TargetName = "Grom", TargetClass = "knight" };
             using var vm = new EquipVM(store, new IEquipTarget[] { hero });
 
-            Assert.That(vm.EquipSlots.Count, Is.EqualTo(2), "mainhand + chest");
+            Assert.That(vm.EquipSlots.Count, Is.EqualTo(4), "mainhand + chest + ring + amulet (WO-543)");
             Assert.That(vm.EquipSlots[0].SlotKey, Is.EqualTo(EquipVM.SlotMainhand));
             Assert.That(vm.EquipSlots[1].SlotKey, Is.EqualTo(EquipVM.SlotChest));
+            Assert.That(vm.EquipSlots[2].SlotKey, Is.EqualTo(EquipVM.SlotRing), "ring slot below chest");
+            Assert.That(vm.EquipSlots[3].SlotKey, Is.EqualTo(EquipVM.SlotAmulet), "amulet slot below ring");
             Assert.That(vm.Stats.Count, Is.EqualTo(4), "HP / MP / Damage / Defense");
             Assert.That(vm.CharacterLabel, Does.Contain("Grom"));
+        }
+
+        [Test]
+        public void ring_slot_lists_compatible_accessories_and_equip_routes_to_target()
+        {
+            var store = SeedStore();
+            store.Accessories["ring_iron"] = new AccessoryDef { id = "ring_iron", name = "Iron Band", slot = "ring", rarity = "common", req = new GearReq { level = 1 } };
+            store.Accessories["amulet_x"]  = new AccessoryDef { id = "amulet_x", name = "Amulet", slot = "amulet", rarity = "rare", req = new GearReq { level = 1 } };
+            var hero = new FakeEquip { TargetName = "Grom", TargetClass = "knight", TargetLevel = 5 };
+            using var vm = new EquipVM(store, new IEquipTarget[] { hero });
+
+            // Select the ring slot (index 2) — only the ring accessory should appear.
+            vm.SelectSlot(2);
+            Assert.That(vm.SelectedSlotKey, Is.EqualTo(EquipVM.SlotRing));
+            var ids = new HashSet<string>();
+            foreach (var i in vm.CompatibleItems) ids.Add(i.Id);
+            Assert.That(ids.Contains("ring_iron"), Is.True, "ring slot lists the ring accessory");
+            Assert.That(ids.Contains("amulet_x"), Is.False, "amulet must not appear in the ring slot");
+
+            int changed = 0; vm.Changed += () => changed++;
+            vm.Equip("ring_iron");
+            Assert.That(hero.EquipAccessoryCalls, Is.EqualTo(1), "ring equip routes to EquipAccessoryById");
+            Assert.That(hero.LastAccessoryId, Is.EqualTo("ring_iron"));
+            Assert.That(hero.EquippedRing?.id, Is.EqualTo("ring_iron"));
+            Assert.That(changed, Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void amulet_slot_unequip_routes_to_target()
+        {
+            var store = SeedStore();
+            var hero = new FakeEquip { TargetName = "Grom", TargetClass = "knight" };
+            hero.EquippedAmulet = new AccessoryDef { id = "amulet_x", name = "Amulet", slot = "amulet", rarity = "epic" };
+            using var vm = new EquipVM(store, new IEquipTarget[] { hero });
+
+            vm.SelectSlot(3);   // amulet slot
+            Assert.That(vm.SelectedSlotKey, Is.EqualTo(EquipVM.SlotAmulet));
+            vm.Unequip();
+            Assert.That(hero.UnequipAccessoryCalls, Is.EqualTo(1));
+            Assert.That(hero.LastUnequipAccessorySlot, Is.EqualTo("amulet"));
+            Assert.That(hero.EquippedAmulet, Is.Null);
         }
 
         [Test]

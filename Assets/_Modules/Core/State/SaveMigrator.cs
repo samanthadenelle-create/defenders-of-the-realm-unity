@@ -62,6 +62,7 @@ namespace DeNelle.Core.State
                 { 23, MigrateToV23 },
                 { 24, MigrateToV24 },
                 { 25, MigrateToV25 },
+                { 26, MigrateToV26 },
             };
 
         /// <summary>
@@ -378,6 +379,16 @@ namespace DeNelle.Core.State
             if (!s.EchoCount.HasValue) s.EchoCount = 1;
             if (!s.SiloResources.HasValue) s.SiloResources = 0;
             if (!s.WavesCompleted.HasValue) s.WavesCompleted = 0;
+            return s;
+        }
+
+        // v26 — WO-543 accessory equip persistence. equippedRingId/equippedAmuletId are
+        // additive-default-on-read (null → "none"); we seed "" explicitly for a clean round-trip,
+        // mirroring the v25 silo seeds. An old save simply has no accessory equipped.
+        private static PersistedState MigrateToV26(PersistedState s)
+        {
+            if (s.EquippedRingId == null) s.EquippedRingId = "";
+            if (s.EquippedAmuletId == null) s.EquippedAmuletId = "";
             return s;
         }
 

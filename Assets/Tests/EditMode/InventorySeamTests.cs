@@ -38,6 +38,8 @@ namespace DeNelle.Tests.EditMode
             public int OwnedQuantity(string id) => Counts.TryGetValue(id, out var v) ? v : 0;
             public WeaponDef FindWeapon(string id) => GearCatalog.FindWeapon(id);
             public ArmorDef FindArmor(string id) => GearCatalog.FindArmor(id);
+            public AccessoryDef FindAccessory(string id) => GearCatalog.FindAccessory(id);
+            public IReadOnlyList<AccessoryDef> AccessoriesForSlot(string slot, int level) => GearCatalog.AccessoriesForSlot(slot, level);
 
             public IReadOnlyList<(WeaponDef def, int qty)> OwnedWeapons()
             {
@@ -77,8 +79,11 @@ namespace DeNelle.Tests.EditMode
         {
             public string TargetName { get; set; } = "Tester";
             public string TargetClass { get; set; } = "knight";
+            public int TargetLevel { get; set; } = 1;
             public WeaponDef EquippedWeapon { get; set; }
             public ArmorDef EquippedArmor { get; set; }
+            public AccessoryDef EquippedRing { get; set; }
+            public AccessoryDef EquippedAmulet { get; set; }
             public string EquippedWeaponName => EquippedWeapon?.name;
             public string EquippedArmorName => EquippedArmor?.name;
             public float WeaponMult => EquippedWeapon != null ? EquippedWeapon.damageMult : 1f;
@@ -92,6 +97,8 @@ namespace DeNelle.Tests.EditMode
             public void EquipArmorById(string id) { EquippedArmor = new ArmorDef { id = id, name = id, defense = 0.3f }; EquipChanged?.Invoke(); }
             public void UnequipWeapon() { EquippedWeapon = null; EquipChanged?.Invoke(); }
             public void UnequipArmor() { EquippedArmor = null; EquipChanged?.Invoke(); }
+            public void EquipAccessoryById(string id) { EquippedRing = new AccessoryDef { id = id, name = id, slot = "ring" }; EquipChanged?.Invoke(); }
+            public void UnequipAccessory(string slot) { if (slot == "amulet") EquippedAmulet = null; else EquippedRing = null; EquipChanged?.Invoke(); }
         }
 
         // ── Fake (mock) seam ─────────────────────────────────────────────────────

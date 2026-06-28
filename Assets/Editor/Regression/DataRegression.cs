@@ -155,6 +155,19 @@ namespace DeNelle.Editor
             // the exact colors later; this gates the MAPPING, not the aesthetic.
             CheckWeaponVfx(failures, log);
 
+            // --- ACCESSORIES (accessories.json -> GearCatalog.Accessories) ---------
+            // WO-543: the third gear category (rings + amulets). Assert the JSON maps to 10
+            // AccessoryDef objects, the (additive) stat bonuses stay within the non-legendary
+            // caps (damageMult < 0.20, defense < 0.15), and every entry carries an iconPath
+            // (the shop/equip sprite) — the same display-field gate the weapon/armor checks use.
+            CheckAccessories(failures, log);
+
+            // --- ARMOR/ACCESSORY RIM-LIGHT VFX (WO-543 ArmorVfxMap) ----------------
+            // The armor/accessory rarity must read through the hero rim-light glow. Assert the
+            // pure ArmorVfxMap resolver returns a DISTINCT color per band, the gold const at
+            // legendary, common == OFF (intensity 0), and a MONOTONICALLY escalating intensity.
+            CheckArmorVfx(failures, log);
+
             // --- ENEMY STRUCTURE-AWARE SWEEP (ff.enemystructureaware) ---------------
             // Closes the UNVERIFIED targeting item (commit 8aa24c32): the verify-capture
             // showed 0 sweep acquires. Construct a REAL Enemy + a side structure (so the
@@ -937,6 +950,130 @@ namespace DeNelle.Editor
                     DeNelle.Core.Diagnostics.FlowTrace.Fail("Regression", msg);
                 }
             }
+        }
+
+        // =====================================================================
+        //  ACCESSORIES — accessories.json via GearCatalog.Accessories (WO-543)
+        // =====================================================================
+        private static void CheckAccessories(List<string> failures, StringBuilder log)
+        {
+            var accessories = new List<AccessoryDef>(GearCatalog.Accessories);
+            log.AppendLine($"accessories.json -> {accessories.Count} AccessoryDef object(s)");
+
+            if (accessories.Count != 10)
+                failures.Add($"accessories.json deserialized to {accessories.Count} objects, expected 10 (mapping break or roster drift)");
+
+            int badField = 0, noIcon = 0, overDmg = 0, overDef = 0;
+            foreach (var ac in accessories)
+            {
+                bool ok = ac != null && !string.IsNullOrEmpty(ac.id) && !string.IsNullOrEmpty(ac.name);
+                if (!ok) { badField++; continue; }
+
+                bool legendary = !string.IsNullOrEmpty(ac.rarity) &&
+                                 ac.rarity.Trim().ToLowerInvariant() == "legendary";
+
+                // Non-legendary balance caps (legendary is the apex and may exceed them).
+                if (!legendary && ac.damageMult >= 0.20f) { overDmg++;
+                    failures.Add($"accessories.json: '{ac.id}' damageMult {ac.damageMult:0.00} >= 0.20 cap (non-legendary)"); }
+                if (!legendary && ac.defense >= 0.15f) { overDef++;
+                    failures.Add($"accessories.json: '{ac.id}' defense {ac.defense:0.00} >= 0.15 cap (non-legendary)"); }
+
+                if (string.IsNullOrEmpty(ac.iconPath)) { noIcon++;
+                    failures.Add($"accessories.json: '{ac.id}' has no iconPath (would render with no shop sprite)"); }
+
+                log.AppendLine($"  AC {ac.id} | name='{ac.name}' | slot={ac.slot} rarity={ac.rarity} " +
+                               $"| dmg={ac.damageMult:0.00} def={ac.defense:0.00} hp={ac.hpBonus} " +
+                               $"| icon='{ac.iconPath}' | cost={CostStr(GearCatalog.GetBuyCost(ac))}");
+            }
+            if (badField > 0) failures.Add($"{badField} accessory(ies) have null/empty id or name");
+            log.AppendLine($"[accessories] caps: {overDmg} over-dmg, {overDef} over-def, {noIcon} missing-icon");
+        }
+
+        // =====================================================================
+        //  ARMOR/ACCESSORY RIM-LIGHT VFX — WO-543 ArmorVfxMap pure resolver
+        // =====================================================================
+        private static void CheckArmorVfx(List<string> failures, StringBuilder log)
+        {
+            log.AppendLine("[armor-vfx] rarity -> rim-light color/intensity mapping (WO-543):");
+
+            string[] bands = { "common", "uncommon", "rare", "epic", "legendary", "elarion" };
+            var colors = new Dictionary<string, Color>();
+            var intensities = new Dictionary<string, float>();
+            foreach (var b in bands)
+            {
+                var profile = ArmorVfxMap.Resolve(b);
+                colors[b] = profile.RimColor;
+                intensities[b] = profile.RimIntensity;
+                log.AppendLine($"  AVFX {b} -> color=({profile.RimColor.r:0.00},{profile.RimColor.g:0.00}," +
+                               $"{profile.RimColor.b:0.00}) intensity={profile.RimIntensity:0.000} burst={profile.LegendaryBurst}");
+            }
+
+            // Distinct color per visual tier (legendary & elarion share the gold apex).
+            string[] distinct = { "common", "uncommon", "rare", "epic", "legendary" };
+            for (int i = 0; i < distinct.Length; i++)
+                for (int j = i + 1; j < distinct.Length; j++)
+                    if (ApproxColor(colors[distinct[i]], colors[distinct[j]]))
+                    {
+                        string msg = $"armor-vfx: bands '{distinct[i]}' and '{distinct[j]}' resolve the SAME rim color";
+                        failures.Add(msg);
+                        DeNelle.Core.Diagnostics.FlowTrace.Fail("Regression", msg);
+                    }
+
+            // legendary / elarion == gold apex.
+            if (!ApproxColor(colors["legendary"], ArmorVfxMap.GoldColor))
+            {
+                string msg = "armor-vfx: legendary color != ArmorVfxMap.GoldColor (the gold apex const)";
+                failures.Add(msg);
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Regression", msg);
+            }
+            if (!ApproxColor(colors["elarion"], ArmorVfxMap.GoldColor))
+            {
+                string msg = "armor-vfx: elarion color != ArmorVfxMap.GoldColor (top band shares the gold apex)";
+                failures.Add(msg);
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Regression", msg);
+            }
+
+            // common == OFF (no glow) + null-safe default off.
+            if (intensities["common"] != 0f)
+            {
+                string msg = $"armor-vfx: common intensity {intensities["common"]:0.00} != 0 (common must be OFF — no glow)";
+                failures.Add(msg);
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Regression", msg);
+            }
+            if (ArmorVfxMap.Resolve((string)null).RimIntensity != 0f)
+            {
+                string msg = "armor-vfx: Resolve(null) intensity != 0 (no gear must be OFF)";
+                failures.Add(msg);
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Regression", msg);
+            }
+
+            // intensity escalates MONOTONICALLY common < uncommon < rare < epic < legendary.
+            for (int i = 1; i < distinct.Length; i++)
+            {
+                float prev = intensities[distinct[i - 1]];
+                float cur  = intensities[distinct[i]];
+                if (!(cur > prev))
+                {
+                    string msg = $"armor-vfx: rim intensity does not escalate '{distinct[i - 1]}'({prev:0.00}) -> " +
+                                 $"'{distinct[i]}'({cur:0.00}) (must be monotonically increasing)";
+                    failures.Add(msg);
+                    DeNelle.Core.Diagnostics.FlowTrace.Fail("Regression", msg);
+                }
+            }
+
+            // legendary drives the apex burst; lower bands do not.
+            if (!ArmorVfxMap.Resolve("legendary").LegendaryBurst)
+                failures.Add("armor-vfx: legendary band must set LegendaryBurst (the Burst_rings apex)");
+            if (ArmorVfxMap.Resolve("rare").LegendaryBurst)
+                failures.Add("armor-vfx: rare band must NOT set LegendaryBurst");
+
+            // Dominant-rarity selection: an epic ring on common armor -> epic profile.
+            var dom = ArmorVfxMap.Resolve(
+                new ArmorDef { id = "a", rarity = "common" },
+                new AccessoryDef { id = "r", rarity = "epic", slot = "ring" },
+                null);
+            if (!ApproxColor(dom.RimColor, ArmorVfxMap.EpicColor))
+                failures.Add("armor-vfx: dominant-rarity pick wrong (epic ring + common armor should resolve EPIC)");
         }
 
         private static bool ApproxColor(Color a, Color b)

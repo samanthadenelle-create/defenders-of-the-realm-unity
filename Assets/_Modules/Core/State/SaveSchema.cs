@@ -27,7 +27,7 @@ namespace DeNelle.Core.State
     {
         // ── Versioning ───────────────────────────────────────────────────────
         /// <summary>CURRENT_SCHEMA_VERSION — bumped whenever the persisted shape changes.</summary>
-        public const int CurrentVersion = 25;  // v25 — Echo Workforce V1 (ECHO_WORKFORCE_SPEC): echoCount + siloResources + wavesCompleted survive save/load → the farm faucet (Echoes auto-fill a pooled silo online+offline via OfflineHarvestService's clock, Dump banks to bins, beating 5 waves unlocks the next Echo ≤4); v24 — Village/Stronghold tier + owned building-research perks (WO-432: WC3 tech-gate at the Heart + per-building Gold-cost research survives save/load → compiled into GameModifiers); v23 — building upgrade tiers (WO-430: per-building tier 0-4 survives save/load → compiled into GameModifiers + dialogue level title); v22 — army roster persistence (WO-453: owned troops + cap + wounded/recovery/veterancy survive save/load); v21 — node-settlement persistence (WO-159: claim/HP/phase + 3-day razed lockout survive save/load); v20 — gear inventory persistence (shop purchases survive reload + Neon sync); v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
+        public const int CurrentVersion = 26;  // v26 — WO-543 accessory equip persistence: equippedRingId + equippedAmuletId (rings/amulets) survive save/load (empty = none); v25 — Echo Workforce V1 (ECHO_WORKFORCE_SPEC): echoCount + siloResources + wavesCompleted survive save/load → the farm faucet (Echoes auto-fill a pooled silo online+offline via OfflineHarvestService's clock, Dump banks to bins, beating 5 waves unlocks the next Echo ≤4); v24 — Village/Stronghold tier + owned building-research perks (WO-432: WC3 tech-gate at the Heart + per-building Gold-cost research survives save/load → compiled into GameModifiers); v23 — building upgrade tiers (WO-430: per-building tier 0-4 survives save/load → compiled into GameModifiers + dialogue level title); v22 — army roster persistence (WO-453: owned troops + cap + wounded/recovery/veterancy survive save/load); v21 — node-settlement persistence (WO-159: claim/HP/phase + 3-day razed lockout survive save/load); v20 — gear inventory persistence (shop purchases survive reload + Neon sync); v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
         /// <summary>SaveExport.format — bumped only if the envelope shape changes.</summary>
         public const int FileFormat = 1;
 
@@ -298,6 +298,20 @@ namespace DeNelle.Core.State
             /// absent on an older save → defaults to 0 on load. Append-only at the END.
             /// </summary>
             [JsonProperty("wavesCompleted")] public double? WavesCompleted;
+
+            // ── v26 — WO-543 accessory equip persistence ─────────────────────────
+            /// <summary>
+            /// The equipped RING accessory id ("" / null = nothing equipped). Nullable per the
+            /// <c>.partial()</c> convention; absent on an older save → the v25→v26 migration seeds
+            /// "". Append-only field at the END so older saves stay loadable.
+            /// </summary>
+            [JsonProperty("equippedRingId")] public string EquippedRingId;
+
+            /// <summary>
+            /// The equipped AMULET accessory id ("" / null = nothing equipped). See
+            /// <see cref="EquippedRingId"/>. Append-only field at the END.
+            /// </summary>
+            [JsonProperty("equippedAmuletId")] public string EquippedAmuletId;
         }
 
         // =====================================================================

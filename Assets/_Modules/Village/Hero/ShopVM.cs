@@ -77,6 +77,7 @@ namespace DeNelle.Village.Hero
         public const string IconRoleWeapon = "weapon";
         public const string IconRoleArmor  = "armor";
         public const string IconRolePotion = "potion";
+        public const string IconRoleAccessory = "accessory";   // WO-543 (rings + amulets)
 
         private readonly string _vendorContext;
         private readonly string _displayName;
@@ -99,7 +100,7 @@ namespace DeNelle.Village.Hero
         private readonly List<(string id, GearKind kind)> _currentStock = new List<(string id, GearKind kind)>();
 
         // Type filter for the SELL list (Buy is vendor-locked). Default = All.
-        private GearKind _buyFilter = GearKind.Weapon | GearKind.Armor | GearKind.Potion;
+        private GearKind _buyFilter = GearKind.Weapon | GearKind.Armor | GearKind.Potion | GearKind.Accessory;
 
         public ShopVM(string vendorContext, IEconomy economy,
                       string displayName = null,
@@ -185,7 +186,7 @@ namespace DeNelle.Village.Hero
         {
             Mode = mode;
             if (mode == ShopMode.Buy)
-                _buyFilter = GearKind.Weapon | GearKind.Armor | GearKind.Potion;   // buy is vendor-locked
+                _buyFilter = GearKind.Weapon | GearKind.Armor | GearKind.Potion | GearKind.Accessory;   // buy is vendor-locked
             SelectedId = null;
             Rebuild();
             Raise();
@@ -275,7 +276,7 @@ namespace DeNelle.Village.Hero
 
         private void BuildBuy()
         {
-            _buyFilter = GearKind.Weapon | GearKind.Armor | GearKind.Potion;   // buy is vendor-locked
+            _buyFilter = GearKind.Weapon | GearKind.Armor | GearKind.Potion | GearKind.Accessory;   // buy is vendor-locked
             ActionLabel = "Purchase";
             Status = "Buy gear: tap a row to view it, then Purchase.";
 
@@ -298,15 +299,22 @@ namespace DeNelle.Village.Hero
             foreach (var w in StoreStockService.Weapons()) if (w != null) allWeapons.Add(w);
             foreach (var a in StoreStockService.Armors())  if (a != null) allArmors.Add(a);
 
+            // WO-543: accessories (rings + amulets) come from the local catalog (offline-first by
+            // nature — no remote stock). The Jeweler is the only vendor whose contract allows them.
+            var allAccessories = new List<AccessoryDef>();
+            foreach (var ac in GearCatalog.Accessories) if (ac != null) allAccessories.Add(ac);
+
             var weapons = new List<WeaponDef>();
             var armors  = new List<ArmorDef>();
-            if ((allowed & GearKind.Weapon) != 0) weapons.AddRange(allWeapons);
-            if ((allowed & GearKind.Armor)  != 0) armors.AddRange(allArmors);
+            var accessories = new List<AccessoryDef>();
+            if ((allowed & GearKind.Weapon)    != 0) weapons.AddRange(allWeapons);
+            if ((allowed & GearKind.Armor)     != 0) armors.AddRange(allArmors);
+            if ((allowed & GearKind.Accessory) != 0) accessories.AddRange(allAccessories);
             bool potionsAllowed = (allowed & GearKind.Potion) != 0;
 
-            bool wouldBeEmpty = weapons.Count == 0 && armors.Count == 0 &&
+            bool wouldBeEmpty = weapons.Count == 0 && armors.Count == 0 && accessories.Count == 0 &&
                                 (!potionsAllowed || _potionIds.Count == 0);
-            bool filterIsAll = _buyFilter == (GearKind.Weapon | GearKind.Armor | GearKind.Potion);
+            bool filterIsAll = _buyFilter == (GearKind.Weapon | GearKind.Armor | GearKind.Potion | GearKind.Accessory);
             if (wouldBeEmpty && filterIsAll && (allWeapons.Count + allArmors.Count) > 0)
             {
                 weapons.Clear(); weapons.AddRange(allWeapons);
@@ -346,6 +354,27 @@ namespace DeNelle.Village.Hero
                     IconRoleArmor, a.id, cost.Coins, "gold", affordable, a.rarity));
                 _currentStock.Add((a.id, GearKind.Armor));
             }
+            foreach (var ac in accessories)
+            {
+                if (ac == null) continue;
+                var acCopy = ac;
+                var cost = GearCatalog.GetBuyCost(ac);
+                bool affordable = _economy == null || _economy.CanAfford(cost);
+                int acDmgPct = RoundToInt(Max(0f, ac.damageMult) * 100f);
+                int acDefPct = RoundToInt(Max(0f, ac.defense) * 100f);
+                var bits = new List<string>();
+                if (acDmgPct > 0) bits.Add("+" + acDmgPct + "% dmg");
+                if (acDefPct > 0) bits.Add("+" + acDefPct + "% def");
+                if (ac.hpBonus > 0) bits.Add("+" + ac.hpBonus + " hp");
+                string acStats = bits.Count > 0 ? string.Join("   ", bits) : "Accessory";
+                string name = string.IsNullOrEmpty(ac.name) ? ac.id : ac.name;
+                _rowDetails[ac.id] = new ShopDetail(name, DescribeGear(ac.job, ac.rarity), acStats,
+                    "Cost: " + CostString(cost), IconRoleAccessory, ac.id);
+                _rowActions[ac.id] = () => TryBuyAccessory(acCopy);
+                _items.Add(new ItemVM(ac.id, BuyLabel(ac.name, GearAppraisal.Appraise(ac)),
+                    IconRoleAccessory, ac.id, cost.Coins, "gold", affordable, ac.rarity));
+                _currentStock.Add((ac.id, GearKind.Accessory));
+            }
             if (potionsAllowed)
             foreach (var pid in _potionIds)
             {
@@ -366,15 +395,15 @@ namespace DeNelle.Village.Hero
             // whatever _items holds; this records why it is empty instead of a blank tab.
             if (_items.Count == 0)
             {
-                bool catalogEmpty = allWeapons.Count == 0 && allArmors.Count == 0;
+                bool catalogEmpty = allWeapons.Count == 0 && allArmors.Count == 0 && allAccessories.Count == 0;
                 if (catalogEmpty)
                     DeNelle.Core.Diagnostics.FlowTrace.Fail("Shop",
-                        $"BUY tab EMPTY for vendor '{_vendorContext}': gear catalog loaded NO weapons/armor " +
-                        "(weapons.json/armor.json missing or failed to parse).");
+                        $"BUY tab EMPTY for vendor '{_vendorContext}': gear catalog loaded NO weapons/armor/accessories " +
+                        "(weapons.json/armor.json/accessories.json missing or failed to parse).");
                 else
                     DeNelle.Core.Diagnostics.FlowTrace.Warn("Shop",
                         $"BUY tab EMPTY for vendor '{_vendorContext}' (allowed {allowed}) though the catalog " +
-                        $"has {allWeapons.Count} weapon(s) + {allArmors.Count} armor(s) — filter excluded all stock.");
+                        $"has {allWeapons.Count} weapon(s) + {allArmors.Count} armor(s) + {allAccessories.Count} accessory(ies) — filter excluded all stock.");
             }
         }
 
@@ -420,6 +449,27 @@ namespace DeNelle.Village.Hero
             }
         }
 
+        private void TryBuyAccessory(AccessoryDef ac)
+        {
+            if (ac == null) return;
+            var cost = GearCatalog.GetBuyCost(ac);
+            if (_economy == null) { Status = "Economy unavailable."; return; }
+            if (_economy.TrySpend(cost))
+            {
+                if (VillageInventory.Instance != null) VillageInventory.Instance.Add(ac.id, 1);
+                var ap = GearAppraisal.Appraise(ac);
+                Status = ap != null && ap.isElarionMarked
+                    ? "Purchased " + ac.name + "! " + ap.Summary() + " (added to inventory — see EQUIP)"
+                    : "Purchased " + ac.name + "! Added to inventory — see EQUIP.";
+                PushHudResources();
+                Rebuild();
+            }
+            else
+            {
+                Status = "Not enough resources for " + ac.name + " — needs " + CostString(cost) + ".";
+            }
+        }
+
         private void TryBuyPotion(string id, ResourceCost cost)
         {
             if (_economy == null) { Status = "Economy unavailable."; return; }
@@ -459,8 +509,10 @@ namespace DeNelle.Village.Hero
                 bool isPotion = _potionIds.Contains(id);
                 bool isWeapon = GearCatalog.FindWeapon(id) != null;
                 bool isArmor  = GearCatalog.FindArmor(id) != null;
-                if (!isWeapon && !isArmor && !isPotion) continue;
-                GearKind k = isWeapon ? GearKind.Weapon : isArmor ? GearKind.Armor : GearKind.Potion;
+                bool isAccessory = GearCatalog.FindAccessory(id) != null;
+                if (!isWeapon && !isArmor && !isAccessory && !isPotion) continue;
+                GearKind k = isWeapon ? GearKind.Weapon : isArmor ? GearKind.Armor
+                           : isAccessory ? GearKind.Accessory : GearKind.Potion;
                 if ((_buyFilter & k) == 0) continue;
                 sellable.Add(id);
             }
@@ -470,22 +522,27 @@ namespace DeNelle.Village.Hero
                 int owned = inv.Get(id);
                 WeaponDef w = GearCatalog.FindWeapon(id);
                 ArmorDef a = GearCatalog.FindArmor(id);
+                AccessoryDef ac = (w == null && a == null) ? GearCatalog.FindAccessory(id) : null;
 
-                string display = (w != null ? w.name : (a != null ? a.name : id)) + " x" + owned;
+                string display = (w != null ? w.name : a != null ? a.name : ac != null ? ac.name : id) + " x" + owned;
                 ResourceCost refund = w != null ? ScaleCost(GearCatalog.GetBuyCost(w), 0.50f) :
                                     a != null ? ScaleCost(GearCatalog.GetBuyCost(a), 0.50f) :
+                                    ac != null ? ScaleCost(GearCatalog.GetBuyCost(ac), 0.50f) :
                                     ScaleCost(PotionBuyCost(id), 0.30f);
 
                 string idCopy = id; var refundCopy = refund;
                 bool isPotionSell = _potionIds.Contains(id);
                 string sellDesc = w != null ? DescribeGear(w.job, w.rarity)
                                 : a != null ? DescribeGear(a.job, a.rarity)
+                                : ac != null ? DescribeGear(ac.job, ac.rarity)
                                 : (isPotionSell ? "Consumable you own." : "Owned item.");
                 string sellStats = w != null ? "+" + RoundToInt((Max(0.1f, w.damageMult) - 1f) * 100f) + "% dmg"
                                  : a != null ? "+" + RoundToInt(Clamp(a.defense, 0f, 0.9f) * 100f) + "% def"
+                                 : ac != null ? AccessorySellStats(ac)
                                  : "Consumable";
-                string sellName = w != null ? w.name : (a != null ? a.name : id);
-                string iconRole = w != null ? IconRoleWeapon : a != null ? IconRoleArmor : IconRolePotion;
+                string sellName = w != null ? w.name : a != null ? a.name : ac != null ? ac.name : id;
+                string iconRole = w != null ? IconRoleWeapon : a != null ? IconRoleArmor
+                                : ac != null ? IconRoleAccessory : IconRolePotion;
 
                 _rowDetails[id] = new ShopDetail(sellName, sellDesc, sellStats,
                     "Refund: +" + CostString(refundCopy), iconRole, id);
@@ -611,6 +668,18 @@ namespace DeNelle.Village.Hero
         private void SpendVendorGold(int amt)
         {
             _vendorGold[VendorKey()] = Math.Max(0, VendorGold() - amt);
+        }
+
+        private string AccessorySellStats(AccessoryDef ac)
+        {
+            if (ac == null) return "Accessory";
+            var bits = new List<string>();
+            int dmg = RoundToInt(Max(0f, ac.damageMult) * 100f);
+            int def = RoundToInt(Max(0f, ac.defense) * 100f);
+            if (dmg > 0) bits.Add("+" + dmg + "% dmg");
+            if (def > 0) bits.Add("+" + def + "% def");
+            if (ac.hpBonus > 0) bits.Add("+" + ac.hpBonus + " hp");
+            return bits.Count > 0 ? string.Join("   ", bits) : "Accessory";
         }
 
         private ResourceCost PotionBuyCost(string id)

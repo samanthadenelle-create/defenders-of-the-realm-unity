@@ -124,6 +124,27 @@ namespace DeNelle.Village
             };
         }
 
+        /// <summary>Appraise a ring/amulet accessory. Returns null for a null def.</summary>
+        public static GearAppraisalResult Appraise(AccessoryDef ac)
+        {
+            if (ac == null) return null;
+            var tier = GearTierTable.Parse(ac.rarity);
+            string mark = ResolveMark(ac.makersMark, ac.saga, ac.IsAegis || tier == GearTier.Legendary);
+            return new GearAppraisalResult
+            {
+                id = ac.id,
+                displayName = string.IsNullOrEmpty(ac.name) ? ac.id : ac.name,
+                tier = tier,
+                tierLabel = GearTierTable.DisplayName(tier),
+                tierHex = GearTierTable.RarityHex(tier),
+                makersMark = mark,
+                flavor = ResolveFlavor(ac.flavor, ac.saga, tier),
+                isElarionMarked = IsElarionMark(mark),
+                isLegendary = tier == GearTier.Legendary,
+                estimatedValue = EstimateAccessoryValue(ac, tier),
+            };
+        }
+
         /// <summary>Appraise by weapon id (catalog lookup). Null if not found.</summary>
         public static GearAppraisalResult AppraiseWeaponId(string id) => Appraise(GearCatalog.FindWeapon(id));
 
@@ -175,6 +196,16 @@ namespace DeNelle.Village
             // per full 1.0 of defense -> 0.28 plate ~= 84) plus a touch per hpBonus.
             float statWorth = Math.Max(0f, a.defense) * 300f + Math.Max(0f, a.hpBonus) * 0.5f;
             return FinishValue(TierBaseValue(tier), statWorth, tier, IsElarionMark(ResolveMark(a.makersMark, a.saga, a.IsAegis)));
+        }
+
+        private static int EstimateAccessoryValue(AccessoryDef ac, GearTier tier)
+        {
+            // An accessory's worth blends its (additive) damage + defense + flat HP bonuses, on the
+            // same scales the weapon/armor models use (50/+1.0 dmg, 300/+1.0 def, 0.5/hp).
+            float statWorth = Math.Max(0f, ac.damageMult) * 50f
+                            + Math.Max(0f, ac.defense) * 300f
+                            + Math.Max(0f, ac.hpBonus) * 0.5f;
+            return FinishValue(TierBaseValue(tier), statWorth, tier, IsElarionMark(ResolveMark(ac.makersMark, ac.saga, ac.IsAegis)));
         }
 
         private static int FinishValue(int baseValue, float statWorth, GearTier tier, bool elarionMarked)

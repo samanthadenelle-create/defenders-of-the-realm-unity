@@ -202,17 +202,20 @@ namespace DeNelle.Village
     /// </summary>
     public static class GearCatalog
     {
-        private const string WeaponsPath = "Data/Canonical/weapons.json";
-        private const string ArmorPath   = "Data/Canonical/armor.json";
+        private const string WeaponsPath     = "Data/Canonical/weapons.json";
+        private const string ArmorPath       = "Data/Canonical/armor.json";
+        private const string AccessoriesPath = "Data/Canonical/accessories.json";
 
-        private static List<WeaponDef> _weapons;
-        private static List<ArmorDef>  _armor;
+        private static List<WeaponDef>    _weapons;
+        private static List<ArmorDef>     _armor;
+        private static List<AccessoryDef> _accessories;
 
-        /// <summary>Forces a re-read of both catalogs.</summary>
+        /// <summary>Forces a re-read of all catalogs (weapons + armor + accessories).</summary>
         public static void Reload()
         {
             _weapons = null;
             _armor = null;
+            _accessories = null;
             EnsureLoaded();
         }
 
@@ -332,6 +335,51 @@ namespace DeNelle.Village
             return null;
         }
 
+        /// <summary>Find exact accessory (ring/amulet) by id (case-insensitive), or null. Used by shop/equip flows.</summary>
+        public static AccessoryDef FindAccessory(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return null;
+            EnsureLoaded();
+            if (_accessories == null) return null;
+            foreach (var ac in _accessories)
+            {
+                if (ac != null && string.Equals(ac.id, id, StringComparison.OrdinalIgnoreCase)) return ac;
+            }
+            return null;
+        }
+
+        /// <summary>All loaded accessory defs (for the Jeweler stock + EquipVM slot lists). Never null.</summary>
+        public static IReadOnlyList<AccessoryDef> Accessories
+        {
+            get
+            {
+                EnsureLoaded();
+                return _accessories ?? (IReadOnlyList<AccessoryDef>)System.Array.Empty<AccessoryDef>();
+            }
+        }
+
+        /// <summary>All loaded accessory defs (alias of <see cref="Accessories"/> for vendor enumeration). Never null.</summary>
+        public static IReadOnlyList<AccessoryDef> AllAccessories() => Accessories;
+
+        /// <summary>Accessories that seat in <paramref name="slot"/> ("ring"/"amulet") and meet the level
+        /// requirement. Job is "any" for v1 accessories, so only slot + level gate. Never null.</summary>
+        public static IReadOnlyList<AccessoryDef> AccessoriesForSlot(string slot, int level)
+        {
+            EnsureLoaded();
+            var list = new List<AccessoryDef>();
+            if (_accessories == null || string.IsNullOrEmpty(slot)) return list;
+            string s = slot.Trim().ToLowerInvariant();
+            foreach (var ac in _accessories)
+            {
+                if (ac == null) continue;
+                string acSlot = (ac.slot ?? string.Empty).Trim().ToLowerInvariant();
+                if (acSlot != s) continue;
+                if (!MeetsReq(ac.req, level)) continue;
+                list.Add(ac);
+            }
+            return list;
+        }
+
         /// <summary>All loaded weapon defs (for vendor stock enumeration). Never null.</summary>
         public static IReadOnlyList<WeaponDef> AllWeapons()
         {
@@ -344,6 +392,14 @@ namespace DeNelle.Village
         {
             EnsureLoaded();
             return _armor ?? (IReadOnlyList<ArmorDef>)System.Array.Empty<ArmorDef>();
+        }
+
+        /// <summary>GOLD buy price for an accessory (for Economy.TrySpend). Mirrors the weapon/armor
+        /// overloads: the price is GearAppraisal's estimated value, floored at 1. Null-safe.</summary>
+        public static DeNelle.Village.ResourceCost GetBuyCost(AccessoryDef ac)
+        {
+            if (ac == null) return default;
+            return new DeNelle.Village.ResourceCost(coins: GoldPrice(GearAppraisal.Appraise(ac)));
         }
 
         /// <summary>
@@ -388,8 +444,9 @@ namespace DeNelle.Village
 
         private static void EnsureLoaded()
         {
-            if (_weapons == null) _weapons = LoadWeapons();
-            if (_armor   == null) _armor   = LoadArmor();
+            if (_weapons     == null) _weapons     = LoadWeapons();
+            if (_armor       == null) _armor       = LoadArmor();
+            if (_accessories == null) _accessories = LoadAccessories();
         }
 
         private static List<WeaponDef> LoadWeapons()
@@ -402,6 +459,12 @@ namespace DeNelle.Village
         {
             var data = LoadJson<ArmorCatalogData>(ArmorPath, "armor.json");
             return data?.armor ?? new List<ArmorDef>();
+        }
+
+        private static List<AccessoryDef> LoadAccessories()
+        {
+            var data = LoadJson<AccessoryCatalogData>(AccessoriesPath, "accessories.json");
+            return data?.accessories ?? new List<AccessoryDef>();
         }
 
         private static T LoadJson<T>(string relativePath, string label) where T : class
