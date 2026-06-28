@@ -11,7 +11,9 @@
 // object. Village → Core only; all cross-calls are null-conditional.
 // =============================================================================
 
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Quests;
+using DeNelle.Village.Crafting;
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -82,10 +84,22 @@ namespace DeNelle.Village
                 }
             }
 
-            // Item grants: log for now (the item/equip lane owns the actual grant
-            // path; a future ItemInventory hook lands here).
+            // Item grants (WO-564): grant into the persisted larder / gear store
+            // (VillageInventory.Add -> GameState.GearInventory, survives reload +
+            // Neon-syncs) — the same store the shop/crafting use. Was log-only before.
             if (!string.IsNullOrEmpty(reward.GrantItemId))
-                Debug.Log($"[QuestRewardBridge] Quest reward item '{reward.GrantItemId}' — inventory grant hook (follow-up).");
+            {
+                var inv = VillageInventory.Instance;
+                if (inv != null)
+                {
+                    inv.Add(reward.GrantItemId, 1);
+                    FlowTrace.Step("Economy", $"Story quest granted item '{reward.GrantItemId}' x1");
+                }
+                else
+                {
+                    FlowTrace.Warn("Economy", $"Story quest item '{reward.GrantItemId}' lost — VillageInventory not ready");
+                }
+            }
         }
     }
 }

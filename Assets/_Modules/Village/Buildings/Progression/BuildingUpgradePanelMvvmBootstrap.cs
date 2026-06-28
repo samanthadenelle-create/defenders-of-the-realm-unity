@@ -64,7 +64,17 @@ namespace DeNelle.Village.Buildings.Progression
             var go = new GameObject("BuildingUpgradePanelMvvm");
             SceneManager.MoveGameObjectToScene(go, scene);
             go.AddComponent<BuildingUpgradePanelMvvm>();
-            FlowTrace.Step("UI", "BuildingUpgradePanelMvvm created (single instance, flag ON)");
+            // WO-564: the harvest-tick driver that makes the upgrade ladder's speed/size
+            // fields actually pay out (consumes HarvestInterval + effective yield ->
+            // EconomyService/ResourceLedger). The LEGACY bootstrap AddComponent's this, but
+            // it short-circuits when ff.buildingupgradepanel is ON (default) — so on the
+            // live MVVM path the "upgrade building -> earn more" passive-income loop never
+            // ticked. Add it here too. The harvester self-guards a singleton (its Awake
+            // destroys a duplicate component) and the global dedupe above guarantees only
+            // ONE panel GO is ever spawned, so this can never double-add even if both
+            // bootstrap paths somehow ran.
+            go.AddComponent<ResourceBuildingHarvester>();
+            FlowTrace.Step("UI", "BuildingUpgradePanelMvvm created (single instance, flag ON; harvester attached)");
         }
 
         private static Transform FindHero()
