@@ -1,31 +1,47 @@
 // =============================================================================
-// IntroSequencePlayer — the ~30s skippable image-slate opening (WO-561).
+// IntroSequencePlayer — the ~30s skippable VIDEO opening (WO-569).
 // -----------------------------------------------------------------------------
-// YARN REMOVED (WO-557): the old 9-screen Yarn cinematic is gone. This is a tight,
-// code-built uGUI image-slate sequence on OUR own presentation kit (ElarionUiKit
-// black+gold) — NO Yarn, NO UXML. Five beats (~5.5s each ≈ 30s) tell the Hollow /
-// dimming-Heart hook and the Knight's call to reclaim the light, then it hands off
-// to hero select.
+// OWNER DECISION (2026-06-28): the boot intro is now a real ~30s cinematic VIDEO
+// (Assets/StreamingAssets/Video/Defenders.mp4 — ends on the gold title
+// "ECHOES OF ELARION"), replacing the WO-561 image-slate sequence. The video
+// plays FULL-SCREEN at boot and is SKIPPABLE; on natural end it hands off to
+// hero select, exactly as the slate sequence did.
 //
-// SKIPPABLE: a full-screen tap advances to the next slate (impatient players click
-// straight through); a visible "Skip" button (and any keyboard key) ends the intro
-// immediately and jumps to the next boot step. "Design it well, but fast for people
-// who want to move right in" (owner).
+// HOW IT PLAYS (mirrors the proven SplashLoading.cs VideoPlayer pattern):
+//   - UnityEngine.Video.VideoPlayer, source = URL (NOT a VideoClip import) —
+//     System.IO.Path.Combine(Application.streamingAssetsPath, "Video/Defenders.mp4").
+//     A StreamingAssets URL plays in Windows + WebGL builds with no import step
+//     (SplashLoading uses a VideoClip; we use a URL so the .mp4 needs no importer).
+//   - renderMode = RenderTexture → drawn onto a full-screen RawImage on a top-most
+//     ElarionUiKit.BuildModalCanvas. (SplashLoading renders its RenderTexture onto a
+//     UI-Toolkit element; we use uGUI RawImage to match this file's existing kit.)
+//   - audioOutputMode = AudioSource (the video's own audio track plays directly via
+//     a dedicated AudioSource on the driver — see OWNER FLAG: audio bus, below).
+//   - Prepare() then wait (bounded by a timeout) before Play(); skipOnDrop=false so
+//     a slow decoder doesn't snap frames (the SplashLoading lesson, lines 150-160).
 //
-// Decoupled trigger: registers itself on Core's IntroLauncher.Play at startup so the
-// Title screen's "Play Intro" button (DeNelle.Onboarding) fires it WITHOUT a hard
-// reference to this assembly — exactly as before.
+// SKIPPABLE: a visible "Skip ›" gold button + a full-screen invisible tap target +
+// ANY keyboard key all end the intro immediately. On natural end (loopPointReached)
+// it also advances. Advance = SceneRouter.GoHeroSelect() — the SAME next step the
+// slate sequence used, so TitleController's "Play Intro" call site is unchanged.
 //
-// ART: each slate loads Resources.Load<Sprite>(image). The owner generates the five
-// slates per docs/ART/INTRO_IMAGE_SLATES.md and drops them at those Resources paths.
-// A missing sprite degrades to caption-on-black (LogWarning, never a hard fault).
+// ROBUST FALLBACK (never hard-blocks boot): if the video URL is missing, errors
+// (errorReceived), or fails to prepare within the timeout, we LogWarning and fall
+// back to the original WO-561 five-slate caption-on-black sequence (kept below).
+// The intro therefore always reaches hero select.
+//
+// Decoupled trigger: registers on Core's IntroLauncher.Play at startup so the Title
+// screen's "Play Intro" button (DeNelle.Onboarding) fires it without a hard ref.
+//
+// Code-built, NO UXML, NO Yarn (Yarn removed WO-557).
 // =============================================================================
 
 using System;
 using System.Collections;
-using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Video;
 using TMPro;
 using DeNelle.Core;
 using DeNelle.Core.UI;
@@ -33,7 +49,7 @@ using DeNelle.Core.Audio;
 
 namespace DeNelle.DialogueUI
 {
-    /// <summary>Registers + launches the skippable image-slate intro.</summary>
+    /// <summary>Registers + launches the skippable video intro.</summary>
     public static class IntroSequencePlayer
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -42,8 +58,8 @@ namespace DeNelle.DialogueUI
             DeNelle.Core.IntroLauncher.Play = Play;
         }
 
-        /// <summary>Play the cinematic intro from the first slate. Spawns a self-contained,
-        /// DontDestroyOnLoad driver so it survives the hand-off frame to hero select.</summary>
+        /// <summary>Play the cinematic intro. Spawns a self-contained, DontDestroyOnLoad
+        /// driver so it survives the hand-off frame to hero select.</summary>
         public static void Play()
         {
             // If one is somehow already running, don't double-spawn.
@@ -52,11 +68,12 @@ namespace DeNelle.DialogueUI
             var go = new GameObject("IntroSequence");
             UnityEngine.Object.DontDestroyOnLoad(go);
             go.AddComponent<IntroSequenceDriver>();
-            Debug.Log("[IntroSequencePlayer] Playing image-slate intro (Yarn-free).");
+            Debug.Log("[IntroSequencePlayer] Playing video intro (Defenders.mp4, Yarn-free).");
         }
     }
 
-    /// <summary>One image slate: a background sprite, a caption, and how long it holds.</summary>
+    /// <summary>One image slate: a background sprite, a caption, and how long it holds.
+    /// (FALLBACK PATH only — used when the video can't play.)</summary>
     internal struct IntroSlate
     {
         public string Image;     // Resources path (no extension) to the slate sprite
@@ -68,12 +85,26 @@ namespace DeNelle.DialogueUI
         { Image = image; Caption = caption; Hold = hold; TitleCard = titleCard; }
     }
 
-    /// <summary>Drives the slate sequence: builds the uGUI overlay, runs the timeline,
-    /// handles tap/key/Skip, then routes to hero select. Code-built, no UXML.</summary>
+    /// <summary>Plays Defenders.mp4 full-screen + skippable; falls back to the
+    /// five-slate caption sequence if the video can't play. Routes to hero select on
+    /// finish. Code-built, no UXML.</summary>
     [DisallowMultipleComponent]
     internal sealed class IntroSequenceDriver : MonoBehaviour
     {
-        // The five beats (~5.5s each + dips ≈ 30s). Captions are canon (see STORY_BIBLE_POLISH.md).
+        // ── Video config ──────────────────────────────────────────────────────
+        private const string VideoRelPath = "Video/Defenders.mp4";   // under StreamingAssets
+        private const float PrepareTimeoutSeconds = 6f;              // bail to fallback if not prepared by here
+
+        private GameObject _canvas;
+        private VideoPlayer _videoPlayer;
+        private AudioSource _audioSource;
+        private RenderTexture _rt;
+        private RawImage _videoSurface;
+        private bool _ending;
+        private bool _videoErrored;
+        private Coroutine _run;
+
+        // ── Fallback slates (WO-561) — only used if the video fails ─────────────
         private static readonly IntroSlate[] Slates =
         {
             new IntroSlate("Intro/intro-heart-ablaze",
@@ -87,23 +118,23 @@ namespace DeNelle.DialogueUI
             new IntroSlate("Intro/intro-reclaim",
                 "Drive back the dark. Let the Heart grow. Reclaim the light of Elarion.", 6f, titleCard: true),
         };
+        private const float DipSeconds = 0.35f;
 
-        private const float DipSeconds = 0.35f;   // dip-to-black transition between slates
-
-        private GameObject _canvas;
         private Image _slateImage;
+        private Image _captionBand;
         private TextMeshProUGUI _caption;
         private TextMeshProUGUI _title;
-        private Image _dip;                        // top black overlay used for dip transitions
+        private TextMeshProUGUI _subtitle;
+        private Image _dip;
         private int _index = -1;
-        private bool _ending;
-        private Coroutine _run;
 
+        // =====================================================================
+        //  Boot — try video, fall back to slates
+        // =====================================================================
         private void Start()
         {
-            Build();
-            CoreServices.Audio?.PlayMusic(MusicTrack.Title);
-            _run = StartCoroutine(RunSequence());
+            BuildCanvas();
+            _run = StartCoroutine(BootVideo());
         }
 
         private void Update()
@@ -113,80 +144,193 @@ namespace DeNelle.DialogueUI
             if (kb != null && kb.anyKey.wasPressedThisFrame) EndIntro();
         }
 
-        // ── Build the overlay (ElarionUiKit black+gold) ───────────────────────
-        private void Build()
+        /// <summary>Tries to play the StreamingAssets video full-screen. On any failure
+        /// (missing URL / errorReceived / prepare timeout) LogWarnings and falls back to
+        /// the slate sequence so boot never blocks.</summary>
+        private IEnumerator BootVideo()
+        {
+            string url = Path.Combine(Application.streamingAssetsPath, VideoRelPath);
+
+            // Wire the VideoPlayer (URL source — no VideoClip import needed).
+            _videoPlayer = gameObject.AddComponent<VideoPlayer>();
+            _videoPlayer.source = VideoSource.Url;
+            _videoPlayer.url = url;
+            _videoPlayer.playOnAwake = false;
+            _videoPlayer.isLooping = false;
+            _videoPlayer.skipOnDrop = false;   // SplashLoading lesson — don't snap frames on a slow decoder
+            _videoPlayer.waitForFirstFrame = true;
+            _videoPlayer.renderMode = VideoRenderMode.RenderTexture;
+
+            // Full-screen RenderTexture → RawImage surface.
+            _rt = new RenderTexture(1920, 1080, 0) { name = "IntroVideoRT" };
+            _videoPlayer.targetTexture = _rt;
+            _videoSurface.texture = _rt;
+
+            // Audio: play the video's own track directly via a dedicated AudioSource.
+            // (OWNER FLAG — audio bus: this is NOT routed through the SFX/music
+            //  mixer bus; it plays at the AudioSource's own output. Direct playback
+            //  was chosen because mixer routing here is non-trivial. Flagged for the
+            //  owner if the intro should sit on the music bus / respect its volume.)
+            _audioSource = gameObject.AddComponent<AudioSource>();
+            _audioSource.playOnAwake = false;
+            _videoPlayer.audioOutputMode = VideoAudioOutputMode.AudioSource;
+            _videoPlayer.EnableAudioTrack(0, true);
+            _videoPlayer.SetTargetAudioSource(0, _audioSource);
+
+            _videoPlayer.errorReceived += OnVideoError;
+            _videoPlayer.loopPointReached += OnVideoEnded;
+
+            // Missing file → straight to fallback (don't even Prepare).
+            bool urlMissing = false;
+            try { urlMissing = !File.Exists(url); }
+            catch { urlMissing = false; }   // some platforms (WebGL) can't File.Exists StreamingAssets — let Prepare decide
+            if (urlMissing)
+            {
+                Debug.LogWarning($"[IntroSequence] Video not found at '{url}' — falling back to slate intro.");
+                StartFallback();
+                yield break;
+            }
+
+            _videoPlayer.Prepare();
+
+            float waited = 0f;
+            while (!_videoPlayer.isPrepared && !_videoErrored && waited < PrepareTimeoutSeconds)
+            {
+                if (_ending) yield break;
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            if (_videoErrored || !_videoPlayer.isPrepared)
+            {
+                Debug.LogWarning($"[IntroSequence] Video failed to prepare " +
+                                 $"(errored={_videoErrored}, prepared={_videoPlayer.isPrepared}) — falling back to slate intro.");
+                StartFallback();
+                yield break;
+            }
+
+            // Show the surface and play. loopPointReached → EndIntro (natural end).
+            _videoSurface.enabled = true;
+            _videoPlayer.Play();
+            Debug.Log("[IntroSequence] Video playing full-screen.");
+        }
+
+        private void OnVideoError(VideoPlayer _, string message)
+        {
+            Debug.LogWarning($"[IntroSequence] VideoPlayer error: {message}");
+            _videoErrored = true;
+        }
+
+        private void OnVideoEnded(VideoPlayer _)
+        {
+            EndIntro();
+        }
+
+        // =====================================================================
+        //  Canvas — full-screen surface + skip/tap controls
+        // =====================================================================
+        private void BuildCanvas()
         {
             _canvas = ElarionUiKit.BuildModalCanvas("IntroCanvas", sortingOrder: 6000);
             _canvas.transform.SetParent(transform, false);
             Transform root = _canvas.transform;
 
-            // Black backdrop (also catches no-image slates).
+            // Black backdrop (covers letterbox + shows while the video prepares).
             var bg = NewImage(root, "Backdrop", Color.black);
             Stretch(bg.rectTransform, 0f, 0f, 1f, 1f);
 
-            // The slate sprite, full-screen.
+            // Full-screen video surface (RawImage shows the RenderTexture). Hidden
+            // until the video is actually playing; the fallback uses _slateImage instead.
+            var surfGo = new GameObject("VideoSurface", typeof(RawImage));
+            surfGo.transform.SetParent(root, false);
+            _videoSurface = surfGo.GetComponent<RawImage>();
+            _videoSurface.color = Color.white;
+            _videoSurface.raycastTarget = false;
+            Stretch(_videoSurface.rectTransform, 0f, 0f, 1f, 1f);
+            _videoSurface.enabled = false;
+
+            // Fallback slate image (also full-screen, used only on the fallback path).
             _slateImage = NewImage(root, "Slate", Color.white);
             Stretch(_slateImage.rectTransform, 0f, 0f, 1f, 1f);
             _slateImage.preserveAspect = false;
-            _slateImage.enabled = false;   // shown once a sprite is assigned
+            _slateImage.enabled = false;
 
-            // Full-screen tap target: advances to the NEXT slate (click straight through).
+            // Full-screen invisible tap target — advances/skips (click straight through).
             var tap = ElarionUiKit.Button(root, "", ElarionUiKit.ButtonKind.Quiet,
-                Vector2.zero, Vector2.one, AdvanceSlate);
+                Vector2.zero, Vector2.one, OnTap);
             var tapImg = tap.GetComponent<Image>();
             if (tapImg != null) tapImg.color = new Color(0f, 0f, 0f, 0f);   // invisible, still raycasts
 
-            // Caption band: a translucent black strip with a thin gold rule on top.
+            // Fallback caption band (only populated/shown on the fallback path).
             var band = NewImage(root, "CaptionBand", new Color(0.02f, 0.02f, 0.025f, 0.72f));
             Stretch(band.rectTransform, 0.06f, 0.07f, 0.94f, 0.24f);
             band.raycastTarget = false;
+            band.enabled = false;
             var rule = NewImage(band.transform, "GoldRule", ElarionUi.Gold);
             var rr = rule.rectTransform;
             rr.anchorMin = new Vector2(0f, 1f); rr.anchorMax = new Vector2(1f, 1f);
             rr.offsetMin = new Vector2(0f, -3f); rr.offsetMax = new Vector2(0f, 0f);
             rule.raycastTarget = false;
+            _captionBand = band;
 
             _caption = ElarionUiKit.Label(band.transform, "", 0.10f, 0.92f,
                 new Color(0.93f, 0.90f, 0.82f, 1f), 40, TextAlignmentOptions.Center,
                 0.05f, 0.95f, spacing: 0.5f);
 
-            // Title card (last slate only).
             _title = ElarionUiKit.Label(root, "", 0.40f, 0.62f, ElarionUi.Gold, 92,
                 TextAlignmentOptions.Center, 0.05f, 0.95f, spacing: 2f, bold: true);
             _title.text = "";
-            var sub = ElarionUiKit.Label(root, "", 0.34f, 0.40f,
+            _subtitle = ElarionUiKit.Label(root, "", 0.34f, 0.40f,
                 new Color(0.93f, 0.90f, 0.82f, 1f), 40, TextAlignmentOptions.Center);
-            sub.name = "Subtitle";
-            sub.text = "";
-            _subtitle = sub;
+            _subtitle.name = "Subtitle";
+            _subtitle.text = "";
 
             // Visible Skip button (top-right) — ends the intro immediately.
             ElarionUiKit.Button(root, "Skip  ›", ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.74f, 0.92f), new Vector2(0.96f, 0.975f), EndIntro);
 
-            // Dip overlay on top of everything — starts opaque so the first slate fades in.
+            // Dip overlay on top — starts opaque so the first frame/slate fades in.
             _dip = NewImage(root, "Dip", Color.black);
             Stretch(_dip.rectTransform, 0f, 0f, 1f, 1f);
             _dip.raycastTarget = false;
             SetAlpha(_dip, 1f);
+            // Fade the opening black out shortly after boot so the video/slate reveals.
+            StartCoroutine(FadeDip(1f, 0f, DipSeconds));
         }
 
-        private TextMeshProUGUI _subtitle;
+        // Tap: in video mode, skip the whole intro; in slate mode, advance one beat.
+        private void OnTap()
+        {
+            if (_ending) return;
+            if (_videoSurface != null && _videoSurface.enabled) { EndIntro(); return; }
+            AdvanceSlate();
+        }
 
-        // ── Timeline ──────────────────────────────────────────────────────────
-        private IEnumerator RunSequence()
+        // =====================================================================
+        //  Fallback slate sequence (WO-561) — only on video failure
+        // =====================================================================
+        private void StartFallback()
+        {
+            // Tear down the (failed) video pieces so nothing lingers.
+            ReleaseVideo();
+            if (_captionBand != null) _captionBand.enabled = true;
+            if (_run != null) StopCoroutine(_run);
+            _run = StartCoroutine(RunSlateSequence());
+        }
+
+        private IEnumerator RunSlateSequence()
         {
             for (int i = 0; i < Slates.Length; i++)
             {
                 if (_ending) yield break;
                 ShowSlate(i);
-                yield return FadeDip(1f, 0f, DipSeconds);   // fade FROM black into the slate
+                yield return FadeDip(1f, 0f, DipSeconds);
                 float t = 0f;
                 while (t < Slates[i].Hold && !_ending && _index == i)
                 { t += Time.deltaTime; yield return null; }
                 if (_ending) yield break;
                 if (_index == i && i < Slates.Length - 1)
-                    yield return FadeDip(0f, 1f, DipSeconds); // dip to black before the next
+                    yield return FadeDip(0f, 1f, DipSeconds);
             }
             EndIntro();
         }
@@ -201,24 +345,22 @@ namespace DeNelle.DialogueUI
             else
             {
                 _slateImage.enabled = false;
-                Debug.LogWarning($"[IntroSequence] slate sprite '{s.Image}' not found — caption-on-black " +
-                                 "(generate art per docs/ART/INTRO_IMAGE_SLATES.md).");
+                Debug.LogWarning($"[IntroSequence] slate sprite '{s.Image}' not found — caption-on-black.");
             }
 
-            _caption.text = s.Caption;
+            if (_caption != null) _caption.text = s.Caption;
             if (s.TitleCard)
             {
-                _title.text = "DEFENDERS OF THE REALM";
+                if (_title != null) _title.text = "DEFENDERS OF THE REALM";
                 if (_subtitle != null) _subtitle.text = "Echoes of Elarion";
             }
         }
 
-        // Skip the CURRENT slate (tap) — jump the timeline forward one beat.
         private void AdvanceSlate()
         {
             if (_ending) return;
+            if (_index < 0) return;   // not in slate mode yet
             if (_index >= Slates.Length - 1) { EndIntro(); return; }
-            // Bumping the index makes the active hold loop exit; restart the timeline at the next slate.
             int next = _index + 1;
             if (_run != null) StopCoroutine(_run);
             _run = StartCoroutine(JumpTo(next));
@@ -226,7 +368,7 @@ namespace DeNelle.DialogueUI
 
         private IEnumerator JumpTo(int next)
         {
-            yield return FadeDip(0f, 1f, 0.18f);   // quick dip
+            yield return FadeDip(0f, 1f, 0.18f);
             for (int i = next; i < Slates.Length; i++)
             {
                 if (_ending) yield break;
@@ -251,17 +393,45 @@ namespace DeNelle.DialogueUI
             SetAlpha(_dip, to);
         }
 
-        // ── End / hand-off ────────────────────────────────────────────────────
+        // =====================================================================
+        //  End / hand-off + cleanup
+        // =====================================================================
         private void EndIntro()
         {
             if (_ending) return;
             _ending = true;
             if (_run != null) StopCoroutine(_run);
-            // Black out instantly so the scene swap is never seen mid-fade, then route.
-            if (_dip != null) SetAlpha(_dip, 1f);
+            if (_dip != null) SetAlpha(_dip, 1f);   // black out instantly so the scene swap is unseen
+            ReleaseVideo();
             Debug.Log("[IntroSequence] Intro complete — routing to hero select.");
             SceneRouter.GoHeroSelect();
-            Destroy(gameObject);
+            Destroy(gameObject);                     // also destroys the canvas (child) + RawImage
+        }
+
+        /// <summary>Stops + tears down the VideoPlayer/AudioSource and releases the
+        /// RenderTexture. Idempotent — safe to call on fallback and on end.</summary>
+        private void ReleaseVideo()
+        {
+            if (_videoPlayer != null)
+            {
+                _videoPlayer.errorReceived -= OnVideoError;
+                _videoPlayer.loopPointReached -= OnVideoEnded;
+                try { _videoPlayer.Stop(); } catch { /* never throw on teardown */ }
+                _videoPlayer.targetTexture = null;
+            }
+            if (_videoSurface != null) _videoSurface.texture = null;
+            if (_rt != null)
+            {
+                _rt.Release();
+                Destroy(_rt);
+                _rt = null;
+            }
+        }
+
+        private void OnDestroy()
+        {
+            // Belt-and-braces: release the RT even if EndIntro was bypassed.
+            ReleaseVideo();
         }
 
         // ── uGUI helpers ──────────────────────────────────────────────────────
