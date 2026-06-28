@@ -162,11 +162,11 @@ namespace DeNelle.Village
         // outside dialogue everything behaves exactly as before.
         public static bool InputSuppressed { get; private set; }
 
-        // WO-377: the Yarn runner we hook for dialogue start/complete. Cached so OnDestroy
-        // can unsubscribe and a deferred retry can wire a runner that spins up late
-        // (DialogueService hosts the runner lazily on the first Play). Mirrors the
-        // resilient hook pattern HeroBodySwapper uses for the idle-pose hold (WO-376).
-        private Yarn.Unity.DialogueRunner _dialogueRunner;
+        // WO-557 (Yarn removed): we subscribe to OUR dialogue stack's engine-wide
+        // Started/Ended signals (DeNelle.Core.Dialogue.DialogueService) to suppress player
+        // input while a conversation is on screen. A static event is always available — no
+        // runner to find, no retry coroutine. Guard so we subscribe exactly once per hero.
+        private bool _dialogueHooked;
 
         // WO-383: teleport-aware warp. SceneTransitionTrigger / seam handoffs set the
         // hero far outside the off-mesh ±50 clamp and onto a separately-baked NavMesh
@@ -392,10 +392,9 @@ namespace DeNelle.Village
             // WO-387: cache the follow camera for the camera-relative movement basis.
             _smartCamera = Object.FindObjectOfType<SmartMobileCamera>();
 
-            // WO-377: hook the Yarn dialogue runner so player input is suppressed while a
-            // dialogue is on screen (and restored when it ends). The runner may already be
-            // hosted (intro/FTUE) or spun up lazily on the first Play — HookDialogueGate
-            // retries next frame until one exists, so a late runner is still wired.
+            // WO-377 / WO-557: suppress player input while a conversation is on screen. We
+            // subscribe to OUR dialogue stack's engine-wide Started/Ended signals (Yarn removed),
+            // and reconcile to the LIVE state in case a dialogue is already running when we spawn.
             HookDialogueGate();
         }
 
@@ -404,87 +403,39 @@ namespace DeNelle.Village
             if (_waveManager != null)
                 _waveManager.OnWaveCleared.RemoveListener(OnWaveCleared);
 
-            // WO-377: unhook the dialogue events and clear the global gate so a hero
+            // WO-557: unhook the dialogue signals and clear the global gate so a hero
             // destroyed mid-dialogue (e.g. scene swap) never leaves input stuck off.
-            if (_dialogueRunner != null)
+            if (_dialogueHooked)
             {
-                if (_dialogueRunner.onDialogueStart != null)    _dialogueRunner.onDialogueStart.RemoveListener(OnDialogueStarted);
-                if (_dialogueRunner.onDialogueComplete != null) _dialogueRunner.onDialogueComplete.RemoveListener(OnDialogueEnded);
+                DeNelle.Core.Dialogue.DialogueService.Started -= OnDialogueStarted;
+                DeNelle.Core.Dialogue.DialogueService.Ended -= OnDialogueEnded;
+                _dialogueHooked = false;
             }
             InputSuppressed = false;
         }
 
-        // WO-377: subscribe to the Yarn DialogueRunner's start/complete events. If no
-        // runner exists yet (DialogueService hosts it lazily), retry next frame so a
-        // runner that spins up just after the hero is still hooked. Mirrors the resilient
-        // hook HeroBodySwapper uses for the WO-376 idle-pose hold.
-        // PERF (coroutine fork-bomb fix): single-flight guard. The retry loop used to call
-        // HookDialogueGate() every frame, which — finding no runner — started ANOTHER retry
-        // coroutine, doubling coroutines every frame (the OuterWorld ~3MB/s retained leak /
-        // freeze; no DialogueRunner exists until you reach the gate). Now only ONE retry runs,
-        // and it polls + hooks directly instead of re-entering the spawner.
-        private bool _retryingHook;
-
+        // WO-557: subscribe to OUR dialogue stack's Started/Ended events (parameterless,
+        // always available — no runner to find, no retry coroutine). Then reconcile to the
+        // live state: if a conversation is ALREADY running when this hero spawns (intro/FTUE),
+        // raise suppression now so input never bleeds through the beat (the WO-377 symptom).
         private void HookDialogueGate()
         {
-            if (_dialogueRunner != null) return; // already hooked
+            if (_dialogueHooked) return; // already hooked
+            DeNelle.Core.Dialogue.DialogueService.Started += OnDialogueStarted;
+            DeNelle.Core.Dialogue.DialogueService.Ended   += OnDialogueEnded;
+            _dialogueHooked = true;
 
-            var runner = Object.FindObjectOfType<Yarn.Unity.DialogueRunner>();
-            if (runner == null)
-            {
-                if (!_retryingHook) { _retryingHook = true; StartCoroutine(RetryHookDialogueGate()); }
-                return;
-            }
-
-            _dialogueRunner = runner;
-            if (runner.onDialogueStart != null)    runner.onDialogueStart.AddListener(OnDialogueStarted);
-            if (runner.onDialogueComplete != null) runner.onDialogueComplete.AddListener(OnDialogueEnded);
-            SyncSuppressionToRunner(runner);
-        }
-
-        private System.Collections.IEnumerator RetryHookDialogueGate()
-        {
-            // Poll directly for a lazily-hosted runner — do NOT call HookDialogueGate() here
-            // (that re-spawns coroutines). Stops the instant one is found or after ~600 frames.
-            for (int i = 0; i < 600 && _dialogueRunner == null; i++)
-            {
-                yield return null;
-                var runner = Object.FindObjectOfType<Yarn.Unity.DialogueRunner>();
-                if (runner != null)
-                {
-                    _dialogueRunner = runner;
-                    if (runner.onDialogueStart != null)    runner.onDialogueStart.AddListener(OnDialogueStarted);
-                    if (runner.onDialogueComplete != null) runner.onDialogueComplete.AddListener(OnDialogueEnded);
-                    SyncSuppressionToRunner(runner);
-                    break;
-                }
-            }
-            _retryingHook = false;
-        }
-
-        // WO-375 ROOT-CAUSE FIX (subscribe-after-start race): onDialogueStart is a
-        // fire-once event — if this hero hooks the runner AFTER a dialogue already began
-        // (the FTUE/intro autostarts before the hero spawns, or a HeroBodySwapper spins up
-        // a fresh HeroLocomotion mid-conversation), the start event has ALREADY fired and
-        // InputSuppressed stays false → player movement/attacks BLEED THROUGH during the
-        // story beat (the WO-377 symptom, re-introduced by ordering). On hook we therefore
-        // reconcile the gate to the runner's LIVE state: if a dialogue is already running,
-        // raise suppression now (catch-up); otherwise leave it clear. §12: no silent gap —
-        // the catch-up is logged so a captured "input during dialogue" trace points here.
-        private void SyncSuppressionToRunner(Yarn.Unity.DialogueRunner runner)
-        {
-            bool running = runner != null && runner.IsDialogueRunning;
+            bool running = DeNelle.Core.Dialogue.DialogueService.IsRunning;
             if (running && !InputSuppressed)
             {
                 InputSuppressed = true;
                 Velocity = Vector3.zero;
                 DeNelle.Core.Diagnostics.FlowTrace.Warn("UI",
-                    "HeroLocomotion hooked a dialogue ALREADY in progress — suppressing input (catch-up for the missed onDialogueStart).");
+                    "HeroLocomotion hooked a dialogue ALREADY in progress — suppressing input (catch-up for the missed Started).");
             }
             else if (!running && InputSuppressed)
             {
-                // The previous owner was destroyed mid-suppression and no dialogue is live now
-                // — don't inherit a stale lock that would dead-freeze this fresh hero.
+                // No dialogue live now — don't inherit a stale lock that would dead-freeze this fresh hero.
                 InputSuppressed = false;
             }
         }

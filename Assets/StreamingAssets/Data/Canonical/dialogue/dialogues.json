@@ -194,6 +194,33 @@
           ]
         }
       ]
+    },
+    {
+      "id": "CompanionMeeting",
+      "startNode": "meet",
+      "nodes": [
+        {
+          "id": "meet",
+          "lines": [
+            { "speaker": "Sylas", "text": "You made it to the wall. Good. I'm Sylas - Scout of the Reach. I've kept the wild off these stones since long before you came." },
+            { "speaker": "Sylas", "text": "The Heart's been louder since you arrived, Keeper. That's not nothing - it means the light still answers someone." }
+          ],
+          "next": "charge"
+        },
+        {
+          "id": "charge",
+          "commands": [
+            { "verb": "StartQuest", "args": ["companion.sylas"] },
+            { "verb": "RecruitCompanion", "args": ["Ranger"] },
+            { "verb": "SetQuestFlag", "args": ["companion.sylas", "met"] },
+            { "verb": "CompleteQuest", "args": ["companion.sylas"] }
+          ],
+          "lines": [
+            { "speaker": "Sylas", "text": "Here is the shape of it: drive the dark back from the Heart and the tree grows. A brighter Heart is a stronger Heart - and the echoes gather more for you while you fight." },
+            { "speaker": "Sylas", "text": "When the horns sound, hold the line. I'll take the treeline. Let's see what the dark side of this land is hiding." }
+          ]
+        }
+      ]
     }
   ]
 }

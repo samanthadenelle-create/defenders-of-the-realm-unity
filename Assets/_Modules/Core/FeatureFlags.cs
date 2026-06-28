@@ -115,12 +115,12 @@ namespace DeNelle.Core
         /// ON (legacy ShopPanel path when OFF), so the two never double-open.</summary>
         public static bool PartyShop => Get("partyshop", defaultOn: true);
 
-        /// <summary>WO-455 — when ON, dialogue runs through OUR code-built system (DeNelle.Core.Dialogue:
-        /// data-driven nodes + DialogueRunner + MVVM DialogueView styled via ElarionUiKit) instead of
-        /// YarnSpinner. Lifecycle WE control = no "No node" race, no Stop()-teardown NRE. Default OFF
-        /// during the phased migration (the Yarn path stays until narrative is converted + Yarn is
-        /// ripped). PlayerPrefs "ff.customdialogue".</summary>
-        public static bool CustomDialogue => Get("customdialogue", defaultOn: false);
+        /// <summary>WO-455 / WO-557 — dialogue runs through OUR code-built system (DeNelle.Core.Dialogue:
+        /// data-driven nodes + DialogueRunner + MVVM DialogueView styled via ElarionUiKit). Lifecycle WE
+        /// control = no "No node" race, no Stop()-teardown NRE. Default ON (WO-557): YarnSpinner is FULLY
+        /// REMOVED — there is no longer a legacy path to fall back to, so the custom sink/View MUST register.
+        /// PlayerPrefs "ff.customdialogue".</summary>
+        public static bool CustomDialogue => Get("customdialogue", defaultOn: true);
 
         /// <summary>WO-482 — when ON, the overworld touch-encounter loop is live: wandering enemy "rep" mobs
         /// in the open world that aggro/chase (chase-music sting, wide leash, ~+5% player speed) and, on

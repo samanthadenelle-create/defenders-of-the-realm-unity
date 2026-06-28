@@ -1,383 +1,133 @@
 // =============================================================================
-// DialogueService — the ONE launch path for every Yarn dialogue in the game.
+// DialogueService (DeNelle.Village) — the ONE launch seam for game dialogue.
 // -----------------------------------------------------------------------------
-// All dialogue content compiles into a single DefendersDialogue.yarnproject and
-// plays through a single shared prefab (Resources/Dialogue/DialogueSystem) whose
-// LineAdvancer + ClassicRPG presenter were tuned for tap/click-to-advance and a
-// softened continue indicator (see DialogueAdvanceSetup). This service is the
-// matching launch seam: any caller — NPC talk, lore stone, intro, companion bark,
-// level-up — starts dialogue the same way and inherits that advance behavior and
-// styling for free:
+// YARN REMOVED (WO-557, full removal). This is now a thin Yarn-FREE compatibility
+// shim that forwards every legacy call site (NPC talk, companion meeting, intro,
+// structure interaction, tutorial) to OUR code-built dialogue stack
+// (DeNelle.Core.Dialogue.DialogueService + dialogues.json). No DialogueRunner,
+// no YarnProject, no shared prefab, no command bridge — the verbs/conditions run
+// through DialogueCommandSink (registered at boot under ff.customdialogue).
 //
-//     DialogueService.Play("Lore_Elarion");
-//
-// It hosts-or-reuses the shared runner, installs DialogueCommandBridge BEFORE the
-// runner starts (command registration must precede the run), suppresses the
-// prefab's CompanionMeeting autostart so the CALLER decides the node, validates
-// the node against the compiled program, then starts it. All cross-calls are
-// null-guarded; a missing prefab / project / node logs and returns false rather
-// than throwing, so a content gap can never hard-fault the game.
+// CONVERSATIONS run as data-driven dialogue (Play / Play-by-id). TRANSACTIONS
+// (shop / upgrade / training menus) are NOT dialogue — PlayStructure opens the
+// building's panel DIRECTLY (the "transactions = direct panels" rule). Every
+// cross-call is null-guarded so a content gap logs and returns false, never throws.
 // =============================================================================
 
-using UnityEngine;
-using Yarn.Unity;
+using DeNelle.Core.UI;
+using DeNelle.Core.Dialogue;
 using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
     /// <summary>
-    /// Game-wide entry point for starting Yarn dialogue. Reuses the live shared
-    /// DialogueRunner if one is already hosted, otherwise instantiates the shared
-    /// Resources/Dialogue/DialogueSystem prefab and wires it once.
+    /// Game-wide entry point for starting dialogue. Forwards to the Yarn-free
+    /// DeNelle.Core.Dialogue stack; structure (building) interactions that are
+    /// transactions route straight to their panel instead of a conversation.
     /// </summary>
     public static class DialogueService
     {
-        private const string PrefabResourcePath = "Dialogue/DialogueSystem";
-
-        /// <summary>The live shared runner, or null if none is hosted yet.</summary>
-        public static DialogueRunner Current => Object.FindObjectOfType<DialogueRunner>();
-
-        /// <summary>True while any dialogue is currently playing.</summary>
-        public static bool IsRunning
-        {
-            get { var r = Current; return r != null && r.IsDialogueRunning; }
-        }
+        /// <summary>True while any dialogue is currently playing (custom runner).</summary>
+        public static bool IsRunning => DeNelle.Core.Dialogue.DialogueService.IsRunning;
 
         /// <summary>
-        /// True if <paramref name="node"/> exists in the shared dialogue system's
-        /// compiled Yarn program. Hosts the system if needed (so it works before the
-        /// first Play). Used by callers to gate OPTIONAL dialogue beats — e.g. a
-        /// welcome node that may not be authored yet — without faulting when absent.
-        /// Returns false (and never throws) if the prefab/project/node is missing.
+        /// True if a conversation with this id is authored in dialogues.json. Callers
+        /// gate OPTIONAL beats (e.g. a welcome line that may not exist yet) with this
+        /// so an unauthored id is a clean no-op, never a fault.
         /// </summary>
         public static bool NodeExists(string node)
         {
             if (string.IsNullOrEmpty(node)) return false;
-            DialogueRunner runner = Current ?? Host();
-            if (runner == null) return false;   // Host() already logged the reason.
-            return NodeExists(runner, node);
+            return DialogueCatalog.Find(node) != null;
         }
 
         /// <summary>
-        /// Start the Yarn node <paramref name="node"/> on the shared dialogue
-        /// system, hosting it first if needed. Returns false (and logs) if the
-        /// prefab/project is missing, the node doesn't exist, or a dialogue is
-        /// already running (an in-progress line is never interrupted).
+        /// Start the conversation <paramref name="node"/> on the custom dialogue
+        /// runner. Returns false (and logs) if the id isn't authored in dialogues.json
+        /// or a dialogue is already running (an in-progress line is never interrupted).
         /// </summary>
         public static bool Play(string node)
         {
             if (string.IsNullOrEmpty(node))
             {
-                Debug.LogWarning("[DialogueService] Play called with an empty node name — ignored.");
+                FlowTrace.Warn("UI", "DialogueService.Play called with an empty node name — ignored.");
                 return false;
             }
-
-            // WO-455 routing seam: when CustomDialogue is ON and this conversation has been
-            // converted into our own dialogue catalog, run it on the Yarn-FREE runner instead.
-            // Dormant by default (flag off); only ids present in dialogues.json ever route here,
-            // so the migration is "add the JSON + flip the flag" with zero risk to un-converted lines.
-            if (DeNelle.Core.FeatureFlags.CustomDialogue && DeNelle.Core.Dialogue.DialogueCatalog.Find(node) != null)
-                return DeNelle.Core.Dialogue.DialogueService.Play(node);
-
-            DialogueRunner runner = Current ?? Host();
-            if (runner == null) return false; // Host() already logged the reason.
-
-            if (runner.IsDialogueRunning)
+            if (IsRunning)
             {
-                Debug.LogWarning($"[DialogueService] A dialogue is already running — '{node}' was not started " +
-                                 "(the current line is not interrupted).");
+                FlowTrace.Warn("UI", $"DialogueService.Play: a dialogue is already running — '{node}' not started.");
                 return false;
             }
-
-            if (!NodeExists(runner, node))
+            if (DialogueCatalog.Find(node) == null)
             {
-                FlowTrace.Fail("UI", $"DialogueService.Play: node '{node}' is NOT in the compiled Yarn program " +
-                               "(check spelling + that its .yarn is in DefendersDialogue.yarnproject) — conversation blank.");
+                FlowTrace.Warn("UI", $"DialogueService.Play: conversation '{node}' is not authored in dialogues.json — skipped.");
                 return false;
             }
-
-            // WEBGL CRASH-GUARD (WO-331): StartDialogue runs its synchronous prologue
-            // (program load, first-line / command dispatch, presenter init) INLINE before
-            // it yields. A throw there (e.g. a Yarn SignalContentComplete fired outside a
-            // running command, a missing presenter, a command-handler exception) would
-            // escape here — and under WebGL (ExplicitlyThrownExceptionsOnly) an uncaught
-            // throw on Village load HALTS the player. Dialogue is non-essential to the
-            // village loading, so a failure must degrade (log) — never crash the scene.
-            try
-            {
-                runner.StartDialogue(node).Forget();
-            }
-            catch (System.Exception ex)
-            {
-                FlowTrace.Fail("UI", $"DialogueService.Play: StartDialogue('{node}') threw {ex.GetType().Name}: {ex.Message} — " +
-                               "dialogue skipped so the village still loads (WebGL crash-guard).");
-                return false;
-            }
-            Debug.Log($"[DialogueService] Playing '{node}'.");
-            FlowTrace.Step("UI", $"Yarn dialogue started via DialogueService.Play('{node}')");
-            // VERIFY (TGVRU): the runner accepted the node and is actually running a conversation now.
-            // StartDialogue runs its synchronous prologue inline; if it silently bailed (no line/menu
-            // rendered) IsDialogueRunning stays false — the "blank conversation" class. Self-report it.
-            if (!runner.IsDialogueRunning)
-                FlowTrace.Warn("UI", $"DialogueService.Play('{node}'): StartDialogue returned but no dialogue is running " +
-                                "(no line/menu rendered) — conversation may read blank.");
-            return true;
-        }
-
-        /// <summary>
-        /// Opens the ONE parameterized building-interaction node (StructureMenu) for
-        /// <paramref name="structureId"/> — sets the $structureId Yarn variable, then
-        /// plays. The node + commands scope everything to that building's own data, so
-        /// the same flow serves every structure ("rinse and repeat, just the parameter").
-        /// </summary>
-        /// <summary>Stops the current dialogue immediately. WALK-AWAY / auto-close from GAME code ONLY —
-        /// never call this from inside a Yarn command (that races the runner's post-command Continue and
-        /// throws "No node has been selected"); a command-opened panel ends its dialogue via the .yarn
-        /// node's built-in <<stop>>. (memory yarn-no-node-stop-after-panel-command.)</summary>
-        public static void Stop()
-        {
-            if (Current != null && Current.IsDialogueRunning)
-            {
-                FlowTrace.Step("UI", "Yarn dialogue ended via DialogueService.Stop() (walk-away/auto-close)");
-                Current.Stop();
-            }
-            // A command-triggered Stop (OpenShop etc.) bypasses the presenter's normal complete-
-            // handler, so the orphaned LineAdvancer pointer-advance action is never .Disable()d —
-            // a later click (e.g. the store Buy button) then advances the now-node-less dialogue and
-            // the runner's post-command Continue throws "No node has been selected". Close that leak
-            // here too. (Same mechanic as CompanionDialoguePresenter.ReleaseYarnInputCapture —
-            // confirmed from the Yarn package source, not guessed.)
-            ReleaseOrphanedAdvanceInput();
-        }
-
-        // Disable any still-enabled action from the Yarn "DialogueAdvance" input asset (the
-        // tap-to-advance the LineAdvancer leaves armed) and clear any stale EventSystem selection.
-        private static void ReleaseOrphanedAdvanceInput()
-        {
-            int disabled = 0, enabledTotal = 0;
-            var others = new System.Text.StringBuilder();
-            try
-            {
-                foreach (var a in UnityEngine.InputSystem.InputSystem.ListEnabledActions())
-                {
-                    if (a == null) continue;
-                    enabledTotal++;
-                    var asset = a.actionMap != null ? a.actionMap.asset : null;
-                    if (asset != null && asset.name == "DialogueAdvance") { a.Disable(); disabled++; }
-                    else if (enabledTotal <= 40) others.Append((asset != null ? asset.name : "?") + "/" + a.name + " ");
-                }
-            }
-            catch (System.Exception ex) { FlowTrace.Warn("UI", "ReleaseOrphanedAdvanceInput failed: " + ex.Message); }
-
-            var es = UnityEngine.EventSystems.EventSystem.current;
-            string sel = (es != null && es.currentSelectedGameObject != null) ? es.currentSelectedGameObject.name : "<none>";
-            if (es != null) es.SetSelectedGameObject(null);
-            // DEV-TAP-DIAG (owner F8 2026-06-21 "dev tools still blocked after shop"): did the release run,
-            // find the orphaned action, and what ELSE is still enabled that could eat UITK pointer input?
-            FlowTrace.Step("DevTapDiag", "ReleaseOrphanedAdvanceInput ran: disabled " + disabled + " DialogueAdvance action(s); " +
-                enabledTotal + " action(s) were enabled; EventSystem selected was '" + sel + "'. Other enabled: " + others);
-        }
-
-        // ── New-Game dialogue reset (DeNelle.Core decoupling hook) ────────────
-        // Onboarding's "Start New" must begin with clean Yarn state. Onboarding
-        // can't reference this Village assembly (or Yarn), so it calls
-        // DeNelle.Core.DialogueResetService.ResetForNewGame(), which invokes the
-        // YarnVariableClear hook we register below. Mirrors IntroLauncher.
-
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        private static void RegisterResetHook()
-        {
-            DeNelle.Core.DialogueResetService.YarnVariableClear = ClearVariableStorage;
-        }
-
-        /// <summary>
-        /// Wipes the live runner's Yarn VARIABLE STORAGE (every $-toggle and the
-        /// visited-node flags Yarn tracks there) so a New Game starts with clean
-        /// dialogue state. No-op when no runner is hosted yet (title time, before
-        /// any village scene) — there is simply no in-process Yarn state to clear,
-        /// and a fresh runner starts empty anyway. We do NOT instantiate a runner
-        /// just to clear it (Current, not Host()).
-        /// </summary>
-        public static void ClearVariableStorage()
-        {
-            var runner = Current;
-            if (runner == null) return;   // no live runner → nothing carried over
-            if (runner.IsDialogueRunning) runner.Stop();   // don't clear mid-line
-            var vs = runner.VariableStorage;
-            if (vs != null)
-            {
-                vs.Clear();   // Yarn.Unity VariableStorageBehaviour.Clear() — wipes all variables
-                Debug.Log("[DialogueService] Yarn variable storage cleared for New Game.");
-            }
-            CurrentStructureId = null;
-            CurrentStructureName = null;
+            return DeNelle.Core.Dialogue.DialogueService.Play(node);
         }
 
         /// <summary>The structureId of the most recent <see cref="PlayStructure"/> call.
-        /// CmdStructureStatus reads THIS rather than the Yarn command arg: a bare command-arg
-        /// (&lt;&lt;structure_status $structureId&gt;&gt;) arrives as the literal "$structureId" — it does
-        /// not interpolate — so the arg can't be trusted. One dialogue runs at a time.</summary>
+        /// One interaction runs at a time, so panels that need the focused building read this.</summary>
         public static string CurrentStructureId { get; private set; }
 
         /// <summary>The player-facing sign LABEL of the most recent <see cref="PlayStructure"/>
-        /// call (e.g. "Jeweler", "Marketplace"). Callers that open a vendor panel use THIS for
-        /// the panel header so a storefront always shows its own name even when several signs
-        /// share one structureId. Null when no label was supplied.</summary>
+        /// call (e.g. "Jeweler", "Marketplace") for the opened panel's header.</summary>
         public static string CurrentStructureName { get; private set; }
 
+        /// <summary>
+        /// Open a building/structure interaction. CONVERSATIONAL structures (e.g. the
+        /// Echo Hollow "pet-house") run as authored dialogue; everything else is a
+        /// TRANSACTION and opens its panel directly (shop for shoppable vendors). A
+        /// structure with neither returns false so the caller's own panel fallback runs.
+        /// </summary>
         public static bool PlayStructure(string structureId, string displayName = null)
         {
             if (string.IsNullOrEmpty(structureId)) return false;
             CurrentStructureId = structureId;
             CurrentStructureName = displayName;
 
-            // WO-455 routing seam: a converted structure conversation runs on our Yarn-free runner
-            // when CustomDialogue is ON (dormant otherwise; only ids in dialogues.json route here).
-            if (DeNelle.Core.FeatureFlags.CustomDialogue && DeNelle.Core.Dialogue.DialogueCatalog.Find(structureId) != null)
+            // 1) Conversational structure authored in dialogues.json -> custom runner.
+            if (DialogueCatalog.Find(structureId) != null)
+            {
+                if (IsRunning) return false; // don't interrupt an active line
                 return DeNelle.Core.Dialogue.DialogueService.Play(structureId);
-
-            DialogueRunner runner = Current ?? Host();
-            if (runner == null) return false;
-            if (runner.IsDialogueRunning) return false;   // don't interrupt an active line
-
-            // The pet house gets its OWN "name + select your pet" flow (PetHouse node)
-            // instead of the generic buy/sell/upgrade StructureMenu. Every other
-            // building shares the parameterized StructureMenu. Fall back to StructureMenu
-            // if the PetHouse node isn't compiled in this build.
-            // The pet house and the barracks each get their OWN flow node; every other
-            // building shares the parameterized StructureMenu. Fall back to StructureMenu
-            // if the dedicated node isn't compiled in this build.
-            string node;
-            if (structureId == "pet-house" && NodeExists(runner, "PetHouse"))
-                node = "PetHouse";
-            else if (structureId == "barracks" && NodeExists(runner, "Barracks_MainMenu"))
-                node = "Barracks_MainMenu";
-            else
-                node = "StructureMenu";
-            if (!NodeExists(runner, node))
-            {
-                FlowTrace.Fail("UI", $"DialogueService.PlayStructure: node '{node}' missing — building hook can't open (blank).");
-                return false;
             }
 
-            if (runner.VariableStorage != null)
+            // 2) Transaction structures -> direct panels (Yarn StructureMenu retired).
+            //    A shoppable vendor opens the gear store; non-shoppable structures fall
+            //    through (false) so the building's own TryPanelFor mapping handles them.
+            var entry = BuildingCatalog.Find(structureId);
+            if (entry != null && entry.IsShoppable)
             {
-                runner.VariableStorage.SetValue("$structureId", structureId);
-                // Seed the player-facing name from the building's OWN sign label so the
-                // dialogue title matches the big-letters sign (e.g. "Forge", not the
-                // titleized id "Workshop"). CmdStructureStatus keeps it and only fills in
-                // yield/cost from the progression data.
-                if (!string.IsNullOrEmpty(displayName))
-                {
-                    // WO-430 — show the current upgrade level in the dialogue TITLE so players
-                    // read their progress (e.g. "Lumbermill — Level 2"). Tier 0 / non-upgradable
-                    // structures keep the plain sign label. Village->Core read is allowed.
-                    string titled = displayName;
-                    if (DeNelle.Core.State.BuildingTierCatalog.IsUpgradable(structureId))
-                    {
-                        int tier = DeNelle.Core.State.ModifierService.TierOf(structureId);
-                        if (tier >= 1) titled = $"{displayName} — Level {tier}";
-                    }
-                    runner.VariableStorage.SetValue("$structureName", titled);
-                }
-            }
-            // WEBGL CRASH-GUARD (WO-331): see Play() — the synchronous StartDialogue
-            // prologue must never escape into the frame and halt the WebGL player.
-            try
-            {
-                runner.StartDialogue(node).Forget();
-            }
-            catch (System.Exception ex)
-            {
-                FlowTrace.Fail("UI", $"DialogueService.PlayStructure: StartDialogue('{node}') threw for structure " +
-                               $"'{structureId}' — {ex.GetType().Name}: {ex.Message} — dialogue skipped (WebGL crash-guard).");
-                return false;
-            }
-            Debug.Log($"[DialogueService] Structure '{structureId}' → node '{node}' ('{displayName}').");
-            FlowTrace.Step("UI", $"Yarn dialogue started via DialogueService.PlayStructure('{structureId}' → node '{node}')");
-            // VERIFY (TGVRU): confirm the structure conversation is actually running (not a silent
-            // inline-bail that leaves the building menu blank).
-            if (!runner.IsDialogueRunning)
-                FlowTrace.Warn("UI", $"DialogueService.PlayStructure('{structureId}' → '{node}'): no dialogue running after " +
-                                "StartDialogue (no line/menu rendered) — building menu may read blank.");
-            return true;
-        }
-
-        // Instantiate the shared dialogue prefab, suppress its CompanionMeeting
-        // autostart (the caller picks the node), and install the command bridge
-        // BEFORE the runner's Start() runs (we are post-Instantiate / pre-Start).
-        private static DialogueRunner Host()
-        {
-            var prefab = Resources.Load<GameObject>(PrefabResourcePath);
-            if (prefab == null)
-            {
-                Debug.LogWarning($"[DialogueService] Resources/{PrefabResourcePath} not found — no dialogue " +
-                                 "can play (the dialogue prefab/pack may be missing from this build).");
-                return null;
+                bool opened = PanelRouter.Open(PanelId.PartyShop, structureId);
+                if (opened) FlowTrace.Step("UI", $"DialogueService.PlayStructure('{structureId}') -> shop panel (transaction).");
+                return opened;
             }
 
-            var instance = Object.Instantiate(prefab);
-            instance.name = "DialogueSystem";
-
-            var runner = instance.GetComponentInChildren<DialogueRunner>(true);
-            if (runner == null)
-            {
-                Debug.LogWarning("[DialogueService] Hosted prefab has no DialogueRunner — cannot play dialogue.");
-                Object.Destroy(instance);
-                return null;
-            }
-
-            // The prefab is configured to autostart CompanionMeeting; suppress that
-            // so Play() controls which node runs. autoStart is read in Start(),
-            // which has not run yet (Instantiate only ran Awake).
-            runner.autoStart = false;
-
-            // WEBGL CRASH-GUARD (WO-331): installing the command bridge registers ~30
-            // Yarn command handlers. A throw here (duplicate registration, a bad handler
-            // signature, a missing sub-system) would otherwise escape the host path and
-            // halt the WebGL player on Village load. Degrade to "hosted, no FTUE commands"
-            // rather than crash — the runner still exists for plain dialogue.
-            try
-            {
-                var bridgeGo = new GameObject("DialogueCommandBridge");
-                bridgeGo.transform.SetParent(instance.transform, false);
-                bridgeGo.AddComponent<DialogueCommandBridge>().Install(runner);
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError("[DialogueService] DialogueCommandBridge install threw — FTUE commands " +
-                               "may be unbound, but the village still loads (WebGL crash-guard). " + ex);
-            }
-
-            // DEV-TOOLS-BLOCKED-AFTER-SHOP fix (owner F8 2026-06-21, ran-from-exe): the Yarn LineAdvancer
-            // leaves its tap-to-advance "DialogueAdvance" InputAction ENABLED, and its complete-handler only
-            // unhooks callbacks — it never .Disable()s the action. A COMMAND-opened panel (OpenShop etc.)
-            // ends its dialogue via the .yarn node's built-in <<stop>> -> the runner's onDialogueComplete,
-            // which never routed through DialogueService.Stop(), so the orphaned action stayed armed and
-            // contended with the Input System UI module -> UI Toolkit pointer events (the hidden dev 5-tap
-            // gesture's ONLY input channel) stopped resolving for the rest of the session. Release the
-            // orphan on EVERY dialogue completion (one-time listener; Host() builds the runner once).
-            // Same mechanic + release routine already used on the Stop() walk-away path.
-            if (runner.onDialogueComplete != null)
-                runner.onDialogueComplete.AddListener(ReleaseOrphanedAdvanceInput);
-
-            return runner;
-        }
-
-        private static bool NodeExists(DialogueRunner runner, string node)
-        {
-            YarnProject project = runner.YarnProject;
-            if (project == null)
-            {
-                Debug.LogError("[DialogueService] The DialogueRunner has no Yarn Project assigned.");
-                return false;
-            }
-
-            string[] names = project.NodeNames;
-            if (names == null) return false;
-            foreach (string n in names)
-                if (n == node) return true;
+            FlowTrace.Step("UI", $"DialogueService.PlayStructure('{structureId}') has no conversation/shop — caller opens its mapped panel.");
             return false;
+        }
+
+        /// <summary>Stop the current dialogue immediately (walk-away / auto-close).
+        /// Synchronous + race-free in the custom runner — no Yarn "No node" hazard.</summary>
+        public static void Stop()
+        {
+            if (DeNelle.Core.Dialogue.DialogueService.IsRunning)
+            {
+                FlowTrace.Step("UI", "Dialogue ended via DialogueService.Stop() (walk-away/auto-close).");
+                DeNelle.Core.Dialogue.DialogueService.Stop();
+            }
+        }
+
+        // ── New-Game dialogue reset (DeNelle.Core decoupling hook) ────────────
+        // Onboarding's "Start New" calls DeNelle.Core.DialogueResetService.ResetForNewGame(),
+        // which invokes the hook we register here. The custom runner keeps no persisted
+        // variable storage (state lives in QuestService / GameState), so the reset just
+        // stops any active conversation; the event-bus latches are cleared by Core.
+        [UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void RegisterResetHook()
+        {
+            DeNelle.Core.DialogueResetService.YarnVariableClear = Stop;
         }
     }
 }

@@ -56,52 +56,10 @@ namespace DeNelle.Village
         {
             if (other.CompareTag("Player") && !_uiOpen)
             {
-                // WO-109: Prefer Yarn dialogue for stationed NPCs (leads to craft/equip/upgrade via commands).
-                // The DialogueRunner + NPCCommandBridge was attached in builder PlaceNpcStation.
-                var runner = GetComponent<Yarn.Unity.DialogueRunner>();
-                if (runner != null && !runner.IsDialogueRunning)
-                {
-                    // Start the NPC-specific Yarn node (unique titles required across the .yarnproject).
-                    // The .yarn files declare TalkToArmorer / TalkToForge etc. and embed the <<command:>> handlers.
-                    string nodeTitle = ResolveTalkNode(BuildingName);
-                    runner.StartDialogue(nodeTitle);
-                    return;
-                }
-                // Fallback to direct UI (upgrade) if no runner or for non-Yarn stations.
+                // WO-557 (Yarn removed): stationed NPC upgrade is a TRANSACTION, not dialogue —
+                // open the code-built upgrade UI directly (it always was the non-Yarn fallback).
                 ShowUpgradeUI();
             }
-        }
-
-        // WO-291: map a stationed building's name to its vendor Yarn Talk node.
-        // The 9 vendor questline nodes live in Assets/Dialogue/NPCs/NPC_<Vendor>.yarn
-        // (Borin/Halvard/OldPell/MotherWren/Sable/Coppin/Brom/Fenn/Alric). Match on
-        // either the vendor's name OR their building role so the scene builder can label
-        // a station either way. Falls back to "TalkTo<BuildingName>" then "TalkToGeneric".
-        private static string ResolveTalkNode(string buildingName)
-        {
-            string n = buildingName ?? string.Empty;
-            bool Has(string s) => n.IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0;
-
-            // Forge / Blacksmith — Borin Emberhand
-            if (Has("borin") || Has("forge") || Has("blacksmith") || Has("smith")) return "TalkToForge";
-            // Armorer — Dame Halvard
-            if (Has("halvard") || Has("armor")) return "TalkToArmorer";
-            // Lumbermill — Old Pell
-            if (Has("pell") || Has("lumber") || Has("sawmill")) return "TalkToLumbermill";
-            // Mill & Granary — Mother Wren
-            if (Has("wren") || Has("granary") || Has("mill")) return "TalkToGranary";
-            // Jeweler / Lapidary — Sable Vey
-            if (Has("sable") || Has("jewel") || Has("lapidar") || Has("gem")) return "TalkToJeweler";
-            // Market / Trader — Coppin
-            if (Has("coppin") || Has("market") || Has("trader") || Has("trade")) return "TalkToMarket";
-            // Inn / Innkeeper — Brom Aleward (the quest hub)
-            if (Has("brom") || Has("inn") || Has("tavern") || Has("hearth")) return "TalkToInn";
-            // Stablemaster / Pet Trainer — Fenn Wildmane
-            if (Has("fenn") || Has("stable") || Has("pet") || Has("beast") || Has("kennel")) return "TalkToStable";
-            // Resource Steward / Upgrade Hall — Warden Alric (master quest)
-            if (Has("alric") || Has("steward") || Has("warden") || Has("upgrade hall") || Has("resource")) return "TalkToSteward";
-
-            return "TalkTo" + (string.IsNullOrEmpty(buildingName) ? "Generic" : buildingName.Replace(" ", ""));
         }
 
         private void OnTriggerExit(Collider other)

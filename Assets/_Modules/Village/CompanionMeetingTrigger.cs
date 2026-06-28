@@ -142,8 +142,8 @@ namespace DeNelle.Village
             // First-village-entry-per-save gate (skipped when the dev flag is set).
             if (!always && PlayerPrefs.GetInt(SeenKey, 0) != 0) return;
 
-            // If a dialogue is already hosted (e.g. a redundant caller), don't double up.
-            if (DialogueService.Current != null)
+            // If a dialogue is already running (e.g. a redundant caller), don't double up.
+            if (DialogueService.IsRunning)
             {
                 _hostedThisSession = true;
                 Hosted = true;

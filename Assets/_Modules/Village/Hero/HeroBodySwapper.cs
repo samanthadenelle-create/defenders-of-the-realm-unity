@@ -31,11 +31,11 @@ namespace DeNelle.Village
         // 0.5 = half speed. Tune here.
         private const float HeroAnimSpeed = 0.5f;
 
-        // WO-376: the swapped hero's guarded animator + the Yarn runner we hook so the
-        // hero RE-asserts a clean idle when dialogue starts (and on complete). Cached so
-        // OnDestroy can unsubscribe and a deferred FindDialogueRunner retry can wire late.
+        // WO-376 / WO-557: the swapped hero's guarded animator. The hero re-asserts a clean
+        // idle when a conversation starts/ends; we subscribe to OUR dialogue stack's
+        // Started/Ended signals (Yarn removed) — no runner to find. Guarded so we hook once.
         private ActorAnimator _heroActor;
-        private Yarn.Unity.DialogueRunner _dialogueRunner;
+        private bool _dialogueHooked;
 
         // Blink LowPoly base body address (set on the prefab by BlinkAddressableMarker.MarkBlinkGear).
         // The gitignored base body lives OUTSIDE Resources, so it loads via Addressables — NOT
@@ -624,48 +624,16 @@ namespace DeNelle.Village
         private static string ClassKey(HeroClass cls) => cls.ToString().ToLowerInvariant();
 
         /// <summary>
-        /// WO-376: subscribe to the shared Yarn runner's start/complete events so the hero
-        /// re-asserts a clean upright idle whenever dialogue is on screen. Idempotent — never
-        /// double-subscribes. If no runner is hosted yet (DialogueService hosts lazily), retry
-        /// on the next frame so a runner created just after the swap is still wired.
+        /// WO-557: subscribe to OUR dialogue stack's Started/Ended signals so the hero
+        /// re-asserts a clean upright idle whenever a conversation is on screen. Idempotent —
+        /// the static events are always available (no runner to find, no retry coroutine).
         /// </summary>
-        // PERF (coroutine fork-bomb fix): single-flight guard — same bug as HeroLocomotion's
-        // gate hook. The retry loop re-called HookDialogueIdle(), which re-started a retry
-        // coroutine each frame when no runner existed. Now one retry runs and polls directly.
-        private bool _retryingHook;
-
         private void HookDialogueIdle()
         {
-            if (_dialogueRunner != null) return; // already hooked
-
-            var runner = Object.FindObjectOfType<Yarn.Unity.DialogueRunner>();
-            if (runner == null)
-            {
-                if (!_retryingHook) { _retryingHook = true; StartCoroutine(RetryHookDialogueIdle()); }
-                return;
-            }
-
-            _dialogueRunner = runner;
-            if (runner.onDialogueStart != null)    runner.onDialogueStart.AddListener(OnDialogueIdle);
-            if (runner.onDialogueComplete != null) runner.onDialogueComplete.AddListener(OnDialogueIdle);
-        }
-
-        private System.Collections.IEnumerator RetryHookDialogueIdle()
-        {
-            // Poll directly — do NOT call HookDialogueIdle() here (that re-spawns coroutines).
-            for (int i = 0; i < 5 && _dialogueRunner == null && this != null; i++)
-            {
-                yield return null;
-                var runner = Object.FindObjectOfType<Yarn.Unity.DialogueRunner>();
-                if (runner != null)
-                {
-                    _dialogueRunner = runner;
-                    if (runner.onDialogueStart != null)    runner.onDialogueStart.AddListener(OnDialogueIdle);
-                    if (runner.onDialogueComplete != null) runner.onDialogueComplete.AddListener(OnDialogueIdle);
-                    break;
-                }
-            }
-            _retryingHook = false;
+            if (_dialogueHooked) return; // already hooked
+            DeNelle.Core.Dialogue.DialogueService.Started += OnDialogueIdle;
+            DeNelle.Core.Dialogue.DialogueService.Ended   += OnDialogueIdle;
+            _dialogueHooked = true;
         }
 
         /// <summary>WO-376: re-pin the relaxed idle pose when a dialogue starts/completes.</summary>
@@ -679,10 +647,11 @@ namespace DeNelle.Village
 
         private void OnDestroy()
         {
-            if (_dialogueRunner != null)
+            if (_dialogueHooked)
             {
-                if (_dialogueRunner.onDialogueStart != null)    _dialogueRunner.onDialogueStart.RemoveListener(OnDialogueIdle);
-                if (_dialogueRunner.onDialogueComplete != null) _dialogueRunner.onDialogueComplete.RemoveListener(OnDialogueIdle);
+                DeNelle.Core.Dialogue.DialogueService.Started -= OnDialogueIdle;
+                DeNelle.Core.Dialogue.DialogueService.Ended   -= OnDialogueIdle;
+                _dialogueHooked = false;
             }
             // Release the Blink base-body Addressables handle (ONE owner) so the prefab never leaks.
             ReleaseBaseBodyHandle();

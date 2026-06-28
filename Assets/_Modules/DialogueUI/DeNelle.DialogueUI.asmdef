@@ -2,11 +2,8 @@
     "name": "DeNelle.DialogueUI",
     "rootNamespace": "DeNelle.DialogueUI",
     "references": [
-        "YarnSpinner.Unity",
-        "YarnSpinner.Addons.ClassicRPG",
-        "UniTask",
         "DeNelle.Core",
-        "DeNelle.Village",
+        "Unity.TextMeshPro",
         "Unity.InputSystem"
     ],
     "includePlatforms": [],

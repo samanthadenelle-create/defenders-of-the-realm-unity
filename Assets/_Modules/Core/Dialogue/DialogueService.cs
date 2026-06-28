@@ -26,6 +26,13 @@ namespace DeNelle.Core.Dialogue
         /// <summary>Raised when a dialogue opens — the View subscribes, builds its panel, binds the VM.</summary>
         public static event Action<DialogueViewModel> Opened;
 
+        /// <summary>Raised when ANY dialogue begins. Parameterless engine-wide signal for
+        /// systems that only need "a conversation is on / off" — e.g. HeroLocomotion /
+        /// HeroBodySwapper input-suppression (replaces the old Yarn onDialogueStart hook).</summary>
+        public static event Action Started;
+        /// <summary>Raised when the active dialogue ends (naturally or via Stop()). Pair of Started.</summary>
+        public static event Action Ended;
+
         public static DialogueViewModel ActiveVm { get; private set; }
         public static bool IsRunning => ActiveVm != null && ActiveVm.IsOpen;
 
@@ -41,10 +48,11 @@ namespace DeNelle.Core.Dialogue
             }
             var vm = new DialogueViewModel();
             ActiveVm = vm;
-            vm.Closed += () => { if (ReferenceEquals(ActiveVm, vm)) ActiveVm = null; };
+            vm.Closed += () => { if (ReferenceEquals(ActiveVm, vm)) ActiveVm = null; Ended?.Invoke(); };
 
             FlowTrace.Step("Dialogue", $"Play '{dialogueId}'.");
             Opened?.Invoke(vm);              // View builds + binds BEFORE the first line fires
+            Started?.Invoke();               // engine-wide "dialogue on" signal (input suppression etc.)
             vm.Begin(def, _sink, _cond);     // enters the entry node -> first line -> vm.Changed -> render
             return true;
         }
