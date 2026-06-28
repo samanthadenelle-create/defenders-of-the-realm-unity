@@ -47,6 +47,9 @@ namespace DeNelle.Village
         /// <summary>Apothecary workbench -- opens the consumable-crafting / alchemy bench
         /// (PanelId.ConsumableCrafting). Opens the panel DIRECTLY (no Yarn structure hook).</summary>
         ApothecaryWorkbench = 8,
+        /// <summary>Jeweler's bench -- opens the jewelry-crafting bench (PanelId.JewelerCrafting,
+        /// WO-553). Opens the panel DIRECTLY (no Yarn structure hook), like the Apothecary.</summary>
+        JewelersBench = 9,
     }
 
     /// <summary>

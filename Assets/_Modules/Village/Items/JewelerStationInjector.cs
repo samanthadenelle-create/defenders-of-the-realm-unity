@@ -1,0 +1,190 @@
+// =============================================================================
+// JewelerStationInjector — runtime, NON-DESTRUCTIVE placement of the Jeweler's Bench
+// jewelry-crafting station in the castle hub. Opens PanelId.JewelerCrafting.
+// -----------------------------------------------------------------------------
+// Mirrors CraftingStationInjector (the Apothecary station) EXACTLY: a self-bootstrapping
+// DDOL singleton that spawns ONE "Jeweler's Bench" station at load WITHOUT touching any
+// .unity file or CastleHubBuilder (scene-resave corruption risk, CLAUDE.md §3; canonical
+// placement is owner-deferred). Idempotent per load, gated to the castle/home hub.
+//
+// WHAT IT BUILDS:
+//   A station GameObject at a tweakable courtyard const, with a Building
+//   (Type=JewelersBench, BuildingId="jewelers-bench", DisplayLabel="Jeweler") + a
+//   BuildingInteractable (the same proximity prompt the other buildings use). Walking up
+//   + interacting opens PanelId.JewelerCrafting DIRECTLY — JewelersBench returns null from
+//   StructureHookIdFor, so Interact() falls through the Yarn path to TryPanelFor ->
+//   JewelerCrafting (no Yarn detour), exactly like the Apothecary.
+//
+// VISUAL: reuses VisualFactory.Skin with a candidate jeweler/store model; on a pack-missing
+//   clone it Guards down to a simple placeholder cube (Debug.LogWarning, never error — §4).
+//
+// Village -> Core only; code-spawn only, no scene hand-edit. Null-guarded throughout.
+// =============================================================================
+
+using DeNelle.Core;
+using DeNelle.Core.Diagnostics;
+using UnityEngine;
+using UnityEngine.AI;
+using UnityEngine.SceneManagement;
+
+namespace DeNelle.Village
+{
+    /// <summary>Runtime, non-destructive placement of the Jeweler's Bench jewelry-crafting
+    /// station in the castle hub. Walk up + interact -> PanelId.JewelerCrafting.</summary>
+    public sealed class JewelerStationInjector : MonoBehaviour
+    {
+        public static JewelerStationInjector Instance { get; private set; }
+
+        /// <summary>Stable id — kept distinct from the "jeweler" vendor SHOP so the bench
+        /// returns null from StructureHookIdFor and opens its panel directly.</summary>
+        private const string StationId = "jewelers-bench";
+        private const string StationLabel = "Jeweler";
+
+        private const string HolderName = "JewelersBenchStation (runtime)";
+
+        // TWEAK: courtyard placement for the Jeweler's Bench, in MainCastle_Hall world space.
+        // Mirror of the Apothecary (which sits at +11 east); this is the free spot to the WEST
+        // of the courtyard, snapped to the navmesh below so it's reachable. Move freely — the
+        // canonical placement is owner-deferred.
+        private static readonly Vector3 StationPos = new Vector3(-11f, 0f, 2f);
+
+        // Candidate Resources structure models (same source as the castle storefronts).
+        // First that loads wins; all-miss -> cube.
+        private static readonly string[] CandidateModels =
+        {
+            "Structures/jeweler",
+            "Structures/store",
+            "Structures/Forge",
+            "Structures/lumbermill",
+        };
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap()
+        {
+            if (Instance != null) return;
+            new GameObject("JewelerStationInjector").AddComponent<JewelerStationInjector>();
+        }
+
+        private void Awake()
+        {
+            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            SceneManager.sceneLoaded += OnSceneLoaded;
+
+            if (HubScenes.IsHub(SceneManager.GetActiveScene().name)) Inject();
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+        }
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            if (HubScenes.IsHub(scene.name)) Inject();
+        }
+
+        private void Inject()
+        {
+            using var _ = FlowTrace.Enter("Crafting", "JewelerStationInjector.Inject");
+
+            // Idempotent: if a jeweler's bench already exists, do NOT spawn a second one.
+            if (AlreadyPresent())
+            {
+                FlowTrace.Step("Crafting", "jeweler's bench station already present — no-op (idempotent).");
+                return;
+            }
+
+            // Snap the const to the navmesh so the station is reachable / seated on the floor.
+            Vector3 pos = StationPos;
+            if (NavMesh.SamplePosition(pos, out var hit, 12f, NavMesh.AllAreas))
+                pos = hit.position;
+
+            var holder = new GameObject(HolderName);
+            holder.transform.position = pos;
+
+            // VISUAL — reuse the castle's Resources structure-model loader; Guard down to a
+            // placeholder cube on a pack-missing clone (LogWarning, never error — §4).
+            AttachVisual(holder);
+
+            // BEHAVIOUR — Building first (BuildingInteractable RequireComponent<Building>), then
+            // the proximity-prompt interactable.
+            Building building = null;
+            Guard.Try("Crafting", "add+configure Building (jeweler's bench)", () =>
+            {
+                building = holder.AddComponent<Building>();
+                building.Configure(BuildingType.JewelersBench, StationId, StationLabel);
+            });
+            if (building == null)
+            {
+                FlowTrace.Fail("Crafting",
+                    "failed to add Building to jeweler's bench — destroying holder (no half-built station).");
+                Destroy(holder);
+                return;
+            }
+
+            Guard.Try("Crafting", "add BuildingInteractable (jeweler's bench)",
+                () => holder.AddComponent<BuildingInteractable>());
+
+            FlowTrace.Step("Crafting",
+                $"spawned Jeweler's Bench station at {pos} (id='{StationId}') -> opens PanelId.JewelerCrafting on interact.");
+            Debug.Log($"[JewelerStationInjector] spawned Jeweler's Bench station at {pos} " +
+                      "(walk up + interact -> jewelry crafting panel).");
+        }
+
+        /// <summary>True if a jeweler's bench station already exists in-scene — a prior runtime holder
+        /// OR any Building of type JewelersBench / id 'jewelers-bench'. Keeps Inject idempotent.
+        /// Does NOT match the generic 'jeweler' vendor shop storefront.</summary>
+        private static bool AlreadyPresent()
+        {
+            if (GameObject.Find(HolderName) != null) return true;
+            foreach (var b in FindObjectsByType<Building>(FindObjectsSortMode.None))
+            {
+                if (b == null) continue;
+                if (b.Type == BuildingType.JewelersBench) return true;
+                string id = (b.BuildingId ?? "").ToLowerInvariant();
+                if (id.Contains("jewelers-bench")) return true;
+            }
+            return false;
+        }
+
+        // ── Visual (reuse VisualFactory.Skin; placeholder cube fallback) ──────
+        private static void AttachVisual(GameObject holder)
+        {
+            GameObject visual = null;
+            foreach (var path in CandidateModels)
+            {
+                // Tripo FBX exports import lying on their side at identity — apply the SAME upright
+                // correction every other hub structure gets (pitch -90 stand up + yaw 90 face plaza).
+                // SeatOnGround (set by SkinOptions.Structure) lands the bounds-base on the holder y;
+                // bake the 0.7 size into the FIT (6 * 0.7 = 4.2) so the seat measures the final size.
+                var opts = SkinOptions.Structure(6f * 0.7f);
+                opts.LocalRotation = Quaternion.Euler(-90f, 90f, 0f);
+                visual = Guard.Try("Crafting", $"skin jeweler's bench visual '{path}'",
+                    () => VisualFactory.Skin(holder.transform, path, opts),
+                    fallback: null);
+                if (visual != null)
+                {
+                    FlowTrace.Step("Crafting", $"jeweler's bench visual resolved from '{path}' (upright -90/+90, fit 4.2m, seated on ground).");
+                    return;
+                }
+            }
+
+            // Pack-missing clone: keep the station VISIBLE + interactable with a placeholder cube.
+            FlowTrace.Warn("Crafting",
+                "no jeweler structure model resolved (Resources/Structures pack may be absent) — placeholder cube used.");
+            Debug.LogWarning("[JewelerStationInjector] no jeweler model found — placeholder cube used.");
+            var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            cube.name = "JewelersBench_Placeholder";
+            cube.transform.SetParent(holder.transform, false);
+            cube.transform.localPosition = Vector3.up * 1f;
+            cube.transform.localScale = new Vector3(2f, 2f, 2f);
+            var col = cube.GetComponent<Collider>();
+            if (col != null) col.isTrigger = true;
+        }
+    }
+}

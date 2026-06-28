@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "_note": "Jeweler jewelry crafting (WO-553). TIER-UP model: base = an accessories.json id consumed from VillageInventory; gems = material ids (materials.json crystal-category ingredients, reused as gems per owner decision 2026-06-28 — NOT a new gem family) consumed from inventory; outputAccessoryId = the HIGHER-RARITY accessories.json id granted into inventory. cost spends the unified wallet (EconomyService.TrySpend). requiresQuestId = optional QuestService gate (\"\" = always available). Loaded by JewelerRecipeCatalog via CanonicalJson (Resources first, StreamingAssets fallback). SEPARATE file from consumable-recipes.json / gear-recipes.json (no cross-lane collision). Gems drop from BOSS mobs at a low rate — that loot wiring is owned by a separate agent (do NOT edit loot-tables.json here). Keep this copy IN SYNC with Assets/StreamingAssets/Data/Canonical/jeweler-recipes.json.",
+  "recipes": [
+    {
+      "id": "jewel_ring_steadfast",
+      "displayName": "Set the Steadfast Ring",
+      "base": { "id": "ring_iron", "count": 1 },
+      "gems": [ { "id": "ing_ember_crystal", "count": 2 } ],
+      "outputAccessoryId": "ring_steadfast",
+      "cost": { "wood": 0, "food": 0, "iron": 30, "crystals": 0 },
+      "requiresQuestId": "",
+      "saga": "Sable seats two ember crystals in a plain iron band — and it remembers a purpose."
+    },
+    {
+      "id": "jewel_ring_embercoil",
+      "displayName": "Wind the Embercoil Ring",
+      "base": { "id": "ring_steadfast", "count": 1 },
+      "gems": [ { "id": "ing_ember_crystal", "count": 2 }, { "id": "ing_aether_shard", "count": 1 } ],
+      "outputAccessoryId": "ring_embercoil",
+      "cost": { "wood": 0, "food": 0, "iron": 60, "crystals": 10 },
+      "requiresQuestId": "",
+      "saga": "Emberhand's coil is wound while the iron still sings; an aether shard keeps it from cooling."
+    },
+    {
+      "id": "jewel_ring_heartward",
+      "displayName": "Cut the Heartward Seal",
+      "base": { "id": "ring_embercoil", "count": 1 },
+      "gems": [ { "id": "ing_aether_shard", "count": 2 }, { "id": "ing_heartstone_crystal", "count": 1 } ],
+      "outputAccessoryId": "ring_heartward",
+      "cost": { "wood": 0, "food": 0, "iron": 100, "crystals": 25 },
+      "requiresQuestId": "",
+      "saga": "A heartstone shard cut flush to silver — it dims slightly every time it turns a blow."
+    },
+    {
+      "id": "jewel_amulet_oathward",
+      "displayName": "Seal the Oathward Pendant",
+      "base": { "id": "amulet_travelers", "count": 1 },
+      "gems": [ { "id": "ing_ember_crystal", "count": 2 } ],
+      "outputAccessoryId": "amulet_oathward",
+      "cost": { "wood": 0, "food": 0, "iron": 40, "crystals": 0 },
+      "requiresQuestId": "",
+      "saga": "An Oathweld medallion set with ember crystal — the ward holds because the smith believed in it."
+    },
+    {
+      "id": "jewel_amulet_lastpressing",
+      "displayName": "Focus the Last-Pressing",
+      "base": { "id": "amulet_oathward", "count": 1 },
+      "gems": [ { "id": "ing_aether_shard", "count": 2 }, { "id": "ing_ember_crystal", "count": 1 } ],
+      "outputAccessoryId": "amulet_lastpressing",
+      "cost": { "wood": 0, "food": 0, "iron": 0, "crystals": 20 },
+      "requiresQuestId": "",
+      "saga": "A teardrop of pressed aether in silver filigree — the light inside was caught before the Heart went quiet."
+    },
+    {
+      "id": "jewel_amulet_elarion",
+      "displayName": "Bind the Elarion Amulet",
+      "base": { "id": "amulet_lastpressing", "count": 1 },
+      "gems": [ { "id": "ing_aether_shard", "count": 2 }, { "id": "ing_heartstone_crystal", "count": 1 } ],
+      "outputAccessoryId": "amulet_elarion",
+      "cost": { "wood": 0, "food": 0, "iron": 80, "crystals": 40 },
+      "requiresQuestId": "",
+      "saga": "City-mark work of the Bright Centuries, bound around a heartstone — the old glyph for the Heart, before anyone thought it needed protecting."
+    }
+  ]
+}

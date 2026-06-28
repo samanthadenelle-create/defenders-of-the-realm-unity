@@ -60,6 +60,9 @@ namespace DeNelle.Core.UI
         /// <summary>Consumable crafting / alchemy bench — CraftingPanelMvvm (combine dropped
         /// ingredients into potions/bombs). SEPARATE from the gear Workshop (PanelId.Crafting).</summary>
         ConsumableCrafting = 9,
+        /// <summary>Jeweler jewelry crafting bench — JewelerPanelMvvm (combine a base ring/amulet +
+        /// gems into a higher-tier accessory, WO-553). SEPARATE from the Apothecary + Forge lanes.</summary>
+        JewelerCrafting = 10,
     }
 
     /// <summary>

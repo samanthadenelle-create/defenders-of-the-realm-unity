@@ -123,6 +123,7 @@ namespace DeNelle.Editor
             // (WO-Item-2's generator fills those — do NOT fail on them yet).
             CheckItemCapabilities(weapons, armors, failures, log);
             CheckCraftingChain(failures, log);
+            CheckJewelerChain(failures, log);
             CheckTalentLayout(failures, log);
 
             // --- ARMED-HERO INVARIANT (WO-Item Addressables equip) -----------------
@@ -682,6 +683,172 @@ namespace DeNelle.Editor
                            $"{droppable.Count} droppable id(s); {chainOk} recipe(s) fully craftable drops->craft->consumable");
             if (orphan > 0)
                 log.AppendLine($"[crafting] SOFT: {orphan} ing_* material(s) used by no recipe (dead-end drop)");
+        }
+
+        // =====================================================================
+        //  JEWELER JEWELRY-CRAFTING CHAIN (WO-553) — guards the jeweler-recipes.json
+        //  data + the atomic JewelerCraftingService loop:
+        //   HARD per recipe: (a) OutputAccessoryId resolves in GearCatalog.FindAccessory;
+        //         (b) base.id resolves as an accessory; (c) every gem.id resolves in
+        //         MaterialCatalog.
+        //   SOFT (log only): a gem id that drops from NO loot table yet — gem boss-drops
+        //         are owned by a SEPARATE agent (owner decision 2026-06-28); not a fail.
+        //   HARD simulated craft (first iron/wood-only recipe — no GameState dependency):
+        //         seed VillageInventory with base + gems + the wallet, call
+        //         JewelerCraftingService.Craft, assert success + base/gems consumed +
+        //         wallet debited + output granted (+1); then a no-funds craft returns
+        //         false and consumes nothing (rollback).
+        // =====================================================================
+        private static void CheckJewelerChain(List<string> failures, StringBuilder log)
+        {
+            GearCatalog.Reload();
+            MaterialCatalog.Reload();
+            LootTableCatalog.Reload();
+            DeNelle.Village.Crafting.JewelerRecipeCatalog.Reload();
+
+            var materialIds = new HashSet<string>();
+            foreach (var m in MaterialCatalog.All)
+                if (m != null && !string.IsNullOrEmpty(m.Id)) materialIds.Add(m.Id);
+
+            var droppable = new HashSet<string>();
+            foreach (var t in LootTableCatalog.All)
+            {
+                if (t == null || t.Drops == null) continue;
+                foreach (var d in t.Drops)
+                    if (d != null && !string.IsNullOrEmpty(d.MaterialId)) droppable.Add(d.MaterialId);
+            }
+
+            var recipes = DeNelle.Village.Crafting.JewelerRecipeCatalog.All;
+            var gemIds = new HashSet<string>();
+            int chainOk = 0;
+            DeNelle.Village.Crafting.JewelerRecipeDef simRecipe = null;
+
+            foreach (var r in recipes)
+            {
+                if (r == null || string.IsNullOrEmpty(r.Id)) continue;
+
+                bool ok = true;
+
+                // (a) output resolves as a real accessory.
+                if (string.IsNullOrEmpty(r.OutputAccessoryId) || GearCatalog.FindAccessory(r.OutputAccessoryId) == null)
+                { failures.Add($"jeweler-recipes.json: '{r.Id}' output '{r.OutputAccessoryId}' is not a known accessory"); ok = false; }
+
+                // (b) base resolves as a real accessory.
+                if (r.Base == null || string.IsNullOrEmpty(r.Base.Id) || GearCatalog.FindAccessory(r.Base.Id) == null)
+                { failures.Add($"jeweler-recipes.json: '{r.Id}' base '{r.Base?.Id}' is not a known accessory"); ok = false; }
+
+                // (c) every gem resolves in MaterialCatalog; SOFT droppability.
+                if (r.Gems != null)
+                {
+                    foreach (var g in r.Gems)
+                    {
+                        if (g == null || string.IsNullOrEmpty(g.Id)) continue;
+                        gemIds.Add(g.Id);
+                        if (!materialIds.Contains(g.Id))
+                        { failures.Add($"jeweler-recipes.json: '{r.Id}' needs unknown gem '{g.Id}' (no MaterialDef)"); ok = false; }
+                        else if (!droppable.Contains(g.Id))
+                            log.AppendLine($"[jeweler] SOFT: gem '{g.Id}' drops from NO loot table yet (boss-drop lane pending — separate agent)");
+                    }
+                }
+
+                if (ok)
+                {
+                    chainOk++;
+                    // Earmark the first iron/wood-only recipe (no GameState-backed crystals/food)
+                    // for the simulated craft so the wallet path needs only EconomyService.
+                    if (simRecipe == null && (r.Cost == null || (r.Cost.Crystals == 0 && r.Cost.Food == 0)))
+                        simRecipe = r;
+                }
+            }
+
+            log.AppendLine($"[jeweler] chain checked: {recipes.Count} recipe(s), {gemIds.Count} gem(s); " +
+                           $"{chainOk} fully craftable base+gems->output");
+
+            // ── HARD simulated craft (atomic consume->grant + no-funds rollback) ──
+            if (simRecipe == null)
+            {
+                log.AppendLine("[jeweler] SOFT: no iron/wood-only recipe to simulate without GameState — sim skipped");
+                return;
+            }
+
+            var ecoGo = new GameObject("JewelerRegressionEconomy");
+            var invGo = new GameObject("JewelerRegressionInventory");
+            EconomyService eco = null;
+            DeNelle.Village.Crafting.VillageInventory inv = null;
+            try
+            {
+                eco = ecoGo.AddComponent<EconomyService>();
+                inv = invGo.AddComponent<DeNelle.Village.Crafting.VillageInventory>();
+                // Awake does not fire on AddComponent in edit mode — assign the singletons directly.
+                SetStaticInstance(typeof(EconomyService), eco);
+                SetStaticInstance(typeof(DeNelle.Village.Crafting.VillageInventory), inv);
+
+                // Seed exactly the base + gems the recipe needs (iron/wood cost covered by the
+                // in-session EconomyService pool defaults — wood 200 / iron 80).
+                inv.Clear();
+                if (simRecipe.Base != null) inv.Add(simRecipe.Base.Id, simRecipe.Base.Count);
+                if (simRecipe.Gems != null)
+                    foreach (var g in simRecipe.Gems)
+                        if (g != null && !string.IsNullOrEmpty(g.Id)) inv.Add(g.Id, g.Count);
+
+                int outBefore = inv.Get(simRecipe.OutputAccessoryId);
+                int ironBefore = eco.Iron;
+
+                var res = DeNelle.Village.Crafting.JewelerCraftingService.Craft(simRecipe.Id);
+                if (!res.Success)
+                    failures.Add($"[jeweler] sim '{simRecipe.Id}': Craft returned FAILURE ('{res.FailReason}') with inputs seeded");
+                else
+                {
+                    if (simRecipe.Base != null && inv.Get(simRecipe.Base.Id) != 0)
+                        failures.Add($"[jeweler] sim '{simRecipe.Id}': base '{simRecipe.Base.Id}' NOT consumed");
+                    if (simRecipe.Gems != null)
+                        foreach (var g in simRecipe.Gems)
+                            if (g != null && inv.Get(g.Id) != 0)
+                                failures.Add($"[jeweler] sim '{simRecipe.Id}': gem '{g.Id}' NOT consumed");
+                    if (inv.Get(simRecipe.OutputAccessoryId) != outBefore + 1)
+                        failures.Add($"[jeweler] sim '{simRecipe.Id}': output '{simRecipe.OutputAccessoryId}' not granted (+1)");
+                    int ironCost = simRecipe.Cost?.Iron ?? 0;
+                    if (ironCost > 0 && eco.Iron != ironBefore - ironCost)
+                        failures.Add($"[jeweler] sim '{simRecipe.Id}': wallet iron not debited ({ironBefore}->{eco.Iron}, expected -{ironCost})");
+                }
+
+                // No-funds rollback: empty inventory -> Craft must fail + consume/grant nothing.
+                inv.Clear();
+                int outAfterClear = inv.Get(simRecipe.OutputAccessoryId);
+                var res2 = DeNelle.Village.Crafting.JewelerCraftingService.Craft(simRecipe.Id);
+                if (res2.Success)
+                    failures.Add($"[jeweler] sim '{simRecipe.Id}': Craft SUCCEEDED with empty inventory (should fail)");
+                if (inv.Get(simRecipe.OutputAccessoryId) != outAfterClear)
+                    failures.Add($"[jeweler] sim '{simRecipe.Id}': failed craft still granted output (no rollback)");
+
+                log.AppendLine($"[jeweler] sim '{simRecipe.Id}' -> consume base+gems, grant '{simRecipe.OutputAccessoryId}', " +
+                               "debit wallet; no-funds craft rejected (rollback) OK");
+            }
+            catch (System.Exception ex)
+            {
+                failures.Add($"[jeweler] sim threw: {ex.Message}");
+                log.AppendLine($"  jeweler sim EXCEPTION: {ex}");
+            }
+            finally
+            {
+                // Leave no durable state: clear inventory, reset singletons, destroy the GOs.
+                if (inv != null) inv.Clear();
+                SetStaticInstance(typeof(EconomyService), null);
+                SetStaticInstance(typeof(DeNelle.Village.Crafting.VillageInventory), null);
+                if (ecoGo != null) Object.DestroyImmediate(ecoGo);
+                if (invGo != null) Object.DestroyImmediate(invGo);
+            }
+        }
+
+        /// <summary>Assigns a MonoBehaviour-singleton's <c>public static Instance { get; private set; }</c>
+        /// backing field by reflection — Awake (which normally sets it) does not fire on AddComponent in
+        /// edit-mode batchmode. Null clears it. Best-effort (no-op if the field isn't found).</summary>
+        private static void SetStaticInstance(System.Type type, object value)
+        {
+            if (type == null) return;
+            var f = type.GetField("<Instance>k__BackingField",
+                                  BindingFlags.NonPublic | BindingFlags.Static);
+            if (f != null) f.SetValue(null, value);
         }
 
         // =====================================================================

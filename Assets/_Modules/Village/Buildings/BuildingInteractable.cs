@@ -392,6 +392,12 @@ namespace DeNelle.Village
                 case BuildingType.ApothecaryWorkbench:
                     panelId = PanelId.ConsumableCrafting;
                     return true;
+                // Jeweler's bench → the jewelry-crafting bench. Routed here (NOT via
+                // StructureHookIdFor, which returns null for it) so Interact() falls through the
+                // Yarn path and opens PanelId.JewelerCrafting DIRECTLY, exactly like the Apothecary.
+                case BuildingType.JewelersBench:
+                    panelId = PanelId.JewelerCrafting;
+                    return true;
                 // Resource + Armorer buildings all share the Building Upgrade panel.
                 case BuildingType.CrystalMine:
                 case BuildingType.Farm:
@@ -595,6 +601,7 @@ namespace DeNelle.Village
             BuildingType.Forge       => "Forge",
             BuildingType.Armorer     => "Armorer",
             BuildingType.ApothecaryWorkbench => "Apothecary",
+            BuildingType.JewelersBench => "Jeweler",
             _ => "Building",
         };
     }
