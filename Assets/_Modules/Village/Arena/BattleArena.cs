@@ -221,6 +221,18 @@ namespace DeNelle.Village.Arena
                 return false;
             }
 
+            // SOFTLOCK FIX (owner F8 "on battle why am i still in build" + battleLock stuck True in
+            // MainCastle_Hall): if a battle is called while Build Mode is active, the build camera +
+            // input override steal control — the hero is warped to the arena but the player "never sees
+            // anything", can't fight, the battle never resolves, and BattleLock (this arena's probe)
+            // stays True forever -> hub softlock (no movement 180s). Force-exit Build Mode FIRST so
+            // control returns to the hero before staging. Exit() is idempotent (no-op if not active).
+            if (BuildModeController.Instance != null && BuildModeController.Instance.IsActive)
+            {
+                FlowTrace.Step("BattleArena", "BeginEncounter: Build Mode was ACTIVE — force-exiting before staging (softlock guard).");
+                Guard.Try("BattleArena", "force-exit build mode", () => BuildModeController.Instance.Exit());
+            }
+
             _current = p;
             _resolved = false;
             _climaxBody = null;

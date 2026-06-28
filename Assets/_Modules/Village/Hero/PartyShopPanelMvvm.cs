@@ -1013,6 +1013,12 @@ namespace DeNelle.Village.Hero
         private static bool WeaponLoadsViaAddressable(WeaponDef def)
         {
             if (def == null) return false;
+            // WO-536: Blink gear was JUNKED in the 2026-06-22 pivot (ff.blinkarmor OFF) and its
+            // addressables no longer resolve -> the load throws + spams [Flow:Store] every preview.
+            // Route junked Blink ids to the sprite fallback. Flag-safe: re-enabling ff.blinkarmor
+            // restores the addressable path.
+            if (!DeNelle.Core.FeatureFlags.BlinkArmor && def.id != null &&
+                def.id.StartsWith("blink_", System.StringComparison.OrdinalIgnoreCase)) return false;
             if (!string.IsNullOrEmpty(def.loadVia) &&
                 def.loadVia.Equals("addressable", System.StringComparison.OrdinalIgnoreCase)) return true;
             return !string.IsNullOrEmpty(def.prefabPath) &&
@@ -1022,6 +1028,9 @@ namespace DeNelle.Village.Hero
         private static bool ArmorLoadsViaAddressable(ArmorDef def)
         {
             if (def == null) return false;
+            // WO-536: junked-Blink armor (ff.blinkarmor OFF) -> sprite fallback, no dead addressable load.
+            if (!DeNelle.Core.FeatureFlags.BlinkArmor && def.id != null &&
+                def.id.StartsWith("blink_", System.StringComparison.OrdinalIgnoreCase)) return false;
             if (!string.IsNullOrEmpty(def.loadVia) &&
                 def.loadVia.Equals("addressable", System.StringComparison.OrdinalIgnoreCase)) return true;
             return !string.IsNullOrEmpty(def.prefabPath) &&

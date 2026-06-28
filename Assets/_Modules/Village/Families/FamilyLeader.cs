@@ -27,6 +27,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -135,7 +136,12 @@ namespace DeNelle.Village
 
         private void Update()
         {
-            if (_enemy == null || _enemy.IsDead) { Disband(); return; }
+            if (_enemy == null || _enemy.IsDead)
+            {
+                FlowTrace.Warn("BattleArena", "MARCH leader DEAD -> Disband (followers must re-enable brains).");
+                Disband();
+                return;
+            }
             if (_members.Count == 0) return;
 
             // Throttled context evaluation → shape selection.

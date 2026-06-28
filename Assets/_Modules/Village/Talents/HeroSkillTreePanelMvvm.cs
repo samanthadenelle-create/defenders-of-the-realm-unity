@@ -47,6 +47,14 @@ namespace DeNelle.Village.Talents
         private Button _confirmBtn;
         private Button _cancelBtn;
 
+        // Single-screen folds (owner 2026-06-28): the right-side detail strip (selected
+        // node name + description + state) and the quick-swap row (slots 1-4).
+        private TMPro.TextMeshProUGUI _detailName;
+        private TMPro.TextMeshProUGUI _detailDesc;
+        private TMPro.TextMeshProUGUI _detailState;
+        private TMPro.TextMeshProUGUI _quickStatus;
+        private GameObject _quickRoot;
+
         private PanelHandle _panelHandle;
 
         // Fixed graph canvas size (px). Edge lines are rotated images positioned in
@@ -146,6 +154,26 @@ namespace DeNelle.Village.Talents
             }
 
             RebuildGraph();
+            RenderDetail();
+            RebuildQuickSlots();
+        }
+
+        // ── Detail strip (selected node name + description + state) ──────────────
+
+        private void RenderDetail()
+        {
+            if (_vm == null) return;
+            bool has = _vm.HasSelection;
+            if (_detailName != null)
+                _detailName.text = has ? _vm.SelectedNodeName : "Select a talent";
+            if (_detailDesc != null)
+                _detailDesc.text = has
+                    ? _vm.SelectedNodeDescription
+                    : "Tap any node to read what it does before you confirm.";
+            if (_detailState != null)
+                _detailState.text = has ? _vm.SelectedNodeStateLine : "";
+            if (_quickStatus != null)
+                _quickStatus.text = _vm.QuickSwapStatus;
         }
 
         // ── Build the node graph (edges behind, nodes in front) ──────────────────
@@ -314,20 +342,14 @@ namespace DeNelle.Village.Talents
                 ring.transform.SetAsFirstSibling();
             }
 
-            // Click → stage (if stageable) or unstage (if already planned).
+            // Click → SELECT (always, so a locked perk can be read in the detail strip);
+            // the VM folds the plan toggle (stage/unstage) in for actionable nodes.
             var btn = go.GetComponent<Button>();
             btn.targetGraphic = img;
             ElarionUiKit.StyleButtonColors(btn);
-            bool clickable = node.IsPending || node.CanUnlock;
-            btn.interactable = clickable;
+            btn.interactable = true;
             string id = node.Id;
-            bool pending = node.IsPending;
-            btn.onClick.AddListener(() =>
-            {
-                if (_vm == null) return;
-                if (pending) _vm.Unstage(id);
-                else _vm.Stage(id);
-            });
+            btn.onClick.AddListener(() => { if (_vm != null) _vm.Select(id); });
 
             // Icon (upper portion).
             var sprite = LoadIcon(node.IconPath);
@@ -432,15 +454,58 @@ namespace DeNelle.Village.Talents
             _walletText.alignment = TMPro.TextAlignmentOptions.Center;
             _walletText.raycastTarget = false;
 
-            // Equip button (top-right of header).
-            var equipBtn = ElarionUiKit.ButtonPack(panel, "Equip", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.78f, 0.915f), new Vector2(0.96f, 0.975f), OpenLoadout,
-                packSpriteName: RpgUiCatalog.ButtonFrame);
-            var equipLbl = equipBtn != null ? equipBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
-            if (equipLbl != null) { equipLbl.color = ElarionUi.Parchment; equipLbl.fontStyle = TMPro.FontStyles.Bold; }
+            // (The old "Equip" button that opened a second loadout screen is GONE — the
+            // quick-swap row below folds that assign flow into THIS screen, owner 2026-06-28.)
 
             BuildScrollGraph(panel);
+            BuildDetailAndQuickSwap(panel);
             BuildFooter(panel);
+        }
+
+        // The right-hand column: a SELECTED-talent detail strip (name + description +
+        // state) over a QUICK-SWAP row (slots 1-4). Browse → select → read → confirm →
+        // assign, all on one screen (no second loadout panel).
+        private void BuildDetailAndQuickSwap(Transform panel)
+        {
+            const float colX0 = 0.675f, colX1 = 0.955f;
+            const float txX0 = 0.69f, txX1 = 0.94f;
+
+            // Dark backing plate for the whole right column (delineates it from the graph).
+            var detailBg = ElarionUiKit.AddImage(panel, "DetailBg",
+                new Vector2(colX0, 0.40f), new Vector2(colX1, 0.84f),
+                new Color(0.04f, 0.035f, 0.03f, 0.92f));
+            var dbImg = detailBg.GetComponent<Image>();
+            if (dbImg != null) dbImg.raycastTarget = false;
+
+            ElarionUiKit.Label(panel, "SELECTED TALENT", 0.805f, 0.835f, ElarionUi.Gilt,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);
+
+            _detailName = ElarionUiKit.Label(panel, "Select a talent", 0.745f, 0.805f, ElarionUi.Parchment,
+                ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);
+
+            _detailDesc = ElarionUiKit.Label(panel,
+                "Tap any node to read what it does before you confirm.",
+                0.475f, 0.735f, ElarionUi.Parchment, ElarionUi.FontLabel,
+                TMPro.TextAlignmentOptions.TopLeft, txX0, txX1);
+            _detailDesc.enableWordWrapping = true;
+
+            _detailState = ElarionUiKit.Label(panel, "", 0.41f, 0.465f, ElarionUi.Affordable,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);
+
+            // Quick-swap caption + slot row.
+            ElarionUiKit.Label(panel, "QUICK-SWAP  (1-4)", 0.365f, 0.395f, ElarionUi.Gilt,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);
+
+            _quickRoot = new GameObject("QuickSwapRow", typeof(RectTransform));
+            _quickRoot.transform.SetParent(panel, false);
+            var qr = _quickRoot.GetComponent<RectTransform>();
+            qr.anchorMin = new Vector2(colX0 + 0.008f, 0.18f);
+            qr.anchorMax = new Vector2(colX1 - 0.008f, 0.36f);
+            qr.offsetMin = Vector2.zero; qr.offsetMax = Vector2.zero;
+
+            _quickStatus = ElarionUiKit.Label(panel, "Select an owned skill, then tap a slot (1-4).",
+                0.145f, 0.175f, ElarionUi.ParchmentDim, ElarionUi.FontMicro,
+                TMPro.TextAlignmentOptions.Center, txX0, txX1);
         }
 
         // The scrollable graph viewport (mask) + fixed-size content (nodes/edges).
@@ -449,7 +514,8 @@ namespace DeNelle.Village.Talents
             var areaGo = new GameObject("GraphScroll", typeof(RectTransform), typeof(ScrollRect));
             areaGo.transform.SetParent(panel, false);
             var ar = areaGo.GetComponent<RectTransform>();
-            ar.anchorMin = new Vector2(0.045f, 0.165f); ar.anchorMax = new Vector2(0.955f, 0.84f);
+            // Left ~62% of the panel; the right column is the detail + quick-swap strip.
+            ar.anchorMin = new Vector2(0.045f, 0.165f); ar.anchorMax = new Vector2(0.655f, 0.84f);
             ar.offsetMin = Vector2.zero; ar.offsetMax = Vector2.zero;
 
             var viewportGo = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D), typeof(Image));
@@ -458,7 +524,21 @@ namespace DeNelle.Village.Talents
             vr.anchorMin = Vector2.zero; vr.anchorMax = Vector2.one;
             vr.offsetMin = Vector2.zero; vr.offsetMax = Vector2.zero;
             var vImg = viewportGo.GetComponent<Image>();
-            vImg.color = new Color(0f, 0f, 0f, 0.001f); // near-invisible, but raycastable for drag-scroll
+            // BLACK GRID node-canvas (owner: "a grid that's black like the image for maximum
+            // value/contrast"). A procedural near-black tile with a single faint gilt-grey rule
+            // on two edges, tiled across the viewport. Opaque, so it overrides the obsidian fill
+            // in the graph rect, and raycastable so drag-scroll still works.
+            var grid = GridSprite();
+            if (grid != null)
+            {
+                vImg.sprite = grid;
+                vImg.type = Image.Type.Tiled;
+                vImg.color = Color.white;
+            }
+            else
+            {
+                vImg.color = new Color(0.012f, 0.012f, 0.016f, 1f); // flat black fallback
+            }
 
             var contentGo = new GameObject("GraphContent", typeof(RectTransform));
             contentGo.transform.SetParent(viewportGo.transform, false);
@@ -527,10 +607,100 @@ namespace DeNelle.Village.Talents
             if (img != null) { var c = img.color; c.a = a; img.color = c; }
         }
 
-        private void OpenLoadout()
+        // ── Quick-swap row (folds the loadout screen into this panel) ─────────────
+
+        private void RebuildQuickSlots()
         {
-            if (!PanelRouter.Open(PanelId.HeroLoadout))
-                Debug.LogWarning("[HeroSkillTreePanelMvvm] HeroLoadout panel not registered — Equip is a no-op.");
+            ClearChildren(_quickRoot);
+            if (_quickRoot == null || _vm == null) return;
+
+            var slots = _vm.QuickSlots;
+            int n = slots != null ? slots.Count : 0;
+            if (n <= 0) return;
+
+            const int cols = 2;
+            float gapX = 0.04f, gapY = 0.10f;
+            int rows = (n + cols - 1) / cols;
+            float w = (1f - gapX * (cols - 1)) / cols;
+            float h = (1f - gapY * (rows - 1)) / rows;
+            bool assignTarget = _vm.SelectedIsAssignable;
+            for (int i = 0; i < n; i++)
+            {
+                int c = i % cols, r = i / cols;
+                float x0 = c * (w + gapX);
+                float y1 = 1f - r * (h + gapY);
+                float y0 = y1 - h;
+                BuildQuickSlotTile(_quickRoot.transform, slots[i], x0, x0 + w, y0, y1, assignTarget);
+            }
+        }
+
+        private void BuildQuickSlotTile(Transform parent, LoadoutSlotVM slot,
+                                        float x0, float x1, float y0, float y1, bool assignTarget)
+        {
+            var tile = new GameObject("Quick_" + slot.SlotKey, typeof(Image), typeof(Button));
+            tile.transform.SetParent(parent, false);
+            var rt = tile.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(x0, y0); rt.anchorMax = new Vector2(x1, y1);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+
+            var img = tile.GetComponent<Image>();
+            Sprite plate = RpgUiCatalog.Get("slot", "slot_talent");
+            if (plate != null) { img.sprite = plate; img.type = Image.Type.Sliced; }
+            else ElarionUiKit.ApplyRounded(img);
+
+            // Once an assignable skill is selected, every slot glows gold (the tap target);
+            // empty reads as a quiet socket, filled reads gold-warm. Tap a filled slot with
+            // nothing assignable selected to clear it.
+            Color fill;
+            if (assignTarget) fill = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.50f);
+            else if (slot.IsEmpty) fill = ElarionUiKit.Track;
+            else fill = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.22f);
+            img.color = fill;
+
+            var btn = tile.GetComponent<Button>();
+            btn.targetGraphic = img;
+            ElarionUiKit.StyleButtonColors(btn);
+            int idx = slot.SlotIndex;
+            btn.onClick.AddListener(() => { if (_vm != null) _vm.AssignSelectedToSlot(idx); });
+
+            ElarionUiKit.Label(tile.transform, slot.SlotKey, 0.60f, 0.95f, ElarionUi.Gilt,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
+
+            string body = slot.IsEmpty ? (assignTarget ? "tap to set" : "+") : slot.AbilityName;
+            Color bodyColor = slot.IsEmpty
+                ? (assignTarget ? ElarionUi.Gilt : ElarionUi.ParchmentDim)
+                : ElarionUi.Parchment;
+            ElarionUiKit.Label(tile.transform, body, 0.06f, 0.56f, bodyColor,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: !slot.IsEmpty);
+        }
+
+        // ── Black-grid node-canvas sprite (generated once) ────────────────────────
+
+        private static Sprite s_gridSprite;
+        private static bool s_gridTried;
+        private static Sprite GridSprite()
+        {
+            if (s_gridSprite != null || s_gridTried) return s_gridSprite;
+            s_gridTried = true;
+            try
+            {
+                const int S = 64;
+                var tex = new Texture2D(S, S, TextureFormat.RGBA32, false);
+                tex.wrapMode = TextureWrapMode.Repeat;
+                tex.filterMode = FilterMode.Bilinear;
+                var bg = new Color(0.012f, 0.012f, 0.016f, 1f);  // near-black cell
+                var line = new Color(0.15f, 0.16f, 0.21f, 1f);   // faint grid rule
+                var px = new Color[S * S];
+                for (int y = 0; y < S; y++)
+                    for (int x = 0; x < S; x++)
+                        px[y * S + x] = (x == 0 || y == 0) ? line : bg;
+                tex.SetPixels(px);
+                tex.Apply();
+                s_gridSprite = Sprite.Create(tex, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f), 100f);
+                s_gridSprite.name = "SkillTreeGrid";
+            }
+            catch { s_gridSprite = null; }   // WebGL/headless guard — flat-black fallback used
+            return s_gridSprite;
         }
 
         // Icon cache — Resources.Load is cheap but cached avoids reloading every Render.
@@ -556,6 +726,16 @@ namespace DeNelle.Village.Talents
             }
         }
 
+        private void ClearChildren(GameObject host)
+        {
+            if (host == null) return;
+            for (int i = host.transform.childCount - 1; i >= 0; i--)
+            {
+                var c = host.transform.GetChild(i);
+                if (c != null) Destroy(c.gameObject);
+            }
+        }
+
         private void Close()
         {
             Unbind();
@@ -565,6 +745,11 @@ namespace DeNelle.Village.Talents
             _planText = null;
             _confirmBtn = null;
             _cancelBtn = null;
+            _detailName = null;
+            _detailDesc = null;
+            _detailState = null;
+            _quickStatus = null;
+            _quickRoot = null;
             if (_ui != null) Destroy(_ui);
             _ui = null;
             _graphContent = null;

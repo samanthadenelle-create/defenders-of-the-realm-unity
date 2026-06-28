@@ -20,6 +20,7 @@
 
 using UnityEngine;
 using UnityEngine.AI;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -72,6 +73,7 @@ namespace DeNelle.Village
             // Disable the brain so it stops writing SetBrainTargetPosition; its
             // OnDisable clears the override, leaving this member the clean sole writer.
             if (_brain != null) _brain.enabled = false;
+            FlowTrace.Step("BattleArena", $"MARCH follower brain DISABLED (slot wiring) slot={_slotIndex}.");
         }
 
         /// <summary>
@@ -84,6 +86,7 @@ namespace DeNelle.Village
             _following = false;
             _enemy?.SetBrainTargetPosition(null);
             if (_brain != null) _brain.enabled = true;
+            FlowTrace.Step("BattleArena", $"MARCH follower brain RE-ENABLED slot={_slotIndex}.");
         }
 
         private void OnDisable()

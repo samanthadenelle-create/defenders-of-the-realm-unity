@@ -25,6 +25,7 @@
 using System;
 using System.Collections.Generic;
 using DeNelle.Core.UI.Mvvm;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.Talents
 {
@@ -110,6 +111,14 @@ namespace DeNelle.Village.Talents
         // Plan→CONFIRM: nodes staged this session but not yet committed/spent.
         private readonly HashSet<string> _pending = new HashSet<string>(StringComparer.Ordinal);
 
+        // Single-screen folds (owner 2026-06-28): the currently SELECTED node (drives the
+        // detail/description panel) + a mirror of the player's QUICK-SWAP bar (slots 1..4)
+        // so a player can read a perk AND assign an owned skill without a second screen.
+        private string _selectedId = "";
+        private readonly List<LoadoutSlotVM> _quickSlots = new List<LoadoutSlotVM>(AssignableSkillBar.SlotCount);
+        private Action _barHandler;
+        private AssignableSkillBar _barSub;
+
         public HeroSkillTreeVM(Action onClose, string heroSlug = HeroSlug)
         {
             _heroSlug = string.IsNullOrEmpty(heroSlug) ? HeroSlug : heroSlug;
@@ -121,6 +130,7 @@ namespace DeNelle.Village.Talents
                 _wisdomHandler = Raise;
                 svc.Changed += _wisdomHandler;
             }
+            SubscribeBar();
 
             Rebuild();
         }
@@ -139,6 +149,7 @@ namespace DeNelle.Village.Talents
             _disposed = true;
             var svc = WisdomCurrencyService.Instance;
             if (svc != null && _wisdomHandler != null) svc.Changed -= _wisdomHandler;
+            UnsubscribeBar();
             Changed = null;
         }
 
@@ -255,6 +266,7 @@ namespace DeNelle.Village.Talents
             // is always committed before its child.
             var ordered = new List<string>(_pending);
             ordered.Sort((a, b) => TierOf(a).CompareTo(TierOf(b)));
+            FlowTrace.Step("SkillTree", "commit plan: " + ordered.Count + " node(s), -" + PendingCost + " wisdom");
             foreach (var id in ordered) svc.Unlock(id);   // each re-validates prereq+cost+capstone
 
             _pending.Clear();
@@ -355,6 +367,8 @@ namespace DeNelle.Village.Talents
                     _shared.Add(BuildNode(n, col, isShared: true, budget, owned, effective));
                 }
             }
+
+            BuildQuickSlots();
         }
 
         private SkillNodeVM BuildNode(HeroTalentNodeDef n, int col, bool isShared, int budget,
@@ -514,6 +528,171 @@ namespace DeNelle.Village.Talents
                 foreach (var id in svc.Unlocked)
                     if (!string.IsNullOrEmpty(id)) set.Add(id);
             return set;
+        }
+
+        // ── Selection + detail panel (read what a perk does BEFORE confirming) ───
+        // The View calls Select(id) on every node tap. Selection drives the detail
+        // strip (name + description). For an ACTIONABLE node we also fold the plan
+        // toggle in here (stage/unstage), so one tap both reads AND plans it; a locked
+        // node just updates the detail so the player can read why it's gated.
+
+        /// <summary>Select a node (updates the detail strip) and, if it's actionable, stage/unstage it.</summary>
+        public void Select(string nodeId)
+        {
+            _selectedId = nodeId ?? "";
+            FlowTrace.Step("SkillTree", "select node " + _selectedId);
+            if (string.IsNullOrEmpty(_selectedId)) { Raise(); return; }
+            if (_pending.Contains(_selectedId)) { Unstage(_selectedId); return; }  // Unstage raises (selection kept)
+            int before = _pending.Count;
+            Stage(_selectedId);                                                     // Stage raises if it took
+            if (_pending.Count == before) Raise();                                  // locked/owned — refresh detail only
+        }
+
+        /// <summary>True when a real node is selected (the detail strip has content).</summary>
+        public bool HasSelection => HeroTalentCatalog.FindNode(_selectedId) != null;
+
+        /// <summary>Display name of the selected node, or "" when none.</summary>
+        public string SelectedNodeName
+        {
+            get { var n = HeroTalentCatalog.FindNode(_selectedId); return n == null ? "" : (string.IsNullOrEmpty(n.Name) ? n.Id : n.Name); }
+        }
+
+        /// <summary>What the selected perk does — the node's authored description, with a
+        /// graceful fallback to the unlocked ability / effect summary when none is authored.</summary>
+        public string SelectedNodeDescription
+        {
+            get
+            {
+                var n = HeroTalentCatalog.FindNode(_selectedId);
+                if (n == null) return "";
+                return string.IsNullOrEmpty(n.Description) ? DescribeFallback(n) : n.Description;
+            }
+        }
+
+        /// <summary>Owned / planned / cost / lock-reason line for the selected node.</summary>
+        public string SelectedNodeStateLine
+        {
+            get
+            {
+                var n = HeroTalentCatalog.FindNode(_selectedId);
+                if (n == null) return "";
+                var svc = WisdomCurrencyService.Instance;
+                var owned = BuildUnlockedSet(svc);
+                if (owned.Contains(n.Id)) return "Owned";
+                if (_pending.Contains(n.Id)) return "Planned  ·  -" + n.Cost + " Wisdom";
+                int budget = (svc != null ? svc.Wisdom : 0) - PendingCost;
+                var effective = Effective(owned);
+                if (HeroTalentCatalog.CanUnlock(n.Id, budget, effective) && n.Cost <= budget)
+                    return "Costs " + n.Cost + " Wisdom  ·  tap the node to plan it";
+                return LockReasonFor(n, budget, effective);
+            }
+        }
+
+        /// <summary>The ability id the selected node grants IF it is an OWNED, assignable skill — else "".
+        /// Non-empty means the quick-swap row can drop this skill into a slot 1..4.</summary>
+        public string SelectedAssignAbilityId
+        {
+            get
+            {
+                var n = HeroTalentCatalog.FindNode(_selectedId);
+                if (n == null) return "";
+                string abilityId = AbilityIdOf(n);
+                if (string.IsNullOrEmpty(abilityId)) return "";
+                if (!BuildUnlockedSet(WisdomCurrencyService.Instance).Contains(n.Id)) return ""; // owned only
+                return AbilityCatalog.FindById(abilityId) != null ? abilityId : "";
+            }
+        }
+
+        /// <summary>True when the selected node is an owned skill that can be assigned to the quick-swap bar.</summary>
+        public bool SelectedIsAssignable => !string.IsNullOrEmpty(SelectedAssignAbilityId);
+
+        // Best-available text when a node carries no authored description string.
+        private static string DescribeFallback(HeroTalentNodeDef n)
+        {
+            if (n == null) return "";
+            string ability = AbilityIdOf(n);
+            if (!string.IsNullOrEmpty(ability))
+            {
+                var def = AbilityCatalog.FindById(ability);
+                if (def != null)
+                    return (string.IsNullOrEmpty(def.Name) ? ability : def.Name)
+                         + (string.IsNullOrEmpty(def.Effect) ? "" : " — " + def.Effect);
+                return "Unlocks ability: " + ability;
+            }
+            if (n.Effect != null && !string.IsNullOrEmpty(n.Effect.Type))
+                return n.Effect.Type + (n.Effect.Value != 0f ? " " + n.Effect.Value : "");
+            return "Passive talent.";
+        }
+
+        // ── Quick-swap bar (folds in the loadout screen) ─────────────────────────
+
+        /// <summary>The player's quick-swap slots 1..4 (mirror of AssignableSkillBar). Never null.</summary>
+        public IReadOnlyList<LoadoutSlotVM> QuickSlots => _quickSlots;
+
+        /// <summary>Last quick-swap action / hint line.</summary>
+        public string QuickSwapStatus { get; private set; } = "Select an owned skill, then tap a slot (1-4).";
+
+        /// <summary>Assign the SELECTED owned skill into quick-swap <paramref name="slotIndex"/>; with no
+        /// assignable selection, tapping a filled slot clears it. Battle-locked + persisted via the bar.</summary>
+        public void AssignSelectedToSlot(int slotIndex)
+        {
+            string id = SelectedAssignAbilityId;
+            if (string.IsNullOrEmpty(id))
+            {
+                if (AssignableSkillBarAccess.EditsLocked) { QuickSwapStatus = "Can't change skills during battle."; Raise(); return; }
+                bool cleared = AssignableSkillBarAccess.Clear(slotIndex);
+                QuickSwapStatus = cleared ? "Slot " + (slotIndex + 1) + " cleared."
+                                          : "Select an owned skill, then tap a slot (1-4).";
+                FlowTrace.Step("SkillTree", "quickswap clear slot " + slotIndex + " => " + cleared);
+                Rebuild(); Raise();
+                return;
+            }
+            if (AssignableSkillBarAccess.EditsLocked) { QuickSwapStatus = "Can't change skills during battle."; Raise(); return; }
+            bool ok = AssignableSkillBarAccess.Assign(slotIndex, id);
+            QuickSwapStatus = ok ? SelectedNodeName + " → quick-swap " + (slotIndex + 1) + "."
+                                 : "That skill is already on the bar.";
+            FlowTrace.Step("SkillTree", "quickswap assign " + id + " -> slot " + slotIndex + " => " + ok);
+            Rebuild(); Raise();
+        }
+
+        private void BuildQuickSlots()
+        {
+            _quickSlots.Clear();
+            var bar = AssignableSkillBarAccess.Current;
+            for (int i = 0; i < AssignableSkillBar.SlotCount; i++)
+            {
+                string id = bar != null ? bar.AbilityIdForSlot(i) : null;
+                string name = "";
+                if (!string.IsNullOrEmpty(id))
+                {
+                    var def = AbilityCatalog.FindById(id);
+                    name = def != null && !string.IsNullOrEmpty(def.Name) ? def.Name : id;
+                }
+                _quickSlots.Add(new LoadoutSlotVM(i, (i + 1).ToString(), id ?? "", name));
+            }
+        }
+
+        private void SubscribeBar()
+        {
+            var bar = AssignableSkillBarAccess.Current;
+            if (bar == null) return;
+            _barHandler = OnBarChanged;
+            bar.Changed += _barHandler;
+            _barSub = bar;
+        }
+
+        private void UnsubscribeBar()
+        {
+            if (_barSub != null && _barHandler != null) _barSub.Changed -= _barHandler;
+            _barSub = null;
+            _barHandler = null;
+        }
+
+        private void OnBarChanged()
+        {
+            if (_disposed) return;
+            Rebuild();
+            Raise();
         }
 
         private void Raise() { if (!_disposed) Changed?.Invoke(); }
