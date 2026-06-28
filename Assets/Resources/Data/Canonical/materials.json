@@ -1,0 +1,108 @@
+{
+  "_comment": "Crafting INGREDIENT / material definitions for the item-drops + crafting lane. Loaded by DeNelle.Village.Items.MaterialCatalog via DeNelle.Core.CanonicalJson (Resources first, StreamingAssets fallback). A material's 'id' is its VillageInventory larder key AND a loot-tables.json drop materialId AND a consumable-recipes.json ingredient id. These are the 12 ingredients we have ART for (iconPath -> Resources/ItemIcons/<id>, ItemIconImporter; glyph fallback until sliced). Added by WO Consumable-Crafting-V1. The legacy scaffolding mats (monster-hide / wild-herb / tattered-cloth / ember-resin / rare-essence) are NOT listed here - they have no recipes and resolve to the glyph fallback in the crafting UI.",
+  "_schemaNotes": {
+    "kind": "material (a crafting ingredient; UI bucket).",
+    "category": "herb | crystal | fungus | liquid | cloth | stone | petal - documentation + a hint for the glyph/icon fallback.",
+    "iconPath": "Resources sprite path (ItemIcons/<id>); glyph is the ASCII fallback.",
+    "glyph": "ASCII fallback shown when the icon sprite is not yet sliced."
+  },
+  "version": 1,
+  "materials": [
+    {
+      "id": "ing_moonbloom",
+      "displayName": "Moonbloom Herb",
+      "kind": "material",
+      "category": "herb",
+      "glyph": "*",
+      "iconPath": "ItemIcons/ing_moonbloom"
+    },
+    {
+      "id": "ing_ironroot",
+      "displayName": "Ironroot",
+      "kind": "material",
+      "category": "herb",
+      "glyph": "Y",
+      "iconPath": "ItemIcons/ing_ironroot"
+    },
+    {
+      "id": "ing_ember_crystal",
+      "displayName": "Ember Crystal",
+      "kind": "material",
+      "category": "crystal",
+      "glyph": "o",
+      "iconPath": "ItemIcons/ing_ember_crystal"
+    },
+    {
+      "id": "ing_starbloom",
+      "displayName": "Starbloom",
+      "kind": "material",
+      "category": "herb",
+      "glyph": "*",
+      "iconPath": "ItemIcons/ing_starbloom"
+    },
+    {
+      "id": "ing_shadowcap",
+      "displayName": "Shadowcap Mushroom",
+      "kind": "material",
+      "category": "fungus",
+      "glyph": "T",
+      "iconPath": "ItemIcons/ing_shadowcap"
+    },
+    {
+      "id": "ing_aether_shard",
+      "displayName": "Aether Shard",
+      "kind": "material",
+      "category": "crystal",
+      "glyph": "+",
+      "iconPath": "ItemIcons/ing_aether_shard"
+    },
+    {
+      "id": "ing_spring_water",
+      "displayName": "Spring Water",
+      "kind": "material",
+      "category": "liquid",
+      "glyph": "~",
+      "iconPath": "ItemIcons/ing_spring_water"
+    },
+    {
+      "id": "ing_oil_flask",
+      "displayName": "Oil Flask",
+      "kind": "material",
+      "category": "liquid",
+      "glyph": "b",
+      "iconPath": "ItemIcons/ing_oil_flask"
+    },
+    {
+      "id": "ing_cloth_scrap",
+      "displayName": "Cloth Scrap",
+      "kind": "material",
+      "category": "cloth",
+      "glyph": "=",
+      "iconPath": "ItemIcons/ing_cloth_scrap"
+    },
+    {
+      "id": "ing_quickfoot",
+      "displayName": "Quickfoot Mushroom",
+      "kind": "material",
+      "category": "fungus",
+      "glyph": "T",
+      "iconPath": "ItemIcons/ing_quickfoot"
+    },
+    {
+      "id": "ing_heartstone_crystal",
+      "displayName": "Heartstone Crystal",
+      "kind": "material",
+      "category": "stone",
+      "glyph": "#",
+      "iconPath": "ItemIcons/ing_heartstone_crystal"
+    },
+    {
+      "id": "ing_elarion_petal",
+      "displayName": "Elarion Petal",
+      "kind": "material",
+      "category": "petal",
+      "glyph": "*",
+      "iconPath": "ItemIcons/ing_elarion_petal"
+    }
+  ]
+}

@@ -57,6 +57,9 @@ namespace DeNelle.Core.UI
         /// <summary>Ability loadout chooser — HeroLoadoutPanelMvvm (W/E/R equip). Opened from the
         /// skill-tree panel's "Equip" button.</summary>
         HeroLoadout = 8,
+        /// <summary>Consumable crafting / alchemy bench — CraftingPanelMvvm (combine dropped
+        /// ingredients into potions/bombs). SEPARATE from the gear Workshop (PanelId.Crafting).</summary>
+        ConsumableCrafting = 9,
     }
 
     /// <summary>

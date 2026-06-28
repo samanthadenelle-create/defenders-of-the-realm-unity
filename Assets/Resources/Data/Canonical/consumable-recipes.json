@@ -1,8 +1,8 @@
 {
-  "_comment": "ISOLATED item-drops lane: consumable crafting recipes (combine N drop materials -> 1 consumable). Loaded by DeNelle.Village.Items.ConsumableCraftingCatalog via DeNelle.Core.CanonicalJson (Resources first, StreamingAssets fallback). This is a SEPARATE file from the dungeon-side crafting-recipes.json (which CraftingRecipeCatalog owns) so the two never collide. A recipe's 'output' is a consumable id from consumables.json AND the VillageInventory larder key it deposits. DARK by default (gated by ItemDropSystem.Enabled): the crafting service no-ops until the flag is on. Placeholder content - OWNER + CREATIVE finalise the real material roster, costs and output magnitudes.",
+  "_comment": "Item-drops + crafting lane: consumable crafting recipes (combine N ingredient materials -> 1 consumable). Loaded by DeNelle.Village.Items.ConsumableCraftingCatalog via DeNelle.Core.CanonicalJson (Resources first, StreamingAssets fallback). SEPARATE from the dungeon-side crafting-recipes.json (CraftingRecipeCatalog owns that) so the two never collide. A recipe's 'output' is a consumable id from consumables.json AND the VillageInventory larder key it deposits; 'ingredients[].id' are material ids from materials.json + loot-tables.json. Gated by ItemDropSystem.Enabled (ON for V1). WO Consumable-Crafting-V1 added the 8 cons_* recipes; ingredients restricted to the 12 art-backed materials (substitutions documented in the WO RESULT).",
   "_schemaNotes": {
-    "recipes": "Each recipe combines the listed ingredient materials (drop ids from loot-tables.json) into one output consumable (id from consumables.json). Craftable once the larder holds at least every listed count.",
-    "ingredients": "{ id, count } - id is a drop-material larder key; count is how many are consumed.",
+    "recipes": "Each recipe combines the listed ingredient materials into one output consumable. Craftable once the larder holds at least every listed count.",
+    "ingredients": "{ id, count } - id is a material larder key (materials.json); count is how many are consumed.",
     "output": "The consumable id produced (deposited 1 into the larder)."
   },
   "version": 1,
@@ -40,6 +40,80 @@
       "ingredients": [
         { "id": "tattered-cloth", "count": 2 },
         { "id": "monster-hide", "count": 1 }
+      ]
+    },
+    {
+      "id": "craft-cons_mending_salve",
+      "output": "cons_mending_salve",
+      "displayName": "Brew Mending Salve",
+      "ingredients": [
+        { "id": "ing_moonbloom", "count": 2 },
+        { "id": "ing_spring_water", "count": 1 }
+      ]
+    },
+    {
+      "id": "craft-cons_ironbark_tonic",
+      "output": "cons_ironbark_tonic",
+      "displayName": "Brew Ironbark Tonic",
+      "ingredients": [
+        { "id": "ing_ironroot", "count": 4 }
+      ]
+    },
+    {
+      "id": "craft-cons_emberfire_bomb",
+      "output": "cons_emberfire_bomb",
+      "displayName": "Assemble Emberfire Bomb",
+      "ingredients": [
+        { "id": "ing_ember_crystal", "count": 2 },
+        { "id": "ing_oil_flask", "count": 1 },
+        { "id": "ing_cloth_scrap", "count": 1 }
+      ]
+    },
+    {
+      "id": "craft-cons_swiftstep_elixir",
+      "output": "cons_swiftstep_elixir",
+      "displayName": "Brew Swiftstep Elixir",
+      "ingredients": [
+        { "id": "ing_moonbloom", "count": 2 },
+        { "id": "ing_quickfoot", "count": 1 }
+      ]
+    },
+    {
+      "id": "craft-cons_arcane_clarity",
+      "output": "cons_arcane_clarity",
+      "displayName": "Brew Arcane Clarity Potion",
+      "ingredients": [
+        { "id": "ing_starbloom", "count": 1 },
+        { "id": "ing_aether_shard", "count": 3 }
+      ]
+    },
+    {
+      "id": "craft-cons_suppressing_smoke",
+      "output": "cons_suppressing_smoke",
+      "displayName": "Assemble Suppressing Smoke Bomb",
+      "ingredients": [
+        { "id": "ing_shadowcap", "count": 3 },
+        { "id": "ing_oil_flask", "count": 2 }
+      ]
+    },
+    {
+      "id": "craft-cons_heartward_draught",
+      "output": "cons_heartward_draught",
+      "displayName": "Brew Heartward Draught",
+      "ingredients": [
+        { "id": "ing_heartstone_crystal", "count": 1 },
+        { "id": "ing_cloth_scrap", "count": 2 },
+        { "id": "ing_spring_water", "count": 1 }
+      ]
+    },
+    {
+      "id": "craft-cons_elarion_blessing",
+      "output": "cons_elarion_blessing",
+      "displayName": "Brew Elarion's Blessing",
+      "ingredients": [
+        { "id": "ing_elarion_petal", "count": 1 },
+        { "id": "ing_starbloom", "count": 2 },
+        { "id": "ing_ember_crystal", "count": 1 }
       ]
     }
   ]

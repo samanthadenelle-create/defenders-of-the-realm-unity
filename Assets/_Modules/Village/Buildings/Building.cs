@@ -44,6 +44,9 @@ namespace DeNelle.Village
         Forge = 6,
         /// <summary>Armorer / Blacksmith -- sells + upgrades ARMOR (vendor context "armorer").</summary>
         Armorer = 7,
+        /// <summary>Apothecary workbench -- opens the consumable-crafting / alchemy bench
+        /// (PanelId.ConsumableCrafting). Opens the panel DIRECTLY (no Yarn structure hook).</summary>
+        ApothecaryWorkbench = 8,
     }
 
     /// <summary>

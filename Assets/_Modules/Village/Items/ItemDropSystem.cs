@@ -50,13 +50,16 @@ namespace DeNelle.Village.Items
         // Feature flag - DEFAULT OFF. The module does nothing until this is true.
         // ---------------------------------------------------------------------
 
-        /// <summary>Compile-time default. OFF unless DOTR_ITEM_DROPS is defined so the
-        /// feature ships dark in the grant/village build.</summary>
+        /// <summary>Compile-time default. ON for V1 (WO Consumable-Crafting-V1): the drops +
+        /// crafting loop is now a live feature, so the watcher self-bootstraps and rolls.
+        /// The DOTR_ITEM_DROPS define is retained for parity but the feature defaults true
+        /// regardless. Set <see cref="Enabled"/> = false (before AfterSceneLoad) to ship it
+        /// dark again.</summary>
         private const bool DefaultEnabled =
 #if DOTR_ITEM_DROPS
             true;
 #else
-            false;
+            true;
 #endif
 
         private static bool _enabled = DefaultEnabled;

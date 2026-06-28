@@ -384,6 +384,14 @@ namespace DeNelle.Village
                 case BuildingType.PetHouse:
                     panelId = PanelId.PetSkillTree;
                     return true;
+                // Apothecary workbench → the consumable-crafting / alchemy bench. Routed here
+                // (NOT via StructureHookIdFor) ON PURPOSE: Interact() tries the Yarn structure
+                // dialogue BEFORE TryPanelFor, so apothecary must return null from
+                // StructureHookIdFor (it does — no case added there) to fall through and open
+                // PanelId.ConsumableCrafting DIRECTLY, with no Yarn detour.
+                case BuildingType.ApothecaryWorkbench:
+                    panelId = PanelId.ConsumableCrafting;
+                    return true;
                 // Resource + Armorer buildings all share the Building Upgrade panel.
                 case BuildingType.CrystalMine:
                 case BuildingType.Farm:
@@ -586,6 +594,7 @@ namespace DeNelle.Village
             BuildingType.Lumbermill  => "Lumbermill",
             BuildingType.Forge       => "Forge",
             BuildingType.Armorer     => "Armorer",
+            BuildingType.ApothecaryWorkbench => "Apothecary",
             _ => "Building",
         };
     }

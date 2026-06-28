@@ -1,9 +1,9 @@
 {
-  "_comment": "PLACEHOLDER loot tables for the ISOLATED item-drops lane (gear/crafting + item drops + consumables). Loaded by DeNelle.Village.Items.LootTableCatalog via DeNelle.Core.CanonicalJson (Resources first, StreamingAssets fallback). DARK by default: nothing rolls unless ItemDropSystem.Enabled is flipped on (define DOTR_ITEM_DROPS or set the flag at runtime). Material ids below double as VillageInventory larder keys and as crafting-recipe ingredient ids - the OWNER + CREATIVE must finalise the real material taxonomy, drop rates, and per-enemy tables before this goes live. This file is example scaffolding only.",
+  "_comment": "Loot tables for the item-drops + crafting lane. Loaded by DeNelle.Village.Items.LootTableCatalog via DeNelle.Core.CanonicalJson (Resources first, StreamingAssets fallback). Gated by ItemDropSystem.Enabled (ON for V1). ItemDropWatcher keys a table by the slain enemy's EnemyDefId (enemies.json id); if none matches it falls back to defaults.enemy / defaults.boss. WO Consumable-Crafting-V1 added per-enemy tables for the real V1 roster (orc + hollow families) dropping the 12 art-backed ingredients (materials.json). The legacy common-grunt / boss-hoard tables remain as the fallback defaults.",
   "_schemaNotes": {
-    "tables": "Each table maps an enemy/boss kind to weighted drops. 'id' matches an enemy def id (enemies.json) for a specific table, or one of the 'defaults' ids for the fallback. 'source' is documentation only (enemy/boss/dungeon).",
-    "drops": "Each line is rolled INDEPENDENTLY: roll 'chance' (0..1); on a hit award a random count in [minCount, maxCount]. materialId is deposited into VillageInventory (the village larder).",
-    "defaults": "Fallback table ids used when a slain enemy/boss has no table of its own (enemy = any common mob, boss = the dragon)."
+    "tables": "Each table maps an enemy/boss def id (enemies.json) to weighted drops. 'source' is documentation only (enemy/boss/dungeon).",
+    "drops": "Each line is rolled INDEPENDENTLY: roll 'chance' (0..1); on a hit award a random count in [minCount, maxCount]. materialId is deposited into VillageInventory (the village larder) - it is a materials.json ingredient id.",
+    "defaults": "Fallback table ids used when a slain enemy/boss has no table of its own."
   },
   "version": 1,
   "tables": [
@@ -24,6 +24,82 @@
         { "materialId": "wild-herb", "chance": 1.0, "minCount": 2, "maxCount": 4 },
         { "materialId": "ember-resin", "chance": 0.75, "minCount": 1, "maxCount": 2 },
         { "materialId": "rare-essence", "chance": 0.50, "minCount": 1, "maxCount": 1 }
+      ]
+    },
+
+    {
+      "id": "hollow-walker",
+      "source": "enemy",
+      "drops": [
+        { "materialId": "ing_moonbloom", "chance": 0.50, "minCount": 1, "maxCount": 2 },
+        { "materialId": "ing_spring_water", "chance": 0.40, "minCount": 1, "maxCount": 1 },
+        { "materialId": "ing_cloth_scrap", "chance": 0.30, "minCount": 1, "maxCount": 1 }
+      ]
+    },
+    {
+      "id": "hollow-rogue",
+      "source": "enemy",
+      "drops": [
+        { "materialId": "ing_quickfoot", "chance": 0.50, "minCount": 1, "maxCount": 2 },
+        { "materialId": "ing_shadowcap", "chance": 0.40, "minCount": 1, "maxCount": 1 },
+        { "materialId": "ing_cloth_scrap", "chance": 0.30, "minCount": 1, "maxCount": 1 }
+      ]
+    },
+    {
+      "id": "hollow-warrior",
+      "source": "enemy",
+      "drops": [
+        { "materialId": "ing_ironroot", "chance": 0.50, "minCount": 1, "maxCount": 2 },
+        { "materialId": "ing_oil_flask", "chance": 0.35, "minCount": 1, "maxCount": 1 },
+        { "materialId": "ing_heartstone_crystal", "chance": 0.12, "minCount": 1, "maxCount": 1 }
+      ]
+    },
+    {
+      "id": "hollow-acolyte",
+      "source": "enemy",
+      "drops": [
+        { "materialId": "ing_aether_shard", "chance": 0.45, "minCount": 1, "maxCount": 2 },
+        { "materialId": "ing_starbloom", "chance": 0.40, "minCount": 1, "maxCount": 1 },
+        { "materialId": "ing_shadowcap", "chance": 0.30, "minCount": 1, "maxCount": 1 }
+      ]
+    },
+    {
+      "id": "necromancer",
+      "source": "boss",
+      "drops": [
+        { "materialId": "ing_starbloom", "chance": 0.60, "minCount": 1, "maxCount": 3 },
+        { "materialId": "ing_aether_shard", "chance": 0.60, "minCount": 2, "maxCount": 3 },
+        { "materialId": "ing_heartstone_crystal", "chance": 0.15, "minCount": 1, "maxCount": 1 },
+        { "materialId": "ing_elarion_petal", "chance": 0.12, "minCount": 1, "maxCount": 1 }
+      ]
+    },
+
+    {
+      "id": "orc-berserker",
+      "source": "enemy",
+      "drops": [
+        { "materialId": "ing_ironroot", "chance": 0.50, "minCount": 1, "maxCount": 2 },
+        { "materialId": "ing_ember_crystal", "chance": 0.40, "minCount": 1, "maxCount": 1 },
+        { "materialId": "ing_oil_flask", "chance": 0.35, "minCount": 1, "maxCount": 1 }
+      ]
+    },
+    {
+      "id": "orc-shaman",
+      "source": "enemy",
+      "drops": [
+        { "materialId": "ing_aether_shard", "chance": 0.45, "minCount": 1, "maxCount": 2 },
+        { "materialId": "ing_ember_crystal", "chance": 0.40, "minCount": 1, "maxCount": 1 },
+        { "materialId": "ing_starbloom", "chance": 0.35, "minCount": 1, "maxCount": 1 }
+      ]
+    },
+    {
+      "id": "orc-necromancer",
+      "source": "enemy",
+      "drops": [
+        { "materialId": "ing_aether_shard", "chance": 0.50, "minCount": 1, "maxCount": 2 },
+        { "materialId": "ing_ember_crystal", "chance": 0.40, "minCount": 1, "maxCount": 2 },
+        { "materialId": "ing_heartstone_crystal", "chance": 0.15, "minCount": 1, "maxCount": 1 },
+        { "materialId": "ing_elarion_petal", "chance": 0.12, "minCount": 1, "maxCount": 1 }
       ]
     }
   ],

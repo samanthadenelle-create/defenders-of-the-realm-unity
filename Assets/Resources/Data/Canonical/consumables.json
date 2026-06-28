@@ -1,11 +1,12 @@
 {
-  "_comment": "PLACEHOLDER consumable definitions for the ISOLATED item-drops lane. Loaded by DeNelle.Village.Items.ConsumableCatalog via DeNelle.Core.CanonicalJson. DARK by default (gated by ItemDropSystem.Enabled). A consumable's 'id' is also its VillageInventory larder key AND the output id of the matching crafting recipe in crafting-recipes.json - so crafting 'minor-heal-potion' deposits 'minor-heal-potion', and ConsumableUseService.TryUse('minor-heal-potion') consumes it + applies its effect. The OWNER + CREATIVE must finalise the real consumable roster, magnitudes, durations and art before this goes live. Example scaffolding only.",
+  "_comment": "Consumable definitions for the item-drops + crafting lane. Loaded by DeNelle.Village.Items.ConsumableCatalog via DeNelle.Core.CanonicalJson. A consumable's 'id' is also its VillageInventory larder key AND the output id of the matching crafting recipe in consumable-recipes.json - so crafting 'cons_mending_salve' deposits 'cons_mending_salve', and ConsumableUseService.TryUse('cons_mending_salve') consumes it + applies its effect. iconPath -> Resources/ItemIcons/<id> sprite (ItemIconImporter); resolves to null + glyph fallback until art is sliced. WO Consumable-Crafting-V1 added the 8 cons_* roster.",
   "_schemaNotes": {
     "kind": "potion | tent | food. Drives where it can be used and its UI bucket.",
-    "effect": "heal | mana | buff | rest. v1 ConsumableUseService implements 'heal' (and 'rest' as a heal); mana/buff/duration are DEFERRED (no mana pool / buff system wired yet).",
+    "effect": "heal | mana | buff | rest. v1 ConsumableUseService implements 'heal' (and 'rest' as a heal); mana/buff/duration (move-speed, spell-power, damage-reduction, AoE damage, blind/slow, ward, all-stats) are DEFERRED - stored as content now, wired to a buff/effect system later.",
     "magnitude": "heal amount (HP) for heal/rest; percent or flat for buffs (deferred).",
-    "duration": "seconds for timed buffs/food (deferred); 0 = instant.",
-    "usableInFight": "true = potions/food usable mid-fight; false = rest-only (tent kits)."
+    "duration": "seconds for timed buffs/HoT/food (deferred); 0 = instant.",
+    "usableInFight": "true = potions/food usable mid-fight; false = rest-only (tent kits).",
+    "iconPath": "Resources sprite path (ItemIcons/<id>); glyph is the ASCII fallback."
   },
   "version": 1,
   "consumables": [
@@ -48,6 +49,94 @@
       "duration": 0,
       "usableInFight": false,
       "glyph": "^"
+    },
+    {
+      "id": "cons_mending_salve",
+      "displayName": "Mending Salve",
+      "kind": "potion",
+      "effect": "heal",
+      "magnitude": 30,
+      "duration": 6,
+      "usableInFight": true,
+      "glyph": "+",
+      "iconPath": "ItemIcons/cons_mending_salve"
+    },
+    {
+      "id": "cons_ironbark_tonic",
+      "displayName": "Ironbark Tonic",
+      "kind": "potion",
+      "effect": "buff",
+      "magnitude": 15,
+      "duration": 30,
+      "usableInFight": true,
+      "glyph": "#",
+      "iconPath": "ItemIcons/cons_ironbark_tonic"
+    },
+    {
+      "id": "cons_emberfire_bomb",
+      "displayName": "Emberfire Bomb",
+      "kind": "potion",
+      "effect": "buff",
+      "magnitude": 60,
+      "duration": 0,
+      "usableInFight": true,
+      "glyph": "o",
+      "iconPath": "ItemIcons/cons_emberfire_bomb"
+    },
+    {
+      "id": "cons_swiftstep_elixir",
+      "displayName": "Swiftstep Elixir",
+      "kind": "potion",
+      "effect": "buff",
+      "magnitude": 30,
+      "duration": 45,
+      "usableInFight": true,
+      "glyph": ">",
+      "iconPath": "ItemIcons/cons_swiftstep_elixir"
+    },
+    {
+      "id": "cons_arcane_clarity",
+      "displayName": "Arcane Clarity Potion",
+      "kind": "potion",
+      "effect": "buff",
+      "magnitude": 40,
+      "duration": 60,
+      "usableInFight": true,
+      "glyph": "*",
+      "iconPath": "ItemIcons/cons_arcane_clarity"
+    },
+    {
+      "id": "cons_suppressing_smoke",
+      "displayName": "Suppressing Smoke Bomb",
+      "kind": "potion",
+      "effect": "buff",
+      "magnitude": 30,
+      "duration": 8,
+      "usableInFight": true,
+      "glyph": "~",
+      "iconPath": "ItemIcons/cons_suppressing_smoke"
+    },
+    {
+      "id": "cons_heartward_draught",
+      "displayName": "Heartward Draught",
+      "kind": "potion",
+      "effect": "heal",
+      "magnitude": 120,
+      "duration": 0,
+      "usableInFight": true,
+      "glyph": "+",
+      "iconPath": "ItemIcons/cons_heartward_draught"
+    },
+    {
+      "id": "cons_elarion_blessing",
+      "displayName": "Elarion's Blessing",
+      "kind": "potion",
+      "effect": "heal",
+      "magnitude": 9999,
+      "duration": 0,
+      "usableInFight": true,
+      "glyph": "!",
+      "iconPath": "ItemIcons/cons_elarion_blessing"
     }
   ]
 }
