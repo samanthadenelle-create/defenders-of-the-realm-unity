@@ -683,11 +683,28 @@ namespace DeNelle.Village
             //  • NON-melee native props (none reach here today — bow/shield use their own paths) keep
             //    SeatNative (trust the authored grip-at-origin). The `native` flag now only gates
             //    NON-melee seating.
+            // ── OFFSET RESOLUTION (hoisted, WO-490) ──────────────────────────────────
+            // Resolve any authored Offset Forge offset BEFORE the seat decision. A NATIVE
+            // grip-at-origin prefab that HAS an authored offset must seat EXACTLY as the Forge
+            // previews it (raw native pivot + localRotation=Euler(rot), localPosition=pos,
+            // localScale=one*scale — OffsetForgeWindow.ApplyOffsetToInstance) — it must NOT run
+            // the melee NormalizeInto+SeatByHandle derive path, which re-seats the grip in a
+            // different frame and makes the owner's authored offset unreproducible. The key is
+            // the mesh name (Forge's default save-id, e.g. "sword_A") with a weapon-id fallback.
+            string offsetKey = !string.IsNullOrEmpty(vis.mesh) ? vis.mesh : weaponId;
+            bool hasOffset = AttachmentOffsetRegistry.TryGetOffset(offsetKey, out var fo) ||
+                             (offsetKey != weaponId && AttachmentOffsetRegistry.TryGetOffset(weaponId, out fo));
+            // ONLY native prefabs with an authored offset bypass the derive path. Raw .fbx melee
+            // (no offset, e.g. sword_G) keeps NormalizeInto+SeatByHandle (no regression).
+            bool seatNativeAuthored = vis.native && hasOffset;
+
             var gripRoot = new GameObject(PropName);
             bool meleeSeat = IsMelee(vis.kind);
-            if (vis.native && !meleeSeat)
+            if ((vis.native && !meleeSeat) || seatNativeAuthored)
             {
-                FlowTrace.Step("Equip", "seat: NATIVE (trust authored grip-at-origin, scale-only)");
+                FlowTrace.Step("Equip", seatNativeAuthored
+                    ? "seat: NATIVE+AUTHORED (trust pivot, Offset Forge frame — skip derive)"
+                    : "seat: NATIVE (trust authored grip-at-origin, scale-only)");
                 SeatNative(prop, gripRoot.transform, vis.heldLength);
             }
             else
@@ -731,7 +748,15 @@ namespace DeNelle.Village
             // because melee is seated via the derived NormalizeInto+SeatByHandle path above (its
             // primary axis is prop-local +Y) — NOT the authored native frame. Only NON-melee native
             // props use their preset gripEuler directly.
-            if (IsMelee(vis.kind))
+            //  • NATIVE+AUTHORED (Offset Forge): trust the authored euler directly — the Forge
+            //    previewed the RAW pivot with localRotation=Euler(rot), so reproduce that EXACT
+            //    frame and SKIP ComputeMeleeGripRotation (the derive path it never used).
+            if (seatNativeAuthored)
+            {
+                _baseGripEuler = fo.eulerRot;
+                _baseGripRot = Quaternion.Euler(fo.eulerRot);
+            }
+            else if (IsMelee(vis.kind))
                 _baseGripRot = ComputeMeleeGripRotation(vis.kind);
             else
                 _baseGripRot = Quaternion.Euler(_baseGripEuler);
@@ -747,16 +772,25 @@ namespace DeNelle.Village
             // localPosition = pos; localScale = one*scale). The key is the weapon's mesh name
             // (e.g. "sword_A" / "shield_A", what the Forge defaults its save-id to) with a
             // fallback to the weapon id. If NO offset is stored, nothing changes (no regression).
-            string offsetKey = !string.IsNullOrEmpty(vis.mesh) ? vis.mesh : weaponId;
-            if (AttachmentOffsetRegistry.TryGetOffset(offsetKey, out var fo) ||
-                (offsetKey != weaponId && AttachmentOffsetRegistry.TryGetOffset(weaponId, out fo)))
+            // offsetKey / fo / hasOffset were resolved at the top of this method.
+            if (hasOffset)
             {
                 gripRoot.transform.localPosition = vis.gripPos + fo.pos;
                 _baseGripEuler = fo.eulerRot;
                 _baseGripRot = Quaternion.Euler(fo.eulerRot);
-                if (fo.scale > 0f && Mathf.Abs(fo.scale - 1f) > 1e-4f)
-                    gripRoot.transform.localScale = gripRoot.transform.localScale * fo.scale;
-                FlowTrace.Step("Offset", $"applied weapon '{offsetKey}' pos={fo.pos} rot={fo.eulerRot} scale={fo.scale:0.###}");
+                if (seatNativeAuthored)
+                {
+                    // NATIVE+AUTHORED: reproduce the Forge preview EXACTLY (localScale = one*scale).
+                    gripRoot.transform.localScale = Vector3.one * (fo.scale > 0f ? fo.scale : 1f);
+                    FlowTrace.Step("Offset", $"applied NATIVE+AUTHORED weapon '{offsetKey}' pos={fo.pos} rot={fo.eulerRot} scale={fo.scale:0.###}");
+                }
+                else
+                {
+                    // Non-native (derive-path) prop: compose scale onto the normalized localScale.
+                    if (fo.scale > 0f && Mathf.Abs(fo.scale - 1f) > 1e-4f)
+                        gripRoot.transform.localScale = gripRoot.transform.localScale * fo.scale;
+                    FlowTrace.Step("Offset", $"applied weapon '{offsetKey}' pos={fo.pos} rot={fo.eulerRot} scale={fo.scale:0.###}");
+                }
             }
             else
             {
