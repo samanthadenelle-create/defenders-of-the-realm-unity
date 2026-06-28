@@ -143,7 +143,22 @@ namespace DeNelle.Village.Items
                 new Vector2(x0, y0), new Vector2(x1, y1),
                 new Color(ElarionUiKit.Cell.r, ElarionUiKit.Cell.g, ElarionUiKit.Cell.b, 0.55f));
             var cardImg = card.GetComponent<Image>();
-            if (cardImg != null) cardImg.raycastTarget = false;
+            if (cardImg != null)
+            {
+                cardImg.raycastTarget = false;
+                // Obsidian item-plate standard (matches EquipmentPanel / InventoryGrid / ShopPanel
+                // item cells): dress sprite-FIRST with the RpgUiCatalog per-item slot plate so the
+                // recipe cards read as one Obsidian surface. Procedural Cell tint stays as the
+                // WebGL-safe fallback when the pack art is absent (LogWarning-not-error contract upheld
+                // inside RpgUiCatalog). Additive — no data binding touched.
+                var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotItem);
+                if (plate != null)
+                {
+                    cardImg.sprite = plate;
+                    cardImg.type   = Image.Type.Sliced;
+                    cardImg.color  = Color.white;
+                }
+            }
             ElarionUiKit.AddInnerRim(card, ElarionUiKit.AccentSoft);
 
             var t = card.transform;
