@@ -129,7 +129,7 @@ namespace DeNelle.Core
         /// were. Separate from ATB (its own system). Default OFF until the vertical is felt-verified
         /// ("unflag when proven"). PlayerPrefs "ff.overworldencounter". Spec: WORK_ORDER_482. See
         /// docs/COMBAT_PIVOT_NORTHSTAR.md + memory overworld-encounter-isolated-battle.</summary>
-        public static bool OverworldEncounter => Get("overworldencounter", defaultOn: false);  // V1 DESCOPE 2026-06-26: arena CUT for V1; V1 raid = walk-to EnemyOutpost (RaidOutpostSystem), NOT the isolated BattleArena. Default flipped to OFF so the cardinal outposts/camps un-suppress + the walk-to raid is live. Code gated-not-deleted; PlayerPrefs "ff.overworldencounter"=1 to restore the V2 arena encounter loop.
+        public static bool OverworldEncounter => Get("overworldencounter", defaultOn: true);  // PREVIEW 2026-06-26 (HUD): temporarily ON so the BattleArena runs and the 9-zone HUD renders for the owner to felt-judge. REVERT to false after the HUD decision. (V1 DESCOPE note: arena was CUT for V1; V1 raid = walk-to EnemyOutpost (RaidOutpostSystem). PlayerPrefs "ff.overworldencounter"=0 to force the V1 walk-to raid.)
 
         /// <summary>WO-473 / PIVOT (owner 2026-06-22): SINGLE-HERO V1 onboarding has NO pet step. When ON
         /// (default), the intro flow skips the PetSelect screen entirely — after the hero pick (Title in-flow
@@ -198,7 +198,7 @@ namespace DeNelle.Core
         /// legacy overlay only: PlayerPrefs "ff.battlehud9zone" = 0.
         /// V1 DESCOPE 2026-06-26: the 9-zone HUD belongs to the CUT BattleArena loop, so it ships
         /// OFF for V1. Default flipped to false; PlayerPrefs "ff.battlehud9zone" = 1 to preview (V2).</summary>
-        public static bool BattleHud9Zone => Get("battlehud9zone", defaultOn: false);
+        public static bool BattleHud9Zone => Get("battlehud9zone", defaultOn: true);   // PREVIEW 2026-06-26 (HUD): ON so the 9-zone spawns in-arena for the owner to felt-judge. REVERT to false (V2) after the decision.
 
         /// <summary>Global runtime kill-switch for ALL dev keyboard hotkeys (DevPanel F1, DebugCanvas
         /// F12, AdminOverlay Ctrl+Shift+A, the test spawners J/K/L, the tower dev harness B/J/K/N/U,
