@@ -314,7 +314,8 @@ namespace DeNelle.Village
         // ── Conditions → live game state ─────────────────────────────────────────
         // Keys: !<key> (negation) · quest_<id>_active · quest_<id>_done ·
         //       keystone_<name> · keystone_count_min_<n> · pet_owned_<species> ·
-        //       onboarded. Unknown => false (logged).
+        //       pet_grantable_<species> · pet_select_closed · onboarded.
+        //       Unknown => false (logged).
         public bool Check(string condition)
         {
             if (string.IsNullOrEmpty(condition)) return true;
@@ -342,6 +343,32 @@ namespace DeNelle.Village
             {
                 var acq = PetAcquisitionService.Instance;
                 return acq != null && acq.Owns(condition.Substring(po.Length));
+            }
+
+            // pet_grantable_<species> — TRUE when the player does NOT own this echo AND a free
+            // deploy slot exists (so the Echo Hollow may offer it). Mirrors the Yarn
+            // <<if not pet_owned("x")>> option gate, but ALSO folds in the A7 "no free slot"
+            // closure (the custom model's `requires` is a single key, so this composite key
+            // replaces the AND that Yarn expressed with two separate gates). No service =>
+            // lenient (allow), matching a fresh pre-bootstrap state.
+            const string pg = "pet_grantable_";
+            if (condition.StartsWith(pg))
+            {
+                var acq = PetAcquisitionService.Instance;
+                if (acq == null) return true;
+                return !acq.Owns(condition.Substring(pg.Length)) && acq.FilledSlotCount < acq.MaxSlots;
+            }
+
+            // pet_select_closed — A7 whole-flow gate: TRUE when the player already owns an echo
+            // AND has no free deploy slot, so the Echo Hollow must NOT offer a second attune.
+            // Mirrors DialogueCommandBridge.FnPetSelectClosed (owns-any AND slots-full); the
+            // starting cap is 1 (PetAcquisitionService.DefaultMaxSlots), Fenn's questline raises it.
+            if (condition == "pet_select_closed")
+            {
+                var acq = PetAcquisitionService.Instance;
+                if (acq == null) return false; // no service -> selection open
+                bool ownsAny = acq.Owns("ice-wolf") || acq.Owns("flame-pup") || acq.Owns("aether-sprite");
+                return ownsAny && acq.FilledSlotCount >= acq.MaxSlots;
             }
 
             if (condition == "onboarded")
