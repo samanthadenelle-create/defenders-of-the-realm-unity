@@ -27,6 +27,83 @@ namespace DeNelle.Core
     [DisallowMultipleComponent]
     public sealed class TripoMaterialFixer : MonoBehaviour
     {
+        // -------------------------------------------------------------------------
+        // P0-2 (PERF AUDIT 2026-06-28, WO-568): shared-material CACHE.
+        // The old code allocated an UNSHARED `new Material(lit)` for EVERY renderer
+        // slot of EVERY enemy on EVERY spawn. With ~6 OuterWorld reps continuously
+        // re-topped + arena families re-staged, two identically-skinned orcs never
+        // shared a material -> SRP batching could never coalesce them, and native
+        // material memory churned (rebuilt mats are never Destroy()ed on death, they
+        // accumulate until Resources.UnloadUnusedAssets).
+        //
+        // Fix: build the URP/Lit material ONCE per distinguishing tuple (shader +
+        // base map + normal map + emission map + base color + emission color +
+        // emissive flag + smoothness + metallic) and reuse the SAME shared Material
+        // instance for every slot that resolves to the same tuple. All `orc-warrior`
+        // bodies now share one material -> batching restored, churn eliminated.
+        //
+        // STATIC + long-lived deliberately: it must survive respawns so the 2nd..Nth
+        // orc is a cache HIT, not a re-alloc. Materials are intentionally never freed
+        // (one per unique look, a tiny bounded set), which is the whole point -- no
+        // per-instance churn. Only truly-identical looks share; any slot whose tuple
+        // differs (unique texture/tint/emission) gets its own cached entry, so the
+        // visual result is identical to the old per-instance build, byte for byte.
+        // -------------------------------------------------------------------------
+        private readonly struct MatKey : System.IEquatable<MatKey>
+        {
+            public readonly int Shader;
+            public readonly int BaseMap;
+            public readonly int Normal;
+            public readonly int EmissionMap;
+            public readonly Color BaseColor;
+            public readonly Color EmissionColor;
+            public readonly bool Emissive;
+            public readonly float Smoothness;
+            public readonly float Metallic;
+
+            public MatKey(int shader, int baseMap, int normal, int emissionMap,
+                          Color baseColor, Color emissionColor, bool emissive,
+                          float smoothness, float metallic)
+            {
+                Shader = shader; BaseMap = baseMap; Normal = normal; EmissionMap = emissionMap;
+                BaseColor = baseColor; EmissionColor = emissionColor; Emissive = emissive;
+                Smoothness = smoothness; Metallic = metallic;
+            }
+
+            public bool Equals(MatKey o) =>
+                Shader == o.Shader && BaseMap == o.BaseMap && Normal == o.Normal &&
+                EmissionMap == o.EmissionMap && Emissive == o.Emissive &&
+                Smoothness == o.Smoothness && Metallic == o.Metallic &&
+                BaseColor == o.BaseColor && EmissionColor == o.EmissionColor;
+
+            public override bool Equals(object obj) => obj is MatKey k && Equals(k);
+
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    int h = Shader;
+                    h = h * 397 ^ BaseMap;
+                    h = h * 397 ^ Normal;
+                    h = h * 397 ^ EmissionMap;
+                    h = h * 397 ^ (Emissive ? 1 : 0);
+                    h = h * 397 ^ Smoothness.GetHashCode();
+                    h = h * 397 ^ Metallic.GetHashCode();
+                    h = h * 397 ^ BaseColor.GetHashCode();
+                    h = h * 397 ^ EmissionColor.GetHashCode();
+                    return h;
+                }
+            }
+        }
+
+        private static readonly System.Collections.Generic.Dictionary<MatKey, Material> s_matCache =
+            new System.Collections.Generic.Dictionary<MatKey, Material>();
+        // Cumulative proof counters (headless): a high hit:new ratio = the win landed.
+        private static int s_cacheHits;
+        private static int s_cacheNew;
+
+        private static int Id(Texture t) => t != null ? t.GetInstanceID() : 0;
+
         [SerializeField] private string _fallbackTextureName;
         [SerializeField] private Color _fallbackTint = Color.white;
         [SerializeField] private bool _hasFallbackTint;
@@ -164,33 +241,19 @@ namespace DeNelle.Core
                     // resolves the tint just multiplies (mild colour push).
                     if (_hasFallbackTint) col = _fallbackTint;
 
-                    var newMat = new Material(lit);
-                    newMat.name = (src != null && src.name != null ? src.name : "Tripo") + " (URP)";
-                    if (newMat.HasProperty("_BaseColor")) newMat.SetColor("_BaseColor", col);
-                    if (newMat.HasProperty("_Color"))     newMat.SetColor("_Color", col);
-                    if (tex != null)
-                    {
-                        if (newMat.HasProperty("_BaseMap")) newMat.SetTexture("_BaseMap", tex);
-                        if (newMat.HasProperty("_MainTex")) newMat.SetTexture("_MainTex", tex);
-                    }
                     // Preserve the normal map always (non-destructive).
-                    if (src != null && src.HasProperty("_BumpMap"))
-                    {
-                        Texture nrm = src.GetTexture("_BumpMap");
-                        if (nrm != null && newMat.HasProperty("_BumpMap"))
-                        {
-                            newMat.SetTexture("_BumpMap", nrm);
-                            newMat.EnableKeyword("_NORMALMAP");
-                        }
-                    }
-                    // Emission: a minimal affinity glow when overridden (pets), else
-                    // preserve the source emission (buildings keep their lit windows).
+                    Texture nrm = (src != null && src.HasProperty("_BumpMap")) ? src.GetTexture("_BumpMap") : null;
+
+                    // Resolve the FINAL emission inputs (override for pets, else the
+                    // source's own emission for buildings) BEFORE keying the cache, so
+                    // the tuple fully determines the built material.
+                    Texture emMap = null;
+                    Color emColor = Color.black;
+                    bool emissive = false;
                     if (_hasEmissionOverride)
                     {
-                        if (newMat.HasProperty("_EmissionColor"))
-                            newMat.SetColor("_EmissionColor", _emissionOverride * EmissionOverrideIntensity);
-                        newMat.EnableKeyword("_EMISSION");
-                        newMat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                        emColor = _emissionOverride * EmissionOverrideIntensity;
+                        emissive = true;
                     }
                     else if (src != null)
                     {
@@ -198,22 +261,25 @@ namespace DeNelle.Core
                         Color emc = src.HasProperty("_EmissionColor") ? src.GetColor("_EmissionColor") : Color.black;
                         if (em != null || emc.maxColorComponent > 0.01f)
                         {
-                            if (em != null && newMat.HasProperty("_EmissionMap")) newMat.SetTexture("_EmissionMap", em);
-                            if (newMat.HasProperty("_EmissionColor")) newMat.SetColor("_EmissionColor", emc);
-                            newMat.EnableKeyword("_EMISSION");
-                            newMat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                            emMap = em; emColor = emc; emissive = true;
                         }
                     }
-                    if (newMat.HasProperty("_Smoothness")) newMat.SetFloat("_Smoothness", _smoothness);
-                    if (newMat.HasProperty("_Metallic"))   newMat.SetFloat("_Metallic", _metallic);
-                    matsRef[i] = newMat;
+
+                    // P0-2: one SHARED material per identical look. Two orcs with the same
+                    // texture/tint/maps now reference the SAME Material instance -> SRP
+                    // batching coalesces them + native-material churn stops on respawn.
+                    string srcName = (src != null && src.name != null ? src.name : "Tripo") + " (URP)";
+                    Material sharedMat = GetOrCreateSharedMaterial(
+                        lit, tex, nrm, emMap, col, emColor, emissive, _smoothness, _metallic, srcName);
+                    matsRef[i] = sharedMat;
                     slotsRebuilt++;
                 });
                 r.sharedMaterials = matsRef;
             }
 
             FlowTrace.Step("TripoMatFix",
-                $"{gameObject.name}: rebuilt {slotsRebuilt} slot(s) across {renderers} renderer(s).");
+                $"{gameObject.name}: rebuilt {slotsRebuilt} slot(s) across {renderers} renderer(s). " +
+                $"matCache: {s_cacheHits} hit / {s_cacheNew} new, size={s_matCache.Count} (P0-2 shared-material win).");
 
             // V: post-rebuild VERIFY — every renderer this fixer covers must now be on a URP/Lit
             // shader (the result of `new Material(lit)`), NOT a Hidden/InternalError/Standard/legacy
@@ -221,6 +287,56 @@ namespace DeNelle.Core
             // shader, the rebuild did not take for it — FlowTrace.Fail so the run self-reports
             // instead of leaving the owner to spot magenta on a model.
             VerifyAllRenderersUrp();
+        }
+
+        // P0-2: get the ONE shared URP/Lit material for this exact look, building + caching
+        // it on first sight. Identical-look slots (same maps/tint/emission/finish) all get the
+        // same instance -> SRP batching + no per-spawn alloc. The built material is identical to
+        // the old per-instance `new Material(lit)` result (same property writes, same order).
+        private static Material GetOrCreateSharedMaterial(
+            Shader lit, Texture tex, Texture nrm, Texture emMap,
+            Color col, Color emColor, bool emissive, float smoothness, float metallic, string name)
+        {
+            var key = new MatKey(lit != null ? lit.GetInstanceID() : 0,
+                                 Id(tex), Id(nrm), Id(emMap),
+                                 col, emColor, emissive, smoothness, metallic);
+
+            // A previously-cached material may have been destroyed by an explicit
+            // Resources.UnloadUnusedAssets sweep — Unity's overloaded == catches that;
+            // rebuild on a dead entry so we never assign a null/destroyed material.
+            if (s_matCache.TryGetValue(key, out var cached) && cached != null)
+            {
+                s_cacheHits++;
+                return cached;
+            }
+
+            var m = new Material(lit);
+            m.name = name;
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", col);
+            if (m.HasProperty("_Color"))     m.SetColor("_Color", col);
+            if (tex != null)
+            {
+                if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
+                if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", tex);
+            }
+            if (nrm != null && m.HasProperty("_BumpMap"))
+            {
+                m.SetTexture("_BumpMap", nrm);
+                m.EnableKeyword("_NORMALMAP");
+            }
+            if (emissive)
+            {
+                if (emMap != null && m.HasProperty("_EmissionMap")) m.SetTexture("_EmissionMap", emMap);
+                if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", emColor);
+                m.EnableKeyword("_EMISSION");
+                m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+            }
+            if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", smoothness);
+            if (m.HasProperty("_Metallic"))   m.SetFloat("_Metallic", metallic);
+
+            s_matCache[key] = m;
+            s_cacheNew++;
+            return m;
         }
 
         // V (TGVRU): assert every renderer slot under this fixer ended on a URP shader after Run().
