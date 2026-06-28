@@ -694,6 +694,7 @@ namespace DeNelle.DevTools
             AddButton(resources, "Load up (full base): +50k Wood/Stone/Iron", GiveBuildMaterials);
             AddButton(resources, "+5 Wisdom (talents)", () => GiveWisdom(5));
             AddButton(resources, "+25 Wisdom (talents)", () => GiveWisdom(25));
+            AddButton(resources, "Respec Knight (free talents)", () => RespecHero("knight"));
             AddButton(resources, "+150 XP (hero)", () => GiveHeroXp(150f));
             AddButton(resources, "+10,000 XP (hero)", () => GiveHeroXp(10000f));
             AddButton(resources, "Level up hero", LevelHero);
@@ -974,6 +975,16 @@ namespace DeNelle.DevTools
             if (svc == null) { SetStatus("WisdomCurrencyService not in scene yet."); return; }
             svc.Grant(amount);
             SetStatus($"Gave {amount} Wisdom — now {svc.Wisdom}.");
+        }
+
+        /// <summary>Respecs a hero's talents (refunds Wisdom + frees nodes) so the
+        /// node-graph plan→CONFIRM flow can be felt-tested on a clean slate.</summary>
+        private void RespecHero(string heroSlug)
+        {
+            var svc = DeNelle.Village.Talents.WisdomCurrencyService.Instance;
+            if (svc == null) { SetStatus("WisdomCurrencyService not in scene yet."); return; }
+            svc.RespecHero(heroSlug);
+            SetStatus($"Respec '{heroSlug}' — nodes freed, Wisdom now {svc.Wisdom}.");
         }
 
         /// <summary>Grants the hero raw XP for fast level/progression testing.</summary>
