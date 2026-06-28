@@ -81,6 +81,21 @@ namespace DeNelle.Editor
             // ── SLOTS (RoleSlot) — per-item article plate for shop/inventory rows ──
             new Entry { Src = "Slots_Obsidian/Inventory_Slot.png", Role = "slot", Name = "slot_item", Border = 24 },
 
+            // ── TALENT NODE-GRAPH (Path B) — node frames + tree window + flourishes ──
+            // 6 ornate node-border frames (used per node-state / tier; slot_talent = the default = 1).
+            new Entry { Src = "Slots_Obsidian/Talent_Border_1.png", Role = "slot", Name = "slot_talent",   Border = 24 },
+            new Entry { Src = "Slots_Obsidian/Talent_Border_1.png", Role = "slot", Name = "slot_talent_1", Border = 24 },
+            new Entry { Src = "Slots_Obsidian/Talent_Border_2.png", Role = "slot", Name = "slot_talent_2", Border = 24 },
+            new Entry { Src = "Slots_Obsidian/Talent_Border_3.png", Role = "slot", Name = "slot_talent_3", Border = 24 },
+            new Entry { Src = "Slots_Obsidian/Talent_Border_4.png", Role = "slot", Name = "slot_talent_4", Border = 24 },
+            new Entry { Src = "Slots_Obsidian/Talent_Border_5.png", Role = "slot", Name = "slot_talent_5", Border = 24 },
+            new Entry { Src = "Slots_Obsidian/Talent_Border_6.png", Role = "slot", Name = "slot_talent_6", Border = 24 }, // capstone frame
+            // Tree window frame (large 9-slice, matches the other panels at 48).
+            new Entry { Src = "Panels_Obsidian/Talent_Tree_Panel.png", Role = "panel", Name = "panel_talent", Border = 48 },
+            // Ornamental flourishes (Phase-5 polish; no slice — placed at native aspect).
+            new Entry { Src = "Decoration_Obsidian/TalentTree_Decoration_1.png", Role = "decoration", Name = "deco_talent_1", Border = 0 },
+            new Entry { Src = "Decoration_Obsidian/TalentTree_Decoration_2.png", Role = "decoration", Name = "deco_talent_2", Border = 0 },
+
             // ── ICONS (RoleIcons) — whole glyphs, no 9-slice (border 0) ─────────
             new Entry { Src = "Icons_Obsidian/Sword.png",          Role = "icons", Name = "icon_sword",     Border = 0 },
             new Entry { Src = "Icons_Obsidian/settings-icon.png",  Role = "icons", Name = "icon_settings",  Border = 0 },
