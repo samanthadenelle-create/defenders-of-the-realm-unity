@@ -71,6 +71,12 @@ namespace DeNelle.Core.UI
         /// <summary>Aether-violet, dim — unselected tab / chip rest state.</summary>
         public static readonly Color AetherDim = ElarionUi.AetherDim;
 
+        /// <summary>Selected tab / chip accent — canon runic gold (black+gold canon, owner 2026-06-28).</summary>
+        public static readonly Color TabSelected = ElarionUi.Gold;
+
+        /// <summary>Unselected tab / chip rest — muted obsidian that recedes into the black panel.</summary>
+        public static readonly Color TabRest = new Color(0.06f, 0.06f, 0.07f, 1f);
+
         /// <summary>Buy / confirm green.</summary>
         public static readonly Color Confirm = ElarionUi.Affordable;
 
@@ -299,7 +305,7 @@ namespace DeNelle.Core.UI
 
         /// <summary>
         /// Styles a category tab with a clear selected / unselected state. Selected
-        /// glows aether-violet with a gilt left marker; unselected sits recessed.
+        /// glows runic gold with a gilt left marker; unselected sits recessed in obsidian.
         /// </summary>
         public static void StyleTab(Button tab, bool selected)
         {
@@ -308,8 +314,8 @@ namespace DeNelle.Core.UI
             tab.style.marginBottom = 6;
             tab.style.fontSize = 14;
             tab.style.unityFontStyleAndWeight = selected ? FontStyle.Bold : FontStyle.Normal;
-            tab.style.color = selected ? Parchment : ParchmentDim;
-            tab.style.backgroundColor = selected ? Aether : AetherDim;
+            tab.style.color = selected ? ElarionUi.Ink : ParchmentDim;
+            tab.style.backgroundColor = selected ? TabSelected : TabRest;
             SetBorderRadius(tab, 9);
             SetBorderWidth(tab, 1);
             // A gilt left edge marks the active tab.
@@ -332,8 +338,8 @@ namespace DeNelle.Core.UI
             chip.style.unityFontStyleAndWeight = selected ? FontStyle.Bold : FontStyle.Normal;
             chip.style.paddingLeft = 12; chip.style.paddingRight = 12;
             chip.style.marginRight = 6; chip.style.marginTop = 2; chip.style.marginBottom = 2;
-            chip.style.color = Parchment;
-            chip.style.backgroundColor = selected ? Aether : AetherDim;
+            chip.style.color = selected ? ElarionUi.Ink : ParchmentDim;
+            chip.style.backgroundColor = selected ? TabSelected : TabRest;
             SetBorderRadius(chip, 8);
             SetBorderWidth(chip, 1);
             SetBorderColor(chip, selected ? new Color(Gilt.r, Gilt.g, Gilt.b, 0.6f) : new Color(0f, 0f, 0f, 0.25f));
