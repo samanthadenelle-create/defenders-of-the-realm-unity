@@ -48,6 +48,17 @@ namespace DeNelle.Core.State
         /// <summary>The live service instance (null before bootstrap).</summary>
         public static GameStateService Instance => _instance;
 
+        // ── Pluggable save IO seam (Tier-2, WO-547) ──────────────────────────
+        /// <summary>
+        /// The swappable save-IO backend. Serialization (SaveSchema &lt;-&gt; JSON)
+        /// stays here in the service; only the raw read/write/exists/delete is
+        /// delegated. Defaults to <see cref="LocalSaveProvider"/> (PlayerPrefs) so
+        /// behaviour is identical to before the seam. Assign a cloud DB / Solana
+        /// implementation to retarget where saves live — a one-line swap, e.g.
+        /// <c>GameStateService.Provider = new CloudSaveProvider();</c>.
+        /// </summary>
+        public static ISaveProvider Provider { get; set; } = new LocalSaveProvider();
+
         [Tooltip("The live GameState ScriptableObject — the in-memory persisted state.")]
         [SerializeField] private GameState _state;
 
@@ -180,14 +191,19 @@ namespace DeNelle.Core.State
             // fresh state and re-raises StateReplaced; the rejects are now LOUD.
             using var _t = FlowTrace.Enter("Save", "Load (PlayerPrefs -> migrate -> validate -> apply)");
 
-            if (!PlayerPrefs.HasKey(SaveSchema.PlayerPrefsKey))
+            if (!Provider.Exists(SaveSchema.PlayerPrefsKey))
             {
                 FlowTrace.Step("Save", "no save key present — brand-new game, fresh SO defaults stand.");
                 StateReplaced.Invoke();
                 return false; // brand-new game — fresh SO defaults stand.
             }
 
-            var json = PlayerPrefs.GetString(SaveSchema.PlayerPrefsKey);
+            // §12: delegate the raw read to the swappable provider, Guarded so an IO
+            // failure self-reports (via FlowTrace.Fail) instead of silently blanking.
+            string json = null;
+            Guard.Try("Save", "Provider.Read (load save IO)",
+                () => json = Provider.Read(SaveSchema.PlayerPrefsKey));
+            FlowTrace.Step("Save", $"read save via {Provider.GetType().Name} (len={(json?.Length ?? 0)}).");
             if (string.IsNullOrEmpty(json))
             {
                 FlowTrace.Warn("Save", "save key present but value is EMPTY — keeping fresh state.");
@@ -263,15 +279,17 @@ namespace DeNelle.Core.State
 
             try
             {
+                // Serialization stays here; only the raw write is delegated to the
+                // swappable provider (LocalSaveProvider by default — PlayerPrefs).
                 var json = JsonConvert.SerializeObject(file, SaveSchema.JsonSettings);
-                PlayerPrefs.SetString(SaveSchema.PlayerPrefsKey, json);
-                PlayerPrefs.Save();
+                Provider.Write(SaveSchema.PlayerPrefsKey, json);
+                FlowTrace.Step("Save", $"wrote save via {Provider.GetType().Name} (len={json.Length}).");
             }
             catch (Exception ex)
             {
-                // §12 TGVRU: a local PlayerPrefs write failure is a player-device save
+                // §12 TGVRU: a local save write failure is a player-device save
                 // problem — route it to the break-log, not just the console.
-                FlowTrace.Fail("Save", $"local Save FAILED (PlayerPrefs write) — progress not persisted this frame. {ex.GetType().Name}: {ex.Message}");
+                FlowTrace.Fail("Save", $"local Save FAILED (provider write) — progress not persisted this frame. {ex.GetType().Name}: {ex.Message}");
             }
         }
 
