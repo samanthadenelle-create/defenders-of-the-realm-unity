@@ -32,6 +32,7 @@
 
 using System.Collections;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -96,6 +97,34 @@ namespace DeNelle.Village
 
         // ── Lifecycle ─────────────────────────────────────────────────────────
 
+        // WO-571: self-bootstrap — this controller was DEAD CODE (defined but never
+        // attached to any GameObject, so the Heartwood ambient bed never played).
+        // Like BattleMusicManager, attach it onto the HeartController GO at runtime
+        // (no Village.unity re-save). [RequireComponent(HeartController)] is honoured
+        // because we only AddComponent onto a GO that already has a HeartController.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap()
+        {
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoadedStatic;
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoadedStatic;
+            AttachToHeart();
+        }
+
+        private static void OnSceneLoadedStatic(
+            UnityEngine.SceneManagement.Scene s, UnityEngine.SceneManagement.LoadSceneMode mode)
+            => AttachToHeart();
+
+        private static void AttachToHeart()
+        {
+            var hearts = Object.FindObjectsByType<HeartController>(FindObjectsSortMode.None);
+            foreach (var heart in hearts)
+            {
+                if (heart == null) continue;
+                if (heart.GetComponent<HeartwoodAmbientController>() == null)
+                    heart.gameObject.AddComponent<HeartwoodAmbientController>();
+            }
+        }
+
         private void Reset() => _heart = GetComponent<HeartController>();
 
         private void Awake()
@@ -105,6 +134,47 @@ namespace DeNelle.Village
             _bedA    = CreateSource("HeartwoodBedA", loop: true);
             _bedB    = CreateSource("HeartwoodBedB", loop: true);
             _stinger = CreateSource("HeartwoodStinger", loop: false);
+
+            // WO-571: route through the shared mixer so the player's volume + mute
+            // apply (the beds are music-bed presence; the stingers are SFX). Was
+            // bypassing the mixer entirely (default output).
+            AudioMixerGroupRoute();
+
+            // WO-571: resolve every clip by a CONVENTION Resources path when the
+            // serialized field is unassigned (canon bans drag-drop). Drop a clip at
+            // the documented Resources/Audio/... path and it "just works".
+            ResolveClipsFromResources();
+        }
+
+        // Route bed sources -> Music group, stinger -> SFX group (null-safe: a
+        // missing mixer leaves them on the default output, still audible).
+        private void AudioMixerGroupRoute()
+        {
+            var music = VillageAudioResources.Group("Music");
+            var sfx   = VillageAudioResources.Group("SFX");
+            if (_bedA != null)    _bedA.outputAudioMixerGroup = music;
+            if (_bedB != null)    _bedB.outputAudioMixerGroup = music;
+            if (_stinger != null) _stinger.outputAudioMixerGroup = sfx;
+        }
+
+        // WO-571: the Resources-by-id clip path. Each field is filled ONLY when it
+        // was left unassigned, so an authored clip (if ever wired) still wins. A
+        // tier with no bed simply stays a silent no-op (the controller already
+        // handles a null bed gracefully); FlowTrace self-reports the gaps (§12).
+        private void ResolveClipsFromResources()
+        {
+            if (_healthyBed  == null) _healthyBed  = VillageAudioResources.Load("Audio/Ambient/Heartwood_Healthy");
+            if (_strainedBed == null) _strainedBed = VillageAudioResources.Load("Audio/Ambient/Heartwood_Strained");
+            if (_criticalBed == null) _criticalBed = VillageAudioResources.Load("Audio/Ambient/Heartwood_Critical");
+            if (_hitClip     == null) _hitClip     = VillageAudioResources.Load("Audio/Sfx/Heart_Hit");
+            if (_fallClip    == null) _fallClip    = VillageAudioResources.Load("Audio/Sfx/Heart_Fall");
+
+            if (_healthyBed == null && _strainedBed == null && _criticalBed == null)
+                FlowTrace.Warn("Audio",
+                    "HeartwoodAmbientController: no ambient bed clips found at " +
+                    "Resources/Audio/Ambient/Heartwood_{Healthy,Strained,Critical} — the " +
+                    "Heartwood plays silent. Drop ambient loops there (see " +
+                    "docs/AUDIO/AUDIO_CLIP_MANIFEST.md).");
         }
 
         private AudioSource CreateSource(string label, bool loop)

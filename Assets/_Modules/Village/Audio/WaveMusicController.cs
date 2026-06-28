@@ -1,6 +1,16 @@
 // =============================================================================
 // WaveMusicController — DEF-67 (Audio & VFX Layering), deliverable 1.
 // -----------------------------------------------------------------------------
+// ⚠ SUPERSEDED 2026-06-28 (WO-571): BattleMusicManager (WO-372) now owns the
+// wave-loop music — it scores four states (Combat/Intense/Victory/Boss), loads
+// its clips by Resources path (Resources/Music/Battle/Overworld_*), and routes
+// through the shared Music mixer group. This older two-track A/B controller is
+// INTENTIONALLY left with NO Resources-by-id wiring: giving it clips would make
+// it crossfade combat/exploration music AT THE SAME TIME as BattleMusicManager
+// (double-scoring). It ships silent (null clips) and is therefore inert. Retire /
+// remove from WaveSystemBridgeBootstrap once BattleMusicManager is felt-verified.
+// Do NOT wire AudioClips here — see docs/AUDIO/AUDIO_CLIP_MANIFEST.md.
+// -----------------------------------------------------------------------------
 // namespace DeNelle.Village. Lives ON the WaveManager GameObject (the canonical
 // wave-reactive bridge pattern — see DailyQuestCombatBridge): [DisallowMultiple
 // Component] + [RequireComponent(typeof(WaveManager))], a [SerializeField]

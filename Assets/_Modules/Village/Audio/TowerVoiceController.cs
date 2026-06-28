@@ -33,6 +33,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -78,6 +79,60 @@ namespace DeNelle.Village
             _source.loop = false;
             _source.spatialBlend = 0f;   // 2D announcement, non-positional
             _source.volume = 1f;         // PlayOneShot's per-call scale carries the mix
+            // WO-571: route through the shared Voice mixer group so the player's
+            // Voice/Master volume + mute apply (was bypassing the mixer entirely).
+            _source.outputAudioMixerGroup = VillageAudioResources.Group("Voice");
+
+            // WO-571: resolve voice lines by a CONVENTION Resources path when none
+            // were authored (canon bans drag-drop). Drop a clip at
+            // Resources/Audio/Voice/HeartFailing(_1/_2/_3) and it "just works".
+            ResolveVoiceLinesFromResources();
+        }
+
+        // WO-571: the Resources-by-id voice path. Only fills in when the serialized
+        // array is empty/all-null, so an authored set (if one is ever wired by an
+        // import pass via SetVoiceLines/Resources) still wins. Speech can't be
+        // synthesised, so a missing set stays a silent no-op — self-reported via
+        // FlowTrace so a run shows WHICH cue has no audio (no silent failure, §12).
+        private void ResolveVoiceLinesFromResources()
+        {
+            if (HasAnyVoiceLine()) return;
+
+            var loaded = new System.Collections.Generic.List<AudioClip>();
+            foreach (string path in VoiceResourcePaths)
+            {
+                AudioClip c = VillageAudioResources.Load(path);
+                if (c != null) loaded.Add(c);
+            }
+
+            if (loaded.Count > 0)
+            {
+                _voiceLines = loaded.ToArray();
+                return;
+            }
+
+            FlowTrace.Warn("Audio",
+                "TowerVoiceController: no low-HP voice clip found at Resources/Audio/Voice/" +
+                "HeartFailing(_1/_2/_3) — the 'Heart is failing!' cue will be SILENT. " +
+                "Drop a VO clip there (see docs/AUDIO/AUDIO_CLIP_MANIFEST.md).");
+        }
+
+        // Convention Resources paths the low-HP voice cue resolves from (in order;
+        // every clip that exists is added so several can rotate).
+        private static readonly string[] VoiceResourcePaths =
+        {
+            "Audio/Voice/HeartFailing",
+            "Audio/Voice/HeartFailing_1",
+            "Audio/Voice/HeartFailing_2",
+            "Audio/Voice/HeartFailing_3",
+        };
+
+        private bool HasAnyVoiceLine()
+        {
+            if (_voiceLines == null) return false;
+            foreach (AudioClip c in _voiceLines)
+                if (c != null) return true;
+            return false;
         }
 
         private void OnEnable()
