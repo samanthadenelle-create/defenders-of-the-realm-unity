@@ -36,6 +36,7 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;   // WO-556: FlowTrace the boss-only gem rolls
 
 namespace DeNelle.Village.Items
 {
@@ -48,6 +49,9 @@ namespace DeNelle.Village.Items
         [JsonProperty("chance")] public float Chance = 1f;   // 0..1
         [JsonProperty("minCount")] public int MinCount = 1;
         [JsonProperty("maxCount")] public int MaxCount = 1;
+        /// <summary>WO-556: when true this line only rolls on a BOSS kill (gem/gear gate).
+        /// Ordinary kills skip it. Defaults false so every existing line is unaffected.</summary>
+        [JsonProperty("bossOnly")] public bool BossOnly = false;
     }
 
     /// <summary>A loot table for one enemy/boss kind.</summary>
@@ -108,11 +112,19 @@ namespace DeNelle.Village.Items
         }
 
         /// <summary>
-        /// Roll the table with <paramref name="tableId"/>: each drop line is rolled
-        /// independently against its chance, and on a hit a random count is awarded.
+        /// Roll the table with <paramref name="tableId"/> for an ORDINARY kill: each drop line is
+        /// rolled independently against its chance, and on a hit a random count is awarded.
+        /// <see cref="LootDropLine.BossOnly"/> lines are SKIPPED. Back-compat default.
         /// Returns a materialId -> count map (empty when nothing dropped / no table).
         /// </summary>
-        public static Dictionary<string, int> Roll(string tableId)
+        public static Dictionary<string, int> Roll(string tableId) => Roll(tableId, includeBossOnly: false);
+
+        /// <summary>
+        /// WO-556: roll the table, optionally INCLUDING <see cref="LootDropLine.BossOnly"/> lines.
+        /// Pass <paramref name="includeBossOnly"/> = true on a BOSS kill so the gated gem/gear lines
+        /// can drop; false (ordinary kill) skips them. Each line is rolled independently.
+        /// </summary>
+        public static Dictionary<string, int> Roll(string tableId, bool includeBossOnly)
         {
             var result = new Dictionary<string, int>();
             var table = Find(tableId);
@@ -121,6 +133,7 @@ namespace DeNelle.Village.Items
             foreach (var line in table.Drops)
             {
                 if (line == null || string.IsNullOrEmpty(line.MaterialId)) continue;
+                if (line.BossOnly && !includeBossOnly) continue;   // gem/gear gate: boss kills only
                 float chance = Mathf.Clamp01(line.Chance);
                 if (chance <= 0f) continue;
                 if (UnityEngine.Random.value > chance) continue;
@@ -132,6 +145,10 @@ namespace DeNelle.Village.Items
 
                 if (result.ContainsKey(line.MaterialId)) result[line.MaterialId] += count;
                 else result[line.MaterialId] = count;
+
+                // WO-556: prove the boss-gated gem/gear drop fired (only reachable on a boss kill).
+                if (line.BossOnly)
+                    FlowTrace.Step("Loot", $"LOOT bossOnly drop '{line.MaterialId}' x{count} from table '{tableId}'.");
             }
             return result;
         }

@@ -3,6 +3,7 @@
   "_schemaNotes": {
     "tables": "Each table maps an enemy/boss def id (enemies.json) to weighted drops. 'source' is documentation only (enemy/boss/dungeon).",
     "drops": "Each line is rolled INDEPENDENTLY: roll 'chance' (0..1); on a hit award a random count in [minCount, maxCount]. materialId is deposited into VillageInventory (the village larder) - it is a materials.json ingredient id.",
+    "bossOnly": "WO-556: optional bool per drop line (default false). A bossOnly line ONLY rolls on a BOSS kill (table source 'boss', or DragonBoss). Used to gate the GEM crystals (ing_ember_crystal/ing_aether_shard/ing_heartstone_crystal) behind bosses at a low rate; ordinary mobs skip them.",
     "defaults": "Fallback table ids used when a slain enemy/boss has no table of its own."
   },
   "version": 1,
@@ -79,7 +80,7 @@
       "source": "enemy",
       "drops": [
         { "materialId": "ing_ironroot", "chance": 0.50, "minCount": 1, "maxCount": 2 },
-        { "materialId": "ing_ember_crystal", "chance": 0.40, "minCount": 1, "maxCount": 1 },
+        { "materialId": "ing_ember_crystal", "chance": 0.40, "minCount": 1, "maxCount": 1, "bossOnly": true },
         { "materialId": "ing_oil_flask", "chance": 0.35, "minCount": 1, "maxCount": 1 }
       ]
     },
@@ -87,8 +88,8 @@
       "id": "orc-shaman",
       "source": "enemy",
       "drops": [
-        { "materialId": "ing_aether_shard", "chance": 0.45, "minCount": 1, "maxCount": 2 },
-        { "materialId": "ing_ember_crystal", "chance": 0.40, "minCount": 1, "maxCount": 1 },
+        { "materialId": "ing_aether_shard", "chance": 0.45, "minCount": 1, "maxCount": 2, "bossOnly": true },
+        { "materialId": "ing_ember_crystal", "chance": 0.40, "minCount": 1, "maxCount": 1, "bossOnly": true },
         { "materialId": "ing_starbloom", "chance": 0.35, "minCount": 1, "maxCount": 1 }
       ]
     },
@@ -96,9 +97,9 @@
       "id": "orc-necromancer",
       "source": "enemy",
       "drops": [
-        { "materialId": "ing_aether_shard", "chance": 0.50, "minCount": 1, "maxCount": 2 },
-        { "materialId": "ing_ember_crystal", "chance": 0.40, "minCount": 1, "maxCount": 2 },
-        { "materialId": "ing_heartstone_crystal", "chance": 0.15, "minCount": 1, "maxCount": 1 },
+        { "materialId": "ing_aether_shard", "chance": 0.50, "minCount": 1, "maxCount": 2, "bossOnly": true },
+        { "materialId": "ing_ember_crystal", "chance": 0.40, "minCount": 1, "maxCount": 2, "bossOnly": true },
+        { "materialId": "ing_heartstone_crystal", "chance": 0.15, "minCount": 1, "maxCount": 1, "bossOnly": true },
         { "materialId": "ing_elarion_petal", "chance": 0.12, "minCount": 1, "maxCount": 1 }
       ]
     },
@@ -108,9 +109,21 @@
       "source": "enemy",
       "drops": [
         { "materialId": "ing_ironroot", "chance": 0.55, "minCount": 1, "maxCount": 2 },
-        { "materialId": "ing_ember_crystal", "chance": 0.40, "minCount": 1, "maxCount": 2 },
+        { "materialId": "ing_ember_crystal", "chance": 0.40, "minCount": 1, "maxCount": 2, "bossOnly": true },
         { "materialId": "ing_oil_flask", "chance": 0.35, "minCount": 1, "maxCount": 1 },
-        { "materialId": "ing_heartstone_crystal", "chance": 0.10, "minCount": 1, "maxCount": 1 }
+        { "materialId": "ing_heartstone_crystal", "chance": 0.10, "minCount": 1, "maxCount": 1, "bossOnly": true }
+      ]
+    },
+    {
+      "_comment": "WO-556 ITEM 2/3 — the rare arena BOSS (BattleArena.BossEnemyId 'orc-warlord', ~5% of fights; model Orc_Necromancer). source 'boss' so ItemDropWatcher rolls the bossOnly gem lines. Ordinary mats always; the 3 crystal GEMS gated bossOnly at a LOW rate (the boss is the gem source now).",
+      "id": "orc-warlord",
+      "source": "boss",
+      "drops": [
+        { "materialId": "ing_ironroot", "chance": 0.80, "minCount": 2, "maxCount": 3 },
+        { "materialId": "ing_oil_flask", "chance": 0.60, "minCount": 1, "maxCount": 2 },
+        { "materialId": "ing_ember_crystal", "chance": 0.30, "minCount": 1, "maxCount": 1, "bossOnly": true },
+        { "materialId": "ing_aether_shard", "chance": 0.22, "minCount": 1, "maxCount": 1, "bossOnly": true },
+        { "materialId": "ing_heartstone_crystal", "chance": 0.12, "minCount": 1, "maxCount": 1, "bossOnly": true }
       ]
     }
   ],

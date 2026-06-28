@@ -133,10 +133,14 @@ namespace DeNelle.Village.Items
         /// the materials into the village larder. Public so the watcher (or a dev test)
         /// can invoke it directly. No-op when disabled or when no table/inventory exists.
         /// </summary>
-        public static void RollAndDeposit(string lootTableId)
+        public static void RollAndDeposit(string lootTableId) => RollAndDeposit(lootTableId, includeBossOnly: false);
+
+        /// <summary>WO-556: roll + deposit, optionally including boss-only (gem/gear) lines. The
+        /// watcher passes <paramref name="includeBossOnly"/> = true on a boss kill.</summary>
+        public static void RollAndDeposit(string lootTableId, bool includeBossOnly)
         {
             if (!Enabled) return;
-            var rolled = LootTableCatalog.Roll(lootTableId);
+            var rolled = LootTableCatalog.Roll(lootTableId, includeBossOnly);
             if (rolled == null || rolled.Count == 0) return;
 
             var inv = VillageInventory.Instance;
@@ -154,10 +158,13 @@ namespace DeNelle.Village.Items
         /// path uses this so the grant happens only when the hero collects the mote).
         /// Returns an empty map when disabled / nothing dropped.
         /// </summary>
-        public static Dictionary<string, int> RollLines(string lootTableId)
+        public static Dictionary<string, int> RollLines(string lootTableId) => RollLines(lootTableId, includeBossOnly: false);
+
+        /// <summary>WO-556: roll (no deposit) optionally including boss-only (gem/gear) lines.</summary>
+        public static Dictionary<string, int> RollLines(string lootTableId, bool includeBossOnly)
         {
             if (!Enabled) return new Dictionary<string, int>();
-            return LootTableCatalog.Roll(lootTableId) ?? new Dictionary<string, int>();
+            return LootTableCatalog.Roll(lootTableId, includeBossOnly) ?? new Dictionary<string, int>();
         }
     }
 }

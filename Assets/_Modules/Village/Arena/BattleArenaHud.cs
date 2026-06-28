@@ -20,6 +20,7 @@ using System;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using DeNelle.Core.UI;   // WO-556: shared Obsidian panel chrome for the victory summary
 
 namespace DeNelle.Village.Arena
 {
@@ -127,41 +128,138 @@ namespace DeNelle.Village.Arena
             if (_remain != null) _remain.text = remaining > 1 ? (remaining + " foes remain") : "1 foe remains";
         }
 
+        // WO-556: continue latch — Continue button + the auto-timeout both route here; the
+        // deferred home-return must fire at most once.
+        private bool _continued;
+
+        // Star glyphs (TMP LiberationSans SDF renders these real star symbols — replaces the old
+        // ASCII '*'/'-'). A true sprite-art star is a later polish; no star sprite ships today.
+        private const string StarFilled = "★";   // ★
+        private const string StarEmpty  = "☆";   // ☆
+
         /// <summary>
-        /// Show the win/loss banner (family-friendly + encouraging), then self-destruct.
-        /// WO-505: <paramref name="stars"/> (0..3) draws the earned star rating under the
-        /// line on a WIN — filled glyphs for earned stars, dim glyphs for the rest. 0 (a
-        /// loss) shows no stars. Glyph rating only (bones); a sprite pass is the owner's later.
+        /// WO-556 ITEM 1 — the REAL victory summary (promotes the old 2.5s banner). On a WIN it
+        /// builds a shared Obsidian panel (<see cref="ElarionUiKit.BuildObsidianPanel"/>) with the
+        /// title, a star row (3/2/1, sprite-style star glyphs), the battle TIME taken, an itemized
+        /// reward list, and a Continue button that fires <paramref name="onContinue"/> (the deferred
+        /// home-return). A long auto-timeout guards against a softlock if the player never taps it.
+        /// On a LOSS it shows a brief regroup panel and self-closes (the controller returns home
+        /// immediately). Logic -> view: all numbers are pushed in; the view reads no game state.
         /// </summary>
-        public void ShowResult(bool won, int stars = 0)
+        public void ShowResult(bool won, int stars, float durationSeconds,
+                               BattleRewardSummary rewards, Action onContinue, float autoTimeoutSeconds = 20f)
         {
             if (_liveGroup != null) _liveGroup.SetActive(false);
-            string line = won ? "Victory!  The realm is safer because of you!"
-                              : "Fall back and regroup, hero.";
-            var banner = AddPanel(_canvas.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                                  new Vector2(0f, 60f), new Vector2(760f, 160f), Dark);
-            var label = AddText(banner.transform, line, 30, won ? Win : Gold, TextAnchor.UpperCenter);
-            var lr = label.rectTransform;
-            lr.anchorMin = new Vector2(0f, 1f); lr.anchorMax = new Vector2(1f, 1f);
-            lr.pivot = new Vector2(0.5f, 1f); lr.anchoredPosition = new Vector2(0f, -18f);
-            lr.sizeDelta = new Vector2(-24f, 48f);
+            // The fight is over — tear the 9-zone battle HUD down now so it can't sit on top of
+            // the summary (it is a separate, high-sorting canvas).
+            if (_hud9 != null) { _hud9.Close(); _hud9 = null; }
 
-            // WO-505 star rating row (win only). ASCII glyphs (the legacy runtime font is
-            // ASCII-only): '*' = earned star, '-' = unearned, spaced for readability. A sprite
-            // star pass is the owner's later polish; these bones prove the wiring.
-            if (won && stars > 0)
+            if (!won)
             {
-                int max = Mathf.Max(stars, 3);
-                var sb = new System.Text.StringBuilder(max * 2);
-                for (int i = 0; i < max; i++) sb.Append(i < stars ? "* " : "- ");
-                var starLabel = AddText(banner.transform, sb.ToString().TrimEnd(), 40, Gold, TextAnchor.LowerCenter);
-                var sr = starLabel.rectTransform;
-                sr.anchorMin = new Vector2(0f, 0f); sr.anchorMax = new Vector2(1f, 0f);
-                sr.pivot = new Vector2(0.5f, 0f); sr.anchoredPosition = new Vector2(0f, 14f);
-                sr.sizeDelta = new Vector2(-24f, 52f);
+                ShowLossPanel();
+                return;
             }
 
+            ShowVictorySummary(Mathf.Clamp(stars, 0, 3), Mathf.Max(0f, durationSeconds), rewards, onContinue, autoTimeoutSeconds);
+        }
+
+        // WO-556: the rich win summary on the shared Obsidian chrome.
+        private void ShowVictorySummary(int stars, float durationSeconds,
+                                        BattleRewardSummary rewards, Action onContinue, float autoTimeoutSeconds)
+        {
+            // Close + Continue both fire the deferred return (Close == "I'm done reading").
+            Action continueAction = () => Continue(onContinue);
+
+            var chrome = ElarionUiKit.BuildObsidianPanel(
+                _canvas.transform, "Victory!",
+                new Vector2(0.16f, 0.14f), new Vector2(0.84f, 0.86f),
+                onClose: continueAction);
+            var content = chrome.content != null ? chrome.content.transform : _canvas.transform;
+
+            // Subtitle — encouraging, family-friendly.
+            ElarionUiKit.Label(content, "The realm is safer because of you!", 0.84f, 0.90f,
+                               ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center,
+                               0.06f, 0.94f);
+
+            // Star row — 3 slots, filled to the earned count. Big gold stars; unearned dim.
+            BuildStarRow(content, stars);
+
+            // Battle time taken (M:SS).
+            ElarionUiKit.Label(content, "Time  " + FormatTime(durationSeconds), 0.58f, 0.66f,
+                               ElarionUi.Gilt, ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center,
+                               0.06f, 0.94f, bold: true);
+
+            // Itemized spoils.
+            ElarionUiKit.Label(content, "Spoils", 0.49f, 0.56f, ElarionUi.Gilt, ElarionUi.FontLabel,
+                               TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
+
+            string rewardBlock =
+                $"+{rewards.Xp} XP\n" +
+                $"+{rewards.Wisdom} Wisdom\n" +
+                $"+{rewards.Wood} Wood    +{rewards.Iron} Iron\n" +
+                (string.IsNullOrEmpty(rewards.GearName) ? "No gear this time" : "Gear:  " + rewards.GearName);
+            var block = ElarionUiKit.Label(content, rewardBlock, 0.20f, 0.48f, ElarionUi.Parchment,
+                                           ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.08f, 0.92f);
+            if (block != null) block.lineSpacing = 8f;
+
+            // Continue button (primary gold CTA).
+            ElarionUiKit.Button(content, "Continue", ElarionUiKit.ButtonKind.Gold,
+                                new Vector2(0.32f, 0.05f), new Vector2(0.68f, 0.14f), continueAction);
+
+            // Softlock guard: auto-continue after a long timeout if the player never taps.
+            StartCoroutine(AutoContinueAfter(autoTimeoutSeconds, onContinue));
+        }
+
+        // WO-556: a brief loss panel; the controller returns the hero home immediately, so this
+        // just shows + self-destructs (no Continue, recovery timing owned by BattleArena).
+        private void ShowLossPanel()
+        {
+            var chrome = ElarionUiKit.BuildObsidianPanel(
+                _canvas.transform, "Defeat",
+                new Vector2(0.22f, 0.34f), new Vector2(0.78f, 0.66f),
+                onClose: Close);
+            var content = chrome.content != null ? chrome.content.transform : _canvas.transform;
+            ElarionUiKit.Label(content, "Fall back and regroup, hero.", 0.40f, 0.62f,
+                               ElarionUi.Parchment, ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center,
+                               0.06f, 0.94f);
             StartCoroutine(CloseAfter(2.5f));
+        }
+
+        // Build a centred 3-slot star row, filled to the earned count.
+        private void BuildStarRow(Transform parent, int stars)
+        {
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < 3; i++)
+            {
+                sb.Append(i < stars ? StarFilled : StarEmpty);
+                if (i < 2) sb.Append("  ");
+            }
+            var row = ElarionUiKit.Label(parent, sb.ToString(), 0.68f, 0.82f,
+                                         ElarionUi.Gold, ElarionUi.FontTitle + 16,
+                                         TMPro.TextAlignmentOptions.Center, 0.10f, 0.90f, bold: true);
+            if (row != null) row.characterSpacing = 4f;
+        }
+
+        // Seconds -> "M:SS".
+        private static string FormatTime(float seconds)
+        {
+            int total = Mathf.Max(0, Mathf.RoundToInt(seconds));
+            return $"{total / 60}:{total % 60:00}";
+        }
+
+        // WO-556: fire the deferred home-return exactly once, then tear the summary down.
+        private void Continue(Action onContinue)
+        {
+            if (_continued) return;
+            _continued = true;
+            onContinue?.Invoke();
+            Close();
+        }
+
+        private System.Collections.IEnumerator AutoContinueAfter(float seconds, Action onContinue)
+        {
+            yield return new WaitForSecondsRealtime(Mathf.Max(1f, seconds));
+            Continue(onContinue);
         }
 
         public void Close()

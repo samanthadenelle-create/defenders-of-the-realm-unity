@@ -49,6 +49,27 @@ using DeNelle.Village.UI;                // ScreenFader — masks the ~7km arena
 namespace DeNelle.Village.Arena
 {
     /// <summary>
+    /// WO-556 ITEM 1 — the itemized totals a WIN actually granted, returned by
+    /// <see cref="BattleArena"/>'s reward path and handed to the victory summary VIEW
+    /// (<see cref="BattleArenaHud.ShowResult"/>) so it lists exactly what was awarded.
+    /// Plain value object (logic -> view), no presentation. <see cref="GearName"/> is
+    /// null when no gear dropped.
+    /// </summary>
+    public struct BattleRewardSummary
+    {
+        /// <summary>Hero XP granted (star-scaled).</summary>
+        public int Xp;
+        /// <summary>Wisdom (skill points) granted (star-scaled).</summary>
+        public int Wisdom;
+        /// <summary>Wood granted (star-scaled).</summary>
+        public int Wood;
+        /// <summary>Iron granted (star-scaled).</summary>
+        public int Iron;
+        /// <summary>Display name of the gear that dropped, or null if none.</summary>
+        public string GearName;
+    }
+
+    /// <summary>
     /// Generic real-time battle controller. PvE entry: <see cref="BeginEncounter"/>.
     /// One battle at a time; a runtime singleton the engage trigger drives.
     /// </summary>
@@ -78,6 +99,20 @@ namespace DeNelle.Village.Arena
         private const float ArenaHalfDepth = 18f;    // Z half-extent (~36 deep) — -25% from 24
 
         private const float BattleTimeoutSeconds = 240f; // generous; a stuck fight ends, never soft-locks
+
+        // WO-556 ITEM 2 — RARE BOSS CHALLENGE. On staging an encounter we roll this chance to
+        // ADD a boss mob to the family (a rare, harder fight that pays boss-only loot). Named
+        // consts so the owner felt-tunes the rate without code spelunking. The boss id resolves
+        // through EnemyFactory.ModelForEnemy -> "Orc_Necromancer" (a VERIFIED Resources/Enemies
+        // model, the existing outpost raid-boss silhouette), NOT a capsule. We use a GROUND boss
+        // (orc-warlord) not the flying DragonBoss: the dragon flies its own kinematic orbit and
+        // does not path the kite-arena navmesh, so it would never engage the hero here.
+        private const float BossSpawnChance = 0.05f;        // ~5% of arena fights gain a boss
+        private const string BossEnemyId    = "orc-warlord"; // -> Orc_Necromancer model (verified)
+
+        // WO-556 ITEM 4 — stars scale the gear-DROP chance (more stars = better odds). Bonus
+        // applied per star ABOVE 1 (1*=+0, 2*=+0.10, 3*=+0.20) on top of the threat curve.
+        private const float GearDropPerStar = 0.10f;
 
         // ENCOUNTER FEEDBACK (2026-06-27): both ~7km WarpHero transitions (into the arena, back
         // home) were unmasked hard cuts. We now bracket each with a black ScreenFader fade so the
@@ -245,6 +280,11 @@ namespace DeNelle.Village.Arena
             // double-simulating (choppy). One static gate removes all three sources at once; reps
             // resume on Resolve. (Static so no per-rep FindObjectsOfType scan is needed.)
             RepEngageWatcher.PauseAll();
+
+            // WO-556 ITEM 2: roll the rare boss. On a hit, append the boss id to the family so
+            // SpawnFamily stages it alongside the rest. Instrumented so the rate is PROVABLE from
+            // the break-log / Editor.log (CLAUDE.md S12) rather than inferred from the const.
+            MaybeAddBoss(p);
 
             FlowTrace.Step("BattleArena", $"BeginEncounter: family=[{string.Join(",", p.EnemyIds)}] threat={p.Threat} theme='{p.BackdropContext}' return='{p.ReturnScene}'.");
             StartCoroutine(StageRoutine(p));
@@ -752,7 +792,7 @@ namespace DeNelle.Village.Arena
             _familyLeader = null;
             _familyEngaged = false;
             Transform heart = _arenaRoot.transform; // arena-centre tether; hero-aggro (DEF-224) pulls them to the hero
-            int n = Mathf.Clamp(p.EnemyIds.Length, 1, 6);
+            int n = Mathf.Clamp(p.EnemyIds.Length, 1, 7);   // WO-556: 6 family + 1 rare boss
 
             for (int i = 0; i < n; i++)
             {
@@ -838,6 +878,27 @@ namespace DeNelle.Village.Arena
             }
         }
 
+        // WO-556 ITEM 2: roll the rare boss and, on a hit, APPEND it to the family ids. Mutates
+        // p.EnemyIds in place (the staging reads it next). Instrumented so the rate is provable.
+        // No-op if the boss is already present (idempotent) so a re-roll can't double-stack it.
+        private static void MaybeAddBoss(EncounterParams p)
+        {
+            if (p == null || p.EnemyIds == null) return;
+            foreach (var existing in p.EnemyIds)
+                if (string.Equals(existing, BossEnemyId, StringComparison.OrdinalIgnoreCase)) return;
+
+            float roll = UnityEngine.Random.value;
+            bool add = roll <= BossSpawnChance;
+            FlowTrace.Step("BattleArena",
+                $"BOSS ROLL chance={BossSpawnChance:0.00} rolled={roll:0.000} -> {(add ? "ADD boss '" + BossEnemyId + "'" : "none")}.");
+            if (!add) return;
+
+            var augmented = new string[p.EnemyIds.Length + 1];
+            System.Array.Copy(p.EnemyIds, augmented, p.EnemyIds.Length);
+            augmented[augmented.Length - 1] = BossEnemyId;
+            p.EnemyIds = augmented;
+        }
+
         // ENCOUNTER FEEDBACK: a player-facing label for the engaged family, derived from the
         // EncounterParams ids (presentation only — no logic). An all-orc family reads "Orc Warband"
         // (matching the rep's DisplayName); otherwise the leader id is humanised. ASCII-only (the
@@ -876,7 +937,12 @@ namespace DeNelle.Village.Arena
             string s = (id ?? "").ToLowerInvariant();
 
             float hp, dmg, spd, atk, height; string display;
-            if (s.Contains("tank"))       { display = "Orc Bulwark";    hp = 190; dmg = 18; spd = 2.2f; atk = 1.6f; height = 2.3f; }
+            // WO-556 ITEM 2 — the rare BOSS (orc-warlord). Big, beefy, slower; its id resolves
+            // to the verified Orc_Necromancer model (heaviest orc silhouette). Height 2.6 so it
+            // reads visibly bigger than the family. Stats well above the family so it is a real
+            // boss beat, lightly threat-scaled like the rest.
+            if (s.Contains("warlord") || s.Contains("boss")) { display = "Orc Warlord"; hp = 520; dmg = 34; spd = 2.6f; atk = 1.8f; height = 2.6f; }
+            else if (s.Contains("tank"))       { display = "Orc Bulwark";    hp = 190; dmg = 18; spd = 2.2f; atk = 1.6f; height = 2.3f; }
             else if (s.Contains("mage"))  { display = "Orc Spiritcaller"; hp = 85; dmg = 21; spd = 3.0f; atk = 1.4f; height = 1.9f; }
             else if (s.Contains("warrior")) { display = "Orc Warleader"; hp = 120; dmg = 24; spd = 3.2f; atk = 1.2f; height = 2.0f; }
             else                          { display = "Orc Raider";     hp = 100; dmg = 16; spd = 3.0f; atk = 1.2f; height = 1.9f; }
@@ -1129,14 +1195,18 @@ namespace DeNelle.Village.Arena
             Guard.Try("BattleArena", "battle result music cue",
                 () => CoreServices.Audio?.PlayMusic(won ? MusicTrack.Victory : MusicTrack.Defeat));
 
-            // Banner (presentation; self-destructs after a beat). Live overlay hides inside ShowResult.
-            Guard.Try("BattleArena", "battle result banner", () => _hud?.ShowResult(won, stars));
-            _hud = null;
-
-            // REWARD (logic, v1 minimal): XP on a win, scaled by the star multiplier. Fuller
-            // loot (gear/resources) is the EnemyOutpost loot-table reuse follow-up; kept light
-            // here so the loop is closed.
-            if (won) Guard.Try("BattleArena", "grant win XP", () => GrantWinReward(_current, rewardMult));
+            // REWARD (logic): grant the win payout and CAPTURE the itemized totals so the
+            // victory SUMMARY (WO-556 ITEM 1) can list exactly what was awarded. Star count feeds
+            // the gear-drop odds (ITEM 4). Defaults to zero on a loss (no reward).
+            BattleRewardSummary totals = default;
+            if (won) Guard.Try("BattleArena", "grant win reward",
+                () => totals = GrantWinReward(_current, rewardMult, stars));
+            // WO-556 ITEM 1 ORACLE FIRE-POINT (permanent): the captured totals the summary reads,
+            // so the headless ArenaCombatOracle PROVES the reward totals were captured + available
+            // to the view (not inferred from code-reading). gear='-' when nothing dropped.
+            if (won)
+                FlowTrace.Step("BattleArena",
+                    $"SUMMARY xp={totals.Xp} wisdom={totals.Wisdom} wood={totals.Wood} iron={totals.Iron} gear={(string.IsNullOrEmpty(totals.GearName) ? "-" : totals.GearName)}");
 
             // Restore any cavern mood RenderSettings BEFORE the open world is back in view.
             RestoreCavernMood();
@@ -1182,14 +1252,44 @@ namespace DeNelle.Village.Arena
             // home hard-cut becomes an intentional fade. Only fires when a battle was actually staged
             // (_current set) — the headless ResolveForTest seam passes a synthetic _current.
             bool hadEncounter = _current != null;
-            if (hadEncounter)
-                Guard.Try("BattleArena", "schedule masked return",
-                    () => StartCoroutine(ReturnHomeWithFade(returnPos, returnYaw, won, capturedStage, capturedSurvivors)));
+
+            // WO-556 ITEM 1: the masked HOME RETURN (teardown + warp + fade). On a WIN it is
+            // DEFERRED until the player taps Continue on the victory summary (or a ~20s timeout) so
+            // the summary can breathe over the dead family; on a LOSS it fires IMMEDIATELY so the
+            // recoverable lose-flow timing (post-loss grace) is preserved exactly as before. Latched
+            // so it runs at most once (Continue + timeout both route here harmlessly).
+            bool returnStarted = false;
+            Action doMaskedReturn = () =>
+            {
+                if (returnStarted) return;
+                returnStarted = true;
+                if (hadEncounter)
+                    Guard.Try("BattleArena", "schedule masked return",
+                        () => StartCoroutine(ReturnHomeWithFade(returnPos, returnYaw, won, capturedStage, capturedSurvivors)));
+                else
+                {
+                    // No params (defensive): tear down immediately, no warp/fade needed.
+                    foreach (var e in capturedSurvivors) if (e != null) Guard.Try("BattleArena", "despawn enemy", () => Destroy(e.gameObject));
+                    if (capturedStage != null) Destroy(capturedStage);
+                }
+            };
+
+            // Push the result to the VIEW. WIN -> the rich summary screen with a Continue button
+            // that fires the deferred return (auto-times-out as a softlock guard). LOSS -> the quick
+            // banner + immediate return (unchanged). If a WIN has NO hud (build failure), return
+            // immediately so the hero can never be stranded at the far arena.
+            var hud = _hud;
+            _hud = null;
+            if (won && hud != null)
+                Guard.Try("BattleArena", "battle victory summary",
+                    () => hud.ShowResult(true, stars, durationSeconds, totals, doMaskedReturn));
+            else if (won)
+                doMaskedReturn();   // no HUD to host the summary -> return now (no softlock)
             else
             {
-                // No params (defensive): tear down + heal immediately, no warp/fade needed.
-                foreach (var e in capturedSurvivors) if (e != null) Guard.Try("BattleArena", "despawn enemy", () => Destroy(e.gameObject));
-                if (capturedStage != null) Destroy(capturedStage);
+                Guard.Try("BattleArena", "battle result banner",
+                    () => hud?.ShowResult(false, 0, durationSeconds, default, null));
+                doMaskedReturn();   // loss returns immediately (recovery timing preserved)
             }
 
             // BATTLE ISOLATION: the fight is over — let home reps roam/chase/aggro again. (On a
@@ -1272,9 +1372,12 @@ namespace DeNelle.Village.Arena
         //   4) gear (chance)  -> GearLoadout.Equip*ById (a low-tier weapon/armor drop)
         // V1-simple + deterministic-ish (formulas, not data files). Cross-module lookups
         // are Unity-fake-null-guarded (explicit != null, not ?.) per the lint.
-        private static void GrantWinReward(EncounterParams p, float rewardMult = 1f)
+        // WO-556 ITEM 1: returns the itemized totals it granted so the victory summary can list
+        // them. WO-556 ITEM 4: stars feed the gear-drop odds. rewardMult is the star multiplier.
+        private static BattleRewardSummary GrantWinReward(EncounterParams p, float rewardMult, int stars)
         {
-            if (p == null) return;
+            var summary = new BattleRewardSummary();
+            if (p == null) return summary;
             int family = Mathf.Max(0, p.EnemyIds != null ? p.EnemyIds.Length : 0);
             int threat = Mathf.Max(0, p.Threat);
 
@@ -1291,6 +1394,7 @@ namespace DeNelle.Village.Arena
                 var add = prog.GetType().GetMethod("AddXp", new[] { typeof(float) });
                 add?.Invoke(prog, new object[] { (float)xp });
             }
+            summary.Xp = xp;
             FlowTrace.Step("BattleArena", $"GrantWinReward: +{xp} XP (family={family} threat={threat}).");
 
             // 2) SKILL POINTS (Wisdom) — 1 base + 1 per 2 family members + 1 per 2 threat
@@ -1300,6 +1404,7 @@ namespace DeNelle.Village.Arena
             if (wallet != null)
             {
                 wallet.Grant(wisdom);
+                summary.Wisdom = wisdom;
                 FlowTrace.Step("BattleArena", $"GrantWinReward: +{wisdom} Wisdom (skill points).");
             }
             else
@@ -1315,6 +1420,8 @@ namespace DeNelle.Village.Arena
             if (econ != null)
             {
                 econ.Grant(wood: wood, iron: iron);
+                summary.Wood = wood;
+                summary.Iron = iron;
                 FlowTrace.Step("BattleArena", $"GrantWinReward: +{wood} wood, +{iron} iron.");
             }
             else
@@ -1325,21 +1432,28 @@ namespace DeNelle.Village.Arena
             // 4) GEAR (chance) — a low-tier drop equipped through the REAL armory API
             // (GearLoadout.Equip*ById), exactly like the outpost loot path but capped at
             // the low tiers so the arena stays a light, frequent reward.
-            string gear = TryGrantArenaGear(threat);
+            string gear = TryGrantArenaGear(threat, stars);
+            summary.GearName = gear;
             if (gear != null)
                 FlowTrace.Step("BattleArena", $"GrantWinReward: gear drop [{gear}] equipped.");
+
+            return summary;
         }
 
         // Low-tier gear drop for an arena win — reuses the outpost's armory-grant pattern
         // (find the Player-tagged hero's GearLoadout, pick a catalog item the hero qualifies
         // for, equip it) but biased to common/uncommon. Drop chance rises a little with
         // threat. Returns the equipped item's display name, or null on no drop. Fake-null-safe.
-        private static string TryGrantArenaGear(int threat)
+        private static string TryGrantArenaGear(int threat, int stars)
         {
             const float baseChance = 0.30f;
             const float perTier    = 0.05f;
-            const float maxChance  = 0.65f;
-            float chance = Mathf.Min(maxChance, baseChance + perTier * Mathf.Max(0, threat));
+            const float maxChance  = 0.85f;   // WO-556: raised so the star bonus has headroom
+            // WO-556 ITEM 4: more stars = better gear odds. Bonus per star ABOVE 1 (a 1-star win
+            // gets the threat-only odds; 3 stars adds +0.20). Owner-tunable (GearDropPerStar).
+            float starBonus = GearDropPerStar * Mathf.Max(0, stars - 1);
+            float chance = Mathf.Min(maxChance, baseChance + perTier * Mathf.Max(0, threat) + starBonus);
+            FlowTrace.Step("BattleArena", $"TryGrantArenaGear: stars={stars} threat={threat} -> dropChance={chance:0.00}.");
             if (UnityEngine.Random.value > chance) return null;
 
             GameObject heroGo = GameObject.FindWithTag("Player");

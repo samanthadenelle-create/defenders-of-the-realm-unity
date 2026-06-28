@@ -158,6 +158,13 @@ namespace DeNelle.Editor
                 else
                     log.AppendLine("  [exec] WIN -> FlowTrace 'GrantWinReward:' CAPTURED (reward path ran with the multiplier)");
 
+                // (e) WO-556 ITEM 1 — the itemized SUMMARY totals were CAPTURED and handed to the
+                // victory-summary view (proves GrantWinReward now RETURNS totals, not void).
+                if (!sink.Has("SUMMARY xp="))
+                    failures.Add("WIN: missing FlowTrace 'SUMMARY xp=...' -- reward totals were not captured for the victory summary (WO-556 ITEM 1)");
+                else
+                    log.AppendLine("  [exec] WIN -> FlowTrace 'SUMMARY xp=...' CAPTURED (totals captured for the summary view)");
+
                 // -----------------------------------------------------------------
                 //  PART 2 -- LOSS resolve: defeat audio fires, no reward.
                 // -----------------------------------------------------------------

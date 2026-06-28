@@ -96,32 +96,45 @@ namespace DeNelle.Village.Items
         {
             if (enemy == null) return;
             string tableId = ResolveEnemyTable(enemy.EnemyDefId);
-            DropFor(tableId, enemy.transform != null ? enemy.transform.position : Vector3.zero);
+            // WO-556: data-driven boss-ness — if the resolved table is a BOSS table, its boss-only
+            // gem/gear lines roll. This covers a boss-tier Enemy (e.g. orc-warlord, source:"boss")
+            // without any per-instance flag.
+            bool isBoss = IsBossTable(tableId);
+            DropFor(tableId, enemy.transform != null ? enemy.transform.position : Vector3.zero, isBoss);
         }
 
         private void OnBossDied(DragonBoss boss)
         {
             string tableId = LootTableCatalog.DefaultBossTableId;
             Vector3 at = (boss != null && boss.transform != null) ? boss.transform.position : Vector3.zero;
-            DropFor(tableId, at);
+            DropFor(tableId, at, includeBossOnly: true);   // the dedicated boss path always allows gem/gear
         }
 
         /// <summary>
         /// Route a roll either to a WORLD pickup mote at <paramref name="at"/> (the
         /// hero collects it) or straight to the larder, per ItemDropSystem.UseWorldPickups.
+        /// WO-556: <paramref name="includeBossOnly"/> opens the gem/gear-gated lines on a boss kill.
         /// </summary>
-        private static void DropFor(string tableId, Vector3 at)
+        private static void DropFor(string tableId, Vector3 at, bool includeBossOnly)
         {
             if (ItemDropSystem.UseWorldPickups)
             {
-                var lines = ItemDropSystem.RollLines(tableId);
+                var lines = ItemDropSystem.RollLines(tableId, includeBossOnly);
                 if (lines != null && lines.Count > 0)
                     ItemPickupSpawner.Spawn(at, lines);
             }
             else
             {
-                ItemDropSystem.RollAndDeposit(tableId);
+                ItemDropSystem.RollAndDeposit(tableId, includeBossOnly);
             }
+        }
+
+        /// <summary>WO-556: true when the table exists and is declared a boss table (source "boss").</summary>
+        private static bool IsBossTable(string tableId)
+        {
+            var t = LootTableCatalog.Find(tableId);
+            return t != null && !string.IsNullOrEmpty(t.Source)
+                && t.Source.Equals("boss", System.StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>Prefer a table whose id matches the enemy def id; else the default.</summary>
