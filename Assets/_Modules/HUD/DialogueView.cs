@@ -72,41 +72,55 @@ namespace DeNelle.HUD
             scaler.matchWidthOrHeight = 0.5f;
             _ui.AddComponent<GraphicRaycaster>();
 
-            // The box: bottom band, tap anywhere on it to advance the line.
-            var boxGo = new GameObject("Box", typeof(Image), typeof(Button));
-            boxGo.transform.SetParent(_ui.transform, false);
-            _box = boxGo.GetComponent<RectTransform>();
-            _box.anchorMin = new Vector2(0.06f, 0.04f);
-            _box.anchorMax = new Vector2(0.94f, 0.30f);
-            _box.offsetMin = Vector2.zero; _box.offsetMax = Vector2.zero;
-            var bg = ElarionUi.PanelStoneDark;
-            boxGo.GetComponent<Image>().color = new Color(bg.r, bg.g, bg.b, 0.96f);
-            boxGo.GetComponent<Button>().onClick.AddListener(OnBoxTapped);
+            // DIALOGUE TEMPLATE (WO-582): the bottom strip is built from the ONE master frame
+            // factory using the Blink Dialogue_Panel frame + its pre-styled drop-zones. The VIEW
+            // re-styles nothing — it drops the model (speaker / body / choices) into the zones.
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "",
+                new Vector2(0.045f, 0.045f), new Vector2(0.955f, 0.235f),
+                () => _vm?.Close(), withBackdrop: false, frameName: RpgUiCatalog.FrameDialogue);
+            _box = chrome.root.GetComponent<RectTransform>();
 
-            // Gilt rim
-            var rim = new GameObject("Rim", typeof(Image));
-            rim.transform.SetParent(boxGo.transform, false);
-            var rr = rim.GetComponent<RectTransform>();
-            rr.anchorMin = Vector2.zero; rr.anchorMax = Vector2.one;
-            rr.offsetMin = new Vector2(-3, -3); rr.offsetMax = new Vector2(3, 3);
-            var rimImg = rim.GetComponent<Image>(); rimImg.color = new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.5f);
-            rimImg.raycastTarget = false; rim.transform.SetAsFirstSibling();
+            var bodyZone = (chrome.layout != null && chrome.layout.body != null)
+                ? chrome.layout.body
+                : chrome.content.GetComponent<RectTransform>();
+            var headerZone = (chrome.layout != null && chrome.layout.header != null)
+                ? chrome.layout.header : bodyZone;
 
-            _speaker = MakeLabel(boxGo.transform, "Speaker", new Vector2(0.03f, 0.74f), new Vector2(0.97f, 0.98f),
-                20, ElarionUi.Gilt, TMPro.FontStyles.Bold, TMPro.TextAlignmentOptions.Left);
-            _body = MakeLabel(boxGo.transform, "Body", new Vector2(0.03f, 0.12f), new Vector2(0.97f, 0.72f),
+            // Tap-to-advance: a transparent button filling the body zone (advances lines, not choices).
+            var tapGo = new GameObject("TapAdvance", typeof(Image), typeof(Button));
+            tapGo.transform.SetParent(bodyZone, false);
+            var trt = tapGo.GetComponent<RectTransform>();
+            trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one;
+            trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
+            tapGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0f);
+            var tapBtn = tapGo.GetComponent<Button>();
+            tapBtn.transition = Selectable.Transition.None;
+            tapBtn.onClick.AddListener(OnBoxTapped);
+
+            // Speaker name → header zone (left, gilt). Body text → body zone. (Drop, no re-style.)
+            _speaker = MakeLabel(headerZone, "Speaker", Vector2.zero, Vector2.one,
+                22, ElarionUi.Gilt, TMPro.FontStyles.Bold, TMPro.TextAlignmentOptions.Left);
+            _body = MakeLabel(bodyZone, "Body", new Vector2(0.0f, 0.14f), new Vector2(1.0f, 1.0f),
                 16, ElarionUi.Parchment, TMPro.FontStyles.Normal, TMPro.TextAlignmentOptions.TopLeft);
 
-            _tapHint = MakeLabel(boxGo.transform, "TapHint", new Vector2(0.5f, 0.01f), new Vector2(0.97f, 0.12f),
+            _tapHint = MakeLabel(bodyZone, "TapHint", new Vector2(0.45f, 0.0f), new Vector2(1.0f, 0.14f),
                 11, ElarionUi.ParchmentDim, TMPro.FontStyles.Italic, TMPro.TextAlignmentOptions.BottomRight).gameObject;
             _tapHint.GetComponent<TMPro.TextMeshProUGUI>().text = "tap to continue";
 
-            // Options column (above the box), built on demand.
+            // Speaker portrait → the frame's medallion socket (if present), when art exists.
+            if (chrome.layout != null && chrome.layout.medallion != null)
+            {
+                var disc = ElarionUiKit.Portrait(chrome.layout.medallion,
+                    ElarionUiKit.PortraitForClass(_vm != null ? _vm.Speaker : null), active: false);
+                if (disc != null && disc.image != null) disc.image.raycastTarget = false;
+            }
+
+            // Options column (above the strip), built on demand.
             var col = new GameObject("Options");
             col.transform.SetParent(_ui.transform, false);
             _optionsCol = col.AddComponent<RectTransform>();
-            _optionsCol.anchorMin = new Vector2(0.10f, 0.31f);
-            _optionsCol.anchorMax = new Vector2(0.90f, 0.62f);
+            _optionsCol.anchorMin = new Vector2(0.12f, 0.25f);
+            _optionsCol.anchorMax = new Vector2(0.88f, 0.55f);
             _optionsCol.offsetMin = Vector2.zero; _optionsCol.offsetMax = Vector2.zero;
             var vlg = col.AddComponent<VerticalLayoutGroup>();
             vlg.spacing = 8; vlg.childControlHeight = true; vlg.childControlWidth = true;

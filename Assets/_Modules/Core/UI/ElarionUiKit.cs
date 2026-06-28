@@ -202,6 +202,98 @@ namespace DeNelle.Core.UI
             public TextMeshProUGUI title;
             /// <summary>The ONE standard Close button (top-right), wired to onClose.</summary>
             public Button close;
+            /// <summary>When a Blink frame is used, the pre-styled drop-zones (medallion / body /
+            /// footer) measured from that frame's art. Screens DROP chrome-less content into these
+            /// instead of re-styling per screen. Null when the procedural panel is used.</summary>
+            public FrameLayout layout;
+        }
+
+        // =====================================================================
+        // FRAME LAYOUT — a Blink frame's pre-styled content DROP-ZONES.
+        // ---------------------------------------------------------------------
+        // The owner's architecture: the Blink panel IS the style (chrome). Each frame
+        // has fixed content regions carved into its art (a portrait medallion, a main
+        // well, a footer strip). A screen drops its CHROME-LESS objects into these
+        // zones — it never re-styles a card/well/footer itself. Define a frame's zones
+        // ONCE here (measured from the art, in fractions so they survive any stretch);
+        // every screen that uses that frame reuses them. DRY + consistent across all UI.
+        // =====================================================================
+
+        /// <summary>The drop-zones of a framed panel. Each is a transparent RectTransform parented
+        /// under the panel content at the frame's measured region — parent your objects to these.
+        /// medallion/footer may be null for frames without that region.</summary>
+        public sealed class FrameLayout
+        {
+            /// <summary>Title band (top), already carrying the gold title label.</summary>
+            public RectTransform header;
+            /// <summary>The main content well (grid / list / detail) — the big dark interior.</summary>
+            public RectTransform body;
+            /// <summary>Circular portrait socket (top-left medallion), or null for frames without one.</summary>
+            public RectTransform medallion;
+            /// <summary>Footer strip (wallet / actions) along the base, or null.</summary>
+            public RectTransform footer;
+        }
+
+        /// <summary>Per-frame zone rects (fractions: xMin,yMin,xMax,yMax of the panel).
+        /// hasMedallion/hasFooter flag optional regions. Measured from the Blink art.</summary>
+        private struct FrameZones
+        {
+            public Vector4 header, body, medallion, footer;
+            public bool hasMedallion, hasFooter;
+        }
+
+        /// <summary>The drop-zone rects for a named frame (defaults are a sane full-well layout).</summary>
+        private static FrameZones ZonesFor(string frameName)
+        {
+            // Default: header band across the top, a large inset body well, a thin footer, no medallion.
+            var z = new FrameZones
+            {
+                header   = new Vector4(0.10f, 0.905f, 0.82f, 0.975f),
+                body     = new Vector4(0.06f, 0.10f, 0.94f, 0.875f),
+                footer   = new Vector4(0.08f, 0.030f, 0.92f, 0.095f),
+                hasFooter = true,
+                hasMedallion = false,
+            };
+            switch (frameName)
+            {
+                case RpgUiCatalog.FrameInventory:
+                    // Tall frame: circular medallion top-left, header right of it, big well below.
+                    z.medallion   = new Vector4(0.045f, 0.835f, 0.225f, 0.985f);
+                    z.hasMedallion = true;
+                    z.header      = new Vector4(0.27f, 0.905f, 0.82f, 0.975f);
+                    z.body        = new Vector4(0.055f, 0.105f, 0.945f, 0.80f);
+                    z.footer      = new Vector4(0.07f, 0.030f, 0.93f, 0.095f);
+                    break;
+                case RpgUiCatalog.FrameCharacter:
+                    z.body = new Vector4(0.07f, 0.10f, 0.93f, 0.86f);
+                    break;
+                case RpgUiCatalog.FrameCrafting:
+                case RpgUiCatalog.FrameMerchant:
+                    // Landscape frames: header band, wide well, footer.
+                    z.header = new Vector4(0.10f, 0.88f, 0.85f, 0.965f);
+                    z.body   = new Vector4(0.05f, 0.115f, 0.95f, 0.845f);
+                    break;
+                case RpgUiCatalog.FrameDialogue:
+                    // Landscape strip: portrait socket FAR-LEFT, speaker-name header + body text right.
+                    z.medallion   = new Vector4(0.012f, 0.16f, 0.178f, 0.88f);
+                    z.hasMedallion = true;
+                    z.header      = new Vector4(0.205f, 0.64f, 0.96f, 0.93f);
+                    z.body        = new Vector4(0.205f, 0.12f, 0.97f, 0.62f);
+                    z.hasFooter   = false;
+                    break;
+            }
+            return z;
+        }
+
+        private static RectTransform Zone(Transform parent, string name, Vector4 frac)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = new Vector2(frac.x, frac.y);
+            rt.anchorMax = new Vector2(frac.z, frac.w);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            return rt;
         }
 
         /// <summary>
@@ -255,11 +347,23 @@ namespace DeNelle.Core.UI
                 var cimg = chrome.content.GetComponent<Image>();
                 if (cimg != null) cimg.raycastTarget = false;
 
-                // Gold title (no procedural shadow/rule — the frame art already has the header band).
-                chrome.title = Label(chrome.content.transform,
+                // Build the frame's pre-styled DROP-ZONES (the templated areas the owner described):
+                // screens parent chrome-less content into chrome.layout.{header,body,medallion,footer}.
+                var z = ZonesFor(frameName);
+                var layout = new FrameLayout
+                {
+                    header = Zone(chrome.content.transform, "Zone_Header", z.header),
+                    body   = Zone(chrome.content.transform, "Zone_Body",   z.body),
+                };
+                if (z.hasMedallion) layout.medallion = Zone(chrome.content.transform, "Zone_Medallion", z.medallion);
+                if (z.hasFooter)    layout.footer    = Zone(chrome.content.transform, "Zone_Footer",    z.footer);
+                chrome.layout = layout;
+
+                // Gold title sits in the header zone (no procedural shadow/rule — the frame has the band).
+                chrome.title = Label(layout.header,
                     (DeNelle.Core.FeatureFlags.BlinkChrome ? "" : ElarionUi.CrestGlyph + "  ") + (title ?? ""),
-                    0.92f, 0.985f, ElarionUi.Gilt, ElarionUi.FontTitle,
-                    TextAlignmentOptions.Center, headerX0, headerX1, spacing: 4f, bold: true);
+                    0f, 1f, ElarionUi.Gilt, ElarionUi.FontTitle,
+                    TextAlignmentOptions.Center, 0f, 1f, spacing: 4f, bold: true);
                 chrome.title.raycastTarget = false;
 
                 chrome.close = ObsidianCloseButton(chrome.content.transform, onClose);

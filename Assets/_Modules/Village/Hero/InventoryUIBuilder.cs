@@ -63,8 +63,12 @@ namespace DeNelle.Village
             // Right: Large grid filling most of the screen (5 cols landscape, ornate frames from pack, items fit with margins, scroll for more).
             // No sidebar/detail panel in main layout to match the mockup's full grid view (selection highlights in grid, equip on tap).
             // Grid extends lower for the big area in the mockup.
-            _gridRoot = ElarionUiKit.Well(panel.transform, new Vector2(0.28f, 0.18f), new Vector2(0.95f, 0.80f));
-            DressPanel(_gridRoot, RpgUiCatalog.PanelInventory, keepWhite: true);
+            // WO-582 frame pass: the grid sits in the Blink frame's own dark well now, so the grid
+            // root is TRANSPARENT (no grey Well sub-frame, no old PanelInventory gold-grid sprite that
+            // double-framed the middle). Items render directly on the frame's central well.
+            _gridRoot = AddImage(panel.transform, "GridRoot",
+                                 new Vector2(0.30f, 0.16f), new Vector2(0.93f, 0.80f), new Color(0f, 0f, 0f, 0f));
+            NoRaycast(_gridRoot);
 
             BuildFooterBar(panel.transform);
         }
@@ -72,10 +76,11 @@ namespace DeNelle.Village
         // ── Footer bar (mockup #41 bottom) ---
         private void BuildFooterBar(Transform panel)
         {
+            // WO-582 frame pass: the footer sits on the Blink frame's ornate base now, so the tray is
+            // a transparent layout host (no Track fill / rim / rule that boxed the bottom over the art).
             var tray = AddImage(panel, "FooterTray",
-                                new Vector2(0.04f, 0.035f), new Vector2(0.96f, 0.100f), Track);
-            AddInnerRim(tray, AccentSoft);
-            AddRule(tray.transform, 0.97f, 0.02f, 0.98f);
+                                new Vector2(0.30f, 0.035f), new Vector2(0.93f, 0.100f), new Color(0f, 0f, 0f, 0f));
+            NoRaycast(tray);
 
             // WO-565: the Sort + Filter buttons were wired to EMPTY lambdas — visible controls
             // that silently did nothing. HIDDEN rather than ship a half-feature: category Filter
