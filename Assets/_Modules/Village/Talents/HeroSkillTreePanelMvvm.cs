@@ -17,8 +17,11 @@
 // (no dependence on a layout pass). The content scrolls (owner: one scrollable
 // canvas, Knight + Shared, no pagination yet).
 //
-// Looks right with FeatureFlags.BlinkChrome ON (Obsidian slot/panel sprites) and
-// OFF (procedural rounded plates) — every sprite lookup keeps a null fallback.
+// This panel LEADS the Obsidian look: it uses the mirrored talent sprites
+// (slot_talent / panel_talent) whenever present — independent of the global
+// BlinkChrome "hide our dressing" flag — and falls back to procedural rounded
+// plates + the default dark frame when the art is absent. Every sprite lookup
+// is null-safe, so it renders correctly in both states.
 //
 // Registers PanelId.HeroSkillTree (+ legacy HeroTalents route; the Skills tab).
 // =============================================================================
@@ -262,9 +265,10 @@ namespace DeNelle.Village.Talents
             rt.sizeDelta = new Vector2(NodeSize, NodeSize);
 
             var img = go.GetComponent<Image>();
-            // Obsidian node plate (slot_talent) when chrome is on; rounded fallback otherwise.
-            Sprite plateSprite = DeNelle.Core.FeatureFlags.BlinkChrome
-                ? RpgUiCatalog.Get("slot", "slot_talent") : null;
+            // Obsidian node plate (slot_talent) whenever the art is present — this panel
+            // leads the Obsidian look regardless of the global BlinkChrome dressing flag
+            // (owner wants the talent tree Obsidian); rounded procedural fallback otherwise.
+            Sprite plateSprite = RpgUiCatalog.Get("slot", "slot_talent");
             if (plateSprite != null)
             {
                 img.sprite = plateSprite;
@@ -280,8 +284,7 @@ namespace DeNelle.Village.Talents
             // Capstone frame — distinct gilt border behind the plate.
             if (node.IsCapstone)
             {
-                Sprite frameSprite = DeNelle.Core.FeatureFlags.BlinkChrome
-                    ? RpgUiCatalog.Get("slot", "slot_talent_6") : null;
+                Sprite frameSprite = RpgUiCatalog.Get("slot", "slot_talent_6");
                 var frame = new GameObject("CapstoneFrame", typeof(Image));
                 frame.transform.SetParent(go.transform, false);
                 var fr = frame.GetComponent<RectTransform>();
@@ -399,14 +402,15 @@ namespace DeNelle.Village.Talents
             if (bdImg != null) bdImg.raycastTarget = false;
 
             // Obsidian talent window frame (panel_talent) when present; default frame otherwise.
-            string panelSprite = (DeNelle.Core.FeatureFlags.BlinkChrome && RpgUiCatalog.Get("panel", "panel_talent") != null)
+            string panelSprite = RpgUiCatalog.Get("panel", "panel_talent") != null
                 ? "panel_talent" : RpgUiCatalog.PanelWindowDark;
             var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.07f, 0.05f), new Vector2(0.93f, 0.95f),
                                                    deep: true, packSpriteName: panelSprite);
             var panel = panelGo.transform;
 
+            // Always keep a dark backing behind the (9-slice) Obsidian frame so the
+            // graph + text stay readable — the frame is a border, not a full fill.
             Color fillColor = new Color(0.07f, 0.055f, 0.042f, 0.985f);
-            if (DeNelle.Core.FeatureFlags.BlinkChrome) fillColor.a = 0f;
             var solidFill = ElarionUiKit.AddImage(panel, "SkillSolidFill",
                 new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f), fillColor);
             var sfImg = solidFill.GetComponent<Image>();
@@ -492,7 +496,8 @@ namespace DeNelle.Village.Talents
             _confirmBtn = ElarionUiKit.ButtonPack(panel, "CONFIRM", ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.55f, 0.07f), new Vector2(0.80f, 0.135f),
                 () => { if (_vm != null) _vm.Commit(); },
-                packSpriteName: DeNelle.Core.FeatureFlags.BlinkChrome ? RpgUiCatalog.ButtonConfirm : RpgUiCatalog.ButtonGold);
+                packSpriteName: RpgUiCatalog.Get("button", "button_confirm") != null
+                    ? RpgUiCatalog.ButtonConfirm : RpgUiCatalog.ButtonGold);
             var confLbl = _confirmBtn != null ? _confirmBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
             if (confLbl != null)
             {
