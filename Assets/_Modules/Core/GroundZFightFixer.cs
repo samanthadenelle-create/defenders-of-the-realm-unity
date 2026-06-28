@@ -54,6 +54,18 @@ namespace DeNelle.Core
         //   clears all terrain render deviation so the terrain is the single visible floor.
         private const float TargetY = -0.5f;
 
+        // CASTLE HUB target — DATA-PROVEN regression fix (2026-06-28, owner F8 "well/castle not
+        // on ground, ground under y=0"). The hub plaza is the DESIGNED stone floor; it must WIN
+        // the depth test, not yield. The old code sank the 26 CourtyardFloor tiles to TargetY
+        // (-0.5) — correct for Village2 (its "Ground" plane should yield to nicer terrain) but
+        // BACKWARDS for the castle. Player.log proved the mover: "[GroundZFightFixer] hub —
+        // lowered 26 CourtyardFloor tiles to Y=-0.5". The sink is old, but f3ef39f9 re-centered
+        // OuterWorld terrain to origin + re-baked the navmesh to y=0.06, raising props (~0) and
+        // the hero (0.06) above the still-sunk plaza → the 0.5m float. Seat the plaza a hair
+        // above origin so it sits at prop/hero level (no float) and still wins over any coplanar
+        // terrain at y=0. Authored near-zero tiles are left alone by the idempotency guard.
+        private const float HubTargetY = 0.02f;
+
         // Only lower a plane that is still ABOVE the target (a baked plane at Y=0 OR the
         // earlier -0.05 fix). A plane already at/below the target (regenerated town, or a
         // re-load after we lowered it) is skipped — keeps the fix idempotent and prevents
@@ -167,20 +179,22 @@ namespace DeNelle.Core
 
                 Transform t = mr.transform;
                 float y = t.position.y;
-                // IDEMPOTENT: only lower a tile still ABOVE the target.
-                if (y > TargetY + NearZeroEpsilon)
+                // SEAT the hub plaza at HubTargetY (~0) so it reads as the floor at prop/hero
+                // level. Only MOVE a tile meaningfully off-target (the old -0.5 sink, or an
+                // outlier); a tile already within epsilon of HubTargetY is left alone.
+                if (Mathf.Abs(y - HubTargetY) > NearZeroEpsilon)
                 {
                     Vector3 p = t.position;
-                    p.y = TargetY;
+                    p.y = HubTargetY;
                     t.position = p;
                     lowered++;
                 }
             }
             if (lowered > 0)
             {
-                Debug.Log("[GroundZFightFixer] hub — lowered " + lowered +
-                          " CourtyardFloor tiles to Y=" + TargetY +
-                          " so the OuterWorld terrain wins the depth test (no rebake).");
+                Debug.Log("[GroundZFightFixer] hub — seated " + lowered +
+                          " CourtyardFloor tiles to Y=" + HubTargetY +
+                          " (plaza is the castle floor; wins over coplanar terrain; no float).");
             }
         }
 
