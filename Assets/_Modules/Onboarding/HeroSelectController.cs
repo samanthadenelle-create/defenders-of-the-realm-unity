@@ -1,52 +1,53 @@
 // =============================================================================
 // HeroSelectController — drives the hero-select screen (intro flow).
 // -----------------------------------------------------------------------------
-// THE SCREEN (WO-503 single-hero V1):
-//   TOP        : a light brand block (title + subtitle) + the eyebrow
-//                "— YOUR HERO —".
-//   CENTERPIECE: the HERO STAGE for Grom (the single playable hero == Knight) —
-//                a LARGE gold-framed portrait with his backstory UNDER it (name /
-//                role / blurb) on the LEFT, and a STATS panel (HP / Attack / Speed
-//                pips + signature ability) BESIDE it on the RIGHT. Responsive: a
-//                ROW in landscape, re-flows to a COLUMN in portrait (never fixed
-//                pixel columns).
-//   BELOW      : a LOCKED "coming later" carousel of the other three heroes
-//                (Thrain/Mage, Sylas/Ranger, Elara/Cleric) — dimmed, scrim +
-//                LOCK badge, PickingMode.Ignore so they are PROVABLY non-selectable.
-//   FOOTER     : a single confirm CTA "Enter Elarion" (Grom pre-selected, enabled
-//                on load) that persists the hero and routes straight to the home
-//                hub (MainCastle_Hall) — no pet-select step.
+// THE SCREEN (WO-559 CAROUSEL):
+//   TOP        : a brand block (title + subtitle) + the eyebrow "— CHOOSE YOUR HERO —".
+//   CENTERPIECE: a CAROUSEL over the whole roster. PREV (◄) / NEXT (►) arrow chips
+//                flank a HERO STAGE that shows ONE hero at a time:
+//                  LEFT  — the HERO, large + focal (gold-framed portrait), with the
+//                          LORE (name / role / blurb) directly UNDER the hero.
+//                  RIGHT — the hero's STATS (HP / Attack / Speed pips + signature
+//                          ability) BESIDE the hero.
+//                Responsive: a ROW in landscape, re-flows to a COLUMN in portrait
+//                (never fixed pixel columns).
+//   INDICATOR  : a row of pip dots (●/○) showing which roster slot is on screen.
+//   FOOTER     : a single confirm CTA. On the playable hero (Grom == Knight) it reads
+//                "Enter Elarion" and is enabled — it persists the hero and routes to
+//                the home hub (MainCastle_Hall). On a LOCKED hero the CTA is disabled
+//                and reads "Coming Soon".
 //
-// WHY THIS KEPT REGRESSING (root cause, fixed here):
+//   LOCKED HEROES: the other three heroes (Thrain/Mage, Sylas/Ranger, Elara/Cleric)
+//   ARE navigable in the carousel — the player can PREVIEW their image + lore + stats —
+//   but they are NOT selectable: the stage shows a dark scrim + LOCK badge over the
+//   image and the confirm CTA is disabled. Only the playable hero can be confirmed.
+//
+// WHY THIS KEPT REGRESSING (root cause, fixed long ago, preserved here):
 //   The old screen BOUND to named elements inside HeroSelectScreen.uxml
-//   (_root.Q<VisualElement>("hero-dragon-stage") …). Per CLAUDE.md §8 / PIPELINE
-//   §8, UXML + USS do NOT render reliably in the WebGL player build — when the
-//   UXML tree failed to instantiate, every Q<>() returned null, every inline
-//   styling pass silently no-op'd on a null guard, and the screen came up empty
-//   or half-built. Each past "fix" layered more inline styles ON TOP of the UXML
-//   elements but still DEPENDED on those elements existing — so it broke again
-//   the next time UXML didn't resolve. Additionally there were no 4-even panels
-//   (fixed 240px cards overflowed in portrait) and no selected-hero detail card.
+//   (_root.Q<VisualElement>("hero-dragon-stage") …). Per CLAUDE.md §8 / PIPELINE §8,
+//   UXML + USS do NOT render reliably in the player build — when the UXML tree failed
+//   to instantiate, every Q<>() returned null and the screen came up empty.
+//   THE FIX (kept): this controller CLEARS the root and BUILDS THE ENTIRE LAYOUT IN
+//   CODE. It does not read a single name out of the UXML, so a UXML that doesn't
+//   render can no longer break this screen. The tree is flex/percent sized so it
+//   re-centres in both orientations; a GeometryChangedEvent handler re-flows on
+//   resize; a post-build self-assert verifies the carousel pieces exist.
 //
-//   THE FIX: this controller now CLEARS the root and BUILDS THE ENTIRE LAYOUT IN
-//   CODE. It does not read a single name out of the UXML. A UXML edit (or a UXML
-//   that doesn't render at all) can no longer break this screen — there is
-//   nothing for it to break. The whole tree is code, sized with flex / percent
-//   so it re-centres in both orientations, and a GeometryChangedEvent handler
-//   re-flows the columns whenever the screen size / orientation changes. A
-//   post-build self-assert verifies the four panels exist and are evenly spread.
+// COPY: every hero name / role / blurb (the lore) is resolved from en.json via
+// CanonStrings at runtime (port-spec Part 4). The card accent colour + glyph come
+// from HeroCatalog (pure presentation data, legitimately in C#).
 //
-// COPY: every hero name / role / blurb is resolved from en.json via CanonStrings
-// at runtime (port-spec Part 4). The card accent colour + glyph come from
-// HeroCatalog (pure presentation data, legitimately in C#).
+// STYLE: code-built UIElements (the HeroSelect scene host is a UIDocument, not a uGUI
+// Canvas), dressed in the shared ElarionUi black+gold "Obsidian" palette — the same
+// design language ElarionUiKit sources from. (ElarionUiKit itself is uGUI and cannot
+// host on a UIDocument without regenerating the scene; see WO-559 decision flag 1.)
 //
 // PERSISTENCE: on confirm, GameStateService.ChooseHero(hero) writes
 // GameState.HeroClass and Save()s it, then routes onward.
 //
-// RETURNING-PLAYER SKIP: a save that already records a hero has finished the
-// intro flow — the screen self-skips straight to the Castle so a returning
-// player is not re-asked. (WO-503: the gate no longer requires a starter pet,
-// because the pet-select step is gone and no longer writes StarterPetId.)
+// RETURNING-PLAYER SKIP: a save that already records a hero has finished the intro
+// flow — the screen self-skips straight to the Castle so a returning player is not
+// re-asked.
 //
 // Lives in DeNelle.Onboarding; references DeNelle.Core only — module isolation.
 // =============================================================================
@@ -61,11 +62,13 @@ using UnityEngine.UIElements;
 namespace DeNelle.Onboarding
 {
     /// <summary>
-    /// Drives the single-hero select screen (WO-503): builds (in code) the hero
-    /// stage for Grom (large image + backstory + stats panel beside it) over a
-    /// LOCKED, non-selectable "coming later" carousel of the other heroes. Grom is
-    /// pre-selected; on confirm it writes <see cref="GameState.HeroClass"/> and
-    /// routes straight to the home hub (MainCastle_Hall). Fully responsive —
+    /// Drives the hero-select CAROUSEL (WO-559): builds (in code) a roster carousel —
+    /// prev/next arrows flanking a hero stage that shows ONE hero at a time (large
+    /// focal image + lore UNDER it on the left, stats BESIDE it on the right) plus a
+    /// pip-dot indicator. Every hero is navigable so the player can preview the roster;
+    /// only the playable hero (Grom == Knight) is selectable — locked heroes show a
+    /// LOCK badge and a disabled "Coming Soon" CTA. On confirm it writes
+    /// <see cref="GameState.HeroClass"/> and routes to the home hub. Fully responsive —
     /// the stage re-flows row↔column on orientation change. A returning player who
     /// already chose a hero is skipped straight to the Castle.
     /// </summary>
@@ -75,21 +78,18 @@ namespace DeNelle.Onboarding
         // -- en.json keys for the screen's own copy --------------------------
         private const string TitleKey    = "heroSelect.title";
         private const string SubtitleKey = "heroSelect.subtitle";
-        // The confirm CTA en.json key (falls back to "Enter Elarion" — WO-503 D2).
+        // The confirm CTA en.json key (falls back to "Enter Elarion").
         // Routes straight to the home hub (no pet-select step).
         private const string DiveKey    = "heroSelect.diveVillage";
-        // WO-327: ConfirmKey ("heroSelect.jumpAction" / "Jump into the Action") was
-        // removed with the DTT-crashing button.
 
         // -- Palette — SOURCED from the shared ElarionUi town-HUD language ----
-        // (WO restyle: matches the town HUD — dark glass + ornate gold-rune
-        // frames — not the retired hardcoded purple/amber. Role-named locals keep
-        // the layout below unchanged while every colour resolves canonically.)
-        private static readonly Color ColBackground   = ElarionUi.PanelStoneDark;                                     // full-screen stone
-        private static readonly Color ColPanelDark     = ElarionUi.PanelStone;                                         // roster panel fill
-        private static readonly Color ColAmber         = ElarionUi.Gold;                                               // accents / eyebrow → runic gold
-        private static readonly Color ColTextBright    = ElarionUi.Parchment;                                          // primary text
-        private static readonly Color ColTextMuted     = ElarionUi.ParchmentDim;                                       // secondary text
+        // (Matches the town HUD — dark glass + ornate gold-rune frames. Role-named
+        // locals keep the layout below readable while every colour resolves canonically.)
+        private static readonly Color ColBackground   = ElarionUi.PanelStoneDark;   // full-screen stone
+        private static readonly Color ColPanelDark     = ElarionUi.PanelStone;       // roster panel fill
+        private static readonly Color ColAmber         = ElarionUi.Gold;             // accents / eyebrow → runic gold
+        private static readonly Color ColTextBright    = ElarionUi.Parchment;        // primary text
+        private static readonly Color ColTextMuted     = ElarionUi.ParchmentDim;     // secondary text
 
         [Header("UI")]
         [Tooltip("UIDocument hosting the hero-select panel. Falls back to the component on this GameObject.")]
@@ -102,24 +102,29 @@ namespace DeNelle.Onboarding
         [SerializeField] private bool _skipWhenIntroComplete = true;
 
         // -- Built UI elements (all created in code) -------------------------
-        // WO-503 single-hero layout: a HERO STAGE (large Grom image + backstory
-        // under it, stats panel beside it) + a LOCKED CAROUSEL of the other heroes
-        // ("coming later", non-selectable). Replaces the old four-even-card grid.
+        // WO-559 carousel layout: prev/next arrows flank a HERO STAGE (large image +
+        // lore under it on the left, stats beside it on the right) with a pip-dot row.
         private VisualElement _root;
-        private VisualElement _heroStage;     // row (landscape) / column (portrait): image+story | stats
-        private VisualElement _stageLeft;     // image + backstory column
-        private VisualElement _stageRight;    // stats panel column
-        private VisualElement _lockedRow;     // bottom band — the 3 locked carousel cards
+        private VisualElement _carousel;      // row: ◄ | stage | ►
+        private VisualElement _heroStage;     // row (landscape) / column (portrait): image+lore | stats
+        private VisualElement _stageLeft;     // image + lore column (rebuilt per index)
+        private VisualElement _stageRight;    // stats panel column (rebuilt per index)
+        private VisualElement _dotsRow;       // pip-dot index indicator
+        private Button _prevButton;
+        private Button _nextButton;
 
         private bool _built;
         private bool _hasSelection;
         private HeroClass _selectedHero;
 
+        // Which roster slot is on screen (index into HeroCatalog.Heroes).
+        private int _carouselIndex;
+
         // The single playable hero in V1 — Grom == HeroClass.Knight (KnightOnly ON).
         private const HeroClass PlayableHero = HeroClass.Knight;
 
-        // WO-503 confirm CTA — "Enter Elarion" (D2): the destination is the home
-        // hub, not a TD raid. Pre-enabled (single hero is pre-selected).
+        // Confirm CTA — "Enter Elarion" on the playable hero; "Coming Soon" (disabled)
+        // on a locked hero.
         private Button _diveButton;
 
         // =====================================================================
@@ -146,7 +151,9 @@ namespace DeNelle.Onboarding
 
         private void OnDisable()
         {
-            if (_diveButton    != null) _diveButton.clicked    -= OnDiveVillageClicked;
+            if (_diveButton != null) _diveButton.clicked -= OnDiveVillageClicked;
+            if (_prevButton != null) _prevButton.clicked -= OnPrevClicked;
+            if (_nextButton != null) _nextButton.clicked -= OnNextClicked;
             if (_root != null) _root.UnregisterCallback<GeometryChangedEvent>(OnRootGeometryChanged);
             _built = false;
         }
@@ -157,15 +164,8 @@ namespace DeNelle.Onboarding
 
         /// <summary>
         /// True when the save already records a chosen hero — the intro flow is
-        /// finished and this screen has nothing to ask.
-        ///
-        /// WO-503 dependency fix: this gate USED to require BOTH a hero AND a
-        /// non-empty StarterPetId. The pet-select step is gone (single-hero V1) and
-        /// no longer writes StarterPetId, so requiring it would NEVER be satisfied —
-        /// a returning player who already picked Grom would be re-shown hero-select
-        /// every launch. The gate is now HeroClass alone. (GameState.StarterPetId
-        /// the FIELD stays — Echo Hollow + save migration still use it; only this
-        /// boot gate stops depending on it.)
+        /// finished and this screen has nothing to ask. The gate is HeroClass alone
+        /// (the pet-select step is gone for single-hero V1).
         /// </summary>
         private static bool IsIntroComplete()
         {
@@ -179,16 +179,16 @@ namespace DeNelle.Onboarding
         // =====================================================================
 
         /// <summary>
-        /// Builds the entire hero-select layout in code on a cleared root. Does
-        /// not read any UXML element by name, so a UXML that fails to render in
-        /// the build (CLAUDE.md §8) cannot break this screen. Structure:
+        /// Builds the entire hero-select CAROUSEL in code on a cleared root. Does not
+        /// read any UXML element by name, so a UXML that fails to render in the build
+        /// (CLAUDE.md §8) cannot break this screen. Structure:
         ///   root (column)
         ///     └─ roster panel  (full screen, opaque)
         ///          ├─ brand       (title + subtitle)
-        ///          ├─ eyebrow     ("— YOUR HERO —")
-        ///          ├─ hero stage  (image + backstory | stats — row/column reflow)
-        ///          ├─ locked row  (3 dimmed, non-selectable "coming later" cards)
-        ///          └─ footer      (confirm CTA "Enter Elarion")
+        ///          ├─ eyebrow     ("— CHOOSE YOUR HERO —")
+        ///          ├─ carousel    (◄ | hero stage [image+lore | stats] | ►)
+        ///          ├─ dots        (pip-dot index indicator)
+        ///          └─ footer      (confirm CTA)
         /// </summary>
         private void BuildScreen()
         {
@@ -210,45 +210,46 @@ namespace DeNelle.Onboarding
             _root.style.justifyContent = Justify.FlexStart;
             _root.style.backgroundColor = ColBackground;
 
-            // WO-503: single-hero stage (large Grom image + backstory + stats) over
-            // a locked "coming later" carousel of the other heroes. The roster panel
-            // carries brand title/subtitle + the eyebrow at the top.
-            BuildRosterPanel();   // full screen (brand + eyebrow + hero stage + locked carousel + CTA)
+            // Open the carousel ON the playable hero so the screen starts on the
+            // selectable, pre-selected Grom (not a locked hero).
+            _carouselIndex = IndexOf(PlayableHero);
 
-            // Grom (Knight) is PRE-SELECTED — the big stage IS the selection. The
-            // confirm CTA is enabled immediately (there is nothing to choose).
-            _selectedHero = PlayableHero;
-            _hasSelection = true;
-            GameStateService.Instance?.ChooseHero(PlayableHero); // KnightOnly-forced; idempotent
-            RefreshConfirmEnabled();
+            BuildRosterPanel();   // full screen (brand + eyebrow + carousel + dots + CTA)
 
-            // Re-flow the responsive layout on every screen-size / orientation
-            // change — keeps the hero stage row (landscape) re-flowing to a column
-            // (portrait) without fixed pixel positions.
+            // Pre-persist the playable hero so GameState always has a valid class even
+            // if the player confirms without navigating (KnightOnly-forced; idempotent).
+            GameStateService.Instance?.ChooseHero(PlayableHero);
+
+            // Paint the opening hero into the stage (sets selection + CTA + dots).
+            PopulateStage(_carouselIndex);
+
+            // Re-flow the responsive layout on every screen-size / orientation change.
             _root.RegisterCallback<GeometryChangedEvent>(OnRootGeometryChanged);
 
             _built = true;
 
-            // Run the orientation re-flow + self-assert once now in case the
-            // panel already has its geometry (so we never wait a frame to verify).
+            // Run the orientation re-flow + self-assert once now in case the panel
+            // already has its geometry (so we never wait a frame to verify).
             ReflowForSize(_root.resolvedStyle.width, _root.resolvedStyle.height);
 
-            // V — prove the screen built: root has children AND the hero stage +
-            // the 3 locked carousel cards exist. A built-but-empty hero-select is a
-            // dead-end screen, so a zero count Fails.
+            // V — prove the screen built: root has children AND the carousel + stage
+            // columns + arrows + dots exist. A built-but-empty hero-select is a
+            // dead-end screen, so a missing piece Fails.
             int rootChildren = _root.childCount;
-            int lockedCount = _lockedRow != null ? _lockedRow.childCount : 0;
-            bool stageOk = _heroStage != null && _stageLeft != null && _stageRight != null;
-            if (rootChildren == 0 || !stageOk || lockedCount == 0)
+            bool carouselOk = _carousel != null && _heroStage != null
+                              && _stageLeft != null && _stageRight != null
+                              && _prevButton != null && _nextButton != null;
+            int dotCount = _dotsRow != null ? _dotsRow.childCount : 0;
+            if (rootChildren == 0 || !carouselOk || dotCount == 0)
             {
                 FlowTrace.Fail("Onboarding",
-                    $"BuildScreen VERIFY FAILED — rootChildren={rootChildren} stageOk={stageOk} locked={lockedCount}. " +
-                    "Hero-select built but EMPTY/incomplete (blank/dead-end screen).");
+                    $"BuildScreen VERIFY FAILED — rootChildren={rootChildren} carouselOk={carouselOk} dots={dotCount}. " +
+                    "Hero-select carousel built but EMPTY/incomplete (blank/dead-end screen).");
             }
             else
             {
                 FlowTrace.Step("Onboarding",
-                    $"BuildScreen VERIFY ok — rootChildren={rootChildren} stageOk={stageOk} locked={lockedCount}.");
+                    $"BuildScreen VERIFY ok — rootChildren={rootChildren} carouselOk={carouselOk} dots={dotCount}.");
             }
         }
 
@@ -257,7 +258,7 @@ namespace DeNelle.Onboarding
         private void BuildRosterPanel()
         {
             var roster = new VisualElement { name = "hero-roster-panel" };
-            roster.style.flexGrow = 1f;          // takes the full screen now
+            roster.style.flexGrow = 1f;          // takes the full screen
             roster.style.flexShrink = 1f;
             roster.style.flexBasis = 0f;
             roster.style.backgroundColor = ColPanelDark;
@@ -305,8 +306,8 @@ namespace DeNelle.Onboarding
             divider.style.backgroundColor = ColAmber;
             roster.Add(divider);
 
-            // Eyebrow — WO-503 D3: inline literal "— YOUR HERO —" (only one to pick).
-            var eyebrow = new Label("— YOUR HERO —");
+            // Eyebrow — the carousel prompt.
+            var eyebrow = new Label("— CHOOSE YOUR HERO —");
             eyebrow.style.fontSize = 12f;
             eyebrow.style.unityFontStyleAndWeight = FontStyle.Bold;
             eyebrow.style.color = ColAmber;
@@ -315,14 +316,13 @@ namespace DeNelle.Onboarding
             eyebrow.style.flexShrink = 0f;
             roster.Add(eyebrow);
 
-            // ── HERO STAGE — the centerpiece. Row in landscape (image+story left,
-            //    stats right); re-flows to a column in portrait (ReflowForSize).
-            BuildHeroStage();
-            roster.Add(_heroStage);
+            // ── CAROUSEL — the centerpiece: ◄ | hero stage | ►.
+            BuildCarousel();
+            roster.Add(_carousel);
 
-            // ── LOCKED CAROUSEL — the other heroes, "coming later", non-selectable.
-            BuildLockedCarousel();
-            roster.Add(_lockedRow);
+            // ── DOTS — pip index indicator under the carousel.
+            BuildDots();
+            roster.Add(_dotsRow);
 
             // Footer — the single confirm CTA.
             var footer = new VisualElement { name = "select-footer" };
@@ -333,8 +333,6 @@ namespace DeNelle.Onboarding
             footer.style.justifyContent = Justify.Center;
             footer.style.alignItems = Align.Center;
 
-            // WO-503 D2: "Enter Elarion" — the destination is the home hub. Grom is
-            // pre-selected, so the CTA is enabled on load.
             _diveButton = new Button { text = FallbackLocale(DiveKey, "Enter Elarion") };
             StyleCta(_diveButton, secondary: false);
             _diveButton.clicked += OnDiveVillageClicked;
@@ -344,24 +342,41 @@ namespace DeNelle.Onboarding
             _root.Add(roster);
         }
 
-        /// <summary>
-        /// Builds the single-hero stage for Grom (Knight): a LARGE gold-framed
-        /// portrait with the backstory UNDER it on the left, and the stats panel
-        /// (HP/Attack/Speed pips + signature ability + role) BESIDE it on the right.
-        /// Row layout in landscape; ReflowForSize switches it to a column in portrait.
-        /// </summary>
-        private void BuildHeroStage()
-        {
-            HeroCardInfo info = FindInfo(PlayableHero);
+        // =====================================================================
+        //  Carousel — arrows + a hero stage that re-paints per index
+        // =====================================================================
 
+        /// <summary>
+        /// Builds the carousel row: a PREV (◄) arrow chip, the hero stage (empty
+        /// containers — <see cref="PopulateStage"/> fills them per index), and a NEXT
+        /// (►) arrow chip. The arrows + stage containers are persistent; only the
+        /// stage CONTENT is rebuilt on navigation.
+        /// </summary>
+        private void BuildCarousel()
+        {
+            _carousel = new VisualElement { name = "hero-carousel" };
+            _carousel.style.flexGrow = 1f;
+            _carousel.style.flexShrink = 1f;
+            _carousel.style.flexDirection = FlexDirection.Row;
+            _carousel.style.alignItems = Align.Center;
+            _carousel.style.justifyContent = Justify.Center;
+
+            _prevButton = BuildArrow("◄", "carousel-prev");
+            _prevButton.clicked += OnPrevClicked;
+            _carousel.Add(_prevButton);
+
+            // Hero stage — row (landscape): image+lore | stats. ReflowForSize flips it
+            // to a column in portrait. Empty until PopulateStage runs.
             _heroStage = new VisualElement { name = "hero-stage" };
             _heroStage.style.flexGrow = 1f;
             _heroStage.style.flexShrink = 1f;
-            _heroStage.style.flexDirection = FlexDirection.Row;   // ReflowForSize flips to Column in portrait
+            _heroStage.style.flexBasis = 0f;
+            _heroStage.style.minWidth = 0f;
+            _heroStage.style.flexDirection = FlexDirection.Row;
             _heroStage.style.alignItems = Align.Stretch;
             _heroStage.style.justifyContent = Justify.Center;
 
-            // ── LEFT column: large image + backstory under it (the larger half).
+            // LEFT column: large image + lore under it (the larger half).
             _stageLeft = new VisualElement { name = "hero-stage-left" };
             _stageLeft.style.flexGrow = 1.3f;
             _stageLeft.style.flexShrink = 1f;
@@ -370,8 +385,93 @@ namespace DeNelle.Onboarding
             _stageLeft.style.flexDirection = FlexDirection.Column;
             _stageLeft.style.alignItems = Align.Stretch;
             _stageLeft.style.marginRight = 8f;
+            _heroStage.Add(_stageLeft);
 
-            // Large hero image — gold double-rim, dark backing, cover-fit Grom.jpg.
+            // RIGHT column: the stats panel BESIDE the image.
+            _stageRight = new VisualElement { name = "hero-stage-right" };
+            _stageRight.style.flexGrow = 1f;
+            _stageRight.style.flexShrink = 1f;
+            _stageRight.style.flexBasis = 0f;
+            _stageRight.style.minWidth = 0f;
+            _stageRight.style.justifyContent = Justify.Center;
+            _stageRight.style.marginLeft = 8f;
+            _heroStage.Add(_stageRight);
+
+            _carousel.Add(_heroStage);
+
+            _nextButton = BuildArrow("►", "carousel-next");
+            _nextButton.clicked += OnNextClicked;
+            _carousel.Add(_nextButton);
+        }
+
+        /// <summary>A gold-trim circular-ish arrow chip button (◄ / ►) for carousel nav.</summary>
+        private Button BuildArrow(string glyph, string name)
+        {
+            var btn = new Button { text = glyph, name = name };
+            btn.style.flexShrink = 0f;
+            btn.style.width = 44f;
+            btn.style.height = 44f;
+            btn.style.marginLeft = 4f;
+            btn.style.marginRight = 4f;
+            btn.style.fontSize = 22f;
+            btn.style.unityFontStyleAndWeight = FontStyle.Bold;
+            btn.style.unityTextAlign = TextAnchor.MiddleCenter;
+            float r = 22f;
+            btn.style.borderTopLeftRadius = r;
+            btn.style.borderTopRightRadius = r;
+            btn.style.borderBottomLeftRadius = r;
+            btn.style.borderBottomRightRadius = r;
+            SetBorderWidth(btn, 2f);
+            SetBorderColor(btn, new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.9f));
+            btn.style.backgroundColor = ElarionUi.GoldButton;
+            btn.style.color = ElarionUi.Ink;
+            return btn;
+        }
+
+        /// <summary>Builds the pip-dot index indicator (one dot per roster slot).</summary>
+        private void BuildDots()
+        {
+            _dotsRow = new VisualElement { name = "hero-dots" };
+            _dotsRow.style.flexDirection = FlexDirection.Row;
+            _dotsRow.style.justifyContent = Justify.Center;
+            _dotsRow.style.alignItems = Align.Center;
+            _dotsRow.style.flexShrink = 0f;
+            _dotsRow.style.marginTop = 10f;
+            _dotsRow.pickingMode = PickingMode.Ignore;
+
+            for (int i = 0; i < HeroCatalog.Heroes.Length; i++)
+            {
+                var dot = new Label("●") { name = $"dot-{i}" };
+                dot.style.fontSize = 14f;
+                dot.style.marginLeft = 3f;
+                dot.style.marginRight = 3f;
+                dot.style.color = ColTextMuted;
+                _dotsRow.Add(dot);
+            }
+        }
+
+        /// <summary>
+        /// Re-paints the hero stage for the roster slot at <paramref name="index"/>:
+        /// rebuilds the LEFT (large focal image + LOCK badge when locked + lore under
+        /// it) and RIGHT (stats panel) content, then refreshes the lock state, the
+        /// confirm CTA (enabled "Enter Elarion" on the playable hero, disabled
+        /// "Coming Soon" on a locked hero) and the dot indicator. The selection is the
+        /// playable hero only — navigating to a locked hero is a PREVIEW, not a pick.
+        /// </summary>
+        private void PopulateStage(int index)
+        {
+            if (_stageLeft == null || _stageRight == null) return;
+            if (HeroCatalog.Heroes.Length == 0) return;
+
+            index = ((index % HeroCatalog.Heroes.Length) + HeroCatalog.Heroes.Length) % HeroCatalog.Heroes.Length;
+            _carouselIndex = index;
+            HeroCardInfo info = HeroCatalog.Heroes[index];
+            bool playable = IsPlayable(info.Hero);
+
+            _stageLeft.Clear();
+            _stageRight.Clear();
+
+            // ── LEFT: large hero image (focal) + lore directly under it.
             var imageFrame = new VisualElement { name = "hero-image-frame" };
             imageFrame.style.flexGrow = 1f;
             imageFrame.style.flexShrink = 1f;
@@ -384,7 +484,8 @@ namespace DeNelle.Onboarding
             imageFrame.style.borderBottomLeftRadius = fr;
             imageFrame.style.borderBottomRightRadius = fr;
             SetBorderWidth(imageFrame, 3f);
-            SetBorderColor(imageFrame, ElarionUi.Gilt);
+            SetBorderColor(imageFrame, playable ? ElarionUi.Gilt
+                                                : new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.4f));
 
             var portrait = new VisualElement { name = "hero-portrait" };
             portrait.style.position = Position.Absolute;
@@ -394,25 +495,59 @@ namespace DeNelle.Onboarding
             portrait.style.bottom = 0f;
             portrait.style.alignItems = Align.Center;
             portrait.style.justifyContent = Justify.Center;
+            if (!playable) portrait.style.opacity = 0.5f;   // dim a locked hero
             ApplyPortrait(portrait, info, glyphSize: 96f);
             imageFrame.Add(portrait);
+
+            // LOCK overlay (dark scrim + LOCK badge + "Coming Soon") for a locked hero.
+            if (!playable)
+            {
+                var scrim = new VisualElement { name = "lock-scrim" };
+                scrim.style.position = Position.Absolute;
+                scrim.style.left = 0f;
+                scrim.style.right = 0f;
+                scrim.style.top = 0f;
+                scrim.style.bottom = 0f;
+                scrim.style.backgroundColor = new Color(0f, 0f, 0f, 0.5f);
+                scrim.style.alignItems = Align.Center;
+                scrim.style.justifyContent = Justify.Center;
+                scrim.pickingMode = PickingMode.Ignore;
+
+                var lockBadge = new Label("LOCKED");
+                lockBadge.style.fontSize = 18f;
+                lockBadge.style.unityFontStyleAndWeight = FontStyle.Bold;
+                lockBadge.style.color = ElarionUi.Parchment;
+                lockBadge.style.unityTextAlign = TextAnchor.MiddleCenter;
+                scrim.Add(lockBadge);
+
+                var comingSoon = new Label("Coming Soon");
+                comingSoon.style.marginTop = 2f;
+                comingSoon.style.fontSize = 11f;
+                comingSoon.style.unityFontStyleAndWeight = FontStyle.Italic;
+                comingSoon.style.color = ColTextMuted;
+                comingSoon.style.unityTextAlign = TextAnchor.MiddleCenter;
+                scrim.Add(comingSoon);
+
+                imageFrame.Add(scrim);
+            }
+
             _stageLeft.Add(imageFrame);
 
-            // Backstory UNDER the image: name (gold, big) + role (amber) + blurb.
-            var story = new VisualElement { name = "hero-backstory" };
+            // Lore UNDER the image: name (gold, big) + role (amber) + blurb.
+            var story = new VisualElement { name = "hero-lore" };
             story.style.flexShrink = 0f;
             story.style.marginTop = 10f;
             story.style.paddingLeft = 2f;
             story.style.paddingRight = 2f;
 
-            var nameLabel = new Label(info != null ? CanonStrings.Locale(info.NameKey) : "Grom");
+            var nameLabel = new Label(CanonStrings.Locale(info.NameKey));
             nameLabel.style.fontSize = 24f;
             nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            nameLabel.style.color = ElarionUi.Gold;
+            nameLabel.style.color = playable ? ElarionUi.Gold : ColTextMuted;
             nameLabel.style.whiteSpace = WhiteSpace.Normal;
             story.Add(nameLabel);
 
-            var roleLabel = new Label(info != null ? CanonStrings.Locale(info.RoleKey) : string.Empty);
+            var roleLabel = new Label(CanonStrings.Locale(info.RoleKey));
             roleLabel.style.marginTop = 2f;
             roleLabel.style.fontSize = 13f;
             roleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
@@ -420,7 +555,7 @@ namespace DeNelle.Onboarding
             roleLabel.style.whiteSpace = WhiteSpace.Normal;
             story.Add(roleLabel);
 
-            var blurbLabel = new Label(info != null ? CanonStrings.Locale(info.BlurbKey) : string.Empty);
+            var blurbLabel = new Label(CanonStrings.Locale(info.BlurbKey));
             blurbLabel.style.marginTop = 6f;
             blurbLabel.style.fontSize = 13f;
             blurbLabel.style.color = ColTextBright;
@@ -428,17 +563,8 @@ namespace DeNelle.Onboarding
             story.Add(blurbLabel);
 
             _stageLeft.Add(story);
-            _heroStage.Add(_stageLeft);
 
-            // ── RIGHT column: the stats panel BESIDE the image.
-            _stageRight = new VisualElement { name = "hero-stage-right" };
-            _stageRight.style.flexGrow = 1f;
-            _stageRight.style.flexShrink = 1f;
-            _stageRight.style.flexBasis = 0f;
-            _stageRight.style.minWidth = 0f;
-            _stageRight.style.justifyContent = Justify.Center;
-            _stageRight.style.marginLeft = 8f;
-
+            // ── RIGHT: the stats panel BESIDE the image.
             var statsPanel = new VisualElement { name = "hero-stats-panel" };
             statsPanel.style.paddingTop = 14f;
             statsPanel.style.paddingBottom = 14f;
@@ -453,11 +579,10 @@ namespace DeNelle.Onboarding
             SetBorderColor(statsPanel, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f));
             statsPanel.style.backgroundColor = ElarionUi.PanelStone;
 
-            BuildStatRow(statsPanel, "HP",     PipString(info != null ? info.Hp : 5));
-            BuildStatRow(statsPanel, "ATTACK", PipString(info != null ? info.Attack : 3));
-            BuildStatRow(statsPanel, "SPEED",  PipString(info != null ? info.Speed : 2));
+            BuildStatRow(statsPanel, "HP",     PipString(info.Hp));
+            BuildStatRow(statsPanel, "ATTACK", PipString(info.Attack));
+            BuildStatRow(statsPanel, "SPEED",  PipString(info.Speed));
 
-            // Divider then the signature ability.
             var statDivider = new VisualElement();
             statDivider.style.height = 1f;
             statDivider.style.marginTop = 10f;
@@ -465,14 +590,14 @@ namespace DeNelle.Onboarding
             statDivider.style.backgroundColor = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.4f);
             statsPanel.Add(statDivider);
 
-            var abilityName = new Label(info != null ? info.AbilityName : "Bulwark Slam");
+            var abilityName = new Label(info.AbilityName);
             abilityName.style.fontSize = 15f;
             abilityName.style.unityFontStyleAndWeight = FontStyle.Bold;
             abilityName.style.color = ColAmber;
             abilityName.style.whiteSpace = WhiteSpace.Normal;
             statsPanel.Add(abilityName);
 
-            var abilityDesc = new Label(info != null ? info.AbilityDesc : string.Empty);
+            var abilityDesc = new Label(info.AbilityDesc);
             abilityDesc.style.marginTop = 2f;
             abilityDesc.style.fontSize = 12f;
             abilityDesc.style.color = ColTextMuted;
@@ -480,179 +605,67 @@ namespace DeNelle.Onboarding
             statsPanel.Add(abilityDesc);
 
             _stageRight.Add(statsPanel);
-            _heroStage.Add(_stageRight);
+
+            // Selection: only the playable hero can be selected. Navigating to a
+            // locked hero previews it but leaves no selectable choice.
+            if (playable)
+            {
+                _selectedHero = info.Hero;
+                _hasSelection = true;
+            }
+            else
+            {
+                _hasSelection = false;
+            }
+
+            RefreshConfirm(playable);
+            RefreshDots();
+
+            // Re-apply orientation flow so a freshly-built stage stacks correctly.
+            if (_root != null)
+                ReflowForSize(_root.resolvedStyle.width, _root.resolvedStyle.height);
         }
 
-        /// <summary>
-        /// Builds the locked "coming later" carousel — one dimmed, NON-SELECTABLE
-        /// card per locked hero (Thrain/Mage, Sylas/Ranger, Elara/Cleric). Each card
-        /// is PickingMode.Ignore with NO click handler, so a tap provably does
-        /// nothing — it can never select a locked hero.
-        /// </summary>
-        private void BuildLockedCarousel()
-        {
-            _lockedRow = new VisualElement { name = "hero-locked-row" };
-            _lockedRow.style.flexDirection = FlexDirection.Row;
-            _lockedRow.style.justifyContent = Justify.Center;
-            _lockedRow.style.alignItems = Align.Stretch;
-            _lockedRow.style.flexShrink = 0f;
-            _lockedRow.style.marginTop = 12f;
-            // The whole band is inert — provably non-interactive.
-            _lockedRow.pickingMode = PickingMode.Ignore;
+        // =====================================================================
+        //  Carousel navigation
+        // =====================================================================
 
-            for (int i = 0; i < HeroCatalog.Heroes.Length; i++)
+        private void OnPrevClicked() => PopulateStage(_carouselIndex - 1);
+        private void OnNextClicked() => PopulateStage(_carouselIndex + 1);
+
+        // =====================================================================
+        //  Confirm CTA + dot indicator state
+        // =====================================================================
+
+        /// <summary>
+        /// Refreshes the confirm CTA for the current hero: enabled "Enter Elarion" on
+        /// the playable hero, disabled "Coming Soon" on a locked hero.
+        /// </summary>
+        private void RefreshConfirm(bool playable)
+        {
+            if (_diveButton == null) return;
+            _diveButton.text = playable ? FallbackLocale(DiveKey, "Enter Elarion") : "Coming Soon";
+            _diveButton.SetEnabled(playable && _hasSelection);
+        }
+
+        /// <summary>Highlights the dot for the on-screen hero (gold), dims the rest.</summary>
+        private void RefreshDots()
+        {
+            if (_dotsRow == null) return;
+            for (int i = 0; i < _dotsRow.childCount; i++)
             {
-                HeroCardInfo info = HeroCatalog.Heroes[i];
-                if (info.Hero == PlayableHero) continue;   // Grom is the stage, not a locked card
-                _lockedRow.Add(BuildLockedCard(info));
+                var dot = _dotsRow[i];
+                dot.style.color = (i == _carouselIndex) ? ColAmber : ColTextMuted;
             }
         }
 
-        /// <summary>
-        /// Builds one dimmed, non-selectable locked card (portrait dimmed under a
-        /// dark scrim + a LOCK badge + "Coming later" caption + dim name/class).
-        /// Provably inert: PickingMode.Ignore and no PointerDownEvent.
-        /// </summary>
-        private VisualElement BuildLockedCard(HeroCardInfo info)
-        {
-            var card = new VisualElement { name = $"hero-locked-{info.Hero}" };
-            card.style.flexGrow = 1f;
-            card.style.flexShrink = 1f;
-            card.style.flexBasis = 0f;
-            card.style.maxWidth = Length.Percent(30f);
-            card.style.minWidth = 0f;
-            card.style.marginLeft = 5f;
-            card.style.marginRight = 5f;
-            float radius = 10f;
-            card.style.borderTopLeftRadius = radius;
-            card.style.borderTopRightRadius = radius;
-            card.style.borderBottomLeftRadius = radius;
-            card.style.borderBottomRightRadius = radius;
-            SetBorderWidth(card, 2f);
-            SetBorderColor(card, ElarionUi.Disabled);
-            card.style.backgroundColor = ElarionUi.Disabled;
-            card.style.overflow = Overflow.Hidden;
-            card.style.flexDirection = FlexDirection.Column;
-            card.style.alignItems = Align.Stretch;
-            card.style.paddingTop = 6f;
-            card.style.paddingBottom = 6f;
-            card.style.paddingLeft = 6f;
-            card.style.paddingRight = 6f;
-            // PROVABLY NON-SELECTABLE: the card ignores pointer events and registers
-            // NO click handler — a tap does nothing, never selects a locked hero.
-            card.pickingMode = PickingMode.Ignore;
-
-            var imageFrame = new VisualElement { name = "locked-image-frame" };
-            imageFrame.style.flexGrow = 1f;
-            imageFrame.style.flexShrink = 1f;
-            imageFrame.style.minHeight = 56f;
-            imageFrame.style.overflow = Overflow.Hidden;
-            imageFrame.style.backgroundColor = new Color(0f, 0f, 0f, 0.30f);
-            float fr = 6f;
-            imageFrame.style.borderTopLeftRadius = fr;
-            imageFrame.style.borderTopRightRadius = fr;
-            imageFrame.style.borderBottomLeftRadius = fr;
-            imageFrame.style.borderBottomRightRadius = fr;
-            SetBorderWidth(imageFrame, 1f);
-            SetBorderColor(imageFrame, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.35f));
-
-            // Dimmed portrait.
-            var portrait = new VisualElement { name = "locked-portrait" };
-            portrait.style.position = Position.Absolute;
-            portrait.style.left = 0f;
-            portrait.style.right = 0f;
-            portrait.style.top = 0f;
-            portrait.style.bottom = 0f;
-            portrait.style.alignItems = Align.Center;
-            portrait.style.justifyContent = Justify.Center;
-            portrait.style.opacity = 0.35f;   // greyed/dimmed
-            ApplyPortrait(portrait, info, glyphSize: 36f);
-            imageFrame.Add(portrait);
-
-            // Dark scrim + centered LOCK badge over the portrait.
-            var scrim = new VisualElement { name = "locked-scrim" };
-            scrim.style.position = Position.Absolute;
-            scrim.style.left = 0f;
-            scrim.style.right = 0f;
-            scrim.style.top = 0f;
-            scrim.style.bottom = 0f;
-            scrim.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);
-            scrim.style.alignItems = Align.Center;
-            scrim.style.justifyContent = Justify.Center;
-            scrim.pickingMode = PickingMode.Ignore;
-
-            var lockGlyph = new Label("LOCKED");
-            lockGlyph.style.fontSize = 12f;
-            lockGlyph.style.unityFontStyleAndWeight = FontStyle.Bold;
-            lockGlyph.style.color = ElarionUi.Parchment;
-            lockGlyph.style.unityTextAlign = TextAnchor.MiddleCenter;
-            scrim.Add(lockGlyph);
-            imageFrame.Add(scrim);
-
-            card.Add(imageFrame);
-
-            // Dim name + class so the player sees who is coming.
-            var nameLabel = new Label(CanonStrings.Locale(info.NameKey));
-            nameLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-            nameLabel.style.marginTop = 4f;
-            nameLabel.style.fontSize = 12f;
-            nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            nameLabel.style.color = ColTextMuted;
-            nameLabel.style.whiteSpace = WhiteSpace.Normal;
-            card.Add(nameLabel);
-
-            var classLabel = new Label(CanonStrings.Locale(info.RoleKey));
-            classLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-            classLabel.style.fontSize = 10f;
-            classLabel.style.color = ColTextMuted;
-            classLabel.style.whiteSpace = WhiteSpace.Normal;
-            card.Add(classLabel);
-
-            var coming = new Label("Coming later");
-            coming.style.unityTextAlign = TextAnchor.MiddleCenter;
-            coming.style.marginTop = 1f;
-            coming.style.fontSize = 9f;
-            coming.style.unityFontStyleAndWeight = FontStyle.Italic;
-            coming.style.color = ColTextMuted;
-            card.Add(coming);
-
-            return card;
-        }
+        // =====================================================================
+        //  Shared stat-row + pip helpers
+        // =====================================================================
 
         /// <summary>
-        /// Applies a hero's portrait art (cover-fit) to a portrait element, falling
-        /// back to the accent glyph when the art is absent (shared by the hero stage
-        /// and the locked cards). No missing-asset risk — Grom/Thrain/Sylas/Elara
-        /// portraits all exist in Resources/HeroPortraits.
-        /// </summary>
-        private static void ApplyPortrait(VisualElement portrait, HeroCardInfo info, float glyphSize)
-        {
-            if (portrait == null || info == null) return;
-            string slug = SlugFor(info.Hero);
-            var portraitSprite = Resources.Load<Sprite>($"HeroPortraits/{slug}");
-            if (portraitSprite != null)
-            {
-                portrait.style.backgroundImage = new StyleBackground(portraitSprite);
-                portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
-                return;
-            }
-            var portraitTex = Resources.Load<Texture2D>($"HeroPortraits/{slug}");
-            if (portraitTex != null)
-            {
-                portrait.style.backgroundImage = new StyleBackground(portraitTex);
-                portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
-                return;
-            }
-            var glyph = new Label(info.Glyph);
-            glyph.style.fontSize = glyphSize;
-            glyph.style.unityFontStyleAndWeight = FontStyle.Bold;
-            glyph.style.color = info.Accent;
-            portrait.Add(glyph);
-        }
-
-        /// <summary>
-        /// Builds one stat row into the stats panel — a fixed-width gold label on
-        /// the left and a pre-filled 1-5 pip value on the right.
+        /// Builds one stat row into the stats panel — a fixed-width gold label on the
+        /// left and a pre-filled 1-5 pip value on the right.
         /// </summary>
         private void BuildStatRow(VisualElement parent, string label, string pipValue)
         {
@@ -690,6 +703,36 @@ namespace DeNelle.Onboarding
             return new string('●', value) + new string('○', 5 - value);
         }
 
+        /// <summary>
+        /// Applies a hero's portrait art (cover-fit) to a portrait element, falling
+        /// back to the accent glyph when the art is absent. No missing-asset risk —
+        /// Grom/Thrain/Sylas/Elara portraits all exist in Resources/HeroPortraits.
+        /// </summary>
+        private static void ApplyPortrait(VisualElement portrait, HeroCardInfo info, float glyphSize)
+        {
+            if (portrait == null || info == null) return;
+            string slug = SlugFor(info.Hero);
+            var portraitSprite = Resources.Load<Sprite>($"HeroPortraits/{slug}");
+            if (portraitSprite != null)
+            {
+                portrait.style.backgroundImage = new StyleBackground(portraitSprite);
+                portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+                return;
+            }
+            var portraitTex = Resources.Load<Texture2D>($"HeroPortraits/{slug}");
+            if (portraitTex != null)
+            {
+                portrait.style.backgroundImage = new StyleBackground(portraitTex);
+                portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+                return;
+            }
+            var glyph = new Label(info.Glyph);
+            glyph.style.fontSize = glyphSize;
+            glyph.style.unityFontStyleAndWeight = FontStyle.Bold;
+            glyph.style.color = info.Accent;
+            portrait.Add(glyph);
+        }
+
         // =====================================================================
         //  Responsive re-flow + self-assert
         // =====================================================================
@@ -701,10 +744,10 @@ namespace DeNelle.Onboarding
 
         /// <summary>
         /// Re-flows the hero stage for the current screen size / orientation:
-        /// LANDSCAPE = a ROW (large image + backstory on the left, stats panel on
-        /// the right); PORTRAIT = a COLUMN (image on top, stats below, backstory
-        /// under the image) so nothing crowds. No fixed x positions — purely flex —
-        /// so it re-centres identically in both orientations. Then self-asserts.
+        /// LANDSCAPE = a ROW (large image + lore on the left, stats on the right);
+        /// PORTRAIT = a COLUMN (image + lore on top, stats below) so nothing crowds.
+        /// No fixed x positions — purely flex — so it re-centres identically in both
+        /// orientations. Then self-asserts.
         /// </summary>
         private void ReflowForSize(float width, float height)
         {
@@ -713,11 +756,8 @@ namespace DeNelle.Onboarding
 
             bool portrait = height >= width;
 
-            // Stage flips between row (landscape) and column (portrait).
             _heroStage.style.flexDirection = portrait ? FlexDirection.Column : FlexDirection.Row;
 
-            // In portrait the columns stack — drop the side margins, add a small
-            // vertical gap; in landscape they sit side-by-side with side margins.
             if (_stageLeft != null)
             {
                 _stageLeft.style.marginRight = portrait ? 0f : 8f;
@@ -732,91 +772,55 @@ namespace DeNelle.Onboarding
         }
 
         /// <summary>
-        /// Regression guard: asserts the hero stage (image + backstory + stats
-        /// beside it) is present AND exactly the locked-carousel cards exist and are
-        /// provably non-interactive (PickingMode.Ignore). Logs loudly if a future
-        /// edit breaks the contract so it is caught immediately.
+        /// Regression guard: asserts the carousel pieces (stage + both columns + prev/
+        /// next arrows + the dot indicator) are present and the index is in range. Logs
+        /// loudly if a future edit breaks the contract so it is caught immediately.
         /// </summary>
         private void VerifyStage()
         {
-            if (_heroStage == null || _stageLeft == null || _stageRight == null)
+            if (_heroStage == null || _stageLeft == null || _stageRight == null
+                || _prevButton == null || _nextButton == null)
             {
                 FlowTrace.Fail("Onboarding",
-                    "VerifyStage: HERO STAGE ASSERT FAILED — stage / left / right column missing.");
+                    "VerifyStage: CAROUSEL ASSERT FAILED — stage / columns / arrows missing.");
                 return;
             }
 
-            // The locked carousel = HeroCatalog minus the single playable hero.
-            int expectedLocked = HeroCatalog.Heroes.Length - 1;
-            int actualLocked = _lockedRow != null ? _lockedRow.childCount : 0;
-            if (actualLocked != expectedLocked)
+            int dots = _dotsRow != null ? _dotsRow.childCount : 0;
+            if (dots != HeroCatalog.Heroes.Length)
             {
                 FlowTrace.Fail("Onboarding",
-                    $"VerifyStage: LOCKED CAROUSEL ASSERT FAILED — expected {expectedLocked} locked cards, found {actualLocked}.");
+                    $"VerifyStage: DOTS ASSERT FAILED — expected {HeroCatalog.Heroes.Length} dots, found {dots}.");
                 return;
             }
 
-            // Every locked card MUST be non-interactive (PickingMode.Ignore) — a
-            // tap can never select a locked hero.
-            for (int i = 0; i < _lockedRow.childCount; i++)
+            if (_carouselIndex < 0 || _carouselIndex >= HeroCatalog.Heroes.Length)
             {
-                var card = _lockedRow[i];
-                if (card.pickingMode != PickingMode.Ignore)
-                {
-                    FlowTrace.Fail("Onboarding",
-                        $"VerifyStage: locked card {i} is INTERACTIVE (pickingMode != Ignore) — it must be non-selectable.");
-                    return;
-                }
+                FlowTrace.Fail("Onboarding",
+                    $"VerifyStage: INDEX OUT OF RANGE — _carouselIndex={_carouselIndex} (roster {HeroCatalog.Heroes.Length}).");
             }
-        }
-
-        // =====================================================================
-        //  Selection (single hero — pre-selected, no in-screen choice)
-        // =====================================================================
-
-        /// <summary>Enables the confirm CTA when a hero is selected (always, for the single hero).</summary>
-        private void RefreshConfirmEnabled()
-        {
-            if (_diveButton != null) _diveButton.SetEnabled(_hasSelection);
         }
 
         // =====================================================================
         //  Entry-point CTAs — write the hero choice then route
         // =====================================================================
 
-        // WO-327: OnConfirmClicked() — the "Jump into the Action" handler that
-        // routed into Defend the Tower — was REMOVED with its button.
-
         /// <summary>
-        /// "Enter Elarion" — the confirm CTA. Persists the chosen hero (Grom), then
-        /// routes DIRECTLY to the home hub (MainCastle_Hall) via GoCastle().
+        /// "Enter Elarion" — the confirm CTA. Persists the chosen (playable) hero, then
+        /// routes DIRECTLY to the home hub (MainCastle_Hall) via GoCastle(). A no-op when
+        /// the on-screen hero is locked (the CTA is disabled there, but guard anyway).
         ///
-        /// WO-503 (D1, hard-wire): the live path is now UNCONDITIONAL HeroSelect ->
-        /// Castle — the pet-select step is gone for single-hero V1. The
-        /// FeatureFlags.BypassPetSelect branch is kept ONLY as a reversibility hatch
-        /// (flag OFF restores the old pet step); the DEFAULT/normal path never loads
-        /// PetSelect. The flag + the pet-step route are retired in the WO-504 purge.
+        /// The live path is HeroSelect -> Castle — the pet-select step is gone for
+        /// single-hero V1. The FeatureFlags.BypassPetSelect branch is kept ONLY as a
+        /// reversibility hatch (flag OFF restores the old pet step).
         /// </summary>
         private void OnDiveVillageClicked()
         {
-            if (!_hasSelection) return;
+            if (!_hasSelection) return;   // locked hero on screen — nothing to confirm
             PersistHero();
 
-            // DELETION-PENDING (WO-503, after felt-verify): the WO-504 pet-select
-            // purge removes the entire boot pet step. Once the owner felt-verifies
-            // Title -> HeroSelect(Grom) -> Castle, delete the following assets:
-            //   - Assets/_Modules/Onboarding/PetSelectController.cs (+ .meta)
-            //   - Assets/Scenes/PetSelect.unity (+ .meta) and de-register it from Build Settings
-            //   - Assets/_Modules/Onboarding/UI/PetSelectScreen.uxml (+ .meta)
-            //   - SceneRouter.PetSelect const + SceneRouter.GoPetSelect()
-            //   - IntroFlowSceneBuilder.cs PetSelect generation + Build-Settings insert
-            //   - FeatureFlags.BypassPetSelect (the reversibility hatch below) once nothing references it
-            // BOUNDARY: this is the pet-SELECT boot screen ONLY. Do NOT touch the
-            // Echo WORKFORCE / harvest system or Assets/_Modules/Pets/** or the
-            // GameState.StarterPetId field — those are the live pet/echo gameplay.
-
-            // Reversibility hatch (D1): flag OFF -> old pet step. DEFAULT path is
-            // GoCastle (flag default ON) — single-hero V1 never shows PetSelect.
+            // Reversibility hatch: flag OFF -> old pet step. DEFAULT path is GoCastle
+            // (flag default ON) — single-hero V1 never shows PetSelect.
             if (FeatureFlags.BypassPetSelect)
             {
                 FlowTrace.Step("Onboarding", "OnDiveVillageClicked: single-hero V1 — GoCastle (PetSelect skipped).");
@@ -845,6 +849,17 @@ namespace DeNelle.Onboarding
         //  Small helpers
         // =====================================================================
 
+        /// <summary>True when a hero class is selectable in V1 (only the playable hero).</summary>
+        private static bool IsPlayable(HeroClass hero) => hero == PlayableHero;
+
+        /// <summary>Catalog index for a hero class, or 0 when absent (never out of range).</summary>
+        private static int IndexOf(HeroClass hero)
+        {
+            for (int i = 0; i < HeroCatalog.Heroes.Length; i++)
+                if (HeroCatalog.Heroes[i].Hero == hero) return i;
+            return 0;
+        }
+
         /// <summary>Canon-roster portrait slug for a hero class.</summary>
         private static string SlugFor(HeroClass hero) => hero switch
         {
@@ -854,14 +869,6 @@ namespace DeNelle.Onboarding
             HeroClass.Cleric => "Elara",
             _                => hero.ToString(),
         };
-
-        /// <summary>Catalog entry for a hero class, or null if absent.</summary>
-        private static HeroCardInfo FindInfo(HeroClass hero)
-        {
-            for (int i = 0; i < HeroCatalog.Heroes.Length; i++)
-                if (HeroCatalog.Heroes[i].Hero == hero) return HeroCatalog.Heroes[i];
-            return null;
-        }
 
         /// <summary>
         /// Returns the localised string for <paramref name="key"/>, falling back to
@@ -938,22 +945,24 @@ namespace DeNelle.Onboarding
 //      (menu: Defenders/Intro Flow/Build Hero + Pet Select Scenes). It creates a
 //      Camera, an EventSystem, and a UIDocument GameObject with this controller
 //      attached. The UIDocument MAY still carry HeroSelectScreen.uxml — that is
-//      now harmless: BuildScreen() clears the root and builds the entire layout
-//      in code, so whether or not the UXML renders, the screen is identical. This
-//      is the regression fix: there is no longer any UXML element this screen
-//      depends on, so a UXML that doesn't render in the WebGL build (CLAUDE.md §8)
-//      cannot break it.
+//      harmless: BuildScreen() clears the root and builds the entire carousel in
+//      code, so whether or not the UXML renders, the screen is identical. There is
+//      no UXML element this screen depends on, so a UXML that doesn't render in the
+//      player build (CLAUDE.md §8) cannot break it.
 //
 //   2. The intro/story cinematic (StoryIntroController) lives in the TITLE scene,
-//      not here. The transition into hero-select is a single-scene
-//      SceneManager.LoadScene (SceneRouter.GoHeroSelect), so Unity destroys the
-//      Title scene — and the cold-open overlay with it — before this scene's
-//      OnEnable runs. There is therefore zero possibility of the intro rendering
-//      on top of hero-select: they never coexist in the same scene. (Title-side,
-//      StoryIntroController.HideImmediate already fully tears its overlay down.)
+//      not here. The transition into hero-select is a single-scene LoadScene
+//      (SceneRouter.GoHeroSelect), so Unity destroys the Title scene — and the
+//      cold-open overlay with it — before this scene's OnEnable runs; they never
+//      coexist.
 //
-//   3. GameStateService must exist before this screen so ChooseHero persists.
-//      It is a DontDestroyOnLoad singleton from the Core bootstrap in Title. If a
-//      session enters HeroSelect cold, the controller logs a warning and still
-//      routes on (the choice just is not saved).
+//   3. GameStateService must exist before this screen so ChooseHero persists. It is
+//      a DontDestroyOnLoad singleton from the Core bootstrap in Title. If a session
+//      enters HeroSelect cold, the controller logs a warning and still routes on
+//      (the choice just is not saved).
+//
+//   4. CAROUSEL (WO-559): all four heroes are navigable for preview; only the
+//      playable hero (Grom == Knight, FeatureFlags.KnightOnly) is selectable. To
+//      unlock more heroes later, widen IsPlayable(HeroClass) — no layout change
+//      needed; the locked scrim/CTA state derives from it.
 // =============================================================================
