@@ -160,8 +160,6 @@ namespace DeNelle.Village.Hero
         {
             DisposeViewModel();
 
-            _store = new InventoryStore(VillageInventory.Instance);
-
             var members = new List<IEquipTarget>();
             var levels = new List<int>();
             _targetAdapters.Clear();
@@ -196,6 +194,10 @@ namespace DeNelle.Village.Hero
                 members.Add(adapter);
                 levels.Add(ResolveLevel(comp.gameObject));
             }
+
+            // WO-578: build the store AFTER the members so OwnedWeapons/OwnedArmor UNION the auto-equipped
+            // gear (what the Forge surfaces as owned) with VillageInventory — store/Forge/Preview agree.
+            _store = new InventoryStore(VillageInventory.Instance, members);
 
             var economy = EconomyService.Instance;   // resolved at the open-site, injected into the pure VM
             _vm = new PartyShopVM(_vendorContext, economy, _store, members, levels, _displayName, onClose: Close);

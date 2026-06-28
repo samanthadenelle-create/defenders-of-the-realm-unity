@@ -81,13 +81,32 @@ namespace DeNelle.Village.Hero
     public sealed class InventoryStore : IInventoryStore, IDisposable
     {
         private readonly DeNelle.Village.Crafting.VillageInventory _inventory;
+
+        // WO-578: the owned set RECONCILES two sources of truth so the Inventory, the Forge, and the
+        // Gear Preview (EquipVM) all agree on "owned":
+        //   1) VillageInventory.Counts — gear the player EXPLICITLY acquired (shop buys, boss/quest
+        //      drops via VillageInventory.Add, jeweler crafts), AND
+        //   2) the gear each party member currently has AUTO-EQUIPPED from the catalog (GearCatalog.
+        //      BestWeapon/BestArmor by class+level). That auto-equip is what the Forge surfaces as the
+        //      hero's gear ("Current: Emberbrand"), so the player rightly considers it OWNED — but it
+        //      was NEVER written to VillageInventory, which is why the inventory projected empty while
+        //      the Forge/EquipVM showed the hero wielding a weapon (the divergence this WO closes).
+        // We UNION the equipped pieces in (read-only, NO mutation) so auto-equip behaviour is fully
+        // intact. Null/empty sources => behaves exactly as before (pure inventory projection).
+        private readonly IReadOnlyList<IEquipTarget> _equippedSources;
+
         private bool _disposed;
 
         public event Action Changed;
 
         public InventoryStore(DeNelle.Village.Crafting.VillageInventory inventory)
+            : this(inventory, null) { }
+
+        public InventoryStore(DeNelle.Village.Crafting.VillageInventory inventory,
+                              IReadOnlyList<IEquipTarget> equippedSources)
         {
             _inventory = inventory;
+            _equippedSources = equippedSources;
             if (_inventory != null) _inventory.Changed += OnInventoryChanged;
         }
 
@@ -110,24 +129,53 @@ namespace DeNelle.Village.Hero
         public IReadOnlyList<(WeaponDef def, int qty)> OwnedWeapons()
         {
             var list = new List<(WeaponDef, int)>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // (1) Explicitly-acquired weapons from VillageInventory (shop buys / boss-quest drops / crafts).
             foreach (var kv in OwnedCounts)
             {
                 if (kv.Value <= 0) continue;
                 var w = GearCatalog.FindWeapon(kv.Key);
-                if (w != null) list.Add((w, kv.Value));
+                if (w != null && seen.Add(w.id)) list.Add((w, kv.Value));
             }
+
+            // (2) WO-578: UNION the currently auto-equipped main-hand + off-hand of every party member
+            // (what the Forge surfaces as "owned"). Read-only — auto-equip is untouched. qty = the
+            // inventory count if also stocked, else 1 (the wielded copy).
+            ForEachEquippedSource(t =>
+            {
+                AddEquippedWeapon(list, seen, t?.EquippedWeapon);
+                AddEquippedWeapon(list, seen, t?.EquippedOffHand);
+            });
+
+            DeNelle.Core.Diagnostics.FlowTrace.Throttle("Inventory", "owned-weapons", 1f,
+                $"OwnedWeapons resolved {list.Count} (inventory ∪ equipped; sources={SourceCount}).");
             return list;
         }
 
         public IReadOnlyList<(ArmorDef def, int qty)> OwnedArmor()
         {
             var list = new List<(ArmorDef, int)>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // (1) Explicitly-acquired armor from VillageInventory.
             foreach (var kv in OwnedCounts)
             {
                 if (kv.Value <= 0) continue;
                 var a = GearCatalog.FindArmor(kv.Key);
-                if (a != null) list.Add((a, kv.Value));
+                if (a != null && seen.Add(a.id)) list.Add((a, kv.Value));
             }
+
+            // (2) WO-578: UNION the currently auto-equipped chest armor of every party member.
+            ForEachEquippedSource(t =>
+            {
+                var a = t?.EquippedArmor;
+                if (a != null && !string.IsNullOrEmpty(a.id) && seen.Add(a.id))
+                    list.Add((a, System.Math.Max(1, OwnedQuantity(a.id))));
+            });
+
+            DeNelle.Core.Diagnostics.FlowTrace.Throttle("Inventory", "owned-armor", 1f,
+                $"OwnedArmor resolved {list.Count} (inventory ∪ equipped; sources={SourceCount}).");
             return list;
         }
 
@@ -138,11 +186,35 @@ namespace DeNelle.Village.Hero
             {
                 if (kv.Value <= 0) continue;
                 // Anything owned that resolves to neither a weapon nor an armor def is a consumable
-                // (potions, crafting materials, drops) — the inventory's catch-all bucket.
+                // (potions, crafting materials, drops) — the inventory's catch-all bucket. Equipped
+                // gear is never a consumable, so the WO-578 equipped-union does not apply here.
                 if (GearCatalog.FindWeapon(kv.Key) == null && GearCatalog.FindArmor(kv.Key) == null)
                     list.Add((kv.Key, kv.Value));
             }
+
+            DeNelle.Core.Diagnostics.FlowTrace.Throttle("Inventory", "owned-consumables", 1f,
+                $"OwnedConsumables resolved {list.Count}.");
             return list;
+        }
+
+        // WO-578 helpers — union the equipped pieces in without duplicating an id already counted.
+        private int SourceCount => _equippedSources != null ? _equippedSources.Count : 0;
+
+        private void ForEachEquippedSource(Action<IEquipTarget> apply)
+        {
+            if (_equippedSources == null) return;
+            foreach (var t in _equippedSources)
+            {
+                if (t == null) continue;
+                apply(t);
+            }
+        }
+
+        private void AddEquippedWeapon(List<(WeaponDef, int)> list, HashSet<string> seen, WeaponDef w)
+        {
+            if (w == null || string.IsNullOrEmpty(w.id)) return;
+            if (!seen.Add(w.id)) return;
+            list.Add((w, System.Math.Max(1, OwnedQuantity(w.id))));
         }
 
         public bool WeaponFitsClass(WeaponDef w, string job) => GearCatalog.WeaponFitsClass(w, job);

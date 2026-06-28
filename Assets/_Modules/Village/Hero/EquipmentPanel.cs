@@ -109,8 +109,6 @@ namespace DeNelle.Village.Hero
         {
             DisposeViewModel();
 
-            _store = new InventoryStore(VillageInventory.Instance);
-
             var targets = new List<IEquipTarget>();
             _targetAdapters.Clear();
             _targetBodies.Clear();
@@ -145,6 +143,11 @@ namespace DeNelle.Village.Hero
                 targets.Add(adapter);
                 _targetBodies.Add(ResolveBody(comp.gameObject));
             }
+
+            // WO-578: build the store AFTER the targets so OwnedWeapons/OwnedArmor UNION the gear each
+            // party member has auto-equipped (what the Forge surfaces as owned) with VillageInventory —
+            // making the Gear Preview drawer agree with the inventory + the Forge on "owned."
+            _store = new InventoryStore(VillageInventory.Instance, targets);
 
             _vm = new EquipVM(_store, targets, onClose: Close);
         }

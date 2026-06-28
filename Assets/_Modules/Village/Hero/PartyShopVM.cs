@@ -667,6 +667,10 @@ namespace DeNelle.Village.Hero
             foreach (var (a, qty) in _store.OwnedArmor())
             {
                 if (a == null || (_storeKinds & GearKind.Armor) == 0) continue;
+                // WO-578: OwnedArmor now UNIONs auto-equipped gear (display "owned"), but only LEDGER
+                // gear (a real VillageInventory count) is sellable — skip equipped-only pieces so the
+                // SELL list never shows a phantom row that SellGear would reject as "you don't own that".
+                if (_store.OwnedQuantity(a.id) <= 0) continue;
                 if (_category == PartyShopCategory.Weapons) continue;
                 if (!ArmorPassesType(a)) continue;   // WO-501 TYPE narrow (registers availability)
                 bool equipped = member != null && member.EquippedArmor != null &&
@@ -684,6 +688,8 @@ namespace DeNelle.Village.Hero
             foreach (var (w, qty) in _store.OwnedWeapons())
             {
                 if (w == null || (_storeKinds & GearKind.Weapon) == 0) continue;
+                // WO-578: SELL only LEDGER gear (see the armor loop above) — skip equipped-only pieces.
+                if (_store.OwnedQuantity(w.id) <= 0) continue;
                 if (_category == PartyShopCategory.Armor) continue;
                 if (!WeaponPassesType(w)) continue;   // WO-501 TYPE narrow (registers availability)
                 bool equipped = member != null && member.EquippedWeapon != null &&

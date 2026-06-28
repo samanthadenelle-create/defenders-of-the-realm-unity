@@ -273,10 +273,13 @@ namespace DeNelle.Village
         private void ConstructViewModel()
         {
             DisposeViewModel();   // defensive: never leak a prior VM on a re-Open without Close
-            _store = new InventoryStore(DeNelle.Village.Crafting.VillageInventory.Instance);
             _equipTarget = _loadout != null
                 ? new GearLoadoutEquipTarget(_loadout, HeroDisplayName(HeroJob), HeroJob)
                 : null;
+            // WO-578: feed the active hero's equip target into the store so OwnedWeapons/OwnedArmor
+            // UNION the auto-equipped gear (what the Forge shows as owned) with VillageInventory.
+            _store = new InventoryStore(DeNelle.Village.Crafting.VillageInventory.Instance,
+                _equipTarget != null ? new System.Collections.Generic.List<IEquipTarget> { _equipTarget } : null);
             _vm = new InventoryVM(_store, _equipTarget, onClose: Close);
         }
 
