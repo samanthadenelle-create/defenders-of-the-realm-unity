@@ -167,12 +167,22 @@ namespace DeNelle.Village
             GameObject visual = null;
             foreach (var path in CandidateModels)
             {
+                // Tripo FBX exports import lying on their side at identity (the "standard tripo
+                // issue" — owner F8 "apothecary on its side"). Apply the SAME upright correction
+                // every other hub structure gets via HubStructureVisualInjector: pitch -90 (stand
+                // up) + yaw 90 (face the plaza), matching the 'store' swap row. This path was the
+                // lone hub structure that skinned at identity and bypassed the convention.
+                var opts = SkinOptions.Structure(6f);
+                opts.LocalRotation = Quaternion.Euler(-90f, 90f, 0f);
                 visual = Guard.Try("Crafting", $"skin apothecary visual '{path}'",
-                    () => VisualFactory.Skin(holder.transform, path, SkinOptions.Structure(6f)),
+                    () => VisualFactory.Skin(holder.transform, path, opts),
                     fallback: null);
                 if (visual != null)
                 {
-                    FlowTrace.Step("Crafting", $"apothecary visual resolved from '{path}'.");
+                    visual.transform.localScale *= 0.7f;                  // owner F8: resize to 70%
+                    var lp = visual.transform.localPosition; lp.y = 0f;   // owner F8: set Y pos to 0
+                    visual.transform.localPosition = lp;
+                    FlowTrace.Step("Crafting", $"apothecary visual resolved from '{path}' (upright +90, 0.7x, y=0).");
                     return;
                 }
             }
