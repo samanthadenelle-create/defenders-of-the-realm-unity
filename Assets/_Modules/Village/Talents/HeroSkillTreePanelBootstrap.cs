@@ -37,7 +37,14 @@ namespace DeNelle.Village.Talents
             if (!scene.IsValid()) return;
             if (FindHero() == null) return; // Title / HeroSelect skip.
 
-            SpawnOne<HeroSkillTreePanelMvvm>(scene, "HeroSkillTreePanelMvvm");
+            // WO-550: the SKILL TREE is a town/progression panel — suppress it in enemy-owned RAID
+            // scenes (Village2). The LOADOUT panel is COMBAT-relevant (hot-swap gear) and STILL spawns
+            // in raids. The home hub (MainCastle_Hall) is unaffected by either gate.
+            if (!DeNelle.Core.HubScenes.SuppressTownHud(SceneManager.GetActiveScene().name))
+                SpawnOne<HeroSkillTreePanelMvvm>(scene, "HeroSkillTreePanelMvvm");
+            else
+                FlowTrace.Step("UI", "HeroSkillTreePanelMvvm suppressed in enemy-owned scene (WO-550); loadout still spawns");
+
             SpawnOne<HeroLoadoutPanelMvvm>(scene, "HeroLoadoutPanelMvvm");
         }
 

@@ -33,8 +33,8 @@
       "displayName": "Enemy Outpost",
       "sceneName": "Village2",
       "ownership": "Enemy",
-      "faction": "hollow",
-      "themeColor": "#7a5fb0",
+      "faction": "orc",
+      "themeColor": "#5a8f3a",
       "_note": "WO-470 / HUD-RCA: Village2 is the enemy-owned raid target (hand-built scene, NOT generator-produced). Marked Enemy here so SceneOwnership.Resolve(\"Village2\").IsEnemyOwned==true AND HubScenes.IsEnemyOwnedScene(\"Village2\")==true, which drives the BATTLE hud (BattleHudVisibilityManager.EvaluateMode). Village2 stays in HubScenes.Names (RaidEntryBridge etc. need it as a hub); ownership is an independent axis."
     },
     {

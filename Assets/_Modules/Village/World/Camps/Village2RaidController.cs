@@ -5,7 +5,8 @@
 //
 // Village2 is "where they go" — the enemy stronghold the player reaches via the
 // castle -> OuterWorld -> cave-portal flow (confirmed working 2026-06-20). It was
-// BUILT + baked (EnemyStrongholdBuilder) with 8 spawn points + a GarrisonController
+// BUILT + baked (EnemyStrongholdBuilder) with 6 spawn points (3 chokepoints + 2
+// courtyard + 1 keep — see BuildSpawnPoints) + a GarrisonController
 // wired, but nothing ACTIVATED it (no enemies) and nothing detected the CLEAR (no
 // victory). This component closes both ends — mirrors the proven RaidVictoryController
 // (RaidBase_* scenes) but for Village2 + its GarrisonController:
@@ -45,6 +46,12 @@ namespace DeNelle.Village.World.Camps
     public sealed class Village2RaidController : MonoBehaviour
     {
         private const string SceneName = "Village2";
+        // NOTE (WO-550, flagged for owner): the CLAIM key is the SCENE NAME "Village2", not the
+        // scene-configs id "village2_enemy_outpost". It is self-consistent (this controller both
+        // writes + reads it via RaidClaimService; persisted as dotr-raid-owner-Village2) and keys
+        // on scene name like the rest of the ownership system (SceneOwnership / HubScenes). Nothing
+        // external reads "village2_enemy_outpost" as a claim key, so it is left as-is — changing it
+        // would only orphan any existing saved claim. Switch to the config id only on an owner call.
         private const string ConfigId  = "Village2";
 
         [Tooltip("Seconds after victory before the hero auto-returns to the castle if the " +
@@ -53,6 +60,7 @@ namespace DeNelle.Village.World.Camps
 
         private GarrisonController _garrison;
         private GameObject _ui;
+        private GameObject _retreatUi;   // WO-550: always-available "Retreat" affordance during the raid
         private bool _handled;     // victory handled once (guards a double OnCleared)
         private bool _returning;   // a return is already in flight
 
@@ -103,6 +111,13 @@ namespace DeNelle.Village.World.Camps
 
         private IEnumerator BindRoutine()
         {
+            // WO-550 (anti-soft-lock): show the RETREAT affordance FIRST, before we even find the
+            // garrison. EnemyStrongholdBuilder deliberately omits the ReturnToOuterWorld_Seam (WO-480
+            // "one-way outpost"), so a player who can't win — or simply wants to bail — otherwise has
+            // NO exit until the garrison is cleared. The button routes home via the same GoCastle path
+            // AutoReturnRoutine uses (but WITHOUT claiming — the base stays enemy-owned on a retreat).
+            BuildRetreatButton();
+
             // The stronghold root + its GarrisonController exist at scene load; give a
             // few frames for additive load + navmesh to settle before we spawn.
             for (int i = 0; i < 10 && _garrison == null; i++)
@@ -184,6 +199,9 @@ namespace DeNelle.Village.World.Camps
             _handled = true;
             if (_garrison != null) _garrison.OnCleared -= HandleCleared;
 
+            // WO-550: the raid is won — drop the in-raid Retreat button (the victory banner owns the exit now).
+            if (_retreatUi != null) { Destroy(_retreatUi); _retreatUi = null; }
+
             FlowTrace.Step("Raid", $"VICTORY — Village2 stronghold garrison wiped. Running claim -> next-companion -> return.");
 
             CoreServices.Audio?.PlayMusic(DeNelle.Core.Audio.MusicTrack.Victory);
@@ -240,6 +258,44 @@ namespace DeNelle.Village.World.Camps
         // =====================================================================
         //  RETURN — victory banner + route home (never soft-lock).
         // =====================================================================
+
+        // =====================================================================
+        //  RETREAT — WO-550 anti-soft-lock: a player can ALWAYS bail a Village2 raid.
+        //  A small, unobtrusive bottom-left button (its own ScreenSpaceOverlay canvas, NO scrim so
+        //  it never blocks gameplay touch input) that routes home via the SAME SceneRouter.GoCastle
+        //  path AutoReturnRoutine/ReturnHome use — but WITHOUT a claim (you abandoned, not cleared,
+        //  so the base stays enemy-owned). No retreat cost is applied (none is trivial here; a cost
+        //  is an owner design call — flagged in WO-550).
+        // =====================================================================
+
+        private void BuildRetreatButton()
+        {
+            try
+            {
+                if (_retreatUi != null) return;
+                // Low sort order: above gameplay HUD but well below the victory banner (32000).
+                _retreatUi = ElarionUiKit.BuildModalCanvas("Village2RetreatButton", 9000);
+                // NO Scrim — a scrim would block all gameplay input; only the button itself is interactive.
+                ElarionUiKit.Button(_retreatUi.transform, "Retreat", ElarionUiKit.ButtonKind.Danger,
+                    new Vector2(0.03f, 0.03f), new Vector2(0.27f, 0.10f), Retreat);
+                FlowTrace.Step("Raid", "Village2 Retreat button shown (anti-soft-lock: the raid is never one-way).");
+            }
+            catch (System.Exception e)
+            {
+                FlowTrace.Warn("Raid", "Village2 Retreat button build threw (raid still playable, AutoReturn covers a cleared raid): " + e.Message);
+            }
+        }
+
+        private void Retreat()
+        {
+            if (_returning) return;
+            _returning = true;
+            FlowTrace.Step("Raid", "RETREAT — player abandoned the Village2 raid; routing home WITHOUT claim (base stays enemy-owned).");
+            if (_retreatUi != null) { Destroy(_retreatUi); _retreatUi = null; }
+            GameStateService.Instance?.Save();
+            // Deliberately NO SceneOwnership.SetEnemyOwned(false): a retreat is not a claim.
+            SceneRouter.GoCastle();
+        }
 
         private void BuildVictoryBanner(string joinedCompanionName)
         {

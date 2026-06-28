@@ -206,10 +206,19 @@ namespace DeNelle.Editor
             placed += BuildRaisedKeep(environment.transform, links.transform,
                 keepHalf, platH, frontZ: -chokeHalf + 1f);
 
-            // 9) LAYER 4 — optional RAISED boss chamber behind the keep, its own stairs+link.
-            if (layout.BossChamber != null && layout.BossChamber.Enabled)
+            // 9) LAYER 4 — optional RAISED boss chamber behind the keep, its own stairs+ramp.
+            //    WO-550: build it ONLY when a boss is actually authored. With boss==null (the current
+            //    village2_stronghold recipe) the chamber + altar were built REGARDLESS, leaving an empty
+            //    decorative room the player climbs to for NOTHING. Gating on a non-empty recipe.boss keeps
+            //    the layout coherent: no boss -> no boss room. (Authoring a real boss that SPAWNS at the
+            //    altar is a richer follow-up — it needs a reachability-verified boss spawn point + a bake;
+            //    flagged for the owner in WO-550 rather than risking an unreachable defender = soft-lock.)
+            if (layout.BossChamber != null && layout.BossChamber.Enabled && !string.IsNullOrEmpty(recipe.Boss))
                 placed += BuildBossChamber(environment.transform, links.transform,
                     keepHalf * 0.8f, bossH, frontZ: keepHalf + 1f, altar: layout.BossChamber.Altar);
+            else if (layout.BossChamber != null && layout.BossChamber.Enabled)
+                FlowTrace.Step("Stronghold",
+                    "boss chamber SKIPPED — recipe.boss is null/empty (no empty altar room built, WO-550).");
 
             // 10) Scatter the recipe's decorative props (torches/banners/barrels/crates/
             //     chests/rubble/bones) across the courtyard.

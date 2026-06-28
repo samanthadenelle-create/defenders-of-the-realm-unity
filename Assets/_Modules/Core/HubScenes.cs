@@ -77,6 +77,14 @@ namespace DeNelle.Core
                 && enemy;
         }
 
+        /// <summary>WO-550 chokepoint: should TOWN / SOCIAL / ECONOMY HUD panels be SUPPRESSED
+        /// in <paramref name="sceneName"/>? True for enemy-owned raid scenes (Village2), false for
+        /// the home hub (MainCastle_Hall) and every other scene. The single semantic test the
+        /// ~14 per-panel bootstraps gate on so combat scenes stop bootstrapping town panels
+        /// (jukebox / clan chat / shops / crafting / quests / skill trees / building upgrade / swap).
+        /// Combat-appropriate HUD (BattleHud9Zone, Compass, vitals, loadout) is NOT gated by this.</summary>
+        public static bool SuppressTownHud(string sceneName) => IsEnemyOwnedScene(sceneName);
+
         private static void EnsureOwnershipLoaded()
         {
             if (_enemyByScene != null) return;

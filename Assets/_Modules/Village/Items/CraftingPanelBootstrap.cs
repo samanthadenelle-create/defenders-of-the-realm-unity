@@ -34,6 +34,14 @@ namespace DeNelle.Village.Items
             if (!scene.IsValid()) return;
             if (FindHero() == null) return; // Title / HeroSelect skip.
 
+            // WO-550: town/economy alchemy crafting does NOT bootstrap in enemy-owned RAID scenes
+            // (Village2); the home hub (MainCastle_Hall) is unaffected. Gate on the ACTIVE scene.
+            if (DeNelle.Core.HubScenes.SuppressTownHud(SceneManager.GetActiveScene().name))
+            {
+                FlowTrace.Warn("UI", "CraftingPanelMvvm suppressed in enemy-owned scene (WO-550)");
+                return;
+            }
+
             // GLOBAL dedupe across all loaded scenes.
             foreach (var existing in Object.FindObjectsByType<CraftingPanelMvvm>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))

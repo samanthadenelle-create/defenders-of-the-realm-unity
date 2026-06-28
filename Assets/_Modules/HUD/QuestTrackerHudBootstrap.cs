@@ -32,6 +32,14 @@ namespace DeNelle.HUD
             // no persistent on-screen tracker. Spawn it wherever a hero exists; it pins the ONE current
             // active quest far-right (the board pop-up remains the full browse/accept list).
 
+            // WO-550: town/story quest tracker does NOT bootstrap in enemy-owned RAID scenes (Village2);
+            // the home hub (MainCastle_Hall) is unaffected. Gate on the ACTIVE scene (player context).
+            if (DeNelle.Core.HubScenes.SuppressTownHud(SceneManager.GetActiveScene().name))
+            {
+                FlowTrace.Warn("UI", "QuestTrackerHud suppressed in enemy-owned scene (WO-550)");
+                return;
+            }
+
             // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<QuestTrackerHud>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))

@@ -46,6 +46,14 @@ namespace DeNelle.Village.Buildings.Progression
             // writer wins — gating here avoids the race). Flag OFF -> this panel owns it.
             if (DeNelle.Core.FeatureFlags.BuildingUpgradePanel) return;
 
+            // WO-550: base-building upgrade (town) does NOT bootstrap in enemy-owned RAID scenes
+            // (Village2); the home hub (MainCastle_Hall) is unaffected. Gate on the ACTIVE scene.
+            if (DeNelle.Core.HubScenes.SuppressTownHud(SceneManager.GetActiveScene().name))
+            {
+                FlowTrace.Warn("UI", "BuildingUpgradePanel suppressed in enemy-owned scene (WO-550)");
+                return;
+            }
+
             // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in Object.FindObjectsByType<BuildingUpgradePanel>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))

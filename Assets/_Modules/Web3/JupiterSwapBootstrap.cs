@@ -50,7 +50,9 @@ namespace DeNelle.Web3
         // Village are the natural homes. An unknown scene is skipped.
         private static readonly string[] AllowedScenes =
         {
-            "Title", "HeroSelect", "PetSelect", "Village2"
+            // WO-550: Village2 REMOVED — the swap CTA (economy/monetisation surface) does NOT belong
+            // in an enemy-owned raid scene. Title / select screens (+ Dungeon_* below) keep it.
+            "Title", "HeroSelect", "PetSelect"
         };
 
         private static bool _warnedNoUxml;

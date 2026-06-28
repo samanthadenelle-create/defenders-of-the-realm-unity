@@ -30,6 +30,14 @@ namespace DeNelle.HUD
             // WO-411: spawns HIDDEN now (DailyQuestHud.Build → display:None); the TOWN ACTIONS "Quests"
             // button toggles it on-demand instead of free-floating top-right.
 
+            // WO-550: town daily-quest HUD does NOT bootstrap in enemy-owned RAID scenes (Village2);
+            // the home hub (MainCastle_Hall) is unaffected. Gate on the ACTIVE scene (player context).
+            if (DeNelle.Core.HubScenes.SuppressTownHud(SceneManager.GetActiveScene().name))
+            {
+                FlowTrace.Warn("UI", "DailyQuestHud suppressed in enemy-owned scene (WO-550)");
+                return;
+            }
+
             // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<DailyQuestHud>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))

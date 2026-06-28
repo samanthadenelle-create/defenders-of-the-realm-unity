@@ -29,6 +29,14 @@ namespace DeNelle.HUD
         {
             if (!scene.IsValid()) return;
 
+            // WO-550: social leaderboard does NOT bootstrap in enemy-owned RAID scenes (Village2);
+            // the home hub (MainCastle_Hall) is unaffected. Gate on the ACTIVE scene (player context).
+            if (DeNelle.Core.HubScenes.SuppressTownHud(SceneManager.GetActiveScene().name))
+            {
+                FlowTrace.Warn("UI", "LeaderboardPanel suppressed in enemy-owned scene (WO-550)");
+                return;
+            }
+
             // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<LeaderboardPanel>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
