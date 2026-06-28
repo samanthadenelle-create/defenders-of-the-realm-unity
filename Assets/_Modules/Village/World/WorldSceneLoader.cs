@@ -161,6 +161,17 @@ namespace DeNelle.Village
                 return;
             }
 
+            // Enemy-owned raid targets (e.g. Village2 stronghold) keep their hub status for
+            // RaidEntryBridge entry/return, but must NOT stream the OuterWorld overworld on top
+            // of the stronghold (terrain/boundary/WorkerManager/encounters). The home hub
+            // (MainCastle_Hall, ownership:"Home") is not enemy-owned and still streams normally.
+            if (DeNelle.Core.HubScenes.IsEnemyOwnedScene(scene.name))
+            {
+                Debug.Log("[WorldSceneLoader] DEBUG (" + via + ") skip — '" + scene.name +
+                    "' is an enemy-owned raid target; not streaming OuterWorld over the stronghold.");
+                return;
+            }
+
             // Already loaded? (re-entry / editor play-twice) — don't double-load.
             if (SceneManager.GetSceneByName(OuterWorldSceneName).isLoaded)
             {

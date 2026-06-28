@@ -175,6 +175,29 @@ namespace DeNelle.Village
                         if (orcFixer != null) orcFixer.SetFallbackTexture(orcTex);
                     }
                 }
+                else if (rigForModel == EnemyRig.OrcWarband || model == "Troll")
+                {
+                    // VILLAGE2 GARRISON FIX (RCA 2026-06-28, DiagGarrisonRoster): the village2_stronghold
+                    // garrison (orc-berserker/orc-shaman/orc-raider → OrcWarband: Orc_Berserker/Shaman/
+                    // Necromancer; + Troll) attaches the Tripo→URP fixer (FixTripoMaterials above), but the
+                    // basecolor-fallback bind was gated to the OrcHumanoid rig ONLY. The Warband family + Troll
+                    // have NO committed OrcTex basecolor (their FBX remaps point to deleted tripo_mat_*.mat),
+                    // so the fixer built a clean URP/Lit with white albedo → flat WHITE orcs. No real texture
+                    // exists, so bind a per-family SOLID tint instead of white. Skipped for OrcHumanoid (it
+                    // binds OrcTex above) — this branch is the else.
+                    var warbandFixer = vis.GetComponentInChildren<DeNelle.Core.TripoMaterialFixer>();
+                    if (warbandFixer != null)
+                    {
+                        // Troll → grey-green hide; Warband orcs → orc green/brown.
+                        Color fallbackTint = model == "Troll"
+                            ? new Color(0.38f, 0.40f, 0.34f)
+                            : new Color(0.30f, 0.42f, 0.22f);
+                        warbandFixer.SetFallbackTint(fallbackTint);
+                        FlowTrace.Step("Enemy",
+                            $"garrison fallback TINT {fallbackTint} bound to '{model}' (rig {rigForModel}) — " +
+                            "no OrcTex basecolor for Warband/Troll family, paints solid colour not white");
+                    }
+                }
 
                 // WIGHT HALF-UNDERGROUND FIX (RCA 2026-06-17): the Tripo/AccuRIG FBXs pivot at
                 // the mesh CENTRE, so when the visual is scaled up (the Demon/wight at 4x) the

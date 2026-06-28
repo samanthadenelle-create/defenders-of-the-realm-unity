@@ -1078,7 +1078,15 @@ namespace DeNelle.HUD
             // the manager's per-frame alpha fade (deactivating the GameObject hides children
             // regardless of CanvasGroup alpha) and restores the instant the battle ends or the
             // 9-zone flag is OFF, so the legacy (non-9-zone) battle HUD path is UNCHANGED.
-            bool hud9Owns = inArenaBattle && DeNelle.Core.FeatureFlags.BattleHud9Zone;
+            // FIX (Village2 NEW battle HUD): an ENEMY-OWNED scene (Village2 outpost)
+            // resolves to Battle mode and BattleHudVisibilityManager spawns the 9-zone
+            // HUD there too. So the legacy _battleHudGroup must be suppressed in that
+            // scene as well — not only during an arena BattleLock fight — or Village2
+            // double-HUDs. Both gates require ff.battlehud9zone ON.
+            bool enemyScene9Owns = DeNelle.Core.FeatureFlags.BattleHud9Zone
+                && DeNelle.Core.HubScenes.IsEnemyOwnedScene(SceneManager.GetActiveScene().name);
+            bool hud9Owns = (inArenaBattle && DeNelle.Core.FeatureFlags.BattleHud9Zone)
+                || enemyScene9Owns;
             if (_battleHudGroup != null)
             {
                 var battleHostRt = _battleHudGroup.transform as RectTransform;
@@ -2727,7 +2735,15 @@ namespace DeNelle.HUD
             if (!force && inVillage == _inVillage) return;
             _inVillage = inVillage;
 
-            bool showVillage = inVillage || _villageOnlyForced;
+            // FIX (quest-board-in-Village2): the town action panel (Quest/Talk faces),
+            // Build button, start-wave button, and castle banner must NOT appear in an
+            // ENEMY-OWNED scene (Village2 enemy outpost) — even though Village2 counts as
+            // a HUB (HubScenes.Names, needed by RaidEntryBridge). Gate the whole town
+            // chrome off on the enemy-owned axis (covers the _villageOnlyForced path too).
+            // Home hub (MainCastle_Hall) is not enemy-owned, so it is unaffected.
+            bool enemyOwnedScene = DeNelle.Core.HubScenes.IsEnemyOwnedScene(
+                SceneManager.GetActiveScene().name);
+            bool showVillage = (inVillage || _villageOnlyForced) && !enemyOwnedScene;
             SetActiveSafe(_castleBanner, showVillage);
             SetActiveSafe(_buildBtn, showVillage);
             // WO-403: the right-edge Talk/Quest action panel is town-only (replaced by

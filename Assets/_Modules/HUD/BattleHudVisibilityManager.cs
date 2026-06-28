@@ -68,6 +68,18 @@ namespace DeNelle.HUD
 
         private System.Type _battleControllerType;
 
+        // ── 9-zone battle HUD spawn (enemy-owned scenes, e.g. Village2) ─────────
+        // The NEW battle HUD (DeNelle.Village.Arena.BattleHud9Zone) is normally only
+        // created by BattleArenaHud inside an isolated arena fight. An enemy-owned
+        // outpost like Village2 resolves to Battle mode here but spawns no arena, so
+        // it would show the LEGACY _battleHudGroup instead. We spawn BattleHud9Zone
+        // by REFLECTION (HUD → Core only; BattleHud9Zone lives in DeNelle.Village —
+        // same decoupling as the WaveManager/BattleController handles above) and tear
+        // it down when we leave the enemy scene / Battle mode. Idempotent: we track
+        // the instance we own and never double-spawn if one already exists (arena).
+        private System.Type _hud9Type;
+        private object _hud9Instance;          // the BattleHud9Zone WE spawned (boxed)
+
         // Cached battle-active flags driven by reflected WaveManager UnityEvents.
         private bool _waveEventActive;         // set by OnWaveStarted/Countdown, cleared by Cleared/Defeat
         private bool _waveEventsBound;
@@ -269,6 +281,10 @@ namespace DeNelle.HUD
                 // HIDDEN (exploration / non-village idle) → both out (minimal HUD).
                 _battleTargetAlpha = mode == HudMode.Battle ? 1f : 0f;
                 _townTargetAlpha   = mode == HudMode.Town   ? 1f : 0f;
+                // Enemy-owned scene (Village2) in Battle mode + ff.battlehud9zone ON →
+                // force the NEW 9-zone HUD up; the LEGACY _battleHudGroup is suppressed
+                // in VillageHudController (hud9Owns gate) so the screen never double-HUDs.
+                ApplyEnemySceneHud9(mode);
             }
             catch (System.Exception e)
             {
@@ -363,6 +379,71 @@ namespace DeNelle.HUD
             if (_battleControllerType == null) return false;
             var bc = FindObjectOfType(_battleControllerType) as Behaviour;
             return bc != null && bc.isActiveAndEnabled;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  9-zone HUD ownership for enemy-owned scenes (Village2). Spawns/tears
+        //  down BattleHud9Zone by reflection so DeNelle.HUD stays Core-only.
+        // ─────────────────────────────────────────────────────────────────────
+        private void ApplyEnemySceneHud9(HudMode mode)
+        {
+            bool wantHud9 = mode == HudMode.Battle
+                && DeNelle.Core.FeatureFlags.BattleHud9Zone
+                && IsEnemyOwnedScene();
+            if (wantHud9) EnsureEnemySceneHud9();
+            else TearDownEnemySceneHud9();
+        }
+
+        private void EnsureEnemySceneHud9()
+        {
+            try
+            {
+                if (_hud9Type == null)
+                    _hud9Type = System.Type.GetType(
+                        "DeNelle.Village.Arena.BattleHud9Zone, DeNelle.Village");
+                if (_hud9Type == null) return;
+
+                // Our tracked instance still alive (Unity-null aware)? → reuse it.
+                if (_hud9Instance is Object alive && alive != null) return;
+                _hud9Instance = null;
+
+                // Idempotent: if a BattleHud9Zone already exists (e.g. spawned by an
+                // arena's BattleArenaHud), don't create a second one and don't claim it.
+                if (FindObjectOfType(_hud9Type) != null) return;
+
+                var create = _hud9Type.GetMethod("Create",
+                    BindingFlags.Public | BindingFlags.Static);
+                if (create == null) return;
+                // Create() returns null when ff.battlehud9zone is OFF (already gated above).
+                _hud9Instance = create.Invoke(null, null);
+                if (_hud9Instance != null)
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("HUD",
+                        "[HUD] enemy-owned scene -> spawned BattleHud9Zone (NEW battle HUD).");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BattleHudVisibilityManager] EnsureEnemySceneHud9 failed: " + e.Message);
+            }
+        }
+
+        private void TearDownEnemySceneHud9()
+        {
+            try
+            {
+                if (_hud9Instance == null) return;
+                if (_hud9Type != null && _hud9Instance is Object o && o != null)
+                {
+                    var close = _hud9Type.GetMethod("Close",
+                        BindingFlags.Public | BindingFlags.Instance);
+                    if (close != null) close.Invoke(_hud9Instance, null);
+                    else if (o is Component c && c != null) Destroy(c.gameObject);
+                }
+                _hud9Instance = null;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BattleHudVisibilityManager] TearDownEnemySceneHud9 failed: " + e.Message);
+            }
         }
     }
 }
