@@ -51,7 +51,7 @@ namespace DeNelle.Village
 
             bool chrome = !DeNelle.Core.FeatureFlags.BlinkChrome;   // flag OFF = our dressing; flag ON = let the Blink Obsidian panel show clean
             var solidFill = AddImage(panel.transform, "InvSolidFill", new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f),
-                                     new Color(0.065f, 0.048f, 0.035f, chrome ? 0.99f : 0f));   // kept for layout; invisible when flag ON
+                                     new Color(0.05f, 0.055f, 0.06f, 0.985f));   // dark obsidian backing (always — matches EquipmentPanel)
             NoRaycast(solidFill);
             solidFill.transform.SetAsFirstSibling();
 

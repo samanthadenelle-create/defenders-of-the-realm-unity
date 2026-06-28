@@ -30,7 +30,7 @@ namespace DeNelle.Village
             // Redesigned left portrait area to match the mockup: ornate gold frame (Profile tab P1), inner portrait area with hero face (large glyph or loaded portrait), Lvl, name, colored bars for HP/MP, and stats.
             // Elegant circular/oval frame for mobile RPG raid style hero portrait.
             var medBand = AddImage(_paperDoll.transform, "MedBand",
-                                   new Vector2(0.0f, 0.610f), new Vector2(1.0f, 0.995f), Color.white);
+                                   new Vector2(0.0f, 0.04f), new Vector2(1.0f, 0.99f), Color.white);
             var mbImg = medBand.GetComponent<Image>();
             if (mbImg != null)
             {
@@ -38,11 +38,13 @@ namespace DeNelle.Village
                 if (techFrame == null) techFrame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P1/bg.png");
                 if (techFrame == null) techFrame = Resources.Load<Sprite>("Tech hud elements/Sprites/Profile tabs/P2/fill.png");
                 // Clean-build fallback (Tech pack gitignored): committed RpgUi profile medallion frame.
+                // Use the ornate wood portrait frame so it doesn't stretch into a gold blob.
+                if (techFrame == null) techFrame = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelPortrait);
                 if (techFrame == null) techFrame = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelProfile);
                 if (techFrame != null)
                 {
                     mbImg.sprite = techFrame; mbImg.type = Image.Type.Sliced;
-                    mbImg.color = Color.white; mbImg.preserveAspect = false; mbImg.raycastTarget = false;
+                    mbImg.color = Color.white; mbImg.preserveAspect = true; mbImg.raycastTarget = false;
                     AddInnerRim(medBand, new Color(0.85f, 0.75f, 0.55f, 0.6f));
                 }
                 else
@@ -72,16 +74,12 @@ namespace DeNelle.Village
             AddLabel(medBand.transform, Cap(job).ToUpperInvariant() + "  LV " + level, 0.42f, 0.58f,
                      InkMicro, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.32f, 0.98f, spacing: 2f);
 
-            // Colored bars for HP (red), other stats (green, blue) like the mockup.
-            PaperDollBarTech("HP", 0.25f, 0.38f, new Color(0.8f, 0.1f, 0.1f, 1f), medBand.transform);
+            // Colored bars in NON-overlapping vertical bands (HP red / MP blue / LVL green),
+            // sized to sit cleanly inside the now full-height card. Single HP bar (dup removed).
+            PaperDollBarTech("HP", 0.34f, 0.44f, new Color(0.62f, 0.16f, 0.14f, 1f), medBand.transform);
+            PaperDollBarTech("MP", 0.20f, 0.30f, new Color(0.18f, 0.33f, 0.62f, 1f), medBand.transform);
             // Additional bar for "Till Next Level" or other, using green.
-            PaperDollBarTech("LVL", 0.12f, 0.22f, new Color(0.2f, 0.6f, 0.2f, 1f), medBand.transform);
-
-            // Heavy Tech hud elements for paper-doll bars (W/A focus): use pack's Loading bar or GreenUielements
-            // loading assets (from Tech hud elements) instead of Rpg. Clean, no legacy Rpg dep for gear UI.
-            // Fallback tinted if pack sprites absent.
-            PaperDollBarTech("HP", 0.30f, 0.46f, new Color(0.62f, 0.16f, 0.14f, 1f), medBand.transform);
-            PaperDollBarTech("MP", 0.10f, 0.26f, new Color(0.18f, 0.33f, 0.62f, 1f), medBand.transform);
+            PaperDollBarTech("LVL", 0.06f, 0.16f, new Color(0.2f, 0.6f, 0.2f, 1f), medBand.transform);
 
             // No EQUIPMENT list / slots in left panel to exactly match the mockup's left side (portrait + name + bars + stats only).
             // The left is pure character details as in the provided mockup image.

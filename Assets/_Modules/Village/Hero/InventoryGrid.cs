@@ -52,6 +52,7 @@ namespace DeNelle.Village
             // In portrait, it will be 4 or 5 depending on width; scroll for additional items.
             // Uses RPG kit for clean tiles + Tech for sockets.
             bool isLandscape = Screen.width > Screen.height;
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
             grid.constraintCount = isLandscape ? 5 : 4;
             grid.cellSize = new Vector2(78f, 72f);
             grid.spacing = new Vector2(6f, 6f);
@@ -62,6 +63,14 @@ namespace DeNelle.Village
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
             BuildCellsFromVM(content.transform);
+
+            // Force a layout pass so the grid + content size resolve immediately (mirrors
+            // EquipmentPanel.FinalizeScroll) — without this the GridLayoutGroup/ContentSizeFitter
+            // may not have run before first paint, leaving cells un-positioned.
+            Canvas.ForceUpdateCanvases();
+            var vrt = viewport.GetComponent<RectTransform>();
+            if (vrt != null) LayoutRebuilder.ForceRebuildLayoutImmediate(vrt);
+            LayoutRebuilder.ForceRebuildLayoutImmediate(crt);
         }
 
         // WO-434 Phase C — the grid is now a pure projection of vm.Slots (OWNED items in the
@@ -249,9 +258,7 @@ namespace DeNelle.Village
             // slot plate present → dress the inner cell tile with the Obsidian slot plate (the same
             // slot_item the shop rows use) so the grid reads as one Obsidian surface. Flag OFF (or
             // plate missing) → the EXACT current look: the RPG kit PanelInventory tile, else rounded.
-            Sprite cellTile = null;
-            if (DeNelle.Core.FeatureFlags.BlinkChrome)
-                cellTile = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotItem);
+            Sprite cellTile = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotItem);
             if (cellTile == null)
                 cellTile = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelInventory);
             if (cellTile != null) {
