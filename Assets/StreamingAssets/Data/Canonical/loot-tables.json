@@ -101,6 +101,17 @@
         { "materialId": "ing_heartstone_crystal", "chance": 0.15, "minCount": 1, "maxCount": 1 },
         { "materialId": "ing_elarion_petal", "chance": 0.12, "minCount": 1, "maxCount": 1 }
       ]
+    },
+    {
+      "_comment": "Overworld orc warband REP (OverworldEncounterSpawner def id 'orc-warrior'): field-kill drops when the player kites + kills the rep before the BattleArena triggers. Beefy-melee flavor; mirrors orc-berserker with a small warband bonus.",
+      "id": "orc-warrior",
+      "source": "enemy",
+      "drops": [
+        { "materialId": "ing_ironroot", "chance": 0.55, "minCount": 1, "maxCount": 2 },
+        { "materialId": "ing_ember_crystal", "chance": 0.40, "minCount": 1, "maxCount": 2 },
+        { "materialId": "ing_oil_flask", "chance": 0.35, "minCount": 1, "maxCount": 1 },
+        { "materialId": "ing_heartstone_crystal", "chance": 0.10, "minCount": 1, "maxCount": 1 }
+      ]
     }
   ],
   "defaults": {

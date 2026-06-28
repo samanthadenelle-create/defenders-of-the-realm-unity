@@ -292,11 +292,18 @@ namespace DeNelle.Village
             var def = new EnemyDef
             {
                 Id = "orc-warrior", Name = "Orc Warleader", DisplayName = "Orc Warband", Ai = "walker",
-                Hp = 9999f,                 // the rep is a HOOK, not a kill -- it transitions on touch/hit
+                // FIELD-KILLABLE REP (owner 2026-06-28): the rep is no longer an un-killable hook.
+                // The player can KITE it with ranged attacks and KILL it in the open world BEFORE the
+                // BattleArena triggers, earning the SAME payout an arena win of this orc family grants
+                // (Enemy.Die(killed:true) -> HeroProgression.AddXp + Glimmer/gold + ItemDropWatcher loot).
+                // Hp ~ one tanky orc's worth (arena tank=190, warrior=120 at threat 1): kitable in a few
+                // ranged hits, never a one-shot. XP/Glimmer aggregate the 3-orc family (BattleArena
+                // BuildEncounterDef: ~14 XP + ~3 Glimmer per orc, x3). All three are OWNER-TUNABLE.
+                Hp = 150f,                  // owner-tunable: between arena warrior(120) and tank(190); kitable, not one-shot
                 MoveSpeed = RepChaseSpeed,  // ~+5% over the hero so it can run you down
                 ContactDamage = 0f,         // never hurts the hero in-world (hook only)
                 AttackInterval = 1.5f, Height = 2.0f, AggroRadius = 8f, // notice radius (owner 2026-06-27: 22->8, reconciled to RepEngageWatcher.AggroRange)
-                XpReward = 0, GlimmerReward = 0,
+                XpReward = 42, GlimmerReward = 9, // owner-tunable: ~14 XP + ~3 Glimmer per orc x3 (matches an arena win of this family)
             };
 
             Enemy enemy = null;
@@ -447,12 +454,21 @@ namespace DeNelle.Village
             _threat = Mathf.Max(1, threat);
             _enemy = GetComponent<Enemy>();
             _leashCenter = transform.position;                    // wander leash centred on the spawn
-            if (_enemy != null) _enemy.Damaged += OnRepDamaged;   // hero attacked the rep -> engage
+            // FIELD-KILL DECOUPLE (owner 2026-06-28): damage no longer auto-engages the arena. With
+            // RangedHitsEngage=false the rep can be WHITTLED DOWN and KILLED in the open world by ranged
+            // attacks; only near-CONTACT with the hero (TouchDistance in Update) starts the BattleArena.
+            // Flip the const true to restore the old "any hit pops the fight" hook behaviour.
+            if (RangedHitsEngage && _enemy != null) _enemy.Damaged += OnRepDamaged;   // hero attacked the rep -> engage
         }
+
+        // OWNER-TUNABLE hook: when true, ANY damage to the rep (incl. a ranged hit) instantly engages
+        // the arena (the legacy un-killable-hook behaviour). When false (V1 default), ranged hits damage
+        // the rep normally so it can be field-killed for full XP+loot; only contact starts the fight.
+        private const bool RangedHitsEngage = false;
 
         private void OnDestroy()
         {
-            if (_enemy != null) _enemy.Damaged -= OnRepDamaged;
+            if (RangedHitsEngage && _enemy != null) _enemy.Damaged -= OnRepDamaged;
         }
 
         private void OnRepDamaged(Vector3 _) => Engage("hero-attacked-rep");
