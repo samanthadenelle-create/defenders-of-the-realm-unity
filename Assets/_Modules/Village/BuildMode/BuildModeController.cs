@@ -409,9 +409,13 @@ namespace DeNelle.Village
             }
 
             Vector3 snapped = _grid.SnapToGrid(hit.point);
-            _ghost.MoveTo(snapped, _armedYawSteps);
 
-            bool valid = IsValidPlacement(hit, snapped, _armed, out Vector2Int cell, out Vector2Int footprint, out BuildRejectReason reason);
+            bool valid = IsValidPlacement(hit, snapped, _armed, out Vector2Int cell, out Vector2Int footprint,
+                out BuildRejectReason reason, out float seatY, out bool wallMounted);
+            // Preview at the SEAT height (wall-top for a wall-walk mount, else the surface Y) so the
+            // ghost shows exactly where the piece lands.
+            Vector3 seatSnapped = new Vector3(snapped.x, seatY, snapped.z);
+            _ghost.MoveTo(seatSnapped, _armedYawSteps);
             _ghost.SetValid(valid);
 
             // WO-394 — a CLICK that lands on an invalid target must never fail silently:
@@ -429,7 +433,7 @@ namespace DeNelle.Village
                 // is now dormant — no longer called from placement. Direct place leaves
                 // _armedYawOffset = 0, so PlacedStructureData yaw = yawSteps × 90 only
                 // (this also retires the latent double-rotation).
-                    Place(cell, footprint, snapped);
+                    Place(cell, footprint, seatSnapped, wallMounted);
 
                     // STAY-ARMED (CoC-style) — deliberately do NOT clear _armed / hide the
                     // ghost after a place. The same entry stays armed so the next valid tap
@@ -507,7 +511,8 @@ namespace DeNelle.Village
             Debug.Log($"[Orient] confirmed: yawSteps={_armedYawSteps} yaw={_armedYawOffset:F0} cell={_pendingCell}");
 
             _pendingPlace = false;
-            Place(_pendingCell, _pendingFootprint, _pendingSnapped);
+            // Dormant modal path (no longer called from placement) — ground placement only.
+            Place(_pendingCell, _pendingFootprint, _pendingSnapped, false);
         }
 
         /// <summary>WO-334 cancel callback — keep the entry armed; nothing is placed.</summary>
@@ -544,16 +549,19 @@ namespace DeNelle.Village
             }
 
             Vector3 snapped = _grid.SnapToGrid(hit.point);
-            _ghost.MoveTo(snapped, _armedYawSteps);
 
-            // Affordability is irrelevant for a move (free) — validate placement only.
+            // Affordability is irrelevant for a move (free) — validate placement only. Capture the
+            // seat height + wall-mount so a moved wall-walk defense keeps sitting on the wall TOP.
             bool valid = IsValidPlacement(hit, snapped, CatalogRegistry.Get(_selected.itemId),
-                out Vector2Int cell, out Vector2Int footprint, out BuildRejectReason reason, ignoreCost: true);
+                out Vector2Int cell, out Vector2Int footprint, out BuildRejectReason reason,
+                out float seatY, out bool wallMounted, ignoreCost: true);
+            Vector3 seatSnapped = new Vector3(snapped.x, seatY, snapped.z);
+            _ghost.MoveTo(seatSnapped, _armedYawSteps);
             _ghost.SetValid(valid);
 
             if (PlaceConfirmedThisFrame())
             {
-                if (valid) CommitMove(cell, footprint, snapped);
+                if (valid) CommitMove(cell, footprint, seatSnapped, wallMounted);
                 else BuildFeedbackToast.Show(reason);   // WO-394 — say why the move can't land
             }
         }
@@ -567,7 +575,12 @@ namespace DeNelle.Village
         /// </summary>
         private bool IsValidPlacement(RaycastHit hit, Vector3 snapped, CatalogEntry entry,
             out Vector2Int cell, out Vector2Int footprint, bool ignoreCost = false)
-            => IsValidPlacement(hit, snapped, entry, out cell, out footprint, out _, ignoreCost);
+            => IsValidPlacement(hit, snapped, entry, out cell, out footprint, out _, out _, out _, ignoreCost);
+
+        /// <summary>Convenience overload that discards the seat-height / wall-mount outputs.</summary>
+        private bool IsValidPlacement(RaycastHit hit, Vector3 snapped, CatalogEntry entry,
+            out Vector2Int cell, out Vector2Int footprint, out BuildRejectReason reason, bool ignoreCost = false)
+            => IsValidPlacement(hit, snapped, entry, out cell, out footprint, out reason, out _, out _, ignoreCost);
 
         /// <summary>
         /// WO-394 — the reason-aware validity gate. Same rules as before, but on rejection
@@ -576,37 +589,73 @@ namespace DeNelle.Village
         /// of failing silently. The rules themselves are unchanged — only the reason is new.
         /// </summary>
         private bool IsValidPlacement(RaycastHit hit, Vector3 snapped, CatalogEntry entry,
-            out Vector2Int cell, out Vector2Int footprint, out BuildRejectReason reason, bool ignoreCost = false)
+            out Vector2Int cell, out Vector2Int footprint, out BuildRejectReason reason,
+            out float seatY, out bool wallMounted, bool ignoreCost = false)
         {
             reason = BuildRejectReason.Generic;
+            // Seat height defaults to the raycast/grid plane Y; the wall-walk branch below raises
+            // it to the wall TOP. wallMounted stays false for ground placements (unchanged path).
+            seatY = snapped.y;
+            wallMounted = false;
             cell = _grid.WorldToCell(snapped);
             // FIX (footprint from CORRECTED bounds) — measure the UPRIGHT, OrientationFix-
             // applied mesh (the SAME geometry the ghost + the placed structure use) so the
             // validity footprint matches what lands, letting pieces sit tight to a wall.
             footprint = _grid.FootprintCells(StructureFactory.MeasureUprightFootprintMetres(entry));
 
-            // 1. Flat, upward-facing top (TowerPlacementSystem.IsValidSurface rule).
-            if (hit.collider == null) { reason = BuildRejectReason.BadSurface; return false; }
-            if (hit.normal.y < 0.85f) { reason = BuildRejectReason.BadSurface; return false; }
-            if (hit.collider.CompareTag("Tower") || hit.collider.CompareTag("Building"))
-            { reason = BuildRejectReason.Occupied; return false; }
+            // SURFACE ROLE (data-driven, PlacementRules.mustSitOn) — a WallWalk defense MUST seat
+            // on a wall TOP (defensive posture); everything else is a flat-ground placement. The
+            // rules live on the catalog row (entry.repo.placement); null = the legacy Ground path.
+            var rules = entry != null && entry.repo != null ? entry.repo.placement : null;
+            bool needsWallWalk = rules != null && rules.mustSitOn == PlacementSurface.WallWalk;
+            // Find a WallSegment under the cursor (the placement ray hits ~all layers, so it CAN
+            // hit the wall collider). The structure seats on the wall's walk-top, NOT the hit point.
+            WallSegment supportingWall = hit.collider != null
+                ? hit.collider.GetComponentInParent<WallSegment>() : null;
 
-            // 2. Footprint cells free + in-bounds. (During a MOVE the structure's own
-            //    cells were freed on enter, so they read as free and never self-block.)
-            //    Split in-bounds vs occupied so the message can say which.
+            // 1. Surface check. (TowerPlacementSystem.IsValidSurface rule.)
+            if (hit.collider == null) { reason = BuildRejectReason.BadSurface; return false; }
+            if (needsWallWalk)
+            {
+                // A wall-walk defense REQUIRES a wall to sit on. No wall under the cursor → reject
+                // (this is the data-driven gate that was DATA-ONLY before — nothing read mustSitOn).
+                if (supportingWall == null) { reason = BuildRejectReason.BadSurface; return false; }
+                // Seat on the wall TOP. WallSegment's collider is base-pivoted (center.y = Height/2,
+                // size.y = Height), so the walk-top = wall.transform.position.y + Height. Skip the
+                // flat-normal check here: even a hit on the wall SIDE seats correctly on the top.
+                seatY = supportingWall.transform.position.y + supportingWall.Height;
+                wallMounted = true;
+            }
+            else
+            {
+                // GROUND path — unchanged: require a flat, upward-facing top, reject tower/building tops.
+                if (hit.normal.y < 0.85f) { reason = BuildRejectReason.BadSurface; return false; }
+                if (hit.collider.CompareTag("Tower") || hit.collider.CompareTag("Building"))
+                { reason = BuildRejectReason.Occupied; return false; }
+            }
+
+            // 2. Footprint cells in-bounds (always). Occupancy is skipped for a wall-walk mount —
+            //    the SUPPORTING wall legitimately occupies those cells, so CanPlace would always
+            //    reject. (During a MOVE the structure's own cells were freed on enter.) V1 caveat:
+            //    bypassing occupancy lets two wall-towers target the same cell; the world-overlap
+            //    test below still rejects tower-on-tower (the prior tower is not excluded).
             if (!_grid.InBounds(cell, footprint)) { reason = BuildRejectReason.OutOfBounds; return false; }
-            if (!_grid.CanPlace(cell, footprint)) { reason = BuildRejectReason.Occupied; return false; }
+            if (!wallMounted && !_grid.CanPlace(cell, footprint)) { reason = BuildRejectReason.Occupied; return false; }
 
             // The footprint's world-space AABB on the XZ plane (cellSize × footprint
             // cells, centred on the snapped cell-block). Used by the world-overlap +
             // gate-clearance tests below, which catch SCENE objects the cell grid does
             // not track (gates + the default-village structures are placed by the
             // scene builder, never Occupy()'d — so CanPlace can't see them).
-            Bounds footprintAabb = FootprintWorldBounds(cell, footprint, snapped.y);
+            Bounds footprintAabb = FootprintWorldBounds(cell, footprint, seatY);
 
             // 3. World overlap — reject if the footprint overlaps an existing placed
-            //    structure or a gate collider in the scene (NOT just the cell grid).
-            if (OverlapsExistingStructure(footprintAabb)) { reason = BuildRejectReason.Occupied; return false; }
+            //    structure or a gate collider in the scene (NOT just the cell grid). For a
+            //    wall-walk mount, EXCLUDE the supporting wall (the tower sits ON it by design);
+            //    any OTHER overlapping structure still rejects.
+            GameObject ignore = supportingWall != null
+                ? supportingWall.GetComponentInParent<PlacedStructure>()?.gameObject : null;
+            if (OverlapsExistingStructure(footprintAabb, ignore)) { reason = BuildRejectReason.Occupied; return false; }
 
             // 4. Gate-lane clearance — never wall off the spawn→Heart corridor. Tests
             //    the whole footprint AABB against each gate's real bounds (expanded by
@@ -663,13 +712,14 @@ namespace DeNelle.Village
         /// where transform.position sits far from the visible mesh. During a MOVE the
         /// selected structure is excluded so it never blocks its own re-placement.
         /// </summary>
-        private bool OverlapsExistingStructure(Bounds footprintAabb)
+        private bool OverlapsExistingStructure(Bounds footprintAabb, GameObject ignore = null)
         {
             var all = FindObjectsByType<PlacedStructure>(FindObjectsSortMode.None);
             foreach (var ps in all)
             {
                 if (ps == null) continue;
                 if (_movingSelected && ps == _selected) continue;   // don't self-block a move
+                if (ignore != null && ps.gameObject == ignore) continue;   // wall-walk: tower sits ON the supporting wall
 
                 Bounds wb;
                 if (!TryWorldBounds(ps.gameObject, out wb)) continue;
@@ -759,7 +809,7 @@ namespace DeNelle.Village
         /// the PlacedStructure marker, and append to the live BaseLayout. The entry
         /// stays armed so the player can place several in a row (CoC behaviour).
         /// </summary>
-        private void Place(Vector2Int cell, Vector2Int footprint, Vector3 snapped)
+        private void Place(Vector2Int cell, Vector2Int footprint, Vector3 snapped, bool wallMounted = false)
         {
             // Re-check affordability AT commit through the same ledger the validity gate
             // used — never spawn if the player can't pay (defensive: balance may have
@@ -772,7 +822,11 @@ namespace DeNelle.Village
             }
 
             var loader = BaseLayoutLoader.EnsureExists();
-            var data = new PlacedStructureData(_armed.id, cell.x, cell.y, _armedYawSteps, 1, _armedYawOffset);
+            // Persist the SEAT height (snapped.y — wall-top for a wall-walk mount, else the surface
+            // Y) + the wall-mounted flag so the piece reloads on the wall TOP (not y=0) and the
+            // loader re-applies the elevation perk. worldY defaults 0 / wallMounted false for ground.
+            var data = new PlacedStructureData(_armed.id, cell.x, cell.y, _armedYawSteps, 1,
+                _armedYawOffset, snapped.y, wallMounted);
 
             var ps = loader.Spawn(data, _grid);
             if (ps == null)
@@ -1101,13 +1155,14 @@ namespace DeNelle.Village
         /// GameObject, and sync the PlacedStructure marker + its BaseLayout record
         /// (cellX/cellZ/yawSteps). Free, so the wallet is untouched.
         /// </summary>
-        private void CommitMove(Vector2Int cell, Vector2Int footprint, Vector3 snapped)
+        private void CommitMove(Vector2Int cell, Vector2Int footprint, Vector3 snapped, bool wallMounted = false)
         {
             if (_selected == null) { CancelMove(); return; }
 
             _grid?.Occupy(cell, footprint, _selected.itemId);
 
-            // Move the object (keep the surface height from the snap point).
+            // Move the object (keep the SEAT height from the snap point — wall-top for a wall-walk
+            // mount, else the surface Y).
             _selected.transform.SetPositionAndRotation(
                 snapped, Quaternion.Euler(0f, _armedYawSteps * 90f, 0f));
 
@@ -1116,7 +1171,18 @@ namespace DeNelle.Village
             _selected.gridCell = cell;
             _selected.footprint = footprint;
             _selected.yawSteps = _armedYawSteps;
-            UpdateLayoutEntry(_selected.itemId, oldCell, cell, _armedYawSteps);
+            _selected.worldY = snapped.y;
+            _selected.wallMounted = wallMounted;
+
+            // Re-apply (or clear) the elevation range perk for the moved piece's new seat — a piece
+            // moved ONTO a wall gains the high-ground bonus; one moved OFF a wall loses it.
+            float elevMult = wallMounted ? 1.25f : 1f;
+            var movedDt = _selected.GetComponent<DefenseTower>();
+            if (movedDt != null) movedDt.ElevationRangeMult = elevMult;
+            var movedAt = _selected.GetComponent<ArcaneTower>();
+            if (movedAt != null) movedAt.ElevationRangeMult = elevMult;
+
+            UpdateLayoutEntry(_selected.itemId, oldCell, cell, _armedYawSteps, snapped.y, wallMounted);
 
             Debug.Log($"[BuildMode] Moved '{_selected.itemId}' to cell ({cell.x},{cell.y}) yaw {_armedYawSteps * 90}° (free).");
 
@@ -1297,7 +1363,8 @@ namespace DeNelle.Village
         /// <paramref name="newCell"/> + yaw. PlacedStructureData is a struct, so we
         /// replace the element by index (not mutate a copy).
         /// </summary>
-        private static void UpdateLayoutEntry(string itemId, Vector2Int oldCell, Vector2Int newCell, int yawSteps)
+        private static void UpdateLayoutEntry(string itemId, Vector2Int oldCell, Vector2Int newCell, int yawSteps,
+            float worldY = 0f, bool wallMounted = false)
         {
             var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
             var layout = state != null ? state.BaseLayout : null;
@@ -1310,6 +1377,8 @@ namespace DeNelle.Village
                     d.cellX = newCell.x;
                     d.cellZ = newCell.y;
                     d.yawSteps = yawSteps;
+                    d.worldY = worldY;            // keep the seat height across a move (wall-top vs ground)
+                    d.wallMounted = wallMounted;  // keep the elevation-perk flag across a move
                     layout[i] = d;
                     return;
                 }

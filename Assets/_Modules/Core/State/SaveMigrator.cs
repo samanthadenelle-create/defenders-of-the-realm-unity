@@ -63,6 +63,7 @@ namespace DeNelle.Core.State
                 { 24, MigrateToV24 },
                 { 25, MigrateToV25 },
                 { 26, MigrateToV26 },
+                { 27, MigrateToV27 },
             };
 
         /// <summary>
@@ -389,6 +390,19 @@ namespace DeNelle.Core.State
         {
             if (s.EquippedRingId == null) s.EquippedRingId = "";
             if (s.EquippedAmuletId == null) s.EquippedAmuletId = "";
+            return s;
+        }
+
+        // v27 — wall-mounted defense seating. PlacedStructureData gained worldY (seat height) +
+        // wallMounted (high-ground perk flag). Both are additive default-on-read: a pre-v27
+        // baseLayout record deserializes with worldY = 0 and wallMounted = false, which is exactly
+        // "ground placement, no elevation bonus" — the prior behaviour. So no per-record rewrite is
+        // needed; this step is a documented no-op that records the schema bump (mirroring the v25/v26
+        // default-on-read precedent). Listing it keeps the version chain explicit + unit-testable.
+        private static PersistedState MigrateToV27(PersistedState s)
+        {
+            // No data rewrite: existing baseLayout entries keep worldY = 0 / wallMounted = false
+            // (ground placement) on read, unchanged. New placements persist their seat height.
             return s;
         }
 

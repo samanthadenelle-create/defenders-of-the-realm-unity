@@ -228,6 +228,11 @@ namespace DeNelle.Village
 
             var cell = new Vector2Int(data.cellX, data.cellZ);
             Vector3 pos = grid.CellToWorld(cell);
+            // SEAT HEIGHT — CellToWorld returns the flat grid plane (Y = origin.y, normally 0).
+            // A persisted worldY != 0 seats the structure ELEVATED (e.g. a defense on a wall-walk
+            // top — the defensive posture). Old records carry worldY = 0 → ground placement,
+            // unchanged. Approximately() so a 0 from an old save is treated as "use the grid plane".
+            if (!Mathf.Approximately(data.worldY, 0f)) pos.y = data.worldY;
             var rot = Quaternion.Euler(0f, data.yawSteps * 90f + data.yawOffset, 0f);
 
             GameObject go = null;
@@ -259,7 +264,24 @@ namespace DeNelle.Village
             ps.footprint = footprint;
             ps.yawSteps = data.yawSteps;
             ps.level = Mathf.Max(1, data.level);
+            ps.worldY = data.worldY;
+            ps.wallMounted = data.wallMounted;
             ps.sellValue = (entry.repo != null ? entry.repo.buildCost : 0) / 2;
+
+            // ELEVATION PERK — a defense seated on a wall-walk top gets the high-ground range/LOS
+            // bonus. Applied HERE (not at place-time) so it covers both fresh placement (Place →
+            // Spawn) AND reload from save, and because it is a MULTIPLIER it survives tier upgrades
+            // (ApplyTierStats recomputes the base Range from the catalog without touching it). Gated
+            // on the explicit wallMounted flag — NOT worldY != 0 — so a structure on merely raised
+            // terrain never wrongly gets the bonus. Bounded to +25%.
+            if (data.wallMounted)
+            {
+                const float kWallWalkRangeMult = 1.25f;
+                var dt = go.GetComponent<DefenseTower>();
+                if (dt != null) dt.ElevationRangeMult = kWallWalkRangeMult;
+                var at = go.GetComponent<ArcaneTower>();
+                if (at != null) at.ElevationRangeMult = kWallWalkRangeMult;
+            }
 
             // DEF-208 — 3-tier visual progression: a taller, tier-tinted read per level
             // (1 bronze · 2 silver · 3 gold). Visual-only; the gameplay upgrade owns stats.

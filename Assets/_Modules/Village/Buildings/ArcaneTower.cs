@@ -57,6 +57,11 @@ namespace DeNelle.Village
         [Header("Look")]
         public Color BlastColor = new Color(0.6f, 0.4f, 1f, 1f);   // arcane violet
 
+        // Elevation perk (wall-mounted): a spire seated on a wall-walk TOP gets the high-ground
+        // range/LOS bonus. 1 = ground (no bonus); set by BaseLayoutLoader.Spawn (e.g. 1.25) when
+        // wall-mounted. A MULTIPLIER on EffectiveRange so it survives tier upgrades. Bounded.
+        public float ElevationRangeMult = 1f;
+
         private float _cd;
         private float _scan;
         private readonly List<IDamageable> _hostiles = new List<IDamageable>();
@@ -64,7 +69,7 @@ namespace DeNelle.Village
         // WO-430 — the Arcane Tower upgrade buffs ITS OWN damage/range (towerDamageMult /
         // towerRangeMult). Always player-owned, so the perk always applies. LIVE-READ.
         private float EffectiveDamage => Damage * DeNelle.Core.State.ModifierService.Active.TowerDamageMult;
-        private float EffectiveRange  => Range  * DeNelle.Core.State.ModifierService.Active.TowerRangeMult;
+        private float EffectiveRange  => Range  * DeNelle.Core.State.ModifierService.Active.TowerRangeMult * ElevationRangeMult;
 
         private void Update()
         {

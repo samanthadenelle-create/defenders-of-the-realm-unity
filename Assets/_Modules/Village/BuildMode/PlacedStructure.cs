@@ -37,6 +37,15 @@ namespace DeNelle.Village
         /// <summary>Upgrade level (1-based).</summary>
         public int level = 1;
 
+        /// <summary>World-space Y this structure seats at (wall-top for a wall-mounted defense,
+        /// else the grid/terrain height). Mirrors <see cref="PlacedStructureData.worldY"/> so a
+        /// move/persist keeps the seat height.</summary>
+        public float worldY;
+
+        /// <summary>True when seated on a wall-walk top (defensive posture). Mirrors
+        /// <see cref="PlacedStructureData.wallMounted"/>; drives the elevation range perk.</summary>
+        public bool wallMounted;
+
         /// <summary>Crystals returned on sell (P2). 50% of build cost by convention.</summary>
         public int sellValue;
 
@@ -46,7 +55,7 @@ namespace DeNelle.Village
 
         /// <summary>Snapshot this live structure into its persisted record.</summary>
         public PlacedStructureData ToSaveData() =>
-            new PlacedStructureData(itemId, gridCell.x, gridCell.y, yawSteps, level);
+            new PlacedStructureData(itemId, gridCell.x, gridCell.y, yawSteps, level, 0f, worldY, wallMounted);
 
         // ── Selection highlight (WO-108 P2) ──────────────────────────────────────
         // A non-destructive emissive tint via a shared MaterialPropertyBlock — the

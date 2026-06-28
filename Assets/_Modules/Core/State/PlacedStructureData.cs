@@ -55,7 +55,26 @@ namespace DeNelle.Core.State
         /// 90° or free rotate confirmation; applied on top of yawSteps at spawn.</summary>
         public float yawOffset;
 
-        public PlacedStructureData(string itemId, int cellX, int cellZ, int yawSteps, int level, float yawOffset = 0f)
+        /// <summary>
+        /// World-space Y (height) the structure seats at. Default 0 = the flat grid plane
+        /// (the legacy y=0 planner). A non-zero value seats the structure ELEVATED — e.g. a
+        /// defense placed on a wall-walk sits on the wall TOP (defensive posture). Additive +
+        /// JSON-friendly: an old save's record deserializes with worldY = 0 (default-on-read),
+        /// preserving ground placement, so it round-trips cleanly.
+        /// </summary>
+        public float worldY;
+
+        /// <summary>
+        /// True when this structure is mounted on a wall-walk top (its placement ray hit a
+        /// WallSegment, mustSitOn == WallWalk). Drives the elevation range/LOS perk on reload
+        /// (the high-ground bonus). Default false = ground-placed. Additive default-on-read so
+        /// older saves load as ground placements (no bonus), distinct from a structure that
+        /// merely sits on raised terrain (worldY != 0 but not wall-mounted).
+        /// </summary>
+        public bool wallMounted;
+
+        public PlacedStructureData(string itemId, int cellX, int cellZ, int yawSteps, int level,
+            float yawOffset = 0f, float worldY = 0f, bool wallMounted = false)
         {
             this.itemId = itemId;
             this.cellX = cellX;
@@ -63,6 +82,8 @@ namespace DeNelle.Core.State
             this.yawSteps = yawSteps;
             this.level = level;
             this.yawOffset = yawOffset;
+            this.worldY = worldY;
+            this.wallMounted = wallMounted;
         }
     }
 }

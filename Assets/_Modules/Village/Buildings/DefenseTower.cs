@@ -47,6 +47,13 @@ namespace DeNelle.Village
         // party. Set by the spawner (GarrisonController) for garrison towers.
         public TowerAllegiance Allegiance = TowerAllegiance.PlayerOwned;
 
+        // Elevation perk (wall-mounted defense): a tower seated on a wall-walk TOP gets the
+        // high-ground range/LOS advantage. 1 = ground (no bonus); BaseLayoutLoader.Spawn sets
+        // it (e.g. 1.25) when the structure is wall-mounted (PlacedStructureData.wallMounted).
+        // A MULTIPLIER on EffectiveRange, so it survives tier upgrades (ApplyTierStats recomputes
+        // the base Range from the catalog, never touching this factor). Bounded by the spawner.
+        public float ElevationRangeMult = 1f;
+
         private float _cd;
         private float _scan;
         private readonly List<IDamageable> _hostiles = new List<IDamageable>();
@@ -69,8 +76,8 @@ namespace DeNelle.Village
         // Overload temp-empower can buff dynamically. Enemy garrison turrets use base stats.
         private float EffectiveDamage => Allegiance == TowerAllegiance.PlayerOwned
             ? Damage * DeNelle.Core.State.ModifierService.Active.TowerDamageMult : Damage;
-        private float EffectiveRange => Allegiance == TowerAllegiance.PlayerOwned
-            ? Range * DeNelle.Core.State.ModifierService.Active.TowerRangeMult : Range;
+        private float EffectiveRange => (Allegiance == TowerAllegiance.PlayerOwned
+            ? Range * DeNelle.Core.State.ModifierService.Active.TowerRangeMult : Range) * ElevationRangeMult;
 
         private void Update()
         {
