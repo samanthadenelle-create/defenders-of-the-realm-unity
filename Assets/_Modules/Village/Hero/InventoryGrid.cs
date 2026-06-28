@@ -39,15 +39,14 @@ namespace DeNelle.Village
                 $"RebuildGrid tab={_vm?.ActiveTab} store={(_store == null ? "NULL" : "ok")} " +
                 $"villageInventory={(invPresent ? "present" : "NULL")} ownedCounts={owned} slots={slotCount}");
 
-            // No slots → render a STYLED obsidian empty-state that FILLS the grid well, instead of the
-            // bare gray frame the owner saw. (The old BuildEmptyNote parented the note INTO the grid
-            // content, where the GridLayoutGroup forced it to a 78x72 cell → unreadable, so only the
-            // gray well showed.) Built directly into _gridRoot so no GridLayoutGroup squishes it.
-            if (_vm == null || _vm.Slots == null || _vm.Slots.Count == 0)
+            // WO-582: ALWAYS render a GRID (owner: "still no grids"). The grid is a fixed set of
+            // styled Obsidian Inventory_Slot frames; owned items drop into the first cells and the
+            // rest stay as empty slots — so a tab with no loose items still reads as a real grid, not
+            // a bare note. Only a missing VM (no inventory at all) shows the empty-state.
+            if (_vm == null)
             {
-                string msg = _vm != null ? EmptyTabNote(_vm.ActiveTab) : "No inventory.";
-                BuildEmptyState(_gridRoot.transform, msg);
-                FlowTrace.Step("Inventory", $"RebuildGrid: empty-state shown (slots={slotCount}).");
+                BuildEmptyState(_gridRoot.transform, "No inventory.");
+                FlowTrace.Step("Inventory", $"RebuildGrid: empty-state shown (no VM).");
                 return;
             }
 
@@ -121,51 +120,74 @@ namespace DeNelle.Village
             }
 
             var slots = _vm.Slots;
-            if (slots == null || slots.Count == 0)
-            {
-                FlowTrace.Warn("Inventory",
-                    $"BuildCellsFromVM: tab {_vm.ActiveTab} has NO owned slots — showing empty note (data-empty).");
-                BuildEmptyNote(content, EmptyTabNote(_vm.ActiveTab));
-                return;
-            }
-
             string selId = _vm.SelectedId;
             bool isConsumables = _vm.ActiveTab == InventoryTabKind.Consumables;
-            int wantCount = slots.Count;
+            int wantCount = slots != null ? slots.Count : 0;
+            int built = 0, failed = 0;
 
-            // Guard EACH cell so one bad ItemVM is logged + skipped, never aborting the whole grid
-            // (the "blank inventory tab" class, WO-412/406).
-            var (built, failed) = Guard.TryEach("Inventory", "build inventory cell", slots, item =>
+            // Build the OWNED items into the first cells (guarded so one bad ItemVM never aborts the grid).
+            if (slots != null && slots.Count > 0)
             {
-                var it = item;   // capture for the closure
-                Sprite iconSp = ResolveItemIcon(it.IconRole, it.IconName);
-                string glyph = GlyphForRole(it.IconRole, it.IconName);
-                bool selected = selId != null &&
-                                string.Equals(selId, it.Id, System.StringComparison.OrdinalIgnoreCase);
-                BuildGearCell(content, glyph, iconSp, it.Name, it.Rarity, it.Equipped, locked: false,
-                              selected: selected, lockText: "",
-                              onTap: () =>
-                              {
-                                  if (_vm == null) return;
-                                  _vm.SelectById(it.Id);
-                                  // Equip-on-tap (preserved): gear equips, a consumable is used.
-                                  if (isConsumables) _vm.Use();
-                                  else _vm.Equip();
-                              });
-            });
-
-            // STOCKED-N COMMIT SEAM: cells offered vs built — splits data-empty from built-but-broken.
-            FlowTrace.Step("Inventory",
-                $"Inventory stocked {built} cell(s) (wanted {wantCount}, failed {failed}).");
-
-            // VERIFY built>0: every cell failed to build (wanted>0, built==0) is built-but-broken,
-            // NOT an empty tab — show the visible empty note instead of a blank grid, and Fail-loud.
-            if (built == 0)
-            {
-                FlowTrace.Fail("Inventory",
-                    $"Inventory had {wantCount} owned slot(s) but built 0 cells ({failed} failed) — showing empty note (built-but-broken, NOT data-empty).");
-                BuildEmptyNote(content, EmptyTabNote(_vm.ActiveTab));
+                var (b, f) = Guard.TryEach("Inventory", "build inventory cell", slots, item =>
+                {
+                    var it = item;   // capture for the closure
+                    Sprite iconSp = ResolveItemIcon(it.IconRole, it.IconName);
+                    string glyph = GlyphForRole(it.IconRole, it.IconName);
+                    bool selected = selId != null &&
+                                    string.Equals(selId, it.Id, System.StringComparison.OrdinalIgnoreCase);
+                    BuildGearCell(content, glyph, iconSp, it.Name, it.Rarity, it.Equipped, locked: false,
+                                  selected: selected, lockText: "",
+                                  onTap: () =>
+                                  {
+                                      if (_vm == null) return;
+                                      _vm.SelectById(it.Id);
+                                      // Equip-on-tap (preserved): gear equips, a consumable is used.
+                                      if (isConsumables) _vm.Use();
+                                      else _vm.Equip();
+                                  });
+                });
+                built = b; failed = f;
             }
+
+            // WO-582: PAD with empty Obsidian slots so the body always reads as a full grid (the owner's
+            // "still no grids"). A tab with no loose items now shows a clean grid of empty slot frames
+            // instead of a note. Fill to at least a full visible page (cols x rows), rounding owned up
+            // to whole rows so the grid never ends mid-row.
+            int cols = (Screen.width > Screen.height) ? 5 : 4;
+            const int minRows = 5;
+            int rowsForOwned = (built + cols - 1) / cols;
+            int target = Mathf.Max(cols * minRows, (rowsForOwned + 1) * cols);
+            for (int i = built; i < target; i++) BuildEmptySlot(content);
+
+            FlowTrace.Step("Inventory",
+                $"Inventory stocked {built} owned + {(target - built)} empty slot(s) (wanted {wantCount}, failed {failed}).");
+
+            if (wantCount > 0 && built == 0)
+                FlowTrace.Fail("Inventory",
+                    $"Inventory had {wantCount} owned slot(s) but built 0 cells ({failed} failed) — grid shows empties only (built-but-broken).");
+        }
+
+        // WO-582 — an empty Obsidian inventory slot: the Blink Inventory_Slot frame (committed via
+        // RpgUi/slot), tinted faint so it reads as an available-but-empty cell. Non-interactive.
+        // Sized by the parent GridLayoutGroup, exactly like a real cell, so the grid stays uniform.
+        private void BuildEmptySlot(Transform content)
+        {
+            var go = new GameObject("EmptySlot", typeof(Image));
+            go.transform.SetParent(content, false);
+            var img = go.GetComponent<Image>();
+            var slotSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotItem);
+            if (slotSprite != null)
+            {
+                img.sprite = slotSprite;
+                img.type = Image.Type.Sliced;
+                img.color = new Color(1f, 1f, 1f, 0.55f);  // faint = empty
+            }
+            else
+            {
+                img.color = new Color(Cell.r, Cell.g, Cell.b, 0.35f);
+                ApplyRounded(img);
+            }
+            img.raycastTarget = false;
         }
 
         // Pick the cell icon from the VM's role/name KEYS — presentation mapping (a key -> art),
