@@ -6,11 +6,14 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Talents
 //
-// Code-built uGUI ONLY (no UXML — §8). Layout:
-//   * TOP ROW — four slot tiles Q/W/E/R. Q is DIMMED ("Basic Attack — locked").
-//     W/E/R show the equipped skill name, or an empty "+" placeholder.
+// Code-built uGUI ONLY (no UXML — §8). This fills the HOT-SWAP bar (the player-
+// assignable bottom-middle battle row); the bottom-RIGHT bar is the FIXED class kit
+// and is not edited here (owner-correct, 2026-06-28). Layout:
+//   * TOP ROW — the hot-swap slot tiles (1..N). Each shows the assigned skill name,
+//     or an empty "+" placeholder.
 //   * BOTTOM — a grid of unlocked skills. TAP a skill (it highlights), then tap a
-//     W/E/R slot to equip it (tap-tap, WebGL-safe — no drag, per the never-drag rule).
+//     hot-swap slot to assign it (tap-tap, WebGL-safe — no drag, per the never-drag
+//     rule). Tap a filled slot with nothing picked to clear it.
 //   * A status line echoes the VM's hint / result.
 //
 // Registers PanelId.HeroLoadout (opened from the skill-tree panel's Equip button).
@@ -131,11 +134,12 @@ namespace DeNelle.Village.Talents
             // once a skill is picked, the tappable W/E/R slots glow gold so it's obvious THIS is the
             // next tap target (the tap-skill-then-tap-slot flow). Q (locked) never glows.
             bool aSkillIsPicked = _vm != null && !string.IsNullOrEmpty(_vm.SelectedAbilityId);
-            bool isAssignTarget = !slot.IsLocked && aSkillIsPicked;
-            // Q (locked) reads dim; empty W/E/R read as a quiet socket; filled read gold-warm.
+            bool isAssignTarget = aSkillIsPicked;
+            // Empty slots read as a quiet socket; filled read gold-warm; when a skill is picked
+            // every slot glows gold (the tap-skill-then-tap-slot flow). Tap a filled slot with
+            // nothing picked to clear it.
             Color fill;
-            if (slot.IsLocked) fill = new Color(ElarionUiKit.Cell.r, ElarionUiKit.Cell.g, ElarionUiKit.Cell.b, 0.30f);
-            else if (isAssignTarget) fill = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.42f);
+            if (isAssignTarget) fill = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.42f);
             else if (slot.IsEmpty) fill = ElarionUiKit.Track;
             else fill = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.20f);
             img.color = fill;
@@ -143,36 +147,29 @@ namespace DeNelle.Village.Talents
             var btn = tile.GetComponent<Button>();
             btn.targetGraphic = img;
             ElarionUiKit.StyleButtonColors(btn);
-            btn.interactable = !slot.IsLocked;
-            var slotKind = slot.Slot;
-            btn.onClick.AddListener(() => { if (_vm != null) _vm.OnSlotTapped(slotKind); });
+            int slotIndex = slot.SlotIndex;
+            btn.onClick.AddListener(() => { if (_vm != null) _vm.OnSlotTapped(slotIndex); });
 
-            // Slot key (Q/W/E/R) — big, top.
-            ElarionUiKit.Label(tile.transform, slot.SlotKey, 0.62f, 0.95f,
-                slot.IsLocked ? ElarionUi.ParchmentDim : ElarionUi.Gilt,
+            // Slot number — big, top.
+            ElarionUiKit.Label(tile.transform, slot.SlotKey, 0.62f, 0.95f, ElarionUi.Gilt,
                 ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
 
             // Content line.
             string body;
             Color bodyColor;
-            if (slot.IsLocked)
-            {
-                body = "Basic Attack\nlocked";
-                bodyColor = ElarionUi.ParchmentDim;
-            }
-            else if (slot.IsEmpty)
+            if (slot.IsEmpty)
             {
                 body = isAssignTarget ? "tap to assign" : "+";
                 bodyColor = isAssignTarget ? ElarionUi.Gilt : ElarionUi.ParchmentDim;
             }
             else
             {
-                body = slot.AbilityName;
+                body = isAssignTarget ? slot.AbilityName : slot.AbilityName + "\n(tap to clear)";
                 bodyColor = ElarionUi.Parchment;
             }
             ElarionUiKit.Label(tile.transform, body, 0.08f, 0.58f, bodyColor,
-                slot.IsEmpty && !slot.IsLocked ? ElarionUi.FontTitle : ElarionUi.FontMicro,
-                TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: !slot.IsLocked && !slot.IsEmpty);
+                slot.IsEmpty ? ElarionUi.FontTitle : ElarionUi.FontMicro,
+                TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: !slot.IsEmpty);
         }
 
         private void RebuildGrid()
@@ -266,13 +263,18 @@ namespace DeNelle.Village.Talents
             if (sfImg != null) sfImg.raycastTarget = false;
             solidFill.transform.SetAsFirstSibling();
 
-            _headerLabel = ElarionUiKit.Header(panel, "Equip Skills", x0: 0.04f, x1: 0.96f, y0: 0.90f, y1: 0.97f);
+            _headerLabel = ElarionUiKit.Header(panel, "Hot-Swap Skills", x0: 0.04f, x1: 0.96f, y0: 0.90f, y1: 0.97f);
 
-            // Slot strip (Q/W/E/R) under the header.
+            // Caption: the class kit is fixed; this bar is for extra talent skills.
+            ElarionUiKit.Label(panel, "Your class kit is fixed — assign extra talent skills to your hot-swap bar.",
+                0.865f, 0.90f, ElarionUi.ParchmentDim, ElarionUi.FontMicro,
+                TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
+
+            // Hot-swap slot strip under the header.
             _slotsRoot = new GameObject("SlotsRow", typeof(RectTransform));
             _slotsRoot.transform.SetParent(panel, false);
             var sr = _slotsRoot.GetComponent<RectTransform>();
-            sr.anchorMin = new Vector2(0.05f, 0.68f); sr.anchorMax = new Vector2(0.95f, 0.86f);
+            sr.anchorMin = new Vector2(0.05f, 0.68f); sr.anchorMax = new Vector2(0.95f, 0.84f);
             sr.offsetMin = Vector2.zero; sr.offsetMax = Vector2.zero;
 
             // Divider caption.

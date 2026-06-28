@@ -373,7 +373,7 @@ namespace DeNelle.Village.Talents
             string abilityId = AbilityIdOf(n);
             bool equipped = kind == SkillNodeKind.Skill
                             && !string.IsNullOrEmpty(abilityId)
-                            && HeroLoadoutAccess.IsEquipped(abilityId);
+                            && AssignableSkillBarAccess.IsAssigned(abilityId);
 
             int tier = isShared ? 0 : TierIndex(n.Tier);
 
