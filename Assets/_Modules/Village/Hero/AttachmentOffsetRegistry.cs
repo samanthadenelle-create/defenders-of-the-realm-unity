@@ -49,6 +49,10 @@ namespace DeNelle.Village
         public Vector3 pos;        // local position
         public Vector3 eulerRot;   // local rotation, euler degrees
         public float scale;        // uniform scale (1 = unchanged)
+        // WO-551: when true (native-only, opt-in per entry), the equip path SKIPS the geometric
+        // true+seat and reproduces the Forge raw-pivot frame exactly (legacy replacement). Default
+        // false => the offset is a NUDGE applied ON TOP of geometry. A missing JSON key reads false.
+        public bool fullOverride;
     }
 
     /// <summary>
@@ -73,6 +77,7 @@ namespace DeNelle.Village
             public JsonVec3 rot;
             public JsonVec3 pos;
             public float scale;
+            public bool fullOverride;   // WO-551: opt-in geometry bypass (default false / missing key).
         }
 
         [Serializable]
@@ -114,7 +119,8 @@ namespace DeNelle.Village
                 {
                     pos = new Vector3(e.pos.x, e.pos.y, e.pos.z),
                     eulerRot = new Vector3(e.rot.x, e.rot.y, e.rot.z),
-                    scale = e.scale <= 0f ? 1f : e.scale
+                    scale = e.scale <= 0f ? 1f : e.scale,
+                    fullOverride = e.fullOverride
                 };
                 n++;
             }

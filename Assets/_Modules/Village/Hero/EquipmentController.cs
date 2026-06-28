@@ -683,36 +683,39 @@ namespace DeNelle.Village
             //  • NON-melee native props (none reach here today — bow/shield use their own paths) keep
             //    SeatNative (trust the authored grip-at-origin). The `native` flag now only gates
             //    NON-melee seating.
-            // ── OFFSET RESOLUTION (hoisted, WO-490) ──────────────────────────────────
-            // Resolve any authored Offset Forge offset BEFORE the seat decision. A NATIVE
-            // grip-at-origin prefab that HAS an authored offset must seat EXACTLY as the Forge
-            // previews it (raw native pivot + localRotation=Euler(rot), localPosition=pos,
-            // localScale=one*scale — OffsetForgeWindow.ApplyOffsetToInstance) — it must NOT run
-            // the melee NormalizeInto+SeatByHandle derive path, which re-seats the grip in a
-            // different frame and makes the owner's authored offset unreproducible. The key is
-            // the mesh name (Forge's default save-id, e.g. "sword_A") with a weapon-id fallback.
+            // ── OFFSET RESOLUTION (WO-551: geometry-first, offset = nudge-on-top) ─────
+            // GEOMETRY IS THE DEFAULT for all conforming melee. We ALWAYS true the prop
+            // (NormalizeInto: longest axis -> +Y, narrowest -> +X) and, for melee, seat the grip
+            // by geometry (SeatByHandle: hilt-forward). The Offset Forge offset is then a small
+            // CALIBRATION NUDGE applied ON TOP of that trued+seated frame — NOT a replacement
+            // that skips geometry. (The b773176d `seatNativeAuthored` bypass made the manual
+            // offset the AUTHORITY — backwards vs the owner principle "trust the geometry" — and
+            // dialed against the RAW pivot, so it never reproduced in-game = "handle still wrong".)
+            // An all-zero entry == pure geometry. A weapon that genuinely breaks the
+            // wide-Y/narrow-XZ pattern can opt OUT of geometry per-entry with "fullOverride":true
+            // (the EXCEPTION, native-only). Key = mesh name (Forge save-id, e.g. "sword_A") then id.
             string offsetKey = !string.IsNullOrEmpty(vis.mesh) ? vis.mesh : weaponId;
             bool hasOffset = AttachmentOffsetRegistry.TryGetOffset(offsetKey, out var fo) ||
                              (offsetKey != weaponId && AttachmentOffsetRegistry.TryGetOffset(weaponId, out fo));
-            // ONLY native prefabs with an authored offset bypass the derive path. Raw .fbx melee
-            // (no offset, e.g. sword_G) keeps NormalizeInto+SeatByHandle (no regression).
-            bool seatNativeAuthored = vis.native && hasOffset;
+            bool meleeSeat = IsMelee(vis.kind);
+            // EXCEPTION (opt-in, native-only): a non-conforming prop bypasses geometry and
+            // reproduces the Forge raw-pivot frame exactly (legacy replacement). Default false,
+            // so a normal authored entry NEVER skips geometry — it only adds a nudge on top.
+            bool fullOverride = hasOffset && fo.fullOverride && vis.native;
 
             var gripRoot = new GameObject(PropName);
-            bool meleeSeat = IsMelee(vis.kind);
-            if ((vis.native && !meleeSeat) || seatNativeAuthored)
+            if ((vis.native && !meleeSeat) || fullOverride)
             {
-                FlowTrace.Step("Equip", seatNativeAuthored
-                    ? "seat: NATIVE+AUTHORED (trust pivot, Offset Forge frame — skip derive)"
+                FlowTrace.Step("Equip", fullOverride
+                    ? "seat: NATIVE+OVERRIDE (opt-in raw-pivot Forge frame — geometry SKIPPED)"
                     : "seat: NATIVE (trust authored grip-at-origin, scale-only)");
                 SeatNative(prop, gripRoot.transform, vis.heldLength);
             }
             else
             {
-                if (vis.native && meleeSeat)
-                    FlowTrace.Step("Equip", "seat: MELEE override — native pivot NOT trusted (BUG 2 §4 derive)");
-                else
-                    FlowTrace.Step("Equip", "seat: NormalizeInto + (melee) SeatByHandle (derive grip from bounds)");
+                FlowTrace.Step("Equip", meleeSeat
+                    ? "seat: GEOMETRY — NormalizeInto (true wide-Y/narrow-XZ) + SeatByHandle (hilt-forward)"
+                    : "seat: GEOMETRY — NormalizeInto (bounds-true)");
                 NormalizeInto(prop, gripRoot.transform, vis.heldLength);
                 // GRIP-POINT INFERENCE (WO-435 — generalized to ALL melee): NormalizeInto centres
                 // by BOUNDS (mid-shaft / mid-blade), not the grip. SeatByHandle re-seats so the
@@ -720,7 +723,12 @@ namespace DeNelle.Village
                 // head/blade points +Y. The width-spike profile finds a staff's grip (or falls back
                 // to the narrower-tipped pommel end) exactly as it does for a sword.
                 if (meleeSeat)
+                {
                     FlowTrace.Try("Equip", "SeatByHandle", () => SeatByHandle(prop, gripRoot.transform));
+                    // §12 instrumentation: prove the geometry path ran + report the seated grip
+                    // shift (prop local Y after SeatByHandle = how far the handle moved to origin).
+                    FlowTrace.Step("Equip", $"trued+seated: grip-shift localY={prop.transform.localPosition.y:0.###} (geometry)");
+                }
             }
 
             gripRoot.transform.SetParent(hand, false);
@@ -748,10 +756,10 @@ namespace DeNelle.Village
             // because melee is seated via the derived NormalizeInto+SeatByHandle path above (its
             // primary axis is prop-local +Y) — NOT the authored native frame. Only NON-melee native
             // props use their preset gripEuler directly.
-            //  • NATIVE+AUTHORED (Offset Forge): trust the authored euler directly — the Forge
-            //    previewed the RAW pivot with localRotation=Euler(rot), so reproduce that EXACT
-            //    frame and SKIP ComputeMeleeGripRotation (the derive path it never used).
-            if (seatNativeAuthored)
+            //  • fullOverride EXCEPTION (Offset Forge opt-out): reproduce the RAW pivot frame —
+            //    localRotation = Euler(rot), SKIP ComputeMeleeGripRotation (the geometry path).
+            //    DEFAULT melee keeps the rig-aware geometric grip; the nudge composes below.
+            if (fullOverride)
             {
                 _baseGripEuler = fo.eulerRot;
                 _baseGripRot = Quaternion.Euler(fo.eulerRot);
@@ -764,37 +772,38 @@ namespace DeNelle.Village
             FlowTrace.Step("Equip", $"attached '{weaponId}' on '{name}': gripPos={vis.gripPos} " +
                 $"baseEuler={_baseGripRot.eulerAngles} kind={vis.kind} native={vis.native}");
 
-            // ── OFFSET FORGE OVERRIDE (WO-490 slice 2) ───────────────────────────────
-            // If the owner authored an attachment offset for this weapon in the Offset Forge
-            // tool (Tools > Offset Forge -> offsets.json), APPLY it as the AUTHORITATIVE grip:
-            // it overrides the inferred gripPos/baseGripRot with the by-eye-correct values,
-            // using the SAME convention the tool's preview uses (localRotation = Euler(rot);
-            // localPosition = pos; localScale = one*scale). The key is the weapon's mesh name
-            // (e.g. "sword_A" / "shield_A", what the Forge defaults its save-id to) with a
-            // fallback to the weapon id. If NO offset is stored, nothing changes (no regression).
-            // offsetKey / fo / hasOffset were resolved at the top of this method.
-            if (hasOffset)
+            // ── OFFSET FORGE NUDGE (WO-551: applied ON TOP of geometry) ──────────────
+            // The authored offset is a CALIBRATION NUDGE relative to the trued+seated runtime
+            // frame, NOT a replacement: COMPOSE the rotation onto the geometric grip, ADD the
+            // position, MULTIPLY the scale. So the pipeline is true -> seat-by-handle -> nudge.
+            // An all-zero entry is a no-op == pure geometry (the conforming-sword case). The
+            // fullOverride EXCEPTION (resolved above) instead REPLACED the frame; here it applies
+            // only its residual pos/scale on the raw-pivot seat. The key is the weapon's mesh name
+            // (e.g. "sword_A", what the Forge defaults its save-id to) with a fallback to the id.
+            if (fullOverride)
             {
+                // OVERRIDE: reproduce the Forge preview EXACTLY (raw pivot + localScale = one*scale).
                 gripRoot.transform.localPosition = vis.gripPos + fo.pos;
-                _baseGripEuler = fo.eulerRot;
-                _baseGripRot = Quaternion.Euler(fo.eulerRot);
-                if (seatNativeAuthored)
-                {
-                    // NATIVE+AUTHORED: reproduce the Forge preview EXACTLY (localScale = one*scale).
-                    gripRoot.transform.localScale = Vector3.one * (fo.scale > 0f ? fo.scale : 1f);
-                    FlowTrace.Step("Offset", $"applied NATIVE+AUTHORED weapon '{offsetKey}' pos={fo.pos} rot={fo.eulerRot} scale={fo.scale:0.###}");
-                }
-                else
-                {
-                    // Non-native (derive-path) prop: compose scale onto the normalized localScale.
-                    if (fo.scale > 0f && Mathf.Abs(fo.scale - 1f) > 1e-4f)
-                        gripRoot.transform.localScale = gripRoot.transform.localScale * fo.scale;
-                    FlowTrace.Step("Offset", $"applied weapon '{offsetKey}' pos={fo.pos} rot={fo.eulerRot} scale={fo.scale:0.###}");
-                }
+                gripRoot.transform.localScale = Vector3.one * (fo.scale > 0f ? fo.scale : 1f);
+                FlowTrace.Step("Offset", $"OVERRIDE '{offsetKey}': raw-pivot pos={fo.pos} rot={fo.eulerRot} scale={fo.scale:0.###}");
+            }
+            else if (hasOffset)
+            {
+                // NUDGE on top of geometry: +pos, *rot (in the seated local frame), *scale.
+                bool nudged = fo.pos != Vector3.zero || fo.eulerRot != Vector3.zero ||
+                              (fo.scale > 0f && Mathf.Abs(fo.scale - 1f) > 1e-4f);
+                gripRoot.transform.localPosition = vis.gripPos + fo.pos;
+                _baseGripRot = _baseGripRot * Quaternion.Euler(fo.eulerRot);
+                _baseGripEuler = _baseGripRot.eulerAngles;
+                if (fo.scale > 0f && Mathf.Abs(fo.scale - 1f) > 1e-4f)
+                    gripRoot.transform.localScale = gripRoot.transform.localScale * fo.scale;
+                FlowTrace.Step("Offset", nudged
+                    ? $"NUDGE '{offsetKey}' on geometry: +pos={fo.pos} *rot={fo.eulerRot} *scale={fo.scale:0.###}"
+                    : $"offset '{offsetKey}' is all-zero — pure geometry (no nudge).");
             }
             else
             {
-                FlowTrace.Step("Offset", $"no offset stored for '{offsetKey}' — identity/inferred grip kept.");
+                FlowTrace.Step("Offset", $"no offset stored for '{offsetKey}' — pure geometry grip kept.");
             }
 
             ApplyHoldPose();
