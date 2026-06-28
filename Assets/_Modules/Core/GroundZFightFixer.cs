@@ -142,6 +142,7 @@ namespace DeNelle.Core
             if (InHubScene())
             {
                 FixHubFloorTiles();
+                EnsureHubOpaqueFloor();
                 return;
             }
 
@@ -196,6 +197,107 @@ namespace DeNelle.Core
                           " CourtyardFloor tiles to Y=" + HubTargetY +
                           " (plaza is the castle floor; wins over coplanar terrain; no float).");
             }
+        }
+
+        // Name of the runtime opaque floor we inject under the castle hub. Used as the
+        // idempotency key — if a child of this name already exists, the pass bails.
+        private const string HubOpaqueFloorName = "HubOpaqueFloor (runtime)";
+
+        // Castle-hub OPAQUE FLOOR pass — DATA-PROVEN fix (2026-06-28, Player.log:
+        // "[WorldSceneLoader] TERRAINDIAG surfaceY @x=0 -> -3.000"). The hub has NO
+        // continuous opaque floor: only ~25 tiny 2 m CourtyardFloor tiles on 8 m centres
+        // (~1% coverage, seated near Y=0 by FixHubFloorTiles), while the big nav plane
+        // "CourtyardFloor_Nav" (130x130) is renderer-DISABLED (nav-only). So the ground
+        // the player SEES across the whole castle is the additively-loaded OuterWorld
+        // ExteriorTerrain, intentionally depressed to Y=-3.0 under the castle footprint
+        // (ExteriorTerrainBuilder CastleDepressionDepth=-3 so terrain can't poke through a
+        // floor) — but with no floor, the 3 m drop shows EVERYWHERE = "all counter sunk".
+        //
+        // Fix: spawn ONE opaque ~90x90 m stone plane at Y=0 (just below the 0.01-0.02 tiles
+        // so it doesn't z-fight them) covering the ±44 m wall interior (NOT the 130 m nav
+        // plane, which pokes 21 m past the walls into the wilderness). Non-blocking (no
+        // collider — the nav plane already handles walkability). Idempotent: bail if it
+        // already exists. URP/Lit stone material so it is never magenta / colourless.
+        private static void EnsureHubOpaqueFloor()
+        {
+            // IDEMPOTENT: bail if we already injected the floor this session.
+            if (GameObject.Find(HubOpaqueFloorName) != null) return;
+
+            // Anchor on the castle XZ centre: reuse the existing hub-tile centroid so the
+            // floor lands under the actual plaza even if the hub root isn't at origin.
+            Vector3 centre = HubFloorCentreXZ();
+
+            var plane = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            plane.name = HubOpaqueFloorName;
+            // Unity primitive Plane is 10x10 m at scale 1 → scale 9 = 90x90 m.
+            plane.transform.localScale = new Vector3(9f, 1f, 9f);
+            plane.transform.position = new Vector3(centre.x, 0.0f, centre.z);
+
+            // Non-blocking: the nav plane (CourtyardFloor_Nav) already handles walkability,
+            // so strip this floor's collider to avoid double colliders / nav interference.
+            var col = plane.GetComponent<Collider>();
+            if (col != null) Object.Destroy(col);
+
+            // Material: a URP/Lit stone surface so it is NEVER magenta (missing shader) and
+            // NEVER colourless. Prefer a committed grey/stone material; fall back to a
+            // neutral-stone Lit material built at runtime.
+            var mr = plane.GetComponent<MeshRenderer>();
+            if (mr != null)
+            {
+                Material stone = LoadHubFloorMaterial();
+                if (stone != null) mr.sharedMaterial = stone;
+            }
+
+            FlowTrace.Step("GroundZFightFixer",
+                "hub — created '" + HubOpaqueFloorName + "' opaque floor (90x90 m) at Y=0.0, " +
+                "centre (" + centre.x.ToString("0.#") + ", " + centre.z.ToString("0.#") +
+                ") so the depressed OuterWorld terrain no longer shows as 'all counter sunk'.");
+        }
+
+        // Centre the runtime floor on the hub plaza: average the XZ of the seated
+        // CourtyardFloor tiles. Falls back to origin if none are found (baked hub is
+        // centred on origin anyway).
+        private static Vector3 HubFloorCentreXZ()
+        {
+            var all = Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
+            double sx = 0, sz = 0; int n = 0;
+            foreach (var mr in all)
+            {
+                if (mr == null) continue;
+                if (!NameIsHubFloorTile(mr.name)) continue;
+                Vector3 p = mr.transform.position;
+                sx += p.x; sz += p.z; n++;
+            }
+            if (n == 0) return Vector3.zero;
+            return new Vector3((float)(sx / n), 0f, (float)(sz / n));
+        }
+
+        // A URP/Lit stone material for the hub opaque floor. Tries a committed grey/stone
+        // material under Resources first; otherwise builds a neutral-stone Lit material at
+        // runtime. Never returns a missing/Standard shader (URP would render it magenta).
+        private static Material LoadHubFloorMaterial()
+        {
+            string[] candidates =
+            {
+                "Materials/M_21_Grey_Light_LPUP",
+                "Materials/M_Stone_Grey",
+                "Materials/StoneGrey",
+                "Materials/Ground_Stone",
+            };
+            foreach (var path in candidates)
+            {
+                var m = Resources.Load<Material>(path);
+                if (m != null) return m;
+            }
+
+            Shader lit = Shader.Find("Universal Render Pipeline/Lit");
+            if (lit == null) return null; // never fall through to a magenta missing shader
+            var mat = new Material(lit) { name = "HubOpaqueFloor_Stone (runtime)" };
+            // Neutral warm stone — not magenta, not flat white/black.
+            var stoneColor = new Color(0.32f, 0.30f, 0.28f, 1f);
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", stoneColor);
+            if (mat.HasProperty("_Color")) mat.SetColor("_Color", stoneColor);
+            return mat;
         }
 
         private static bool NameIsHubFloorTile(string n)
