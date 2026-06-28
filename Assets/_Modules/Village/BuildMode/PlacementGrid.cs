@@ -35,11 +35,19 @@ namespace DeNelle.Village
         [Tooltip("Cell edge in metres — 3 m matches polyperfect 3×3 modular walls.")]
         public float cellSize = 3f;
 
-        [Tooltip("Cells across X — 84 m / 3 m = 28.")]
-        public int gridWidth = 28;
+        // FOOTPRINT EXPANDED (owner F8 2026-06-28 "expand the build footprint enough to get
+        // north and south towers"): the castle perimeter is ~square — the S/N walls sit at
+        // z≈±40.5 (castle-south-recipe.json: gate z=-40.6, walls -40.55/-40.93, corner
+        // tower -40.03) and the E/W walls at x≈±42. The old grid was 84m×66m (±42 X, ±33 Z),
+        // so the N/S walls fell ~7.5m OUTSIDE the buildable Z range → "can't place towers"
+        // there, while E/W (at the ±42 X edge) worked. Now a symmetric 90m×90m grid (±45 on
+        // BOTH axes) reaches every wall AND the ±42.33 corner towers. Placement is still gated
+        // by surface/occupancy/gate-lane checks, so a bigger grid doesn't allow silly builds.
+        [Tooltip("Cells across X — 90 m / 3 m = 30 (±45, reaches the E/W walls + corner towers).")]
+        public int gridWidth = 30;
 
-        [Tooltip("Cells across Z — 66 m / 3 m = 22.")]
-        public int gridHeight = 22;
+        [Tooltip("Cells across Z — 90 m / 3 m = 30 (±45, reaches the N/S walls at ±40.5 + corner towers).")]
+        public int gridHeight = 30;
 
         [Tooltip("World-space XZ of the grid's (0,0) cell-corner. Default centres the grid on the origin.")]
         public Vector3 origin = Vector3.zero;
