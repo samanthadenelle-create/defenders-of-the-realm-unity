@@ -3,6 +3,8 @@
 // (AdminOverlay). Remove after confirming no tool is lost. Activation (F10 hotkey +
 // 5-tap corner gesture) is gated OFF below; the class + all action handlers remain
 // intact so any F10-only tool can be migrated to the Settings menu before purge.
+// TAGGED FOR REMOVAL (owner 2026-06-28): superseded by AdminOverlay; remove after
+// confirming no tool is lost.
 // -----------------------------------------------------------------------------
 // DevPanelController — the DEV-ONLY in-game QA / debug console (DeNelle.DevTools)
 // -----------------------------------------------------------------------------

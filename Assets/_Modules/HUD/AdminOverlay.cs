@@ -204,6 +204,13 @@ namespace DeNelle.HUD
             // reached by reflection here since the HUD asmdef can't reference DeNelle.Village.
             card.Add(Button("Set Level 5 (+skill pts)",     () => OnSetHeroLevel(5)));
             card.Add(Button("Set Level 10 (+skill pts)",    () => OnSetHeroLevel(10)));
+            // Direct Wisdom grants (owner F8 2026-06-28: "Set Level 10 isn't doing it" —
+            // SetHeroLevel is a NO-OP once already >= the target level, so it grants no new
+            // Wisdom). These add Wisdom unconditionally regardless of level. The only "+Wisdom"
+            // buttons used to live on the DEPRECATED F10 DevPanelController (which the owner never
+            // sees) — this is the live Settings -> DevTools panel, so they belong HERE.
+            card.Add(Button("+25 Wisdom (talents)",         () => OnGiveWisdom(25)));
+            card.Add(Button("+100 Wisdom (talents)",        () => OnGiveWisdom(100)));
             card.Add(Button("Trigger next wave",            OnTriggerWave));
             card.Add(Button("VFX Parade",                   OnVfxParade));
             // Lock-On A/B toggle (WO-512): flip ff.lockon live so the owner can compare
@@ -213,7 +220,7 @@ namespace DeNelle.HUD
             card.Add(_lockOnButton);
             card.Add(Button("Reset Yarn (replay tutorial)", OnReplayTutorial));
             card.Add(Button("Close",                        Toggle));
-            FlowTrace.Step("UI", "DevPanel (AdminOverlay) UI built — wired 6 buttons");
+            FlowTrace.Step("UI", "DevPanel (AdminOverlay) UI built — wired 8 buttons (incl. +25/+100 Wisdom)");
 
             _status = new Label(string.Empty);
             _status.style.color = ElarionUi.ParchmentDim;
@@ -743,6 +750,31 @@ namespace DeNelle.HUD
             FlowTrace.Step("Hero",
                 $"DevPanel (AdminOverlay) set hero -> Lv.{reached} (target {target}), Wisdom {wisdom}");
             SetStatus($"Set hero to Lv.{reached} (target {target}) — {wisdom} Wisdom to spend in the skill tree.");
+        }
+
+        /// <summary>
+        /// Grants <paramref name="amount"/> Wisdom directly (the skill-tree spend currency),
+        /// independent of hero level. WisdomCurrencyService lives in DeNelle.Village.Talents,
+        /// which the HUD asmdef can't reference, so we reach it by reflection (same idiom as
+        /// the Wisdom READ in OnSetHeroLevel): WisdomCurrencyService.Instance.Grant(amount).
+        /// </summary>
+        private void OnGiveWisdom(int amount)
+        {
+            var wisType = Type.GetType("DeNelle.Village.Talents.WisdomCurrencyService, DeNelle.Village");
+            var wisInst = wisType?.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            if (wisInst == null) { SetStatus("Wisdom: WisdomCurrencyService not in scene yet."); return; }
+
+            var grant = wisType.GetMethod("Grant",
+                BindingFlags.Public | BindingFlags.Instance, null, new[] { typeof(int) }, null);
+            if (grant == null) { SetStatus("Wisdom: WisdomCurrencyService.Grant(int) not found."); return; }
+            grant.Invoke(wisInst, new object[] { amount });
+
+            int wisdom = 0;
+            var wisProp = wisType.GetProperty("Wisdom", BindingFlags.Public | BindingFlags.Instance);
+            if (wisProp?.GetValue(wisInst) is int w) wisdom = w;
+
+            FlowTrace.Step("Hero", $"DevPanel (AdminOverlay) granted +{amount} Wisdom -> {wisdom} total.");
+            SetStatus($"+{amount} Wisdom — now {wisdom} to spend in the skill tree.");
         }
 
         private void OnReplayTutorial()

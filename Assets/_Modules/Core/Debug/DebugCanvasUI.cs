@@ -1,4 +1,9 @@
 // =============================================================================
+// DEPRECATED + TAGGED FOR REMOVAL (owner 2026-06-28): superseded by the live
+// Settings -> Dev Tools panel (AdminOverlay). Retained only until confirmed no
+// unique tool is lost; safe to delete after that. Do not extend this panel.
+// =============================================================================
+// =============================================================================
 // DebugCanvasUI — playtesting overlay (Editor / development builds only)
 // -----------------------------------------------------------------------------
 // Toggle with F12.  Attach to a Canvas GameObject in the boot scene.
