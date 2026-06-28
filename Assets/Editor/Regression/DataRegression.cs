@@ -123,6 +123,7 @@ namespace DeNelle.Editor
             // (WO-Item-2's generator fills those — do NOT fail on them yet).
             CheckItemCapabilities(weapons, armors, failures, log);
             CheckCraftingChain(failures, log);
+            CheckTalentLayout(failures, log);
 
             // --- ARMED-HERO INVARIANT (WO-Item Addressables equip) -----------------
             // At scale (433+ weapons, Blink Addressable-keyed) BestWeapon(job,1) may now
@@ -681,6 +682,54 @@ namespace DeNelle.Editor
                            $"{droppable.Count} droppable id(s); {chainOk} recipe(s) fully craftable drops->craft->consumable");
             if (orphan > 0)
                 log.AppendLine($"[crafting] SOFT: {orphan} ing_* material(s) used by no recipe (dead-end drop)");
+        }
+
+        // =====================================================================
+        //  TALENT NODE-GRAPH LAYOUT (Path B) — guards the authored graph data so a
+        //  bad position/edge can't ship a broken tree:
+        //   HARD: a node sets BOTH x and y or NEITHER; positions stay within 0..1;
+        //         every prerequisite + edge id resolves to a real node (no dangling).
+        //   SOFT (log): how many nodes carry an authored position.
+        // =====================================================================
+        private static void CheckTalentLayout(List<string> failures, StringBuilder log)
+        {
+            var checkNodes = new List<DeNelle.Village.Talents.HeroTalentNodeDef>();
+            var allIds = new HashSet<string>();
+
+            foreach (var slug in new[] { "knight", "ranger", "mage" })
+            {
+                var tree = DeNelle.Village.Talents.HeroTalentCatalog.GetTree(slug);
+                if (tree?.Nodes == null) continue;
+                foreach (var n in tree.Nodes)
+                    if (n != null && !string.IsNullOrEmpty(n.Id)) { checkNodes.Add(n); allIds.Add(n.Id); }
+            }
+            var shared = DeNelle.Village.Talents.HeroTalentCatalog.SharedNodes;
+            if (shared != null)
+                foreach (var n in shared)
+                    if (n != null && !string.IsNullOrEmpty(n.Id)) { checkNodes.Add(n); allIds.Add(n.Id); }
+
+            int positioned = 0;
+            foreach (var n in checkNodes)
+            {
+                bool xs = n.X >= 0f, ys = n.Y >= 0f;
+                if (xs != ys)
+                    failures.Add($"hero-talents.json: '{n.Id}' has only one of x/y set (x={n.X}, y={n.Y}) — set both or neither");
+                if (n.HasPosition)
+                {
+                    positioned++;
+                    if (n.X > 1f || n.Y > 1f)
+                        failures.Add($"hero-talents.json: '{n.Id}' position out of 0..1 (x={n.X}, y={n.Y})");
+                }
+                if (n.Prerequisites != null)
+                    foreach (var pr in n.Prerequisites)
+                        if (!string.IsNullOrEmpty(pr) && !allIds.Contains(pr))
+                            failures.Add($"hero-talents.json: '{n.Id}' prerequisite '{pr}' is not a known node");
+                if (n.Edges != null)
+                    foreach (var e in n.Edges)
+                        if (!string.IsNullOrEmpty(e) && !allIds.Contains(e))
+                            failures.Add($"hero-talents.json: '{n.Id}' edge '{e}' is not a known node");
+            }
+            log.AppendLine($"[talents] layout checked: {checkNodes.Count} node(s), {positioned} positioned; all prereq/edge ids resolve");
         }
 
         // =====================================================================

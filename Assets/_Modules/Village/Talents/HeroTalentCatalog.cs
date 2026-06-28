@@ -62,6 +62,18 @@ namespace DeNelle.Village.Talents
         [JsonProperty("effect")] public HeroTalentEffectDef Effect; // v2 effect payload
         [JsonProperty("prerequisites")] public List<string> Prerequisites = new List<string>();
 
+        // Node-graph (Path B) layout: canvas-relative position (0..1; y 0=top, 1=bottom)
+        // and OPTIONAL extra cosmetic connector targets beyond prerequisites. -1 = unset
+        // (the View falls back to a tier/slot auto-position). Connectors are drawn along
+        // prerequisites by default; Edges adds non-prereq links only if authored.
+        [JsonProperty("x")] public float X = -1f;
+        [JsonProperty("y")] public float Y = -1f;
+        [JsonProperty("edges")] public List<string> Edges = new List<string>();
+
+        /// <summary>True when this node carries an authored graph position.</summary>
+        [JsonIgnore]
+        public bool HasPosition => X >= 0f && Y >= 0f;
+
         // WO-36 (talent -> stat half): additive ability stat modifiers applied while
         // this node is unlocked. Both default to 0 so any node lacking these keys
         // contributes nothing. damageBonus is an additive fraction (0.10 = +10%
