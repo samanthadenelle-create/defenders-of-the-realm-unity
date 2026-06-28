@@ -15,9 +15,10 @@
 // below by OnboardingSceneBuilder.
 //
 // THE TITLE SCREEN itself is a UI Toolkit document (TitleScreen.uxml/.uss). Every
-// canon string on it — the tagline "By lantern. By oath. By Heart.", the game
-// title, the "DeNelle Studios" credit — is loaded from canon-strings.json via
-// CanonStrings at runtime. NONE are baked into the .uxml (v2 port-spec Part 4).
+// canon string on it — the game title "Echoes of Elarion", the series line
+// "Defenders of the Realm", the tagline "Hold the last light.", the "DeNelle
+// Studios" credit — is loaded from canon-strings.json via CanonStrings at runtime.
+// NONE are baked into the .uxml (v2 port-spec Part 4).
 //
 //   Connect Wallet button — Week-1 stub: logs and no-ops (the real Solana flow
 //                            is the Week-7 Wallet module).
@@ -664,7 +665,7 @@ namespace DeNelle.Onboarding
             roster.style.paddingLeft = 10f;
             roster.style.paddingRight = 10f;
 
-            // Game title — canon string, never hardcoded (port-spec Part 4).
+            // Game title — canon string "Echoes of Elarion", never hardcoded (port-spec Part 4).
             var gameTitle = new Label(CanonStrings.GameTitle);
             gameTitle.style.fontSize = 28f;
             gameTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
@@ -673,6 +674,18 @@ namespace DeNelle.Onboarding
             gameTitle.style.whiteSpace = WhiteSpace.Normal;
             gameTitle.style.flexShrink = 0f;
             roster.Add(gameTitle);
+
+            // Series / franchise line — small caps under the title ("Defenders of the
+            // Realm"; this game is a chapter of that saga). Canon string, never hardcoded.
+            var seriesLine = new Label(CanonStrings.GameSubtitle);
+            seriesLine.style.marginTop = 1f;
+            seriesLine.style.fontSize = 12f;
+            seriesLine.style.unityFontStyleAndWeight = FontStyle.Bold;
+            seriesLine.style.color = ColAmber;
+            seriesLine.style.unityTextAlign = TextAnchor.MiddleCenter;
+            seriesLine.style.whiteSpace = WhiteSpace.Normal;
+            seriesLine.style.flexShrink = 0f;
+            roster.Add(seriesLine);
 
             // Tagline.
             var tagline = new Label(CanonStrings.Tagline);

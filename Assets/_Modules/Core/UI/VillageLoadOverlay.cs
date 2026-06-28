@@ -48,7 +48,7 @@ namespace DeNelle.Core.UI
         private static readonly string[] Lore =
         {
             "Elarion holds because we hold the line.",
-            "By lantern. By oath. By Heart.",
+            "Hold the last light.",
             "The Echoes rest in the Hollow, waiting to be called.",
             "Every tower is a promise the gate will not fall.",
             "The enemy comes by night. We rebuild by day.",

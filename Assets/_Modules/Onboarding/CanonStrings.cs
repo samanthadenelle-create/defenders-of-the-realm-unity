@@ -39,12 +39,14 @@ namespace DeNelle.Onboarding
         private const string LocaleRelativePath = "Data/Canonical/en.json";
 
         // ── Canon-strings.json keys used by the Onboarding module ────────────
-        /// <summary>Key — the title-screen tagline ("By lantern. By oath. By Heart.").</summary>
+        /// <summary>Key — the title-screen tagline ("Hold the last light.").</summary>
         public const string KeyTagline = "tagline";
         /// <summary>Key — the publisher / studio name ("DeNelle Studios").</summary>
         public const string KeyPublisher = "publisher";
-        /// <summary>Key — the game title ("Defenders of the Realm").</summary>
+        /// <summary>Key — the main game title ("Echoes of Elarion").</summary>
         public const string KeyGameTitle = "gameTitle";
+        /// <summary>Key — the series / franchise label ("Defenders of the Realm").</summary>
+        public const string KeyGameSubtitle = "gameSubtitle";
         /// <summary>Key — the Heart-Wing brand-dragon proper noun.</summary>
         public const string KeyHeartWing = "heartWing";
 
@@ -79,14 +81,17 @@ namespace DeNelle.Onboarding
             return Resolve(_locale, key);
         }
 
-        /// <summary>The title-screen tagline — "By lantern. By oath. By Heart."</summary>
+        /// <summary>The title-screen tagline — "Hold the last light."</summary>
         public static string Tagline => Canon(KeyTagline);
 
         /// <summary>The publisher name — "DeNelle Studios".</summary>
         public static string Publisher => Canon(KeyPublisher);
 
-        /// <summary>The game title — "Defenders of the Realm".</summary>
+        /// <summary>The main game title — "Echoes of Elarion".</summary>
         public static string GameTitle => Canon(KeyGameTitle);
+
+        /// <summary>The series / franchise label — "Defenders of the Realm" (this game is a chapter of that saga).</summary>
+        public static string GameSubtitle => Canon(KeyGameSubtitle);
 
         /// <summary>The three cold-open lines, in order (narrative-bible §7.1).</summary>
         public static string[] ColdOpenLines()
