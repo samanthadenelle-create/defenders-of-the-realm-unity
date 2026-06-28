@@ -278,7 +278,7 @@ namespace DeNelle.Village.Hero
             // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header + ONE Close.
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Gear Shop",
                 new Vector2(0.12f, 0.06f), new Vector2(0.88f, 0.94f), () => _vm?.Close(),
-                headerX0: 0.04f, headerX1: 0.96f);
+                headerX0: 0.04f, headerX1: 0.96f, frameName: RpgUiCatalog.FrameMerchant);
             var panel = chrome.content.transform;
             _headerLabel = chrome.title;
 

@@ -71,7 +71,8 @@ namespace DeNelle.Village.Hero
             // gold header + the shared Close) replaces the hand-rolled Canvas/backdrop/brown panel +
             // bespoke header + a custom red Close button.
             var modal = ElarionUiKit.BuildObsidianModal("RumorBoardPanelUI", "Brom's Rumor Board",
-                new Vector2(0.08f, 0.1f), new Vector2(0.92f, 0.9f), Close, sortingOrder: 1000);
+                new Vector2(0.08f, 0.1f), new Vector2(0.92f, 0.9f), Close, sortingOrder: 1000,
+                frameName: RpgUiCatalog.FrameQuest);
             _ui = modal.canvas;
             var panel = modal.chrome.content;
             _panelRoot = panel.transform;

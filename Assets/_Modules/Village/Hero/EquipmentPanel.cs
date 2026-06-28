@@ -80,9 +80,10 @@ namespace DeNelle.Village.Hero
             // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header +
             // the ONE standard Close button. Replaces the old backdrop + brown PanelFramed +
             // dark solidFill + per-panel "X". Content lives on chrome.content (0..1 anchors).
-            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "GEAR PREVIEW",
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "CHARACTER",
                 new Vector2(0.12f, 0.06f), new Vector2(0.88f, 0.95f),
-                () => _vm?.Close(), headerX0: 0.10f, headerX1: 0.90f);
+                () => _vm?.Close(), headerX0: 0.10f, headerX1: 0.90f,
+                frameName: RpgUiCatalog.FrameCharacter);
             var panel = chrome.content;
             _panelTransform = panel.transform;
 
