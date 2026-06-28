@@ -200,6 +200,24 @@ namespace DeNelle.Core
         /// OFF for V1. Default flipped to false; PlayerPrefs "ff.battlehud9zone" = 1 to preview (V2).</summary>
         public static bool BattleHud9Zone => Get("battlehud9zone", defaultOn: true);   // PREVIEW 2026-06-26 (HUD): ON so the 9-zone spawns in-arena for the owner to felt-judge. REVERT to false (V2) after the decision.
 
+        /// <summary>WO-579 — the village wave loop AUTO-ARMS its prepare-phase countdown on home-hub
+        /// entry (MainCastle_Hall) so a "next wave in MM:SS" timer ticks top-left and the wave AUTO-starts
+        /// at zero (towers + hero auto-defend in-hub). The HUD "Start Wave" button is then a manual EARLY
+        /// OVERRIDE (skip the remaining countdown), not the only kickoff. Default ON (owner felt-test
+        /// 2026-06-28: "start wave was an OVERRIDE, otherwise should AUTO attack"). PlayerPrefs
+        /// "ff.waveautostart" = 0 to revert to the old defend-gated (button-only) start.</summary>
+        public static bool WaveAutoStart => Get("waveautostart", defaultOn: true);
+
+        /// <summary>WO-579 — DEPRECATED breach→ATB handoff. When an enemy reached the Heart ring the
+        /// village wave used to PAUSE and load the flat/static ATBBattle scene (memory
+        /// atb-flat-vs-overworld: ATB is the deprecated side-path). Owner felt-test 2026-06-28: the
+        /// village wave must resolve IN-HUB (towers + hero auto-defend; enemies contact-damage the Heart;
+        /// Heart at 0 = defeat) and must NOT launch ATBBattle. Default OFF → no scene swap, so placed
+        /// towers + the wave counter never reset across the (removed) round-trip. The ATB system itself is
+        /// untouched (dungeons / sandbox still use SceneRouter.GoBattle). PlayerPrefs "ff.wavebreachtoatb"
+        /// = 1 to restore the legacy breach→ATB route.</summary>
+        public static bool WaveBreachToAtb => Get("wavebreachtoatb", defaultOn: false);
+
         /// <summary>Global runtime kill-switch for ALL dev keyboard hotkeys (DevPanel F1, DebugCanvas
         /// F12, AdminOverlay Ctrl+Shift+A, the test spawners J/K/L, the tower dev harness B/J/K/N/U,
         /// the jukebox J open, etc.). Default OFF — so every dev hotkey is DEAD everywhere (editor AND

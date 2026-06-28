@@ -302,6 +302,19 @@ namespace DeNelle.Village
         private bool _breachArmed;
         private int _spawnInstanceCounter;
 
+        // WO-579 (#5 "resets to wave 1") — cross-reload wave RESUME. The WaveManager is rebuilt on
+        // every hub (re)load (it is NOT DontDestroyOnLoad), so without a resume point BeginLoop always
+        // restarts at _startWave (=1). This static survives a scene reload WITHIN a play session, and is
+        // seeded once from the save (GameState.BestWave + 1) for cross-session continuation.
+        // CompleteWave advances it; ResetResumeStatic clears it at each play start so a new game / save
+        // reset re-seeds from the (possibly reset) BestWave instead of carrying a stale wave number.
+        private static int s_resumeWaveId = 0;   // 0 = unseeded
+
+        // WO-139 #12 pattern: with domain reload disabled, statics persist across Play sessions. Reset
+        // the resume seed at each play start so it re-derives from the save (handles new game / reload).
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetResumeStatic() => s_resumeWaveId = 0;
+
         /// <summary>The phase the wave loop is in.</summary>
         public WavePhase Phase => _phase;
 
@@ -479,7 +492,31 @@ namespace DeNelle.Village
             // tutorial's BeginWaveRequested is the kickoff there. Core-not-bootstrapped
             // (no service) is treated as a returning player so a missing Core never
             // strands a dev auto-start.
-            if (_autoStart && !IsFirstRun()) BeginLoop().Forget();
+            // WO-579 (#2/#3 — owner felt-test 2026-06-28 "start wave should AUTO attack; Start Wave is
+            // an OVERRIDE"): AUTO-ARM the prepare-phase countdown in the player's HOME HUB so the
+            // top-left "next wave in MM:SS" clock ticks (VillageHudController.PollWaveTimer surfaces
+            // CountdownRemaining) and the wave AUTO-starts at zero (towers + hero auto-defend in-hub).
+            // The baked MainCastle_Hall WaveManager has _autoStart serialized OFF, so we also auto-arm
+            // when ff.waveautostart is on AND this is the home hub (a hub scene that is NOT enemy-owned;
+            // excludes the Village2 enemy stronghold, which runs its own garrison loop). IsFirstRun
+            // (FTUE) still blocks it — the tutorial owns the first kickoff. The HUD "Start Wave" button
+            // (ForceBeginNextWave) remains the manual EARLY override that skips the remaining countdown.
+            bool autoArm = _autoStart || (FeatureFlags.WaveAutoStart && IsHomeHubScene());
+            if (autoArm && !IsFirstRun()) GuardedKickoff("Start/auto-arm");
+        }
+
+        /// <summary>
+        /// WO-579: true when this WaveManager lives in the player-owned HOME HUB — a hub scene that is
+        /// NOT enemy-owned (MainCastle_Hall / CastleHub / CastleHub_MainKeep). The Village2 enemy
+        /// stronghold is a hub name too but is enemy-owned, so it is excluded from the home-defense
+        /// auto-countdown (it drives its own garrison roster).
+        /// </summary>
+        private bool IsHomeHubScene()
+        {
+            string scene = gameObject.scene.IsValid()
+                ? gameObject.scene.name
+                : SceneManager.GetActiveScene().name;
+            return HubScenes.IsHub(scene) && !HubScenes.IsEnemyOwnedScene(scene);
         }
 
         /// <summary>
@@ -607,10 +644,29 @@ namespace DeNelle.Village
                 return;
             }
 
-            FlowTrace.Step("Wave", $"BeginLoop data OK — calling EnterCountdown(startWave={_startWave}), forceSpawn={_forceSpawnNow}");
-            EnterCountdown(_startWave);
+            // WO-579 (#5): resume from the persisted run progress so a hub reload does not reset to 1.
+            int startAt = ResolveStartWave();
+            FlowTrace.Step("Wave", $"BeginLoop data OK — calling EnterCountdown(startWave={startAt}) [resume={s_resumeWaveId}, dev_startWave={_startWave}], forceSpawn={_forceSpawnNow}");
+            EnterCountdown(startAt);
             FlowTrace.Step("Wave", $"BeginLoop EXIT — phase={_phase} countdownRemaining={_countdownRemaining:F2}s");
-            Debug.Log($"[WaveManager] Loop armed — wave {_startWave}, countdown {_countdownRemaining:F1}s.");
+            Debug.Log($"[WaveManager] Loop armed — wave {startAt}, countdown {_countdownRemaining:F1}s.");
+        }
+
+        /// <summary>
+        /// WO-579: the wave the loop should (re)start at. Resumes from the in-session/saved run
+        /// progress so returning to the hub does not reset to wave 1. Seeds <see cref="s_resumeWaveId"/>
+        /// once from <c>GameState.BestWave + 1</c> (cross-session) the first time it is needed; the dev
+        /// <see cref="_startWave"/> is the floor (a dev override above the resume still wins).
+        /// </summary>
+        private int ResolveStartWave()
+        {
+            if (s_resumeWaveId <= 0)
+            {
+                var svc = GameStateService.Instance;
+                int best = (svc != null && svc.State != null) ? svc.State.BestWave : 0;
+                s_resumeWaveId = Mathf.Max(1, best + 1);
+            }
+            return Mathf.Max(_startWave, s_resumeWaveId);
         }
 
         // ── Robust start (TriggerWave-timeout RCA, layers 2 + 3) ──────────────
@@ -1556,7 +1612,12 @@ namespace DeNelle.Village
                 _liveEnemies.RemoveAll(e => e == null);
             }
 
-            if (_breachArmed && _heart != null)
+            // WO-579 (#4 — owner felt-test 2026-06-28): the village wave resolves IN-HUB (towers + hero
+            // auto-defend; enemies contact-attack the Heart : IDamageableStructure; Heart at 0 = defeat).
+            // The legacy breach-ring → ATBBattle hand-off (the "wave ~3 auto-launches ATB" symptom — an
+            // escalating brute reaches the tree ring) is gated OFF by default. With it off, no scene swap
+            // ever happens, so placed towers + the wave counter never reset across the (removed) detour.
+            if (FeatureFlags.WaveBreachToAtb && _breachArmed && _heart != null)
             {
                 Vector3 heartPos = _heart.transform.position;
                 float ringSqr = _innerRingRadius * _innerRingRadius;
@@ -1598,6 +1659,12 @@ namespace DeNelle.Village
         {
             int cleared = _currentWaveId;
             if (_heart != null) _heart.SetState(HeartState.Serene);
+
+            // WO-579 (#5): advance + PERSIST the run progress so a hub reload / scene return resumes at
+            // the next wave instead of restarting at 1. The static carries it within the play session;
+            // RecordRun writes BestWave to the save (the cross-session resume seed) and saves.
+            s_resumeWaveId = cleared + 1;
+            GameStateService.Instance?.RecordRun(cleared);
 
             AwardWaveResources(cleared);   // WO-330: build resources (Wood/Iron) — the core economy income
             AwardWaveCrystals(cleared);
@@ -1955,6 +2022,11 @@ namespace DeNelle.Village
         private void HandleEnemyReachedHeart(Enemy enemy)
         {
             if (_phase != WavePhase.Active) return;
+            // WO-579 (#4): in-hub resolution (default) — an enemy that reaches the Heart simply
+            // contact-attacks it (Enemy.TickContactAttack strikes HeartController : IDamageableStructure),
+            // draining its HP toward the defeat condition. The wave does NOT pause/load the deprecated
+            // ATBBattle scene. Only the legacy breach→ATB route (ff.wavebreachtoatb) still hands off.
+            if (!FeatureFlags.WaveBreachToAtb) return;
             if (enemy != null && !_breachRoster.Contains(enemy))
             {
                 _breachRoster.Add(enemy);

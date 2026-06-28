@@ -307,12 +307,13 @@ namespace DeNelle.HUD
             DeNelle.Core.Diagnostics.FlowTrace.Throttle("HUD", "evalmode", 1f,
                 $"EvaluateMode inputs: wave={IsWaveActive()} atb={IsInBattle()} raid={IsRaidScene()} " +
                 $"battleLock={DeNelle.Core.Combat.BattleLock.IsInBattle()} enemyScene={IsEnemyOwnedScene()} scene='{SceneManager.GetActiveScene().name}'");
-            // #7 (owner felt-test "triggering wave brings old battle ui"): a hub wave must NOT
-            // pull up the legacy wave-defense Battle HUD. In V1 the hero is not the wave defender
-            // (towers/troops auto-defend, WATCHED from the Town HUD), so a wave keeps the Town HUD
-            // — the wave still runs (enemies spawn, towers fight); only the HUD switch is removed.
-            // IsWaveActive() stays wired for the throttled diag above; it is no longer a Battle trigger.
-            if (IsInBattle() || IsRaidScene()
+            // WO-579 (#1 — owner felt-test 2026-06-28 "when i click START WAVE should change to battle
+            // HUD"): a LIVE wave (Active / fighting) flips the hub to the Battle HUD (9-zone). This
+            // REVERSES the earlier #7 call (which kept the Town HUD during a wave) per the owner's new
+            // direction. The calm prepare-phase COUNTDOWN stays on the Town HUD (whose top-left clock
+            // shows the next-wave timer); only the fighting phase pulls the Battle HUD up. Auto-start
+            // and the manual "Start Wave" override both reach the Active phase → Battle here.
+            if (IsWaveFighting() || IsInBattle() || IsRaidScene()
                 || DeNelle.Core.Combat.BattleLock.IsInBattle()) return HudMode.Battle;
 
             // WO-470 / HUD-RCA: an ENEMY-OWNED scene (e.g. Village2, the enemy
@@ -367,6 +368,22 @@ namespace DeNelle.HUD
             if (phase == null) return false;
             int p = System.Convert.ToInt32(phase);
             return p == 1 /* Countdown */ || p == 2 /* Active */;
+        }
+
+        /// <summary>
+        /// WO-579: the wave is in its ACTIVE (fighting) phase — enemies are spawned and the hub is
+        /// under attack. Distinct from <see cref="IsWaveActive"/> (which also includes the calm Countdown
+        /// phase): the prepare-phase countdown stays on the TOWN HUD (top-left next-wave clock), and only
+        /// the live wave flips to the Battle HUD (owner felt-test 2026-06-28 "click START WAVE → battle
+        /// HUD"). Reads the same reflected <c>Phase</c> + the wave-started/cleared event flag.
+        /// </summary>
+        private bool IsWaveFighting()
+        {
+            if (_waveEventActive) return true;
+            if (_waveManager == null || _wavePhaseProp == null) return false;
+            object phase = _wavePhaseProp.GetValue(_waveManager);
+            if (phase == null) return false;
+            return System.Convert.ToInt32(phase) == 2; // Active
         }
 
         /// <summary>Arena/dungeon ATB battle live — a BattleController exists + enabled.</summary>

@@ -91,13 +91,15 @@ namespace DeNelle.Village.Hud
             Model.Context.Set(ctx, inVillage, combat, modal);
         }
 
-        /// <summary>Village wave defense in progress — Countdown or Active (the real WaveManager API).</summary>
+        /// <summary>WO-579: village wave in its ACTIVE (fighting) phase — Battle context. The calm
+        /// prepare-phase Countdown stays Town (its top-left clock shows the next-wave timer), so only the
+        /// Active phase counts as combat here (matches BattleHudVisibilityManager.IsWaveFighting). Was
+        /// Countdown||Active; narrowed so arming a wave's countdown no longer hides the Town timer.</summary>
         private static bool IsWaveActive()
         {
             var wm = WaveManager.Instance;
             if (wm == null) return false;
-            var p = wm.Phase;
-            return p == DeNelle.Village.WavePhase.Countdown || p == DeNelle.Village.WavePhase.Active;
+            return wm.Phase == DeNelle.Village.WavePhase.Active;
         }
 
         /// <summary>
