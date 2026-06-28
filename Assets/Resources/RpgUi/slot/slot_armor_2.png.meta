@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 67e28177ce1fac94283e001035ed27b9
+guid: 8df5038f99871b04fa18d4a83d669f0f
 TextureImporter:
   internalIDToNameTable: []
   externalObjects: {}
@@ -110,7 +110,7 @@ TextureImporter:
     buildTarget: WebGL
     maxTextureSize: 512
     resizeAlgorithm: 0
-    textureFormat: 28
+    textureFormat: 29
     textureCompression: 1
     compressionQuality: 50
     crunchedCompression: 1

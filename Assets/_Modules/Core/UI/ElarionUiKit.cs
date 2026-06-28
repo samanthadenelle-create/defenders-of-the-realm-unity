@@ -214,7 +214,8 @@ namespace DeNelle.Core.UI
         /// </summary>
         public static PanelChrome BuildObsidianPanel(Transform parent, string title,
             Vector2 anchorMin, Vector2 anchorMax, Action onClose,
-            float headerX0 = 0.06f, float headerX1 = 0.94f, bool withBackdrop = true)
+            float headerX0 = 0.06f, float headerX1 = 0.94f, bool withBackdrop = true,
+            string frameName = null)
         {
             var chrome = new PanelChrome();
 
@@ -224,6 +225,45 @@ namespace DeNelle.Core.UI
                     new Color(0.02f, 0.015f, 0.012f, 0.94f), rounded: false);
                 var bdImg = chrome.backdrop.GetComponent<Image>();
                 if (bdImg != null) bdImg.raycastTarget = false;
+            }
+
+            // SPRITE-FIRST: when the caller names a Blink Obsidian frame AND the mirrored art is
+            // present (Resources/RpgUi/frame), render the REAL ornate panel background instead of
+            // the procedural black-fill + gold-border. The frame art carries its own border/header
+            // filigree/corners, so we skip the procedural trim. Content is a transparent full-rect
+            // overlay — screens lay out by the same fractions, now over the real frame. Falls back
+            // to the procedural panel (the C# "make our own" path) when the art is absent.
+            Sprite frameSprite = string.IsNullOrEmpty(frameName)
+                ? null : RpgUiCatalog.Get(RpgUiCatalog.RoleFrame, frameName);
+            if (frameSprite != null)
+            {
+                var frameGo = new GameObject("ObsidianPanel", typeof(Image));
+                frameGo.transform.SetParent(parent, false);
+                var frt = frameGo.GetComponent<RectTransform>();
+                frt.anchorMin = anchorMin; frt.anchorMax = anchorMax;
+                frt.offsetMin = Vector2.zero; frt.offsetMax = Vector2.zero;
+                var fimg = frameGo.GetComponent<Image>();
+                fimg.sprite = frameSprite;
+                fimg.type = Image.Type.Simple;   // full ornate background, drawn to the rect
+                fimg.color = Color.white;
+                fimg.raycastTarget = true;       // eat taps so they can't fall through
+                chrome.root = frameGo;
+
+                // Transparent content layer at 0..1 so existing fraction-anchored layouts drop in.
+                chrome.content = AddImage(frameGo.transform, "PanelContent", Vector2.zero, Vector2.one,
+                    new Color(0f, 0f, 0f, 0f), rounded: false);
+                var cimg = chrome.content.GetComponent<Image>();
+                if (cimg != null) cimg.raycastTarget = false;
+
+                // Gold title (no procedural shadow/rule — the frame art already has the header band).
+                chrome.title = Label(chrome.content.transform,
+                    (DeNelle.Core.FeatureFlags.BlinkChrome ? "" : ElarionUi.CrestGlyph + "  ") + (title ?? ""),
+                    0.92f, 0.985f, ElarionUi.Gilt, ElarionUi.FontTitle,
+                    TextAlignmentOptions.Center, headerX0, headerX1, spacing: 4f, bold: true);
+                chrome.title.raycastTarget = false;
+
+                chrome.close = ObsidianCloseButton(chrome.content.transform, onClose);
+                return chrome;
             }
 
             // Gold trim border layer (spans the whole rect; the black fill insets over it).
@@ -261,13 +301,15 @@ namespace DeNelle.Core.UI
 
         /// <summary>Build a complete Obsidian modal (canvas + scrim + chrome) in one call.</summary>
         public static ObsidianModal BuildObsidianModal(string name, string title,
-            Vector2 anchorMin, Vector2 anchorMax, Action onClose, int sortingOrder = 31000)
+            Vector2 anchorMin, Vector2 anchorMax, Action onClose, int sortingOrder = 31000,
+            string frameName = null)
         {
             var canvas = BuildModalCanvas(name, sortingOrder);
             var c = canvas.GetComponent<Canvas>();
             if (c != null) c.overrideSorting = true;
             Scrim(canvas.transform, onClose);
-            var chrome = BuildObsidianPanel(canvas.transform, title, anchorMin, anchorMax, onClose);
+            var chrome = BuildObsidianPanel(canvas.transform, title, anchorMin, anchorMax, onClose,
+                frameName: frameName);
             return new ObsidianModal { canvas = canvas, chrome = chrome };
         }
 

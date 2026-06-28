@@ -42,17 +42,27 @@ namespace DeNelle.Editor
     public static class RpgUiImporter
     {
         private const string PackRoot = "Assets/Tech hud elements/Sprites";
+        // Second source pack: the Blink "OBSIDIAN UI" art (gitignored). We MIRROR the
+        // ornate obsidian panel/slot/silhouette/button PNGs into committed Resources/RpgUi
+        // so the runtime catalog can serve them on a fresh clone / WebGL (the source pack
+        // need not be present once mirrored). CopyAsset generates a FRESH GUID for each
+        // copy, so there is no duplicate-GUID clash with the gitignored originals.
+        private const string BlinkRoot = "Assets/Blink/Art/UI/Obsidian_UI";
         private const string ResRoot  = "Assets/Resources/RpgUi";
 
         // One element to copy: source path, destination role folder, canonical name.
         private struct Entry
         {
-            public string Src;    // full project path under PackRoot
+            public string Src;    // path under Root (defaults to PackRoot)
+            public string Root;   // source pack root; null/empty => PackRoot. Set BlinkRoot for Obsidian art.
             public string Role;   // role subfolder under Resources/RpgUi
             public string Name;   // canonical file name (no extension) used by the catalog
             public int    Border; // uniform 9-slice border in px (0 = Simple, no slicing). Ornate
                                    // window/button frames need this so corners stay crisp when the
                                    // panel is stretched to any size (Image.Type.Sliced).
+            public Vector4 Border4; // per-side 9-slice border (L,B,R,T) in px; (0,0,0,0) => use uniform Border.
+                                    // Obsidian panels have a tall header band + footer that differ from the
+                                    // sides, so they need asymmetric borders to slice without distorting.
         }
 
         [MenuItem("Defenders/Art/Import RPG UI Pack")]
@@ -67,7 +77,8 @@ namespace DeNelle.Editor
             int copied = 0, missing = 0;
             foreach (var e in entries)
             {
-                string src = PackRoot + "/" + e.Src;
+                string baseRoot = string.IsNullOrEmpty(e.Root) ? PackRoot : e.Root;
+                string src = baseRoot + "/" + e.Src;
                 if (!File.Exists(src))
                 {
                     Debug.LogWarning("[RpgUiImporter] missing pack sprite (skipped): " + src);
@@ -86,7 +97,7 @@ namespace DeNelle.Editor
                     Debug.LogWarning("[RpgUiImporter] copy failed: " + src + " -> " + dst);
                     continue;
                 }
-                ForceSpriteImport(dst, e.Border);
+                ForceSpriteImport(dst, e.Border, e.Border4);
                 copied++;
             }
 
@@ -159,6 +170,67 @@ namespace DeNelle.Editor
                 // ── button/ — clean framed (text-free) button + exit, 9-sliced ──
                 new Entry { Src = "D2/Button 1.png",   Role = "button", Name = "button_frame", Border = 28 },
                 new Entry { Src = "D2/Exit.png",       Role = "button", Name = "button_exit",  Border = 20 },
+
+                // =====================================================================
+                // BLINK "OBSIDIAN UI" — the canonical black+gold RPG panel art the owner
+                // pinned as the template. Mirrored out of the gitignored Assets/Blink into
+                // committed Resources/RpgUi so every screen renders the REAL ornate frame
+                // (fresh-clone / WebGL safe). Panels are big complete backgrounds → import
+                // Simple (Border 0) and the kit renders them preserve-aspect. Slots/buttons
+                // are small + scale → 9-sliced with a corner border.
+                // =====================================================================
+
+                // frame/ — full ornate obsidian panel backgrounds (one per screen). Simple.
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Inventory_Panel.png",   Role = "frame", Name = "frame_inventory" },
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Crafting_Panel.png",    Role = "frame", Name = "frame_crafting" },
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Stats_Panel.png",       Role = "frame", Name = "frame_character" },
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Core_Panel.png",        Role = "frame", Name = "frame_core" },
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Core_2_Panel.png",      Role = "frame", Name = "frame_core_2" },
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Talent_Tree_Panel.png", Role = "frame", Name = "frame_talent" },
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Merchant_Panel.png",    Role = "frame", Name = "frame_merchant" },
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Dialogue_Panel.png",    Role = "frame", Name = "frame_dialogue" },
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Quest_Log_Panel.png",   Role = "frame", Name = "frame_quest" },
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Settings_Panel.png",    Role = "frame", Name = "frame_settings" },
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Options_Panel.png",     Role = "frame", Name = "frame_options" },
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Loot_Panel.png",        Role = "frame", Name = "frame_loot" },
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Pet_Panel.png",         Role = "frame", Name = "frame_pet" },
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Stats_Panel.png",       Role = "frame", Name = "frame_stats" },
+                // Panel_Element + Text_Background are inner sub-plates (9-sliced, they scale).
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Panel_Element.png",     Role = "frame", Name = "frame_element",  Border = 40 },
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Text_Background.png",   Role = "frame", Name = "frame_textbg",   Border = 32 },
+
+                // silhouette/ — the paper-doll body silhouettes behind the equipment slots.
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Male_Silouhette.png",   Role = "silhouette", Name = "sil_male" },
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Female_Silouhette.png", Role = "silhouette", Name = "sil_female" },
+                new Entry { Root = BlinkRoot, Src = "Panels_Obsidian/Pet_Silouhette.png",    Role = "silhouette", Name = "sil_pet" },
+
+                // slot/ — ornate square item/gear/talent sockets, 9-sliced (corner ~28px).
+                new Entry { Root = BlinkRoot, Src = "Slots_Obsidian/Inventory_Slot.png",  Role = "slot", Name = "slot_item",      Border = 28 },
+                new Entry { Root = BlinkRoot, Src = "Slots_Obsidian/Armor_Slot.png",      Role = "slot", Name = "slot_armor",     Border = 28 },
+                new Entry { Root = BlinkRoot, Src = "Slots_Obsidian/Armor_Slot_2.png",    Role = "slot", Name = "slot_armor_2",   Border = 28 },
+                new Entry { Root = BlinkRoot, Src = "Slots_Obsidian/Character_Slot.png",  Role = "slot", Name = "slot_character", Border = 28 },
+                new Entry { Root = BlinkRoot, Src = "Slots_Obsidian/Action_Bar_Slot.png", Role = "slot", Name = "slot_action",    Border = 24 },
+                new Entry { Root = BlinkRoot, Src = "Slots_Obsidian/Socketing_Slot.png",  Role = "slot", Name = "slot_socket",    Border = 24 },
+                new Entry { Root = BlinkRoot, Src = "Slots_Obsidian/Rarity_1.png",        Role = "slot", Name = "rarity_1",       Border = 24 },
+                new Entry { Root = BlinkRoot, Src = "Slots_Obsidian/Rarity_2.png",        Role = "slot", Name = "rarity_2",       Border = 24 },
+                new Entry { Root = BlinkRoot, Src = "Slots_Obsidian/Rarity_3.png",        Role = "slot", Name = "rarity_3",       Border = 24 },
+                new Entry { Root = BlinkRoot, Src = "Slots_Obsidian/Rarity_4.png",        Role = "slot", Name = "rarity_4",       Border = 24 },
+                new Entry { Root = BlinkRoot, Src = "Slots_Obsidian/Rarity_5.png",        Role = "slot", Name = "rarity_5",       Border = 24 },
+                new Entry { Root = BlinkRoot, Src = "Slots_Obsidian/Talent_Border_1.png", Role = "slot", Name = "talent_1",       Border = 30 },
+                new Entry { Root = BlinkRoot, Src = "Slots_Obsidian/Talent_Border_2.png", Role = "slot", Name = "talent_2",       Border = 30 },
+                new Entry { Root = BlinkRoot, Src = "Slots_Obsidian/Talent_Border_3.png", Role = "slot", Name = "talent_3",       Border = 30 },
+                new Entry { Root = BlinkRoot, Src = "Slots_Obsidian/Talent_Border_4.png", Role = "slot", Name = "talent_4",       Border = 30 },
+
+                // button/ — obsidian buttons (framed, 9-sliced) + the close glyph (Simple).
+                new Entry { Root = BlinkRoot, Src = "Buttons_Obsidian/Button1_Gray.png",   Role = "button", Name = "obsidian_gray",   Border = 24 },
+                new Entry { Root = BlinkRoot, Src = "Buttons_Obsidian/Button1_Green.png",  Role = "button", Name = "obsidian_green",  Border = 24 },
+                new Entry { Root = BlinkRoot, Src = "Buttons_Obsidian/Button1_Red.png",    Role = "button", Name = "obsidian_red",    Border = 24 },
+                new Entry { Root = BlinkRoot, Src = "Buttons_Obsidian/Button1_Yellow.png", Role = "button", Name = "obsidian_yellow", Border = 24 },
+                new Entry { Root = BlinkRoot, Src = "Buttons_Obsidian/Button2_Green.png",  Role = "button", Name = "button_confirm",  Border = 24 },
+                new Entry { Root = BlinkRoot, Src = "Buttons_Obsidian/Button2_Red.png",    Role = "button", Name = "button_deny",     Border = 24 },
+                new Entry { Root = BlinkRoot, Src = "Buttons_Obsidian/Close_Button_Normal.png", Role = "button", Name = "close_normal" },
+                new Entry { Root = BlinkRoot, Src = "Buttons_Obsidian/Close_Button_On.png",     Role = "button", Name = "close_on" },
+                new Entry { Root = BlinkRoot, Src = "Buttons_Obsidian/Arrow.png",               Role = "button", Name = "arrow" },
             };
         }
 
@@ -166,6 +238,11 @@ namespace DeNelle.Editor
         // border>0 sets a uniform 9-slice border so ornate window/button frames stretch
         // to any panel size without distorting the carved corners (Image.Type.Sliced).
         private static void ForceSpriteImport(string assetPath, int border = 0)
+        {
+            ForceSpriteImport(assetPath, border, Vector4.zero);
+        }
+
+        private static void ForceSpriteImport(string assetPath, int border, Vector4 border4)
         {
             var importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
             if (importer == null)
@@ -181,12 +258,15 @@ namespace DeNelle.Editor
             importer.filterMode          = FilterMode.Bilinear;
             importer.textureCompression  = TextureImporterCompression.Uncompressed; // keep gilt edges clean
             importer.npotScale           = TextureImporterNPOTScale.None;
-            if (border > 0)
+            // Keep full source resolution for the big ornate panels so the carved edges stay crisp.
+            importer.maxTextureSize      = 4096;
+            bool hasB4 = border4.sqrMagnitude > 0.01f;
+            if (border > 0 || hasB4)
             {
                 // 9-slice border (L,B,R,T) lives on the importer's sprite settings.
                 var settings = new TextureImporterSettings();
                 importer.ReadTextureSettings(settings);
-                settings.spriteBorder = new Vector4(border, border, border, border);
+                settings.spriteBorder = hasB4 ? border4 : new Vector4(border, border, border, border);
                 settings.spriteMeshType = SpriteMeshType.FullRect; // sliced frames need FullRect
                 importer.SetTextureSettings(settings);
             }
@@ -204,6 +284,9 @@ namespace DeNelle.Editor
             EnsureFolder(ResRoot + "/badge");
             EnsureFolder(ResRoot + "/button");
             EnsureFolder(ResRoot + "/panel");
+            EnsureFolder(ResRoot + "/frame");      // Blink Obsidian full-panel backgrounds
+            EnsureFolder(ResRoot + "/silhouette"); // paper-doll body silhouettes
+            EnsureFolder(ResRoot + "/slot");       // Obsidian item/gear/talent sockets
         }
 
         private static void EnsureFolder(string path)

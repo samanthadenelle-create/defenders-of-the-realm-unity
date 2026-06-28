@@ -56,6 +56,35 @@ namespace DeNelle.Core.UI
         public const string RoleButton = "button";
         public const string RolePanel  = "panel";
         public const string RoleSlot   = "slot";
+        // Blink "OBSIDIAN UI" roles (mirrored by RpgUiImporter from Assets/Blink):
+        public const string RoleFrame      = "frame";       // full ornate obsidian panel backgrounds
+        public const string RoleSilhouette = "silhouette";  // paper-doll body silhouettes
+
+        // frame/ — one ornate obsidian panel background per screen (Simple, preserve-aspect):
+        public const string FrameInventory = "frame_inventory";
+        public const string FrameCrafting  = "frame_crafting";
+        public const string FrameCharacter = "frame_character"; // Stats_Panel
+        public const string FrameCore      = "frame_core";
+        public const string FrameTalent    = "frame_talent";
+        public const string FrameMerchant  = "frame_merchant";
+        public const string FrameDialogue  = "frame_dialogue";
+        public const string FrameQuest     = "frame_quest";
+        public const string FrameSettings  = "frame_settings";
+        public const string FrameOptions   = "frame_options";
+        public const string FrameLoot      = "frame_loot";
+        public const string FramePet       = "frame_pet";
+        public const string FrameElement   = "frame_element"; // inner sub-plate (9-sliced)
+        public const string FrameTextBg    = "frame_textbg";  // inner text background (9-sliced)
+        // silhouette/:
+        public const string SilMale   = "sil_male";
+        public const string SilFemale = "sil_female";
+        public const string SilPet    = "sil_pet";
+        // slot/ — Obsidian sockets (9-sliced):
+        public const string SlotArmor     = "slot_armor";
+        public const string SlotCharacter = "slot_character";
+        public const string SlotAction    = "slot_action";
+        public const string SlotSocket    = "slot_socket";
+        // slot/ rarity frames Rarity_1..5 -> rarity_1..5; talent borders -> talent_1..4.
 
         // ── Well-known sprite names within a role (lockstep with the importer map) ──
         // bars/ (ornate gold-frame bar family — frame bg + matching colored fill):
