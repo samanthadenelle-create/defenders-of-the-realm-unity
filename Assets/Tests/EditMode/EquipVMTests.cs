@@ -79,6 +79,7 @@ namespace DeNelle.Tests.EditMode
             public int TargetLevel { get; set; } = 10;
             public WeaponDef EquippedWeapon { get; set; }
             public ArmorDef EquippedArmor { get; set; }
+            public WeaponDef EquippedOffHand { get; set; }
             public AccessoryDef EquippedRing { get; set; }
             public AccessoryDef EquippedAmulet { get; set; }
             public string EquippedWeaponName => EquippedWeapon?.name;
@@ -97,6 +98,9 @@ namespace DeNelle.Tests.EditMode
             public void EquipArmorById(string id) { EquipArmorCalls++; EquippedArmor = new ArmorDef { id = id, name = id, defense = 0.3f }; EquipChanged?.Invoke(); }
             public void UnequipWeapon() { UnequipWeaponCalls++; EquippedWeapon = null; EquipChanged?.Invoke(); }
             public void UnequipArmor() { EquippedArmor = null; EquipChanged?.Invoke(); }
+            public int EquipOffHandCalls, UnequipOffHandCalls;
+            public void EquipOffHandById(string id) { EquipOffHandCalls++; EquippedOffHand = new WeaponDef { id = id, name = id, category = "shield" }; EquipChanged?.Invoke(); }
+            public void UnequipOffHand() { UnequipOffHandCalls++; EquippedOffHand = null; EquipChanged?.Invoke(); }
             public void EquipAccessoryById(string id)
             {
                 EquipAccessoryCalls++; LastAccessoryId = id;
@@ -131,11 +135,12 @@ namespace DeNelle.Tests.EditMode
             var hero = new FakeEquip { TargetName = "Grom", TargetClass = "knight" };
             using var vm = new EquipVM(store, new IEquipTarget[] { hero });
 
-            Assert.That(vm.EquipSlots.Count, Is.EqualTo(4), "mainhand + chest + ring + amulet (WO-543)");
+            Assert.That(vm.EquipSlots.Count, Is.EqualTo(5), "mainhand + offhand + chest + ring + amulet");
             Assert.That(vm.EquipSlots[0].SlotKey, Is.EqualTo(EquipVM.SlotMainhand));
-            Assert.That(vm.EquipSlots[1].SlotKey, Is.EqualTo(EquipVM.SlotChest));
-            Assert.That(vm.EquipSlots[2].SlotKey, Is.EqualTo(EquipVM.SlotRing), "ring slot below chest");
-            Assert.That(vm.EquipSlots[3].SlotKey, Is.EqualTo(EquipVM.SlotAmulet), "amulet slot below ring");
+            Assert.That(vm.EquipSlots[1].SlotKey, Is.EqualTo(EquipVM.SlotOffHand), "off-hand (shield) delineated from main-hand");
+            Assert.That(vm.EquipSlots[2].SlotKey, Is.EqualTo(EquipVM.SlotChest));
+            Assert.That(vm.EquipSlots[3].SlotKey, Is.EqualTo(EquipVM.SlotRing), "ring slot below chest");
+            Assert.That(vm.EquipSlots[4].SlotKey, Is.EqualTo(EquipVM.SlotAmulet), "amulet slot below ring");
             Assert.That(vm.Stats.Count, Is.EqualTo(4), "HP / MP / Damage / Defense");
             Assert.That(vm.CharacterLabel, Does.Contain("Grom"));
         }
@@ -149,8 +154,8 @@ namespace DeNelle.Tests.EditMode
             var hero = new FakeEquip { TargetName = "Grom", TargetClass = "knight", TargetLevel = 5 };
             using var vm = new EquipVM(store, new IEquipTarget[] { hero });
 
-            // Select the ring slot (index 2) — only the ring accessory should appear.
-            vm.SelectSlot(2);
+            // Select the ring slot (index 3 after off-hand insert) — only the ring accessory should appear.
+            vm.SelectSlot(3);
             Assert.That(vm.SelectedSlotKey, Is.EqualTo(EquipVM.SlotRing));
             var ids = new HashSet<string>();
             foreach (var i in vm.CompatibleItems) ids.Add(i.Id);
@@ -173,7 +178,7 @@ namespace DeNelle.Tests.EditMode
             hero.EquippedAmulet = new AccessoryDef { id = "amulet_x", name = "Amulet", slot = "amulet", rarity = "epic" };
             using var vm = new EquipVM(store, new IEquipTarget[] { hero });
 
-            vm.SelectSlot(3);   // amulet slot
+            vm.SelectSlot(4);   // amulet slot (index 4 after off-hand insert)
             Assert.That(vm.SelectedSlotKey, Is.EqualTo(EquipVM.SlotAmulet));
             vm.Unequip();
             Assert.That(hero.UnequipAccessoryCalls, Is.EqualTo(1));
@@ -233,8 +238,8 @@ namespace DeNelle.Tests.EditMode
             Assert.That(weaponIds.Contains("sword"), Is.True, "knight sword must be compatible");
             Assert.That(weaponIds.Contains("bow"), Is.False, "ranger bow must be filtered out for a knight");
 
-            // Select the chest slot -> armor list.
-            vm.SelectSlot(1);
+            // Select the chest slot (index 2 after the off-hand insert) -> armor list.
+            vm.SelectSlot(2);
             Assert.That(vm.SelectedSlotKey, Is.EqualTo(EquipVM.SlotChest));
             var armorIds = new HashSet<string>();
             foreach (var i in vm.CompatibleItems) armorIds.Add(i.Id);

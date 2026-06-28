@@ -47,6 +47,9 @@ namespace DeNelle.Village.Hero
         /// <summary>The equipped armor def, or null when no armor is equipped.</summary>
         ArmorDef EquippedArmor { get; }
 
+        /// <summary>The equipped OFF-HAND (shield) def, or null when none.</summary>
+        WeaponDef EquippedOffHand { get; }
+
         /// <summary>WO-543: the equipped RING accessory, or null.</summary>
         AccessoryDef EquippedRing { get; }
 
@@ -87,6 +90,12 @@ namespace DeNelle.Village.Hero
         void EquipArmorById(string id);
         void UnequipWeapon();
         void UnequipArmor();
+
+        // ── Off-hand (shield) commands ────────────────────────────────────────────────
+        /// <summary>Equip an off-hand (shield) item by id.</summary>
+        void EquipOffHandById(string id);
+        /// <summary>Clear the off-hand (shield) slot.</summary>
+        void UnequipOffHand();
 
         // ── Accessory commands (WO-543) ───────────────────────────────────────────────
         /// <summary>Equip a ring/amulet accessory by id (routes by the def's slot).</summary>
@@ -164,6 +173,7 @@ namespace DeNelle.Village.Hero
 
         public WeaponDef EquippedWeapon => _loadout != null ? _loadout.EquippedWeapon : null;
         public ArmorDef EquippedArmor   => _loadout != null ? _loadout.EquippedArmor : null;
+        public WeaponDef EquippedOffHand => _loadout != null ? _loadout.EquippedOffHand : null;
 
         public AccessoryDef EquippedRing   => _loadout != null ? _loadout.EquippedRing : null;
         public AccessoryDef EquippedAmulet => _loadout != null ? _loadout.EquippedAmulet : null;
@@ -181,6 +191,9 @@ namespace DeNelle.Village.Hero
         public void EquipArmorById(string id)  { if (_loadout != null) _loadout.EquipArmorById(id); }
         public void UnequipWeapon()            { if (_loadout != null) _loadout.UnequipWeapon(); }
         public void UnequipArmor()             { if (_loadout != null) _loadout.UnequipArmor(); }
+
+        public void EquipOffHandById(string id) { if (_loadout != null) _loadout.EquipOffHandById(id); }
+        public void UnequipOffHand()            { if (_loadout != null) _loadout.UnequipOffHand(); }
 
         public void EquipAccessoryById(string id)  { if (_loadout != null) _loadout.EquipAccessoryById(id); }
         public void UnequipAccessory(string slot)  { if (_loadout != null) _loadout.UnequipAccessory(slot); }

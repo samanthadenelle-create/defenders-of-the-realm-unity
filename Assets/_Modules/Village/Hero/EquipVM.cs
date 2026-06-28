@@ -42,8 +42,11 @@ namespace DeNelle.Village.Hero
 
     public sealed class EquipVM : IPanelViewModel, IDisposable
     {
-        // ── Slot keys (SlotVM.SlotKey) — weapon + armor + WO-543 ring/amulet accessories ──
+        // ── Slot keys (SlotVM.SlotKey) — weapon + off-hand + armor + WO-543 ring/amulet ──
+        // We DELINEATE main-hand weapon (sword / 1H / 2H) from the OFF-HAND shield (owner
+        // requirement): shields live only in the off-hand; the main-hand list excludes them.
         public const string SlotMainhand = "mainhand";
+        public const string SlotOffHand  = "offhand";
         public const string SlotChest    = "chest";
         public const string SlotRing     = "ring";    // WO-543
         public const string SlotAmulet   = "amulet";  // WO-543
@@ -137,7 +140,8 @@ namespace DeNelle.Village.Hero
         /// <summary>HP / MP / Damage / Defense bars from the equip target. Never null.</summary>
         public IReadOnlyList<EquipStat> Stats => _stats;
 
-        /// <summary>The equipment slots (mainhand / chest), each holding the equipped item or empty.</summary>
+        /// <summary>The equipment slots (mainhand / offhand / chest / ring / amulet), in order,
+        /// each holding the equipped item or empty.</summary>
         public IReadOnlyList<SlotVM> EquipSlots => _equipSlots;
 
         /// <summary>Index of the selected slot within <see cref="EquipSlots"/>, or -1.</summary>
@@ -191,6 +195,7 @@ namespace DeNelle.Village.Hero
             if (t == null) { Status = "No hero to equip."; Raise(); return; }
 
             if (_selectedSlotKey == SlotMainhand) t.EquipWeaponById(itemId);
+            else if (_selectedSlotKey == SlotOffHand) t.EquipOffHandById(itemId);
             else if (_selectedSlotKey == SlotChest) t.EquipArmorById(itemId);
             else if (_selectedSlotKey == SlotRing || _selectedSlotKey == SlotAmulet) t.EquipAccessoryById(itemId);
             else t.EquipArmorById(itemId);
@@ -207,6 +212,7 @@ namespace DeNelle.Village.Hero
             if (t == null) { Status = "No hero."; Raise(); return; }
 
             if (_selectedSlotKey == SlotMainhand) t.UnequipWeapon();
+            else if (_selectedSlotKey == SlotOffHand) t.UnequipOffHand();
             else if (_selectedSlotKey == SlotChest) t.UnequipArmor();
             else if (_selectedSlotKey == SlotRing || _selectedSlotKey == SlotAmulet) t.UnequipAccessory(_selectedSlotKey);
             else t.UnequipArmor();
@@ -260,6 +266,16 @@ namespace DeNelle.Village.Hero
                     IconRoleWeapon, w.id, 0, "gold", true, w.rarity, equipped: true);
             }
             _equipSlots.Add(new SlotVM(SlotMainhand, weapon, highlighted: _selectedSlotKey == SlotMainhand));
+
+            // Off-hand (shield) — delineated from the main-hand weapon (owner requirement).
+            ItemVM? offhand = null;
+            if (t?.EquippedOffHand != null)
+            {
+                var o = t.EquippedOffHand;
+                offhand = new ItemVM(o.id, string.IsNullOrEmpty(o.name) ? o.id : o.name,
+                    IconRoleWeapon, o.id, 0, "gold", true, o.rarity, equipped: true);
+            }
+            _equipSlots.Add(new SlotVM(SlotOffHand, offhand, highlighted: _selectedSlotKey == SlotOffHand));
 
             ItemVM? armor = null;
             if (t?.EquippedArmor != null)
@@ -330,12 +346,19 @@ namespace DeNelle.Village.Hero
             var t = Active;
             string job = t != null ? t.TargetClass : null;
 
-            if (_selectedSlotKey == SlotMainhand)
+            if (_selectedSlotKey == SlotMainhand || _selectedSlotKey == SlotOffHand)
             {
-                string equippedId = t?.EquippedWeapon != null ? t.EquippedWeapon.id : null;
+                // Delineate hands: the OFF-HAND lists ONLY shields; the MAIN-HAND excludes
+                // shields (sword / 1H / 2H only). The model's EnforceHandSlots still resolves
+                // 2H↔off-hand conflicts on equip — this just keeps each list honest.
+                bool offhand = _selectedSlotKey == SlotOffHand;
+                string equippedId = offhand
+                    ? (t?.EquippedOffHand != null ? t.EquippedOffHand.id : null)
+                    : (t?.EquippedWeapon != null ? t.EquippedWeapon.id : null);
                 foreach (var (w, qty) in _store.OwnedWeapons())
                 {
                     if (w == null) continue;
+                    if (offhand != w.IsOffHandItem) continue;   // shields ⇄ off-hand only
                     if (!string.IsNullOrEmpty(job) && !_store.WeaponFitsClass(w, job)) continue;
                     bool equipped = !string.IsNullOrEmpty(equippedId) &&
                                     string.Equals(equippedId, w.id, StringComparison.OrdinalIgnoreCase);

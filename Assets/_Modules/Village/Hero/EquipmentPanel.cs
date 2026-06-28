@@ -1,31 +1,23 @@
 // =============================================================================
-// EquipmentPanel — code-built "browse your gear and equip" screen (WO-109+ ).
+// EquipmentPanel — the "Gear Preview" showcase + equip screen (WO Gear-Preview, 2026-06-28).
 // -----------------------------------------------------------------------------
-// Opened via Yarn command "OpenEquip" from NPC dialogue (DialogueCommandBridge.CmdOpenEquip).
+// Opened via Yarn "OpenEquip" / PanelRouter. Restyled to the owner's mock: a large
+// central 3D HERO preview (live, equipped gear visible) framed by labeled Obsidian
+// SLOT plates — Full Armor Set, Shield (Off Hand), Weapon (Main Hand), Amulet, Ring.
+// Tapping a slot opens a bottom DRAWER listing the compatible owned items for that
+// slot, with Equip / Unequip. We DELINEATE the main-hand weapon (sword / 1H / 2H)
+// from the OFF-HAND shield (owner requirement): shields appear only in the off-hand
+// list; the main-hand list excludes them. The model's EnforceHandSlots still resolves
+// 2H↔off-hand conflicts on equip.
 //
-// WO-434 Phase C — REBOUND ONTO EquipVM (MVVM). The panel is now an IPanelView: ALL
-// equip STATE + LOGIC (owned-vs-class compatible list, equip/unequip/swap, the per-
-// member target picker, stat readouts, equipped marks) lives in EquipVM. This View is
-// a DUMB SKIN: in Open() it resolves the live targets (hero + companions) + the owned
-// store at the open-site, injects them as IEquipTarget[] / IInventoryStore, constructs
-// EquipVM, and Bind()s it. Render() repaints widgets from vm.* on every vm.Changed;
-// taps route back as vm commands. It never reads GearLoadout / VillageInventory / the
-// catalog directly anymore — those come through the seams the VM owns.
+// MVVM (WO-434): an IPanelView bound to EquipVM. ALL state/logic (slots, equipped
+// items, compatible lists, equip/unequip/swap, target picker, stat readouts) lives in
+// EquipVM; this View is a DUMB SKIN that repaints from vm.* on vm.Changed and routes
+// taps back as commands. It never reads GearLoadout / inventory / catalog directly.
 //
-// SLOT MODEL (kept faithful): the model supports a weapon (mainhand) + an armor (chest)
-// slot today. The old Weapon / Armor FILTER tabs now SELECT the slot (vm.SelectSlot);
-// the list under them is vm.CompatibleItems for the selected slot (owned + fit-by-class).
-// An UNEQUIP CTA clears the selected slot (vm.Unequip — the Phase A addition).
-//
-// LAYOUT (the ShopPanel zero-height-collapse lesson — UNCHANGED): rows are laid out by
-// a VerticalLayoutGroup + ContentSizeFitter, each row carries a LayoutElement height,
-// and after populating we Canvas.ForceUpdateCanvases() then ForceRebuildLayoutImmediate
-// so the list gets real height on the same frame instead of collapsing to nothing.
-//
-// PRESENTATION: every surface routes through the shared DeNelle.Core.UI kit
-// (ElarionUiKit + ElarionUi palette + the RPG pack). Sprite-FIRST with the kit's
-// procedural fallback, so it is correct with or without pack art on disk (WebGL-safe).
-// Blink dressing (WO-432/433 pattern) is flag-gated on FeatureFlags.BlinkChrome.
+// PRESENTATION: routes through the shared DeNelle.Core.UI kit (ElarionUiKit + ElarionUi
+// + RpgUiCatalog). Sprite-FIRST with procedural fallback (WebGL-safe). This screen LEADS
+// the Obsidian look — it uses the slot/panel pack art whenever present.
 // =============================================================================
 using System.Collections.Generic;
 using UnityEngine;
@@ -42,36 +34,30 @@ namespace DeNelle.Village.Hero
     {
         private GameObject _ui;
 
-        // WO-434 Phase C — the bound ViewModel + the model seams injected at the open-site.
+        // WO-434 — the bound ViewModel + the model seams injected at the open-site.
         private EquipVM _vm;
         private InventoryStore _store;
         private readonly List<GearLoadoutEquipTarget> _targetAdapters = new List<GearLoadoutEquipTarget>();
 
-        // WO-434 Phase D — the live hero preview viewer + the per-target live body it previews.
-        // The body GameObjects are resolved at the open-site (same place we resolve the equip
-        // targets) so the preview can switch with the target picker. The viewer is a NEW widget
-        // bound to a RawImage in the medallion; it degrades gracefully (no body / no RT = no
-        // preview, never an NRE).
+        // Live 3D hero preview (the showcase centerpiece) + the per-target body it previews.
         private HeroPreviewViewer _preview;
         private RawImage _previewImage;
         private readonly List<GameObject> _targetBodies = new List<GameObject>();
-        private int _previewTargetIndex = -1;   // which target the preview currently shows (-1 = none yet)
+        private int _previewTargetIndex = -1;
 
-        // Legacy demo-def equip system (preserved): still equips basic_sword / leather_armor on
-        // the HERO so its visual/stat path still fires. Mirrors the old DoEquip side-effect.
+        // Legacy demo-def equip (preserved) — still equips basic_sword / leather_armor on the HERO.
         private HeroEquipment _equip;
 
-        // Live regions so equip can repaint in place without a full rebuild.
+        // Live regions.
         private Transform _panelTransform;
-        private GameObject _medallionHost;
-        private static readonly Vector2 MedAnchorMin = new Vector2(0.04f, 0.80f);
-        private static readonly Vector2 MedAnchorMax = new Vector2(0.96f, 0.905f);
-
-        private GameObject _listContentArea; // the content-area host (replaced per slot)
-        private RectTransform _scrollContent; // the active VerticalLayoutGroup content (for the rebuild)
-        private TMPro.TextMeshProUGUI _summaryLabel;
-        private GameObject _tabBar;
+        private GameObject _slotsHost;          // holds the 5 labeled slot plates (rebuilt per render)
         private GameObject _targetBar;
+
+        // Change-drawer (tap a slot → browse compatible items for it).
+        private GameObject _drawerHost;
+        private string _drawerSlotKey;          // the slot the drawer is editing (null = closed)
+        private GameObject _listContentArea;    // the drawer's list host (set when the drawer opens)
+        private RectTransform _scrollContent;
 
         private static readonly Color TabSelectedTint = new Color(1.15f, 1.10f, 0.92f, 1f);
         private static readonly Color TabRestTint     = new Color(0.58f, 0.55f, 0.50f, 1f);
@@ -85,101 +71,57 @@ namespace DeNelle.Village.Hero
 
             ConstructViewModel();
 
-            // Kit modal: ScreenSpaceOverlay canvas + scrim + ornate framed panel
-            // (same boilerplate the inventory / shop modals use → identical depth).
             _ui = ElarionUiKit.BuildModalCanvas("EquipmentPanel", sortingOrder: 2500);
             _ui.transform.SetParent(transform, false);
             var canvas = _ui.GetComponent<Canvas>();
             if (canvas != null) canvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, () => _vm?.Close());
 
-            // Near-black backdrop so the world behind vanishes and the screen reads as its
-            // own premium space (mirrors ShopPanel). Visual-only (raycast off) so the scrim
-            // below still owns tap-to-close.
             var backdrop = ElarionUiKit.AddImage(_ui.transform, "EquipBackdrop",
                 Vector2.zero, Vector2.one, new Color(0.02f, 0.015f, 0.012f, 0.94f), rounded: false);
             var bdImg = backdrop.GetComponent<Image>();
             if (bdImg != null) bdImg.raycastTarget = false;
 
-            // Centred ornate dark-WOOD plate (D3 vendor board) — cohesive with the shop.
             var panel = ElarionUiKit.PanelFramed(_ui.transform,
-                                                 new Vector2(0.14f, 0.10f), new Vector2(0.86f, 0.92f),
+                                                 new Vector2(0.12f, 0.06f), new Vector2(0.88f, 0.95f),
                                                  deep: true, packSpriteName: RpgUiCatalog.PanelVendor);
+            _panelTransform = panel.transform;
 
-            // Solid heavy dark fill inside the frame so it reads premium, not see-through
-            // (inset so the carved wood border still shows). Same recipe as ShopPanel.
             var solidFill = ElarionUiKit.AddImage(panel.transform, "EquipSolidFill",
-                new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f),
-                // Flag OFF = our premium dark plate; flag ON = invisible (kept for layout) so the Blink Obsidian panel shows clean.
-                new Color(0.08f, 0.06f, 0.045f, DeNelle.Core.FeatureFlags.BlinkChrome ? 0f : 0.985f));
+                new Vector2(0.02f, 0.015f), new Vector2(0.98f, 0.985f),
+                new Color(0.05f, 0.055f, 0.06f, 0.985f));   // dark obsidian backing (always — frame is a border)
             var sfImg = solidFill.GetComponent<Image>();
             if (sfImg != null) sfImg.raycastTarget = false;
             solidFill.transform.SetAsFirstSibling();
 
-            // Gilt crest header + gold rule, matching the town HUD / inventory / shop.
-            ElarionUiKit.Header(panel.transform, "EQUIPMENT", x0: 0.04f, x1: 0.96f, y0: 0.91f, y1: 0.98f);
+            // Gold "GEAR PREVIEW" header.
+            ElarionUiKit.Header(panel.transform, "GEAR PREVIEW", x0: 0.10f, x1: 0.90f, y0: 0.915f, y1: 0.98f);
 
-            // ── Character medallion (driven by vm.Portrait / vm.CharacterLabel) ──
-            _panelTransform = panel.transform;
-            BuildCharacterMedallion(panel.transform, MedAnchorMin, MedAnchorMax);
+            // X close (top-right).
+            var closeBtn = ElarionUiKit.ButtonPack(panel.transform, "X", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.915f, 0.915f), new Vector2(0.975f, 0.978f),
+                () => _vm?.Close(), RpgUiCatalog.ButtonFrame);
+            CreamTab(closeBtn);
 
-            // ── WO-434 Phase D: live hero preview (a NEW widget) ──────────────────────────
-            // A square 3D portrait on the LEFT, just under the medallion band — it shows the
-            // ACTUAL hero body and the equipped weapon, refreshing on every vm.Changed. Sits in
-            // the gap between the medallion (≥0.80) and the target picker (≤0.79), on the left
-            // third, so it never overlaps the picker / summary / tabs / scroll list. Built ONCE
-            // here (persists across renders, unlike the rebuilt medallion) and Begun in Bind().
+            // Central 3D hero preview (the showcase centerpiece).
             BuildPreviewWidget(panel.transform);
 
-            // ── Equip-target picker (hero + companions) — vm.TargetNames / vm.SelectTarget ──
-            BuildTargetBar(panel.transform, new Vector2(0.04f, 0.715f), new Vector2(0.96f, 0.79f));
+            // The five labeled slot plates around the hero (rebuilt per render).
+            _slotsHost = new GameObject("Slots", typeof(RectTransform));
+            _slotsHost.transform.SetParent(panel.transform, false);
+            var sh = _slotsHost.GetComponent<RectTransform>();
+            sh.anchorMin = Vector2.zero; sh.anchorMax = Vector2.one;
+            sh.offsetMin = Vector2.zero; sh.offsetMax = Vector2.zero;
 
-            // ── Equipped summary + total bonuses (under the picker, on a recessed well) ──
-            ElarionUiKit.Well(panel.transform, new Vector2(0.04f, 0.655f), new Vector2(0.96f, 0.71f));
-            _summaryLabel = ElarionUiKit.Label(panel.transform, "", 0.66f, 0.71f, ElarionUi.Parchment,
-                                               ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center,
-                                               0.06f, 0.94f);
-
-            // ── Slot-selector tabs (WEAPONS=mainhand / ARMOR=chest) + an UNEQUIP CTA ──
-            var tabBar = new GameObject("FilterBar", typeof(RectTransform));
-            tabBar.transform.SetParent(panel.transform, false);
-            var tb = tabBar.GetComponent<RectTransform>();
-            tb.anchorMin = new Vector2(0.04f, 0.575f);
-            tb.anchorMax = new Vector2(0.96f, 0.645f);
-            tb.offsetMin = Vector2.zero; tb.offsetMax = Vector2.zero;
-            CreamTab(ElarionUiKit.ButtonPack(tabBar.transform, "WEAPONS", ElarionUiKit.ButtonKind.Gold,
-                                    new Vector2(0.02f, 0.05f), new Vector2(0.40f, 0.95f),
-                                    () => SelectSlotKey(EquipVM.SlotMainhand), RpgUiCatalog.ButtonFrame));
-            CreamTab(ElarionUiKit.ButtonPack(tabBar.transform, "ARMOR", ElarionUiKit.ButtonKind.Gold,
-                                    new Vector2(0.41f, 0.05f), new Vector2(0.79f, 0.95f),
-                                    () => SelectSlotKey(EquipVM.SlotChest), RpgUiCatalog.ButtonFrame));
-            CreamTab(ElarionUiKit.ButtonPack(tabBar.transform, "UNEQUIP", ElarionUiKit.ButtonKind.Quiet,
-                                    new Vector2(0.81f, 0.05f), new Vector2(0.98f, 0.95f),
-                                    () => _vm?.Unequip(), RpgUiCatalog.ButtonFrame));
-            _tabBar = tabBar;
-
-            // ── Scrollable list content host (rebuilt per slot) ────────────────
-            _listContentArea = new GameObject("ListArea", typeof(RectTransform));
-            _listContentArea.transform.SetParent(panel.transform, false);
-            var la = _listContentArea.GetComponent<RectTransform>();
-            la.anchorMin = new Vector2(0.04f, 0.10f);
-            la.anchorMax = new Vector2(0.96f, 0.565f);
-            la.offsetMin = Vector2.zero; la.offsetMax = Vector2.zero;
-
-            // Close — bottom centre, cream pack button drawn last so it takes taps.
-            var closeBtn = ElarionUiKit.ButtonPack(panel.transform, "Close", ElarionUiKit.ButtonKind.Quiet,
-                                new Vector2(0.34f, 0.015f), new Vector2(0.66f, 0.085f),
-                                () => _vm?.Close(), RpgUiCatalog.ButtonFrame);
-            CreamTab(closeBtn);
-            if (closeBtn != null) closeBtn.transform.SetAsLastSibling();
+            // Slim target picker (only when there is more than one assignable member).
+            if (_vm != null && _vm.TargetNames.Count > 1)
+                BuildTargetBar(panel.transform, new Vector2(0.30f, 0.875f), new Vector2(0.70f, 0.91f));
 
             Bind(_vm);
-            Debug.Log("[EquipmentPanel] Opened — bound EquipVM (MVVM). Equip to see visual/stat change on hero.");
+            Debug.Log("[EquipmentPanel] Opened — Gear Preview showcase bound to EquipVM (MVVM).");
         }
 
         // ── Construct the model seams + the pure ViewModel at the open-site ──────────
-        // Resolve the assignable targets (hero + every live companion body with a GearLoadout),
-        // wrap each in a GearLoadoutEquipTarget, wrap the owned store, and inject both into EquipVM.
         private void ConstructViewModel()
         {
             DisposeViewModel();
@@ -190,7 +132,6 @@ namespace DeNelle.Village.Hero
             _targetAdapters.Clear();
             _targetBodies.Clear();
 
-            // Legacy demo-def equip system (preserved) — still resolved on the player.
             _equip = FindObjectOfType<HeroEquipment>();
             var hero = GameObject.FindWithTag("Player");
             if (_equip == null && hero != null) _equip = hero.AddComponent<HeroEquipment>();
@@ -207,17 +148,14 @@ namespace DeNelle.Village.Hero
                 var adapter = new GearLoadoutEquipTarget(hl, HeroName(hjob), hjob);
                 _targetAdapters.Add(adapter);
                 targets.Add(adapter);
-                // WO-434 Phase D — the live body the preview clones (the "HeroBody" child the
-                // swapper builds; the hero root itself as a fallback). Parallel to `targets`.
                 _targetBodies.Add(ResolveBody(hero));
             }
 
-            // Companions: each StoryCompanion body has a GearLoadout bound to its class.
             foreach (var comp in FindObjectsByType<StoryCompanion>(FindObjectsSortMode.None))
             {
                 if (comp == null) continue;
                 var cl = comp.GetComponent<GearLoadout>();
-                if (cl == null) continue;   // non-geared body (e.g. a fallback capsule) — skip
+                if (cl == null) continue;
                 string cjob = comp.Hero.ToString().ToLowerInvariant();
                 var adapter = new GearLoadoutEquipTarget(cl, comp.DisplayName, cjob);
                 _targetAdapters.Add(adapter);
@@ -228,9 +166,6 @@ namespace DeNelle.Village.Hero
             _vm = new EquipVM(_store, targets, onClose: Close);
         }
 
-        // WO-434 Phase D — the live visible body to clone for the preview: the "HeroBody" child
-        // HeroBodySwapper / the companion injector build (the skinned class FBX), falling back to
-        // the root itself when no such child exists (e.g. a fallback capsule). Null-safe.
         private static GameObject ResolveBody(GameObject root)
         {
             if (root == null) return null;
@@ -238,7 +173,6 @@ namespace DeNelle.Village.Hero
             return body != null ? body.gameObject : root;
         }
 
-        // The active target's currently-equipped weapon id (for seating the preview's mesh). "" when none.
         private string ActiveWeaponId()
         {
             if (_vm == null) return null;
@@ -248,7 +182,6 @@ namespace DeNelle.Village.Hero
             return w != null ? w.id : null;
         }
 
-        // The active target's live body (parallel to the VM's target list). Null when out of range.
         private GameObject ActiveBody()
         {
             if (_vm == null) return null;
@@ -256,8 +189,6 @@ namespace DeNelle.Village.Hero
             return (idx >= 0 && idx < _targetBodies.Count) ? _targetBodies[idx] : null;
         }
 
-        // The hero's class id from HeroAbilities (the same source GearLoadout uses), defaulting
-        // to the catalog default when abilities aren't ready yet.
         private static string ResolveHeroJob(GearLoadout loadout)
         {
             var ha = loadout != null ? loadout.GetComponent<HeroAbilities>() : null;
@@ -280,21 +211,16 @@ namespace DeNelle.Village.Hero
             if (_vm != null) _vm.Changed -= Render;
         }
 
-        // Repaint widgets from vm.* ONLY.
         private void Render()
         {
             if (_vm == null) return;
-            HighlightTabs();
             HighlightTargets();
-            RebuildMedallion();
-            RefreshSummary();
-            RebuildList();
+            RebuildSlots();
             RenderPreview();
+            if (_drawerSlotKey != null) RebuildList();   // keep the open drawer fresh
         }
 
-        // WO-434 Phase D — drive the live preview from vm state. A TARGET switch rebuilds the
-        // clone (new body); any other change (equip/unequip/swap) just re-seats the weapon mesh.
-        // Begun lazily on the first render after Bind so the body + weapon are resolvable.
+        // WO-434 Phase D — drive the live preview from vm state.
         private void RenderPreview()
         {
             if (_previewImage == null || _vm == null) return;
@@ -310,7 +236,104 @@ namespace DeNelle.Village.Hero
             }
         }
 
-        // ── Slot select (the old Weapon/Armor filter) ───────────────────────────────
+        // ── The five labeled slot plates around the hero ─────────────────────────────
+        private void RebuildSlots()
+        {
+            if (_slotsHost == null) return;
+            for (int i = _slotsHost.transform.childCount - 1; i >= 0; i--)
+            {
+                var c = _slotsHost.transform.GetChild(i);
+                if (c != null) Destroy(c.gameObject);
+            }
+
+            // LEFT column: Full Armor Set (large) + Shield (Off Hand).
+            BuildGearSlot(EquipVM.SlotChest,   new Vector2(0.035f, 0.46f), new Vector2(0.235f, 0.82f));
+            BuildGearSlot(EquipVM.SlotOffHand, new Vector2(0.035f, 0.10f), new Vector2(0.235f, 0.42f));
+
+            // RIGHT column: Weapon (Main Hand) (large) + Amulet + Ring.
+            BuildGearSlot(EquipVM.SlotMainhand, new Vector2(0.765f, 0.52f), new Vector2(0.965f, 0.82f));
+            BuildGearSlot(EquipVM.SlotAmulet,   new Vector2(0.765f, 0.33f), new Vector2(0.965f, 0.49f));
+            BuildGearSlot(EquipVM.SlotRing,     new Vector2(0.765f, 0.10f), new Vector2(0.965f, 0.30f));
+        }
+
+        // One labeled slot: caption above + a framed plate showing the equipped item's glyph +
+        // name (rarity-tinted) or an empty placeholder. Tapping opens the change-drawer.
+        private void BuildGearSlot(string slotKey, Vector2 anchorMin, Vector2 anchorMax)
+        {
+            var slot = FindSlot(slotKey);
+
+            // Caption above the plate.
+            float capH = (anchorMax.y - anchorMin.y) * 0.16f;
+            ElarionUiKit.Label(_slotsHost.transform, SlotCaption(slotKey),
+                anchorMax.y, anchorMax.y + capH, ElarionUi.Gilt,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, anchorMin.x, anchorMax.x, bold: true);
+
+            // Framed plate (button).
+            var go = new GameObject("Slot_" + slotKey, typeof(Image), typeof(Button));
+            go.transform.SetParent(_slotsHost.transform, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var img = go.GetComponent<Image>();
+
+            bool selected = slotKey == _drawerSlotKey;
+            var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotItem);
+            if (plate != null)
+            {
+                img.sprite = plate; img.type = Image.Type.Sliced;
+                img.color = selected ? TabSelectedTint : Color.white;
+            }
+            else
+            {
+                img.color = selected ? ElarionUiKit.CellSelected : ElarionUiKit.Cell;
+                ElarionUiKit.ApplyRounded(img);
+            }
+
+            var btn = go.GetComponent<Button>();
+            btn.targetGraphic = img;
+            ElarionUiKit.StyleButtonColors(btn);
+            string key = slotKey;
+            btn.onClick.AddListener(() => OnSlotTapped(key));
+
+            bool filled = slot.HasValue && slot.Value.Content.HasValue;
+            var item = filled ? slot.Value.Content.Value : default;
+
+            // Role glyph icon (centered, upper portion).
+            var iconSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, SlotIconName(slotKey));
+            var iconGo = ElarionUiKit.AddImage(go.transform, "Icon",
+                new Vector2(0.28f, filled ? 0.34f : 0.30f), new Vector2(0.72f, filled ? 0.86f : 0.78f),
+                Color.white, rounded: false);
+            var iconImg = iconGo.GetComponent<Image>();
+            iconImg.raycastTarget = false;
+            if (iconSprite != null)
+            {
+                iconImg.sprite = iconSprite; iconImg.preserveAspect = true;
+                iconImg.color = filled ? RarityTint(item.Rarity) : new Color(1f, 1f, 1f, 0.30f);
+            }
+            else
+            {
+                iconImg.color = new Color(0f, 0f, 0f, 0f);
+                ElarionUiKit.Label(iconGo.transform, "?", 0f, 1f,
+                    filled ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
+                    ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
+            }
+
+            // Item name (or "Empty") along the bottom band.
+            string nameText = filled ? item.Name : "Empty";
+            ElarionUiKit.Label(go.transform, nameText, 0.04f, filled ? 0.30f : 0.26f,
+                filled ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: filled);
+        }
+
+        private void OnSlotTapped(string slotKey)
+        {
+            if (_vm == null) return;
+            // Toggle: tapping the open slot again closes the drawer.
+            if (_drawerSlotKey == slotKey) { CloseDrawer(); return; }
+            SelectSlotKey(slotKey);
+            OpenDrawer(slotKey);
+        }
+
         private void SelectSlotKey(string slotKey)
         {
             if (_vm == null) return;
@@ -318,7 +341,54 @@ namespace DeNelle.Village.Hero
                 if (_vm.EquipSlots[i].SlotKey == slotKey) { _vm.SelectSlot(i); return; }
         }
 
-        // ── Target picker (hero + companions) — vm.TargetNames / vm.SelectTarget ─────
+        // ── Change-drawer: a bottom tray listing compatible items for the chosen slot ──
+        private void OpenDrawer(string slotKey)
+        {
+            CloseDrawer();
+            _drawerSlotKey = slotKey;
+
+            _drawerHost = ElarionUiKit.PanelFramed(_panelTransform,
+                new Vector2(0.06f, 0.02f), new Vector2(0.94f, 0.40f),
+                deep: true, packSpriteName: RpgUiCatalog.PanelWindowDark);
+            var fill = ElarionUiKit.AddImage(_drawerHost.transform, "DrawerFill",
+                new Vector2(0.02f, 0.03f), new Vector2(0.98f, 0.97f),
+                new Color(0.04f, 0.045f, 0.05f, 0.99f));
+            var fImg = fill.GetComponent<Image>();
+            if (fImg != null) fImg.raycastTarget = false;
+            fill.transform.SetAsFirstSibling();
+
+            ElarionUiKit.Label(_drawerHost.transform, "Change " + SlotCaption(slotKey), 0.84f, 0.97f,
+                ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+
+            // Unequip + Done buttons (top row of the drawer).
+            var unequip = ElarionUiKit.ButtonPack(_drawerHost.transform, "Unequip", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.06f, 0.84f), new Vector2(0.26f, 0.965f), () => { _vm?.Unequip(); }, RpgUiCatalog.ButtonFrame);
+            CreamTab(unequip);
+            var done = ElarionUiKit.ButtonPack(_drawerHost.transform, "Done", ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.74f, 0.84f), new Vector2(0.94f, 0.965f), CloseDrawer, RpgUiCatalog.ButtonFrame);
+            CreamTab(done);
+
+            // List host inside the drawer.
+            _listContentArea = new GameObject("ListArea", typeof(RectTransform));
+            _listContentArea.transform.SetParent(_drawerHost.transform, false);
+            var la = _listContentArea.GetComponent<RectTransform>();
+            la.anchorMin = new Vector2(0.05f, 0.06f); la.anchorMax = new Vector2(0.95f, 0.80f);
+            la.offsetMin = Vector2.zero; la.offsetMax = Vector2.zero;
+
+            RebuildList();
+            RebuildSlots();   // refresh slot highlight
+        }
+
+        private void CloseDrawer()
+        {
+            _drawerSlotKey = null;
+            _listContentArea = null;
+            _scrollContent = null;
+            if (_drawerHost != null) { Destroy(_drawerHost); _drawerHost = null; }
+            RebuildSlots();
+        }
+
+        // ── Target picker (hero + companions) ────────────────────────────────────────
         private void BuildTargetBar(Transform parent, Vector2 anchorMin, Vector2 anchorMax)
         {
             var bar = new GameObject("TargetBar", typeof(RectTransform));
@@ -357,94 +427,43 @@ namespace DeNelle.Village.Hero
             }
         }
 
-        private void HighlightTabs()
-        {
-            if (_tabBar == null || _vm == null) return;
-            string active = _vm.SelectedSlotKey == EquipVM.SlotMainhand ? "Btn_WEAPONS" : "Btn_ARMOR";
-            foreach (Transform child in _tabBar.transform)
-            {
-                if (child == null) continue;
-                if (child.name == "Btn_UNEQUIP") continue;   // the unequip CTA is not a slot selector
-                var img = child.GetComponent<Image>();
-                if (img != null) img.color = child.name == active ? TabSelectedTint : TabRestTint;
-            }
-        }
-
-        // Repaint the equipped-summary + total bonuses from vm.Stats + vm.CharacterLabel.
-        private void RefreshSummary()
-        {
-            if (_summaryLabel == null || _vm == null) return;
-
-            string who = _vm.CharacterLabel;
-            string weapon = "none";
-            string armor = "none";
-
-            var ws = _vm.EquipSlots;
-            for (int i = 0; i < ws.Count; i++)
-            {
-                var c = ws[i].Content;
-                if (ws[i].SlotKey == EquipVM.SlotMainhand) weapon = c.HasValue ? c.Value.Name : "none";
-                else if (ws[i].SlotKey == EquipVM.SlotChest) armor = c.HasValue ? c.Value.Name : "none";
-            }
-
-            string dmg = StatLabelValue("Damage");
-            string def = StatLabelValue("Defense");
-            _summaryLabel.text = $"{who}:   {weapon}  /  {armor}      Bonuses:  {dmg} dmg   {def} def";
-        }
-
-        // Pull a stat row's bar label by stat name from vm.Stats (e.g. "+20%"). "" when absent.
-        private string StatLabelValue(string label)
-        {
-            if (_vm == null) return "";
-            foreach (var s in _vm.Stats)
-                if (s.Label == label) return s.Bar.Label ?? "";
-            return "";
-        }
-
-        // ── List build ───────────────────────────────────────────────────────────
+        // ── List build (inside the drawer) ───────────────────────────────────────────
         private void RebuildList()
         {
             using var _ = FlowTrace.Enter("Equip", $"EquipmentPanel.RebuildList slot={_vm?.SelectedSlotKey}");
-            // Tear down any previous list inside the content host.
             _scrollContent = null;
-            if (_listContentArea != null)
+            if (_listContentArea == null) return;
+            for (int i = _listContentArea.transform.childCount - 1; i >= 0; i--)
             {
-                for (int i = _listContentArea.transform.childCount - 1; i >= 0; i--)
-                {
-                    var c = _listContentArea.transform.GetChild(i);
-                    if (c != null) Destroy(c.gameObject);
-                }
+                var c = _listContentArea.transform.GetChild(i);
+                if (c != null) Destroy(c.gameObject);
             }
 
             var listRoot = BuildScrollContent();
             int wantCount = _vm != null ? _vm.CompatibleItems.Count : 0;
 
-            // Guard EACH gear row so one bad ItemVM is logged + skipped, never aborting the list.
             var (built, failed) = _vm != null
                 ? Guard.TryEach("Equip", "build gear row", _vm.CompatibleItems,
                     item => CreateGearRow(listRoot, item))
                 : (0, 0);
 
-            // STOCKED-N COMMIT SEAM: rows offered vs built — data-empty vs built-but-broken.
             FlowTrace.Step("Equip",
                 $"EquipmentPanel stocked {built} gear row(s) (wanted {wantCount}, failed {failed}).");
 
-            // VERIFY rows>0: show a VISIBLE empty-state row instead of a blank gear list.
             if (built == 0)
             {
                 if (wantCount == 0)
                     FlowTrace.Warn("Equip",
-                        $"EquipmentPanel has NO compatible items for slot {_vm?.SelectedSlotKey} — showing empty-state row (data-empty).");
+                        $"EquipmentPanel has NO compatible items for slot {_vm?.SelectedSlotKey} — empty-state row (data-empty).");
                 else
                     FlowTrace.Fail("Equip",
-                        $"EquipmentPanel had {wantCount} item(s) but built 0 rows ({failed} failed) — showing empty-state row (built-but-broken).");
+                        $"EquipmentPanel had {wantCount} item(s) but built 0 rows ({failed} failed) — empty-state row (built-but-broken).");
                 CreateEmptyStateRow(listRoot, "No gear available for this slot.");
             }
 
             FinalizeScroll();
         }
 
-        // A single visible row carrying the empty-state copy — the never-blank fallback.
         private void CreateEmptyStateRow(Transform parent, string msg)
         {
             var go = new GameObject("EmptyStateRow", typeof(TMPro.TextMeshProUGUI), typeof(LayoutElement));
@@ -460,25 +479,11 @@ namespace DeNelle.Village.Hero
             t.raycastTarget = false;
         }
 
-        // Build the masked, vertically-scrolling content tray and return the
-        // VerticalLayoutGroup content the rows parent to. Mirrors the ShopPanel
-        // scroll mechanism EXACTLY (well backing + masked viewport + top-anchored
-        // content + VerticalLayoutGroup + ContentSizeFitter) — the proven anti-
-        // collapse layout. Do not revert to fraction-anchored rows.
         private Transform BuildScrollContent()
         {
             var well = ElarionUiKit.Well(_listContentArea.transform, Vector2.zero, Vector2.one);
             var wImg = well.GetComponent<Image>();
-            if (wImg != null)
-            {
-                wImg.raycastTarget = false;
-                // BlinkChrome ON: neutralize the shared well so the Blink panel shows through
-                // behind the per-item slot plates (mirrors ShopPanel.BuildScrollContent). Flag OFF → unchanged.
-                if (DeNelle.Core.FeatureFlags.BlinkChrome)
-                {
-                    var c = wImg.color; c.a = 0f; wImg.color = c;
-                }
-            }
+            if (wImg != null) wImg.raycastTarget = false;
 
             var viewport = new GameObject("Viewport", typeof(Image), typeof(Mask), typeof(ScrollRect));
             viewport.transform.SetParent(_listContentArea.transform, false);
@@ -486,7 +491,7 @@ namespace DeNelle.Village.Hero
             vr.anchorMin = Vector2.zero; vr.anchorMax = Vector2.one;
             vr.offsetMin = Vector2.zero; vr.offsetMax = Vector2.zero;
             var vImg = viewport.GetComponent<Image>();
-            vImg.color = new Color(0f, 0f, 0f, 0.001f); // near-invisible but a valid mask graphic
+            vImg.color = new Color(0f, 0f, 0f, 0.001f);
             viewport.GetComponent<Mask>().showMaskGraphic = false;
 
             var content = new GameObject("ScrollContent", typeof(RectTransform));
@@ -496,7 +501,7 @@ namespace DeNelle.Village.Hero
             cr.anchorMax = new Vector2(1f, 1f);
             cr.pivot = new Vector2(0.5f, 1f);
             cr.anchoredPosition = Vector2.zero;
-            cr.sizeDelta = Vector2.zero; // height driven by the ContentSizeFitter
+            cr.sizeDelta = Vector2.zero;
 
             var vlg = content.AddComponent<VerticalLayoutGroup>();
             vlg.childAlignment = TextAnchor.UpperCenter;
@@ -523,11 +528,6 @@ namespace DeNelle.Village.Hero
             return content.transform;
         }
 
-        // CRITICAL (ShopPanel zero-height-collapse lesson): the modal is built AND
-        // populated in one synchronous frame before the ScreenSpaceOverlay canvas
-        // resolves its rects, so the top-anchored content (sizeDelta.y starts 0) can
-        // collapse every row to nothing. Force the canvas rects to resolve, then
-        // rebuild the content-area + content layout so rows get real height NOW.
         private void FinalizeScroll()
         {
             if (_scrollContent == null) return;
@@ -537,13 +537,9 @@ namespace DeNelle.Village.Hero
             LayoutRebuilder.ForceRebuildLayoutImmediate(_scrollContent);
         }
 
-        // One gear row: a tech-pack gear socket (weapon vs armor frame) + name + an Equip button.
-        // Data comes from the bound ItemVM (id/name/icon-keys/rarity/equipped). The equipped row is
-        // tinted + tagged; the Equip button routes to vm.Equip(id). Blink slot plate flag-gated.
+        // One gear row in the drawer: slot-appropriate glyph + name + Equip CTA.
         private void CreateGearRow(Transform parent, ItemVM row)
         {
-            bool isWeapon = _vm != null && _vm.SelectedSlotKey == EquipVM.SlotMainhand;
-
             var go = new GameObject("GearRow_" + row.Id, typeof(Image), typeof(LayoutElement));
             go.transform.SetParent(parent, false);
             var le = go.GetComponent<LayoutElement>();
@@ -552,93 +548,62 @@ namespace DeNelle.Village.Hero
             var rowImg = go.GetComponent<Image>();
             DressRowPlate(rowImg, row.Equipped);
 
-            // Tech gear socket (left) — weapon vs armor frame from the pack.
+            string slotKey = _vm != null ? _vm.SelectedSlotKey : EquipVM.SlotMainhand;
             var sock = ElarionUiKit.TechGearSocket(go.transform, "Socket",
                 new Vector2(0.02f, 0.12f), new Vector2(0.16f, 0.88f),
-                new Color(0.85f, 0.7f, 0.2f, 0.9f), isWeapon: isWeapon);
+                new Color(0.85f, 0.7f, 0.2f, 0.9f), isWeapon: slotKey == EquipVM.SlotMainhand);
             sock.GetComponent<Image>().raycastTarget = false;
-            // Drop the pack sword/shield glyph into the socket, sprite-FIRST.
-            var iconSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons,
-                isWeapon ? RpgUiCatalog.IconSword : RpgUiCatalog.IconShield);
+            var iconSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, SlotIconName(slotKey));
             var iconGo = ElarionUiKit.AddImage(sock.transform, "Icon",
                 new Vector2(0.18f, 0.18f), new Vector2(0.82f, 0.82f), Color.white, rounded: false);
             var iconImg = iconGo.GetComponent<Image>();
             iconImg.raycastTarget = false;
-            if (iconSprite != null)
-            {
-                iconImg.sprite = iconSprite;
-                iconImg.preserveAspect = true;
-            }
-            else
-            {
-                iconImg.color = new Color(0f, 0f, 0f, 0f);
-                ElarionUiKit.Label(iconGo.transform, isWeapon ? "/" : "[]", 0f, 1f,
-                    ElarionUi.Parchment, ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
-            }
+            if (iconSprite != null) { iconImg.sprite = iconSprite; iconImg.preserveAspect = true; }
+            else iconImg.color = new Color(0f, 0f, 0f, 0f);
 
-            // Name (upper) + a marker for the equipped row.
             string nameText = row.Name;
             if (row.Equipped) nameText += "   [Equipped]";
-            ElarionUiKit.Label(go.transform, nameText, 0.48f, 0.92f,
+            ElarionUiKit.Label(go.transform, nameText, 0.18f, 0.92f,
                 row.Equipped ? ElarionUi.Gilt : ElarionUi.Parchment,
                 ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.18f, 0.74f, bold: row.Equipped);
 
-            // Equip button (primary tech CTA). Disabled on the already-equipped row.
             string id = row.Id;
+            bool isWeaponSlot = slotKey == EquipVM.SlotMainhand;
             var btn = ElarionUiKit.TechPrimaryButton(go.transform, row.Equipped ? "Equipped" : "Equip",
                 new Vector2(0.76f, 0.14f), new Vector2(0.98f, 0.86f),
-                () => DoEquip(id, isWeapon));
+                () => DoEquip(id, isWeaponSlot));
             if (btn != null) btn.interactable = !row.Equipped;
         }
 
-        // Row plate dressing (flag-gated, sprite-first) — mirrors ShopPanel.DressRowPlate.
-        // BlinkChrome ON + slot plate present → dress with the Blink per-item slot plate
-        // (9-sliced, white). Flag OFF (or plate missing) → the exact current Cell/CellSelected look.
         private static void DressRowPlate(Image rowImg, bool equipped)
         {
             if (rowImg == null) return;
-            if (DeNelle.Core.FeatureFlags.BlinkChrome)
+            var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotItem);
+            if (plate != null)
             {
-                var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotItem);
-                if (plate != null)
-                {
-                    rowImg.sprite = plate;
-                    rowImg.type   = Image.Type.Sliced;
-                    // Keep the equipped affordance: a warm hold tint over the white plate.
-                    rowImg.color  = equipped ? new Color(1.15f, 1.10f, 0.92f, 1f) : Color.white;
-                    return;
-                }
+                rowImg.sprite = plate;
+                rowImg.type   = Image.Type.Sliced;
+                rowImg.color  = equipped ? new Color(1.15f, 1.10f, 0.92f, 1f) : Color.white;
+                return;
             }
-            // Fallback (flag OFF, or plate not imported): the original look, verbatim.
             rowImg.color = equipped ? ElarionUiKit.CellSelected : ElarionUiKit.Cell;
             ElarionUiKit.ApplyRounded(rowImg);
         }
 
-        // Equip routes through the VM (the model seam under it applies damageMult / defense +
-        // drives the body visual via GearVisualApplier; the summary reads back from vm.Stats).
-        // The legacy HeroEquipment demo path is preserved for the two ids it knows, but ONLY for
-        // the HERO (active target index 0) — HeroEquipment lives on the player.
         private void DoEquip(string id, bool isWeapon)
         {
             if (_vm == null) return;
             _vm.Equip(id);
-
             if (_vm.ActiveTargetIndex == 0 && _equip != null && (id == "basic_sword" || id == "leather_armor"))
                 _equip.Equip(id);
-
             Debug.Log($"[EquipmentPanel] Equipped {id} via EquipVM — hero visual/stat updated.");
         }
 
-        // ── WO-434 Phase D: the live hero preview widget + viewer lifecycle ──────────────
-        // The RawImage is built ONCE (persists across vm.Changed renders, unlike the medallion
-        // which is destroyed+rebuilt each render). It sits in the medallion band's LEFT crest
-        // slot — a real 3D portrait of the hero replacing the static crest glyph — so it adds
-        // nothing to the vertical stack and never touches the picker / summary / tabs / scroll.
+        // ── Live hero preview widget (centerpiece) + viewer lifecycle ────────────────
         private void BuildPreviewWidget(Transform parent)
         {
-            // Anchored over the medallion band's left crest circle (matches ClassCrest's slot).
-            var host = ElarionUiKit.AddImage(parent, "HeroPreviewPortrait",
-                new Vector2(0.05f, 0.795f), new Vector2(0.20f, 0.915f),
+            var host = ElarionUiKit.AddImage(parent, "HeroPreview",
+                new Vector2(0.32f, 0.10f), new Vector2(0.68f, 0.88f),
                 new Color(0.02f, 0.047f, 0.094f, 1f), rounded: false);
             var hostImg = host.GetComponent<Image>();
             if (hostImg != null) hostImg.raycastTarget = false;
@@ -646,18 +611,15 @@ namespace DeNelle.Village.Hero
             var imgGo = new GameObject("PreviewRawImage", typeof(RectTransform), typeof(RawImage));
             imgGo.transform.SetParent(host.transform, false);
             var rt = imgGo.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.06f, 0.06f);
-            rt.anchorMax = new Vector2(0.94f, 0.94f);
+            rt.anchorMin = new Vector2(0.04f, 0.04f);
+            rt.anchorMax = new Vector2(0.96f, 0.96f);
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             _previewImage = imgGo.GetComponent<RawImage>();
             _previewImage.raycastTarget = false;
             _previewImage.color = Color.white;
-            _previewImage.enabled = false;   // hidden until a valid RenderTexture exists
+            _previewImage.enabled = false;
         }
 
-        // Begin (or retarget) the preview against the ACTIVE target's live body + equipped
-        // weapon, and bind its RenderTexture to the RawImage. Graceful: any missing piece (no
-        // RawImage, no body, RT failure) simply leaves the preview hidden — never an NRE/blank.
         private void BeginOrRetargetPreview()
         {
             if (_previewImage == null) return;
@@ -670,20 +632,18 @@ namespace DeNelle.Village.Hero
             if (_preview == null)
             {
                 _preview = new HeroPreviewViewer();
-                ok = _preview.Begin(body, textureSize: 384, weaponId: weaponId);
+                ok = _preview.Begin(body, textureSize: 512, weaponId: weaponId);
             }
             else
             {
                 ok = _preview.Retarget(body, weaponId);
-                if (!ok) ok = _preview.IsValid;   // retarget no-op'd but the rig is still valid
+                if (!ok) ok = _preview.IsValid;
             }
 
             if (ok && _preview.IsValid && _preview.Texture != null)
             {
                 _previewImage.texture = _preview.Texture;
                 _previewImage.enabled = true;
-                // A slight yaw reads as a 3/4 portrait (FrameCamera already angles the camera;
-                // this just biases the body so the equipped weapon hand faces the viewer).
                 _preview.SetRotation(18f);
             }
             else
@@ -692,7 +652,6 @@ namespace DeNelle.Village.Hero
             }
         }
 
-        // Refresh the equipped-weapon mesh on the preview (cheap — drives the existing rig).
         private void RefreshPreviewWeapon()
         {
             if (_preview == null || !_preview.IsValid) return;
@@ -711,97 +670,52 @@ namespace DeNelle.Village.Hero
             HidePreview();
         }
 
-        // ── Character medallion (the gold sunburst PORTRAIT MEDALLION, profile_frame) ──
-        // Driven by vm.Portrait (class crest) + vm.CharacterLabel (name — class). Sprite-FIRST:
-        // when profile_frame is absent it falls back to a plain Niche backing so a null sprite
-        // never blanks the screen.
-        private void BuildCharacterMedallion(Transform parent, Vector2 anchorMin, Vector2 anchorMax)
+        // ── Helpers ──────────────────────────────────────────────────────────────────
+        private SlotVM? FindSlot(string slotKey)
         {
-            var host = ElarionUiKit.AddImage(parent, "CharacterMedallion", anchorMin, anchorMax,
-                new Color(0, 0, 0, 0), rounded: false);
-            _medallionHost = host;
-            var hostImg = host.GetComponent<Image>();
-            if (hostImg != null) hostImg.raycastTarget = false;
+            if (_vm == null) return null;
+            foreach (var s in _vm.EquipSlots)
+                if (s.SlotKey == slotKey) return s;
+            return null;
+        }
 
-            var frame = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelProfile);
-            if (frame != null)
+        private static string SlotCaption(string slotKey)
+        {
+            switch (slotKey)
             {
-                var fImg = host.GetComponent<Image>();
-                fImg.sprite = frame; fImg.color = Color.white; fImg.type = Image.Type.Simple;
-                fImg.preserveAspect = false; fImg.raycastTarget = false;
+                case EquipVM.SlotMainhand: return "Weapon (Main Hand)";
+                case EquipVM.SlotOffHand:  return "Shield (Off Hand)";
+                case EquipVM.SlotChest:    return "Full Armor Set";
+                case EquipVM.SlotAmulet:   return "Amulet";
+                case EquipVM.SlotRing:     return "Ring";
+                default:                   return slotKey;
             }
-            else
+        }
+
+        private static string SlotIconName(string slotKey)
+        {
+            switch (slotKey)
             {
-                var niche = ElarionUiKit.Niche(host.transform, Vector2.zero, Vector2.one);
-                var nImg = niche.GetComponent<Image>(); if (nImg != null) nImg.raycastTarget = false;
+                case EquipVM.SlotMainhand: return RpgUiCatalog.IconSword;
+                case EquipVM.SlotOffHand:  return RpgUiCatalog.IconShield;
+                case EquipVM.SlotChest:    return RpgUiCatalog.IconInventory;
+                case EquipVM.SlotAmulet:   return RpgUiCatalog.IconHeart;
+                case EquipVM.SlotRing:     return RpgUiCatalog.IconCompass;
+                default:                   return RpgUiCatalog.IconInventory;
             }
-
-            // Hero crest in the LEFT sunburst circle (the class crest glyph reads as the hero token).
-            string portraitClass = _vm != null ? _vm.Portrait.IconName : "";
-            ElarionUiKit.Label(host.transform, ClassCrest(portraitClass), 0.10f, 0.90f, ElarionUi.Gilt,
-                ElarionUi.FontTitle + 14, TMPro.TextAlignmentOptions.Center, 0.02f, 0.40f, bold: true);
-
-            // Character label (name — class) on the RIGHT-top, from the VM.
-            string label = _vm != null ? _vm.CharacterLabel : "Hero";
-            ElarionUiKit.Label(host.transform, label, 0.56f, 0.92f, ElarionUi.Parchment,
-                ElarionUi.FontHead, TMPro.TextAlignmentOptions.Left, 0.45f, 0.98f, bold: true);
-
-            // TWO bar slots on the RIGHT — HP (red) over MP (blue), driven from vm.Stats fills.
-            BarSlot(host.transform, "HP", 0.34f, 0.52f, RpgUiCatalog.BarFrameRed, RpgUiCatalog.BarFillRed,
-                new Color(0.62f, 0.16f, 0.14f, 1f), StatFill("HP"));
-            BarSlot(host.transform, "MP", 0.12f, 0.30f, RpgUiCatalog.BarFrameBlue, RpgUiCatalog.BarFillBlue,
-                new Color(0.18f, 0.33f, 0.62f, 1f), StatFill("MP"));
         }
 
-        // Read a stat row's normalized fill by name from vm.Stats (1f when absent — full, the old look).
-        private float StatFill(string label)
+        private static Color RarityTint(string rarity)
         {
-            if (_vm == null) return 1f;
-            foreach (var s in _vm.Stats)
-                if (s.Label == label) return s.Bar.Fill01;
-            return 1f;
-        }
-
-        // Destroy + rebuild the medallion so its crest/name match the active target (on switch).
-        private void RebuildMedallion()
-        {
-            if (_panelTransform == null) return;
-            if (_medallionHost != null) Destroy(_medallionHost);
-            BuildCharacterMedallion(_panelTransform, MedAnchorMin, MedAnchorMax);
-        }
-
-        // One horizontal bar slot in the medallion's right column (sprite-first frame+fill,
-        // procedural tinted fallback). fillFrac in [0..1].
-        private void BarSlot(Transform host, string caps, float y0, float y1,
-                             string frameSprite, string fillSprite, Color fallbackFill, float fillFrac)
-        {
-            const float x0 = 0.45f, x1 = 0.97f;
-            var frameGo = ElarionUiKit.AddImage(host, "Bar_" + caps + "_frame",
-                new Vector2(x0, y0), new Vector2(x1, y1), Color.white, rounded: false);
-            var fImg = frameGo.GetComponent<Image>();
-            if (fImg != null) fImg.raycastTarget = false;
-            var fSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleBars, frameSprite);
-            if (fSprite != null) { fImg.sprite = fSprite; fImg.type = Image.Type.Sliced; fImg.color = Color.white; }
-            else { fImg.color = new Color(0f, 0f, 0f, 0.35f); ElarionUiKit.ApplyRounded(fImg); }
-
-            float fw = Mathf.Clamp01(fillFrac);
-            float fillX1 = 0.04f + (0.97f - 0.04f) * fw;
-            var fillGo = ElarionUiKit.AddImage(frameGo.transform, "Bar_" + caps + "_fill",
-                new Vector2(0.04f, 0.20f), new Vector2(fillX1, 0.80f), fallbackFill, rounded: false);
-            var fillImg = fillGo.GetComponent<Image>();
-            if (fillImg != null)
+            switch ((rarity ?? "").ToLowerInvariant())
             {
-                fillImg.raycastTarget = false;
-                var fillS = RpgUiCatalog.Get(RpgUiCatalog.RoleBars, fillSprite);
-                if (fillS != null) { fillImg.sprite = fillS; fillImg.type = Image.Type.Sliced; fillImg.color = Color.white; }
-                else ElarionUiKit.ApplyRounded(fillImg);
+                case "rare":      return new Color(0.55f, 0.75f, 1f, 1f);
+                case "epic":      return new Color(0.78f, 0.55f, 1f, 1f);
+                case "legendary": return new Color(1f, 0.84f, 0.32f, 1f);
+                default:          return Color.white;
             }
-            ElarionUiKit.Label(frameGo.transform, caps, 0f, 1f, ElarionUi.Parchment,
-                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.03f, 0.30f, bold: true);
         }
 
-        // Apply the cohesive CREAM bold + dark-outline label treatment to a pack button,
-        // drawn last so the label sits crisp above the dark frame interior (matches ShopPanel).
         private static void CreamTab(Button btn)
         {
             if (btn == null) return;
@@ -826,18 +740,6 @@ namespace DeNelle.Village.Hero
             }
         }
 
-        private static string ClassCrest(string job)
-        {
-            switch ((job ?? "").ToLowerInvariant())
-            {
-                case "knight": return "/";   // sword
-                case "mage":   return "S";   // staff
-                case "ranger": return "B";   // bow
-                case "cleric": return "C";   // censer
-                default:        return "*";
-            }
-        }
-
         private static string Cap(string s)
         {
             if (string.IsNullOrEmpty(s)) return s;
@@ -858,15 +760,15 @@ namespace DeNelle.Village.Hero
         private void Close()
         {
             DisposeViewModel();
-            DisposePreview();            // WO-434 Phase D — free the clone + RenderTexture + camera (no leak)
+            DisposePreview();
             if (_ui != null) Destroy(_ui);
             _ui = null;
+            _slotsHost = null;
+            _targetBar = null;
+            _drawerHost = null;
+            _drawerSlotKey = null;
             _listContentArea = null;
             _scrollContent = null;
-            _summaryLabel = null;
-            _tabBar = null;
-            _targetBar = null;
-            _medallionHost = null;
             _panelTransform = null;
             _previewImage = null;
             _previewTargetIndex = -1;

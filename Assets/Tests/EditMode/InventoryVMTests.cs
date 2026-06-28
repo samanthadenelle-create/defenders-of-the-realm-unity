@@ -87,6 +87,7 @@ namespace DeNelle.Tests.EditMode
             public int TargetLevel { get; set; } = 1;
             public WeaponDef EquippedWeapon { get; set; }
             public ArmorDef EquippedArmor { get; set; }
+            public WeaponDef EquippedOffHand { get; set; }
             public AccessoryDef EquippedRing { get; set; }
             public AccessoryDef EquippedAmulet { get; set; }
             public string EquippedWeaponName => EquippedWeapon?.name;
@@ -103,6 +104,8 @@ namespace DeNelle.Tests.EditMode
             public void EquipArmorById(string id) { EquippedArmor = new ArmorDef { id = id, name = id, defense = 0.3f }; EquipChanged?.Invoke(); }
             public void UnequipWeapon() { EquippedWeapon = null; EquipChanged?.Invoke(); }
             public void UnequipArmor() { EquippedArmor = null; EquipChanged?.Invoke(); }
+            public void EquipOffHandById(string id) { EquippedOffHand = new WeaponDef { id = id, name = id, category = "shield" }; EquipChanged?.Invoke(); }
+            public void UnequipOffHand() { EquippedOffHand = null; EquipChanged?.Invoke(); }
             public void EquipAccessoryById(string id) { EquippedRing = new AccessoryDef { id = id, name = id, slot = "ring" }; EquipChanged?.Invoke(); }
             public void UnequipAccessory(string slot) { if (slot == "amulet") EquippedAmulet = null; else EquippedRing = null; EquipChanged?.Invoke(); }
         }
