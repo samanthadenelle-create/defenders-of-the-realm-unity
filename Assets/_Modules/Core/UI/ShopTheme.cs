@@ -174,7 +174,7 @@ namespace DeNelle.Core.UI
             chip.style.alignItems = Align.Center;
             chip.style.paddingTop = 4; chip.style.paddingBottom = 4;
             chip.style.paddingLeft = 10; chip.style.paddingRight = 12;
-            chip.style.backgroundColor = new Color(0.18f, 0.14f, 0.08f, 1f);
+            chip.style.backgroundColor = new Color(0.06f, 0.06f, 0.07f, 1f); // obsidian chip (WO-562)
             SetBorderRadius(chip, 12);
             SetBorderWidth(chip, 1);
             SetBorderColor(chip, new Color(Gilt.r, Gilt.g, Gilt.b, 0.55f));
@@ -271,25 +271,30 @@ namespace DeNelle.Core.UI
         }
 
         /// <summary>
-        /// A small round corner close button (the "X"). Themed plum with a gilt rim.
+        /// The shared Close affordance (WO-562: black + gold canon, ONE consistent labelled "Close",
+        /// never a per-panel violet "X"). A gold-trim chip with dark ink text, sized for a thumb tap.
         /// </summary>
         public static void StyleCloseButton(Button button)
         {
             if (button == null) return;
-            button.text = "X";
-            button.style.width = 34; button.style.height = 34;
-            button.style.fontSize = 15;
+            button.text = "Close";
+            button.style.minWidth = 72; button.style.height = 34;
+            button.style.fontSize = 14;
             button.style.unityFontStyleAndWeight = FontStyle.Bold;
-            button.style.backgroundColor = AetherDim;
-            button.style.color = Parchment;
-            button.style.paddingLeft = 0; button.style.paddingRight = 0;
+            button.style.backgroundColor = ElarionUi.GoldButton;
+            button.style.color = ElarionUi.Ink;
+            button.style.paddingLeft = 14; button.style.paddingRight = 14;
             button.style.paddingTop = 0; button.style.paddingBottom = 0;
-            SetBorderRadius(button, 17);
+            SetBorderRadius(button, 9);
             SetBorderWidth(button, 1);
-            SetBorderColor(button, new Color(Gilt.r, Gilt.g, Gilt.b, 0.5f));
-            Color hover = Lighten(AetherDim, 0.12f);
+            SetBorderColor(button, new Color(Gilt.r, Gilt.g, Gilt.b, 0.9f));
+            Color rest  = ElarionUi.GoldButton;
+            Color hover = Lighten(rest, 0.10f);
+            Color press = Darken(rest, 0.12f);
             button.RegisterCallback<PointerEnterEvent>(_ => button.style.backgroundColor = hover);
-            button.RegisterCallback<PointerLeaveEvent>(_ => button.style.backgroundColor = AetherDim);
+            button.RegisterCallback<PointerLeaveEvent>(_ => button.style.backgroundColor = rest);
+            button.RegisterCallback<PointerDownEvent>(_ => button.style.backgroundColor = press);
+            button.RegisterCallback<PointerUpEvent>(_ => button.style.backgroundColor = hover);
         }
 
         /// <summary>

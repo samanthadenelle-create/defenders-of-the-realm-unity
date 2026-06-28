@@ -84,19 +84,14 @@ namespace DeNelle.Village.Hero
             if (canvas != null) canvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, onTapClose: Close);
 
-            var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.16f, 0.06f), new Vector2(0.84f, 0.94f),
-                                                   deep: true, packSpriteName: RpgUiCatalog.PanelWindowDark);
-            var panel = panelGo.transform;
+            // WO-562: canonical obsidian chrome (black + gold trim + gold header "RAIDS" + shared
+            // Close) replaces PanelFramed + a bespoke Header + a per-panel "X" Danger button.
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "RAIDS",
+                new Vector2(0.16f, 0.06f), new Vector2(0.84f, 0.94f), Close, withBackdrop: false);
+            var panel = chrome.content.transform;
 
             // The RAIDS banner image heads the panel (decorative, null-safe).
             BuildBanner(panel);
-
-            // Gold serif title under the banner.
-            ElarionUiKit.Header(panel, "RAIDS", x0: 0.06f, x1: 0.94f, y0: 0.82f, y1: 0.89f);
-
-            // Close (X) — top-right ornate pack-frame danger button (drawn over the banner).
-            ElarionUiKit.ButtonPack(panel, "X", ElarionUiKit.ButtonKind.Danger,
-                                    new Vector2(0.9f, 0.92f), new Vector2(0.985f, 0.985f), Close);
 
             // Content area (the card grid lives here).
             _contentRoot = new GameObject("Content", typeof(RectTransform));

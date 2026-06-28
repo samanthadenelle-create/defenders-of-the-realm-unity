@@ -40,15 +40,20 @@ namespace DeNelle.Core.UI
         // ── Palette (warm parchment / stone + runic gold) ─────────────────────
         // Role-named. uGUI (HudTheme) mirrors these so both toolkits agree.
 
-        /// <summary>Earthy stone panel fill (#2c2115).</summary>
-        public static readonly Color PanelStone     = new Color(0.172f, 0.129f, 0.082f, 0.94f);
-        /// <summary>Darker recessed panel / tray fill.</summary>
-        public static readonly Color PanelStoneDark = new Color(0.110f, 0.086f, 0.058f, 0.97f);
-        /// <summary>Full-screen dim behind a modal.</summary>
-        public static readonly Color Scrim          = new Color(0.02f, 0.015f, 0.04f, 0.62f);
+        // OBSIDIAN CANON (WO-562, owner 2026-06-28): the panel language is BLACK + GOLD TRIM, never
+        // brown. These tokens were warm stone/wood (#2c2115); they are now near-black obsidian so EVERY
+        // surface routing through the shared layer (ElarionUi UIToolkit helpers + ShopTheme + the
+        // UiStyle.UiTheme kit tokens seeded from these .r/.g/.b) reskins to black at once. Match
+        // ElarionUiKit.ObsidianFill (0.02,0.02,0.025,0.98) so uGUI + UIToolkit panels read identically.
+        /// <summary>Panel surface fill — near-black obsidian, lifted a hair for cells/slots over the panel.</summary>
+        public static readonly Color PanelStone     = new Color(0.055f, 0.050f, 0.060f, 0.96f);
+        /// <summary>Panel backboard / recessed tray fill — the canonical obsidian black.</summary>
+        public static readonly Color PanelStoneDark = new Color(0.020f, 0.020f, 0.025f, 0.98f);
+        /// <summary>Full-screen dim behind a modal — deep near-black scrim.</summary>
+        public static readonly Color Scrim          = new Color(0.015f, 0.012f, 0.020f, 0.82f);
 
-        /// <summary>Hewn-stone trim / inner rim (#8b5e3c).</summary>
-        public static readonly Color StoneTrim      = new Color(0.545f, 0.369f, 0.235f, 1f);
+        /// <summary>Trim / inner rim — runic GOLD (was hewn-stone brown; gold-trim canon WO-562).</summary>
+        public static readonly Color StoneTrim      = new Color(0.831f, 0.686f, 0.216f, 1f);
         /// <summary>Runic gold — borders, titles, accents (#d4af37).</summary>
         public static readonly Color Gold           = new Color(0.831f, 0.686f, 0.216f, 1f);
         /// <summary>Brighter gilt highlight (#eec848).</summary>
@@ -203,8 +208,9 @@ namespace DeNelle.Core.UI
             if (!TryApplyPanelBackground(panel))
                 panel.style.backgroundColor = dark ? PanelStoneDark : PanelStone;
             SetRadius(panel, RadiusLg);
-            SetBorderWidth(panel, 2);
-            SetBorderColor(panel, new Color(Gold.r, Gold.g, Gold.b, 0.55f));
+            // Gold-trim canon (WO-562): a full, crisp 3px gold border (was a faint 2px @0.55a).
+            SetBorderWidth(panel, 3);
+            SetBorderColor(panel, new Color(Gold.r, Gold.g, Gold.b, 1f));
         }
 
         /// <summary>A recessed well (scroll tray / viewport) — darker, lightly framed.</summary>

@@ -246,24 +246,13 @@ namespace DeNelle.Village.Talents
             if (canvas != null) canvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, onTapClose: () => { if (_vm != null) _vm.Close(); });
 
-            var backdrop = ElarionUiKit.AddImage(_ui.transform, "LoadoutBackdrop",
-                Vector2.zero, Vector2.one, new Color(0.02f, 0.015f, 0.012f, 0.94f), rounded: false);
-            var bdImg = backdrop.GetComponent<Image>();
-            if (bdImg != null) bdImg.raycastTarget = false;
-
-            var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.10f, 0.10f), new Vector2(0.90f, 0.90f),
-                                                   deep: true, packSpriteName: RpgUiCatalog.PanelWindowDark);
-            var panel = panelGo.transform;
-
-            Color fillColor = new Color(0.07f, 0.055f, 0.042f, 0.985f);
-            if (DeNelle.Core.FeatureFlags.BlinkChrome) fillColor.a = 0f;
-            var solidFill = ElarionUiKit.AddImage(panel, "LoadoutSolidFill",
-                new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f), fillColor);
-            var sfImg = solidFill.GetComponent<Image>();
-            if (sfImg != null) sfImg.raycastTarget = false;
-            solidFill.transform.SetAsFirstSibling();
-
-            _headerLabel = ElarionUiKit.Header(panel, "Hot-Swap Skills", x0: 0.04f, x1: 0.96f, y0: 0.90f, y1: 0.97f);
+            // WO-562: the ONE canonical obsidian chrome (black fill + gold trim + gold header + the
+            // shared Close) replaces the bespoke backdrop + PanelFramed + brown solidFill + custom Header.
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Hot-Swap Skills",
+                new Vector2(0.10f, 0.10f), new Vector2(0.90f, 0.90f),
+                () => { if (_vm != null) _vm.Close(); });
+            var panel = chrome.content.transform;
+            _headerLabel = chrome.title;
 
             // Caption: the class kit is fixed; this bar is for extra talent skills.
             ElarionUiKit.Label(panel, "Your class kit is fixed — assign extra talent skills to your hot-swap bar.",

@@ -99,11 +99,16 @@ namespace DeNelle.Village.UI
             cs.minWidth = 320f;
             cs.maxWidth = 420f;
             cs.paddingTop = 20f; cs.paddingBottom = 20f; cs.paddingLeft = 24f; cs.paddingRight = 24f;
-            cs.backgroundColor = new Color(0.09f, 0.11f, 0.17f, 0.98f);
+            // WO-562 obsidian canon: near-black card + a 2px gold trim (was a hand-rolled blue-grey fill).
+            cs.backgroundColor = new Color(0.02f, 0.02f, 0.025f, 0.98f);
             cs.borderTopLeftRadius = 14f; cs.borderTopRightRadius = 14f;
             cs.borderBottomLeftRadius = 14f; cs.borderBottomRightRadius = 14f;
+            var goldTrim = new Color(0.831f, 0.686f, 0.216f, 1f);
+            cs.borderTopWidth = 2f; cs.borderBottomWidth = 2f; cs.borderLeftWidth = 2f; cs.borderRightWidth = 2f;
+            cs.borderTopColor = goldTrim; cs.borderBottomColor = goldTrim;
+            cs.borderLeftColor = goldTrim; cs.borderRightColor = goldTrim;
 
-            card.Add(MakeLabel("Welcome back, Keeper.", 22f, FontStyle.Bold, new Color(0.95f, 0.85f, 0.45f)));
+            card.Add(MakeLabel("Welcome back, Keeper.", 22f, FontStyle.Bold, new Color(0.933f, 0.784f, 0.282f)));
 
             var awayLine = MakeLabel(AwayText(), 14f, FontStyle.Normal, new Color(0.78f, 0.82f, 0.9f));
             awayLine.style.marginTop = 4f;

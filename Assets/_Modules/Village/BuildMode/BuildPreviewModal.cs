@@ -98,7 +98,7 @@ namespace DeNelle.Village
             panelRT.sizeDelta = new Vector2(360, 440);
             panelRT.anchoredPosition = Vector2.zero;
             var panelImg = panel.GetComponent<Image>();
-            panelImg.color = new Color(0.12f, 0.10f, 0.08f, 0.96f); // earthy dark (matches Village theme)
+            panelImg.color = new Color(0.02f, 0.02f, 0.025f, 0.98f); // WO-562 obsidian canon (was earthy brown)
 
             // Title with friendly display name when available (premium touch).
             var titleGO = new GameObject("Title", typeof(RectTransform), typeof(Text));
@@ -113,7 +113,7 @@ namespace DeNelle.Village
             title.text = "Preview & Orient — " + display;
             title.alignment = TextAnchor.MiddleCenter;
             title.fontSize = 15;
-            title.color = new Color(0.95f, 0.88f, 0.65f); // warm parchment/gold
+            title.color = new Color(0.933f, 0.784f, 0.282f); // WO-562 runic gold title
 
             // RawImage for 3D preview RT (bigger = proper model viewer)
             var imgGO = new GameObject("PreviewImage", typeof(RectTransform), typeof(RawImage));
@@ -172,13 +172,13 @@ namespace DeNelle.Village
             btnRT.anchoredPosition = anchored;
 
             var img = btnGO.GetComponent<Image>();
-            img.color = new Color(0.25f, 0.22f, 0.18f, 1f); // earthy button bg
+            img.color = new Color(0.831f, 0.686f, 0.216f, 0.97f); // WO-562 gold CTA button (was earthy brown)
 
             var txt = btnGO.GetComponentInChildren<Text>();
             txt.text = label;
             txt.alignment = TextAnchor.MiddleCenter;
             txt.fontSize = 12;
-            txt.color = new Color(0.95f, 0.9f, 0.75f);
+            txt.color = new Color(0.137f, 0.098f, 0.055f); // dark ink on gold
 
             // uGUI onClick is registered as a best-effort path, but is NOT relied upon —
             // builds here lack a working EventSystem/GraphicRaycaster, so the manual rect

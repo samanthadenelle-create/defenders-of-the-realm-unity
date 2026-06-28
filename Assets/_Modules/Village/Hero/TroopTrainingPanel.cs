@@ -55,21 +55,17 @@ namespace DeNelle.Village.Hero
             if (canvas != null) canvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, onTapClose: Close);
 
-            var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.22f, 0.08f), new Vector2(0.78f, 0.92f),
-                                                   deep: true, packSpriteName: RpgUiCatalog.PanelWindowDark);
-            var panel = panelGo.transform;
-
-            ElarionUiKit.Header(panel, "Barracks — Train", x0: 0.04f, x1: 0.96f, y0: 0.9f, y1: 0.97f);
+            // WO-562: the ONE canonical obsidian chrome (black fill + gold trim + gold header + the
+            // shared Close) replaces PanelFramed + a bespoke Header + a per-panel "X" Danger button.
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Barracks — Train",
+                new Vector2(0.22f, 0.08f), new Vector2(0.78f, 0.92f), Close, withBackdrop: false);
+            var panel = chrome.content.transform;
 
             // Live economy readout (gold ink, mirrors the store).
             CreateEconomyReadout(panel);
 
             // Army-cap indicator (SlotsUsed / MaxArmySize).
             CreateCapReadout(panel);
-
-            // Close (X) — top-right ornate pack-frame danger button.
-            ElarionUiKit.ButtonPack(panel, "X", ElarionUiKit.ButtonKind.Danger,
-                                    new Vector2(0.9f, 0.9f), new Vector2(0.985f, 0.985f), Close);
 
             // Content area (the scroll list lives here).
             _contentRoot = new GameObject("Content", typeof(RectTransform));

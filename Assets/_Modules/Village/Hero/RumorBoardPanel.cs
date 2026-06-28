@@ -41,6 +41,7 @@ namespace DeNelle.Village.Hero
     public sealed class RumorBoardPanel : MonoBehaviour
     {
         private GameObject _ui;
+        private Transform _panelRoot;   // WO-562: the obsidian content panel (tab strip re-parents here)
         private GameObject _contentRoot;
         private TMPro.TextMeshProUGUI _statusText;
         private bool _subscribed;
@@ -66,46 +67,14 @@ namespace DeNelle.Village.Hero
             if (_handle == null)
                 _handle = PanelManager.Register("Rumor Board", Close, () => _ui != null);
 
-            _ui = new GameObject("RumorBoardPanelUI");
-            _ui.transform.SetParent(null, false);
-
-            var canvas = _ui.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 1000;
-
-            var scaler = _ui.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1080, 1920);
-            scaler.matchWidthOrHeight = 0.5f;
-
-            _ui.AddComponent<GraphicRaycaster>();
-
-            // Backdrop (tap to close)
-            var backdrop = new GameObject("Backdrop", typeof(Image), typeof(Button));
-            backdrop.transform.SetParent(_ui.transform, false);
-            var bdRect = backdrop.GetComponent<RectTransform>();
-            bdRect.anchorMin = Vector2.zero;
-            bdRect.anchorMax = Vector2.one;
-            bdRect.offsetMin = Vector2.zero;
-            bdRect.offsetMax = Vector2.zero;
-            backdrop.GetComponent<Image>().color = ElarionUi.Scrim;
-            backdrop.GetComponent<Button>().onClick.AddListener(Close);
-
-            // Panel frame
-            var panel = new GameObject("Panel", typeof(Image));
-            panel.transform.SetParent(_ui.transform, false);
-            var pr = panel.GetComponent<RectTransform>();
-            pr.anchorMin = new Vector2(0.08f, 0.1f);
-            pr.anchorMax = new Vector2(0.92f, 0.9f);
-            pr.offsetMin = Vector2.zero;
-            pr.offsetMax = Vector2.zero;
-            panel.GetComponent<Image>().color = ElarionUi.PanelStoneDark;
-
-            CreateHeader(panel.transform, "Brom's Rumor Board");
-
-            // Close button
-            CreateBigButton(panel.transform, "Close", new Vector2(0.5f, 0.94f), Close,
-                new Color(ElarionUi.Danger.r, ElarionUi.Danger.g, ElarionUi.Danger.b, 0.55f));
+            // WO-562: the ONE canonical obsidian modal (canvas + scrim + black panel + gold trim +
+            // gold header + the shared Close) replaces the hand-rolled Canvas/backdrop/brown panel +
+            // bespoke header + a custom red Close button.
+            var modal = ElarionUiKit.BuildObsidianModal("RumorBoardPanelUI", "Brom's Rumor Board",
+                new Vector2(0.08f, 0.1f), new Vector2(0.92f, 0.9f), Close, sortingOrder: 1000);
+            _ui = modal.canvas;
+            var panel = modal.chrome.content;
+            _panelRoot = panel.transform;
 
             // WO-454 Phase 2: tab strip (All / Story / Daily / Gear / Endgame) just under the header.
             BuildTabStrip(panel.transform);
@@ -323,7 +292,7 @@ namespace DeNelle.Village.Hero
         {
             if (_activeTab == tab) return;
             _activeTab = tab;
-            if (_ui != null) BuildTabStrip(_ui.transform.Find("Panel") ?? _ui.transform);
+            if (_ui != null) BuildTabStrip(_panelRoot ?? _ui.transform);
             Repaint();
         }
 

@@ -107,8 +107,11 @@ namespace DeNelle.Core.UI
         public UColor GlassDeep     = new UColor(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.86f);
         public UColor Track         = new UColor(0.0f, 0.0f, 0.0f, 0.45f);
         public UColor Cell          = new UColor(ElarionUi.PanelStone.r, ElarionUi.PanelStone.g, ElarionUi.PanelStone.b, 0.84f);
-        public UColor CellSelected  = new UColor(0.26f, 0.20f, 0.13f, 0.95f);
-        public UColor StoneNiche    = new UColor(0.075f, 0.060f, 0.048f, 0.96f);
+        // OBSIDIAN CANON (WO-562): neutralised off the old warm-wood literals to dark neutrals so the
+        // kit's selected-cell + niche read black, matching the obsidian panel language (the other kit
+        // tokens above already follow ElarionUi.PanelStone/Dark which are now obsidian black).
+        public UColor CellSelected  = new UColor(0.12f, 0.12f, 0.14f, 0.95f);
+        public UColor StoneNiche    = new UColor(0.030f, 0.030f, 0.038f, 0.96f);
         public UColor AccentLine    = new UColor(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f);
         public UColor AccentSoft    = new UColor(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.30f);
         public UColor PortraitPlaceholder = new UColor(0.74f, 0.66f, 0.50f, 1f);

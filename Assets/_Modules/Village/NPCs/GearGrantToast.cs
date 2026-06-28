@@ -16,6 +16,7 @@
 
 using UnityEngine;
 using UnityEngine.UI;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Village
 {
@@ -67,52 +68,17 @@ namespace DeNelle.Village
             _group.blocksRaycasts = false;   // never swallow gameplay input
 
             // ── The card (top-centre) ───────────────────────────────────────────
-            var card = new GameObject("Card", typeof(RectTransform), typeof(Image));
-            card.transform.SetParent(transform, false);
-            var crt = (RectTransform)card.transform;
+            // WO-562: built from the ONE shared obsidian toast (black fill + gold top accent +
+            // WebGL-safe Text), so this surface no longer hand-rolls its own bg/accent/label colours.
+            var parts = ElarionUiKit.ToastCard(transform, ElarionUiKit.ToastTone.Gold,
+                                               accentLeft: false, align: TextAnchor.MiddleCenter);
+            var crt = (RectTransform)parts.card.transform;
             crt.anchorMin = new Vector2(0.5f, 1f);
             crt.anchorMax = new Vector2(0.5f, 1f);
             crt.pivot = new Vector2(0.5f, 1f);
             crt.anchoredPosition = new Vector2(0f, -120f);
             crt.sizeDelta = new Vector2(460f, 110f);
-
-            var bg = card.GetComponent<Image>();
-            bg.color = new Color(0.07f, 0.08f, 0.12f, 0.92f);
-            bg.raycastTarget = false;
-
-            // Gold top accent bar (matches the project's prompt styling).
-            var accent = new GameObject("Accent", typeof(RectTransform), typeof(Image));
-            accent.transform.SetParent(card.transform, false);
-            var art = (RectTransform)accent.transform;
-            art.anchorMin = new Vector2(0f, 1f);
-            art.anchorMax = new Vector2(1f, 1f);
-            art.pivot = new Vector2(0.5f, 1f);
-            art.anchoredPosition = Vector2.zero;
-            art.sizeDelta = new Vector2(0f, 6f);
-            var ai = accent.GetComponent<Image>();
-            ai.color = new Color(0.85f, 0.72f, 0.36f, 1f);
-            ai.raycastTarget = false;
-
-            // Text — uGUI Text (no TMP dependency; WebGL-safe).
-            var label = new GameObject("Label", typeof(RectTransform), typeof(Text));
-            label.transform.SetParent(card.transform, false);
-            var lrt = (RectTransform)label.transform;
-            lrt.anchorMin = Vector2.zero;
-            lrt.anchorMax = Vector2.one;
-            lrt.offsetMin = new Vector2(18f, 12f);
-            lrt.offsetMax = new Vector2(-18f, -16f);
-
-            var text = label.GetComponent<Text>();
-            text.text = BuildText(armorLabel, weaponLabel);
-            text.color = new Color(0.93f, 0.92f, 0.88f, 1f);
-            text.fontSize = 24;
-            text.alignment = TextAnchor.MiddleCenter;
-            text.horizontalOverflow = HorizontalWrapMode.Wrap;
-            text.verticalOverflow = VerticalWrapMode.Overflow;
-            text.raycastTarget = false;
-            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
-                       ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
-            if (font != null) text.font = font;
+            if (parts.label != null) parts.label.text = BuildText(armorLabel, weaponLabel);
 
             _shownAt = Time.unscaledTime;
         }

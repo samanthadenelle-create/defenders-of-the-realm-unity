@@ -309,6 +309,159 @@ namespace DeNelle.Core.UI
         }
 
         // =====================================================================
+        // TOAST — the ONE shared non-blocking notification card (WO-562).
+        // ---------------------------------------------------------------------
+        // Every hand-rolled toast (GearGrantToast blue-grey, BuildFeedbackToast
+        // brown) built its own bg + accent + label colours. This is the single
+        // obsidian toast visual: a near-BLACK rounded card + a tone accent bar
+        // (left edge or top edge) + a legacy-uGUI Text label (NO TMP dependency
+        // so it is WebGL-safe, matching the toasts' proven path). Callers keep
+        // their own Canvas + fade/lifetime; they just stop hand-rolling the look.
+        // =====================================================================
+
+        /// <summary>Toast intent — drives the accent bar colour (Gold = grant/info-positive,
+        /// Confirm = success, Danger = denied/error, Info = neutral gold-soft).</summary>
+        public enum ToastTone { Gold, Confirm, Danger, Info }
+
+        /// <summary>The accent-bar colour for a toast tone (sourced from the canon palette).</summary>
+        public static Color ToastAccent(ToastTone tone)
+        {
+            switch (tone)
+            {
+                case ToastTone.Confirm: return new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 1f);
+                case ToastTone.Danger:  return new Color(ElarionUi.Danger.r, ElarionUi.Danger.g, ElarionUi.Danger.b, 1f);
+                case ToastTone.Info:    return AccentSoft;
+                default:                return ObsidianTrim; // Gold
+            }
+        }
+
+        /// <summary>The pieces of a built toast card: the card GameObject (caller sets its
+        /// RectTransform anchors/size + parents it under its own Canvas), the legacy Text
+        /// label (set <c>.text</c>), and the accent Image (retint if desired).</summary>
+        public sealed class ToastParts
+        {
+            /// <summary>The obsidian card root — POSITION + SIZE this RectTransform.</summary>
+            public GameObject card;
+            /// <summary>The legacy uGUI Text label (WebGL-safe) — set its text.</summary>
+            public Text label;
+            /// <summary>The tone accent bar Image.</summary>
+            public Image accent;
+        }
+
+        /// <summary>
+        /// Build the ONE shared obsidian toast card under <paramref name="parent"/>: a near-black
+        /// rounded fill + a soft gold inner rim + a tone accent bar (left edge when
+        /// <paramref name="accentLeft"/>, else a top bar) + a WebGL-safe legacy Text label. Never
+        /// raycast-blocks. The caller positions/sizes the returned <see cref="ToastParts.card"/> and
+        /// sets <see cref="ToastParts.label"/>.text. Centralises the look so no toast hand-rolls chrome.
+        /// </summary>
+        public static ToastParts ToastCard(Transform parent, ToastTone tone,
+                                           bool accentLeft = true, TextAnchor align = TextAnchor.MiddleLeft)
+        {
+            var cardGo = new GameObject("Card", typeof(RectTransform), typeof(Image));
+            cardGo.transform.SetParent(parent, false);
+            var bg = cardGo.GetComponent<Image>();
+            bg.color = ObsidianFill;
+            ApplyRounded(bg);
+            bg.raycastTarget = false;
+            AddInnerRim(cardGo, ObsidianTrim);   // soft gold rim (gold-trim canon)
+
+            var accentGo = new GameObject("Accent", typeof(RectTransform), typeof(Image));
+            accentGo.transform.SetParent(cardGo.transform, false);
+            var art = (RectTransform)accentGo.transform;
+            if (accentLeft)
+            {
+                art.anchorMin = new Vector2(0f, 0f); art.anchorMax = new Vector2(0f, 1f);
+                art.pivot = new Vector2(0f, 0.5f); art.sizeDelta = new Vector2(7f, 0f);
+            }
+            else
+            {
+                art.anchorMin = new Vector2(0f, 1f); art.anchorMax = new Vector2(1f, 1f);
+                art.pivot = new Vector2(0.5f, 1f); art.sizeDelta = new Vector2(0f, 6f);
+            }
+            art.anchoredPosition = Vector2.zero;
+            var ai = accentGo.GetComponent<Image>();
+            ai.color = ToastAccent(tone);
+            ai.raycastTarget = false;
+
+            var labelGo = new GameObject("Label", typeof(RectTransform), typeof(Text));
+            labelGo.transform.SetParent(cardGo.transform, false);
+            var lrt = (RectTransform)labelGo.transform;
+            lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
+            lrt.offsetMin = new Vector2(accentLeft ? 22f : 18f, 10f);
+            lrt.offsetMax = new Vector2(-16f, -12f);
+            var text = labelGo.GetComponent<Text>();
+            text.color = ElarionUi.Parchment;
+            text.fontSize = 24;
+            text.alignment = align;
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.raycastTarget = false;
+            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
+                       ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
+            if (font != null) text.font = font;
+
+            return new ToastParts { card = cardGo, label = text, accent = ai };
+        }
+
+        // =====================================================================
+        // CONFIRM MODAL — the ONE shared yes/no (or OK) popup (WO-562).
+        // ---------------------------------------------------------------------
+        // A complete obsidian confirm/popup: BuildObsidianModal (canvas+scrim+
+        // black panel+gold trim+shared Close) + a centred message + one or two
+        // kit Buttons. So no surface hand-rolls a bespoke confirm dialog.
+        // =====================================================================
+
+        /// <summary>The pieces of a built confirm modal.</summary>
+        public sealed class ConfirmModal
+        {
+            /// <summary>The modal canvas root (Destroy to dismiss).</summary>
+            public GameObject canvas;
+            /// <summary>The obsidian panel chrome (content / title / shared Close).</summary>
+            public PanelChrome chrome;
+            /// <summary>The confirm (primary) button.</summary>
+            public Button confirm;
+            /// <summary>The cancel button (null when no cancel label was supplied).</summary>
+            public Button cancel;
+            /// <summary>The centred message label.</summary>
+            public TextMeshProUGUI message;
+        }
+
+        /// <summary>
+        /// Build a complete shared confirm/popup modal: obsidian panel (black + gold trim + the
+        /// shared Close) with a centred <paramref name="message"/> and a primary Confirm button
+        /// (plus a Cancel when <paramref name="cancelLabel"/> is non-empty). The Close + Cancel
+        /// both fire <paramref name="onCancel"/>; Confirm fires <paramref name="onConfirm"/>.
+        /// Callers Destroy <see cref="ConfirmModal.canvas"/> to dismiss. No bespoke popup chrome.
+        /// </summary>
+        public static ConfirmModal BuildConfirmModal(string name, string title, string message,
+            string confirmLabel, string cancelLabel, Action onConfirm, Action onCancel,
+            ButtonKind confirmKind = ButtonKind.Confirm, int sortingOrder = 32000)
+        {
+            var modal = BuildObsidianModal(name, title,
+                new Vector2(0.28f, 0.34f), new Vector2(0.72f, 0.66f),
+                onCancel ?? onConfirm, sortingOrder);
+            var content = modal.chrome.content.transform;
+
+            var msg = Label(content, message ?? "", 0.40f, 0.82f, ElarionUi.Parchment,
+                            ElarionUi.FontBody, TextAlignmentOptions.Center, 0.08f, 0.92f);
+
+            bool hasCancel = !string.IsNullOrEmpty(cancelLabel);
+            Button cancel = null;
+            if (hasCancel)
+                cancel = Button(content, cancelLabel, ButtonKind.Quiet,
+                                new Vector2(0.10f, 0.10f), new Vector2(0.48f, 0.26f),
+                                () => { if (onCancel != null) onCancel(); });
+
+            var confirm = Button(content, confirmLabel ?? "OK", confirmKind,
+                                 hasCancel ? new Vector2(0.52f, 0.10f) : new Vector2(0.32f, 0.10f),
+                                 hasCancel ? new Vector2(0.90f, 0.26f) : new Vector2(0.68f, 0.26f),
+                                 () => { if (onConfirm != null) onConfirm(); });
+
+            return new ConfirmModal { canvas = modal.canvas, chrome = modal.chrome, confirm = confirm, cancel = cancel, message = msg };
+        }
+
+        // =====================================================================
         // HEADER — section header (crest glyph + gilt underline rule).
         // =====================================================================
 

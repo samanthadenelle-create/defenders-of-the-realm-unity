@@ -84,15 +84,13 @@ namespace DeNelle.Village.Hero
             if (canvas != null) canvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, onTapClose: Close);
 
-            var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.10f, 0.05f), new Vector2(0.90f, 0.95f),
-                                                   deep: true, packSpriteName: RpgUiCatalog.PanelWindowDark);
-            var panel = panelGo.transform;
+            // WO-562: canonical obsidian chrome (black + gold trim + shared Close) replaces
+            // PanelFramed + a per-panel "X" Danger button. BuildHeader still adds the deploy sub-title.
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "",
+                new Vector2(0.10f, 0.05f), new Vector2(0.90f, 0.95f), Close, withBackdrop: false);
+            var panel = chrome.content.transform;
 
             BuildHeader(panel);
-
-            // Close (X) — top-right ornate pack-frame danger button.
-            ElarionUiKit.ButtonPack(panel, "X", ElarionUiKit.ButtonKind.Danger,
-                                    new Vector2(0.92f, 0.93f), new Vector2(0.985f, 0.985f), Close);
 
             // LEFT column — Your Forces (party row + troop list + cap indicator).
             BuildLeftColumn(panel);
