@@ -66,6 +66,14 @@ namespace DeNelle.Village
         private const string DataPathRelative = "OffsetForge/offsets.json";
         // Optional Resources fallback path (no extension for Resources.Load).
         private const string ResourcesPath = "OffsetForge/offsets";
+        // WRITABLE dev-override file (WO-577). In a built player Application.dataPath is read-only,
+        // so the in-game Seating Editor persists here; this file is loaded AS AN OVERLAY on top of
+        // the repo offsets.json (dev entries WIN per id), so a saved offset survives a reload + the
+        // next launch of the same build. The owner also gets a JSON snippet to bake into the repo.
+        private static string DevFilePath => Path.Combine(Application.persistentDataPath, "offsets-dev.json");
+
+        /// <summary>The writable dev-override file path (Application.persistentDataPath/offsets-dev.json).</summary>
+        public static string DevPath => DevFilePath;
 
         // ---- JSON mirror of OffsetForge.OffsetTable (JsonUtility-compatible) -------
         [Serializable] private struct JsonVec3 { public float x; public float y; public float z; }
@@ -95,22 +103,24 @@ namespace DeNelle.Village
             s_loaded = true;
             s_map = new Dictionary<string, AttachmentOffset>(StringComparer.OrdinalIgnoreCase);
 
-            string json = ReadJson();
-            if (string.IsNullOrEmpty(json))
-            {
-                FlowTrace.Step("Offset", "no offsets.json found (dataPath/Resources) -- registry empty (identity preserved).");
-                return;
-            }
+            int baseN = ApplyTable(ReadBaseJson(), "base");
+            int devN  = ApplyTable(ReadDevJson(),  "dev");   // dev overlay WINS per id
+            FlowTrace.Step("Offset", $"loaded attachment offsets: {baseN} base + {devN} dev-override -> {s_map.Count} effective.");
+        }
 
+        // Parse a JSON table and upsert each entry into the map (later calls overwrite earlier =
+        // the dev overlay winning). Returns the count applied. Null/empty/invalid -> 0 (safe).
+        private static int ApplyTable(string json, string label)
+        {
+            if (string.IsNullOrEmpty(json)) return 0;
             JsonTable table = null;
             try { table = JsonUtility.FromJson<JsonTable>(json); }
             catch (Exception ex)
             {
-                FlowTrace.Warn("Offset", $"failed to parse offsets.json: {ex.Message} -- registry empty.");
-                return;
+                FlowTrace.Warn("Offset", $"failed to parse {label} offsets json: {ex.Message} -- skipped.");
+                return 0;
             }
-
-            if (table == null || table.offsets == null) return;
+            if (table == null || table.offsets == null) return 0;
             int n = 0;
             foreach (var e in table.offsets)
             {
@@ -124,11 +134,11 @@ namespace DeNelle.Village
                 };
                 n++;
             }
-            FlowTrace.Step("Offset", $"loaded {n} attachment offset(s) from offsets.json.");
+            return n;
         }
 
         // Read the raw JSON from the tool's data-path file first, then a Resources copy.
-        private static string ReadJson()
+        private static string ReadBaseJson()
         {
             try
             {
@@ -143,6 +153,21 @@ namespace DeNelle.Village
 
             var ta = Resources.Load<TextAsset>(ResourcesPath);
             return ta != null ? ta.text : null;
+        }
+
+        // Read the writable dev-override file (Application.persistentDataPath/offsets-dev.json).
+        // Absent in a fresh build until the Seating Editor saves -> returns null (no overlay).
+        private static string ReadDevJson()
+        {
+            try
+            {
+                if (File.Exists(DevFilePath)) return File.ReadAllText(DevFilePath);
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("Offset", $"dev offsets read failed: {ex.Message} -- ignoring overlay.");
+            }
+            return null;
         }
 
         /// <summary>
@@ -163,6 +188,139 @@ namespace DeNelle.Village
         {
             s_loaded = false;
             s_map = null;
+        }
+
+        // ── WRITER (WO-577 — in-game Seating Editor persistence) ─────────────────────
+
+        /// <summary>
+        /// Upsert one authored offset and persist it. ALWAYS writes the writable dev-override file
+        /// (Application.persistentDataPath/offsets-dev.json) so the change survives in a built player;
+        /// in the Editor it ALSO writes the repo file (Assets/OffsetForge/offsets.json) so the source
+        /// of truth is updated directly. Reloads the cache so the next equip applies it immediately.
+        /// Returns the dev path + a copy-pasteable single-entry JSON snippet (for baking into the
+        /// repo offsets.json from a build, where the repo file is not writable).
+        /// </summary>
+        public static bool SaveOffset(string id, Vector3 pos, Vector3 euler, float scale,
+                                      bool fullOverride, out string devPath, out string snippet)
+        {
+            devPath = DevFilePath;
+            snippet = BuildSnippet(id, pos, euler, scale, fullOverride);
+            if (string.IsNullOrEmpty(id))
+            {
+                FlowTrace.Fail("Offset", "SaveOffset: empty id -- nothing written.");
+                return false;
+            }
+
+            bool devOk = UpsertFile(DevFilePath, id, pos, euler, scale, fullOverride, false);
+#if UNITY_EDITOR
+            // In the Editor, write straight into the committed repo file too.
+            try
+            {
+                string repo = Path.Combine(Application.dataPath, DataPathRelative);
+                UpsertFile(repo, id, pos, euler, scale, fullOverride, true);
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("Offset", $"repo offsets.json write failed: {ex.Message} (dev file written).");
+            }
+#endif
+            Reload();
+            FlowTrace.Step("Offset", $"SaveOffset '{id}' -> dev='{DevFilePath}' (ok={devOk}); snippet logged for repo bake.");
+            return devOk;
+        }
+
+        /// <summary>Remove an authored offset from the dev file (and the repo file in the Editor), then reload.</summary>
+        public static bool RemoveOffset(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return false;
+            bool any = RemoveFromFile(DevFilePath, id);
+#if UNITY_EDITOR
+            try { any |= RemoveFromFile(Path.Combine(Application.dataPath, DataPathRelative), id); }
+            catch (Exception ex) { FlowTrace.Warn("Offset", $"repo offsets.json remove failed: {ex.Message}."); }
+#endif
+            Reload();
+            FlowTrace.Step("Offset", $"RemoveOffset '{id}' (removed={any}).");
+            return any;
+        }
+
+        // Read (or create) a JsonTable at path, upsert the entry, write it back (pretty). When
+        // makeDir is true the parent directory is created first (repo path under Assets/).
+        private static bool UpsertFile(string path, string id, Vector3 pos, Vector3 euler,
+                                       float scale, bool fullOverride, bool makeDir)
+        {
+            try
+            {
+                if (makeDir)
+                {
+                    string dir = Path.GetDirectoryName(path);
+                    if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                }
+                else
+                {
+                    string dir = Path.GetDirectoryName(path);
+                    if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                }
+
+                JsonTable table = null;
+                if (File.Exists(path))
+                {
+                    try { table = JsonUtility.FromJson<JsonTable>(File.ReadAllText(path)); }
+                    catch { table = null; }
+                }
+                if (table == null) table = new JsonTable();
+                if (table.offsets == null) table.offsets = new List<JsonEntry>();
+
+                JsonEntry entry = table.offsets.Find(e => e != null &&
+                    string.Equals(e.id, id, StringComparison.OrdinalIgnoreCase));
+                if (entry == null) { entry = new JsonEntry { id = id }; table.offsets.Add(entry); }
+                entry.id = id;
+                entry.pos = new JsonVec3 { x = pos.x, y = pos.y, z = pos.z };
+                entry.rot = new JsonVec3 { x = euler.x, y = euler.y, z = euler.z };
+                entry.scale = scale <= 0f ? 1f : scale;
+                entry.fullOverride = fullOverride;
+
+                File.WriteAllText(path, JsonUtility.ToJson(table, true));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("Offset", $"UpsertFile '{path}' failed: {ex.Message}.");
+                return false;
+            }
+        }
+
+        private static bool RemoveFromFile(string path, string id)
+        {
+            try
+            {
+                if (!File.Exists(path)) return false;
+                JsonTable table = JsonUtility.FromJson<JsonTable>(File.ReadAllText(path));
+                if (table == null || table.offsets == null) return false;
+                int before = table.offsets.Count;
+                table.offsets.RemoveAll(e => e != null &&
+                    string.Equals(e.id, id, StringComparison.OrdinalIgnoreCase));
+                if (table.offsets.Count == before) return false;
+                File.WriteAllText(path, JsonUtility.ToJson(table, true));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("Offset", $"RemoveFromFile '{path}' failed: {ex.Message}.");
+                return false;
+            }
+        }
+
+        // A copy-pasteable single-entry snippet matching offsets.json's schema (for baking back
+        // into the repo file from a built player, where Assets/ is not writable).
+        private static string BuildSnippet(string id, Vector3 pos, Vector3 euler, float scale, bool fullOverride)
+        {
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            return string.Format(ci,
+                "{{ \"id\": \"{0}\", \"rot\": {{ \"x\": {1:0.###}, \"y\": {2:0.###}, \"z\": {3:0.###} }}, " +
+                "\"pos\": {{ \"x\": {4:0.####}, \"y\": {5:0.####}, \"z\": {6:0.####} }}, " +
+                "\"scale\": {7:0.###}, \"fullOverride\": {8} }}",
+                id, euler.x, euler.y, euler.z, pos.x, pos.y, pos.z,
+                scale <= 0f ? 1f : scale, fullOverride ? "true" : "false");
         }
     }
 }

@@ -66,6 +66,11 @@ namespace OffsetForge
         public Vec3 rot;   // euler degrees (x,y,z)
         public Vec3 pos;   // local position
         public float scale = 1f;
+        // WO-577: when true, the consumer seats from the geometry VERTICAL baseline and treats
+        // rot/pos/scale as the absolute in-hand delta (bypassing its own grip inference). Default
+        // false = the offset is a nudge on top of the consumer's geometric grip. Additive field;
+        // older JSON without the key reads false (back-compat).
+        public bool fullOverride = false;
     }
 
     /// <summary>A flat table of offsets, serialized to/from JSON.</summary>
@@ -98,6 +103,7 @@ namespace OffsetForge
                 existing.rot = entry.rot;
                 existing.pos = entry.pos;
                 existing.scale = entry.scale;
+                existing.fullOverride = entry.fullOverride;
             }
             else
             {

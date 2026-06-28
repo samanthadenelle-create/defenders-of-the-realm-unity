@@ -213,6 +213,9 @@ namespace DeNelle.HUD
             card.Add(Button("+100 Wisdom (talents)",        () => OnGiveWisdom(100)));
             card.Add(Button("Trigger next wave",            OnTriggerWave));
             card.Add(Button("VFX Parade",                   OnVfxParade));
+            // WO-577: in-game Seating Editor (Offset Forge slice 2) — dial weapon/shield
+            // attachment offsets live on the equipped hero, save to offsets.json.
+            card.Add(Button("Seating Editor (gear)",        OnSeatingEditor));
             // Lock-On A/B toggle (WO-512): flip ff.lockon live so the owner can compare
             // locked vs free camera mid-fight in the built exe. FeatureFlags.Get reads
             // PlayerPrefs live each call (no cache), so the write below takes effect next frame.
@@ -505,6 +508,37 @@ namespace DeNelle.HUD
             // arbiter so the modal slot is cleared, not just the display flag).
             Close();
             SetStatus("VFX Parade opened. Use Next/Prev, tag a moment + note, Bookmark -> vfx-picks.json.");
+        }
+
+        // ── In-game Seating Editor (WO-577) ──────────────────────────────────
+        /// <summary>
+        /// Launch the live weapon/shield Seating Editor (Offset Forge slice 2). The HUD asmdef
+        /// can't reference DeNelle.Village, so SeatingEditorOverlay.Launch() is invoked by
+        /// reflection (same idiom as the orient menu / VFX parade). It finds the equipped hero
+        /// itself. Hides the admin overlay so the seating panel is unobstructed.
+        /// </summary>
+        private void OnSeatingEditor()
+        {
+            var t = Type.GetType("DeNelle.Village.UI.SeatingEditorOverlay, DeNelle.Village");
+            if (t == null)
+            {
+                SetStatus("Seating Editor: DeNelle.Village.UI.SeatingEditorOverlay not found in this build.");
+                return;
+            }
+            var launch = t.GetMethod("Launch", BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);
+            if (launch == null)
+            {
+                SetStatus("Seating Editor: SeatingEditorOverlay.Launch() not found.");
+                return;
+            }
+            object instance = null;
+            try { instance = launch.Invoke(null, null); }
+            catch (Exception e) { SetStatus("Seating Editor: launch threw — " + e.Message); return; }
+
+            Close();
+            SetStatus(instance != null
+                ? "Seating Editor opened. Pick Main/Off-hand, dial from vertical, Save (writes offsets.json + logs JSON)."
+                : "Seating Editor: no equipped hero/weapon found to edit.");
         }
 
         // ── Lock-On A/B toggle (WO-512) ──────────────────────────────────────

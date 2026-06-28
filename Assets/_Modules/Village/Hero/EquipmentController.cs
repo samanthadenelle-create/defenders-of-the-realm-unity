@@ -216,6 +216,30 @@ namespace DeNelle.Village
         private string _currentWeaponId;
         private int _armorTier;
 
+        // ── IN-GAME SEATING EDITOR support (WO-577, Offset Forge slice 2) ─────────────
+        // The live on-screen Seating Editor (SeatingEditorOverlay) edits the offset of the
+        // CURRENTLY equipped weapon/off-hand by eye. To preview live + reproduce the runtime
+        // seat exactly, it needs the same inputs the attach path used. These are captured on
+        // each attach (main-hand below; off-hand mirror further down) and consumed by the
+        // public editor API at the bottom of this class. Inert when no editor is open.
+        private string      _currentWeaponMeshKey;     // offset id (mesh name, e.g. "sword_A")
+        private WeaponClass _currentWeaponKind;
+        private bool        _currentWeaponMelee;
+        private float       _currentWeaponHeldLength;
+        private Vector3     _currentWeaponGripPos;
+        private Vector3     _currentWeaponGripEuler;
+        private bool        _currentWeaponNative;
+        private string  _currentOffHandMeshKey;
+        private float   _currentOffHandHeldLength;
+        private Vector3 _currentOffHandGripPos;
+        private Vector3 _currentOffHandGripEuler;
+        private bool    _currentOffHandNative;
+        // While a seating edit is live: suspend the auto idle/combat hold so the grip root
+        // the editor drives is not stomped by ApplyHoldPose, and remember which slot is edited.
+        private bool _seatingEditActive;
+        private bool _seatEditOffHand;
+        private int  _seatEditMode = -1;   // -1 unseated, 0 nudge(geometry), 1 vertical(fullOverride)
+
         // ── ARMOR TINT (WO-567) ──────────────────────────────────────────────────────
         // The combat-pivot north star keeps ONE static hero model — armor is NOT a mesh swap
         // (Blink junked). To make "equipped armor" READ on the body, higher armor tiers tint the
@@ -715,33 +739,44 @@ namespace DeNelle.Village
             // EXCEPTION (opt-in, native-only): a non-conforming prop bypasses geometry and
             // reproduces the Forge raw-pivot frame exactly (legacy replacement). Default false,
             // so a normal authored entry NEVER skips geometry — it only adds a nudge on top.
-            bool fullOverride = hasOffset && fo.fullOverride && vis.native;
+            // OWNER CONVENTION (WO-577, 2026-06-28): fullOverride now means "author from the
+            // 100%-VERTICAL baseline (geometry) + a saved DELTA", written by the in-game Seating
+            // Editor — NOT the old raw-pivot/SeatNative bypass (which the WO-551 notes flagged as
+            // the backwards approach that never reproduced in-game). Dropped the `&& vis.native`
+            // gate so a vertical-delta can be authored for ANY weapon (Tripo/KayKit included).
+            // SAFE: only entries with fo.fullOverride==true take this path, and none existed
+            // before the editor — the DEFAULT geometry+nudge path (WO-551) is byte-for-byte intact.
+            bool fullOverride = hasOffset && fo.fullOverride;
 
             var gripRoot = new GameObject(PropName);
-            if ((vis.native && !meleeSeat) || fullOverride)
+            bool useNativeSeat = (vis.native && !meleeSeat) && !fullOverride;
+            if (useNativeSeat)
             {
-                FlowTrace.Step("Equip", fullOverride
-                    ? "seat: NATIVE+OVERRIDE (opt-in raw-pivot Forge frame — geometry SKIPPED)"
-                    : "seat: NATIVE (trust authored grip-at-origin, scale-only)");
+                FlowTrace.Step("Equip", "seat: NATIVE (trust authored grip-at-origin, scale-only)");
                 SeatNative(prop, gripRoot.transform, vis.heldLength);
             }
             else
             {
-                FlowTrace.Step("Equip", meleeSeat
-                    ? "seat: GEOMETRY — NormalizeInto (true wide-Y/narrow-XZ) + SeatByHandle (hilt-forward)"
-                    : "seat: GEOMETRY — NormalizeInto (bounds-true)");
+                FlowTrace.Step("Equip", fullOverride
+                    ? "seat: GEOMETRY-VERTICAL — NormalizeInto (longest->+Y) + hilt-lower-half (owner vertical baseline + delta)"
+                    : (meleeSeat
+                        ? "seat: GEOMETRY — NormalizeInto (true wide-Y/narrow-XZ) + SeatByHandle (hilt-forward)"
+                        : "seat: GEOMETRY — NormalizeInto (bounds-true)"));
                 NormalizeInto(prop, gripRoot.transform, vis.heldLength);
-                // GRIP-POINT INFERENCE (WO-435 — generalized to ALL melee): NormalizeInto centres
-                // by BOUNDS (mid-shaft / mid-blade), not the grip. SeatByHandle re-seats so the
-                // HANDLE (the narrow end below the head/crossguard) sits at the origin and the
-                // head/blade points +Y. The width-spike profile finds a staff's grip (or falls back
-                // to the narrower-tipped pommel end) exactly as it does for a sword.
+                // GRIP-POINT INFERENCE: NormalizeInto centres by BOUNDS (mid-shaft / mid-blade),
+                // not the grip. For the DEFAULT path SeatByHandle re-seats the inferred handle to
+                // origin (blade +Y). For the VERTICAL-baseline (fullOverride) path the owner rule
+                // is fixed: the hilt is the LOWER HALF, blade up — SeatHiltLowerHalf seats the hand
+                // on the lower-half hilt deterministically (width-spike only refines the grip Y).
                 if (meleeSeat)
                 {
-                    FlowTrace.Try("Equip", "SeatByHandle", () => SeatByHandle(prop, gripRoot.transform));
+                    if (fullOverride)
+                        FlowTrace.Try("Equip", "SeatHiltLowerHalf", () => SeatHiltLowerHalf(prop, gripRoot.transform));
+                    else
+                        FlowTrace.Try("Equip", "SeatByHandle", () => SeatByHandle(prop, gripRoot.transform));
                     // §12 instrumentation: prove the geometry path ran + report the seated grip
-                    // shift (prop local Y after SeatByHandle = how far the handle moved to origin).
-                    FlowTrace.Step("Equip", $"trued+seated: grip-shift localY={prop.transform.localPosition.y:0.###} (geometry)");
+                    // shift (prop local Y = how far the grip moved to origin).
+                    FlowTrace.Step("Equip", $"trued+seated: grip-shift localY={prop.transform.localPosition.y:0.###} (geometry{(fullOverride ? "-vertical" : "")})");
                 }
             }
 
@@ -753,6 +788,16 @@ namespace DeNelle.Village
             _gripRoot = gripRoot.transform;
             _baseGripEuler = vis.gripEuler;
             _currentWeaponProp = gripRoot;
+
+            // Capture the attach inputs the in-game Seating Editor (WO-577) needs to live-preview
+            // + reproduce this seat. Cheap struct copies; consumed only when an editor opens.
+            _currentWeaponMeshKey    = offsetKey;
+            _currentWeaponKind       = vis.kind;
+            _currentWeaponMelee      = meleeSeat;
+            _currentWeaponHeldLength = vis.heldLength;
+            _currentWeaponGripPos    = vis.gripPos;
+            _currentWeaponGripEuler  = vis.gripEuler;
+            _currentWeaponNative     = vis.native;
 
             // Base orientation:
             //  • ALL melee (sword/dagger/axe/hammer/staff/wand — WO-435): build the grip-root
@@ -1024,6 +1069,56 @@ namespace DeNelle.Village
                 prop.transform.localPosition =
                     Quaternion.AngleAxis(180f, Vector3.right) * prop.transform.localPosition;
             }
+        }
+
+        // ── HILT-LOWER-HALF SEAT (WO-577 owner convention, 2026-06-28) ───────────────
+        // From the 100%-vertical baseline (NormalizeInto: longest axis -> +Y, bounds-centre at
+        // origin), the owner's FIXED rule is: the HILT is the LOWER HALF (-Y), the blade points
+        // UP (+Y), and the hand grips the hilt on that lower half. This removes SeatByHandle's
+        // which-end-is-the-hilt ambiguity (no flip): the grip is always in the bottom portion.
+        // Default grip = ~18% up from the bottom (hilt centre near the pommel); a clear width
+        // spike (crossguard) WITHIN the lower half refines the exact grip Y. Prop-LOCAL coords
+        // relative to <paramref name="parent"/> (the grip root). Used by the vertical-authoring /
+        // fullOverride path + the in-game Seating Editor preview; the default path keeps SeatByHandle.
+        private static void SeatHiltLowerHalf(GameObject prop, Transform parent)
+        {
+            if (!TryLocalBounds(prop, parent, out Bounds b)) return;
+            float yMin = b.center.y - b.extents.y;
+            float yMax = b.center.y + b.extents.y;
+            float length = yMax - yMin;
+            if (length < 1e-4f) return;
+            float mid = yMin + length * 0.5f;
+
+            // Default: hilt centre ~18% up from the bottom.
+            float gripY = yMin + length * 0.18f;
+
+            // Refine within the LOWER half only: a crossguard width spike marks the blade/handle
+            // boundary; grip the centre of the handle segment below it.
+            const int Bins = 48;
+            var widthHi = new float[Bins];
+            var hit = new bool[Bins];
+            CollectWidthProfile(prop, parent, yMin, length, Bins, widthHi, hit);
+            float median = MedianOfHit(widthHi, hit);
+            float binH = length / Bins;
+            int spikeBin = -1; float spikeW = 0f;
+            for (int i = 0; i < Bins; i++)
+            {
+                if (!hit[i]) continue;
+                float by = yMin + (i + 0.5f) * binH;
+                if (by > mid) break;                       // lower half only
+                if (widthHi[i] > spikeW) { spikeW = widthHi[i]; spikeBin = i; }
+            }
+            if (spikeBin >= 0 && median > 1e-5f && spikeW >= median * 1.6f)
+            {
+                float spikeY = yMin + (spikeBin + 0.5f) * binH;
+                gripY = (yMin + spikeY) * 0.5f;            // centre of the handle below the crossguard
+            }
+
+            // Shift so the grip point sits at the parent origin (hand bone). NEVER flips — blade
+            // stays +Y by the owner rule.
+            Vector3 lp = prop.transform.localPosition;
+            lp.y -= gripY;
+            prop.transform.localPosition = lp;
         }
 
         // Bin mesh vertices along prop-local Y; record the max cross-section half-extent
@@ -1302,13 +1397,34 @@ namespace DeNelle.Village
             foreach (var c in prop.GetComponentsInChildren<Collider>(true)) if (c != null) Destroy(c);
             foreach (var rb in prop.GetComponentsInChildren<Rigidbody>(true)) if (rb != null) Destroy(rb);
 
+            // OFFSET RESOLUTION (WO-577): an off-hand can now carry an authored VERTICAL-baseline
+            // offset (fullOverride) from the in-game Seating Editor — keyed by mesh name then id.
+            // Only fullOverride is honoured here (the existing shield grip is a baked preset, so a
+            // plain nudge would double-rotate it). The current shield_A entry has no fullOverride,
+            // so this is inert until the owner re-authors the shield from vertical — no regression.
+            string offsetKey = !string.IsNullOrEmpty(vis.mesh) ? vis.mesh : id;
+            bool hasOffset = AttachmentOffsetRegistry.TryGetOffset(offsetKey, out var fo) ||
+                             (offsetKey != id && AttachmentOffsetRegistry.TryGetOffset(id, out fo));
+            bool fullOverride = hasOffset && fo.fullOverride;
+
             var gripRoot = new GameObject(OffHandPropName);
+            if (fullOverride)
+            {
+                // VERTICAL baseline (geometry, longest->+Y) + the saved delta. Shields are not
+                // melee, so no hilt-lower-half; the owner dials the full strap pose from vertical.
+                FlowTrace.Step("Equip", $"off-hand seat: GEOMETRY-VERTICAL + saved DELTA pos={fo.pos} rot={fo.eulerRot} scale={fo.scale:0.###}");
+                NormalizeInto(prop, gripRoot.transform, vis.heldLength);
+                gripRoot.transform.SetParent(hand, false);
+                gripRoot.transform.localPosition = vis.gripPos + fo.pos;
+                gripRoot.transform.localRotation = Quaternion.Euler(fo.eulerRot);
+                gripRoot.transform.localScale    = Vector3.one * (fo.scale > 0f ? fo.scale : 1f);
+            }
             // NATIVE Blink shield: trust the authored grip-at-origin + orientation (scale-only), and
             // seat dead-centre in the hand (zero gripPos/euler) like the bow's proven off-hand seat —
             // the foreign-pivot + (-0.05) offset of the legacy path is exactly what made the shield
             // dangle beside the forearm. Tripo/Resources shields keep the bounds-normalize + preset
             // grip (their pivot is unknown, so normalize centres them deterministically).
-            if (vis.native)
+            else if (vis.native)
             {
                 FlowTrace.Step("Equip", "off-hand seat: NATIVE (trust authored grip-at-origin, scale-only)");
                 SeatNative(prop, gripRoot.transform, vis.heldLength);
@@ -1326,6 +1442,12 @@ namespace DeNelle.Village
             }
 
             _currentOffHandProp = gripRoot;
+            // Capture off-hand attach inputs for the in-game Seating Editor (WO-577).
+            _currentOffHandMeshKey    = offsetKey;
+            _currentOffHandHeldLength = vis.heldLength;
+            _currentOffHandGripPos    = vis.gripPos;
+            _currentOffHandGripEuler  = vis.gripEuler;
+            _currentOffHandNative     = vis.native;
 
             // RENDER-VERIFY + DETACH-ON-FAIL (TGVRU): the shield can attach but be invisible (no
             // enabled renderer / no mesh) or seated on the wrong bone. PROVE it renders + is parented
@@ -1388,6 +1510,9 @@ namespace DeNelle.Village
             // SetArmorTier landed before the HeroBody existed (cheap; clears the flag on success).
             if (_armorTintDirty) ApplyArmorTint();
 
+            // While the in-game Seating Editor drives the grip root, the auto idle/combat hold
+            // must not stomp the previewed pose (WO-577).
+            if (_seatingEditActive) return;
             if (_combatExplicit || _gripRoot == null) return;
             if (_waveManager == null) _waveManager = Object.FindObjectOfType<WaveManager>();
             bool active = _waveManager != null &&
@@ -1564,6 +1689,192 @@ namespace DeNelle.Village
                 }
             }
             return _bodyRenderers.Count > 0;
+        }
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        //  IN-GAME SEATING EDITOR API (WO-577, Offset Forge slice 2)
+        //  Drives the offset of the CURRENTLY equipped weapon/off-hand live, by eye, on the
+        //  REAL hero — the runtime parallel of the editor-only Offset Forge window. The
+        //  SeatingEditorOverlay (DeNelle.Village.UI) is the on-screen UI; this is the model.
+        //  what-you-see-is-what-you-save: the preview mirrors the exact attach math so a Save
+        //  (-> offsets.json via AttachmentOffsetRegistry) reproduces the previewed pose on the
+        //  next equip / scene load. DEV-only — gated by the caller (AdminOverlay dev tools).
+        // ═════════════════════════════════════════════════════════════════════════════
+
+        /// <summary>Snapshot handed to the editor when an edit session begins.</summary>
+        public struct SeatingEditInfo
+        {
+            public bool    valid;
+            public bool    offHand;
+            public string  offsetKey;     // what the offset is saved under (mesh name)
+            public string  label;         // human label (weapon/off-hand id)
+            public bool    melee;
+            public Vector3 pos;           // seeded from any existing saved offset
+            public Vector3 euler;
+            public float   scale;
+            public bool    fullOverride;
+        }
+
+        /// <summary>True while a seating edit session is live (auto hold suspended).</summary>
+        public bool SeatingEditActive => _seatingEditActive;
+
+        /// <summary>Does the requested slot currently have an equipped prop to edit?</summary>
+        public bool HasSeatingTarget(bool offHand) =>
+            (offHand ? _currentOffHandProp : _currentWeaponProp) != null;
+
+        /// <summary>
+        /// Begin editing the offset of the equipped <paramref name="offHand"/> slot. Seeds the
+        /// returned info from any existing saved offset, suspends the auto idle/combat hold, and
+        /// applies the (seeded) preview so the live model immediately reflects the editable pose.
+        /// Returns false (info.valid=false) when that slot has no prop equipped.
+        /// </summary>
+        public bool BeginSeatingEdit(bool offHand, out SeatingEditInfo info)
+        {
+            info = default;
+            var grip = offHand ? _currentOffHandProp : _currentWeaponProp;
+            if (grip == null)
+            {
+                FlowTrace.Warn("Offset", $"BeginSeatingEdit: no {(offHand ? "off-hand" : "weapon")} prop equipped on '{name}'.");
+                return false;
+            }
+
+            string key = offHand ? _currentOffHandMeshKey : _currentWeaponMeshKey;
+            string id  = offHand ? _currentOffHandId      : _currentWeaponId;
+            AttachmentOffset fo = default;
+            bool has = !string.IsNullOrEmpty(key) && AttachmentOffsetRegistry.TryGetOffset(key, out fo);
+
+            info.valid        = true;
+            info.offHand      = offHand;
+            info.offsetKey    = !string.IsNullOrEmpty(key) ? key : id;
+            info.label        = !string.IsNullOrEmpty(id) ? id : info.offsetKey;
+            info.melee        = !offHand && _currentWeaponMelee;
+            info.pos          = has ? fo.pos      : Vector3.zero;
+            info.euler        = has ? fo.eulerRot : Vector3.zero;
+            info.scale        = has && fo.scale > 0f ? fo.scale : 1f;
+            // Default the editor to the owner's vertical-authoring workflow unless an existing
+            // entry was a plain nudge.
+            info.fullOverride = has ? fo.fullOverride : true;
+
+            _seatingEditActive = true;
+            _seatEditOffHand   = offHand;
+            _seatEditMode      = -1;   // force a re-seat on the first preview
+            ApplySeatingPreview(info.pos, info.euler, info.scale, info.fullOverride);
+            FlowTrace.Step("Offset", $"BeginSeatingEdit '{info.offsetKey}' offHand={offHand} seed pos={info.pos} euler={info.euler} scale={info.scale:0.###} full={info.fullOverride}");
+            return true;
+        }
+
+        /// <summary>
+        /// Live-preview an offset on the equipped slot being edited. Mirrors the attach seat math
+        /// so the preview == the saved runtime result. <paramref name="fullOverride"/> true =
+        /// VERTICAL baseline (hilt-lower-half for melee) + this rotation as the absolute in-hand
+        /// pose; false = NUDGE on top of the geometric rig-aware grip (legacy WO-551). Re-seats the
+        /// prop child only when the baseline mode flips (cheap; no destroy / async reload).
+        /// </summary>
+        public void ApplySeatingPreview(Vector3 pos, Vector3 euler, float scale, bool fullOverride)
+        {
+            bool offHand = _seatEditOffHand;
+            var grip = offHand ? _currentOffHandProp : _currentWeaponProp;
+            if (grip == null) return;
+            var grt = grip.transform;
+            if (grt.childCount == 0) return;
+            var child = grt.GetChild(0).gameObject;
+
+            bool    melee   = !offHand && _currentWeaponMelee;
+            float   held    = offHand ? _currentOffHandHeldLength : _currentWeaponHeldLength;
+            Vector3 gripPos = offHand ? _currentOffHandGripPos    : _currentWeaponGripPos;
+            if (scale <= 0f) scale = 1f;
+
+            int wantMode = fullOverride ? 1 : 0;
+            if (_seatEditMode != wantMode)
+            {
+                // Reset the grip root so the child re-seat math (measured in parent-local) is clean.
+                grt.localRotation = Quaternion.identity;
+                grt.localScale    = Vector3.one;
+                grt.localPosition = Vector3.zero;
+                NormalizeInto(child, grt, held > 0f ? held : 1f);
+                if (melee)
+                {
+                    if (fullOverride) SeatHiltLowerHalf(child, grt);
+                    else              SeatByHandle(child, grt);
+                }
+                _seatEditMode = wantMode;
+            }
+
+            // Compose the grip-root transform exactly as the attach path does for this mode.
+            Quaternion baseRot;
+            if (fullOverride)
+                baseRot = Quaternion.identity;                                   // delta IS the pose
+            else if (melee)
+                baseRot = ComputeMeleeGripRotation(_currentWeaponKind);          // rig-aware grip
+            else
+                baseRot = Quaternion.Euler(offHand ? _currentOffHandGripEuler : _currentWeaponGripEuler);
+
+            grt.localPosition = gripPos + pos;
+            grt.localRotation = baseRot * Quaternion.Euler(euler);
+            grt.localScale    = Vector3.one * scale;
+
+            // Keep the editor's mirror of base state coherent so a later EndSeatingEdit / hold
+            // re-apply uses the previewed orientation as the base (no snap-back).
+            if (!offHand)
+            {
+                _baseGripRot   = grt.localRotation;
+                _baseGripEuler = _baseGripRot.eulerAngles;
+            }
+        }
+
+        /// <summary>
+        /// Persist the edited offset to offsets.json (via AttachmentOffsetRegistry) under the slot's
+        /// id, reload the registry, and keep the live preview. Returns the writable dev path + a
+        /// copy-pasteable JSON snippet for the owner to bake into the repo offsets.json. In the
+        /// editor it also writes the repo file directly. FlowTrace'd per §12.
+        /// </summary>
+        public bool SaveSeating(Vector3 pos, Vector3 euler, float scale, bool fullOverride,
+                                out string devPath, out string snippet)
+        {
+            devPath = null; snippet = null;
+            string key = _seatEditOffHand ? _currentOffHandMeshKey : _currentWeaponMeshKey;
+            if (string.IsNullOrEmpty(key)) key = _seatEditOffHand ? _currentOffHandId : _currentWeaponId;
+            if (string.IsNullOrEmpty(key))
+            {
+                FlowTrace.Fail("Offset", "SaveSeating: no offset key for the edited slot — nothing saved.");
+                return false;
+            }
+            if (scale <= 0f) scale = 1f;
+
+            bool ok = AttachmentOffsetRegistry.SaveOffset(key, pos, euler, scale, fullOverride, out devPath, out snippet);
+            FlowTrace.Step("Offset", ok
+                ? $"SaveSeating '{key}': pos={pos} euler={euler} scale={scale:0.###} full={fullOverride} -> {devPath}"
+                : $"SaveSeating '{key}': WRITE FAILED (see warnings).");
+            // Keep showing the just-saved pose (registry reload doesn't re-seat the live prop).
+            ApplySeatingPreview(pos, euler, scale, fullOverride);
+            return ok;
+        }
+
+        /// <summary>Re-equip from the (reloaded) registry to PROVE the saved file reproduces the pose.</summary>
+        public void ReapplySeatingFromRegistry()
+        {
+            AttachmentOffsetRegistry.Reload();
+            bool wasEditing = _seatingEditActive;
+            bool offHand    = _seatEditOffHand;
+            _seatingEditActive = false;     // allow the re-attach to seat normally
+            _seatEditMode = -1;
+            EquipBestForHero();
+            if (wasEditing)
+            {
+                // Re-enter edit on the freshly attached prop so the panel stays live.
+                BeginSeatingEdit(offHand, out _);
+            }
+        }
+
+        /// <summary>End the edit session: restore the auto idle/combat hold on the main weapon.</summary>
+        public void EndSeatingEdit()
+        {
+            if (!_seatingEditActive) return;
+            _seatingEditActive = false;
+            _seatEditMode = -1;
+            // Re-apply the hold pose so the main weapon resumes its idle/combat tilt cleanly.
+            ApplyHoldPose();
+            FlowTrace.Step("Offset", $"EndSeatingEdit on '{name}'.");
         }
 
         // ── Internals ──────────────────────────────────────────────────────────────
