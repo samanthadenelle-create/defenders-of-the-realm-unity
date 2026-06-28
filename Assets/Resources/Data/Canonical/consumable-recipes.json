@@ -115,6 +115,45 @@
         { "id": "ing_starbloom", "count": 2 },
         { "id": "ing_ember_crystal", "count": 1 }
       ]
+    },
+    {
+      "id": "craft-cons_field_poultice",
+      "output": "cons_field_poultice",
+      "displayName": "Bind Field Poultice",
+      "ingredients": [
+        { "id": "ing_moonbloom", "count": 1 },
+        { "id": "ing_cloth_scrap", "count": 1 },
+        { "id": "ing_spring_water", "count": 1 }
+      ]
+    },
+    {
+      "id": "craft-cons_hearthfire_stew",
+      "output": "cons_hearthfire_stew",
+      "displayName": "Cook Hearthfire Stew",
+      "ingredients": [
+        { "id": "ing_ironroot", "count": 2 },
+        { "id": "ing_spring_water", "count": 1 }
+      ]
+    },
+    {
+      "id": "craft-cons_wardens_campfire",
+      "output": "cons_wardens_campfire",
+      "displayName": "Lay Warden's Campfire",
+      "ingredients": [
+        { "id": "ing_cloth_scrap", "count": 2 },
+        { "id": "ing_oil_flask", "count": 1 },
+        { "id": "ing_ironroot", "count": 1 }
+      ]
+    },
+    {
+      "id": "craft-cons_purifying_draught",
+      "output": "cons_purifying_draught",
+      "displayName": "Brew Purifying Draught",
+      "ingredients": [
+        { "id": "ing_moonbloom", "count": 1 },
+        { "id": "ing_shadowcap", "count": 1 },
+        { "id": "ing_spring_water", "count": 1 }
+      ]
     }
   ]
 }

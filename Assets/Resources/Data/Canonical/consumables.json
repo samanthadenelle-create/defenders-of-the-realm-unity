@@ -137,6 +137,46 @@
       "usableInFight": true,
       "glyph": "!",
       "iconPath": "ItemIcons/cons_elarion_blessing"
+    },
+    {
+      "id": "cons_field_poultice",
+      "displayName": "Field Poultice",
+      "kind": "potion",
+      "effect": "heal",
+      "magnitude": 60,
+      "duration": 0,
+      "usableInFight": true,
+      "glyph": "+"
+    },
+    {
+      "id": "cons_hearthfire_stew",
+      "displayName": "Hearthfire Stew",
+      "kind": "food",
+      "effect": "heal",
+      "magnitude": 80,
+      "duration": 0,
+      "usableInFight": true,
+      "glyph": "%"
+    },
+    {
+      "id": "cons_wardens_campfire",
+      "displayName": "Warden's Campfire",
+      "kind": "tent",
+      "effect": "rest",
+      "magnitude": 9999,
+      "duration": 0,
+      "usableInFight": false,
+      "glyph": "^"
+    },
+    {
+      "id": "cons_purifying_draught",
+      "displayName": "Purifying Draught",
+      "kind": "potion",
+      "effect": "heal",
+      "magnitude": 50,
+      "duration": 0,
+      "usableInFight": true,
+      "glyph": "+"
     }
   ]
 }

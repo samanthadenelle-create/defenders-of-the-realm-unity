@@ -45,10 +45,27 @@ namespace DeNelle.Village.Items
             var col = go.GetComponent<Collider>();
             if (col != null) col.isTrigger = true;
 
-            // Cheap unlit-ish tint so it reads as loot without any art dependency.
+            // Cheap loot-gold tint so it reads as loot without any art dependency.
+            // CreatePrimitive ships the built-in Standard shader, which URP cannot
+            // render -> it falls back to Hidden/InternalErrorShader (MAGENTA). Build a
+            // URP-compatible material explicitly (URP/Lit uses "_BaseColor", legacy
+            // "_Color"); Sprites/Default is the always-present last resort. Same class
+            // of fix as the "pink floor" URP/Lit lesson.
             var rend = go.GetComponent<Renderer>();
-            if (rend != null && rend.material != null)
-                rend.material.color = new Color(1f, 0.84f, 0.32f, 1f);
+            if (rend != null)
+            {
+                var shader = Shader.Find("Universal Render Pipeline/Lit");
+                if (shader == null) shader = Shader.Find("Universal Render Pipeline/Unlit");
+                if (shader == null) shader = Shader.Find("Sprites/Default");
+                if (shader != null)
+                {
+                    var gold = new Color(1f, 0.84f, 0.32f, 1f);
+                    var mat = new Material(shader);
+                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", gold);
+                    if (mat.HasProperty("_Color")) mat.SetColor("_Color", gold);
+                    rend.material = mat;
+                }
+            }
 
             go.AddComponent<ItemPickupMarker>().Init(lines);
         }

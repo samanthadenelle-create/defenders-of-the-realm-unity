@@ -122,6 +122,7 @@ namespace DeNelle.Editor
             // asserts on the resolved capability flags + a SOFT prefabPath coverage count
             // (WO-Item-2's generator fills those — do NOT fail on them yet).
             CheckItemCapabilities(weapons, armors, failures, log);
+            CheckCraftingChain(failures, log);
 
             // --- ARMED-HERO INVARIANT (WO-Item Addressables equip) -----------------
             // At scale (433+ weapons, Blink Addressable-keyed) BestWeapon(job,1) may now
@@ -586,6 +587,100 @@ namespace DeNelle.Editor
                            $"{weapons.Count}W + {armors.Count}A + {consumables.Count}C entries");
             log.AppendLine($"[item-model] SOFT prefabPath coverage: {prefabResolved}/{carriableTotal} " +
                            $"Carriable entries resolve a non-null prefabPath (WO-Item-2 fills the rest)");
+        }
+
+        // =====================================================================
+        //  CRAFTING CHAIN — drops -> craft -> inventory data smoke (WO Consumable-
+        //  Crafting-V1 + overnight stretch). The runtime transaction reuses the
+        //  already-shipping VillageInventory larder (proven elsewhere); this oracle
+        //  guards the DATA chain so new content can never break craftability:
+        //   HARD (fail REGRESSION):
+        //    - every recipe Output resolves in the consumable catalog
+        //    - every recipe ingredient resolves in the material catalog (legacy ids OK)
+        //    - every art-backed (ing_*) ingredient is DROPPABLE in >=1 loot table
+        //      (so the ingredient is obtainable -> the recipe is actually craftable)
+        //    - every loot-table drop materialId resolves in the material catalog
+        //      (no phantom drop) — legacy scaffolding ids excepted
+        //   SOFT (log only): ing_* materials used by no recipe (orphan ingredient)
+        // =====================================================================
+        private static void CheckCraftingChain(List<string> failures, StringBuilder log)
+        {
+            // Documented legacy scaffolding ids: referenced by the 4 pre-existing
+            // recipes + the default loot tables, intentionally have NO MaterialDef
+            // (glyph fallback). Must not fail the gate.
+            var legacy = new HashSet<string>
+            {
+                "wild-herb", "rare-essence", "monster-hide", "tattered-cloth", "ember-resin"
+            };
+
+            MaterialCatalog.Reload();
+            ConsumableCatalog.Reload();
+            ConsumableCraftingCatalog.Reload();
+            LootTableCatalog.Reload();
+
+            var materialIds = new HashSet<string>();
+            foreach (var m in MaterialCatalog.All)
+                if (m != null && !string.IsNullOrEmpty(m.Id)) materialIds.Add(m.Id);
+
+            // Union of every materialId dropped by any loot table (obtainable set).
+            var droppable = new HashSet<string>();
+            foreach (var t in LootTableCatalog.All)
+            {
+                if (t == null || t.Drops == null) continue;
+                foreach (var d in t.Drops)
+                {
+                    if (d == null || string.IsNullOrEmpty(d.MaterialId)) continue;
+                    droppable.Add(d.MaterialId);
+                    if (!materialIds.Contains(d.MaterialId) && !legacy.Contains(d.MaterialId))
+                        failures.Add($"loot-tables.json: table '{t.Id}' drops phantom material '{d.MaterialId}' (no MaterialDef)");
+                }
+            }
+
+            var recipes = ConsumableCraftingCatalog.All;
+            var usedIngredients = new HashSet<string>();
+            int chainOk = 0;
+            foreach (var r in recipes)
+            {
+                if (r == null || string.IsNullOrEmpty(r.Id)) continue;
+
+                if (string.IsNullOrEmpty(r.Output) || !ConsumableCatalog.IsConsumable(r.Output))
+                    failures.Add($"consumable-recipes.json: '{r.Id}' output '{r.Output}' is not a known consumable");
+
+                bool ingredientsOk = true;
+                if (r.Ingredients != null)
+                {
+                    foreach (var ing in r.Ingredients)
+                    {
+                        if (ing == null || string.IsNullOrEmpty(ing.Id)) continue;
+                        usedIngredients.Add(ing.Id);
+
+                        bool isMat = materialIds.Contains(ing.Id);
+                        if (!isMat && !legacy.Contains(ing.Id))
+                        {
+                            failures.Add($"consumable-recipes.json: '{r.Id}' needs unknown ingredient '{ing.Id}' (no MaterialDef)");
+                            ingredientsOk = false;
+                        }
+                        // Art-backed ingredient must be obtainable from a drop, else the
+                        // recipe is uncraftable in normal play.
+                        if (isMat && ing.Id.StartsWith("ing_") && !droppable.Contains(ing.Id))
+                        {
+                            failures.Add($"consumable-recipes.json: '{r.Id}' ingredient '{ing.Id}' drops from NO loot table (uncraftable)");
+                            ingredientsOk = false;
+                        }
+                    }
+                }
+                if (ingredientsOk && ConsumableCatalog.IsConsumable(r.Output)) chainOk++;
+            }
+
+            // SOFT: art-backed materials that no recipe consumes (dead-end drops).
+            int orphan = 0;
+            foreach (var id in materialIds)
+                if (id.StartsWith("ing_") && !usedIngredients.Contains(id)) orphan++;
+
+            log.AppendLine($"[crafting] chain checked: {recipes.Count} recipe(s), {materialIds.Count} material(s), " +
+                           $"{droppable.Count} droppable id(s); {chainOk} recipe(s) fully craftable drops->craft->consumable");
+            if (orphan > 0)
+                log.AppendLine($"[crafting] SOFT: {orphan} ing_* material(s) used by no recipe (dead-end drop)");
         }
 
         // =====================================================================
