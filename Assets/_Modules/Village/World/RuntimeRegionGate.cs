@@ -187,7 +187,10 @@ namespace DeNelle.Village
 
             // 6) AI cross-scene link — only once OuterWorld is additive-loaded.
             if (SceneManager.GetSceneByName(OuterWorldSceneName).isLoaded)
+            {
                 BuildAiLink(width);
+                LogSpawnReachability();   // OuterWorld already additive at Start: log full-route reachability now
+            }
             else
             {
                 FlowTrace.Step("RuntimeSeam",
@@ -206,7 +209,45 @@ namespace DeNelle.Village
             if (scene.name != OuterWorldSceneName || _aiLinkBuilt) return;
             float width = _recipe != null && _recipe.approachWidth > 0.01f ? _recipe.approachWidth : 7f;
             BuildAiLink(width);
+            // WO-468 4-lane capture: now that BOTH the castle navmesh AND the additive OuterWorld
+            // navmesh are live (the real play condition), log whether the hero SPAWN can PATH to this
+            // gate's threshold. The Start-time AssertApproachWelded tests only gate-local weld + ran
+            // castle-only; this tests the full spawn->gate route with the dual navmesh present, which
+            // is what AssertHeroCrossing actually exercises.
+            LogSpawnReachability();
             SceneManager.sceneLoaded -= OnOuterWorldLoaded;
+        }
+
+        // Per-gate spawn->threshold reachability with all navmeshes live (castle + additive OuterWorld).
+        private void LogSpawnReachability()
+        {
+            Guard.Try("RuntimeSeam", "log spawn->gate reachability", () =>
+            {
+                var spawnGo = GameObject.Find("HeroStartPoint_PlayerSpawn")
+                           ?? GameObject.Find("HeroStartPoint_InsidePersonalQuarters");
+                Vector3 spawn = spawnGo != null ? spawnGo.transform.position : Vector3.zero;
+                Vector3 threshold = ToWorld(new Vector3(_gatePos.x, _gatePos.y, _thresholdZ));
+                bool sSpawn = NavMesh.SamplePosition(spawn, out NavMeshHit hS, 5f, NavMesh.AllAreas);
+                bool sThr   = NavMesh.SamplePosition(threshold, out NavMeshHit hT, 2f, NavMesh.AllAreas);
+                if (!sSpawn || !sThr)
+                {
+                    FlowTrace.Fail("RuntimeSeam",
+                        $"SPAWN_TO_GATE_FAIL [{SideName(_facingYaw)}] — sample spawn(onMesh={sSpawn})@{spawn} or threshold(onMesh={sThr})@{threshold} failed.");
+                    return;
+                }
+                var path = new NavMeshPath();
+                NavMesh.CalculatePath(hS.position, hT.position, NavMesh.AllAreas, path);
+                int corners = path.corners != null ? path.corners.Length : 0;
+                Vector3 last = corners > 0 ? path.corners[corners - 1] : hS.position;
+                float approach = Vector3.Distance(last, hT.position);
+                if (path.status == NavMeshPathStatus.PathComplete)
+                    FlowTrace.Step("RuntimeSeam",
+                        $"SPAWN_TO_GATE_OK [{SideName(_facingYaw)}] — spawn{spawn} -> threshold{threshold} PATH-COMPLETE (approach {approach:F1}m). Hero can walk to this gate.");
+                else
+                    FlowTrace.Fail("RuntimeSeam",
+                        $"SPAWN_TO_GATE_FAIL [{SideName(_facingYaw)}] — spawn{spawn} -> threshold{threshold} is {path.status}, closest {approach:F1}m (lastCorner {last}). " +
+                        "The dual castle+OuterWorld navmesh severs this lane (likely a structure pinch or dual-sheet edge). This is the AssertHeroCrossing failure.");
+            });
         }
 
         // --------------------------------------------------------------------
@@ -334,6 +375,17 @@ namespace DeNelle.Village
                 trig.ProximityRadius = _recipe.triggerRadius > 0.01f ? _recipe.triggerRadius : 6f;
                 FlowTrace.Step("RuntimeSeam",
                     $"trigger[{SideName(_facingYaw)}] seated @DECK-CENTRE world{ToWorld(new Vector3(_gatePos.x, _gatePos.y, deckCentreZ))} (southZ={deckCentreZ:F1}) -> '{_recipe.to}'@{ToWorld(_landing)} additive={trig.loadAdditive} r={trig.ProximityRadius} (EffRadius=Max(r,40m)) — sphere blankets the {overlap + (_gatePos.z - _thresholdZ):F0}m approach deck so the prompt is FORGIVING (fires on the whole approach, not just the exact spot).");
+                // WO-530: behavior-neutral. Log the trigger's FINAL world position (AFTER parenting/
+                // SetParent, which is what AutoPilot's SEAM-UNREACHABLE measures against) plus a navmesh
+                // sample at both the trigger and the threshold, so a fleet run shows where the trigger
+                // ACTUALLY lands at runtime and whether it sits on the baked mesh (vs the 7045m red herring).
+                Vector3 thresholdWorld = ToWorld(new Vector3(_gatePos.x, _gatePos.y, _thresholdZ));
+                bool trigOnMesh = NavMesh.SamplePosition(go.transform.position, out NavMeshHit hTrig, 4f, NavMesh.AllAreas);
+                bool thrOnMesh  = NavMesh.SamplePosition(thresholdWorld, out NavMeshHit hThr, 4f, NavMesh.AllAreas);
+                FlowTrace.Step("RuntimeSeam",
+                    $"trigger FINAL world pos {go.transform.position} (parent '{(transform != null ? transform.name : "<none>")}') " +
+                    $"navSample(onMesh={trigOnMesh} hit @ {(trigOnMesh ? hTrig.position.ToString() : "n/a")}); " +
+                    $"thresholdWorld {thresholdWorld} navSample(onMesh={thrOnMesh} hit @ {(thrOnMesh ? hThr.position.ToString() : "n/a")}).");
             });
         }
 

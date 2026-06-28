@@ -83,28 +83,27 @@ namespace DeNelle.Village.World
 
             var parent = new GameObject(BoundaryName);
 
-            // WO-468 Phase 2 (un-stack): terrain is 1000x1000 but SHIFTED SOUTH to sit
-            // side-by-side with the castle — it now spans world z = -72 (north edge, just
-            // south of the castle gate) to -1072 (south edge), centred at z = -572; X stays
-            // ±500. The ring hugs those edges (~13 m inside) so the player can reach the cave
-            // at z=-700 but cannot walk off. North wall is OPEN-ish at the seam handled by the
-            // navlink; we still wall it just north of the terrain edge so the player can't
-            // wander into the void between the castle and the terrain off the path.
-            const float CenterZ = -572f;
-            // North edge is walled EXCEPT a ~24 m gap at the path (x≈0) where the navlink seam
-            // from the castle crosses — otherwise the player could never enter from the castle.
-            // Two segments leave x∈[-12,12] open for the crossing.
-            AddWall(parent.transform, "North_W", new Vector3(-256f, 10f, -74f), new Vector3(488f, 20f, 2f));
-            AddWall(parent.transform, "North_E", new Vector3(256f, 10f, -74f),  new Vector3(488f, 20f, 2f));
-            AddWall(parent.transform, "South", new Vector3(0f, 10f, -1070f), new Vector3(970f, 20f, 2f));
-            AddWall(parent.transform, "East",  new Vector3(485f, 10f, CenterZ),  new Vector3(2f, 20f, 992f));
-            AddWall(parent.transform, "West",  new Vector3(-485f, 10f, CenterZ), new Vector3(2f, 20f, 992f));
+            // WO-468 WRAPPED SEAM (2026-06-27): the terrain is ORIGIN-CENTERED again (1000x1000,
+            // edges at ±500) and WRAPS the castle on all 4 sides — superseding the WO-468-Phase-2
+            // south-shift (the old CenterZ=-572 / z=-74..-1070 ring walled only the south half against
+            // the now-centered terrain, leaving N/E/W open to the void). The castle sits at world
+            // origin; ALL 4 gate crossings are INTERIOR warps at ±66 (HeroLinkCrossing/SceneTransition),
+            // fully inside this perimeter — so the ±485 ring is the FAR map edge and is a CLOSED 4-wall
+            // box (NO gate-lane gaps: a gap on a gate axis would only expose the void at ±485 for the
+            // player walking straight out, since the gates aren't at the boundary). ~15 m inside the
+            // ±500 edge, 20 m tall, 2 m thick.
+            const float Edge = 485f;
+            const float Len  = 970f;   // span across the other axis (±485)
+            AddWall(parent.transform, "North", new Vector3(0f, 10f,  Edge), new Vector3(Len, 20f, 2f));
+            AddWall(parent.transform, "South", new Vector3(0f, 10f, -Edge), new Vector3(Len, 20f, 2f));
+            AddWall(parent.transform, "East",  new Vector3( Edge, 10f, 0f), new Vector3(2f, 20f, Len));
+            AddWall(parent.transform, "West",  new Vector3(-Edge, 10f, 0f), new Vector3(2f, 20f, Len));
 
             // A new GameObject lands in the ACTIVE scene (MainCastle_Hall) by default;
             // move the ring into OuterWorld so it unloads/reloads with that scene.
             SceneManager.MoveGameObjectToScene(parent, ow);
 
-            Debug.Log("[OuterWorldBoundary] 4 edge colliders injected at ±485 (OuterWorld 1000x1000, additively loaded).");
+            Debug.Log("[OuterWorldBoundary] closed 4-wall ring injected at ±485 (origin-centered OuterWorld 1000x1000, wraps the castle).");
         }
 
         // Create one invisible wall: a GameObject with ONLY a BoxCollider (no MeshRenderer).

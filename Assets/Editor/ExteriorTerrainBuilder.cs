@@ -152,9 +152,16 @@ namespace DeNelle.Editor
         // tiles at Y≈0.015 and the seam-blended terrain at Y≈0. 0.5 m
         // gives a small visible step at the wall while keeping the
         // terrain BELOW the hex tiles so they don't compete for pixels.
-        private const float TerrainBaseDepth = 0.5f;   // owner 2026-05-20: was 22 — terrain dropped out of
-                                                       // hero sight from village ground. 0.5 m below village
-                                                       // floor keeps a clean seam with the hex disc edge.
+        // WO-468 wrapped-seam (2026-06-27): raised 0.5 -> 4.0 so the heightmap has DOWNWARD
+        // headroom for the castle-footprint DEPRESSION (CastleDepressionDepth, ~-3 m within ±62 of
+        // origin). Heightmap value 0 = world Y = -TerrainBaseDepth; with 0.5 the terrain could only
+        // sink to -0.5 (clamped), too shallow to seat OuterWorld ground clearly BELOW the castle
+        // floor (Y=0) — the wrapped origin-centered terrain pokes through the castle floor. 4.0 lets
+        // the depression reach -3 while baseLevel01 keeps all non-depressed ground exactly at Y=0
+        // (the legacy 0.5 Z-fight tuning was for Village.unity hex tiles, abandoned — terrain is in
+        // OuterWorld.unity now). The south biome (designed to sink to -14, previously clamped at
+        // -0.5) now reveals a gentle valley down to -4, which is more correct, not a regression.
+        private const float TerrainBaseDepth = 4.0f;
 
         // Heightmap resolution -- must be 2^n + 1. 513 gives ~0.58u per sample
         // across 300u, plenty for rolling hills without tanking import time.
@@ -186,6 +193,15 @@ namespace DeNelle.Editor
         private const float CastleClearHalfX  = 62f;   // origin-centered; covers the ±42 walls + margin
         private const float CastleClearHalfZ  = 62f;
         private const float CastleClearFalloff = 14f;  // soft taper so the tree-line edge isn't a hard ring
+
+        // WO-468 wrapped-seam castle DEPRESSION (2026-06-27): the origin-centered terrain now wraps
+        // UNDER the castle (which sits at world origin, floor at Y=0). Without a depression the
+        // OuterWorld ground would be coplanar with the castle floor and POKE THROUGH it. Sink the
+        // terrain to this depth within the castle footprint (±CastleClearHalfX/Z), smoothly tapering
+        // over CastleClearFalloff, so OuterWorld ground sits clearly BELOW the castle floor. Mirrors
+        // the SeamWeight footprint (1.0 inside ±62, smoothstep taper). The Task-2 NavMeshModifierVolume
+        // separately carves the OuterWorld navmesh hole here; this is the VISUAL no-poke-through term.
+        private const float CastleDepressionDepth = -3f;
 
         // ── Tree budget (§9.6) ───────────────────────────────────────────────
         // WO-468 Phase 1: bumped 320 -> 1000 so the ~11x-larger terrain isn't
@@ -372,6 +388,11 @@ namespace DeNelle.Editor
                     float flat = CorridorWeight(worldX, worldZ);
                     float elevatedY = Mathf.Lerp(biomeY, 0f, flat);
 
+                    // WO-468 wrapped-seam: sink the castle footprint BELOW the castle floor (Y=0) so
+                    // the origin-centered terrain that now wraps under the castle doesn't poke through.
+                    float castleW = SeamWeight(worldX, worldZ);
+                    elevatedY = Mathf.Lerp(elevatedY, CastleDepressionDepth, castleW);
+
                     // Normalise back to 0..1 heightmap space.
                     heights[z, x] = Mathf.Clamp01(baseLevel01 + elevatedY / TerrainHeight);
                 }
@@ -393,8 +414,9 @@ namespace DeNelle.Editor
             // WO-483 RE-CENTER (2026-06-23): the terrain is origin-centered again and now
             // OVERLAPS the castle scene at world origin, so the castle/wall footprint MUST stay
             // clear of scattered trees/rocks (owner: "trees populate inside walls"). 1.0 inside
-            // the footprint, smoothstep taper over CastleClearFalloff. Used ONLY by the tree
-            // (~877) + rock (~1013) reject — NO terrain-height effect (height uses VillageHalfX/Z).
+            // the footprint, smoothstep taper over CastleClearFalloff. Used by the tree + rock
+            // reject AND (WO-468 wrapped-seam) by the castle-footprint DEPRESSION in CreateTerrainData/
+            // WorldHeightAt (biome height still uses VillageHalfX/Z; this only carves the castle dip).
             float dx = Mathf.Abs(worldX) - CastleClearHalfX;
             float dz = Mathf.Abs(worldZ) - CastleClearHalfZ;
             float d = Mathf.Max(dx, dz);                 // <=0 inside the footprint, grows outside
@@ -512,7 +534,11 @@ namespace DeNelle.Editor
             // Mirror CreateTerrainData: only the cave corridor (WO-468) flattens
             // now — the village/seam plateau is gone (WO-468 Phase 2).
             float flat = CorridorWeight(worldX, worldZ);
-            return Mathf.Lerp(biomeY, 0f, flat);
+            float elevatedY = Mathf.Lerp(biomeY, 0f, flat);
+            // WO-468 wrapped-seam: mirror CreateTerrainData's castle-footprint depression so
+            // steepness/scatter sampling matches the real surface.
+            float castleW = SeamWeight(worldX, worldZ);
+            return Mathf.Lerp(elevatedY, CastleDepressionDepth, castleW);
         }
 
         /// <summary>

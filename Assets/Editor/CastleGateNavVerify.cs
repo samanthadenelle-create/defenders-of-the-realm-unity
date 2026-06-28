@@ -100,6 +100,86 @@ namespace DeNelle.Editor
             Debug.Log($"[AllGates] {(reachable == comps.Length ? "GATE_NAV_OK" : "GATE_NAV_FAIL")} :: {reachable}/{comps.Length} gates reachable from spawn.");
         }
 
+        // WO-468 4-LANE DIAGNOSTIC (read-only): the runtime SceneTransitionTriggers do NOT exist
+        // in the saved scene (RuntimeRegionGate builds them at play time), so DiagnoseAllGates sees
+        // 0 triggers. This instead path-tests the hero spawn -> EACH of the 4 recipe-derived gate
+        // openings + their exit-strip OUTER ends on the COMMITTED castle navmesh, naming exactly
+        // which side(s) the navmesh fails to reach and the closest approach. This is the §12 capture
+        // for "only south traversable". Batchmode: DiagnoseFourLanes.
+        public static void DiagnoseFourLanes()
+        {
+            EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            int surfaces = ReloadCommittedNavMesh();
+            Debug.Log("[FourLanes] NavMeshSurfaces with persisted data = " + surfaces);
+
+            var spawnGo = GameObject.Find("HeroStartPoint_PlayerSpawn")
+                       ?? GameObject.Find("HeroStartPoint_InsidePersonalQuarters")
+                       ?? GameObject.Find("Capsule");
+            if (spawnGo == null) { Debug.Log("[FourLanes] GATE_NAV_FAIL :: no hero spawn marker"); return; }
+            Vector3 spawn = spawnGo.transform.position;
+            bool sSpawn = NavMesh.SamplePosition(spawn, out NavMeshHit hSpawn, 5f, NavMesh.AllAreas);
+            Debug.Log($"[FourLanes] spawn={spawn} onMesh={sSpawn}");
+            if (!sSpawn) { Debug.Log("[FourLanes] GATE_NAV_FAIL :: spawn not on navmesh"); return; }
+
+            Vector3 southGate = ReadRecipeSouthGate();   // (-4.37,0,-40.6)
+            // The exit strip extends ~18m OUTWARD past the gate (BuildGateExitStrips outsideReach),
+            // and the runtime threshold sits ~22m back from the gate on the deck. Probe a point ~12m
+            // outward of the gate (representative of where the hero must reach to trip the seam).
+            var sides = new[] { ("South", 0f), ("West", 90f), ("North", 180f), ("East", 270f) };
+            int reached = 0;
+            foreach (var (label, yaw) in sides)
+            {
+                Quaternion rot = Quaternion.Euler(0f, yaw, 0f);
+                Vector3 gateW = rot * southGate;                       // gate opening, this side
+                Vector3 outward = rot * Vector3.back;                  // south(-Z) rotated
+                Vector3 stripOuter = gateW + outward * 12f;            // ~12m out, on the exit strip
+                stripOuter.y = 0f;
+                gateW.y = 0f;
+
+                bool gOn = NavMesh.SamplePosition(gateW, out NavMeshHit hG, 3f, NavMesh.AllAreas);
+                bool oOn = NavMesh.SamplePosition(stripOuter, out NavMeshHit hO, 3f, NavMesh.AllAreas);
+                var path = new NavMeshPath();
+                Vector3 tgt = oOn ? hO.position : (gOn ? hG.position : stripOuter);
+                NavMesh.CalculatePath(hSpawn.position, tgt, NavMesh.AllAreas, path);
+                int corners = path.corners != null ? path.corners.Length : 0;
+                Vector3 last = corners > 0 ? path.corners[corners - 1] : hSpawn.position;
+                float approach = Vector3.Distance(last, stripOuter);
+                bool complete = path.status == NavMeshPathStatus.PathComplete;
+                bool ok = complete && oOn && approach <= 5f;
+                if (ok) reached++;
+                Debug.Log($"[FourLanes] {label}(yaw={yaw}) gateWorld={gateW} gateOnMesh={gOn} " +
+                          $"stripOuter={stripOuter} stripOnMesh={oOn} pathStatus={path.status} " +
+                          $"approach={approach:F1}m -> {(ok ? "REACHABLE" : "UNREACHABLE")}");
+            }
+            Debug.Log($"[FourLanes] {(reached == 4 ? "GATE_NAV_OK" : "GATE_NAV_FAIL")} :: {reached}/4 gate lanes reachable from spawn.");
+        }
+
+        // WO-468 wrapped-seam: verify the OuterWorld navmesh is WALKABLE at the 4 gate LANDINGS
+        // (±66 on each axis) and CARVED (hole) under the castle footprint (origin). Opens OuterWorld
+        // solo, loads its committed navmesh, samples each point. Batchmode: DiagnoseOuterWorldLandings.
+        public static void DiagnoseOuterWorldLandings()
+        {
+            EditorSceneManager.OpenScene("Assets/Scenes/OuterWorld.unity", OpenSceneMode.Single);
+            int surfaces = ReloadCommittedNavMesh();
+            Debug.Log("[OWLandings] OuterWorld NavMeshSurfaces with data = " + surfaces);
+
+            // 4 landings = south fallback (-4.37,0.5,-66) rotated 0/90/180/270 about origin.
+            Vector3 southLanding = new Vector3(-4.37f, 0.5f, -66f);
+            var sides = new[] { ("South", 0f), ("West", 90f), ("North", 180f), ("East", 270f) };
+            int walkable = 0;
+            foreach (var (label, yaw) in sides)
+            {
+                Vector3 land = Quaternion.Euler(0f, yaw, 0f) * southLanding;
+                bool on = NavMesh.SamplePosition(land, out NavMeshHit h, 4f, NavMesh.AllAreas);
+                if (on) walkable++;
+                Debug.Log($"[OWLandings] {label} landing={land} onMesh={on} hit={(on ? h.position.ToString() : "n/a")}");
+            }
+            // Hole check: origin should NOT be walkable (carved by the Not-Walkable volume).
+            bool originOn = NavMesh.SamplePosition(Vector3.zero, out NavMeshHit ho, 3f, NavMesh.AllAreas);
+            Debug.Log($"[OWLandings] origin(castle footprint) onMesh={originOn} (EXPECT False — carved hole) hit={(originOn ? ho.position.ToString() : "n/a")}");
+            Debug.Log($"[OWLandings] {(walkable == 4 && !originOn ? "OW_LANDINGS_OK" : "OW_LANDINGS_CHECK")} :: {walkable}/4 landings walkable, originHole={!originOn}.");
+        }
+
         // RUNTIME diagnostic for "reach gate, nothing happens": dumps the actual state of
         // the SceneTransitionTrigger seam (active? enabled? position? radius? target?),
         // whether OuterWorld is loadable, and which objects carry the Player/HeroTarget tag

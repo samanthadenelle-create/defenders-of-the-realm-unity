@@ -75,6 +75,15 @@ namespace DeNelle.Editor
             SetEnum(surfType, surf, "collectObjects", 0); // All
             SetEnum(surfType, surf, "useGeometry", 1);    // PhysicsColliders (terrain has a TerrainCollider)
 
+            // WO-468 wrapped-seam: the terrain is now origin-centered (±500) and WRAPS UNDER the
+            // castle (MainCastle_Hall sits at world origin). The OuterWorld navmesh would bake a sheet
+            // coplanar with the castle navmesh under the castle footprint -> a DUAL-SHEET hazard when
+            // both load additively (warps/agents snap to the wrong sheet). Carve a hole in the
+            // OuterWorld navmesh over the castle footprint (±62, matching ExteriorTerrainBuilder's
+            // CastleClearHalfX/Z) with a Not-Walkable NavMeshModifierVolume. collectObjects=All picks
+            // it up. The 4 gate LANDINGS (±66) sit just OUTSIDE this hole, so they stay walkable.
+            EnsureCastleNavHole();
+
             var build = surfType.GetMethod("BuildNavMesh", System.Type.EmptyTypes);
             if (build == null) { Debug.LogError("[OuterWorldNavBake] BuildNavMesh() not found."); return; }
             build.Invoke(surf, null);
@@ -105,6 +114,38 @@ namespace DeNelle.Editor
             EditorSceneManager.SaveScene(scene);
             AssetDatabase.SaveAssets();
             Debug.Log("[OuterWorldNavBake] saved scene + asset. Done.");
+        }
+
+        // Idempotently place a Not-Walkable NavMeshModifierVolume over the castle footprint so the
+        // OuterWorld bake carves a hole there (no dual-sheet under the castle). Reflection on
+        // Unity.AI.Navigation.NavMeshModifierVolume (no hard package dep, matches this file's style).
+        // ±62 matches ExteriorTerrainBuilder.CastleClearHalfX/Z; tall (40m) so it spans the depression
+        // and any terrain wobble; centered at origin, top above Y=0.
+        private const string CastleNavHoleName = "WO468_CastleNavHole_NotWalkable";
+        private static void EnsureCastleNavHole()
+        {
+            var volType = ResolveType("Unity.AI.Navigation.NavMeshModifierVolume");
+            if (volType == null)
+            {
+                Debug.LogWarning("[OuterWorldNavBake] NavMeshModifierVolume type not found — castle nav hole SKIPPED (dual-sheet risk under the castle).");
+                return;
+            }
+            var existing = GameObject.Find(CastleNavHoleName);
+            if (existing != null) Object.DestroyImmediate(existing);
+
+            var host = new GameObject(CastleNavHoleName);
+            host.transform.position = new Vector3(0f, 0f, 0f);   // castle is at world origin
+            var vol = host.AddComponent(volType);
+
+            const float half = 62f;       // ±62 castle footprint (ExteriorTerrainBuilder.CastleClearHalfX/Z)
+            var pSize = volType.GetProperty("size");
+            if (pSize != null) pSize.SetValue(vol, new Vector3(half * 2f, 40f, half * 2f));
+            var pCenter = volType.GetProperty("center");
+            if (pCenter != null) pCenter.SetValue(vol, new Vector3(0f, 0f, 0f)); // spans Y -20..+20 around origin
+            var pArea = volType.GetProperty("area");
+            if (pArea != null) pArea.SetValue(vol, 1); // 1 = Not Walkable
+
+            Debug.Log("[OuterWorldNavBake] castle nav hole volume placed (±62, Not Walkable) — OuterWorld navmesh carved clear under the castle (no dual-sheet).");
         }
 
         private static System.Type ResolveType(string fullName)
