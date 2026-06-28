@@ -69,7 +69,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.Building
   _type: 1
   _buildingId: pet-house
-  _displayLabel: Pet House
+  _displayLabel: Echo Hollow
   _displayNameKey: petHouse
   _crystalCost: 120
   _hp: 160

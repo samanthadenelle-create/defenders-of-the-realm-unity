@@ -113,13 +113,14 @@ MonoBehaviour:
   _contactDamage: 6
   _attackInterval: 1.3
   _ai: 0
+  _isFlying: 0
   _contactProbeDistance: 1.1
   _heartArrivalRadius: 2.5
   _heroAggroRadius: 7
   _heroAggroDropMargin: 2.5
   _pathRefreshInterval: 0.25
   _pathMinMoveDelta: 0.5
-  _typeVfxSet: {fileID: 11400000, guid: e6cfb68dcbf88f247bc64a568fb426d9, type: 2}
+  _typeVfxSet: {fileID: 0}
   _audioSource: {fileID: 0}
   _deathVFXOverride: 31
   _heavyHitThreshold: 20
