@@ -506,6 +506,20 @@ namespace DeNelle.Village
             }
         }
 
+        /// <summary>
+        /// WO-581: explicit animator injection — <see cref="HeroBodySwapper"/> calls this
+        /// DIRECTLY after a body swap (no reflection) so this component drives Speed→Walk on the
+        /// LIVE swapped rig. Re-scans the controller's params (a swap rebinds the animator).
+        /// Replaces the brittle name-based reflection write that wrote 0 when this component
+        /// wasn't on the root yet at swap time (the castle-hub "hero will not animate" regression).
+        /// </summary>
+        public void SetAnimator(Animator anim)
+        {
+            if (anim == null) return;
+            _animator = anim;
+            RefreshParamCache();
+        }
+
         // WO-139 #9: WaveManager may spawn after the hero, leaving _waveManager
         // null forever (victory pose never wires). Retry the resolve+subscribe
         // each frame until it's found, then stop.

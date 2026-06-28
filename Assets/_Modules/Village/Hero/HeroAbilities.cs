@@ -180,6 +180,25 @@ namespace DeNelle.Village
         /// in the real class body so each hero casts its own kit. AbilityCatalog
         /// normalises the id, but lower-case it here to be safe.
         /// </summary>
+        /// <summary>
+        /// WO-581: explicit animator injection — <see cref="HeroBodySwapper"/> calls this DIRECTLY
+        /// after a body swap (no reflection) so the Cast trigger drives the LIVE swapped rig.
+        /// Re-scans the controller for the "Cast" param (a swap rebinds the animator). Replaces
+        /// the brittle name-based reflection write that silently wrote 0 components.
+        /// </summary>
+        public void SetAnimator(Animator anim)
+        {
+            if (anim == null) return;
+            _animator = anim;
+            _paramCheckedAnimator = anim;
+            _hasCastParam = false;
+            if (anim.runtimeAnimatorController != null)
+            {
+                foreach (var p in anim.parameters)
+                    if (p.nameHash == AnimCast) { _hasCastParam = true; break; }
+            }
+        }
+
         public void SetHeroClass(string slug)
         {
             if (string.IsNullOrWhiteSpace(slug)) return;

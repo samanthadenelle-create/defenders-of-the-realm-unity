@@ -423,50 +423,50 @@ namespace DeNelle.Village
             // these params/state is a safe no-op. Does NOT touch the Walk/Cast/combat
             // transitions — those still fire from gameplay as before.
             DriveIdlePose(anim);
-            // ALWAYS re-cache the _animator field on BOTH HeroLocomotion (drives
-            // Speed → Walk) and HeroAbilities (fires Cast). This was previously
-            // gated on the (always-null) snapshot AND only touched HeroLocomotion,
-            // which is the core reason the hero never animated. Their private
-            // fields still point at the destroyed placeholder animator; reflection
-            // write because the fields are private.
+            // WO-581: hand the LIVE swapped animator to the components that drive it — DIRECTLY,
+            // no reflection. HeroBodySwapper, HeroLocomotion and HeroAbilities all live in the
+            // DeNelle.Village assembly, so the old name-based reflection (GetField("_animator"))
+            // was never necessary — and it silently wrote 0 components whenever the targets weren't
+            // on the hero root yet at swap time. The castle-hub hero gets HeroLocomotion from
+            // HeroControlEnsurer (whose Ensure() can run AFTER this synchronous Knight swap) and
+            // never gets HeroAbilities there at all → the reflection loop matched nothing →
+            // "re-cache wrote 0 components" FAIL + a non-animating hero. Replaced with an explicit
+            // public SetAnimator(Animator) on both components, called by type (eliminates the whole
+            // name-mismatch / timing failure class). The fields were NOT renamed — the loop just
+            // ran before the components existed.
+            //
             // DEF-221: the BODY slug and the ABILITY slug can differ. The Cleric loads
             // its own body/controller (slug "Cleric") but fires the Mage loadout until a
             // dedicated cleric/healer kit lands — so route its abilities to "Mage".
             string abilitySlug = (cls == HeroClass.Cleric) ? "Mage" : slug;
             int recached = 0;
-            foreach (var mb in GetComponentsInChildren<MonoBehaviour>(true))
+            // HeroLocomotion drives Speed→Walk and is the animation-critical component. ENSURE it
+            // exists now (idempotent — HeroControlEnsurer also adds it) so the live animator binds
+            // deterministically at swap time, not whenever the ensurer happens to run later.
+            if (!TryGetComponent(out HeroLocomotion loco)) loco = gameObject.AddComponent<HeroLocomotion>();
+            Guard.Try("HeroBody", "HeroLocomotion.SetAnimator", () => loco.SetAnimator(anim));
+            recached++;
+            // HeroAbilities fires Cast. It's baked into combat/village scenes but NOT every hub,
+            // so recache it only when present (its own CastResolved self-heals the animator too).
+            bool hasAbilities = TryGetComponent(out HeroAbilities abilities);
+            if (hasAbilities)
             {
-                if (mb == null) continue;
-                string n = mb.GetType().Name;
-                if (n != "HeroLocomotion" && n != "HeroAbilities") continue;
-                // §12: the reflection writes were un-Guarded (Debug.Log only). A throw here
-                // (renamed field / signature drift) would have left HeroLocomotion/HeroAbilities
-                // pointing at the DESTROYED placeholder animator — the hero would never animate,
-                // silently. Guard each so one bad component logs + is skipped, never aborts the wire.
-                MonoBehaviour mbLocal = mb;
-                Guard.Try("HeroBody", $"recache _animator on {n}", () =>
-                {
-                    var f = mbLocal.GetType().GetField("_animator",
-                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    if (f != null) { f.SetValue(mbLocal, anim); recached++; }
-                });
-                // WO-36: bind the hero class on HeroAbilities so a Knight/Ranger
-                // casts its OWN abilities.json loadout. The field defaulted to
-                // "mage" and was never reassigned, so every class fired the Mage
-                // kit. slug is "Knight"/"Ranger"/"Mage"; SetHeroClass lower-cases it.
-                if (n == "HeroAbilities")
-                    Guard.Try("HeroBody", "HeroAbilities.SetHeroClass", () =>
-                        mbLocal.GetType().GetMethod("SetHeroClass",
-                            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
-                          ?.Invoke(mbLocal, new object[] { abilitySlug }));
+                Guard.Try("HeroBody", "HeroAbilities.SetAnimator", () => abilities.SetAnimator(anim));
+                // WO-36: bind the hero class so a Knight/Ranger casts its OWN abilities.json
+                // loadout (the field defaults to "mage"). abilitySlug routes Cleric → "Mage".
+                Guard.Try("HeroBody", "HeroAbilities.SetHeroClass", () => abilities.SetHeroClass(abilitySlug));
+                recached++;
             }
-            // §12 self-report: recached==0 means NEITHER HeroLocomotion nor HeroAbilities got the
-            // live animator — their fields still point at the destroyed placeholder, so the hero
-            // cannot animate. That is a hard FAIL the run must surface, not a quiet Debug.Log.
+            // §12 self-report: recached should never be 0 now (locomotion is ensured above). Keep
+            // the guard as defense-in-depth — a 0 here means the locomotion ensure itself failed.
             if (recached == 0)
                 FlowTrace.Fail("HeroBody",
-                    "Animator re-cache wrote 0 components — neither HeroLocomotion nor HeroAbilities " +
-                    "received the live animator (renamed _animator field?); the hero will not animate.");
+                    "Animator re-cache wrote 0 components — HeroLocomotion could not be ensured on the " +
+                    "hero root; the hero will not animate.");
+            else
+                FlowTrace.Step("HeroBody",
+                    $"Animator re-cache wrote {recached} components (HeroLocomotion" +
+                    (hasAbilities ? " + HeroAbilities" : "") + ") — direct SetAnimator, no reflection.");
             FlowTrace.Step("HeroBody",
                 "Animator wired: controller=" +
                 $"{(anim.runtimeAnimatorController != null ? anim.runtimeAnimatorController.name : "NULL")}, " +
