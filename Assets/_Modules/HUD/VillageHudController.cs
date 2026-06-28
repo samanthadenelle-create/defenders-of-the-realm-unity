@@ -111,30 +111,20 @@ namespace DeNelle.HUD
 
         private TextMeshProUGUI[] _resourceTexts; // 0 Wood, 1 Iron, 2 Crystal, 3 Gold
 
-        private TextMeshProUGUI _waveText;
-        private TextMeshProUGUI _waveStateText;
-        private TextMeshProUGUI _enemyCountText;
+        // WO-563: the OLD battle-HUD wave readout (_waveText/_waveStateText/_enemyCountText)
+        // was REMOVED — the town wave cluster (_townTimerText/_townWaveProgText/lookout) is the
+        // sole wave readout and the 9-zone owns the in-battle chrome. _lastWaveNumber/_lastWaveState
+        // are kept (the town readout + state strings still use them).
         private int _lastWaveNumber = 1;
         private string _lastWaveState = "Defend";
-
-        // Combo / kill-streak momentum badge
-        private RectTransform _momentumBadge;
-        private TextMeshProUGUI _comboText;
-        private TextMeshProUGUI _streakText;
-        private CanvasGroup _momentumGroup;
-        private int _lastCombo, _lastStreak;
-        private float _momentumPop;
-        private float _momentumHold;
 
         // Castle (Heart) HP — top-centre (VILLAGE-ONLY).
         private Image _castleFill;
         private TextMeshProUGUI _castleText;
 
-        // Hero vitals (in the bottom skill bar)
-        private Image _hpFill;
-        private TextMeshProUGUI _hpText;
-        private Image _manaFill;
-        private TextMeshProUGUI _manaText;
+        // Hero HP state — fed by SetHeroHp; the OLD vitals/skill-bar HP widgets were removed
+        // (WO-563). These plain floats are still read by ApplyCombatGate (heroHurt gate) and
+        // pushed onward to the party frame, so they stay.
         private float _hpCurrent, _hpMax = 1f;
 
         // ── WO-541 Stage 3a: live Core HUD-context gate ──────────────────────────
@@ -149,17 +139,8 @@ namespace DeNelle.HUD
         // TMP mesh only regenerates when the displayed integer actually changes.
         private int _lastTimerTotal = int.MinValue, _lastLive = int.MinValue, _lastTotal = int.MinValue;
 
-        // Hero XP — a thin yellow line ABOVE the HP bar, in the same vitals panel
-        // (owner: no full-screen XP bar; show progress visually next to health).
-        // Driven by polling HeroProgression via reflection (HUD→Core; no Village ref).
-        private Image _xpLineFill;          // the yellow fill (width = XP fraction)
-        private float _xpFraction;          // 0..1 toward next level
-        private object _heroProg;           // cached HeroProgression instance (reflection)
-        private System.Type _heroProgType;
-        private System.Reflection.PropertyInfo _xpProp;      // HeroProgression.Xp (float)
-        private System.Reflection.PropertyInfo _xpToNextProp; // HeroProgression.XpToNext (float)
-        private float _xpPollTimer;
-        private const float XpPollInterval = 0.25f;
+        // WO-563: the hero XP yellow line lived inside the removed OLD vitals cluster, so it
+        // is gone with it (UpdateHeroXpLine + the HeroProgression reflection poll were removed).
 
         // ── Wisdom skill-tree badge (owner 2026-06-24) ───────────────────────────
         // A small, non-intrusive corner badge that ANNOUNCES unspent Wisdom + is the
@@ -210,14 +191,9 @@ namespace DeNelle.HUD
         private bool _waveCombatActive;      // derived: phase is Countdown or Active
         private bool _lastCombatGate;        // last applied gate (avoid redundant SetActive churn)
 
-        // Skill bar cells
-        private TextMeshProUGUI[] _slotKey;
-        private TextMeshProUGUI[] _slotGlyph;
-        private TextMeshProUGUI[] _slotName;
-        private Image[] _slotAccent;
-        private Image[] _slotIcon;     // real ability art (by hero class + slot), replaces the glyph
-        private Image[] _slotCooldown;
-        private float[] _slotCdFill;
+        // WO-563: the OLD skill-bar ability cells (Q/W/E/R discs + cooldown rings) were REMOVED —
+        // the 9-zone battle HUD (BattleHud9Zone) owns the in-battle ability bar now. The Set*
+        // ability setters below are kept as no-ops so existing Village-side pushes don't break.
 
         // Party frames (slot 0 = hero, 1..3 = companions) — dark-stone player frame:
         // portrait (class) + red HP + blue MP.
@@ -241,16 +217,11 @@ namespace DeNelle.HUD
         private float _rootDimAlpha = 1f;     // current eased root alpha for the dim
         private bool _hudHiddenByModal;       // SetHudVisible(false) — modal owns root alpha
 
-        // ── WO-337: BATTLE-HUD group ──────────────────────────────────────────
-        // The combat-only clusters (abilities, hero vitals, wave/enemy readout,
-        // momentum badge) live under their OWN canvas + CanvasGroup at a higher
-        // sortingOrder so BattleHudVisibilityManager can fade the whole battle HUD
-        // in/out (active combat only) WITHOUT touching the IDLE/village UI
-        // (resource strip, castle/Heart HP banner, build button) which stays on
-        // the base HUD canvas. Exposed read-only for the visibility manager.
-        private Canvas _battleCanvas;
-        private CanvasGroup _battleHudGroup;
-        public CanvasGroup BattleHudGroup => _battleHudGroup;
+        // ── WO-563: the OLD WO-337 BATTLE-HUD group was REMOVED ───────────────
+        // It hosted the legacy combat clusters (abilities, hero vitals, wave/enemy
+        // readout, momentum badge) faded by BattleHudVisibilityManager. The owner
+        // kept the NEW 9-zone battle HUD (BattleHud9Zone) and removed this old group.
+        // The BattleHudGroup property + _battleCanvas/_battleHudGroup fields are gone.
 
         // ── WO-339: TOWN-HUD group ────────────────────────────────────────────
         // The idle-village TOWN HUD (wave-management cluster top-left, resource
@@ -272,11 +243,11 @@ namespace DeNelle.HUD
 
         // ── Responsive layout cluster roots ──────────────────────────────────
         private RectTransform _resourceStrip;
-        private RectTransform _waveReadout;
+        // WO-563: _waveReadout (OLD battle wave readout container) removed with the battle HUD.
         private RectTransform _castleBanner;
         private RectTransform _partyStack;
-        private RectTransform _skillBar;      // bottom-RIGHT ability cluster (right thumb)
-        private RectTransform _vitalsCluster; // bottom-LEFT-ABOVE joystick: hero HP + mana
+        // WO-563: _skillBar (bottom-right abilities) + _vitalsCluster (bottom-left HP/mana) were
+        // removed with the OLD battle HUD — the 9-zone owns them now.
         private RectTransform _buildBtn;
         private RectTransform _startWaveBtn;
         private bool _startWaveAvailable;
@@ -729,10 +700,7 @@ namespace DeNelle.HUD
             Check("hudCanvas", _hudCanvas);
             Check("rootGroup", _rootGroup);
             Check("castleFill", _castleFill);
-            Check("waveText", _waveText);
-            Check("hpFill", _hpFill);
-            // manaFill intentionally null since WO-541 Stage 3a removed the MP box — not checked.
-            Check("skillBar", _skillBar);
+            // WO-563: waveText/hpFill/skillBar belonged to the removed OLD battle HUD — not checked.
             Check("partyFrame", _partyFrame);
             Check("resourceTexts", _resourceTexts);
             FlowTrace.Step("HUD", $"VerifyHudBuilt: {present} present, {missing} missing (buildFailed={_hudBuildFailed}).");
@@ -769,10 +737,9 @@ namespace DeNelle.HUD
             // WO-541 Stage 3a: hook the live Core HUD context once HudModelHost registers it.
             HookHudContext();
 
-            AnimateMomentumBadge();
+            // WO-563: AnimateMomentumBadge + UpdateHeroXpLine removed with the OLD battle HUD.
             AnimateLookoutBell();
             UpdateTownHud();
-            UpdateHeroXpLine();
             UpdateWisdomBadge();
             ApplyForgettingDim();
         }
@@ -787,8 +754,9 @@ namespace DeNelle.HUD
             // A full-screen modal (SetHudVisible) owns the root alpha while open — don't fight it.
             if (_hudHiddenByModal) return;
 
-            // Combat is "live" when the battle cluster (abilities + hero vitals) is up.
-            bool combatLive = _battleHudGroup != null && _battleHudGroup.alpha > 0.5f;
+            // Combat is "live" when the Core HUD context says Battle (WO-563: the old
+            // _battleHudGroup alpha probe is gone with that group).
+            bool combatLive = _hudCtx == DeNelle.Core.HudModel.HudContext.Battle;
 
             // Out of combat the dim follows the forgetting level (1 → 0.55); in combat
             // it eases back to full so the hero plate never reads washed out.
@@ -797,64 +765,9 @@ namespace DeNelle.HUD
             _rootGroup.alpha = _rootDimAlpha;
         }
 
-        // ── Hero XP yellow line (above the HP bar) — cheap poll of HeroProgression. ─
-        // HUD cannot reference DeNelle.Village, so the level/XP source is read via
-        // reflection (same pattern as ResolveHeroIfNeeded / XPBarController). The fill
-        // width = current XP / XP-to-next-level (0..1), lerped for a smooth slide.
-        private void UpdateHeroXpLine()
-        {
-            if (_xpLineFill == null) return;
-
-            _xpPollTimer -= Time.unscaledDeltaTime;
-            if (_xpPollTimer <= 0f)
-            {
-                _xpPollTimer = XpPollInterval;
-                ResolveHeroProgIfNeeded();
-                if (_heroProg != null && _xpProp != null && _xpToNextProp != null)
-                {
-                    try
-                    {
-                        float xp     = (float)_xpProp.GetValue(_heroProg);
-                        float toNext = (float)_xpToNextProp.GetValue(_heroProg);
-                        _xpFraction = toNext > 0f ? Mathf.Clamp01(xp / toNext) : 0f;
-                    }
-                    catch (System.Exception e)
-                    {
-                        // TGVRU: no silent catch (§12). Usually a benign mid-poll hero swap, but
-                        // a reflection/type mismatch would also land here and silently freeze the
-                        // XP line — Warn so a real binding break self-reports. Throttled (hot poll).
-                        FlowTrace.Throttle("HUD", "xpline-read", 2f,
-                            $"UpdateHeroXpLine: HeroProgression read threw ({e.GetType().Name}: {e.Message}) — re-resolving next tick.");
-                        _heroProg = null;
-                    }
-                }
-            }
-
-            // Smooth slide toward the target fraction.
-            float cur = _xpLineFill.fillAmount;
-            if (!Mathf.Approximately(cur, _xpFraction))
-                _xpLineFill.fillAmount = Mathf.Lerp(cur, _xpFraction, Time.unscaledDeltaTime * 6f);
-        }
-
-        private void ResolveHeroProgIfNeeded()
-        {
-            if (_heroProg != null) return;
-            if (_heroProgType == null)
-                _heroProgType = System.Type.GetType("DeNelle.Village.HeroProgression, DeNelle.Village");
-            if (_heroProgType == null) return;
-
-            // HeroProgression.Instance is the canonical single hero per run.
-            var instProp = _heroProgType.GetProperty("Instance",
-                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-            object prog = instProp != null ? instProp.GetValue(null) : null;
-            if (prog == null)
-                prog = UnityEngine.Object.FindObjectOfType(_heroProgType);
-            if (prog == null) return;
-
-            _heroProg     = prog;
-            _xpProp       = _heroProgType.GetProperty("Xp");
-            _xpToNextProp = _heroProgType.GetProperty("XpToNext");
-        }
+        // WO-563: UpdateHeroXpLine + ResolveHeroProgIfNeeded were removed with the OLD vitals
+        // cluster (which hosted the hero XP yellow line). The skill tree / progression UI now
+        // surfaces XP; the in-HUD line is gone.
 
         // ── Wave-timer fallback poll — keep the town countdown LIVE from WaveManager. ─
         // Reflection (HUD cannot reference DeNelle.Village). Only writes the timer while
@@ -965,12 +878,12 @@ namespace DeNelle.HUD
             // Town/Overworld/Modal keep the party frame (companion HP bars) as before. When the
             // Core HUD model is unavailable, _hudCtx stays Town so behaviour is unchanged.
             if (_hudCtx == DeNelle.Core.HudModel.HudContext.Battle) showParty = false;
+            // WO-563: the bottom-left vitals cluster was removed; this gate now drives only the
+            // party-frame stack (companion HP bars on the base canvas).
             if (show == _lastCombatGate
-                && _vitalsCluster != null && _vitalsCluster.gameObject.activeSelf == show
                 && _partyStack != null && _partyStack.gameObject.activeSelf == showParty) return;
             _lastCombatGate = show;
             SetActiveSafe(_partyStack, showParty);
-            SetActiveSafe(_vitalsCluster, show);
         }
 
         // ── WO-339: per-frame TOWN-HUD animation (timer urgency, res flash, map). ─
@@ -1066,35 +979,9 @@ namespace DeNelle.HUD
             if (townShown || inArenaBattle) SetActiveSafe(_castleBanner, false);
             else if (_inVillage || _villageOnlyForced) SetActiveSafe(_castleBanner, true);
 
-            // WO-507 (owner 2026-06-24, double-HUD screenshot): when the 9-zone battle HUD is
-            // APPLIED (ff.battlehud9zone ON) AND a BattleArena fight is live, the 9-zone fully
-            // owns the battle screen (its own canvas: hero plate, enemy family overview, current
-            // target, basic-attack pill, ability arc, quick-focus). The LEGACY battle cluster —
-            // VillageHudController's _battleHudGroup, which parents _vitalsCluster (HP/mana),
-            // _skillBar (the old ability/Attack/PARRY discs), the wave readout, and the
-            // momentum/arrow chips — was still fading IN underneath it (BattleHudVisibilityManager
-            // shows _battleHudGroup in Battle mode), giving the owner a DOUBLE HUD. So while the
-            // 9-zone is active in battle, FORCE the legacy battle group's GameObject OFF (one gate
-            // hides every child — vitals, skill bar, focus buttons, arrow chips). This wins over
-            // the manager's per-frame alpha fade (deactivating the GameObject hides children
-            // regardless of CanvasGroup alpha) and restores the instant the battle ends or the
-            // 9-zone flag is OFF, so the legacy (non-9-zone) battle HUD path is UNCHANGED.
-            // FIX (Village2 NEW battle HUD): an ENEMY-OWNED scene (Village2 outpost)
-            // resolves to Battle mode and BattleHudVisibilityManager spawns the 9-zone
-            // HUD there too. So the legacy _battleHudGroup must be suppressed in that
-            // scene as well — not only during an arena BattleLock fight — or Village2
-            // double-HUDs. Both gates require ff.battlehud9zone ON.
-            bool enemyScene9Owns = DeNelle.Core.FeatureFlags.BattleHud9Zone
-                && DeNelle.Core.HubScenes.IsEnemyOwnedScene(SceneManager.GetActiveScene().name);
-            bool hud9Owns = (inArenaBattle && DeNelle.Core.FeatureFlags.BattleHud9Zone)
-                || enemyScene9Owns;
-            if (_battleHudGroup != null)
-            {
-                var battleHostRt = _battleHudGroup.transform as RectTransform;
-                if (hud9Owns) SetActiveSafe(battleHostRt, false);
-                else if (battleHostRt != null && !battleHostRt.gameObject.activeSelf)
-                    battleHostRt.gameObject.SetActive(true);
-            }
+            // WO-563: the legacy double-HUD suppression is gone — the OLD _battleHudGroup it
+            // hid no longer exists. The NEW 9-zone HUD (BattleHud9Zone) is the only battle HUD
+            // and gates its own canvas on the Core HudContext, so there is nothing to suppress.
         }
 
         private void ProjectMiniMap()
@@ -1159,24 +1046,7 @@ namespace DeNelle.HUD
             }
         }
 
-        private void AnimateMomentumBadge()
-        {
-            if (_momentumBadge == null || _momentumGroup == null) return;
-            float dt = Time.unscaledDeltaTime;
-            if (_momentumPop > 0f)
-                _momentumPop = Mathf.Max(0f, _momentumPop - dt * 6f);
-            float scale = 1f + 0.30f * _momentumPop;
-            _momentumBadge.localScale = new Vector3(scale, scale, 1f);
-            if (_momentumHold > 0f)
-            {
-                _momentumHold -= dt;
-                _momentumGroup.alpha = Mathf.MoveTowards(_momentumGroup.alpha, 1f, dt * 8f);
-            }
-            else if (_momentumGroup.alpha > 0f)
-            {
-                _momentumGroup.alpha = Mathf.MoveTowards(_momentumGroup.alpha, 0f, dt * 2.2f);
-            }
-        }
+        // WO-563: AnimateMomentumBadge was removed with the OLD battle HUD's momentum badge.
 
         // =====================================================================
         //  BUILD
@@ -1213,23 +1083,10 @@ namespace DeNelle.HUD
             _safeArea = NewRect("SafeArea", go.transform, Vector2.zero, Vector2.one);
             ApplySafeArea();
 
-            // WO-337: dedicated BATTLE-HUD canvas (its own CanvasGroup, sortingOrder
-            // ~150) layered over the base HUD. The combat clusters live UNDER this so
-            // the visibility manager can fade the whole battle HUD without disturbing
-            // the idle/village UI on the base canvas. Full-stretch inside the safe area.
-            var battleGo = new GameObject("BattleHUD");
-            battleGo.transform.SetParent(_safeArea, false);
-            var battleRt = battleGo.AddComponent<RectTransform>();
-            battleRt.anchorMin = Vector2.zero;
-            battleRt.anchorMax = Vector2.one;
-            battleRt.offsetMin = Vector2.zero;
-            battleRt.offsetMax = Vector2.zero;
-            _battleCanvas = battleGo.AddComponent<Canvas>();
-            _battleCanvas.overrideSorting = true;
-            _battleCanvas.sortingOrder = 150;
-            battleGo.AddComponent<GraphicRaycaster>();
-            _battleHudGroup = battleGo.AddComponent<CanvasGroup>();
-            var battleRoot = battleRt;
+            // WO-563: the OLD WO-337 BATTLE-HUD canvas/group + its four clusters (wave readout,
+            // momentum badge, vitals cluster, skill bar) were REMOVED. The NEW 9-zone battle HUD
+            // (BattleHud9Zone) is the sole battle HUD, spawned per-battle by BattleArenaHud (arena)
+            // and BattleHudVisibilityManager (enemy-owned + raid scenes).
 
             // WO-339: dedicated TOWN-HUD canvas (its own CanvasGroup, sortingOrder
             // ~140 — under the battle HUD so an active wave's combat chrome always
@@ -1290,11 +1147,8 @@ namespace DeNelle.HUD
             // combat Skills panel is the existing bottom-right skill bar (rune cells).
             BuildTownActionPanel(_safeArea);
 
-            // BATTLE HUD — combat-only clusters (faded in/out by the visibility mgr).
-            BuildWaveReadout(battleRoot);
-            BuildMomentumBadge(battleRoot);
-            BuildVitalsCluster(battleRoot);
-            BuildSkillBar(battleRoot);
+            // WO-563: the OLD battle clusters (BuildWaveReadout / BuildMomentumBadge /
+            // BuildVitalsCluster / BuildSkillBar) are no longer built — the 9-zone HUD owns combat.
 
             // Self-reveal: the freshly-built HUD fades in from alpha 0 → 1 over ~0.3s
             // so it animates onto the screen on load instead of popping in hard.
@@ -1882,53 +1736,8 @@ namespace DeNelle.HUD
         }
 
         // ── Wave readout — floating minimal text, no panel. ───────────────────
-        private void BuildWaveReadout(Transform parent)
-        {
-            _waveReadout = NewRect("WaveReadout", parent, new Vector2(0.30f, 0.895f), new Vector2(0.70f, 0.95f));
-
-            // MOCKUP ALIGN: big bold gilt "WAVE 3/5" centered at the top (the wave-progress
-            // headline). Gilt-on-dark with a dark halo, matching the town HUD type voice.
-            _waveText = AddText(_waveReadout, "WAVE 1", HudTheme.FontTitle + 4, HudTheme.Gilt, TextAlignmentOptions.Center);
-            _waveText.fontStyle = FontStyles.Bold;
-            _waveText.characterSpacing = 6f;
-            _waveText.outlineColor = new Color32(0, 0, 0, 210);
-            _waveText.outlineWidth = 0.2f;
-
-            var stateRect = NewRect("State", _waveReadout, new Vector2(0f, 0.30f), new Vector2(1f, 0.58f));
-            _waveStateText = AddText(stateRect, _lastWaveState, HudTheme.FontBody, HudTheme.Gold, TextAlignmentOptions.Center);
-            _waveStateText.outlineColor = new Color32(0, 0, 0, 160);
-            _waveStateText.outlineWidth = 0.12f;
-
-            var countRect = NewRect("EnemyCount", _waveReadout, new Vector2(0f, 0f), new Vector2(1f, 0.30f));
-            _enemyCountText = AddText(countRect, "", HudTheme.FontLabel, HudTheme.TextDim, TextAlignmentOptions.Center);
-            _enemyCountText.fontStyle = FontStyles.Bold;
-            _enemyCountText.outlineColor = new Color32(0, 0, 0, 140);
-            _enemyCountText.outlineWidth = 0.1f;
-        }
-
-        // ── Combo / kill-streak momentum badge — minimal, pops + fades. ───────
-        private void BuildMomentumBadge(Transform parent)
-        {
-            _momentumBadge = NewRect("MomentumBadge", parent, new Vector2(0.30f, 0.32f), new Vector2(0.70f, 0.44f));
-            _momentumGroup = _momentumBadge.gameObject.AddComponent<CanvasGroup>();
-            _momentumGroup.alpha = 0f;
-            _momentumGroup.interactable = false;
-            _momentumGroup.blocksRaycasts = false;
-
-            var comboRect = NewRect("Combo", _momentumBadge, new Vector2(0f, 0.42f), new Vector2(1f, 1f));
-            _comboText = AddText(comboRect, "", HudTheme.FontTitle + 8, HudTheme.Gilt, TextAlignmentOptions.Center);
-            _comboText.fontStyle = FontStyles.Bold;
-            _comboText.characterSpacing = 3f;
-            _comboText.outlineColor = new Color32(0, 0, 0, 210);
-            _comboText.outlineWidth = 0.2f;
-
-            var streakRect = NewRect("Streak", _momentumBadge, new Vector2(0f, 0f), new Vector2(1f, 0.42f));
-            _streakText = AddText(streakRect, "", HudTheme.FontHead, HudTheme.HpRed, TextAlignmentOptions.Center);
-            _streakText.fontStyle = FontStyles.Bold;
-            _streakText.characterSpacing = 2f;
-            _streakText.outlineColor = new Color32(0, 0, 0, 200);
-            _streakText.outlineWidth = 0.16f;
-        }
+        // WO-563: BuildWaveReadout + BuildMomentumBadge were REMOVED with the OLD battle HUD.
+        // The town wave cluster is the sole wave readout; combo/kill-streak momentum is gone.
 
         // ── Top-left party stack — slim glass rows. ───────────────────────────
         private void BuildPartyFrames(Transform parent)
@@ -2122,189 +1931,12 @@ namespace DeNelle.HUD
         // engage zone, centre ~radius*1.35 from the corner, claimed to radius*1.7).
         // We keep that quadrant CLEAR and float the hero vitals ABOVE it, anchored
         // to the bottom-left but lifted well over the stick (≈y 0.165→0.235).
-        private void BuildVitalsCluster(Transform parent)
-        {
-            _vitalsCluster = NewRect("VitalsCluster", parent, new Vector2(0.02f, 0.165f), new Vector2(0.40f, 0.235f));
-            // MOCKUP ALIGN: dark-glass framed panel (the combat HUD is dark glass + gold,
-            // not light parchment) so the hero mana/XP cluster matches the rest.
-            FramePanel(_vitalsCluster.gameObject, ElarionUiKit.Glass);
-
-            // HP bar (top half) — REMOVED (WO-382): the hero's HP was shown twice —
-            // here (bottom-left red bar) AND in the top-left party panel (slot 0).
-            // The party panel is now the single source of truth for hero HP, so we
-            // no longer build the duplicate HP bar/text here. _hpFill and _hpText
-            // stay null; SetHeroHp() null-guards them and still feeds the party
-            // panel via SetPartyMember(0, ...). The mana bar + XP line below are
-            // UNIQUE to this cluster and are intentionally kept.
-            // (Former HP-bar build block removed to de-duplicate the display.)
-
-            // XP line — a THIN yellow strip directly ABOVE the HP bar (owner request:
-            // no full-screen XP bar; show level progress visually next to health).
-            // Sits in the gap between the HP track top (0.92) and the panel top (1.0).
-            var xpTrack = NewRect("XPTrack", _vitalsCluster, new Vector2(0.05f, 0.935f), new Vector2(0.95f, 0.99f));
-            StyleWellLight(xpTrack.gameObject);
-            var xpFill = NewRect("XPFill", xpTrack, Vector2.zero, Vector2.one);
-            xpFill.offsetMin = new Vector2(1f, 1f); xpFill.offsetMax = new Vector2(-1f, -1f);
-            _xpLineFill = xpFill.gameObject.AddComponent<Image>();
-            _xpLineFill.color = new Color(1f, 0.85f, 0.15f, 1f); // yellow
-            _xpLineFill.sprite = HudTheme.RoundedFrame;
-            _xpLineFill.type = HudTheme.RoundedFrame != null ? Image.Type.Filled : Image.Type.Filled;
-            _xpLineFill.fillMethod = Image.FillMethod.Horizontal;
-            _xpLineFill.fillOrigin = 0;
-            _xpLineFill.fillAmount = 0f;
-            _xpLineFill.raycastTarget = false;
-
-            // Mana bar (bottom half) — REMOVED (WO-541 Stage 3a): the bottom-left blue/green
-            // "MP 10/10" box was redundant with the hero card's own MP readout (the owner
-            // flagged it as a context-free duplicate). _manaFill/_manaText stay null by design;
-            // SetMana() null-guards them and no-ops. The XP line above is unique and kept.
-        }
-
-        // ── Bottom-RIGHT ability cluster — 2×2 grid of skill cells (RIGHT thumb). ─
-        // MOBILE ERGONOMICS: the RIGHT thumb hits skills, so the ability cluster
-        // hugs the bottom-RIGHT corner as a compact 2×2 grid (reachable arc for a
-        // right thumb). The LEFT thumb owns the joystick — the bottom-left stays
-        // clear. Cells/cooldowns/labels/accents are unchanged; only the container
-        // anchor + per-cell grid layout moved. All SetAbility* bindings are intact.
-        private void BuildSkillBar(Transform parent)
-        {
-            _skillBar = NewRect("SkillBar", parent, new Vector2(0.62f, 0.0f), new Vector2(1.0f, 0.22f));
-            // MOCKUP ALIGN: dark-glass framed panel (NOT light parchment) so the bottom-
-            // right ability cluster reads in the shared dark-glass + gold language.
-            FramePanel(_skillBar.gameObject, ElarionUiKit.GlassDeep);
-            // The skill-bar BACKGROUND frame must not eat taps — only the ability buttons need
-            // them. The battle skill bar sits in the bottom-right (higher canvas) near the town
-            // BAG diamond; a raycastable frame there could intercept the BAG tap. The ability
-            // button seats keep their own raycast, so this only frees the dead background.
-            if (_skillBar.TryGetComponent<UnityEngine.UI.Image>(out var skillFrame)) skillFrame.raycastTarget = false;
-
-            // MOCKUP ALIGN: two labeled rows — "SPELLS" (top row, slots 0/1) and
-            // "WEAPON SKILLS" (bottom row, slots 2/3), matching hud_mobile_combat's
-            // right-thumb skill panel. Section labels sit above each row.
-            var spellsLbl = NewRect("SpellsLabel", _skillBar, new Vector2(0.04f, 0.905f), new Vector2(0.96f, 0.99f));
-            var sl = AddText(spellsLbl, "SPELLS", 13, HudTheme.Gilt, TextAlignmentOptions.Center);
-            sl.fontStyle = FontStyles.Bold; sl.characterSpacing = 3f;
-            sl.outlineColor = new Color32(0, 0, 0, 200); sl.outlineWidth = 0.08f;
-
-            var skillsLbl = NewRect("WeaponSkillsLabel", _skillBar, new Vector2(0.04f, 0.435f), new Vector2(0.96f, 0.52f));
-            var wl = AddText(skillsLbl, "WEAPON SKILLS", 13, HudTheme.Gilt, TextAlignmentOptions.Center);
-            wl.fontStyle = FontStyles.Bold; wl.characterSpacing = 2f;
-            wl.outlineColor = new Color32(0, 0, 0, 200); wl.outlineWidth = 0.08f;
-
-            _slotKey      = new TextMeshProUGUI[AbilitySlotCount];
-            _slotGlyph    = new TextMeshProUGUI[AbilitySlotCount];
-            _slotName     = new TextMeshProUGUI[AbilitySlotCount];
-            _slotAccent   = new Image[AbilitySlotCount];
-            _slotIcon     = new Image[AbilitySlotCount];
-            _slotCooldown = new Image[AbilitySlotCount];
-            _slotCdFill   = new float[AbilitySlotCount];
-
-            // MOCKUP ALIGN: SPELLS row defaults to 1/2, WEAPON SKILLS to letter keys.
-            // The bridge (SetAbilitySlot) overwrites these with the real per-class keys.
-            string[] defaultKeys = { "1", "2", "E", "R" };
-
-            // MOCKUP ALIGN: 2 rows × 2 columns of CIRCULAR rune buttons, each row sitting
-            // UNDER its section label — SPELLS row (slots 0/1, top band ~0.52..0.90) and
-            // WEAPON SKILLS row (slots 2/3, bottom band ~0.05..0.43). Column 0 hugs the
-            // RIGHT edge (right-thumb arc). Row band tops are gapped below the labels.
-            const int cols = 2;
-            float gapX = 0.04f;
-            float marginX = 0.05f;
-            // Per-row vertical bands (y0..y1 fraction of the panel), label sits just above.
-            float[] rowY0 = { 0.52f, 0.05f };  // index 0 = SPELLS row, 1 = WEAPON SKILLS row
-            float[] rowY1 = { 0.88f, 0.41f };
-
-            for (int i = 0; i < AbilitySlotCount; i++)
-            {
-                int col = i % cols;            // 0 = right column, 1 = left column
-                int row = i / cols;            // 0 = SPELLS (top), 1 = WEAPON SKILLS (bottom)
-                float cellW = (1f - 2f * marginX - (cols - 1) * gapX) / cols;
-                // place column 0 on the RIGHT (nearest the screen edge / thumb).
-                float x = marginX + (cols - 1 - col) * (cellW + gapX);
-                float y0 = rowY0[row], y1 = rowY1[row];
-                var cell = NewRect("Slot" + i, _skillBar, new Vector2(x, y0), new Vector2(x + cellW, y1));
-                var cellImg = cell.gameObject.AddComponent<Image>();
-                // MOCKUP ALIGN: dark-glass cell seat + gilt rune rim (the ornate framed
-                // circular button look), replacing the light-parchment seat.
-                cellImg.color = ElarionUiKit.Cell;
-                cellImg.sprite = HudTheme.RoundedFrame;
-                cellImg.type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
-                ElarionUiKit.AddInnerRim(cell.gameObject, ElarionUiKit.AccentSoft);
-
-                // Circular RUNIC ability frame ringing the ability disc (sprite-first;
-                // the hud_ability_frame widget art). A decorative ring behind the
-                // accent so each skill reads as a rune-framed circular button per the
-                // mockup. When the art is missing it stays inert (the accent shows).
-                var runeFrame = NewRect("RuneFrame", cell, new Vector2(0.04f, 0.30f), new Vector2(0.96f, 1.0f));
-                var runeImg = runeFrame.gameObject.AddComponent<Image>();
-                runeImg.raycastTarget = false;
-                if (!TrySetWidget(runeImg, IconAbilityFrame))
-                    runeImg.color = new Color(0f, 0f, 0f, 0f); // no art → inert
-
-                // Accent disc (tinted per ability) — fills most of the cell as a CIRCLE
-                // (circular rune button). MOCKUP ALIGN: dark seat so an unset slot reads
-                // dark glass; SetAbilitySlot still recolours this per-ability (kept).
-                var disc = NewRect("Accent", cell, new Vector2(0.14f, 0.40f), new Vector2(0.86f, 0.94f));
-                _slotAccent[i] = disc.gameObject.AddComponent<Image>();
-                _slotAccent[i].color = ElarionUiKit.Track;
-                _slotAccent[i].sprite = HudTheme.Disc;   // circular ability seat
-                _slotAccent[i].type = HudTheme.Disc != null ? Image.Type.Simple : Image.Type.Simple;
-                _slotAccent[i].raycastTarget = false;
-
-                // Real ability ICON art (by class+slot) — on the disc, under the glyph + cooldown.
-                // Hidden (zero alpha) until SetAbilitySlot resolves it; falls back to the glyph.
-                var abIcon = NewRect("AbIcon", disc, new Vector2(0.13f, 0.13f), new Vector2(0.87f, 0.87f));
-                _slotIcon[i] = abIcon.gameObject.AddComponent<Image>();
-                _slotIcon[i].raycastTarget = false;
-                _slotIcon[i].preserveAspect = true;
-                _slotIcon[i].color = new Color(1f, 1f, 1f, 0f);
-
-                // Glyph: cream parchment (legible on the dark seat AND on tinted ability
-                // accents, which SetAbilitySlot sets at 0.85 alpha over the dark cell).
-                _slotGlyph[i] = AddText(disc, "", 30, ElarionUi.Parchment, TextAlignmentOptions.Center);
-                _slotGlyph[i].outlineColor = new Color32(0, 0, 0, 200);
-                _slotGlyph[i].outlineWidth = 0.1f;
-
-                // Cooldown radial overlay
-                var cd = NewRect("CD", disc, Vector2.zero, Vector2.one);
-                _slotCooldown[i] = cd.gameObject.AddComponent<Image>();
-                _slotCooldown[i].color = HudTheme.CdShade;
-                _slotCooldown[i].sprite = HudTheme.Disc;
-                _slotCooldown[i].type = HudTheme.Disc != null ? Image.Type.Filled : Image.Type.Filled;
-                _slotCooldown[i].fillMethod = Image.FillMethod.Radial360;
-                _slotCooldown[i].fillOrigin = (int)Image.Origin360.Top;
-                _slotCooldown[i].fillClockwise = false;
-                _slotCooldown[i].fillAmount = 0f;
-                _slotCooldown[i].raycastTarget = false;
-
-                // Ability NAME label — cream parchment on the dark glass.
-                var nameRect = NewRect("Name", cell, new Vector2(0.02f, 0.0f), new Vector2(0.98f, 0.32f));
-                _slotName[i] = AddText(nameRect, "", 14, ElarionUi.Parchment, TextAlignmentOptions.Center);
-                _slotName[i].fontStyle = FontStyles.Bold;
-                _slotName[i].enableAutoSizing = true;
-                _slotName[i].fontSizeMin = 8f;
-                _slotName[i].fontSizeMax = 14f;
-                _slotName[i].raycastTarget = false;
-                _slotName[i].outlineColor = new Color32(0, 0, 0, 190);
-                _slotName[i].outlineWidth = 0.08f;
-
-                // Hotkey badge (top-right) — small gilt chip with dark-ink letter.
-                var keyBadge = NewRect("KeyBadge", cell, new Vector2(0.70f, 0.70f), new Vector2(1.0f, 1.0f));
-                var keyImg = keyBadge.gameObject.AddComponent<Image>();
-                keyImg.sprite = HudTheme.RoundedFrame;
-                keyImg.type = HudTheme.RoundedFrame != null ? Image.Type.Sliced : Image.Type.Simple;
-                keyImg.color = new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.92f);
-                keyImg.raycastTarget = false;
-                _slotKey[i] = AddText(keyBadge, defaultKeys[i], 14, ElarionUi.Ink, TextAlignmentOptions.Center);
-                _slotKey[i].fontStyle = FontStyles.Bold;
-
-                var btn = cell.gameObject.AddComponent<Button>();
-                btn.targetGraphic = cellImg;
-                ElarionUiKit.StyleButtonColors(btn);
-                int slot = i;
-                btn.onClick.AddListener(() => AbilityRequested?.Invoke(slot));
-            }
-        }
+        // WO-563: BuildVitalsCluster + BuildSkillBar were REMOVED with the OLD battle HUD.
+        // The hero HP/mana/XP and the Q/W/E/R ability cells they built are now owned by the
+        // 9-zone battle HUD (BattleHud9Zone) + the party-frame stack. The IVillageHud Set*
+        // setters that fed them are kept (below) as null-safe no-ops so Village-side pushes
+        // (HudModelProducers / ComboHudBridge / WaveHudBridge) still resolve. The AbilityRequested
+        // event stays declared for the same reason.
 
         // ── Build entry — bottom-right, clean gold pill. VILLAGE-ONLY. ────────
         private void BuildBuildButton(Transform parent)
@@ -2655,19 +2287,11 @@ namespace DeNelle.HUD
                 // MOCKUP ALIGN: Heart-of-Elarion objective bar TOP-LEFT under resources;
                 // WAVE x/y readout CENTERED-top; resource strip across the top-right.
                 SetAnchors(_castleBanner,   new Vector2(0.005f, 0.875f), new Vector2(0.46f, 0.94f));
-                SetAnchors(_waveReadout,    new Vector2(0.30f, 0.86f),  new Vector2(0.70f, 0.925f));
+                // WO-563: _waveReadout / _skillBar / _vitalsCluster removed with the OLD battle HUD.
                 SetAnchors(_resourceStrip,  new Vector2(0.48f, 0.955f), new Vector2(1f, 1f));
-                // Ability cluster hugs the bottom-RIGHT corner (right-thumb arc). Taller
-                // to fit the two labeled rows (SPELLS + WEAPON SKILLS) per the mockup.
-                SetAnchors(_skillBar,       new Vector2(0.58f, 0.0f),   new Vector2(1.0f, 0.28f));
-                // CLICK-FIX (F8 overlap probe): the TOWN ACTIONS diamond (BUILD/TALK/BAG/
-                // QUESTS) used a fixed bottom-RIGHT-corner footprint that sat UNDER the
-                // skill-bar slots (which render on the later battleRoot, on top) — so the
-                // BUILD tap could never land. Lift the diamond ABOVE the skill-bar band
-                // (skill top = 0.28) on the right edge, clearing the slot footprint.
+                // TOWN ACTIONS diamond (BUILD/TALK/BAG/QUESTS) — right edge, clear of the old
+                // skill-bar band footprint.
                 SetAnchors(_townActionPanel, new Vector2(0.66f, 0.30f), new Vector2(1.0f, 0.58f));
-                // Hero vitals float on the bottom-LEFT, lifted ABOVE the joystick.
-                SetAnchors(_vitalsCluster,  new Vector2(0.02f, 0.235f), new Vector2(0.46f, 0.30f));
                 // Build entry lifts to the upper-right, clear of the skill cluster.
                 SetAnchors(_buildBtn,       new Vector2(0.84f, 0.255f), new Vector2(0.99f, 0.33f));
                 // "Start Wave" CTA is now a CHILD of the wave plate (filling it) — no
@@ -2691,16 +2315,10 @@ namespace DeNelle.HUD
                 // MOCKUP ALIGN: Heart objective bar top-LEFT; WAVE readout centered-top;
                 // resources top-right.
                 SetAnchors(_castleBanner,   new Vector2(0.005f, 0.93f), new Vector2(0.30f, 0.99f));
-                SetAnchors(_waveReadout,    new Vector2(0.36f, 0.86f), new Vector2(0.64f, 0.925f));
+                // WO-563: _waveReadout / _skillBar / _vitalsCluster removed with the OLD battle HUD.
                 SetAnchors(_resourceStrip,  new Vector2(0.76f, 0.94f), new Vector2(0.995f, 0.99f));
-                // Landscape: more width — ability cluster sits tight in the corner.
-                SetAnchors(_skillBar,       new Vector2(0.74f, 0.0f),   new Vector2(1.0f, 0.34f));
-                // CLICK-FIX (F8 overlap probe): lift the TOWN ACTIONS diamond ABOVE the
-                // landscape skill-bar band (skill top = 0.34) on the right edge so the
-                // BUILD/TALK/BAG/QUESTS icons no longer sit under the slot footprint.
+                // TOWN ACTIONS diamond — right edge, clear of the old skill-bar band footprint.
                 SetAnchors(_townActionPanel, new Vector2(0.74f, 0.36f), new Vector2(1.0f, 0.66f));
-                // Vitals bottom-left above the (smaller) landscape joystick.
-                SetAnchors(_vitalsCluster,  new Vector2(0.02f, 0.30f),  new Vector2(0.30f, 0.37f));
                 SetAnchors(_buildBtn,       new Vector2(0.88f, 0.36f),  new Vector2(0.995f, 0.45f));
                 // "Start Wave" CTA is now a CHILD of the wave plate (filling it) — no
                 // root re-anchor here, or it would be yanked off the plate. It tracks
@@ -2850,11 +2468,9 @@ namespace DeNelle.HUD
         /// </summary>
         private void RefreshCombatWaveHeadline()
         {
-            // TGVRU: a null headline means SetWave/SetWaveProgress can't surface the wave number.
-            if (_waveText == null) { ReportMissingTarget("SetWave/RefreshCombatWaveHeadline", "_waveText"); return; }
-            _waveText.text = _townWaveMax > 0
-                ? "WAVE " + _lastWaveNumber + "/" + _townWaveMax
-                : "WAVE " + _lastWaveNumber;
+            // WO-563: the OLD battle wave headline (_waveText) was removed; the town wave cluster
+            // (RefreshTownWaveProgress) is the sole wave readout now. Kept as a no-op so the many
+            // call sites (SetWave / SetWaveProgress / HideWaveClearBanner) don't need to change.
         }
 
         public void SetCountdown(float secondsRemaining)
@@ -2862,7 +2478,6 @@ namespace DeNelle.HUD
             if (secondsRemaining > 0.1f)
             {
                 _lastWaveState = "Prepare — " + secondsRemaining.ToString("0.0") + "s";
-                if (_waveStateText != null) _waveStateText.text = _lastWaveState;
                 // WO-339: live town countdown timer + auto lookout escalation.
                 _townTimerSeconds = secondsRemaining;
                 _townWaveActive = false;
@@ -2872,7 +2487,6 @@ namespace DeNelle.HUD
             else
             {
                 _lastWaveState = "Defend";
-                if (_waveStateText != null) _waveStateText.text = _lastWaveState;
                 _townTimerSeconds = 0f;
                 _townWaveActive = true;
                 ApplyLookout(3); // combat
@@ -2974,25 +2588,15 @@ namespace DeNelle.HUD
 
         public void SetWaveImminent(bool imminent)
         {
-            if (_waveText != null) _waveText.color = imminent ? HudTheme.HpRed : HudTheme.Gilt;   // MOCKUP ALIGN: gilt headline at rest
-            if (_waveStateText != null)
-            {
-                _lastWaveState = imminent ? "Horde Approaching" : "Defend";
-                _waveStateText.text = _lastWaveState;
-                _waveStateText.color = imminent ? HudTheme.HpRed : HudTheme.Gold;
-            }
+            // WO-563: OLD battle headline removed; only the town lookout pip + state string remain.
+            _lastWaveState = imminent ? "Horde Approaching" : "Defend";
             // WO-339: escalate the town lookout pip (unless already in combat).
             if (_lookoutStatus != 3) ApplyLookout(imminent ? 2 : 0);
         }
 
         public void ShowWaveClearBanner(int waveNumber, int enemiesDefeated, string flavourLine)
         {
-            if (_waveText != null) _waveText.text = "WAVE " + waveNumber + " CLEAR";
-            if (_waveStateText != null)
-            {
-                _waveStateText.text = enemiesDefeated > 0 ? enemiesDefeated + " slain" : "Cleared";
-                _waveStateText.color = HudTheme.Gold;
-            }
+            // WO-563: OLD battle wave banner removed; the town lookout drives the cleared state.
             // WO-339: wave cleared → exit combat lookout.
             _townWaveActive = false;
             ApplyLookout(0);
@@ -3000,8 +2604,6 @@ namespace DeNelle.HUD
 
         public void HideWaveClearBanner()
         {
-            RefreshCombatWaveHeadline();   // MOCKUP ALIGN: restore the "WAVE N/M" headline
-            if (_waveStateText != null) { _waveStateText.text = _lastWaveState; _waveStateText.color = HudTheme.Gold; }
             // WO-339: wave done → lookout returns to SAFE, timer awaits next countdown.
             _townWaveActive = false;
             _townTimerSeconds = -1f;
@@ -3060,19 +2662,18 @@ namespace DeNelle.HUD
         }
 
         /// <summary>
-        /// Show / hide the COMBAT cluster — the bottom-RIGHT ability cells
-        /// (<see cref="_skillBar"/>) AND the bottom-LEFT hero HP/mana vitals
-        /// (<see cref="_vitalsCluster"/>). Driven by the Village-side
-        /// BuildModeHudBridge (hide on Build Enter) + the H hotkey.
-        /// VISIBILITY ONLY — data bindings keep writing while hidden. By name.
+        /// WO-563: the OLD combat clusters (bottom-right ability cells + bottom-left vitals) were
+        /// removed. This now just latches the combat-HUD flag and re-applies the combat gate (which
+        /// drives the party-frame stack). Driven by the Village-side BuildModeHudBridge (hide on
+        /// Build Enter) + the H hotkey. VISIBILITY ONLY — data bindings keep writing while hidden.
         /// </summary>
         public void SetCombatHudVisible(bool visible)
         {
             _combatHudVisible = visible;
-            if (_skillBar != null && _skillBar.gameObject.activeSelf != visible)
-                _skillBar.gameObject.SetActive(visible);
-            if (_vitalsCluster != null && _vitalsCluster.gameObject.activeSelf != visible)
-                _vitalsCluster.gameObject.SetActive(visible);
+            // WO-563: the OLD skill bar + vitals cluster this used to toggle are gone. The flag is
+            // still honoured by ApplyCombatGate (party-frame stack), so re-apply it now (Build-mode
+            // enter/exit + the H hotkey still hide/show the base combat chrome that remains).
+            ApplyCombatGate();
         }
 
         /// <summary>
@@ -3218,141 +2819,49 @@ namespace DeNelle.HUD
             }
         }
 
-        public void SetComboCount(int count)
-        {
-            if (_comboText == null) { ReportMissingTarget("SetComboCount", "_comboText"); return; }
-            if (count <= 1)
-            {
-                _comboText.text = "";
-                _lastCombo = count;
-                return;
-            }
-            _comboText.text = count + "× COMBO";
-            if (count > _lastCombo) PopMomentum();
-            _lastCombo = count;
-        }
+        // WO-563: the OLD battle HUD's combo/kill-streak momentum badge + enemy-count readout +
+        // ability cells were REMOVED. These IVillageHud setters are kept as no-ops (the Village-side
+        // ComboHudBridge / HudModelProducers / HeroAbilitiesHudBridge still push to them) — the
+        // 9-zone battle HUD reads ability/target/HP state directly from the systems now.
+        public void SetComboCount(int count) { /* WO-563: momentum badge removed */ }
 
-        public void SetKillStreak(int streak)
-        {
-            if (_streakText == null) { ReportMissingTarget("SetKillStreak", "_streakText"); return; }
-            if (streak <= 1)
-            {
-                _streakText.text = "";
-                _lastStreak = streak;
-                return;
-            }
-            _streakText.text = streak + "× KILLS";
-            if (streak > _lastStreak) PopMomentum();
-            _lastStreak = streak;
-        }
+        public void SetKillStreak(int streak) { /* WO-563: momentum badge removed */ }
 
-        private void PopMomentum()
-        {
-            _momentumPop = 1f;
-            _momentumHold = 1.1f;
-        }
+        public void SetEnemyCount(int live, int total) { /* WO-563: battle enemy-count readout removed */ }
 
-        public void SetEnemyCount(int live, int total)
-        {
-            if (_enemyCountText == null) { ReportMissingTarget("SetEnemyCount", "_enemyCountText"); return; }
-            if (total <= 0)
-            {
-                _enemyCountText.text = "";
-                _lastLive = _lastTotal = int.MinValue;
-                return;
-            }
-            if (live != _lastLive || total != _lastTotal)   // WO-410: rebuild only on spawn/kill, not every frame
-            {
-                _lastLive = live; _lastTotal = total;
-                _enemyCountText.text = live + " / " + total + " enemies";
-                float clearPct = total > 0 ? 1f - Mathf.Clamp01((float)live / total) : 0f;
-                _enemyCountText.color = Color.Lerp(HudTheme.TextDim, HudTheme.Gold, clearPct);
-            }
-        }
+        /// <summary>WO-563: the OLD bottom-left MP box is gone (the 9-zone shows mana). No-op.</summary>
+        public void SetMana(float current, float max) { /* WO-563: vitals MP box removed */ }
 
-        /// <summary>Live mana bar — pushed every frame by HeroAbilitiesHudBridge.</summary>
-        public void SetMana(float current, float max)
-        {
-            // WO-541 Stage 3a: the bottom-left MP box was removed (redundant with the hero
-            // card's MP). The fields are null BY DESIGN now — null-guard + no-op cleanly (no
-            // false "dropped push" trace). Kept on IVillageHud so existing callers don't break.
-            if (_manaFill != null) _manaFill.fillAmount = max > 0f ? Mathf.Clamp01(current / max) : 0f;
-            if (_manaText != null) _manaText.text = Mathf.RoundToInt(current) + "/" + Mathf.RoundToInt(max);
-        }
-
-        /// <summary>Live hero HP bar — pushed every frame by HeroAbilitiesHudBridge.</summary>
+        /// <summary>
+        /// Live hero HP — the OLD bottom-left HP bar/text were removed (WO-563), but this still
+        /// latches _hpCurrent/_hpMax (read by ApplyCombatGate's heroHurt gate) and feeds the
+        /// party-frame stack (slot 0 = hero), which survives. Pushed by HeroAbilitiesHudBridge.
+        /// </summary>
         public void SetHeroHp(float current, float max)
         {
             _hpCurrent = current;
             _hpMax = max > 0f ? max : 1f;
-            if (_hpFill == null && _hpText == null)
-                ReportMissingTarget("SetHeroHp", "_hpFill/_hpText");
-            if (_hpFill != null) _hpFill.fillAmount = Mathf.Clamp01(_hpCurrent / _hpMax);
-            if (_hpText != null) _hpText.text = Mathf.RoundToInt(current) + "/" + Mathf.RoundToInt(max);
             // Re-resolve the hero name/portrait once the class loads (in case it wasn't ready at build).
             if (_partyName != null && _partyName.Length > 0 && _partyName[0] != null && _partyName[0].text == "Hero")
                 RefreshHeroPortrait();
             SetPartyMember(0, _partyName != null && _partyName[0] != null ? _partyName[0].text : "Hero", current, max);
         }
 
-        /// <summary>Per-slot cooldown sweep (radial drains as the ability returns).</summary>
-        public void SetAbilityCooldown(int slot, float remaining, float total)
-        {
-            if (_slotCooldown == null || slot < 0 || slot >= _slotCooldown.Length || _slotCooldown[slot] == null)
-            { ReportMissingTarget("SetAbilityCooldown", "_slotCooldown[" + slot + "]"); return; }
-            float fill = total > 0f ? Mathf.Clamp01(remaining / total) : 0f;
-            _slotCooldown[slot].fillAmount = fill;
-            if (_slotCdFill != null) _slotCdFill[slot] = fill;
-            bool ready = fill <= 0.001f;
-            // MOCKUP ALIGN (dark glass): cream parchment when ready, dim parchment while
-            // on cooldown — legible on the dark ability cell (the light-skin ink was
-            // invisible on the re-darkened combat panel). Key chip stays gilt-on-ink.
-            if (_slotName != null && _slotName[slot] != null)
-                _slotName[slot].color = ready ? ElarionUi.Parchment : ElarionUi.ParchmentDim;
-            if (_slotKey != null && _slotKey[slot] != null)
-                _slotKey[slot].color = ready ? ElarionUi.Ink : new Color(ElarionUi.Ink.r, ElarionUi.Ink.g, ElarionUi.Ink.b, 0.6f);
-        }
+        /// <summary>WO-563: per-slot cooldown sweep — the OLD ability cells are gone; the 9-zone
+        /// renders its own cooldown rings from HeroAbilities. Kept as a no-op for existing callers.</summary>
+        public void SetAbilityCooldown(int slot, float remaining, float total) { /* WO-563: skill bar removed */ }
 
-        /// <summary>Per-class ability cell content (key/glyph/name) — 5-arg path.</summary>
+        /// <summary>Per-class ability cell content (key/glyph/name) — 5-arg path. No-op (WO-563).</summary>
         public void SetAbilitySlot(int slot, string key, string glyph, string name, string description)
         {
             SetAbilitySlot(slot, key, glyph, name, description, null);
         }
 
-        /// <summary>Per-class ability cell content + accent colour — 6-arg path (preferred).</summary>
+        /// <summary>Per-class ability cell content + accent — 6-arg path. No-op (WO-563: skill bar removed).</summary>
         public void SetAbilitySlot(int slot, string key, string glyph, string name, string description, string accentHex)
         {
-            if (slot < 0 || slot >= AbilitySlotCount) return;
-            // TGVRU: the skill bar didn't build (or this slot's cells are null) -> the whole
-            // ability content push silently drops. Self-report once when no per-slot cell exists.
-            if ((_slotKey == null || _slotKey[slot] == null)
-                && (_slotName == null || _slotName[slot] == null)
-                && (_slotGlyph == null || _slotGlyph[slot] == null))
-                ReportMissingTarget("SetAbilitySlot", "_slotKey/_slotName/_slotGlyph[" + slot + "]");
-            if (_slotKey != null && _slotKey[slot] != null && !string.IsNullOrEmpty(key)) _slotKey[slot].text = key;
-            if (_slotGlyph != null && _slotGlyph[slot] != null) _slotGlyph[slot].text = string.IsNullOrEmpty(glyph) ? "?" : glyph;
-            // Real ability art (by hero class + slot) wins over the glyph when present.
-            if (_slotIcon != null && _slotIcon[slot] != null)
-            {
-                var svc = DeNelle.Core.State.GameStateService.Instance;
-                var hc = svc != null && svc.State != null ? svc.State.HeroClass : DeNelle.Core.State.HeroClassOpt.None;
-                var iconKey = AbilityIconForClassSlot(hc, slot);
-                var sp = iconKey != null ? WidgetSprite(iconKey) : null;
-                if (sp != null)
-                {
-                    _slotIcon[slot].sprite = sp;
-                    _slotIcon[slot].color = Color.white;
-                    if (_slotGlyph != null && _slotGlyph[slot] != null) _slotGlyph[slot].text = "";
-                }
-            }
-            if (_slotName != null && _slotName[slot] != null)
-                _slotName[slot].text = string.IsNullOrEmpty(name) ? "" : name;
-            if (_slotAccent != null && _slotAccent[slot] != null && !string.IsNullOrEmpty(accentHex)
-                && ColorUtility.TryParseHtmlString(accentHex, out var c))
-            {
-                c.a = 0.85f;
-                _slotAccent[slot].color = c;
-            }
+            /* WO-563: the OLD bottom-right ability cells were removed; the 9-zone owns the ability
+               bar (it reads the live loadout directly). Kept on IVillageHud so callers don't break. */
         }
 
         // Per-class ability icon by slot (Q/W/E/R). Names match the staged Resources/HudIcons/<Class>/

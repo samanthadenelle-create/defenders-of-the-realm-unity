@@ -183,6 +183,13 @@ namespace DeNelle.Village.Arena
         private HeroTargetIndicator _target;
         private float _battleStart;
 
+        // WO-563: Mid-Right FOCUS quick-actions. Heal casts the class's heal ability (hidden when
+        // the class has none); Attack fires the basic-attack combo. (Mode had no clean manual
+        // toggle — CameraModeController.Mode is auto Town/Battle — so that button is not built.)
+        private Button _focusHealBtn;        // hidden when the current class has no heal slot
+        private AbilitySlot? _healSlot;      // resolved heal slot for the current class (null = none)
+        private string _healResolvedForClass;
+
         // -- Top-Left ----------------------------------------------------------
         private Image _hpFill;
         private Text  _hpText;
@@ -318,6 +325,7 @@ namespace DeNelle.Village.Arena
         {
             HookContext();   // WO-541 Stage 3a: subscribe to the Core HUD context once available
             ResolveSystems();
+            ResolveHealSlot();   // WO-563: show/hide the FOCUS Heal button by class heal availability
             PushPlayerStats();
             PushTarget();
             PushTargetCycle();
@@ -746,17 +754,47 @@ namespace DeNelle.Village.Arena
             var hdr = AddText(panel.transform, "FOCUS", 11, Parchment, TextAnchor.UpperCenter);
             Anchor(hdr.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -6f), new Vector2(-12f, 16f), new Vector2(0.5f, 1f));
 
-            // Heal-toggle (placeholder - toggles a heal-focus mode later).
-            AddTextButton(panel.transform, "Heal: Off", new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                          new Vector2(0f, -34f), new Vector2(168f, 48f), ColHealer, () => Debug.Log("[BattleHud9Zone] focus heal-toggle (placeholder)."));
+            // WO-563: FOCUS quick-actions wired to the real combat intents.
+            //   Heal   -> cast the class's heal ability (HeroAbilities.TryCast via Cast). The button
+            //             HIDES when the current class has no heal slot (e.g. Knight) — ResolveHealSlot.
+            //   Attack -> fire the basic-attack combo (PlayerAttackController) — same as the big pill.
+            //   Mode   -> NOT built: there is no clean player-facing combat/camera mode toggle
+            //             (CameraModeController.Mode is auto Town/Battle), so per WO-563 it is hidden
+            //             rather than shipped as a no-op.
+            _focusHealBtn = AddTextButton(panel.transform, "Heal", new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                          new Vector2(0f, -34f), new Vector2(168f, 48f), ColHealer, FocusHeal);
+            _focusHealBtn.gameObject.SetActive(false);   // shown by ResolveHealSlot when a heal exists
 
-            // Attack (placeholder - a quick-focus attack press later).
             AddTextButton(panel.transform, "Attack", new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                          new Vector2(0f, -90f), new Vector2(168f, 48f), ColDps, () => Debug.Log("[BattleHud9Zone] focus attack (placeholder)."));
+                          new Vector2(0f, -90f), new Vector2(168f, 48f), ColDps, BasicAttack);
+        }
 
-            // Mode switch (attack / ranged / spell - placeholder cycle).
-            AddTextButton(panel.transform, "Mode: Attack", new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                          new Vector2(0f, -146f), new Vector2(168f, 48f), ColWizard, () => Debug.Log("[BattleHud9Zone] focus mode-switch (placeholder)."));
+        // FOCUS Heal: cast the class's heal ability through the same public path the ability bar
+        // uses (HeroAbilities.TryCast, gated by cooldown/mana inside). No-op (and the button is
+        // hidden) when the class has no heal slot.
+        private void FocusHeal()
+        {
+            if (_healSlot.HasValue) Cast(_healSlot.Value);
+        }
+
+        // Resolve which Q/W/E/R slot (if any) is a Heal effect for the current hero class, and
+        // show/hide the FOCUS Heal button accordingly. Cheap + cached per class (re-runs only on a
+        // class change). The 9-zone engine is a 4-slot Q/W/E/R caster, so only kit slots qualify.
+        private void ResolveHealSlot()
+        {
+            string cls = HeroClassId();
+            if (_healResolvedForClass == cls) return;
+            _healResolvedForClass = cls;
+            _healSlot = null;
+            AbilitySlot[] all = { AbilitySlot.Q, AbilitySlot.W, AbilitySlot.E, AbilitySlot.R };
+            foreach (var s in all)
+            {
+                var def = AbilityCatalog.Find(cls, s);
+                if (def != null && def.EffectEnum == AbilityEffect.Heal) { _healSlot = s; break; }
+            }
+            if (_focusHealBtn != null) _focusHealBtn.gameObject.SetActive(_healSlot.HasValue);
+            FlowTrace.Step("HUD", "FOCUS heal slot for class '" + cls + "' = " +
+                           (_healSlot.HasValue ? _healSlot.Value.ToString() : "none (button hidden)"));
         }
 
         // ---------------------------------------------------------------------

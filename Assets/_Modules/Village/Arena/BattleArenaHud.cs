@@ -28,11 +28,10 @@ namespace DeNelle.Village.Arena
     public sealed class BattleArenaHud : MonoBehaviour
     {
         private Canvas _canvas;
-        private Text _title;
-        private Image _enemyFill;
-        private Text _remain;
-        private GameObject _liveGroup;   // primary bar + flee (hidden when the banner shows)
-        private Image _primaryPanel;     // the TOP-CENTRE title + enemy bar (suppressed when the 9-zone owns the top)
+        // WO-563: the legacy TOP-CENTRE primary panel (title + enemy HP bar + "N foes remain")
+        // was REMOVED — the 9-zone battle HUD owns the enemy-target readout now. Only the Flee
+        // button + the centre result/victory banner remain on this overlay.
+        private GameObject _liveGroup;   // hosts the Flee button (hidden when the banner shows)
         private Action _onFlee;
 
         // Flee tap-to-confirm (anti-misfire). First tap ARMS the button ("Tap again to flee?")
@@ -75,23 +74,9 @@ namespace DeNelle.Village.Arena
             // WO-498 — spawn the 9-zone mobile battle HUD bones alongside (flag-gated; returns
             // null + no-ops when ff.battlehud9zone is OFF, so the legacy overlay is unchanged).
             hud._hud9 = BattleHud9Zone.Create();
-            // WO-507 (avoid a DOUBLE HUD): when the 9-zone is APPLIED it owns the top of the
-            // screen (Zone 2 enemy family overview @ top-centre, Zone 3 timer @ top-right) and the
-            // hero/ability readouts. So SUPPRESS this overlay's duplicate TOP-CENTRE primary panel
-            // (encounter title + enemy HP bar + "N foes remain"). We KEEP the pieces the 9-zone
-            // bones DON'T have: the top-left Flee+confirm (separate corner) and the centre
-            // victory/defeat RESULT banner + stars (ShowResult). When the 9-zone is OFF the legacy
-            // overlay is unchanged (the primary panel stays).
-            if (hud._hud9 != null) hud.SuppressPrimaryForHud9();
+            // WO-563: the legacy top-centre primary panel was removed outright (the 9-zone owns
+            // the enemy-target readout), so there is no longer a duplicate to suppress.
             return hud;
-        }
-
-        /// <summary>WO-507 — hide the duplicate top-centre primary panel when the 9-zone HUD
-        /// is active (it provides the enemy family overview + timer up top). Flee + the result
-        /// banner are untouched, so nothing is lost.</summary>
-        private void SuppressPrimaryForHud9()
-        {
-            if (_primaryPanel != null) _primaryPanel.gameObject.SetActive(false);
         }
 
         public void SetFleeHandler(Action onFlee) => _onFlee = onFlee;
@@ -99,9 +84,8 @@ namespace DeNelle.Village.Arena
         /// <summary>
         /// ENGAGE INTRO CARD (encounter feedback): a brief centre overlay naming the engaged foe
         /// (e.g. "Orc Warband - Battle!") so the pull-into-the-fight has an on-screen cause. Built
-        /// on the HUD's OWN canvas (a sibling of the live group), NOT inside the top-centre primary
-        /// panel — so SuppressPrimaryForHud9 (which hides only that panel) does NOT hide this card.
-        /// Self-destructs after <paramref name="seconds"/>. ASCII-only text (legacy runtime font).
+        /// on the HUD's OWN canvas (a sibling of the live group). Self-destructs after
+        /// <paramref name="seconds"/>. ASCII-only text (legacy runtime font).
         /// </summary>
         public void ShowIntro(string foeLabel, float seconds = 1.6f)
         {
@@ -118,14 +102,6 @@ namespace DeNelle.Village.Arena
         {
             yield return new WaitForSeconds(Mathf.Max(0f, s));
             if (go != null) Destroy(go);
-        }
-
-        /// <summary>Push the primary-target state (frac 0..1, foes remaining). Logic -> view.</summary>
-        public void SetPrimary(string title, float frac, int remaining)
-        {
-            if (_title != null && title != null) _title.text = title;
-            if (_enemyFill != null) _enemyFill.fillAmount = Mathf.Clamp01(frac);
-            if (_remain != null) _remain.text = remaining > 1 ? (remaining + " foes remain") : "1 foe remains";
         }
 
         // WO-556: continue latch — Continue button + the auto-timeout both route here; the
@@ -293,24 +269,8 @@ namespace DeNelle.Village.Arena
             var lg = _liveGroup.AddComponent<RectTransform>();
             Stretch(lg);
 
-            // TOP CENTRE: encounter title + enemy HP bar + remaining count.
-            var top = AddPanel(_liveGroup.transform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                               new Vector2(0f, -54f), new Vector2(560f, 78f), Dark);
-            _primaryPanel = top;
-            _title = AddText(top.transform, "Orc Warband", 22, Gold, TextAnchor.UpperCenter);
-            var tr = _title.rectTransform; tr.anchorMin = new Vector2(0f, 1f); tr.anchorMax = new Vector2(1f, 1f);
-            tr.pivot = new Vector2(0.5f, 1f); tr.anchoredPosition = new Vector2(0f, -6f); tr.sizeDelta = new Vector2(-16f, 26f);
-
-            var barBg = AddPanel(top.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                                 new Vector2(0f, -8f), new Vector2(520f, 18f), new Color(0f, 0f, 0f, 0.6f));
-            _enemyFill = AddImage(barBg.transform, Danger);
-            var fr = _enemyFill.rectTransform; Stretch(fr); fr.offsetMin = new Vector2(2f, 2f); fr.offsetMax = new Vector2(-2f, -2f);
-            _enemyFill.type = Image.Type.Filled; _enemyFill.fillMethod = Image.FillMethod.Horizontal;
-            _enemyFill.fillOrigin = (int)Image.OriginHorizontal.Left; _enemyFill.fillAmount = 1f;
-
-            _remain = AddText(top.transform, "", 15, new Color(0.85f, 0.85f, 0.9f), TextAnchor.LowerCenter);
-            var rr = _remain.rectTransform; rr.anchorMin = new Vector2(0f, 0f); rr.anchorMax = new Vector2(1f, 0f);
-            rr.pivot = new Vector2(0.5f, 0f); rr.anchoredPosition = new Vector2(0f, 4f); rr.sizeDelta = new Vector2(-16f, 20f);
+            // WO-563: the TOP-CENTRE primary panel (encounter title + enemy HP bar + "N foes
+            // remain") was removed — the 9-zone battle HUD owns the enemy-target readout now.
 
             // TOP-LEFT (separate, safe corner): Flee button with tap-to-confirm. Deliberately
             // far from the bottom-right ability arc / basic-attack / joystick so it can never be

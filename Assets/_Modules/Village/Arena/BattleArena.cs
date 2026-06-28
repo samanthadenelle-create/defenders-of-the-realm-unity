@@ -391,11 +391,10 @@ namespace DeNelle.Village.Arena
             {
                 _hud = BattleArenaHud.Create();
                 _hud.SetFleeHandler(Flee);
-                _hud.SetPrimary("Orc Warband", 1f, _liveEnemies.Count);
+                // WO-563: SetPrimary removed — the 9-zone battle HUD owns the enemy-target readout.
                 // ENGAGE INTRO CARD (encounter feedback): a centre overlay naming the foe, so the
-                // pull-into-the-fight has an on-screen cause. Built on the HUD's own canvas (NOT the
-                // suppressed top-centre primary panel) so it shows EVEN when the 9-zone HUD owns the
-                // top. Derived from the family ids; self-destructs after IntroCardSeconds.
+                // pull-into-the-fight has an on-screen cause. Built on the HUD's own canvas so it
+                // shows EVEN with the 9-zone HUD up. Derived from the family ids; self-destructs.
                 _hud.ShowIntro(FoeLabel(p) + " - Battle!", IntroCardSeconds);
             });
             FlowTrace.Step("BattleArena", $"INTRO card '{FoeLabel(p)} - Battle!' shown (visible even under the 9-zone HUD).");
@@ -1082,9 +1081,7 @@ namespace DeNelle.Village.Arena
 
                 // WIN: every staged enemy is dead.
                 _liveEnemies.RemoveAll(e => e == null || e.IsDead);
-                // Push primary-target state to the overlay (presentation; logic owns the values).
-                if (_hud != null && _liveEnemies.Count > 0)
-                    _hud.SetPrimary(null, _liveEnemies[0] != null ? _liveEnemies[0].HpFraction : 0f, _liveEnemies.Count);
+                // WO-563: SetPrimary removed — the 9-zone HUD reads enemy HP/target directly.
                 if (_liveEnemies.Count == 0)
                 {
                     // WO-493 #4: linger on the climactic kill (slow-mo) BEFORE teardown/return.

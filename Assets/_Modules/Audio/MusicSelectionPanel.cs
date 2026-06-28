@@ -43,6 +43,12 @@ namespace DeNelle.Audio
         /// <summary>Key that toggles the jukebox panel open/closed.</summary>
         public const KeyCode ToggleKey = KeyCode.J;
 
+        /// <summary>WO-563: public open/toggle so a reachable HUD button (SocialAccessCluster) can
+        /// surface the jukebox on touch — the J key is keyboard-only + gated behind DevHotkeys, so
+        /// it was unreachable on mobile/WebGL. Mirrors ClanChatPanel/LeaderboardPanel.Toggle().</summary>
+        public void Toggle() => SetOpen(!_open);
+        public void Open()   => SetOpen(true);
+
         private UIDocument _doc;
         private VisualElement _overlay;
         private VisualElement _rowList;

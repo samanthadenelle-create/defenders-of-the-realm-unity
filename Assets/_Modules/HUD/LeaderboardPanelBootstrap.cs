@@ -1,8 +1,8 @@
 // =============================================================================
 // LeaderboardPanelBootstrap — auto-spawns a LeaderboardPanel in any gameplay
 // scene that has a hero present (Village, Dungeon), never the Title scene.
-// Mirrors ClanChatPanelBootstrap so the leaderboard hotkey (L) only lights up
-// where it makes sense.
+// Mirrors ClanChatPanelBootstrap. NOTE (WO-563): there is NO 'L' hotkey — the panel
+// opens via LeaderboardPanel.Toggle(), surfaced by the touch-friendly SocialAccessCluster.
 // =============================================================================
 
 using UnityEngine;

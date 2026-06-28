@@ -85,12 +85,15 @@ namespace DeNelle.HUD
         private bool _waveEventsBound;
 
         // ── Target groups ─────────────────────────────────────────────────────
+        // WO-563: the OLD battle group is gone (VillageHudController.BattleHudGroup removed). This
+        // manager now drives ONLY the TOWN fade + spawns/tears down the NEW 9-zone battle HUD for
+        // the Battle scenes that have no other spawner (enemy-owned outposts + RaidBase_* raids;
+        // an arena fight spawns its own via BattleArenaHud — the idempotent guard below avoids a
+        // double-spawn there).
         private VillageHudController _hud;
-        private CanvasGroup _battleGroup;
         private CanvasGroup _townGroup;        // WO-339
 
         // ── Fade state ────────────────────────────────────────────────────────
-        private float _battleTargetAlpha;      // 0 hidden, 1 shown
         private float _townTargetAlpha;        // WO-339
         private float _pollTimer;
 
@@ -128,7 +131,6 @@ namespace DeNelle.HUD
             // Snap to the correct state on boot (no fade on first frame).
             ResolveTargets();
             RefreshVisibility();
-            if (_battleGroup != null) _battleGroup.alpha = _battleTargetAlpha;
             if (_townGroup != null) _townGroup.alpha = _townTargetAlpha;
         }
 
@@ -136,7 +138,6 @@ namespace DeNelle.HUD
         {
             // New scene → the HUD / WaveManager / BattleController may have changed.
             _hud = null;
-            _battleGroup = null;
             _townGroup = null;
             _waveManager = null;
             _waveEventsBound = false;
@@ -155,9 +156,8 @@ namespace DeNelle.HUD
                 RefreshVisibility();      // re-evaluate (covers polled WaveManager.Phase)
             }
 
-            // WO-339: cross-fade BOTH HUD groups (0.6s) toward their mode targets.
+            // WO-563: fade ONLY the town HUD group (0.6s) — the old battle group is gone.
             float step = FadeSeconds > 0f ? Time.unscaledDeltaTime / FadeSeconds : 1f;
-            FadeGroup(_battleGroup, _battleTargetAlpha, step);
             FadeGroup(_townGroup, _townTargetAlpha, step);
         }
 
@@ -180,13 +180,11 @@ namespace DeNelle.HUD
                 if (_hud == null)
                 {
                     _hud = FindObjectOfType<VillageHudController>();
-                    _battleGroup = _hud != null ? _hud.BattleHudGroup : null;
                     _townGroup = _hud != null ? _hud.TownHudGroup : null;
                 }
-                else
+                else if (_townGroup == null)
                 {
-                    if (_battleGroup == null) _battleGroup = _hud.BattleHudGroup;
-                    if (_townGroup == null) _townGroup = _hud.TownHudGroup;
+                    _townGroup = _hud.TownHudGroup;
                 }
 
                 ResolveWaveManager();
@@ -277,14 +275,12 @@ namespace DeNelle.HUD
             try
             {
                 HudMode mode = EvaluateMode();
-                // BATTLE → battle group in, town out. TOWN → town in, battle out.
-                // HIDDEN (exploration / non-village idle) → both out (minimal HUD).
-                _battleTargetAlpha = mode == HudMode.Battle ? 1f : 0f;
-                _townTargetAlpha   = mode == HudMode.Town   ? 1f : 0f;
-                // Enemy-owned scene (Village2) in Battle mode + ff.battlehud9zone ON →
-                // force the NEW 9-zone HUD up; the LEGACY _battleHudGroup is suppressed
-                // in VillageHudController (hud9Owns gate) so the screen never double-HUDs.
-                ApplyEnemySceneHud9(mode);
+                // WO-563: only the TOWN group is faded now. TOWN → town in; BATTLE/HIDDEN → town out
+                // (the 9-zone owns the battle screen; exploration shows only base chrome).
+                _townTargetAlpha = mode == HudMode.Town ? 1f : 0f;
+                // Spawn / tear down the NEW 9-zone battle HUD for Battle scenes that need it
+                // (enemy-owned outposts + raids; arena spawns its own — guarded against double).
+                ApplyBattleHud9(mode);
             }
             catch (System.Exception e)
             {
@@ -382,14 +378,16 @@ namespace DeNelle.HUD
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  9-zone HUD ownership for enemy-owned scenes (Village2). Spawns/tears
-        //  down BattleHud9Zone by reflection so DeNelle.HUD stays Core-only.
+        //  9-zone HUD ownership for Battle scenes. WO-563: spawn for ANY Battle mode
+        //  (enemy-owned outpost, RaidBase_* raid, or arena) so NO battle context is ever
+        //  HUD-less. An arena fight already spawns one via BattleArenaHud — the idempotent
+        //  guard in EnsureEnemySceneHud9 (FindObjectOfType != null → bail) prevents a double,
+        //  and we only ever tear down the instance WE spawned. Spawns/tears down by reflection
+        //  so DeNelle.HUD stays Core-only (BattleHud9Zone lives in DeNelle.Village).
         // ─────────────────────────────────────────────────────────────────────
-        private void ApplyEnemySceneHud9(HudMode mode)
+        private void ApplyBattleHud9(HudMode mode)
         {
-            bool wantHud9 = mode == HudMode.Battle
-                && DeNelle.Core.FeatureFlags.BattleHud9Zone
-                && IsEnemyOwnedScene();
+            bool wantHud9 = mode == HudMode.Battle && DeNelle.Core.FeatureFlags.BattleHud9Zone;
             if (wantHud9) EnsureEnemySceneHud9();
             else TearDownEnemySceneHud9();
         }
