@@ -273,24 +273,12 @@ namespace DeNelle.Village.Hero
             if (canvas != null) canvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, onTapClose: () => _vm?.Close());
 
-            var backdrop = ElarionUiKit.AddImage(_ui.transform, "ShopBackdrop",
-                Vector2.zero, Vector2.one, new Color(0.02f, 0.015f, 0.012f, 0.94f), rounded: false);
-            var bdImg = backdrop.GetComponent<Image>();
-            if (bdImg != null) bdImg.raycastTarget = false;
-
-            var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.12f, 0.06f), new Vector2(0.88f, 0.94f),
-                                                   deep: true, packSpriteName: RpgUiCatalog.PanelVendor);
-            var panel = panelGo.transform;
-
-            Color fillColor = new Color(0.07f, 0.055f, 0.042f, 0.985f);
-            if (DeNelle.Core.FeatureFlags.BlinkChrome) fillColor.a = 0f;
-            var solidFill = ElarionUiKit.AddImage(panel, "ShopSolidFill",
-                new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f), fillColor);
-            var sfImg = solidFill.GetComponent<Image>();
-            if (sfImg != null) sfImg.raycastTarget = false;
-            solidFill.transform.SetAsFirstSibling();
-
-            _headerLabel = ElarionUiKit.Header(panel, "Gear Shop", x0: 0.04f, x1: 0.96f, y0: 0.91f, y1: 0.98f);
+            // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header + ONE Close.
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Gear Shop",
+                new Vector2(0.12f, 0.06f), new Vector2(0.88f, 0.94f), () => _vm?.Close(),
+                headerX0: 0.04f, headerX1: 0.96f);
+            var panel = chrome.content.transform;
+            _headerLabel = chrome.title;
 
             // Wallet readout (top-right band).
             var walletGo = new GameObject("Wallet", typeof(TMPro.TextMeshProUGUI));
@@ -364,11 +352,8 @@ namespace DeNelle.Village.Hero
             // The 3D render preview pane (WO-501 owner point 3) beside the slim list.
             BuildPreviewPane(panel);
 
-            // -- Bottom action bar (WO-501 owner point 4): Close + Purchase/Sell toggle + Equip --
-            var closeBtn = ElarionUiKit.ButtonPack(panel, "Close", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.04f, 0.03f), new Vector2(0.26f, 0.105f), () => _vm?.Close(),
-                packSpriteName: RpgUiCatalog.ButtonFrame);
-            CreamTab(closeBtn);
+            // -- Bottom action bar (WO-501 owner point 4): Purchase/Sell toggle + Equip --
+            // Close is the SHARED top-right Obsidian Close button (WO-554) — no per-panel footer Close.
 
             // ONE Purchase/Sell button whose label + action TOGGLE on _vm.Tab (the proven ShopPanel
             // pattern, ShopPanel.cs:341-344) - routes through _vm.Act on the selected id.
@@ -402,7 +387,7 @@ namespace DeNelle.Village.Hero
             // Raise the action buttons above the scroll content so a row never eats the tap (ShopPanel trap).
             if (_buySellBtn != null) _buySellBtn.transform.SetAsLastSibling();
             if (_equipBtn != null) _equipBtn.transform.SetAsLastSibling();
-            if (closeBtn != null) closeBtn.transform.SetAsLastSibling();
+            if (chrome.close != null) chrome.close.transform.SetAsLastSibling();
         }
 
         private void CreateTab(string label, Vector2 anchorX, System.Action onClick)

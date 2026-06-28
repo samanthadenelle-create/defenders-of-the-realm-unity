@@ -158,24 +158,12 @@ namespace DeNelle.Village.Buildings.Progression
             if (canvas != null) canvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, onTapClose: () => _vm?.Close());
 
-            var backdrop = ElarionUiKit.AddImage(_ui.transform, "UpgradeBackdrop",
-                Vector2.zero, Vector2.one, new Color(0.02f, 0.015f, 0.012f, 0.94f), rounded: false);
-            var bdImg = backdrop.GetComponent<Image>();
-            if (bdImg != null) bdImg.raycastTarget = false;
-
-            var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.14f, 0.07f), new Vector2(0.86f, 0.93f),
-                                                   deep: true, packSpriteName: RpgUiCatalog.PanelVendor);
-            var panel = panelGo.transform;
-
-            Color fillColor = new Color(0.07f, 0.055f, 0.042f, 0.985f);
-            if (DeNelle.Core.FeatureFlags.BlinkChrome) fillColor.a = 0f;
-            var solidFill = ElarionUiKit.AddImage(panel, "UpgradeSolidFill",
-                new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f), fillColor);
-            var sfImg = solidFill.GetComponent<Image>();
-            if (sfImg != null) sfImg.raycastTarget = false;
-            solidFill.transform.SetAsFirstSibling();
-
-            _headerLabel = ElarionUiKit.Header(panel, "Upgrade Building", x0: 0.04f, x1: 0.96f, y0: 0.9f, y1: 0.97f);
+            // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header + ONE Close.
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Upgrade Building",
+                new Vector2(0.14f, 0.07f), new Vector2(0.86f, 0.93f), () => _vm?.Close(),
+                headerX0: 0.04f, headerX1: 0.96f);
+            var panel = chrome.content.transform;
+            _headerLabel = chrome.title;
 
             // Wallet readout under the header.
             var walletGo = new GameObject("Wallet", typeof(TMPro.TextMeshProUGUI));
@@ -209,18 +197,9 @@ namespace DeNelle.Village.Buildings.Progression
                 _mainBtnLabel.transform.SetAsLastSibling();
             }
 
-            // Close.
-            var closeBtn = ElarionUiKit.ButtonPack(panel, "Close", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.06f, 0.03f), new Vector2(0.32f, 0.075f), () => _vm?.Close(),
-                packSpriteName: RpgUiCatalog.ButtonFrame);
-            var closeLbl = closeBtn != null ? closeBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
-            if (closeLbl != null)
-            {
-                closeLbl.color = ElarionUi.Parchment; closeLbl.fontStyle = TMPro.FontStyles.Bold;
-                closeLbl.transform.SetAsLastSibling();
-            }
+            // Close is the SHARED top-right Obsidian Close button (WO-554) — no per-panel footer Close.
 
-            // Status line (right of Close, bottom band).
+            // Status line (bottom band).
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
             statusGo.transform.SetParent(panel, false);
             var sRect = statusGo.GetComponent<RectTransform>();

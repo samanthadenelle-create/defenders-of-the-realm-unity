@@ -77,31 +77,14 @@ namespace DeNelle.Village.Hero
             if (canvas != null) canvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, () => _vm?.Close());
 
-            var backdrop = ElarionUiKit.AddImage(_ui.transform, "EquipBackdrop",
-                Vector2.zero, Vector2.one, new Color(0.02f, 0.015f, 0.012f, 0.94f), rounded: false);
-            var bdImg = backdrop.GetComponent<Image>();
-            if (bdImg != null) bdImg.raycastTarget = false;
-
-            var panel = ElarionUiKit.PanelFramed(_ui.transform,
-                                                 new Vector2(0.12f, 0.06f), new Vector2(0.88f, 0.95f),
-                                                 deep: true, packSpriteName: RpgUiCatalog.PanelVendor);
+            // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header +
+            // the ONE standard Close button. Replaces the old backdrop + brown PanelFramed +
+            // dark solidFill + per-panel "X". Content lives on chrome.content (0..1 anchors).
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "GEAR PREVIEW",
+                new Vector2(0.12f, 0.06f), new Vector2(0.88f, 0.95f),
+                () => _vm?.Close(), headerX0: 0.10f, headerX1: 0.90f);
+            var panel = chrome.content;
             _panelTransform = panel.transform;
-
-            var solidFill = ElarionUiKit.AddImage(panel.transform, "EquipSolidFill",
-                new Vector2(0.02f, 0.015f), new Vector2(0.98f, 0.985f),
-                new Color(0.05f, 0.055f, 0.06f, 0.985f));   // dark obsidian backing (always — frame is a border)
-            var sfImg = solidFill.GetComponent<Image>();
-            if (sfImg != null) sfImg.raycastTarget = false;
-            solidFill.transform.SetAsFirstSibling();
-
-            // Gold "GEAR PREVIEW" header.
-            ElarionUiKit.Header(panel.transform, "GEAR PREVIEW", x0: 0.10f, x1: 0.90f, y0: 0.915f, y1: 0.98f);
-
-            // X close (top-right).
-            var closeBtn = ElarionUiKit.ButtonPack(panel.transform, "X", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.915f, 0.915f), new Vector2(0.975f, 0.978f),
-                () => _vm?.Close(), RpgUiCatalog.ButtonFrame);
-            CreamTab(closeBtn);
 
             // Central 3D hero preview (the showcase centerpiece).
             BuildPreviewWidget(panel.transform);

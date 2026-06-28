@@ -165,6 +165,150 @@ namespace DeNelle.Core.UI
         }
 
         // =====================================================================
+        // OBSIDIAN PANEL CHROME — THE one canonical panel chrome (WO-554).
+        // ---------------------------------------------------------------------
+        // A near-BLACK panel fill + a GOLD TRIM border + a gold header title + a
+        // SINGLE standard Close button. Built ONCE here and reused by EVERY panel
+        // so the chrome is never re-authored per surface (owner directive
+        // 2026-06-28: "black panel + gold trim — kill the brown; NO per-panel 'X'
+        // buttons, one consistent Close"). This SUPERSEDES the per-panel recipe of
+        // backdrop + PanelFramed(brown wood sprite) + dark solidFill + Header + own
+        // X/Close that every panel had copy-pasted. Sprite-free (pure tinted quads)
+        // so it is identical on every target incl. WebGL and can never blank.
+        // =====================================================================
+
+        /// <summary>The canonical near-black panel fill (owner-specified value).</summary>
+        public static readonly Color ObsidianFill = new Color(0.02f, 0.02f, 0.025f, 0.98f);
+        /// <summary>The canonical gold trim border colour (runic gold, opaque).</summary>
+        public static Color ObsidianTrim => new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 1f);
+        /// <summary>Gold-trim border thickness, in reference px.</summary>
+        public const float ObsidianTrimPx = 3f;
+
+        /// <summary>
+        /// The pieces of a built Obsidian panel chrome. Parent your UI under
+        /// <see cref="content"/> — it spans the inner black area at 0..1 anchors, exactly like
+        /// the old framed-panel transform, so existing fraction-anchored content drops in
+        /// unchanged. <see cref="title"/> + <see cref="close"/> are pre-built and wired.
+        /// </summary>
+        public sealed class PanelChrome
+        {
+            /// <summary>Full-screen dark backdrop behind the panel (raycast-off); null when not requested.</summary>
+            public GameObject backdrop;
+            /// <summary>The gold-trim panel root (the border layer).</summary>
+            public GameObject root;
+            /// <summary>The near-black inner fill — PARENT YOUR UI HERE (0..1 anchors work as before).</summary>
+            public GameObject content;
+            /// <summary>The gold header title label (retext / recolour as needed).</summary>
+            public TextMeshProUGUI title;
+            /// <summary>The ONE standard Close button (top-right), wired to onClose.</summary>
+            public Button close;
+        }
+
+        /// <summary>
+        /// THE canonical panel chrome: a near-black panel with a GOLD TRIM border, a gold header
+        /// title, and ONE standard Close button — created here ONCE and reused by every panel (DRY).
+        /// Parent it under your modal canvas (build that with <see cref="BuildModalCanvas"/> +
+        /// <see cref="Scrim"/>, or use <see cref="BuildObsidianModal"/> for the whole thing).
+        /// Anchor by fraction-of-parent. Returns a <see cref="PanelChrome"/> whose <c>content</c> is
+        /// the inner fill to populate. No per-panel X buttons — the Close is consistent game-wide.
+        /// </summary>
+        public static PanelChrome BuildObsidianPanel(Transform parent, string title,
+            Vector2 anchorMin, Vector2 anchorMax, Action onClose,
+            float headerX0 = 0.06f, float headerX1 = 0.94f, bool withBackdrop = true)
+        {
+            var chrome = new PanelChrome();
+
+            if (withBackdrop)
+            {
+                chrome.backdrop = AddImage(parent, "Backdrop", Vector2.zero, Vector2.one,
+                    new Color(0.02f, 0.015f, 0.012f, 0.94f), rounded: false);
+                var bdImg = chrome.backdrop.GetComponent<Image>();
+                if (bdImg != null) bdImg.raycastTarget = false;
+            }
+
+            // Gold trim border layer (spans the whole rect; the black fill insets over it).
+            // Its Image keeps raycastTarget = true so taps can't fall through the panel.
+            chrome.root = AddImage(parent, "ObsidianPanel", anchorMin, anchorMax, ObsidianTrim, rounded: true);
+
+            // Near-black fill, inset by the trim thickness so the gold reads as a clean border.
+            chrome.content = AddImage(chrome.root.transform, "PanelFill", Vector2.zero, Vector2.one, ObsidianFill, rounded: true);
+            var fillRt = chrome.content.GetComponent<RectTransform>();
+            fillRt.offsetMin = new Vector2(ObsidianTrimPx, ObsidianTrimPx);
+            fillRt.offsetMax = new Vector2(-ObsidianTrimPx, -ObsidianTrimPx);
+            var fillImg = chrome.content.GetComponent<Image>();
+            if (fillImg != null) fillImg.raycastTarget = false;
+
+            // Gold header title across the top.
+            chrome.title = Header(chrome.content.transform, title ?? "", x0: headerX0, x1: headerX1, y0: 0.92f, y1: 0.98f);
+
+            // The single standard Close button (top-right corner).
+            chrome.close = ObsidianCloseButton(chrome.content.transform, onClose);
+
+            return chrome;
+        }
+
+        /// <summary>The whole modal in one call: <see cref="BuildModalCanvas"/> (overrideSorting) +
+        /// <see cref="Scrim"/> (tap-outside closes) + <see cref="BuildObsidianPanel"/>. Returns the
+        /// canvas GameObject and the chrome. Use for new panels; existing panels keep their canvas
+        /// and call <see cref="BuildObsidianPanel"/> directly.</summary>
+        public sealed class ObsidianModal
+        {
+            /// <summary>The ScreenSpaceOverlay modal canvas root.</summary>
+            public GameObject canvas;
+            /// <summary>The built panel chrome (content / title / close).</summary>
+            public PanelChrome chrome;
+        }
+
+        /// <summary>Build a complete Obsidian modal (canvas + scrim + chrome) in one call.</summary>
+        public static ObsidianModal BuildObsidianModal(string name, string title,
+            Vector2 anchorMin, Vector2 anchorMax, Action onClose, int sortingOrder = 31000)
+        {
+            var canvas = BuildModalCanvas(name, sortingOrder);
+            var c = canvas.GetComponent<Canvas>();
+            if (c != null) c.overrideSorting = true;
+            Scrim(canvas.transform, onClose);
+            var chrome = BuildObsidianPanel(canvas.transform, title, anchorMin, anchorMax, onClose);
+            return new ObsidianModal { canvas = canvas, chrome = chrome };
+        }
+
+        /// <summary>
+        /// The ONE standard Close button used by every panel (built by <see cref="BuildObsidianPanel"/>;
+        /// exposed for surfaces that build their own chrome). A compact gold-trimmed chip in the
+        /// TOP-RIGHT corner labelled "Close", wired to <paramref name="onClose"/>. Consistent
+        /// placement + look everywhere — replaces the per-panel "X" buttons.
+        /// </summary>
+        public static Button ObsidianCloseButton(Transform parent, Action onClose)
+        {
+            var go = new GameObject("CloseButton", typeof(Image), typeof(UnityEngine.UI.Button));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.865f, 0.928f);
+            rt.anchorMax = new Vector2(0.978f, 0.984f);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+
+            var img = go.GetComponent<Image>();
+            img.color = ObsidianTrim;          // gold trim chip
+            ApplyRounded(img);
+
+            // Inner black so it reads as gold-bordered (matches the panel language).
+            var inner = AddImage(go.transform, "Inner", Vector2.zero, Vector2.one, ObsidianFill);
+            var innerRt = inner.GetComponent<RectTransform>();
+            innerRt.offsetMin = new Vector2(2f, 2f); innerRt.offsetMax = new Vector2(-2f, -2f);
+            var innerImg = inner.GetComponent<Image>();
+            if (innerImg != null) innerImg.raycastTarget = false;
+
+            var btn = go.GetComponent<UnityEngine.UI.Button>();
+            btn.targetGraphic = img;
+            StyleButtonColors(btn);
+            if (onClose != null) btn.onClick.AddListener(() => onClose());
+
+            var lbl = Label(go.transform, "Close", 0f, 1f, ElarionUi.Gilt, ElarionUi.FontLabel,
+                            TextAlignmentOptions.Center, 0f, 1f, bold: true);
+            lbl.raycastTarget = false;
+            return btn;
+        }
+
+        // =====================================================================
         // HEADER — section header (crest glyph + gilt underline rule).
         // =====================================================================
 

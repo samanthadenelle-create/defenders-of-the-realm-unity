@@ -227,24 +227,12 @@ namespace DeNelle.Village.Items
             if (canvas != null) canvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, onTapClose: () => { if (_vm != null) _vm.Close(); });
 
-            var backdrop = ElarionUiKit.AddImage(_ui.transform, "CraftBackdrop",
-                Vector2.zero, Vector2.one, new Color(0.02f, 0.015f, 0.012f, 0.94f), rounded: false);
-            var bdImg = backdrop.GetComponent<Image>();
-            if (bdImg != null) bdImg.raycastTarget = false;
-
-            var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.07f, 0.05f), new Vector2(0.93f, 0.95f),
-                                                   deep: true, packSpriteName: RpgUiCatalog.PanelWindowDark);
-            var panel = panelGo.transform;
-
-            Color fillColor = new Color(0.07f, 0.055f, 0.042f, 0.985f);
-            if (DeNelle.Core.FeatureFlags.BlinkChrome) fillColor.a = 0f;
-            var solidFill = ElarionUiKit.AddImage(panel, "CraftSolidFill",
-                new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f), fillColor);
-            var sfImg = solidFill.GetComponent<Image>();
-            if (sfImg != null) sfImg.raycastTarget = false;
-            solidFill.transform.SetAsFirstSibling();
-
-            _headerLabel = ElarionUiKit.Header(panel, "Alchemy", x0: 0.04f, x1: 0.96f, y0: 0.91f, y1: 0.975f);
+            // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header + ONE Close.
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Alchemy",
+                new Vector2(0.07f, 0.05f), new Vector2(0.93f, 0.95f), () => { if (_vm != null) _vm.Close(); },
+                headerX0: 0.04f, headerX1: 0.96f);
+            var panel = chrome.content.transform;
+            _headerLabel = chrome.title;
 
             // One-line hint under the header.
             ElarionUiKit.Label(panel, "Combine ingredients dropped by enemies into potions and bombs.",
@@ -258,16 +246,7 @@ namespace DeNelle.Village.Items
             cr.anchorMin = new Vector2(0.04f, 0.15f); cr.anchorMax = new Vector2(0.96f, 0.83f);
             cr.offsetMin = Vector2.zero; cr.offsetMax = Vector2.zero;
 
-            // Close.
-            var closeBtn = ElarionUiKit.ButtonPack(panel, "Close", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.06f, 0.04f), new Vector2(0.30f, 0.10f), () => { if (_vm != null) _vm.Close(); },
-                packSpriteName: RpgUiCatalog.ButtonFrame);
-            var closeLbl = closeBtn != null ? closeBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
-            if (closeLbl != null)
-            {
-                closeLbl.color = ElarionUi.Parchment; closeLbl.fontStyle = TMPro.FontStyles.Bold;
-                closeLbl.transform.SetAsLastSibling();
-            }
+            // Close is the SHARED top-right Obsidian Close button (WO-554) — no per-panel footer Close.
         }
 
         // Icon cache — Resources.Load is cheap but cached avoids reloading every Render.

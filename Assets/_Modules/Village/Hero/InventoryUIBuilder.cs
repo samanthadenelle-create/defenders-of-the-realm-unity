@@ -40,38 +40,13 @@ namespace DeNelle.Village
 
             ElarionUiKit.Scrim(_ui.transform, Close);
 
-            var backdrop = AddImage(_ui.transform, "InvBackdrop", Vector2.zero, Vector2.one, new Color(0.02f, 0.015f, 0.012f, 0.94f));
-            NoRaycast(backdrop);
-
-            // Main dark wood panel
-            // Use the neutral window frame, NOT PanelVendor — the inventory was showing the SAME
-            // Merchant board as the shop ("the image of store"). Its grid already uses PanelInventory.
-            var panel = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.97f),
-                                                 deep: true, packSpriteName: RpgUiCatalog.PanelWindowDark);
-
-            bool chrome = !DeNelle.Core.FeatureFlags.BlinkChrome;   // flag OFF = our dressing; flag ON = let the Blink Obsidian panel show clean
-            var solidFill = AddImage(panel.transform, "InvSolidFill", new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f),
-                                     new Color(0.05f, 0.055f, 0.06f, 0.985f));   // dark obsidian backing (always — matches EquipmentPanel)
-            NoRaycast(solidFill);
-            solidFill.transform.SetAsFirstSibling();
-
-            // Warm glow accents
-            var baseGlow = AddImage(panel.transform, "BaseEmberGlow", new Vector2(0.06f, 0.025f), new Vector2(0.94f, 0.20f),
-                                    new Color(0.55f, 0.32f, 0.12f, chrome ? 0.22f : 0f));
-            NoRaycast(baseGlow);
-
-            if (chrome) AddRuneStrip(panel.transform, 0.965f, 0.992f);
-
-            // Header
-            AddLabelShadow(panel.transform, ElarionUi.CrestGlyph + "  INVENTORY", 0.918f, 0.958f,
-                           GiltInk, ElarionUi.FontTitle, 0.05f, 0.80f, spacing: 6f);
-            AddRule(panel.transform, 0.908f, 0.04f, 0.96f);
-
-            // Close button (top right)
-            var closeBtn = ElarionUiKit.ButtonPack(panel.transform, "X", ElarionUiKit.ButtonKind.Quiet,
-                      new Vector2(0.904f, 0.928f), new Vector2(0.916f, 0.962f), Close,
-                      packSpriteName: RpgUiCatalog.ButtonFrame);
-            CreamLabel(closeBtn);
+            // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header +
+            // the ONE standard Close button. Replaces the old backdrop + brown PanelFramed +
+            // dark solidFill + ember glow + rune strip + per-panel "X".
+            var panelChrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "INVENTORY",
+                new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.97f),
+                Close, headerX0: 0.05f, headerX1: 0.80f);
+            var panel = panelChrome.content;
 
             // Left: Narrow portrait area to match mockup exactly - ornate gold frame with hero portrait, Lvl, name, colored bars, stats.
             // Matches the mockup's left panel width and style.

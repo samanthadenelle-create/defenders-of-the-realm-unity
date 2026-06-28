@@ -268,49 +268,32 @@ namespace DeNelle.Village.Hero
             if (shopCanvas != null) shopCanvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, onTapClose: () => _vm?.Close());
 
-            var backdrop = ElarionUiKit.AddImage(_ui.transform, "ShopBackdrop",
-                Vector2.zero, Vector2.one, new Color(0.02f, 0.015f, 0.012f, 0.94f), rounded: false);
-            var bdImg = backdrop.GetComponent<Image>();
-            if (bdImg != null) bdImg.raycastTarget = false;
+            // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header + ONE Close.
+            // Replaces the old backdrop + brown PanelFramed + per-vendor solidFill. The header text
+            // comes from the VM (vm.Title) — set after Bind in Render via _headerLabel.
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Vendor Wares",
+                new Vector2(0.14f, 0.07f), new Vector2(0.86f, 0.93f), () => _vm?.Close(),
+                headerX0: 0.04f, headerX1: 0.96f);
+            var panel = chrome.content.transform;
+            _headerLabel = chrome.title;
 
-            var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.14f, 0.07f), new Vector2(0.86f, 0.93f),
-                                                   deep: true, packSpriteName: RpgUiCatalog.PanelVendor);
-            var panel = panelGo.transform;
-
+            // Subtle per-vendor accent glow (atmosphere over the shared black chrome).
             string vcLow = (_vendorContext ?? "").ToLowerInvariant();
-            Color fillColor, glowColor;
-            if (vcLow.Contains("forge") || vcLow.Contains("blacksmith"))
-            { fillColor = new Color(0.11f, 0.055f, 0.032f, 0.985f); glowColor = new Color(0.55f, 0.22f, 0.05f, 0.22f); }
-            else if (vcLow.Contains("armor"))
-            { fillColor = new Color(0.055f, 0.065f, 0.085f, 0.985f); glowColor = new Color(0.30f, 0.45f, 0.65f, 0.18f); }
-            else if (vcLow.Contains("jewel"))
-            { fillColor = new Color(0.085f, 0.055f, 0.10f, 0.985f); glowColor = new Color(0.55f, 0.30f, 0.65f, 0.18f); }
-            else if (vcLow.Contains("arcane") || vcLow.Contains("magic") || vcLow.Contains("tower"))
-            { fillColor = new Color(0.06f, 0.05f, 0.11f, 0.985f); glowColor = new Color(0.35f, 0.30f, 0.75f, 0.20f); }
-            else if (vcLow.Contains("market") || vcLow.Contains("granary") || vcLow.Contains("farm"))
-            { fillColor = new Color(0.08f, 0.07f, 0.04f, 0.985f); glowColor = new Color(0.45f, 0.40f, 0.12f, 0.18f); }
-            else if (vcLow.Contains("lumber"))
-            { fillColor = new Color(0.055f, 0.07f, 0.045f, 0f); glowColor = new Color(0.25f, 0.42f, 0.18f, 0.18f); }
-            else
-            { fillColor = new Color(0.07f, 0.055f, 0.042f, 0f); glowColor = new Color(0.45f, 0.35f, 0.18f, 0.16f); }
-
-            if (DeNelle.Core.FeatureFlags.BlinkChrome)
-            { fillColor.a = 0f; glowColor.a = 0f; }
-
-            var solidFill = ElarionUiKit.AddImage(panel, "ShopSolidFill",
-                new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f), fillColor);
-            var sfImg = solidFill.GetComponent<Image>();
-            if (sfImg != null) sfImg.raycastTarget = false;
-            solidFill.transform.SetAsFirstSibling();
+            Color glowColor;
+            if (vcLow.Contains("forge") || vcLow.Contains("blacksmith")) glowColor = new Color(0.55f, 0.22f, 0.05f, 0.22f);
+            else if (vcLow.Contains("armor")) glowColor = new Color(0.30f, 0.45f, 0.65f, 0.18f);
+            else if (vcLow.Contains("jewel")) glowColor = new Color(0.55f, 0.30f, 0.65f, 0.18f);
+            else if (vcLow.Contains("arcane") || vcLow.Contains("magic") || vcLow.Contains("tower")) glowColor = new Color(0.35f, 0.30f, 0.75f, 0.20f);
+            else if (vcLow.Contains("market") || vcLow.Contains("granary") || vcLow.Contains("farm")) glowColor = new Color(0.45f, 0.40f, 0.12f, 0.18f);
+            else if (vcLow.Contains("lumber")) glowColor = new Color(0.25f, 0.42f, 0.18f, 0.18f);
+            else glowColor = new Color(0.45f, 0.35f, 0.18f, 0.16f);
+            if (DeNelle.Core.FeatureFlags.BlinkChrome) glowColor.a = 0f;
 
             var glow = ElarionUiKit.AddImage(panel, "VendorGlow",
                 new Vector2(0.05f, 0.015f), new Vector2(0.95f, 0.17f), glowColor, rounded: false);
             var glowImg = glow.GetComponent<Image>();
             if (glowImg != null) glowImg.raycastTarget = false;
-            glow.transform.SetSiblingIndex(1);
-
-            // Header text comes from the VM (vm.Title) — set after Bind in Render via a header label.
-            _headerLabel = ElarionUiKit.Header(panel, "Vendor Wares", x0: 0.04f, x1: 0.96f, y0: 0.9f, y1: 0.97f);
+            glow.transform.SetAsFirstSibling();
 
             CreateEconomyReadout(panel);
 
@@ -349,20 +332,9 @@ namespace DeNelle.Village.Hero
                 _actionLabel.outlineColor = new Color32(20, 12, 4, 235); _actionLabel.outlineWidth = 0.22f;
                 _actionLabel.transform.SetAsLastSibling();
             }
-            var closeBtn = ElarionUiKit.ButtonPack(panel, "Close", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.06f, 0.03f), new Vector2(0.32f, 0.105f), () => _vm?.Close(),
-                packSpriteName: RpgUiCatalog.ButtonFrame);
-            var closeLbl = closeBtn != null ? closeBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
-            if (closeLbl != null)
-            {
-                closeLbl.color = ElarionUi.Parchment; closeLbl.fontStyle = TMPro.FontStyles.Bold;
-                closeLbl.outlineColor = new Color32(20, 12, 4, 235); closeLbl.outlineWidth = 0.22f;
-                closeLbl.transform.SetAsLastSibling();
-            }
-            // Raise the WHOLE close button (not just its label) above the dynamically-rebuilt buy-rows so a
-            // row can never cover/eat it — the fleet's 'Btn_Close <- BuyRow' soft-trap (can't dismiss the
-            // shop). Status (below, bottom-right) doesn't overlap the close rect, so its later creation is fine.
-            if (closeBtn != null) closeBtn.transform.SetAsLastSibling();
+            // Close is the SHARED top-right Obsidian Close button (WO-554) — no per-panel footer Close.
+            // Keep it above the dynamically-rebuilt rows so a row can never cover/eat it (fleet soft-trap).
+            if (chrome.close != null) chrome.close.transform.SetAsLastSibling();
 
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
             statusGo.transform.SetParent(panel, false);

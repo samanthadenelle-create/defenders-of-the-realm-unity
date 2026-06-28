@@ -418,29 +418,12 @@ namespace DeNelle.Village.Talents
             if (canvas != null) canvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, onTapClose: () => { if (_vm != null) _vm.Close(); });
 
-            var backdrop = ElarionUiKit.AddImage(_ui.transform, "SkillBackdrop",
-                Vector2.zero, Vector2.one, new Color(0.02f, 0.015f, 0.012f, 0.94f), rounded: false);
-            var bdImg = backdrop.GetComponent<Image>();
-            if (bdImg != null) bdImg.raycastTarget = false;
-
-            // Obsidian board frame — match the known-good EquipmentPanel sibling (PanelVendor,
-            // the proven dark obsidian board). Falls back to the neutral dark frame if absent.
-            string panelSprite = RpgUiCatalog.Get("panel", RpgUiCatalog.PanelVendor) != null
-                ? RpgUiCatalog.PanelVendor : RpgUiCatalog.PanelWindowDark;
-            var panelGo = ElarionUiKit.PanelFramed(_ui.transform, new Vector2(0.07f, 0.05f), new Vector2(0.93f, 0.95f),
-                                                   deep: true, packSpriteName: panelSprite);
-            var panel = panelGo.transform;
-
-            // Always keep a dark backing behind the (9-slice) Obsidian frame so the
-            // graph + text stay readable — the frame is a border, not a full fill.
-            Color fillColor = new Color(0.05f, 0.055f, 0.06f, 0.985f);
-            var solidFill = ElarionUiKit.AddImage(panel, "SkillSolidFill",
-                new Vector2(0.025f, 0.02f), new Vector2(0.975f, 0.98f), fillColor);
-            var sfImg = solidFill.GetComponent<Image>();
-            if (sfImg != null) sfImg.raycastTarget = false;
-            solidFill.transform.SetAsFirstSibling();
-
-            _headerLabel = ElarionUiKit.Header(panel, "Skills", x0: 0.04f, x1: 0.74f, y0: 0.91f, y1: 0.975f);
+            // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header + ONE Close.
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Skills",
+                new Vector2(0.07f, 0.05f), new Vector2(0.93f, 0.95f), () => { if (_vm != null) _vm.Close(); },
+                headerX0: 0.04f, headerX1: 0.74f);
+            var panel = chrome.content.transform;
+            _headerLabel = chrome.title;
 
             // Wisdom readout under the header.
             var walletGo = new GameObject("Wallet", typeof(TMPro.TextMeshProUGUI));
@@ -593,12 +576,7 @@ namespace DeNelle.Village.Talents
             var canLbl = _cancelBtn != null ? _cancelBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
             if (canLbl != null) { canLbl.color = ElarionUi.Parchment; canLbl.fontStyle = TMPro.FontStyles.Bold; }
 
-            var closeBtn = ElarionUiKit.ButtonPack(panel, "Close", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.82f, 0.075f), new Vector2(0.95f, 0.135f),
-                () => { if (_vm != null) _vm.Close(); },
-                packSpriteName: RpgUiCatalog.ButtonFrame);
-            var closeLbl = closeBtn != null ? closeBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
-            if (closeLbl != null) { closeLbl.color = ElarionUi.Parchment; closeLbl.fontStyle = TMPro.FontStyles.Bold; }
+            // Close is the SHARED top-right Obsidian Close button (WO-554) — no per-panel footer Close.
         }
 
         private static void SetButtonAlpha(Button btn, float a)
