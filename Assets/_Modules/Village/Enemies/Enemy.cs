@@ -1114,22 +1114,36 @@ namespace DeNelle.Village
             {
                 _attackCooldown = _attackInterval;
 
-                // DEF-48: if a telegraph duration is configured, play the wind-up
-                // before landing damage. Otherwise deal damage instantly (legacy path).
-                float telegraphDuration = _typeVfxSet != null ? _typeVfxSet.TelegraphDuration : 0f;
-                if (telegraphDuration > 0f)
-                    StartCoroutine(TelegraphThenAttack(telegraphDuration));
-                else
-                    ExecuteContactAttack();
+                // DEF-48 / WO-560: ALWAYS telegraph the contact strike. Arena orcs are
+                // built by EnemyFactory with a synthesized EnemyDef and never receive a
+                // _typeVfxSet, so the legacy "telegraphDuration==0 -> instant hit" path
+                // gave the V1 fight NO readable wind-up (owner F8: enemies hit with no
+                // tell). We now floor the wind-up at ContactTelegraphFloor (>=1.0s) so the
+                // melee read is reactable even with no SO configured, and the ground-ring
+                // warning is drawn unconditionally in TelegraphThenAttack.
+                float telegraphDuration = _typeVfxSet != null && _typeVfxSet.TelegraphDuration > 0f
+                    ? _typeVfxSet.TelegraphDuration : ContactTelegraphFloor;
+                telegraphDuration = Mathf.Max(telegraphDuration, ContactTelegraphFloor);
+                StartCoroutine(TelegraphThenAttack(telegraphDuration));
             }
         }
 
-        // ── DEF-48: telegraph → attack ────────────────────────────────────────
+        // ── DEF-48 / WO-560: telegraph → attack ───────────────────────────────
 
         /// <summary>
-        /// DEF-48: Plays the wind-up animation and optional ground-ring VFX, then
-        /// deals damage after <paramref name="duration"/> seconds. Guards against
-        /// double-trigger via <see cref="_telegraphing"/>.
+        /// WO-560: minimum readable wind-up for a contact (melee) strike. Floors the
+        /// telegraph so arena orcs (no _typeVfxSet) still show a reactable tell. Matches
+        /// the rooted-cast floor (RootedCast uses 1.0s) so melee and cast read alike.
+        /// </summary>
+        private const float ContactTelegraphFloor = 1.0f;
+
+        /// <summary>
+        /// DEF-48 / WO-560: Plays the wind-up animation + a ground-ring danger tell at
+        /// the target's feet, then deals damage after <paramref name="duration"/> seconds.
+        /// The ground ring is drawn UNCONDITIONALLY (procedural <see cref="VFXManager"/>
+        /// shockwave ring) so the warning shows even when no <see cref="EnemyTypeVfxSet"/>
+        /// is assigned (arena path). An authored TelegraphVFXPrefab, when present, is
+        /// spawned in addition. Guards against double-trigger via <see cref="_telegraphing"/>.
         /// </summary>
         private System.Collections.IEnumerator TelegraphThenAttack(float duration)
         {
@@ -1138,17 +1152,30 @@ namespace DeNelle.Village
             // Wind-up animation trigger — Animator must have a "WindUp" state.
             if (_animator != null && _hasWindUpParam) _animator.SetTrigger(AnimWindUp);
 
-            // Spawn the ground-ring warning VFX at the target's position (if any).
+            // WO-560: ALWAYS draw a ground-ring danger tell at the target's feet so the
+            // player can read + react to the incoming melee strike. Uses the procedural
+            // Impact_ShockwaveRing fallback (committed asset / AbilityVfxKit) — no pack
+            // prefab, no SO required. FlowTrace each fire so the telegraph is observable
+            // in a headless run (acceptance: telegraph window > 0).
+            var targetMb = _currentTarget as MonoBehaviour;
+            if (targetMb != null)
+            {
+                Vector3 feet = targetMb.transform.position;
+                VFXManager.Play(VFXType.Impact_ShockwaveRing, feet,
+                    Quaternion.identity, playSound: false);
+                DeNelle.Core.Diagnostics.FlowTrace.Step("VFXTelegraph",
+                    $"{_enemyId}: MELEE telegraph fired (dur={duration:F2}s) ground-ring @ {feet} target='{targetMb.name}'");
+            }
+
+            // Authored ground-ring warning VFX at the target's position (in addition).
             GameObject telegraphVFX = null;
             if (_typeVfxSet != null && _typeVfxSet.TelegraphVFXPrefab != null
-                && _currentTarget != null)
+                && targetMb != null)
             {
-                var targetMb = _currentTarget as MonoBehaviour;
-                if (targetMb != null)
-                    telegraphVFX = Instantiate(
-                        _typeVfxSet.TelegraphVFXPrefab,
-                        targetMb.transform.position,
-                        Quaternion.identity);
+                telegraphVFX = Instantiate(
+                    _typeVfxSet.TelegraphVFXPrefab,
+                    targetMb.transform.position,
+                    Quaternion.identity);
             }
 
             yield return new WaitForSeconds(duration);
@@ -1271,6 +1298,18 @@ namespace DeNelle.Village
             // Telegraph: wind-up pose + audio charge cue.
             _actor?.PlayWindUp();
             EnemyCombatAudio.PlayCastCharge();
+
+            // WO-560: draw a ground-ring danger tell at the AIM POINT (target's feet) so
+            // the incoming cast is readable + dodgeable, mirroring the melee tell. Uses the
+            // procedural Impact_ShockwaveRing fallback (committed asset, no pack prefab).
+            if (target != null)
+            {
+                Vector3 castFeet = target.position;
+                VFXManager.Play(VFXType.Impact_ShockwaveRing, castFeet,
+                    Quaternion.identity, playSound: false);
+                DeNelle.Core.Diagnostics.FlowTrace.Step("VFXTelegraph",
+                    $"{_enemyId}: CAST telegraph fired (windUp={windUp:F2}s) ground-ring @ {castFeet}");
+            }
 
             yield return new WaitForSeconds(windUp * 0.6f);
 

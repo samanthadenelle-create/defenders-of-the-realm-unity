@@ -1205,6 +1205,15 @@ namespace DeNelle.Village.Arena
                 FlowTrace.Step("BattleArena",
                     $"SUMMARY xp={totals.Xp} wisdom={totals.Wisdom} wood={totals.Wood} iron={totals.Iron} gear={(string.IsNullOrEmpty(totals.GearName) ? "-" : totals.GearName)}");
 
+            // WO-560: VICTORY REWARD BURST (juice). On a win, fire a celebratory VFX at the
+            // hero + a small loot-pop per reward granted, escalating with the star rating
+            // (1/2/3 -> more bursts). Uses ONLY existing celebration types (procedural gold
+            // fallbacks — no pack prefab). Guarded + FlowTrace'd; does NOT touch the WO-556
+            // summary (HUD) which is pushed separately below.
+            if (won)
+                Guard.Try("BattleArena", "victory reward burst",
+                    () => PlayVictoryBurst(stars, totals));
+
             // Restore any cavern mood RenderSettings BEFORE the open world is back in view.
             RestoreCavernMood();
 
@@ -1317,6 +1326,53 @@ namespace DeNelle.Village.Arena
         {
             yield return new WaitForSecondsRealtime(Mathf.Max(0f, seconds));
             CoreServices.Audio?.PlayMusic(MusicTrack.Overworld);
+        }
+
+        // WO-560: celebratory VFX burst on a WIN. A single WaveClear_Celebration at the
+        // burst centre, plus a small loot-pop per reward actually granted, and (stars-1)
+        // extra celebratory bursts ringing the centre so a 3-star clear reads bigger than a
+        // 1-star. Centre = the hero (falls back to the climax body = last dead enemy). Uses
+        // only existing celebration VFXType values (procedural gold fallbacks, no pack
+        // prefab). FlowTrace the fire so it is observable headless / in the F8 break-log.
+        private void PlayVictoryBurst(int stars, BattleRewardSummary totals)
+        {
+            var heroGo = GameObject.FindWithTag("Player");
+            Vector3 centre = heroGo != null
+                ? heroGo.transform.position
+                : (_climaxBody != null ? _climaxBody.position : Vector3.zero);
+            Vector3 lift = Vector3.up * 1.2f;
+
+            // Main celebration burst at the hero.
+            VFXManager.Play(VFXType.WaveClear_Celebration, centre + lift);
+
+            // Loot-pop per reward granted (gold level-up pop), ringed around the centre so
+            // each award reads as its own little burst.
+            int pops = 0;
+            void LootPop(bool granted)
+            {
+                if (!granted) return;
+                float ang = pops * 1.1f;            // fan the pops out around the centre
+                Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * 1.0f;
+                VFXManager.Play(VFXType.Juice_LevelUp, centre + lift + off, Quaternion.identity, playSound: false);
+                pops++;
+            }
+            LootPop(totals.Xp > 0);
+            LootPop(totals.Wisdom > 0);
+            LootPop(totals.Wood > 0);
+            LootPop(totals.Iron > 0);
+            LootPop(!string.IsNullOrEmpty(totals.GearName));
+
+            // Escalate with the star rating: each star ABOVE 1 adds an extra ringing burst.
+            int extra = Mathf.Max(0, stars - 1);
+            for (int i = 0; i < extra; i++)
+            {
+                float ang = (i + 0.5f) * 2.4f;
+                Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * 2.2f;
+                VFXManager.Play(VFXType.Juice_WaveClear, centre + lift + off, Quaternion.identity, playSound: false);
+            }
+
+            FlowTrace.Step("BattleArena",
+                $"VICTORY BURST FIRED stars={stars} lootPops={pops} extraBursts={extra} centre={centre}");
         }
 
         // ENCOUNTER FEEDBACK (2026-06-27): the masked home return. Fades to black, then UNDER black

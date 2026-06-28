@@ -834,9 +834,46 @@ namespace DeNelle.Village
                     break;
 
                 default:
-                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Aoe, _aetherColor, position, 1.5f, position);
+                    // WO-560: unmapped types previously ALL spawned an identical aether nova
+                    // (visual sameness). Pick a type-appropriate procedural burst by reading
+                    // the enum NAME — element keyword -> colour, category keyword -> effect —
+                    // so a new/uncased type still reads roughly right (committed-asset-only,
+                    // no pack prefab) until it earns an explicit case above.
+                    SpawnHeuristicFallback(type, position, rotation);
                     break;
             }
+        }
+
+        /// <summary>
+        /// WO-560: name-driven procedural fallback for VFXTypes with no explicit case.
+        /// Maps the enum name's element keyword to a colour and its category keyword to an
+        /// <see cref="AbilityEffect"/> so unmapped types stop looking identical. Pure
+        /// procedural (AbilityVfxKit) — never references a (gitignored) pack prefab.
+        /// </summary>
+        private static void SpawnHeuristicFallback(VFXType type, Vector3 position, Quaternion rotation)
+        {
+            string n = type.ToString();
+
+            // Element keyword -> colour.
+            Color col =
+                (n.Contains("Fire") || n.Contains("Flame")) ? _flameColor :
+                (n.Contains("Ice")  || n.Contains("Frost")) ? _iceColor :
+                (n.Contains("Heal")) ? _healColor :
+                (n.Contains("Physical") || n.Contains("Shard") || n.Contains("Shockwave")) ? _physColor :
+                (n.Contains("Celebration") || n.Contains("Juice") || n.Contains("Combo") || n.Contains("LevelUp")) ? _goldColor :
+                _aetherColor;
+
+            // Category keyword -> effect + scale.
+            if (n.Contains("Death") || n.Contains("Explosion") || n.Contains("Boss"))
+                AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Meteor, col, position, 2.5f, position);
+            else if (n.Contains("Cast") || n.Contains("Telegraph") || n.Contains("Projectile"))
+                AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Strike, col, position, 1.5f, position + rotation * Vector3.forward * 2f);
+            else if (n.Contains("Aura"))
+                AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Heal, col, position, 1f, position);
+            else if (n.Contains("Ring") || n.Contains("Shockwave") || n.Contains("Celebration") || n.Contains("Aoe"))
+                AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Aoe, col, position, 2f, position);
+            else
+                AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Strike, col, position, 1.5f, position);
         }
 
         /// <summary>
