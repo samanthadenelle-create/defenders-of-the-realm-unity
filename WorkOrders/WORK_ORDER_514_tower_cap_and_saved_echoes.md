@@ -10,6 +10,11 @@
 - SME first: find the tower placement system (TowerPlacementSystem) + where towers register/spawn; add the count + cap gate there. Instrument the count.
 
 ## Item B — Population → "Saved Echoes" (X/10) → skill points
+> ⚠ **SUPERSEDED 2026-06-29 by `WORK_ORDER_587` (Population & Echo Growth System V1).** The owner's matured design
+> replaces the flat "X/10, 3-per-SP" model with milestone-driven population XP + cap unlocking echo workforce slots
+> (1→5) from quests / outposts / wave victories / village upgrades, data-driven via `population-milestones.json`.
+> Build Item B per **WO-587**. (Items A tower-cap + C siege below remain OPEN under this WO.) The SP-linkage idea
+> here is an OPEN question in WO-587.
 - Today: a "Population" stat exists but is **never touched / unused / not wired to anything**. Dead UI.
 - **Owner decision:** EITHER kill it, OR (preferred) **rebrand it to "Saved Echoes"** and make it MEAN something:
   - Display as **Saved Echoes X/10** (the echoes you've rescued/saved — ties to the echo/life-force economy, memory `echo-workforce-drag-drop`).
