@@ -72,6 +72,12 @@ namespace DeNelle.Village
         [Tooltip("Damage dealt to a structure per melee hit.")]
         [SerializeField] private float _contactDamage = 6f;
 
+        /// <summary>The authored per-hit contact damage (from enemies.json <c>def.ContactDamage</c>,
+        /// post wave-scaling). HeroHealth's contact tick reads THIS per adjacent enemy so each
+        /// enemy hits for its real stat (berserker 15 vs necromancer 18 vs walker 8) instead of a
+        /// single hardcoded flat value — turns the authored contactDamage column live for hero combat.</summary>
+        public float ContactDamage => _contactDamage;
+
         [Tooltip("Seconds between melee hits while in contact.")]
         [SerializeField] private float _attackInterval = 1.3f;
 
@@ -1501,6 +1507,17 @@ namespace DeNelle.Village
         /// flame/ice/aether; melee stays physical). Set by EnemyDamageable.TakeDamage.</summary>
         public void SetNextImpactElement(DamageElement element) => _nextImpactElement = element;
 
+        // Ticket #61: stamped TRUE by the HERO's attack/ability paths (via
+        // EnemyDamageable.MarkNextHitFromHero) for the NEXT hit only; consumed in
+        // TakeDamageFrom. Gates the combo / kill-streak / RAMPAGE feedback so tower,
+        // pet, DoT and environmental damage NEVER drive the combo. Default false =
+        // non-hero (only the hero stamps it true).
+        private bool _nextDealtByHero;
+
+        /// <summary>Ticket #61: mark the NEXT hit as hero-dealt so its combo/streak/RAMPAGE
+        /// feedback fires. Set by EnemyDamageable.MarkNextHitFromHero (hero paths only).</summary>
+        public void SetNextDealtByHero(bool value) => _nextDealtByHero = value;
+
         public void TakeDamage(float amount)
         {
             // No source position — default flinch direction is Front (attacker
@@ -1517,6 +1534,13 @@ namespace DeNelle.Village
         public void TakeDamageFrom(float amount, Vector3 sourceWorldPos)
         {
             if (_dead || amount <= 0f) return;
+
+            // Ticket #61: consume the hero-source stamp ONCE for this hit. Only the hero's
+            // attack/ability paths stamp it true (via EnemyDamageable.MarkNextHitFromHero);
+            // tower / pet / DoT / environment leave it false. Gates the combo / kill-streak /
+            // RAMPAGE feedback below (and the kill feedback inside Die) to hero strikes only.
+            bool dealtByHero = _nextDealtByHero;
+            _nextDealtByHero = false;
 
             // Floating combat text — pop the damage number at the enemy's head so
             // the player can see the hit (and watch it rise after a damage talent).
@@ -1536,7 +1560,7 @@ namespace DeNelle.Village
             _hp = Mathf.Max(0f, _hp - amount);
             if (_hp <= 0f)
             {
-                Die(killed: true);
+                Die(killed: true, dealtByHero: dealtByHero);
             }
             else
             {
@@ -1595,8 +1619,12 @@ namespace DeNelle.Village
                 PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomHitClip() : null,
                               CombatSfxFallback.Hit);
 
-                // DEF-44/45: hit-stop + combo counter.
-                CombatFeedbackManager.Hit(hitPos, amount);
+                // DEF-44/45: hit-stop + combo counter. Ticket #61: HERO hits ONLY — tower /
+                // pet / DoT / environment hits must NOT drive the combo / RAMPAGE feedback.
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Combat",
+                    "CombatFeedback Hit gated: dealtByHero=" + dealtByHero + " amount=" + amount);
+                if (dealtByHero)
+                    CombatFeedbackManager.Hit(hitPos, amount);
             }
         }
 
@@ -1706,6 +1734,7 @@ namespace DeNelle.Village
             // 6. Clear the next-hit VFX/tint stamps so a reused body starts neutral.
             _nextNumberTint = null;
             _nextImpactElement = null;
+            _nextDealtByHero = false;   // ticket #61: don't leak a hero stamp across pooling
         }
 
         /// <summary>
@@ -1740,6 +1769,7 @@ namespace DeNelle.Village
             _heroResolveTimer = 0f;
             _nextNumberTint = null;
             _nextImpactElement = null;
+            _nextDealtByHero = false;   // ticket #61
 
             // 2. Restore HP to full so the body isn't handed out at 0 HP / instantly
             //    re-dead. Configure() re-seeds _maxHp from the def right after this;
@@ -1790,7 +1820,13 @@ namespace DeNelle.Village
         /// True when HP reached zero (a real defender kill — grants shared XP);
         /// false when force-removed (ATB breach) — no XP, just drop its ledger.
         /// </param>
-        private void Die(bool killed)
+        /// <param name="dealtByHero">
+        /// Ticket #61: true only when the KILLING blow came from the player's HERO. Gates
+        /// the combo / kill-streak / RAMPAGE feedback (CombatFeedbackManager.Kill) to hero
+        /// kills only — tower / pet / DoT / environment kills still die + drop loot + grant
+        /// XP, they just don't feed the combo. Forced removals default to non-hero.
+        /// </param>
+        private void Die(bool killed, bool dealtByHero = false)
         {
             _dead = true;
             _telegraphing = false;   // audit 2026-05-30: clear the wind-up latch on death (safe for future pooling)
@@ -1863,7 +1899,14 @@ namespace DeNelle.Village
 
                 // Regular shake only when no EliteVFXController handled it.
                 if (eliteVfx == null) CameraShakeBridge.Shake(0.18f, 0.22f);
-                CombatFeedbackManager.Kill(transform.position);
+
+                // Ticket #61: combo / kill-streak / RAMPAGE + crystal feedback fires for HERO
+                // kills ONLY. A tower / pet / DoT / environmental kill still bursts VFX, shakes,
+                // drops loot and grants XP (all above/below) — it just must NOT feed the combo.
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Combat",
+                    "CombatFeedback Kill gated: dealtByHero=" + dealtByHero + " enemy=" + gameObject.name);
+                if (dealtByHero)
+                    CombatFeedbackManager.Kill(transform.position);
 
                 // DEF-178: a brief hit-stop "punch" on the kill — the satisfying
                 // weight beat that was missing (kills only shook, never froze). Just

@@ -607,6 +607,8 @@ namespace DeNelle.Village
                         LaunchProjectile(foe.WorldPosition, () =>
                         {
                             if (hitFoe == null || !hitFoe.IsAlive) return;
+                            // Ticket #61: hero-dealt -> combo/streak/RAMPAGE eligible.
+                            (hitFoe as DeNelle.Core.Combat.IHeroDamageMarkable)?.MarkNextHitFromHero();
                             hitFoe.TakeDamage(hitDmg, hitEl);
                             DeNelle.Core.Combat.DamageAttribution.Record(hitFoe, HeroProgression.Id, hitDmg);
                             if (snare) hitFoe.ApplyStatus(StatusEffect.Slow, 2.5f); // castAbility.ts snare
@@ -690,6 +692,8 @@ namespace DeNelle.Village
                 if (_loco == null) _loco = GetComponent<HeroLocomotion>();
                 _loco?.WarpTo(landing);
 
+                // Ticket #61: hero-dealt -> combo/streak/RAMPAGE eligible.
+                (foe as DeNelle.Core.Combat.IHeroDamageMarkable)?.MarkNextHitFromHero();
                 foe.TakeDamage(dmg, DamageElement.Aether);
                 DeNelle.Core.Combat.DamageAttribution.Record(foe, HeroProgression.Id, dmg);
                 // Bonus vs backline: a stun/interrupt on the dashed-into target (Freeze = stun).
@@ -737,6 +741,8 @@ namespace DeNelle.Village
             {
                 var target = AsHostile(_overlap[i]);
                 if (target == null) continue;
+                // Ticket #61: hero-dealt -> combo/streak/RAMPAGE eligible.
+                (target as DeNelle.Core.Combat.IHeroDamageMarkable)?.MarkNextHitFromHero();
                 target.TakeDamage(dmg, DamageElement.None);   // physical knockback
                 DeNelle.Core.Combat.DamageAttribution.Record(target, HeroProgression.Id, dmg);
                 target.ApplyStatus(StatusEffect.Slow, 1.5f);   // brief slow
@@ -854,6 +860,8 @@ namespace DeNelle.Village
                 if (target == null) continue;
                 // OverlapSphere is centre-distance; castAbility.ts hypot()'s the
                 // same way, so no extra precision pass is needed.
+                // Ticket #61: hero-dealt -> combo/streak/RAMPAGE eligible.
+                (target as DeNelle.Core.Combat.IHeroDamageMarkable)?.MarkNextHitFromHero();
                 target.TakeDamage(damage, element);
                 DeNelle.Core.Combat.DamageAttribution.Record(target, HeroProgression.Id, damage);
                 if (freezeSeconds > 0f)

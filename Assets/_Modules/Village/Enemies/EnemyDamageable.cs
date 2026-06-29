@@ -38,7 +38,7 @@ namespace DeNelle.Village
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Enemy))]
-    public sealed class EnemyDamageable : MonoBehaviour, IDamageable, IDamageTintable, ICombatLayered
+    public sealed class EnemyDamageable : MonoBehaviour, IDamageable, IDamageTintable, IHeroDamageMarkable, ICombatLayered
     {
         private Enemy _enemy;
 
@@ -131,6 +131,14 @@ namespace DeNelle.Village
         public void SetNextDamageTint(Color color)
         {
             if (E != null) E.SetNextDamageTint(color);
+        }
+
+        /// <summary>Ticket #61: forwards the hero-source mark to the Enemy so the NEXT hit
+        /// (and a kill it causes) feeds the combo / kill-streak / RAMPAGE feedback. Only the
+        /// hero's attack/ability paths call this; pets, towers, DoT and environment do not.</summary>
+        public void MarkNextHitFromHero()
+        {
+            if (E != null) E.SetNextDealtByHero(true);
         }
 
         /// <summary>

@@ -557,6 +557,9 @@ namespace DeNelle.Village
                 // enemy. Drop the duplicate calls — TakeDamage is the single feedback
                 // entry point. (Non-Enemy IDamageable targets simply skip the extra feel,
                 // which is acceptable — only enemies are hostile melee targets.)
+                // Ticket #61: mark this as a HERO strike so its combo / kill-streak / RAMPAGE
+                // feedback fires (tower / pet / DoT never stamp -> never feed the combo).
+                (damageable as DeNelle.Core.Combat.IHeroDamageMarkable)?.MarkNextHitFromHero();
                 damageable.TakeDamage(damage, DamageElement.None);
                 anyHit = true;
                 lastHitDamage = damage;

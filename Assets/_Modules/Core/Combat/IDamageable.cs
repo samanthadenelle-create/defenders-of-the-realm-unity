@@ -111,6 +111,23 @@ namespace DeNelle.Core.Combat
         void SetNextDamageTint(Color color);
     }
 
+    /// <summary>
+    /// Optional companion to <see cref="IDamageable"/> (ticket #61): lets a damage SOURCE
+    /// mark the NEXT hit as dealt by the player's HERO, so the target can gate the combo /
+    /// kill-streak / RAMPAGE feedback to hero strikes ONLY — never tower, pet, DoT, or
+    /// environmental damage. The implementor stamps the flag for the next hit, then clears
+    /// it when that hit resolves (same one-shot stamp pattern as <see cref="IDamageTintable"/>
+    /// and the impact-element stamp). A source that does NOT call this is treated as
+    /// non-hero (the safe default — only the hero's attack/ability paths stamp it).
+    /// Cross-module (Core) so the hero (DeNelle.Village) can mark without referencing the
+    /// concrete enemy type.
+    /// </summary>
+    public interface IHeroDamageMarkable
+    {
+        /// <summary>Mark the NEXT hit on this target as a hero-dealt strike (combo/streak eligible).</summary>
+        void MarkNextHitFromHero();
+    }
+
     /// <summary>Elemental flavour of a damage source — Mage / pet element wheel.</summary>
     public enum DamageElement
     {
