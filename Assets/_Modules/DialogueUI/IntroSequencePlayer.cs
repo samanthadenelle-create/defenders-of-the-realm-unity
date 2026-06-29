@@ -265,13 +265,16 @@ namespace DeNelle.DialogueUI
             var band = NewImage(root, "CaptionBand", new Color(0.02f, 0.02f, 0.025f, 0.72f));
             Stretch(band.rectTransform, 0.06f, 0.07f, 0.94f, 0.24f);
             band.raycastTarget = false;
-            band.enabled = false;
             var rule = NewImage(band.transform, "GoldRule", ElarionUi.Gold);
             var rr = rule.rectTransform;
             rr.anchorMin = new Vector2(0f, 1f); rr.anchorMax = new Vector2(1f, 1f);
             rr.offsetMin = new Vector2(0f, -3f); rr.offsetMax = new Vector2(0f, 0f);
             rule.raycastTarget = false;
             _captionBand = band;
+            // Hide via the GameObject, not band.enabled — disabling only the band's own
+            // Image leaves the GoldRule child Image still drawing a gold line ~2/3 down
+            // the screen over the playing video (owner 2026-06-28). SetActive hides children.
+            band.gameObject.SetActive(false);
 
             _caption = ElarionUiKit.Label(band.transform, "", 0.10f, 0.92f,
                 new Color(0.93f, 0.90f, 0.82f, 1f), 40, TextAlignmentOptions.Center,
@@ -313,7 +316,7 @@ namespace DeNelle.DialogueUI
         {
             // Tear down the (failed) video pieces so nothing lingers.
             ReleaseVideo();
-            if (_captionBand != null) _captionBand.enabled = true;
+            if (_captionBand != null) _captionBand.gameObject.SetActive(true);
             if (_run != null) StopCoroutine(_run);
             _run = StartCoroutine(RunSlateSequence());
         }
