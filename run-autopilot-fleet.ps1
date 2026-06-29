@@ -25,7 +25,8 @@ param(
     [int]$Count = 8,
     [int]$SeedStart = 1,
     [string]$ExePath = 'Builds\Windows\DefendersOfTheRealm.exe',
-    [int]$TimeoutMin = 8
+    [int]$TimeoutMin = 8,
+    [switch]$Graphics   # render WITH a graphics device so the per-panel UI shots are not blank
 )
 
 $ErrorActionPreference = 'Stop'
@@ -73,11 +74,11 @@ Write-Host "[fleet] cleaned stale run logs under '$pdp' (fresh aggregation slate
 $procs = @()
 for ($i = 0; $i -lt $Count; $i++) {
     $seed = $SeedStart + $i
-    $args = @(
-        '-batchmode', '-nographics',
-        '-screen-width', '800', '-screen-height', '600',
-        '--autopilot', "--run=$i", "--seed=$seed"
-    )
+    $args = @('-batchmode')
+    if (-not $Graphics) { $args += '-nographics' }
+    $w = if ($Graphics) { '1280' } else { '800' }
+    $h = if ($Graphics) { '720' }  else { '600' }
+    $args += @('-screen-width', $w, '-screen-height', $h, '--autopilot', "--run=$i", "--seed=$seed")
     $p = Start-Process -FilePath $ExePath -ArgumentList $args -PassThru
     $procs += $p
     Write-Host "[fleet] launched run=$i seed=$seed pid=$($p.Id)"

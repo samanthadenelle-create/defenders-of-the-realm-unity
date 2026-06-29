@@ -1674,6 +1674,20 @@ namespace DeNelle.DevTools
         //  For every PanelId registered with PanelRouter: open, assert AnyOpen,
         //  actuate the clickables on the open surface, then CloseOpen.
         // =====================================================================
+        // Write a per-panel screenshot for UI-fidelity review (compare vs the Blink template
+        // PNGs in Assets/Blink/.../Panels_Obsidian). Renders only with graphics ON — a
+        // -nographics fleet writes a blank frame. Lands in persistentDataPath/ui-shots/.
+        private static void CaptureUiPanel(string name)
+        {
+            try
+            {
+                string dir = System.IO.Path.Combine(Application.persistentDataPath, "ui-shots");
+                System.IO.Directory.CreateDirectory(dir);
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, "panel_" + name + ".png"));
+            }
+            catch { /* capture is best-effort; never break the drive loop */ }
+        }
+
         private IEnumerator OpenEachHUDPanel()
         {
             int opened = 0, registered = 0;
@@ -1704,6 +1718,9 @@ namespace DeNelle.DevTools
                     FlowTrace.Step("Auto", $"OpenEachHUDPanel: '{id}' open (PanelManager='{PanelManager.OpenPanelName}').");
                     opened++;
                 }
+
+                CaptureUiPanel(id.ToString());   // UI-fidelity shot (renders graphics-on; blank under -nographics)
+                yield return null;               // let ScreenCapture flush with the panel still open
 
                 ClickableActuator.ActuateAll(null, _rng);
                 yield return Wait(SettleSeconds);
