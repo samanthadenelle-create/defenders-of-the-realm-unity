@@ -37,8 +37,14 @@ namespace DeNelle.Core
         /// </summary>
         public static IVillageHud Hud { get; private set; }
 
-        /// <summary>Registers the village HUD. Called by VillageHudController.Awake.</summary>
-        public static void RegisterHud(IVillageHud hud) { Hud = hud; }
+        /// <summary>Registers the village HUD. Called by VillageHudController.Awake.
+        /// Main-thread only (no locking) — registrations happen in Awake/OnDestroy.</summary>
+        public static void RegisterHud(IVillageHud hud)
+        {
+            if (Hud != null && !ReferenceEquals(Hud, hud))
+                Debug.LogWarning("[CoreServices] Replacing existing IVillageHud registration.");
+            Hud = hud;
+        }
 
         /// <summary>Unregisters the village HUD. Called by VillageHudController.OnDestroy.</summary>
         public static void UnregisterHud(IVillageHud hud) { if (ReferenceEquals(Hud, hud)) Hud = null; }
@@ -51,9 +57,12 @@ namespace DeNelle.Core
         /// </summary>
         public static IHudModel HudModel { get; private set; }
 
-        /// <summary>Registers the HUD model facade. Called by HudModelHost.Awake (WO-541 Stage 2).</summary>
+        /// <summary>Registers the HUD model facade. Called by HudModelHost.Awake (WO-541 Stage 2).
+        /// Main-thread only (no locking) — registrations happen in Awake/OnDestroy.</summary>
         public static void RegisterHudModel(IHudModel m)
         {
+            if (HudModel != null && !ReferenceEquals(HudModel, m))
+                Debug.LogWarning("[CoreServices] Replacing existing IHudModel registration.");
             HudModel = m;
             DeNelle.Core.Diagnostics.FlowTrace.Step("HUD", "HudModel registered");
         }
@@ -68,8 +77,14 @@ namespace DeNelle.Core
         /// </summary>
         public static IAudioService Audio { get; private set; }
 
-        /// <summary>Registers the audio service. Called by AudioService.Awake.</summary>
-        public static void RegisterAudio(IAudioService audio) { Audio = audio; }
+        /// <summary>Registers the audio service. Called by AudioService.Awake.
+        /// Main-thread only (no locking) — registrations happen in Awake/OnDestroy.</summary>
+        public static void RegisterAudio(IAudioService audio)
+        {
+            if (Audio != null && !ReferenceEquals(Audio, audio))
+                Debug.LogWarning("[CoreServices] Replacing existing IAudioService registration.");
+            Audio = audio;
+        }
 
         /// <summary>Unregisters the audio service. Called by AudioService.OnDestroy.</summary>
         public static void UnregisterAudio(IAudioService audio) { if (ReferenceEquals(Audio, audio)) Audio = null; }

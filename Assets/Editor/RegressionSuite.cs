@@ -175,6 +175,9 @@ namespace DeNelle.Editor
             // ── Home-hub must be EXITABLE (behavioral NavMesh gate, not a grep) ──
             Run(results, "castle-gate-exitable",             Case_CastleGateExitable);
 
+            // ── Save integrity: HMAC tamper-reject (overnight security silo B, LB-3) ──
+            Run(results, "save-integrity", () => { bool ok = SaveIntegrityRegression.Run(out var d); return ok ? Pass(d) : Fail(d); });
+
             // ── Report ──────────────────────────────────────────────────────────
             int passed = results.Count(r => r.Pass);
             int failed = results.Count - passed;

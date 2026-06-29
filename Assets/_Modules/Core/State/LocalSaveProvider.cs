@@ -41,6 +41,10 @@ namespace DeNelle.Core.State
         public void Delete(string slot)
         {
             if (PlayerPrefs.HasKey(slot)) PlayerPrefs.DeleteKey(slot);
+            // LB-3: drop the sibling integrity signature too, so a later fresh
+            // save under the same slot can't be rejected against a stale sig.
+            var sigKey = slot + SaveSchema.SignatureKeySuffix;
+            if (PlayerPrefs.HasKey(sigKey)) PlayerPrefs.DeleteKey(sigKey);
             PlayerPrefs.Save();
         }
     }

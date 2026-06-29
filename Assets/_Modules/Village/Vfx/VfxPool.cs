@@ -52,6 +52,15 @@ namespace DeNelle.Village
         private readonly Queue<PooledVfx> _deathPool     = new Queue<PooledVfx>();
         private readonly Queue<PooledVfx> _telegraphPool  = new Queue<PooledVfx>();
 
+        // ── Shared emissive-material cache (security audit E-VFXMAT) ───────────
+        // ApplyEmissiveMaterial used to `new Material(sh)` for EVERY renderer at
+        // bootstrap (~62 instances), all under DontDestroyOnLoad and never destroyed
+        // → a permanent, growing leak. The colour/emissive combos are a tiny fixed
+        // set, so cache one shared Material per (shader, colour, emissive) key and
+        // reuse it across every renderer. Same visual output (sharedMaterial), no leak.
+        private static readonly Dictionary<string, Material> s_emissiveMatCache =
+            new Dictionary<string, Material>();
+
         // =====================================================================
         //  Bootstrap
         // =====================================================================
@@ -299,15 +308,22 @@ namespace DeNelle.Village
                     "renderer's default material (effect may read invisible/off-colour). Check the URP shader set is included.");
                 return;
             }
-            var mat = new Material(sh);
-            if (mat.HasProperty("_BaseColor"))  mat.SetColor("_BaseColor", colour);
-            if (mat.HasProperty("_Color"))      mat.SetColor("_Color", colour);
-            if (mat.HasProperty("_EmissionColor"))
+            // One shared Material per (shader, colour, emissive) — built once, reused
+            // for every renderer (security audit E-VFXMAT: no per-renderer leak).
+            string key = sh.GetInstanceID() + "|" + ColorUtility.ToHtmlStringRGBA(colour) + "|" + emissive.ToString("F3");
+            if (!s_emissiveMatCache.TryGetValue(key, out var mat) || mat == null)
             {
-                mat.SetColor("_EmissionColor", colour * emissive);
-                mat.EnableKeyword("_EMISSION");
+                mat = new Material(sh);
+                if (mat.HasProperty("_BaseColor"))  mat.SetColor("_BaseColor", colour);
+                if (mat.HasProperty("_Color"))      mat.SetColor("_Color", colour);
+                if (mat.HasProperty("_EmissionColor"))
+                {
+                    mat.SetColor("_EmissionColor", colour * emissive);
+                    mat.EnableKeyword("_EMISSION");
+                }
+                if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 0f);  // opaque
+                s_emissiveMatCache[key] = mat;
             }
-            if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 0f);  // opaque
             r.sharedMaterial = mat;
         }
     }

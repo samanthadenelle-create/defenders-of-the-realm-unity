@@ -271,6 +271,16 @@ namespace DeNelle.Core
         // ── WO-443 — WebGL one-session URL activation (?trace=1) ──────────────────
         private static bool s_urlActivationChecked;
 
+        // SECURITY (audit B-URLFLAG): a URL query can ONLY activate flags on this explicit
+        // allow-list. Anything else (gameplay / economy / monetization flags) is rejected so
+        // a crafted link can never flip game state. Today the only URL-activatable flag is the
+        // diagnostic web-trace toggle. Map: URL query key → PlayerPrefs flag key.
+        private static readonly System.Collections.Generic.Dictionary<string, string> s_urlActivatableFlags =
+            new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase)
+            {
+                { "trace", "ff.webtrace" },   // diagnostic-only; safe to flip per session
+            };
+
         /// <summary>
         /// WO-443 — reads <see cref="Application.absoluteURL"/> on WebGL and, if it carries
         /// <c>?trace=1</c> (or <c>&amp;trace=1</c>), turns the <see cref="WebTrace"/> flag ON for THIS
@@ -296,12 +306,20 @@ namespace DeNelle.Core
                     int eq = pair.IndexOf('=');
                     string key = (eq < 0 ? pair : pair.Substring(0, eq)).Trim();
                     string val = (eq < 0 ? "" : pair.Substring(eq + 1)).Trim();
-                    if (key.Equals("trace", System.StringComparison.OrdinalIgnoreCase)
-                        && (val == "1" || val.Equals("true", System.StringComparison.OrdinalIgnoreCase)))
+
+                    // Allow-list gate (B-URLFLAG): only diagnostic flags here may be set via URL.
+                    if (!s_urlActivatableFlags.TryGetValue(key, out string prefKey))
                     {
-                        PlayerPrefs.SetInt("ff.webtrace", 1);
+                        if (!string.IsNullOrEmpty(key))
+                            Debug.LogWarning($"[FeatureFlags] URL flag '{key}' is NOT URL-activatable — rejected.");
+                        continue;
+                    }
+
+                    if (val == "1" || val.Equals("true", System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        PlayerPrefs.SetInt(prefKey, 1);
                         PlayerPrefs.Save();
-                        Debug.Log("[FeatureFlags] ?trace=1 detected — web tracing activated for this session (ff.webtrace=1).");
+                        Debug.Log($"[FeatureFlags] ?{key}=1 detected — '{prefKey}' activated for this session.");
                         return;
                     }
                 }

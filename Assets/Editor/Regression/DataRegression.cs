@@ -180,6 +180,10 @@ namespace DeNelle.Editor
             // when the flag is off (reversible).
             CheckEnemyStructureSweep(failures, log);
 
+            // --- monetization covenant gate (LB-5) + tower upgrade perks (overnight silos C/E) ---
+            if (!MonetizationCovenantRegression.Run(out var covReason)) failures.Add(covReason); else log.AppendLine("[covenant] " + covReason);
+            if (!TowerPerkRegression.Run(out var towerPerkReason)) failures.Add(towerPerkReason); else log.AppendLine("[tower-perks] " + towerPerkReason);
+
             // --- verdict -----------------------------------------------------------
             log.AppendLine("=== verdict ===");
             if (failures.Count == 0)

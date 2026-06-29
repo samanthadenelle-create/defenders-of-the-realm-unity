@@ -40,18 +40,22 @@ namespace DeNelle.HUD
         // DEF-212 modal arbiter handle (same discipline as HelpMenu / the shop panels).
         private PanelHandle _panelHandle;
 
-        // Dev orient tool — catalog id the owner types in.
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+        // Dev orient tool — catalog id the owner types in. (dev-only — LB-11)
         private TextField _orientIdField;
 
         // Lock-On A/B toggle button (WO-512) — label reflects ff.lockon state, retargeted on tap.
         private Button _lockOnButton;
+#endif
 
         // Reflection handles — resolved lazily on first show.
         private Type _gameStateServiceType;
         private object _gameStateInstance;
         private object _gameStateState;
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
         private Type _waveManagerType;
         private object _waveManagerInstance;
+#endif
 
         // True once BuildUi() has actually run (i.e. a PanelSettings was found and the
         // overlay VisualElements exist). When false, Open() would silently no-op — the
@@ -198,6 +202,13 @@ namespace DeNelle.HUD
             // so you can actually buy) + the Yarn/tutorial reset. The rest (wave trigger,
             // onboarded toggles, save, reset-save, orient tool) are dropped from the panel; their
             // handlers stay in the file in case they're wanted back.
+            // ── DEV-ONLY GRANT/TOOL BUTTONS (LB-11 / E-ADMIN / E-DEVTOOLS) ──────
+            // SECURITY: these mint spendable resources / Wisdom / levels and launch
+            // dev tools. They are compile-stripped from release builds so a player can
+            // never reach them — only DEVELOPMENT_BUILD / the editor compile them in.
+            // The Close button below stays so the (release-gated, can't-open) overlay
+            // is still dismissable if it ever renders.
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
             card.Add(Button("Load resources (full base)",   OnLoadResources));
             // Level shortcuts — same REAL leveling path the F10 DevPanel uses
             // (HeroProgression.AddXp -> ApplyLevelRewards grants Wisdom + skill points),
@@ -222,8 +233,9 @@ namespace DeNelle.HUD
             _lockOnButton = Button(LockOnLabel(), OnToggleLockOn);
             card.Add(_lockOnButton);
             card.Add(Button("Reset Yarn (replay tutorial)", OnReplayTutorial));
+#endif
             card.Add(Button("Close",                        Toggle));
-            FlowTrace.Step("UI", "DevPanel (AdminOverlay) UI built — wired 8 buttons (incl. +25/+100 Wisdom)");
+            FlowTrace.Step("UI", "DevPanel (AdminOverlay) UI built");
 
             _status = new Label(string.Empty);
             _status.style.color = ElarionUi.ParchmentDim;
@@ -254,6 +266,8 @@ namespace DeNelle.HUD
         }
 
         // ── Dev orient tool row ──────────────────────────────────────────────
+        // SECURITY (LB-11): dev-only tool — compile-stripped from release builds.
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
         private VisualElement BuildOrientRow()
         {
             var row = new VisualElement();
@@ -354,6 +368,7 @@ namespace DeNelle.HUD
             open.Invoke(menu, new object[] { id, prefab, displayName });
             return true;
         }
+#endif // DEVELOPMENT_BUILD || UNITY_EDITOR — dev orient tool
 
         public void Toggle() => SetOpen(!IsOpen);
 
@@ -371,12 +386,15 @@ namespace DeNelle.HUD
                 FlowTrace.Warn("UI", "DevPanel open FAILED — AdminOverlay._overlay is null (UI never built)");
                 return;
             }
-            // Resolve gate on demand.
-            if (!IsAuthorised())
+            // SECURITY (LB-11 / E-ADMIN): REAL runtime gate. In a release player build the
+            // overlay must NEVER open for a non-owner — the dev grant/tool buttons are also
+            // compile-stripped, but this blocks the panel (incl. the Ctrl+Shift+A chord and
+            // the Help "Dev tools" launcher) from opening at all unless the bound wallet is the
+            // owner's. Editor + debug/DEVELOPMENT builds stay fully open for dev work.
+            if (open && !IsAuthorised() && !Application.isEditor && !Debug.isDebugBuild)
             {
-                // Owner gate failed — still allow if the debug chord was used
-                // (it's the only way to get here at all right now). The chord
-                // requires Ctrl+Shift+A so it's not a stranger trigger.
+                FlowTrace.Warn("UI", "DevPanel open BLOCKED — not authorised (release owner gate)");
+                return;
             }
             _overlay.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
             _overlay.pickingMode = open ? PickingMode.Position : PickingMode.Ignore;
@@ -413,6 +431,7 @@ namespace DeNelle.HUD
             _gameStateState = stateProp?.GetValue(_gameStateInstance);
         }
 
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
         private void ResolveWaveManager()
         {
             if (_waveManagerInstance != null) return;
@@ -420,6 +439,7 @@ namespace DeNelle.HUD
             if (_waveManagerType == null) return;
             _waveManagerInstance = UnityEngine.Object.FindObjectOfType(_waveManagerType);
         }
+#endif
 
         private static T GetMember<T>(object obj, string name) where T : class
         {
@@ -430,6 +450,10 @@ namespace DeNelle.HUD
             return f?.GetValue(obj) as T;
         }
 
+        // ── DEV-ONLY reflection helpers + action handlers (LB-11 / E-ADMIN / E-DEVTOOLS) ──
+        // SECURITY: everything below mutates economy/level/save state or launches dev tools.
+        // Compile-stripped from release builds — a player build contains none of this code.
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
         private static void SetField(object obj, string name, object value)
         {
             var t = obj.GetType();
@@ -824,6 +848,7 @@ namespace DeNelle.HUD
             DeNelle.Core.SceneRouter.GoHeroSelect();
             SetStatus("Replay Tutorial: FTUE gate cleared — dropping to Character Select (HeroSelect).");
         }
+#endif // DEVELOPMENT_BUILD || UNITY_EDITOR — dev grant/tool handlers
 
         private void SetStatus(string s)
         {

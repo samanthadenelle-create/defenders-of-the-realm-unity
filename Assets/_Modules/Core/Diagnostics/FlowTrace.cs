@@ -20,8 +20,12 @@ namespace DeNelle.Core.Diagnostics
     /// </summary>
     public static class FlowTrace
     {
-        /// <summary>Master switch. Leave on while we are stabilising the loop.</summary>
-        public static bool Enabled = true;
+        /// <summary>Master switch. Defaults ON only in the editor / a development build — a
+        /// release/WebGL player ships with tracing OFF so the hot-path Debug.Log lines (which
+        /// can carry wallet ids, save-blob lengths, roster) never reach a production log. The
+        /// runtime setter is preserved so remote triage (Configure / TraceConfig) can still opt
+        /// a shipped build back IN on demand.</summary>
+        public static bool Enabled = Application.isEditor || Debug.isDebugBuild;
 
         // --- pluggable SINK (owner spec 2026-06-18: "log OR weblog") --------------
         // ALL FlowTrace output is routed through Sink.{Info,Warn,Error} instead of
@@ -51,34 +55,56 @@ namespace DeNelle.Core.Diagnostics
         private static System.Collections.Generic.HashSet<string> s_only;
         private static readonly System.Collections.Generic.HashSet<string> s_muted = new System.Collections.Generic.HashSet<string>();
 
+        // Thread-safety (security audit E-FTTHREAD): s_only, s_muted, s_nextAt and s_seen are
+        // plain (non-thread-safe) collections that can be mutated from async/background callers
+        // (FlowTrace is invoked all over the codebase, including off the main thread). A single
+        // static lock guards every read+write of them. The hot-path Allowed() takes the lock
+        // only AFTER the !Enabled early-out, so a shipped release build (Enabled=false) never
+        // touches the lock and the off path stays zero-cost.
+        private static readonly object s_traceLock = new object();
+
         /// <summary>Allow-list: log ONLY these systems (mutes all others). Pass none to clear.</summary>
         public static void Only(params string[] systems)
         {
-            s_only = (systems == null || systems.Length == 0)
-                ? null
-                : new System.Collections.Generic.HashSet<string>(systems);
+            lock (s_traceLock)
+            {
+                s_only = (systems == null || systems.Length == 0)
+                    ? null
+                    : new System.Collections.Generic.HashSet<string>(systems);
+            }
         }
 
         /// <summary>Deny-set: these systems never log (applied on top of any allow-list).</summary>
         public static void Mute(params string[] systems)
         {
             if (systems == null) return;
-            foreach (var s in systems) if (!string.IsNullOrEmpty(s)) s_muted.Add(s);
+            lock (s_traceLock)
+            {
+                foreach (var s in systems) if (!string.IsNullOrEmpty(s)) s_muted.Add(s);
+            }
         }
 
         /// <summary>Clear all category filters — every system logs again (still gated by Enabled).</summary>
         public static void AllOn()
         {
-            s_only = null;
-            s_muted.Clear();
+            lock (s_traceLock)
+            {
+                s_only = null;
+                s_muted.Clear();
+            }
         }
 
         /// <summary>O(1) gate: master switch + category allow-list + mute-set.</summary>
         private static bool Allowed(string system)
         {
             if (!Enabled) return false;
-            if (s_only != null && !s_only.Contains(system)) return false;
-            if (s_muted.Count > 0 && s_muted.Contains(system)) return false;
+            // s_only/s_muted guarded by s_traceLock; the !Enabled early-out above keeps the
+            // shipped release path (Enabled=false) lock-free and zero-cost.
+            lock (s_traceLock)
+            {
+                if (s_only != null && !s_only.Contains(system)) return false;
+                if (s_muted.Count > 0 && s_muted.Contains(system)) return false;
+            }
             return true;
         }
 
@@ -139,8 +165,11 @@ namespace DeNelle.Core.Diagnostics
             if (!Allowed(system)) return;
             float now = Time.realtimeSinceStartup;
             string k = system + "/" + key;
-            if (s_nextAt.TryGetValue(k, out float next) && now < next) return;
-            s_nextAt[k] = now + everySeconds;
+            lock (s_traceLock)
+            {
+                if (s_nextAt.TryGetValue(k, out float next) && now < next) return;
+                s_nextAt[k] = now + everySeconds;
+            }
             Sink.Info($"[Flow:{system}] {message}");
         }
 
@@ -152,15 +181,21 @@ namespace DeNelle.Core.Diagnostics
         {
             if (!Allowed(system)) return;
             string k = system + "/" + key;
-            if (!s_seen.Add(k)) return;
+            lock (s_traceLock)
+            {
+                if (!s_seen.Add(k)) return;
+            }
             Sink.Info($"[Flow:{system}] {message}");
         }
 
         /// <summary>Reset once/throttle state — call on scene reload if you want fresh first-hit logs.</summary>
         public static void ResetSession()
         {
-            s_seen.Clear();
-            s_nextAt.Clear();
+            lock (s_traceLock)
+            {
+                s_seen.Clear();
+                s_nextAt.Clear();
+            }
         }
 
         // --- performance timing -------------------------------------------------
@@ -325,8 +360,8 @@ namespace DeNelle.Core.Diagnostics
         // from Mute un-mutes it), then add the new ones. Keeps the allow-list set by Only().
         private static void AllOnMuteApply(string[] mute)
         {
-            s_muted.Clear();
-            if (mute != null) Mute(mute);
+            lock (s_traceLock) { s_muted.Clear(); }
+            if (mute != null) Mute(mute);   // Mute takes the lock itself
         }
 
         /// <summary>

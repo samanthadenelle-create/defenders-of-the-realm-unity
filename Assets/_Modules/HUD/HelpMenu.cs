@@ -187,15 +187,16 @@ namespace DeNelle.HUD
             card.Add(MakeButton("Report a bug",        OnReportBug));
             card.Add(MakeButton("Controls",            OnShowControls));
             card.Add(MakeButton("Reset Hero & Pet",    OnResetProgress, ElarionUi.ButtonKind.Danger));
-            // WO-2026-06-12: "Dev tools" routes to AdminOverlay, which itself SHIPS in release
-            // builds (it is NOT #if-gated — see AdminOverlay.cs). Gating only the entry point to
-            // dev builds left the owner with no Settings-bar route to the live AdminOverlay in a
-            // player build (chord-only). Always surface the entry so the Settings bar reaches the
-            // owner-only overlay everywhere AdminOverlay exists. AdminOverlay's own owner-wallet /
-            // chord gate is the access control; this is just the launcher.
+            // SECURITY (LB-11 / E-DEVTOOLS): the "Dev tools" launcher opens AdminOverlay, which
+            // hosts resource/Wisdom/level GRANT buttons. The launcher is compile-stripped from
+            // release builds so a player can never reach the admin overlay through the Settings
+            // bar. (AdminOverlay also enforces a real owner-wallet runtime gate + strips its own
+            // grant buttons — belt and suspenders.) Editor + DEVELOPMENT builds keep the entry.
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
             var devToolsButton = MakeButton("Dev tools", OnOpenDevTools);
             FlowTrace.Step("UI", "Dev tools button wired (HelpMenu Settings card)");
             card.Add(devToolsButton);
+#endif
             card.Add(MakeButton("Credits",             OnShowCredits));
             card.Add(MakeButton("Close",               Close, ElarionUi.ButtonKind.Gold));
 
@@ -406,7 +407,9 @@ namespace DeNelle.HUD
         /// <summary>
         /// Opens the AdminOverlay so the owner can trigger waves / give
         /// crystals / mute / etc. without hunting for the Ctrl+Shift+A chord.
+        /// SECURITY (LB-11): compile-stripped from release builds along with its launcher.
         /// </summary>
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
         private void OnOpenDevTools()
         {
             FlowTrace.Step("UI", "DevPanel toggle/click reached (HelpMenu 'Dev tools' → AdminOverlay)");
@@ -435,6 +438,7 @@ namespace DeNelle.HUD
             Close();
             admin.Open();
         }
+#endif // DEVELOPMENT_BUILD || UNITY_EDITOR — dev tools launcher
 
         private void ShowToast(string message)
         {

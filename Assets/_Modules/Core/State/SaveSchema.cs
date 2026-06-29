@@ -15,6 +15,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
@@ -54,12 +56,75 @@ namespace DeNelle.Core.State
                 {
                     NullValueHandling = NullValueHandling.Include,
                     Formatting = Formatting.None,
+                    // LB-3 hardening: cap nesting depth so a maliciously deep
+                    // JSON blob (save OR backend load) can't blow the stack /
+                    // pin the CPU during parse. 64 is far beyond any real save
+                    // shape (deepest real nesting is a few levels).
+                    MaxDepth = 64,
                 };
                 // StringEnumConverter honours [EnumMember] — kebab/lowercase wire values.
                 settings.Converters.Add(new StringEnumConverter());
                 settings.Converters.Add(new TutorialStepConverter());
                 return settings;
             }
+        }
+
+        // =====================================================================
+        //  Save integrity (LB-3) — keyed HMAC-SHA256 over the serialized save
+        // ---------------------------------------------------------------------
+        //  The local save is plaintext PlayerPrefs JSON; nothing stopped a player
+        //  from editing the blob (resources.*, ownedItemIds, …) and relaunching to
+        //  load it as truth. We now write a keyed HMAC ALONGSIDE the payload (a
+        //  sibling PlayerPrefs key "<slot>.sig") and verify it on load. A mismatch
+        //  is rejected — the tampered blob never reaches ApplyPersisted.
+        //
+        //  THREAT-MODEL HONESTY: the HMAC key is EMBEDDED in the client binary, so
+        //  this is best-effort OBFUSCATION, not cryptographic authority. A
+        //  determined attacker who reverse-engineers the build can extract the key
+        //  and forge a signature. The REAL anti-cheat authority is the server-side
+        //  record (LB-1) — this layer raises the bar past trivial PlayerPrefs
+        //  editing for the offline-only player and catches accidental corruption.
+        // =====================================================================
+
+        /// <summary>Sibling-key suffix holding a save slot's integrity signature.</summary>
+        public const string SignatureKeySuffix = ".sig";
+
+        /// <summary>
+        /// The client-embedded HMAC key. Assembled from fragments so it is not a
+        /// single grep-able literal in the binary (obfuscation only — see the
+        /// integrity-block header; the server is the real authority).
+        /// </summary>
+        private static byte[] IntegrityKey()
+        {
+            // Fragments interleaved so the assembled key never appears verbatim.
+            var parts = new[] { "dotr", "save", "integrity", "v1", "9f3c7a", "Elarion", "hmac" };
+            return Encoding.UTF8.GetBytes(string.Join(":", parts));
+        }
+
+        /// <summary>Lowercase-hex HMAC-SHA256 of <paramref name="payload"/> under the embedded key.</summary>
+        public static string ComputeSignature(string payload)
+        {
+            using var h = new HMACSHA256(IntegrityKey());
+            var hash = h.ComputeHash(Encoding.UTF8.GetBytes(payload ?? string.Empty));
+            var sb = new StringBuilder(hash.Length * 2);
+            foreach (var b in hash) sb.Append(b.ToString("x2"));
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// True when <paramref name="sig"/> is the valid signature for
+        /// <paramref name="payload"/>. Constant-time compare (no early-out leak).
+        /// An empty/missing signature is NOT valid (caller handles the legacy
+        /// unsigned-save migration separately).
+        /// </summary>
+        public static bool VerifySignature(string payload, string sig)
+        {
+            if (string.IsNullOrEmpty(sig)) return false;
+            var expected = ComputeSignature(payload);
+            if (expected.Length != sig.Length) return false;
+            var diff = 0;
+            for (var i = 0; i < expected.Length; i++) diff |= expected[i] ^ sig[i];
+            return diff == 0;
         }
 
         // =====================================================================

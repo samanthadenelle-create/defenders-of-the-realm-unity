@@ -211,6 +211,28 @@ namespace DeNelle.Core.State
                 return false;
             }
 
+            // ── LB-3 save-integrity gate ─────────────────────────────────────
+            // Verify the keyed HMAC written alongside the payload. A mismatch =
+            // tamper/corruption → reject and keep fresh defaults (never load the
+            // attacker-chosen blob). BACKWARD-COMPAT: a legacy save written before
+            // LB-3 has NO sibling sig — load it ONCE, then re-write WITH a sig
+            // below (do not wipe existing players). The key is client-embedded
+            // (best-effort obfuscation; real authority is server-side LB-1).
+            string sig = null;
+            Guard.Try("Save", "Provider.Read (load save signature)",
+                () => sig = Provider.Read(SaveSchema.PlayerPrefsKey + SaveSchema.SignatureKeySuffix));
+            bool legacyUnsignedSave = string.IsNullOrEmpty(sig);
+            if (legacyUnsignedSave)
+            {
+                FlowTrace.Step("Save", "no integrity signature present — legacy unsigned save; loading once + re-signing on apply.");
+            }
+            else if (!SaveSchema.VerifySignature(json, sig))
+            {
+                FlowTrace.Fail("Save", "[Flow:Save] HMAC mismatch — tamper/corruption; rejecting save, keeping fresh state.");
+                StateReplaced.Invoke();
+                return false;
+            }
+
             SaveSchema.SaveFile file;
             try
             {
@@ -250,6 +272,14 @@ namespace DeNelle.Core.State
             ApplyPersisted(validation.Data);
             _state.SchemaVersion = SaveSchema.CurrentVersion;
             FlowTrace.Step("Save", $"Load OK — applied save (storeVersion={file.StoreVersion} -> schema v{SaveSchema.CurrentVersion}).");
+            // LB-3 one-time migration: a legacy save had no integrity signature.
+            // Re-write it now so the NEXT load is gated by a valid HMAC. Idempotent
+            // (Save writes payload + sig); existing players keep their progress.
+            if (legacyUnsignedSave)
+            {
+                FlowTrace.Step("Save", "migrating legacy unsigned save — re-writing WITH integrity signature.");
+                Save();
+            }
             StateReplaced.Invoke();
             return true;
         }
@@ -283,7 +313,11 @@ namespace DeNelle.Core.State
                 // swappable provider (LocalSaveProvider by default — PlayerPrefs).
                 var json = JsonConvert.SerializeObject(file, SaveSchema.JsonSettings);
                 Provider.Write(SaveSchema.PlayerPrefsKey, json);
-                FlowTrace.Step("Save", $"wrote save via {Provider.GetType().Name} (len={json.Length}).");
+                // LB-3: write the keyed HMAC ALONGSIDE the payload so a tampered
+                // blob is rejected on load. Sibling slot "<key>.sig".
+                var sig = SaveSchema.ComputeSignature(json);
+                Provider.Write(SaveSchema.PlayerPrefsKey + SaveSchema.SignatureKeySuffix, sig);
+                FlowTrace.Step("Save", $"wrote save+sig via {Provider.GetType().Name} (len={json.Length}).");
             }
             catch (Exception ex)
             {
@@ -844,7 +878,10 @@ namespace DeNelle.Core.State
         {
             if (_state == null) return;
             if (!string.IsNullOrEmpty(_state.BoundWallet)) return;
-            _state.BoundWallet = GuestWalletPrefix + SystemInfo.deviceUniqueIdentifier;
+            // LB-4: never embed the RAW device fingerprint in the player id — hash
+            // it with a static salt (SHA256(deviceId + salt)) so the persisted /
+            // synced id is a stable opaque token, not a re-identifiable hardware id.
+            _state.BoundWallet = GuestWalletPrefix + HashDeviceId(SystemInfo.deviceUniqueIdentifier);
             if (!_warnedGuestAccount)
             {
                 _warnedGuestAccount = true;
@@ -868,6 +905,15 @@ namespace DeNelle.Core.State
 
         private void OnApplicationQuit()
         {
+            // Persist the local save SYNCHRONOUSLY first — this is the durable write that
+            // must survive the quit (PlayerPrefs to disk). It always completes here.
+            Save();
+
+            // The backend network flush is BEST-EFFORT only: OnApplicationQuit cannot await,
+            // so this fire-and-forget call is not guaranteed to finish before the process
+            // exits. That is acceptable — SyncToBackend enqueues into the persisted offline
+            // queue (PlayerPrefs key "dotr-sync-queue"), which is flushed on the NEXT launch.
+            // Do NOT convert this to a blocking await (would hang / be killed on quit).
             SyncToBackend(highPriority: true).Forget();
         }
 
@@ -916,7 +962,13 @@ namespace DeNelle.Core.State
             // the literal "load" (matches api/_lib/wallet-auth.buildSignedMessage).
             // When the flag is off or no real signer exists, this is a no-op and the
             // request goes out exactly as before (offline-safe).
-            await TryAttachAuthHeaders(req, payloadHashOrLoadTag: "load");
+            // LB-4: fail closed — if auth is enforced and we can't sign, do NOT
+            // issue an unauthed cloud load on the real rail.
+            if (!await TryAttachAuthHeaders(req, payloadHashOrLoadTag: "load"))
+            {
+                Debug.LogError("[Sync] Cloud LOAD aborted — backend auth enforced but request could not be signed (fail-closed).");
+                return;
+            }
 
             await req.SendWebRequest();
 
@@ -995,38 +1047,48 @@ namespace DeNelle.Core.State
 
         /// <summary>
         /// Attaches X-Wallet / X-Nonce / X-Signature to <paramref name="req"/> when
-        /// backend auth is enforced AND a real signer is connected. Otherwise a
-        /// no-op (the request stays unauthed). <paramref name="payloadHashOrLoadTag"/>
-        /// is the sha256-hex of the raw POST body, or the literal "load" for a GET.
+        /// backend auth is enforced AND a real signer is connected.
+        /// <para>
+        /// LB-4 — FAIL CLOSED. Returns <c>true</c> when it is safe to send the
+        /// request, <c>false</c> when the caller MUST abort it:
+        /// </para>
+        /// <list type="bullet">
+        ///   <item>flag OFF → returns true (offline/unauthed path unchanged — no headers).</item>
+        ///   <item>flag ON + signer/nonce/signature obtained → headers set, returns true.</item>
+        ///   <item>flag ON but signing fails at ANY step → returns FALSE so the caller
+        ///         ABORTS rather than sending an UNAUTHED request on a real rail.</item>
+        /// </list>
+        /// <paramref name="payloadHashOrLoadTag"/> is the sha256-hex of the raw POST
+        /// body, or the literal "load" for a GET.
         /// </summary>
-        private async UniTask TryAttachAuthHeaders(UnityWebRequest req, string payloadHashOrLoadTag)
+        private async UniTask<bool> TryAttachAuthHeaders(UnityWebRequest req, string payloadHashOrLoadTag)
         {
             if (!BackendAuthConfig.Enforced)
-                return; // flag off — current behaviour, no auth headers.
+                return true; // flag off — current behaviour, no auth headers, send as before.
 
             var signer = CoreServices.WalletSigner;
             if (signer == null || !signer.CanSign)
             {
-                Debug.LogWarning(
-                    "[Sync] Backend auth enforced but no real wallet signer is available " +
-                    "(signing is stubbed) — sending save/load WITHOUT auth headers. " +
+                Debug.LogError(
+                    "[Sync] Backend auth ENFORCED but no real wallet signer is available " +
+                    "(signing is stubbed) — ABORTING sync (fail-closed; refusing to send unauthed). " +
                     "Connect a real wallet (SolanaWalletProvider) to sign.");
-                return;
+                return false;
             }
 
             var wallet = signer.WalletAddress;
             if (string.IsNullOrEmpty(wallet))
             {
-                Debug.LogWarning("[Sync] Wallet signer reports CanSign but has no address — skipping auth headers.");
-                return;
+                Debug.LogError("[Sync] Wallet signer reports CanSign but has no address — ABORTING sync (fail-closed).");
+                return false;
             }
 
             // 1. GET a fresh single-use nonce bound to this wallet.
             var nonce = await FetchNonce(wallet);
             if (string.IsNullOrEmpty(nonce))
             {
-                Debug.LogWarning("[Sync] Could not obtain an auth nonce — sending without auth headers.");
-                return;
+                Debug.LogError("[Sync] Could not obtain an auth nonce — ABORTING sync (fail-closed; not sending unauthed).");
+                return false;
             }
 
             // 2. Build the EXACT canonical message the backend reconstructs, then sign.
@@ -1040,20 +1102,21 @@ namespace DeNelle.Core.State
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[Sync] Wallet signing failed ({ex.Message}) — sending without auth headers.");
-                return;
+                Debug.LogError($"[Sync] Wallet signing failed ({ex.Message}) — ABORTING sync (fail-closed).");
+                return false;
             }
 
             if (string.IsNullOrEmpty(signature))
             {
-                Debug.LogWarning("[Sync] Wallet returned an empty signature — sending without auth headers.");
-                return;
+                Debug.LogError("[Sync] Wallet returned an empty signature — ABORTING sync (fail-closed).");
+                return false;
             }
 
             // 3. Present the challenge response. Header names match the backend exactly.
             req.SetRequestHeader("X-Wallet", wallet);
             req.SetRequestHeader("X-Nonce", nonce);
             req.SetRequestHeader("X-Signature", signature);
+            return true;
         }
 
         /// <summary>
@@ -1085,6 +1148,16 @@ namespace DeNelle.Core.State
                 return null;
             }
         }
+
+        /// <summary>
+        /// LB-4: salted SHA-256 of the device id → a stable opaque guest token.
+        /// The salt is a constant build-time value: it only prevents the hash from
+        /// being a plain unsalted deviceId digest (rainbow-table / cross-app
+        /// correlation), it is not a secret. Returns lowercase hex.
+        /// </summary>
+        private const string GuestIdSalt = "dotr-guest-id:v1:9f3c7a";
+        private static string HashDeviceId(string deviceId)
+            => Sha256Hex(Encoding.UTF8.GetBytes((deviceId ?? string.Empty) + GuestIdSalt));
 
         /// <summary>Lowercase hex SHA-256 of the raw bytes — matches Node's crypto sha256 hex digest.</summary>
         private static string Sha256Hex(byte[] bytes)
@@ -1180,7 +1253,14 @@ namespace DeNelle.Core.State
             // the EXACT raw body bytes we upload (binds the signature to this body,
             // matches api/_lib/wallet-auth.buildSignedMessage). No-op (skips headers)
             // when the flag is off or no real signer is available — offline-safe.
-            await TryAttachAuthHeaders(req, payloadHashOrLoadTag: Sha256Hex(body));
+            // LB-4: fail closed — if auth is enforced and we can't sign, do NOT
+            // upload the save unauthed on the real rail. Returning false re-queues
+            // the delta offline (caller's EnqueueOffline path) for a later retry.
+            if (!await TryAttachAuthHeaders(req, payloadHashOrLoadTag: Sha256Hex(body)))
+            {
+                Debug.LogError("[Sync] Cloud SAVE aborted — backend auth enforced but request could not be signed (fail-closed). Delta re-queued offline.");
+                return false;
+            }
 
             await req.SendWebRequest();
 

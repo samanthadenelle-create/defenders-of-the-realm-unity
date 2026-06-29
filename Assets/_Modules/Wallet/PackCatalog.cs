@@ -17,6 +17,7 @@ using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Wallet
 {
@@ -194,10 +195,65 @@ namespace DeNelle.Wallet
         //  Loading
         // =====================================================================
 
+        // =====================================================================
+        //  Covenant firewall — the RUNTIME chokepoint (LB-5 / C-COV / C-KIND)
+        // ---------------------------------------------------------------------
+        //  ConvenienceItemDef.Kind is an unvalidated string; the covenant (§5.3:
+        //  TIME-SAVING only, never combat power) was comment-only. This is the
+        //  canonical allowlist of sanctioned convenience kinds — the SAME set the
+        //  editor MonetizationCovenantRegression gate derives from skr_staking.json
+        //  convenienceAllowList + packs.json _schemaNotes + the economy-pack
+        //  extension set. Any convenience def whose Kind is NOT here is REJECTED at
+        //  load (FlowTrace.Fail + skipped — the Guard pattern; a bad def never grants
+        //  power, it is simply dropped from the pack). Stored normalised (lower,
+        //  '-'/' ' -> '_') so hyphen/underscore spellings compare equal.
+        private static readonly HashSet<string> ConvenienceAllowList = new HashSet<string>
+        {
+            // PackDef documented set (packs.json _schemaNotes.convenience)
+            "instant_build", "instant_repair", "harvest_auto_collect", "xp_weekend",
+            // economy-pack extension set (WO economy_store_packs _schemaExtensions)
+            "harvest_boost", "instant_fill_storage", "workforce_slot",
+            "storage_tier_jump", "offline_window_extension",
+            // skr_staking.json convenienceAllowList (loyalty convenience bumps)
+            "echo_storage_slot", "passive_accrual_hours",
+        };
+
+        private static string NormalizeKind(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return string.Empty;
+            return s.Trim().ToLowerInvariant().Replace('-', '_').Replace(' ', '_');
+        }
+
+        /// <summary>Drops any convenience item whose Kind is outside the sanctioned
+        /// allowlist (combat/stat/RNG smuggled in as "convenience"). Logs the breach
+        /// via FlowTrace.Fail and removes the def so it can never grant power.</summary>
+        private static void EnforceCovenant(PackCatalogData data)
+        {
+            if (data == null || data.Packs == null) return;
+            foreach (var pack in data.Packs)
+            {
+                var conv = pack?.Contents?.Convenience;
+                if (conv == null) continue;
+                for (int i = conv.Count - 1; i >= 0; i--)
+                {
+                    var item = conv[i];
+                    string norm = item != null ? NormalizeKind(item.Kind) : string.Empty;
+                    if (string.IsNullOrEmpty(norm) || !ConvenienceAllowList.Contains(norm))
+                    {
+                        FlowTrace.Fail("Covenant",
+                            $"PackCatalog: pack '{pack?.Sku}' convenience kind '{item?.Kind}' is NOT sanctioned " +
+                            "(covenant §5.3 — time-saving only, never combat power) — REJECTED + skipped.");
+                        conv.RemoveAt(i);
+                    }
+                }
+            }
+        }
+
         private static void EnsureLoaded()
         {
             if (_data != null) return;
             _data = LoadCatalog();
+            EnforceCovenant(_data);
         }
 
         private static PackCatalogData LoadCatalog()
