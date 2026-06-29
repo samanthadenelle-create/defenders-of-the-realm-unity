@@ -536,22 +536,36 @@ namespace DeNelle.Village.Arena
                 if (tex == null) tex = Resources.Load<Texture2D>("Arena/Backdrops/outerworld_backdrop");
                 if (tex == null)
                 {
-                    FlowTrace.Step("BattleArena", "BuildBackdrop: no backdrop texture for '" + key + "' -> skip (persisted sky kept).");
-                    return;
+                    // No painted art -> NEVER degrade to bare sky. Build a runtime vertical gradient
+                    // (biome sky -> horizon) so the arena always reads as an enclosed environment.
+                    tex = BuildGradientBackdrop(key);
+                    FlowTrace.Warn("BattleArena", "BuildBackdrop: no painted texture for '" + key + "' -> runtime gradient backdrop.");
                 }
+                else
+                {
+                    FlowTrace.Step("BattleArena", "BuildBackdrop: painted texture '" + tex.name + "' for '" + key + "'.");
+                }
+
+                // Build-safe shader chain: prefer Unlit (matte-painting glow), then legacy unlit, then
+                // URP/Lit (guaranteed present — referenced by scene materials + Always-Included). The
+                // unlit shaders are also in EnsureShadersIncluded's Always-Included list; this is the
+                // belt-and-suspenders so a strip can never null the material into a no-show.
                 var sh = Shader.Find("Universal Render Pipeline/Unlit");
                 if (sh == null) sh = Shader.Find("Unlit/Texture");
+                if (sh == null) sh = Shader.Find("Universal Render Pipeline/Lit");
                 if (sh == null)
                 {
-                    // Build-strip guard: the unlit shader was dropped from the player (no baked/
-                    // Always-Included reference). Degrade to "no backdrop" — keep the persisted sky —
-                    // never throw on `new Material(null)`. Durable fix: AlwaysIncludedShaders helper.
-                    FlowTrace.Warn("BattleArena", "BuildBackdrop: unlit shader missing from build -> skipping backdrop (sky kept).");
+                    FlowTrace.Warn("BattleArena", "BuildBackdrop: no usable shader found -> skipping backdrop (sky kept).");
                     return;
                 }
+                FlowTrace.Step("BattleArena", "BuildBackdrop: shader '" + sh.name + "'.");
                 var mat = new Material(sh) { name = "ArenaBackdrop_" + key };
                 if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", tex);
                 if (mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", tex);
+                // DOUBLE-SIDED: the ring quads face inward; render BOTH faces so a winding/facing
+                // mismatch can NEVER backface-cull them to invisible (the "built-but-invisible ->
+                // bare sky" bug, authored headless/blind). Cull Off is winding-agnostic.
+                MakeDoubleSided(mat);
 
                 // Sky-top colour (sampled from the painting top, biome fallback) tints BOTH the top cap
                 // and the camera clear so the seam where the ring meets the cap/sky is invisible.
@@ -560,6 +574,7 @@ namespace DeNelle.Village.Arena
                 if (capMat.HasProperty("_BaseColor")) capMat.SetColor("_BaseColor", skyTop);
                 if (capMat.HasProperty("_Color")) capMat.SetColor("_Color", skyTop);
                 capMat.color = skyTop;
+                MakeDoubleSided(capMat);   // cap quad faces down; double-side so winding can't hide it.
 
                 float r = Mathf.Max(ArenaHalfWidth, ArenaHalfDepth) + 16f;   // behind the treeline ring
                 float h = 110f;                                              // tall: no combat camera angle sees over it
@@ -611,6 +626,46 @@ namespace DeNelle.Village.Arena
                 // (quads + cap + sky override on the success path) — not inferred from code-reading.
                 FlowTrace.Step("BattleArena", "BACKDROP loaded theme=" + key + " tex=" + tex.name + " quads=" + built + " cap=1 skyOverride=1");
             });
+        }
+
+        // Force a material to render BOTH faces (Cull Off) so inward-facing backdrop quads stay visible
+        // regardless of Unity Quad winding — the decisive fix for "built-but-invisible -> bare sky".
+        // URP _Cull: 0 = RenderFace.Both. Safe no-op if the shader lacks the property.
+        private static void MakeDoubleSided(Material m)
+        {
+            if (m == null) return;
+            if (m.HasProperty("_Cull")) m.SetFloat("_Cull", 0f);
+            m.doubleSidedGI = true;
+        }
+
+        // Runtime vertical-gradient backdrop (biome sky at TOP -> horizon at BOTTOM) used only when no
+        // painted art loads. CPU-readable, no committed asset — guarantees the arena is enclosed, never
+        // bare sky. Colours mirror the SampleBackdropTop biome fallbacks for a seamless cap tint.
+        private static Texture2D BuildGradientBackdrop(string key)
+        {
+            string k = key ?? "";
+            Color top = k.Contains("cavern")   ? new Color(0.10f, 0.10f, 0.13f)
+                      : k.Contains("desert")   ? new Color(0.85f, 0.78f, 0.62f)
+                      : k.Contains("volcanic") ? new Color(0.32f, 0.14f, 0.12f)
+                      :                          new Color(0.62f, 0.74f, 0.86f); // soft daylight sky
+            Color horizon = k.Contains("cavern")   ? new Color(0.05f, 0.05f, 0.07f)
+                          : k.Contains("desert")   ? new Color(0.70f, 0.60f, 0.45f)
+                          : k.Contains("volcanic") ? new Color(0.55f, 0.22f, 0.12f)
+                          :                          new Color(0.78f, 0.82f, 0.74f);
+            const int h = 64;
+            var t = new Texture2D(2, h, TextureFormat.RGB24, false)
+            {
+                name = "ArenaBackdropGradient_" + k,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            for (int y = 0; y < h; y++)
+            {
+                Color c = Color.Lerp(horizon, top, y / (float)(h - 1));
+                t.SetPixel(0, y, c);
+                t.SetPixel(1, y, c);
+            }
+            t.Apply();
+            return t;
         }
 
         // Sky colour for the cap + camera clear. Tries the top row of the painting (so the cap/ring seam
