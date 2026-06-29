@@ -43,7 +43,8 @@ namespace DeNelle.Village
         // ── Contact-damage tuning (first-pass) ────────────────────────────────
         private const float EngageRadius   = 1.5f;  // enemy must be this close to strike
         private const float DamageInterval = 1.0f;  // seconds between contact ticks
-        private const float DamagePerEnemy = 6f;    // damage per adjacent enemy per tick
+        private const float DamagePerEnemy = 6f;    // FALLBACK only — used if an attacker's real
+                                                    // ContactDamage is non-positive (mis-authored def).
         private const int   MaxEnemiesPerTick = 4;  // cap so a swarm can't one-shot
 
         private float _hp;
@@ -278,7 +279,19 @@ namespace DeNelle.Village
                     $"hero struck by {attackers} adjacent enemy(s) within {EngageRadius:F2}m " +
                     $"(scene='{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}').");
                 float hpBeforeTick = _hp;
-                TakeDamage(DamagePerEnemy * Mathf.Min(attackers, MaxEnemiesPerTick));
+                // WO-591 RCA: honour each adjacent enemy's REAL authored ContactDamage (from
+                // enemies.json, post wave-scaling) instead of a single flat number — so berserker
+                // (15) vs necromancer (18) vs walker (8) finally differ, and ApplyWaveScaling's
+                // damageMult reaches the hero. Capped at MaxEnemiesPerTick so a swarm can't one-shot.
+                int counted = Mathf.Min(attackers, Mathf.Min(MaxEnemiesPerTick, _attackerBuf.Length));
+                float tickDamage = 0f;
+                for (int i = 0; i < counted; i++)
+                {
+                    var atk = _attackerBuf[i];
+                    float dmg = atk != null ? atk.ContactDamage : 0f;
+                    tickDamage += dmg > 0f ? dmg : DamagePerEnemy; // fallback if a def authored 0
+                }
+                TakeDamage(tickDamage);
                 // WO-566: v2 talent reflect (Retaliation Surge) + the Last Stand reflect portion
                 // bounce a fraction of the damage ACTUALLY taken (post block/DR) back onto the
                 // contact attackers. Identity (0) until a reflect node is learned.
