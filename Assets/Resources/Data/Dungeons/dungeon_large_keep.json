@@ -1,0 +1,45 @@
+{
+  "_schema": "WO-584b seeded dungeon map (LARGE). Multi-wing keep with a boss: entrance -> central hub -> two combat wings (west treasure spur, east trap gauntlet) -> long corridor -> boss room. Deeper budget (depth 6). boss != null so the boss room IS built (WO-550 rule). Generator pins skeleton + validates entrance->boss PathComplete and all enemy slots reachable; re-rolls seed on failure.",
+  "id": "dungeon_large_keep",
+  "catalog": "dungeon-modules",
+  "seed": 424242,
+  "theme": "ruined_keep",
+  "lighting": "torch_dark",
+  "enemies": ["hollow-warrior", "hollow-walker", "orc-berserker", "orc-shaman"],
+  "boss": "orc-warlord",
+
+  "params": {
+    "enemyLevel": 12,
+    "bossStyle": "brute",
+    "depth": 6,
+    "componentMix": {
+      "combat": 1.0,
+      "treasure": 0.8,
+      "trap": 0.6,
+      "puzzle": 0.0
+    }
+  },
+
+  "grid": { "cols": 5, "rows": 5 },
+
+  "nodes": [
+    { "cell": [2, 0], "module": "room_entrance",   "role": "entrance" },
+    { "cell": [2, 1], "module": "room_hall_4way",  "role": "combat" },
+    { "cell": [1, 1], "module": "room_corner",     "role": "combat" },
+    { "cell": [1, 2], "module": "room_treasure",   "role": "treasure" },
+    { "cell": [3, 1], "module": "room_trap_choke", "role": "trap" },
+    { "cell": [3, 2], "module": "room_corridor_t", "role": "combat" },
+    { "cell": [2, 2], "module": "room_hall_4way",  "role": "combat" },
+    { "cell": [2, 4], "module": "room_boss",       "role": "boss" }
+  ],
+
+  "links": [
+    { "from": [2, 0], "to": [2, 1], "connector": "corridor_straight" },
+    { "from": [2, 1], "to": [1, 1], "connector": "door_abut" },
+    { "from": [1, 1], "to": [1, 2], "connector": "weld_abut" },
+    { "from": [2, 1], "to": [3, 1], "connector": "door_abut" },
+    { "from": [3, 1], "to": [3, 2], "connector": "weld_abut" },
+    { "from": [2, 1], "to": [2, 2], "connector": "weld_abut" },
+    { "from": [2, 2], "to": [2, 4], "connector": "corridor_long" }
+  ]
+}

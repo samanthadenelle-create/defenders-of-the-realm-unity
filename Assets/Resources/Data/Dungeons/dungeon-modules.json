@@ -1,0 +1,125 @@
+{
+  "_schema": "WO-584b dungeon module catalog. rooms[] = fixed-footprint prefabs with sockets (doorway edges) + slot counts; connectors[] = fixed-size corridor/door/weld pieces selecting a RegionGate crossing sub-pattern. One catalog feeds every dungeon map. prefab:null => degrade to tinted primitive (no invisible blocker).",
+  "gridCell": 20.0,
+  "wallHeight": 4.0,
+  "floorThickness": 0.5,
+
+  "rooms": [
+    {
+      "id": "room_entrance",
+      "prefab": "Dungeons/Modules/Room_Entrance",
+      "footprint": [1, 1],
+      "sockets": ["N"],
+      "tags": ["entrance"],
+      "enemySlots": 0,
+      "propSlots": 2,
+      "treasureSlots": 0,
+      "weight": 1.0
+    },
+    {
+      "id": "room_hall_4way",
+      "prefab": "Dungeons/Modules/Room_Hall_4way",
+      "footprint": [1, 1],
+      "sockets": ["N", "E", "S", "W"],
+      "tags": ["combat", "hub"],
+      "enemySlots": 4,
+      "propSlots": 3,
+      "treasureSlots": 0,
+      "weight": 1.2
+    },
+    {
+      "id": "room_corridor_t",
+      "prefab": "Dungeons/Modules/Room_T_Junction",
+      "footprint": [1, 1],
+      "sockets": ["N", "E", "W"],
+      "tags": ["combat"],
+      "enemySlots": 2,
+      "propSlots": 2,
+      "treasureSlots": 0,
+      "weight": 1.0
+    },
+    {
+      "id": "room_corner",
+      "prefab": "Dungeons/Modules/Room_Corner",
+      "footprint": [1, 1],
+      "sockets": ["N", "E"],
+      "tags": ["combat"],
+      "enemySlots": 2,
+      "propSlots": 2,
+      "treasureSlots": 0,
+      "weight": 0.9
+    },
+    {
+      "id": "room_treasure",
+      "prefab": "Dungeons/Modules/Room_Treasure",
+      "footprint": [1, 1],
+      "sockets": ["S"],
+      "tags": ["treasure"],
+      "enemySlots": 1,
+      "propSlots": 2,
+      "treasureSlots": 3,
+      "weight": 0.7
+    },
+    {
+      "id": "room_trap_choke",
+      "prefab": "Dungeons/Modules/Room_TrapChoke",
+      "footprint": [1, 1],
+      "sockets": ["N", "S"],
+      "tags": ["trap"],
+      "enemySlots": 1,
+      "propSlots": 1,
+      "treasureSlots": 0,
+      "weight": 0.6
+    },
+    {
+      "id": "room_boss",
+      "prefab": "Dungeons/Modules/Room_Boss",
+      "footprint": [1, 1],
+      "sockets": ["S"],
+      "tags": ["boss"],
+      "enemySlots": 5,
+      "propSlots": 4,
+      "treasureSlots": 1,
+      "weight": 1.0
+    }
+  ],
+
+  "connectors": [
+    {
+      "id": "weld_abut",
+      "prefab": null,
+      "length": 0,
+      "width": 4.0,
+      "crossing": "weld",
+      "tags": ["abut"],
+      "_note": "rooms abut; shared socket edge welded by an overlap deck (RuntimeRegionGate.BuildApproachDeck). No geometry."
+    },
+    {
+      "id": "door_abut",
+      "prefab": "Dungeons/Modules/Door_Frame",
+      "length": 0,
+      "width": 4.0,
+      "crossing": "door",
+      "tags": ["door"],
+      "_note": "abutting rooms + doorway frame + funnel choke panels (RuntimeRegionGate.BuildFunnelPanels) so navmesh routes only through the opening."
+    },
+    {
+      "id": "corridor_straight",
+      "prefab": "Dungeons/Modules/Corridor_Straight",
+      "length": 1,
+      "width": 4.0,
+      "crossing": "corridor",
+      "tags": ["corridor"],
+      "_note": "one empty cell of gap; axis-aligned floor strip + side rails (DungeonComposer.BuildCorridor)."
+    },
+    {
+      "id": "corridor_long",
+      "prefab": "Dungeons/Modules/Corridor_Straight",
+      "length": 2,
+      "width": 4.0,
+      "crossing": "corridor",
+      "tags": ["corridor"],
+      "_note": "two-cell corridor for spaced-out wings."
+    }
+  ]
+}

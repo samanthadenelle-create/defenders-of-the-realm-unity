@@ -1,0 +1,35 @@
+{
+  "_schema": "WO-584b seeded dungeon map (SMALL). Linear 3-room crypt: entrance -> combat hall -> treasure. Authored skeleton so it is concrete + renderable; generator pins these and validates entrance->end reachability. No boss.",
+  "id": "dungeon_small_crypt",
+  "catalog": "dungeon-modules",
+  "seed": 1337,
+  "theme": "crypt",
+  "lighting": "torch_dark",
+  "enemies": ["hollow-walker", "hollow-warrior"],
+  "boss": null,
+
+  "params": {
+    "enemyLevel": 3,
+    "bossStyle": "none",
+    "depth": 3,
+    "componentMix": {
+      "combat": 1.0,
+      "treasure": 0.6,
+      "trap": 0.2,
+      "puzzle": 0.0
+    }
+  },
+
+  "grid": { "cols": 3, "rows": 3 },
+
+  "nodes": [
+    { "cell": [1, 0], "module": "room_entrance",  "role": "entrance" },
+    { "cell": [1, 1], "module": "room_hall_4way", "role": "combat" },
+    { "cell": [1, 2], "module": "room_treasure",  "role": "treasure" }
+  ],
+
+  "links": [
+    { "from": [1, 0], "to": [1, 1], "connector": "corridor_straight" },
+    { "from": [1, 1], "to": [1, 2], "connector": "door_abut" }
+  ]
+}

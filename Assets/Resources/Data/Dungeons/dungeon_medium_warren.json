@@ -1,0 +1,39 @@
+{
+  "_schema": "WO-584b seeded dungeon map (MEDIUM). Branching warren: entrance -> hub hall -> (east treasure spur) + (north trap-choke -> combat) end. Mixed connectors (weld/door/corridor). Authored skeleton with one side branch; generator validates entrance->end PathComplete + every enemy slot reachable.",
+  "id": "dungeon_medium_warren",
+  "catalog": "dungeon-modules",
+  "seed": 90210,
+  "theme": "warren",
+  "lighting": "torch_dark",
+  "enemies": ["hollow-walker", "hollow-warrior", "hollow-acolyte"],
+  "boss": null,
+
+  "params": {
+    "enemyLevel": 6,
+    "bossStyle": "none",
+    "depth": 4,
+    "componentMix": {
+      "combat": 1.0,
+      "treasure": 0.7,
+      "trap": 0.5,
+      "puzzle": 0.0
+    }
+  },
+
+  "grid": { "cols": 4, "rows": 4 },
+
+  "nodes": [
+    { "cell": [1, 0], "module": "room_entrance",   "role": "entrance" },
+    { "cell": [1, 1], "module": "room_hall_4way",  "role": "combat" },
+    { "cell": [2, 1], "module": "room_treasure",   "role": "treasure" },
+    { "cell": [1, 2], "module": "room_trap_choke", "role": "trap" },
+    { "cell": [1, 3], "module": "room_corridor_t", "role": "combat" }
+  ],
+
+  "links": [
+    { "from": [1, 0], "to": [1, 1], "connector": "corridor_straight" },
+    { "from": [1, 1], "to": [2, 1], "connector": "door_abut" },
+    { "from": [1, 1], "to": [1, 2], "connector": "weld_abut" },
+    { "from": [1, 2], "to": [1, 3], "connector": "door_abut" }
+  ]
+}
