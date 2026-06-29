@@ -72,6 +72,39 @@ namespace DeNelle.Village.World
         // Translucent teal water tint (matches the proven MoatWater look from the old village moat).
         private static readonly Color WaterColor = new Color(0.10f, 0.42f, 0.45f, 0.62f);
 
+        // ---- WATER FILL tunables (WO-590) ------------------------------------------------
+        // MEASURED DIP (instrument-first, S12 — NOT guessed): the OuterWorld terrain WRAPS
+        // UNDER the castle (castle floor at world Y=0) and is SUNK within the castle footprint,
+        // so a void/dip rings the island and the castle reads as FLOATING. Numbers, with source:
+        //   * Dip BOTTOM Y = -3 m       -> ExteriorTerrainBuilder.cs:204 (CastleDepressionDepth=-3f),
+        //                                  and :197-204 (terrain wraps under the castle, floor Y=0).
+        //   * Full-depression footprint -> ExteriorTerrainBuilder.cs:193-194 (CastleClearHalfX/Z=62f):
+        //                                  terrain is at -3 m out to ~+/-62 m from origin.
+        //   * Taper back up to Y=0      -> ExteriorTerrainBuilder.cs:195 (CastleClearFalloff=14f): the
+        //                                  terrain climbs -3 -> 0 over r=62..76, so OuterWorld ground
+        //                                  returns to the castle-floor level at ~r=76 m (the far shore).
+        //   * Existing moat ring        -> this file: MoatCentreRadius=46 (:63), MoatWidth=3 (:67),
+        //                                  WaterY=-0.4 (:70). The fill picks up just OUTSIDE that ring.
+
+        // Inner radius of the broad fill: start at the OUTER edge of the existing moat ring so the
+        // two water bodies do NOT overlap (overlapping coplanar transparent quads double-blend /
+        // z-fight). = MoatCentreRadius + MoatWidth/2 (~47.5), rounded to 48.
+        private const float FillInnerRadius = 48f;
+
+        // Outer radius of the fill: out to just INSIDE where the terrain rises back to the water
+        // surface. With the surface at FillWaterY=-0.4, the taper (-3 @ r=62 -> 0 @ r=76) crosses
+        // -0.4 m at ~r=74; we stop at 72 so the water tucks UNDER the rising shore (no plane poking
+        // above ground, no far void shows). Derived from the ExteriorTerrainBuilder depression taper.
+        private const float FillOuterRadius = 72f;
+
+        // Fill surface Y: COPLANAR with the moat ring (WaterY), i.e. just below the castle floor
+        // (Y=0), so the fill + moat read as ONE body lapping the castle base and the -3 m dip void is
+        // hidden. NOT the dip BOTTOM (-3) -- a surface down there would leave a 3 m void wall showing.
+        private const float FillWaterY = WaterY;
+
+        // Fish-school size over the fill (graceful/optional, WO-590). Capped low for the owner's Pi.
+        private const int FishSchoolCount = 10;
+
         // ---- DRAWBRIDGE tunables ----
         // Bridge deck WIDTH (across the lane). WIDE + readable as the proper way out (owner),
         // while still a SINGLE-LANE chokepoint towers/troops can cover.
@@ -141,11 +174,19 @@ namespace DeNelle.Village.World
             Material bridgeMat = BuildLitMaterial("CastleMoat_Bridge", BridgeColor, transparent: false);
 
             int waterQuads = BuildWaterRing(root.transform, waterMat);
+            // WO-590: fill the seam DIP between the moat ring and the OuterWorld shore with a broad
+            // water surface (shares waterMat -> the shimmer below animates it too) so the castle no
+            // longer reads as floating over a void.
+            int fillQuads  = BuildWaterFill(root.transform, waterMat);
             int bridges    = BuildDrawbridges(root.transform, bridgeMat, gateLateral);
 
             // Bring the ring to life with the proven shimmer (reuse, DEF-195). Point it at the
-            // shared water material; it scrolls a procedural ripple normal across every quad.
+            // shared water material; it scrolls a procedural ripple normal across every quad
+            // (ring + fill, since they share waterMat).
             AttachShimmer(root, waterMat);
+
+            // WO-590: a small fish school over the fill water (graceful/optional — skips if no model).
+            SpawnFishSchool(root.transform);
 
             // A new GameObject lands in the active scene by default; if the hub is loaded but not
             // active, move the moat into it so it shares the hub's lifetime.
@@ -153,8 +194,10 @@ namespace DeNelle.Village.World
                 SceneManager.MoveGameObjectToScene(root, hub);
 
             FlowTrace.Step("CastleMoat",
-                "built castle moat: " + waterQuads + " water quads (ring r=" + MoatCentreRadius +
-                "m width=" + MoatWidth + "m) + " + bridges + " wide drawbridge decks at the 4 cardinal gates " +
+                "built castle moat: " + waterQuads + " ring quads (r=" + MoatCentreRadius +
+                "m width=" + MoatWidth + "m) + " + fillQuads + " dip-fill quads (r=" + FillInnerRadius +
+                ".." + FillOuterRadius + "m @ y=" + FillWaterY.ToString("0.00") + ", fills the -3m seam dip) + " +
+                bridges + " wide drawbridge decks at the 4 cardinal gates " +
                 "(gateLateral=" + gateLateral.ToString("0.00") + ", source: castle-south-recipe x4 symmetry).");
         }
 
@@ -193,6 +236,74 @@ namespace DeNelle.Village.World
                 count++;
             }
             return count;
+        }
+
+        // --------------------------------------------------------------------
+        //  WATER FILL (WO-590) — broad square ANNULUS that fills the castle-seam DIP.
+        //  4 LARGE quads (one per side) form a square water FRAME from the moat's outer
+        //  edge (FillInnerRadius) out to the OuterWorld shoreline (FillOuterRadius),
+        //  leaving the castle island (the centre square) clear -> minimal transparent
+        //  OVERDRAW (no water plane under the island; few-big-quads, Pi-cheap). Mirrors
+        //  BuildWaterRing's proven side/yaw math exactly, just with the wider band radii,
+        //  so it stays concentric with the ring. Shares the moat water material -> the one
+        //  MoatWaterShimmer animates it too. Visual only (colliders stripped), shared mat.
+        // --------------------------------------------------------------------
+        private static int BuildWaterFill(Transform parent, Material mat)
+        {
+            float bandCentre = (FillInnerRadius + FillOuterRadius) * 0.5f; // centreline radius of each side band
+            float bandWidth  = FillOuterRadius - FillInnerRadius;          // across-channel depth of the band
+            // Mirror the ring: span the full side + the band width so corners overlap, no gap.
+            float sideLength = (bandCentre * 2f) + bandWidth;
+
+            var sides = new (string label, float yaw)[] { ("South", 0f), ("West", 90f), ("North", 180f), ("East", 270f) };
+
+            int count = 0;
+            foreach (var (label, yaw) in sides)
+            {
+                Quaternion rot = Quaternion.Euler(0f, yaw, 0f);
+                Vector3 outward = rot * Vector3.back;          // -Z rotated to this side
+                Vector3 sideCentre = outward * bandCentre;     // midpoint of this side band
+                sideCentre.y = FillWaterY;
+
+                var quad = GameObject.CreatePrimitive(PrimitiveType.Plane);
+                quad.name = "MoatFill_" + label;
+                quad.transform.SetParent(parent, false);
+                quad.transform.position = sideCentre;
+                quad.transform.rotation = rot;                 // length axis runs ALONG the side
+                // Plane local X = width axis (across the band), local Z = length axis (along side).
+                quad.transform.localScale = new Vector3(bandWidth / 10f, 1f, sideLength / 10f);
+
+                StripCollider(quad);                            // water never blocks; visual only
+                ApplyMaterial(quad, mat);
+                count++;
+            }
+            return count;
+        }
+
+        // --------------------------------------------------------------------
+        //  FISH SCHOOL (WO-590) — a small wandering school over the SOUTH fill band
+        //  (front of the castle, most visible). Graceful/optional: FishSchool loads a
+        //  model from Resources, else builds a tiny primitive fish, never hard-errors.
+        // --------------------------------------------------------------------
+        private static void SpawnFishSchool(Transform parent)
+        {
+            Guard.Try("CastleMoat", "spawn fish school", () =>
+            {
+                float bandCentre = (FillInnerRadius + FillOuterRadius) * 0.5f;
+                float bandWidth  = FillOuterRadius - FillInnerRadius;
+
+                var go = new GameObject("MoatFishSchool");
+                go.transform.SetParent(parent, false);
+                // Centre the school over the south fill band, just below the water surface.
+                go.transform.position = new Vector3(0f, FillWaterY, -bandCentre);
+
+                var school = go.AddComponent<FishSchool>();
+                // Box bounds: across = the band depth (a margin in), along = a believable patch.
+                school.Configure(
+                    FishSchoolCount,
+                    new Vector3((bandWidth * 0.5f) - 1.5f, 0.4f, 16f),
+                    FillWaterY - 0.3f);
+            });
         }
 
         // --------------------------------------------------------------------
