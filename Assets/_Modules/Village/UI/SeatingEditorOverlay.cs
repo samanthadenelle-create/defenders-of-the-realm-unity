@@ -612,7 +612,10 @@ namespace DeNelle.Village.UI
             if (src != null)
             {
                 _document.panelSettings = src.panelSettings;
-                _document.sortingOrder  = src.sortingOrder + 14;   // above panels
+                // Must sit ABOVE the inventory uGUI canvas (sortingOrder 31000) so the editor
+                // renders ON TOP of the panel that launches it — otherwise it hides behind and the
+                // caller is forced to Close() the panel first (owner F8: "tool closes the window").
+                _document.sortingOrder  = Mathf.Max(src.sortingOrder + 14, 32100);
             }
             else
             {

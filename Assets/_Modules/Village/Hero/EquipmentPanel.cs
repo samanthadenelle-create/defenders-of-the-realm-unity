@@ -93,7 +93,11 @@ namespace DeNelle.Village.Hero
             // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header +
             // the ONE standard Close button. Replaces the old backdrop + brown PanelFramed +
             // dark solidFill + per-panel "X". Content lives on chrome.content (0..1 anchors).
-            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "CHARACTER",
+            // Header shows the HERO'S NAME, not the generic "CHARACTER" (owner ask 2026-06-29:
+            // "upgrade from Character in the ragdoll to characters name"). Resolved from the active
+            // hero's class -> canon full name (Grom Ironhand, etc.), matching the inventory card.
+            string headerName = HeroFullName(ResolveActiveHeroJob());
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, headerName,
                 new Vector2(0.12f, 0.06f), new Vector2(0.88f, 0.95f),
                 () => _vm?.Close(), headerX0: 0.10f, headerX1: 0.90f,
                 frameName: RpgUiCatalog.FrameCharacter);
@@ -341,8 +345,14 @@ namespace DeNelle.Village.Hero
             bool filled = slot.HasValue && slot.Value.Content.HasValue;
             var item = filled ? slot.Value.Content.Value : default;
 
-            // Role glyph icon (centered, upper portion).
-            var iconSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, SlotIconName(slotKey));
+            // Real item art for FILLED slots (mirrors InventoryGrid.ResolveItemIcon): the slot's
+            // ItemVM already carries the correct IconRole + item id, so resolve the actual weapon/
+            // armor sprite instead of the generic slot glyph. Owner bug: the armor slot fell to the
+            // SlotChest glyph = IconInventory ("icon_inventory" = a gold chest/bag), so equipped armor
+            // read as a "gold bag". Empty slots keep the ghost glyph.
+            var iconSprite = filled ? ResolveSlotItemArt(slotKey, item) : null;
+            if (iconSprite == null)
+                iconSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, SlotIconName(slotKey));
             var iconGo = ElarionUiKit.AddImage(go.transform, "Icon",
                 new Vector2(0.28f, filled ? 0.34f : 0.30f), new Vector2(0.72f, filled ? 0.86f : 0.78f),
                 Color.white, rounded: false);
@@ -772,6 +782,37 @@ namespace DeNelle.Village.Hero
             }
         }
 
+        // Resolve a filled slot's REAL item art from its ItemVM (role + id), mirroring
+        // InventoryGrid.ResolveItemIcon so the doll's slots match the grid. Returns null when no
+        // art resolves (caller falls back to the slot glyph) — so accessories/shields with no sheet
+        // art keep their sensible glyph (heart/compass/shield), never the gold inventory bag.
+        private static Sprite ResolveSlotItemArt(string slotKey, ItemVM item)
+        {
+            // OFF-HAND is shields-only (V1): resolve SHIELD art via ForArmor (which has the shield
+            // keyword handling), NEVER ForWeapon. The off-hand ItemVM is tagged IconRoleWeapon, and
+            // ForWeapon falls through to a SWORD sprite for a shield id — owner bug "offhand shows a
+            // sword". Null -> caller falls back to the shield glyph (a shield, never a sword).
+            if (slotKey == EquipVM.SlotOffHand)
+            {
+                var sh = GearCatalog.FindArmor(item.Id);
+                return sh != null ? ItemIconCatalog.ForArmor(sh) : null;
+            }
+            switch (item.IconRole)
+            {
+                case EquipVM.IconRoleWeapon:
+                {
+                    var w = GearCatalog.FindWeapon(item.Id);
+                    return w != null ? ItemIconCatalog.ForWeapon(w) : null;
+                }
+                case EquipVM.IconRoleArmor:
+                {
+                    var a = GearCatalog.FindArmor(item.Id);
+                    return a != null ? ItemIconCatalog.ForArmor(a) : null;
+                }
+            }
+            return null;
+        }
+
         private static string SlotIconName(string slotKey)
         {
             switch (slotKey)
@@ -818,6 +859,28 @@ namespace DeNelle.Village.Hero
                 case "cleric": return "Elara";
                 default:        return Cap(job);
             }
+        }
+
+        // Canon FULL name for the panel header (matches HeroInventoryController.HeroDisplayName).
+        private static string HeroFullName(string job)
+        {
+            switch ((job ?? "").ToLowerInvariant())
+            {
+                case "knight": return "Grom Ironhand";
+                case "mage":   return "Thrain the Wise";
+                case "ranger": return "Sylas Swift";
+                case "healer":
+                case "cleric": return "Elara Dawnlight";
+                default:        return Cap(job);
+            }
+        }
+
+        // Active hero's class for the header (no loadout needed) — mirrors ResolveHeroJob's source.
+        private static string ResolveActiveHeroJob()
+        {
+            var ha = FindObjectOfType<HeroAbilities>();
+            string j = ha != null ? ha.HeroClass : null;
+            return string.IsNullOrEmpty(j) ? AbilityCatalog.DefaultClass : j;
         }
 
         private static string Cap(string s)

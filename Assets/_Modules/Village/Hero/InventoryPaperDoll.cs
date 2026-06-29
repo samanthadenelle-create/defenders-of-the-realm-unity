@@ -83,9 +83,11 @@ namespace DeNelle.Village
             }
 
             // Tappable hero portrait → open the full Character / Gear Preview paper-doll (EquipmentPanel).
-            // A transparent overlay button covers the portrait region (the preview RawImage + frame are
-            // NoRaycast, so the tap lands here); a small gold "View Gear" tag at the portrait's bottom edge
-            // makes it discoverable. Added LAST so it sits on top of the live preview. Null-safe.
+            // A transparent overlay button covers the WHOLE portrait region (the preview RawImage + frame
+            // are NoRaycast, so the tap lands here). Owner ask: the old micro "View Gear" tag read as a tiny
+            // dead link, so the large tap target was undiscoverable — make it OBVIOUS: a visible gold ribbon
+            // button across the portrait's bottom edge with a large label. Added LAST so it sits on top of
+            // the live preview. Null-safe.
             var gearTapGo = AddImage(medBand.transform, "ViewGearTap",
                                      new Vector2(0.08f, 0.52f), new Vector2(0.92f, 0.97f), new Color(0, 0, 0, 0));
             var gearTapImg = gearTapGo.GetComponent<Image>();
@@ -93,8 +95,17 @@ namespace DeNelle.Village
             gearTapBtn.targetGraphic = gearTapImg;
             StyleButtonColors(gearTapBtn);
             gearTapBtn.onClick.AddListener(OpenGearPreview);
-            var gearTag = AddLabel(gearTapGo.transform, "⚔ View Gear", 0.0f, 0.12f, GiltInk,
-                                   ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+
+            // Visible gold "VIEW GEAR" ribbon along the portrait's bottom edge — large, unmistakable.
+            var gearRibbon = AddImage(gearTapGo.transform, "ViewGearRibbon",
+                                      new Vector2(0.0f, 0.0f), new Vector2(1.0f, 0.16f),
+                                      new Color(ElarionUi.Gold.r * 0.55f, ElarionUi.Gold.g * 0.42f, 0.06f, 0.92f));
+            var ribImg = gearRibbon.GetComponent<Image>();
+            if (ribImg != null) { ApplyRounded(ribImg); ribImg.raycastTarget = false; }
+            AddInnerRim(gearRibbon, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f));
+            var gearTag = AddLabel(gearRibbon.transform, "⚔  VIEW GEAR", 0.0f, 1.0f, Color.white,
+                                   ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f,
+                                   spacing: 2f, bold: true);
             gearTag.raycastTarget = false;
 
             // Name + class • level — centered band just under the portrait (no overlap with the art).

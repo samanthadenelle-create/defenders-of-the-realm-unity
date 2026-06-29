@@ -159,13 +159,13 @@ namespace DeNelle.Village
                 new Vector2(0.02f, 0.10f), new Vector2(0.20f, 0.90f),
                 () =>
                 {
-                    // Z-ORDER FIX (owner F8 "only saw it when I left the panel"): the seating editor is a
-                    // UI-Toolkit overlay; the inventory is a uGUI canvas ON TOP of it (sortingOrder 31000),
-                    // so the editor renders BEHIND the panel. Close the inventory first so it is unobstructed,
-                    // then launch on the WORLD hero (Launch resolves the Player-tagged EquipmentController).
-                    // The offset saves per weapon-id to AttachmentOffsetRegistry → grip is corrected everywhere.
-                    Close();
-                    DeNelle.Village.UI.SeatingEditorOverlay.Launch();
+                    // Z-ORDER FIX v2 (owner F8 "tool closes the window"): the seating editor is a UI-Toolkit
+                    // overlay; the inventory is a uGUI canvas at sortingOrder 31000. The overlay now adopts
+                    // sortingOrder >= 32100 (SeatingEditorOverlay.AdoptPanelSettings) so it renders ON TOP of
+                    // the inventory — no need to Close() it. Drive the PREVIEW's own weapon (the 3D model the
+                    // owner is looking at); null-safe LaunchFor falls back to the world hero. The offset saves
+                    // per weapon-id to AttachmentOffsetRegistry → the grip is corrected everywhere.
+                    DeNelle.Village.UI.SeatingEditorOverlay.LaunchFor(_heroPreview?.Equip);
                 },
                 RpgUiCatalog.ButtonFrame);
             if (btn != null) btn.name = "OrientDev";

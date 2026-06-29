@@ -166,9 +166,26 @@ namespace DeNelle.Village.Hero
                     string goName = r.gameObject != null ? r.gameObject.name : "<null-go>";
                     Vector3 ext = r.bounds.size;
 
+                    // Box-head RCA: a flat tan/cardboard head = the head submesh lost its albedo.
+                    // Log the bound _BaseMap (or _MainTex) texture name + whether a MaterialPropertyBlock
+                    // is overriding this renderer — Instantiate does NOT copy per-renderer MPBs, so a
+                    // clone can revert to the material's authored albedo OR sit on a stripped block.
+                    string texDesc = "tex=?";
+                    if (!matNull)
+                    {
+                        Texture baseTex = null;
+                        if (mat.HasProperty("_BaseMap")) baseTex = mat.GetTexture("_BaseMap");
+                        if (baseTex == null && mat.HasProperty("_MainTex")) baseTex = mat.GetTexture("_MainTex");
+                        Color baseCol = mat.HasProperty("_BaseColor") ? mat.GetColor("_BaseColor")
+                                       : (mat.HasProperty("_Color") ? mat.GetColor("_Color") : Color.white);
+                        texDesc = (baseTex != null ? $"baseMap='{baseTex.name}'" : "baseMap=NULL")
+                                  + $" baseColor=({baseCol.r:F2},{baseCol.g:F2},{baseCol.b:F2})";
+                    }
+                    string pbDesc = $"hasMPB={r.HasPropertyBlock()}";
+
                     FlowTrace.Step("Preview",
                         $"  rend[{i}] '{goName}' {rType} enabled={r.enabled} {meshDesc} " +
-                        $"bounds={ext.x:F2}x{ext.y:F2}x{ext.z:F2} {shaderDesc}");
+                        $"bounds={ext.x:F2}x{ext.y:F2}x{ext.z:F2} {shaderDesc} {texDesc} {pbDesc}");
 
                     bool looksLikeHead = goName.ToLowerInvariant().Contains("head");
                     if (meshNull || matNull || (looksLikeHead && !r.enabled))
