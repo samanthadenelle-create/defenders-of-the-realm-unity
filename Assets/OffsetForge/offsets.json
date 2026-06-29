@@ -12,7 +12,8 @@
                 "y": 0.0,
                 "z": 0.0
             },
-            "scale": 1.0
+            "scale": 1.0,
+            "fullOverride": false
         },
         {
             "id": "Knight",
@@ -26,7 +27,8 @@
                 "y": 0.0,
                 "z": 0.0
             },
-            "scale": 1.0
+            "scale": 1.0,
+            "fullOverride": false
         },
         {
             "id": "crystals",
@@ -40,7 +42,8 @@
                 "y": 0.0,
                 "z": 0.0
             },
-            "scale": 1.0
+            "scale": 1.0,
+            "fullOverride": false
         },
         {
             "id": "iron",
@@ -54,7 +57,8 @@
                 "y": 0.0,
                 "z": 0.0
             },
-            "scale": 1.0
+            "scale": 1.0,
+            "fullOverride": false
         },
         {
             "id": "wood",
@@ -68,7 +72,8 @@
                 "y": 0.0,
                 "z": 0.0
             },
-            "scale": 1.0
+            "scale": 1.0,
+            "fullOverride": false
         },
         {
             "id": "food",
@@ -82,7 +87,8 @@
                 "y": 0.0,
                 "z": 0.0
             },
-            "scale": 1.0
+            "scale": 1.0,
+            "fullOverride": false
         },
         {
             "id": "sword_A",
@@ -96,7 +102,8 @@
                 "y": 0.0,
                 "z": 0.0
             },
-            "scale": 1.0
+            "scale": 1.0,
+            "fullOverride": false
         },
         {
             "id": "sword_D",
@@ -110,30 +117,30 @@
                 "y": 0.0,
                 "z": 0.0
             },
-            "scale": 0.47,
+            "scale": 0.4699999988079071,
             "fullOverride": true
         },
         {
             "id": "sword_F",
             "rot": {
-                "x": -12.0,
-                "y": 26.0,
-                "z": 80.0
+                "x": 0.0,
+                "y": -52.0,
+                "z": 48.0
             },
             "pos": {
                 "x": 0.0,
-                "y": 0.0,
+                "y": 0.05999999865889549,
                 "z": 0.0
             },
             "scale": 1.0,
-            "fullOverride": true
+            "fullOverride": false
         },
         {
             "id": "sword_G",
             "rot": {
-                "x": -39.0,
-                "y": 31.0,
-                "z": 102.0
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
             },
             "pos": {
                 "x": 0.0,
@@ -141,7 +148,7 @@
                 "z": 0.0
             },
             "scale": 1.0,
-            "fullOverride": true
+            "fullOverride": false
         }
     ]
 }

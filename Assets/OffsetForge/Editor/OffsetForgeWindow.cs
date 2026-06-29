@@ -37,6 +37,18 @@ namespace OffsetForge.Editor
         private float _camYaw = 30f;
         private float _camPitch = 20f;
         private float _camDistance = 5f;
+        // View-only turntable for the hero context — lets the owner spin the hero to inspect the
+        // weapon mapping from any side WITHOUT changing the saved weapon offset (local transform).
+        private float _contextYaw;
+
+        // Auto-fit (owner request 2026-06-29): the GAME auto-sizes a weapon to a target length when
+        // it equips (NormalizeInto), so a tiny raw model that needed ~16x by hand should instead
+        // load pre-fit at Scale 1. We replicate that generically: measure the model's longest-axis
+        // bounds and scale it to _autoFitTarget metres. The saved "Scale" then rides on top as a
+        // clean multiplier (1 = the fit) — matching the runtime's scale-as-multiplier semantics.
+        private bool  _autoFit = true;
+        private float _autoFitTarget = 0.9f;   // target longest-axis length (m) at Scale 1
+        private float _autoFitScale = 1f;      // computed from the model's native bounds on load
         private Vector3 _camPivot = Vector3.zero;
         private bool _framed;
 
@@ -316,8 +328,20 @@ namespace OffsetForge.Editor
             if (EditorGUI.EndChangeCheck())
             {
                 _sourceModel = newModel;
-                if (_sourceModel != null && string.IsNullOrEmpty(_saveId))
+                // Sync the save KEY to the loaded model EVERY time (owner bug 2026-06-29: "all id's
+                // resolve to sword_a"). Previously this only set the id when empty, so the first model
+                // loaded ('_tripobak_sword_A') stuck and every later sword would overwrite that entry.
+                // The id field stays editable for a custom key AFTER loading.
+                if (_sourceModel != null)
                     _saveId = _sourceModel.name;
+                // Owner spec 2026-06-29 ("on drag onto, on the hover/drop event clear the cell first,
+                // then drop"): the drop must NOT inherit the previous model's pose (the carry-over bug
+                // that gave sword_G sword_F's rotation). So CLEAR the offset cell on every model change,
+                // then RELOAD the new id's own saved entry from disk (true round-trip; stays cleared if
+                // no entry exists yet).
+                ClearOffsetCell();
+                LoadSavedOffsetForCurrentId();
+                RecomputeAutoFit();
                 RebuildPreviewInstance();
             }
             if (_sourceModel == null)
@@ -360,6 +384,27 @@ namespace OffsetForge.Editor
 
             if (GUILayout.Button("Load Hero", GUILayout.Width(120)))
                 TryLoadHero();
+
+            // View controls — keep the WEAPON the framed subject and let the owner spin the hero
+            // to inspect the mapping from any angle (view-only; the saved offset is untouched).
+            if (GUILayout.Button("Frame Weapon", GUILayout.Width(120)))
+            {
+                _framed = false;
+                Repaint();
+            }
+            EditorGUI.BeginChangeCheck();
+            float newYaw = EditorGUILayout.Slider("Rotate hero (view)", _contextYaw, -180f, 180f);
+            if (EditorGUI.EndChangeCheck())
+            {
+                _contextYaw = newYaw;
+                _framed = false;   // re-center on the hand as the hero turns
+                Repaint();
+            }
+            EditorGUILayout.HelpBox(
+                "Left-drag = orbit the camera · scroll = zoom · middle/alt-drag = pan. " +
+                "'Frame Weapon' re-centers on the blade; 'Rotate hero' spins the body to view the " +
+                "grip from any side. Both are VIEW-only — they never change the saved offset.",
+                MessageType.None);
         }
 
         private void TryLoadHero()
@@ -427,6 +472,9 @@ namespace OffsetForge.Editor
             try
             {
                 ApplyOffsetToInstance();
+                // View-only hero turntable (does NOT touch the weapon's saved local offset).
+                if (_showContext && _contextInstance != null)
+                    _contextInstance.transform.rotation = Quaternion.Euler(0f, _contextYaw, 0f);
                 if (!_framed) FrameCamera();
 
                 PositionCamera();
@@ -516,9 +564,15 @@ namespace OffsetForge.Editor
             bounds = new Bounds(Vector3.zero, Vector3.zero);
             bool has = false;
             EncapsulateRenderers(_previewInstance, ref bounds, ref has);
-            // When context is shown, frame the hand + weapon together.
-            if (_showContext && _contextInstance != null)
-                EncapsulateRenderers(_contextInstance, ref bounds, ref has);
+            // When context is shown, the WEAPON stays the subject. Framing the whole hero makes the
+            // body dominate and shrinks the weapon to a speck (owner bug 2026-06-29: "hero becomes
+            // dominant item not sword"). Frame the weapon + just the grip-anchor point (the hand);
+            // the hero is still visible context you orbit around / spin with "Rotate hero".
+            if (_showContext && _gripAnchor != null)
+            {
+                if (!has) { bounds = new Bounds(_gripAnchor.position, Vector3.zero); has = true; }
+                else bounds.Encapsulate(_gripAnchor.position);
+            }
             return has;
         }
 
@@ -540,8 +594,89 @@ namespace OffsetForge.Editor
             if (_previewInstance == null) return;
             _previewInstance.transform.localRotation = Quaternion.Euler(_rotation);
             _previewInstance.transform.localPosition = _position;
-            float s = _modelScale <= 0f ? 1f : _modelScale;
-            _previewInstance.transform.localScale = Vector3.one * s;
+            float mult = _modelScale <= 0f ? 1f : _modelScale;
+            // Auto-fit (owner request 2026-06-29): the saved "Scale" is a MULTIPLIER on the auto-sized
+            // weapon, exactly as the runtime treats fo.scale on top of NormalizeInto. So the preview's
+            // true scale = native auto-fit * the multiplier. This makes a tiny raw model show correctly
+            // at Scale 1 (no more "needs 16x by hand") and matches what the game will render.
+            float fit = (_autoFit && _autoFitScale > 0f) ? _autoFitScale : 1f;
+            _previewInstance.transform.localScale = Vector3.one * (fit * mult);
+        }
+
+        /// <summary>
+        /// Clear the offset CELL to the neutral pose (owner: "on drag onto ... clear cell()") so a
+        /// freshly dropped model never inherits the previous model's rotation/position/scale.
+        /// </summary>
+        private void ClearOffsetCell()
+        {
+            _rotation = Vector3.zero;
+            _position = Vector3.zero;
+            _modelScale = 1f;
+        }
+
+        /// <summary>
+        /// Round-trip: after a model is dropped, load that id's OWN saved entry (if one exists on disk)
+        /// into the sliders so re-opening a known weapon shows its real pose instead of a blank cell.
+        /// </summary>
+        private void LoadSavedOffsetForCurrentId()
+        {
+            if (string.IsNullOrEmpty(_saveId) || string.IsNullOrEmpty(_savePath) || !File.Exists(_savePath))
+                return;
+            try
+            {
+                var table = OffsetTableIO.Load(File.ReadAllText(_savePath));
+                var e = table != null ? table.Find(_saveId) : null;
+                if (e == null) return;
+                _rotation = new Vector3(e.rot.x, e.rot.y, e.rot.z);
+                _position = new Vector3(e.pos.x, e.pos.y, e.pos.z);
+                _modelScale = e.scale > 0f ? e.scale : 1f;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[OffsetForge] load-existing offset failed for '" + _saveId + "': " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Measure the dropped model's native longest-axis length and compute the scale that fits it to
+        /// _autoFitTarget metres — the editor analogue of the runtime's NormalizeInto auto-size. Lets the
+        /// owner work at Scale 1 instead of guessing a raw multiplier (e.g. the "scale 16" trap).
+        /// </summary>
+        private void RecomputeAutoFit()
+        {
+            _autoFitScale = 1f;
+            if (_sourceModel == null) return;
+            try
+            {
+                // Measure at identity scale: instantiate-free bounds from the asset's renderers is not
+                // reliable for prefabs, so measure the live preview clone after it rebuilds. Here we
+                // estimate from the source asset's mesh bounds at unit scale.
+                var bounds = new Bounds(Vector3.zero, Vector3.zero);
+                bool has = false;
+                var filters = _sourceModel.GetComponentsInChildren<MeshFilter>();
+                for (int i = 0; i < filters.Length; i++)
+                {
+                    if (filters[i] == null || filters[i].sharedMesh == null) continue;
+                    var mb = filters[i].sharedMesh.bounds;
+                    if (!has) { bounds = mb; has = true; } else bounds.Encapsulate(mb);
+                }
+                var skins = _sourceModel.GetComponentsInChildren<SkinnedMeshRenderer>();
+                for (int i = 0; i < skins.Length; i++)
+                {
+                    if (skins[i] == null || skins[i].sharedMesh == null) continue;
+                    var mb = skins[i].sharedMesh.bounds;
+                    if (!has) { bounds = mb; has = true; } else bounds.Encapsulate(mb);
+                }
+                if (!has) return;
+                float longest = Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z));
+                if (longest > 1e-4f && _autoFitTarget > 0f)
+                    _autoFitScale = _autoFitTarget / longest;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[OffsetForge] auto-fit measure failed: " + ex.Message);
+                _autoFitScale = 1f;
+            }
         }
 
         private void DrawControls()
@@ -567,15 +702,33 @@ namespace OffsetForge.Editor
 
             EditorGUILayout.Space(2);
 
-            // Position float fields.
-            EditorGUILayout.LabelField("Position");
-            _position = EditorGUILayout.Vector3Field(GUIContent.none, _position);
+            // Position sliders (metres) — parity with the rotation rows (owner request 2026-06-29).
+            EditorGUILayout.LabelField("Position (metres)");
+            _position.x = PositionSlider("X", _position.x);
+            _position.y = PositionSlider("Y", _position.y);
+            _position.z = PositionSlider("Z", _position.z);
 
             EditorGUILayout.Space(2);
 
-            // Uniform scale.
-            _modelScale = EditorGUILayout.FloatField("Scale (uniform)", _modelScale);
+            // Uniform scale (a MULTIPLIER on the auto-fit; 1 = the fitted size).
+            _modelScale = EditorGUILayout.FloatField("Scale (x auto-fit)", _modelScale);
             if (_modelScale <= 0f) _modelScale = 1f;
+
+            // Auto-fit row (owner request 2026-06-29): replicate the runtime NormalizeInto auto-size so
+            // the editor is WYSIWYG and the owner authors at Scale 1 instead of the "scale 16" trap.
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                bool prevFit = _autoFit;
+                _autoFit = EditorGUILayout.ToggleLeft("Auto-fit length", _autoFit, GUILayout.Width(120));
+                using (new EditorGUI.DisabledScope(!_autoFit))
+                {
+                    EditorGUILayout.LabelField("target m", GUILayout.Width(56));
+                    float t = EditorGUILayout.FloatField(_autoFitTarget, GUILayout.Width(50));
+                    if (t > 0f) _autoFitTarget = t;
+                }
+                EditorGUILayout.LabelField("fit x" + _autoFitScale.ToString("0.00"), GUILayout.Width(70));
+                if (prevFit != _autoFit || GUI.changed) RecomputeAutoFit();
+            }
 
             // Reset.
             using (new EditorGUILayout.HorizontalScope())
@@ -608,6 +761,16 @@ namespace OffsetForge.Editor
                 }
                 Repaint();
             }
+            return v;
+        }
+
+        // Position slider in metres — fine grip-nudge range (the editable value box on the right
+        // still accepts exact typed values). Parity with RotationSlider per owner request.
+        private float PositionSlider(string label, float value)
+        {
+            EditorGUI.BeginChangeCheck();
+            float v = EditorGUILayout.Slider(label, value, -0.5f, 0.5f);
+            if (EditorGUI.EndChangeCheck()) Repaint();
             return v;
         }
 
