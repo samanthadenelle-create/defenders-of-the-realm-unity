@@ -1,0 +1,21 @@
+# Vercel does NOT honor .gitignore on CLI deploys — without this it uploads the
+# whole ~3GB Unity repo (Library/, Temp/, Assets/, Builds/Windows, gitignored art
+# packs) and fails the 2 GiB limit. Allowlist ONLY what the deployment serves:
+#   - Builds/WebGL  → the static site root (vercel.json "outputDirectory")
+#   - api/          → the serverless functions (incl. api/pi/verify.js)
+#   - the configs   → vercel.json + package.json (+ lock) for the api deps
+# This mirrors the gitignore intent (the heavy dirs are all gitignored too).
+
+# 1) ignore every top-level entry
+/*
+
+# 2) re-include only what we serve
+!/api
+!/vercel.json
+!/package.json
+!/package-lock.json
+!/Builds
+
+# 3) within Builds, keep ONLY the WebGL output (drop Builds/Windows etc.)
+/Builds/*
+!/Builds/WebGL

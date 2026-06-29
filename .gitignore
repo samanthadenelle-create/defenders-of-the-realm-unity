@@ -281,3 +281,4 @@ yarn.lock
 # Resources path (RpgUiImporter -> Resources/RpgUi). Owner+CLI decision 2026-06-13.
 /Assets/Tech hud elements/
 /Assets/Tech hud elements.meta
+.vercel
