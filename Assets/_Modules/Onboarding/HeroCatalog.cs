@@ -61,10 +61,23 @@ namespace DeNelle.Onboarding
         /// <summary>One-line signature ability effect blurb.</summary>
         public readonly string AbilityDesc;
 
+        // ── Primary skill kit (hero-select detail panel) ────────────────────
+        // The hero's Q/W/E/R primary skills, MIRRORED VERBATIM (slot key + name)
+        // from Resources/Data/Canonical/abilities.json — the same source the
+        // signature ability is drawn from — so the hero-select "Primary Skills"
+        // panel shows the real, in-game kit without a cross-module JSON load
+        // (Onboarding references DeNelle.Core only; see the file header). May be
+        // empty for a hero whose ability set is not yet authored in abilities.json
+        // (e.g. the Cleric) — the UI shows a labelled placeholder in that case.
+
+        /// <summary>The hero's primary Q/W/E/R skills (verbatim from abilities.json); may be empty.</summary>
+        public readonly HeroSkillInfo[] PrimarySkills;
+
         public HeroCardInfo(HeroClass hero, string nameKey, string roleKey,
                             string blurbKey, string glyph, Color accent,
                             int hp, int attack, int speed,
-                            string abilityName, string abilityDesc)
+                            string abilityName, string abilityDesc,
+                            HeroSkillInfo[] primarySkills = null)
         {
             Hero = hero;
             NameKey = nameKey;
@@ -77,6 +90,26 @@ namespace DeNelle.Onboarding
             Speed = speed;
             AbilityName = abilityName;
             AbilityDesc = abilityDesc;
+            PrimarySkills = primarySkills ?? System.Array.Empty<HeroSkillInfo>();
+        }
+    }
+
+    /// <summary>
+    /// One primary-skill entry for the hero-select detail panel — the slot key
+    /// (Q / F / E / R) plus the ability's display name. Mirrored verbatim from
+    /// Resources/Data/Canonical/abilities.json (no narrative authored here).
+    /// </summary>
+    public sealed class HeroSkillInfo
+    {
+        /// <summary>The slot key as shown on the ability bar (Q / F / E / R).</summary>
+        public readonly string Slot;
+        /// <summary>The ability's display name (e.g. "Frost Nova").</summary>
+        public readonly string Name;
+
+        public HeroSkillInfo(string slot, string name)
+        {
+            Slot = slot;
+            Name = name;
         }
     }
 
@@ -93,19 +126,40 @@ namespace DeNelle.Onboarding
                 "T", new Color(0.45f, 0.75f, 1.0f),       // Thrain — icy blue
                 hp: 2, attack: 5, speed: 3,
                 abilityName: "Frost Nova",
-                abilityDesc: "Freezing burst — 26 dmg + freeze in a ring."),
+                abilityDesc: "Freezing burst — 26 dmg + freeze in a ring.",
+                primarySkills: new[]
+                {
+                    new HeroSkillInfo("Q", "Arcane Bolt"),
+                    new HeroSkillInfo("F", "Frost Nova"),
+                    new HeroSkillInfo("E", "Healing Beacon"),
+                    new HeroSkillInfo("R", "Meteor Strike"),
+                }),
             new HeroCardInfo(
                 HeroClass.Knight, "hero.knight.name", "hero.knight.role", "hero.knight.blurb",
                 "G", new Color(0.98f, 0.84f, 0.40f),      // Grom — holy gold
                 hp: 5, attack: 3, speed: 2,
                 abilityName: "Bulwark Slam",
-                abilityDesc: "Cleaving slam — hits all foes in front."),
+                abilityDesc: "Cleaving slam — hits all foes in front.",
+                primarySkills: new[]
+                {
+                    new HeroSkillInfo("Q", "Heroic Leap"),
+                    new HeroSkillInfo("F", "Shield Bash"),
+                    new HeroSkillInfo("E", "Defender's Call"),
+                    new HeroSkillInfo("R", "Radiant Strike"),
+                }),
             new HeroCardInfo(
                 HeroClass.Ranger, "hero.ranger.name", "hero.ranger.role", "hero.ranger.blurb",
                 "S", new Color(0.41f, 0.74f, 0.48f),      // Sylas — wood-green
                 hp: 3, attack: 4, speed: 5,
                 abilityName: "Snare Trap",
-                abilityDesc: "Snares foes at range and deals damage."),
+                abilityDesc: "Snares foes at range and deals damage.",
+                primarySkills: new[]
+                {
+                    new HeroSkillInfo("Q", "Quick Shot"),
+                    new HeroSkillInfo("F", "Snare Trap"),
+                    new HeroSkillInfo("E", "Mending Salve"),
+                    new HeroSkillInfo("R", "Storm of Arrows"),
+                }),
             new HeroCardInfo(
                 HeroClass.Cleric, "hero.cleric.name", "hero.cleric.role", "hero.cleric.blurb",
                 "E", new Color(1.0f, 0.93f, 0.70f),       // Elara — warm white-gold

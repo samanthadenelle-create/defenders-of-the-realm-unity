@@ -109,6 +109,7 @@ namespace DeNelle.Onboarding
         private VisualElement _heroStage;     // row (landscape) / column (portrait): image+lore | stats
         private VisualElement _stageLeft;     // image + lore column (rebuilt per index)
         private VisualElement _stageRight;    // stats panel column (rebuilt per index)
+        private VisualElement _heroImageFrame; // focal hero image (window-relative sized on reflow)
         private VisualElement _dotsRow;       // pip-dot index indicator
         private Button _prevButton;
         private Button _nextButton;
@@ -393,6 +394,7 @@ namespace DeNelle.Onboarding
             _stageRight.style.flexShrink = 1f;
             _stageRight.style.flexBasis = 0f;
             _stageRight.style.minWidth = 0f;
+            _stageRight.style.flexDirection = FlexDirection.Column;
             _stageRight.style.justifyContent = Justify.Center;
             _stageRight.style.marginLeft = 8f;
             _heroStage.Add(_stageRight);
@@ -472,13 +474,19 @@ namespace DeNelle.Onboarding
             _stageRight.Clear();
 
             // ── LEFT: large hero image (focal) + lore directly under it.
+            // The image is the FOCAL point — sized to ~30% of window width × ~60% of
+            // window height (owner spec) and centred. Window-relative sizing is applied
+            // in ApplyHeroImageSize() (here + on every reflow); the min-size keeps it
+            // visible for the first frame before geometry resolves.
             var imageFrame = new VisualElement { name = "hero-image-frame" };
-            imageFrame.style.flexGrow = 1f;
-            imageFrame.style.flexShrink = 1f;
-            imageFrame.style.minHeight = 160f;
+            imageFrame.style.flexGrow = 0f;
+            imageFrame.style.flexShrink = 0f;
+            imageFrame.style.alignSelf = Align.Center;
+            imageFrame.style.minWidth = 120f;
+            imageFrame.style.minHeight = 200f;
             imageFrame.style.overflow = Overflow.Hidden;
             imageFrame.style.backgroundColor = new Color(0f, 0f, 0f, 0.30f);
-            float fr = 10f;
+            float fr = 12f;
             imageFrame.style.borderTopLeftRadius = fr;
             imageFrame.style.borderTopRightRadius = fr;
             imageFrame.style.borderBottomLeftRadius = fr;
@@ -486,6 +494,7 @@ namespace DeNelle.Onboarding
             SetBorderWidth(imageFrame, 3f);
             SetBorderColor(imageFrame, playable ? ElarionUi.Gilt
                                                 : new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.4f));
+            _heroImageFrame = imageFrame;
 
             var portrait = new VisualElement { name = "hero-portrait" };
             portrait.style.position = Position.Absolute;
@@ -533,51 +542,43 @@ namespace DeNelle.Onboarding
 
             _stageLeft.Add(imageFrame);
 
-            // Lore UNDER the image: name (gold, big) + role (amber) + blurb.
-            var story = new VisualElement { name = "hero-lore" };
-            story.style.flexShrink = 0f;
-            story.style.marginTop = 10f;
-            story.style.paddingLeft = 2f;
-            story.style.paddingRight = 2f;
+            // Lore UNDER the image, inside a framed Obsidian "lore card" so it reads as
+            // a polished panel (black + gold trim) rather than loose text. Name (gold,
+            // big) + role (amber) sit above a gilt rule; the blurb fills the card body.
+            var story = MakeSectionPanel("— LORE —");
+            story.name = "hero-lore-panel";
+            story.style.marginTop = 12f;
 
             var nameLabel = new Label(CanonStrings.Locale(info.NameKey));
             nameLabel.style.fontSize = 24f;
             nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
             nameLabel.style.color = playable ? ElarionUi.Gold : ColTextMuted;
+            nameLabel.style.letterSpacing = 0.5f;
             nameLabel.style.whiteSpace = WhiteSpace.Normal;
             story.Add(nameLabel);
 
             var roleLabel = new Label(CanonStrings.Locale(info.RoleKey));
             roleLabel.style.marginTop = 2f;
-            roleLabel.style.fontSize = 13f;
+            roleLabel.style.fontSize = ElarionUi.FontLabel;
             roleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
             roleLabel.style.color = ColAmber;
+            roleLabel.style.letterSpacing = 1f;
             roleLabel.style.whiteSpace = WhiteSpace.Normal;
             story.Add(roleLabel);
 
             var blurbLabel = new Label(CanonStrings.Locale(info.BlurbKey));
-            blurbLabel.style.marginTop = 6f;
-            blurbLabel.style.fontSize = 13f;
+            blurbLabel.style.marginTop = 8f;
+            blurbLabel.style.fontSize = ElarionUi.FontLabel;
             blurbLabel.style.color = ColTextBright;
             blurbLabel.style.whiteSpace = WhiteSpace.Normal;
             story.Add(blurbLabel);
 
             _stageLeft.Add(story);
 
-            // ── RIGHT: the stats panel BESIDE the image.
-            var statsPanel = new VisualElement { name = "hero-stats-panel" };
-            statsPanel.style.paddingTop = 14f;
-            statsPanel.style.paddingBottom = 14f;
-            statsPanel.style.paddingLeft = 16f;
-            statsPanel.style.paddingRight = 16f;
-            float pr = 12f;
-            statsPanel.style.borderTopLeftRadius = pr;
-            statsPanel.style.borderTopRightRadius = pr;
-            statsPanel.style.borderBottomLeftRadius = pr;
-            statsPanel.style.borderBottomRightRadius = pr;
-            SetBorderWidth(statsPanel, 2f);
-            SetBorderColor(statsPanel, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f));
-            statsPanel.style.backgroundColor = ElarionUi.PanelStone;
+            // ── RIGHT: a framed STATS card + a framed PRIMARY SKILLS card, stacked,
+            // BESIDE the image — same black+gold Obsidian chrome as the lore card.
+            var statsPanel = MakeSectionPanel("— STATS —");
+            statsPanel.name = "hero-stats-panel";
 
             BuildStatRow(statsPanel, "HP",     PipString(info.Hp));
             BuildStatRow(statsPanel, "ATTACK", PipString(info.Attack));
@@ -590,8 +591,16 @@ namespace DeNelle.Onboarding
             statDivider.style.backgroundColor = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.4f);
             statsPanel.Add(statDivider);
 
+            var sigLabel = new Label("SIGNATURE");
+            sigLabel.style.fontSize = ElarionUi.FontMicro;
+            sigLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            sigLabel.style.color = ColTextMuted;
+            sigLabel.style.letterSpacing = 1.5f;
+            statsPanel.Add(sigLabel);
+
             var abilityName = new Label(info.AbilityName);
-            abilityName.style.fontSize = 15f;
+            abilityName.style.marginTop = 2f;
+            abilityName.style.fontSize = ElarionUi.FontBody;
             abilityName.style.unityFontStyleAndWeight = FontStyle.Bold;
             abilityName.style.color = ColAmber;
             abilityName.style.whiteSpace = WhiteSpace.Normal;
@@ -599,12 +608,37 @@ namespace DeNelle.Onboarding
 
             var abilityDesc = new Label(info.AbilityDesc);
             abilityDesc.style.marginTop = 2f;
-            abilityDesc.style.fontSize = 12f;
+            abilityDesc.style.fontSize = ElarionUi.FontLabel;
             abilityDesc.style.color = ColTextMuted;
             abilityDesc.style.whiteSpace = WhiteSpace.Normal;
             statsPanel.Add(abilityDesc);
 
             _stageRight.Add(statsPanel);
+
+            // PRIMARY SKILLS — the hero's Q/W/E/R kit, mirrored from abilities.json
+            // (HeroCatalog.PrimarySkills). A labelled placeholder shows for a hero whose
+            // kit is not yet authored (e.g. the Cleric).
+            var skillsPanel = MakeSectionPanel("— PRIMARY SKILLS —");
+            skillsPanel.name = "hero-skills-panel";
+            skillsPanel.style.marginTop = 10f;
+
+            var skills = info.PrimarySkills;
+            if (skills != null && skills.Length > 0)
+            {
+                for (int s = 0; s < skills.Length; s++)
+                    BuildSkillRow(skillsPanel, skills[s].Slot, skills[s].Name);
+            }
+            else
+            {
+                var soon = new Label("Abilities revealed at launch");
+                soon.style.fontSize = ElarionUi.FontLabel;
+                soon.style.unityFontStyleAndWeight = FontStyle.Italic;
+                soon.style.color = ColTextMuted;
+                soon.style.whiteSpace = WhiteSpace.Normal;
+                skillsPanel.Add(soon);
+            }
+
+            _stageRight.Add(skillsPanel);
 
             // Selection: only the playable hero can be selected. Navigating to a
             // locked hero previews it but leaves no selectable choice.
@@ -620,6 +654,9 @@ namespace DeNelle.Onboarding
 
             RefreshConfirm(playable);
             RefreshDots();
+
+            // Size the focal image window-relative now (in case geometry is ready).
+            ApplyHeroImageSize();
 
             // Re-apply orientation flow so a freshly-built stage stacks correctly.
             if (_root != null)
@@ -662,6 +699,88 @@ namespace DeNelle.Onboarding
         // =====================================================================
         //  Shared stat-row + pip helpers
         // =====================================================================
+
+        /// <summary>
+        /// Sizes the focal hero image window-relative — ~30% of window WIDTH (60% in
+        /// portrait, where 30% would be a sliver) × ~60% of window HEIGHT (owner spec) —
+        /// from the root's resolved size. No-ops until geometry resolves (the min-size on
+        /// the frame keeps it visible meanwhile).
+        /// </summary>
+        private void ApplyHeroImageSize()
+        {
+            if (_heroImageFrame == null || _root == null) return;
+            float w = _root.resolvedStyle.width;
+            float h = _root.resolvedStyle.height;
+            if (w <= 0f || h <= 0f) return;
+            bool portrait = h >= w;
+            _heroImageFrame.style.width = (portrait ? 0.60f : 0.30f) * w;
+            _heroImageFrame.style.height = 0.60f * h;
+        }
+
+        /// <summary>
+        /// A framed Obsidian section card (black fill + gold trim, the shared ElarionUi
+        /// panel language) with a small gold header + gilt rule. Content is added by the
+        /// caller. Reused for the LORE, STATS and PRIMARY SKILLS cards so they read as
+        /// one designed UI.
+        /// </summary>
+        private static VisualElement MakeSectionPanel(string heading)
+        {
+            var panel = new VisualElement { name = "section-panel" };
+            ElarionUi.StylePanel(panel);
+            panel.style.flexShrink = 0f;
+            panel.style.paddingTop = 12f;
+            panel.style.paddingBottom = 12f;
+            panel.style.paddingLeft = 14f;
+            panel.style.paddingRight = 14f;
+
+            if (!string.IsNullOrEmpty(heading))
+            {
+                var head = new Label(heading);
+                head.style.fontSize = ElarionUi.FontMicro;
+                head.style.unityFontStyleAndWeight = FontStyle.Bold;
+                head.style.color = ElarionUi.Gilt;
+                head.style.letterSpacing = 2f;
+                head.style.unityTextAlign = TextAnchor.MiddleLeft;
+                panel.Add(head);
+                panel.Add(ElarionUi.MakeRule());
+            }
+            return panel;
+        }
+
+        /// <summary>
+        /// Builds one primary-skill row — a gold slot badge (Q/F/E/R) + the ability
+        /// name — into the Primary Skills card.
+        /// </summary>
+        private void BuildSkillRow(VisualElement parent, string slot, string name)
+        {
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems = Align.Center;
+            row.style.marginTop = 5f;
+
+            var badge = new Label(slot);
+            badge.style.width = 22f;
+            badge.style.height = 22f;
+            badge.style.flexShrink = 0f;
+            badge.style.marginRight = 8f;
+            badge.style.fontSize = ElarionUi.FontMicro;
+            badge.style.unityFontStyleAndWeight = FontStyle.Bold;
+            badge.style.unityTextAlign = TextAnchor.MiddleCenter;
+            badge.style.color = ElarionUi.Ink;
+            badge.style.backgroundColor = ElarionUi.GoldButton;
+            ElarionUi.SetRadius(badge, 11f);
+            row.Add(badge);
+
+            var label = new Label(name);
+            label.style.flexShrink = 1f;
+            label.style.fontSize = ElarionUi.FontLabel;
+            label.style.unityFontStyleAndWeight = FontStyle.Bold;
+            label.style.color = ColTextBright;
+            label.style.whiteSpace = WhiteSpace.Normal;
+            row.Add(label);
+
+            parent.Add(row);
+        }
 
         /// <summary>
         /// Builds one stat row into the stats panel — a fixed-width gold label on the
@@ -767,6 +886,9 @@ namespace DeNelle.Onboarding
             {
                 _stageRight.style.marginLeft = portrait ? 0f : 8f;
             }
+
+            // Re-size the focal hero image whenever the screen size / orientation changes.
+            ApplyHeroImageSize();
 
             VerifyStage();
         }
