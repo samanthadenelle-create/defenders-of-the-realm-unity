@@ -152,10 +152,44 @@ namespace DeNelle.Village
         /// <summary>The authoring data this tower was initialized from.</summary>
         public TowerData Data => _data;
 
-        /// <summary>Attack range for the current level (from TowerData; 0 when unset). (WO-82)</summary>
-        public float CurrentRange { get { var u = CurrentUpgrade(); return u != null ? u.range : 0f; } }
-        /// <summary>Attack damage for the current level (from TowerData; 0 when unset). (WO-82)</summary>
-        public float CurrentDamage { get { var u = CurrentUpgrade(); return u != null ? u.damage : 0f; } }
+        /// <summary>
+        /// The effective tier this tower applies from <see cref="TowerPerkTable"/>: the placed
+        /// upgrade level (1..3), OR the capstone tier 4 once Empowered. This is the single tier the
+        /// data-driven perk row is read for (no per-level if/else anywhere).
+        /// </summary>
+        public int EffectiveTier => IsEmpowered ? 4 : Mathf.Clamp(_currentLevel, 1, MaxLevel);
+
+        /// <summary>
+        /// Attack range for the current level. (WO-82 base from TowerData) + the WC3 tower-upgrade
+        /// tech applied: TowerPerkTable rangeAdd for this tier, then the village-wide Arcane-Tower
+        /// research range perk (ModifierService.TowerRangeMult). 0 when unset. (WO-432)
+        /// </summary>
+        public float CurrentRange
+        {
+            get
+            {
+                var u = CurrentUpgrade();
+                if (u == null) return 0f;
+                float ranged = TowerPerkTable.EffectiveRange(u.range, EffectiveTier);
+                return ranged * DeNelle.Core.State.ModifierService.Active.TowerRangeMult;
+            }
+        }
+
+        /// <summary>
+        /// Attack damage for the current level. (WO-82 base from TowerData) + the WC3 tower-upgrade
+        /// tech applied: TowerPerkTable damageMult/damageAdd for this tier, then the village-wide
+        /// research damage perk (ModifierService.TowerDamageMult). 0 when unset. (WO-432)
+        /// </summary>
+        public float CurrentDamage
+        {
+            get
+            {
+                var u = CurrentUpgrade();
+                if (u == null) return 0f;
+                float dmg = TowerPerkTable.EffectiveDamage(u.damage, EffectiveTier);
+                return dmg * DeNelle.Core.State.ModifierService.Active.TowerDamageMult;
+            }
+        }
 
         private TowerUpgrade CurrentUpgrade()
         {
@@ -723,6 +757,16 @@ namespace DeNelle.Village
             _currentLevel++;
             ApplyVisualForLevel(_currentLevel);
 
+            // WO-432 — the upgrade now GRANTS the designed per-tier tech (data-driven, no longer a
+            // no-op): TowerCombat reads CurrentDamage/CurrentRange (perk row + village modifier) and
+            // the fire cadence live, so this level-up immediately raises dmg/range/fire-rate. Trace the
+            // applied row so a capture PROVES the gain (instrument-first, §12).
+            var perkRow = TowerPerkTable.Get(EffectiveTier);
+            FlowTrace.Step("Tower",
+                $"Upgrade -> L{_currentLevel} ('{_data.towerName}') applied perk tier {EffectiveTier} " +
+                $"({perkRow.Name}): dmgMult={perkRow.DamageMult:0.00} +{perkRow.DamageAdd} | rangeAdd=+{perkRow.RangeAdd} " +
+                $"| fireRateMult={perkRow.FireRateMult:0.00} => CurrentDamage={CurrentDamage:0.0} CurrentRange={CurrentRange:0.0}");
+
             // DEF-75 — visual feedback fires AFTER the model swap.
             TriggerUpgradeVFX();
             var audio = FindAnyObjectByType<TowerAudioController>();
@@ -1105,6 +1149,122 @@ namespace DeNelle.Village
                 null,
                 new[] { typeof(float), typeof(float) },
                 null);
+        }
+    }
+
+    // =========================================================================
+    // TowerPerkTable — WO-432 (owner 2026-06-28). The THIN data-driven interpreter
+    // for tower-perks.json: one perk Row per tier (1..3 = the placed Level 1/2/3
+    // upgrades, 4 = the max-level Empowerment capstone) carrying the WC3-style stat
+    // deltas (damageMult/damageAdd, rangeAdd, fireRateMult). It owns NO per-tier
+    // if/else — Tower.CurrentDamage/CurrentRange and TowerCombat read a single row
+    // for the tower's EffectiveTier and apply it. Loaded once via the SAME WebGL-safe
+    // CanonicalJson loader the rest of the catalogs use; ships a built-in fallback
+    // table so a missing/broken JSON never leaves towers un-upgraded (no silent
+    // failure, §12). Replaces the old "upgrade = visual swap only / TODO no-op".
+    // =========================================================================
+    public static class TowerPerkTable
+    {
+        /// <summary>One tier's designed upgrade deltas (a row of tower-perks.json).</summary>
+        public sealed class Row
+        {
+            [Newtonsoft.Json.JsonProperty("tier")]             public int Tier;
+            [Newtonsoft.Json.JsonProperty("name")]             public string Name = "";
+            [Newtonsoft.Json.JsonProperty("damageMult")]       public float DamageMult = 1f;
+            [Newtonsoft.Json.JsonProperty("damageAdd")]        public float DamageAdd = 0f;
+            [Newtonsoft.Json.JsonProperty("rangeAdd")]         public float RangeAdd = 0f;
+            [Newtonsoft.Json.JsonProperty("fireRateMult")]     public float FireRateMult = 1f;
+            [Newtonsoft.Json.JsonProperty("signatureAbility")] public string SignatureAbility = "";
+        }
+
+        private sealed class File
+        {
+            [Newtonsoft.Json.JsonProperty("version")] public int Version;
+            [Newtonsoft.Json.JsonProperty("tiers")]   public System.Collections.Generic.List<Row> Tiers
+                = new System.Collections.Generic.List<Row>();
+        }
+
+        public const string RelativePath = "Data/Canonical/tower-perks.json";
+
+        // tier (1-based) -> Row. Index 0 unused; built lazily, rebuildable via Reload().
+        private static Row[] _rows;
+
+        /// <summary>The hard-coded fallback table — identical to the shipped JSON — so a
+        /// missing/corrupt tower-perks.json can never silently make upgrades a no-op again.</summary>
+        private static Row[] BuiltInFallback() => new[]
+        {
+            null,
+            new Row { Tier = 1, Name = "Built",      DamageMult = 1.08f, DamageAdd = 0f,  RangeAdd = 0f, FireRateMult = 1.00f, SignatureAbility = "" },
+            new Row { Tier = 2, Name = "Reinforced", DamageMult = 1.25f, DamageAdd = 3f,  RangeAdd = 2f, FireRateMult = 0.55f, SignatureAbility = "" },
+            new Row { Tier = 3, Name = "Masterwork", DamageMult = 1.45f, DamageAdd = 6f,  RangeAdd = 4f, FireRateMult = 0.40f, SignatureAbility = "overcharge" },
+            new Row { Tier = 4, Name = "Empowered",  DamageMult = 1.70f, DamageAdd = 10f, RangeAdd = 6f, FireRateMult = 0.30f, SignatureAbility = "overcharge" },
+        };
+
+        /// <summary>Force a fresh read of tower-perks.json (used by the editor regression + on first use).</summary>
+        public static void Reload()
+        {
+            Row[] built = null;
+            Guard.Try("TowerPerkTable", "load tower-perks.json", () =>
+            {
+                string json = DeNelle.Core.CanonicalJson.Read(RelativePath);
+                if (string.IsNullOrWhiteSpace(json)) return;
+                var file = Newtonsoft.Json.JsonConvert.DeserializeObject<File>(json);
+                if (file == null || file.Tiers == null || file.Tiers.Count == 0) return;
+
+                int maxTier = 1;
+                foreach (var r in file.Tiers) if (r != null && r.Tier > maxTier) maxTier = r.Tier;
+                var arr = new Row[maxTier + 1];
+                foreach (var r in file.Tiers)
+                    if (r != null && r.Tier >= 1 && r.Tier < arr.Length) arr[r.Tier] = r;
+                built = arr;
+            });
+
+            if (built == null)
+            {
+                FlowTrace.Warn("TowerPerkTable",
+                    $"tower-perks.json missing/empty/unparsable at '{RelativePath}' — using the built-in fallback table (upgrades still grant stats).");
+                built = BuiltInFallback();
+            }
+            _rows = built;
+        }
+
+        private static Row[] Rows()
+        {
+            if (_rows == null) Reload();
+            return _rows;
+        }
+
+        /// <summary>The perk Row for <paramref name="tier"/> (clamped into the authored range).
+        /// Never null — falls back to a neutral identity row if a tier is unauthored.</summary>
+        public static Row Get(int tier)
+        {
+            var rows = Rows();
+            if (rows == null || rows.Length <= 1) return new Row { Tier = tier };
+            int maxTier = rows.Length - 1;
+            int t = Mathf.Clamp(tier, 1, maxTier);
+            return rows[t] ?? new Row { Tier = t };
+        }
+
+        /// <summary>Effective damage for a base damage at a tier: base*damageMult + damageAdd. Pure.</summary>
+        public static float EffectiveDamage(float baseDamage, int tier)
+        {
+            var r = Get(tier);
+            return baseDamage * r.DamageMult + r.DamageAdd;
+        }
+
+        /// <summary>Effective range for a base range at a tier: base + rangeAdd. Pure.</summary>
+        public static float EffectiveRange(float baseRange, int tier)
+        {
+            var r = Get(tier);
+            return baseRange + r.RangeAdd;
+        }
+
+        /// <summary>Effective fire cooldown for a base cooldown at a tier: base*fireRateMult (lower = faster). Pure.</summary>
+        public static float EffectiveCooldown(float baseCooldown, int tier)
+        {
+            var r = Get(tier);
+            float mult = r.FireRateMult > 0.01f ? r.FireRateMult : 1f;   // guard a bad 0 from divide-by-fire
+            return baseCooldown * mult;
         }
     }
 }

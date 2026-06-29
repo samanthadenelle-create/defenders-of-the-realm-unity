@@ -133,8 +133,11 @@ namespace DeNelle.Village
             }
 
             FireAt(target, secondary);
-            float level = _tower != null ? Mathf.Max(1, _tower.CurrentLevel) : 1;
-            _nextAttackTime = Time.time + (_baseCooldown / level);
+            // WO-432 — fire rate is now DATA-DRIVEN via the TowerPerkTable (cooldown * fireRateMult),
+            // not the old implicit cooldown/level rule. The tier is the tower's EffectiveTier (placed
+            // level 1..3, or the capstone tier 4 once Empowered), so upgrading visibly speeds up fire.
+            int tier = _tower != null ? _tower.EffectiveTier : 1;
+            _nextAttackTime = Time.time + TowerPerkTable.EffectiveCooldown(_baseCooldown, tier);
         }
 
         // ── Target selection ──────────────────────────────────────────────────
