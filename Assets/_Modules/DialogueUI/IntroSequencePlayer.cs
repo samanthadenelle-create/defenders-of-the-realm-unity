@@ -212,6 +212,10 @@ namespace DeNelle.DialogueUI
             // Show the surface and play. loopPointReached → EndIntro (natural end).
             _videoSurface.enabled = true;
             _videoPlayer.Play();
+            // Owner 2026-06-29 ("only use the video"): the boot/title music was overlapping the
+            // video's own voiceover. Fade it out so the intro plays on the video's audio alone.
+            // Only on the VIDEO path — the fallback slate sequence (no VO) keeps its music.
+            CoreServices.Audio?.StopMusic();
             // Real video is playing — the fallback caption band (+ its gold rule child)
             // must never overlay the video (owner 2026-06-28). Hide it explicitly.
             if (_captionBand != null) _captionBand.gameObject.SetActive(false);

@@ -81,6 +81,7 @@ namespace DeNelle.Editor
         {
             public readonly List<MusicTrack> Tracks = new List<MusicTrack>();
             public void PlayMusic(MusicTrack track) { Tracks.Add(track); }
+            public void StopMusic() { }
             public void PlaySfx(AudioClip clip, float volume) { }
             public void PlayUiClick() { }
 

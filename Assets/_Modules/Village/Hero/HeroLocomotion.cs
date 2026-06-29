@@ -561,11 +561,14 @@ namespace DeNelle.Village
                     _footstepSrc.loop = true;
                     _footstepSrc.playOnAwake = false;
                     _footstepSrc.spatialBlend = 0f; // 2D — it's the player's own steps
-                    _footstepSrc.volume = 0.35f;
+                    _footstepSrc.volume = 0.10f;    // owner 2026-06-29: much softer (was 0.35)
                 }
             }
             if (_footstepSrc == null) return;
-            bool walking = Velocity.sqrMagnitude > (FootstepMoveThreshold * FootstepMoveThreshold);
+            // Footsteps play ONLY while genuinely walking AND not in a battle — the kite-fight has the
+            // hero moving constantly, so steps under combat audio are noise (owner 2026-06-29: stop in battle).
+            bool walking = Velocity.sqrMagnitude > (FootstepMoveThreshold * FootstepMoveThreshold)
+                           && !DeNelle.Village.Arena.BattleArena.AnyBattleInProgress;
             if (walking && !_footstepSrc.isPlaying) _footstepSrc.Play();
             else if (!walking && _footstepSrc.isPlaying) _footstepSrc.Pause();
         }
