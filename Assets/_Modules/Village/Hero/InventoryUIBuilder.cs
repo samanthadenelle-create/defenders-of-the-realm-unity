@@ -71,6 +71,14 @@ namespace DeNelle.Village
                                  new Vector2(0.30f, 0.16f), new Vector2(0.93f, 0.80f), new Color(0f, 0f, 0f, 0f));
             NoRaycast(_gridRoot);
 
+            // WO-585 — selection DETAIL strip: a thin host between the grid bottom (0.16) and the
+            // footer top (0.10). Empty/transparent until an item is tapped; RebuildSidebar then drops
+            // the selected item's name + stats + an explicit Equip/Use CTA + the equip Status line
+            // into it, so a tap has a visible, separate-from-equip response (was the inert feel).
+            _sidebarRoot = AddImage(panel.transform, "DetailStrip",
+                                    new Vector2(0.30f, 0.103f), new Vector2(0.93f, 0.156f), new Color(0f, 0f, 0f, 0f));
+            NoRaycast(_sidebarRoot);
+
             BuildFooterBar(panel.transform);
         }
 

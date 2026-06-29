@@ -319,7 +319,9 @@ namespace DeNelle.Village
             SafeRun(RebuildPaperDoll, "RebuildPaperDoll");
             SafeRun(RebuildTabsRow,   "RebuildTabsRow");   // reflect active-tab highlight from the VM
             SafeRun(RebuildGrid,      "RebuildGrid");
-            // No RebuildSidebar (layout matches mockup; equipped shown in grid/paper doll).
+            // WO-585 — restore the selection detail strip: a tapped item now shows a detail
+            // pane + an explicit Equip/Use CTA + the equip Status line (was the inert feel).
+            SafeRun(RebuildSidebar,   "RebuildSidebar");
         }
 
         // ── Paper-doll: a CLEAN, READABLE equipment column (T-022 "this layout is awful").
@@ -357,7 +359,7 @@ namespace DeNelle.Village
 
         // (RebuildGrid + Build*Cells + BuildGearCell + NoRaycast + BuildEmptyNote provided by InventoryGrid partial)
 
-        // (RebuildSidebar + Build*Sidebar + BuildDetailHeader + StatRow + DetailFlavour + BuildEquipButton + ClearSelection + ConsumableSel provided by InventorySidebar partial)
+        // (RebuildSidebar + BuildEquipAction — the WO-585 selection detail strip — provided by the InventorySidebar partial)
 
         private const float SbMidX0 = 0.250f, SbMidX1 = 0.690f;
 

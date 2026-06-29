@@ -181,6 +181,9 @@ namespace DeNelle.Village.Hero
         /// <summary>Select the slot at <paramref name="index"/> (fills the detail pane).</summary>
         public void Select(int index)
         {
+            // A fresh selection invalidates the previous command's result message (WO-585) so the
+            // detail strip never shows a stale "Equipped X." against a newly-tapped item.
+            Status = null;
             if (index < 0 || index >= _slots.Count) { SelectedId = null; Raise(); return; }
             SelectedId = _slots[index].Id;
             Raise();
@@ -190,6 +193,7 @@ namespace DeNelle.Village.Hero
         public void SelectById(string id)
         {
             if (string.IsNullOrEmpty(id) || !_details.ContainsKey(id)) return;
+            Status = null;   // fresh selection clears the prior action's status (WO-585)
             SelectedId = id;
             Raise();
         }

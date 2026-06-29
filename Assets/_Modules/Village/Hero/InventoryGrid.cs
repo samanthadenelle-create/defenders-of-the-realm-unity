@@ -140,10 +140,18 @@ namespace DeNelle.Village
                                   onTap: () =>
                                   {
                                       if (_vm == null) return;
+                                      // WO-585 (§12) — the decisive felt-test capture: the tap chain was
+                                      // never instrumented (only grid BUILD was). Log the tapped id +
+                                      // tab + consumable flag, then the resolved SelectedId post-select.
+                                      FlowTrace.Step("Inventory",
+                                          $"onTap id={it.Id} name='{it.Name}' tab={_vm.ActiveTab} consumable={isConsumables} (SELECT)");
+                                      // WO-585 — SEPARATE select from equip: a tap now ONLY selects
+                                      // (highlights the cell + opens the detail strip with an explicit
+                                      // Equip/Use CTA). The actual equip/use happens on that CTA button,
+                                      // so re-tapping an already-equipped item is no longer a silent no-op.
                                       _vm.SelectById(it.Id);
-                                      // Equip-on-tap (preserved): gear equips, a consumable is used.
-                                      if (isConsumables) _vm.Use();
-                                      else _vm.Equip();
+                                      FlowTrace.Step("Inventory",
+                                          $"onTap post-select SelectedId={_vm.SelectedId}");
                                   });
                 });
                 built = b; failed = f;
