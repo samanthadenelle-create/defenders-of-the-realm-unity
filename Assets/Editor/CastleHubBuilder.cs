@@ -373,11 +373,11 @@ namespace DeNelle.Editor
             // Also exposed via the one-off menu for already-saved scenes (e.g. your MainCastle_Hall).
             WireOuterWorldConnection(gateMarker);
 
-            // === INBOUND CONNECTORS TO THE GARRISON OUTPOSTS (West / North / East gates) ===
-            // The south gate is the OuterWorld seam (above). The W/N/E gates each become a
-            // single-load destination seam into an already-baked garrison outpost scene.
-            // Modeled exactly on WireOuterWorldConnection (reflection SceneTransitionTrigger).
-            WireOutpostConnectors(root.transform);
+            // NOTE: outposts are NOT reached by walk-to gate seams (retired — CANON_GROUND_TRUTH
+            // 2026-06-28 / WO-584). They are entered via cave -> loading-zone -> OutpostResolver.
+            // The old WireOutpostConnectors(W/N/E) machinery has been removed (it was inert behind
+            // ff.outposttravel which defaults OFF). RemoveInTownOutpostConnectors() still strips any
+            // stale OutpostConnector_* baked into older saved scenes.
 
             // === ROAMING / AMBIENCE (Bella + NPCs) ===
             var ambience = new GameObject("RoamingNPCs_Animals_Bella_Ambience");
@@ -1082,132 +1082,16 @@ namespace DeNelle.Editor
         }
 
         // =====================================================================
-        //  OUTPOST CONNECTORS — castle -> garrison-outpost seams (West / North / East).
+        //  OUTPOST CONNECTORS — RETIRED (CANON_GROUND_TRUTH 2026-06-28 / WO-584).
         // -----------------------------------------------------------------------------
-        //  The south gate is the OuterWorld seam (WireOuterWorldConnection). The other three
-        //  cardinal gates each get an inbound connector into an ALREADY-BAKED garrison outpost
-        //  scene (built by GarrisonSceneBuilder, in Build Settings, with its own navmesh +
-        //  return seam). The ONLY missing piece is these castle->outpost seams, so we build
-        //  them here, modeled EXACTLY on WireOuterWorldConnection + BuildGateExitStrips:
-        //   • a child GameObject "OutpostConnector_<scene>" placed at a recipe-driven gate pose
-        //     (MakeGatePose(southGate, yaw)) so it sits centered on the W/N/E gate, then pulled
-        //     INWARD toward the courtyard (same reason the OuterWorld trigger sits +Z toward the
-        //     reachable interior) so the hero reaches it BEFORE the navmesh edge fires.
-        //   • a trigger BoxCollider (isTrigger) sized like the OuterWorld exit seam,
-        //   • a DeNelle.Village.SceneTransitionTrigger added VIA REFLECTION (FindType — the
-        //     Editor asmdef cannot reference DeNelle.Village), with: targetSceneName = garrison
-        //     scene, targetPosition = the scene's hero entry point, loadAdditive = false (an
-        //     outpost is a destination LEVEL, like the garrison's own single-load return seam),
-        //     ProximityRadius = 20f (the South seam needed 20; the hero stops ~16.7m out so the
-        //     default 6 never fires).
-        //
-        //  GARRISON ENTRY CONVENTION (verified against GarrisonSceneBuilder.Scenes.cs ~line 72
-        //  `entryPos = (0, 0.1, -(half+6))` + HalfExtentFor ~line 100 + garrison-recipes.json):
-        //    troll_outpost  size=medium -> half=16 -> entry z = -(16+6) = -22
-        //    ruined_keep    size=large  -> half=20 -> entry z = -(20+6) = -26
-        //    frost_keep     size=medium -> half=16 -> entry z = -22
-        //  Scene name = "Garrison_<id>". Swapping an outpost is ONE line in the array below.
-        //
-        //  Idempotent: destroys any prior "OutpostConnector_*" child first (mirrors the prior-
-        //  trigger cleanup in WireOuterWorldConnection) so a re-run leaves EXACTLY three.
+        //  The old castle->garrison-outpost walk-to gate seams (W/N/E) have been REMOVED.
+        //  Outposts are NOT reached by gate-seams or walking — they're entered via
+        //  cave -> loading-zone -> OutpostResolver. The removed machinery (OutpostConnectors
+        //  array + WireOutpostConnectors + BatchWireOutpostsAndSave + the "Wire Castle to
+        //  Outposts" menu) was already inert at runtime (gated behind ff.outposttravel, which
+        //  defaults OFF, so it stripped itself every bake). RemoveInTownOutpostConnectors()
+        //  below still scrubs any stale OutpostConnector_* baked into older saved scenes.
         // =====================================================================
-        private static readonly (string sceneName, float yaw, Vector3 targetPosition)[] OutpostConnectors =
-        {
-            ("Garrison_troll_outpost", 90f,  new Vector3(0f, 0.1f, -22f)), // medium: half=16 -> -(16+6)=-22
-            ("Garrison_ruined_keep",   180f, new Vector3(0f, 0.1f, -26f)), // large:  half=20 -> -(20+6)=-26
-            ("Garrison_frost_keep",    270f, new Vector3(0f, 0.1f, -22f)), // medium: half=16 -> -22
-        };
-
-        private static void WireOutpostConnectors(Transform root)
-        {
-            if (root == null) return;
-
-            // Idempotent: strip any prior outpost connectors so a re-run leaves exactly three.
-            foreach (var t in root.GetComponentsInChildren<Transform>(true))
-            {
-                if (t != null && t != root && t.name.StartsWith("OutpostConnector_"))
-                    Object.DestroyImmediate(t.gameObject);
-            }
-
-            // WO-468 (owner 2026-06-19): outposts are reached by WALKING — the in-town castle->outpost
-            // fast-travel seams must NOT exist while ff.outposttravel is OFF (a [SeamTrace] caught the
-            // OutpostConnector_* triggers active 16-41m from the hero INSIDE MainCastle_Hall — "should
-            // not see in town"). The travel PROMPT is already gated (SceneTransitionTrigger.IsTravelGated),
-            // but the trigger GameObjects still sat baked in the scene; removing them at the source keeps
-            // a re-bake from re-introducing them. We just stripped any priors above; when the flag is OFF
-            // we stop here so NONE are placed. Flip ff.outposttravel ON to restore the three connectors.
-            if (!DeNelle.Core.FeatureFlags.OutpostTravel)
-            {
-                FlowTrace.Step("Seam",
-                    "WireOutpostConnectors: ff.outposttravel OFF — in-town outpost connectors SKIPPED (WO-453 walk-to). " +
-                    "Any prior OutpostConnector_* were stripped above; scene leaves none.");
-                Log("WireOutpostConnectors: ff.outposttravel OFF — no in-town outpost seams placed (reached by walking, WO-453).");
-                return;
-            }
-
-            // The SceneTransitionTrigger lives in DeNelle.Village — the Editor asmdef cannot
-            // reference it, so resolve via reflection (same as WireOuterWorldConnection).
-            var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
-            if (transType == null)
-            {
-                Err("WireOutpostConnectors: DeNelle.Village.SceneTransitionTrigger not found (is it compiled?) — outpost connectors skipped.");
-                return;
-            }
-
-            // The W/N/E gate world poses are the recipe south gate rotated around world origin
-            // (identical math to BuildGateExitStrips). Pull the connector INWARD toward the
-            // courtyard so the hero reaches it before the navmesh edge (mirrors the OuterWorld
-            // trigger sitting +Z toward the reachable interior).
-            Vector3 southGate = ReadSouthGatePos();
-            const float inwardPull = 6f; // toward courtyard interior (away from the gate opening)
-
-            var fScene    = transType.GetField("targetSceneName");
-            var fPos      = transType.GetField("targetPosition");
-            var fAdditive = transType.GetField("loadAdditive");
-            var fRadius   = transType.GetField("ProximityRadius");
-
-            foreach (var (sceneName, yaw, targetPosition) in OutpostConnectors)
-            {
-                GatePose pose = MakeGatePose(southGate, yaw, sceneName);
-
-                // Outward direction for this side (south faces -Z at yaw 0). Pull INWARD = -outward.
-                Quaternion yawRot = Quaternion.Euler(0f, yaw, 0f);
-                Vector3 outward   = yawRot * Vector3.back;
-                Vector3 worldPos  = pose.worldPos - outward * inwardPull;
-                worldPos.y = 1.5f; // collider center height, matching the OuterWorld trigger
-
-                var connector = new GameObject("OutpostConnector_" + sceneName);
-                connector.transform.SetParent(root, false);
-                connector.transform.position = worldPos;
-                connector.transform.rotation = yawRot; // box aligned with the gate opening
-
-                var col = connector.AddComponent<BoxCollider>();
-                col.isTrigger = true;
-                col.size = new Vector3(12f, 6f, 10f); // small "at the gate" trigger (radius 12)
-
-                var comp = connector.AddComponent(transType);
-                if (fScene    != null) fScene.SetValue(comp, sceneName);
-                if (fPos      != null) fPos.SetValue(comp, targetPosition);
-                // ADDITIVE (was single-load — owner playtest 2026-06-13): single-load
-                // REPLACED the castle scene, which destroyed the hero (the crossing's
-                // WarpTo then had no player → black screen, "still has NO hero"). The
-                // working OuterWorld seam is additive so the hero survives + warps across;
-                // the raid design (RaidOutpostSystem) also uses additive Garrison_* scenes.
-                if (fAdditive != null) fAdditive.SetValue(comp, true);  // hero survives the crossing
-                // radius 28 was a GAME-BREAKER: 4 gates surround the ~35m spawn, so a few steps tripped one ->
-                // fade-to-black/yanked out. 12 only fires AT the gate; the widened nav lane (gate strip 7.5 / inner
-                // gap 8) lets the hero reach close enough to cross deliberately.
-                if (fRadius   != null) fRadius.SetValue(comp, 12f);
-
-                // OWNER 2026-06-17: AUTO-CROSS, no F-prompt — outpost seams cross on proximity. Null-safe.
-                transType.GetField("requireConfirm")?.SetValue(comp, false);
-
-                Log($"WireOutpostConnectors: placed OutpostConnector_{sceneName} at world {worldPos} " +
-                    $"(gate yaw {yaw}, entry {targetPosition}, additive, radius 12).");
-            }
-
-            Log($"WireOutpostConnectors: {OutpostConnectors.Length} inbound outpost seam(s) wired (W/N/E gates).");
-        }
 
         /// <summary>
         /// Cross-assembly type lookup (same pattern used by OuterWorldBuilder / VillageSceneBuilder).
@@ -1365,56 +1249,6 @@ namespace DeNelle.Editor
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
             Log("BATCH: wired + saved MainCastle_Hall. Ready to Play.");
-        }
-
-        // =====================================================================
-        //  Apply the THREE inbound outpost connectors (W/N/E gates) to the
-        //  already-saved MainCastle_Hall WITHOUT a full rebuild. Opens the scene,
-        //  finds the castle root the other batch methods use (CastleHubRoot, or its
-        //  floor host), wires the connectors, marks dirty + saves. Mirrors
-        //  BatchWireCastleAndSave. Also defensively re-registers each target garrison
-        //  scene in Build Settings (idempotent; the scenes are already registered).
-        //  Run headless via run-unity-method.ps1, or from the menu below.
-        // =====================================================================
-        [MenuItem("Defenders/Scenes/Wire Castle to Outposts")]
-        public static void WireCastleToOutpostsMenu()
-        {
-            BatchWireOutpostsAndSave();
-        }
-
-        public static void BatchWireOutpostsAndSave()
-        {
-            const string scenePath = "Assets/Scenes/MainCastle_Hall.unity";
-            var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
-            Log("BATCH-OUTPOSTS: opened " + scenePath);
-
-            // Same root-find the floor/bake batch methods use: CastleHubRoot, else its floor host.
-            var rootGo = GameObject.Find(RootName);
-            Transform root = rootGo != null ? rootGo.transform
-                : (GameObject.Find(RootName + "_FloorHost") ?? new GameObject(RootName + "_FloorHost")).transform;
-
-            WireOutpostConnectors(root);
-
-            // Defensive: ensure each target garrison scene is in Build Settings (no-op if already
-            // present — they were registered by GarrisonSceneBuilder.AddSceneToBuildSettings, which
-            // is private to another class; this local idempotent equivalent is in-reach here).
-            foreach (var (sceneName, _, _) in OutpostConnectors)
-                EnsureSceneInBuildSettings("Assets/Scenes/" + sceneName + ".unity");
-
-            EditorSceneManager.MarkSceneDirty(scene);
-            EditorSceneManager.SaveScene(scene);
-            Log("BATCH-OUTPOSTS: wired " + OutpostConnectors.Length + " outpost connector(s) + saved MainCastle_Hall.");
-        }
-
-        // Idempotent local equivalent of GarrisonSceneBuilder's (private) AddSceneToBuildSettings:
-        // adds the scene to Build Settings (enabled) only if it is not already listed.
-        private static void EnsureSceneInBuildSettings(string scenePath)
-        {
-            var scenes = EditorBuildSettings.scenes.ToList();
-            if (scenes.Any(s => s.path == scenePath)) return;
-            scenes.Add(new EditorBuildSettingsScene(scenePath, true));
-            EditorBuildSettings.scenes = scenes.ToArray();
-            Log("EnsureSceneInBuildSettings: registered " + scenePath + " in Build Settings.");
         }
 
         // =====================================================================
@@ -1635,9 +1469,9 @@ namespace DeNelle.Editor
         //  REWIRE + REBAKE (owner 2026-06-17) — LEAST-INVASIVE base-loop exit fix.
         // -----------------------------------------------------------------------------
         //  Does NOT regenerate the castle (the owner has tuned walls/structures). It only:
-        //   1. Re-runs the EXIT seam wiring (EnsureExitSeamAtRecipeGate) and the OUTPOST
-        //      seam wiring (WireOutpostConnectors) — both now stamp requireConfirm=false, so
-        //      the saved SceneTransitionTrigger components AUTO-CROSS (no F-prompt, owner directive).
+        //   1. Re-runs the EXIT seam wiring (EnsureExitSeamAtRecipeGate) which stamps
+        //      requireConfirm=false so the saved SceneTransitionTrigger AUTO-CROSSES (no
+        //      F-prompt, owner directive). (Outpost gate-seam wiring retired — WO-584.)
         //   2. Rebuilds the invisible NavMesh floor + re-bakes every NavMeshSurface (3/4 gates
         //      were unreachable from a stale/fragmented bake) and persists the navmesh asset.
         //   3. Saves MainCastle_Hall + verifies spawn->gate reachability (CastleGateNavVerify).
@@ -1650,12 +1484,13 @@ namespace DeNelle.Editor
             var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
             Log("REWIRE-REBAKE: opened " + scenePath);
 
-            // 1. Re-apply the exit + outpost seam wiring so requireConfirm=false lands on the
-            //    saved components (auto-cross, no F-prompt — owner 2026-06-17). Idempotent.
+            // 1. Re-apply the exit seam wiring so requireConfirm=false lands on the saved
+            //    component (auto-cross, no F-prompt — owner 2026-06-17). Idempotent. (The old
+            //    outpost-connector wiring was removed — outposts are entered via cave ->
+            //    loading-zone -> OutpostResolver, not walk-to gate seams. WO-584.)
             EnsureExitSeamAtRecipeGate();
             var root = GameObject.Find(RootName);
-            if (root != null) WireOutpostConnectors(root.transform);
-            else Err("REWIRE-REBAKE: " + RootName + " not found — outpost connectors skipped.");
+            if (root == null) Err("REWIRE-REBAKE: " + RootName + " not found.");
 
             // 2. Rebuild the walkable floor (courtyard + gate strips + keep interior) so the
             //    bake collects a connected sheet, then re-bake + persist. Mirrors the proven
@@ -2125,13 +1960,14 @@ namespace DeNelle.Editor
             FlowTrace.Step("BridgeSeam", "RemoveCastleBridgeSeam: done.");
         }
 
-        // Strip every in-town OutpostConnector_* seam from the castle (WO-468 / WO-453). These were
-        // baked by WireOutpostConnectors as castle->garrison fast-travel triggers; with ff.outposttravel
-        // OFF the player reaches an outpost by WALKING, so the in-town connectors must not exist (a
-        // [SeamTrace] caught them active 16-41m from the hero inside MainCastle_Hall). Scans the WHOLE
-        // scene (not just under root) so a connector parented elsewhere is still caught. Idempotent +
-        // null-safe; logs each removal. (WireOutpostConnectors is now also gated OFF behind the flag,
-        // so a re-bake will not re-introduce them.)
+        // Strip every in-town OutpostConnector_* seam from the castle (WO-468 / WO-453 / WO-584).
+        // These were baked by the now-REMOVED WireOutpostConnectors as castle->garrison fast-travel
+        // triggers; outposts are NOT reached by walk-to gate seams (entered via cave -> loading-zone
+        // -> OutpostResolver), so any stale OutpostConnector_* baked into an older saved scene must be
+        // scrubbed (a [SeamTrace] caught them active 16-41m from the hero inside MainCastle_Hall).
+        // Scans the WHOLE scene (not just under root) so a connector parented elsewhere is still
+        // caught. Idempotent + null-safe; logs each removal. (The wiring source is gone, so a re-bake
+        // will not re-introduce them.)
         private static void RemoveInTownOutpostConnectors(Transform root)
         {
             Guard.Try("Seam", "strip in-town OutpostConnector_* seams", () =>
