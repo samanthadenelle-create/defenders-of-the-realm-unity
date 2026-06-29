@@ -31,7 +31,14 @@ namespace DeNelle.Village
     public sealed class GameOverScreen : MonoBehaviour
     {
         public static GameOverScreen Instance { get; private set; }
-        private const string TargetScene = "Village2";
+
+        // WO (F8 2026-06-28): the defeat overlay must fire in EVERY home/hub scene that
+        // can host a defendable Heart + a wave loop — not just Village2. The wave loop now
+        // runs in MainCastle_Hall (WO-584), whose Heart hit 0 with NO game-over because this
+        // screen only hooked the hardcoded "Village2". Gate on the canonical HubScenes list
+        // (Village2 + MainCastle_Hall + CastleHub*) so adding a hub = one edit there. Arena /
+        // RaidBase_* scenes are intentionally NOT hubs — they keep their own death flow.
+        private static bool IsDefeatScene(string sceneName) => HubScenes.IsHub(sceneName);
 
         private HeartController _heart;
         private HeroHealth _hero;
@@ -47,6 +54,7 @@ namespace DeNelle.Village
         // own return-scene wiring. Village2's hooked path leaves these null.
         private System.Action _onRetry;
         private System.Action _onLeave;
+        private string _defeatScene;       // scene active when defeat showed — Retry reloads THIS
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -62,7 +70,7 @@ namespace DeNelle.Village
             DontDestroyOnLoad(gameObject);
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneLoaded += OnSceneLoaded;
-            if (SceneManager.GetActiveScene().name == TargetScene) Hook();
+            if (IsDefeatScene(SceneManager.GetActiveScene().name)) Hook();
         }
 
         private void OnDestroy()
@@ -80,7 +88,7 @@ namespace DeNelle.Village
             _heart = null;
             _hero = null;
             ClearCustomActions(); // WO-320: don't let a DTT retry/leave action survive the scene swap
-            if (scene.name == TargetScene) Hook();
+            if (IsDefeatScene(scene.name)) Hook();
         }
 
         private void Hook()
@@ -105,7 +113,7 @@ namespace DeNelle.Village
             // FindFirstObjectByType is a scene-wide search; running it every frame churns
             // on mobile. Throttle to once per ~0.5s and stop once both refs resolve.
             if ((_heart == null || _hero == null)
-                && SceneManager.GetActiveScene().name == TargetScene
+                && IsDefeatScene(SceneManager.GetActiveScene().name)
                 && Time.unscaledTime - _lastHookAttempt > 0.5f)
             {
                 _lastHookAttempt = Time.unscaledTime;
@@ -131,7 +139,7 @@ namespace DeNelle.Village
                 // WO-320: prefer the caller-supplied retry (e.g. reload the DTT scene);
                 // fall back to the Village2 reload when no custom action was provided.
                 if (_onRetry != null) { var a = _onRetry; ClearCustomActions(); a(); }
-                else SceneRouter.LoadScene(SceneRouter.Village);
+                else SceneRouter.LoadScene(string.IsNullOrEmpty(_defeatScene) ? SceneRouter.Village : _defeatScene);
             }
             else if (exit)
             {
@@ -200,6 +208,9 @@ namespace DeNelle.Village
         {
             if (_shown) return;
             _shown = true;
+            // Remember WHERE we fell so Retry reloads THIS scene (MainCastle_Hall, Village2,
+            // …), not the old hardcoded Village2 default — wrong when the wave loop ran in the hub.
+            _defeatScene = SceneManager.GetActiveScene().name;
             // WO-333: the level-up skill-point panel (LevelUpSkillPopup) is a persistent
             // HUD layer that otherwise stays open BEHIND the game-over overlay. Force-close
             // any open instances before we build the overlay. Null-guarded per CLAUDE.md §10.

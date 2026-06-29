@@ -186,6 +186,13 @@ namespace DeNelle.Village
         private bool BlockedByWall(IDamageable target)
         {
             if (target == null) return true;
+            // A FLYER (the apex dragon) is engaged from above — a ground wall on the
+            // "Structure" layer does NOT block a shot arcing up to the sky. The recent
+            // wall-LoS gate (owner 2026-06-27 "walls block tower fire") was authored for
+            // GROUND creeps; for a high flyer the tower->target Linecast clips the castle
+            // wall/roof and wrongly rejects it, the "towers cannot target dragon, can't
+            // see dragon as too high" F8 (owner 2026-06-28). Exempt flyers from the gate.
+            if (target is ICombatLayered layered && layered.Layer == CombatLayer.Flying) return false;
             if (_structureMask < 0) _structureMask = LayerMask.GetMask("Structure");
             if (_structureMask == 0) return false;
             Vector3 fPos = _firePoint != null ? _firePoint.position : transform.position;
