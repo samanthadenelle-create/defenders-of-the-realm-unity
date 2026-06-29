@@ -2076,12 +2076,25 @@ namespace DeNelle.Village
                 int groundMask = LayerMask.GetMask("Default", "Terrain", "Ground");
                 if (groundMask == 0) groundMask = Physics.DefaultRaycastLayers;
 
+                // #55 (capture-proven 2026-06-29): grounding the TRANSFORM PIVOT to the surface
+                // is NOT enough — the captured trace showed SnapBodyToGround never reported "no
+                // ground" (the pivot WAS snapping) yet the body still read as floating, because the
+                // visible mesh sits ABOVE the pivot (rig/agent vertical offset). So ground the
+                // VISIBLE BOTTOM (combined renderer bounds.min.y), not the pivot: measure how far the
+                // pivot rides above the lowest rendered point (footGap) and snap so that bottom lands
+                // on the surface. footGap==0 (pivot already at the feet) degrades to the old behaviour.
+                float footGap = PivotToVisibleBottomGap();
+
                 Vector3 origin = pos + Vector3.up * 2f;
                 if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 50f,
                                     groundMask, QueryTriggerInteraction.Ignore))
                 {
-                    pos.y = (lerp >= 1f) ? hit.point.y : Mathf.Lerp(pos.y, hit.point.y, lerp);
+                    float target = hit.point.y + footGap;
+                    pos.y = (lerp >= 1f) ? target : Mathf.Lerp(pos.y, target, lerp);
                     transform.position = pos;
+                    if (lerp >= 1f)
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("Enemy",
+                            $"SnapBodyToGround({gameObject.name}) ground={hit.point.y:0.00} footGap={footGap:0.00} -> pivotY={pos.y:0.00} (visible bottom rests on surface)");
                     return;
                 }
 
@@ -2089,7 +2102,8 @@ namespace DeNelle.Village
                 // traverses) when no physics ground collider answered.
                 if (NavMesh.SamplePosition(pos, out NavMeshHit navHit, 5f, NavMesh.AllAreas))
                 {
-                    pos.y = (lerp >= 1f) ? navHit.position.y : Mathf.Lerp(pos.y, navHit.position.y, lerp);
+                    float target = navHit.position.y + footGap;
+                    pos.y = (lerp >= 1f) ? target : Mathf.Lerp(pos.y, target, lerp);
                     transform.position = pos;
                     return;
                 }
@@ -2102,6 +2116,33 @@ namespace DeNelle.Village
                 DeNelle.Core.Diagnostics.FlowTrace.Warn("Enemy",
                     $"SnapBodyToGround({gameObject.name}) threw (best-effort, death path unaffected): {e.GetType().Name}: {e.Message}");
             }
+        }
+
+        /// <summary>
+        /// #55: the vertical distance the transform PIVOT rides ABOVE the lowest visibly-rendered
+        /// point (combined child-renderer world bounds.min.y). Used by SnapBodyToGround so it can
+        /// land the VISIBLE bottom of the body on the surface rather than the pivot — the rig/agent
+        /// offset means the pivot is often well above the feet, which read as "floating" when only
+        /// the pivot was grounded. Returns 0 when no renderers exist or the pivot is already at/below
+        /// the visible bottom (so the snap degrades to grounding the pivot — never lifts the body).
+        /// </summary>
+        private float PivotToVisibleBottomGap()
+        {
+            var rends = GetComponentsInChildren<Renderer>();
+            if (rends == null || rends.Length == 0) return 0f;
+            float bottom = float.PositiveInfinity;
+            for (int i = 0; i < rends.Length; i++)
+            {
+                var r = rends[i];
+                if (r == null || !r.enabled) continue;
+                // Skip non-body renderers (VFX/particles/UI) that would skew the floor.
+                if (r is ParticleSystemRenderer) continue;
+                float min = r.bounds.min.y;
+                if (min < bottom) bottom = min;
+            }
+            if (float.IsInfinity(bottom)) return 0f;
+            float gap = transform.position.y - bottom;
+            return gap > 0f ? gap : 0f;
         }
 
         // ── Glimmer reflection bridge (DEF-32) ───────────────────────────────
