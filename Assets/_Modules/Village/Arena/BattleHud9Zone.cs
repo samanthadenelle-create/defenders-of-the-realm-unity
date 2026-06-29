@@ -430,6 +430,9 @@ namespace DeNelle.Village.Arena
 
         private void PushPlayerStats()
         {
+            // FIX: bind the hero HP source EAGERLY so the bar paints frame-1; the lazy
+            // ResolveSystems() in Update() can race the first frames and leave it unbound.
+            if (_health == null) _health = HeroHealth.Instance;
             if (_health != null && _hpFill != null)
             {
                 float max = _health.MaxHp <= 0f ? 1f : _health.MaxHp;
@@ -699,7 +702,7 @@ namespace DeNelle.Village.Arena
                 var role = RoleOf(row.Tracked);
                 if (row.Name != null)
                 {
-                    row.Name.text = row.Tracked.name.Replace("(Clone)", "").Trim();
+                    row.Name.text = FriendlyTargetName(row.Tracked, role);
                     row.Name.color = Parchment;
                 }
                 if (row.HpFill != null)
