@@ -286,6 +286,18 @@ namespace DeNelle.Village.Arena
                 yield return null;
             }
             if (rt != null) rt.localScale = Vector3.one;
+
+            // Owner-requested "simple animation": a gentle +/-6deg sway (a soft rotate, NOT a full
+            // spin which would flip the crown upside-down), on unscaled time so it shimmers while the
+            // paused victory summary is up. Ends cleanly when the crown is destroyed on panel close
+            // (Unity's overridden null check exits the loop on the fake-null destroyed RectTransform).
+            float sway = 0f;
+            while (rt != null)
+            {
+                sway += Time.unscaledDeltaTime;
+                rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(sway * 1.6f) * 6f);
+                yield return null;
+            }
         }
 
         // Legacy fallback: the centred 3-slot TMP star-glyph row, filled to the earned count. Only
