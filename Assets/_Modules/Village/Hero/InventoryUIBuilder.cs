@@ -159,9 +159,13 @@ namespace DeNelle.Village
                 new Vector2(0.02f, 0.10f), new Vector2(0.20f, 0.90f),
                 () =>
                 {
-                    var eq = _heroPreview != null ? _heroPreview.Equip : null;
-                    if (eq != null) DeNelle.Village.UI.SeatingEditorOverlay.LaunchFor(eq);
-                    else            DeNelle.Village.UI.SeatingEditorOverlay.Launch();   // fall back to world hero
+                    // Z-ORDER FIX (owner F8 "only saw it when I left the panel"): the seating editor is a
+                    // UI-Toolkit overlay; the inventory is a uGUI canvas ON TOP of it (sortingOrder 31000),
+                    // so the editor renders BEHIND the panel. Close the inventory first so it is unobstructed,
+                    // then launch on the WORLD hero (Launch resolves the Player-tagged EquipmentController).
+                    // The offset saves per weapon-id to AttachmentOffsetRegistry → grip is corrected everywhere.
+                    Close();
+                    DeNelle.Village.UI.SeatingEditorOverlay.Launch();
                 },
                 RpgUiCatalog.ButtonFrame);
             if (btn != null) btn.name = "OrientDev";
@@ -288,6 +292,21 @@ namespace DeNelle.Village
             // Not registered — close the inventory so the tap isn't a dead end, and report.
             Close();
             FlowTrace.Warn("UI", "Skills tab: HeroSkillTree panel not registered (no hero?) — nothing to open.");
+        }
+
+        // Tapping the hero portrait opens the full Character / Gear Preview paper-doll
+        // (EquipmentPanel). Prefer the registered PanelRouter route (PanelManager swaps the
+        // inventory out, one-modal-at-a-time). If no panel host exists yet (nothing has opened
+        // it this session), lazily create the host — its Awake registers it — then open directly,
+        // mirroring the dialogue "OpenEquip" command. Null-safe; never a dead-end tap.
+        private void OpenGearPreview()
+        {
+            if (DeNelle.Core.UI.PanelRouter.Open(DeNelle.Core.UI.PanelId.EquipmentPanel))
+                return;
+            var panel = FindObjectOfType<DeNelle.Village.Hero.EquipmentPanel>();
+            if (panel == null)
+                panel = new GameObject("EquipmentPanelHost").AddComponent<DeNelle.Village.Hero.EquipmentPanel>();
+            panel.Open();   // NotifyOpened closes this inventory (it is the registered open panel)
         }
 
         private static Sprite TabPackIcon(Tab t)

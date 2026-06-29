@@ -82,6 +82,21 @@ namespace DeNelle.Village
                 }
             }
 
+            // Tappable hero portrait → open the full Character / Gear Preview paper-doll (EquipmentPanel).
+            // A transparent overlay button covers the portrait region (the preview RawImage + frame are
+            // NoRaycast, so the tap lands here); a small gold "View Gear" tag at the portrait's bottom edge
+            // makes it discoverable. Added LAST so it sits on top of the live preview. Null-safe.
+            var gearTapGo = AddImage(medBand.transform, "ViewGearTap",
+                                     new Vector2(0.08f, 0.52f), new Vector2(0.92f, 0.97f), new Color(0, 0, 0, 0));
+            var gearTapImg = gearTapGo.GetComponent<Image>();
+            var gearTapBtn = gearTapGo.AddComponent<Button>();
+            gearTapBtn.targetGraphic = gearTapImg;
+            StyleButtonColors(gearTapBtn);
+            gearTapBtn.onClick.AddListener(OpenGearPreview);
+            var gearTag = AddLabel(gearTapGo.transform, "⚔ View Gear", 0.0f, 0.12f, GiltInk,
+                                   ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+            gearTag.raycastTarget = false;
+
             // Name + class • level — centered band just under the portrait (no overlap with the art).
             AddLabel(medBand.transform, HeroDisplayName(job), 0.44f, 0.515f, Ink,
                      ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 1f, bold: true);

@@ -63,6 +63,9 @@ namespace DeNelle.Core.UI
         /// <summary>Jeweler jewelry crafting bench — JewelerPanelMvvm (combine a base ring/amulet +
         /// gems into a higher-tier accessory, WO-553). SEPARATE from the Apothecary + Forge lanes.</summary>
         JewelerCrafting = 10,
+        /// <summary>Character / Gear Preview paper-doll — EquipmentPanel (central 3D hero + the five
+        /// equipment slot plates). Opened by tapping the hero portrait in the inventory.</summary>
+        EquipmentPanel = 11,
     }
 
     /// <summary>

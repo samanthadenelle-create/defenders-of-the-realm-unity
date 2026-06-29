@@ -65,6 +65,19 @@ namespace DeNelle.Village.Hero
         private const float RowHeightPx = 64f;
         private const float RowGapPx    = 4f;
 
+        // Modal-arbiter handle (one panel at a time) + PanelRouter registration.
+        private PanelHandle _panelHandle;
+
+        // True while the panel UI exists/visible — the IsOpen probe for PanelManager.
+        public bool IsOpen => _ui != null;
+
+        // ── Registration (mirror HeroSkillTreePanelMvvm) ──────────────────────────
+        private void Awake()
+        {
+            _panelHandle = PanelManager.Register("Character", Close, () => IsOpen);
+            PanelRouter.Register(PanelId.EquipmentPanel, Open);
+        }
+
         public void Open()
         {
             if (_ui != null) return;
@@ -118,6 +131,12 @@ namespace DeNelle.Village.Hero
 #endif
 
             Bind(_vm);
+
+            // Modal arbiter: announce the open (closes any other panel; one-modal-at-a-time).
+            // Rejected during battle — NotifyOpened already invoked Close in that case.
+            if (!PanelManager.NotifyOpened(_panelHandle))
+                return;
+
             Debug.Log("[EquipmentPanel] Opened — Gear Preview showcase bound to EquipVM (MVVM).");
         }
 
@@ -834,6 +853,7 @@ namespace DeNelle.Village.Hero
             _previewImage = null;
             _previewTargetIndex = -1;
             _targetBodies.Clear();
+            PanelManager.NotifyClosed(_panelHandle);
         }
 
         private void OnDestroy()
@@ -841,6 +861,8 @@ namespace DeNelle.Village.Hero
             DisposeViewModel();
             DisposePreview();
             if (_ui != null) Destroy(_ui);
+            PanelRouter.Unregister(PanelId.EquipmentPanel, Open);
+            PanelManager.NotifyClosed(_panelHandle);
         }
     }
 }
