@@ -54,25 +54,32 @@ namespace DeNelle.Village
             NoRaycast(portraitFrame);
             AddInnerRim(portraitFrame, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.70f));
 
-            var artSprite = LoadHeroPortrait(job);
-            if (artSprite != null)
+            // LIVE 3D dressed hero FIRST (REUSE the Gear screen's proven HeroPreviewViewer): renders
+            // the active hero with the equipped weapon/shield/armor into this frame. Falls back to the
+            // static 2D portrait / class crest when there is no hero body or the viewer can't build —
+            // so the niche is never the empty transparent container it used to be.
+            if (!TryMountHeroPreview(portraitFrame.transform))
             {
-                var art = AddImage(portraitFrame.transform, "PortraitArt",
-                                   new Vector2(0.05f, 0.05f), new Vector2(0.95f, 0.95f), Color.white);
-                var aImg = art.GetComponent<Image>();
-                if (aImg != null)
+                var artSprite = LoadHeroPortrait(job);
+                if (artSprite != null)
                 {
-                    aImg.sprite = artSprite;
-                    aImg.type = Image.Type.Simple;
-                    aImg.preserveAspect = true;     // <- the fix: never stretch into an ellipse/blob
-                    aImg.raycastTarget = false;
+                    var art = AddImage(portraitFrame.transform, "PortraitArt",
+                                       new Vector2(0.05f, 0.05f), new Vector2(0.95f, 0.95f), Color.white);
+                    var aImg = art.GetComponent<Image>();
+                    if (aImg != null)
+                    {
+                        aImg.sprite = artSprite;
+                        aImg.type = Image.Type.Simple;
+                        aImg.preserveAspect = true;     // <- the fix: never stretch into an ellipse/blob
+                        aImg.raycastTarget = false;
+                    }
                 }
-            }
-            else
-            {
-                // Clean framed placeholder (NOT a raw gold ellipse): a class crest on the dark frame.
-                AddLabel(portraitFrame.transform, ClassCrest(job), 0f, 1f, GiltInk,
-                         ElarionUi.FontTitle + 30, TMPro.TextAlignmentOptions.Center, 0.1f, 0.9f, bold: true);
+                else
+                {
+                    // Clean framed placeholder (NOT a raw gold ellipse): a class crest on the dark frame.
+                    AddLabel(portraitFrame.transform, ClassCrest(job), 0f, 1f, GiltInk,
+                             ElarionUi.FontTitle + 30, TMPro.TextAlignmentOptions.Center, 0.1f, 0.9f, bold: true);
+                }
             }
 
             // Name + class • level — centered band just under the portrait (no overlap with the art).

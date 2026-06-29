@@ -126,6 +126,7 @@ namespace DeNelle.Village
 
         private void OnDestroy()
         {
+            DisposeHeroPreview();   // free the paper-doll preview rig + its RenderTexture (no leak)
             DisposeViewModel();
             if (_ui != null) Destroy(_ui);
             if (Instance == this) Instance = null;
@@ -236,6 +237,7 @@ namespace DeNelle.Village
         /// <summary>Tear the overlay down (keeps the controller alive for re-open).</summary>
         public void Close()
         {
+            DisposeHeroPreview();   // release the live paper-doll hero preview + its RenderTexture
             DisposeViewModel();
             if (_ui != null) Destroy(_ui);
             _ui = null;

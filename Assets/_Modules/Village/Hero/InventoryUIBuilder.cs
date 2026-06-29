@@ -15,6 +15,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Village.Hero;
 using DeNelle.Village.Items;
 
 namespace DeNelle.Village
@@ -278,6 +279,107 @@ namespace DeNelle.Village
                     $"TabPackIcon: load threw for tab {t} ({ex.GetType().Name}: {ex.Message}) — tab shows no icon.");
                 return null;
             }
+        }
+
+        // ── Live 3D dressed-hero preview in the paper-doll niche ─────────────────────
+        // REUSE (no new system): the SAME proven HeroPreviewViewer the Character / Gear screen
+        // (EquipmentPanel.BuildPreviewWidget + BeginOrRetargetPreview) drives — it renders the
+        // active hero, with the equipped weapon / shield / armor tier, into a RenderTexture a UI
+        // RawImage shows. The viewer is PERSISTED across paper-doll rebuilds (the RT is reused and
+        // RefreshGear mirrors equip changes) and disposed on Close (DisposeHeroPreview) so there is
+        // no RenderTexture leak. Null-safe per §12: any failure leaves the niche to the 2D portrait/
+        // crest fallback — no crash, no error spam (one FlowTrace line, never a silent swallow).
+        private DeNelle.Village.Hero.HeroPreviewViewer _heroPreview;
+        private RawImage _paperDollPreview;
+
+        // Mount the live hero into <paramref name="parent"/> via a child RawImage. Returns true when
+        // a live preview is showing; false when there is no hero body or the viewer can't build — the
+        // caller then falls back to the static 2D portrait. Called from RebuildPaperDoll (first call
+        // happens on Open via Bind->Render, so the preview begins when the panel opens).
+        private bool TryMountHeroPreview(Transform parent)
+        {
+            if (parent == null) return false;
+            try
+            {
+                var body = ResolvePreviewBody();
+                if (body == null)
+                {
+                    FlowTrace.Step("Inventory", "Paper-doll: no hero body — using 2D portrait fallback.");
+                    return false;
+                }
+
+                string weaponId  = _loadout != null && _loadout.EquippedWeapon  != null ? _loadout.EquippedWeapon.id  : null;
+                string offHandId = _loadout != null && _loadout.EquippedOffHand != null ? _loadout.EquippedOffHand.id : null;
+                int    armorTier = _loadout != null ? GearLoadout.ArmorVisualTier(_loadout.EquippedArmor) : 0;
+
+                if (_heroPreview == null)
+                {
+                    _heroPreview = new DeNelle.Village.Hero.HeroPreviewViewer();
+                    if (!_heroPreview.Begin(body, textureSize: 512, weaponId: weaponId,
+                                            offHandId: offHandId, armorTier: armorTier))
+                    {
+                        DisposeHeroPreview();
+                        return false;
+                    }
+                    _heroPreview.SetRotation(18f);   // same 3/4 hero angle as the Gear screen
+                }
+                else
+                {
+                    // Persisted across rebuilds: mirror the latest equipped look (weapon+shield+armor),
+                    // reusing the existing RenderTexture — no re-Begin, no RT churn.
+                    _heroPreview.RefreshGear(weaponId, offHandId, armorTier);
+                }
+
+                if (!_heroPreview.IsValid || _heroPreview.Texture == null)
+                {
+                    DisposeHeroPreview();
+                    return false;
+                }
+
+                var imgGo = new GameObject("HeroPreviewRawImage", typeof(RectTransform), typeof(RawImage));
+                imgGo.transform.SetParent(parent, false);
+                var rt = imgGo.GetComponent<RectTransform>();
+                rt.anchorMin = new Vector2(0.05f, 0.05f);
+                rt.anchorMax = new Vector2(0.95f, 0.95f);
+                rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                _paperDollPreview = imgGo.GetComponent<RawImage>();
+                _paperDollPreview.raycastTarget = false;
+                _paperDollPreview.color = Color.white;
+                _paperDollPreview.texture = _heroPreview.Texture;
+                return true;
+            }
+            catch (System.Exception ex)
+            {
+                // No silent failure (§12): log once, drop to the 2D portrait, never crash the modal.
+                FlowTrace.Warn("Inventory",
+                    $"TryMountHeroPreview threw ({ex.GetType().Name}: {ex.Message}) — using 2D portrait fallback.");
+                DisposeHeroPreview();
+                return false;
+            }
+        }
+
+        // The actor body to clone for the preview — mirrors EquipmentPanel.ResolveBody: the live
+        // hero's "HeroBody" child (the visual rig) or the tagged root itself, falling back to the
+        // resolved loadout's GameObject. Null when no hero is present (caller skips the preview).
+        private GameObject ResolvePreviewBody()
+        {
+            var hero = GameObject.FindWithTag("Player");
+            if (hero == null) hero = SafeFindByTag("HeroTarget");
+            if (hero != null)
+            {
+                var t = hero.transform.Find("HeroBody");
+                return t != null ? t.gameObject : hero;
+            }
+            return _loadout != null ? _loadout.gameObject : null;
+        }
+
+        // Free the preview rig + its RenderTexture. Called on Close / OnDestroy (and on any build
+        // failure) so the off-screen clone + RT never leak. Safe to call repeatedly.
+        private void DisposeHeroPreview()
+        {
+            _heroPreview?.Dispose();
+            _heroPreview = null;
+            _paperDollPreview = null;
         }
 
         // (Shared UI primitives Add*/Dress*/AddCircle*/Rarity*/glyphs/Has/Cap/Hero* live once in the main partial file.
