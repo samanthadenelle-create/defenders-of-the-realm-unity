@@ -302,6 +302,34 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// #76: resolve the seat height as the surface DIRECTLY BELOW the committed placement —
+        /// "ground is the area below placement", not whatever the camera ray grazed. Probe straight
+        /// DOWN through the snapped footprint XZ and take the TOPMOST flat, upward-facing surface
+        /// beneath it (so placing on a rampart / a tier-3 roof seats on that top, while a wall the
+        /// cursor merely passed over — not below the footprint — never contaminates the height).
+        /// Tower/Building tops are skipped (can't stack on another structure here). Returns false if
+        /// nothing valid is below (caller keeps the existing seatY).
+        /// </summary>
+        private bool TryResolveGroundYBelow(Vector3 snapped, out float groundY)
+        {
+            groundY = snapped.y;
+            Vector3 origin = new Vector3(snapped.x, snapped.y + 50f, snapped.z);
+            var hits = Physics.RaycastAll(origin, Vector3.down, 200f, ~0, QueryTriggerInteraction.Ignore);
+            bool found = false;
+            float best = float.NegativeInfinity;
+            for (int i = 0; i < hits.Length; i++)
+            {
+                var h = hits[i];
+                if (h.normal.y < 0.85f) continue;   // skip steep faces (wall sides, slopes)
+                if (h.collider != null &&
+                    (h.collider.CompareTag("Tower") || h.collider.CompareTag("Building"))) continue;
+                if (h.point.y > best) { best = h.point.y; found = true; }
+            }
+            if (found) { groundY = best; return true; }
+            return false;
+        }
+
+        /// <summary>
         /// Read the place/select confirm intent for THIS frame, gated so a tap/click
         /// that lands inside the on-screen move joystick's engage zone never confirms a
         /// placement or selection (DEF-171). The hero locomotion stick stays live during
@@ -628,10 +656,20 @@ namespace DeNelle.Village
             }
             else
             {
-                // GROUND path — unchanged: require a flat, upward-facing top, reject tower/building tops.
+                // GROUND path — require a flat, upward-facing top, reject tower/building tops.
                 if (hit.normal.y < 0.85f) { reason = BuildRejectReason.BadSurface; return false; }
                 if (hit.collider.CompareTag("Tower") || hit.collider.CompareTag("Building"))
                 { reason = BuildRejectReason.Occupied; return false; }
+
+                // #76: GROUND is the area DIRECTLY BELOW placement, NOT whatever the camera ray grazed.
+                // The camera ray only AIMS; near a corner it can strike a wall TOP the cursor merely
+                // passed over, divorcing seatY (wall height) from the snapped XZ (floor cell) so the
+                // tower floats at wall height. Re-probe straight DOWN through the committed footprint XZ
+                // and seat on THAT surface. Dynamic + relative: floor cell -> floor Y, rampart cell ->
+                // rampart top, tier-3 roof -> roof Y (so building UP works); a wall the cursor merely
+                // grazed is not below the footprint, so it can't contaminate the height.
+                if (TryResolveGroundYBelow(snapped, out float groundY))
+                    seatY = groundY;
             }
 
             // 2. Footprint cells in-bounds (always). Occupancy is skipped for a wall-walk mount —
