@@ -3,6 +3,13 @@
 This file is read by every agent (UI and CLI) before starting work.
 Rules here are **non-negotiable**. Do not skip them to ship faster.
 
+**⛔ PREFLIGHT GATE (owner directive 2026-06-28, BINDING):** before you TOUCH ANY CODE or START
+DEBUGGING — unprompted, or whenever the owner says "answer the preflight gate" — open
+`PREFLIGHT_GATE.md` (repo root) and answer **YES + a one-line proof** to every applicable item.
+A single NO / "I think so" / unproven YES = STOP; you have not earned the edit. The owner should never
+again have to remind a CLI to read canon, be the SME, instrument first, or update canon — the gate makes
+those a hard yes/no checklist.
+
 **READ FIRST, EVERY SESSION (owner directive 2026-06-20, BINDING):** load
 `SESSION_CANON_LOADER.md` (repo root) — the at-a-glance SME primer (core rules +
 current state + key files) the owner pastes to start a session. It is the fast path;
