@@ -113,11 +113,23 @@ namespace DeNelle.Village
         private static readonly System.Collections.Generic.List<SceneTransitionTrigger> s_prevFrameInRange =
             new System.Collections.Generic.List<SceneTransitionTrigger>();
 
-        // Effective radius: confirm-to-cross is unconditional, so the seam always reaches to
-        // ConfirmMinRadius — the prompt appears at the navmesh edge where the hero stalls and
-        // he WARPS across (he need not touch the marker). There is no longer an auto-cross mode
-        // that would want the tighter authored ProximityRadius.
-        private float EffRadius => Mathf.Max(ProximityRadius, ConfirmMinRadius);
+        // Effective radius: confirm-to-cross is unconditional, so a navmesh-edge GATE LANE reaches to
+        // ConfirmMinRadius — the prompt appears at the navmesh edge where the hero stalls and he WARPS
+        // across (he need not touch the marker).
+        //
+        // #62 EXCEPTION: a WALK-UP STORY PORTAL (a narrative entrance the hero physically reaches, e.g.
+        // the enemy stronghold mouth — marked by a non-empty promptOverride) must honor its AUTHORED
+        // ProximityRadius, NOT the 40m floor. The 40m floor exists ONLY for the castle gate-lane
+        // navmesh stall; applied to a walk-up portal it blows the prompt zone out to 40m so the player
+        // can almost never step far enough back to clear it on retreat -> the "enter enemy stronghold"
+        // prompt sticks. Bounding it to the authored entry zone makes retreat clear the prompt via the
+        // existing MobileInteractButton.Release the moment the hero leaves that zone (same as how
+        // DungeonPortal clears its prompt). (Correct long-term: the RegionGate/dungeon-entry primitive
+        // OWNS the entry-zone + prompt state so retreat is an explicit state transition — see WO.)
+        private bool IsWalkUpEntry => !string.IsNullOrEmpty(promptOverride) && !suppressPrompt;
+        private float EffRadius => IsWalkUpEntry
+            ? ProximityRadius
+            : Mathf.Max(ProximityRadius, ConfirmMinRadius);
 
         // =====================================================================
         // ROOT-CAUSE FIX (owner directive 2026-06-18): auto-cross is GONE.
