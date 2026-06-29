@@ -24,6 +24,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using DeNelle.Core.Data;
 using DeNelle.Core.Progression;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Village.UI
 {
@@ -47,9 +48,18 @@ namespace DeNelle.Village.UI
         // (not silently dropped) so the spend screen surfaces the moment the fight ends.
         private int _pendingLevel = -1;
 
+        // PanelManager mutual-exclusion handle (one panel at a time).
+        private PanelHandle _panelHandle;
+
         private void OnEnable()
         {
             BuildUiIfNeeded();
+            // Register with the modal arbiter so the spend card closes any other panel
+            // (and vice-versa). Probe = the overlay's own visibility.
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.Register("Level-Up Skill",
+                    Hide,
+                    () => _overlay != null && _overlay.style.display.value == DisplayStyle.Flex);
             Hide();
 
             // DEF-261 ROOT-CAUSE FIX: subscribe to the STATIC relay, not the instance
@@ -121,6 +131,9 @@ namespace DeNelle.Village.UI
             _overlay.style.display = DisplayStyle.Flex;
             if (_card != null) _card.style.display = DisplayStyle.Flex;
             if (_pill != null) _pill.style.display = DisplayStyle.None;
+            // Announce open: closes any previously-open panel. Battle-lock may reject
+            // (NotifyOpened==false) — revert and stay hidden, never force-show.
+            if (!PanelManager.NotifyOpened(_panelHandle)) { Hide(); return; }
         }
 
         // Close/collapse: if points remain, fall back to the persistent pill so the
@@ -148,6 +161,7 @@ namespace DeNelle.Village.UI
         internal void Hide()
         {
             if (_overlay != null) _overlay.style.display = DisplayStyle.None;
+            PanelManager.NotifyClosed(_panelHandle);
         }
 
         private void UpdateUI()

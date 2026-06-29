@@ -35,6 +35,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.Hero
 {
@@ -121,6 +122,67 @@ namespace DeNelle.Village.Hero
             _model.SetActive(true);                 // the live child may be inactive mid-build; the clone must render
             SetLayerRecursive(_model, _previewLayer);
             StripGameplayBehaviours(_model);
+
+            // --- INSTRUMENTATION (WO preview cube-head RCA): enumerate every renderer on the
+            // cloned preview body so the trace proves WHY the head renders as a cube here while
+            // the live Arena hero's head is fine (wrong source body / disabled-or-missing head
+            // renderer / null mesh / null material / wrong shader). Logging only — never throws
+            // into Begin. system tag = "Preview".
+            try
+            {
+                var renderers = _model.GetComponentsInChildren<Renderer>(true);
+                int skinned = 0;
+                for (int i = 0; i < renderers.Length; i++)
+                    if (renderers[i] is SkinnedMeshRenderer) skinned++;
+                FlowTrace.Step("Preview",
+                    $"PreviewActor cloned from '{(actorBody != null ? actorBody.name : "null")}': " +
+                    $"{renderers.Length} renderers ({skinned} skinned), preview layer={_previewLayer}");
+
+                for (int i = 0; i < renderers.Length; i++)
+                {
+                    var r = renderers[i];
+                    if (r == null) { FlowTrace.Warn("Preview", $"renderer[{i}] is NULL"); continue; }
+
+                    string rType;
+                    Mesh mesh = null;
+                    if (r is SkinnedMeshRenderer smr) { rType = "SkinnedMeshRenderer"; mesh = smr.sharedMesh; }
+                    else if (r is MeshRenderer)
+                    {
+                        rType = "MeshRenderer";
+                        var mf = r.GetComponent<MeshFilter>();
+                        mesh = mf != null ? mf.sharedMesh : null;
+                    }
+                    else { rType = r.GetType().Name; }
+
+                    bool meshNull = mesh == null;
+                    string meshDesc = meshNull ? "MESH-NULL" : $"mesh='{mesh.name}'";
+
+                    var mat = r.sharedMaterial;
+                    bool matNull = mat == null;
+                    string shaderDesc = matNull
+                        ? "NULL-material"
+                        : (mat.shader != null ? $"shader='{mat.shader.name}'" : "NULL-shader");
+
+                    string goName = r.gameObject != null ? r.gameObject.name : "<null-go>";
+                    Vector3 ext = r.bounds.size;
+
+                    FlowTrace.Step("Preview",
+                        $"  rend[{i}] '{goName}' {rType} enabled={r.enabled} {meshDesc} " +
+                        $"bounds={ext.x:F2}x{ext.y:F2}x{ext.z:F2} {shaderDesc}");
+
+                    bool looksLikeHead = goName.ToLowerInvariant().Contains("head");
+                    if (meshNull || matNull || (looksLikeHead && !r.enabled))
+                    {
+                        FlowTrace.Warn("Preview",
+                            $"  SUSPECT rend[{i}] '{goName}' {rType} enabled={r.enabled} " +
+                            $"{meshDesc} {shaderDesc} (meshNull={meshNull} matNull={matNull} headDisabled={(looksLikeHead && !r.enabled)})");
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                FlowTrace.Warn("Preview", $"renderer enumeration threw ({ex.GetType().Name}: {ex.Message})");
+            }
 
             Bounds bounds = ComputeBounds(_model);
 

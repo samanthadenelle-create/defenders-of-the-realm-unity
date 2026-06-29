@@ -29,6 +29,9 @@ namespace DeNelle.Village.UI
         private bool _visible;
         private float _nextRefresh;
 
+        // PanelManager mutual-exclusion handle (one panel at a time).
+        private PanelHandle _panelHandle;
+
         // --- self-install on a borrowed PanelSettings (renders in builds) --------
         private static bool s_hooked;
 
@@ -67,7 +70,15 @@ namespace DeNelle.Village.UI
         private void Awake() => Instance = this;
         private void OnDestroy() { if (Instance == this) Instance = null; ClearMarker(); }
 
-        private void OnEnable() { BuildUi(); Hide(); }
+        private void OnEnable()
+        {
+            BuildUi();
+            // Register with the modal arbiter so opening this closes any other panel
+            // (and vice-versa). Probe = the panel's own visibility flag.
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.Register("Tower Manager", Hide, () => _visible);
+            Hide();
+        }
 
         private void Update()
         {
@@ -79,8 +90,21 @@ namespace DeNelle.Village.UI
         /// <summary>Show/hide the manager (via the BuildMenu "Manage Towers" button).</summary>
         public void Toggle() { if (_visible) Hide(); else Show(); }
 
-        public void Show() { if (_panel == null) return; _visible = true; _panel.style.display = DisplayStyle.Flex; Refresh(); }
-        public void Hide() { _visible = false; if (_panel != null) _panel.style.display = DisplayStyle.None; }
+        public void Show()
+        {
+            if (_panel == null) return;
+            _visible = true;
+            _panel.style.display = DisplayStyle.Flex;
+            // Announce open: closes any previously-open panel. Battle-lock may reject.
+            if (!PanelManager.NotifyOpened(_panelHandle)) { Hide(); return; }
+            Refresh();
+        }
+        public void Hide()
+        {
+            _visible = false;
+            if (_panel != null) _panel.style.display = DisplayStyle.None;
+            PanelManager.NotifyClosed(_panelHandle);
+        }
 
         // --- UI ------------------------------------------------------------------
         private void BuildUi()

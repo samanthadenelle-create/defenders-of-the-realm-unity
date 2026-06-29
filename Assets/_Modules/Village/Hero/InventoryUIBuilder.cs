@@ -91,6 +91,13 @@ namespace DeNelle.Village
                                 new Vector2(0.30f, 0.035f), new Vector2(0.93f, 0.100f), new Color(0f, 0f, 0f, 0f));
             NoRaycast(tray);
 
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+            // Dev-only: seat hand-grips on the equipped weapon while looking at the LEFT 3D hero
+            // preview (parity with the Gear/EquipmentPanel screen). Hidden in shipping players.
+            // Drops into the freed left of the footer tray; the wallet wells stay right-aligned (x≥0.47).
+            BuildOrientButton(tray.transform);
+#endif
+
             // WO-565: the Sort + Filter buttons were wired to EMPTY lambdas — visible controls
             // that silently did nothing. HIDDEN rather than ship a half-feature: category Filter
             // is already provided by the tab row (Weapons/Armor/Accessories/Consumables), and a
@@ -138,6 +145,28 @@ namespace DeNelle.Village
             AddLabel(well.transform, caps, 0.06f, 0.40f, InkMicro,
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 2f);
         }
+
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+        // Dev-only "Orient" button — opens the in-game Seating Editor (WO-577) on the inventory
+        // PREVIEW's own EquipmentController (HeroPreviewViewer.Equip), so the owner dials the
+        // hand-grip offset on the weapon she is looking at in the left 3D preview. The offset saves
+        // per weapon id to AttachmentOffsetRegistry, which the equip/attach path already reads → the
+        // grip is then correct everywhere. Reuse, no new tool: the SAME overlay the Gear screen, the
+        // build-menu Orient, and AdminOverlay launch. Falls back to the world hero when no preview.
+        private void BuildOrientButton(Transform parent)
+        {
+            var btn = ElarionUiKit.ButtonPack(parent, "⚒ Orient", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.02f, 0.10f), new Vector2(0.20f, 0.90f),
+                () =>
+                {
+                    var eq = _heroPreview != null ? _heroPreview.Equip : null;
+                    if (eq != null) DeNelle.Village.UI.SeatingEditorOverlay.LaunchFor(eq);
+                    else            DeNelle.Village.UI.SeatingEditorOverlay.Launch();   // fall back to world hero
+                },
+                RpgUiCatalog.ButtonFrame);
+            if (btn != null) btn.name = "OrientDev";
+        }
+#endif
 
         private static void CreamLabel(Button btn)
         {
@@ -376,9 +405,22 @@ namespace DeNelle.Village
             if (hero != null)
             {
                 var t = hero.transform.Find("HeroBody");
-                return t != null ? t.gameObject : hero;
+                if (t != null)
+                {
+                    var body = t.gameObject;
+                    FlowTrace.Step("Preview",
+                        $"ResolvePreviewBody: hero='{hero.name}' -> 'HeroBody' child '{body.name}' (children={body.transform.childCount})");
+                    return body;
+                }
+                FlowTrace.Step("Preview",
+                    $"ResolvePreviewBody: hero='{hero.name}' had NO 'HeroBody' child -> returning hero root '{hero.name}' (children={hero.transform.childCount})");
+                return hero;
             }
-            return _loadout != null ? _loadout.gameObject : null;
+            var fallback = _loadout != null ? _loadout.gameObject : null;
+            FlowTrace.Step("Preview",
+                $"ResolvePreviewBody: no 'Player'/'HeroTarget' hero found -> loadout fallback '{(fallback != null ? fallback.name : "NULL")}'" +
+                (fallback != null ? $" (children={fallback.transform.childCount})" : ""));
+            return fallback;
         }
 
         // Free the preview rig + its RenderTexture. Called on Close / OnDestroy (and on any build

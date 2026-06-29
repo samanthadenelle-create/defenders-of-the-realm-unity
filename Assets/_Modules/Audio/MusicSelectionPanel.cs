@@ -54,6 +54,9 @@ namespace DeNelle.Audio
         private VisualElement _rowList;
         private bool _open;
 
+        // PanelManager mutual-exclusion handle (one panel at a time).
+        private DeNelle.Core.UI.PanelHandle _panelHandle;
+
         // Rebuilt each open so a context change (village -> overworld) shows the
         // right track set and the right checkmark.
         private void Awake()
@@ -81,6 +84,9 @@ namespace DeNelle.Audio
 
             _doc.sortingOrder = 96; // above HUD chips, near the cosmetic shop (95)
             BuildTree();
+            // Register with the modal arbiter so opening the jukebox closes any other
+            // panel (and vice-versa). Probe = the panel's own open flag.
+            _panelHandle = PanelManager.Register("Jukebox", () => SetOpen(false), () => _open);
             SetOpen(false);
         }
 
@@ -211,7 +217,22 @@ namespace DeNelle.Audio
             _open = open;
             if (_overlay != null)
                 _overlay.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
-            if (open) RebuildRows();
+            if (open)
+            {
+                // Announce open: closes any previously-open panel. Battle-lock may reject
+                // (NotifyOpened==false) — revert and stay hidden, never force-show.
+                if (!PanelManager.NotifyOpened(_panelHandle))
+                {
+                    _open = false;
+                    if (_overlay != null) _overlay.style.display = DisplayStyle.None;
+                    return;
+                }
+                RebuildRows();
+            }
+            else
+            {
+                PanelManager.NotifyClosed(_panelHandle);
+            }
         }
 
         // ── Style helpers ────────────────────────────────────────────────────

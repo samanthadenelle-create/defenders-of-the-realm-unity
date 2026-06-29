@@ -212,6 +212,9 @@ namespace DeNelle.DialogueUI
             // Show the surface and play. loopPointReached → EndIntro (natural end).
             _videoSurface.enabled = true;
             _videoPlayer.Play();
+            // Real video is playing — the fallback caption band (+ its gold rule child)
+            // must never overlay the video (owner 2026-06-28). Hide it explicitly.
+            if (_captionBand != null) _captionBand.gameObject.SetActive(false);
             Debug.Log("[IntroSequence] Video playing full-screen.");
         }
 

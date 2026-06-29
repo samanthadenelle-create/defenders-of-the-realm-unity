@@ -310,9 +310,15 @@ namespace DeNelle.Onboarding
             // FAST PATH — a brief companion hook in the village then straight to Wave 1.
             // The full 7-scene FTUE / cinematic is reserved for "Play Intro" below.
             DeNelle.Core.OnboardingMode.ChooseFastPath();
-            _titleBuilt = false;
-            BuildTitleScreen();
-            SetTitleVisible(true);
+
+            // WO-559 ROUTING FIX: "Start New" now opens the NEW HeroSelect CAROUSEL scene
+            // instead of the old in-Title 4-card grid (BuildTitleScreen). ResetToNewGame
+            // above set HeroClass = None and Save()'d, so HeroSelectController.IsIntroComplete()
+            // is false and the carousel BUILDS (it only self-skips to the castle when a hero
+            // is already persisted — i.e. a returning player via Continue). The old 4-card
+            // BuildTitleScreen path is left intact but is no longer routed to from New Game.
+            FlowTrace.Step("Onboarding", "OnStartNew: routing to the HeroSelect carousel (fresh HeroClass=None).");
+            SceneRouter.GoHeroSelect();
         }
 
         // Play Intro: the full 9-screen cinematic intro (Yarn, on the dialogue spine)
@@ -328,6 +334,23 @@ namespace DeNelle.Onboarding
             // the cinematic intro here, then the full FTUE companion meeting in the
             // village (TutorialDirector / CompanionMeetingTrigger read this flag).
             DeNelle.Core.OnboardingMode.ChooseFullTutorial();
+
+            // WO-559 ROUTING FIX: the intro ends by routing to the HeroSelect CAROUSEL
+            // (IntroSequencePlayer.EndIntro -> SceneRouter.GoHeroSelect). That carousel
+            // SELF-SKIPS straight to the castle when a hero is already persisted
+            // (HeroSelectController.IsIntroComplete -> HeroClass != None). "Play Intro" is
+            // a fresh playthrough, so clear the persisted hero HERE (HeroClass = None +
+            // Save) so the carousel BUILDS after the intro rather than skipping past it to
+            // the castle. This does NOT touch the "Continue" path (OnContinue), so a
+            // returning player who resumes still routes straight to the castle.
+            var svc = GameStateService.Instance;
+            if (svc != null && svc.State != null)
+            {
+                svc.State.HeroClass = HeroClassOpt.None;
+                svc.Save();
+                FlowTrace.Step("Onboarding", "OnPlayIntro: cleared persisted HeroClass (None) so the post-intro carousel builds.");
+            }
+
             if (DeNelle.Core.IntroLauncher.Play != null)
             {
                 // The cinematic owns the screen until it transitions to hero select;
