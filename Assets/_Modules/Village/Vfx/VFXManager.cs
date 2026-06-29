@@ -592,7 +592,14 @@ namespace DeNelle.Village
         {
             if (go == null) return;
 
-            var renderers = go.GetComponentsInChildren<ParticleSystemRenderer>(true);
+            // #44: query ALL renderers, not just ParticleSystemRenderer. The authored VFX prefabs
+            // (Lana Studio "Casual RPG VFX") carry MESH geometry on MeshRenderers using legacy
+            // built-in particle shaders (Particles/Additive, Particles/Alpha Blended) -> those render
+            // as Hidden/InternalErrorShader magenta blocks under URP ("blocky purple cubes"). The old
+            // particle-only query skipped them. The reshade below is material-gated by
+            // IsLegacyParticleShader, so widening the net only touches genuinely-legacy materials and
+            // leaves every legitimate mesh/particle material alone.
+            var renderers = go.GetComponentsInChildren<Renderer>(true);
             if (renderers == null || renderers.Length == 0) return;
 
             Shader urp = AbilityVfxKit.ResolveParticleShader();
