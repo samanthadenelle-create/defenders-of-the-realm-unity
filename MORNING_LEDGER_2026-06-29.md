@@ -18,7 +18,7 @@
 | `81015e80` | **Save atomicity fix** — the one real bug the seeded-chaos fleet surfaced. The LB-3 integrity HMAC was a *second* PlayerPrefs write (`<key>.sig`); a crash/power-loss between the two writes could reject a VALID save as "tampered" → silent save loss. Now folded into ONE atomic write (`<sig>\n<json>`). CompileGate green; RegressionSuite `save-integrity` PASS (valid verified, tampered rejected, round-trip consistent). Backward-compatible (old saves load once + re-sign). |
 | earlier | 3 design-package commits (canon refresh, SKR/Pi tokenomics, pre-production/GTM/audits). |
 
-> ⚠️ The **live itch WebGL build** (loader `6e7ba61f…`) predates `81015e80`. A **fresh WebGL build WITH the save fix is building+pushing now** (detached, ~30–60 min) — by morning the deployed build will include everything. The save fix does **not** affect the load/play smoke test, so testing the current build is still valid for the perf/Pi-Browser gate.
+> ✅ **The live itch WebGL build now includes everything** — a fresh build WITH the save fix (`81015e80`) was pushed overnight (new loader `09795be2…`, butler 138.65 MiB patch, itch processed it). Just open the URL above; it's current.
 
 ## 🔑 Key data
 - **Icons (Store/Inventory):** weapons **23 real / 11 glyph**, armors **20 real / 0 glyph**, **Knight starting weapon → REAL sword art ✅**. The 11 glyphs are mage wand/staff + cleric censer (no art *by design*). → **V1 Knight inventory renders real icons; no fix needed.** The letter-glyphs you saw were non-Knight weapons in the owned list — a **roster question** (should they appear at all in a Knight's V1 inventory?), your call.
