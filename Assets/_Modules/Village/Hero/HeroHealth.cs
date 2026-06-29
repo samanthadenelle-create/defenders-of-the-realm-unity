@@ -175,7 +175,11 @@ namespace DeNelle.Village
         private void Awake()
         {
             Instance = this;
-            _hp = _maxHp;
+            // FIX 2: start at the EFFECTIVE max (base + gear + talent maxHpPct), not the bare
+            // serialized base. With a talent like Vitality the effective max can be ~195 vs a
+            // base 100, so seeding _hp from _maxHp made the hero spawn at 100/195 (~0.51 frac) —
+            // the bar read half-empty. MaxHp is the same effective max the Fraction calc uses.
+            _hp = MaxHp;
             _enemyMask = LayerMask.GetMask("Enemy");
             if (_enemyMask == 0) _enemyMask = ~0;   // "Enemy" layer missing — scan all
 

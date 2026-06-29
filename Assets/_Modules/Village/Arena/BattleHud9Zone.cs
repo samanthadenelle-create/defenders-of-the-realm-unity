@@ -193,6 +193,8 @@ namespace DeNelle.Village.Arena
         // -- Top-Left ----------------------------------------------------------
         private Image _hpFill;
         private Text  _hpText;
+        private float _lastHpFrac = -1f;     // FIX 3: last pushed HP fraction (damage hit-flash detect)
+        private Coroutine _hpFlash;          // FIX 3: active HP-bar damage flash, if any
         private Image _bar2Fill;
         private Image _heroPortrait;
 
@@ -432,6 +434,14 @@ namespace DeNelle.Village.Arena
             {
                 float max = _health.MaxHp <= 0f ? 1f : _health.MaxHp;
                 float frac = Mathf.Clamp01(_health.Hp / max);
+                // FIX 3: brief damage hit-flash — only when HP DROPS (never on heal/first push), so
+                // taking a hit reads. Plain unscaled coroutine, no deps; the bar fill is unaffected.
+                if (_lastHpFrac >= 0f && frac < _lastHpFrac - 0.0001f)
+                {
+                    if (_hpFlash != null) StopCoroutine(_hpFlash);
+                    _hpFlash = StartCoroutine(FlashHpDamage());
+                }
+                _lastHpFrac = frac;
                 _hpFill.fillAmount = frac;
                 if (_hpText != null) _hpText.text = Mathf.CeilToInt(Mathf.Max(0f, _health.Hp)) + " / " + Mathf.CeilToInt(max);
             }
@@ -707,25 +717,57 @@ namespace DeNelle.Village.Arena
         }
 
         // Bind each row to a living family member (one row per enemy, nearest-first).
+        // FIX 1: the candidate list is the ENCOUNTER's staged enemies ONLY — never an unfiltered
+        // FindObjectsByType<Enemy>(). During an arena fight the paused home reps ("OrcRep_*") are
+        // still live Enemy components in the scene; an unfiltered scan leaked them into the roster
+        // (bars never drained, freed rows re-bound to them as real arena orcs died). We prefer the
+        // arena's own staged list (BattleArena.StagedEnemies, dead members already pruned); only if
+        // no arena is present do we fall back to name-prefix-filtered scene enemies ("ArenaEnemy_").
+        private static readonly List<Enemy> _rebindScratch = new List<Enemy>();
         private void RebindFamily()
         {
-            var enemies = Object.FindObjectsByType<Enemy>(FindObjectsSortMode.None);
+            _rebindScratch.Clear();
+            var arena = BattleArena.Existing;
+            var staged = arena != null ? arena.StagedEnemies : null;
+            if (staged != null && staged.Count > 0)
+            {
+                for (int i = 0; i < staged.Count; i++)
+                {
+                    var en = staged[i];
+                    if (en != null && !en.IsDead) _rebindScratch.Add(en);
+                }
+            }
+            else
+            {
+                // Defensive fallback (HUD up with no live BattleArena accessor): scan the scene but
+                // restrict to the staged arena orcs by name prefix so home reps are still excluded.
+                var enemies = Object.FindObjectsByType<Enemy>(FindObjectsSortMode.None);
+                for (int e = 0; e < enemies.Length; e++)
+                {
+                    var en = enemies[e];
+                    if (en == null || en.IsDead) continue;
+                    if (!en.name.StartsWith("ArenaEnemy_")) continue;
+                    _rebindScratch.Add(en);
+                }
+            }
+
             // Sort by distance to the hero for a stable, readable list.
             Vector3 me = _abilities != null ? _abilities.transform.position : Vector3.zero;
-            System.Array.Sort(enemies, (a, b) =>
+            _rebindScratch.Sort((a, b) =>
             {
                 if (a == null) return 1; if (b == null) return -1;
                 return (a.transform.position - me).sqrMagnitude.CompareTo((b.transform.position - me).sqrMagnitude);
             });
+
             int r = 0;
-            for (int e = 0; e < enemies.Length && r < _cycleRows.Count; e++)
+            for (int e = 0; e < _rebindScratch.Count && r < _cycleRows.Count; e++)
             {
-                var en = enemies[e];
-                if (en == null || en.IsDead) continue;
-                _cycleRows[r].Tracked = en;
+                _cycleRows[r].Tracked = _rebindScratch[e];
                 r++;
             }
+            // Freed rows clear — they NEVER re-bind to a non-staged enemy (the leak fix).
             for (; r < _cycleRows.Count; r++) _cycleRows[r].Tracked = null;
+            _rebindScratch.Clear();
         }
 
         // Row tap -> engage the soft lock-on onto that enemy (WO-512): route through the single lock
@@ -1585,6 +1627,28 @@ namespace DeNelle.Village.Arena
         // Light press juice (owner 2026-06-27 "add a little extra vfx so the controller HUD feels
         // better"): a quick squash-and-settle on tap. Self-contained, unscaled-time (works while
         // combat time-scales), and always restores scale on finish so nothing drifts.
+        // FIX 3: bright damage flash colour the HP fill snaps to, then fades back to HpGreen.
+        private static readonly Color HpFlashHit = new Color(1f, 0.95f, 0.62f, 1f);
+
+        // FIX 3: flash the HP fill on damage so a hit reads. Unscaled time (works while the arena
+        // is paused on death-cam), null-guarded, self-clears. Started only on an HP DECREASE.
+        private System.Collections.IEnumerator FlashHpDamage()
+        {
+            if (_hpFill == null) { _hpFlash = null; yield break; }
+            const float dur = 0.20f;
+            _hpFill.color = HpFlashHit;
+            float t = 0f;
+            while (t < dur)
+            {
+                if (_hpFill == null) { _hpFlash = null; yield break; }
+                t += Time.unscaledDeltaTime;
+                _hpFill.color = Color.Lerp(HpFlashHit, HpGreen, t / dur);
+                yield return null;
+            }
+            if (_hpFill != null) _hpFill.color = HpGreen;
+            _hpFlash = null;
+        }
+
         private System.Collections.IEnumerator PunchScale(RectTransform rt)
         {
             if (rt == null) yield break;

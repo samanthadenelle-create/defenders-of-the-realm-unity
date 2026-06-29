@@ -190,6 +190,14 @@ namespace DeNelle.Village.Arena
         /// <summary>Raised when a battle resolves: (params, won).</summary>
         public event Action<EncounterParams, bool> OnBattleEnded;
 
+        /// <summary>
+        /// The enemies STAGED for the current encounter (the orc family + any rare boss), in spawn
+        /// order. Read-only view so presentation (BattleHud9Zone roster) binds to the ENCOUNTER's
+        /// enemies only and never leaks paused home reps (frozen "OrcRep_*" Enemy components that
+        /// still live in the home scene during a fight). Entries are removed as members die/despawn.
+        /// </summary>
+        public IReadOnlyList<Enemy> StagedEnemies => _liveEnemies;
+
         private Func<bool> _battleProbe;
         private GameObject _arenaRoot;
         private readonly List<Enemy> _liveEnemies = new List<Enemy>();
@@ -221,6 +229,13 @@ namespace DeNelle.Village.Arena
         private bool _savedCamAllowHDR;
         private bool _savedCamPostFx;
         private bool _hadCamData;
+
+        // WO (2026-06-28) arena sky override: the enclosure cap + a SolidColor camera clear KILL the
+        // persisted NIGHT skybox over/through the backdrop. Saved when staged, restored on Resolve.
+        private bool _skyOverridden;
+        private Camera _skyCam;
+        private CameraClearFlags _savedClearFlags;
+        private Color _savedCamBg;
 
         private void Awake()
         {
@@ -538,33 +553,122 @@ namespace DeNelle.Village.Arena
                 if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", tex);
                 if (mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", tex);
 
+                // Sky-top colour (sampled from the painting top, biome fallback) tints BOTH the top cap
+                // and the camera clear so the seam where the ring meets the cap/sky is invisible.
+                Color skyTop = SampleBackdropTop(tex, key);
+                var capMat = new Material(sh) { name = "ArenaBackdropCap_" + key };
+                if (capMat.HasProperty("_BaseColor")) capMat.SetColor("_BaseColor", skyTop);
+                if (capMat.HasProperty("_Color")) capMat.SetColor("_Color", skyTop);
+                capMat.color = skyTop;
+
                 float r = Mathf.Max(ArenaHalfWidth, ArenaHalfDepth) + 16f;   // behind the treeline ring
-                float h = 60f;
+                float h = 110f;                                              // tall: no combat camera angle sees over it
                 var root = new GameObject("ArenaBackdrop");
                 root.transform.SetParent(_arenaRoot.transform, false);
                 root.transform.localPosition = new Vector3(0f, h * 0.32f, 0f);
 
-                Vector3[] poss = { new Vector3(0f, 0f, r), new Vector3(0f, 0f, -r), new Vector3(r, 0f, 0f), new Vector3(-r, 0f, 0f) };
-                float[] yaws = { 180f, 0f, -90f, 90f };
-                for (int i = 0; i < 4; i++)
+                // FULL ENCLOSURE: 8 inward-facing quads at 45-degree steps close the old 45-degree CORNER
+                // gaps the 4-cardinal cyclorama left open (where the persisted night skybox leaked through).
+                // Quad faces inward: position at angle a -> yaw a+180.
+                int built = 0;
+                for (int i = 0; i < 8; i++)
                 {
+                    float a = i * 45f;
+                    float ar = a * Mathf.Deg2Rad;
                     var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
                     q.name = "Backdrop_" + i;
                     q.transform.SetParent(root.transform, false);
-                    q.transform.localPosition = poss[i];
-                    q.transform.localRotation = Quaternion.Euler(0f, yaws[i], 0f);
-                    q.transform.localScale = new Vector3(r * 2.4f, h, 1f);
+                    q.transform.localPosition = new Vector3(r * Mathf.Sin(ar), 0f, r * Mathf.Cos(ar));
+                    q.transform.localRotation = Quaternion.Euler(0f, a + 180f, 0f);   // face inward toward centre
+                    q.transform.localScale = new Vector3(r * 1.25f, h, 1f);            // overlap neighbours -> no seams
                     var mr = q.GetComponent<MeshRenderer>();
                     mr.sharedMaterial = mat;
                     mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                     StripColliders(q);
+                    built++;
                 }
-                FlowTrace.Step("BattleArena", "BuildBackdrop: cyclorama backdrop '" + key + "' behind the treeline (r=" + r.ToString("0") + ").");
+
+                // TOP CAP: a large downward-facing quad sealing the top of the ring so a raised combat
+                // camera can never look straight up into the persisted starry skybox. Sky-tinted unlit.
+                var cap = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                cap.name = "Backdrop_Cap";
+                cap.transform.SetParent(root.transform, false);
+                cap.transform.localPosition = new Vector3(0f, h * 0.5f, 0f);          // top of the ring
+                cap.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);          // normal points DOWN at the camera
+                cap.transform.localScale = new Vector3(r * 2.8f, r * 2.8f, 1f);
+                var capMr = cap.GetComponent<MeshRenderer>();
+                capMr.sharedMaterial = capMat;
+                capMr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                StripColliders(cap);
+
+                // BELT-AND-SUSPENDERS: override the arena camera's clear to a SolidColor sky tint so even
+                // if a sliver gap remained the persisted NIGHT skybox can never leak. Restored on teardown.
+                ApplySkyOverride(skyTop);
+
+                FlowTrace.Step("BattleArena", "BuildBackdrop: full enclosure '" + key + "' (8 quads + top cap, h=" + h.ToString("0") + ", r=" + r.ToString("0") + ").");
                 // PERMANENT live instrumentation (owner steer 2026-06-23 "debug line background loaded"):
-                // a headless encounter run / F8 felt-test self-PROVES the painted biome backdrop actually
-                // rendered (4 quads built on the success path) — not inferred from code-reading.
-                FlowTrace.Step("BattleArena", "BACKDROP loaded theme=" + key + " tex=" + tex.name + " quads=4");
+                // a headless encounter run / F8 felt-test self-PROVES the enclosure actually built
+                // (quads + cap + sky override on the success path) — not inferred from code-reading.
+                FlowTrace.Step("BattleArena", "BACKDROP loaded theme=" + key + " tex=" + tex.name + " quads=" + built + " cap=1 skyOverride=1");
             });
+        }
+
+        // Sky colour for the cap + camera clear. Tries the top row of the painting (so the cap/ring seam
+        // is invisible); falls back to a biome-appropriate tint when the texture is not CPU-readable.
+        private static Color SampleBackdropTop(Texture2D tex, string key)
+        {
+            string k = key ?? "";
+            Color fallback = k.Contains("cavern") ? new Color(0.10f, 0.10f, 0.13f)
+                           : k.Contains("desert") ? new Color(0.85f, 0.78f, 0.62f)
+                           : new Color(0.62f, 0.74f, 0.86f); // default soft daylight sky
+            Color result = fallback;
+            Guard.Try("BattleArena", "sample backdrop top", () =>
+            {
+                if (tex != null && tex.isReadable)
+                    result = tex.GetPixelBilinear(0.5f, 0.98f);
+            });
+            return result;
+        }
+
+        // Arena-camera sky override (belt-and-suspenders against the persisted NIGHT skybox leaking
+        // over/through the enclosure). Per the spec we prefer the arena/bloom camera's clearFlags over
+        // global RenderSettings so the open-world sky is untouched. Saved here, restored on Resolve.
+        private void ApplySkyOverride(Color sky)
+        {
+            if (_skyOverridden) return;
+            Guard.Try("BattleArena", "apply sky override", () =>
+            {
+                var cam = _bloomCam != null ? _bloomCam : Camera.main;
+                if (cam == null)
+                {
+                    FlowTrace.Warn("BattleArena", "ApplySkyOverride: no arena camera -> night-sky leak still masked by the enclosure cap.");
+                    return;
+                }
+                _skyCam = cam;
+                _savedClearFlags = cam.clearFlags;
+                _savedCamBg = cam.backgroundColor;
+                _skyOverridden = true;
+                cam.clearFlags = CameraClearFlags.SolidColor;
+                cam.backgroundColor = sky;
+                FlowTrace.Step("BattleArena", "ApplySkyOverride: arena camera clearFlags=SolidColor (night skybox killed, saved for restore).");
+            });
+        }
+
+        // Restore the saved arena-camera clear on Resolve so the open-world sky is unchanged on return.
+        private void RestoreSkyOverride()
+        {
+            if (!_skyOverridden) return;
+            Guard.Try("BattleArena", "restore sky override", () =>
+            {
+                if (_skyCam != null)
+                {
+                    _skyCam.clearFlags = _savedClearFlags;
+                    _skyCam.backgroundColor = _savedCamBg;
+                }
+                FlowTrace.Step("BattleArena", "RestoreSkyOverride: arena camera clearFlags restored (open-world sky unchanged).");
+            });
+            _skyOverridden = false;
+            _skyCam = null;
         }
 
         // ---------------------------------------------------------------------
@@ -1216,6 +1320,9 @@ namespace DeNelle.Village.Arena
 
             // Restore any cavern mood RenderSettings BEFORE the open world is back in view.
             RestoreCavernMood();
+
+            // Restore the arena-camera sky clear (enclosure backdrop) so the open-world sky returns.
+            RestoreSkyOverride();
 
             // WO-504 #2: hand the combat camera's post-fx/HDR back to its open-world state
             // (the Volume itself tears down with _arenaRoot below).
