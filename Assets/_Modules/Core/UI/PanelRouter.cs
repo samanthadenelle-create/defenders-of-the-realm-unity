@@ -66,6 +66,9 @@ namespace DeNelle.Core.UI
         /// <summary>Character / Gear Preview paper-doll — EquipmentPanel (central 3D hero + the five
         /// equipment slot plates). Opened by tapping the hero portrait in the inventory.</summary>
         EquipmentPanel = 11,
+        /// <summary>Game Guide / tutorial codex — GameGuidePanel (tabbed help reference: tabs left,
+        /// body right). Opt-in, opened from the Settings panel's "Game Guide" button (WO-588).</summary>
+        GameGuide = 12,
     }
 
     /// <summary>

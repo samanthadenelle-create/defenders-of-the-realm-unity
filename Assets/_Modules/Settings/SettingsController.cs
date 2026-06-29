@@ -79,6 +79,9 @@ namespace DeNelle.Settings
         private const string MuteToggleName = "settings-mute-toggle";
         private const string QualityRowName = "settings-quality-row";
         private const string DifficultyRowName = "settings-difficulty-row";
+        private const string ScrollName = "settings-scroll";
+        // WO-588: the runtime-built "Help" section + Game Guide button (no UXML — §8).
+        private const string GuideSectionName = "settings-guide-section";
         private const string DifficultyBlurbName = "settings-difficulty-blurb";
         private const string ShakeToggleName = "settings-shake-toggle";
         private const string AudioSeamName = "settings-audio-seam";
@@ -185,6 +188,7 @@ namespace DeNelle.Settings
 
             BuildQualityButtons();
             BuildDifficultyButtons();
+            BuildGameGuideButton();
             RegisterCallbacks();
             RefreshFromModel();
             _bound = true;
@@ -248,6 +252,57 @@ namespace DeNelle.Settings
                 _difficultyRow.Add(button);
                 _difficultyButtons[i] = button;
             }
+        }
+
+        /// <summary>
+        /// WO-588: appends a "Help" section with a single "Game Guide" button to the
+        /// settings scroll at runtime (code-built — no UXML authoring, §8). Tapping it
+        /// closes Settings and opens the opt-in Game Guide codex via PanelRouter. Mirrors
+        /// the runtime-button pattern of <see cref="BuildDifficultyButtons"/>. Idempotent:
+        /// a re-bind removes the prior section before re-adding it.
+        /// </summary>
+        private void BuildGameGuideButton()
+        {
+            if (_root == null) return;
+            var scroll = _root.Q<ScrollView>(ScrollName);
+
+            // Re-bind safety: drop any previously-built section so we never duplicate it.
+            VisualElement searchRoot = scroll != null ? (VisualElement)scroll : _root;
+            var prior = searchRoot.Q<VisualElement>(GuideSectionName);
+            if (prior != null) prior.RemoveFromHierarchy();
+
+            var section = new VisualElement { name = GuideSectionName };
+
+            var caption = new Label("Help");
+            caption.AddToClassList("settings-section-caption");
+            section.Add(caption);
+
+            var row = new VisualElement();
+            row.AddToClassList("settings-row");
+
+            var guideButton = new Button(OnGameGuideClicked)
+            {
+                name = "settings-guide-button",
+                text = "Game Guide",
+            };
+            guideButton.AddToClassList("settings-button");
+            guideButton.AddToClassList("settings-button--primary");
+            { var f = UiFont(); if (f != null) guideButton.style.unityFont = f; }
+            row.Add(guideButton);
+            section.Add(row);
+
+            if (scroll != null) scroll.Add(section);
+            else _root.Add(section);
+        }
+
+        /// <summary>
+        /// Opens the Game Guide codex. Closes Settings first so the modal arbiter
+        /// (PanelManager, one-panel-at-a-time) swaps cleanly to the guide.
+        /// </summary>
+        private void OnGameGuideClicked()
+        {
+            Close();
+            DeNelle.Core.UI.PanelRouter.Open(DeNelle.Core.UI.PanelId.GameGuide);
         }
 
         private void RegisterCallbacks()

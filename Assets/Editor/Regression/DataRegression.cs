@@ -123,6 +123,13 @@ namespace DeNelle.Editor
             // least one real condition — so an owner edit can't silently break the unlock cadence.
             CheckPopulationMilestones(failures, log);
 
+            // --- GAME GUIDE (guide-content.json -> GuideContentCatalog) ------------
+            // WO-588: the opt-in tutorial codex content. Load through the real loader; assert
+            // the JSON maps to >0 sections and every section carries a non-empty id/tab/title
+            // and at least one non-empty body paragraph — so a content edit can't ship a blank
+            // tab or an empty body to the guide panel.
+            CheckGuideContent(failures, log);
+
             // --- ITEM-MODEL CAPABILITY INVARIANTS (WO-Item-1, docs/ITEM_MODEL.md §2c) ---
             // OWNER-RATIFIED 2026-06-18: the model invariants live in the regression test,
             // not just the doc — so every change/regen is gated by data, not faith. HARD
@@ -562,6 +569,46 @@ namespace DeNelle.Editor
             }
             if (bad > 0)
                 failures.Add($"{bad} building(s) have null/empty id or displayName");
+        }
+
+        // WO-588: validate the Game Guide codex content (guide-content.json).
+        private static void CheckGuideContent(List<string> failures, StringBuilder log)
+        {
+            GuideContentCatalog.Reload();
+            var sections = new List<GuideSection>(GuideContentCatalog.Sections);
+
+            log.AppendLine($"guide-content.json -> {sections.Count} GuideSection object(s)");
+            if (sections.Count == 0)
+            {
+                failures.Add("guide-content.json deserialized to 0 sections (mapping break or empty 'sections')");
+                return;
+            }
+
+            int badField = 0, emptyBody = 0;
+            var seenIds = new HashSet<string>();
+            foreach (var s in sections)
+            {
+                bool ok = s != null
+                          && !string.IsNullOrEmpty(s.Id)
+                          && !string.IsNullOrEmpty(s.Tab)
+                          && !string.IsNullOrEmpty(s.Title);
+                if (!ok) { badField++; continue; }
+
+                if (!seenIds.Add(s.Id))
+                    failures.Add($"guide-content.json: duplicate section id '{s.Id}'");
+
+                // Body must have at least one non-empty paragraph (a blank body renders as an empty tab).
+                bool hasBody = false;
+                if (s.Body != null)
+                    foreach (var p in s.Body)
+                        if (!string.IsNullOrEmpty(p)) { hasBody = true; break; }
+                if (!hasBody) emptyBody++;
+
+                log.AppendLine($"  GG {s.Id} | tab='{s.Tab}' status='{s.Status}' " +
+                               $"body={(s.Body != null ? s.Body.Count : 0)} tips={(s.Tips != null ? s.Tips.Count : 0)}");
+            }
+            if (badField > 0) failures.Add($"{badField} guide section(s) have null/empty id, tab, or title");
+            if (emptyBody > 0) failures.Add($"{emptyBody} guide section(s) have an empty body (no non-empty paragraph)");
         }
 
         // WO-587: validate the Population milestone table that drives Echo slot unlocks.
