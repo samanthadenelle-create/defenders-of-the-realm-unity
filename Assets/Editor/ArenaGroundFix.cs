@@ -29,6 +29,9 @@ namespace DeNelle.Editor
     {
         private const string PrefabPath = "Assets/Resources/Arena/ForestClearingArena.prefab";
         private const string GroundMat  = "Assets/Resources/Arena/Grass_1.mat";
+        // Stone material for the owner's hand-added "Design" group (dungeon walls + pillars).
+        // Ships under Resources/ so it is GUARANTEED present in a build.
+        private const string DesignMat  = "Assets/Resources/Arena/Dwarven_Ground.mat";
 
         [MenuItem("Defenders/Arena/Fix Ground Material")]
         public static void FixGroundMaterial()
@@ -78,6 +81,78 @@ namespace DeNelle.Editor
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
                 Debug.Log("[ArenaGroundFix] DONE. ARENA_GROUND_FIXED :: " + PrefabPath);
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(contents);
+            }
+        }
+
+        // =====================================================================
+        // FixDesignMaterials -- the owner's hand-added "Design" group (4 dungeon
+        // walls + 4 stone pillars, polyperfect SM_Dungeon_*) rendered FLAT WHITE
+        // in the arena: the FBX import has importMaterials:0 with NO material remap,
+        // so the MeshRenderers have an empty material slot -> URP default-Lit white
+        // (RCA proven 2026-06-29, agent file:line). This LOADS the prefab, assigns
+        // the SERIALIZABLE Dwarven_Ground.mat (Resources => in-build) to every
+        // renderer under "Design", and saves -- every other child preserved.
+        //
+        //   Defenders > Arena > Fix Design (white slabs)
+        //   (batchmode: DeNelle.Editor.ArenaGroundFix.FixDesignMaterials)
+        //   Prints marker: ARENA_DESIGN_FIXED :: <count> renderer(s)
+        // =====================================================================
+        [MenuItem("Defenders/Arena/Fix Design (white slabs)")]
+        public static void FixDesignMaterials()
+        {
+            var matAsset = AssetDatabase.LoadAssetAtPath<Material>(DesignMat);
+            if (matAsset == null)
+            {
+                Debug.LogError("[ArenaGroundFix] Design stone material not found: " + DesignMat + " -- aborting (no fix applied).");
+                return;
+            }
+
+            var contents = PrefabUtility.LoadPrefabContents(PrefabPath);
+            if (contents == null)
+            {
+                Debug.LogError("[ArenaGroundFix] Could not load prefab contents: " + PrefabPath);
+                return;
+            }
+
+            try
+            {
+                Transform designT = FindByName(contents.transform, "Design");
+                if (designT == null)
+                {
+                    Debug.LogWarning("[ArenaGroundFix] 'Design' group not found under " + PrefabPath + " -- nothing to fix.");
+                    return;
+                }
+
+                int fixedCount = 0;
+                foreach (var mr in designT.GetComponentsInChildren<MeshRenderer>(true))
+                {
+                    if (mr == null) continue;
+                    // Assign the SERIALIZABLE asset to EVERY material slot (walls/pillars are
+                    // single-material, but be safe if a mesh has submeshes). Idempotent.
+                    var slots = mr.sharedMaterials;
+                    bool changed = false;
+                    for (int i = 0; i < slots.Length; i++)
+                    {
+                        if (slots[i] != matAsset) { slots[i] = matAsset; changed = true; }
+                    }
+                    if (slots.Length == 0) { slots = new[] { matAsset }; changed = true; }
+                    if (changed) { mr.sharedMaterials = slots; fixedCount++; }
+                }
+
+                PrefabUtility.SaveAsPrefabAsset(contents, PrefabPath, out bool ok);
+                if (!ok)
+                {
+                    Debug.LogError("[ArenaGroundFix] SaveAsPrefabAsset reported failure for " + PrefabPath);
+                    return;
+                }
+
+                AssetDatabase.SaveAssets();
+                AssetDatabase.Refresh();
+                Debug.Log("[ArenaGroundFix] DONE. ARENA_DESIGN_FIXED :: " + fixedCount + " renderer(s) -> " + DesignMat);
             }
             finally
             {
