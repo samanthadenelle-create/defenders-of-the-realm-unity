@@ -1,0 +1,129 @@
+{
+  "_comment": "Data-driven REWARDED-AD HOOK config for Defenders of the Realm / Echoes of Elarion. Drives the thin AdGateService interpreter (WORK_ORDER_ad_generator.md §A). Owner data-first style: WHERE/WHEN an ad offer appears + WHAT it grants is DATA here, not hardcoded branches. The existing RewardedAdManager (Assets/_Modules/Village/Monetization/RewardedAdManager.cs) is the SDK seam (ShowAdInternal); this file replaces its single fixed 480s cooldown + implicit reward with a placement/reward TABLE. Devnet/stub-friendly: every reward resolves through existing services (EconomyService, OfflineHarvestService, BuildTimerService) so it runs end-to-end with the stub ad provider.",
+  "_sources": {
+    "sdkSeam": "Assets/_Modules/Village/Monetization/RewardedAdManager.cs (ShowAdInternal stub -> real Unity Ads/AdMob)",
+    "covenant": "docs/monetization-v2-spec.md §5.3 — convenience is TIME-SAVING only, never combat-power; same covenant binds ad rewards",
+    "rewardSinks": "Assets/Resources/Data/Canonical/packs.json economy block (glimmer/crystals/food/coins) — ad rewards draw from the SAME currency vocabulary"
+  },
+  "_schema": {
+    "placement": "{ id (string, unique, stable key the call-site passes), enabled (bool), surface (enum: store|harvest|build|defeat|daily|tree), rewardId (FK->rewards[].id), cooldownSeconds (int, per-placement; overrides global), dailyCap (int, max grants/placement/local-day, 0=unlimited), requiresFlag (FeatureFlags name or empty), prompt { headline, body, cta } (localizable strings shown on the offer button/modal), priority (int, higher wins when two placements compete for one surface) }",
+    "reward": "{ id (string, unique), kind (enum: currency|timeskip|harvest|buff|cosmeticTrial), grant (object shaped by kind — see examples), description (string, player-facing), maxStack (int, how many unclaimed grants may queue, 0=apply-immediately) }",
+    "global": "{ defaultCooldownSeconds, hardDailyCap (sum across ALL placements), adProvider (stub|unityads|admob), respectDoNotSell (bool) }"
+  },
+  "version": 1,
+  "global": {
+    "defaultCooldownSeconds": 480,
+    "hardDailyCap": 12,
+    "adProvider": "stub",
+    "respectDoNotSell": true,
+    "covenantLine": "Ads are always optional. You are never required to watch one. Ever."
+  },
+  "rewards": [
+    {
+      "id": "reward.crystals.small",
+      "kind": "currency",
+      "grant": { "currency": "crystals", "amount": 150 },
+      "description": "+150 crystals",
+      "maxStack": 0
+    },
+    {
+      "id": "reward.coins.small",
+      "kind": "currency",
+      "grant": { "currency": "coins", "amount": 250 },
+      "description": "+250 coins",
+      "maxStack": 0
+    },
+    {
+      "id": "reward.glimmer.trickle",
+      "kind": "currency",
+      "grant": { "currency": "glimmer", "amount": 15 },
+      "description": "+15 glimmer (cosmetic shop currency)",
+      "maxStack": 3
+    },
+    {
+      "id": "reward.harvest.doubler",
+      "kind": "harvest",
+      "grant": { "service": "OfflineHarvestService", "multiplier": 2.0, "durationSeconds": 3600 },
+      "description": "Double passive harvest for 1 hour",
+      "maxStack": 1
+    },
+    {
+      "id": "reward.build.skip1",
+      "kind": "timeskip",
+      "grant": { "service": "BuildTimerService", "kind": "instant-build", "count": 1 },
+      "description": "Finish one build instantly",
+      "maxStack": 2
+    },
+    {
+      "id": "reward.revive.freeContinue",
+      "kind": "buff",
+      "grant": { "effect": "battle-continue", "value": 1 },
+      "description": "Revive and continue the battle once",
+      "maxStack": 0
+    },
+    {
+      "id": "reward.daily.bonusChest",
+      "kind": "currency",
+      "grant": { "currency": "coins", "amount": 500, "bonus": { "currency": "crystals", "amount": 100 } },
+      "description": "Daily bonus chest: +500 coins, +100 crystals",
+      "maxStack": 0
+    }
+  ],
+  "placements": [
+    {
+      "id": "place.store.crystals",
+      "enabled": true,
+      "surface": "store",
+      "rewardId": "reward.crystals.small",
+      "cooldownSeconds": 480,
+      "dailyCap": 4,
+      "requiresFlag": "",
+      "priority": 10,
+      "prompt": { "headline": "Free Crystals", "body": "Watch a short clip for 150 crystals.", "cta": "Watch" }
+    },
+    {
+      "id": "place.harvest.doubler",
+      "enabled": true,
+      "surface": "harvest",
+      "rewardId": "reward.harvest.doubler",
+      "cooldownSeconds": 3600,
+      "dailyCap": 3,
+      "requiresFlag": "",
+      "priority": 20,
+      "prompt": { "headline": "Double Your Harvest", "body": "The echoes work twice as fast for an hour.", "cta": "Watch & Double" }
+    },
+    {
+      "id": "place.build.skip",
+      "enabled": true,
+      "surface": "build",
+      "rewardId": "reward.build.skip1",
+      "cooldownSeconds": 300,
+      "dailyCap": 5,
+      "requiresFlag": "",
+      "priority": 15,
+      "prompt": { "headline": "Finish Now", "body": "Skip this build instantly — watch a short clip.", "cta": "Skip Build" }
+    },
+    {
+      "id": "place.defeat.continue",
+      "enabled": true,
+      "surface": "defeat",
+      "rewardId": "reward.revive.freeContinue",
+      "cooldownSeconds": 0,
+      "dailyCap": 2,
+      "requiresFlag": "overworldencounter",
+      "priority": 30,
+      "prompt": { "headline": "Get Back Up", "body": "Revive and continue this battle once.", "cta": "Continue" }
+    },
+    {
+      "id": "place.daily.chest",
+      "enabled": true,
+      "surface": "daily",
+      "rewardId": "reward.daily.bonusChest",
+      "cooldownSeconds": 0,
+      "dailyCap": 1,
+      "requiresFlag": "",
+      "priority": 25,
+      "prompt": { "headline": "Daily Bonus Chest", "body": "Claim today's bonus — one free watch a day.", "cta": "Claim" }
+    }
+  ]
+}

@@ -1,0 +1,140 @@
+{
+  "$schema": "see WorkOrders/WORK_ORDER_skr_store_design.md §4-§5 for the authoritative schema",
+  "version": 1,
+  "currency": "SKR",
+  "balanceDisplay": {
+    "symbol": "SKR",
+    "subUnit": "milli",
+    "decimals": 1,
+    "getMoreRoutesTo": "packstore"
+  },
+  "disclaimer": "SKR is a premium token. You are never required to spend anything. Ever. SKR buys only time and beauty, never power.",
+  "catalog": [
+    {
+      "id": "skr_glow_emberblade",
+      "name": "Emberblade Glow",
+      "tagline": "A warm ember-light that clings to the Knight's blade.",
+      "tier": 1,
+      "category": "cosmetic",
+      "costSkr": 15,
+      "grant": { "kind": "cosmetic_sku", "cosmeticSku": "weapon_glow_ember" },
+      "iconId": "ItemIcons/skr/glow_emberblade",
+      "earnableHint": "Also unlockable with Glimmer in the cosmetic shop, or by reaching Hero level 8.",
+      "repeatable": false
+    },
+    {
+      "id": "skr_crest_lanternward",
+      "name": "Lanternward Crest",
+      "tagline": "A shield decal stamped with the keeper's lantern.",
+      "tier": 1,
+      "category": "cosmetic",
+      "costSkr": 20,
+      "grant": { "kind": "cosmetic_sku", "cosmeticSku": "shield_crest_lanternward" },
+      "iconId": "ItemIcons/skr/crest_lanternward",
+      "earnableHint": "Earnable with Glimmer in the cosmetic shop.",
+      "repeatable": false
+    },
+    {
+      "id": "skr_attire_ashenwarden",
+      "name": "Ashen Warden Attire",
+      "tagline": "Soot-grey plate for the Knight who has held the longest watch.",
+      "tier": 2,
+      "category": "cosmetic",
+      "costSkr": 70,
+      "grant": { "kind": "cosmetic_sku", "cosmeticSku": "knight_outfit_ashenwarden" },
+      "iconId": "ItemIcons/skr/attire_ashenwarden",
+      "earnableHint": "Also reachable via the Keeper's Almanac seasonal pass free track.",
+      "repeatable": false
+    },
+    {
+      "id": "skr_token_instantbuild_5",
+      "name": "Mason's Favor (x5)",
+      "tagline": "The Folk raise five walls in a blink, as thanks for tending the Heart.",
+      "tier": 3,
+      "category": "convenience",
+      "costSkr": 25,
+      "grant": { "kind": "convenience_token", "token": { "kind": "instant-build", "count": 5 } },
+      "iconId": "ItemIcons/skr/token_instantbuild",
+      "earnableHint": "Instant-build tokens also drop from completed questlines.",
+      "repeatable": true
+    },
+    {
+      "id": "skr_token_harvest_24h",
+      "name": "Tireless Echoes (24h)",
+      "tagline": "Your echoes gather without a hand to guide them, for a day and a night.",
+      "tier": 3,
+      "category": "convenience",
+      "costSkr": 40,
+      "grant": { "kind": "convenience_token", "token": { "kind": "harvest-auto-collect", "count": 1 } },
+      "iconId": "ItemIcons/skr/token_harvest",
+      "earnableHint": "A 1-hour version is craftable at the Forge.",
+      "repeatable": true
+    },
+    {
+      "id": "skr_pack_lanternlight",
+      "name": "Lanternlight Coffer",
+      "tagline": "The value coffer — an outfit, a pet skin, and a little of everything, paid in token.",
+      "tier": 4,
+      "category": "premium_pack",
+      "costSkr": 180,
+      "grant": {
+        "kind": "bundle",
+        "items": [
+          { "kind": "cosmetic_sku", "cosmeticSku": "knight_outfit_lanternlight" },
+          { "kind": "cosmetic_sku", "cosmeticSku": "pet_skin_lanternlight" },
+          { "kind": "convenience_token", "token": { "kind": "instant-build", "count": 3 } },
+          { "kind": "economy", "economy": { "glimmer": 75, "crystals": 700, "food": 200, "coins": 400 } }
+        ]
+      },
+      "iconId": "ItemIcons/skr/pack_lanternlight",
+      "earnableHint": "This is the SKR-priced twin of the Lanternlight pack — buyable with real money in the Realm Store too.",
+      "repeatable": false
+    },
+    {
+      "id": "skr_crown_founder",
+      "name": "Founder's Crown",
+      "tagline": "For the first to believe in Elarion. Worn forever; offered only at the dawn.",
+      "tier": 5,
+      "category": "exclusive",
+      "costSkr": 600,
+      "grant": {
+        "kind": "bundle",
+        "items": [
+          { "kind": "cosmetic_sku", "cosmeticSku": "crown_founder" },
+          { "kind": "cosmetic_sku", "cosmeticSku": "knight_outfit_founder" },
+          { "kind": "cosmetic_sku", "cosmeticSku": "banner_founder_inscribed" }
+        ]
+      },
+      "iconId": "ItemIcons/skr/crown_founder",
+      "availability": { "startUtc": null, "endUtc": null, "launchWindowOnly": true },
+      "earnableHint": null,
+      "repeatable": false
+    }
+  ],
+  "acquisitionPacks": [
+    {
+      "sku": "skr_pouch_small",
+      "name": "Token Pouch",
+      "skrAmount": 100,
+      "bonusSkr": 0,
+      "pricing": { "usd": 4.99, "usdc": 4.99, "sol": 0.045, "skr": 0 },
+      "founderOnly": false
+    },
+    {
+      "sku": "skr_pouch_medium",
+      "name": "Token Satchel",
+      "skrAmount": 250,
+      "bonusSkr": 25,
+      "pricing": { "usd": 9.99, "usdc": 9.99, "sol": 0.09, "skr": 0 },
+      "founderOnly": false
+    },
+    {
+      "sku": "skr_pouch_large",
+      "name": "Token Coffer",
+      "skrAmount": 600,
+      "bonusSkr": 90,
+      "pricing": { "usd": 19.99, "usdc": 19.99, "sol": 0.18, "skr": 0 },
+      "founderOnly": false
+    }
+  ]
+}

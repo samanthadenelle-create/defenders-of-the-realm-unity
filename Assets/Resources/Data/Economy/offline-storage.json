@@ -1,0 +1,153 @@
+{
+  "_comment": "Offline storage / offline-accrual config for Echoes of Elarion. DATA the runtime interprets — NOT hardcoded branches (owner data-first style). Externalizes the tunables currently hardcoded on EchoService (BaseRatePerHour, SiloCapHours, MaxEchoes, resource split) and OfflineHarvestService (OfflineCapHours) into one authored table, and defines the storage-capacity UPGRADE LADDER that the offline-storage store packs sell against. Design doc: WorkOrders/WORK_ORDER_offline_storage_logic.md.",
+  "_sources": {
+    "echoService": "Assets/_Modules/Village/Harvest/EchoService.cs (silo model: capHours, rate=echoCount*BaseRatePerHour, DumpSilos split)",
+    "offlineHarvest": "Assets/_Modules/Village/Harvest/OfflineHarvestService.cs (away-window cap, node/settlement/pet accrual, LastHarvestClaimMs clock)",
+    "saveSchema": "Assets/_Modules/Core/State/GameState.cs + SaveSchema.cs (v25 fields: SiloResources, LastHarvestClaimMs, EchoCount, WavesCompleted)",
+    "packs": "Assets/Resources/Data/Canonical/packs.json (SKR/USD pricing ladder, harvest-auto-collect convenience)"
+  },
+  "version": 1,
+  "schemaVersion": 26,
+  "_schemaVersionNote": "Bump GameState/SaveSchema to v26 ONLY if the new per-resource overflow fields below are adopted. The V1 shared-silo model already round-trips on v25 (SiloResources + LastHarvestClaimMs). See the save-model note in the design doc.",
+
+  "model": "shared-silo",
+  "_modelNote": "V1 = shared-silo (one pooled buffer measured in HOURS of accrual; matches live EchoService). 'per-resource' switches the runtime to the perResourceWarehouses table below (V2, flag ff.perresourcestorage). Runtime reads this string and picks the interpreter — no recompile to switch.",
+
+  "accrual": {
+    "baseRatePerHourPerEcho": 120.0,
+    "maxEchoes": 4,
+    "wavesPerEcho": 5,
+    "_rateNote": "Total accrual rate = activeEchoes * baseRatePerHourPerEcho (resources/hour). ratePerSecond = that / 3600. Echoes unlock via the wave pillar (every wavesPerEcho clears, up to maxEchoes).",
+    "resourceSplit": [
+      { "resource": "wood", "fraction": 0.34, "remainder": true },
+      { "resource": "iron", "fraction": 0.33, "remainder": false },
+      { "resource": "food", "fraction": 0.33, "remainder": false }
+    ],
+    "_splitNote": "How a Dumped silo divides across the build harvestables. 'remainder:true' slot absorbs the integer rounding leftover so no unit is lost. Crystals are NOT in the silo split — they stay a premium/reward currency, banked only by mines/settlements/pets via OfflineHarvestService."
+  },
+
+  "siloBaseCapHours": 4.0,
+  "offlineWindowBaseCapHours": 10.0,
+  "_capNote": "siloBaseCapHours = the Echo silo buffer ceiling (absolute capacity = capHours * baseRatePerHourPerEcho * activeEchoes). offlineWindowBaseCapHours = the OfflineHarvestService away-window clamp for mine/settlement/pet nodes. Both are raised by the upgrade ladder below. Two dials, one ladder: a tier can lift one or both.",
+
+  "storageTiers": [
+    {
+      "tier": 1,
+      "id": "silo_t1_starter",
+      "name": "Woven Silo",
+      "siloCapHours": 4.0,
+      "offlineWindowCapHours": 10.0,
+      "cost": { "wood": 0, "iron": 0, "crystals": 0, "coins": 0, "skr": 0 },
+      "skrFastTrack": 0,
+      "default": true,
+      "_note": "Starting tier — every new save owns this. No cost; it is the baseline the ladder upgrades from."
+    },
+    {
+      "tier": 2,
+      "id": "silo_t2_timbered",
+      "name": "Timbered Granary",
+      "siloCapHours": 6.0,
+      "offlineWindowCapHours": 12.0,
+      "cost": { "wood": 400, "iron": 150, "crystals": 0, "coins": 250, "skr": 0 },
+      "skrFastTrack": 30,
+      "_note": "First meaningful lift: 4h -> 6h silo, 10h -> 12h window. Soft-currency affordable within a session or two. SKR fast-track skips the grind."
+    },
+    {
+      "tier": 3,
+      "id": "silo_t3_stone",
+      "name": "Stone Reliquary Vault",
+      "siloCapHours": 8.0,
+      "offlineWindowCapHours": 16.0,
+      "cost": { "wood": 1200, "iron": 500, "crystals": 200, "coins": 800, "skr": 0 },
+      "skrFastTrack": 60,
+      "_note": "8h silo (a full work-day away pays off) + 16h window. Introduces a crystal cost so it gates behind some harvest depth."
+    },
+    {
+      "tier": 4,
+      "id": "silo_t4_warded",
+      "name": "Warded Hold",
+      "siloCapHours": 12.0,
+      "offlineWindowCapHours": 24.0,
+      "cost": { "wood": 3000, "iron": 1400, "crystals": 700, "coins": 2000, "skr": 0 },
+      "skrFastTrack": 120,
+      "_note": "12h silo / 24h window — the overnight check-in tier. The classic 'sleep, wake up full' loop lands here."
+    },
+    {
+      "tier": 5,
+      "id": "silo_t5_eternal",
+      "name": "Eternal Heartstore",
+      "siloCapHours": 18.0,
+      "offlineWindowCapHours": 36.0,
+      "cost": { "wood": 7000, "iron": 3200, "crystals": 1800, "coins": 5000, "skr": 0 },
+      "skrFastTrack": 240,
+      "_note": "End-of-ladder soft-currency sink for committed players. 36h window means a weekend away still rewards. Premium fast-track for whales who want it now."
+    }
+  ],
+
+  "premium": {
+    "currency": "skr",
+    "_currencyNote": "SKR is the canonical premium token (wallet-rail, see packs.json pricing). skrFastTrack on each tier = the premium SKILL-SKIP cost to instantly own that tier instead of grinding soft currency. Convenience-only: it buys TIME (a bigger barn, sooner), never combat power — same covenant as the pack convenience items (instant-build / harvest-auto-collect).",
+    "fastForwardSilo": {
+      "id": "silo_fastforward",
+      "name": "Spirit Surge",
+      "skrPerFill": 15,
+      "_note": "Optional one-shot: instantly fill the silo to its current cap (skip the wait), priced in SKR. Maps to the packs.json 'harvest-auto-collect' convenience kind. Pure time-skip; the cap itself is unchanged."
+    },
+    "packLinkedTiers": {
+      "_note": "Offline-storage store packs grant a storageTier outright (or advance the owned tier). The pack catalogue (packs.json) references these tier ids in a future 'storage' contents slot. Buying a pack = owning that tier's cap permanently, no soft-currency spend.",
+      "examples": [
+        { "packSku": "lanternlight", "grantsTierAtLeast": "silo_t3_stone" },
+        { "packSku": "patron-of-elarion", "grantsTierAtLeast": "silo_t4_warded" },
+        { "packSku": "founders-vow", "grantsTierAtLeast": "silo_t5_eternal" }
+      ]
+    }
+  },
+
+  "perResourceWarehouses": {
+    "_note": "V2 option (model:'per-resource', ff.perresourcestorage). Absolute per-resource holding caps for the SPENDABLE wallet (overflow past these is lost/refused on grant), independent of the time-based silo. Lets a pack sell 'Iron Vault +5000' style upgrades. Each warehouse has its own tier ladder mirroring storageTiers' cost shape. Inert in V1 (shared-silo).",
+    "warehouses": [
+      {
+        "resource": "wood",
+        "baseCap": 2000,
+        "tiers": [
+          { "tier": 1, "cap": 2000, "cost": { "wood": 0, "iron": 0, "crystals": 0, "coins": 0, "skr": 0 } },
+          { "tier": 2, "cap": 5000, "cost": { "wood": 0, "iron": 300, "crystals": 0, "coins": 400, "skr": 0 }, "skrFastTrack": 30 },
+          { "tier": 3, "cap": 12000, "cost": { "wood": 0, "iron": 900, "crystals": 250, "coins": 1200, "skr": 0 }, "skrFastTrack": 60 }
+        ]
+      },
+      {
+        "resource": "iron",
+        "baseCap": 1500,
+        "tiers": [
+          { "tier": 1, "cap": 1500, "cost": { "wood": 0, "iron": 0, "crystals": 0, "coins": 0, "skr": 0 } },
+          { "tier": 2, "cap": 4000, "cost": { "wood": 400, "iron": 0, "crystals": 0, "coins": 400, "skr": 0 }, "skrFastTrack": 30 },
+          { "tier": 3, "cap": 10000, "cost": { "wood": 1200, "iron": 0, "crystals": 250, "coins": 1200, "skr": 0 }, "skrFastTrack": 60 }
+        ]
+      },
+      {
+        "resource": "food",
+        "baseCap": 1500,
+        "tiers": [
+          { "tier": 1, "cap": 1500, "cost": { "wood": 0, "iron": 0, "crystals": 0, "coins": 0, "skr": 0 } },
+          { "tier": 2, "cap": 4000, "cost": { "wood": 400, "iron": 150, "crystals": 0, "coins": 400, "skr": 0 }, "skrFastTrack": 30 },
+          { "tier": 3, "cap": 10000, "cost": { "wood": 1200, "iron": 450, "crystals": 200, "coins": 1200, "skr": 0 }, "skrFastTrack": 60 }
+        ]
+      }
+    ]
+  },
+
+  "saveModel": {
+    "_note": "What persists. V1 needs NO new fields (already on GameState v25). The ownedStorageTier + per-resource tier indices are the ONLY additions, and they are small ints that fit the staged local->cloud->Solana save path (canon: data-architecture-hybrid-db-direction — config binaries stay OUT of the DB; only these scalar indices + balances sync).",
+    "existingFields_v25": [
+      "SiloResources (double) — current pooled silo balance, pre-Dump",
+      "LastHarvestClaimMs (double, Unix-ms) — the accrual clock; offline delta = now - this; advanced atomically on Dump/claim",
+      "EchoCount (int) — active echoes (the rate multiplier)",
+      "WavesCompleted (int) — echo-unlock counter",
+      "Resources { wood, iron, food, crystals, coins } — the spendable wallet"
+    ],
+    "newFields_v26": [
+      { "field": "ownedStorageTier", "type": "int", "default": 1, "desc": "Index into storageTiers; runtime applies that tier's siloCapHours + offlineWindowCapHours. Replaces the hardcoded EchoService.SiloCapHours / OfflineHarvestService.OfflineCapHours." },
+      { "field": "warehouseTiers", "type": "int[] (per resource)", "default": [1,1,1], "desc": "Only used when model='per-resource'. Index into each perResourceWarehouses[].tiers." }
+    ]
+  }
+}

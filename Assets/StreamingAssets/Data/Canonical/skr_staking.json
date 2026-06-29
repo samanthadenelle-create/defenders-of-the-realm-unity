@@ -1,0 +1,138 @@
+{
+  "_comment": "SKR Staking Reward — data-driven config + tiers + perks + capped reward-pool accounting. Design source: WorkOrders/WORK_ORDER_skr_staking_and_seeker.md (Part A). Thin interpreter, no hardcoded branches: tiers/perks/pools are rows. Loaded via CanonicalJson.Read('Data/Canonical/skr_staking.json'); mirror to Assets/Resources/Data/Canonical/ at implementation (WebGL pattern, same as packs.json). NO binary inlined: cosmeticSku/iconId are POINTER strings only. Covenant firewall: PerkGrant.kind has NO combat/stat kind; the SkrStakingRegression build gate rejects one.",
+  "version": 1,
+  "schemaName": "skr_staking",
+
+  "config": {
+    "enabled": true,
+    "displayName": "Keeper's Vow",
+    "spendableNeverAutoLocked": true,
+    "cooldownHours": 48,
+    "cooldownNote": "Mirrors the Solana Mobile SKR protocol's ~48h / 2-day-epoch unstake cooldown so the in-game UX matches real SKR.",
+    "skrRebateEnabled": false,
+    "skrRebateGateNote": "Option (b) SKR rebate ships ONLY after the monetization-v2-spec.md sec/sweepstakes legal sign-off. Cosmetics (a) + store-discount (c) ship first with no gate. When false, tiers grant perks only and skr_rebate_share perks are skipped.",
+    "displayCopy": {
+      "lockModalTitle": "Take the Keeper's Vow",
+      "framing": "Loyalty rewards for supporting Elarion — cosmetic and convenience only.",
+      "forbiddenLanguage": ["APY", "passive income", "returns", "yield", "interest", "guaranteed"],
+      "forbiddenLanguageNote": "Security-optics discipline (WO Part A §A4). Never advertise a rate for the GAME reward; the protocol's native staking APY is Solana Mobile's, shown in their wallet, not ours."
+    }
+  },
+
+  "stakeTiers": [
+    {
+      "id": "tier_kindled",
+      "displayName": "Kindled",
+      "durationDays": 30,
+      "minStakeSkr": 50,
+      "earlyUnstakeForfeits": true,
+      "unlockDisclosure": "Locks for 30 days. Unstake early anytime: you keep all cosmetics; only an unclaimed loyalty rebate (if any) is forfeited. Your SKR is always yours.",
+      "perks": [
+        { "kind": "profile_flair", "flairId": "flair_kindled_keeper" },
+        { "kind": "store_discount_pct", "discountPct": 5 }
+      ]
+    },
+    {
+      "id": "tier_tended",
+      "displayName": "Tended",
+      "durationDays": 90,
+      "minStakeSkr": 200,
+      "earlyUnstakeForfeits": true,
+      "unlockDisclosure": "Locks for 90 days. Unstake early anytime: cosmetics kept, unclaimed rebate forfeited. Principal always returns to your spendable balance after the 48h cooldown.",
+      "perks": [
+        { "kind": "profile_flair", "flairId": "flair_tended_keeper" },
+        { "kind": "cosmetic_sku", "cosmeticSku": "skr_crown_keeper_animated" },
+        { "kind": "store_discount_pct", "discountPct": 10 },
+        { "kind": "convenience_bump", "bump": { "kind": "echo_storage_slot", "amount": 1 } }
+      ]
+    },
+    {
+      "id": "tier_everburning",
+      "displayName": "Everburning",
+      "durationDays": 180,
+      "minStakeSkr": 500,
+      "earlyUnstakeForfeits": true,
+      "unlockDisclosure": "Locks for 180 days. Unstake early anytime: cosmetics kept, unclaimed rebate forfeited. 48h cooldown then principal returns.",
+      "perks": [
+        { "kind": "profile_flair", "flairId": "flair_everburning_keeper" },
+        { "kind": "cosmetic_sku", "cosmeticSku": "skr_crown_keeper_animated" },
+        { "kind": "cosmetic_sku", "cosmeticSku": "skr_vfx_everburning_weapon" },
+        { "kind": "store_discount_pct", "discountPct": 15 },
+        { "kind": "convenience_bump", "bump": { "kind": "echo_storage_slot", "amount": 1 } },
+        { "kind": "skr_rebate_share", "rebateWeight": 1.0 }
+      ]
+    }
+  ],
+
+  "rewardPools": [
+    {
+      "poolId": "owner_yield_2026Q3",
+      "fundedSkr": 9000,
+      "reservedSkr": 0,
+      "paidSkr": 0,
+      "periodStartUtc": "2026-07-01T00:00:00Z",
+      "periodEndUtc": "2026-09-30T23:59:59Z",
+      "maxRebatePerUser": 25,
+      "haltIfDebtExceeds": true,
+      "sourceNote": "Funded ONLY from the owner's existing 1M-SKR STAKING YIELD (monetization-v2-spec.md §12), never principal, never minted. Invariant (regression-gated): paidSkr + reservedSkr <= fundedSkr, always. Interpreter checks the pool BEFORE crediting; on dry pool it FlowTrace.Warn()s and degrades to perks-only (never silent, never overdraws)."
+    }
+  ],
+
+  "convenienceAllowList": ["echo_storage_slot", "passive_accrual_hours"],
+  "convenienceAllowListNote": "Sanctioned convenience kinds ONLY (WO §A4 guardrail 1). Anything granting fire-rate, stat, cap-raise, or permanent power is rejected by SkrStakingRegression — pay-to-win firewall.",
+
+  "perkKindEnum": ["cosmetic_sku", "profile_flair", "store_discount_pct", "convenience_bump", "skr_rebate_share"],
+  "perkKindEnumNote": "NO combat/stat kind exists. SkrStakingRegression fails the build if a perk kind outside this set appears.",
+
+  "sample_runtime_state": {
+    "_comment": "ILLUSTRATIVE player-side state behind ISkrLedger (NOT authored content — shows the shapes the runtime persists). Demonstrates the staked sub-bucket, an active stake, a stake in cooldown, and a worked pool-invariant snapshot.",
+    "skrLedger": {
+      "spendableSkr": 320,
+      "stakedSkr": 700,
+      "source": "virtual_local",
+      "lastSyncUtc": "2026-07-15T10:00:00Z"
+    },
+    "stakeRecords": [
+      {
+        "id": "stk_0001",
+        "amountSkr": 500,
+        "lockStartUtc": "2026-07-02T12:00:00Z",
+        "lockTierId": "tier_everburning",
+        "unlockUtc": "2026-12-29T12:00:00Z",
+        "status": "active",
+        "cooldownEndUtc": null,
+        "source": "virtual_local",
+        "onchainRef": null
+      },
+      {
+        "id": "stk_0002",
+        "amountSkr": 200,
+        "lockStartUtc": "2026-05-01T08:00:00Z",
+        "lockTierId": "tier_tended",
+        "unlockUtc": "2026-07-30T08:00:00Z",
+        "status": "cooldown",
+        "cooldownEndUtc": "2026-07-17T08:00:00Z",
+        "source": "virtual_local",
+        "onchainRef": null
+      }
+    ],
+    "pendingRebates": [
+      {
+        "id": "drop_0001",
+        "poolId": "owner_yield_2026Q3",
+        "amountSkr": 3.5,
+        "reason": "keeper_loyalty_rebate_week_28",
+        "grantedUtc": "2026-07-14T00:00:00Z",
+        "claimNote": "Shown as pending; real SKR payout occurs at Stage 3 (on-chain) from the §12 payouts vault, server-verified. Until then it is a tracked claim, never a minted balance."
+      }
+    ],
+    "poolInvariantSnapshot": {
+      "poolId": "owner_yield_2026Q3",
+      "fundedSkr": 9000,
+      "reservedSkr": 3.5,
+      "paidSkr": 0,
+      "invariantHolds": "paidSkr(0) + reservedSkr(3.5) = 3.5 <= fundedSkr(9000) ✓",
+      "perUserCapCheck": "drop_0001 amount 3.5 <= maxRebatePerUser 25 ✓"
+    }
+  }
+}

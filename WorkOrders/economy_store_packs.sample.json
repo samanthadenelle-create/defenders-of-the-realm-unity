@@ -1,0 +1,294 @@
+{
+  "_comment": "SAMPLE / PROPOSED economy store packs (resource, farming-boost, offline-storage, bundles). Shaped to the real PackDef schema (Assets/_Modules/Wallet/PackCatalog.cs) + the additive extensions specified in WorkOrders/WORK_ORDER_economy_store_packs.md §2/§7: economy.wood/iron/grain, pricing.coins(gold)/crystals(soft), convenience[].boost (BoostSpec), and the optional badge/featured/rotationGroup/category/discountPct flags. This is NOT the live catalogue — do NOT merge into Assets/.../Canonical/packs.json (that holds the canon five). Once the schema extension lands, these append into the catalogue (or a sibling economy-packs.json) and load via PackCatalog. All artId values are PLACEHOLDERS — icons not yet produced (see WO §11). Resource/price numbers are starting points to tune against the harvest economy.",
+  "_schemaExtensions": {
+    "economy": "Adds wood/iron/grain ints alongside glimmer/crystals/food/coins.",
+    "pricing": "Adds coins (gold) + crystals (soft currency) in-game price tracks alongside usd/usdc/sol/skr wallet rails. A pack is soft-purchasable when coins>0 or crystals>0; wallet-purchasable when usdc/sol/skr>0.",
+    "convenience.boost": "Optional nested BoostSpec { multiplier, durationHours, appliesTo(all|wood|iron|grain), stack(extend|refresh|reject|queue) } for timed kinds. Null for non-timed items.",
+    "packDef": "Optional badge(starter|best-value), featured(bool), rotationGroup(string), category(resource|boost|storage|bundle), discountPct(int)."
+  },
+  "version": 1,
+  "currencyDisclaimer": "Token price moves with the market.",
+  "packs": [
+    {
+      "sku": "hearthstock-crate",
+      "tier": 1,
+      "name": "Hearthstock Crate",
+      "tagline": "A starter's stock — a little of each to get the Heart growing.",
+      "theme": "Starter mixed-resource pack — deliberately cheap first-purchase nudge.",
+      "category": "resource",
+      "badge": "starter",
+      "artId": "art.econpack.crate.mixed.small",
+      "pricing": { "usd": 0.99, "usdc": 0.99, "sol": 0.009, "skr": 10, "coins": 500, "crystals": 40 },
+      "contents": {
+        "cosmetics": [],
+        "economy": { "wood": 250, "iron": 250, "grain": 250 },
+        "convenience": []
+      }
+    },
+    {
+      "sku": "homestead-haul",
+      "tier": 2,
+      "name": "Homestead Haul",
+      "tagline": "A balanced haul to keep every echo busy.",
+      "theme": "Medium mixed-resource pack.",
+      "category": "resource",
+      "artId": "art.econpack.crate.mixed.medium",
+      "pricing": { "usd": 2.49, "usdc": 2.49, "sol": 0.022, "skr": 25, "coins": 1400, "crystals": 110 },
+      "contents": {
+        "cosmetics": [],
+        "economy": { "wood": 750, "iron": 750, "grain": 750 },
+        "convenience": []
+      }
+    },
+    {
+      "sku": "granary-haul",
+      "tier": 3,
+      "name": "Granary Haul",
+      "tagline": "The smart stock-up — most resources per coin before the whale tier.",
+      "theme": "Large mixed-resource pack — BEST VALUE ribbon.",
+      "category": "resource",
+      "badge": "best-value",
+      "artId": "art.econpack.crate.mixed.large",
+      "pricing": { "usd": 5.99, "usdc": 5.99, "sol": 0.054, "skr": 60, "coins": 3600, "crystals": 280 },
+      "contents": {
+        "cosmetics": [],
+        "economy": { "wood": 2000, "iron": 2000, "grain": 2000 },
+        "convenience": []
+      }
+    },
+    {
+      "sku": "kings-stockpile",
+      "tier": 4,
+      "name": "King's Stockpile",
+      "tagline": "Enough to raise a wing in a day.",
+      "theme": "Mega mixed-resource pack — whale tier, intentionally lower per-unit efficiency.",
+      "category": "resource",
+      "artId": "art.econpack.crate.mixed.mega",
+      "pricing": { "usd": 14.99, "usdc": 14.99, "sol": 0.135, "skr": 150, "coins": 10000, "crystals": 750 },
+      "contents": {
+        "cosmetics": [],
+        "economy": { "wood": 6000, "iron": 6000, "grain": 6000 },
+        "convenience": []
+      }
+    },
+    {
+      "sku": "timberload-large",
+      "tier": 3,
+      "name": "Timberload",
+      "tagline": "All wood, for when the sawmill runs dry.",
+      "theme": "Single-resource (wood) pack — targets a wood bottleneck, slight per-unit premium.",
+      "category": "resource",
+      "artId": "art.econpack.crate.wood.large",
+      "pricing": { "usd": 5.99, "usdc": 5.99, "sol": 0.054, "skr": 60, "coins": 3600, "crystals": 280 },
+      "contents": {
+        "cosmetics": [],
+        "economy": { "wood": 6000, "iron": 0, "grain": 0 },
+        "convenience": []
+      }
+    },
+    {
+      "sku": "ironload-large",
+      "tier": 3,
+      "name": "Ironload",
+      "tagline": "All iron, to keep the forges roaring.",
+      "theme": "Single-resource (iron) pack.",
+      "category": "resource",
+      "artId": "art.econpack.crate.iron.large",
+      "pricing": { "usd": 5.99, "usdc": 5.99, "sol": 0.054, "skr": 60, "coins": 3600, "crystals": 280 },
+      "contents": {
+        "cosmetics": [],
+        "economy": { "wood": 0, "iron": 6000, "grain": 0 },
+        "convenience": []
+      }
+    },
+    {
+      "sku": "boost-2x-harvest-1h",
+      "tier": 1,
+      "name": "Quick Harvest — 1 Hour",
+      "tagline": "Double the echoes' yield for an hour. Works while you're away.",
+      "theme": "Timed 2x harvest boost, 1h, all resources.",
+      "category": "boost",
+      "artId": "art.econpack.boost.2x.1h",
+      "pricing": { "usd": 0.49, "usdc": 0.49, "sol": 0.005, "skr": 6, "coins": 300, "crystals": 25 },
+      "contents": {
+        "cosmetics": [],
+        "economy": {},
+        "convenience": [
+          {
+            "kind": "harvest-boost",
+            "count": 1,
+            "description": "2x echo harvest rate for 1 hour — keeps ticking offline.",
+            "boost": { "multiplier": 2.0, "durationHours": 1, "appliesTo": "all", "stack": "extend" }
+          }
+        ]
+      }
+    },
+    {
+      "sku": "boost-2x-harvest-24h",
+      "tier": 3,
+      "name": "Bountiful Day — 24 Hours",
+      "tagline": "A full day of doubled yield, online or off.",
+      "theme": "Timed 2x harvest boost, 24h, all resources — best-value boost.",
+      "category": "boost",
+      "badge": "best-value",
+      "artId": "art.econpack.boost.2x.24h",
+      "pricing": { "usd": 5.99, "usdc": 5.99, "sol": 0.054, "skr": 70, "coins": 3500, "crystals": 280 },
+      "contents": {
+        "cosmetics": [],
+        "economy": {},
+        "convenience": [
+          {
+            "kind": "harvest-boost",
+            "count": 1,
+            "description": "2x echo harvest rate for 24 hours — keeps ticking offline, up to your offline window.",
+            "boost": { "multiplier": 2.0, "durationHours": 24, "appliesTo": "all", "stack": "extend" }
+          }
+        ]
+      }
+    },
+    {
+      "sku": "instant-fill-storage-1",
+      "tier": 1,
+      "name": "Storehouse Topper",
+      "tagline": "Fill every store to the brim, instantly.",
+      "theme": "Instant-fill all storage types to current cap, single use.",
+      "category": "boost",
+      "artId": "art.econpack.instantfill.1",
+      "pricing": { "usd": 1.99, "usdc": 1.99, "sol": 0.018, "skr": 20, "coins": 1200, "crystals": 90 },
+      "contents": {
+        "cosmetics": [],
+        "economy": {},
+        "convenience": [
+          { "kind": "instant-fill-storage", "count": 1, "description": "Instantly fill wood, iron and grain to their current storage cap." }
+        ]
+      }
+    },
+    {
+      "sku": "workforce-slot-1",
+      "tier": 2,
+      "name": "Echo Awakening",
+      "tagline": "Call one more echo to the work — a permanent extra hand (cap 5).",
+      "theme": "Permanent +1 echo workforce slot. Hard cap 5; blocked at maximum.",
+      "category": "boost",
+      "artId": "art.econpack.workforce.slot",
+      "pricing": { "usd": 9.99, "usdc": 9.99, "sol": 0.09, "skr": 120, "coins": 8000, "crystals": 600 },
+      "contents": {
+        "cosmetics": [],
+        "economy": {},
+        "convenience": [
+          { "kind": "workforce-slot", "count": 1, "description": "Permanently unlock one more echo workforce slot (to a maximum of 5). Assign its harvest target by drag-drop." }
+        ]
+      }
+    },
+    {
+      "sku": "storage-tier-jump-3",
+      "tier": 3,
+      "name": "Granary Expansion",
+      "tagline": "Three storage tiers at once — hold far more before you cap out.",
+      "theme": "Buy +3 storage-capacity tiers outright (soft-currency convenience).",
+      "category": "storage",
+      "badge": "best-value",
+      "artId": "art.econpack.storage.tier3",
+      "pricing": { "usd": 7.99, "usdc": 7.99, "sol": 0.072, "skr": 160, "coins": 10000, "crystals": 800 },
+      "contents": {
+        "cosmetics": [],
+        "economy": {},
+        "convenience": [
+          { "kind": "storage-tier-jump", "count": 3, "description": "Raise every resource storage cap by three tiers." }
+        ]
+      }
+    },
+    {
+      "sku": "offline-window-perm-24h",
+      "tier": 4,
+      "name": "Eternal Vigil",
+      "tagline": "Your village keeps gathering for a full day while you're away — forever.",
+      "theme": "Permanent offline-accrual window to 24h. SKR fast-track ONLY (no soft path).",
+      "category": "storage",
+      "artId": "art.econpack.offline.perm24h",
+      "pricing": { "usd": 18.99, "usdc": 18.99, "sol": 0.17, "skr": 220, "coins": 0, "crystals": 0 },
+      "contents": {
+        "cosmetics": [],
+        "economy": {},
+        "convenience": [
+          { "kind": "offline-window-extension", "count": 1, "description": "Permanently extend your offline-accrual window to 24 hours." }
+        ]
+      }
+    },
+    {
+      "sku": "bundle-farmers",
+      "tier": 3,
+      "name": "Farmer's Bundle",
+      "tagline": "Everything a new farmer needs — stock, a boost, and room to grow.",
+      "theme": "Signature combo: Medium mixed resources + 2x/8h boost + 1 storage tier. ~25% off the sum.",
+      "category": "bundle",
+      "badge": "best-value",
+      "discountPct": 25,
+      "artId": "art.econpack.bundle.farmers",
+      "pricing": { "usd": 7.99, "usdc": 7.99, "sol": 0.072, "skr": 90, "coins": 4800, "crystals": 380 },
+      "contents": {
+        "cosmetics": [],
+        "economy": { "wood": 750, "iron": 750, "grain": 750 },
+        "convenience": [
+          {
+            "kind": "harvest-boost",
+            "count": 1,
+            "description": "2x echo harvest rate for 8 hours.",
+            "boost": { "multiplier": 2.0, "durationHours": 8, "appliesTo": "all", "stack": "extend" }
+          },
+          { "kind": "storage-tier-jump", "count": 1, "description": "Raise every resource storage cap by one tier." }
+        ]
+      }
+    },
+    {
+      "sku": "bundle-starter",
+      "tier": 1,
+      "name": "Starter Stockpile",
+      "tagline": "A first leg-up — a little stock, a quick boost, a full store.",
+      "theme": "Starter combo: Small mixed resources + 2x/1h boost + 1 instant-fill. First-session nudge.",
+      "category": "bundle",
+      "badge": "starter",
+      "discountPct": 20,
+      "artId": "art.econpack.bundle.starter",
+      "pricing": { "usd": 1.99, "usdc": 1.99, "sol": 0.018, "skr": 20, "coins": 1000, "crystals": 80 },
+      "contents": {
+        "cosmetics": [],
+        "economy": { "wood": 250, "iron": 250, "grain": 250 },
+        "convenience": [
+          {
+            "kind": "harvest-boost",
+            "count": 1,
+            "description": "2x echo harvest rate for 1 hour.",
+            "boost": { "multiplier": 2.0, "durationHours": 1, "appliesTo": "all", "stack": "extend" }
+          },
+          { "kind": "instant-fill-storage", "count": 1, "description": "Instantly fill all storage to current cap." }
+        ]
+      }
+    },
+    {
+      "sku": "bundle-weekly-deal",
+      "tier": 3,
+      "name": "Weekly Deal — Harvest Festival",
+      "tagline": "This week only — the village celebrates with a deep discount.",
+      "theme": "Recurring rotating weekly-deal slot (~35% off). featured=true; rotationGroup pool resets Monday.",
+      "category": "bundle",
+      "featured": true,
+      "rotationGroup": "weekly-deal-pool",
+      "discountPct": 35,
+      "artId": "art.econpack.bundle.weekly",
+      "pricing": { "usd": 4.99, "usdc": 4.99, "sol": 0.045, "skr": 55, "coins": 3000, "crystals": 230 },
+      "contents": {
+        "cosmetics": [],
+        "economy": { "wood": 1000, "iron": 1000, "grain": 1000 },
+        "convenience": [
+          {
+            "kind": "harvest-boost",
+            "count": 1,
+            "description": "2x echo harvest rate for 8 hours.",
+            "boost": { "multiplier": 2.0, "durationHours": 8, "appliesTo": "all", "stack": "extend" }
+          }
+        ]
+      }
+    }
+  ]
+}
