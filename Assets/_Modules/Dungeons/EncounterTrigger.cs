@@ -31,6 +31,7 @@ using System;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Village.Arena;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -309,6 +310,57 @@ namespace DeNelle.Dungeons
             using var _flow = FlowTrace.Enter("Dungeon",
                 $"EncounterTrigger.LaunchBattle id='{EncounterId}' boss={_isBossTrigger}");
 
+            // GUARD the handoff (both paths): the caller already set _inCombat=true + stashed the
+            // encounter handoff BEFORE this call. If the handoff FAILS (throw, or the arena refusing
+            // to stage) the scene never starts a fight, so the run is left permanently combat-LOCKED
+            // with no battle and no rollback — the Keeper freezes. On any failure we FAIL loud and
+            // ROLL BACK the handoff + combat lock + re-arm _hasFired so the trigger is not wedged.
+
+            // WO-591 (owner 2026-06-29 "we should retire ATB"): route the dungeon fight to the
+            // REAL-TIME isolated BattleArena instead of the flat ATBBattle scene. The arena stages
+            // additively at a far offset, warps the hero in, and on victory warps the hero back to
+            // ReturnPosition/Yaw IN this same dungeon scene (no scene round-trip). Reversible:
+            // ff.dungeonrealtime = 0 restores the legacy ATB GoBattle path below.
+            if (FeatureFlags.DungeonRealtimeBattle)
+            {
+                try
+                {
+                    Vector3 returnPos = _hero != null ? _hero.position : Vector3.zero;
+                    float   returnYaw = _hero != null ? _hero.eulerAngles.y : 0f;
+                    var ep = new EncounterParams
+                    {
+                        EnemyIds        = enemyTypes ?? System.Array.Empty<string>(),
+                        Threat          = _isBossTrigger ? 3 : 1,   // boss fights scale up
+                        BackdropContext = "cavern",                 // underground dungeon look
+                        ReturnScene     = SceneRouter.DungeonHealersCottage,
+                        ReturnPosition  = returnPos,
+                        ReturnYaw       = returnYaw,
+                    };
+                    FlowTrace.Step("Dungeon",
+                        $"EncounterTrigger.LaunchBattle: ff.dungeonrealtime ON -> real-time BattleArena " +
+                        $"(id='{EncounterId}' boss={_isBossTrigger} threat={ep.Threat} enemies=[{string.Join(",", ep.EnemyIds)}]).");
+                    bool staged = BattleArena.Instance.BeginEncounter(ep);
+                    if (!staged)
+                    {
+                        FlowTrace.Fail("Dungeon",
+                            $"EncounterTrigger.LaunchBattle: BattleArena.BeginEncounter REFUSED to stage encounter " +
+                            $"'{EncounterId}' (boss={_isBossTrigger}) — rolling back the combat lock + pending handoff " +
+                            "so the run is not wedged in a battle-less combat lock.");
+                        RollbackHandoff();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    FlowTrace.Fail("Dungeon",
+                        $"EncounterTrigger.LaunchBattle: real-time arena handoff THREW for encounter '{EncounterId}' " +
+                        $"(boss={_isBossTrigger}): {ex.GetType().Name}: {ex.Message} — rolling back the combat " +
+                        "lock + pending handoff so the run is not wedged in a battle-less combat lock.");
+                    RollbackHandoff();
+                }
+                return;
+            }
+
+            FlowTrace.Step("Dungeon", $"EncounterTrigger.LaunchBattle: ff.dungeonrealtime OFF -> legacy ATB GoBattle (id='{EncounterId}').");
             var p = new BattleParams
             {
                 Wave = 0, // a dungeon encounter is not a village wave
@@ -323,12 +375,10 @@ namespace DeNelle.Dungeons
             // it off the params. (BattleParams gains a Label field when the
             // Week-2 battle spec lands; until then the roster carries the fight.)
             //
-            // GUARD the ATB handoff: the caller already set _inCombat=true + stashed the
-            // encounter handoff BEFORE this call. If GoBattle THROWS (route missing / scene
-            // not in build / load failure) the scene never leaves the dungeon, so the run is
-            // left permanently combat-LOCKED with no battle and no rollback — the Keeper
-            // freezes. Catch it, FAIL loud, and ROLL BACK the handoff + combat lock + re-arm
-            // _hasFired so the trigger is not wedged (it can fire again once the route works).
+            // GUARD the ATB handoff: if GoBattle THROWS (route missing / scene not in build /
+            // load failure) the run is left permanently combat-LOCKED with no battle and no
+            // rollback — the Keeper freezes. Catch it, FAIL loud, and ROLL BACK the handoff +
+            // combat lock + re-arm _hasFired so the trigger is not wedged.
             try
             {
                 await SceneRouter.GoBattle(p);

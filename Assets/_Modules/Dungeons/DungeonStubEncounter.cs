@@ -23,6 +23,8 @@
 using System.Collections;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
+using DeNelle.Core.Diagnostics;
+using DeNelle.Village.Arena;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -128,17 +130,21 @@ namespace DeNelle.Dungeons
             if (_fired) return;
             _fired = true;
 
-            // #18: snapshot where the hero is so the battle round-trip drops them
-            // back HERE, not at the dungeon entrance. Restored on scene reload (Start).
+            // #18: snapshot where the hero is so the battle round-trip drops them back HERE, not at
+            // the dungeon entrance. Restored on scene reload (Start). This is the LEGACY ATB path's
+            // return mechanism (the ATB scene unloads + RELOADS this dungeon). On the real-time arena
+            // path (WO-591, flag ON) there is NO scene round-trip — BattleArena.BeginEncounter warps
+            // the hero back to EncounterParams.ReturnPosition IN this same scene — so the snapshot/
+            // Start-restore would be a redundant SECOND warp. Guard it behind the flag-off path.
             var heroNow = ResolveHero();
-            if (heroNow != null)
+            if (!FeatureFlags.DungeonRealtimeBattle && heroNow != null)
             {
                 s_returnPos   = heroNow.transform.position;
                 s_returnScene = string.IsNullOrEmpty(_returnScene) ? SceneRouter.Village : _returnScene;
                 s_hasReturn   = true;
             }
 
-            Debug.Log("[DungeonStubEncounter] Encounter zone entered — launching ATB battle.");
+            Debug.Log("[DungeonStubEncounter] Encounter zone entered — launching battle.");
             LaunchBattle().Forget();
         }
 
@@ -182,12 +188,41 @@ namespace DeNelle.Dungeons
 
         private async UniTask LaunchBattle()
         {
+            string returnScene = string.IsNullOrEmpty(_returnScene) ? SceneRouter.Village : _returnScene;
+
+            // WO-591 (owner 2026-06-29 "we should retire ATB"): route the dungeon fight to the REAL-TIME
+            // isolated BattleArena instead of the flat ATBBattle scene. The arena stages additively at a
+            // far offset, warps the hero in, and on victory warps the hero back to ReturnPosition/Yaw IN
+            // this same dungeon scene (no scene round-trip). Reversible: ff.dungeonrealtime = 0 restores
+            // the legacy ATB GoBattle path below.
+            if (FeatureFlags.DungeonRealtimeBattle)
+            {
+                var hero = ResolveHero();
+                Vector3 returnPos = hero != null ? hero.transform.position : Vector3.zero;
+                float   returnYaw = hero != null ? hero.transform.eulerAngles.y : 0f;
+                var ep = new EncounterParams
+                {
+                    EnemyIds        = _enemyTypes ?? System.Array.Empty<string>(),
+                    Threat          = 1,             // stub encounters are baseline-threat
+                    BackdropContext = "cavern",      // underground dungeon look
+                    ReturnScene     = returnScene,
+                    ReturnPosition  = returnPos,
+                    ReturnYaw       = returnYaw,
+                };
+                FlowTrace.Step("Dungeon",
+                    "DungeonStubEncounter.LaunchBattle: ff.dungeonrealtime ON -> real-time BattleArena " +
+                    "(enemies=[" + string.Join(",", ep.EnemyIds) + "] return='" + returnScene + "').");
+                BattleArena.Instance.BeginEncounter(ep);
+                return;
+            }
+
+            FlowTrace.Step("Dungeon", "DungeonStubEncounter.LaunchBattle: ff.dungeonrealtime OFF -> legacy ATB GoBattle.");
             var p = new BattleParams
             {
                 Wave = 0, // a dungeon encounter is not a village wave
                 BreachedIds = _enemyTypes ?? System.Array.Empty<string>(),
                 ParticipatingPetIds = System.Array.Empty<string>(),
-                ReturnScene = string.IsNullOrEmpty(_returnScene) ? SceneRouter.Village : _returnScene,
+                ReturnScene = returnScene,
             };
             await SceneRouter.GoBattle(p);
         }

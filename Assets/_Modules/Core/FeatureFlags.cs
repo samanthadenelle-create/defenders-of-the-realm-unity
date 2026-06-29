@@ -218,6 +218,19 @@ namespace DeNelle.Core
         /// = 1 to restore the legacy breach→ATB route.</summary>
         public static bool WaveBreachToAtb => Get("wavebreachtoatb", defaultOn: false);
 
+        /// <summary>WO-591 / owner directive 2026-06-29 ("we should retire ATB"): when ON (default), the
+        /// two remaining DUNGEON encounter entry points (<see cref="DeNelle.Dungeons.DungeonStubEncounter"/>
+        /// and <see cref="DeNelle.Dungeons.EncounterTrigger"/>) route the fight into the REAL-TIME isolated
+        /// <see cref="DeNelle.Village.Arena.BattleArena"/> (BeginEncounter — the verified open-kite combat
+        /// stack the overworld + arena already use), instead of loading the FLAT/static ATBBattle scene via
+        /// <c>SceneRouter.GoBattle</c>. Canon: the dungeon is a SKIN of the BattleArena; ATB is the weaker
+        /// system (static enemy defs, never reads the talent tree/loadout) and is being retired. The arena
+        /// stages additively + warps the hero in/out IN the dungeon scene (no scene round-trip), so victory
+        /// lands the hero back where the fight started. Default ON. This is a REVERSIBLE RETIRE, not removal:
+        /// the ATBBattle scene + BattleController are untouched — set PlayerPrefs "ff.dungeonrealtime" = 0 to
+        /// restore the legacy ATB GoBattle path verbatim.</summary>
+        public static bool DungeonRealtimeBattle => Get("dungeonrealtime", defaultOn: true);
+
         /// <summary>Global runtime kill-switch for ALL dev keyboard hotkeys (DevPanel F1, DebugCanvas
         /// F12, AdminOverlay Ctrl+Shift+A, the test spawners J/K/L, the tower dev harness B/J/K/N/U,
         /// the jukebox J open, etc.). Default OFF — so every dev hotkey is DEAD everywhere (editor AND

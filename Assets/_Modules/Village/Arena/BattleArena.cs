@@ -265,9 +265,12 @@ namespace DeNelle.Village.Arena
                 Debug.LogWarning("[BattleArena] null/empty EncounterParams - ignored.");
                 return false;
             }
-            if (!FeatureFlags.OverworldEncounter)
+            // GATE: the arena stages for an OVERWORLD encounter (ff.overworldencounter) OR a retired-ATB
+            // DUNGEON encounter (ff.dungeonrealtime, WO-591 — the two dungeon call sites route here instead
+            // of the flat ATBBattle scene). Either flag being ON authorizes a stage; both OFF suppresses it.
+            if (!FeatureFlags.OverworldEncounter && !FeatureFlags.DungeonRealtimeBattle)
             {
-                Debug.LogWarning("[BattleArena] ff.overworldencounter OFF - encounter suppressed.");
+                Debug.LogWarning("[BattleArena] ff.overworldencounter + ff.dungeonrealtime both OFF - encounter suppressed.");
                 return false;
             }
 

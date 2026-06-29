@@ -3,6 +3,7 @@
     "rootNamespace": "DeNelle.Dungeons",
     "references": [
         "DeNelle.Core",
+        "DeNelle.Village",
         "DeNelle.Data",
         "Unity.Localization",
         "UniTask",
