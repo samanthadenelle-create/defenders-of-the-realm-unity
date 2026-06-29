@@ -42,6 +42,14 @@ namespace DeNelle.Audio
         {
             if (!scene.IsValid()) return;
 
+            // WO-550: the town jukebox does NOT bootstrap in enemy-owned RAID scenes (Village2);
+            // the home hub (MainCastle_Hall) is unaffected. Gate on the ACTIVE scene (player context).
+            if (DeNelle.Core.HubScenes.SuppressTownHud(SceneManager.GetActiveScene().name))
+            {
+                FlowTrace.Warn("UI", "MusicSelectionPanel suppressed in enemy-owned scene (WO-550)");
+                return;
+            }
+
             // GLOBAL dedupe (across ALL loaded scenes) — not per-scene. The
             // additive OuterWorld load fires sceneLoaded with a new scene and a
             // per-scene check missed the live instance, spawning a duplicate.
