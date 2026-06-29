@@ -25,6 +25,7 @@ using UnityEngine.ResourceManagement.ResourceLocations;
 using DeNelle.Village;
 using DeNelle.Village.Arena;
 using DeNelle.Village.Items;
+using DeNelle.Village.Population;
 using DeNelle.Core.State;
 using DeNelle.Core.Catalog;
 
@@ -115,6 +116,12 @@ namespace DeNelle.Editor
             // build pipeline, never via Resources.Load(Model). So we do NOT assert a path
             // load on Model (that would invent an expectation the catalog doesn't declare).
             CheckBuildings(failures, log);
+
+            // --- POPULATION MILESTONES (population-milestones.json -> PopulationMilestonesCatalog) ---
+            // WO-587: the milestone TABLE that drives Echo workforce slot unlocks. Assert the JSON
+            // maps to >0 milestones, echo slots ascend 2..5 with NO gaps, and every entry carries at
+            // least one real condition — so an owner edit can't silently break the unlock cadence.
+            CheckPopulationMilestones(failures, log);
 
             // --- ITEM-MODEL CAPABILITY INVARIANTS (WO-Item-1, docs/ITEM_MODEL.md §2c) ---
             // OWNER-RATIFIED 2026-06-18: the model invariants live in the regression test,
@@ -555,6 +562,54 @@ namespace DeNelle.Editor
             }
             if (bad > 0)
                 failures.Add($"{bad} building(s) have null/empty id or displayName");
+        }
+
+        // WO-587: validate the Population milestone table that drives Echo slot unlocks.
+        private static void CheckPopulationMilestones(List<string> failures, StringBuilder log)
+        {
+            PopulationMilestonesCatalog.Reload();
+            var milestones = new List<PopulationMilestone>(PopulationMilestonesCatalog.Milestones);
+
+            log.AppendLine($"population-milestones.json -> {milestones.Count} PopulationMilestone object(s)");
+            if (milestones.Count == 0)
+            {
+                failures.Add("population-milestones.json deserialized to 0 milestones (mapping break or empty 'milestones')");
+                return;
+            }
+
+            // Echo slots must ascend 2,3,4,... with NO gaps and a condition on every entry
+            // (the catalog already sorts by EchoSlot ascending).
+            int expected = 2;
+            foreach (var m in milestones)
+            {
+                if (m == null) { failures.Add("population-milestones.json: a null milestone entry"); continue; }
+
+                if (m.EchoSlot != expected)
+                    failures.Add($"population-milestones.json: echoSlot {m.EchoSlot} out of order/gapped (expected {expected}; slots must ascend 2..5 with no gaps)");
+
+                if (!m.HasAnyCondition)
+                    failures.Add($"population-milestones.json: echoSlot {m.EchoSlot} has NO condition (needs at least one 'any' or 'all' threshold)");
+
+                log.AppendLine($"  PM slot={m.EchoSlot} " +
+                               $"any=[{CondStr(m.Any)}] all=[{CondStr(m.All)}]");
+                expected++;
+            }
+
+            // Slots should reach the design max of 5 (3 organic + 2 flex).
+            if (milestones[milestones.Count - 1].EchoSlot != 5)
+                failures.Add($"population-milestones.json: top echoSlot is {milestones[milestones.Count - 1].EchoSlot}, expected 5 (3 organic + 2 flex cap)");
+        }
+
+        private static string CondStr(MilestoneCondition c)
+        {
+            if (c == null || c.IsEmpty) return "-";
+            var parts = new List<string>();
+            if (c.Xp > 0) parts.Add($"xp>={c.Xp}");
+            if (c.QuestsCompleted > 0) parts.Add($"quests>={c.QuestsCompleted}");
+            if (c.OutpostsCleared > 0) parts.Add($"outposts>={c.OutpostsCleared}");
+            if (c.WavesCleared > 0) parts.Add($"waves>={c.WavesCleared}");
+            if (c.VillageLevel > 0) parts.Add($"village>={c.VillageLevel}");
+            return string.Join(",", parts);
         }
 
         // =====================================================================

@@ -55,8 +55,9 @@ namespace DeNelle.Village
 
         // -- Tunables (owner-tunable in playtest) ------------------------------
         [Header("Workforce")]
-        [Tooltip("Hard cap on owned Echoes (owner model: 4 = Wave 15 unlock).")]
-        [Min(1)] public int MaxEchoes = 4;
+        [Tooltip("Hard cap on owned Echoes (owner model: 5 = 3 organic + 2 flex, memory echo-workforce-drag-drop; " +
+                 "PopulationService unlocks the flex slots via milestones, the wave hook the organic ones).")]
+        [Min(1)] public int MaxEchoes = 5;
 
         [Tooltip("Waves cleared per Echo unlock (owner model: every 5 = 4 normal + 1 boss).")]
         [Min(1)] public int WavesPerEcho = 5;
@@ -308,6 +309,31 @@ namespace DeNelle.Village
             {
                 if (gs != null) gs.Save();   // persist the wave-count progress either way
             }
+        }
+
+        /// <summary>
+        /// Grant ONE new Echo (the "unlock the next Echo" path), up to <see cref="MaxEchoes"/>.
+        /// Mirrors the wave-unlock increment but is driven by an external coordinator
+        /// (PopulationService milestones, WO-587) instead of the wave counter. No-op at the
+        /// cap or before GameState exists. Persists + fires EchoUnlocked + Changed on success.
+        /// </summary>
+        public void GrantEcho(string reason)
+        {
+            var gs = GameStateService.Instance;
+            var s = gs != null ? gs.State : null;
+            if (s == null) { FlowTrace.Warn("Echo", $"GrantEcho('{reason}') before GameState -- ignored."); return; }
+
+            if (s.EchoCount >= MaxEchoes)
+            {
+                FlowTrace.Step("Echo", $"GrantEcho('{reason}'): already at cap {MaxEchoes} -- no-op.");
+                return;
+            }
+
+            s.EchoCount += 1;
+            if (gs != null) gs.Save();
+            FlowTrace.Step("Echo", $"GrantEcho('{reason}'): New Echo joined! count now {s.EchoCount}/{MaxEchoes}.");
+            EchoUnlocked?.Invoke(s.EchoCount);
+            Changed?.Invoke();
         }
 
         // =====================================================================

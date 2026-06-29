@@ -29,7 +29,7 @@ namespace DeNelle.Core.State
     {
         // ── Versioning ───────────────────────────────────────────────────────
         /// <summary>CURRENT_SCHEMA_VERSION — bumped whenever the persisted shape changes.</summary>
-        public const int CurrentVersion = 27;  // v27 — wall-mounted defense seating: PlacedStructureData gains worldY (seat height) + wallMounted (high-ground perk flag) so a defense placed on a wall-walk persists on the wall TOP, not y=0 (both additive default-on-read; an old baseLayout record loads worldY=0/wallMounted=false = ground placement, unchanged); v26 — WO-543 accessory equip persistence: equippedRingId + equippedAmuletId (rings/amulets) survive save/load (empty = none); v25 — Echo Workforce V1 (ECHO_WORKFORCE_SPEC): echoCount + siloResources + wavesCompleted survive save/load → the farm faucet (Echoes auto-fill a pooled silo online+offline via OfflineHarvestService's clock, Dump banks to bins, beating 5 waves unlocks the next Echo ≤4); v24 — Village/Stronghold tier + owned building-research perks (WO-432: WC3 tech-gate at the Heart + per-building Gold-cost research survives save/load → compiled into GameModifiers); v23 — building upgrade tiers (WO-430: per-building tier 0-4 survives save/load → compiled into GameModifiers + dialogue level title); v22 — army roster persistence (WO-453: owned troops + cap + wounded/recovery/veterancy survive save/load); v21 — node-settlement persistence (WO-159: claim/HP/phase + 3-day razed lockout survive save/load); v20 — gear inventory persistence (shop purchases survive reload + Neon sync); v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
+        public const int CurrentVersion = 28;  // v28 — WO-587 Population & Echo growth: populationXp + populationQuests + populationOutposts + populationEchoSlots survive save/load (the milestone-driven Echo workforce slot unlocks; all additive nonNegInt default-on-read — an old save loads xp/quests/outposts = 0 and echoSlots = 1 = the starter Wood echo, unchanged); v27 — wall-mounted defense seating: PlacedStructureData gains worldY (seat height) + wallMounted (high-ground perk flag) so a defense placed on a wall-walk persists on the wall TOP, not y=0 (both additive default-on-read; an old baseLayout record loads worldY=0/wallMounted=false = ground placement, unchanged); v26 — WO-543 accessory equip persistence: equippedRingId + equippedAmuletId (rings/amulets) survive save/load (empty = none); v25 — Echo Workforce V1 (ECHO_WORKFORCE_SPEC): echoCount + siloResources + wavesCompleted survive save/load → the farm faucet (Echoes auto-fill a pooled silo online+offline via OfflineHarvestService's clock, Dump banks to bins, beating 5 waves unlocks the next Echo ≤4); v24 — Village/Stronghold tier + owned building-research perks (WO-432: WC3 tech-gate at the Heart + per-building Gold-cost research survives save/load → compiled into GameModifiers); v23 — building upgrade tiers (WO-430: per-building tier 0-4 survives save/load → compiled into GameModifiers + dialogue level title); v22 — army roster persistence (WO-453: owned troops + cap + wounded/recovery/veterancy survive save/load); v21 — node-settlement persistence (WO-159: claim/HP/phase + 3-day razed lockout survive save/load); v20 — gear inventory persistence (shop purchases survive reload + Neon sync); v19 — arenaDefense placed-defender layout (WO-389); v18 — fold AetherCrystals into Resources.Crystals (single-source-of-truth); v17 — zone graph persistence (WO-164); v16 — party roster (WO-301); v15 — magic tech-axis currency (DEF-121/WO-230); v14 — baseLayout (WO-108); v13 — buildJobs + adSkip (WO-172)
         /// <summary>SaveExport.format — bumped only if the envelope shape changes.</summary>
         public const int FileFormat = 1;
 
@@ -436,6 +436,25 @@ namespace DeNelle.Core.State
             /// <see cref="EquippedRingId"/>. Append-only field at the END.
             /// </summary>
             [JsonProperty("equippedAmuletId")] public string EquippedAmuletId;
+
+            // ── v28 — WO-587 Population & Echo growth ────────────────────────────
+            /// <summary>
+            /// Accumulated Population XP. Nullable per the <c>.partial()</c> convention; absent on
+            /// an older save → defaults to 0 on load via the v27→v28 migration. Append-only at the END.
+            /// </summary>
+            [JsonProperty("populationXp")] public double? PopulationXP;
+
+            /// <summary>Cumulative completed quests counted toward Population milestones (v28; absent → 0).</summary>
+            [JsonProperty("populationQuests")] public double? PopulationQuests;
+
+            /// <summary>Cumulative cleared outposts counted toward Population milestones (v28; absent → 0).</summary>
+            [JsonProperty("populationOutposts")] public double? PopulationOutposts;
+
+            /// <summary>
+            /// Highest Echo workforce slot unlocked by Population milestones (1..5). Absent on an
+            /// older save → defaults to 1 (the starter echo) via the v27→v28 migration. Append-only at the END.
+            /// </summary>
+            [JsonProperty("populationEchoSlots")] public double? PopulationEchoSlots;
         }
 
         // =====================================================================
@@ -592,6 +611,16 @@ namespace DeNelle.Core.State
                     RequireFinite(raw.SiloResources.Value, "siloResources");
                 if (raw.WavesCompleted.HasValue)
                     raw.WavesCompleted = NonNegInt(raw.WavesCompleted.Value, "wavesCompleted");
+
+                // ── Population growth (v28) → all counters nonNegInt ─────────────────
+                if (raw.PopulationXP.HasValue)
+                    raw.PopulationXP = NonNegInt(raw.PopulationXP.Value, "populationXp");
+                if (raw.PopulationQuests.HasValue)
+                    raw.PopulationQuests = NonNegInt(raw.PopulationQuests.Value, "populationQuests");
+                if (raw.PopulationOutposts.HasValue)
+                    raw.PopulationOutposts = NonNegInt(raw.PopulationOutposts.Value, "populationOutposts");
+                if (raw.PopulationEchoSlots.HasValue)
+                    raw.PopulationEchoSlots = NonNegInt(raw.PopulationEchoSlots.Value, "populationEchoSlots");
 
                 // ── Build jobs (WO-172) → startMs/durationMs finiteInt; counter nonNegInt ─
                 if (raw.BuildJobs != null)

@@ -64,6 +64,7 @@ namespace DeNelle.Core.State
                 { 25, MigrateToV25 },
                 { 26, MigrateToV26 },
                 { 27, MigrateToV27 },
+                { 28, MigrateToV28 },
             };
 
         /// <summary>
@@ -403,6 +404,19 @@ namespace DeNelle.Core.State
         {
             // No data rewrite: existing baseLayout entries keep worldY = 0 / wallMounted = false
             // (ground placement) on read, unchanged. New placements persist their seat height.
+            return s;
+        }
+
+        // v28 — WO-587 Population & Echo growth. populationXp/populationQuests/populationOutposts are
+        // additive-default-on-read (null → 0 on load); populationEchoSlots seeds 1 when absent so an
+        // existing player keeps their starter Wood echo slot. We set each explicitly for a clean
+        // round-trip, mirroring the v25/v26 seed precedent. Idempotent (only seeds when null).
+        private static PersistedState MigrateToV28(PersistedState s)
+        {
+            if (!s.PopulationXP.HasValue) s.PopulationXP = 0;
+            if (!s.PopulationQuests.HasValue) s.PopulationQuests = 0;
+            if (!s.PopulationOutposts.HasValue) s.PopulationOutposts = 0;
+            if (!s.PopulationEchoSlots.HasValue) s.PopulationEchoSlots = 1;
             return s;
         }
 

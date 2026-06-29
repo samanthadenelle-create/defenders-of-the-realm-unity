@@ -259,5 +259,22 @@ namespace DeNelle.Core.Quests
                 return prog != null && prog.Keystones != null ? prog.Keystones.Count : 0;
             }
         }
+
+        /// <summary>
+        /// Cumulative count of quests marked Completed (true). WO-587: the Population growth
+        /// bridge polls this on QuestChanged to award population XP per newly-completed quest
+        /// without QuestService taking any dependency on Population (Core purity preserved).
+        /// </summary>
+        public int CompletedQuestCount
+        {
+            get
+            {
+                var prog = Progress;
+                if (prog == null || prog.Completed == null) return 0;
+                int n = 0;
+                foreach (var kv in prog.Completed) if (kv.Value) n++;
+                return n;
+            }
+        }
     }
 }

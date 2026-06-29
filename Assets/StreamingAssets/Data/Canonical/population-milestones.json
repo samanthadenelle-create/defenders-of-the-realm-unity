@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "_authoringNotes": "WORK_ORDER_587 — Population & Echo Growth. Each milestone unlocks the NEXT echo workforce slot (2..5) when its condition is met. 'any' = ANY one listed counter satisfies; 'all' = ALL listed counters required; an entry may carry both (both blocks must pass). Counters: xp (accumulated population XP), questsCompleted, outpostsCleared, wavesCleared, villageLevel. Numbers are PLACEHOLDERS — owner-tune here with NO code change (DataRegression validates slots ascending 2..5, no gaps, each has >=1 condition).",
+  "milestones": [
+    { "echoSlot": 2, "any": { "xp": 800, "questsCompleted": 8, "outpostsCleared": 2 } },
+    { "echoSlot": 3, "any": { "xp": 1800, "questsCompleted": 18, "outpostsCleared": 5 } },
+    { "echoSlot": 4, "all": { "villageLevel": 2, "questsCompleted": 35 } },
+    { "echoSlot": 5, "all": { "villageLevel": 3 }, "any": { "questsCompleted": 55, "outpostsCleared": 12 } }
+  ]
+}

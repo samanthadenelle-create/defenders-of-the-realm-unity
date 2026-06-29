@@ -18,6 +18,7 @@
 using DeNelle.Core.Audio;
 using DeNelle.Core.HUD;
 using DeNelle.Core.HudModel;
+using DeNelle.Core.Population;
 using DeNelle.Core.Web3;
 using UnityEngine;
 
@@ -69,6 +70,26 @@ namespace DeNelle.Core
 
         /// <summary>Unregisters the HUD model facade. Called by HudModelHost.OnDestroy.</summary>
         public static void UnregisterHudModel(IHudModel m) { if (ReferenceEquals(HudModel, m)) HudModel = null; }
+
+        // ── Population growth (WO-587) ────────────────────────────────────────
+        /// <summary>
+        /// The active Population growth service, or null when no PopulationService is
+        /// present (it self-bootstraps via PopulationBootstrap). Drives Echo workforce
+        /// slot unlocks from milestones. Always null-check before use.
+        /// </summary>
+        public static IPopulationService Population { get; private set; }
+
+        /// <summary>Registers the Population service. Called by PopulationService.Awake.
+        /// Main-thread only (no locking) — registrations happen in Awake/OnDestroy.</summary>
+        public static void RegisterPopulation(IPopulationService svc)
+        {
+            if (Population != null && !ReferenceEquals(Population, svc))
+                Debug.LogWarning("[CoreServices] Replacing existing IPopulationService registration.");
+            Population = svc;
+        }
+
+        /// <summary>Unregisters the Population service. Called by PopulationService.OnDestroy.</summary>
+        public static void UnregisterPopulation(IPopulationService svc) { if (ReferenceEquals(Population, svc)) Population = null; }
 
         // ── Audio (WO-41) ─────────────────────────────────────────────────────
         /// <summary>

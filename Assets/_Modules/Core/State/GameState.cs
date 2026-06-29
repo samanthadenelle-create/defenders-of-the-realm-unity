@@ -362,6 +362,26 @@ namespace DeNelle.Core.State
         public System.Collections.Generic.List<string> OwnedBuildingPerks
             = new System.Collections.Generic.List<string>();
 
+        // ── WO-587 — Population & Echo growth (schema v28) ────────────────────
+        /// <summary>
+        /// WO-587 — accumulated Population XP (earned from quests / outposts / waves). Drives the
+        /// milestone-based Echo workforce slot unlocks. 0 on a fresh save. Round-trips through
+        /// SaveSchema v28 (additive at the END so older saves stay loadable).
+        /// </summary>
+        public int PopulationXP = 0;
+
+        /// <summary>WO-587 — cumulative completed quests counted toward Population milestones (v28).</summary>
+        public int PopulationQuests = 0;
+
+        /// <summary>WO-587 — cumulative cleared enemy outposts counted toward Population milestones (v28).</summary>
+        public int PopulationOutposts = 0;
+
+        /// <summary>
+        /// WO-587 — highest Echo workforce SLOT unlocked by Population milestones (1..5; 1 = the
+        /// starter Wood echo). Guards "unlock exactly once". Round-trips through SaveSchema v28.
+        /// </summary>
+        public int PopulationEchoSlots = 1;
+
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
         {

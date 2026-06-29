@@ -424,6 +424,10 @@ namespace DeNelle.Core.State
                 EchoCount = s.EchoCount,             // ECHO_WORKFORCE_SPEC — owned Echo workers (v25)
                 SiloResources = s.SiloResources,     // ECHO_WORKFORCE_SPEC — pooled silo buffer (v25)
                 WavesCompleted = s.WavesCompleted,   // ECHO_WORKFORCE_SPEC — Echo-unlock wave counter (v25)
+                PopulationXP = s.PopulationXP,             // WO-587 — accumulated Population XP (v28)
+                PopulationQuests = s.PopulationQuests,     // WO-587 — Population quest counter (v28)
+                PopulationOutposts = s.PopulationOutposts, // WO-587 — Population outpost counter (v28)
+                PopulationEchoSlots = s.PopulationEchoSlots, // WO-587 — highest unlocked echo slot (v28)
             };
         }
 
@@ -496,6 +500,10 @@ namespace DeNelle.Core.State
             if (p.EchoCount.HasValue) s.EchoCount = (int)p.EchoCount.Value;             // ECHO_WORKFORCE_SPEC — owned Echoes (v25); absent → migrator seeds 1
             if (p.SiloResources.HasValue) s.SiloResources = p.SiloResources.Value;     // ECHO_WORKFORCE_SPEC — silo buffer (v25); absent → keep 0
             if (p.WavesCompleted.HasValue) s.WavesCompleted = (int)p.WavesCompleted.Value;  // ECHO_WORKFORCE_SPEC — wave counter (v25); absent → keep 0
+            if (p.PopulationXP.HasValue) s.PopulationXP = (int)p.PopulationXP.Value;                 // WO-587 — Population XP (v28); absent → keep 0
+            if (p.PopulationQuests.HasValue) s.PopulationQuests = (int)p.PopulationQuests.Value;     // WO-587 — quest counter (v28); absent → keep 0
+            if (p.PopulationOutposts.HasValue) s.PopulationOutposts = (int)p.PopulationOutposts.Value; // WO-587 — outpost counter (v28); absent → keep 0
+            if (p.PopulationEchoSlots.HasValue) s.PopulationEchoSlots = (int)p.PopulationEchoSlots.Value; // WO-587 — unlocked echo slots (v28); absent → migrator seeds 1
             EnsureZoneGraph(s);                       // backfill a pre-v17 / empty save's zone graph
         }
 
@@ -821,6 +829,10 @@ namespace DeNelle.Core.State
             s.EchoCount = 1;                                  // ECHO_WORKFORCE_SPEC — New Game starts with the 1 starter Echo.
             s.SiloResources = 0;                              // ECHO_WORKFORCE_SPEC — empty silo on New Game.
             s.WavesCompleted = 0;                             // ECHO_WORKFORCE_SPEC — no waves cleared yet.
+            s.PopulationXP = 0;                               // WO-587 — New Game starts with no Population XP.
+            s.PopulationQuests = 0;                           // WO-587 — no quests counted yet.
+            s.PopulationOutposts = 0;                         // WO-587 — no outposts counted yet.
+            s.PopulationEchoSlots = 1;                        // WO-587 — start with the 1 starter echo slot (Wood).
             s.PartyMemberIds = new List<string>();            // WO-301 — start alone; the first companion joins on tutorial complete.
             EnsureZoneGraph(s);                               // WO-164 — seed the default zone graph (5 zones) on New Game.
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately
