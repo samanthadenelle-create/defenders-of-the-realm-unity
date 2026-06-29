@@ -1,5 +1,10 @@
 # MASTER CATALOG — village-hero
 
+> **STALE: 2026-06-28** — "Blaise + class bodies" / party-of-4 / Blink full-body rig is RETIRED.
+> Player hero = a **single Tripo self-rigged Knight ("Grom")**, static armor, **no mesh-swap / no body
+> swap** (combat pivot 2026-06-22; Blink hero rig JUNKED). Treat any "Blaise / class body swap / party"
+> prose below as historical. Current truth = `CANON_GROUND_TRUTH_2026-06-28.md` + `docs/COMBAT_PIVOT_NORTHSTAR.md`.
+
 **Scope:** `Assets/_Modules/Village/Hero/` — the player-hero (Blaise + class bodies) feature
 area: locomotion, abilities, body swap, gear/equip, combat-feel, cameras, input, HUD bridges,
 inventory/shop UI. **Assembly:** `DeNelle.Village` (`DeNelle.Village.asmdef`); refs include

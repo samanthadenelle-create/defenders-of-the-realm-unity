@@ -1,3 +1,5 @@
+> ⚠ **PARTIALLY SUPERSEDED 2026-06-28.** Live V1 resource set is **WOOD / IRON / GRAIN** (+ gold store currency) — the Stone/Aether/Gems faucet set below is stale, and the live offline-harvest faucet is the **Echo workforce** (`ECHO_WORKFORCE_SPEC.md`, `OfflineHarvestService`). The flow/refine/sink/pacing-curve *design thinking* below still informs the (V2-gated) economy depth; treat numbers + resource list as superseded. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # Resource Economy Design — how it actually flows (the never-designed layer)
 
 > Owner gap (2026-05-30): *"we have never designed HOW it happens, only that it needs to happen."* Every

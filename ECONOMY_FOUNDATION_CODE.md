@@ -1,3 +1,5 @@
+> ⚠ **SUPERSEDED 2026-06-28 — pre-Echo-workforce resource model.** Faucet set here (Iron/Lumber/Magic/Gems) is stale; live resources are **WOOD / IRON / GRAIN** (+ gold store currency) and the live harvest engine is the Echo workforce (`ECHO_WORKFORCE_SPEC.md` + `OfflineHarvestService`). Kept for the ResourceNode/PetHarvester code scaffold only. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+
 # Economy Foundation Code — Ready for CLI Integration
 
 **Date:** 2026-06-01  

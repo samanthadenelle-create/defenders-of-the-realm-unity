@@ -21,9 +21,9 @@ Docs index: `docs/README.md`.
 | `docs/MASTER_CATALOG.md` | Verified-from-code SME catalog (code mechanics current) |
 | `PARALLEL_LANES.md` | Which work lanes can run simultaneously |
 | `PUNCHLIST.md` | Outstanding punch-list items |
-| `AGENT_OPENERS.md` | Prompt openers for spawning agents |
+| `AGENT_OPENERS.md` | Prompt openers for spawning agents (current architecture, updated 2026-06-27) |
 
-> ⚠ **Demoted as STALE (do not treat as current — see ledger):** `SESSION_START_HERE.md`,
+> ⚠ **Demoted as STALE (do not treat as current — see ledger):** `SESSION_START_HERE.md` (⛔ RETIRED — see banner),
 > `ARCHITECTURE_REFERENCE.md`, `CORE_ARCHITECTURE_PLAN.md` (TD+Solana framing), `BUG_LIST.md` +
 > `BUG_WORKFLOW.md` (Linear-era), `PIPELINE.md`, `CLI_GATEKEEPER_PLAYBOOK.md` (stale branch/path).
 

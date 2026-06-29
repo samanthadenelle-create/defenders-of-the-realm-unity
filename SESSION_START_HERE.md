@@ -1,4 +1,12 @@
-> ⚠ **STALE — pre-pivot process/state doc** (stale branch `feat/tower-core-loop`, Linear board, or Solana/tower-defense framing). Board = Notion; branch = `wip/village2-and-f8-tickets`. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+> ⛔ **RETIRED / DO NOT USE FOR CURRENT STATE** — This file is a 2026-05-31 snapshot.
+> It references a stale branch (`feat/tower-core-loop`), Linear board (→ Notion), old lane structure,
+> DTT/Village.unity systems (REMOVED), and party-of-4 (REMOVED). **Do not follow any plan or
+> lane described below.** For the real entry point use (in order):
+> 1. `CANON_GROUND_TRUTH_2026-06-26.md` (single live anchor)
+> 2. `SESSION_CANON_LOADER.md` (at-a-glance SME primer)
+> 3. `docs/HANDOVER.md` (the 2026-06-26 session block at top)
+> 4. `docs/MASTER_CATALOG.md` (verified-from-code catalog)
+> Body kept below as frozen history only.
 
 # SESSION START HERE — read this first, don't re-digest the repo
 

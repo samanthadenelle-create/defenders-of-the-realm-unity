@@ -1,6 +1,6 @@
 # HANDOVER — the one sheet a new session reads to be productive now
 
-> **Read order for a new session:** ★ the SESSION HANDOVER block immediately below (2026-06-19) →
+> **Read order for a new session:** ★ the SESSION HANDOVER block immediately below (2026-06-28) →
 > this sheet → `docs/MASTER_CATALOG.md` (mandatory, be the SME) → `docs/ARCHITECTURE.md` (the
 > architecture hub) → the relevant `docs/MASTER_CATALOG/<area>.md` for what you're about to touch.
 > **ALSO MANDATORY before any work:** read `OVERNIGHT_AUTOPILOT_LOG.md` (the overnight run's full
@@ -15,21 +15,24 @@
 
 ---
 
-## ★★ SESSION HANDOVER — 2026-06-26 (READ FIRST — anchored to `CANON_GROUND_TRUTH_2026-06-26.md`) ★★
+## ★★ SESSION HANDOVER — 2026-06-28 (READ FIRST — anchored to `CANON_GROUND_TRUTH_2026-06-28.md`) ★★
 
-**WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`, HEAD `8aa24c32`, **nothing pushed**. A long
-single-Knight-pivot arc (06-24→26) landed: overworld real-time **BattleArena** (lock-on WO-512, 9-zone HUD,
-victory/defeat + star rating), **Echo workforce** wired (1–4 echoes, offline real-clock, save v25),
-**village-tier upgrade** unlocking the WO-432 building tree, **store redesign** (WO-501) + **gear balance**
-(WO-500), **Offset Forge** offsets on weapon attach (WO-490/510), **castle moat + 4 drawbridges**
-(`ff.castlemoat`) + **four-side warp gates** (RuntimeRegionGate) + **tree aura/tower glow**
-(`ff.hubambientvfx`). itch web build is LIVE; Vercel parked.
+**WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`, HEAD `7c05cd1b`, **nothing pushed**. The
+single-Knight-pivot arc plus the WO-560→584 arc landed: overworld real-time **BattleArena** (lock-on
+WO-512, 9-zone HUD, victory/defeat + star rating), **Echo workforce** wired (1–4 echoes, offline
+real-clock, **save v27**: v26 ring/amulet, v27 wall-mount seating), **village-tier upgrade** unlocking
+the WO-432 building tree, **store redesign** (WO-501) + **gear balance** (WO-500), **Offset Forge** offsets
+on weapon attach (WO-490/510), **castle moat + 4 drawbridges** (`ff.castlemoat`) + **four-side warp gates**
+(RuntimeRegionGate) + **tree aura/tower glow** (`ff.hubambientvfx`). **WO-560→584 arc:** UI Blink
+master-frame template (`docs/UI_BLINK_TEMPLATE_CANON.md`, BINDING), **title rebrand WO-570** ("Echoes of
+Elarion" / tagline "Hold the last light."), **WO-584 dungeon/outpost/arena consolidation** (one warp-in
+space primitive, 3 skins, resolver + ownership flip — replaces flat ATB dungeon, `ff.atbdungeon` OFF),
+wave-loop-in-hub. itch web build is LIVE; Vercel parked.
 
-**IN-FLIGHT / DO NOT PUSH:** HEAD `8aa24c32` = **UNVERIFIED** hero-priority structure sweep
-(`ff.enemystructureaware`) — verify-capture showed **0 sweep acquires**. NEXT: skip-reason FlowTrace
-(hero-in-aggro vs no-structure-in-range) + a headless capture of the no-hero-near-structure case BEFORE
-claiming fixed. Two untracked `.cs` await triage: `Assets/Editor/CastlePlaceCrossing.cs`,
-`Assets/_Modules/Village/Hero/RumorBoardPanelBootstrap.cs`.
+**IN-FLIGHT (carried from the 06-26 snapshot — re-confirm against HEAD before trusting):** the
+hero-priority structure sweep (`ff.enemystructureaware`) was **UNVERIFIED** (0 sweep acquires) as of
+`8aa24c32`; HEAD has since advanced ~30 commits — re-check its status before pushing. Verify any untracked
+`.cs` triage state with `git status` rather than assuming.
 
 **CANON STATE (the corrections that supersede everything older):** hero = **single Tripo self-rigged
 Knight ("Grom")**, static armor, no mesh-swap — **Blink hero rig JUNKED 06-22** (Blink = UI re-skin only).
@@ -40,8 +43,9 @@ Knight ("Grom")**, static armor, no mesh-swap — **Blink hero rig JUNKED 06-22*
 **QUEUED (captured, not built):** WO-509 functional N/E/W moat seams · WO-513 coordinated orc family ·
 WO-514 tower cap + Population→Saved-Echoes→SP + siege-AI (mobs target towers) · WO-430 offline-garrison.
 
-**⚠️ OPEN CREATIVE FORK (owner's call):** Cathedral Spire vs living world-Tree (STORYLINE/DESIGN-DECISIONS
-say Spire replaces the Tree; combat-pivot canon keeps the living Tree). See `CANON_READINESS_LEDGER_2026-06-26.md`.
+**CREATIVE FORK CLOSED (owner ruling, WO-520 / memory `canon-maintenance-wo520`):** the **living
+world-Tree** is canon (NOT the Cathedral Spire) — STORYLINE/DESIGN-DECISIONS "Spire replaces the Tree" is
+SUPERSEDED. See `CANON_READINESS_LEDGER_2026-06-26.md`.
 
 **RESUME POINT:** finish the targeting proof on HEAD → triage the two untracked `.cs` → then WO-509/513/514.
 Full doc-canon reconciliation = **WO-520** (`CANON_READINESS_LEDGER_2026-06-26.md`).

@@ -10,26 +10,32 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
 
 ---
 
-## CURRENT STATE — 2026-06-26 (supersedes ALL blocks below; anchored to `CANON_GROUND_TRUTH_2026-06-26.md`)
+## CURRENT STATE — 2026-06-28 (supersedes ALL blocks below; anchored to `CANON_GROUND_TRUTH_2026-06-28.md`)
 
 > The 2026-06-09 and 2026-05-29 blocks below are kept for history. Where they conflict, **this block wins.**
 
 - **Branch:** `wip/village2-and-f8-tickets` (the `feat/tower-core-loop` name everywhere below is STALE).
-  HEAD `8aa24c32` (2026-06-26); nothing pushed this arc.
+  HEAD `7c05cd1b` (2026-06-28); nothing pushed this arc.
+- **Title:** **"Echoes of Elarion"** (chapter) within the **"Defenders of the Realm"** series; tagline
+  **"Hold the last light."** (WO-570).
 - **V1 = single controllable Knight ("Grom")** in an overworld with an isolated real-time **BattleArena**
   (lock-on WO-512, 9-zone HUD). **ATB is separate/flat.** Base-defense + tower-defense = **V2-gated**
   behind `ff.basebuilding`. **Defend-the-Tower/PatriciaLight = REMOVED (2026-06-09)** — not a pillar.
+- **Combat space (WO-584, READY 06-28):** one warp-in space primitive, 3 skins (dungeon/outpost/arena),
+  resolver + ownership flip; replaces the flat ATB dungeon fight (`ff.atbdungeon` OFF). UI canon =
+  `docs/UI_BLINK_TEMPLATE_CANON.md` (BINDING master-frame formula).
 - **Hero = single Tripo self-rigged model**, static armor, no mesh-swap. **Blink hero rig JUNKED (06-22)**
   (Blink = UI re-skin only). Roster = Tripo only; V1 = Knight + ORCS.
 - **World:** home = `MainCastle_Hall`; `OuterWorld` additive; `Village2` = raid target; `Village.unity`
   ABANDONED. Castle↔OuterWorld = **four-side warp gates** (RuntimeRegionGate); moat + 4 drawbridges
   (`ff.castlemoat`); tree aura + tower glow (`ff.hubambientvfx`).
-- **Economy:** Echo workforce wired (1–4 echoes, offline real-clock, save v25); village-tier upgrade
+- **Economy:** Echo workforce wired (1–4 echoes, offline real-clock, **save v27**); village-tier upgrade
   unlocks the WO-432 building-upgrade tree; store redesign (WO-501) + gear balance (WO-500).
 - **Dialogue:** Yarn being DROPPED for custom MVVM dialogue (WO-455).
 - **Distribution:** itch web build LIVE (`html5`); Vercel parked (payload too big); Pi backend = Cloudflare Worker.
-- **WO numbering:** next free = **430** (authority = `MASTER_PIPELINES_BACKLOG_2026-06-06.md` +
-  `CLI_LANES_WO_NUMBERS.md`, not filesystem max; many 446–514 specs are queued current-direction).
+- **WO numbering:** WO specs now run through **584** (authority = `MASTER_PIPELINES_BACKLOG_2026-06-06.md`
+  + `CLI_LANES_WO_NUMBERS.md`, not filesystem max; the WO-560→584 arc = UI Blink template, title rebrand,
+  dungeon/outpost/arena consolidation, wave-loop-in-hub).
 - **In-flight (do NOT push):** HEAD targeting sweep `ff.enemystructureaware` is UNVERIFIED (0 sweep acquires).
 
 ---

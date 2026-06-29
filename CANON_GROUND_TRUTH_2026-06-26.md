@@ -1,5 +1,13 @@
 # CANON GROUND TRUTH — 2026-06-26
 
+> ⚠ **SUPERSEDED 2026-06-28 → see `CANON_GROUND_TRUTH_2026-06-28.md` (the single current anchor).**
+> This 06-26 snapshot is stale: HEAD has advanced ~30+ commits (now `7c05cd1b`, was `8aa24c32`);
+> **save schema is now v27** (not v25 — v26 ring/amulet, v27 wall-mount seating); the WO-560→584 arc
+> landed after this (UI Blink master-frame template `docs/UI_BLINK_TEMPLATE_CANON.md`; title rebrand
+> WO-570 "Echoes of Elarion" / tagline "Hold the last light."; **WO-584 dungeon/outpost/arena
+> consolidation** — RegionGate warp → resolver → Arena skin → ownership flip, `ff.atbdungeon` OFF).
+> Kept as a frozen historical snapshot per CLAUDE.md §15 — do not rewrite the body below.
+
 > **Purpose:** the single anchor of *current reality*, derived ONLY from verified sources
 > (HEAD commit arc, working tree, the auto-memory index, the 06-25 overnight summary, and the
 > combat-pivot canon) — NOT from assumptions. Every doc-audit agent checks files against THIS.
