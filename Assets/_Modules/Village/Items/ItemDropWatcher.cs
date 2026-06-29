@@ -117,7 +117,13 @@ namespace DeNelle.Village.Items
         /// </summary>
         private static void DropFor(string tableId, Vector3 at, bool includeBossOnly)
         {
-            if (ItemDropSystem.UseWorldPickups)
+            // #55: per-kill WORLD motes are CreatePrimitive objects spawned at each death spot; they
+            // are unparented, survive arena teardown, and litter the field ("3 little blocks" for a
+            // 3-orc pack). Inside an ACTIVE BattleArena, route the roll straight to the larder so loot
+            // is still credited but NO physical mote is left behind. World motes stay in the open
+            // village/overworld where walking over them to collect is the intended interaction.
+            bool arenaLive = DeNelle.Village.Arena.BattleArena.Existing != null;
+            if (ItemDropSystem.UseWorldPickups && !arenaLive)
             {
                 var lines = ItemDropSystem.RollLines(tableId, includeBossOnly);
                 if (lines != null && lines.Count > 0)

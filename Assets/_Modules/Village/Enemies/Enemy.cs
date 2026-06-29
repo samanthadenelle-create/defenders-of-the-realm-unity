@@ -1794,6 +1794,11 @@ namespace DeNelle.Village
             //    NavMeshAgent; SetPosition alone desyncs the internal agent state).
             if (_agent != null)
             {
+                // #55: Die() disabled the agent + released transform ownership so the corpse could
+                // settle onto the ground. Restore both BEFORE re-placing it (Warp requires the agent
+                // enabled + on navmesh) so the reused body owns its transform and paths normally again.
+                if (!_agent.enabled) _agent.enabled = true;
+                _agent.updatePosition = true;
                 if (_agent.isOnNavMesh) _agent.isStopped = true;
                 _agent.Warp(pos);
                 if (_agent.isOnNavMesh) _agent.isStopped = false;
@@ -1831,6 +1836,17 @@ namespace DeNelle.Village
             _dead = true;
             _telegraphing = false;   // audit 2026-05-30: clear the wind-up latch on death (safe for future pooling)
             if (_agent != null && _agent.isOnNavMesh) _agent.isStopped = true;
+
+            // #55: a live NavMeshAgent OWNS the transform (updatePosition) and re-writes the
+            // corpse to navmesh/agent height every frame — reverting SnapBodyToGround so the body
+            // "floats" at agent height through the death hold. Release transform ownership + disable
+            // the agent on death so the grounded snap AND the per-frame 1/2-raycast settle (in
+            // ReturnToPoolAfterDeathHold) hold. Restored in PrepareForReuse before the pool re-Warps.
+            if (_agent != null)
+            {
+                _agent.updatePosition = false;
+                if (_agent.isActiveAndEnabled) _agent.enabled = false;
+            }
 
             // WO-531: snap the body down to the ground the instant it dies so the corpse
             // (and every position-derived effect below — deathPos VFX, scorch decal,
@@ -1975,7 +1991,20 @@ namespace DeNelle.Village
         /// </summary>
         private System.Collections.IEnumerator ReturnToPoolAfterDeathHold()
         {
-            yield return new WaitForSeconds(DeathHoldSeconds);
+            // #55 1/2-raycast settle: each frame ease the corpse's Y halfway onto the surface
+            // directly below it (down-ray = "ground is the area below placement"), so it conforms
+            // to slopes/ledges/tiers as the collapse clip plays instead of hanging at agent height.
+            // Exponential convergence reaches the surface within a few frames; a final lerp=1 beat
+            // hard-snaps it exactly flush so there is zero gap to perceive. The agent was disabled in
+            // Die(), so nothing re-pins the body while we settle it.
+            float t = 0f;
+            while (t < DeathHoldSeconds)
+            {
+                SnapBodyToGround(0.5f);
+                t += Time.deltaTime;
+                yield return null;
+            }
+            SnapBodyToGround(1f);   // final hard-snap: rest exactly on the surface
             ResetForPool();
             EnemyPool.Release(this);
         }
@@ -2029,11 +2058,18 @@ namespace DeNelle.Village
         /// Fallback: <see cref="NavMesh.SamplePosition"/> and snap Y to the sampled point.
         /// If neither resolves, the position is left unchanged and a Warn is logged.
         /// </summary>
-        private void SnapBodyToGround()
+        /// <param name="lerp">
+        /// 1 = hard-snap the body exactly onto the surface below it (the one-shot death snap and
+        /// the final settle beat). 0..1 = ease the Y that fraction toward the surface — the #55
+        /// per-frame "1/2-raycast settle" passes 0.5 so the corpse conforms smoothly to whatever
+        /// is directly below it (slope / ledge / tier) as the collapse clip plays.
+        /// </param>
+        private void SnapBodyToGround(float lerp = 1f)
         {
             try
             {
                 Vector3 pos = transform.position;
+                lerp = Mathf.Clamp01(lerp);
 
                 // Ground/terrain/default layers only — this naturally excludes the
                 // enemy's own collider (on the "Enemy" layer) so the ray never self-hits.
@@ -2044,7 +2080,7 @@ namespace DeNelle.Village
                 if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 50f,
                                     groundMask, QueryTriggerInteraction.Ignore))
                 {
-                    pos.y = hit.point.y;
+                    pos.y = (lerp >= 1f) ? hit.point.y : Mathf.Lerp(pos.y, hit.point.y, lerp);
                     transform.position = pos;
                     return;
                 }
@@ -2053,7 +2089,7 @@ namespace DeNelle.Village
                 // traverses) when no physics ground collider answered.
                 if (NavMesh.SamplePosition(pos, out NavMeshHit navHit, 5f, NavMesh.AllAreas))
                 {
-                    pos.y = navHit.position.y;
+                    pos.y = (lerp >= 1f) ? navHit.position.y : Mathf.Lerp(pos.y, navHit.position.y, lerp);
                     transform.position = pos;
                     return;
                 }
