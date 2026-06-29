@@ -184,6 +184,9 @@ namespace DeNelle.Editor
             if (!MonetizationCovenantRegression.Run(out var covReason)) failures.Add(covReason); else log.AppendLine("[covenant] " + covReason);
             if (!TowerPerkRegression.Run(out var towerPerkReason)) failures.Add(towerPerkReason); else log.AppendLine("[tower-perks] " + towerPerkReason);
 
+            // --- Store/Inventory icon coverage (key data: real art vs glyph fallback) ---
+            CheckItemIconCoverage(weapons, armors, failures, log);
+
             // --- verdict -----------------------------------------------------------
             log.AppendLine("=== verdict ===");
             if (failures.Count == 0)
@@ -216,6 +219,48 @@ namespace DeNelle.Editor
         {
             var f = obj.GetType().GetField(field, BindingFlags.NonPublic | BindingFlags.Instance);
             if (f != null) f.SetValue(obj, value);
+        }
+
+        // =====================================================================
+        //  STORE / INVENTORY ICON COVERAGE — does each real item resolve ART?
+        // =====================================================================
+        // Answers the felt bug ("items show letters") with DATA, no screenshot:
+        // call ItemIconCatalog on every real WeaponDef/ArmorDef and count real-sprite
+        // vs glyph-fallback. wand/staff/censer -> null is BY DESIGN (no art); the V1
+        // failure case is a KNIGHT sword resolving to glyph (sword art exists).
+        private static void CheckItemIconCoverage(List<WeaponDef> weapons, List<ArmorDef> armors,
+                                                  List<string> failures, StringBuilder log)
+        {
+            log.AppendLine("--- ICON COVERAGE (store/inventory) ---");
+
+            int wReal = 0, wGlyph = 0; var wGlyphSample = new List<string>();
+            foreach (var w in weapons)
+            {
+                if (w == null) continue;
+                if (ItemIconCatalog.ForWeapon(w) != null) wReal++;
+                else { wGlyph++; if (wGlyphSample.Count < 24) wGlyphSample.Add((w.id ?? "?") + "/" + (w.name ?? "?")); }
+            }
+            int aReal = 0, aGlyph = 0; var aGlyphSample = new List<string>();
+            foreach (var a in armors)
+            {
+                if (a == null) continue;
+                if (ItemIconCatalog.ForArmor(a) != null) aReal++;
+                else { aGlyph++; if (aGlyphSample.Count < 24) aGlyphSample.Add((a.id ?? "?") + "/" + (a.name ?? "?")); }
+            }
+            log.AppendLine($"[icon-coverage] weapons: {wReal} real / {wGlyph} glyph   armors: {aReal} real / {aGlyph} glyph");
+            if (wGlyph > 0) log.AppendLine("  weapon glyphs: " + string.Join(", ", wGlyphSample));
+            if (aGlyph > 0) log.AppendLine("  armor glyphs:  " + string.Join(", ", aGlyphSample));
+
+            // V1-critical: the Knight's actual starting weapon is a sword and MUST resolve art.
+            try
+            {
+                var knightWeapon = GearCatalog.BestWeapon("knight", 1);
+                if (knightWeapon != null && ItemIconCatalog.ForWeapon(knightWeapon) == null)
+                    failures.Add($"icon: Knight starting weapon '{knightWeapon.id}/{knightWeapon.name}' falls to GLYPH — sword art should resolve (real bug, not the by-design staff/censer glyph)");
+                else
+                    log.AppendLine($"[icon-coverage] Knight start weapon '{(knightWeapon?.id ?? "null")}' -> {(knightWeapon != null && ItemIconCatalog.ForWeapon(knightWeapon) != null ? "REAL art OK" : "no weapon/glyph")}");
+            }
+            catch (System.Exception e) { log.AppendLine("[icon-coverage] knight-weapon probe threw: " + e.Message); }
         }
 
         private static void CheckEnemyStructureSweep(List<string> failures, StringBuilder log)
