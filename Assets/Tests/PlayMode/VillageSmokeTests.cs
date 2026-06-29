@@ -12,8 +12,9 @@
 //     (WO-327), and
 //   - no NullReferenceException is logged during a short run (guards WO-328).
 //
-// The Village scene MUST be present in Build Settings (Assets/Scenes/Village.unity)
-// for the loads below to resolve.
+// The hub scene MUST be present in Build Settings (Assets/Scenes/Village2.unity)
+// for the loads below to resolve. (Village.unity was removed 2026-06-29 — orphaned;
+// Village2 is the live hub scene.)
 // =============================================================================
 
 using System.Collections;
@@ -29,7 +30,7 @@ namespace DeNelle.Tests.PlayMode
     [TestFixture]
     public class VillageSmokeTests
     {
-        private const string SceneName = "Village";
+        private const string SceneName = "Village2";
         private readonly List<string> _exceptions = new List<string>();
 
         [SetUp]
