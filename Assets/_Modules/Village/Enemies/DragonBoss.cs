@@ -446,6 +446,7 @@ namespace DeNelle.Village
             _swoopStruck = false;
             if (_animator != null && _hasAttackParam) _animator.SetTrigger(AnimAttack);
             PlayTelegraph(); // wind-up tell before the dive
+            DeNelle.Village.GameSfx.PlayDragonRoar(); // #51: roar as the dragon commits to a swoop
         }
 
         /// <summary>

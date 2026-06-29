@@ -100,9 +100,14 @@ namespace DeNelle.Audio
             // directly under Assets/Audio/Resources/). Missing ones stay null;
             // AudioService's "no clip" guard handles them silently.
             TryAssignClip(service, MusicTrack.Title,   "title");
-            TryAssignClip(service, MusicTrack.Village, "village");
+            // Town/hub theme (owner Suno track 2026-06-29): "Whispering Pines" is the PRIMARY town
+            // theme; the prior "village" clip is kept as a pool variant (non-destructive).
+            TryAssignClip(service, MusicTrack.Village, "whispering_pines");
+            TryAddClip(service,    MusicTrack.Village, "village");
             TryAssignClip(service, MusicTrack.Victory, "victory");
-            TryAssignClip(service, MusicTrack.Dungeon, "dungeon");
+            // Dungeon theme (owner Suno track 2026-06-29): "The Whispering Depths" — this slot was
+            // previously silent (no dungeon.mp3 shipped).
+            TryAssignClip(service, MusicTrack.Dungeon, "whispering_depths");
 
             // Game-over music (owner-supplied 2026-06-02): Resources/Audio/Music/GameOver.mp3.
             // Load the legacy 'defeat' sting first as a fallback, then GameOver — the new clip
@@ -114,7 +119,10 @@ namespace DeNelle.Audio
             // Pooled tracks (WO-171) — the owner's NEW themes (2026-06-02), cycled by
             // NextFromPool. Battle: 3 themes. Overworld: 2 themes ("a loop of either is fine"
             // — owner). Assign the default, append the rest to the rotation pool.
-            TryAssignClip(service, MusicTrack.Battle,    "battle_theme_NEW");
+            // Battle/invasion theme (owner Suno track 2026-06-29): "Siege of the Iron Bastion" is the
+            // PRIMARY battle theme; the prior battle themes stay as pool variants (cycled by NextFromPool).
+            TryAssignClip(service, MusicTrack.Battle,    "siege_iron_bastion");
+            TryAddClip(service,    MusicTrack.Battle,    "battle_theme_NEW");
             TryAddClip(service,    MusicTrack.Battle,    "battle_theme2_NEW");
             TryAddClip(service,    MusicTrack.Battle,    "battle_theme3_NEW");
             TryAssignClip(service, MusicTrack.Overworld, "mainworld1_NEW");

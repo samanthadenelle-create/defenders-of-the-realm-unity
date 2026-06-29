@@ -282,3 +282,9 @@ yarn.lock
 /Assets/Tech hud elements/
 /Assets/Tech hud elements.meta
 .vercel
+
+# Local API keys (never commit)
+.secrets/
+
+# Raw audio drop (rip source files, not committed)
+Tools/AudioGen/drop/

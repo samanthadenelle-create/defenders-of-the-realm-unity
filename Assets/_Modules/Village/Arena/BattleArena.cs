@@ -292,6 +292,8 @@ namespace DeNelle.Village.Arena
             _battleStartTime = Time.time;   // WO-505: start the star-rating clock.
             BattleInProgress = true;
 
+            DeNelle.Village.GameSfx.PlayWeaponDraw(); // #51: hero unsheathes as the fight begins
+
             // BATTLE ISOLATION: freeze EVERY home-scene rep for the duration of the fight. The
             // open world stays in memory (additive intent), so without this its reps keep roaming/
             // chasing/aggroing + running home combat — bleeding rumble/feedback into the battle and

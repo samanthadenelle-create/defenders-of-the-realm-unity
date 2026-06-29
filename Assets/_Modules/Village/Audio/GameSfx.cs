@@ -167,6 +167,35 @@ namespace DeNelle.Village
             CoreServices.Audio?.PlaySfx(s_heroHit, 0.5f);
         }
 
+        // #51 recorded-clip beats. These have NO synth fallback (the swing whoosh / weapon draw /
+        // dragon roar previously played nothing) — they no-op cleanly until the CC0 WAV is dropped
+        // at Resources/Sfx/<name>, exactly like LookoutHorn. Loaded once, cached, null-guarded.
+        private static AudioClip s_swordSwing;
+        private static AudioClip s_weaponDraw;
+        private static AudioClip s_dragonRoar;
+        private static bool s_swordSwingTried, s_weaponDrawTried, s_dragonRoarTried;
+
+        /// <summary>The whoosh BEFORE the clash — fired on every melee swing start (#51).</summary>
+        public static void PlaySwordSwing()
+        {
+            if (!s_swordSwingTried) { s_swordSwing = Resources.Load<AudioClip>("Sfx/SwordSwing"); s_swordSwingTried = true; }
+            if (s_swordSwing != null) CoreServices.Audio?.PlaySfx(s_swordSwing, 0.5f);
+        }
+
+        /// <summary>Steel-on-leather unsheathe — fired when the hero enters combat (#51).</summary>
+        public static void PlayWeaponDraw()
+        {
+            if (!s_weaponDrawTried) { s_weaponDraw = Resources.Load<AudioClip>("Sfx/WeaponDraw"); s_weaponDrawTried = true; }
+            if (s_weaponDraw != null) CoreServices.Audio?.PlaySfx(s_weaponDraw, 0.7f);
+        }
+
+        /// <summary>The dragon's roar — fired as it begins a swoop attack (#51).</summary>
+        public static void PlayDragonRoar()
+        {
+            if (!s_dragonRoarTried) { s_dragonRoar = Resources.Load<AudioClip>("Sfx/DragonRoar"); s_dragonRoarTried = true; }
+            if (s_dragonRoar != null) CoreServices.Audio?.PlaySfx(s_dragonRoar, 0.85f);
+        }
+
         /// <summary>
         /// WO-394 — the "build denied" buzz played when a placement is rejected (not
         /// enough resources / no space / blocks the gate / locked). A short, low,

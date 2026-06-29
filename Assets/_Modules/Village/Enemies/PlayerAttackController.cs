@@ -396,6 +396,10 @@ namespace DeNelle.Village
             _swingStartTime = Time.time;
             _isInSwing      = true;
 
+            // #51: the whoosh on the swing itself (the "swish" before the clash). The clash plays
+            // later only when ResolveAttack connects, so swing + hit read as two distinct beats.
+            GameSfx.PlaySwordSwing();
+
             // WO-423: turn to face the intended target BEFORE the swing plays, so the
             // hit (a 360° OverlapSphere in ResolveAttack) and any weapon VFX read as
             // facing the foe instead of the last move direction. Prefer the reticle's
