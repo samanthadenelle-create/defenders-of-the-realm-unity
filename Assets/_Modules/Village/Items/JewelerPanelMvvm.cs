@@ -239,16 +239,23 @@ namespace DeNelle.Village.Items
             var panel = chrome.content.transform;
             _headerLabel = chrome.title;
 
-            // One-line hint under the header.
-            ElarionUiKit.Label(panel, "Set gems into a ring or amulet to forge a finer piece.",
-                0.85f, 0.90f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
-                TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
+            // WO-582: fit content into the frame's BODY drop-zone (the templated area) instead of
+            // floating over the whole panel rect — this stops the old card host from overlapping the
+            // frame's ornate border. Falls back to the panel rect when no frame is used. Content then
+            // uses fractions INSIDE the body zone (mirrors CraftingPanelMvvm).
+            var bodyHost = (chrome.layout != null && chrome.layout.body != null)
+                ? chrome.layout.body : (RectTransform)panel;
 
-            // Cards host.
+            // One-line hint at the top of the body zone.
+            ElarionUiKit.Label(bodyHost, "Set gems into a ring or amulet to forge a finer piece.",
+                0.92f, 1.0f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
+                TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f);
+
+            // Cards host — fills the body zone (below the hint).
             _contentRoot = new GameObject("Cards", typeof(RectTransform));
-            _contentRoot.transform.SetParent(panel, false);
+            _contentRoot.transform.SetParent(bodyHost, false);
             var cr = _contentRoot.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0.04f, 0.15f); cr.anchorMax = new Vector2(0.96f, 0.83f);
+            cr.anchorMin = new Vector2(0.0f, 0.0f); cr.anchorMax = new Vector2(1.0f, 0.90f);
             cr.offsetMin = Vector2.zero; cr.offsetMax = Vector2.zero;
 
             // Close is the SHARED top-right Obsidian Close button (WO-554) — no per-panel footer Close.

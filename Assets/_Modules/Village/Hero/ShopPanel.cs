@@ -277,6 +277,14 @@ namespace DeNelle.Village.Hero
             var panel = chrome.content.transform;
             _headerLabel = chrome.title;
 
+            // WO-582 (Blink frame zone-fit): fit ALL content into the frame's BODY drop-zone (the
+            // templated inner well) instead of floating over the whole panel rect — this stops the
+            // economy/tabs/list/details/buttons from overlapping the frame's ornate border. Falls back
+            // to the panel rect when no frame is used. Mirrors CraftingPanelMvvm.BuildChrome. The shared
+            // Close (chrome.close) + the per-vendor glow stay on the full panel (chrome, not content).
+            var bodyHost = (chrome.layout != null && chrome.layout.body != null)
+                ? chrome.layout.body : (RectTransform)panel;
+
             // Subtle per-vendor accent glow (atmosphere over the shared black chrome).
             string vcLow = (_vendorContext ?? "").ToLowerInvariant();
             Color glowColor;
@@ -295,10 +303,10 @@ namespace DeNelle.Village.Hero
             if (glowImg != null) glowImg.raycastTarget = false;
             glow.transform.SetAsFirstSibling();
 
-            CreateEconomyReadout(panel);
+            CreateEconomyReadout(bodyHost);
 
             var tabBar = new GameObject("TabBar", typeof(RectTransform));
-            tabBar.transform.SetParent(panel, false);
+            tabBar.transform.SetParent(bodyHost, false);
             var tbRect = tabBar.GetComponent<RectTransform>();
             tbRect.anchorMin = new Vector2(0.02f, 0.78f);
             tbRect.anchorMax = new Vector2(0.98f, 0.86f);
@@ -311,17 +319,17 @@ namespace DeNelle.Village.Hero
             _tabBar = tabBar;
 
             _contentRoot = new GameObject("Content", typeof(RectTransform));
-            _contentRoot.transform.SetParent(panel, false);
+            _contentRoot.transform.SetParent(bodyHost, false);
             var cr = _contentRoot.GetComponent<RectTransform>();
             cr.anchorMin = new Vector2(0.02f, 0.13f);
             cr.anchorMax = new Vector2(0.62f, 0.71f);
             cr.offsetMin = Vector2.zero;
             cr.offsetMax = Vector2.zero;
 
-            BuildFilterBar(panel);
-            BuildDetailsPane(panel);
+            BuildFilterBar(bodyHost);
+            BuildDetailsPane(bodyHost);
 
-            var purchaseBtn = ElarionUiKit.ButtonPack(panel, "Purchase", ElarionUiKit.ButtonKind.Gold,
+            var purchaseBtn = ElarionUiKit.ButtonPack(bodyHost, "Purchase", ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.34f, 0.03f), new Vector2(0.60f, 0.105f),
                 () => { if (_vm != null) { if (_vm.Mode == ShopMode.Sell) _vm.Sell(); else _vm.Buy(); } },
                 packSpriteName: DeNelle.Core.FeatureFlags.BlinkChrome ? RpgUiCatalog.ButtonConfirm : RpgUiCatalog.ButtonGold);
@@ -337,7 +345,7 @@ namespace DeNelle.Village.Hero
             if (chrome.close != null) chrome.close.transform.SetAsLastSibling();
 
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
-            statusGo.transform.SetParent(panel, false);
+            statusGo.transform.SetParent(bodyHost, false);
             var sRect = statusGo.GetComponent<RectTransform>();
             sRect.anchorMin = new Vector2(0.64f, 0.035f);
             sRect.anchorMax = new Vector2(0.98f, 0.095f);

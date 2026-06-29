@@ -75,10 +75,16 @@ namespace DeNelle.Village.Hero
                 frameName: RpgUiCatalog.FrameQuest);
             _ui = modal.canvas;
             var panel = modal.chrome.content;
-            _panelRoot = panel.transform;
+            // WO-582: fit content into the frame's BODY drop-zone (the templated well) instead of
+            // floating over the whole panel rect — keeps the list off the ornate Quest frame border.
+            // Falls back to the panel rect when no frame is used. All content (tabs/list/status) now
+            // anchors as fractions INSIDE the body zone.
+            var bodyHost = (modal.chrome.layout != null && modal.chrome.layout.body != null)
+                ? modal.chrome.layout.body : (RectTransform)panel.transform;
+            _panelRoot = bodyHost;
 
             // WO-454 Phase 2: tab strip (All / Story / Daily / Gear / Endgame) just under the header.
-            BuildTabStrip(panel.transform);
+            BuildTabStrip(bodyHost);
 
             // SCROLLABLE content area (TKT-3): the board overflowed because rows were placed by
             // normalized anchor math with no clipping/scroll. Now a uGUI ScrollRect — Viewport
@@ -86,7 +92,7 @@ namespace DeNelle.Village.Hero
             // ContentSizeFitter) that GROWS with the rows and scrolls when it exceeds the viewport.
             // Mirrors ShopPanel's scroll pattern.
             var viewportGo = new GameObject("Viewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
-            viewportGo.transform.SetParent(panel.transform, false);
+            viewportGo.transform.SetParent(bodyHost, false);
             var vpr = viewportGo.GetComponent<RectTransform>();
             vpr.anchorMin = new Vector2(0.03f, 0.08f);
             vpr.anchorMax = new Vector2(0.97f, 0.82f); // WO-454: leave room for the tab strip above
@@ -122,7 +128,7 @@ namespace DeNelle.Village.Hero
 
             // Status line
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
-            statusGo.transform.SetParent(panel.transform, false);
+            statusGo.transform.SetParent(bodyHost, false);
             var sRect = statusGo.GetComponent<RectTransform>();
             sRect.anchorMin = new Vector2(0.02f, 0.01f);
             sRect.anchorMax = new Vector2(0.98f, 0.07f);

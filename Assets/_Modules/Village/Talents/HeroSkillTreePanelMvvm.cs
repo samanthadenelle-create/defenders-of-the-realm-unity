@@ -293,10 +293,13 @@ namespace DeNelle.Village.Talents
             rt.sizeDelta = new Vector2(NodeSize, NodeSize);
 
             var img = go.GetComponent<Image>();
-            // Obsidian node plate (slot_talent) whenever the art is present — this panel
-            // leads the Obsidian look regardless of the global BlinkChrome dressing flag
-            // (owner wants the talent tree Obsidian); rounded procedural fallback otherwise.
-            Sprite plateSprite = RpgUiCatalog.Get("slot", "slot_talent");
+            // Real Blink talent BORDER art (talent_1..4 — the node frames per UI canon) sprite-FIRST,
+            // mapped by node tier (1..4; shared/0 → talent_1). This panel leads the Obsidian look
+            // regardless of the global BlinkChrome dressing flag. Falls back to the mirrored slot_talent
+            // plate, then to the procedural rounded plate, so a node never blanks even with no pack art.
+            int tier = (node.Tier >= 1 && node.Tier <= 4) ? node.Tier : 1;
+            Sprite plateSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, "talent_" + tier)
+                                 ?? RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, "slot_talent");
             if (plateSprite != null)
             {
                 img.sprite = plateSprite;
@@ -422,7 +425,13 @@ namespace DeNelle.Village.Talents
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Skills",
                 new Vector2(0.07f, 0.05f), new Vector2(0.93f, 0.95f), () => { if (_vm != null) _vm.Close(); },
                 headerX0: 0.04f, headerX1: 0.74f, frameName: RpgUiCatalog.FrameTalent);
-            var panel = chrome.content.transform;
+            // Fit ALL content into the frame's BODY drop-zone (the templated well) instead of
+            // floating over the whole panel rect — the old 0..1-over-content layout overlapped the
+            // frame's ornate border. Every sub-builder now lays out (in fractions) INSIDE the body
+            // zone. Falls back to the transparent content overlay when no frame is mirrored.
+            var bodyHost = (chrome.layout != null && chrome.layout.body != null)
+                ? chrome.layout.body : (RectTransform)chrome.content.transform;
+            Transform panel = bodyHost;
             _headerLabel = chrome.title;
 
             // Wisdom readout under the header.
@@ -454,10 +463,12 @@ namespace DeNelle.Village.Talents
             const float colX0 = 0.675f, colX1 = 0.955f;
             const float txX0 = 0.69f, txX1 = 0.94f;
 
-            // Dark backing plate for the whole right column (delineates it from the graph).
-            var detailBg = ElarionUiKit.AddImage(panel, "DetailBg",
+            // Right-column host. The frame supplies the chrome (UI canon §4: no per-screen wells) —
+            // so this is now a TRANSPARENT layout host, not a self-styled dark plate, to avoid
+            // double-framing inside the body zone. It still groups the detail strip + quick-swap row.
+            var detailBg = ElarionUiKit.AddImage(panel, "DetailHost",
                 new Vector2(colX0, 0.40f), new Vector2(colX1, 0.84f),
-                new Color(0.045f, 0.05f, 0.055f, 0.92f));
+                new Color(0f, 0f, 0f, 0f));
             var dbImg = detailBg.GetComponent<Image>();
             if (dbImg != null) dbImg.raycastTarget = false;
 

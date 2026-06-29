@@ -35,6 +35,7 @@ namespace DeNelle.HUD
         private RectTransform _box;       // the dialogue box (tap to advance)
         private RectTransform _optionsCol;
         private GameObject _tapHint;
+        private ElarionUiKit.PortraitHandle _portrait;   // medallion portrait disc (refreshed per Repaint)
 
         private void OnEnable() { DialogueService.Opened += OnOpened; }
         private void OnDisable() { DialogueService.Opened -= OnOpened; }
@@ -49,7 +50,7 @@ namespace DeNelle.HUD
             Repaint();
         }
 
-        private void OnClosed() { Unbind(); if (_ui != null) { Destroy(_ui); _ui = null; } }
+        private void OnClosed() { Unbind(); _portrait = null; if (_ui != null) { Destroy(_ui); _ui = null; } }
 
         private void Unbind()
         {
@@ -107,12 +108,14 @@ namespace DeNelle.HUD
                 11, ElarionUi.ParchmentDim, TMPro.FontStyles.Italic, TMPro.TextAlignmentOptions.BottomRight).gameObject;
             _tapHint.GetComponent<TMPro.TextMeshProUGUI>().text = "tap to continue";
 
-            // Speaker portrait → the frame's medallion socket (if present), when art exists.
+            // Speaker portrait → the frame's medallion socket (if present). The actual sprite is
+            // resolved + REFRESHED every Repaint (RefreshPortrait), because a per-node `portrait`
+            // command can change the speaker portrait mid-conversation. Built once here, repainted live.
             if (chrome.layout != null && chrome.layout.medallion != null)
             {
-                var disc = ElarionUiKit.Portrait(chrome.layout.medallion,
-                    ElarionUiKit.PortraitForClass(_vm != null ? _vm.Speaker : null), active: false);
-                if (disc != null && disc.image != null) disc.image.raycastTarget = false;
+                _portrait = ElarionUiKit.Portrait(chrome.layout.medallion,
+                    ResolveSpeakerPortrait(_vm != null ? _vm.Speaker : null), active: false);
+                if (_portrait != null && _portrait.image != null) _portrait.image.raycastTarget = false;
             }
 
             // Options column (above the strip), built on demand.
@@ -144,6 +147,7 @@ namespace DeNelle.HUD
 
             if (_speaker != null) { _speaker.text = _vm.Speaker; _speaker.gameObject.SetActive(!string.IsNullOrEmpty(_vm.Speaker)); }
             if (_body != null) _body.text = _vm.Text;
+            RefreshPortrait();
 
             BuildOptions();
             if (_tapHint != null) _tapHint.SetActive(!_vm.ShowingOptions && !string.IsNullOrEmpty(_vm.Text));
@@ -170,6 +174,47 @@ namespace DeNelle.HUD
                     15, ElarionUi.Parchment, TMPro.FontStyles.Normal, TMPro.TextAlignmentOptions.Left);
                 lbl.text = labels[i];
                 lbl.raycastTarget = false;
+            }
+        }
+
+        // ── Speaker → portrait mapping (WO-583) ──────────────────────────────────
+        // The dialogue line carries only a speaker NAME (e.g. "Miller"), not a class, so the old
+        // PortraitForClass(Speaker) call always returned null and the medallion stayed blank. Resolve
+        // by priority, never blank / never throw:
+        //   1) an AUTHORED per-node portrait — the dialogues.json `portrait` command sets
+        //      DeNelle.Core.DialoguePortrait.Forced to a Resources sprite path (e.g. "Portraits/farm");
+        //   2) the speaker name mapped to a class portrait (Knight/Ranger/Wizard/Healer);
+        //   3) null → RefreshPortrait draws the warm crest placeholder disc.
+        private static Sprite ResolveSpeakerPortrait(string speaker)
+        {
+            string forced = DeNelle.Core.DialoguePortrait.Forced;
+            if (!string.IsNullOrEmpty(forced))
+            {
+                var sp = Resources.Load<Sprite>(forced);
+                if (sp != null) return sp;
+            }
+            var cls = ElarionUiKit.PortraitForClass(speaker);
+            if (cls != null) return cls;
+            return null;
+        }
+
+        // Repaint the medallion portrait from the current speaker / forced portrait. Called every
+        // Repaint so a per-node portrait command (or a speaker change) updates the socket live;
+        // falls back to the placeholder disc when nothing resolves.
+        private void RefreshPortrait()
+        {
+            if (_portrait == null || _portrait.image == null) return;
+            var sp = ResolveSpeakerPortrait(_vm != null ? _vm.Speaker : null);
+            if (sp != null)
+            {
+                _portrait.image.sprite = sp;
+                _portrait.image.color = Color.white;
+                _portrait.image.preserveAspect = true;
+            }
+            else
+            {
+                _portrait.image.sprite = ElarionUiKit.CircleSprite;
+                _portrait.image.color = ElarionUiKit.PortraitPlaceholder;
             }
         }
 

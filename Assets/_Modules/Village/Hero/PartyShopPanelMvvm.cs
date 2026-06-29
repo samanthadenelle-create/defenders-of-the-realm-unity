@@ -282,9 +282,17 @@ namespace DeNelle.Village.Hero
             var panel = chrome.content.transform;
             _headerLabel = chrome.title;
 
+            // WO-582 (Blink frame zone-fit): fit ALL content into the frame's BODY drop-zone (the
+            // templated inner well) instead of floating over the whole panel rect — this stops the
+            // wallet/party/tabs/list/preview/buttons from overlapping the frame's ornate border. Falls
+            // back to the panel rect when no frame is used. Mirrors CraftingPanelMvvm.BuildChrome. The
+            // shared Close (chrome.close) stays on the full panel (chrome, not content).
+            var bodyHost = (chrome.layout != null && chrome.layout.body != null)
+                ? chrome.layout.body : (RectTransform)panel;
+
             // Wallet readout (top-right band).
             var walletGo = new GameObject("Wallet", typeof(TMPro.TextMeshProUGUI));
-            walletGo.transform.SetParent(panel, false);
+            walletGo.transform.SetParent(bodyHost, false);
             var wr = walletGo.GetComponent<RectTransform>();
             wr.anchorMin = new Vector2(0.60f, 0.905f); wr.anchorMax = new Vector2(0.96f, 0.96f);
             wr.offsetMin = Vector2.zero; wr.offsetMax = Vector2.zero;
@@ -296,14 +304,14 @@ namespace DeNelle.Village.Hero
 
             // TOP-LEFT party-member selector bar (spec point 1).
             _partyBar = new GameObject("PartyBar", typeof(RectTransform));
-            _partyBar.transform.SetParent(panel, false);
+            _partyBar.transform.SetParent(bodyHost, false);
             var pb = _partyBar.GetComponent<RectTransform>();
             pb.anchorMin = new Vector2(0.04f, 0.80f); pb.anchorMax = new Vector2(0.96f, 0.885f);
             pb.offsetMin = Vector2.zero; pb.offsetMax = Vector2.zero;
 
             // Selected-member sub-header (name - class (Lv N)).
             var memGo = new GameObject("MemberLabel", typeof(TMPro.TextMeshProUGUI));
-            memGo.transform.SetParent(panel, false);
+            memGo.transform.SetParent(bodyHost, false);
             var mr = memGo.GetComponent<RectTransform>();
             mr.anchorMin = new Vector2(0.04f, 0.755f); mr.anchorMax = new Vector2(0.66f, 0.80f);
             mr.offsetMin = Vector2.zero; mr.offsetMax = Vector2.zero;
@@ -316,7 +324,7 @@ namespace DeNelle.Village.Hero
 
             // BUY / SELL tabs (both on the same screen - spec point 4).
             _tabBar = new GameObject("TabBar", typeof(RectTransform));
-            _tabBar.transform.SetParent(panel, false);
+            _tabBar.transform.SetParent(bodyHost, false);
             var tb = _tabBar.GetComponent<RectTransform>();
             tb.anchorMin = new Vector2(0.66f, 0.755f); tb.anchorMax = new Vector2(0.96f, 0.80f);
             tb.offsetMin = Vector2.zero; tb.offsetMax = Vector2.zero;
@@ -327,7 +335,7 @@ namespace DeNelle.Village.Hero
             // narrow over the combined weapons+armor list. Pinned/hidden for single-kind vendors
             // (CategorySelectorVisible). Sits just under the tab/member band, above the grid.
             _categoryBar = new GameObject("CategoryBar", typeof(RectTransform));
-            _categoryBar.transform.SetParent(panel, false);
+            _categoryBar.transform.SetParent(bodyHost, false);
             var cb = _categoryBar.GetComponent<RectTransform>();
             cb.anchorMin = new Vector2(0.04f, 0.705f); cb.anchorMax = new Vector2(0.96f, 0.748f);
             cb.offsetMin = Vector2.zero; cb.offsetMax = Vector2.zero;
@@ -338,7 +346,7 @@ namespace DeNelle.Village.Hero
             // Finer weapon/armor TYPE chip row (WO-501 owner point 1) - sits just under the category
             // bar. Rebuilt per Render from _vm.AvailableTypes so it only shows live chips (>0 rows).
             _typeBar = new GameObject("TypeBar", typeof(RectTransform));
-            _typeBar.transform.SetParent(panel, false);
+            _typeBar.transform.SetParent(bodyHost, false);
             var tyb = _typeBar.GetComponent<RectTransform>();
             tyb.anchorMin = new Vector2(0.04f, 0.655f); tyb.anchorMax = new Vector2(0.96f, 0.70f);
             tyb.offsetMin = Vector2.zero; tyb.offsetMax = Vector2.zero;
@@ -346,20 +354,20 @@ namespace DeNelle.Village.Hero
             // The scroll list area - SLIM name column (WO-501 owner point 2): narrowed to the left ~36%
             // so the 3D preview pane sits beside it. The VerticalLayoutGroup auto-fits the new width.
             _contentRoot = new GameObject("Content", typeof(RectTransform));
-            _contentRoot.transform.SetParent(panel, false);
+            _contentRoot.transform.SetParent(bodyHost, false);
             var cr = _contentRoot.GetComponent<RectTransform>();
             cr.anchorMin = new Vector2(0.04f, 0.12f); cr.anchorMax = new Vector2(0.40f, 0.645f);
             cr.offsetMin = Vector2.zero; cr.offsetMax = Vector2.zero;
 
             // The 3D render preview pane (WO-501 owner point 3) beside the slim list.
-            BuildPreviewPane(panel);
+            BuildPreviewPane(bodyHost);
 
             // -- Bottom action bar (WO-501 owner point 4): Purchase/Sell toggle + Equip --
             // Close is the SHARED top-right Obsidian Close button (WO-554) — no per-panel footer Close.
 
             // ONE Purchase/Sell button whose label + action TOGGLE on _vm.Tab (the proven ShopPanel
             // pattern, ShopPanel.cs:341-344) - routes through _vm.Act on the selected id.
-            _buySellBtn = ElarionUiKit.ButtonPack(panel, "Purchase", ElarionUiKit.ButtonKind.Gold,
+            _buySellBtn = ElarionUiKit.ButtonPack(bodyHost, "Purchase", ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.30f, 0.03f), new Vector2(0.60f, 0.105f),
                 () => { var s = _vm?.SelectedId; if (!string.IsNullOrEmpty(s)) _vm.Act(s); },
                 packSpriteName: DeNelle.Core.FeatureFlags.BlinkChrome ? RpgUiCatalog.ButtonConfirm : null);
@@ -367,7 +375,7 @@ namespace DeNelle.Village.Hero
             _buySellLabel = _buySellBtn != null ? _buySellBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
 
             // EQUIP the selected owned item to the selected member (IEquipTarget seam via the VM).
-            _equipBtn = ElarionUiKit.ButtonPack(panel, "Equip", ElarionUiKit.ButtonKind.Gold,
+            _equipBtn = ElarionUiKit.ButtonPack(bodyHost, "Equip", ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.64f, 0.03f), new Vector2(0.86f, 0.105f),
                 () => _vm?.EquipSelected(),
                 packSpriteName: DeNelle.Core.FeatureFlags.BlinkChrome ? RpgUiCatalog.ButtonConfirm : null);
@@ -376,7 +384,7 @@ namespace DeNelle.Village.Hero
 
             // Status line (narrow strip above the buttons so a row can never eat the tap).
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
-            statusGo.transform.SetParent(panel, false);
+            statusGo.transform.SetParent(bodyHost, false);
             var sRect = statusGo.GetComponent<RectTransform>();
             sRect.anchorMin = new Vector2(0.04f, 0.115f); sRect.anchorMax = new Vector2(0.96f, 0.16f);
             sRect.offsetMin = Vector2.zero; sRect.offsetMax = Vector2.zero;

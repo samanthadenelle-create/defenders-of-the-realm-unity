@@ -85,21 +85,31 @@ namespace DeNelle.Village.Hero
                 () => _vm?.Close(), headerX0: 0.10f, headerX1: 0.90f,
                 frameName: RpgUiCatalog.FrameCharacter);
             var panel = chrome.content;
-            _panelTransform = panel.transform;
+
+            // UI_BLINK_TEMPLATE_CANON §3/§4: drop content into the frame's BODY drop-zone
+            // (the templated, pre-positioned area inside the ornate border) instead of floating
+            // over the whole panel rect at 0..1 — that overlapped FrameCharacter's border.
+            // FrameCharacter exposes only a body zone (no medallion/footer); the central 3D hero
+            // preview stays the medallion-equivalent in the body. Falls back to the panel rect
+            // when no frame art is present (WebGL-safe). All fraction layouts below are now
+            // relative to this body zone.
+            var bodyHost = (chrome.layout != null && chrome.layout.body != null)
+                ? chrome.layout.body : (RectTransform)panel.transform;
+            _panelTransform = bodyHost;
 
             // Central 3D hero preview (the showcase centerpiece).
-            BuildPreviewWidget(panel.transform);
+            BuildPreviewWidget(bodyHost);
 
             // The five labeled slot plates around the hero (rebuilt per render).
             _slotsHost = new GameObject("Slots", typeof(RectTransform));
-            _slotsHost.transform.SetParent(panel.transform, false);
+            _slotsHost.transform.SetParent(bodyHost, false);
             var sh = _slotsHost.GetComponent<RectTransform>();
             sh.anchorMin = Vector2.zero; sh.anchorMax = Vector2.one;
             sh.offsetMin = Vector2.zero; sh.offsetMax = Vector2.zero;
 
             // Slim target picker (only when there is more than one assignable member).
             if (_vm != null && _vm.TargetNames.Count > 1)
-                BuildTargetBar(panel.transform, new Vector2(0.30f, 0.875f), new Vector2(0.70f, 0.91f));
+                BuildTargetBar(bodyHost, new Vector2(0.30f, 0.875f), new Vector2(0.70f, 0.91f));
 
             Bind(_vm);
             Debug.Log("[EquipmentPanel] Opened — Gear Preview showcase bound to EquipVM (MVVM).");
@@ -283,7 +293,9 @@ namespace DeNelle.Village.Hero
             var img = go.GetComponent<Image>();
 
             bool selected = slotKey == _drawerSlotKey;
-            var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotItem);
+            // Real Obsidian equipment-slot plate (UI_BLINK_TEMPLATE_CANON §4) — sprite-FIRST,
+            // sliced, white; the procedural Cell tint is the WebGL-safe null fallback.
+            var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotArmor);
             if (plate != null)
             {
                 img.sprite = plate; img.type = Image.Type.Sliced;
@@ -612,7 +624,19 @@ namespace DeNelle.Village.Hero
                 new Vector2(0.32f, 0.10f), new Vector2(0.68f, 0.88f),
                 new Color(0.02f, 0.047f, 0.094f, 1f), rounded: false);
             var hostImg = host.GetComponent<Image>();
-            if (hostImg != null) hostImg.raycastTarget = false;
+            if (hostImg != null)
+            {
+                hostImg.raycastTarget = false;
+                // Central hero plate: real Obsidian character socket (UI_BLINK_TEMPLATE_CANON §4),
+                // sprite-FIRST; the dark glass fill stays as the WebGL-safe null fallback.
+                var charPlate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotCharacter);
+                if (charPlate != null)
+                {
+                    hostImg.sprite = charPlate;
+                    hostImg.type   = Image.Type.Sliced;
+                    hostImg.color  = Color.white;
+                }
+            }
 
             var imgGo = new GameObject("PreviewRawImage", typeof(RectTransform), typeof(RawImage));
             imgGo.transform.SetParent(host.transform, false);
