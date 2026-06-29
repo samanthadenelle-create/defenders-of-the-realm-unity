@@ -127,6 +127,65 @@ namespace DeNelle.Core.State
             return diff == 0;
         }
 
+        // ── Atomic single-key integrity envelope (replaces the LB-3 sibling ".sig"
+        //    key). The HMAC was originally written to a SEPARATE PlayerPrefs slot,
+        //    so a crash/power-loss BETWEEN the two writes (or two concurrent writers)
+        //    could leave the payload and signature out of sync → a VALID save then
+        //    rejected as "tampered" → silent save loss. Folding the 64-hex signature
+        //    into the FRONT of the stored value makes the write a SINGLE atomic
+        //    Provider.Write, so payload+sig can never tear apart.
+        //    Layout:  <64-hex-sig>\n<json-payload>
+        //    A legacy unsigned save (raw JSON, no hex+newline prefix) is detected by
+        //    the absence of this prefix and migrated once on load.
+
+        private const int SignatureHexLen = 64; // HMAC-SHA256 => 32 bytes => 64 hex chars
+
+        /// <summary>Wrap a JSON payload with its HMAC as a single atomically-writable value.</summary>
+        public static string EmbedSignature(string json)
+        {
+            return ComputeSignature(json) + "\n" + (json ?? string.Empty);
+        }
+
+        /// <summary>
+        /// Split a stored value written by <see cref="EmbedSignature"/>. Returns the
+        /// inner JSON payload. <paramref name="signaturePresent"/> is false for a
+        /// legacy unsigned save (raw JSON) — the caller loads it once and re-signs.
+        /// <paramref name="signatureValid"/> is true only when a present signature
+        /// verifies against the payload (false = tamper/corruption → reject).
+        /// </summary>
+        public static string TryExtractSigned(string stored, out bool signaturePresent, out bool signatureValid)
+        {
+            signaturePresent = false;
+            signatureValid = false;
+            if (string.IsNullOrEmpty(stored)) return stored;
+
+            // A signed value is exactly: 64 lowercase-hex chars, a '\n', then JSON.
+            if (stored.Length > SignatureHexLen + 1 && stored[SignatureHexLen] == '\n')
+            {
+                var sig = stored.Substring(0, SignatureHexLen);
+                if (IsLowerHex(sig))
+                {
+                    signaturePresent = true;
+                    var json = stored.Substring(SignatureHexLen + 1);
+                    signatureValid = VerifySignature(json, sig);
+                    return json;
+                }
+            }
+            // Legacy unsigned save (raw JSON) — return as-is for one-time migration.
+            return stored;
+        }
+
+        private static bool IsLowerHex(string s)
+        {
+            for (var i = 0; i < s.Length; i++)
+            {
+                var c = s[i];
+                var ok = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+                if (!ok) return false;
+            }
+            return true;
+        }
+
         // =====================================================================
         //  SaveFile — the SaveExport envelope (the live save + downloadable file)
         // =====================================================================

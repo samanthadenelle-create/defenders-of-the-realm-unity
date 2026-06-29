@@ -200,33 +200,32 @@ namespace DeNelle.Core.State
 
             // §12: delegate the raw read to the swappable provider, Guarded so an IO
             // failure self-reports (via FlowTrace.Fail) instead of silently blanking.
-            string json = null;
+            string stored = null;
             Guard.Try("Save", "Provider.Read (load save IO)",
-                () => json = Provider.Read(SaveSchema.PlayerPrefsKey));
-            FlowTrace.Step("Save", $"read save via {Provider.GetType().Name} (len={(json?.Length ?? 0)}).");
-            if (string.IsNullOrEmpty(json))
+                () => stored = Provider.Read(SaveSchema.PlayerPrefsKey));
+            FlowTrace.Step("Save", $"read save via {Provider.GetType().Name} (len={(stored?.Length ?? 0)}).");
+            if (string.IsNullOrEmpty(stored))
             {
                 FlowTrace.Warn("Save", "save key present but value is EMPTY — keeping fresh state.");
                 StateReplaced.Invoke();
                 return false;
             }
 
-            // ── LB-3 save-integrity gate ─────────────────────────────────────
-            // Verify the keyed HMAC written alongside the payload. A mismatch =
-            // tamper/corruption → reject and keep fresh defaults (never load the
-            // attacker-chosen blob). BACKWARD-COMPAT: a legacy save written before
-            // LB-3 has NO sibling sig — load it ONCE, then re-write WITH a sig
-            // below (do not wipe existing players). The key is client-embedded
-            // (best-effort obfuscation; real authority is server-side LB-1).
-            string sig = null;
-            Guard.Try("Save", "Provider.Read (load save signature)",
-                () => sig = Provider.Read(SaveSchema.PlayerPrefsKey + SaveSchema.SignatureKeySuffix));
-            bool legacyUnsignedSave = string.IsNullOrEmpty(sig);
+            // ── LB-3 save-integrity gate (atomic single-key envelope) ─────────
+            // The keyed HMAC is embedded in the FRONT of the stored value and split
+            // back out here. A present-but-invalid signature = tamper/corruption →
+            // reject and keep fresh defaults (never load the attacker-chosen blob).
+            // BACKWARD-COMPAT: a legacy save (raw JSON, no embedded sig) is loaded
+            // ONCE, then re-written WITH a sig on the next Save() (do not wipe
+            // existing players). The key is client-embedded (best-effort
+            // obfuscation; real authority is server-side LB-1).
+            string json = SaveSchema.TryExtractSigned(stored, out bool sigPresent, out bool sigValid);
+            bool legacyUnsignedSave = !sigPresent;
             if (legacyUnsignedSave)
             {
                 FlowTrace.Step("Save", "no integrity signature present — legacy unsigned save; loading once + re-signing on apply.");
             }
-            else if (!SaveSchema.VerifySignature(json, sig))
+            else if (!sigValid)
             {
                 FlowTrace.Fail("Save", "[Flow:Save] HMAC mismatch — tamper/corruption; rejecting save, keeping fresh state.");
                 StateReplaced.Invoke();
@@ -312,12 +311,11 @@ namespace DeNelle.Core.State
                 // Serialization stays here; only the raw write is delegated to the
                 // swappable provider (LocalSaveProvider by default — PlayerPrefs).
                 var json = JsonConvert.SerializeObject(file, SaveSchema.JsonSettings);
-                Provider.Write(SaveSchema.PlayerPrefsKey, json);
-                // LB-3: write the keyed HMAC ALONGSIDE the payload so a tampered
-                // blob is rejected on load. Sibling slot "<key>.sig".
-                var sig = SaveSchema.ComputeSignature(json);
-                Provider.Write(SaveSchema.PlayerPrefsKey + SaveSchema.SignatureKeySuffix, sig);
-                FlowTrace.Step("Save", $"wrote save+sig via {Provider.GetType().Name} (len={json.Length}).");
+                // LB-3: embed the keyed HMAC in the FRONT of the value and write it
+                // in a SINGLE atomic Provider.Write, so the payload and signature can
+                // never tear apart (a torn pair would reject a valid save → save loss).
+                Provider.Write(SaveSchema.PlayerPrefsKey, SaveSchema.EmbedSignature(json));
+                FlowTrace.Step("Save", $"wrote signed save via {Provider.GetType().Name} (len={json.Length}).");
             }
             catch (Exception ex)
             {
