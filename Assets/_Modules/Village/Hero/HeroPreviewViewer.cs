@@ -69,6 +69,11 @@ namespace DeNelle.Village.Hero
         /// <summary>The render texture the panel binds to a RawImage. Null if Begin failed.</summary>
         public RenderTexture Texture => _rt;
 
+        /// <summary>The preview body's weapon-mesh driver (reused world EquipmentController),
+        /// so the Gear-screen Orient tool can seat the SHOWN weapon live (parity with the
+        /// build-mode model-select Orient). Null until <see cref="Begin"/> attaches it.</summary>
+        public EquipmentController Equip => _equip;
+
         /// <summary>True when the rig was created and a texture is available to display.</summary>
         public bool IsValid => !_disposed && _rt != null && _cam != null && _model != null;
 

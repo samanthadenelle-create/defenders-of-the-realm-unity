@@ -68,6 +68,7 @@ namespace DeNelle.Village.UI
         private VisualElement _panel;
 
         private EquipmentController _eq;
+        private EquipmentController _injected;   // when set, edit THIS controller (e.g. the Gear preview) instead of the world hero
         private bool    _offHand;
         private Vector3 _pos;
         private Vector3 _euler;
@@ -84,13 +85,32 @@ namespace DeNelle.Village.UI
         /// <summary>Find-or-create the overlay and open it on the live hero. Returns the instance.</summary>
         public static SeatingEditorOverlay Launch()
         {
+            var existing = FindOrCreate();
+            existing._injected = null;           // world-hero mode (AdminOverlay dev tools)
+            existing.Open();
+            return existing;
+        }
+
+        /// <summary>Open the seating editor on a SPECIFIC EquipmentController — used by the
+        /// Gear screen to orient the weapon shown in its 3D preview (parity with the build
+        /// menu's model-select Orient). Distinct name so AdminOverlay's reflection
+        /// <c>GetMethod("Launch")</c> stays unambiguous.</summary>
+        public static SeatingEditorOverlay LaunchFor(EquipmentController target)
+        {
+            var existing = FindOrCreate();
+            existing._injected = target;
+            existing.Open();
+            return existing;
+        }
+
+        private static SeatingEditorOverlay FindOrCreate()
+        {
             var existing = FindObjectOfType<SeatingEditorOverlay>();
             if (existing == null)
             {
                 var go = new GameObject("SeatingEditorOverlay");
                 existing = go.AddComponent<SeatingEditorOverlay>();
             }
-            existing.Open();
             return existing;
         }
 
@@ -106,10 +126,10 @@ namespace DeNelle.Village.UI
         // ── Open / Close ──────────────────────────────────────────────────────────────
         public void Open()
         {
-            _eq = ResolveHeroEquipment();
+            _eq = _injected != null ? _injected : ResolveHeroEquipment();
             if (_eq == null)
             {
-                Debug.LogWarning("[Seating] no EquipmentController found on a hero — cannot open seating editor.");
+                Debug.LogWarning("[Seating] no EquipmentController (injected or world hero) — cannot open seating editor.");
                 return;
             }
 

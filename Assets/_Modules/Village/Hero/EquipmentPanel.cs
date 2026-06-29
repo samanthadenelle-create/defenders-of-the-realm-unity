@@ -111,6 +111,12 @@ namespace DeNelle.Village.Hero
             if (_vm != null && _vm.TargetNames.Count > 1)
                 BuildTargetBar(bodyHost, new Vector2(0.30f, 0.875f), new Vector2(0.70f, 0.91f));
 
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+            // Dev-only: orient the SHOWN weapon live (parity with the build-menu model-select
+            // Orient) so the owner resolves hand grips from the Gear screen. Hidden in players.
+            BuildOrientButton(bodyHost);
+#endif
+
             Bind(_vm);
             Debug.Log("[EquipmentPanel] Opened — Gear Preview showcase bound to EquipVM (MVVM).");
         }
@@ -432,6 +438,27 @@ namespace DeNelle.Village.Hero
             }
             HighlightTargets();
         }
+
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+        // Dev-only "Orient" button — opens the in-game Seating Editor (WO-577) on the PREVIEW's
+        // own EquipmentController, so the owner dials the hand-grip offset on the weapon she is
+        // looking at in the 3D showcase. The offset saves per weapon id to AttachmentOffsetRegistry,
+        // which the equip/attach path already reads → the grip is then correct everywhere. Reuse,
+        // no new tool: same overlay the build-menu Orient and AdminOverlay launch.
+        private void BuildOrientButton(Transform parent)
+        {
+            var btn = ElarionUiKit.ButtonPack(parent, "⚒ Orient", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.02f, 0.02f), new Vector2(0.20f, 0.07f),
+                () =>
+                {
+                    var eq = _preview != null ? _preview.Equip : null;
+                    if (eq != null) DeNelle.Village.UI.SeatingEditorOverlay.LaunchFor(eq);
+                    else            DeNelle.Village.UI.SeatingEditorOverlay.Launch();   // fall back to world hero
+                },
+                RpgUiCatalog.ButtonFrame);
+            if (btn != null) btn.name = "OrientDev";
+        }
+#endif
 
         private void HighlightTargets()
         {
