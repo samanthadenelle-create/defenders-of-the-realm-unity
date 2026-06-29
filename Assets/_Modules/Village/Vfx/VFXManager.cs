@@ -528,6 +528,18 @@ namespace DeNelle.Village
             var go = Instantiate(prefab, _poolRoot);
             go.name = $"[VFX_{type}]";
 
+            // WO-602 §12: the authored catalog cast prefabs (Lana Studio orbs, etc.) were
+            // built against LEGACY built-in particle shaders ("Particles/Additive" 10720 /
+            // "Particles/Alpha Blended" 10721). URP cannot render those — it substitutes the
+            // magenta error shader, drawn as opaque billboard quads = the hard purple/blue
+            // "cubes" the hero spell-cast showed. WO-420 only magenta-proofed the PROCEDURAL
+            // AbilityVfxKit path; these authored prefabs were never proofed. Re-shade every
+            // ParticleSystemRenderer to URP/Particles/Unlit ONCE per instance (this method is
+            // the single instantiation choke point for warm + on-demand + dungeon paths), blend
+            // mode + texture + tint preserved. Guarded — a stripped shader degrades, never throws.
+            Guard.Try("VFXManager", $"ProofUrpParticleShaders('{type}')",
+                () => ProofUrpParticleShaders(go, type));
+
             // V §12: a wired prefab that ships NO ParticleSystem (or visible Renderer) pools and
             // "plays" but renders nothing — the silent-invisible-effect class. Verify ONCE per type
             // at warm time so a bad catalog entry self-reports instead of going quiet in combat.
@@ -549,6 +561,178 @@ namespace DeNelle.Village
                 FlowTrace.Once("VFXManager", $"novisual:{type}",
                     $"VerifyHasParticles({phase}, '{type}'): prefab has NO ParticleSystem and NO Renderer — " +
                     "effect plays but renders nothing (invisible VFX). Check the catalog prefab for this type.");
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // ── WO-602: URP particle-shader proof (kill the magenta "cubes") ──────
+        // ─────────────────────────────────────────────────────────────────────
+        // The authored catalog VFX prefabs (Lana Studio Casual RPG VFX orbs, Spells
+        // Pack, etc.) reference Unity's LEGACY built-in particle shaders. Under URP those
+        // can't render, so Unity swaps in Hidden/InternalErrorShader → opaque magenta
+        // billboards (the purple/blue cube cluster). We mirror AbilityVfxKit's proven
+        // runtime fix (WO-420) but EXTEND it: instead of stamping a blank material we
+        // preserve the source blend mode (additive vs alpha), main texture and tint so the
+        // intended look survives. Reuses AbilityVfxKit.ResolveParticleShader() (already
+        // caches "Universal Render Pipeline/Particles/Unlit" in a static + logs fallbacks).
+
+        // URP fixed-function blend factor enum values (UnityEngine.Rendering.BlendMode).
+        private const int BLEND_ONE                 = 1;   // One
+        private const int BLEND_SRC_ALPHA           = 5;   // SrcAlpha
+        private const int BLEND_ONE_MINUS_SRC_ALPHA = 10;  // OneMinusSrcAlpha
+
+        /// <summary>
+        /// WO-602: walk every ParticleSystemRenderer on <paramref name="go"/> (and children)
+        /// and replace any LEGACY/built-in/error particle shader with URP/Particles/Unlit,
+        /// preserving blend mode + main texture + tint. Idempotent by construction — called
+        /// once per instance from CreatePooledInstance (the only instantiation site), so no
+        /// per-Play re-processing. Degrades gracefully (FlowTrace.Warn, leave as-is) when the
+        /// URP particle shader is stripped from the build. Never throws.
+        /// </summary>
+        private static void ProofUrpParticleShaders(GameObject go, VFXType type)
+        {
+            if (go == null) return;
+
+            var renderers = go.GetComponentsInChildren<ParticleSystemRenderer>(true);
+            if (renderers == null || renderers.Length == 0) return;
+
+            Shader urp = AbilityVfxKit.ResolveParticleShader();
+            if (urp == null || urp.name.IndexOf("Universal Render Pipeline", System.StringComparison.Ordinal) < 0)
+            {
+                // ResolveParticleShader already FlowTrace.Warn'd the miss. We require the real
+                // URP particle shader for a correct soft-particle result — a non-URP fallback
+                // (Sprites/Default etc.) would not honour additive blend the same way, so rather
+                // than risk a worse look we leave the authored materials untouched and report.
+                FlowTrace.Warn("VFXManager",
+                    $"ProofUrpParticleShaders('{type}'): URP Particles/Unlit unavailable (got " +
+                    $"'{(urp != null ? urp.name : "null")}') — leaving authored materials as-is " +
+                    "(may render magenta if legacy). Add it to GraphicsSettings AlwaysIncludedShaders.");
+                return;
+            }
+
+            int reshaded = 0;
+            foreach (var r in renderers)
+            {
+                if (r == null) continue;
+                var mats = r.sharedMaterials;
+                if (mats == null) continue;
+
+                bool changed = false;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    var src = mats[i];
+                    if (src == null) continue;
+                    if (!IsLegacyParticleShader(src.shader)) continue;
+
+                    bool additive = SourceWantsAdditive(src);
+
+                    // Carry over the look from the legacy material BEFORE we lose its props.
+                    Texture mainTex = SafeGetMainTexture(src);
+                    Color tint = SafeGetTintColor(src);
+
+                    var nm = new Material(urp) { name = $"{src.name}_URPProofed" };
+                    ConfigureUrpParticleBlend(nm, additive);
+                    if (mainTex != null)
+                    {
+                        if (nm.HasProperty("_BaseMap")) nm.SetTexture("_BaseMap", mainTex);
+                        nm.mainTexture = mainTex;   // _MainTex alias for completeness
+                    }
+                    if (nm.HasProperty("_BaseColor")) nm.SetColor("_BaseColor", tint);
+                    if (nm.HasProperty("_Color"))     nm.SetColor("_Color", tint);
+                    nm.color = tint;
+
+                    mats[i] = nm;
+                    changed = true;
+                    reshaded++;
+                }
+
+                if (changed) r.sharedMaterials = mats;
+            }
+
+            if (reshaded > 0)
+                FlowTrace.Step("VFXManager",
+                    $"ProofUrpParticleShaders('{type}'): re-shaded {reshaded} legacy particle " +
+                    $"material(s) to URP/Particles/Unlit across {renderers.Length} renderer(s).");
+        }
+
+        /// <summary>
+        /// True when <paramref name="sh"/> is a legacy/built-in/error particle shader that URP
+        /// can't render — null, Hidden/InternalErrorShader, "Legacy Shaders/*", or any
+        /// "*Particles/*" that is NOT the URP one.
+        /// </summary>
+        private static bool IsLegacyParticleShader(Shader sh)
+        {
+            if (sh == null) return true;
+            string n = sh.name ?? string.Empty;
+            if (n.IndexOf("Universal Render Pipeline", System.StringComparison.Ordinal) >= 0) return false;
+            if (n == "Hidden/InternalErrorShader") return true;
+            if (n.StartsWith("Legacy Shaders/", System.StringComparison.Ordinal)) return true;
+            if (n.IndexOf("Particles/", System.StringComparison.Ordinal) >= 0) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Decide additive vs alpha-blend from the legacy source material. Reads the shader name
+        /// (Particles/Additive 10720 → additive; Particles/Alpha Blended 10721 → alpha) and, when
+        /// the shader is the error shader (original lost), falls back to the material's _DstBlend
+        /// if present, else defaults to ADDITIVE (cast orbs/glows are overwhelmingly additive).
+        /// </summary>
+        private static bool SourceWantsAdditive(Material src)
+        {
+            if (src == null) return true;
+            string n = src.shader != null ? (src.shader.name ?? string.Empty) : string.Empty;
+
+            if (n.IndexOf("Additive", System.StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (n.IndexOf("Alpha Blended", System.StringComparison.OrdinalIgnoreCase) >= 0) return false;
+            if (n.IndexOf("AlphaBlend", System.StringComparison.OrdinalIgnoreCase) >= 0) return false;
+
+            // Shader name uninformative (error shader / unknown) — peek at the captured dst blend.
+            if (src.HasProperty("_DstBlend"))
+            {
+                int dst = (int)src.GetFloat("_DstBlend");
+                if (dst == BLEND_ONE) return true;                   // additive
+                if (dst == BLEND_ONE_MINUS_SRC_ALPHA) return false;  // alpha
+            }
+            return true;   // default additive
+        }
+
+        /// <summary>Configure a URP Particles/Unlit material for transparent additive or alpha blend.</summary>
+        private static void ConfigureUrpParticleBlend(Material m, bool additive)
+        {
+            if (m == null) return;
+
+            // _Surface 1 = Transparent (URP Particles/Unlit). _Blend: 0 = Alpha, 2 = Additive.
+            if (m.HasProperty("_Surface")) m.SetFloat("_Surface", 1f);
+            if (m.HasProperty("_Blend"))   m.SetFloat("_Blend", additive ? 2f : 0f);
+
+            int dst = additive ? BLEND_ONE : BLEND_ONE_MINUS_SRC_ALPHA;
+            if (m.HasProperty("_SrcBlend")) m.SetFloat("_SrcBlend", BLEND_SRC_ALPHA);
+            if (m.HasProperty("_DstBlend")) m.SetFloat("_DstBlend", dst);
+            if (m.HasProperty("_ZWrite"))   m.SetFloat("_ZWrite", 0f);
+
+            // URP transparent keyword + don't write depth + render in the transparent queue.
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            m.DisableKeyword("_ALPHAMODULATE_ON");
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;   // 3000
+        }
+
+        private static Texture SafeGetMainTexture(Material src)
+        {
+            if (src == null) return null;
+            if (src.HasProperty("_MainTex")) return src.GetTexture("_MainTex");
+            if (src.HasProperty("_BaseMap")) return src.GetTexture("_BaseMap");
+            return src.mainTexture;
+        }
+
+        private static Color SafeGetTintColor(Material src)
+        {
+            if (src == null) return Color.white;
+            // Legacy Particles/Additive + Alpha Blended use _TintColor; others _Color.
+            if (src.HasProperty("_TintColor")) return src.GetColor("_TintColor");
+            if (src.HasProperty("_Color"))     return src.GetColor("_Color");
+            if (src.HasProperty("_BaseColor")) return src.GetColor("_BaseColor");
+            return Color.white;
         }
 
         /// <summary>Get a dormant instance from the pool or create a new one.</summary>
