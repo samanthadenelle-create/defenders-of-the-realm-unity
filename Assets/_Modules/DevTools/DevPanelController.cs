@@ -1311,8 +1311,10 @@ namespace DeNelle.DevTools
                 return;
             }
 
+            // #66: match the lowered dragon _orbitHeight (22 -> 10) so the dev-spawned, scale-0.3
+            // dragon drops into frame instead of far overhead.
             Vector3 spawnPos = (anchor != null ? anchor.position : Vector3.zero)
-                               + new Vector3(0f, 22f, 0f);
+                               + new Vector3(0f, 10f, 0f);
             var dragon = Instantiate(_dragonBossPrefab, spawnPos, Quaternion.identity);
             dragon.Configure("dev-syndrath", anchor);
             SetStatus("Spawned Syndrath the Devourer over the Heart.");

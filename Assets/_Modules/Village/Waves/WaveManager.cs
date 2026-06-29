@@ -1328,8 +1328,10 @@ namespace DeNelle.Village
             // Spawn the dragon at cruise height above the Heart so it begins its
             // orbit immediately; DragonBoss.Configure re-seeds its anchor + HP.
             Transform heartT = _heart != null ? _heart.transform : null;
+            // #66: lower the entry drop from +22 to +10 to match the lowered _orbitHeight (was 22 -> 10)
+            // so the smaller (scale 0.3) dragon reads in-frame instead of starting far overhead.
             Vector3 spawnPos = (heartT != null ? heartT.position : transform.position)
-                               + new Vector3(0f, 22f, 0f);
+                               + new Vector3(0f, 10f, 0f);
 
             // G(uard the Instantiate): the prefab instantiation can throw on a corrupt/missing
             // asset; an unguarded throw here aborts the whole wave-start coroutine (every later
