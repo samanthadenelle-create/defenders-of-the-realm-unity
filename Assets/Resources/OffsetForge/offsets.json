@@ -70,6 +70,21 @@
             },
             "scale": 0.47,
             "fullOverride": true
+        },
+        {
+            "id": "sword_G",
+            "rot": {
+                "x": -39.0,
+                "y": 31.0,
+                "z": 102.0
+            },
+            "pos": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": 1.0,
+            "fullOverride": true
         }
     ]
 }
