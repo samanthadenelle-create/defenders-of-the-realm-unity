@@ -140,6 +140,22 @@ namespace DeNelle.Village
         // ── Target selection ──────────────────────────────────────────────────
 
         /// <summary>
+        /// HORIZONTAL (XZ-plane) squared distance — the range gate ignores the Y drop.
+        /// Owner 2026-06-28: a wall-mounted tower sits high above the ground enemies, so a
+        /// full 3D range check spent the budget on the height drop and shrank the tower's
+        /// ground footprint (anything on the floor "landed out of range"). Gating on the
+        /// horizontal distance lets an elevated tower reach as far across the ground as a
+        /// ground tower would — "natural physics would create a larger arc." Applies
+        /// uniformly to every tower, so no per-tower wall-mounted tag is needed.
+        /// </summary>
+        private static float HorizontalSqr(Vector3 a, Vector3 b)
+        {
+            float dx = a.x - b.x;
+            float dz = a.z - b.z;
+            return dx * dx + dz * dz;
+        }
+
+        /// <summary>
         /// The air/ground targeting-matrix gate (TD rock-paper-scissors). Returns
         /// true when THIS tower may fire at <paramref name="target"/>: an anti-ground
         /// tower skips flyers, an anti-air tower skips ground, "both" hits all. A
@@ -189,7 +205,7 @@ namespace DeNelle.Village
             {
                 var enemy = list[i];
                 if (enemy == null) continue;
-                float sq = (enemy.transform.position - myPos).sqrMagnitude;
+                float sq = HorizontalSqr(enemy.transform.position, myPos);
                 if (sq > maxSq || sq >= bestSq) continue;
                 var dmg = enemy.GetComponent<EnemyDamageable>();
                 if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
@@ -210,7 +226,7 @@ namespace DeNelle.Village
                 && CanHit(boss)   // air/ground matrix: the dragon flies — anti-air / both only
                 && !BlockedByWall((IDamageable)boss))   // LoS: don't shoot the boss through a wall
             {
-                float bsq = (((IDamageable)boss).WorldPosition - myPos).sqrMagnitude;
+                float bsq = HorizontalSqr(((IDamageable)boss).WorldPosition, myPos);
                 if (bsq <= maxSq && bsq < bestSq)
                 {
                     bestSq = bsq;
@@ -243,7 +259,7 @@ namespace DeNelle.Village
             {
                 var enemy = list[i];
                 if (enemy == null) continue;
-                float sq = (enemy.transform.position - myPos).sqrMagnitude;
+                float sq = HorizontalSqr(enemy.transform.position, myPos);
                 if (sq > maxSq) continue;
                 var dmg = enemy.GetComponent<EnemyDamageable>();
                 if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
@@ -260,7 +276,7 @@ namespace DeNelle.Village
             if (boss != null && boss.IsAlive && ((IDamageable)boss).Faction == CombatFaction.Hostile
                 && CanHit(boss))   // air/ground matrix: anti-air / both only
             {
-                float bsq = (((IDamageable)boss).WorldPosition - myPos).sqrMagnitude;
+                float bsq = HorizontalSqr(((IDamageable)boss).WorldPosition, myPos);
                 if (bsq <= maxSq && ((IDamageable)boss).Hp > bestHp)
                 {
                     bestHp = ((IDamageable)boss).Hp;
@@ -448,7 +464,7 @@ namespace DeNelle.Village
                 {
                     var enemy = list[i];
                     if (enemy == null) continue;
-                    float sq = (enemy.transform.position - myPos).sqrMagnitude;
+                    float sq = HorizontalSqr(enemy.transform.position, myPos);
                     if (sq > maxSq) continue;
                     var dmg = enemy.GetComponent<EnemyDamageable>();
                     if (dmg == null || !dmg.IsAlive) continue;
