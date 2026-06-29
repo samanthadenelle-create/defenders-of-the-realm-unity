@@ -38,9 +38,13 @@ namespace DeNelle.Village
         public static SettlementPlacer Instance { get; private set; }
 
         [Header("Demo claim verb")]
-        [Tooltip("If true, a left-click on a finite-reserve MineNode builds a settlement there " +
-                 "(the playable Phase-2 verb). Disable when a proper build-mode UI calls ClaimAt().")]
-        public bool ClickToClaim = true;
+        [Tooltip("If true, a left-click on a finite-reserve MineNode builds a settlement (a " +
+                 "defensive outpost) there. V1 HARVEST-ONLY (owner 2026-06-29): the create-a-" +
+                 "defensive-post verb was never finished, so it is OFF by default -- nodes are " +
+                 "harvest-only and a stray left-click never spawns an outpost. The ClaimAt() seam " +
+                 "(the real build-mode entry) is untouched and still callable. Flip back to true " +
+                 "to restore the click-to-claim demo when the outpost UX ships. Reversible.")]
+        public bool ClickToClaim = false;
 
         [Header("Settlement defaults")]
         [Tooltip("Starting max HP of a freshly-built settlement (the base garrison the player " +

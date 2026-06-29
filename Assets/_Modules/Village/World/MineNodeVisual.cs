@@ -31,6 +31,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -90,11 +91,23 @@ namespace DeNelle.Village
         {
             if (_visual != null) { Destroy(_visual); _visual = null; }
 
-            // Hide any placeholder mesh sitting on the node's OWN GameObject (e.g. the
-            // tinted Cube OuterWorldBuilder bakes, or a primitive sphere) — we replace it.
-            // We disable rather than destroy so the host transform/colliders are untouched.
+            // Permanently REMOVE any placeholder mesh sitting on the node's OWN GameObject
+            // (the tinted Cube OuterWorldBuilder bakes — including the bright cyan
+            // AetherCrystal cube — or a primitive sphere). We DESTROY the MeshRenderer +
+            // MeshFilter rather than only disabling them: NodeDiscoverySystem captures every
+            // child Renderer via GetComponentsInChildren<Renderer>(true) (which INCLUDES
+            // disabled renderers) and its ApplyDim() sets r.enabled = true on reveal — that
+            // resurrected the disabled host cube as a bright unlit cyan box poking through the
+            // real seated prop. Destroying the components removes them from that capture for
+            // good. The host transform + any Collider (SettlementPlacer's raycast + future
+            // triggers) are left untouched, so harvest interaction is unaffected.
             var hostRenderer = GetComponent<MeshRenderer>();
-            if (hostRenderer != null) hostRenderer.enabled = false;
+            if (hostRenderer != null) Destroy(hostRenderer);
+            var hostFilter = GetComponent<MeshFilter>();
+            if (hostFilter != null) Destroy(hostFilter);
+            FlowTrace.Step("HarvestNode",
+                "MineNodeVisual(" + Resource + "): removed host placeholder cube renderer+filter " +
+                "- only the seated Harvest prop renders (no cyan cube; NodeDiscovery cannot re-enable it).");
 
             _visual = new GameObject("NodeVisual");
             _visual.transform.SetParent(transform, false);

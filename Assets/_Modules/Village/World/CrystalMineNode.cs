@@ -94,6 +94,15 @@ namespace DeNelle.Village
         // tap-reachable. The legacy [G] keyboard trigger was removed in the strip sweep.
         private const int UpgradeButtonPriority = 5;
 
+        // V1 HARVEST-ONLY (owner 2026-06-29): the world Crystal Mine is a HARVEST node only
+        // for V1 -- the tier-UPGRADE verb was never finished. We stop ADVERTISING it: no
+        // on-screen "Upgrade Mine T1->2" button (the sibling MineNode's priority-0 harvest
+        // reclaims the shared button so harvest stays tappable) and the world prompt shows the
+        // harvest line ALONE. The upgrade CODE (AttemptUpgrade / TryUpgrade / ApplyTier) is
+        // left fully intact and reachable -- flip this to true to restore the verb when the
+        // upgrade UX ships. Reversible; no logic deleted.
+        private const bool ShowUpgradeVerb = false;
+
         // ── Runtime ──────────────────────────────────────────────────────────
         private MineNode _node;
         private CrystalGrade _grade;
@@ -163,6 +172,11 @@ namespace DeNelle.Village
 
             ApplyTier();   // realise the current Tier onto the node's tuning fields.
             ResolvePlayer();
+
+            if (!ShowUpgradeVerb)
+                FlowTrace.Step("HarvestNode",
+                    "CrystalMineNode at " + transform.position + " (" + _grade + "): V1 harvest-only " +
+                    "- upgrade verb suppressed (no on-screen Upgrade button; harvest-only world prompt).");
         }
 
         private void Update()
@@ -197,7 +211,7 @@ namespace DeNelle.Village
             // instead of flickering against harvest. Release the claim when maxed / out of
             // range so the sibling's harvest request reclaims the button (harvest stays
             // tappable). The old [G] keyboard trigger was removed in the strip sweep.
-            if (_inRange && !IsMaxTier)
+            if (ShowUpgradeVerb && _inRange && !IsMaxTier)
                 MobileInteractButton.Request(
                     this,
                     $"Upgrade Mine T{Tier}->{Tier + 1}  ({NextUpgradeCost()} ✦)",
@@ -342,10 +356,13 @@ namespace DeNelle.Village
             // showed ONLY the upgrade line, so a player at a crystal node never learned
             // they could harvest at all — it read as "nothing happens". Lead with harvest
             // (the primary verb) and append the upgrade affordance.
-            string upgrade = IsMaxTier
+            string upgrade = !ShowUpgradeVerb ? "" : IsMaxTier
                 ? $"Mine maxed (T{Tier})"
                 : $"〔 Tap 〕 Upgrade  T{Tier}->{Tier + 1} ({NextUpgradeCost()} ✦)";
             string label = $"〔 Tap 〕 Harvest {_grade} ✦      {upgrade}";
+            // V1 harvest-only: when the upgrade affordance is suppressed, trim the trailing
+            // pad so the bubble reads as a clean harvest-only prompt (no dangling spaces).
+            if (!ShowUpgradeVerb) label = label.TrimEnd();
             _prompt = BuildBubble(label);
         }
 
