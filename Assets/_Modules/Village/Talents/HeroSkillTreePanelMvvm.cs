@@ -46,6 +46,7 @@ namespace DeNelle.Village.Talents
         private TMPro.TextMeshProUGUI _planText;
         private Button _confirmBtn;
         private Button _cancelBtn;
+        private Button _respecBtn;
 
         // Single-screen folds (owner 2026-06-28): the right-side detail strip (selected
         // node name + description + state) and the quick-swap row (slots 1-4).
@@ -53,6 +54,7 @@ namespace DeNelle.Village.Talents
         private TMPro.TextMeshProUGUI _detailDesc;
         private TMPro.TextMeshProUGUI _detailState;
         private TMPro.TextMeshProUGUI _quickStatus;
+        private TMPro.TextMeshProUGUI _respecStatus;
         private GameObject _quickRoot;
 
         private PanelHandle _panelHandle;
@@ -152,6 +154,13 @@ namespace DeNelle.Village.Talents
                 _cancelBtn.interactable = any;
                 SetButtonAlpha(_cancelBtn, any ? 1f : 0.4f);
             }
+            if (_respecBtn != null)
+            {
+                bool can = _vm.CanRespec;
+                _respecBtn.interactable = can;
+                SetButtonAlpha(_respecBtn, can ? 1f : 0.4f);
+            }
+            if (_respecStatus != null) _respecStatus.text = _vm.RespecStatus;
 
             RebuildGraph();
             RenderDetail();
@@ -587,8 +596,25 @@ namespace DeNelle.Village.Talents
             var canLbl = _cancelBtn != null ? _cancelBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
             if (canLbl != null) { canLbl.color = ElarionUi.Parchment; canLbl.fontStyle = TMPro.FontStyles.Bold; }
 
+            // RESPEC — refund this hero's talents for a Crystal cost (owner F8 "no respec option").
+            // Surfaces the legacy TalentTreePanel respec on the LIVE MVVM panel via vm.Respec().
+            int respecCost = _vm != null ? _vm.RespecCost : HeroSkillTreeVMRespecFallbackCost;
+            _respecBtn = ElarionUiKit.ButtonPack(panel, "Respec  " + respecCost + " Crystals", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.815f, 0.075f), new Vector2(0.955f, 0.135f),
+                () => { if (_vm != null) _vm.Respec(); },
+                packSpriteName: RpgUiCatalog.ButtonFrame);
+            var resLbl = _respecBtn != null ? _respecBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
+            if (resLbl != null) { resLbl.color = ElarionUi.Parchment; resLbl.fontStyle = TMPro.FontStyles.Bold; }
+
+            _respecStatus = ElarionUiKit.Label(panel, "", 0.14f, 0.17f, ElarionUi.ParchmentDim,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Right, 0.55f, 0.955f);
+
             // Close is the SHARED top-right Obsidian Close button (WO-554) — no per-panel footer Close.
         }
+
+        // Display-only fallback if the button is built before the VM binds (cost still comes
+        // from HeroTalentCatalog at click time via vm.Respec); matches RespecCostCrystals default.
+        private const int HeroSkillTreeVMRespecFallbackCost = 300;
 
         private static void SetButtonAlpha(Button btn, float a)
         {
@@ -735,6 +761,8 @@ namespace DeNelle.Village.Talents
             _planText = null;
             _confirmBtn = null;
             _cancelBtn = null;
+            _respecBtn = null;
+            _respecStatus = null;
             _detailName = null;
             _detailDesc = null;
             _detailState = null;

@@ -506,6 +506,7 @@ namespace DeNelle.Village
                 case "dash":      ResolveDash(def, origin);      return;
                 case "knockback": ResolveKnockback(def, origin); return;
                 case "taunt":     ResolveTaunt(def, origin);     return;
+                case "blink":     ResolveBlink(def, origin);     return;
             }
 
             DamageElement element = ElementOf(def);
@@ -696,6 +697,27 @@ namespace DeNelle.Village
                 ReportRumble(dmg);
             }
             SpawnVfx(origin, def, 1.6f, foe?.WorldPosition);
+        }
+
+        /// <summary>
+        /// Universal Dash (2026-06-29) — a short cooldown-gated blink/dodge any class can learn
+        /// from the Shared Universal talent pool. Warps the hero <c>def.Range</c> metres along its
+        /// current facing via <see cref="HeroLocomotion.WarpTo"/> (the same warp the Knight's
+        /// Heroic Leap uses), with NO target required, so it reads as an escape/reposition rather
+        /// than a gap-closer. No damage; the per-cast cooldown is charged by the caller (TryCast /
+        /// TryCastExtra). V1 cooldown-only — no stamina (deferred to V2). Null-guarded + additive.
+        /// </summary>
+        private void ResolveBlink(AbilityDef def, Vector3 origin)
+        {
+            if (_loco == null) _loco = GetComponent<HeroLocomotion>();
+            Vector3 dir = transform.forward; dir.y = 0f;
+            if (dir.sqrMagnitude < 0.01f) dir = Vector3.forward;
+            float dist = def.Range > 0f ? def.Range : 6f;
+            Vector3 landing = origin + dir.normalized * dist;
+            _loco?.WarpTo(landing);
+            VFXManager.Play(VFXType.Impact_ShockwaveRing, origin + Vector3.up * 1.0f);
+            SpawnVfx(landing, def, 1.2f, null);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Hero", "universal blink " + (def.Id ?? "dash") + " -> " + landing);
         }
 
         /// <summary>

@@ -90,6 +90,15 @@
         "suppressing-volley":{ "id": "knight.suppressing-volley","slot": "r", "key": "R", "name": "Suppressing Volley","description": "Cleaving volley — 36 dmg to all foes in a 6m arc (20s cd).",               "icon": "✦", "color": "#facc15", "effect": "cleave", "cooldown": 20,  "manaCost": 5, "damage": 36, "range": 6 },
         "shield-bash":       { "id": "knight.shield-bash",       "slot": "w", "key": "F", "name": "Shield Bash",       "description": "Bashes + snares the nearest foe — 22 dmg + a 2.5s slow up close (8s cd).",  "icon": "✦", "color": "#ffd27a", "effect": "snare",  "cooldown": 8,   "manaCost": 2, "damage": 22, "range": 3.6 }
       }
+    },
+    "universal-skills": {
+      "displayName": "Universal Skills",
+      "_comment": "Cross-class COMMON actives any hero may learn from the Shared Universal talent pool (shared.n9-n11 in hero-talents.json reference these by 'abilityId'). V1 cooldown-gated, NO stamina/mana (manaCost 0 — stamina deferred to V2). Effects use only shapes HeroAbilities.ResolveEffect supports: strike / heal / blink ('blink' = the universal-dash raw-effect dodge added 2026-06-29).",
+      "abilities": {
+        "arcane-bolt": { "id": "universal.arcane-bolt", "slot": "w", "key": "F", "name": "Arcane Bolt", "description": "A low-level magic dart at the nearest foe — 22 dmg @ 14m (2s cd).", "icon": "✦", "color": "#b388ff", "effect": "strike", "cooldown": 2,  "manaCost": 0, "damage": 22, "range": 14 },
+        "mend":        { "id": "universal.mend",        "slot": "e", "key": "E", "name": "Mend",        "description": "Channel a little life back — heals 25 HP (12s cd).",                "icon": "✚", "color": "#86efac", "effect": "heal",   "cooldown": 12, "manaCost": 0, "damage": 25, "range": 5 },
+        "dash":        { "id": "universal.dash",        "slot": "w", "key": "F", "name": "Dash",        "description": "Blink 6m in your facing — a quick dodge (8s cd).",                  "icon": "➾", "color": "#7dd3fc", "effect": "blink",  "cooldown": 8,  "manaCost": 0, "damage": 0,  "range": 6 }
+      }
     }
   }
 }
