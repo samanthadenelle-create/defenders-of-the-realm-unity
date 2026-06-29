@@ -21,6 +21,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using DeNelle.Core.UI;   // WO-556: shared Obsidian panel chrome for the victory summary
+using DeNelle.Core.Diagnostics;   // FlowTrace — crown-tier instrumentation
 
 namespace DeNelle.Village.Arena
 {
@@ -122,8 +123,14 @@ namespace DeNelle.Village.Arena
         /// On a LOSS it shows a brief regroup panel and self-closes (the controller returns home
         /// immediately). Logic -> view: all numbers are pushed in; the view reads no game state.
         /// </summary>
+        // <paramref name="perfect"/> = a flawless / no-hit win earns the perfect-tier crown instead of
+        // the 1/2/3 tier crown. NOTE(perfect-tier): no no-hit/damage-taken signal is tracked by the
+        // arena/combat today (stars come from BattleStarRating.StarsForDuration on duration alone), so
+        // BattleArena does not pass this yet — it defaults false. Wire it through here when a flawless
+        // signal lands so the crown upgrades automatically.
         public void ShowResult(bool won, int stars, float durationSeconds,
-                               BattleRewardSummary rewards, Action onContinue, float autoTimeoutSeconds = 20f)
+                               BattleRewardSummary rewards, Action onContinue, float autoTimeoutSeconds = 20f,
+                               bool perfect = false)
         {
             if (_liveGroup != null) _liveGroup.SetActive(false);
             // The fight is over — tear the 9-zone battle HUD down now so it can't sit on top of
@@ -136,12 +143,13 @@ namespace DeNelle.Village.Arena
                 return;
             }
 
-            ShowVictorySummary(Mathf.Clamp(stars, 0, 3), Mathf.Max(0f, durationSeconds), rewards, onContinue, autoTimeoutSeconds);
+            ShowVictorySummary(Mathf.Clamp(stars, 0, 3), Mathf.Max(0f, durationSeconds), rewards, onContinue, autoTimeoutSeconds, perfect);
         }
 
         // WO-556: the rich win summary on the shared Obsidian chrome.
         private void ShowVictorySummary(int stars, float durationSeconds,
-                                        BattleRewardSummary rewards, Action onContinue, float autoTimeoutSeconds)
+                                        BattleRewardSummary rewards, Action onContinue, float autoTimeoutSeconds,
+                                        bool perfect)
         {
             // Close + Continue both fire the deferred return (Close == "I'm done reading").
             Action continueAction = () => Continue(onContinue);
@@ -157,8 +165,9 @@ namespace DeNelle.Village.Arena
                                ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center,
                                0.06f, 0.94f);
 
-            // Star row — 3 slots, filled to the earned count. Big gold stars; unearned dim.
-            BuildStarRow(content, stars);
+            // Tier-crown rating (font-independent; replaces the TMP star glyphs that tofu'd when the
+            // build font lacked U+2605/U+2606). Falls back to the glyph row only if the art is absent.
+            BuildStarRow(content, stars, perfect);
 
             // Battle time taken (M:SS).
             ElarionUiKit.Label(content, "Time  " + FormatTime(durationSeconds), 0.58f, 0.66f,
@@ -201,8 +210,87 @@ namespace DeNelle.Village.Arena
             StartCoroutine(CloseAfter(2.5f));
         }
 
-        // Build a centred 3-slot star row, filled to the earned count.
-        private void BuildStarRow(Transform parent, int stars)
+        // Build the centred rating: a SINGLE crown-tier sprite (font-independent, so it can never
+        // tofu). perfect -> the flawless capstone crown; else crown_tier1/2/3 by earned star count.
+        // If the crown art is absent (pack not imported) we fall back to the legacy TMP star-glyph
+        // row so the panel never blanks. The crown pops in via a plain unscaled-time coroutine
+        // (NO DOTween — the panel may pause the game).
+        private void BuildStarRow(Transform parent, int stars, bool perfect)
+        {
+            // TODO(perfect-tier): no no-hit / damage-taken signal is tracked by the arena or combat
+            // yet (stars are duration-only via BattleStarRating). 'perfect' defaults false until such
+            // a flawless signal is threaded in; when it is, the perfect crown lights up automatically.
+            string key = perfect
+                ? RpgUiCatalog.CrownPerfect
+                : "crown_tier" + Mathf.Clamp(stars, 1, 3);
+
+            Sprite crown = RpgUiCatalog.Get(RpgUiCatalog.RoleCrown, key);
+            if (crown == null)
+            {
+                // Art absent — keep the panel populated with the legacy glyph row (may tofu on a
+                // font without the star glyphs, but never blanks).
+                FlowTrace.Step("BattleArenaHud",
+                    $"crown art '{key}' absent -> TMP star-glyph fallback (stars={stars}, perfect={perfect}).");
+                BuildStarGlyphRowFallback(parent, stars);
+                return;
+            }
+
+            FlowTrace.Step("BattleArenaHud",
+                $"victory crown '{key}' (stars={stars}, perfect={perfect}).");
+
+            // Centred crown image in the rating band (mirrors the old row's vertical placement).
+            var go = new GameObject("VictoryCrown");
+            go.transform.SetParent(parent, false);
+            var img = go.AddComponent<Image>();
+            img.sprite = crown;
+            img.preserveAspect = true;
+            img.raycastTarget = false;
+            var rt = img.rectTransform;
+            rt.anchorMin = new Vector2(0.5f, 0.75f);   // centre of the 0.68..0.82 rating band
+            rt.anchorMax = new Vector2(0.5f, 0.75f);
+            rt.pivot     = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = new Vector2(180f, 180f);    // big and proud; preserve-aspect keeps it square
+
+            StartCoroutine(PopCrown(rt, img));
+        }
+
+        // Plain coroutine pop: alpha 0->1 + scale 0 -> 1.12 (ease-out, ~0.35s) -> settle to 1.0
+        // (~0.15s). Time.unscaledDeltaTime so it animates even if the battle pause froze Time.scale.
+        private System.Collections.IEnumerator PopCrown(RectTransform rt, Image img)
+        {
+            if (rt == null || img == null) yield break;
+            const float rise = 0.35f, settle = 0.15f, overshoot = 1.12f;
+
+            rt.localScale = Vector3.zero;
+            var c = img.color; c.a = 0f; img.color = c;
+
+            float t = 0f;
+            while (t < rise)
+            {
+                t += Time.unscaledDeltaTime;
+                float u = Mathf.Clamp01(t / rise);
+                float eased = 1f - Mathf.Pow(1f - u, 3f);   // ease-out cubic
+                if (rt != null) rt.localScale = Vector3.one * (overshoot * eased);
+                if (img != null) { var cc = img.color; cc.a = eased; img.color = cc; }
+                yield return null;
+            }
+            if (img != null) { var cc = img.color; cc.a = 1f; img.color = cc; }
+
+            t = 0f;
+            while (t < settle)
+            {
+                t += Time.unscaledDeltaTime;
+                float u = Mathf.Clamp01(t / settle);
+                if (rt != null) rt.localScale = Vector3.one * Mathf.Lerp(overshoot, 1f, u);
+                yield return null;
+            }
+            if (rt != null) rt.localScale = Vector3.one;
+        }
+
+        // Legacy fallback: the centred 3-slot TMP star-glyph row, filled to the earned count. Only
+        // used when the crown art is absent (so the rating is never blank).
+        private void BuildStarGlyphRowFallback(Transform parent, int stars)
         {
             var sb = new System.Text.StringBuilder();
             for (int i = 0; i < 3; i++)

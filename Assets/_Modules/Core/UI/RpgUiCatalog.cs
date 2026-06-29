@@ -59,6 +59,10 @@ namespace DeNelle.Core.UI
         // Blink "OBSIDIAN UI" roles (mirrored by RpgUiImporter from Assets/Blink):
         public const string RoleFrame      = "frame";       // full ornate obsidian panel backgrounds
         public const string RoleSilhouette = "silhouette";  // paper-doll body silhouettes
+        // crown/ — victory-summary tier crowns (font-independent star-rating replacement; the
+        // build font had no TMP star glyph, so the 3-star row tofu'd). Art placed at
+        // Resources/RpgUi/crown/ by the importer; callers keep the glyph fallback on null.
+        public const string RoleCrown      = "crown";
 
         // frame/ — one ornate obsidian panel background per screen (Simple, preserve-aspect):
         public const string FrameInventory = "frame_inventory";
@@ -134,6 +138,12 @@ namespace DeNelle.Core.UI
         public const string ButtonExit    = "button_exit";     // D2/Exit (close/exit button)
         // slot/ — per-item article plate (Blink ArticleSlot/ItemBackground), 9-sliced:
         public const string SlotItem      = "slot_item";       // Slots_Obsidian/Inventory_Slot (per-item plate)
+        // crown/ — victory tier crowns (preserve-aspect single sprite). tier1/2/3 map to the
+        // earned star count; perfect is the flawless/no-hit capstone crown.
+        public const string CrownTier1    = "crown_tier1";
+        public const string CrownTier2    = "crown_tier2";
+        public const string CrownTier3    = "crown_tier3";
+        public const string CrownPerfect  = "crown_perfect";
 
         /// <summary>
         /// Representative sprite for a role (the first one loaded, by name order), or
