@@ -509,7 +509,21 @@ namespace DeNelle.Village
             }
 
             FlowTrace.Step("Seam", "starting RepositionPlayerAfterLoad coroutine (fade -> warp -> fade)");
-            StartCoroutine(RepositionPlayerAfterLoad(player));
+            // PERSISTENT HOST (owner F8 2026-06-30): on a SINGLE load the SOURCE scene (this trigger's
+            // scene, e.g. OuterWorld) UNLOADS — destroying THIS component and KILLING the coroutine
+            // before it warps the hero (the trace died right after 'fade-to-black'; the hero kept its
+            // carry position instead of seating at the entry). The hero root is already DDOL'd above,
+            // so host the reposition on the hero's own (surviving) MonoBehaviour. Additive loads keep
+            // this trigger alive, so 'this' stays the host there.
+            MonoBehaviour coHost = this;
+            if (!loadAdditive && player != null)
+            {
+                var heroMb = player.GetComponentInParent<HeroLocomotion>()
+                          ?? player.GetComponentInChildren<HeroLocomotion>();
+                if (heroMb != null) coHost = heroMb;
+                else FlowTrace.Warn("Seam", "no HeroLocomotion to host reposition across Single load — using this (may die on unload).");
+            }
+            coHost.StartCoroutine(RepositionPlayerAfterLoad(player));
         }
 
         private Transform ResolveHero()

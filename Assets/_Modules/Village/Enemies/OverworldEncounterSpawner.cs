@@ -97,7 +97,28 @@ namespace DeNelle.Village
             SceneManager.sceneLoaded -= OnSceneLoaded;
         }
 
-        private void OnSceneLoaded(Scene scene, LoadSceneMode mode) => MaybePopulate();
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            // CHAIN CLEANUP (owner 2026-06-30): reps are DontDestroyOnLoad and would otherwise be
+            // carried into a single-loaded chain scene (Outpost1/Dungeon/Outpost2) where they don't
+            // belong. If OuterWorld is no longer loaded, despawn them so the outpost reads clean
+            // (owner: "if easier and cleaner they can go"). They re-populate via MaybePopulate when
+            // OuterWorld loads again.
+            if (!OuterWorldLoaded()) DespawnAllReps();
+            MaybePopulate();
+        }
+
+        // Destroy + forget every live rep (used when leaving OuterWorld into a chain scene).
+        private void DespawnAllReps()
+        {
+            int n = 0;
+            for (int i = 0; i < _reps.Count; i++)
+                if (_reps[i] != null) { Destroy(_reps[i]); n++; }
+            _reps.Clear();
+            if (n > 0)
+                FlowTrace.Step("Encounter",
+                    $"DespawnAllReps: cleared {n} carried rep(s) (OuterWorld not loaded — chain scene); re-populate on return.");
+        }
 
         // True when OuterWorld is loaded (active OR additive), case-insensitive — mirrors
         // RaidOutpostSystem.InOuterWorld so the rep gate matches the other world systems.
