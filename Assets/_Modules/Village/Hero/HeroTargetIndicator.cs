@@ -597,7 +597,9 @@ namespace DeNelle.Village
             for (int i = _candidates.Count - 1; i >= 0; i--)
             {
                 var d = _candidates[i];
-                if (d == null) { _candidates.RemoveAt(i); continue; }
+                // Unity-aware: an interface ref misses a destroyed MonoBehaviour with plain `== null`
+                // (scene-unloaded crate); prune it so the WorldPosition deref below can't NRE.
+                if (d == null || (d as UnityEngine.Object) == null) { _candidates.RemoveAt(i); continue; }
                 Vector3 vp = cam.WorldToViewportPoint(d.WorldPosition);
                 bool onScreen = vp.z > 0f && vp.x >= 0f && vp.x <= 1f && vp.y >= 0f && vp.y <= 1f;
                 if (!onScreen) _candidates.RemoveAt(i);
@@ -701,7 +703,13 @@ namespace DeNelle.Village
             for (int i = 0; i < _candidates.Count; i++)
             {
                 var cand = _candidates[i];
-                if (cand == null || !cand.IsAlive) continue;
+                // Unity-aware null check: an IDamageable held via the INTERFACE static type bypasses
+                // Unity's overloaded ==, so `cand == null` MISSES a destroyed MonoBehaviour. A candidate
+                // killed by a SCENE UNLOAD (e.g. an Outpost crate when single-loading into the Dungeon)
+                // keeps _broken=false, so IsAlive lies 'true' and WorldPosition (transform) then throws
+                // NRE (owner F8 2026-06-30, ×8/frame in the Dungeon). Cast to UnityEngine.Object so the
+                // == overload catches the dead object, and skip it.
+                if (cand == null || (cand as UnityEngine.Object) == null || !cand.IsAlive) continue;
                 if (!gate) return cand;   // can't determine facing → nearest wins
                 Vector3 to = cand.WorldPosition - me;
                 to.y = 0f;
