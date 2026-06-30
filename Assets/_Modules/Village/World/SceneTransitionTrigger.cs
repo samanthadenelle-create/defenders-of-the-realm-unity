@@ -285,6 +285,13 @@ namespace DeNelle.Village
         // ON to restore the prompt.
         private bool IsTravelGated()
         {
+            // A WALK-UP entry (a physical proximity door carrying a promptOverride — e.g. the OuterWorld
+            // CavePortal into Outpost1, or the chain's "Enter the Dungeon"/"...Outpost2" doors) IS the
+            // earned walk: reaching it means you walked there. The travel-gate (WO-453, ff.outposttravel
+            // OFF) exists to block FAST-TRAVEL to outposts from afar, NOT to lock the player out of a
+            // door they physically walked up to. So a walk-up entry is never travel-gated. (owner F8
+            // 2026-06-30: "no options to port" — the CavePortal->Outpost1 prompt was suppressed here.)
+            if (IsWalkUpEntry) return false;
             return IsOutpostDestination() && !DeNelle.Core.FeatureFlags.OutpostTravel;
         }
 
