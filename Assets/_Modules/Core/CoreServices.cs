@@ -155,5 +155,30 @@ namespace DeNelle.Core
         {
             if (ReferenceEquals(WalletSigner, signer)) WalletSigner = null;
         }
+
+        // ── Scene-link resolver (WO1) ─────────────────────────────────────────
+        /// <summary>
+        /// The active data-driven scene-link resolver, or null when no
+        /// SceneLinkResolverHost is present (it self-bootstraps). Routes the hero
+        /// across the world graph (Castle → OuterWorld → Outpost1 → Dungeon →
+        /// Outpost2 + portal). Always null-check before use
+        /// (e.g. CoreServices.SceneLinkResolver?.TravelTo(id)).
+        /// </summary>
+        public static DeNelle.Core.World.ISceneLinkResolver SceneLinkResolver { get; private set; }
+
+        /// <summary>Registers the scene-link resolver. Called by SceneLinkResolverHost.Awake.
+        /// Main-thread only (no locking) — registrations happen in Awake/OnDestroy.</summary>
+        public static void RegisterSceneLinkResolver(DeNelle.Core.World.ISceneLinkResolver resolver)
+        {
+            if (SceneLinkResolver != null && !ReferenceEquals(SceneLinkResolver, resolver))
+                Debug.LogWarning("[CoreServices] Replacing existing ISceneLinkResolver registration.");
+            SceneLinkResolver = resolver;
+        }
+
+        /// <summary>Unregisters the scene-link resolver. Called by SceneLinkResolverHost.OnDestroy.</summary>
+        public static void UnregisterSceneLinkResolver(DeNelle.Core.World.ISceneLinkResolver resolver)
+        {
+            if (ReferenceEquals(SceneLinkResolver, resolver)) SceneLinkResolver = null;
+        }
     }
 }

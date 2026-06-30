@@ -41,21 +41,21 @@ namespace DeNelle.Editor
     {
         private const string ScenePath = "Assets/Scenes/OuterWorld.unity";
 
-        private const string PolyPrefabRoot =
-            "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/";
-        // Big rock formation reads as a cave mouth (docs/polyperfect-asset-catalog.md
-        // "Rocks & stones" -> Rock_Large; verified on disk under Nature_M/Stones_M).
-        private const string CaveMouthPrefab = PolyPrefabRoot + "Nature_M/Stones_M/Rock_Large.prefab";
+        // OUTPOST PORTAL ENTRANCE (owner 2026-06-30): the outpost is entered through the
+        // enemy_outpost structure (NOT a cave rock). Lives under Resources/Dungeons; loaded by the
+        // editor path at bake. Alignment comes from the Offset Forge offset id "enemy_outpost", read
+        // DATA-DRIVEN from offsets.json — the first real-world placement test of the Offset Forge tool.
+        private const string OutpostModelPath = "Assets/Resources/Dungeons/enemy_outpost.fbx";
+        private const string OutpostOffsetId  = "enemy_outpost";
 
         private const string CaveName    = "CavePortal";
         private const string TriggerName = "CavePortal_Trigger";
 
-        // Corridor terminus — the far end of the enlarged OuterWorld.
-        // OWNER DECISION 2026-06-20: park the 600m walk to the far cave — put the outpost portal at
-        // the OUTERWORLD EDGE the player actually reaches just past the seam (~z-150, where she was),
-        // so the outpost is quick-access right after crossing. (The far-cave concept is parked, not
-        // deleted — bump this Z south again later for a "deep" entrance.)
-        private static readonly Vector3 CavePos = new Vector3(0f, 0f, -150f);
+        // Outpost portal placement. OWNER 2026-06-30: position is arbitrary, but it should sit FAR
+        // from town so the player must walk + EXPLORE OuterWorld to find it (not quick-access at the
+        // seam). The 1000m terrain spans z ~[-500,+500] (TerrainCenterZ=0); the south seam lands the
+        // player ~z-66, so z-420 is a ~350m southward walk to a deep-south entrance.
+        private static readonly Vector3 CavePos = new Vector3(0f, 0f, -420f);
 
         // Village2 ARRIVAL point — where the player ports TO from OuterWorld.
         // WO-480 (connected-interior regen): the player arrives at the front-gate approach and WALKS in
@@ -165,34 +165,77 @@ namespace DeNelle.Editor
                 FlowTrace.Step("CavePortal", $"swept {sweptTriggers} stale '{TriggerName}' object(s) (idempotent — no orphan triggers on the path).");
         }
 
-        // Instantiate the polyperfect rock as the cave mouth. Skip-safe: a missing
-        // prefab logs a warning and falls back to a tinted primitive cube.
+        // Instantiate the enemy_outpost structure as the outpost-portal entrance, aligned by the
+        // Offset Forge offset (data-driven). Skip-safe: a missing model logs a warning and falls back
+        // to a tinted primitive cube. The GameObject name stays "CavePortal" so the trigger/warp
+        // wiring + SeamTrace are unchanged — only the visual model is swapped.
         private static GameObject BuildCaveMouth(Transform parent)
         {
-            GameObject prefab = Guard.Try("CavePortal", "LoadCaveMouthPrefab",
-                () => AssetDatabase.LoadAssetAtPath<GameObject>(CaveMouthPrefab), null);
+            GameObject prefab = Guard.Try("CavePortal", "LoadOutpostModel",
+                () => AssetDatabase.LoadAssetAtPath<GameObject>(OutpostModelPath), null);
 
             GameObject cave;
             if (prefab != null)
             {
                 cave = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
-                FlowTrace.Step("CavePortal", $"cave mouth = polyperfect '{CaveMouthPrefab}'.");
-                // Scale up so the boulder reads as a sizeable cave entrance (a few metres).
-                cave.transform.localScale = Vector3.one * 4f;
+                ApplyForgeOffset(cave.transform, OutpostOffsetId);
+                FlowTrace.Step("CavePortal", $"outpost entrance = '{OutpostModelPath}' (OffsetForge id '{OutpostOffsetId}').");
             }
             else
             {
-                Debug.LogWarning("[CavePortal] cave-mouth prefab '" + CaveMouthPrefab +
-                    "' not found (polyperfect pack may not be imported) — using a primitive placeholder cube.");
-                FlowTrace.Warn("CavePortal", "cave-mouth prefab missing — primitive placeholder cube stand-in.");
+                Debug.LogWarning("[CavePortal] outpost model '" + OutpostModelPath +
+                    "' not found — using a primitive placeholder cube.");
+                FlowTrace.Warn("CavePortal", "outpost model missing — primitive placeholder cube stand-in.");
                 cave = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 if (parent != null) cave.transform.SetParent(parent, false);
-                cave.transform.localScale = new Vector3(6f, 5f, 4f); // sizeable cave-mouth read
-                TintMesh(cave, new Color(0.20f, 0.19f, 0.18f));       // dark stone
+                cave.transform.localScale = new Vector3(6f, 5f, 4f);
+                TintMesh(cave, new Color(0.20f, 0.19f, 0.18f));
             }
 
             cave.name = CaveName;
             return cave;
+        }
+
+        // Apply the Offset Forge offset authored in the tool (euler degrees). DATA-DRIVEN (CLAUDE.md
+        // §12) — same convention as MineNodeVisual: the model's LOCAL rotation = Quaternion.Euler(rot),
+        // scale = the authored uniform scale. Position is owned by CavePos (the offset's pos is the
+        // in-tool nudge; for a world structure the placement coord wins, so pos is not applied here).
+        private static void ApplyForgeOffset(Transform t, string id)
+        {
+            var e = LoadForgeOffset(id);
+            if (e == null)
+            {
+                FlowTrace.Warn("CavePortal", $"OffsetForge id '{id}' not in offsets.json — model left at identity (verify alignment).");
+                return;
+            }
+            t.localRotation = Quaternion.Euler(e.rot.x, e.rot.y, e.rot.z);
+            if (e.scale > 0f) t.localScale = Vector3.one * e.scale;
+            FlowTrace.Step("CavePortal", $"OffsetForge '{id}': rot=({e.rot.x},{e.rot.y},{e.rot.z}) scale={e.scale} (applied).");
+        }
+
+        // Local JsonUtility mirror of OffsetForge.OffsetTable — the DeNelle.Editor asmdef does not
+        // reference OffsetForge.Runtime, and the schema is tiny + stable. Reads the authoring file the
+        // Offset Forge tool writes (Assets/OffsetForge/offsets.json).
+        [System.Serializable] private struct ForgeV3 { public float x, y, z; }
+        [System.Serializable] private class ForgeOffset { public string id; public ForgeV3 rot; public ForgeV3 pos; public float scale; }
+        [System.Serializable] private class ForgeTable { public ForgeOffset[] offsets; }
+
+        private static ForgeOffset LoadForgeOffset(string id)
+        {
+            try
+            {
+                string path = System.IO.Path.Combine(Application.dataPath, "OffsetForge/offsets.json");
+                if (!System.IO.File.Exists(path)) return null;
+                var table = JsonUtility.FromJson<ForgeTable>(System.IO.File.ReadAllText(path));
+                if (table == null || table.offsets == null) return null;
+                foreach (var e in table.offsets)
+                    if (e != null && e.id == id) return e;
+            }
+            catch (System.Exception ex)
+            {
+                FlowTrace.Warn("CavePortal", $"OffsetForge read failed: {ex.Message}");
+            }
+            return null;
         }
 
         // PortalVFXController self-bootstraps its glow/light/vortex on Start, so a

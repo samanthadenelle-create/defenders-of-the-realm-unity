@@ -270,7 +270,50 @@ namespace DeNelle.Core
         /// N/E/W crossings yet — those are the editor/architect follow per docs/CASTLE_MOAT_DESIGN_NOTE).
         /// Default ON so the owner sees the bones; PlayerPrefs "ff.castlemoat" = 0 to hide. Tunables live in
         /// <see cref="DeNelle.Village.World.CastleMoatBuilder"/>.</summary>
-        public static bool CastleMoat => Get("castlemoat", defaultOn: true);
+        public static bool CastleMoat => Get("castlemoat", defaultOn: false);
+
+        /// <summary>The editor-baked south CastleBridgeSeam deck (CastleHubBuilder.AddCastleBridgeSeam).
+        /// Default OFF (2026-06-29): the editor deck stacked a 2nd navmesh deck on top of the runtime
+        /// RuntimeRegionGate south deck, splitting the south navmesh -> spawn->gate PathPartial. South now
+        /// uses the runtime-only crossing like W/N/E. Set "ff.castleeditorbridgeseam"=1 to restore.</summary>
+        public static bool CastleEditorBridgeSeam => Get("castleeditorbridgeseam", defaultOn: false);
+
+        /// <summary>The runtime gate-finding BEACON pillar (RuntimeRegionGate.BuildGateBeacon) — the tall
+        /// white emissive cube + point light at each of the 4 crossings. Owner 2026-06-29: "the white thing"
+        /// that doesn't belong; the gates should be VERY SIMPLE AND FLAT. Default OFF so no beacon pillars
+        /// render — the crossing still works (deck + trigger). Set "ff.gatebeacon"=1 to restore findability
+        /// pillars.</summary>
+        public static bool GateBeacon => Get("gatebeacon", defaultOn: false);
+
+        /// <summary>OUTPOST ENTRANCES (owner 2026-06-28: "create a few caves in the bake, we just don't
+        /// wire them and flag them on till ready"). When ON, the walk-in CAVE MOUTHS placed in the
+        /// OuterWorld by <see cref="DeNelle.Editor.OuterWorldCavePortalBuilder"/> become live OUTPOST
+        /// entrances — a deck-seated <c>SceneTransitionTrigger</c> warps the hero into the (future)
+        /// loading-zone → outpost RESOLVER. That resolver/loading-zone DOES NOT EXIST YET, so this ships
+        /// OFF: the bake places the cave GEOMETRY only and leaves the entrance behavior INERT (no trigger /
+        /// no destination) until the resolver slice lands. Canon: outposts/dungeons are entered by a
+        /// placeable warp gate (cave skin = outpost) → loading zone → resolver. Default OFF. Flip ON once
+        /// the resolver is wired: PlayerPrefs "ff.outpostcaves" = 1.</summary>
+        public static bool OutpostCaves => Get("outpostcaves", defaultOn: true);
+
+        /// <summary>DUNGEON ENTRANCES (owner 2026-06-28, same theory as <see cref="OutpostCaves"/>): when
+        /// ON, the KayKit-skinned DUNGEON PORTAL points placed in the OuterWorld by
+        /// <see cref="DeNelle.Editor.OuterWorldCavePortalBuilder"/> become live dungeon entrances routed
+        /// into the (future) loading-zone → dungeon resolver. Same unbuilt-resolver caveat: the bake places
+        /// the portal GEOMETRY only and leaves the behavior INERT until the resolver lands. Kept SEPARATE
+        /// from <see cref="OutpostCaves"/> so cave-outposts and portal-dungeons can be enabled
+        /// independently (cave skin = outpost, portal skin = dungeon). Default OFF. Flip ON when ready:
+        /// PlayerPrefs "ff.dungeonportals" = 1.</summary>
+        public static bool DungeonPortals => Get("dungeonportals", defaultOn: false);
+
+        /// <summary>SURVIVAL RULE (owner 2026-06-29): Health AND Mana do NOT auto-restore after combat.
+        /// When ON (default), the post-combat "return heal" (BattleArena.ReturnHomeWithFade) is SKIPPED —
+        /// in the field the hero keeps the HP/MP it ended the fight with and relies on crafted potions.
+        /// Full passive recovery happens ONLY at a SAFE ZONE (Castle/Town/Base — see
+        /// <see cref="DeNelle.Village.SafeZoneRecovery"/> + <see cref="DeNelle.Core.HubScenes.IsHub"/>), which
+        /// ALWAYS fully heals regardless of this flag (that is the design, not the auto-heal this gates).
+        /// Reversible: PlayerPrefs "ff.noautoheal" = 0 restores the post-combat auto-heal-to-full.</summary>
+        public static bool NoAutoHeal => Get("noautoheal", defaultOn: true);
 
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
