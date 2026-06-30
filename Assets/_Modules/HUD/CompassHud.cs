@@ -42,7 +42,12 @@ namespace DeNelle.HUD
         // Compass strip footprint (in CanvasScaler reference pixels).
         private const float CompassWidth  = 240f;
         private const float CompassHeight = 30f;
-        private const float CompassTop    = 70f;   // below the wave/timer cluster
+        // Owner 2026-06-30: sit the compass RIGHT BELOW the top resource strip (which spans
+        // the top ~0.94–1.0 band = down to ~115px from the top edge in the shared 1080×1920
+        // reference). 122 clears the resource bar in both portrait and web-landscape with a
+        // small gap; nudge this single value up/down to taste. (The old decorative compass
+        // widget in VillageHudController was removed, so there is nothing to collide with.)
+        private const float CompassTop    = 122f;
 
         /// <summary>How far inside the screen edge an off-screen arrow sits (px).</summary>
         private const float EdgeInset = 36f;

@@ -1303,10 +1303,11 @@ namespace DeNelle.HUD
         private RectTransform _compassWidget;
         private void BuildTopChrome(Transform parent)
         {
-            // Ornate compass — top-centre, small, above the resource strip. Passive.
-            _compassWidget = AddWidgetIcon("Compass", parent,
-                new Vector2(0.465f, 0.90f), new Vector2(0.535f, 0.955f),
-                IconCompass, "*", 30, LGilt);
+            // Decorative compass widget THROWN OUT (owner 2026-06-30): the functional
+            // CompassHud (NSEW heading + enemy-bearing ticks, its own overlay canvas) is the
+            // single compass now, repositioned to sit right below the resource strip. We leave
+            // the _compassWidget field null on purpose — SetActiveSafe(_compassWidget, …) in
+            // ApplyContext null-guards, so the (now-absent) icon is simply never shown.
 
             // Mobile-first (keyboard-removal sweep): the Escape key was the SOLE trigger for
             // BOTH "close the open modal" and "toggle pause". On a phone there is no Escape,

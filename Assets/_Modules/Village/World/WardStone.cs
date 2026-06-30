@@ -138,6 +138,15 @@ namespace DeNelle.Village
             _glow.range = 12f;
             _glow.intensity = 0f;
             _glow.color = LitColor;
+
+            // HIDE ALL WARD-STONES (owner 2026-06-30): like the gate beacons, the runtime
+            // ward-stone cubes + glow are unwanted world clutter for now. Per the
+            // hide-don't-destroy convention, keep the GameObject AND its WardTetherService
+            // reach/lit STATE fully intact (this is presentation only) and just disable the
+            // renderer + glow light so nothing draws. Re-enable these two lines to restore
+            // the visible ward-stones.
+            if (_renderer != null) _renderer.enabled = false;
+            _glow.enabled = false;
         }
 
         private void ApplyLitVisuals(bool lit)
