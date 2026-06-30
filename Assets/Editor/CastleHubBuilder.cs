@@ -228,39 +228,11 @@ namespace DeNelle.Editor
             }
 
             // === UNDER-COURTYARD OPAQUE FLOOR (inner see-under fix) ===
-            // The qFloorWood tiles only cover ~±16m; from there out to the wall (~r41) the only
-            // "ground" is the INVISIBLE nav floor over the -3m terrain dip → you see DOWN into the
-            // void from inside (reads as "floating"). Lay ONE opaque plane at y=0 (just below the
-            // 0.01 tiles → no z-fight) covering out to the wall line so the interior reads as solid.
-            // Visual only (no collider; walkability comes from CourtyardFloor_Nav). Same floor
-            // material as the tiles when available, else a tinted URP/Lit stone so it reads consistent.
-            {
-                var underFloor = GameObject.CreatePrimitive(PrimitiveType.Plane);
-                underFloor.transform.SetParent(courtyard.transform, false);
-                underFloor.transform.localPosition = new Vector3(0f, 0f, 0f);
-                underFloor.transform.localScale = new Vector3(8.2f, 1f, 8.2f); // 82×82m → covers ±41 to the wall line
-                underFloor.name = "CourtyardUnderFloor_Visual";
-                var ufCol = underFloor.GetComponent<Collider>();
-                if (ufCol != null) Object.DestroyImmediate(ufCol); // visual only — nav floor handles walkability
-                var ufR = underFloor.GetComponent<MeshRenderer>();
-                if (ufR != null)
-                {
-                    Material floorMat = null;
-                    if (qFloorWood != null)
-                    {
-                        var srcR = qFloorWood.GetComponentInChildren<MeshRenderer>();
-                        if (srcR != null) floorMat = srcR.sharedMaterial; // reuse the plaza tile material → consistent read
-                    }
-                    if (floorMat == null)
-                    {
-                        var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-                        if (shader != null) floorMat = new Material(shader) { color = new Color(0.40f, 0.37f, 0.33f) };
-                    }
-                    if (floorMat != null) ufR.sharedMaterial = floorMat;
-                }
-                MarkStatic(underFloor);
-                FlowTrace.Step("CastleHub", "CourtyardUnderFloor_Visual laid (82×82m @ y0) — closes the inner courtyard see-under.");
-            }
+            // Extracted to EnsureCourtyardUnderFloor so the no-regen RewireAndRebakeCurrentCastle
+            // can re-apply the SAME under-floor (idempotent) on the saved scene. The helper reuses a
+            // plaza tile material when one exists (the CourtyardFloor_* tiles are already children at
+            // this point), else a tinted URP/Lit stone.
+            EnsureCourtyardUnderFloor(courtyard.transform);
 
             // === THE 8 STRUCTURES (ring around plaza, storefronts face center, NPC points) ===
             var structuresRoot = new GameObject("The8Structures_Storefronts_NPCPoints");
@@ -676,6 +648,54 @@ namespace DeNelle.Editor
         //  when Use Geometry = Physics Colliders. Generated, not hand-placed, so a
         //  rebuild reproduces the walkable floor every time.
         // =====================================================================
+        // =====================================================================
+        //  COURTYARD UNDER-FLOOR (inner see-under fix) — idempotent helper (extracted from
+        //  BuildCastleHub so the no-regen rebake can re-apply it on the saved scene).
+        //  The qFloorWood plaza tiles only cover ~±16m; from there out to the wall (~r41) the
+        //  only "ground" is the INVISIBLE nav floor over the -3m terrain dip → you see DOWN into
+        //  the void from inside (reads as "floating"). Lay ONE opaque plane at y=0 (just below the
+        //  0.01 tiles → no z-fight) out to the wall line so the interior reads solid. Visual only
+        //  (no collider; walkability comes from CourtyardFloor_Nav). Reuses a plaza tile material
+        //  when one exists, else a tinted URP/Lit stone. Idempotent: destroys any prior
+        //  CourtyardUnderFloor_Visual under `parent` so a re-run leaves exactly one.
+        // =====================================================================
+        private static void EnsureCourtyardUnderFloor(Transform parent)
+        {
+            if (parent == null) { Err("EnsureCourtyardUnderFloor: parent is null — under-floor skipped."); return; }
+
+            var prior = parent.Find("CourtyardUnderFloor_Visual");
+            if (prior != null) Object.DestroyImmediate(prior.gameObject);
+
+            var underFloor = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            underFloor.transform.SetParent(parent, false);
+            underFloor.transform.localPosition = new Vector3(0f, 0f, 0f);
+            underFloor.transform.localScale = new Vector3(8.2f, 1f, 8.2f); // 82×82m → covers ±41 to the wall line
+            underFloor.name = "CourtyardUnderFloor_Visual";
+            var ufCol = underFloor.GetComponent<Collider>();
+            if (ufCol != null) Object.DestroyImmediate(ufCol); // visual only — nav floor handles walkability
+            var ufR = underFloor.GetComponent<MeshRenderer>();
+            if (ufR != null)
+            {
+                Material floorMat = null;
+                // Reuse an existing plaza tile material so the under-floor reads consistent with the tiles.
+                foreach (Transform child in parent)
+                {
+                    if (child == underFloor.transform) continue;
+                    if (!child.name.StartsWith("CourtyardFloor")) continue;
+                    var srcR = child.GetComponentInChildren<MeshRenderer>();
+                    if (srcR != null && srcR.sharedMaterial != null) { floorMat = srcR.sharedMaterial; break; }
+                }
+                if (floorMat == null)
+                {
+                    var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                    if (shader != null) floorMat = new Material(shader) { color = new Color(0.40f, 0.37f, 0.33f) };
+                }
+                if (floorMat != null) ufR.sharedMaterial = floorMat;
+            }
+            MarkStatic(underFloor);
+            FlowTrace.Step("CastleHub", "CourtyardUnderFloor_Visual laid (82×82m @ y0) — closes the inner courtyard see-under.");
+        }
+
         private static void BuildNavMeshFloor(Transform parent)
         {
             // Idempotent: drop any prior generated floor first.
@@ -1642,6 +1662,17 @@ namespace DeNelle.Editor
                 : (GameObject.Find(RootName + "_FloorHost") ?? new GameObject(RootName + "_FloorHost")).transform;
             BuildNavMeshFloor(parent);
             Log("REWIRE-REBAKE: floor ensured (courtyard + gate + keep interior).");
+
+            // 2b. Fold in the two edits that previously lived ONLY in the full-regen BuildCastleHub
+            //     (which we must never run): the inner-courtyard opaque under-floor (closes the -3m
+            //     see-under) + the relocated enemy spawns (4 WaveSpawnPoints pushed to the r~80
+            //     OuterWorld shore). Both idempotent. They're placed BEFORE the bake so the bake/save
+            //     captures them. The moat carve (in BuildNavMeshFloor above) + the bridge widen (in
+            //     AddCastleBridgeSeam below) complete the four castle edits on this single command.
+            var courtyardT = GameObject.Find("CentralCourtyard_Plaza");
+            EnsureCourtyardUnderFloor(courtyardT != null ? courtyardT.transform : parent);
+            PlaceCastleSpawnPoints(parent);
+            FlowTrace.Step("CastleBake", "REWIRE-REBAKE: courtyard under-floor + 4 relocated WaveSpawnPoints applied pre-bake (no regen).");
 
             BakeAllCastleSurfacesAndPersist("REWIRE-REBAKE");
 
