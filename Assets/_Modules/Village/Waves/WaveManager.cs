@@ -389,10 +389,8 @@ namespace DeNelle.Village
             if (def == null) return null;
 
             Vector3 pos = worldPos;
-            // Walkable-only mask: exclude the built-in NotWalkable area (index 1) so a snap can't
-            // re-bind a spawn onto the moat-water carve (CastleHubBuilder.CarveMoatNonWalkable).
             if (UnityEngine.AI.NavMesh.SamplePosition(
-                    pos, out var hit, 8f, UnityEngine.AI.NavMesh.AllAreas & ~(1 << 1)))
+                    pos, out var hit, 8f, UnityEngine.AI.NavMesh.AllAreas))
                 pos = hit.position;
 
             Vector3 toHeart = heart != null ? (heart.position - pos) : Vector3.forward;
@@ -1446,10 +1444,8 @@ namespace DeNelle.Village
             // (NavMeshAgent.isOnNavMesh would stay false → enemy never moves).
             // Sample within a generous 8 m radius; bail to the raw position if
             // we somehow have no NavMesh nearby at all.
-            // Walkable-only mask: exclude the built-in NotWalkable area (index 1) so a slightly-off
-            // spawn can't re-bind onto the moat-water carve (CastleHubBuilder.CarveMoatNonWalkable).
             if (UnityEngine.AI.NavMesh.SamplePosition(
-                    pos, out var hit, 8f, UnityEngine.AI.NavMesh.AllAreas & ~(1 << 1)))
+                    pos, out var hit, 8f, UnityEngine.AI.NavMesh.AllAreas))
                 pos = hit.position;
 
             // POOLED: route through EnemyPool so a dead enemy's body is reused instead

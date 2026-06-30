@@ -272,27 +272,6 @@ namespace DeNelle.Core
         /// <see cref="DeNelle.Village.World.CastleMoatBuilder"/>.</summary>
         public static bool CastleMoat => Get("castlemoat", defaultOn: true);
 
-        /// <summary>OUTPOST ENTRANCES (owner 2026-06-28: "create a few caves in the bake, we just don't
-        /// wire them and flag them on till ready"). When ON, the walk-in CAVE MOUTHS placed in the
-        /// OuterWorld by <see cref="DeNelle.Editor.OuterWorldCavePortalBuilder"/> become live OUTPOST
-        /// entrances — a deck-seated <c>SceneTransitionTrigger</c> warps the hero into the (future)
-        /// loading-zone → outpost RESOLVER. That resolver/loading-zone DOES NOT EXIST YET, so this ships
-        /// OFF: the bake places the cave GEOMETRY only and leaves the entrance behavior INERT (no trigger /
-        /// no destination) until the resolver slice lands. Canon: outposts/dungeons are entered by a
-        /// placeable warp gate (cave skin = outpost) → loading zone → resolver. Default OFF. Flip ON once
-        /// the resolver is wired: PlayerPrefs "ff.outpostcaves" = 1.</summary>
-        public static bool OutpostCaves => Get("outpostcaves", defaultOn: false);
-
-        /// <summary>DUNGEON ENTRANCES (owner 2026-06-28, same theory as <see cref="OutpostCaves"/>): when
-        /// ON, the KayKit-skinned DUNGEON PORTAL points placed in the OuterWorld by
-        /// <see cref="DeNelle.Editor.OuterWorldCavePortalBuilder"/> become live dungeon entrances routed
-        /// into the (future) loading-zone → dungeon resolver. Same unbuilt-resolver caveat: the bake places
-        /// the portal GEOMETRY only and leaves the behavior INERT until the resolver lands. Kept SEPARATE
-        /// from <see cref="OutpostCaves"/> so cave-outposts and portal-dungeons can be enabled
-        /// independently (cave skin = outpost, portal skin = dungeon). Default OFF. Flip ON when ready:
-        /// PlayerPrefs "ff.dungeonportals" = 1.</summary>
-        public static bool DungeonPortals => Get("dungeonportals", defaultOn: false);
-
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
         {
