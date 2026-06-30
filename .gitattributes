@@ -22,3 +22,12 @@
 *.asmdef     text eol=lf
 *.uss        text eol=lf
 *.uxml       text eol=lf
+
+# BUT binary-serialized .asset files (TerrainData / NavMesh / LightingData) are NOT YAML —
+# the `*.asset text eol=lf` rule above EOL-mangles them (strips CR bytes on commit -> the
+# committed blob is corrupt -> Unity "Unknown error occurred while loading" -> null TerrainData,
+# the 2026-06-30 OuterWorld terrain bug). Force these binary so git stores them verbatim.
+# (More-specific rules win over the *.asset rule above.)
+*TerrainData.asset  binary
+NavMesh-*.asset     binary
+LightingData.asset  binary
