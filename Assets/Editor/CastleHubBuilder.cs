@@ -764,12 +764,30 @@ namespace DeNelle.Editor
             const float carveInnerR    = 44f;   // start just inside the moat ring (ring centreline 46, width 3)
             const float carveOuterR    = 72f;   // out to the broad fill outer edge (FillOuterRadius=72)
             const float lateralExtent  = 72f;   // half-span each side → covers the corners (±72)
-            const float laneHalfClear  = 5.0f;  // 10m clear bridge lane (> 8.5m bridge, ≤ 15m gate opening)
-            const float carveY         = 0.1f;  // just above the y=0 nav floor so the carve wins the voxel column
+            // CARVE Y HARDENING (owner/Grok 2026-06-29): was 0.1 (ABOVE the y≈0 floor) — the carve quad
+            // then WON the voxel column over the y≈0 deck (vertical conflict, the real root cause: that
+            // is why widening the lateral lane did nothing). Drop it to -0.05 (just BELOW the walkable
+            // surface) so the deck/floor wins the column. Belt-and-suspenders ON TOP OF excluding the
+            // bridge corridor from the carve — together no carve can ever sever the deck.
+            const float carveY         = -0.05f; // just below the y≈0 nav floor so the walkable surface wins the column
+            // BRIDGE CORRIDOR EXCLUSION (owner 2026-06-29): the prior thin lane gap still let carve
+            // quads sit ABOVE the deck edges; that vertical voxel conflict SPLIT the deck navmesh into
+            // two islands (hero reached z≈-58.6, trigger island at z≈-64 — captured PathPartial). FIX:
+            // keep ALL carve geometry 100% OFF the real welded bridge corridor (detected from the live
+            // Floor_Bridge_Nav* deck) — a GENEROUS uncarved corridor (deck width + ~6m each side ≈ 20m)
+            // so no NotWalkable quad overlaps/over-hangs the deck → the deck navmesh welds courtyard→far
+            // end continuously. The beside-deck water is blocked instead by BuildBridgeWaterWalls
+            // (obstacle colliders ~0.5m off the deck edge). A cardinal with NO real deck carves the FULL
+            // annulus (no walkable gap) — only the south crossing has a deck today.
+            const float corridorMargin = 6f;    // uncarved corridor half = deck half-width + this (≈20m total)
 
             float radialDepth  = carveOuterR - carveInnerR;            // 28m radial band depth
             float radialCentre = (carveInnerR + carveOuterR) * 0.5f;   // 58m radial centre
-            float gateLateral  = ReadSouthGatePos().x;                 // lateral offset of the gate lane (x4 symmetry)
+
+            // Collect every real welded bridge deck present (built by AddCastleBridgeSeam).
+            var decks = new List<Transform>();
+            foreach (var go in Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None))
+                if (go.name.StartsWith("Floor_Bridge_Nav")) decks.Add(go.transform);
 
             var sides = new (string label, float yaw)[] { ("South", 0f), ("West", 90f), ("North", 180f), ("East", 270f) };
             int made = 0;
@@ -779,13 +797,36 @@ namespace DeNelle.Editor
                 Vector3 outward = rot * Vector3.back;   // radial-out unit for this side
                 Vector3 lateral = rot * Vector3.right;  // lateral unit along this side
 
-                // Lane gap is [gateLateral - laneHalfClear, gateLateral + laneHalfClear].
-                // Left quad covers [-lateralExtent, gateLateral - laneHalfClear].
-                float leftMax    = gateLateral - laneHalfClear;
+                // Does a real welded deck run on THIS side? If so, leave its corridor 100% uncarved.
+                bool hasBridge = false;
+                float corridorLateral = 0f, corridorHalf = 0f;
+                foreach (var deck in decks)
+                {
+                    Vector3 c = deck.position; c.y = 0f;
+                    if (c.sqrMagnitude < 1f) continue;
+                    if (Vector3.Dot(c.normalized, outward) < 0.85f) continue; // deck not aligned to this side (~<30°)
+                    hasBridge = true;
+                    corridorLateral = Vector3.Dot(c, lateral);            // deck centre along this side's lateral
+                    float deckHalf  = Mathf.Abs(deck.lossyScale.x) * 5f;  // Unity plane is 10m → half = scale.x*5 (4.25m @ 0.85)
+                    corridorHalf    = deckHalf + corridorMargin;          // ≈ 4.25 + 6 = 10.25m → ~20.5m uncarved corridor
+                    break;
+                }
+
+                if (!hasBridge)
+                {
+                    // No bridge here → carve the FULL annulus band (single quad, no walkable gap).
+                    Vector3 pos = outward * radialCentre; pos.y = carveY;
+                    CreateNotWalkableCarve(parent, "MoatCarve_" + label + "_Full", pos, rot,
+                        new Vector3((lateralExtent * 2f) / 10f, 1f, radialDepth / 10f));
+                    made++;
+                    continue;
+                }
+
+                // Bridge present → carve L + R of the uncarved corridor [corridorLateral ± corridorHalf].
+                float leftMax    = corridorLateral - corridorHalf;
                 float leftWidth  = leftMax - (-lateralExtent);
                 float leftCentre = (-lateralExtent + leftMax) * 0.5f;
-                // Right quad covers [gateLateral + laneHalfClear, +lateralExtent].
-                float rightMin    = gateLateral + laneHalfClear;
+                float rightMin    = corridorLateral + corridorHalf;
                 float rightWidth  = lateralExtent - rightMin;
                 float rightCentre = (rightMin + lateralExtent) * 0.5f;
 
@@ -804,10 +845,87 @@ namespace DeNelle.Editor
                     made++;
                 }
             }
-            FlowTrace.Step("CastleHub", "CarveMoatNonWalkable: " + made + " NotWalkable carve quads (area=1) over moat r" +
-                carveInnerR + "→" + carveOuterR + "m, 4 cardinal lanes (±" + laneHalfClear + "m @ lateral " +
-                gateLateral.ToString("F2") + ") left walkable.");
-            Log("CarveMoatNonWalkable: placed " + made + " NotWalkable carve quads (area index 1) over the moat footprint.");
+            FlowTrace.Step("CastleHub", "CarveMoatNonWalkable: " + made + " NotWalkable quads (area=1) over moat r" +
+                carveInnerR + "→" + carveOuterR + "m; " + decks.Count + " real bridge corridor(s) left UNCARVED (deck welds), " +
+                "bridgeless cardinals fully carved.");
+            Log("CarveMoatNonWalkable: placed " + made + " NotWalkable carve quads (area index 1); bridge corridors excluded.");
+        }
+
+        // =====================================================================
+        //  BRIDGE WATER WALLS (owner 2026-06-29) — invisible vertical box colliders flanking each REAL
+        //  welded bridge deck so the moat water immediately BESIDE the bridge is non-walkable (navmesh
+        //  obstacle) + physically blocked, WITHOUT any carve quad over the deck (which would split the
+        //  deck navmesh into islands). Built from the live Floor_Bridge_Nav* deck(s): two thin tall
+        //  boxes ~0.5m outside the 8.5m deck edges (so agent-radius erosion can't narrow the deck
+        //  navmesh), spanning the moat radial band (r44→72), rotated to the deck's cardinal (x4
+        //  symmetry). BoxCollider only (no MeshRenderer/MeshFilter) → invisible but baked as an
+        //  obstacle (useGeometry=PhysicsColliders). Idempotent: clears prior BridgeWaterWall_* first.
+        // =====================================================================
+        private static void BuildBridgeWaterWalls(Transform parent)
+        {
+            if (parent == null) { Err("BuildBridgeWaterWalls: parent null — walls skipped."); return; }
+
+            // Idempotent: clear any prior walls.
+            var stale = new List<GameObject>();
+            foreach (var go in Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None))
+                if (go.name.StartsWith("BridgeWaterWall_")) stale.Add(go);
+            foreach (var go in stale) Object.DestroyImmediate(go);
+
+            // Moat band geometry (mirror CarveMoatNonWalkable) so the walls span the carved water.
+            const float carveInnerR = 44f, carveOuterR = 72f;
+            float radialDepth  = carveOuterR - carveInnerR;          // 28m
+            float radialCentre = (carveInnerR + carveOuterR) * 0.5f; // 58m
+
+            const float clearance     = 0.5f;  // gap from deck edge so erosion can't pinch the deck navmesh
+            const float wallThickness = 0.4f;
+            const float wallHeight    = 3f;
+
+            var decks = new List<Transform>();
+            foreach (var go in Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None))
+                if (go.name.StartsWith("Floor_Bridge_Nav")) decks.Add(go.transform);
+
+            var sides = new (string dir, float yaw)[] { ("S", 0f), ("W", 90f), ("N", 180f), ("E", 270f) };
+            int made = 0;
+            foreach (var deck in decks)
+            {
+                Vector3 c = deck.position; c.y = 0f;
+                if (c.sqrMagnitude < 1f) continue;
+
+                // Which cardinal does this deck run along? Pick the best-matching outward.
+                string dir = "S"; float yaw = 0f; float best = -2f;
+                foreach (var s in sides)
+                {
+                    Vector3 outw = Quaternion.Euler(0f, s.yaw, 0f) * Vector3.back;
+                    float d = Vector3.Dot(c.normalized, outw);
+                    if (d > best) { best = d; dir = s.dir; yaw = s.yaw; }
+                }
+                Quaternion rot = Quaternion.Euler(0f, yaw, 0f);
+                Vector3 outward = rot * Vector3.back;
+                Vector3 lateral = rot * Vector3.right;
+
+                float deckLateral = Vector3.Dot(c, lateral);            // deck centre along lateral
+                float deckHalf    = Mathf.Abs(deck.lossyScale.x) * 5f;  // 4.25m for the 8.5m deck
+                float wallOffset  = deckHalf + clearance + wallThickness * 0.5f; // centre offset from deck centre
+
+                foreach (var sd in new (string lbl, float sign)[] { ("L", -1f), ("R", +1f) })
+                {
+                    float offs = deckLateral + sd.sign * wallOffset;
+                    Vector3 pos = outward * radialCentre + lateral * offs;
+                    pos.y = wallHeight * 0.5f; // box spans world y 0→height
+
+                    var wall = new GameObject("BridgeWaterWall_" + dir + "_" + sd.lbl);
+                    wall.transform.SetParent(parent, false);
+                    wall.transform.position = pos;
+                    wall.transform.rotation = rot;   // local X = lateral, local Z = radial
+                    var box = wall.AddComponent<BoxCollider>();
+                    box.size = new Vector3(wallThickness, wallHeight, radialDepth); // thin(lat) × tall(y) × long(radial)
+                    MarkStatic(wall);
+                    made++;
+                }
+            }
+            FlowTrace.Step("CastleHub", "BuildBridgeWaterWalls: " + made + " invisible flank walls (BoxCollider only) along " +
+                decks.Count + " bridge deck(s) — beside-bridge water now navmesh+physics blocked, deck corridor kept clear.");
+            Log("BuildBridgeWaterWalls: placed " + made + " bridge water walls (idempotent).");
         }
 
         // Invisible carve plane forced to the Unity built-in "Not Walkable" area (index 1) so the
@@ -1961,16 +2079,40 @@ namespace DeNelle.Editor
             // z=-61 left a ~13m void to the gate (z≈-40.6) and never connected (trigger read off-mesh,
             // GATE_NAV_FAIL). Span the gate→far-end strip: centre z = midpoint, length covers gate to
             // the trigger with overlap into the courtyard so the bake welds them into ONE surface.
-            float gateZ      = ReadSouthGatePos().z;           // recipe Gate_South z ≈ -40.6
-            const float farEndZ = -63.0f;                       // walkable deck far end (trigger sits here)
-            float deckCentreZ = (gateZ + farEndZ) * 0.5f;       // ≈ -51.8
-            float deckLenZ    = Mathf.Abs(farEndZ - gateZ) + 6f; // +6m overlap into the courtyard for the weld
-            // Unity plane is 10×10m @ scale 1 → scale.z = lenZ/10, scale.x = width(7m)/10 = 0.7.
+            // WELD FIX (2026-06-29): the deck must overlap BOTH ends generously so the bake fuses it
+            // into ONE surface with the courtyard nav on the inner end AND keeps the deck-end trigger
+            // on-mesh on the outer end. Prior +6m symmetric overlap left the inner weld thin and the
+            // far end only at the trigger; pair this with the widened carve lane (laneHalfClear 6.5) so
+            // the moat carve no longer pinches the deck.
+            float gateZ          = ReadSouthGatePos().z;       // recipe Gate_South z ≈ -40.6
+            // TRIGGER RELOCATED (owner/Grok 2026-06-29): root cause confirmed NOT the carve — the deck
+            // welds to the courtyard fine (hero reliably reaches ~z-58.7, 30m out), but the LAST ~5m of
+            // the deck (z-58.7→-66) bakes as a SEPARATE navmesh island, and a trigger at z-63 sat on that
+            // disconnected outer island → PathPartial. Move the trigger ONTO the welded inner deck the
+            // hero reliably reaches: z=-52 (≈11m past the south gate z-40.6, well inside the inner island
+            // that extends to ~-58.7, with margin). The deck visual/nav far end stays -66; the
+            // masked-warp ARRIVAL target stays separate/untouched. The disconnected last 5m is harmless.
+            const float triggerZ = -52.0f;                     // exit trigger sits here — on the WELDED inner deck
+            const float deckFarEndZ = -66.0f;                  // deck far end — 3m PAST the trigger for on-mesh margin
+            const float deckInnerOverlap = 12f;                // extend the deck 12m INSIDE the south gate so it fuses
+                                                               // with the courtyard floor + gate-exit strip (weld fix)
+            float deckInnerZ  = gateZ + deckInnerOverlap;          // ≈ -28.6 (inward / less negative → into the courtyard)
+            float deckCentreZ = (deckInnerZ + deckFarEndZ) * 0.5f; // ≈ -47.3
+            float deckLenZ    = Mathf.Abs(deckFarEndZ - deckInnerZ); // ≈ 37.4m (gate-interior overlap → 3m past trigger)
+            // Unity plane is 10×10m @ scale 1 → scale.z = lenZ/10, scale.x = width(8.5m)/10 = 0.85.
             CreateInvisibleFloor(seamRoot.transform, "Floor_Bridge_Nav",
                 new Vector3(gateX, 0f, deckCentreZ), new Vector3(0.85f, 1f, deckLenZ / 10f)); // X 0.85 = 8.5m walkable deck (widened from 7m; ≤15m gate opening)
             Log("BRIDGE-SEAM: CONTINUOUS walkable deck Floor_Bridge_Nav centre=(" + gateX + ",0," +
-                deckCentreZ.ToString("F1") + ") len≈" + deckLenZ.ToString("F1") + "m (gate " + gateZ.ToString("F1") +
-                " → far end " + farEndZ + ") — welds to courtyard.");
+                deckCentreZ.ToString("F1") + ") len≈" + deckLenZ.ToString("F1") + "m (inner " + deckInnerZ.ToString("F1") +
+                " [" + deckInnerOverlap + "m past gate " + gateZ.ToString("F1") + "] → far end " + deckFarEndZ +
+                "; trigger seats on the WELDED inner deck at " + triggerZ + ") — welds courtyard↔deck.");
+
+            // --- 2b. BRIDGE WATER WALLS — invisible flank colliders just outside the deck edges so the
+            //     beside-bridge water bakes non-walkable (+ physical block) WITHOUT a carve quad over the
+            //     deck. Built AFTER Floor_Bridge_Nav (it detects the deck) and BEFORE BuildNavMeshFloor +
+            //     the bake below, so the walls are collected into this bridge bake. Parented to root (NOT
+            //     the floor root) so the BuildNavMeshFloor rebuild can't drop them. Idempotent. ---
+            BuildBridgeWaterWalls(root.transform);
 
             // --- 3. The DIRECT NavMeshLink crossing (the real seam). Built only when walkable. ---
             if (BridgeLinkWalkable)
@@ -1991,7 +2133,7 @@ namespace DeNelle.Editor
             // (proven) reflection-field wiring. We then nudge ONLY position + targetPosition via the
             // SAME SerializedObject/reflection approach so we never break that field wiring.
             EnsureExitSeamAtRecipeGate();
-            RelocateExitSeamToBridge(gateX, BridgeLinkWalkable);
+            RelocateExitSeamToBridge(gateX, triggerZ, BridgeLinkWalkable);
 
             // --- 5. Rebuild the nav floor so Floor_Bridge_Nav is collected, then bake + persist + save. ---
             BuildNavMeshFloor(root.transform);
@@ -2010,12 +2152,12 @@ namespace DeNelle.Editor
                 FlowTrace.Fail("BridgeSeam", "VerifyOpenScene reports the exit seam is NOT exitable :: " + detail);
 
             // HONEST walkable-approach assert: the hero must be able to WALK from a courtyard point to
-            // the far-end trigger ON the castle deck. Target the trigger (z=-63), NOT z=-66 — the old
-            // -66 target snapped onto OuterWorld's same-origin stacked navmesh and FALSE-GREENED a
-            // "walkable" crossing that did not exist. Tight end tolerance (1.0m) so a snap can't lie:
-            // the trigger must sit on genuinely-connected castle navmesh for this to pass.
+            // the RELOCATED trigger ON the WELDED inner deck (z=triggerZ=-52), NOT the far end -66 — the
+            // last ~5m of deck bakes as a disconnected island and the old -63 target sat on it (PathPartial).
+            // Tight end tolerance (1.0m) so a snap can't lie: the trigger must sit on genuinely-connected
+            // castle navmesh for this to pass.
             var courtyard = new Vector3(0f, 0f, 0f);
-            var deckTrigger = new Vector3(gateX, 0f, -63f);
+            var deckTrigger = new Vector3(gateX, 0f, triggerZ);
             bool sStart = NavMesh.SamplePosition(courtyard, out NavMeshHit hStart, 5f, NavMesh.AllAreas);
             bool sEnd   = NavMesh.SamplePosition(deckTrigger, out NavMeshHit hEnd, 1f, NavMesh.AllAreas);
             if (sStart && sEnd)
@@ -2024,8 +2166,8 @@ namespace DeNelle.Editor
                 NavMesh.CalculatePath(hStart.position, hEnd.position, NavMesh.AllAreas, path);
                 if (path.status == NavMeshPathStatus.PathComplete)
                     FlowTrace.Step("BridgeSeam",
-                        "PATH-COMPLETE courtyard(0,0,0) -> deckTrigger(" + gateX + ",0,-63) — the continuous deck welds to the " +
-                        "courtyard; the hero walks the bridge to the trigger, then masked-warps to OuterWorld. Approach is walkable.");
+                        "PATH-COMPLETE courtyard(0,0,0) -> deckTrigger(" + gateX + ",0," + triggerZ + ") — the continuous deck welds to the " +
+                        "courtyard; the hero walks the bridge to the trigger on the welded inner deck, then masked-warps to OuterWorld. Approach is walkable.");
                 else
                     FlowTrace.Fail("BridgeSeam",
                         "courtyard -> deckTrigger path is " + path.status + " — the bridge deck did NOT weld to the courtyard " +
@@ -2181,7 +2323,7 @@ namespace DeNelle.Editor
         // Uses the SAME SerializedObject/reflection-field approach the existing seam code uses so the
         // proven field wiring (targetSceneName / loadAdditive / requireConfirm / ProximityRadius) is
         // preserved; we only adjust transform position + targetPosition here.
-        private static void RelocateExitSeamToBridge(float gateX, bool bridgeLinkWalkable)
+        private static void RelocateExitSeamToBridge(float gateX, float triggerZ, bool bridgeLinkWalkable)
         {
             var marker = GameObject.Find("WorldGate_ConnectToOuterWorld_Marker");
             if (marker == null)
@@ -2190,12 +2332,11 @@ namespace DeNelle.Editor
                 return;
             }
 
-            // Seat the trigger host EXACTLY on the proven-walkable deck point (world (gateX,0,-63)).
-            // The PATH-COMPLETE assert proves courtyard->(gateX,0,-63) is a complete walkable route at
-            // deck-navmesh level (y≈0.06). A y=0.5 host floated above that mesh so the verify's tight
-            // 1.0m sample missed at the far edge. y=0 puts the trigger on the navmesh the hero walks —
-            // proximity (6m+) still fires, and the strict spawn->trigger CalculatePath now resolves.
-            marker.transform.position = new Vector3(gateX, 0f, -63f);
+            // Seat the trigger host on the WELDED inner deck the hero reliably reaches (world (gateX,0,
+            // triggerZ=-52)) — NOT the far end, whose last ~5m bakes as a disconnected island (the old
+            // z-63 host sat on it → PathPartial). y=0 puts the trigger on the navmesh the hero walks so
+            // proximity (6m+) fires and the strict spawn->trigger CalculatePath resolves PathComplete.
+            marker.transform.position = new Vector3(gateX, 0f, triggerZ);
 
             var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
             if (transType == null)
@@ -2220,11 +2361,11 @@ namespace DeNelle.Editor
             if (bridgeLinkWalkable)
             {
                 transType.GetField("targetPosition")?.SetValue(comp, new Vector3(gateX, 0.5f, -66f));
-                Log("BRIDGE-SEAM: exit seam relocated to bridge far end (" + gateX + ",0,-63), deck-seated; WarpTo same-spot (" + gateX + ",0.5,-66) → no jump.");
+                Log("BRIDGE-SEAM: exit seam relocated onto welded inner deck (" + gateX + ",0," + triggerZ + "), deck-seated; WarpTo (" + gateX + ",0.5,-66) → arrival target unchanged.");
             }
             else
             {
-                Log("BRIDGE-SEAM: exit seam relocated to bridge far end (" + gateX + ",0,-63), deck-seated; masked-warp target left intact (BridgeLinkWalkable=false).");
+                Log("BRIDGE-SEAM: exit seam relocated onto welded inner deck (" + gateX + ",0," + triggerZ + "), deck-seated; masked-warp target left intact (BridgeLinkWalkable=false).");
             }
         }
 
