@@ -211,9 +211,13 @@ namespace DeNelle.Editor
             DressTorches(root, new[] { new Vector3(-13f, 0f, -13f), new Vector3(13f, 0f, -13f), new Vector3(-13f, 0f, 13f), new Vector3(13f, 0f, 13f) });
             DressWalls(root, 30f);
 
-            // OPTIONAL return exit -> OuterWorld (closes the loop back to the overworld).
+            // Return exit -> the castle HUB (MainCastle_Hall), NOT OuterWorld standalone. OuterWorld
+            // streams ADDITIVE over a hub via WorldSceneLoader; single-loading it leaves no
+            // MainCastle_Hall -> no castle walls + no hub navmesh (owner F8 2026-06-30: "spawned home,
+            // no navmesh, no castle walls"). Loading the hub restores the castle + its navmesh, and
+            // WorldSceneLoader re-adds OuterWorld additive. Land in the courtyard; WarpTo snaps to mesh.
             AddTransition(root, "Outpost2Exit_ToWorld", new Vector3(0f, 0f, 12f),
-                          targetScene: "OuterWorld", targetPos: new Vector3(0f, 0.5f, -12f), prompt: "Return to the World");
+                          targetScene: "MainCastle_Hall", targetPos: new Vector3(0f, 0.5f, -12f), prompt: "Return Home");
 
             BakeAndVerify(surface, "Outpost2", EntryPos, new Vector3(0f, 0f, 12f));
             SaveChainScene(scene, Outpost2Path);
@@ -272,7 +276,14 @@ namespace DeNelle.Editor
             bool saved = EditorSceneManager.SaveScene(scene, path);
             AssetDatabase.SaveAssets();
             EnsureInBuildSettings(path);
-            FlowTrace.Step(Sys, $"SAVED '{path}' (ok={saved})");
+            // NOTE (proven by data 2026-06-30): in BATCHMODE, EditorSceneManager.SaveScene writes a
+            // freshly-created scene in BINARY even though the project is ForceText (mode reads
+            // ForceText, firstByte still 0x00). ForceReserializeAssets / OpenScene+SaveScene do NOT
+            // convert it headlessly — only the interactive GUI editor does. So these three scenes are
+            // committed BINARY; .gitattributes marks them `binary` (like TerrainData/NavMesh) so git
+            // never EOL-mangles them. They are builder-generated + never hand-edited (§3), so a
+            // non-diffable blob is fine. See memory: gitattributes-binary-asset-eol-corruption.
+            FlowTrace.Step(Sys, $"SAVED '{path}' (ok={saved}, binary — git-safe via .gitattributes)");
         }
 
         // =====================================================================

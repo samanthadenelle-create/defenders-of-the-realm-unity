@@ -31,3 +31,14 @@
 *TerrainData.asset  binary
 NavMesh-*.asset     binary
 LightingData.asset  binary
+
+# Same class of bug for the DUNGEON-CHAIN scenes: DungeonChainBuilder creates them via
+# EditorSceneManager.NewScene + SaveScene in BATCHMODE, which writes them BINARY even though the
+# project is ForceText (proven 2026-06-30: mode=ForceText yet firstByte=0x00; ForceReserializeAssets
+# / OpenScene+SaveScene will NOT convert headlessly, only the interactive GUI editor does). Under the
+# `*.unity text eol=lf` rule above a future bake could emit a CRLF in the binary data and corrupt the
+# blob. These three are builder-generated + never hand-edited (CLAUDE.md §3), so force them binary so
+# git stores them verbatim. (More-specific rules win over *.unity above.)
+Assets/Scenes/Outpost1.unity  binary
+Assets/Scenes/Dungeon.unity   binary
+Assets/Scenes/Outpost2.unity  binary
