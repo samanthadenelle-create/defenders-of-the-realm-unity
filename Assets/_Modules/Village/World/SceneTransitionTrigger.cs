@@ -598,6 +598,14 @@ namespace DeNelle.Village
 
         private IEnumerator RepositionPlayerAfterLoad(Transform playerTransform)
         {
+            // Capture seam identity NOW: on a Single load this trigger's SOURCE scene UNLOADS partway
+            // through this coroutine, destroying this component — so a native `name` access AFTER that
+            // throws NRE and ABORTS the coroutine before the re-home step below (owner F8 2026-06-30,
+            // line 643; that abort also left the carried hero in the DDOL scene = leak/dupe next hop).
+            // targetPosition/targetSceneName are managed fields (safe post-destroy); only the native
+            // `.name` getter throws, so snapshot it up front.
+            string seamName = name;
+
             // (1) Fade to black BEFORE the snap so the teleport + camera cut
             //     happen unseen.
             FlowTrace.Step("Seam", "reposition: fade-to-black (0.25s)");
@@ -640,7 +648,7 @@ namespace DeNelle.Village
                 if (rb != null) rb.linearVelocity = Vector3.zero;
 
                 FlowTrace.Step("Seam", $"repositioned: requested {targetPosition}, hero now @ {playerTransform.position} in '{targetSceneName}' (loco={(loco != null)})");
-                Debug.Log($"[SeamTrace] '{name}' repositioned: requested {targetPosition}, hero now at {playerTransform.position} in '{targetSceneName}' (loco={(loco != null)}).");
+                Debug.Log($"[SeamTrace] '{seamName}' repositioned: requested {targetPosition}, hero now at {playerTransform.position} in '{targetSceneName}' (loco={(loco != null)}).");
 
                 // SINGLE-LOAD HERO CARRY — re-home step (only when WE DDOL'd the hero above).
                 // A DontDestroyOnLoad object lives in the special DDOL scene, NOT the target
