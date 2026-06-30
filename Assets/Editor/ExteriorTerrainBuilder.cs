@@ -201,7 +201,11 @@ namespace DeNelle.Editor
         // over CastleClearFalloff, so OuterWorld ground sits clearly BELOW the castle floor. Mirrors
         // the SeamWeight footprint (1.0 inside ±62, smoothstep taper). The Task-2 NavMeshModifierVolume
         // separately carves the OuterWorld navmesh hole here; this is the VISUAL no-poke-through term.
-        private const float CastleDepressionDepth = -3f;
+        // 2026-06-30: -3f sank the castle-zone OuterWorld ground to surfaceY=-3 — the visible
+        // "depressed ground" (owner felt-test + live TERRAINDIAG surfaceY@x=0 -> -3.000). 0f keeps
+        // it flush at the village baseline, restoring the ~10 PM felt-verified state. The navmesh
+        // hole under the castle is carved separately (NavMeshModifierVolume), so 0f is visual-only.
+        private const float CastleDepressionDepth = 0f;
 
         // ── Tree budget (§9.6) ───────────────────────────────────────────────
         // WO-468 Phase 1: bumped 320 -> 1000 so the ~11x-larger terrain isn't
