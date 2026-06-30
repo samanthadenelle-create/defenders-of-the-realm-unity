@@ -225,6 +225,17 @@ namespace DeNelle.Village.Arena
                 : "crown_tier" + Mathf.Clamp(stars, 1, 3);
 
             Sprite crown = RpgUiCatalog.Get(RpgUiCatalog.RoleCrown, key);
+            if (crown == null && key != RpgUiCatalog.CrownPerfect)
+            {
+                // Owner 2026-06-30 ("crowns not loading"): the per-tier art (crown_tier1/2/3) isn't
+                // imported yet — only crown_perfect.png exists in Resources/RpgUi/crown/. Fall back to
+                // it so a crown ALWAYS shows on a win instead of the tofu'd TMP star glyphs. Drop
+                // crown_tier1/2/3.png into that folder and they auto-take over per earned-star tier.
+                crown = RpgUiCatalog.Get(RpgUiCatalog.RoleCrown, RpgUiCatalog.CrownPerfect);
+                if (crown != null)
+                    FlowTrace.Warn("BattleArenaHud",
+                        $"crown art '{key}' absent -> crown_perfect fallback (add crown_tier1/2/3 for per-tier crowns) (stars={stars}).");
+            }
             if (crown == null)
             {
                 // Art absent — keep the panel populated with the legacy glyph row (may tofu on a

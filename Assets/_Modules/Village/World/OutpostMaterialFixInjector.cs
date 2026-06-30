@@ -40,9 +40,12 @@ namespace DeNelle.Village.World
     {
         // GameObject name the outpost structure is given by OuterWorldCavePortalBuilder.CaveName.
         private const string OutpostObjectName = "CavePortal";
-        // Resources path to the Tripo texture (Assets/Resources/Dungeons/enemy_outpost.jpg) —
-        // the safety-net base map if the FBX's embedded texture didn't auto-link on import.
-        private const string FallbackTexture   = "Dungeons/enemy_outpost";
+        // Resources path to the Tripo color atlas. The jpg lives in the enemy_outpost SUBFOLDER
+        // (Assets/Resources/Dungeons/enemy_outpost/enemy_outpost.jpg), so the load path is
+        // "Dungeons/enemy_outpost/enemy_outpost" — NOT "Dungeons/enemy_outpost" (that collides with
+        // the enemy_outpost.fbx and loads no texture). This is the safety-net base map applied when
+        // the FBX's embedded texture didn't auto-link on import (the magenta/colorless symptom).
+        private const string FallbackTexture   = "Dungeons/enemy_outpost/enemy_outpost";
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Register()

@@ -504,7 +504,18 @@ namespace DeNelle.Village
                 var col = pillar.GetComponent<Collider>();
                 if (col != null) Object.Destroy(col);                       // never obstruct the lane
                 var r = pillar.GetComponent<MeshRenderer>();
-                if (r != null) r.enabled = false;                           // HIDE not destroy (owner 2026-06-30)
+                if (r != null)
+                {
+                    // Give the hidden pillar a VALID URP material before disabling. A CreatePrimitive
+                    // cube keeps Unity's built-in default material = InternalErrorShader (magenta) under
+                    // URP, so MagentaGuard's scene sweep flags the (hidden) pillar as a stray magenta
+                    // cube and error-spams the break-log every load (owner F8 2026-06-30, dev console).
+                    // A valid URP/Lit mat means it's never "magenta"; the renderer is then disabled so
+                    // it still never draws — hidden AND silent.
+                    var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                    if (sh != null) r.sharedMaterial = new Material(sh) { name = "BeaconPillar_Hidden" };
+                    r.enabled = false;                                      // HIDE not destroy (owner 2026-06-30)
+                }
 
                 // 2) A colored point light at the gate so the area is lit + the eye is drawn to it.
                 var lightGo = new GameObject("Beacon_Light");
