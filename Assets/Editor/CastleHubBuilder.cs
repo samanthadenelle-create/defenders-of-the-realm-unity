@@ -227,6 +227,41 @@ namespace DeNelle.Editor
                 Object.DestroyImmediate(plane.GetComponent<Collider>());
             }
 
+            // === UNDER-COURTYARD OPAQUE FLOOR (inner see-under fix) ===
+            // The qFloorWood tiles only cover ~±16m; from there out to the wall (~r41) the only
+            // "ground" is the INVISIBLE nav floor over the -3m terrain dip → you see DOWN into the
+            // void from inside (reads as "floating"). Lay ONE opaque plane at y=0 (just below the
+            // 0.01 tiles → no z-fight) covering out to the wall line so the interior reads as solid.
+            // Visual only (no collider; walkability comes from CourtyardFloor_Nav). Same floor
+            // material as the tiles when available, else a tinted URP/Lit stone so it reads consistent.
+            {
+                var underFloor = GameObject.CreatePrimitive(PrimitiveType.Plane);
+                underFloor.transform.SetParent(courtyard.transform, false);
+                underFloor.transform.localPosition = new Vector3(0f, 0f, 0f);
+                underFloor.transform.localScale = new Vector3(8.2f, 1f, 8.2f); // 82×82m → covers ±41 to the wall line
+                underFloor.name = "CourtyardUnderFloor_Visual";
+                var ufCol = underFloor.GetComponent<Collider>();
+                if (ufCol != null) Object.DestroyImmediate(ufCol); // visual only — nav floor handles walkability
+                var ufR = underFloor.GetComponent<MeshRenderer>();
+                if (ufR != null)
+                {
+                    Material floorMat = null;
+                    if (qFloorWood != null)
+                    {
+                        var srcR = qFloorWood.GetComponentInChildren<MeshRenderer>();
+                        if (srcR != null) floorMat = srcR.sharedMaterial; // reuse the plaza tile material → consistent read
+                    }
+                    if (floorMat == null)
+                    {
+                        var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                        if (shader != null) floorMat = new Material(shader) { color = new Color(0.40f, 0.37f, 0.33f) };
+                    }
+                    if (floorMat != null) ufR.sharedMaterial = floorMat;
+                }
+                MarkStatic(underFloor);
+                FlowTrace.Step("CastleHub", "CourtyardUnderFloor_Visual laid (82×82m @ y0) — closes the inner courtyard see-under.");
+            }
+
             // === THE 8 STRUCTURES (ring around plaza, storefronts face center, NPC points) ===
             var structuresRoot = new GameObject("The8Structures_Storefronts_NPCPoints");
             structuresRoot.transform.SetParent(courtyard.transform, false);
@@ -680,6 +715,114 @@ namespace DeNelle.Editor
             // UpperBattlements_Nav plane baked into the saved scene so the navmesh is clean.
             var priorUpperNav = GameObject.Find("UpperBattlements_Nav");
             if (priorUpperNav != null) { Object.DestroyImmediate(priorUpperNav); Log("BuildNavMeshFloor: removed stale UpperBattlements_Nav plane (single-layer pivot)."); }
+
+            // WATER CARVE (moat NON-WALKABLE): the runtime CastleMoatBuilder lays collider-less
+            // water over this flat walkable sheet → hero & enemies walk on water. Carve the moat
+            // footprint NotWalkable, leaving the 4 cardinal bridge lanes open. Done last so the
+            // carve quads parent under floorRoot and bake in the SAME pass.
+            CarveMoatNonWalkable(floorRoot.transform);
+        }
+
+        // =====================================================================
+        //  MOAT WATER CARVE — mark the moat footprint NON-WALKABLE so neither the
+        //  hero nor enemies can walk on the collider-less water. The water geometry
+        //  (CastleMoatBuilder, runtime) matches: moat ring centreline r=46/width 3 +
+        //  broad fill annulus r=48→72. We carve a SQUARE annulus r≈44→72, but leave a
+        //  clear lane at each of the 4 cardinal gates (centred on the gate lateral
+        //  offset, x4 symmetry) so the bridges stay walkable.
+        //
+        //  Geometry: 2 carve quads per side (left + right of the bridge lane) = 8 quads.
+        //  Each quad is thin radially (44→72 = 28m deep) and long laterally (±72m to
+        //  cover the corners — adjacent sides overlap at corners, harmless). The lane
+        //  gap is LaneHalfClear*2 = 10m wide (> the 8.5m bridge, ≤ the 15m gate opening)
+        //  so agent-radius erosion can't pinch it shut. Quads sit just ABOVE the y=0 nav
+        //  floor so they win the voxel column on bake → those columns bake NotWalkable.
+        //  AREA INDEX USED = 1 (Unity built-in "Not Walkable").
+        // =====================================================================
+        private static void CarveMoatNonWalkable(Transform parent)
+        {
+            const float carveInnerR    = 44f;   // start just inside the moat ring (ring centreline 46, width 3)
+            const float carveOuterR    = 72f;   // out to the broad fill outer edge (FillOuterRadius=72)
+            const float lateralExtent  = 72f;   // half-span each side → covers the corners (±72)
+            const float laneHalfClear  = 5.0f;  // 10m clear bridge lane (> 8.5m bridge, ≤ 15m gate opening)
+            const float carveY         = 0.1f;  // just above the y=0 nav floor so the carve wins the voxel column
+
+            float radialDepth  = carveOuterR - carveInnerR;            // 28m radial band depth
+            float radialCentre = (carveInnerR + carveOuterR) * 0.5f;   // 58m radial centre
+            float gateLateral  = ReadSouthGatePos().x;                 // lateral offset of the gate lane (x4 symmetry)
+
+            var sides = new (string label, float yaw)[] { ("South", 0f), ("West", 90f), ("North", 180f), ("East", 270f) };
+            int made = 0;
+            foreach (var (label, yaw) in sides)
+            {
+                Quaternion rot = Quaternion.Euler(0f, yaw, 0f);
+                Vector3 outward = rot * Vector3.back;   // radial-out unit for this side
+                Vector3 lateral = rot * Vector3.right;  // lateral unit along this side
+
+                // Lane gap is [gateLateral - laneHalfClear, gateLateral + laneHalfClear].
+                // Left quad covers [-lateralExtent, gateLateral - laneHalfClear].
+                float leftMax    = gateLateral - laneHalfClear;
+                float leftWidth  = leftMax - (-lateralExtent);
+                float leftCentre = (-lateralExtent + leftMax) * 0.5f;
+                // Right quad covers [gateLateral + laneHalfClear, +lateralExtent].
+                float rightMin    = gateLateral + laneHalfClear;
+                float rightWidth  = lateralExtent - rightMin;
+                float rightCentre = (rightMin + lateralExtent) * 0.5f;
+
+                if (leftWidth > 0.1f)
+                {
+                    Vector3 pos = outward * radialCentre + lateral * leftCentre; pos.y = carveY;
+                    CreateNotWalkableCarve(parent, "MoatCarve_" + label + "_L", pos, rot,
+                        new Vector3(leftWidth / 10f, 1f, radialDepth / 10f));
+                    made++;
+                }
+                if (rightWidth > 0.1f)
+                {
+                    Vector3 pos = outward * radialCentre + lateral * rightCentre; pos.y = carveY;
+                    CreateNotWalkableCarve(parent, "MoatCarve_" + label + "_R", pos, rot,
+                        new Vector3(rightWidth / 10f, 1f, radialDepth / 10f));
+                    made++;
+                }
+            }
+            FlowTrace.Step("CastleHub", "CarveMoatNonWalkable: " + made + " NotWalkable carve quads (area=1) over moat r" +
+                carveInnerR + "→" + carveOuterR + "m, 4 cardinal lanes (±" + laneHalfClear + "m @ lateral " +
+                gateLateral.ToString("F2") + ") left walkable.");
+            Log("CarveMoatNonWalkable: placed " + made + " NotWalkable carve quads (area index 1) over the moat footprint.");
+        }
+
+        // Invisible carve plane forced to the Unity built-in "Not Walkable" area (index 1) so the
+        // bake produces a HOLE in the navmesh over it. Mirrors CreateInvisibleFloor (renderer off,
+        // MeshCollider kept for the Physics-Colliders bake) but uses a NotWalkable modifier + an
+        // explicit rotation (the moat sides are rotated per cardinal).
+        private static void CreateNotWalkableCarve(Transform parent, string name, Vector3 localPos, Quaternion localRot, Vector3 localScale)
+        {
+            var plane = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            plane.name = name;
+            plane.transform.SetParent(parent, false);
+            plane.transform.localPosition = localPos;
+            plane.transform.localRotation = localRot;
+            plane.transform.localScale = localScale;
+
+            var r = plane.GetComponent<MeshRenderer>();
+            if (r != null) r.enabled = false;
+            if (plane.GetComponent<MeshCollider>() == null) plane.AddComponent<MeshCollider>();
+
+            AddNotWalkableNavMeshModifier(plane);
+        }
+
+        // Force a GameObject's baked navmesh area to "Not Walkable" (overrideArea, area index 1)
+        // so the bake carves a hole there. Mirrors AddWalkableNavMeshModifier (area 0) — reflection
+        // on Unity.AI.Navigation.NavMeshModifier to match this file's no-hard-dep style.
+        private static void AddNotWalkableNavMeshModifier(GameObject go)
+        {
+            var t = FindType("Unity.AI.Navigation.NavMeshModifier");
+            if (t == null) { Err("AddNotWalkableNavMeshModifier: NavMeshModifier type not found — moat carve will NOT apply."); return; }
+            var mod = go.GetComponent(t);
+            if (mod == null) mod = go.AddComponent(t);
+            var pOverride = t.GetProperty("overrideArea");
+            if (pOverride != null) pOverride.SetValue(mod, true);
+            var pArea = t.GetProperty("area");
+            if (pArea != null) pArea.SetValue(mod, 1); // 1 = Not Walkable (Unity built-in)
         }
 
         // =====================================================================
@@ -1755,6 +1898,11 @@ namespace DeNelle.Editor
                 var deck = (GameObject)PrefabUtility.InstantiatePrefab(bridgePrefab, seamRoot.transform);
                 deck.name = "Bridge_Deck_Visual";
                 deck.transform.position = deckPos;
+                // Widen the stone deck ~1.2x in X to match the widened 8.5m walkable nav deck.
+                // NOTE (flag for orchestrator): the prefab's native width is unknown, so 1.2 is an
+                // approximate match — verify the stone visually spans the lane after bake; adjust if it
+                // looks stretched/narrow. The WALKABLE width is the nav deck below (0.85 = 8.5m), unaffected.
+                deck.transform.localScale = new Vector3(1.2f, 1f, 1f);
                 MarkStatic(deck);
                 Log("BRIDGE-SEAM: visual bridge placed at " + deckPos + ".");
             }
@@ -1766,7 +1914,7 @@ namespace DeNelle.Editor
                 deck.name = "Bridge_Deck_Visual";
                 deck.transform.SetParent(seamRoot.transform, false);
                 deck.transform.position = deckPos;
-                deck.transform.localScale = new Vector3(7f, 0.4f, 16f); // ~7m wide × ~16m long deck
+                deck.transform.localScale = new Vector3(8.5f, 0.4f, 16f); // ~8.5m wide × ~16m long deck (widened from 7m; ≤15m gate opening)
                 var dr = deck.GetComponent<MeshRenderer>();
                 if (dr != null)
                 {
@@ -1788,7 +1936,7 @@ namespace DeNelle.Editor
             float deckLenZ    = Mathf.Abs(farEndZ - gateZ) + 6f; // +6m overlap into the courtyard for the weld
             // Unity plane is 10×10m @ scale 1 → scale.z = lenZ/10, scale.x = width(7m)/10 = 0.7.
             CreateInvisibleFloor(seamRoot.transform, "Floor_Bridge_Nav",
-                new Vector3(gateX, 0f, deckCentreZ), new Vector3(0.7f, 1f, deckLenZ / 10f));
+                new Vector3(gateX, 0f, deckCentreZ), new Vector3(0.85f, 1f, deckLenZ / 10f)); // X 0.85 = 8.5m walkable deck (widened from 7m; ≤15m gate opening)
             Log("BRIDGE-SEAM: CONTINUOUS walkable deck Floor_Bridge_Nav centre=(" + gateX + ",0," +
                 deckCentreZ.ToString("F1") + ") len≈" + deckLenZ.ToString("F1") + "m (gate " + gateZ.ToString("F1") +
                 " → far end " + farEndZ + ") — welds to courtyard.");
@@ -2418,8 +2566,14 @@ namespace DeNelle.Editor
                 Quaternion rot = Quaternion.Euler(0f, s.angle, 0f);
                 Vector3 gate = rot * south;            // gate center (mirror of south)
                 Vector3 outward = rot * Vector3.back;  // south outward = -Z, rotated per side
-                Vector3 spawn = gate + outward * 12f;
+                // MOVED OUT (was outward*12f ≈ r52, now IN the carved moat water r44→72): push the
+                // spawn PAST the moat onto dry OuterWorld shore. Gate radial out ≈ 40.6, so +40m
+                // lands the spawn at radial ≈ 80m (> FillOuterRadius 72; terrain back to ~y0 by ~76).
+                // Enemies spawn in the OuterWorld roam zone (castle stays safe) — they do NOT path
+                // back across the seam; WaveManager's Walkable-only snap binds them to OuterWorld nav.
+                Vector3 spawn = gate + outward * 40f;
                 spawn.y = 0f;
+                float spawnRadius = new Vector2(spawn.x, spawn.z).magnitude;
 
                 string name = "WaveSpawnPoint-" + s.dir;
                 var existing = root.Find(name);
@@ -2430,9 +2584,11 @@ namespace DeNelle.Editor
                 try { go.tag = "SpawnPoint"; } catch { /* tag optional; discovery is by component */ }
                 var sp = go.AddComponent(spType);
                 if (cfg != null) cfg.Invoke(sp, new object[] { "spawn-" + i, i, s.dir, gate });
+                FlowTrace.Step("CastleHub", "Spawn " + name + " @ " + spawn.ToString("F1") +
+                    " radius=" + spawnRadius.ToString("F1") + "m (past moat r72 → OuterWorld dry shore).");
                 made++; i++;
             }
-            Log("PlaceCastleSpawnPoints: placed " + made + " WaveSpawnPoints 12m outside each gate.");
+            Log("PlaceCastleSpawnPoints: placed " + made + " WaveSpawnPoints ~40m outside each gate (radial ≈80m, past the moat onto OuterWorld shore).");
         }
 
         private static Transform FindHeroParentInCastle(Scene scene)

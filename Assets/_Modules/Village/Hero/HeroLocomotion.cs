@@ -784,7 +784,9 @@ namespace DeNelle.Village
                     // the sample radius, that's valid ground — pull the hero DOWN toward
                     // its Y at a gravity-like rate (never up; up is the agent's job /
                     // the lift's), so the hero falls to the surface instead of freezing.
-                    if (NavMesh.SamplePosition(p, out NavMeshHit hit, SnapSampleRadius, NavMesh.AllAreas))
+                    // Walkable-only mask: exclude the built-in NotWalkable area (index 1) so the
+                    // hero's off-mesh re-bind can't re-acquire the moat-water carve (CastleHubBuilder).
+                    if (NavMesh.SamplePosition(p, out NavMeshHit hit, SnapSampleRadius, NavMesh.AllAreas & ~(1 << 1)))
                     {
                         float groundY = hit.position.y;
                         if (p.y > groundY + 0.01f)
