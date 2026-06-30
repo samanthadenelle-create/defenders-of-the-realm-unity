@@ -488,8 +488,14 @@ namespace DeNelle.Village
                 // Warm portal-blue, like WardStone's lit ward-glow — reads as a "go here" cue.
                 Color glowColor = new Color(0.40f, 0.75f, 1.00f);
 
-                // 1) A tall thin emissive pillar (a stretched cube) so the gate is visible from
-                //    across the courtyard. No collider (don't block the hero) — render-only.
+                // 1) Emissive pillar BUILT BUT HIDDEN (owner 2026-06-30): the four "Beacon_Pillar"
+                //    cubes render as white "beams" standing in the castle gate archways. The owner
+                //    wants them not drawn. Per the hide-don't-destroy convention we KEEP the
+                //    GameObject (so nothing referencing it by name breaks, and it's trivially
+                //    reversible) and just DISABLE its renderer — no white beam, no behavior change.
+                //    The pillar is render-only (no collider, no NavMeshObstacle) and is built at
+                //    runtime, so it has no role in the baked navmesh / seam crossing either way.
+                //    Re-enable the renderer to restore the visual findability cue.
                 var pillar = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 pillar.name = "Beacon_Pillar";
                 pillar.transform.SetParent(root.transform, false);
@@ -498,22 +504,7 @@ namespace DeNelle.Village
                 var col = pillar.GetComponent<Collider>();
                 if (col != null) Object.Destroy(col);                       // never obstruct the lane
                 var r = pillar.GetComponent<MeshRenderer>();
-                if (r != null)
-                {
-                    // CreatePrimitive assigns Unity's built-in STANDARD-shader Default-Material,
-                    // which is stripped in the URP build -> InternalErrorShader -> magenta (auto-hidden
-                    // by MagentaGuard). REPLACE it with a fresh URP/Lit material (WardStone pattern)
-                    // instead of patching the Standard default.
-                    var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-                    if (sh != null)
-                    {
-                        var beaconMat = new Material(sh) { name = "BeaconPillar" };
-                        beaconMat.SetColor("_BaseColor", glowColor);
-                        beaconMat.EnableKeyword("_EMISSION");
-                        beaconMat.SetColor("_EmissionColor", glowColor * 2.2f); // bright self-lit glow
-                        r.sharedMaterial = beaconMat;
-                    }
-                }
+                if (r != null) r.enabled = false;                           // HIDE not destroy (owner 2026-06-30)
 
                 // 2) A colored point light at the gate so the area is lit + the eye is drawn to it.
                 var lightGo = new GameObject("Beacon_Light");
