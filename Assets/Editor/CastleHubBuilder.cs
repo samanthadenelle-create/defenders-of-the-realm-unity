@@ -668,7 +668,12 @@ namespace DeNelle.Editor
 
             var underFloor = GameObject.CreatePrimitive(PrimitiveType.Plane);
             underFloor.transform.SetParent(parent, false);
-            underFloor.transform.localPosition = new Vector3(0f, 0f, 0f);
+            // Z-FIGHT FIX (owner F8 2026-06-29 "floor fighting itself"): was y=0, coplanar with the nav
+            // floor (y0) and grazing the plaza tiles (y≈0.01) → z-fight where they overlap. Drop to
+            // y=-0.12, clearly BELOW both, so no coplanar flicker. The -3m dip it hides is far below, so a
+            // 0.12m drop still closes the inner see-under at normal viewing angles and never pokes above
+            // the tiles. Still spans ±41 (8.2×10m plane) out to the wall line.
+            underFloor.transform.localPosition = new Vector3(0f, -0.12f, 0f);
             underFloor.transform.localScale = new Vector3(8.2f, 1f, 8.2f); // 82×82m → covers ±41 to the wall line
             underFloor.name = "CourtyardUnderFloor_Visual";
             var ufCol = underFloor.GetComponent<Collider>();
@@ -770,24 +775,20 @@ namespace DeNelle.Editor
             // surface) so the deck/floor wins the column. Belt-and-suspenders ON TOP OF excluding the
             // bridge corridor from the carve — together no carve can ever sever the deck.
             const float carveY         = -0.05f; // just below the y≈0 nav floor so the walkable surface wins the column
-            // BRIDGE CORRIDOR EXCLUSION (owner 2026-06-29): the prior thin lane gap still let carve
-            // quads sit ABOVE the deck edges; that vertical voxel conflict SPLIT the deck navmesh into
-            // two islands (hero reached z≈-58.6, trigger island at z≈-64 — captured PathPartial). FIX:
-            // keep ALL carve geometry 100% OFF the real welded bridge corridor (detected from the live
-            // Floor_Bridge_Nav* deck) — a GENEROUS uncarved corridor (deck width + ~6m each side ≈ 20m)
-            // so no NotWalkable quad overlaps/over-hangs the deck → the deck navmesh welds courtyard→far
-            // end continuously. The beside-deck water is blocked instead by BuildBridgeWaterWalls
-            // (obstacle colliders ~0.5m off the deck edge). A cardinal with NO real deck carves the FULL
-            // annulus (no walkable gap) — only the south crossing has a deck today.
-            const float corridorMargin = 6f;    // uncarved corridor half = deck half-width + this (≈20m total)
+            // 4-CARDINAL CORRIDOR EXCLUSION (owner 2026-06-29, regression fix): the prior pass only
+            // spared the corridor on sides WITH a Floor_Bridge_Nav deck (south only) and FULLY carved
+            // W/N/E → their walk-out lanes were severed (captured: SPAWN_TO_GATE [East/West/North]
+            // PathPartial, path stops at the carve inner edge r≈44). The owner's design is FOUR walk-out
+            // exits (all cardinals), so leave a GENEROUS uncarved corridor (~20m wide, ≥ the 8.5m south
+            // deck + ~6m/side) at ALL 4 cardinal gates and carve ONLY the 4 diagonal quadrants (NE/NW/
+            // SE/SW). Corridor centre = the gate lateral offset, rotated x4 (the same `lateral = rot *
+            // Vector3.right` axis used everywhere). South ALSO keeps its deck + trigger@-52 + flank walls
+            // (built elsewhere); W/N/E simply walk out over cosmetic water until their formal bridges land.
+            const float corridorHalf = 10.25f;  // ~20.5m uncarved corridor per cardinal (matches 8.5m deck + ~6m/side)
 
             float radialDepth  = carveOuterR - carveInnerR;            // 28m radial band depth
             float radialCentre = (carveInnerR + carveOuterR) * 0.5f;   // 58m radial centre
-
-            // Collect every real welded bridge deck present (built by AddCastleBridgeSeam).
-            var decks = new List<Transform>();
-            foreach (var go in Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None))
-                if (go.name.StartsWith("Floor_Bridge_Nav")) decks.Add(go.transform);
+            float gateLateral  = ReadSouthGatePos().x;                 // lateral offset of EVERY cardinal gate (x4 symmetry)
 
             var sides = new (string label, float yaw)[] { ("South", 0f), ("West", 90f), ("North", 180f), ("East", 270f) };
             int made = 0;
@@ -797,36 +798,12 @@ namespace DeNelle.Editor
                 Vector3 outward = rot * Vector3.back;   // radial-out unit for this side
                 Vector3 lateral = rot * Vector3.right;  // lateral unit along this side
 
-                // Does a real welded deck run on THIS side? If so, leave its corridor 100% uncarved.
-                bool hasBridge = false;
-                float corridorLateral = 0f, corridorHalf = 0f;
-                foreach (var deck in decks)
-                {
-                    Vector3 c = deck.position; c.y = 0f;
-                    if (c.sqrMagnitude < 1f) continue;
-                    if (Vector3.Dot(c.normalized, outward) < 0.85f) continue; // deck not aligned to this side (~<30°)
-                    hasBridge = true;
-                    corridorLateral = Vector3.Dot(c, lateral);            // deck centre along this side's lateral
-                    float deckHalf  = Mathf.Abs(deck.lossyScale.x) * 5f;  // Unity plane is 10m → half = scale.x*5 (4.25m @ 0.85)
-                    corridorHalf    = deckHalf + corridorMargin;          // ≈ 4.25 + 6 = 10.25m → ~20.5m uncarved corridor
-                    break;
-                }
-
-                if (!hasBridge)
-                {
-                    // No bridge here → carve the FULL annulus band (single quad, no walkable gap).
-                    Vector3 pos = outward * radialCentre; pos.y = carveY;
-                    CreateNotWalkableCarve(parent, "MoatCarve_" + label + "_Full", pos, rot,
-                        new Vector3((lateralExtent * 2f) / 10f, 1f, radialDepth / 10f));
-                    made++;
-                    continue;
-                }
-
-                // Bridge present → carve L + R of the uncarved corridor [corridorLateral ± corridorHalf].
-                float leftMax    = corridorLateral - corridorHalf;
+                // EVERY cardinal keeps its corridor [gateLateral ± corridorHalf] uncarved; carve L + R
+                // of it (out to ±lateralExtent → the diagonal quadrants, which adjacent sides overlap).
+                float leftMax    = gateLateral - corridorHalf;
                 float leftWidth  = leftMax - (-lateralExtent);
                 float leftCentre = (-lateralExtent + leftMax) * 0.5f;
-                float rightMin    = corridorLateral + corridorHalf;
+                float rightMin    = gateLateral + corridorHalf;
                 float rightWidth  = lateralExtent - rightMin;
                 float rightCentre = (rightMin + lateralExtent) * 0.5f;
 
@@ -846,9 +823,9 @@ namespace DeNelle.Editor
                 }
             }
             FlowTrace.Step("CastleHub", "CarveMoatNonWalkable: " + made + " NotWalkable quads (area=1) over moat r" +
-                carveInnerR + "→" + carveOuterR + "m; " + decks.Count + " real bridge corridor(s) left UNCARVED (deck welds), " +
-                "bridgeless cardinals fully carved.");
-            Log("CarveMoatNonWalkable: placed " + made + " NotWalkable carve quads (area index 1); bridge corridors excluded.");
+                carveInnerR + "→" + carveOuterR + "m; ALL 4 cardinal corridors (±" + corridorHalf + "m @ lateral " +
+                gateLateral.ToString("F2") + ", full band r" + carveInnerR + "→" + carveOuterR + ") left UNCARVED — only the 4 diagonal quadrants carved.");
+            Log("CarveMoatNonWalkable: placed " + made + " NotWalkable carve quads (area index 1); all 4 cardinal walk-out corridors preserved.");
         }
 
         // =====================================================================
