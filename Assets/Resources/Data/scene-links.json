@@ -1,0 +1,8 @@
+{
+  "links": [
+    { "id": "castle_to_outerworld", "type": "seam", "fromScene": "MainCastle_Hall", "toScene": "OuterWorld", "loadMode": "additive", "spawnPoint": "", "targetPosition": { "x": 0, "y": 0.5, "z": -12 }, "unloadFrom": false },
+    { "id": "outerworld_to_outpost1", "type": "outpost", "fromScene": "OuterWorld", "toScene": "Outpost1", "loadMode": "single", "spawnPoint": "Outpost1_Entry", "targetPosition": { "x": 0, "y": 0, "z": 0 }, "unloadFrom": false },
+    { "id": "outpost1_to_dungeon", "type": "dungeon", "fromScene": "Outpost1", "toScene": "Dungeon", "loadMode": "single", "spawnPoint": "Dungeon_Entry", "targetPosition": { "x": 0, "y": 0, "z": 0 }, "unloadFrom": false },
+    { "id": "dungeon_portal_to_outpost2", "type": "portal", "fromScene": "Dungeon", "toScene": "Outpost2", "loadMode": "single", "spawnPoint": "Outpost2_Entry", "targetPosition": { "x": 0, "y": 0, "z": 0 }, "unloadFrom": false }
+  ]
+}

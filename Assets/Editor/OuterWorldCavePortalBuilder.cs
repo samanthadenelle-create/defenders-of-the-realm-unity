@@ -57,14 +57,6 @@ namespace DeNelle.Editor
         // player ~z-66, so z-420 is a ~350m southward walk to a deep-south entrance.
         private static readonly Vector3 CavePos = new Vector3(0f, 0f, -420f);
 
-        // Village2 ARRIVAL point — where the player ports TO from OuterWorld.
-        // WO-480 (connected-interior regen): the player arrives at the front-gate approach and WALKS in
-        // through the now-connected gate -> chokepoint -> keep ramp (no in-scene crossing needed).
-        // The old (20.6,-38.3) spot dead-ends 33.9m from the gate on a SEPARATE exterior island after the
-        // regen (hero stranded); (0,-20) is the HeroStartPoint approach that reaches chokepoint (0.4m) and
-        // climbs the keep ramp. WarpTo samples the navmesh on arrival.
-        private static readonly Vector3 Village2SpawnPos = new Vector3(0f, 0.1f, -20f);
-
         [MenuItem("Defenders/World/Place OuterWorld Cave Portal")]
         public static void PlaceCavePortal()
         {
@@ -103,7 +95,7 @@ namespace DeNelle.Editor
 
             FlowTrace.Step("CavePortal",
                 $"DONE — cave @ {cave.transform.position}, trigger child '{TriggerName}', " +
-                $"target Village2 @ {Village2SpawnPos}, scene-saved={saved}.");
+                $"target Outpost1 @ (0,0,-12) [Outpost1_Entry], scene-saved={saved}.");
         }
 
         // Parent the portal under a root that SURVIVES a terrain rebuild. CRITICAL (2026-06-20):
@@ -289,9 +281,14 @@ namespace DeNelle.Editor
             Guard.Try("CavePortal", "WireSceneTransitionTrigger", () =>
             {
                 var comp = trig.AddComponent(transType);
-                SetField(transType, comp, "targetSceneName", "Village2");
+                // CONNECT THE CHAIN (owner 2026-06-30): the outpost entrance now routes into the
+                // dungeon chain (OuterWorld -> Outpost1 -> Dungeon -> Outpost2), NOT the retired
+                // Village2 raid target (the stale seam both RCA agents flagged). Single-load Outpost1
+                // and seat the hero at its Outpost1_Entry marker — DungeonChainBuilder.EntryPos =
+                // (0,0,-12); scene-links.json link 'outerworld_to_outpost1' targets the same.
+                SetField(transType, comp, "targetSceneName", "Outpost1");
                 SetField(transType, comp, "loadAdditive", false);
-                SetField(transType, comp, "targetPosition", Village2SpawnPos);
+                SetField(transType, comp, "targetPosition", new Vector3(0f, 0f, -12f));
                 SetField(transType, comp, "ProximityRadius", 16f);
                 // NARRATIVE LABEL (WO-468): SceneTransitionTrigger now carries a `promptOverride`
                 // field (added by the orchestrator) that REPLACES the default "Travel to <dest>"
@@ -301,8 +298,8 @@ namespace DeNelle.Editor
             }, false);
 
             FlowTrace.Step("CavePortal",
-                $"click-to-enter wired: SceneTransitionTrigger -> Village2 (single load), " +
-                $"target {Village2SpawnPos}, proximity 16m. Trigger world pos = {trig.transform.position}.");
+                $"click-to-enter wired: SceneTransitionTrigger -> Outpost1 (single load), " +
+                $"target (0,0,-12) [Outpost1_Entry], proximity 16m. Trigger world pos = {trig.transform.position}.");
         }
 
         // ── shared helpers (mirror EnemyStrongholdBuilder) ──────────────────────

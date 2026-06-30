@@ -53,6 +53,21 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/RaidBase_mage_enclave.unity
     guid: 2f1990e6a3742bc4d81694e2e9ee63da
+  - enabled: 1
+    path: Assets/Scenes/Dungeon_Demo.unity
+    guid: dc8b11c24ecb9124c8e5b6e05e1cdb45
+  - enabled: 1
+    path: Assets/Scenes/Garrison_village2_stronghold.unity
+    guid: e7b246cf326dcbb4ea5b0f13f706f423
+  - enabled: 1
+    path: Assets/Scenes/Outpost1.unity
+    guid: 99d5d52ba00a2234eac6cd20271a8043
+  - enabled: 1
+    path: Assets/Scenes/Outpost2.unity
+    guid: d993dd45063fdac4f84c1e25f4f04490
+  - enabled: 1
+    path: Assets/Scenes/Dungeon.unity
+    guid: 4629e1fb6060c1a4e84b1ed676fe69e1
   m_configObjects:
     com.unity.addressableassets: {fileID: 11400000, guid: 16d06bc18dab1cd408b1472b0382cf8a, type: 2}
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}

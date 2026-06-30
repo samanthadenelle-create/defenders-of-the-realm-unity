@@ -101,7 +101,7 @@ namespace DeNelle.Village
 
         // True when OuterWorld is loaded (active OR additive), case-insensitive — mirrors
         // RaidOutpostSystem.InOuterWorld so the rep gate matches the other world systems.
-        private static bool OuterWorldLoaded()
+        internal static bool OuterWorldLoaded()
         {
             int count = SceneManager.sceneCount;
             for (int i = 0; i < count; i++)
@@ -476,6 +476,13 @@ namespace DeNelle.Village
         private void Update()
         {
             if (_engaged || !FeatureFlags.OverworldEncounter) return;
+
+            // CHAIN ISOLATION (owner 2026-06-30): reps are DontDestroyOnLoad and survive a single-load
+            // into the dungeon chain (Outpost1/Dungeon/Outpost2). They must NOT roam/aggro/engage there
+            // — a rep staging a BattleArena in a single-loaded scene is what caused the Village2
+            // SpawnFamily NRE / WarpHero-off-mesh errors. Only act while OuterWorld is actually loaded
+            // (the reps' home region); in a chain scene OuterWorld is unloaded so they stay inert.
+            if (!OverworldEncounterSpawner.OuterWorldLoaded()) return;
 
             // BATTLE ISOLATION + POST-LOSS GRACE: while a fight is staged, or during the brief
             // post-loss recovery window, EVERY home rep freezes — no roam/chase/aggro/engage.
