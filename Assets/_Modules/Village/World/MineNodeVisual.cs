@@ -113,6 +113,12 @@ namespace DeNelle.Village
         /// call again after changing Resource — it tears the old visual down first.</summary>
         public void Build()
         {
+            // Owner F8 2026-06-30 ("nodes are floating, the y is not set on raycast"): snap the node
+            // HOST to the real ground BEFORE seating. SeatOnGround only re-bases the visual to the
+            // host's y (it does NOT raycast), and OuterWorldBuilder places nodes at a fixed y that
+            // ignores the terrain heightmap dip — so without this the prop seats at the wrong height.
+            SnapHostToGround();
+
             if (_visual != null) { Destroy(_visual); _visual = null; }
 
             // Permanently REMOVE any placeholder mesh sitting on the node's OWN GameObject
@@ -175,6 +181,36 @@ namespace DeNelle.Village
 
             // 2) Procedural low-poly silhouette fallback (distinct per resource).
             BuildProcedural(_visual.transform, Resource);
+        }
+
+        // Cast straight down to the ground (terrain) and set the host y to the hit, so the seated
+        // prop sits ON the surface instead of floating at OuterWorldBuilder's fixed placement y.
+        // Our own colliders are disabled for the cast so the ray can't hit the node itself.
+        private void SnapHostToGround()
+        {
+            Guard.Try("HarvestNode", "snap node to ground", () =>
+            {
+                var ownCols = GetComponentsInChildren<Collider>(true);
+                foreach (var c in ownCols) if (c != null) c.enabled = false;
+
+                Vector3 p = transform.position;
+                bool hit = Physics.Raycast(new Vector3(p.x, p.y + 60f, p.z), Vector3.down,
+                    out RaycastHit h, 300f, ~0, QueryTriggerInteraction.Ignore);
+
+                foreach (var c in ownCols) if (c != null) c.enabled = true;
+
+                if (hit)
+                {
+                    transform.position = new Vector3(p.x, h.point.y, p.z);
+                    FlowTrace.Step("HarvestNode",
+                        $"MineNodeVisual({Resource}): snapped host to ground y={h.point.y:F2} (was {p.y:F2}, hit '{h.collider.name}').");
+                }
+                else
+                {
+                    FlowTrace.Warn("HarvestNode",
+                        $"MineNodeVisual({Resource}): NO ground under node at {p} (down-ray miss) — left at y={p.y:F2}. Likely the same navmesh/terrain gap as the hero fall.");
+                }
+            });
         }
 
         // ── Procedural silhouettes ───────────────────────────────────────────────────

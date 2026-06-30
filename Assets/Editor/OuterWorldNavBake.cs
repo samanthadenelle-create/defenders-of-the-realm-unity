@@ -44,10 +44,24 @@ namespace DeNelle.Editor
                 {
                     float edge = terr.transform.position.y + terr.SampleHeight(levelSample);
                     float delta = 0f - edge;
-                    if (Mathf.Abs(delta) > 0.001f)
+                    // SAFETY (2026-06-30): levelSample (0,0,-200) assumes the UN-STACKED layout
+                    // (terrain z=-72..-1072). On the still-STACKED/centered terrain (un-stack is parked
+                    // in stash, NOT applied here) that point is OFF the flat plateau (±150) -> SampleHeight
+                    // returns a SLOPED value -> re-leveling would MIS-SHIFT the already-reconciled terrain
+                    // and re-break the hero fall. The terrain is now authoritatively leveled by
+                    // ExteriorTerrainBuilder, so allow only a TINY corrective nudge here; a large delta means
+                    // the sample is off the plateau -> SKIP the shift and bake the navmesh on the terrain
+                    // AS-IS so the nav matches the real (reconciled) ground.
+                    if (Mathf.Abs(delta) > 0.001f && Mathf.Abs(delta) <= 1.5f)
                     {
                         terr.transform.position += new Vector3(0f, delta, 0f);
                         Debug.Log("[OuterWorldNavBake] leveled terrain by " + delta.ToString("0.000") + " -> Y=0.");
+                    }
+                    else if (Mathf.Abs(delta) > 1.5f)
+                    {
+                        Debug.LogWarning("[OuterWorldNavBake] SKIPPED terrain re-level (delta " +
+                            delta.ToString("0.000") + "m > 1.5m cap) — levelSample off the flat plateau " +
+                            "(un-stack not applied); baking navmesh on the terrain AS-IS to match the reconciled ground.");
                     }
                 }
 
