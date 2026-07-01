@@ -205,6 +205,7 @@ namespace DeNelle.Village
             EnsurePalette();
             _palette.Show();
 
+            FlowTrace.Step("Build", "BuildMode.Enter — palette shown, EnsureTouchInput next");
             EnsureTouchInput();   // install the Lean.Touch driver on a touch device (S6)
 
             // Notify cross-assembly listeners (BuildModeHudBridge hides the combat HUD
@@ -344,8 +345,20 @@ namespace DeNelle.Village
         {
             bool confirmed = _input.PlaceOrSelect;   // consumes the latch (touch driver)
             if (!confirmed) return false;
+            // TGVRU §12 (EDIT-ONLY instrumentation) — a confirm WAS read this frame; trace the
+            // point + joystick-zone state so a web trace shows whether a real click reached
+            // placement and why it may be suppressed. NOTE: we log the already-consumed
+            // `confirmed` and reuse a single IsInZone() call — never RE-READ _input.PlaceOrSelect
+            // (that would double-consume the single-frame latch and change behaviour).
+            bool inZone = VirtualJoystick.IsInZone(_input.ScreenPoint);
+            FlowTrace.Step("Build", $"PlaceConfirm check: input.PlaceOrSelect={confirmed}, " +
+                $"screenPoint={_input?.ScreenPoint}, inJoystickZone={inZone}");
             // Suppress confirms whose screen point sits in the move-stick zone.
-            if (VirtualJoystick.IsInZone(_input.ScreenPoint)) return false;
+            if (inZone)
+            {
+                FlowTrace.Warn("Build", "PlaceConfirm SUPPRESSED by joystick zone");
+                return false;
+            }
             // Suppress + REPORT confirms eaten by a pickable UI panel over the cursor — the silent
             // "cannot build" class (a full-screen scrim with a bad PanelSettings ate every click 3x
             // in MainCastle_Hall). Naming the culprit (§12) turns a silent fail into a diagnosis.
@@ -356,6 +369,7 @@ namespace DeNelle.Village
                         "If you CANNOT place a structure, THIS panel is eating the click — check its PanelSettings / PickingMode.");
                 return false;
             }
+            FlowTrace.Step("Build", "PlaceConfirm CONFIRMED — placement/select proceeds this frame");
             return true;
         }
 
@@ -849,6 +863,7 @@ namespace DeNelle.Village
         /// </summary>
         private void Place(Vector2Int cell, Vector2Int footprint, Vector3 snapped, bool wallMounted = false)
         {
+            FlowTrace.Step("Build", $"Place() — tower spawn (id='{_armed?.id}', cell=({cell.x},{cell.y}))");
             // Re-check affordability AT commit through the same ledger the validity gate
             // used — never spawn if the player can't pay (defensive: balance may have
             // changed since the ghost frame). Charge ONLY after this, per WO-131.
@@ -910,6 +925,7 @@ namespace DeNelle.Village
 
         private void Arm(CatalogEntry entry)
         {
+            FlowTrace.Step("Build", $"Armed placement for '{entry?.id}'");
             // Entering CREATE mode clears any active selection / move (P2).
             ClearSelection();
             _armed = entry;
@@ -1850,7 +1866,34 @@ namespace DeNelle.Village
         /// </summary>
         private void EnsureTouchInput()
         {
-            if (!Input.touchSupported) return;   // desktop → keep DesktopBuildInput
+            // TGVRU §12 (EDIT-ONLY instrumentation) — a web session must show EXACTLY which
+            // IBuildInput the controller chose and the device-detection state behind that pick
+            // (the desktop-vs-touch fork that decides whether Build Mode is even placeable on
+            // WebGL). No behaviour change; these are pure breadcrumbs.
+            FlowTrace.Step("Build", $"EnsureTouchInput: Input.touchSupported={Input.touchSupported}, " +
+                $"Application.isMobilePlatform={Application.isMobilePlatform}, _input(before)={_input?.GetType().Name}");
+            try
+            {
+                // InputSystem devices ARE referenceable here — DeNelle.Village references
+                // Unity.InputSystem (asmdef) + DesktopBuildInput uses it in-assembly. Wrapped in
+                // try/catch only for runtime safety (a device query can never legitimately throw,
+                // but a null-device edge on WebGL is captured rather than silently lost).
+                FlowTrace.Step("Build", "EnsureTouchInput InputSystem devices: " +
+                    $"Touchscreen.current={(UnityEngine.InputSystem.Touchscreen.current != null)}, " +
+                    $"Mouse.current={(UnityEngine.InputSystem.Mouse.current != null)}, " +
+                    $"Pointer.current={(UnityEngine.InputSystem.Pointer.current != null)}");
+            }
+            catch (System.Exception ex)
+            {
+                FlowTrace.Warn("Build", "EnsureTouchInput: InputSystem device probe threw: " + ex.Message);
+            }
+
+            if (!Input.touchSupported)
+            {
+                FlowTrace.Step("Build", $"EnsureTouchInput: desktop path (touchSupported=false) — kept " +
+                    $"_input={_input?.GetType().Name} (DesktopBuildInput expected)");
+                return;   // desktop → keep DesktopBuildInput
+            }
 
             if (_touchDriver == null)
             {
@@ -1859,6 +1902,8 @@ namespace DeNelle.Village
             }
             _touchDriver.Install(_camera);
             _input = _touchDriver;
+            FlowTrace.Step("Build", $"EnsureTouchInput: touch path — installed LeanTouchBuildDriver, " +
+                $"_input={_input?.GetType().Name}");
         }
 
         /// <summary>

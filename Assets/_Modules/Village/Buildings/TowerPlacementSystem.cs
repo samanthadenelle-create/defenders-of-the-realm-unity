@@ -129,6 +129,7 @@ namespace DeNelle.Village
         /// </param>
         public void StartPlacing(TowerData data, bool prepaid = false)
         {
+            FlowTrace.Step("Build", $"TowerPlacement.StartPlacing prepaid={prepaid}, data='{data?.towerName ?? "<null>"}'");
             if (data == null) return;
             CancelPlacing();   // drop any in-flight marker first (refunds nothing — _prepaid cleared)
 
@@ -179,7 +180,13 @@ namespace DeNelle.Village
             if (Input.GetMouseButtonDown(1)) { CancelPlacing(); return; }
 
             Ray ray = _mainCamera.ScreenPointToRay(Input.mousePosition);
-            if (!Physics.Raycast(ray, out RaycastHit hit, _rayDistance, _groundMask))
+            bool rayHit = Physics.Raycast(ray, out RaycastHit hit, _rayDistance, _groundMask);
+            // TGVRU §12 (EDIT-ONLY instrumentation) — throttled (~1/sec) so a web trace shows the
+            // per-frame placement read state without flooding: is the ground ray hitting, is the
+            // legacy left-click firing (the DesktopBuildInput legacy path), and the cursor point.
+            FlowTrace.Throttle("Build", "towerplace-update", 1f,
+                $"TowerPlacement.Update ray hit={rayHit}, GetMouseButtonDown(0)={Input.GetMouseButtonDown(0)}, mousePos={Input.mousePosition}");
+            if (!rayHit)
             {
                 // Cursor off the ground — hide and bail.
                 _currentMarker.SetActive(false);
@@ -209,6 +216,7 @@ namespace DeNelle.Village
 
             if (Input.GetMouseButtonDown(0))
             {
+                FlowTrace.Step("Build", $"TowerPlacement placing at {pos} valid={valid}");
                 if (valid) PlaceTower(pos);
                 else SurfaceRejection(reason);   // WO-394 — never fail a click silently
             }

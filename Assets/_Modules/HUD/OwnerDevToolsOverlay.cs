@@ -419,6 +419,10 @@ namespace DeNelle.HUD
                 FlowTrace.Warn("OwnerDev", $"tool '{label}' FAILED: {e.GetType().Name}: {e.Message}");
                 SetStatus($"{label} FAILED: {e.Message}");
             }
+            // Close the panel after a tool runs so it stops covering the game (2026-07-01 fix): it was
+            // eating the very next tap. Critical for "Dump state" — its capture-next-click must land on
+            // the game element the owner wants inspected (e.g. the diamond HUD), NOT on this panel.
+            try { if (_panelGo != null) _panelGo.SetActive(false); } catch { /* never break a tool */ }
         }
 
         private static void AddLayout(GameObject buttonGo)

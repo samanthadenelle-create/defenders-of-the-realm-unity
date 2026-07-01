@@ -27,6 +27,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 using Lean.Touch;
+using DeNelle.Core.Diagnostics;   // EDIT-ONLY: FlowTrace breadcrumbs (touch install + tap)
 
 namespace DeNelle.Village
 {
@@ -73,6 +74,7 @@ namespace DeNelle.Village
         /// </summary>
         public void Install(Camera overviewCamera)
         {
+            FlowTrace.Step("Build", $"LeanTouchBuildDriver.Install — LeanTouch.Instance={(LeanTouch.Instance != null)}");
             _overviewCamera = overviewCamera;
             _screenPoint = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
 
@@ -129,6 +131,7 @@ namespace DeNelle.Village
         private void HandleFingerTap(LeanFinger finger)
         {
             if (finger == null || finger.Index < 0) return;   // skip simulated mouse
+            FlowTrace.Step("Build", $"finger tap idx={finger.Index} overGui={finger.IsOverGui} screen={finger.ScreenPosition}");
             if (finger.IsOverGui) return;                      // don't place through the button bar
             if (LeanTouch.Fingers.Count >= 2) return;          // 2-finger = camera gesture
 

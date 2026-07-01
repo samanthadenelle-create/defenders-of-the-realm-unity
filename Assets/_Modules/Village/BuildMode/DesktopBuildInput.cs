@@ -21,6 +21,7 @@
 
 using UnityEngine;
 using UnityEngine.InputSystem;
+using DeNelle.Core.Diagnostics;   // EDIT-ONLY: FlowTrace breadcrumb (WebGL Mouse.current probe)
 
 namespace DeNelle.Village
 {
@@ -34,8 +35,20 @@ namespace DeNelle.Village
         public Vector2 ScreenPoint =>
             Mouse.current != null ? Mouse.current.position.ReadValue() : Vector2.zero;
 
-        public bool PlaceOrSelect =>
-            Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame;
+        public bool PlaceOrSelect
+        {
+            get
+            {
+                // TGVRU §12 (EDIT-ONLY instrumentation) — the SUSPECTED WebGL-desktop cause: the
+                // new Input System's Mouse.current can be null in a WebGL player (no HID mouse
+                // device bound), which makes every PlaceOrSelect read false, so a click never LOCKS
+                // IN a placement. Log the device state ONCE per session so a web trace proves it.
+                // Once() (Info) is used — the existing available once-per-session primitive.
+                FlowTrace.Once("Build", "desktop-mouse-state",
+                    $"DesktopBuildInput active; Mouse.current={(Mouse.current != null)}");
+                return Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame;
+            }
+        }
 
         public bool Cancel =>
             (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame) ||
