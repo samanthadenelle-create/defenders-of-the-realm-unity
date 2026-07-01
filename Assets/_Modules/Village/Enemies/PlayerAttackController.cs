@@ -272,6 +272,17 @@ namespace DeNelle.Village
                     _combatInputSuppressed = true;
                     FlowTrace.Step("Combat", "input gated: not in battle (town/overworld) - combat moves suppressed");
                 }
+                // §12 outgoing-attack trace (2026-06-30 "0 damage in dungeon"): PROVE a melee swing was
+                // pressed but SUPPRESSED because BattleLock is false — the exact dungeon 0-damage cause
+                // (in-place hollows staged no battle). Should stop once a hollow engages (HeroCombatEngagement).
+                bool meleePressed =
+                    (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame) ||
+                    (Gamepad.current != null && Gamepad.current.buttonSouth.wasPressedThisFrame) ||
+                    UnityEngine.Input.GetMouseButtonDown(0);
+                if (meleePressed)
+                    FlowTrace.Throttle("Combat", "melee-suppressed", 1f,
+                        "MELEE swing pressed but SUPPRESSED — BattleLock.IsInBattle()=false (no active battle). " +
+                        "Hero deals 0 damage here until a battle is staged OR a hero-only enemy engages.");
                 return;
             }
             if (_combatInputSuppressed)
@@ -564,6 +575,12 @@ namespace DeNelle.Village
                 // Ticket #61: mark this as a HERO strike so its combo / kill-streak / RAMPAGE
                 // feedback fires (tower / pet / DoT never stamp -> never feed the combo).
                 (damageable as DeNelle.Core.Combat.IHeroDamageMarkable)?.MarkNextHitFromHero();
+                // §12 outgoing-attack trace (2026-06-30): PROVE the melee swing LANDS as a hero-dealt
+                // hit — the counterpart to Enemy's "CombatFeedback Hit gated: dealtByHero=..." line. On
+                // the next felt-test this MUST read dealtByHero=True (was never emitted while suppressed).
+                FlowTrace.Step("Combat",
+                    $"hero MELEE hit '{col.transform.root.name}' faction={damageable.Faction} " +
+                    $"dealtByHero=True amount={damage:F1} (perfect={isPerfect} riposte={riposte}).");
                 damageable.TakeDamage(damage, DamageElement.None);
                 anyHit = true;
                 lastHitDamage = damage;
@@ -588,6 +605,14 @@ namespace DeNelle.Village
                 if (isPerfect)
                     TriggerPerfectHitFeedback(hitPos);
             }
+
+            // §12 outgoing-attack trace (2026-06-30): the swing FIRED (BattleLock was live) but
+            // connected with nothing — splits "hero can't attack (gated)" from "attacked but no
+            // hostile in reach / LoS-blocked". Throttled so a flurry of empty swings doesn't spam.
+            if (!anyHit)
+                FlowTrace.Throttle("Combat", "melee-whiff", 1f,
+                    $"hero MELEE swing FIRED but hit nothing (candidates={hits.Length}, reach={EffectiveRange():F1}m) " +
+                    "— in battle, but no hostile IDamageable in reach/LoS.");
 
             // Impact audio — the meaty "connect" the swing was missing. Melee classes get a
             // weapon clash; casters get a spell-hit zap. (TakeDamageFrom already plays the

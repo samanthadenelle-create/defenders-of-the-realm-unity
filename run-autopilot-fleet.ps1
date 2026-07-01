@@ -74,8 +74,9 @@ Write-Host "[fleet] cleaned stale run logs under '$pdp' (fresh aggregation slate
 $procs = @()
 for ($i = 0; $i -lt $Count; $i++) {
     $seed = $SeedStart + $i
-    $args = @('-batchmode')
-    if (-not $Graphics) { $args += '-nographics' }
+    # -Graphics => WINDOWED real-rendering run (no -batchmode/-nographics) so ScreenCapture
+    # writes real frames (batchmode has no backbuffer => black). Default => headless batch.
+    $args = if ($Graphics) { @() } else { @('-batchmode', '-nographics') }
     $w = if ($Graphics) { '1280' } else { '800' }
     $h = if ($Graphics) { '720' }  else { '600' }
     $args += @('-screen-width', $w, '-screen-height', $h, '--autopilot', "--run=$i", "--seed=$seed")

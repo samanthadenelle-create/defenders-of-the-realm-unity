@@ -694,11 +694,21 @@ namespace DeNelle.DevTools
         private bool _seamCensusDone;
         private readonly Dictionary<string, int> _seamStrikes = new Dictionary<string, int>();
         private readonly HashSet<string> _seamReported = new HashSet<string>();
+        // Seams already noted as "reachable by proximity" (PathPartial but last corner within
+        // the firing radius) — emit that visibility Step ONCE per seam so the data is in the log
+        // without spamming every 5s tick. (RCA 2026-06-29: hero->seam PathPartial, lastCorner 0.10m.)
+        private readonly HashSet<string> _seamProxNoted = new HashSet<string>();
 
         private void CheckSeamReachable()
         {
             if (_hero == null) return;
             Vector3 heroPos = _hero.transform.position;
+            // FAR-STAGED GUARD (RCA 2026-06-29): the real-time BattleArena stages the fight in-scene at
+            // ~(5000,0,5000) ≈ 7071m from origin, so mid-battle the hero is legitimately ~7000m from any
+            // castle seam — a seam reachability check is MEANINGLESS then (it false-flagged
+            // SEAM-UNREACHABLE 'closest 7091m'). Hub/world extents are ≤ ~150m, the arena is ~7071m, so a
+            // 2000m gate cleanly skips arena/battle frames without masking any real in-hub failure.
+            if (heroPos.magnitude > 2000f) return;
             // The hero must be on the navmesh for a path query to mean anything — skip during
             // warps / lifts (off-mesh) so a transient airborne frame can't read every seam bad.
             if (!NavMesh.SamplePosition(heroPos, out NavMeshHit hHero, SeamSampleTol + 1f, NavMesh.AllAreas))
@@ -766,6 +776,17 @@ namespace DeNelle.DevTools
                 {
                     // Good (or a cross-scene warp seam) — clear any accrued strikes.
                     _seamStrikes.Remove(id);
+                    // VISIBILITY: when the seam passed via the PROXIMITY branch (the path is
+                    // PathPartial/PathInvalid but its last corner still lands inside the firing
+                    // radius), surface the data so a reader sees WHY it's a PASS rather than the
+                    // old strict-PathComplete FAIL. This is the exact RCA case (2026-06-29):
+                    // hero->seam PathPartial, lastCorner 0.10m <= ProximityRadius 12m -> warp arms.
+                    if (seamOnMesh && reachable && status != NavMeshPathStatus.PathComplete
+                        && _seamProxNoted.Add(id))
+                        FlowTrace.Step(Tag, $"SEAM-REACHABLE (by proximity): '{seam.gameObject.name}' in " +
+                            $"'{seam.gameObject.scene.name}' — path status={status} but last corner closes to " +
+                            $"{approach:0.00}m <= ProximityRadius {seam.ProximityRadius:0.0}m + {SeamReachMargin:0.0}m margin; " +
+                            "the proximity warp arms here, so the seam is walk-reachable (NOT a strict-PathComplete requirement).");
                     continue;
                 }
 
