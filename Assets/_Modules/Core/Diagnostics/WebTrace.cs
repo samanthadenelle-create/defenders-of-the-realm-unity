@@ -151,6 +151,15 @@ namespace DeNelle.Core.Diagnostics
                 }
 
                 _active = true;
+                // CRITICAL (2026-07-01): FlowTrace ships OFF in a release/WebGL build
+                // (FlowTrace.Enabled = isEditor || isDebugBuild), so every FlowTrace.Step/Warn/Fail
+                // is a no-op and its [Flow:*] lines never reach Debug.Log — which meant "web debugging
+                // on" captured plain logs but NONE of the instrumentation (the Pi sign-in flow was
+                // invisible). When web-tracing is deliberately active, turn FlowTrace ON so its lines
+                // emit -> get captured here -> POST to /api/trace. Gated by ff.webtrace (opt-in), so a
+                // build with tracing off is unaffected. (Pre-release: FlowTrace lines can carry ids;
+                // ff.webtrace is config-flippable OFF for launch — see the header note above.)
+                FlowTrace.Enabled = true;
                 // Main-thread handler (mirrors BreakCaptureHarness) — the ring + flush
                 // coroutine all run on the main thread, so no cross-thread access to _ring.
                 Application.logMessageReceived += OnLog;
