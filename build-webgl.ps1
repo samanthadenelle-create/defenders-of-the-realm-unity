@@ -20,7 +20,15 @@
 param(
     # WO-126: itch.io can't serve Brotli (.br) payloads (no Content-Encoding: br
     # header). Pass -NoBrotli to build uncompressed files itch.io can host.
-    [switch]$NoBrotli
+    [switch]$NoBrotli,
+
+    # Pass -DevBuild to produce a Development player (BuildOptions.Development ->
+    # defines DEVELOPMENT_BUILD -> compiles in the AutoPilot bot + DevTools QA panel).
+    # This is the LOCALHOST bot-testing build: serve it (serve-webgl.ps1) and open
+    # "http://localhost:PORT/?autopilot=1&seed=1001" to spawn an in-browser chaos bot.
+    # Larger (Development disables code/data compression) but localhost has no size cap.
+    # NEVER deploy a -DevBuild to prod (it would expose ?autopilot=1 to real users).
+    [switch]$DevBuild
 )
 
 $ErrorActionPreference = 'Stop'
@@ -78,6 +86,10 @@ $unityArgs = @(
 if ($NoBrotli) {
     $unityArgs += '-noBrotli'
     Write-Host "[webgl] -NoBrotli: building UNCOMPRESSED payloads (itch.io-compatible, larger first load)."
+}
+if ($DevBuild) {
+    $unityArgs += '-devBuild'
+    Write-Host "[webgl] -DevBuild: Development player (AutoPilot bot + DevTools QA panel compiled in) for LOCALHOST bot testing. Do NOT deploy to prod."
 }
 if (Get-Process -Name 'Unity' -ErrorAction SilentlyContinue) {
     Write-Error "A 'Unity' editor process is already running - close it before batchmode (project lock)."

@@ -67,8 +67,13 @@ namespace DeNelle.DevTools
                     try { startScene = Environment.GetEnvironmentVariable("AUTOPILOT_SCENE"); } catch { }
                 }
 
-                FlowTrace.Step("Auto", $"AutoPilotInstaller: --autopilot requested — starting bot (quitOnDone=true, seed={seed}, run='{runId ?? "<none>"}', scene='{startScene ?? "<default>"}').");
-                driver.Begin(quitOnDone: true, seed: seed, runId: runId, startScene: startScene);
+                // In a browser (WebGL localhost dev instance) there is nothing to quit TO — Application.Quit
+                // just freezes the tab. Keep the bot alive so the tab can be reloaded to re-run; the Windows
+                // headless fleet still quits on done so run-autopilot-fleet.ps1 can cycle instances.
+                bool quitOnDone = Application.platform != RuntimePlatform.WebGLPlayer;
+
+                FlowTrace.Step("Auto", $"AutoPilotInstaller: autopilot requested — starting bot (quitOnDone={quitOnDone}, seed={seed}, run='{runId ?? "<none>"}', scene='{startScene ?? "<default>"}').");
+                driver.Begin(quitOnDone: quitOnDone, seed: seed, runId: runId, startScene: startScene);
             }
             catch (Exception e)
             {
@@ -98,7 +103,54 @@ namespace DeNelle.DevTools
             }
             catch { }
 
+            // WebGL localhost dev instance: the CLI-arg + env-var paths don't exist in a browser,
+            // so a DEV web build opts in via the page URL query — "?autopilot=1" (any "autopilot"
+            // token in the query). This whole file is #if DEVELOPMENT_BUILD || UNITY_EDITOR, so a
+            // RELEASE web build can NEVER auto-bot (the trigger isn't compiled in). Each tab can
+            // vary its explore path with "&seed=1001" and namespace output with "&run=web1".
+            try
+            {
+                if (UrlQuery().Contains("autopilot")) return true;
+            }
+            catch { }
+
             return false;
+        }
+
+        /// <summary>The lower-cased URL query string (WebGL page URL after '?'), or "" elsewhere / on failure.</summary>
+        private static string UrlQuery()
+        {
+            try
+            {
+                string url = Application.absoluteURL;
+                if (string.IsNullOrEmpty(url)) return "";
+                int q = url.IndexOf('?');
+                return q >= 0 ? url.Substring(q + 1).ToLowerInvariant() : "";
+            }
+            catch { return ""; }
+        }
+
+        /// <summary>Read a "key=value" token from the WebGL URL query ("?autopilot=1&amp;seed=1001&amp;run=web1"); null if absent/empty.</summary>
+        private static string UrlQueryValue(string key)
+        {
+            try
+            {
+                string query = UrlQuery();
+                if (string.IsNullOrEmpty(query)) return null;
+                string wantKey = (key ?? string.Empty).ToLowerInvariant();
+                foreach (var pair in query.Split('&'))
+                {
+                    int eq = pair.IndexOf('=');
+                    if (eq <= 0) continue;
+                    if (pair.Substring(0, eq) == wantKey)
+                    {
+                        string v = pair.Substring(eq + 1).Trim();
+                        return string.IsNullOrEmpty(v) ? null : v;
+                    }
+                }
+            }
+            catch { }
+            return null;
         }
 
         /// <summary>Parse an int CLI arg of the form "<prefix><n>" (e.g. "--seed=7"); fallback if absent/bad.</summary>
@@ -114,6 +166,13 @@ namespace DeNelle.DevTools
                             string v = a.Substring(prefix.Length).Trim();
                             if (int.TryParse(v, out int n)) return n;
                         }
+            }
+            catch { }
+            // WebGL fallback: "--seed=" -> URL "?...&seed=1001" query param.
+            try
+            {
+                string v = UrlQueryValue(prefix.TrimStart('-').TrimEnd('='));
+                if (!string.IsNullOrEmpty(v) && int.TryParse(v, out int n)) return n;
             }
             catch { }
             return fallback;
@@ -132,6 +191,13 @@ namespace DeNelle.DevTools
                             string v = a.Substring(prefix.Length).Trim();
                             return string.IsNullOrEmpty(v) ? null : v;
                         }
+            }
+            catch { }
+            // WebGL fallback: "--run=" -> URL "?...&run=web1", "--scene=" -> "?...&scene=OuterWorld".
+            try
+            {
+                string v = UrlQueryValue(prefix.TrimStart('-').TrimEnd('='));
+                if (!string.IsNullOrEmpty(v)) return v;
             }
             catch { }
             return null;
