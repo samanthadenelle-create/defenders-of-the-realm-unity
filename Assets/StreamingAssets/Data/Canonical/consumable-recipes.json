@@ -154,6 +154,24 @@
         { "id": "ing_shadowcap", "count": 1 },
         { "id": "ing_spring_water", "count": 1 }
       ]
+    },
+    {
+      "id": "craft-survival-heal-potion",
+      "output": "minor-heal-potion",
+      "displayName": "Brew Survival Healing Draught",
+      "ingredients": [
+        { "id": "HealthHerb", "count": 2 },
+        { "id": "BoneFragment", "count": 3 }
+      ]
+    },
+    {
+      "id": "craft-survival-mana-potion",
+      "output": "cons_mana_draught",
+      "displayName": "Brew Mana Draught",
+      "ingredients": [
+        { "id": "ManaCrystalShard", "count": 2 },
+        { "id": "ArcaneDust", "count": 1 }
+      ]
     }
   ]
 }

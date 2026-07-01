@@ -52,6 +52,10 @@ namespace DeNelle.Village.Items
         [JsonProperty("kind")] public string KindRaw;       // "potion" | "tent" | "food"
         [JsonProperty("effect")] public string EffectRaw;   // "heal" | "mana" | "buff" | "rest"
         [JsonProperty("magnitude")] public float Magnitude;
+        // WO3: percent-of-max effect size (0..100). When > 0 it drives heal/mana as a
+        // PERCENT of the hero's effective max (not the flat `magnitude`); `magnitude`
+        // stays as the fallback. Default 0 = use the flat magnitude path.
+        [JsonProperty("magnitudePct")] public float MagnitudePct;
         [JsonProperty("duration")] public float Duration;   // seconds; 0 = instant
         [JsonProperty("usableInFight")] public bool UsableInFight = true;
         [JsonProperty("glyph")] public string Glyph;

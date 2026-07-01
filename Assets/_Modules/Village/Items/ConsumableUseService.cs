@@ -24,6 +24,7 @@
 
 using UnityEngine;
 using DeNelle.Village.Crafting;
+using DeNelle.Core.Diagnostics; // WO3: FlowTrace self-reporting for the percent/over-time potions
 
 namespace DeNelle.Village.Items
 {
@@ -73,20 +74,19 @@ namespace DeNelle.Village.Items
             switch (def.Effect)
             {
                 case ConsumableEffect.Heal:
-                    ApplyHeal(def.Magnitude);
+                    ApplyHeal(def);
                     break;
 
                 case ConsumableEffect.Rest:
                     // Tent kit: v1 applies the heal magnitude; the proper "rest
                     // between fights -> heal party to full + clear debuffs" layer
                     // is DEFERRED (no between-fight state machine yet).
-                    ApplyHeal(def.Magnitude);
+                    ApplyHeal(def);
                     Debug.Log("[ConsumableUse] tent rest applied (between-fight rest layer DEFERRED).");
                     break;
 
                 case ConsumableEffect.Mana:
-                    // DEFERRED: no hero mana pool field exists yet.
-                    Debug.Log("[ConsumableUse] mana restore DEFERRED (no mana pool wired): " + def.Id);
+                    ApplyMana(def);
                     break;
 
                 case ConsumableEffect.Buff:
@@ -100,17 +100,59 @@ namespace DeNelle.Village.Items
             }
         }
 
-        /// <summary>Heal the active hero. Finds the first HeroHealth in the scene.</summary>
-        private static void ApplyHeal(float amount)
+        /// <summary>
+        /// Heal the active hero. WO3: when <c>magnitudePct &gt; 0</c> the heal is a PERCENT of
+        /// the hero's effective max HP (gear+talent), so "30%" scales with the build; otherwise
+        /// the flat <c>magnitude</c> path is preserved. Finds the first HeroHealth in the scene.
+        /// </summary>
+        private static void ApplyHeal(ConsumableDef def)
         {
-            if (amount <= 0f) return;
             var hero = Object.FindFirstObjectByType<HeroHealth>();
             if (hero == null)
             {
                 Debug.Log("[ConsumableUse] no hero found to heal.");
                 return;
             }
-            hero.Heal(amount);
+
+            float amount;
+            if (def.MagnitudePct > 0f)
+            {
+                amount = def.MagnitudePct / 100f * hero.MaxHp;
+                FlowTrace.Step("ConsumableUse", $"heal {def.Id}: {def.MagnitudePct}% of maxHp ({hero.MaxHp:0.0}) = {amount:0.0}.");
+            }
+            else
+            {
+                amount = def.Magnitude;
+                FlowTrace.Step("ConsumableUse", $"heal {def.Id}: flat {amount:0.0}.");
+            }
+
+            if (amount <= 0f) return;
+            hero?.Heal(amount);
+        }
+
+        /// <summary>
+        /// WO3 (Mana Draught): restore mana GRADUALLY via HeroAbilities — <c>magnitudePct</c>
+        /// percent of max mana spread over <c>duration</c> seconds (owner spec: +3%/s till 30%).
+        /// Data-driven; the code only interprets. No-ops null-safely if no mana pool is present.
+        /// </summary>
+        private static void ApplyMana(ConsumableDef def)
+        {
+            if (def.MagnitudePct <= 0f)
+            {
+                Debug.Log("[ConsumableUse] mana potion has no magnitudePct; nothing to restore: " + def.Id);
+                return;
+            }
+
+            var hero = Object.FindFirstObjectByType<HeroAbilities>();
+            if (hero == null)
+            {
+                Debug.Log("[ConsumableUse] no hero mana pool found (HeroAbilities) for: " + def.Id);
+                return;
+            }
+
+            float seconds = def.Duration > 0f ? def.Duration : 10f;
+            hero?.RestoreManaOverTime(def.MagnitudePct, seconds);
+            FlowTrace.Step("ConsumableUse", $"mana {def.Id}: +{def.MagnitudePct}% over {seconds}s (over-time drip).");
         }
     }
 }

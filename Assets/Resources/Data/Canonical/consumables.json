@@ -16,6 +16,7 @@
       "kind": "potion",
       "effect": "heal",
       "magnitude": 40,
+      "magnitudePct": 30,
       "duration": 0,
       "usableInFight": true,
       "glyph": "!"
@@ -26,9 +27,21 @@
       "kind": "potion",
       "effect": "heal",
       "magnitude": 90,
+      "magnitudePct": 30,
       "duration": 0,
       "usableInFight": true,
       "glyph": "!"
+    },
+    {
+      "id": "cons_mana_draught",
+      "displayName": "Mana Draught",
+      "kind": "potion",
+      "effect": "mana",
+      "magnitude": 0,
+      "magnitudePct": 30,
+      "duration": 10,
+      "usableInFight": true,
+      "glyph": "*"
     },
     {
       "id": "traveler-rations",
