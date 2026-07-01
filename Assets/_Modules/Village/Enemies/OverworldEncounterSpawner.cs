@@ -320,7 +320,7 @@ namespace DeNelle.Village
                 // Hp ~ one tanky orc's worth (arena tank=190, warrior=120 at threat 1): kitable in a few
                 // ranged hits, never a one-shot. XP/Glimmer aggregate the 3-orc family (BattleArena
                 // BuildEncounterDef: ~14 XP + ~3 Glimmer per orc, x3). All three are OWNER-TUNABLE.
-                Hp = 150f,                  // owner-tunable: between arena warrior(120) and tank(190); kitable, not one-shot
+                Hp = 98f,                   // 2026-07-01 owner call: early fights ~35% softer; sits between the softened arena warrior(78) and tank(124); kitable, not one-shot
                 MoveSpeed = RepChaseSpeed,  // ~+5% over the hero so it can run you down
                 ContactDamage = 0f,         // never hurts the hero in-world (hook only)
                 AttackInterval = 1.5f, Height = 2.0f, AggroRadius = 8f, // notice radius (owner 2026-06-27: 22->8, reconciled to RepEngageWatcher.AggroRange)

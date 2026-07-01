@@ -1105,10 +1105,14 @@ namespace DeNelle.Village.Arena
             // reads visibly bigger than the family. Stats well above the family so it is a real
             // boss beat, lightly threat-scaled like the rest.
             if (s.Contains("warlord") || s.Contains("boss")) { display = "Orc Warlord"; hp = 520; dmg = 34; spd = 2.6f; atk = 1.8f; height = 2.6f; }
-            else if (s.Contains("tank"))       { display = "Orc Bulwark";    hp = 190; dmg = 18; spd = 2.2f; atk = 1.6f; height = 2.3f; }
-            else if (s.Contains("mage"))  { display = "Orc Spiritcaller"; hp = 85; dmg = 21; spd = 3.0f; atk = 1.4f; height = 1.9f; }
-            else if (s.Contains("warrior")) { display = "Orc Warleader"; hp = 120; dmg = 24; spd = 3.2f; atk = 1.2f; height = 2.0f; }
-            else                          { display = "Orc Raider";     hp = 100; dmg = 16; spd = 3.0f; atk = 1.2f; height = 1.9f; }
+            // 2026-07-01 owner call — early overworld orcs ~35% softer (HP+dmg ×0.65) so new
+            // players aren't slaughtered. Warlord (boss above) left intact. NOTE: these are
+            // HARDCODED here (not read from enemies.json) — see follow-up ticket to make the arena
+            // read the canonical enemy catalog so future balance is a data tune, not a code edit.
+            else if (s.Contains("tank"))       { display = "Orc Bulwark";    hp = 124; dmg = 12; spd = 2.2f; atk = 1.6f; height = 2.3f; }
+            else if (s.Contains("mage"))  { display = "Orc Spiritcaller"; hp = 55; dmg = 14; spd = 3.0f; atk = 1.4f; height = 1.9f; }
+            else if (s.Contains("warrior")) { display = "Orc Warleader"; hp = 78; dmg = 16; spd = 3.2f; atk = 1.2f; height = 2.0f; }
+            else                          { display = "Orc Raider";     hp = 65; dmg = 10; spd = 3.0f; atk = 1.2f; height = 1.9f; }
 
             return new EnemyDef
             {
@@ -1564,12 +1568,23 @@ namespace DeNelle.Village.Arena
 
             // RETURN HEAL (owner felt-test 2026-06-24): top the hero off to FULL HP — the "rest up at
             // home base" beat. Null-safe; no-op on a downed hero (Respawn owns that). HP only.
-            Guard.Try("BattleArena", "return heal hero to full", () =>
+            // SURVIVAL RULE (owner 2026-06-29): when ff.noautoheal is ON (default) HP/MP do NOT
+            // auto-restore after combat — the field hero keeps what it ended the fight with and relies
+            // on crafted potions; full recovery happens only at a SAFE ZONE (SafeZoneRecovery). The
+            // return heal is GATED, not removed (reversible: PlayerPrefs "ff.noautoheal" = 0).
+            if (FeatureFlags.NoAutoHeal)
             {
-                var hh = HeroHealth.Instance;
-                if (hh != null) hh.RestoreToFull();
-            });
-            FlowTrace.Step("BattleArena", "RETURN heal: hero restored to full HP on town return.");
+                FlowTrace.Step("Combat", "battle ended — no auto-heal (ff.noautoheal); use potions or a safe zone");
+            }
+            else
+            {
+                Guard.Try("BattleArena", "return heal hero to full", () =>
+                {
+                    var hh = HeroHealth.Instance;
+                    if (hh != null) hh.RestoreToFull();
+                });
+                FlowTrace.Step("BattleArena", "RETURN heal: hero restored to full HP on town return.");
+            }
 
             // CAMERA RE-LOCK: the death-cam released SmartMobileCamera and the warp moved the hero —
             // re-enable + snap the follow camera and clear the stale reticle lock, all under black so
