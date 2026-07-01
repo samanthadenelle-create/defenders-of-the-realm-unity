@@ -40,6 +40,17 @@ module.exports = async (req, res) => {
     }
 
     try {
+        // Echo to Vercel runtime logs so the CLIENT traces are readable via get_runtime_logs
+        // WITHOUT the (sensitive, unpullable) DATABASE_URL — this closes the web-debug read gap
+        // that hid the Pi-hang trace on 2026-07-01. Log a one-line summary always + only the
+        // SIGNAL lines (Fail/Warn/error/Pi/softlock) to keep runtime-log volume/cost sane.
+        try {
+            const flat = lines.map(l => typeof l === 'string' ? l : JSON.stringify(l));
+            const signal = flat.filter(l => /Fail|Warn|error|exception|\bPi\b|threw|softlock|NullReference/i.test(l));
+            console.log(`[web_trace] sess=${String(session).slice(0, 12)} build=${build} lines=${flat.length} signal=${signal.length}`);
+            if (signal.length) console.log('[web_trace:signal]\n' + signal.join('\n'));
+        } catch (e) { /* logging must never break the sink */ }
+
         const sql = neon(process.env.DATABASE_URL);
         const props = { build: String(build), session: String(session), lines: lines };
         // ::jsonb cast — the Neon HTTP driver sends params as strings (same as events/track.js).
