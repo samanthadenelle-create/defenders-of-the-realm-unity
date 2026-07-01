@@ -32,6 +32,7 @@ namespace DeNelle.Core.Platform
         private IPiPlatform _pi;
         private Button _button;
         private Text _label;
+        private bool _signingIn; // guard: auto-fire + manual click must not double-run (orphans the shared TCS)
 
         /// <summary>Spawns the controller once at boot if not already present.</summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -80,11 +81,30 @@ namespace DeNelle.Core.Platform
 
         private async UniTaskVoid SignInAsync()
         {
+            // Auto-fire (WaitForPiThenAutoSignIn) and the manual button both call this. They share the
+            // single _initTcs/_authTcs on WebGLPiPlatform, so a second overlapping run overwrites the
+            // first's TCS and orphans its await forever. Guard so only one sign-in runs at a time.
+            if (_signingIn) { FlowTrace.Step("Pi", "SignIn already in progress — ignoring duplicate trigger."); return; }
+            _signingIn = true;
             try
             {
                 SetButton("Signing in…", false);
 
-                bool inited = await _pi.Init(sandbox);
+                // ROOT CAUSE of the 2026-07-01 break: the Pi SDK calls resolve only via a JS promise
+                // callback (WebGLPiPlatform HandleCallback). If the promise never settles — a dismissed
+                // Pi consent popup or an SDK stall in the Pi Desktop preview — the bare `await` HANGS
+                // FOREVER, leaving the button stuck on "Signing in…" (and it now auto-fires on load, so it
+                // hangs with no user action). Bound every SDK await with a timeout so sign-in ALWAYS
+                // resolves to a retryable state instead of a dead screen. Proven from data: client traces
+                // flow but ZERO /api/pi/verify calls -> the flow dies at Init/Authenticate before verify.
+                bool inited;
+                try { inited = await _pi.Init(sandbox).Timeout(TimeSpan.FromSeconds(20)); }
+                catch (TimeoutException)
+                {
+                    FlowTrace.Warn("Pi", "Pi.init timed out after 20s (SDK never signalled ready).");
+                    SetButton("Sign in with Pi", true);
+                    return;
+                }
                 if (!inited)
                 {
                     FlowTrace.Warn("Pi", "Pi.init failed/unavailable.");
@@ -92,7 +112,14 @@ namespace DeNelle.Core.Platform
                     return;
                 }
 
-                PiAuthResult auth = await _pi.Authenticate(new[] { "username" });
+                PiAuthResult auth;
+                try { auth = await _pi.Authenticate(new[] { "username" }).Timeout(TimeSpan.FromSeconds(30)); }
+                catch (TimeoutException)
+                {
+                    FlowTrace.Warn("Pi", "Pi.authenticate timed out after 30s (consent not completed).");
+                    SetButton("Sign in with Pi", true);
+                    return;
+                }
                 if (!auth.Ok || string.IsNullOrEmpty(auth.AccessToken))
                 {
                     FlowTrace.Warn("Pi", $"Pi auth failed: {auth.Error}");
@@ -116,6 +143,10 @@ namespace DeNelle.Core.Platform
                 FlowTrace.Fail("Pi", $"SignIn threw: {e.Message}");
                 SetButton("Sign in with Pi", true);
             }
+            finally
+            {
+                _signingIn = false;
+            }
         }
 
         // Server-side token validation is the trust boundary — never trust the frontend identity.
@@ -128,6 +159,7 @@ namespace DeNelle.Core.Platform
                 downloadHandler = new DownloadHandlerBuffer(),
             };
             req.SetRequestHeader("Content-Type", "application/json");
+            req.timeout = 20; // never hang on a stalled backend
 
             try { await req.SendWebRequest().ToUniTask(); }
             catch (Exception e) { FlowTrace.Warn("Pi", $"/verify transport error: {e.Message}"); return false; }
