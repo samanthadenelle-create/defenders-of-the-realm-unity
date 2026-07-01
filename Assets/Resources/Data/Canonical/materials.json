@@ -103,6 +103,46 @@
       "category": "petal",
       "glyph": "*",
       "iconPath": "ItemIcons/ing_elarion_petal"
+    },
+    {
+      "id": "HealthHerb",
+      "displayName": "Health Herb",
+      "kind": "material",
+      "category": "herb",
+      "glyph": "*",
+      "iconPath": ""
+    },
+    {
+      "id": "BoneFragment",
+      "displayName": "Bone Fragment",
+      "kind": "material",
+      "category": "bone",
+      "glyph": "/",
+      "iconPath": ""
+    },
+    {
+      "id": "ManaCrystalShard",
+      "displayName": "Mana Crystal Shard",
+      "kind": "material",
+      "category": "crystal",
+      "glyph": "+",
+      "iconPath": ""
+    },
+    {
+      "id": "ArcaneDust",
+      "displayName": "Arcane Dust",
+      "kind": "material",
+      "category": "dust",
+      "glyph": ".",
+      "iconPath": ""
+    },
+    {
+      "id": "IronScrap",
+      "displayName": "Iron Scrap",
+      "kind": "material",
+      "category": "metal",
+      "glyph": "=",
+      "iconPath": ""
     }
   ]
 }

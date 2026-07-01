@@ -1,18 +1,20 @@
 {
-  "_comment": "Canonical pack-store catalogue for Defenders of the Realm. The five purchasable packs, extracted VERBATIM from docs/monetization-v2-spec.md §4 (pricing ladder), §5.1 (cosmetic layer), §5.2 (economy layer), §5.3 (convenience layer) and §8.4 (PackDef schema). Pack names are canon — copy verbatim, never paraphrase. Mirrors the React v1 PackDef interface (src/content/packs.ts) so both engines read the same source of truth. Devnet-only economy in the v2 Unity foundation (v2-unity-port-spec.md Part 10).",
+  "_comment": "Canonical pack-store catalogue for Defenders of the Realm. Packs 1-5 (tiers 1-5) are the original pricing-ladder packs extracted VERBATIM from docs/monetization-v2-spec.md §4/§5/§8.4 — names are canon, never paraphrase. Packs 6-13 (tiers 6-13) are the STARTER STORE BUNDLES authored 2026-06-28 (WorkOrders/WORK_ORDER_store_packs_content.md) per the monetization audit (docs/audits/AUDIT_monetization_2026-06-28.md) to give the PackStore a full, compelling launch shelf. Each bundle is themed and price-anchored to an existing ladder point ($4.99/$9.99/$19.99); tier is a UNIQUE lookup key (PackCatalog.FindByTier), not the price. Every referenced cosmetic SKU has a matching entry in cosmetics.json so no granted cosmetic is dangling.",
   "_sources": {
     "monetizationSpec": "defenders-unity/docs/monetization-v2-spec.md (§4 pricing, §5 contents, §8.4 PackDef schema)",
     "portSpec": "defenders-unity/docs/v2-unity-port-spec.md (Part 3 store row, Part 4 packs.json schema)",
-    "reactCatalog": "defenders-of-the-realm/src/content/packs.ts (PackDef interface — §8.4)"
+    "reactCatalog": "defenders-of-the-realm/src/content/packs.ts (PackDef interface — §8.4)",
+    "starterBundles": "WorkOrders/WORK_ORDER_store_packs_content.md (packs 6-13, authored 2026-06-28)"
   },
   "_schemaNotes": {
     "packDef": "Each entry mirrors React's PackDef: sku, tier, name, tagline, pricing { usd, usdc, sol, skr }, contents { cosmetics, economy, convenience }, founderOnly?, packExclusiveCosmetic. The Unity loader deserializes each entry straight into a PackDef record.",
-    "pricing": "usd is the Stripe/USD reference price; usdc/sol/skr are the per-currency wallet-rail amounts set ONCE at v1 launch and held until v1.1 review (the SKR-fixed pricing strategy, §4). The Unity wallet module reads sol/usdc/skr only — Stripe is web-only and out of scope for the Unity port.",
-    "convenience": "Convenience items are TIME-SAVING only, never combat-power (the bent covenant, §5.3). instant-build / instant-repair / harvest-auto-collect / xp-weekend. No permanent passives.",
-    "economy": "In-game currency top-ups (§5.2). The Unity port's GameState resource wallet tracks crystals/food/coins; glimmer is a cosmetic-shop currency not yet modelled in the v2 foundation GameState and is carried here for catalogue completeness.",
-    "founderOnly": "Founder's Vow (tier 5) is launch-window-only — gated by Date.now() < FOUNDER_WINDOW_END in React; the Unity port reads founderOnly and the owner gates the launch window."
+    "pricing": "usd is the Stripe/USD reference price; usdc/sol/skr are the per-currency wallet-rail amounts. The Unity wallet module reads sol/usdc/skr only. Starter bundles reuse the three ladder price points: $4.99 -> {usdc 4.99, sol 0.045, skr 60}; $9.99 -> {usdc 9.99, sol 0.09, skr 120}; $19.99 -> {usdc 19.99, sol 0.18, skr 240}.",
+    "tier": "Unique 1..N lookup key (PackCatalog.FindByTier). NOT the price band — multiple bundles share a price point but each has a unique tier.",
+    "convenience": "TIME-SAVING only, never combat-power (the bent covenant, §5.3). instant-build / instant-repair / harvest-auto-collect / xp-weekend. No permanent passives.",
+    "economy": "In-game currency top-ups (§5.2). GameState applies crystals/food/coins; glimmer is carried for catalogue completeness (not yet applied at runtime per the audit).",
+    "cosmeticGrant": "Every cosmetics[] SKU is recorded into OwnedItemIds on grant and MUST exist in cosmetics.json (id == the SKU) or it is unredeemable. Starter-bundle cosmetics live in cosmetics.json with unlockMethod 'achievement' + glimmerCost 0 (owned via entitlement, equippable, not glimmer-buyable)."
   },
-  "version": 1,
+  "version": 2,
   "currencyDisclaimer": "Token price moves with the market.",
   "packs": [
     {
@@ -104,6 +106,146 @@
         ]
       },
       "packExclusiveCosmetic": "cosmetic.founders-vow.exclusive"
+    },
+    {
+      "sku": "frostfall-bundle",
+      "tier": 6,
+      "name": "Frostfall Bundle",
+      "tagline": "Winter comes to Elarion — armour the Heart in pale frost and rime.",
+      "theme": "Seasonal cosmetic-forward bundle (winter): Frostfall Knight regalia + Glacierborn companion + Frozen Hearth palette.",
+      "founderOnly": false,
+      "pricing": { "usd": 9.99, "usdc": 9.99, "sol": 0.09, "skr": 120 },
+      "contents": {
+        "cosmetics": ["cosmetic.frostfall-bundle.hero-outfit", "cosmetic.frostfall-bundle.pet-skin", "cosmetic.frostfall-bundle.building-palette", "cosmetic.frostfall-bundle.exclusive"],
+        "economy": { "glimmer": 150, "crystals": 1200, "food": 400, "coins": 800 },
+        "convenience": [
+          { "kind": "instant-build", "count": 3, "description": "Skip the build animation for three buildings." }
+        ]
+      },
+      "packExclusiveCosmetic": "cosmetic.frostfall-bundle.exclusive"
+    },
+    {
+      "sku": "embergrove-bundle",
+      "tier": 7,
+      "name": "Embergrove Bundle",
+      "tagline": "Autumn embers drift through the grove — warm the village in banked-forge gold.",
+      "theme": "Seasonal cosmetic-forward bundle (autumn): Embergrove Mage vestments + Emberkin companion + Embergrove palette.",
+      "founderOnly": false,
+      "pricing": { "usd": 9.99, "usdc": 9.99, "sol": 0.09, "skr": 120 },
+      "contents": {
+        "cosmetics": ["cosmetic.embergrove-bundle.hero-outfit", "cosmetic.embergrove-bundle.pet-skin", "cosmetic.embergrove-bundle.building-palette", "cosmetic.embergrove-bundle.exclusive"],
+        "economy": { "glimmer": 150, "crystals": 1200, "food": 400, "coins": 800 },
+        "convenience": [
+          { "kind": "instant-build", "count": 3, "description": "Skip the build animation for three buildings." }
+        ]
+      },
+      "packExclusiveCosmetic": "cosmetic.embergrove-bundle.exclusive"
+    },
+    {
+      "sku": "bloomtide-bundle",
+      "tier": 8,
+      "name": "Spring Awakening",
+      "tagline": "The first thaw greens the realm — raise the Bloomtide banners and welcome the season.",
+      "theme": "Seasonal cosmetic bundle (spring), value-priced: Bloomtide Ranger garb + Bloomtide banners + first-thaw palette.",
+      "founderOnly": false,
+      "pricing": { "usd": 4.99, "usdc": 4.99, "sol": 0.045, "skr": 60 },
+      "contents": {
+        "cosmetics": ["cosmetic.bloomtide-bundle.hero-outfit", "cosmetic.bloomtide-bundle.permanent-banner", "cosmetic.bloomtide-bundle.building-palette", "cosmetic.bloomtide-bundle.exclusive"],
+        "economy": { "glimmer": 75, "crystals": 600, "food": 200, "coins": 400 },
+        "convenience": [
+          { "kind": "instant-build", "count": 2, "description": "Skip the build animation for two buildings." }
+        ]
+      },
+      "packExclusiveCosmetic": "cosmetic.bloomtide-bundle.exclusive"
+    },
+    {
+      "sku": "starters-hand",
+      "tier": 9,
+      "name": "Starter's Hand",
+      "tagline": "A steady hand for a new tender — everything you need to get the Heart growing.",
+      "theme": "Onboarding value pack: economy-heavy headstart + early instant-build/repair + one welcome cosmetic. The 'best first buy'.",
+      "founderOnly": false,
+      "pricing": { "usd": 4.99, "usdc": 4.99, "sol": 0.045, "skr": 60 },
+      "contents": {
+        "cosmetics": ["cosmetic.starters-hand.exclusive"],
+        "economy": { "glimmer": 50, "crystals": 900, "food": 300, "coins": 600 },
+        "convenience": [
+          { "kind": "instant-build", "count": 3, "description": "Skip the build animation for three buildings." },
+          { "kind": "instant-repair", "count": 2, "description": "Skip the repair queue for two buildings." }
+        ]
+      },
+      "packExclusiveCosmetic": "cosmetic.starters-hand.exclusive"
+    },
+    {
+      "sku": "echo-patron-pack",
+      "tier": 10,
+      "name": "Echo Patron Pack",
+      "tagline": "Patron of the echoes — set the harvest loop humming and let the workforce roll.",
+      "theme": "Harvest-loop economy headstart: heavy resources + harvest-auto-collect tokens + workshop palette. Built around the echo workforce.",
+      "founderOnly": false,
+      "pricing": { "usd": 19.99, "usdc": 19.99, "sol": 0.18, "skr": 240 },
+      "contents": {
+        "cosmetics": ["cosmetic.echo-patron-pack.building-palette", "cosmetic.echo-patron-pack.exclusive"],
+        "economy": { "glimmer": 300, "crystals": 4000, "food": 2000, "coins": 2500 },
+        "convenience": [
+          { "kind": "harvest-auto-collect", "count": 3, "description": "Resources auto-tick into inventory for 24 hours, three times." },
+          { "kind": "instant-build", "count": 5, "description": "Skip the build animation for five buildings." }
+        ]
+      },
+      "packExclusiveCosmetic": "cosmetic.echo-patron-pack.exclusive"
+    },
+    {
+      "sku": "hero-wardrobe-pack",
+      "tier": 11,
+      "name": "Hero Wardrobe Pack",
+      "tagline": "A full wardrobe for the Knight — four ways to wear the watch over Elarion.",
+      "theme": "Cosmetic-forward Knight wardrobe set (ties into Wardrobe/Dressable): four swappable outfit pieces, light economy.",
+      "founderOnly": false,
+      "pricing": { "usd": 9.99, "usdc": 9.99, "sol": 0.09, "skr": 120 },
+      "contents": {
+        "cosmetics": ["cosmetic.hero-wardrobe-pack.hero-outfit-a", "cosmetic.hero-wardrobe-pack.hero-outfit-b", "cosmetic.hero-wardrobe-pack.hero-outfit-c", "cosmetic.hero-wardrobe-pack.exclusive"],
+        "economy": { "glimmer": 200, "crystals": 800, "food": 200, "coins": 500 },
+        "convenience": [
+          { "kind": "instant-build", "count": 1, "description": "Skip the build animation for one building." }
+        ]
+      },
+      "packExclusiveCosmetic": "cosmetic.hero-wardrobe-pack.exclusive"
+    },
+    {
+      "sku": "realm-defender-bundle",
+      "tier": 12,
+      "name": "Realm Defender Bundle",
+      "tagline": "Bear the colours of the realm — flair for blade and shield, no edge but the eye's.",
+      "theme": "Visual weapon/shield flair (cosmetic only, zero combat power per the covenant) + a defender's banner.",
+      "founderOnly": false,
+      "pricing": { "usd": 9.99, "usdc": 9.99, "sol": 0.09, "skr": 120 },
+      "contents": {
+        "cosmetics": ["cosmetic.realm-defender-bundle.weapon-flair", "cosmetic.realm-defender-bundle.shield-flair", "cosmetic.realm-defender-bundle.permanent-banner", "cosmetic.realm-defender-bundle.exclusive"],
+        "economy": { "glimmer": 150, "crystals": 1000, "food": 300, "coins": 700 },
+        "convenience": [
+          { "kind": "instant-build", "count": 2, "description": "Skip the build animation for two buildings." }
+        ]
+      },
+      "packExclusiveCosmetic": "cosmetic.realm-defender-bundle.exclusive"
+    },
+    {
+      "sku": "builders-cache",
+      "tier": 13,
+      "name": "Builder's Cache",
+      "tagline": "For the tender who builds without pause — skip the queue, raise the realm.",
+      "theme": "Convenience-forward (needs the token tray): large instant-build/repair stacks + xp-weekends + a master-builder palette.",
+      "founderOnly": false,
+      "pricing": { "usd": 19.99, "usdc": 19.99, "sol": 0.18, "skr": 240 },
+      "contents": {
+        "cosmetics": ["cosmetic.builders-cache.building-palette", "cosmetic.builders-cache.exclusive"],
+        "economy": { "glimmer": 250, "crystals": 3500, "food": 1000, "coins": 2000 },
+        "convenience": [
+          { "kind": "instant-build", "count": 15, "description": "Skip the build animation for fifteen buildings." },
+          { "kind": "instant-repair", "count": 15, "description": "Skip the repair queue for fifteen buildings." },
+          { "kind": "xp-weekend", "count": 2, "description": "Two 24-hour 2x-XP weekend buffs." }
+        ]
+      },
+      "packExclusiveCosmetic": "cosmetic.builders-cache.exclusive"
     }
   ]
 }

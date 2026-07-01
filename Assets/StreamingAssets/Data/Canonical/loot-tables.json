@@ -32,36 +32,60 @@
       "id": "hollow-walker",
       "source": "enemy",
       "drops": [
-        { "materialId": "ing_moonbloom", "chance": 0.50, "minCount": 1, "maxCount": 2 },
-        { "materialId": "ing_spring_water", "chance": 0.40, "minCount": 1, "maxCount": 1 },
-        { "materialId": "ing_cloth_scrap", "chance": 0.30, "minCount": 1, "maxCount": 1 }
+        { "materialId": "BoneFragment", "chance": 0.85, "minCount": 1, "maxCount": 2 },
+        { "materialId": "HealthHerb", "chance": 0.35, "minCount": 1, "maxCount": 1 }
       ]
     },
     {
       "id": "hollow-rogue",
       "source": "enemy",
       "drops": [
-        { "materialId": "ing_quickfoot", "chance": 0.50, "minCount": 1, "maxCount": 2 },
-        { "materialId": "ing_shadowcap", "chance": 0.40, "minCount": 1, "maxCount": 1 },
-        { "materialId": "ing_cloth_scrap", "chance": 0.30, "minCount": 1, "maxCount": 1 }
+        { "materialId": "BoneFragment", "chance": 0.80, "minCount": 1, "maxCount": 2 },
+        { "materialId": "IronScrap", "chance": 0.45, "minCount": 1, "maxCount": 1 }
       ]
     },
     {
       "id": "hollow-warrior",
       "source": "enemy",
       "drops": [
-        { "materialId": "ing_ironroot", "chance": 0.50, "minCount": 1, "maxCount": 2 },
-        { "materialId": "ing_oil_flask", "chance": 0.35, "minCount": 1, "maxCount": 1 },
-        { "materialId": "ing_heartstone_crystal", "chance": 0.12, "minCount": 1, "maxCount": 1 }
+        { "materialId": "BoneFragment", "chance": 0.85, "minCount": 1, "maxCount": 2 },
+        { "materialId": "IronScrap", "chance": 0.55, "minCount": 1, "maxCount": 2 }
       ]
     },
     {
       "id": "hollow-acolyte",
       "source": "enemy",
       "drops": [
-        { "materialId": "ing_aether_shard", "chance": 0.45, "minCount": 1, "maxCount": 2 },
-        { "materialId": "ing_starbloom", "chance": 0.40, "minCount": 1, "maxCount": 1 },
-        { "materialId": "ing_shadowcap", "chance": 0.30, "minCount": 1, "maxCount": 1 }
+        { "materialId": "ManaCrystalShard", "chance": 0.70, "minCount": 1, "maxCount": 2 },
+        { "materialId": "ArcaneDust", "chance": 0.55, "minCount": 1, "maxCount": 2 }
+      ]
+    },
+
+    {
+      "_comment": "Phase-2 survival containers — BreakableContainer props in the outpost/dungeon chain roll these on break (ItemDropSystem.RollLines). Early-game GENEROUS so survival materials feel gatherable.",
+      "id": "crate-common",
+      "source": "dungeon",
+      "drops": [
+        { "materialId": "BoneFragment", "chance": 0.90, "minCount": 1, "maxCount": 3 },
+        { "materialId": "IronScrap", "chance": 0.60, "minCount": 1, "maxCount": 2 },
+        { "materialId": "HealthHerb", "chance": 0.50, "minCount": 1, "maxCount": 2 }
+      ]
+    },
+    {
+      "id": "barrel-common",
+      "source": "dungeon",
+      "drops": [
+        { "materialId": "HealthHerb", "chance": 0.80, "minCount": 1, "maxCount": 3 },
+        { "materialId": "IronScrap", "chance": 0.50, "minCount": 1, "maxCount": 2 }
+      ]
+    },
+    {
+      "id": "chest-rare",
+      "source": "dungeon",
+      "drops": [
+        { "materialId": "ManaCrystalShard", "chance": 0.90, "minCount": 1, "maxCount": 3 },
+        { "materialId": "ArcaneDust", "chance": 0.85, "minCount": 2, "maxCount": 4 },
+        { "materialId": "HealthHerb", "chance": 0.60, "minCount": 1, "maxCount": 2 }
       ]
     },
     {

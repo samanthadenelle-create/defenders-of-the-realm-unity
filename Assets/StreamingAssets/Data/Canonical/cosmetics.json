@@ -123,6 +123,264 @@
       "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#62b08e"
+    },
+
+    {
+      "id": "cosmetic.frostfall-bundle.hero-outfit",
+      "category": "hero",
+      "appliesTo": "knight",
+      "displayName": "Frostfall Knight Regalia",
+      "description": "Plate rimed with the breath of the high passes — winter's own watch.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#7fb4d4"
+    },
+    {
+      "id": "cosmetic.frostfall-bundle.pet-skin",
+      "category": "pet",
+      "appliesTo": "ice-wolf",
+      "displayName": "Glacierborn Companion",
+      "description": "Fur of pale frost; the snow remembers its tread.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#bfe0f3"
+    },
+    {
+      "id": "cosmetic.frostfall-bundle.building-palette",
+      "category": "village",
+      "appliesTo": "building-palette",
+      "displayName": "Frozen Hearth Palette",
+      "description": "The Heart's lantern and the workshops glow pale blue through a rime of frost.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#a8d4ff"
+    },
+    {
+      "id": "cosmetic.frostfall-bundle.exclusive",
+      "category": "village",
+      "appliesTo": "emblem",
+      "displayName": "Frostfall Crest",
+      "description": "A crest of the winter watch, flown only by those who tended the Heart through the cold.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#6fa8cf"
+    },
+
+    {
+      "id": "cosmetic.embergrove-bundle.hero-outfit",
+      "category": "hero",
+      "appliesTo": "mage",
+      "displayName": "Embergrove Mage Vestments",
+      "description": "Robes spun from autumn leaves and Heartwood ash.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#c8632a"
+    },
+    {
+      "id": "cosmetic.embergrove-bundle.pet-skin",
+      "category": "pet",
+      "appliesTo": "flame-pup",
+      "displayName": "Emberkin Companion",
+      "description": "Coat the colour of a banked forge, sparks at the heel.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#e76a2f"
+    },
+    {
+      "id": "cosmetic.embergrove-bundle.building-palette",
+      "category": "village",
+      "appliesTo": "building-palette",
+      "displayName": "Embergrove Autumn Palette",
+      "description": "Echo Hollow, Workshop, Arcane Tower and Farm in autumn warmth.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#c47a3a"
+    },
+    {
+      "id": "cosmetic.embergrove-bundle.exclusive",
+      "category": "village",
+      "appliesTo": "emblem",
+      "displayName": "Embergrove Crest",
+      "description": "An ember-gold crest for the keepers of the autumn grove.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#b8601f"
+    },
+
+    {
+      "id": "cosmetic.bloomtide-bundle.hero-outfit",
+      "category": "hero",
+      "appliesTo": "ranger",
+      "displayName": "Bloomtide Ranger Garb",
+      "description": "Greens of the first thaw stitched into oilskin.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#7bc467"
+    },
+    {
+      "id": "cosmetic.bloomtide-bundle.permanent-banner",
+      "category": "village",
+      "appliesTo": "banners",
+      "displayName": "Bloomtide Banners",
+      "description": "Banners of the spring season, green as the first thaw, flown over the village.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#62b08e"
+    },
+    {
+      "id": "cosmetic.bloomtide-bundle.building-palette",
+      "category": "village",
+      "appliesTo": "building-palette",
+      "displayName": "First-Thaw Green Palette",
+      "description": "The realm's roofs and walls dressed in soft spring green.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#8ed07a"
+    },
+    {
+      "id": "cosmetic.bloomtide-bundle.exclusive",
+      "category": "village",
+      "appliesTo": "emblem",
+      "displayName": "Bloomtide Crest",
+      "description": "A blossom-marked crest for those who welcomed the spring.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#57a37f"
+    },
+
+    {
+      "id": "cosmetic.starters-hand.exclusive",
+      "category": "village",
+      "appliesTo": "emblem",
+      "displayName": "Tender's First Token",
+      "description": "A small token from the Heart to every new tender — the first mark of the watch.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#d9c27a"
+    },
+
+    {
+      "id": "cosmetic.echo-patron-pack.building-palette",
+      "category": "village",
+      "appliesTo": "building-palette",
+      "displayName": "Workshop Patron Palette",
+      "description": "Brass-and-amber workshop trim for the patron who keeps the echoes working.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#c79a3e"
+    },
+    {
+      "id": "cosmetic.echo-patron-pack.exclusive",
+      "category": "village",
+      "appliesTo": "emblem",
+      "displayName": "Echo Patron Sigil",
+      "description": "The sigil of a patron of the harvest — worn by those who keep the workforce humming.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#b88a2e"
+    },
+
+    {
+      "id": "cosmetic.hero-wardrobe-pack.hero-outfit-a",
+      "category": "hero",
+      "appliesTo": "knight",
+      "displayName": "Wardrobe: Warden Plate",
+      "description": "A heavy warden's plate, broad at the shoulder, for the long watch.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#9aa3ad"
+    },
+    {
+      "id": "cosmetic.hero-wardrobe-pack.hero-outfit-b",
+      "category": "hero",
+      "appliesTo": "knight",
+      "displayName": "Wardrobe: Vigil Cloak",
+      "description": "A travelling cloak over light plate, for the Knight who walks the borders.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#5d6b7a"
+    },
+    {
+      "id": "cosmetic.hero-wardrobe-pack.hero-outfit-c",
+      "category": "hero",
+      "appliesTo": "knight",
+      "displayName": "Wardrobe: Gilded Pauldrons",
+      "description": "Parade plate with gilded pauldrons, for the Knight who stands at the Heart.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#d4b65a"
+    },
+    {
+      "id": "cosmetic.hero-wardrobe-pack.exclusive",
+      "category": "hero",
+      "appliesTo": "knight",
+      "displayName": "Wardrobe: Heartwood Surcoat",
+      "description": "The pack-exclusive surcoat, embroidered with the world-tree of Elarion.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#7fae6b"
+    },
+
+    {
+      "id": "cosmetic.realm-defender-bundle.weapon-flair",
+      "category": "hero",
+      "appliesTo": "weapon",
+      "displayName": "Heartsteel Blade Flair",
+      "description": "A purely cosmetic blade finish — Heartwood-green steel with a faint glow. No edge but the eye's.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#6fae8e"
+    },
+    {
+      "id": "cosmetic.realm-defender-bundle.shield-flair",
+      "category": "hero",
+      "appliesTo": "shield",
+      "displayName": "Aegis of Elarion Shield Flair",
+      "description": "A cosmetic shield facing bearing the world-tree crest. Cosmetic only — zero combat power, per the covenant.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#c2a24a"
+    },
+    {
+      "id": "cosmetic.realm-defender-bundle.permanent-banner",
+      "category": "village",
+      "appliesTo": "banners",
+      "displayName": "Defender's Banner",
+      "description": "The colours of the realm's defenders, flown permanently over the village.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#9c5b4a"
+    },
+    {
+      "id": "cosmetic.realm-defender-bundle.exclusive",
+      "category": "village",
+      "appliesTo": "emblem",
+      "displayName": "Realm Defender Crest",
+      "description": "The crest worn by the sworn defenders of Elarion.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#8a4f40"
+    },
+
+    {
+      "id": "cosmetic.builders-cache.building-palette",
+      "category": "village",
+      "appliesTo": "building-palette",
+      "displayName": "Master Builder Palette",
+      "description": "Clean stone and timber trim for the tender who builds without pause.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#a89070"
+    },
+    {
+      "id": "cosmetic.builders-cache.exclusive",
+      "category": "village",
+      "appliesTo": "emblem",
+      "displayName": "Builder's Cache Sigil",
+      "description": "The sigil of a master builder of Elarion — flown by those who raised the realm.",
+      "glimmerCost": 0,
+      "unlockMethod": "achievement",
+      "previewColor": "#977f5f"
     }
   ]
 }
