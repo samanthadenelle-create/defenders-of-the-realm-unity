@@ -857,18 +857,20 @@ namespace DeNelle.Village
                 return UpgradeResult.NoEconomy;
             }
 
-            // Wood-priced (preserves the original cost-enforced TowerUpgradeButton semantics),
-            // spent atomically through the multi-resource API (no obsolete Wood-only calls).
-            var price = ResourceCost.WoodOnly(cost);
+            // #60: tower upgrades cost MULTI-resource (wood + iron + crystal) so the gathering
+            // economy (all three node types) feeds tower progression, not a single resource. The
+            // single TowerUpgrade.upgradeCost int drives all three amounts; CanAfford/TrySpend
+            // already enforce every ResourceCost field atomically (EconomyService).
+            var price = new ResourceCost(wood: cost, iron: cost, crystals: cost);
             if (!economy.CanAfford(price))
             {
-                FlowTrace.Step("Tower", $"TryUpgrade: CANT-AFFORD next level (cost={cost} Wood, have={economy.Wood}).");
+                FlowTrace.Step("Tower", $"TryUpgrade: CANT-AFFORD next level (cost={cost} wood+iron+crystal, have W={economy.Wood} I={economy.Iron} C={economy.Crystals}).");
                 return UpgradeResult.CantAfford;
             }
             if (!economy.TrySpend(price))
             {
                 // Race: balance changed between CanAfford and TrySpend. No mutation occurred.
-                FlowTrace.Warn("Tower", $"TryUpgrade: TrySpend failed for cost={cost} Wood (balance changed) — refused.");
+                FlowTrace.Warn("Tower", $"TryUpgrade: TrySpend failed for cost={cost} wood+iron+crystal (balance changed) — refused.");
                 return UpgradeResult.CantAfford;
             }
 
@@ -876,11 +878,11 @@ namespace DeNelle.Village
             if (!leveled)
             {
                 // Should not happen (we re-checked max above), but never leave a silent spend.
-                FlowTrace.Fail("Tower", $"TryUpgrade: spent {cost} Wood but Upgrade() no-opped — leveled={leveled}.");
+                FlowTrace.Fail("Tower", $"TryUpgrade: spent {cost} wood+iron+crystal but Upgrade() no-opped — leveled={leveled}.");
                 return UpgradeResult.Maxed;
             }
 
-            FlowTrace.Step("Tower", $"TryUpgrade: SPENT {cost} Wood + LEVELED -> L{_currentLevel}/{MaxLevel}.");
+            FlowTrace.Step("Tower", $"TryUpgrade: SPENT {cost} wood+iron+crystal + LEVELED -> L{_currentLevel}/{MaxLevel}.");
             return UpgradeResult.Success;
         }
 
