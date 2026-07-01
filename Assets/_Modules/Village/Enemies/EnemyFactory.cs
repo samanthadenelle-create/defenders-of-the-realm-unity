@@ -188,13 +188,23 @@ namespace DeNelle.Village
                     var warbandFixer = vis.GetComponentInChildren<DeNelle.Core.TripoMaterialFixer>();
                     if (warbandFixer != null)
                     {
-                        // Troll → grey-green hide; Warband orcs → orc green/brown.
-                        Color fallbackTint = model == "Troll"
-                            ? new Color(0.38f, 0.40f, 0.34f)
-                            : new Color(0.30f, 0.42f, 0.22f);
+                        // STAND-IN TINT (no Troll.fbx / OgreMage.fbx yet): troll & ogre reuse an
+                        // OrcWarband orc model (see ModelForEnemy) but are DISTINGUISHED by tint so a
+                        // player reads them as a different foe, not just another orc. Keyed by def.Id/
+                        // Family (the model is now an orc, so "model == Troll" no longer fires).
+                        //   troll/caveman → grey-green troll hide; ogre → cold ogre grey;
+                        //   real Warband orcs → orc green/brown.
+                        string tId  = def != null ? (def.Id ?? "").Trim().ToLowerInvariant() : "";
+                        string tFam = def != null ? (def.Family ?? "").Trim().ToLowerInvariant() : "";
+                        bool isTroll = model == "Troll" || tId == "troll" || tId == "caveman" || tFam == "troll";
+                        bool isOgre  = tId == "ogre" || tId == "ogre-mage" || tFam == "ogre";
+                        Color fallbackTint =
+                            isTroll ? new Color(0.38f, 0.40f, 0.34f) :   // grey-green troll hide
+                            isOgre  ? new Color(0.48f, 0.47f, 0.52f) :   // cold ogre grey
+                                      new Color(0.30f, 0.42f, 0.22f);     // orc green/brown
                         warbandFixer.SetFallbackTint(fallbackTint);
                         FlowTrace.Step("Enemy",
-                            $"garrison fallback TINT {fallbackTint} bound to '{model}' (rig {rigForModel}) — " +
+                            $"garrison fallback TINT {fallbackTint} bound to '{model}' (id '{tId}', rig {rigForModel}) — " +
                             "no OrcTex basecolor for Warband/Troll family, paints solid colour not white");
                     }
                 }
@@ -314,7 +324,7 @@ namespace DeNelle.Village
                 // tribe / outpost spawners all carry. Every target below is a VERIFIED
                 // file in Assets/Resources/Enemies.
                 case "orc-raider":       return "Orc_Berserker";     // greenskin raider → real orc (OrcWarband rig)
-                case "caveman":          return "Troll";             // big brute → Cave Troll silhouette
+                case "caveman":          return "Orc_Berserker";     // STAND-IN: no Troll.fbx — big brute reuses Orc_Berserker (tinted grey-green below)
                 case "feral-wolf":       return "Skeleton_Rogue";    // no beast model exists — keep the fast, low skirmisher
                 case "tiefling-cultist": return "Demon";             // demonic cultist → Demon (distinct horned silhouette)
 
@@ -340,9 +350,14 @@ namespace DeNelle.Village
                 case "orc-warlord":      return "Orc_Necromancer";   // outpost raid boss — heaviest orc silhouette
 
                 // ── BRUTES / OGRES / BOSSES ──────────────────────────────────────
-                case "troll":            return "Troll";             // Cave Troll brute
-                case "ogre":             return "OgreMage";          // ogre brute → OgreMage
-                case "ogre-mage":        return "OgreMage";          // ogre caster
+                // STAND-INS (no Troll.fbx / OgreMage.fbx in Resources/Enemies — those render
+                // as tinted capsules): reuse EXISTING OrcWarband-rig orc models until real
+                // Tripo troll/ogre art lands. troll → big Orc_Berserker, ogre → Orc_Shaman.
+                // Both go through the OrcWarband SetFallbackTint path below, so the tint block
+                // paints troll grey-green and ogre grey to keep them visually distinct.
+                case "troll":            return "Orc_Berserker";     // STAND-IN: big brute (was "Troll" — missing)
+                case "ogre":             return "Orc_Shaman";        // STAND-IN: ogre brute (was "OgreMage" — missing)
+                case "ogre-mage":        return "Orc_Shaman";        // STAND-IN: ogre caster (was "OgreMage" — missing)
                 case "demon":            return "Demon";             // demon
                 case "boss-dragon":      return "Dragon";            // wing boss → the Dragon
                 case "dragon":           return "Dragon";
@@ -356,8 +371,8 @@ namespace DeNelle.Village
             switch (family)
             {
                 case "orc":   return def != null && def.Role == "caster" ? "Orc_Shaman" : "Orc_Berserker";
-                case "troll": return "Troll";
-                case "ogre":  return "OgreMage";
+                case "troll": return "Orc_Berserker";   // STAND-IN (no Troll.fbx) — tinted grey-green below
+                case "ogre":  return "Orc_Shaman";      // STAND-IN (no OgreMage.fbx) — tinted grey below
                 case "demon":
                 case "cult":  return "Demon";
                 case "dragon": return "Dragon";
