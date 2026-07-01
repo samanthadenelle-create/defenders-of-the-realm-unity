@@ -325,6 +325,56 @@ namespace DeNelle.Village.Talents
             Raise();
         }
 
+        // ── Respec (refund spent Wisdom for a Crystal cost) ──────────────────────
+        // Mirrors the legacy TalentTreePanel.OnRespecClicked path so the LIVE MVVM panel
+        // surfaces the same in-game respec (owner F8: "no respec option"). Spends
+        // HeroTalentCatalog.RespecCostCrystals via EconomyService (Crystals-only), then
+        // WisdomCurrencyService.RespecHero wipes this hero's unlocked nodes + refunds the
+        // Wisdom. Refreshes the panel so freed nodes + the refunded balance show at once.
+
+        /// <summary>The Crystal cost of a full respec (HeroTalentCatalog.RespecCostCrystals).</summary>
+        public int RespecCost => HeroTalentCatalog.RespecCostCrystals;
+
+        /// <summary>True when a respec can be afforded right now (enough Crystals in the wallet).</summary>
+        public bool CanRespec
+        {
+            get
+            {
+                var econ = EconomyService.Instance;
+                return econ != null && econ.CanAfford(ResourceCost.CrystalsOnly(RespecCost));
+            }
+        }
+
+        /// <summary>Last respec action result (shown on the panel's status line).</summary>
+        public string RespecStatus { get; private set; } = "";
+
+        /// <summary>
+        /// Respec this hero: pay the Crystal cost, then wipe + refund the hero's talents.
+        /// Discards any staged plan first (a respec invalidates it). No-op (with a status
+        /// hint) when the wallet can't cover the cost. Refreshes the panel on success.
+        /// </summary>
+        public void Respec()
+        {
+            if (string.IsNullOrEmpty(_heroSlug)) return;
+
+            var econ = EconomyService.Instance;
+            var cost = ResourceCost.CrystalsOnly(RespecCost);
+            if (econ == null || !econ.TrySpend(cost))
+            {
+                RespecStatus = "Need " + RespecCost + " Crystals to respec.";
+                FlowTrace.Warn("SkillTree", "respec REJECTED — need " + RespecCost + " crystals");
+                Raise();
+                return;
+            }
+
+            _pending.Clear();
+            WisdomCurrencyService.Instance?.RespecHero(_heroSlug);
+            RespecStatus = "Respec complete — talents refunded.";
+            FlowTrace.Step("SkillTree", "respec '" + _heroSlug + "' done (-" + RespecCost + " crystals)");
+            Rebuild();
+            Raise();
+        }
+
         // owned ∪ pending — the "tentatively owned" set used for staging validation + node state.
         private HashSet<string> Effective(HashSet<string> owned)
         {
