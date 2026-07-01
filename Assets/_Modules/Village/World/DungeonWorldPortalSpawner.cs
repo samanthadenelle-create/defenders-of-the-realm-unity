@@ -129,6 +129,11 @@ namespace DeNelle.Village.World
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            // Dungeon entry gated OFF (owner 2026-07-01): the first 2 dungeons are placeholder-primitive
+            // ("pill") scenes — the KayKit dungeon art isn't wired yet, so we flag them off for the public
+            // milestone rather than ship capsule enemies. Real fix = deep dungeon-art work. Re-enable for
+            // testing: PlayerPrefs "ff.dungeonportals" = 1 (FeatureFlags.DungeonPortals, default OFF).
+            if (!DeNelle.Core.FeatureFlags.DungeonPortals) return;
             if (Instance != null) return;
             var go = new GameObject("DungeonWorldPortalSpawner");
             go.AddComponent<DungeonWorldPortalSpawner>();

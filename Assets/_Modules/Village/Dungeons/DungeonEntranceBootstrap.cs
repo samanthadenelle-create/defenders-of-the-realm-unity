@@ -31,6 +31,10 @@ namespace DeNelle.Village
 
         public void PlaceEntrances()
         {
+            // Dungeon entry gated OFF (owner 2026-07-01): first 2 dungeons are placeholder "pill" scenes
+            // (KayKit dungeon art not wired). Flagged off for the public milestone; re-enable for testing:
+            // PlayerPrefs "ff.dungeonportals" = 1 (FeatureFlags.DungeonPortals, default OFF).
+            if (!DeNelle.Core.FeatureFlags.DungeonPortals) return;
             if (_placed) return;
             _placed = true;
 

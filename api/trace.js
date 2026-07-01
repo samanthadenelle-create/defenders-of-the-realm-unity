@@ -61,7 +61,7 @@ module.exports = async (req, res) => {
         // always + each SIGNAL line as its OWN log entry (Pi flow + errors; the AudioMixer 'warning'
         // boot noise is intentionally excluded to keep volume/cost sane).
         try {
-            const isSignal = l => /\[Flow:Pi\]|PiInit|PiAuth|Signing in|timed out|Exception|threw|softlock|NullReference|Fail|\berror\b/i.test(l);
+            const isSignal = l => /\[Flow:Pi\]|PiInit|PiAuth|Signing in|timed out|Exception|threw|softlock|NullReference|Fail|\berror\b|SeekerBootstrap|tier=|device=|\[Flow:Perf\]|\bfps=/i.test(l);
             const signal = lines.filter(isSignal);
             console.log(`[web_trace] sess=${String(session).slice(0, 14)} build=${build} lines=${lines.length} signal=${signal.length}`);
             for (const s of signal) console.log('  [sig] ' + s);
