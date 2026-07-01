@@ -27,28 +27,38 @@ module.exports = async (req, res) => {
     try { if (typeof body === 'string') body = JSON.parse(body); }
     catch { body = { _raw: String(req.body) }; }
 
-    const session = req.headers['x-trace-session'] || (body && body.session) || 'anonymous';
-    const build   = req.headers['x-trace-build']   || (body && body.build)   || 'unknown';
+    const session = req.headers['x-trace-session'] || (body && (body.session || body.sessionId)) || 'anonymous';
+    const build   = req.headers['x-trace-build']   || (body && (body.build   || body.buildId))   || 'unknown';
 
-    // Batch may be a raw array of lines, or { lines: [...] }, or arbitrary JSON — store as-is.
+    // Normalize every caller shape to an array of readable PER-LINE strings:
+    //   WebTrace client -> { sessionId, buildId, entries:[{utcMs,kind,tag,message,scene}] }
+    //   others          -> a raw array, or { lines:[...] }
+    // Per-entry strings (not one JSON blob) so the runtime-log echo below is greppable and each
+    // line is its own log entry (a single blob gets truncated by the log viewer — that hid the
+    // Pi flow lines on the first pass 2026-07-01).
+    const toStr = e => (e && typeof e === 'object')
+        ? `[${e.scene || '?'}] ${(e.kind || 'log')}: ${e.message != null ? e.message : JSON.stringify(e)}`.trim()
+        : String(e);
     const lines = Array.isArray(body)
-        ? body
-        : (body && Array.isArray(body.lines) ? body.lines : (body ? [JSON.stringify(body)] : []));
+        ? body.map(toStr)
+        : (body && Array.isArray(body.entries) ? body.entries.map(toStr)
+        : (body && Array.isArray(body.lines)   ? body.lines.map(toStr)
+        : (body ? [JSON.stringify(body)] : [])));
 
     if (!lines || lines.length === 0) {
         return res.status(200).json({ success: true, inserted: 0 });
     }
 
     try {
-        // Echo to Vercel runtime logs so the CLIENT traces are readable via get_runtime_logs
-        // WITHOUT the (sensitive, unpullable) DATABASE_URL — this closes the web-debug read gap
-        // that hid the Pi-hang trace on 2026-07-01. Log a one-line summary always + only the
-        // SIGNAL lines (Fail/Warn/error/Pi/softlock) to keep runtime-log volume/cost sane.
+        // Echo CLIENT traces to Vercel runtime logs so they're readable via get_runtime_logs WITHOUT
+        // the (sensitive, unpullable) DATABASE_URL — closes the web-debug read gap. One-line summary
+        // always + each SIGNAL line as its OWN log entry (Pi flow + errors; the AudioMixer 'warning'
+        // boot noise is intentionally excluded to keep volume/cost sane).
         try {
-            const flat = lines.map(l => typeof l === 'string' ? l : JSON.stringify(l));
-            const signal = flat.filter(l => /Fail|Warn|error|exception|\bPi\b|threw|softlock|NullReference/i.test(l));
-            console.log(`[web_trace] sess=${String(session).slice(0, 12)} build=${build} lines=${flat.length} signal=${signal.length}`);
-            if (signal.length) console.log('[web_trace:signal]\n' + signal.join('\n'));
+            const isSignal = l => /\[Flow:Pi\]|PiInit|PiAuth|Signing in|timed out|Exception|threw|softlock|NullReference|Fail|\berror\b/i.test(l);
+            const signal = lines.filter(isSignal);
+            console.log(`[web_trace] sess=${String(session).slice(0, 14)} build=${build} lines=${lines.length} signal=${signal.length}`);
+            for (const s of signal) console.log('  [sig] ' + s);
         } catch (e) { /* logging must never break the sink */ }
 
         const sql = neon(process.env.DATABASE_URL);
