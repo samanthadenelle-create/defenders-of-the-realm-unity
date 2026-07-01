@@ -23,6 +23,16 @@
 const PI_ME_URL = 'https://api.minepi.com/v2/me';
 
 module.exports = async (req, res) => {
+    // CORS (2026-07-01): the PUBLISHED app is served under <app>.pinet.com (Pi's proxy),
+    // so this vercel API is called CROSS-ORIGIN. Without these headers the browser blocks
+    // the sign-in POST and verification fails for real Pioneers. ACAO:* is safe here — there
+    // are no cookies/credentials; identity is the bearer accessToken in the body, which is
+    // validated against Pi's own /me below, so a permissive origin can't forge an identity.
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') { res.status(204).end(); return; }
+
     if (req.method !== 'POST') {
         res.status(400).json({ success: false, error: 'POST only' });
         return;
