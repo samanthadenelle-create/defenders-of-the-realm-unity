@@ -1,5 +1,13 @@
 # DeNelle Studios — Project Canon Loader
 
+> ## ▶ LIVE THREAD (2026-07-01) — READ BEFORE WORKING
+> Current focus = **web / Pi stabilization** (pre-release DoD: consolidated deploy, sign-in works, core loop
+> playable, zero P0s). **Pi sign-in is RESOLVED** (COOP/COEP drop was the root); web observability (`WebTrace`
+> `?trace=1` → `api/trace` → Neon) + localhost dev WebGL bots shipped. Read the live anchor
+> **`CANON_GROUND_TRUTH_2026-07-01.md`** + **`SESSION_BOOT_DIRECTIVE.md`**.
+> The **seam un-stack (WO-453) is PARKED** in `stash@{0}` — `WorldGeometry.cs` not in the tree; resume via
+> `RESUME_2026-06-30_seam-unstack.md` when we return to it. The built exe still ping-pongs the seam.
+
 **READ THIS FIRST on any new session (owner directive 2026-06-20).** Every CLI/agent
 loads this before doing anything, to stay an SME. It is the fast-path summary; the
 binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HANDOVER.md`,
@@ -29,8 +37,9 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   (implement + headless-verify) → PO (felt-verify + close). Shared board = the Task list; log
   every hand-off. Full spec: `docs/TICKET_PIPELINE.md`.
 
-## Current State (2026-06-28 — anchored to `CANON_GROUND_TRUTH_2026-06-28.md`)
-- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). HEAD `7c05cd1b`, nothing pushed.
+## Current State (2026-07-01 — anchored to `CANON_GROUND_TRUTH_2026-07-01.md`)
+- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). HEAD `36c901f2`; upstream exists, **19 commits ahead** (local-only). Save schema **v28** (WO-587).
+- **Pre-release web/Pi stabilization is the live focus.** Pi sign-in RESOLVED; Vercel still blocked by the 100 MB per-file limit (→ WO-545). Seam un-stack PARKED in `stash@{0}`.
 - **Title:** **"Echoes of Elarion"** (chapter) within the **"Defenders of the Realm"** series; tagline **"Hold the last light."** (WO-570).
 - **Combat space:** WO-584 consolidation (READY) — one warp-in space primitive, 3 skins (dungeon/outpost/arena), ownership flip; replaces flat ATB dungeon (`ff.atbdungeon` OFF).
 - **Game:** Echoes of Elarion / Defenders of the Realm (Unity 6 / URP). **V1 = ONE controllable hero
@@ -45,7 +54,7 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
 - **World:** home hub `MainCastle_Hall`; `OuterWorld` streams additively; `Village2` = raid target
   (`Village.unity` ABANDONED). Castle↔OuterWorld = four-side warp gates (RuntimeRegionGate); moat +
   4 drawbridges (`ff.castlemoat`); tree aura + tower glow (`ff.hubambientvfx`).
-- **Economy:** Echo workforce wired (1–4 echoes, offline real-clock, **save v27**); gold on kills; research costs.
+- **Economy:** Echo workforce wired (offline real-clock, **save v28** — WO-587 Population & Echo growth); gold on kills; research costs.
 - **In-flight:** HEAD targeting sweep (`ff.enemystructureaware`) is **UNVERIFIED** — do not push until proven.
 
 ## Key Files to Remember

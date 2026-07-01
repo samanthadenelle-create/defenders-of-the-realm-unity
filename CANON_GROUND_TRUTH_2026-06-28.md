@@ -1,3 +1,8 @@
+> ⚠ SUPERSEDED 2026-07-01 — the live anchor is now **`CANON_GROUND_TRUTH_2026-07-01.md`**. This 06-28
+> snapshot is frozen for history. Key deltas since: HEAD `7c05cd1b`→`36c901f2` (Pi-web arc); save v27→**v28**
+> (WO-587); **Pi sign-in RESOLVED** (COOP/COEP drop); web observability + localhost web-bots shipped; dungeons
+> flagged OFF; seam un-stack PARKED in `stash@{0}` (not landed). Do not treat lines below as current.
+
 # CANON GROUND TRUTH — 2026-06-28
 
 > **Purpose:** the single anchor of *current reality*, derived ONLY from verified sources

@@ -23,11 +23,26 @@ Purpose-built for big WebGL games (handles 186 MB fine), zero header config:
 3. Set viewport (e.g. 1280×720) → Save → it gives you a play link. Send it to testers.
 - Testers press **F1** in-game for the dev portal (set level, +10k XP, jump-to-state) to run `docs/qa` cases.
 
-### Vercel (the longer-term home — try, but expect the size caveat)
-A `vercel.json` is already written into `Builds/WebGL/vercel.json` with the **Brotli headers** Unity needs
-(`Content-Encoding: br` + MIME types) — without those the browser won't load the build. Deploy `Builds/WebGL/`
-as its **own (second) Vercel project**. **If Vercel rejects the 174 MB `.data.br`:** host the `Build/` folder
-on a CDN/object store (S3+CloudFront, Cloudflare R2, Backblaze) and point the loader at it, or use itch.
+### Vercel — CONFIRMED BLOCKER (2026-07-01): 100 MB PER-FILE LIMIT
+**Proven, not guessed.** `vercel deploy --prod` (CLI 54.6.1, authed as `denelle-studios`, project
+`defenders-of-the-realm-v2`) uploaded the whole 130.9 MB payload fine, then **rejected with
+`"File size limit exceeded (100 MB)"`.** Vercel caps **individual files at 100 MB** — and the single
+monolithic `WebGL.data.unityweb` is **113.7 MB** (post-trim; was 174 MB), ~14 MB over. The *total* size
+is fine; it's the one `.data` file. **This is the exact reason the project moved to itch (no per-file cap).**
+
+**The deploy pipeline itself is VALIDATED** — auth OK, upload OK, `.vercelignore` correctly ships only
+`Builds/WebGL` + `api/` + configs (not the 3 GB repo), build ships Brotli + `decompressionFallback`
+(so no server `Content-Encoding` needed; the COOP/COEP headers in root `vercel.json` are what matter).
+**The ONLY thing standing between us and a live Vercel URL is getting that one `.data` file under 100 MB.**
+
+**The right fix = WO-545 (Addressables-remote), NOT a compression hack.** The `.data` is dominated by
+`Resources/Heroes` (138 MB raw: 84 MB Textures + ~40 MB regenerable `.fbm` dupes). Moving heroes/enemies
+out of `Resources/` into per-entity Addressable groups (reusing the already-shipping
+`gear_assets_all_*.bundle` pattern) splits the monolith — V1 ships Knight in the pack, mage/ranger/cleric
+stream from CDN on unlock — and drops the base `.data` far below 100 MB. See
+`docs/DATA_ARCHITECTURE_DECISION_2026-06-27.md` (T1 Addressables-remote) + WO-191 Phase 2.
+**Fallback if a fast fix is needed:** host `Build/` on an object store (R2/S3+CloudFront) + point the loader
+at it (Vercel Blob or external CDN), or keep using itch for tester links until WO-545 lands.
 
 ## The `vercel.json` (also placed in `Builds/WebGL/`)
 ```json
