@@ -85,8 +85,38 @@ namespace DeNelle.Village
             FindObjectsByType<HeroLocomotion>(FindObjectsInactive.Include, FindObjectsSortMode.None)
                 .FirstOrDefault();
 
+        // Duplicate-hero guard (owner 2026-07-01): the return-to-town Single load can yield TWO heroes —
+        // the carried DontDestroyOnLoad hero (SceneTransitionTrigger warps it in) PLUS the town's own baked
+        // "Hero (Blaise)" (CastleHubBuilder bakes one into MainCastle_Hall). FindLoco() only ever grabs the
+        // FIRST, so without this both persist. Keep ONE (prefer the carried DDOL instance = player
+        // continuity; else the first) and destroy the extra root(s). Ensure() re-applies tag/components/
+        // loadout to the kept hero, so keeping either is functionally safe. Runs on every sceneLoaded.
+        private static void DedupeHeroes()
+        {
+            var heroes = FindObjectsByType<HeroLocomotion>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            if (heroes == null || heroes.Length <= 1) return;
+
+            HeroLocomotion keep = null;
+            foreach (var h in heroes)
+                if (h != null && h.gameObject.scene.name == "DontDestroyOnLoad") { keep = h; break; }
+            if (keep == null) keep = heroes[0];
+            if (keep == null) return;
+
+            var keepRoot = keep.transform.root.gameObject;
+            foreach (var h in heroes)
+            {
+                if (h == null) continue;
+                var root = h.transform.root.gameObject;
+                if (root == keepRoot) continue;
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Hero",
+                    $"Duplicate hero removed — destroying '{root.name}' (scene={h.gameObject.scene.name}); kept '{keepRoot.name}'.");
+                Destroy(root);
+            }
+        }
+
         private void Ensure()
         {
+            DedupeHeroes();
             var loco = FindLoco();
             GameObject hero = loco != null ? loco.gameObject : FindHeroByName();
             if (hero == null)

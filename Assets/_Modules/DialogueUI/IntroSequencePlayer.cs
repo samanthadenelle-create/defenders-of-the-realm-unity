@@ -173,9 +173,19 @@ namespace DeNelle.DialogueUI
             //  owner if the intro should sit on the music bus / respect its volume.)
             _audioSource = gameObject.AddComponent<AudioSource>();
             _audioSource.playOnAwake = false;
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // WebGL does NOT support VideoAudioOutputMode.AudioSource — it raises errorReceived, which
+            // drops the intro into the (imageless) slate fallback so the VIDEO NEVER SHOWS on web. Use
+            // Direct (matches the working OnboardingSceneBuilder VideoPlayer, :149). 2026-07-01 fix:
+            // "intro not streaming on web — players get test boxes". _audioSource stays created (kept
+            // non-null so later refs are safe) but is not the video's output on WebGL.
+            _videoPlayer.audioOutputMode = VideoAudioOutputMode.Direct;
+            _videoPlayer.EnableAudioTrack(0, true);
+#else
             _videoPlayer.audioOutputMode = VideoAudioOutputMode.AudioSource;
             _videoPlayer.EnableAudioTrack(0, true);
             _videoPlayer.SetTargetAudioSource(0, _audioSource);
+#endif
 
             _videoPlayer.errorReceived += OnVideoError;
             _videoPlayer.loopPointReached += OnVideoEnded;
