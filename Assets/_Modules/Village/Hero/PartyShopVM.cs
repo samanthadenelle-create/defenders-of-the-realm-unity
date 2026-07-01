@@ -340,6 +340,8 @@ namespace DeNelle.Village.Hero
                 if (it == null) return "";
                 var item = it.Value;
                 if (_tab == PartyShopTab.Sell) return "+" + (item.Price > 0 ? item.Price + " Gold" : "Free");
+                // Locked (wrong class / above level): the price line reads the requirement, not a price.
+                if (item.Locked) return string.IsNullOrEmpty(item.LockReason) ? "Locked" : item.LockReason;
                 if (item.Equipped || item.Price <= 0) return "Owned";
                 return item.Price + " Gold";
             }
@@ -500,7 +502,10 @@ namespace DeNelle.Village.Hero
             // ArmorFitsClass + level into a single list, and surfaces craftables when the vendor
             // allows GearKind.Craftable). Note: _storeKinds is the gear-narrowed mask the VM applies
             // for SELL; for BUY we pass the raw vendor context so the resolver can also yield craftables.
-            var shoppable = ShopCatalog.Shoppable(_vendorContext, job, level);
+            // SHOW-ALL (owner 2026-07-01): includeIneligible:true returns the WHOLE catalog category
+            // tagged with Eligible/LockReason, so the shop shows every item and LOCKS (greys, hint
+            // "Requires Lv X" / "Class: Y") the ones above the hero's level or the wrong class.
+            var shoppable = ShopCatalog.Shoppable(_vendorContext, job, level, includeIneligible: true);
 
             // Category "dropdown": ALL shows the combined list ARMOR-FIRST then weapons (armor/
             // weapons-first, STORE_EQUIP_SPEC); WEAPONS / ARMOR narrow to one kind. Craftables
@@ -547,7 +552,7 @@ namespace DeNelle.Village.Hero
                                 + " owned=" + owned);
                         }
 
-                        AddBuyWeaponRow(w, cost, owned, equipped, affordable);
+                        AddBuyWeaponRow(w, cost, owned, equipped, affordable, entry.Eligible, entry.LockReason);
                         _currentStock.Add((w.id, GearKind.Weapon));
                         break;
                     }
@@ -572,7 +577,7 @@ namespace DeNelle.Village.Hero
                                 + " owned=" + owned);
                         }
 
-                        AddBuyArmorRow(a, cost, owned, equipped, affordable);
+                        AddBuyArmorRow(a, cost, owned, equipped, affordable, entry.Eligible, entry.LockReason);
                         _currentStock.Add((a.id, GearKind.Armor));
                         break;
                     }
@@ -604,7 +609,8 @@ namespace DeNelle.Village.Hero
             }
         }
 
-        private void AddBuyWeaponRow(WeaponDef w, ResourceCost cost, bool owned, bool equipped, bool affordable)
+        private void AddBuyWeaponRow(WeaponDef w, ResourceCost cost, bool owned, bool equipped, bool affordable,
+                                     bool eligible, string lockReason)
         {
             string id = w.id;
             string name = string.IsNullOrEmpty(w.name) ? w.id : w.name;
@@ -612,6 +618,18 @@ namespace DeNelle.Village.Hero
             _rowDetails[id] = new PartyShopDetail(
                 WeaponStats(w), DeltaVsEquippedWeapon(w), DescribeGear(w.job, w.rarity),
                 w.iconPath, IconRoleWeapon, id);
+
+            // SHOW-ALL / LOCK (owner 2026-07-01): an item the selected member can't use yet (wrong class
+            // or above level) is SHOWN for progression but NOT purchasable/equippable — the row is greyed
+            // with the reason. Tapping it only reports the requirement (never spends/equips).
+            if (!eligible)
+            {
+                string reason = string.IsNullOrEmpty(lockReason) ? "Locked" : lockReason;
+                _rowActions[id] = () => { Status = name + " - " + reason + "."; };
+                _items.Add(new ItemVM(id, name, IconRoleWeapon, id, cost.Coins, "gold",
+                    affordable: false, w.rarity, equipped: false, locked: true, lockReason: reason));
+                return;
+            }
 
             // Single-tap action: EQUIP if already owned, else BUY (which auto-equips on success).
             if (owned) _rowActions[id] = () => EquipWeapon(w);
@@ -622,7 +640,8 @@ namespace DeNelle.Village.Hero
                 affordable, w.rarity, equipped: equipped, locked: false));
         }
 
-        private void AddBuyArmorRow(ArmorDef a, ResourceCost cost, bool owned, bool equipped, bool affordable)
+        private void AddBuyArmorRow(ArmorDef a, ResourceCost cost, bool owned, bool equipped, bool affordable,
+                                    bool eligible, string lockReason)
         {
             string id = a.id;
             string name = string.IsNullOrEmpty(a.name) ? a.id : a.name;
@@ -630,6 +649,16 @@ namespace DeNelle.Village.Hero
             _rowDetails[id] = new PartyShopDetail(
                 ArmorStats(a), DeltaVsEquippedArmor(a), DescribeGear(a.job, a.rarity),
                 a.iconPath, IconRoleArmor, id);
+
+            // SHOW-ALL / LOCK (see AddBuyWeaponRow): shown for progression, not purchasable/equippable.
+            if (!eligible)
+            {
+                string reason = string.IsNullOrEmpty(lockReason) ? "Locked" : lockReason;
+                _rowActions[id] = () => { Status = name + " - " + reason + "."; };
+                _items.Add(new ItemVM(id, name, IconRoleArmor, id, cost.Coins, "gold",
+                    affordable: false, a.rarity, equipped: false, locked: true, lockReason: reason));
+                return;
+            }
 
             if (owned) _rowActions[id] = () => EquipArmor(a);
             else _rowActions[id] = () => BuyArmor(a);

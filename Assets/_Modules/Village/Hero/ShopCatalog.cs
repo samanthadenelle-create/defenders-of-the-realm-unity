@@ -62,18 +62,29 @@ namespace DeNelle.Village.Hero
         public readonly string Id;
         /// <summary>The craftable payload — only meaningful when Kind == Craftable (else default).</summary>
         public readonly ShoppableCraftable Craftable;
+        /// <summary>Whether the given job/level may actually buy+equip this (fits class AND meets the level
+        /// requirement). True for every entry when the resolver is asked NOT to include ineligible items
+        /// (the legacy filtered contract); false on an item shown greyed/locked-for-progression.</summary>
+        public readonly bool Eligible;
+        /// <summary>When !Eligible, WHY it's locked (e.g. "Requires Lv 5" / "Class: Ranger"), else null.</summary>
+        public readonly string LockReason;
 
-        private ShoppableEntry(ShoppableKind kind, string id, ShoppableCraftable craftable)
+        private ShoppableEntry(ShoppableKind kind, string id, ShoppableCraftable craftable,
+                               bool eligible, string lockReason)
         {
             Kind = kind;
             Id = id;
             Craftable = craftable;
+            Eligible = eligible;
+            LockReason = lockReason;
         }
 
-        public static ShoppableEntry Weapon(string id) => new ShoppableEntry(ShoppableKind.Weapon, id, default);
-        public static ShoppableEntry Armor(string id)  => new ShoppableEntry(ShoppableKind.Armor, id, default);
+        public static ShoppableEntry Weapon(string id, bool eligible = true, string lockReason = null) =>
+            new ShoppableEntry(ShoppableKind.Weapon, id, default, eligible, lockReason);
+        public static ShoppableEntry Armor(string id, bool eligible = true, string lockReason = null) =>
+            new ShoppableEntry(ShoppableKind.Armor, id, default, eligible, lockReason);
         public static ShoppableEntry FromCraftable(ShoppableCraftable c) =>
-            new ShoppableEntry(ShoppableKind.Craftable, c.Id, c);
+            new ShoppableEntry(ShoppableKind.Craftable, c.Id, c, true, null);
     }
 
     /// <summary>
@@ -89,34 +100,50 @@ namespace DeNelle.Village.Hero
         ///   • Craftable kind            → the registered craftable recipes filtered by craftability.
         /// Never null. Never throws (every loop is Guard.TryEach'd). The result preserves the inline
         /// BuildBuy ordering for gear (weapons, then armor) so the existing UI is unchanged.
+        ///
+        /// <para><paramref name="includeIneligible"/> (owner 2026-07-01): when FALSE (the legacy default)
+        /// the ineligible items are FILTERED OUT — identical to the original contract the EditMode tests
+        /// lock. When TRUE the resolver returns EVERY item of the vendor's category, each tagged with
+        /// <see cref="ShoppableEntry.Eligible"/> + <see cref="ShoppableEntry.LockReason"/>, so the shop can
+        /// SHOW-ALL and grey out (lock) what's above the hero's level or the wrong class — players see the
+        /// progression. The eligibility RULE is unchanged (WeaponFitsClass/ArmorFitsClass + level); it only
+        /// SETS the flag instead of excluding.</para>
         /// </summary>
-        public static IReadOnlyList<ShoppableEntry> Shoppable(string vendorContext, string job, int level)
+        public static IReadOnlyList<ShoppableEntry> Shoppable(string vendorContext, string job, int level,
+                                                              bool includeIneligible = false)
         {
             var result = new List<ShoppableEntry>();
 
             GearKind allowed = VendorStockContract.AllowedFor(vendorContext ?? string.Empty);
 
-            // ── Gear: weapons (class fit + level), same gates the inline loop applied ──
+            // ── Gear: weapons (class fit + level). The SAME gates the inline loop applied — but now used
+            //    to SET the eligible flag; when includeIneligible we keep the locked item, else skip it. ──
             if ((allowed & GearKind.Weapon) != 0)
             {
                 Guard.TryEach("ShopCatalog", "stock weapon", GearCatalog.AllWeapons(), w =>
                 {
                     if (w == null) return;
-                    if (!string.IsNullOrEmpty(job) && !GearCatalog.WeaponFitsClass(w, job)) return;
-                    if (!MeetsLevel(w.req, level)) return;
-                    result.Add(ShoppableEntry.Weapon(w.id));
+                    bool classOk = string.IsNullOrEmpty(job) || GearCatalog.WeaponFitsClass(w, job);
+                    bool levelOk = MeetsLevel(w.req, level);
+                    bool eligible = classOk && levelOk;
+                    if (!eligible && !includeIneligible) return;
+                    result.Add(ShoppableEntry.Weapon(w.id, eligible,
+                        eligible ? null : WeaponLockReason(w, classOk, levelOk)));
                 });
             }
 
-            // ── Gear: armor (weight/class fit + level) ──
+            // ── Gear: armor (weight/class fit + level) — same eligible-flag treatment. ──
             if ((allowed & GearKind.Armor) != 0)
             {
                 Guard.TryEach("ShopCatalog", "stock armor", GearCatalog.AllArmors(), a =>
                 {
                     if (a == null) return;
-                    if (!GearCatalog.ArmorFitsClass(a, job)) return;
-                    if (!MeetsLevel(a.req, level)) return;
-                    result.Add(ShoppableEntry.Armor(a.id));
+                    bool classOk = GearCatalog.ArmorFitsClass(a, job);
+                    bool levelOk = MeetsLevel(a.req, level);
+                    bool eligible = classOk && levelOk;
+                    if (!eligible && !includeIneligible) return;
+                    result.Add(ShoppableEntry.Armor(a.id, eligible,
+                        eligible ? null : ArmorLockReason(a, classOk, levelOk)));
                 });
             }
 
@@ -156,5 +183,35 @@ namespace DeNelle.Village.Hero
         }
 
         private static bool MeetsLevel(GearReq req, int level) => req == null || level >= req.level;
+
+        // -- Lock-reason copy (only computed for an ineligible/locked item) -----------------
+        // Prefer the CLASS restriction (a hard "never for this hero") over the LEVEL gate (a
+        // "come back later"), so a wrong-class item never masquerades as merely under-leveled.
+
+        private static string WeaponLockReason(WeaponDef w, bool classOk, bool levelOk)
+        {
+            if (!classOk) return "Class: " + Cap(w != null ? w.job : null);
+            if (!levelOk) return "Requires Lv " + (w != null && w.req != null ? w.req.level : 1);
+            return null;
+        }
+
+        private static string ArmorLockReason(ArmorDef a, bool classOk, bool levelOk)
+        {
+            if (!classOk)
+            {
+                // Armor fits by WEIGHT (light↔Ranger/Mage, heavy↔Knight/Cleric); a mismatch means the
+                // wrong weight class — name the weight so the hint reads "Light armor" / "Heavy armor".
+                string wt = a != null ? (a.weight ?? string.Empty).Trim() : string.Empty;
+                return wt.Length == 0 ? "Wrong class" : Cap(wt) + " armor";
+            }
+            if (!levelOk) return "Requires Lv " + (a != null && a.req != null ? a.req.level : 1);
+            return null;
+        }
+
+        private static string Cap(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return s;
+            return char.ToUpperInvariant(s[0]) + (s.Length > 1 ? s.Substring(1) : string.Empty);
+        }
     }
 }

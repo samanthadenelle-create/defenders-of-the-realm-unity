@@ -108,8 +108,13 @@ namespace DeNelle.Village.Hero
 
         private PanelHandle _panelHandle;
 
-        // Rows recorded per rebuild as (id, plate) so Render can hold the selected row.
-        private readonly List<(string id, Image plate)> _rowPlates = new List<(string id, Image plate)>();
+        // Rows recorded per rebuild as (id, plate, locked) so Render can hold the selected row + keep
+        // locked (show-all-but-greyed) rows dimmed across re-dress passes.
+        private readonly List<(string id, Image plate, bool locked)> _rowPlates =
+            new List<(string id, Image plate, bool locked)>();
+
+        // Dim factor for a locked (ineligible-for-this-member) row so it reads as non-purchasable.
+        private const float LockedRowAlpha = 0.45f;
 
         public bool IsOpen => _ui != null;
 
@@ -641,12 +646,21 @@ namespace DeNelle.Village.Hero
                 var plate = _rowPlates[i].plate;
                 if (plate == null) continue;
                 DressRowPlate(plate);
+                if (_rowPlates[i].locked) DimPlate(plate);   // keep locked rows greyed after the re-dress
                 if (sel != null && _rowPlates[i].id == sel)
                 {
                     var c = plate.color;
                     plate.color = new Color(c.r * RowSelectedTint.r, c.g * RowSelectedTint.g, c.b * RowSelectedTint.b, c.a);
                 }
             }
+        }
+
+        // Grey a locked (ineligible-for-this-member) row plate so it reads as non-purchasable.
+        private static void DimPlate(Image plate)
+        {
+            if (plate == null) return;
+            var c = plate.color;
+            plate.color = new Color(c.r, c.g, c.b, c.a * LockedRowAlpha);
         }
 
         private const float RowHeightPx = 44f;   // WO-501: name-only rows are shorter
@@ -719,6 +733,8 @@ namespace DeNelle.Village.Hero
         private void CreateRow(Transform parent, ItemVM item)
         {
             bool isSell = _vm != null && _vm.Tab == PartyShopTab.Sell;
+            bool locked = item.Locked;
+            bool hasReason = locked && !string.IsNullOrEmpty(item.LockReason);
 
             var row = new GameObject((isSell ? "SellRow_" : "BuyRow_") + item.Id,
                 typeof(Image), typeof(Button), typeof(LayoutElement));
@@ -729,19 +745,32 @@ namespace DeNelle.Village.Hero
 
             var rowImg = row.GetComponent<Image>();
             DressRowPlate(rowImg);
-            _rowPlates.Add((item.Id, rowImg));
+            if (locked) DimPlate(rowImg);   // greyed non-purchasable row (re-applied in HighlightSelectedRow)
+            _rowPlates.Add((item.Id, rowImg, locked));
 
             var rowBtn = row.GetComponent<Button>();
             rowBtn.targetGraphic = rowImg;
             ElarionUiKit.StyleButtonColors(rowBtn);
             string id = item.Id;
             // Tap the ROW = inspect (hold-select) -> the preview + action bar follow the selection.
+            // Locked rows are still selectable so the player can preview stats + see the requirement.
             rowBtn.onClick.AddListener(() => _vm?.Select(id));
 
-            // Name only - equipped names bold + gilt so the player sees what is worn.
+            // Name - locked rows dimmed; equipped names bold + gilt so the player sees what is worn.
+            // A locked row shrinks the name column to make room for the right-aligned "requires" hint.
+            Color nameColor = locked ? ElarionUi.ParchmentDim
+                            : (item.Equipped ? ElarionUi.Gilt : ElarionUi.Parchment);
+            float nameX1 = hasReason ? 0.56f : 0.94f;
             ElarionUiKit.Label(row.transform, item.Name,
-                0.0f, 1f, item.Equipped ? ElarionUi.Gilt : ElarionUi.Parchment,
-                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.06f, 0.94f, bold: item.Equipped);
+                0.0f, 1f, nameColor,
+                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.06f, nameX1,
+                bold: item.Equipped && !locked);
+
+            // Lock reason hint ("Requires Lv 5" / "Class: Ranger"), right-aligned on locked rows.
+            if (hasReason)
+                ElarionUiKit.Label(row.transform, item.LockReason,
+                    0.0f, 1f, ElarionUi.Danger,
+                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Right, 0.58f, 0.94f, bold: false);
         }
 
         // -- 3D RENDER PREVIEW pane (WO-501 owner point 3) ----------------------------
@@ -1238,27 +1267,33 @@ namespace DeNelle.Village.Hero
             var item = _vm.SelectedItem;
             bool hasSel = item.HasValue;
 
+            bool locked = hasSel && item.Value.Locked;
+
             // Purchase/Sell toggle label + enable.
             if (_buySellLabel != null)
             {
                 string price = _vm.SelectedPriceText;
                 if (sell) _buySellLabel.text = hasSel ? "Sell  " + price : "Sell";
+                else if (locked)
+                    _buySellLabel.text = string.IsNullOrEmpty(item.Value.LockReason)
+                        ? "Locked" : item.Value.LockReason;   // e.g. "Requires Lv 5" / "Class: Ranger"
                 else _buySellLabel.text = hasSel
                         ? (item.Value.Equipped || item.Value.Price <= 0 ? "Owned" : "Purchase  " + price)
                         : "Purchase";
             }
             if (_buySellBtn != null)
             {
-                bool canBuy = hasSel && (sell
+                // Locked items can never be purchased (wrong class / above level) - button disabled.
+                bool canBuy = hasSel && !locked && (sell
                     ? true
                     : !(item.Value.Equipped) && (item.Value.Price <= 0 || item.Value.Affordable));
                 _buySellBtn.interactable = canBuy;
             }
 
-            // Equip: only for an OWNED, not-yet-equipped item on the BUY tab.
+            // Equip: only for an OWNED, not-yet-equipped, UNLOCKED item on the BUY tab.
             if (_equipBtn != null)
             {
-                bool canEquip = hasSel && !sell && (item.Value.Price <= 0) && !item.Value.Equipped;
+                bool canEquip = hasSel && !sell && !locked && (item.Value.Price <= 0) && !item.Value.Equipped;
                 _equipBtn.interactable = canEquip;
             }
         }

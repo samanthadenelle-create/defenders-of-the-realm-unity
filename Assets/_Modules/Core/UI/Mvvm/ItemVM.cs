@@ -25,10 +25,13 @@ namespace DeNelle.Core.UI.Mvvm
         public readonly string Rarity;
         public readonly bool Equipped;
         public readonly bool Locked;
+        /// <summary>Why the item is locked (e.g. "Requires Lv 5" / "Class: Ranger"), or null when unlocked.
+        /// The View shows this hint on a greyed, non-purchasable row so the player sees progression.</summary>
+        public readonly string LockReason;
 
         public ItemVM(string id, string name, string iconRole, string iconName, int price,
                       string currencyId, bool affordable, string rarity = null,
-                      bool equipped = false, bool locked = false)
+                      bool equipped = false, bool locked = false, string lockReason = null)
         {
             Id = id;
             Name = name;
@@ -40,6 +43,7 @@ namespace DeNelle.Core.UI.Mvvm
             Rarity = rarity;
             Equipped = equipped;
             Locked = locked;
+            LockReason = lockReason;
         }
     }
 }
