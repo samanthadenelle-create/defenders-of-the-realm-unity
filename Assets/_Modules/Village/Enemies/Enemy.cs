@@ -230,6 +230,19 @@ namespace DeNelle.Village
         private bool      _heroAggroEngaged;     // sticky once in range (hysteresis)
         private float     _heroResolveTimer;     // periodic re-resolve (hero may spawn late / respawn)
 
+        // ── Dungeon/outpost in-scene battle-lock (2026-06-30 "0 damage in dungeon" fix) ──
+        // The hero's attack input (PlayerAttackController / HeroAbilityInput) is gated on
+        // BattleLock.IsInBattle(), which only the STAGED battle owners raise. The in-place
+        // OutpostEnemyGroupSpawner hollows (heart==null, EnemyBrain.HeroOnlyTarget) stage NO
+        // BattleArena, so the lock stayed FALSE and every hero swing/cast was suppressed — the
+        // ONLY damage that landed was the passive reflect (dealtByHero=false). We raise
+        // HeroCombatEngagement (a BattleLock source) while such a duelist has the hero in aggro
+        // range, so the hero can actually fight them. Scoped to HeroOnlyTarget combatants, so it
+        // never trips on overworld roamers (they pop the arena) or heart-siege wave enemies.
+        private EnemyBrain _engageBrain;         // cached hero-only brain (null for non-duelists)
+        private bool       _engageBrainResolved; // resolve-once latch (re-armed in Configure for pooling)
+        private bool       _engagedLatched;      // current membership in HeroCombatEngagement (edge-triggered)
+
         // Structure-awareness fix (ff.enemystructureaware): reused buffer for the brain-less
         // all-direction structure sweep (OverlapSphereNonAlloc) so it never allocs per tick.
         private readonly Collider[] _structureScanBuffer = new Collider[16];
@@ -509,6 +522,10 @@ namespace DeNelle.Village
             _dead = false;
             _attackCooldown = 0f;
             _navWarned = false;
+            // Re-arm the in-scene battle-lock brain resolve for pooled reuse (the spawner adds the
+            // EnemyBrain AFTER Configure, so this resolves lazily on the first Update post-spawn).
+            _engageBrainResolved = false;
+            _engageBrain = null;
 
             // Animation + turning fixes for core TD battle characters.
             // Attach guarded driver (so Enemy.cs can call SetLocomotion/PlayAttack/Die
@@ -584,7 +601,18 @@ namespace DeNelle.Village
         // query a clean live list instead of an overflow-prone physics sweep. Covers
         // pooling too (re-enable re-registers; Register dedups).
         private void OnEnable()  => TargetManager.Register(this);
-        private void OnDisable() => TargetManager.Unregister(this);
+        private void OnDisable()
+        {
+            TargetManager.Unregister(this);
+            // Release the in-scene battle-lock membership so a despawned/pooled/destroyed enemy
+            // can never wedge BattleLock.IsInBattle() true (a stale token would keep combat input
+            // locked in town). OnDisable runs before OnDestroy and on pool release — covers all exits.
+            if (_engagedLatched)
+            {
+                _engagedLatched = false;
+                DeNelle.Core.Combat.HeroCombatEngagement.SetEngaged(this, false);
+            }
+        }
 
         private void EnsureHitReaction()
         {
@@ -670,6 +698,45 @@ namespace DeNelle.Village
             DriveNav();
             TickFacing();
             DriveAnimator();
+            UpdateHeroCombatEngagement();
+        }
+
+        // ---------------------------------------------------------------------
+        // In-scene battle-lock — let the hero ATTACK the in-place dungeon/outpost
+        // hollows (2026-06-30 "0 damage in dungeon" root fix). See the fields block
+        // above + DeNelle.Core.Combat.HeroCombatEngagement for the full RCA.
+        // ---------------------------------------------------------------------
+
+        /// <summary>
+        /// Raises/clears this enemy's membership in <see cref="DeNelle.Core.Combat.HeroCombatEngagement"/>
+        /// (a <see cref="DeNelle.Core.Combat.BattleLock"/> source) so the hero's attack input is LIVE
+        /// while an in-place hero-only duelist (dungeon/outpost hollow) is engaging her. Scoped to
+        /// heart-less <see cref="EnemyBrain.HeroOnlyTarget"/> combatants and edge-triggered so it only
+        /// touches the shared set on a change. Staged battles keep their own BattleLock probes; this
+        /// only adds the previously-missing "in-place real-time fight" source.
+        /// </summary>
+        private void UpdateHeroCombatEngagement()
+        {
+            bool engaged = false;
+            // Only heart-less duelists (the OutpostEnemyGroupSpawner hollows + arena orcs) can ever
+            // hold this lock — a heart-siege wave enemy or a plain overworld roamer never does.
+            if (!_dead && _heart == null)
+            {
+                if (!_engageBrainResolved) { _engageBrain = GetComponent<EnemyBrain>(); _engageBrainResolved = true; }
+                if (_engageBrain != null && _engageBrain.HeroOnlyTarget)
+                    engaged = IsHeroWithinAggro();   // hero inside this enemy's aggro band => a live fight
+            }
+
+            if (engaged != _engagedLatched)
+            {
+                _engagedLatched = engaged;
+                DeNelle.Core.Combat.HeroCombatEngagement.SetEngaged(this, engaged);
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Combat",
+                    $"{_enemyId}: hero-combat engagement -> {engaged} " +
+                    $"(heart-less hero-only duelist; BattleLock.IsInBattle now={DeNelle.Core.Combat.BattleLock.IsInBattle()}, " +
+                    $"engagedCount={DeNelle.Core.Combat.HeroCombatEngagement.EngagedCount}). " +
+                    "engaged=True is what lets the hero's swings/casts fire in the dungeon/outpost.");
+            }
         }
 
         // ---------------------------------------------------------------------

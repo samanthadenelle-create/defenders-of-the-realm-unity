@@ -27,6 +27,7 @@
 
 using System.Collections.Generic;
 using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics; // WO3: FlowTrace self-reporting for the mana-over-time potion
 using DeNelle.Core.State;     // WO-36: GameState backstop for hero class self-resolve
 using DeNelle.Village.Talents; // WO-36: talent -> ability-stat multipliers
 using UnityEngine;
@@ -73,6 +74,14 @@ namespace DeNelle.Village
 
         // --- runtime state (the React CombatState fields HeroAbilities owns) ---
         private float _mana;
+
+        // WO3: mana-over-time potion (Mana Draught). The potion adds mana GRADUALLY
+        // (e.g. +3%/s of max for 10s = +30% total), not an instant chunk. We hold a
+        // per-second rate + an expiry time; Update() drips it in until the window ends.
+        // Re-entrant: a second potion REFRESHES the window + ADDS the remaining target
+        // onto the rate (simple, correct — never double-counts already-delivered mana).
+        private float _manaOverTimeRate;   // mana per second added while active (absolute units)
+        private float _manaOverTimeUntil;  // Time.time at which the drip stops
         private readonly float[] _cooldownRemaining = new float[4]; // indexed by AbilitySlot
 
         // WO-574: per-ability cooldowns for the player-assignable EXTRA skill bar
@@ -244,6 +253,13 @@ namespace DeNelle.Village
 
             // ── mana regen + cooldown ticks (heroAbilities.ts lines 122-126) ──
             _mana = Mathf.Min(_maxMana, _mana + _manaRegenPerSecond * dt * _manaRegenMultiplier);
+
+            // WO3: Mana Draught — drip the over-time mana restore while the window is open.
+            if (Time.time < _manaOverTimeUntil && _manaOverTimeRate > 0f)
+            {
+                _mana = Mathf.Min(_maxMana, _mana + _manaOverTimeRate * dt);
+                if (_mana >= _maxMana) { _manaOverTimeRate = 0f; _manaOverTimeUntil = 0f; }
+            }
             for (int i = 0; i < _cooldownRemaining.Length; i++)
                 _cooldownRemaining[i] = Mathf.Max(0f, _cooldownRemaining[i] - dt);
 
@@ -266,6 +282,52 @@ namespace DeNelle.Village
         public float ExtraCooldownRemaining(string abilityId)
         {
             return !string.IsNullOrEmpty(abilityId) && _extraCooldown.TryGetValue(abilityId, out var v) ? v : 0f;
+        }
+
+        /// <summary>
+        /// WO3 (Mana Draught): restore mana GRADUALLY — <paramref name="totalPct"/> percent
+        /// of max mana spread evenly over <paramref name="seconds"/> (owner spec: "+3%/s till
+        /// 30% recovered" = totalPct 30, seconds 10). Data-driven from consumables.json. The
+        /// drip runs in Update(). Re-entrant: a second draught REFRESHES the window and carries
+        /// any UNDELIVERED mana from the prior draught into the new rate, so it never
+        /// double-counts already-restored mana.
+        /// </summary>
+        public void RestoreManaOverTime(float totalPct, float seconds)
+        {
+            Guard.Try("HeroAbilities", "RestoreManaOverTime", () =>
+            {
+                if (totalPct <= 0f || seconds <= 0f)
+                {
+                    FlowTrace.Warn("HeroAbilities", $"RestoreManaOverTime ignored (pct={totalPct}, secs={seconds}).");
+                    return;
+                }
+
+                // Carry forward whatever the in-flight draught hasn't yet delivered.
+                float carry = 0f;
+                if (Time.time < _manaOverTimeUntil && _manaOverTimeRate > 0f)
+                    carry = _manaOverTimeRate * (_manaOverTimeUntil - Time.time);
+
+                float target = _maxMana * (totalPct / 100f) + carry;
+                _manaOverTimeRate  = target / seconds;
+                _manaOverTimeUntil = Time.time + seconds;
+
+                FlowTrace.Step("HeroAbilities",
+                    $"Mana Draught: +{totalPct}% ({target:0.0} mana) over {seconds}s -> {_manaOverTimeRate:0.00}/s (mana {_mana:0.0}/{_maxMana:0.0}).");
+            });
+        }
+
+        /// <summary>
+        /// SAFE-ZONE full recovery (owner 2026-06-29): restore mana to FULL instantly. Called when the
+        /// hero enters a safe zone (Castle/Town/Base — see <see cref="DeNelle.Village.SafeZoneRecovery"/>),
+        /// the only place full passive recovery happens under the survival rule (ff.noautoheal). Clears any
+        /// in-flight Mana Draught drip so it can't keep ticking past full. Self-reporting.
+        /// </summary>
+        public void RestoreManaToFull()
+        {
+            _mana = _maxMana;
+            _manaOverTimeRate  = 0f;   // a full restore ends any in-flight draught drip
+            _manaOverTimeUntil = 0f;
+            FlowTrace.Step("HeroAbilities", $"SAFE-ZONE mana restore: mana -> FULL ({_maxMana:0.0}).");
         }
 
         /// <summary>
@@ -593,6 +655,16 @@ namespace DeNelle.Village
                     // Core IDamageable seam via WaveManager — no concrete/HUD ref added.
                     if (foe == null && AimPointOverride == null)
                         foe = LiveBoss();
+                    // §12 outgoing-attack trace (2026-06-30 "0 damage in dungeon"): PROVE the ability's
+                    // target resolution — did it find a hostile in reach, and (owner's hypothesis) what
+                    // FACTION is it? AsHostile below only accepts CombatFaction.Hostile.
+                    if (foe == null)
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("HeroAbility",
+                            $"{def.EffectEnum} cast: NO hostile target in reach (maxR={maxR:F1}m origin={origin}) — 0 damage this cast.");
+                    else
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("HeroAbility",
+                            $"{def.EffectEnum} cast: target='{(foe as MonoBehaviour)?.name}' faction={foe.Faction} " +
+                            $"dist={(foe.WorldPosition - origin).magnitude:F1}m computedDmg={dmg:F1} (launching projectile).");
                     if (foe != null)
                     {
                         // DEF (combat feel): LAUNCH a visible projectile (Ranger arrow / Mage
@@ -609,6 +681,10 @@ namespace DeNelle.Village
                             if (hitFoe == null || !hitFoe.IsAlive) return;
                             // Ticket #61: hero-dealt -> combo/streak/RAMPAGE eligible.
                             (hitFoe as DeNelle.Core.Combat.IHeroDamageMarkable)?.MarkNextHitFromHero();
+                            // §12: PROVE the ability lands as a hero-dealt hit (dealtByHero=True).
+                            DeNelle.Core.Diagnostics.FlowTrace.Step("HeroAbility",
+                                $"ability hit '{(hitFoe as MonoBehaviour)?.name}' faction={hitFoe.Faction} " +
+                                $"dealtByHero=True amount={hitDmg:F1}.");
                             hitFoe.TakeDamage(hitDmg, hitEl);
                             DeNelle.Core.Combat.DamageAttribution.Record(hitFoe, HeroProgression.Id, hitDmg);
                             if (snare) hitFoe.ApplyStatus(StatusEffect.Slow, 2.5f); // castAbility.ts snare
@@ -960,7 +1036,18 @@ namespace DeNelle.Village
         {
             if (col == null) return null;
             var dmg = col.GetComponentInParent<IDamageable>();
-            if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) return null;
+            // §12 (2026-06-30): the owner's hypothesis was a wrong TEAM/FACTION flag. This trace
+            // PROVES per-candidate WHY a collider is/ isn't a valid hero target — no IDamageable,
+            // dead, or a non-Hostile faction. Throttled+keyed so it names the excluded object once/sec.
+            if (dmg == null)
+                return null;   // not a damageable at all (wall/prop) — silent, expected
+            if (!dmg.IsAlive || dmg.Faction != CombatFaction.Hostile)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroAbility", "ashostile-reject-" + col.transform.root.name, 1f,
+                    $"AsHostile REJECTED '{col.transform.root.name}': alive={dmg.IsAlive} faction={dmg.Faction} " +
+                    "(needs alive + faction=Hostile). If a dungeon enemy shows faction!=Hostile, THAT is a faction bug.");
+                return null;
+            }
             return dmg;
         }
 

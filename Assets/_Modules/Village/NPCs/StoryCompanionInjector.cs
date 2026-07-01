@@ -865,7 +865,9 @@ namespace DeNelle.Village
             };
             Texture2D tex = null;
             if (!string.IsNullOrEmpty(texPath))
-                Guard.Try("Roster", $"load diffuse {texPath}", () => tex = Resources.Load<Texture2D>(texPath));
+                // WO-545: Addressables-first/Resources-fallback seam (was Resources.Load) so the
+                // companion atlas survives Heroes/Textures leaving Resources.
+                Guard.Try("Roster", $"load diffuse {texPath}", () => tex = DeNelle.Core.HeroTextureLoader.Load(texPath));
             Color tint = TintFor(hero);
 
             // TGVRU-G: Guard.TryEach over the renderers — one bad material/renderer logs (via

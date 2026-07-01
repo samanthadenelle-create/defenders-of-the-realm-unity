@@ -1008,7 +1008,9 @@ namespace DeNelle.Village
                 _ => null,
             };
             if (string.IsNullOrEmpty(texPath)) return false;
-            var tex = Resources.Load<Texture2D>(texPath);
+            // WO-545: route through the Addressables-first/Resources-fallback seam so this
+            // atlas still loads once Heroes/Textures leaves Resources (was Resources.Load).
+            var tex = DeNelle.Core.HeroTextureLoader.Load(texPath);
             if (tex == null)
             {
                 Debug.LogWarning("[HeroBodySwapper] DEF-267 baked/basecolor diffuse not found at Resources/" +
@@ -1069,7 +1071,7 @@ namespace DeNelle.Village
                     // its basecolor (medieval_knight_3d_model_normal, copied to Heroes/Textures/
                     // KnightArmored_normal, imported textureType=NormalMap). Bind it so the armour
                     // plates/cloth catch surface detail. Null-guarded — a missing normal is a clean no-op.
-                    var knightArmoredNormal = Resources.Load<Texture2D>("Heroes/Textures/KnightArmored_normal");
+                    var knightArmoredNormal = DeNelle.Core.HeroTextureLoader.Load("Heroes/Textures/KnightArmored_normal"); // WO-545 Addressables seam
                     if (knightArmoredNormal != null && baked.HasProperty("_BumpMap"))
                     {
                         baked.SetTexture("_BumpMap", knightArmoredNormal);

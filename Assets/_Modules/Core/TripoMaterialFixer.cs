@@ -184,7 +184,10 @@ namespace DeNelle.Core
 
             Texture2D fallbackTex = null;
             if (!string.IsNullOrEmpty(_fallbackTextureName))
-                fallbackTex = Resources.Load<Texture2D>(_fallbackTextureName);
+                // WO-545: Addressables-first/Resources-fallback seam (was Resources.Load). Generic
+                // over the path — hero atlases ("Heroes/Textures/*") resolve from the migrated
+                // bundle; enemy atlases ("Enemies/OrcTex/*", not migrated) fall back to Resources.
+                fallbackTex = HeroTextureLoader.Load(_fallbackTextureName);
             if (!string.IsNullOrEmpty(_fallbackTextureName) && fallbackTex == null)
                 FlowTrace.Warn("TripoMatFix",
                     $"'{gameObject.name}': fallback texture '{_fallbackTextureName}' did not load from Resources — " +

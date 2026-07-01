@@ -46,17 +46,37 @@ namespace DeNelle.Core.Platform
         private void Start()
         {
             _pi = PiPlatform.Current;
-            if (_pi == null || !_pi.IsAvailable)
-            {
-                FlowTrace.Step("Pi", "Pi unavailable (not Pi Browser) — sign-in skipped.");
-                return;
-            }
+            // ALWAYS show the manual "Sign in with Pi" button so the user can trigger sign-in even
+            // if auto-detection is delayed/flaky. The Pi SDK (sdk.minepi.com/pi-sdk.js) loads
+            // ASYNC, so IsAvailable can be false for the first moments after boot — gating the
+            // button on it (the old bug) hid the sign-in entirely in the Pi Desktop preview.
             BuildButton();
-            SignInAsync().Forget(); // auto-trigger on app load
+            WaitForPiThenAutoSignIn().Forget();
         }
 
         /// <summary>Manual trigger (the button).</summary>
         public void SignIn() => SignInAsync().Forget();
+
+        /// <summary>
+        /// The Pi SDK script loads asynchronously, so window.Pi may not be ready when Start() runs.
+        /// Poll briefly (~10s) so AUTO sign-in fires the instant the SDK becomes available (the Pi
+        /// portal auto-detects a signed-in user within seconds); otherwise the manual button remains.
+        /// </summary>
+        private async UniTaskVoid WaitForPiThenAutoSignIn()
+        {
+            for (int i = 0; i < 20; i++) // ~10s @ 500ms
+            {
+                if (_pi == null) _pi = PiPlatform.Current;
+                if (_pi != null && _pi.IsAvailable)
+                {
+                    SignInAsync().Forget(); // auto-trigger the moment Pi is ready
+                    return;
+                }
+                await UniTask.Delay(500);
+            }
+            FlowTrace.Step("Pi", "Pi not auto-detected after 10s — manual 'Sign in with Pi' button available.");
+            SetButton("Sign in with Pi", true);
+        }
 
         private async UniTaskVoid SignInAsync()
         {

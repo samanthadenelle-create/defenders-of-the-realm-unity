@@ -60,7 +60,7 @@ namespace DeNelle.Core.Diagnostics
         // EMPTY by default → the sink no-ops until the backend lands. This is the
         // single place to wire the URL; it carries NO secret (the Neon connstring
         // stays server-side only, per WO-429). Mirrors GameStateService's BackendBase.
-        private const string TraceEndpoint = "";
+        private const string TraceEndpoint = "https://defenders-of-the-realm-v2.vercel.app/api/trace";
 
         // Bounded ring + batch cadence — sized so a log storm can't flood memory or
         // the endpoint.

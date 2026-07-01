@@ -10,6 +10,10 @@
 /*
 
 # 2) re-include only what we serve
+#    api/: full backend now ships — Vercel PRO lifts the Hobby 12-function cap (owner
+#    upgraded 2026-07-01). All functions deploy (events/track, trace, save/load, pi/verify,
+#    profile, referral, promo, leaderboard) so the client's telemetry + the WebTrace debug
+#    sink reach Neon. DATABASE_URL must be set on the project.
 !/api
 !/vercel.json
 !/package.json

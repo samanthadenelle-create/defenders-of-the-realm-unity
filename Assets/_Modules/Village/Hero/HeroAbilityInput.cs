@@ -56,7 +56,18 @@ namespace DeNelle.Village
             // gamepad face buttons / left-click are inert in town + the overworld walk and only
             // fire inside a live battle (BattleArena / ArenaMode / ATB register the in-progress
             // probe). A throwing probe degrades to "not in battle", so this can never wedge input.
-            if (!BattleLock.IsInBattle()) return;
+            if (!BattleLock.IsInBattle())
+            {
+                // §12 outgoing-attack trace (2026-06-30 "0 damage in dungeon"): PROVE when a cast/
+                // primary attack is pressed but SUPPRESSED because nothing raised BattleLock. This is
+                // the smoking gun for the dungeon 0-damage bug (in-place hollows staged no battle). With
+                // the HeroCombatEngagement fix this should STOP firing once a hollow engages the hero.
+                if (PrimaryAttackPressed() || ReadSlot() is AbilitySlot)
+                    DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroAbility", "cast-suppressed", 1f,
+                        "ABILITY/primary-attack pressed but SUPPRESSED — BattleLock.IsInBattle()=false " +
+                        "(no active battle here). This is why the hero does 0 damage outside a staged/engaged fight.");
+                return;
+            }
 
             // PRIMARY ATTACK: left-click / Space / gamepad-South fire slot Q (the
             // class basic strike) at the auto-locked target. Universal, forgiving
@@ -64,12 +75,18 @@ namespace DeNelle.Village
             // pressing 1 and nothing connecting at range.
             if (PrimaryAttackPressed())
             {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("HeroAbility",
+                    "primary attack (slot Q) FIRED — BattleLock live; resolving vs locked/nearest hostile.");
                 _abilities.TryCast(AbilitySlot.Q);
                 return;   // don't also double-fire from the number row this frame
             }
 
             if (ReadSlot() is AbilitySlot slot)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("HeroAbility",
+                    $"ability slot {slot} FIRED — BattleLock live.");
                 _abilities.TryCast(slot);
+            }
         }
 
         /// <summary>True the frame the universal primary-attack input is pressed.</summary>

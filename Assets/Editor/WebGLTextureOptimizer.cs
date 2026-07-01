@@ -37,6 +37,7 @@ namespace DeNelle.Editor
         {
             "Assets/Resources/Textures",
             "Assets/Resources/Heroes",
+            "Assets/HeroContent",   // WO-545: heroes migrated out of Resources into per-hero bundles
             "Assets/Resources/Pets",
             "Assets/Resources/Enemies",
             "Assets/Resources/Cosmetics",

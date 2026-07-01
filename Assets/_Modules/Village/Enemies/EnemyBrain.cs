@@ -122,6 +122,14 @@ namespace DeNelle.Village
         /// </summary>
         public void SetHeroOnlyTarget(bool on) { _heroOnlyTarget = on; }
 
+        /// <summary>
+        /// True when this brain is a HERO-ONLY duelist (set by the isolated BattleArena and
+        /// the in-place OutpostEnemyGroupSpawner dungeon/outpost groups). Read by
+        /// <see cref="Enemy"/> to raise the in-scene <see cref="DeNelle.Core.Combat.HeroCombatEngagement"/>
+        /// battle-lock so the hero's attack input is live for these fights (2026-06-30 dungeon 0-damage fix).
+        /// </summary>
+        public bool HeroOnlyTarget => _heroOnlyTarget;
+
         // Shared runtime Kiter config (WO-145 Tactic B): hold ~10 m, back off inside 6 m,
         // gentle weave, fire ranged every 1.6 s. ONE instance reused across all caster
         // enemies — DPS-mage behaviour: "casts from a distance, AI keeps its distance"

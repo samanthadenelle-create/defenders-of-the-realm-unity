@@ -94,7 +94,7 @@ namespace DeNelle.Core
         /// query-param <c>?trace=1</c> (see <see cref="ApplyUrlActivationOnce"/>) so support can turn it
         /// on without a rebuild. The sink itself is a clean no-op on standalone/editor and stays dormant
         /// until a backend endpoint is configured.</summary>
-        public static bool WebTrace => Get("webtrace", defaultOn: false);
+        public static bool WebTrace => Get("webtrace", defaultOn: true);
 
         /// <summary>When ON, tapping an upgradable building opens the code-built MVVM
         /// <c>BuildingUpgradePanelMvvm</c> (a big "Upgrade Building" CTA + a tier-ladder grid)
