@@ -234,3 +234,10 @@ Files: CastleMoatBuilder.cs, new shader, new material, new json. MoatWaterShimme
 water must cover the seam from castle plinth to OuterWorld terrain). The older ~3-unit
 note is superseded/bannered. Width question CLOSED; remaining open calls: color/mood,
 motion intensity, fish density.
+
+**Owner verification method (07-03):** the SOUTH BRIDGE is the ground truth for moat
+width — it spans castle plinth → OuterWorld terrain, so its measured span bounds the
+seam gap the water must cover. Measured: bridge ≈ 22.2m end-to-end (10.85 local ×
+2.049 scale), ends bedded on land both sides → open water ≈ the 14m band. STANDING
+ORACLE for any moat/water change: water band must remain fully covered by the bridge
+span (band ⊂ bridge extent) or the crossing visually breaks.
