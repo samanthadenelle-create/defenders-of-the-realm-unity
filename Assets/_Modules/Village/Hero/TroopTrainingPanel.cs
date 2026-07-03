@@ -85,6 +85,7 @@ namespace DeNelle.Village.Hero
             sRect.offsetMin = Vector2.zero;
             sRect.offsetMax = Vector2.zero;
             _statusText = statusGo.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(_statusText); // font-safe before first .text set (kit convention)
             _statusText.fontSize = ElarionUi.FontLabel;
             _statusText.color = ElarionUi.ParchmentDim;
             _statusText.alignment = TMPro.TextAlignmentOptions.Center;
@@ -106,6 +107,7 @@ namespace DeNelle.Village.Hero
             r.offsetMin = Vector2.zero;
             r.offsetMax = Vector2.zero;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(t); // font-safe before first .text set (kit convention)
             t.fontSize = ElarionUi.FontLabel;
             t.color = ElarionUi.Gilt;
             t.alignment = TMPro.TextAlignmentOptions.Center;
@@ -129,6 +131,7 @@ namespace DeNelle.Village.Hero
             r.offsetMin = Vector2.zero;
             r.offsetMax = Vector2.zero;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(t); // font-safe before first .text set (kit convention)
             t.fontSize = ElarionUi.FontLabel;
             t.color = ElarionUi.Parchment;
             t.alignment = TMPro.TextAlignmentOptions.Center;

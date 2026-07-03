@@ -389,13 +389,23 @@ namespace DeNelle.Village.Talents
                 ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f, bold: true);
 
             // State line (bottom): owned / planned / cost / lock reason.
-            string stateLine; Color stateColor;
+            // Locked nodes: readability pass (UI matrix 2026-07-03) — the red "Requires..."
+            // read as an error and crowded the plate. Quiet it: ParchmentDim, italic, one
+            // step smaller, with the requirement on its own line under "Locked".
+            string stateLine; Color stateColor; bool lockedNode = false;
             if (node.Owned) { stateLine = "Owned"; stateColor = ElarionUi.Gilt; }
             else if (node.IsPending) { stateLine = "Planned -" + node.WisdomCost; stateColor = ElarionUi.Affordable; }
             else if (node.CanUnlock) { stateLine = node.WisdomCost + " Wisdom"; stateColor = ElarionUi.Affordable; }
-            else { stateLine = string.IsNullOrEmpty(node.LockReason) ? "Locked" : node.LockReason; stateColor = ElarionUi.Danger; }
-            ElarionUiKit.Label(go.transform, stateLine, 0.02f, 0.20f, stateColor,
-                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f);
+            else
+            {
+                lockedNode = true;
+                stateLine = string.IsNullOrEmpty(node.LockReason) ? "Locked" : "Locked\n" + node.LockReason;
+                stateColor = ElarionUi.ParchmentDim;
+            }
+            var stateLbl = ElarionUiKit.Label(go.transform, stateLine, 0.02f, 0.20f, stateColor,
+                lockedNode ? ElarionUi.FontMicro - 1 : ElarionUi.FontMicro,
+                TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f);
+            if (lockedNode) stateLbl.fontStyle = TMPro.FontStyles.Italic;
 
             // Equipped chip (Skill nodes slotted in the loadout).
             if (node.IsEquipped)

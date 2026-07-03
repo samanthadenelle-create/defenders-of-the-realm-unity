@@ -86,8 +86,12 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.Scrim(_ui.transform, onTapClose: Close);
 
             // WO-562: canonical obsidian chrome (black + gold trim + shared Close) replaces
-            // PanelFramed + a per-panel "X" Danger button. BuildHeader still adds the deploy sub-title.
-            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "",
+            // PanelFramed + a per-panel "X" Danger button. The chrome's header zone carries the
+            // ONE title (UI matrix 2026-07-03: the extra procedural Header was a duplicate);
+            // BuildHeader now adds only the badge / stars / target-time sub-row.
+            string raidName = _def != null && !string.IsNullOrEmpty(_def.displayName)
+                ? _def.displayName : (_def != null ? _def.id : "Raid");
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "RAID: " + raidName,
                 new Vector2(0.10f, 0.05f), new Vector2(0.90f, 0.95f), Close, withBackdrop: false);
             var panel = chrome.content.transform;
 
@@ -107,8 +111,8 @@ namespace DeNelle.Village.Hero
 
         private void BuildHeader(Transform panel)
         {
-            string name = _def != null && !string.IsNullOrEmpty(_def.displayName) ? _def.displayName : (_def != null ? _def.id : "Raid");
-            ElarionUiKit.Header(panel, "RAID: " + name, x0: 0.05f, x1: 0.90f, y0: 0.93f, y1: 0.985f);
+            // Title lives in the obsidian chrome's header zone (set in Open) — no second
+            // header here (UI matrix 2026-07-03 dedupe). This builds only the sub-row.
 
             // Difficulty badge + ★★★ target time, just under the header.
             Color tint = DifficultyColor(_def != null ? _def.difficulty : null);
