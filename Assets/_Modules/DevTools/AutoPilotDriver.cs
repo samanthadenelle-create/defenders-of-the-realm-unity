@@ -692,6 +692,7 @@ namespace DeNelle.DevTools
             {
                 if (_hero == null) break;
                 Vector3 pos = _hero.transform.position;
+                CaptureBridgeCrossing(pos);   // feet-on-stone shot at the bridge mouth (t≈9s, cap-proof)
                 if (HorizontalDistance(pos, entry.transform.position) < entry.enterRadius + 0.5f) reachedEntry = true;
                 if (HorizontalDistance(pos, lastPos) > 6f) { warped = true; break; }   // teleport, not a step
                 lastPos = pos;
@@ -2598,6 +2599,30 @@ namespace DeNelle.DevTools
         //  produces an ATTEMPTED PASS/FAIL verdict. SKIPPED remains only for the
         //  genuinely impossible state: no hero.
         // =====================================================================
+        // Owner 2026-07-03 "I walk ON TOP of the bridge": one screenshot per run taken while
+        // the hero is physically ON the south bridge span — the feet-on-stone visual proof
+        // (renders graphics-on; blank under -nographics). Box = south span: x≈-4.4±4,
+        // z between the plinth face (-53) and the outer end (~-76).
+        private bool _bridgeShotTaken;
+        private void CaptureBridgeCrossing(Vector3 pos)
+        {
+            if (_bridgeShotTaken) return;
+            // Box includes the bridge MOUTH (z from -50): the crossing warp fires at the
+            // threshold, so the hero's deepest on-foot point is deck-meets-plinth — exactly
+            // the junction the feet-on-stone proof needs (windowed run 10100: crossing at
+            // t≈9s, the deeper-span legs never ran before the 300s cap).
+            if (pos.z > -50f || pos.z < -76f || Mathf.Abs(pos.x + 4.4f) > 5f) return;
+            _bridgeShotTaken = true;
+            try
+            {
+                string dir = System.IO.Path.Combine(Application.persistentDataPath, "ui-shots");
+                System.IO.Directory.CreateDirectory(dir);
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, "bridge_crossing.png"));
+                FlowTrace.Step("Auto", $"bridge-crossing shot captured at {pos} (feet-on-stone visual proof).");
+            }
+            catch { /* capture is best-effort */ }
+        }
+
         private IEnumerator HomeReturnRoundTrip()
         {
             const float PlinthHalf = 44f;         // = CastleHubBuilder.PlinthHalf (courtyard footprint)
@@ -2666,6 +2691,7 @@ namespace DeNelle.DevTools
                 {
                     if (_hero == null) break;
                     Vector3 pos = _hero.transform.position;
+                    CaptureBridgeCrossing(pos);
                     if (Vector3.Distance(pos, exitWarpTarget) < 8f) { crossedOut = true; break; }
                     if (HorizontalDistance(pos, exitGatePos) <= exitRadius + 0.5f &&
                         MobileInteractButton.IsActive && MobileInteractButton.InvokeActive())
@@ -2750,6 +2776,7 @@ namespace DeNelle.DevTools
             while (Time.realtimeSinceStartup - tRet < ReturnLegBudget)
             {
                 if (_hero == null) break;
+                CaptureBridgeCrossing(_hero.transform.position);
                 if (BackHome()) { home = true; break; }
                 float d = HorizontalDistance(_hero.transform.position, retPos);
                 if (d < closest) closest = d;
