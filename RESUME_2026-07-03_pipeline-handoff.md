@@ -97,3 +97,19 @@ All brace/NUL-checked by their agents; a pre-gate was launched (may or may not h
 2. Knight package ×3 (body / gap policy / package shape).
 3. Water slices 2-3 taste (color/mood, motion, fish).
 4. Death-clip direction mapping final confirm (left/right/back/assassinate rows).
+
+## FABLE SESSION BENCHMARK SNAPSHOT (owner is A/B-testing Fable vs Opus — measure the next
+## session against these same yardsticks: the matrix, the fleet oracles, the image pairs)
+- Session span: ~05:00-15:50, 2026-07-03 (one overnight-into-afternoon session, post-compaction).
+- Commits today: 35 (all local, gate-verified lanes, push held).
+- Matrix movement: HUD kit shipped+fleet-green; 13/13 router panels machine-green; 14 surface
+  conversions off UIDocument (8 morning + 6 wave-1 silos); 6 dead surfaces deleted with proof;
+  4 fleet failure classes RCA'd from captured data and driven to 0 (threshold weld, popup
+  open/close, focus-freeze); bridge walks on measured stone.
+- Fan-out: 11 agents this afternoon (6 SME silos + PM + water design + rigging SME + onboarding
+  audit + tutorial fixer), PM caught 1 live-reference deletion before it shipped.
+- Owner-lane deliverables: Knight package imported + 61 clips extracted + specs captured;
+  water design + 4 canon rulings; onboarding audit (V2 dark behind flag + 3 wiring gaps).
+- End-of-session artifact: Builds/Windows/DefendersOfTheRealm.exe (BUILD_OK 15:48).
+- Quality-bar rules in force: preflight gate per edit, §12 captured-data-before-fix, brace/NUL
+  per file, image-pair sign-off, verify-before-delete. The next session inherits identical rules.
