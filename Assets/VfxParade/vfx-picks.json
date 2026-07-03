@@ -1,0 +1,10 @@
+{
+    "picks": [
+        {
+            "path": "Assets/Spells Pack/Particles/Prefabs/Buffs/Buff_Nature.prefab",
+            "name": "Buff_Nature",
+            "moment": "hit",
+            "note": "good spell landing on shield"
+        }
+    ]
+}

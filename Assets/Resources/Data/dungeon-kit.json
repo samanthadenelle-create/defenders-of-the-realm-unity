@@ -1,0 +1,59 @@
+{
+  "_note": "WO-595 KayKit modular dungeon kit. The single data source the composer reads. Owner thinks in data structures: change this JSON to change the kit, no code edit. Sockets N/S/E/W = open|closed; snapping mates open->open at cellSize with a yaw. parts[] positions are cell-anchor-relative (cell centre = 0,0,0). FBX under Assets/Models/KayKit/dungeon/fbx(unity)/. Grid measured, not assumed (4m cell / 4m walls).",
+  "grid": {
+    "cellSize": 4.0,
+    "wallHeight": 4.0,
+    "subGrid": 2.0,
+    "doorWidth": 2.0,
+    "doorHeight": 3.0,
+    "wallOnEdgeCenterline": true,
+    "levelStepY": 4.0
+  },
+  "themes": {
+    "default": "dungeon_texture",
+    "options": ["dungeon_texture", "alt_texture_1_Golden", "alt_texture_2_BlackAndWhite", "alt_texture_3_SepiaA", "alt_texture_4_SepiaB", "alt_texture_5_NightA", "alt_texture_6_NightB"],
+    "materialDir": "Assets/Models/KayKit/dungeon/fbx(unity)/Materials/",
+    "atlasDir": "Assets/Models/KayKit/KayKit Dungeon Remastered 1.1/Assets/textures/",
+    "_note": "one shared UV atlas -> one material swap re-skins the whole kit"
+  },
+  "chunks": [
+    { "id": "room_small",        "type": "room",          "cells": [1,1], "sockets": {"N":"closed","S":"closed","E":"closed","W":"closed"},
+      "parts": [
+        {"fbx":"floor_tile_large","pos":[0,0,0],"yaw":0},
+        {"fbx":"wall","pos":[0,0,2],"yaw":0}, {"fbx":"wall","pos":[0,0,-2],"yaw":0},
+        {"fbx":"wall","pos":[2,0,0],"yaw":90}, {"fbx":"wall","pos":[-2,0,0],"yaw":90},
+        {"fbx":"wall_corner","pos":[2,0,2],"yaw":0}, {"fbx":"wall_corner","pos":[-2,0,2],"yaw":90},
+        {"fbx":"wall_corner","pos":[2,0,-2],"yaw":270}, {"fbx":"wall_corner","pos":[-2,0,-2],"yaw":180},
+        {"fbx":"ceiling_tile","pos":[0,4,0],"yaw":0}
+      ] },
+    { "id": "room_small_2door",  "type": "room",          "cells": [1,1], "sockets": {"N":"open","S":"open","E":"closed","W":"closed"},
+      "parts": [
+        {"fbx":"floor_tile_large","pos":[0,0,0],"yaw":0},
+        {"fbx":"wall_doorway","pos":[0,0,2],"yaw":0}, {"fbx":"wall_doorway","pos":[0,0,-2],"yaw":0},
+        {"fbx":"wall","pos":[2,0,0],"yaw":90}, {"fbx":"wall","pos":[-2,0,0],"yaw":90}
+      ] },
+    { "id": "room_medium",       "type": "room",          "cells": [2,2], "sockets": {"N":"open","S":"open","E":"open","W":"open"}, "parts": [] },
+    { "id": "room_large",        "type": "room",          "cells": [3,3], "sockets": {"N":"open","S":"open","E":"open","W":"open"}, "parts": [] },
+    { "id": "boss_room",         "type": "boss_room",     "cells": [3,3], "sockets": {"N":"closed","S":"open","E":"closed","W":"closed"}, "parts": [] },
+    { "id": "hall_straight",     "type": "hall_straight", "cells": [1,3], "sockets": {"N":"open","S":"open","E":"closed","W":"closed"}, "parts": [] },
+    { "id": "hall_straight_short","type": "hall_straight","cells": [1,2], "sockets": {"N":"open","S":"open","E":"closed","W":"closed"}, "parts": [] },
+    { "id": "hall_corner_L",     "type": "corner",        "cells": [1,1], "sockets": {"N":"open","S":"closed","E":"open","W":"closed"}, "parts": [] },
+    { "id": "hall_T",            "type": "hall_T",        "cells": [1,1], "sockets": {"N":"open","S":"closed","E":"open","W":"open"}, "parts": [] },
+    { "id": "hall_cross",        "type": "hall_cross",    "cells": [1,1], "sockets": {"N":"open","S":"open","E":"open","W":"open"},
+      "parts": [ {"fbx":"floor_tile_large","pos":[0,0,0],"yaw":0}, {"fbx":"wall_crossing","pos":[0,0,0],"yaw":0} ] },
+    { "id": "dead_end",          "type": "dead_end",      "cells": [1,1], "sockets": {"N":"closed","S":"open","E":"closed","W":"closed"}, "parts": [] },
+    { "id": "rubble_cap",        "type": "dead_end",      "cells": [1,1], "sockets": {"N":"closed","S":"open","E":"closed","W":"closed"}, "parts": [] },
+    { "id": "door_gate",         "type": "access_point",  "cells": [1,1], "sockets": {"N":"open","S":"open","E":"closed","W":"closed"}, "parts": [] },
+    { "id": "door_arch",         "type": "access_point",  "cells": [1,1], "sockets": {"N":"open","S":"open","E":"closed","W":"closed"}, "parts": [] },
+    { "id": "entrance",          "type": "entrance",      "cells": [1,2], "sockets": {"N":"open","S":"open","E":"closed","W":"closed"}, "parts": [] },
+    { "id": "exit_portal",       "type": "exit",          "cells": [1,1], "sockets": {"N":"closed","S":"open","E":"closed","W":"closed"}, "parts": [] },
+    { "id": "stairs_up",         "type": "stairs_up",     "cells": [1,1], "sockets": {"N":"open","S":"open","E":"closed","W":"closed"}, "levelDeltaY": 4.0, "parts": [] },
+    { "id": "stairs_down",       "type": "stairs_down",   "cells": [1,1], "sockets": {"N":"open","S":"open","E":"closed","W":"closed"}, "levelDeltaY": -4.0, "parts": [] },
+    { "id": "stairs_grand",      "type": "stairs_up",     "cells": [1,2], "sockets": {"N":"open","S":"open","E":"closed","W":"closed"}, "levelDeltaY": 4.0, "parts": [] },
+    { "id": "elevator",          "type": "elevator",      "cells": [1,1], "sockets": {"N":"open","S":"closed","E":"closed","W":"closed"}, "custom": "moving-platform-script", "parts": [] },
+    { "id": "trap_spikes",       "type": "trap_room",     "cells": [1,1], "sockets": {"N":"open","S":"open","E":"closed","W":"closed"}, "parts": [] },
+    { "id": "trap_pit",          "type": "trap_room",     "cells": [1,1], "sockets": {"N":"open","S":"open","E":"closed","W":"closed"}, "parts": [] },
+    { "id": "trap_grate_hall",   "type": "trap_room",     "cells": [1,2], "sockets": {"N":"open","S":"open","E":"closed","W":"closed"}, "parts": [] },
+    { "id": "pillar_hall",       "type": "hall_straight", "cells": [1,3], "sockets": {"N":"open","S":"open","E":"closed","W":"closed"}, "parts": [] }
+  ]
+}

@@ -1,0 +1,397 @@
+{
+  "_comment": "Canonical Game Guide content for Defenders of the Realm: Echoes of Elarion. Authored content for the in-game opt-in help codex (WO-588). The guide panel (GuideVM + View) renders whatever sections this file declares: tabs down the left, body + tips on the right. Adding or editing a section is a DATA change, no code. Each section is grounded in the SHIPPED game; any not-yet-built system is marked status 'coming' rather than described as live. Building entries are enumerated one-per-real-building from Assets/Resources/Data/Canonical/buildings.json (plus the Heart of Elarion, the village's central structure). Display names follow canon-strings.json. Tone: warm, concise, encouraging.",
+  "version": 1,
+  "sections": [
+    {
+      "id": "basic_mechanics",
+      "tab": "Basic Mechanics",
+      "title": "Basic Mechanics",
+      "status": "live",
+      "body": [
+        "You play one hero, the Keeper of Elarion, and you control only the Keeper. Everything else in the realm acts on its own, so you are never juggling a squad. Walk with WASD, the arrow keys, a gamepad stick, or the on-screen joystick on touch and web builds. The camera follows you while you explore.",
+        "The loop is simple and it always comes home: leave the hub to explore and fight, win resources and gear, then return to grow the village and your hero. Hold the last light, push the dark back, and the realm heals a little more each time.",
+        "Approach a person, gate, building, or glowing object and an interact prompt appears. That single button opens dialogue, shops, the build menu, or a region crossing depending on what you are facing."
+      ],
+      "tips": [
+        "Movement is camera-relative: push the stick where you want to go on screen.",
+        "Most panels share one Close button, top of the frame. There is no clutter of X buttons.",
+        "Nothing here is timed against you out in the world. Take your time and read.",
+        "Open this guide any time from Settings; it never blocks play."
+      ]
+    },
+    {
+      "id": "objectives",
+      "tab": "Objectives",
+      "title": "Objectives",
+      "status": "live",
+      "body": [
+        "Your current goal is always one glance away. The Quest Tracker card on the right edge of the screen shows the quest you are following and the exact step in front of you, like 'Speak with the Village Elder' or 'Clear the outpost.'",
+        "Objectives advance as you do the thing they ask. Finish a step and the card updates to the next one; finish the last step and the quest completes and pays out. You never have to guess what to do next.",
+        "Tap the tracker card to open the full quest log and see everything you have available, active, and completed."
+      ],
+      "tips": [
+        "If you ever feel lost, read the tracker card first.",
+        "The Heart of Elarion also speaks as danger rises during a defense, a living cue that something needs you.",
+        "Completed objectives often unlock the next building, region, or hero ability."
+      ]
+    },
+    {
+      "id": "quests",
+      "tab": "Quests",
+      "title": "Quests",
+      "status": "live",
+      "body": [
+        "Quests are how the story of Elarion unfolds and how you earn many of your rewards. You pick them up by talking to people in the village and the world. Each quest runs through a chain of stages, and each stage has a clear objective and a reward when you clear it.",
+        "There are story quests that carry the main tale, gear quests that lead you toward better equipment, and side quests for extra resources. The Quest Tracker follows one at a time; the quest log lists them all with their progress.",
+        "Conversations use a clean dialogue box, one speaker and their line at a time, with choices when they matter. Some options only appear once you have done the right thing or hold the right item, so coming back to a character later can open new threads."
+      ],
+      "tips": [
+        "Rewards can be resources (Crystals, Wood, Iron, Food) or a granted item.",
+        "Some stages grant a keystone that feeds your hero progression, so they are worth chasing.",
+        "Revisit villagers after big events; their dialogue and offers change."
+      ]
+    },
+    {
+      "id": "exploration",
+      "tab": "Exploration",
+      "title": "Exploration",
+      "status": "live",
+      "body": [
+        "Home is the castle hub, with the Outer World streaming in around it so you can walk straight out into the realm. The world is built as connected regions joined by natural, diegetic crossings, a bridge, a tunnel, a mountain pass, rather than invisible walls.",
+        "These crossings are Region Gates. Walk up to one, step onto the threshold, and the gate carries you across the seam into the next region. Some warp you, some stream the next area in around you, but they always read as a real place you walk through.",
+        "Out in the world you will find enemy outposts and wandering threats. Closing on one starts a battle. Clearing them pushes the darkness back, which strengthens the world tree and speeds your Echoes' harvest, so exploring is never just sightseeing."
+      ],
+      "tips": [
+        "Crossings are safe to walk up to; the transition only triggers on the threshold.",
+        "Clearing the world is permanent progress, not just one-time loot.",
+        "Watch for glowing nodes and collectibles tucked into the regions."
+      ]
+    },
+    {
+      "id": "inventory",
+      "tab": "Inventory",
+      "title": "Inventory",
+      "status": "live",
+      "body": [
+        "The Inventory is where you view and equip everything you own. It is laid out as tabs over a grid: Weapons, Armor, Accessories, and Consumables. Tap any item to see its stats and the actions you can take, Equip, Use, or Drop.",
+        "Beside the grid, a live 3D preview of your hero, the Gear Preview, shows exactly how your current loadout looks. Change a piece and the hero updates in place, so you always see what you are wearing.",
+        "Your hero has five equip slots: Main Hand for your weapon, Off-Hand for a shield, an Armor set, a Ring, and an Amulet. The Off-Hand only accepts shields, so a sword and shield stay clearly delineated from a two-handed grip."
+      ],
+      "tips": [
+        "Equipped pieces are marked on the grid so you can see your set at a glance.",
+        "The detail strip shows stat changes before you commit to a swap.",
+        "Off-Hand is shields only; weapons go in the Main Hand.",
+        "Consumables are used straight from the inventory."
+      ]
+    },
+    {
+      "id": "crafting",
+      "tab": "Crafting",
+      "title": "Crafting",
+      "status": "live",
+      "body": [
+        "Crafting turns raw resources and gathered materials into gear and consumables. Instead of only buying equipment, you can build it, and crafted gear comes in tiers, from Common up through finer, master, and legendary grades that scale its stats.",
+        "Pick a recipe, check the cost and any special components it needs, and tap Craft. The panel shows exactly what a recipe requires next to what you own, and flags anything you are short on, so there is no guesswork. A successful craft drops the new item straight into your inventory, ready to equip.",
+        "Different crafts live in different places: weapon and armor recipes at the smiths, jewelry at the Jeweler, and potions and food via the village's consumable recipes. Some of the best recipes also call for special materials you earn from quests."
+      ],
+      "tips": [
+        "If a component shows red, you are missing it; finish the quest or gather more.",
+        "Higher tiers cost more but multiply the gear's stats meaningfully.",
+        "Crafting and buying both feed the same inventory; use whichever is cheaper for you."
+      ]
+    },
+    {
+      "id": "armory",
+      "tab": "Armory",
+      "title": "Armory",
+      "status": "live",
+      "body": [
+        "Every weapon, armor set, and accessory carries a rarity, from Common and Uncommon up through Rare, Epic, and Legendary, and rarity scales the item's power. Weapons raise your damage, armor adds defense and bonus health, and accessories (rings and amulets) round out your build.",
+        "Many pieces have a level requirement and a class fit, so a weapon meant for one hero will not slot onto another. Gear is bought with the realm's resources, Wood, Iron, Food, and Crystals, so your economy directly feeds your power.",
+        "The Off-Hand slot is reserved for shields, keeping sword-and-board distinct from a heavier weapon. Use the Gear Preview to see and compare a loadout on your hero before you commit."
+      ],
+      "tips": [
+        "Check an item's level and class requirement before you save up for it.",
+        "Rarer is stronger, but a well-matched lower-rarity piece can beat an off-class higher one.",
+        "Defense reduces damage taken; bonus health gives you a bigger margin to heal through."
+      ]
+    },
+    {
+      "id": "leveling",
+      "tab": "Leveling",
+      "title": "Leveling System",
+      "status": "live",
+      "body": [
+        "Your hero earns experience by defeating enemies. Cross a threshold and you level up instantly, with no break in the action. The XP bar on the HUD shows how close you are to the next level.",
+        "Each level makes you stronger in two ways. It raises your ability damage, so the same skills hit harder the more you fight, and it grants Wisdom, the points you spend in the Skill Tree. Early levels give a steady trickle of Wisdom, and later levels give a little more.",
+        "Because leveling pays out both raw power and Wisdom, every fight moves you forward twice: better numbers now, and a deeper skill build over time."
+      ],
+      "tips": [
+        "Wisdom is your skill-point currency; spend it in the Skill Tree.",
+        "Leveling is automatic; just keep fighting.",
+        "Ability damage compounds with level, so your kit feels better the longer you play."
+      ]
+    },
+    {
+      "id": "skill_tree",
+      "tab": "Skill Tree",
+      "title": "Skill Tree",
+      "status": "live",
+      "body": [
+        "The Skill Tree is where you shape your hero. You spend Wisdom, earned from leveling and victories, to unlock nodes across four tiers, climbing from the basics up to powerful tier-four capstones. Higher tiers cost more Wisdom and sit behind the nodes below them.",
+        "Nodes come in two flavors. Skill nodes unlock a brand-new ability you can equip; stat nodes give permanent passive boosts like more damage, defense, or health. Alongside each hero's own tree there is a small pool of shared, universal nodes any hero can take.",
+        "This is the heart of your build. Want to lean into survival, burst, or sustain? The tree lets you commit, and unlocked abilities then go onto your skill bar (see Hot-Swap)."
+      ],
+      "tips": [
+        "Capstones are the tier-four payoffs; plan a path toward the one you want.",
+        "Unlocking a Skill node is step one; you still equip it on the skill bar to use it.",
+        "Stat nodes are quiet but always-on; do not overlook them.",
+        "The Knight's tree is fully wired for V1; other heroes follow as they come online."
+      ]
+    },
+    {
+      "id": "hot_swap",
+      "tab": "Hot-Swap",
+      "title": "Hot-Swap Skill Bar",
+      "status": "live",
+      "body": [
+        "Your hero fights with two sets of abilities. The fixed class kit is your bread and butter: a basic attack that is always there, plus three signature abilities that define your class. That kit is your reliable baseline.",
+        "On top of that sits the hot-swap skill bar, a row of extra slots you fill yourself with abilities you unlock in the Skill Tree. This is how the tree pays off in combat: unlock a skill, then drag it into a slot to bring it into the fight.",
+        "You arrange the hot-swap bar out of combat. Drag a skill onto a slot, or move it between slots to taste, and it locks in for your next battle. In the fight, each slot has its own cooldown, so your custom kit plays right alongside your class signatures."
+      ],
+      "tips": [
+        "Edit the bar between fights, not during one; assignments lock in for combat.",
+        "Only abilities you have unlocked in the Skill Tree can be slotted.",
+        "Mix your class kit with picked skills to cover damage, control, and sustain.",
+        "Empty slots show as a plus; drop a skill in to fill them."
+      ]
+    },
+    {
+      "id": "arena_battles",
+      "tab": "Arena Battles",
+      "title": "Arena Battles",
+      "status": "live",
+      "body": [
+        "When you close on an enemy in the world, the screen fades and you drop into an isolated battle arena, just your hero against a small family of foes, usually one to three, with a rare chance of a boss. There are no buildings in the way; it is a clean, open space to fight in.",
+        "Combat is real-time and built around movement. Kite, reposition, and time your abilities: open with your basic attack, weave in your signatures and hot-swap skills, and heal or control when the pressure spikes. Clear every enemy to win.",
+        "Win and you are rated with stars based on how fast and clean you fought: a quick finish earns three stars, a solid one two, and a win at any pace one. More stars multiply your rewards, XP, Wisdom, resources, and a better shot at gear. Then you warp back to where you were, the world a little safer."
+      ],
+      "tips": [
+        "Three stars rewards the fastest clears; speed is paid in loot.",
+        "Keep moving; standing still in a real-time fight gets you hit.",
+        "Save a heal or a control skill for when a foe winds up a big hit.",
+        "Losing returns you to a safe spot, so a tough fight is never the end."
+      ]
+    },
+    {
+      "id": "defense_building",
+      "tab": "Defense Building",
+      "title": "Defense Building",
+      "status": "live",
+      "body": [
+        "Back home, the realm strikes back in waves. Each wave opens with a prepare phase, a countdown to ready your defenses, then enemies march in from the gates toward the Heart of Elarion. You and your defenses hold them off; clear the wave to win, but let the Heart fall and the run ends.",
+        "The waves escalate in story and scale, from the first scattered Hollowed to orc warbands, troll brutes, and a dragon at the apex. Beating waves is also how your Echo workforce grows, so defending home directly feeds your economy.",
+        "Note on what is coming: the deeper base-building layer, freely placing and upgrading your own towers and walls, and converting cleared outposts into garrisoned bases that troops auto-defend, is a V2 feature still being built. For now, focus on holding the line with your hero as the waves test the village."
+      ],
+      "tips": [
+        "Use the prepare countdown to position and ready yourself before enemies spawn.",
+        "Every five waves cleared unlocks another Echo for your workforce.",
+        "The Heart is what you are protecting; do not let enemies reach it.",
+        "Player-placed towers, walls, and garrison troops arrive in a later update."
+      ]
+    },
+    {
+      "id": "echoes",
+      "tab": "Echoes",
+      "title": "Echoes",
+      "status": "live",
+      "body": [
+        "Echoes are spirits released by the world tree, the Heart of Elarion, that gather resources for you on their own. They are the realm's passive economy: you set them to work and they keep harvesting whether you are playing or away.",
+        "You start with a single Echo and earn more by defending home, one additional Echo for every five waves you clear, up to a workforce of four. More Echoes means more harvest, so offense and defense both feed your gathering.",
+        "Echoes pour their take into a shared silo that holds a set number of hours, filling while you play and while you are offline, up to its cap. When you come back, tap Dump to bank the silo into your main resources and reset the clock. The come-back-and-claim rhythm is the loop; upgrading the silo lets it hold more before it tops out."
+      ],
+      "tips": [
+        "Dump the silo when you return so it does not sit full and waste harvest.",
+        "Clear waves to grow your workforce; five waves per new Echo, up to four.",
+        "Harvest keeps running while you are away, capped at the silo's hours.",
+        "A stronger, healthier world tree means faster gathering, so keep pushing the dark back."
+      ]
+    },
+    {
+      "id": "building_heart",
+      "tab": "Heart of Elarion",
+      "title": "Heart of Elarion",
+      "status": "live",
+      "body": [
+        "At the very center of the village stands the Heart of Elarion, the world tree and stone reliquary that everything else protects. It is the source of the realm's life force and the home the waves are trying to reach.",
+        "The Heart is more than a target. It releases the Echoes that gather for you, and it sets the village's tier, the gate that unlocks higher building upgrades as your home grows. As danger rises during a defense, the Heart even speaks, a living warning that a lane is breaking.",
+        "Keep the Heart standing and keep it strong. Driving enemies back feeds its life force, which heals the world and quickens your Echoes' harvest."
+      ],
+      "tips": [
+        "If the Heart falls during a wave, the run is over; defend it above all.",
+        "The Heart's tier gates what your other buildings can upgrade to.",
+        "Listen to the Heart's voice in a defense; it flags trouble before you see it."
+      ]
+    },
+    {
+      "id": "building_crystal_mine",
+      "tab": "Crystal Mine",
+      "title": "Crystal Mine",
+      "status": "live",
+      "body": [
+        "The Crystal Mine taps the gem-sap that seeps from the Heart into the stone, producing Crystals, the realm's premium resource for shops, gear, and upgrades. It is one of your economy's cornerstones.",
+        "Build and upgrade it to raise its yield. As a resource building, its upgrade path is about level and output, more Crystals flowing in over time, so investing here pays for everything else.",
+        "Why bother? Crystals gate the rarer gear and the deeper upgrades, so a healthy mine quietly funds your whole build."
+      ],
+      "tips": [
+        "Crystals are needed for rarer gear and many upgrades; keep the mine running.",
+        "Upgrading raises yield; treat it as compounding income.",
+        "Pair it with your other resource buildings for a balanced economy."
+      ]
+    },
+    {
+      "id": "building_farm",
+      "tab": "Farm",
+      "title": "Farm",
+      "status": "live",
+      "body": [
+        "The Farm grows the wheat and apples the Heart wills into being, producing Food for the realm. Food is one of the core resources you spend on gear and upkeep.",
+        "Like the other resource buildings, the Farm upgrades along a yield path: each level produces more Food over time. It keeps your hero fed and your crafting and shops supplied.",
+        "A steady Farm means you are never stalled on Food when you want to craft or buy."
+      ],
+      "tips": [
+        "Food feeds crafting and many gear purchases; do not let it run dry.",
+        "Upgrade the Farm to keep pace with your spending.",
+        "Resource buildings work best upgraded together."
+      ]
+    },
+    {
+      "id": "building_sawmill",
+      "tab": "Sawmill",
+      "title": "Sawmill",
+      "status": "live",
+      "body": [
+        "The Sawmill cuts timber into planks, producing Wood, the most common building and crafting resource and the bones of your walls and gear. Its blade hums against the timber the green places of Elarion still spare.",
+        "Upgrade it along its yield path to bring in more Wood per cycle. Wood is also one of the things your Echoes harvest, so the Sawmill and your workforce both feed the same pile.",
+        "Plentiful Wood keeps crafting cheap and your defenses well supplied."
+      ],
+      "tips": [
+        "Wood is your most-used resource; a strong Sawmill keeps everything affordable.",
+        "Echoes can gather Wood too, stacking with the mill's output.",
+        "Upgrade early so you are never short on the basics."
+      ]
+    },
+    {
+      "id": "building_echo_hollow",
+      "tab": "Echo Hollow",
+      "title": "Echo Hollow",
+      "status": "live",
+      "body": [
+        "The Echo Hollow is an ancient recess in the world tree's roots where the Echoes rest between their work, their presence a low hum in the stones. It is the home of your gathering spirits.",
+        "Think of the Hollow as the heart of your passive economy, the place tied to the Echo workforce that grows as you clear waves. It grounds the spirits that keep harvesting while you fight and while you are away.",
+        "A thriving Hollow means a thriving workforce, which means more resources flowing in for everything else you want to build."
+      ],
+      "tips": [
+        "Your Echoes are tied to the Hollow; grow your workforce by clearing waves.",
+        "See the Echoes tab for how the harvest-and-Dump loop works.",
+        "More Echoes, more passive resources; this is the engine of your idle economy."
+      ]
+    },
+    {
+      "id": "building_workshop",
+      "tab": "Workshop",
+      "title": "Workshop",
+      "status": "live",
+      "body": [
+        "The Workshop is where the Folk make what the Keeper needs and ask nothing in return. It is the village's general crafting and production hall, hammer and forge working together.",
+        "Use it as a hub for turning your resources into useful goods. As your village tier rises at the Heart, the Workshop and its kin can be upgraded for better output.",
+        "A solid Workshop keeps the village self-sufficient, less buying, more making."
+      ],
+      "tips": [
+        "Lean on the Workshop to craft from resources you already have.",
+        "Upgrades unlock as your village tier rises at the Heart.",
+        "Pair production buildings with strong resource buildings to keep them fed."
+      ]
+    },
+    {
+      "id": "building_forge",
+      "tab": "Forge",
+      "title": "Forge",
+      "status": "live",
+      "body": [
+        "The Forge is the smith's fire that never cools, where raw iron is beaten into plate the Hollowed cannot easily bite through. It is your weapons-and-gear smith: a place to both buy equipment and upgrade what you carry.",
+        "Step inside and you can shop for gear, sell what you have outgrown, and run the upgrade flow to improve your equipment. The Forge is one of the buildings that does double duty, a store and a smithy in one.",
+        "Coming back to the Forge as you level is how you keep your weapon matched to the fights ahead."
+      ],
+      "tips": [
+        "The Forge both sells gear and upgrades it; use both flows.",
+        "Sell gear you have outgrown to fund the next tier.",
+        "Match your weapon's level and class requirement to your hero."
+      ]
+    },
+    {
+      "id": "building_armorer",
+      "tab": "Armorer",
+      "title": "Armorer",
+      "status": "live",
+      "body": [
+        "The Armorer is the realm's dedicated smith for protection, where the Folk shape iron into the plate that keeps you standing through a wave. Where the Forge leans toward your weapon, the Armorer is your place for armor.",
+        "Like the Forge, it both sells gear and runs an upgrade flow, so you can buy a fresh set and improve the one you wear. Better armor means more defense and more bonus health to heal through.",
+        "Visit the Armorer when fights start hitting harder than your current set can absorb."
+      ],
+      "tips": [
+        "Upgrade armor when you are taking too much damage to heal through.",
+        "Defense and bonus health both come from your armor set.",
+        "The Armorer buys and sells gear, just like the Forge."
+      ]
+    },
+    {
+      "id": "building_market",
+      "tab": "Market",
+      "title": "Market",
+      "status": "live",
+      "body": [
+        "The Market is the village's trading floor, where you buy and sell goods. It is a shop building, your place to convert resources into the items you want and to offload what you do not need.",
+        "Drop in to browse what is for sale, pick up consumables and gear, and sell surplus back for resources. It keeps your inventory and your resource bins flowing in both directions.",
+        "A short trip to the Market is often the fastest way to fix a gap in your kit between fights."
+      ],
+      "tips": [
+        "Sell surplus here to free up space and gain resources.",
+        "Stock up on consumables before a tough stretch.",
+        "Compare Market prices with crafting before you spend."
+      ]
+    },
+    {
+      "id": "building_jeweler",
+      "tab": "Jeweler",
+      "title": "Jeweler",
+      "status": "live",
+      "body": [
+        "The Jeweler specializes in the accessories that round out your build, the rings and amulets that fill your hero's two accessory slots. It is a shop, and the home of the realm's finer crafted trinkets.",
+        "Visit to buy accessories and to craft jewelry from your materials. Accessories add bonus health and other perks on top of your weapon and armor, the finishing touches on a loadout.",
+        "When your weapon and armor are solid, the Jeweler is where you squeeze out that extra edge."
+      ],
+      "tips": [
+        "Accessories fill your Ring and Amulet slots; one of each.",
+        "The Jeweler both sells and crafts accessories.",
+        "Treat accessories as the polish on an already-strong build."
+      ]
+    },
+    {
+      "id": "building_arcane_tower",
+      "tab": "Arcane Tower",
+      "title": "Arcane Tower",
+      "status": "live",
+      "body": [
+        "The Arcane Tower was built by the first Keepers and holds the ward-stones that answer your call. It is the realm's most imposing structure, the tallest silhouette in the village and its sturdiest, with the most health of any building.",
+        "Unlike the resource and shop buildings, the Tower upgrades along a spells path: its own system of magical wards and powers, damage-over-time, area effects, and mana, that you research and improve. It is your magical backbone for the defense.",
+        "Invest in the Tower when you want the village itself to fight back with arcane power, not just your hero."
+      ],
+      "tips": [
+        "The Tower upgrades spells, not resources; it is its own research track.",
+        "It is the toughest building, a strong anchor in your defenses.",
+        "Higher village tiers at the Heart unlock its deeper upgrades."
+      ]
+    }
+  ]
+}
