@@ -72,7 +72,18 @@ namespace DeNelle.Village
             // Blink base load entirely for the Knight and build the armored body directly.
             if (cls == HeroClass.Knight)
             {
-                FlowTrace.Step("HeroBody", $"class={cls} slug={slug} — Knight routes to legacy Tripo armored body (skipping Blink base).");
+                // OWNER RULING 2026-07-03: the PALADIN hero package is the new Knight body. When
+                // ff.heropackage is ON (default) load the published KnightPackage prefab (Paladin
+                // variant that binds KnightPackage.controller + bakes sword/shield/helmet). OFF (or a
+                // failed package load) routes to the legacy Tripo armored Knight so the hero is never
+                // bodyless and the legacy path stays byte-for-byte reachable.
+                if (DeNelle.Core.FeatureFlags.HeroPackage)
+                {
+                    FlowTrace.Step("HeroBody", $"class={cls} — ff.heropackage ON: routing to PALADIN package body 'KnightPackage'.");
+                    BuildPackageHeroBody(cls, "KnightPackage", controllerSnapshot);
+                    return;
+                }
+                FlowTrace.Step("HeroBody", $"class={cls} slug={slug} — ff.heropackage OFF: legacy Tripo armored body (skipping Blink base).");
                 BuildLegacyResourcesBody(cls, slug, controllerSnapshot);
                 return;
             }
@@ -226,10 +237,77 @@ namespace DeNelle.Village
             WireHeroBody(body, cls, slug, controllerSnapshot, isBlink: false);
         }
 
+        // ─────────────────────────────────────────────────────────────────────────────
+        // PACKAGE PATH (owner ruling 2026-07-03): build the Knight from the published PALADIN hero
+        // package. HeroAssetLoader.LoadHeroPrefab("KnightPackage") resolves Resources/Heroes/
+        // KnightPackage.prefab — a variant of Knight_Hero.fbx that already BINDS KnightPackage.controller
+        // (full posture-tree) and bakes sword/shield/helmet. VisualFactory.Skin instantiates the prefab
+        // WHOLE (Object.Instantiate — verified), so the skinned body's Animator keeps that bound
+        // controller; WireHeroBody(usePackage:true) must therefore NOT overwrite it. On ANY load miss we
+        // fall back to the legacy Tripo Knight (never bodyless, ff.heropackage=0 parity).
+        // ─────────────────────────────────────────────────────────────────────────────
+        private void BuildPackageHeroBody(HeroClass cls, string slug,
+                                          RuntimeAnimatorController controllerSnapshot)
+        {
+            using var _ = FlowTrace.Enter("HeroBody", $"BuildPackageHeroBody slug={slug}");
+
+            GameObject prefab = null;
+            Guard.Try("HeroBody", $"HeroAssetLoader.LoadHeroPrefab {slug}", () =>
+            {
+                prefab = DeNelle.Core.HeroAssetLoader.LoadHeroPrefab(slug);
+            });
+            if (prefab == null)
+            {
+                FlowTrace.Fail("HeroBody",
+                    $"PACKAGE MISS — Paladin package prefab '{slug}' failed to load (Resources/Heroes/" +
+                    $"{slug}.prefab missing/unregistered). Falling back to the legacy Tripo Knight body " +
+                    "(no bodyless hero). Publish the package prefab or set ff.heropackage=0.");
+                BuildLegacyResourcesBody(cls, "Knight", controllerSnapshot);
+                return;
+            }
+
+            // FACING/HEIGHT (owner felt-tune needed): the Paladin is a DIFFERENT rig from the Tripo
+            // Knight (Mixamo, Z-forward) — its correct forward yaw is UNKNOWN. Start at 0 (identity) and
+            // FlowTrace it LOUDLY so the owner corrects it after seeing the body. Height starts at the
+            // base TargetHeightMeters (the legacy Knight used x1.0286 — a Tripo-specific tweak that does
+            // NOT transfer to this rig); Skin's FitHeight normalizes to it regardless of import scale.
+            const float PackageForwardYaw = 0f;
+            float targetH = TargetHeightMeters;
+            FlowTrace.Step("HeroBody",
+                $"PACKAGE FORWARD YAW = {PackageForwardYaw} (owner felt-tune needed) | PACKAGE HEIGHT = {targetH}m " +
+                "(owner felt-tune; legacy Knight used x1.0286, a Tripo-only tweak not carried to the Paladin rig).");
+
+            GameObject body = null;
+            Guard.Try("HeroBody", "VisualFactory.Skin (KnightPackage / Paladin)", () =>
+            {
+                body = VisualFactory.Skin(transform, prefab, new SkinOptions
+                {
+                    FitHeight = targetH,
+                    StripColliders = true,
+                    SeatOnGround = true,
+                    FixTripoMaterials = false,
+                    LocalRotation = Quaternion.Euler(0f, PackageForwardYaw, 0f),
+                });
+            });
+            if (body == null)
+            {
+                FlowTrace.Fail("HeroBody",
+                    "VisualFactory.Skin returned null for the Paladin package 'KnightPackage' — falling " +
+                    "back to the legacy Tripo Knight body (no bodyless hero).");
+                BuildLegacyResourcesBody(cls, "Knight", controllerSnapshot);
+                return;
+            }
+            body.name = "HeroBody";
+            FlowTrace.Step("HeroBody", "Paladin package body skinned + named 'HeroBody'.");
+
+            WireHeroBody(body, cls, slug, controllerSnapshot, isBlink: false, usePackage: true);
+        }
+
         // Shared post-load wiring for BOTH the Blink and legacy body. On the Blink path the
         // Tripo/CC5 material + embedded-strip + sole-nudge steps are skipped (clean assets).
         private void WireHeroBody(GameObject body, HeroClass cls, string slug,
-                                  RuntimeAnimatorController controllerSnapshot, bool isBlink)
+                                  RuntimeAnimatorController controllerSnapshot, bool isBlink,
+                                  bool usePackage = false)
         {
             // DEF-232 spawn-time validation: the camera (SmartMobileCamera) follows the hero
             // ROOT by tag; HeroLocomotion drives that same root. The visible body must sit
@@ -269,11 +347,30 @@ namespace DeNelle.Village
             // controller directly from Resources/Heroes/<slug>.controller instead;
             // fall back to any carried-over snapshot only if that asset is absent.
             // WO-545 Tier-1 seam: Addressables-first, Resources-fallback (V1-safe).
-            var controller = DeNelle.Core.HeroAssetLoader.LoadHeroController(slug)
-                             ?? controllerSnapshot;
-
             var anim = body.GetComponentInChildren<Animator>();
             if (anim == null) anim = body.AddComponent<Animator>();
+
+            RuntimeAnimatorController controller;
+            if (usePackage)
+            {
+                // PACKAGE: the KnightPackage (Paladin) prefab already BINDS KnightPackage.controller and
+                // VisualFactory.Skin instantiates the prefab WHOLE (Object.Instantiate), so the live
+                // animator already carries that posture-tree controller. It is NOT in Resources, so a
+                // LoadHeroController("KnightPackage") would miss — KEEP the prefab's bound controller and
+                // do NOT overwrite it below (guarded by usePackage at the assignment).
+                controller = anim.runtimeAnimatorController;
+                FlowTrace.Step("HeroBody",
+                    $"PACKAGE controller kept from prefab Animator: {(controller != null ? controller.name : "<null>")}.");
+                if (controller == null)
+                    FlowTrace.Fail("HeroBody",
+                        "PACKAGE prefab Animator carried NO controller — KnightPackage.prefab must bind " +
+                        "KnightPackage.controller. Hero will not animate.");
+            }
+            else
+            {
+                controller = DeNelle.Core.HeroAssetLoader.LoadHeroController(slug)
+                             ?? controllerSnapshot;
+            }
             // CRITICAL (WO-174 "no walk / statue"): the per-class controllers are built from
             // HUMANOID Mixamo/iClone clips (HeroAnimatorFactory). A Humanoid clip can ONLY pose the
             // rig through an Avatar — with NO avatar the Animator freezes in its bind/T-pose. The
@@ -328,7 +425,10 @@ namespace DeNelle.Village
             // so the Knight keeps its proven -90° (model-forward = move-forward), matching the orcs.
             if (isBlink)
                 AlignBodyFacingToRoot(body, anim);
-            if (controller != null)
+            // PACKAGE: do NOT overwrite — the prefab's bound KnightPackage.controller is already live on
+            // this animator (Skin preserved it). Re-assigning would be a no-op here but the guard makes
+            // the "baked controller wins" contract explicit. Legacy/Blink still bind their loaded controller.
+            if (controller != null && !usePackage)
             {
                 anim.runtimeAnimatorController = controller;
             }
@@ -340,7 +440,11 @@ namespace DeNelle.Village
             // Owner 2026-05-30: Mixamo clips play too fast on the hero. Scale global
             // animator playback to half speed. Works regardless of which controller is
             // loaded (it's a multiplier on all clip playback). Tune via HeroAnimSpeed.
-            anim.speed = HeroAnimSpeed;
+            // PACKAGE cadence: the Paladin package is a SINGLE cadence authority baked at 1.0 (dossier
+            // §5.1), so it plays at native speed. The legacy Tripo/Mixamo path stays at the 0.5x global
+            // multiplier (its clips run fast). Branch on usePackage; legacy behavior is unchanged.
+            float animSpeed = usePackage ? 1f : HeroAnimSpeed;
+            anim.speed = animSpeed;
             // STRIDE-POLISH (2026-07-02): runtime cadence knob. The baked locomotion
             // timeScales (HeroAnimatorFactory.ApplyLocomotionCadence: walk x2 / run x3
             // against this 0.5x global) net walk 1.0x / run 1.5x. Those are BAKE-TIME;
@@ -348,7 +452,7 @@ namespace DeNelle.Village
             // "anim.runCadence" (default 1.5 = baked = zero change), scaling anim.speed
             // ONLY while the base layer is in Locomotion/InjuredLocomotion — cast/
             // attack/hit pacing (WO-217 + ShapeAttackTempo hitstop) is untouched.
-            HeroLocomotionCadence.Attach(gameObject, anim, HeroAnimSpeed);
+            HeroLocomotionCadence.Attach(gameObject, anim, animSpeed);
             // Keep animating even when the follow camera frames just past the hero
             // edge, else Unity freezes the rig and it T-poses on re-entry to view.
             anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
@@ -383,7 +487,9 @@ namespace DeNelle.Village
             // EquipmentController attaches it to LeftHand on the OnGearChanged this fires (the
             // controller is already added above, so it's subscribed). Knight-specific, like the
             // height tweak — Tripo donor carries no weapon/shield, so we attach them as gear.
-            if (cls == HeroClass.Knight && equipLoadout.EquippedOffHand == null)
+            // PACKAGE: the Paladin package BAKES its own sword/shield/helmet into the mesh, so the
+            // separate shield prop is NOT seeded (baked wins — item e). Legacy Tripo Knight still gets it.
+            if (cls == HeroClass.Knight && !usePackage && equipLoadout.EquippedOffHand == null)
                 Guard.Try("HeroBody", "seed knight default shield",
                     () => equipLoadout.EquipOffHandById("knight_shield_starter"));
             // ARMOR RENDER (HeroArmorVisual): show EQUIPPED Blink armor on the BODY by swapping
@@ -446,7 +552,10 @@ namespace DeNelle.Village
             // DEF-221: the BODY slug and the ABILITY slug can differ. The Cleric loads
             // its own body/controller (slug "Cleric") but fires the Mage loadout until a
             // dedicated cleric/healer kit lands — so route its abilities to "Mage".
-            string abilitySlug = (cls == HeroClass.Cleric) ? "Mage" : slug;
+            // PACKAGE: the body slug is "KnightPackage" but the ability LOADOUT is still "Knight"
+            // (abilities.json has no "knightpackage" job) — route it back to "Knight".
+            string abilitySlug = (cls == HeroClass.Cleric) ? "Mage"
+                               : (usePackage ? "Knight" : slug);
             int recached = 0;
             // HeroLocomotion drives Speed→Walk and is the animation-critical component. ENSURE it
             // exists now (idempotent — HeroControlEnsurer also adds it) so the live animator binds
@@ -543,9 +652,25 @@ namespace DeNelle.Village
             // EquipArmorById persists the choice + fires OnGearChanged (HeroArmorVisual reacts), and
             // intentionally bypasses the weight-class gate (Dragonic is heavy but the Mage default) —
             // this is the owner's explicit cosmetic default, not an auto-best pick.
-            SeedClassDefaultArmor(loadout, cls);
-
-            GearVisualApplier.Apply(body.transform, loadout);
+            // PACKAGE (item e — "baked wins"): the Paladin package IS the hero body with sword/shield/
+            // helmet baked into the mesh. Do NOT seed the default Blink armor set (HeroArmorVisual would
+            // SWAP OUT the Paladin body for a Blink armored skinned-mesh, hiding the package) and do NOT
+            // run the GearVisualApplier weapon-prop attach (it seats a duplicate sword on RightHand).
+            // Legacy Tripo Knight keeps both (its donor carries no weapon/armor). NOTE: EquipmentController
+            // (added above; logic in EquipmentController.cs, OUTSIDE this silo) still reacts to
+            // GearLoadout default gear via OnGearChanged and would attach a KayKit weapon mesh — a
+            // follow-up must make that component package-aware for full de-duplication.
+            if (!usePackage)
+            {
+                SeedClassDefaultArmor(loadout, cls);
+                GearVisualApplier.Apply(body.transform, loadout);
+            }
+            else
+            {
+                FlowTrace.Step("HeroBody",
+                    "PACKAGE: skipped SeedClassDefaultArmor + GearVisualApplier (baked sword/shield/helmet " +
+                    "win). FOLLOW-UP: EquipmentController (out of silo) may still attach a duplicate weapon mesh.");
+            }
 
             // Ensure the guarded ActorAnimator is on the hero root (finds the Animator on the
             // new "HeroBody" child). This wires the full shared animation pipeline (same as

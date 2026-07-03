@@ -348,6 +348,17 @@ namespace DeNelle.Core
         /// PlayerPrefs "ff.tutorialv2" = 0 to force the legacy director.</summary>
         public static bool TutorialV2 => Get("tutorialv2", defaultOn: true);
 
+        /// <summary>Hero package pipeline (owner ruling 2026-07-03: the PALADIN is the new Knight body) —
+        /// when ON (default), the runtime hero pipeline loads the published PALADIN hero package for the
+        /// Knight: <c>Resources/Heroes/KnightPackage.prefab</c> (a variant of Knight_Hero.fbx that BINDS
+        /// <c>KnightPackage.controller</c>, the full posture-tree controller) instead of the legacy Tripo
+        /// armored Knight. The package prefab carries its own Animator + controller + baked sword/shield/
+        /// helmet, and runs at a single 1.0 cadence authority (not the legacy 0.5 global anim speed).
+        /// OFF restores the legacy Tripo Knight (legacy slug "Knight", 0.5 anim speed, +15 forward yaw)
+        /// exactly. A failed package load also degrades to the legacy Knight so the hero is never bodyless.
+        /// PlayerPrefs "ff.heropackage" = 0 to force the legacy Tripo Knight.</summary>
+        public static bool HeroPackage => Get("heropackage", defaultOn: true);
+
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
         {
