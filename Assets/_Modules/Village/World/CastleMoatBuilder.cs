@@ -726,8 +726,16 @@ namespace DeNelle.Village.World
                 if (haveWalkPlane)
                 {
                     const float slabThick = 0.4f;
-                    Vector3 castleEndTop = new Vector3(walkCenterX, liftY + 0.05f, -RampInnerRadius);
-                    Vector3 outerEndTop  = new Vector3(walkCenterX, walkOuterY + 0.05f, -RampInnerRadius - walkSpan);
+                    // MEASURED stone-walkway height (BridgeDeckMeasure diag 2026-07-03, owner:
+                    // "I walk ON TOP of the bridge"): the FBX walkway's dominant up-facing band
+                    // is at LOCAL y=2.6 (arches fill 0->2 below, parapets at 3.4 above) — the
+                    // bounds-bottom anchor put the walk plane ~2m INSIDE the stone. The slab top
+                    // = the stone surface: bridge base + 2.6*scaleY, castle end lifted by the
+                    // same descent pitch the seat applies.
+                    const float DeckSurfaceLocalY = 2.6f;
+                    float deckAboveBase = DeckSurfaceLocalY * Mathf.Abs(bridge.transform.lossyScale.y);
+                    Vector3 castleEndTop = new Vector3(walkCenterX, walkOuterY + deckAboveBase + liftY + 0.05f, -RampInnerRadius);
+                    Vector3 outerEndTop  = new Vector3(walkCenterX, walkOuterY + deckAboveBase + 0.05f, -RampInnerRadius - walkSpan);
                     Vector3 alongSpan = castleEndTop - outerEndTop;
 
                     var deckGo = new GameObject("Bridge_DeckCollider");
