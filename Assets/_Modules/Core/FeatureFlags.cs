@@ -97,12 +97,11 @@ namespace DeNelle.Core
         public static bool WebTrace => Get("webtrace", defaultOn: true);
 
         /// <summary>When ON, tapping an upgradable building opens the code-built MVVM
-        /// <c>BuildingUpgradePanelMvvm</c> (a big "Upgrade Building" CTA + a tier-ladder grid)
-        /// instead of the legacy Yarn upgrade menu / UIDocument BuildingUpgradePanel. Presentation
-        /// only — the upgrade math (BuildingUpgradeService / ResourceBuildingState) is unchanged.
-        /// Default OFF. PlayerPrefs "ff.buildingupgradepanel". The MVVM bootstrap only spawns when
-        /// ON, and the legacy UIDocument bootstrap suppresses itself when ON, so the two never
-        /// double-register PanelId.BuildingUpgrade.</summary>
+        /// <c>BuildingUpgradePanelMvvm</c> — the Warcraft-3-style ENHANCEMENT perk grid
+        /// (tap a tile to unlock a tier/perk; owner redo 2026-07-02). Presentation only —
+        /// the unlock math (BuildingUpgradeService / ResourceBuildingState) is unchanged.
+        /// Default ON. PlayerPrefs "ff.buildingupgradepanel". The legacy UIDocument twin was
+        /// DELETED 2026-07-02 (audit §3.1); OFF is now a kill-switch (no panel spawns).</summary>
         public static bool BuildingUpgradePanel => Get("buildingupgradepanel", defaultOn: true);
 
         /// <summary>When ON, opening a weapon/armor shop opens the native code-built MVVM
@@ -270,7 +269,7 @@ namespace DeNelle.Core
         /// N/E/W crossings yet — those are the editor/architect follow per docs/CASTLE_MOAT_DESIGN_NOTE).
         /// Default ON so the owner sees the bones; PlayerPrefs "ff.castlemoat" = 0 to hide. Tunables live in
         /// <see cref="DeNelle.Village.World.CastleMoatBuilder"/>.</summary>
-        public static bool CastleMoat => Get("castlemoat", defaultOn: false);
+        public static bool CastleMoat => Get("castlemoat", defaultOn: true);
 
         /// <summary>The editor-baked south CastleBridgeSeam deck (CastleHubBuilder.AddCastleBridgeSeam).
         /// Default OFF (2026-06-29): the editor deck stacked a 2nd navmesh deck on top of the runtime
@@ -306,6 +305,19 @@ namespace DeNelle.Core
         /// PlayerPrefs "ff.dungeonportals" = 1.</summary>
         public static bool DungeonPortals => Get("dungeonportals", defaultOn: false);
 
+        /// <summary>WORLD FEEL (owner felt-test 2026-07-01: "world feels empty / very flat / not polished").
+        /// When ON (default), <c>DeNelle.Village.World.WorldFeelInjector</c> applies the world-aesthetics
+        /// pass at runtime on the outdoor scenes (MainCastle_Hall / OuterWorld / Village2), WITHOUT
+        /// hand-editing any scene: (1) camera clearFlags forced to Skybox — the hub camera ships
+        /// SolidColor near-black (MainCastle_Hall.unity m_ClearFlags:2, bg 0.16/0.17/0.19), which IS the
+        /// black-void sky in every screenshot; (2) a dusk "hold the last light" procedural skybox +
+        /// warm trilight ambient + low warm sun + soft haze fog; (3) a subtle global URP post volume
+        /// (bloom for torch/aura pop, gentle vignette, slight warm grade); (4) drifting ambient motes
+        /// around the camera in the open world. Every knob is a tunable const in the injector.
+        /// Default ON so the owner feels the draft; PlayerPrefs "ff.worldfeel" = 0 restores the
+        /// exact prior look (no rebuild).</summary>
+        public static bool WorldFeel => Get("worldfeel", defaultOn: true);
+
         /// <summary>SURVIVAL RULE (owner 2026-06-29): Health AND Mana do NOT auto-restore after combat.
         /// When ON (default), the post-combat "return heal" (BattleArena.ReturnHomeWithFade) is SKIPPED —
         /// in the field the hero keeps the HP/MP it ended the fight with and relies on crafted potions.
@@ -314,6 +326,26 @@ namespace DeNelle.Core
         /// ALWAYS fully heals regardless of this flag (that is the design, not the auto-heal this gates).
         /// Reversible: PlayerPrefs "ff.noautoheal" = 0 restores the post-combat auto-heal-to-full.</summary>
         public static bool NoAutoHeal => Get("noautoheal", defaultOn: true);
+
+        /// <summary>Combat-feel polish layer (2026-07-02 arena feel pass) — when ON (default), the
+        /// presentation-side feel additions run: recorded sword-clash / enemy-death SFX VARIANT pools
+        /// (GameSfx / EnemyCombatAudio pick a random authored take per hit instead of one repeated
+        /// clip), and the arena stage RETHEME (stone-biome fights swap the forest-clearing green
+        /// lawn + toy-tree ring for the biome's stone ground + rock-only silhouette so the floor
+        /// matches the colosseum backdrop — owner F8 "this looks awful" visual-vocabulary clash).
+        /// Pure presentation: no damage, timing or AI change. OFF restores the previous look/sound
+        /// exactly. PlayerPrefs "ff.combatfeel" = 0 to disable.</summary>
+        public static bool CombatFeel => Get("combatfeel", defaultOn: true);
+
+        /// <summary>WO-T1 (Tutorial V2, docs/TUTORIAL_V2_SPEC_2026-07-02.md) — when ON, the data-driven
+        /// tutorial runs: <c>tutorial-steps.json</c> walked by the thin <c>DeNelle.Village.TutorialFlow</c>
+        /// interpreter (7 mandatory steps + the contextual one-shot registry), Sylas speaking through the
+        /// standard dialogue template, completion signals via <c>TutorialSignals</c>, tutorial_* telemetry
+        /// through EventTracker. The legacy <c>TutorialDirector</c> FTUE stands down while this is ON
+        /// (it is deleted only in WO-T5, after the flip is fleet-verified + owner felt-verified).
+        /// Default OFF ("unflag when proven") — the orchestrator flips it after fleet verification.
+        /// PlayerPrefs "ff.tutorialv2".</summary>
+        public static bool TutorialV2 => Get("tutorialv2", defaultOn: false);
 
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)

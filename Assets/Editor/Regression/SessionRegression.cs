@@ -81,19 +81,24 @@ namespace DeNelle.Editor
         private static void CheckVendorContract(List<string> failures, StringBuilder log)
         {
             // (context, expected GearKind). Mirrors VendorStockContract's documented intent.
+            // WO-598: registered vendors (vendors.json) derive their kinds from the registry
+            // (forge = weapon+armor; market = consumables+materials; jeweler = accessories+gems);
+            // unregistered contexts keep the WO-444 heuristic (blacksmith=Armor per the owner's
+            // 2026-06-13 ruling — the old Weapon expectation here was stale).
+            VendorRegistry.Reload();
             var cases = new (string ctx, GearKind expect)[]
             {
-                ("forge",       GearKind.Weapon),
-                ("blacksmith",  GearKind.Weapon),
-                ("smith",       GearKind.Weapon),
+                ("forge",       GearKind.Weapon | GearKind.Armor),          // registry (WO-598)
+                ("blacksmith",  GearKind.Armor),                            // heuristic (WO-444)
+                ("smith",       GearKind.Weapon),                           // heuristic
                 ("armor",       GearKind.Armor),
                 ("armory",      GearKind.Armor),
-                ("armorer",     GearKind.Armor),
-                ("jeweler",     GearKind.Armor),   // jewelry modeled as Armor (adornment arc)
-                ("market",      GearKind.Potion),
-                ("marketplace", GearKind.Potion),
-                ("trader",      GearKind.Potion),
-                ("granary",     GearKind.Potion),
+                ("armorer",     GearKind.Armor),                            // registry (armor-only)
+                ("jeweler",     GearKind.Accessory | GearKind.Material),    // registry (rings/amulets + gems, WO-543/598)
+                ("market",      GearKind.Potion | GearKind.Material),       // registry (consumables + materials)
+                ("marketplace", GearKind.Potion | GearKind.Material),       // substring-matches the market row
+                ("trader",      GearKind.Potion),                           // heuristic
+                ("granary",     GearKind.Potion),                           // heuristic
                 // unknown / empty -> safe general default (never broken / never empty)
                 ("",            GearKind.Weapon | GearKind.Armor | GearKind.Potion),
                 ("totally_unknown_vendor", GearKind.Weapon | GearKind.Armor | GearKind.Potion),

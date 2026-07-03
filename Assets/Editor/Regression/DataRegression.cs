@@ -130,6 +130,15 @@ namespace DeNelle.Editor
             // tab or an empty body to the guide panel.
             CheckGuideContent(failures, log);
 
+            // --- DIALOGUE SPEAKER CARDS (dialogues.json speakers block) -------------
+            // Owner-ratified card standard (2026-07-02 audit): every NPC dialogue card shows
+            // name + guild/shop AFFILIATION + portrait. Assert every spoken line's speaker
+            // resolves to a speakers-block record with a non-empty name + affiliation, and
+            // every DECLARED portrait path (speakers block AND legacy per-node `portrait`
+            // command args) loads a NON-NULL sprite — a dangling portrait path fails the gate.
+            // An EMPTY portrait is legal by design (styled silhouette fallback in DialogueView).
+            CheckDialogueSpeakers(failures, log);
+
             // --- ITEM-MODEL CAPABILITY INVARIANTS (WO-Item-1, docs/ITEM_MODEL.md §2c) ---
             // OWNER-RATIFIED 2026-06-18: the model invariants live in the regression test,
             // not just the doc — so every change/regen is gated by data, not faith. HARD
@@ -179,6 +188,14 @@ namespace DeNelle.Editor
             // (the shop/equip sprite) — the same display-field gate the weapon/armor checks use.
             CheckAccessories(failures, log);
 
+            // --- VENDOR STOCK QUERIES (vendors.json -> VendorRegistry/VendorStockResolver) ---
+            // WO-598 "the honest shelf": every registered vendor's query must resolve >=1 item
+            // OR carry an authored emptyLine (never a raw empty grid); no roster-unobtainable
+            // class (Mage under Knight-only V1) may appear in ANY vendor result; and each
+            // trade's result stays inside its declared bands (Market never weapons, Jeweler
+            // never armor, Forge never consumables).
+            CheckVendorStock(failures, log);
+
             // --- ARMOR/ACCESSORY RIM-LIGHT VFX (WO-543 ArmorVfxMap) ----------------
             // The armor/accessory rarity must read through the hero rim-light glow. Assert the
             // pure ArmorVfxMap resolver returns a DISTINCT color per band, the gold const at
@@ -201,6 +218,14 @@ namespace DeNelle.Editor
             // --- Store/Inventory icon coverage (key data: real art vs glyph fallback) ---
             CheckItemIconCoverage(weapons, armors, failures, log);
 
+            // --- TUTORIAL V2 REGISTRY (WO-T1, spec §2.5.4) ---------------------------
+            // tutorial-steps.json invariants: steps parse; every dialogue id exists in
+            // dialogues.json; every highlight id is a known registry key; every completion
+            // signal is a known bus id/prefix; mandatory order strictly increasing; every
+            // speaker used by tut_* dialogues has a speaker record with a portrait (the
+            // yellow-disc class of bug becomes a build failure).
+            CheckTutorialSteps(failures, log);
+
             // --- verdict -----------------------------------------------------------
             log.AppendLine("=== verdict ===");
             if (failures.Count == 0)
@@ -214,6 +239,104 @@ namespace DeNelle.Editor
                 foreach (var f in failures) log.AppendLine("  - " + f);
                 // LogError so it also lands in break-log.jsonl and fails loudly in the log scan.
                 Debug.LogError(log.ToString());
+            }
+        }
+
+        // =====================================================================
+        //  TUTORIAL V2 REGISTRY — tutorial-steps.json invariants (WO-T1)
+        // =====================================================================
+        private static void CheckTutorialSteps(List<string> failures, StringBuilder log)
+        {
+            log.AppendLine("=== tutorial-steps.json (Tutorial V2 registry) ===");
+            DeNelle.Core.Tutorial.TutorialStepCatalog.Reload();
+            DeNelle.Core.Dialogue.DialogueCatalog.Reload();
+
+            var all = DeNelle.Core.Tutorial.TutorialStepCatalog.All;
+            var mandatory = DeNelle.Core.Tutorial.TutorialStepCatalog.MandatorySteps();
+            var contextual = DeNelle.Core.Tutorial.TutorialStepCatalog.ContextualSteps();
+            log.AppendLine($"tutorial-steps.json -> {all.Count} steps ({mandatory.Count} mandatory, {contextual.Count} contextual)");
+
+            if (mandatory.Count == 0)
+            { failures.Add("tutorial-steps.json deserialized to 0 mandatory steps (mapping break or empty)"); return; }
+            if (mandatory.Count != 7)
+                failures.Add($"tutorial mandatory chain has {mandatory.Count} steps — the owner-decided flow is exactly 7 (spec CREATIVE SCOPE)");
+
+            // Known highlight-registry ids + completion-signal vocabulary.
+            var knownHighlights = new HashSet<string>(DeNelle.Core.UI.TutorialHighlightRegistry.KnownIds);
+            bool KnownSignal(string s) =>
+                !string.IsNullOrEmpty(s) && (
+                    s == DeNelle.Core.Tutorial.TutorialSignals.BuildModeEntered ||
+                    s == DeNelle.Core.Tutorial.TutorialSignals.TowerPlaced ||
+                    s == DeNelle.Core.Tutorial.TutorialSignals.WaveCleared ||
+                    s == DeNelle.Core.Tutorial.TutorialSignals.ArenaWin ||
+                    s == DeNelle.Core.Tutorial.TutorialSignals.ArenaLoss ||
+                    s == DeNelle.Core.Tutorial.TutorialSignals.CanAffordUpgrade ||
+                    s == DeNelle.Core.Tutorial.TutorialSignals.EchoBornSecond ||
+                    s == DeNelle.Core.Tutorial.TutorialSignals.FirstGearAdded ||
+                    s == DeNelle.Core.Tutorial.TutorialSignals.FirstSkillPoint ||
+                    s.StartsWith(DeNelle.Core.Tutorial.TutorialSignals.DialogueEndedPrefix) ||
+                    s.StartsWith(DeNelle.Core.Tutorial.TutorialSignals.HeroReachedPrefix) ||
+                    s.StartsWith(DeNelle.Core.Tutorial.TutorialSignals.PanelOpenedPrefix));
+
+            int lastOrder = int.MinValue;
+            var tutSpeakers = new HashSet<string>();
+            foreach (var s in mandatory)
+            {
+                if (s.Order <= lastOrder)
+                    failures.Add($"tutorial step '{s.Id}' order {s.Order} is not strictly increasing");
+                lastOrder = s.Order;
+            }
+
+            foreach (var s in all)
+            {
+                if (s == null || string.IsNullOrEmpty(s.Id))
+                { failures.Add("tutorial step with null/empty id"); continue; }
+
+                // Completion signal present + known vocabulary.
+                string sig = s.Completion != null ? s.Completion.Signal : null;
+                if (!KnownSignal(sig))
+                    failures.Add($"tutorial step '{s.Id}' completion signal '{sig ?? "<null>"}' is not a known bus id");
+
+                // Dialogue ids resolve in dialogues.json.
+                foreach (var did in new[] { s.Dialogue?.Intro, s.Dialogue?.Outro })
+                {
+                    if (string.IsNullOrEmpty(did)) continue;
+                    var def = DeNelle.Core.Dialogue.DialogueCatalog.Find(did);
+                    if (def == null)
+                    { failures.Add($"tutorial step '{s.Id}' dialogue '{did}' does not exist in dialogues.json"); continue; }
+                    foreach (var node in def.Nodes)
+                        if (node?.Lines != null)
+                            foreach (var line in node.Lines)
+                                if (line != null && !string.IsNullOrEmpty(line.Speaker))
+                                    tutSpeakers.Add(line.Speaker);
+                }
+
+                // Highlight ids come from the registry's build-time contract.
+                if (s.Highlight != null)
+                    foreach (var h in s.Highlight)
+                        if (!string.IsNullOrEmpty(h) && !knownHighlights.Contains(h))
+                            failures.Add($"tutorial step '{s.Id}' highlight '{h}' is not a known TutorialHighlightRegistry id");
+
+                // Contextual rules: oneShot + never pausePressure (a hint never gates).
+                if (s.IsContextual)
+                {
+                    if (!s.OneShot) failures.Add($"contextual step '{s.Id}' must be oneShot:true");
+                    if (s.PausePressure) failures.Add($"contextual step '{s.Id}' must never pausePressure");
+                    if (s.Trigger == null || s.Trigger.Type != "signal" || string.IsNullOrEmpty(s.Trigger.Signal))
+                        failures.Add($"contextual step '{s.Id}' must trigger on a signal");
+                }
+            }
+
+            // Every tut_* speaker resolves to a card record WITH a portrait (or an
+            // explicit-silhouette empty) — the yellow-disc bug class becomes a failure.
+            foreach (var sp in tutSpeakers)
+            {
+                var rec = DeNelle.Core.Dialogue.DialogueCatalog.FindSpeaker(sp);
+                if (rec == null)
+                    failures.Add($"tutorial dialogue speaker '{sp}' has no speaker record in dialogues.json (blank NPC card)");
+                else if (string.IsNullOrEmpty(rec.Portrait))
+                    log.AppendLine($"  note: speaker '{sp}' has an empty portrait — renders the styled silhouette (deliberate).");
+                else log.AppendLine($"  speaker '{sp}' -> portrait '{rec.Portrait}' ok");
             }
         }
 
@@ -233,6 +356,121 @@ namespace DeNelle.Editor
         {
             var f = obj.GetType().GetField(field, BindingFlags.NonPublic | BindingFlags.Instance);
             if (f != null) f.SetValue(obj, value);
+        }
+
+        // =====================================================================
+        //  VENDOR STOCK QUERIES (WO-598) — the honest shelf, gated by data
+        // =====================================================================
+        // Resolves every registered vendor's stock query through the REAL resolver
+        // (vendors.json -> VendorRegistry -> VendorStockResolver, the same path the
+        // shop VM binds) with the roster PINNED to Knight-only (the V1 canon) and
+        // asserts:
+        //   1. vendors.json maps to >=1 VendorDef and covers the shoppable set
+        //      (forge/armorer/market/jeweler — buildings.json isShoppable).
+        //   2. every vendor resolves >=1 item OR carries an authored emptyLine
+        //      (never a raw empty grid — flag_11).
+        //   3. NO roster-unobtainable item leaks: under Knight-only no weapon with a
+        //      non-knight job and no light-weight armor may appear (flag_08's Mage
+        //      wands at the Forge, as a permanent gate).
+        //   4. each trade stays inside its bands: goods vendors never surface
+        //      weapons/armor/accessories; the jeweler never weapons/armor/consumables;
+        //      gear vendors never consumables/materials (flag_03).
+        //   5. the Forge resolves >=1 ELIGIBLE item for a level-1 Knight (the V1
+        //      player can actually shop on day one).
+        private static void CheckVendorStock(List<string> failures, StringBuilder log)
+        {
+            log.AppendLine("--- VENDOR STOCK (vendors.json + VendorStockResolver, WO-598) ---");
+
+            VendorRegistry.Reload();
+            GearCatalog.Reload();
+            var vendors = VendorRegistry.All;
+            log.AppendLine($"vendors.json -> {vendors.Count} VendorDef objects");
+            if (vendors.Count == 0)
+            {
+                failures.Add("vendors.json deserialized to 0 vendors (mapping break or missing file)");
+                return;
+            }
+
+            // 1. Coverage: every shoppable storefront id has a registry row.
+            foreach (var required in new[] { "forge", "armorer", "market", "jeweler" })
+            {
+                bool found = false;
+                foreach (var v in vendors)
+                    if (v != null && string.Equals(v.Id, required, System.StringComparison.OrdinalIgnoreCase))
+                    { found = true; break; }
+                if (!found)
+                    failures.Add($"vendors.json is missing the shoppable vendor '{required}' (buildings.json isShoppable)");
+            }
+
+            var knightOnly = new[] { "knight" };
+            foreach (var v in vendors)
+            {
+                if (v == null || string.IsNullOrEmpty(v.Id)) { failures.Add("vendors.json entry with null/empty id"); continue; }
+
+                // 2. Authored empty line — required so a 0-item resolve can never render raw.
+                if (string.IsNullOrEmpty(v.EmptyLine))
+                    failures.Add($"vendor '{v.Id}' has no authored emptyLine (raw empty grid would render)");
+
+                // Resolve as the V1 shopper (Knight, generous level so level gates don't hide leaks),
+                // roster PINNED to knight-only so the assert is deterministic regardless of flags.
+                var wares = DeNelle.Village.Hero.VendorStockResolver.Resolve(v.Id, "knight", 99, knightOnly);
+                var layout = DeNelle.Village.Hero.VendorStockResolver.LayoutFor(v.Id);
+                log.AppendLine($"  vendor '{v.Id}' (layout={layout}) resolved {wares.Count} ware(s)");
+
+                if (wares.Count == 0 && string.IsNullOrEmpty(v.EmptyLine))
+                    failures.Add($"vendor '{v.Id}' resolves 0 items AND has no authored emptyLine");
+
+                foreach (var ware in wares)
+                {
+                    // 3. Roster leak gate: under Knight-only, no non-knight weapon / light armor.
+                    if (ware.Kind == DeNelle.Village.Hero.VendorWareKind.Weapon)
+                    {
+                        var w = GearCatalog.FindWeapon(ware.Id);
+                        if (w == null) { failures.Add($"vendor '{v.Id}' weapon '{ware.Id}' resolves to no def"); continue; }
+                        if (!GearCatalog.WeaponFitsClass(w, "knight"))
+                            failures.Add($"vendor '{v.Id}' stocks '{w.id}' (job='{w.job}') — roster-unobtainable under Knight-only (the flag_08 Mage-wand class of bug)");
+                    }
+                    else if (ware.Kind == DeNelle.Village.Hero.VendorWareKind.Armor)
+                    {
+                        var a = GearCatalog.FindArmor(ware.Id);
+                        if (a == null) { failures.Add($"vendor '{v.Id}' armor '{ware.Id}' resolves to no def"); continue; }
+                        if (!GearCatalog.ArmorFitsClass(a, "knight"))
+                            failures.Add($"vendor '{v.Id}' stocks '{a.id}' (weight='{a.weight}') — roster-unobtainable under Knight-only");
+                    }
+
+                    // 4. Trade-band gate: a ware outside the vendor's layout is a wrong-shelf leak.
+                    bool isGear = ware.Kind == DeNelle.Village.Hero.VendorWareKind.Weapon ||
+                                  ware.Kind == DeNelle.Village.Hero.VendorWareKind.Armor;
+                    bool isGoods = ware.Kind == DeNelle.Village.Hero.VendorWareKind.Consumable ||
+                                   ware.Kind == DeNelle.Village.Hero.VendorWareKind.Material;
+                    bool isJewel = ware.Kind == DeNelle.Village.Hero.VendorWareKind.Ring ||
+                                   ware.Kind == DeNelle.Village.Hero.VendorWareKind.Amulet ||
+                                   ware.Kind == DeNelle.Village.Hero.VendorWareKind.Gem;
+                    switch (layout)
+                    {
+                        case DeNelle.Village.Hero.VendorLayout.Goods:
+                            if (isGear || isJewel)
+                                failures.Add($"GOODS vendor '{v.Id}' surfaced a {ware.Kind} ('{ware.Id}') — the Market must never sell gear/jewelry (flag_03)");
+                            break;
+                        case DeNelle.Village.Hero.VendorLayout.Jeweler:
+                            if (isGear || ware.Kind == DeNelle.Village.Hero.VendorWareKind.Consumable)
+                                failures.Add($"JEWELER vendor '{v.Id}' surfaced a {ware.Kind} ('{ware.Id}') — the Jeweler must never sell weapons/armor (flag_11)");
+                            break;
+                        case DeNelle.Village.Hero.VendorLayout.Gear:
+                            if (isGoods || isJewel)
+                                failures.Add($"GEAR vendor '{v.Id}' surfaced a {ware.Kind} ('{ware.Id}') — outside its trade");
+                            break;
+                    }
+                }
+            }
+
+            // 5. The V1 day-one Knight can actually buy at the Forge (>=1 ELIGIBLE ware at Lv 1).
+            var forgeLv1 = DeNelle.Village.Hero.VendorStockResolver.Resolve("forge", "knight", 1, knightOnly);
+            int eligible = 0;
+            foreach (var wr in forgeLv1) if (wr.Eligible) eligible++;
+            log.AppendLine($"  forge @ Knight Lv1 -> {forgeLv1.Count} ware(s), {eligible} eligible");
+            if (eligible == 0)
+                failures.Add("the Forge resolves 0 ELIGIBLE items for a level-1 Knight — the V1 player can't shop on day one");
         }
 
         // =====================================================================
@@ -572,6 +810,63 @@ namespace DeNelle.Editor
         }
 
         // WO-588: validate the Game Guide codex content (guide-content.json).
+        // =====================================================================
+        //  DIALOGUE SPEAKER CARDS — name + affiliation + portrait all resolve
+        // =====================================================================
+        private static void CheckDialogueSpeakers(List<string> failures, StringBuilder log)
+        {
+            DeNelle.Core.Dialogue.DialogueCatalog.Reload();
+            var dialogues = DeNelle.Core.Dialogue.DialogueCatalog.Dialogues;
+            var speakers  = DeNelle.Core.Dialogue.DialogueCatalog.Speakers;
+            log.AppendLine($"dialogues.json -> {dialogues.Count} DialogueDef, {speakers.Count} speaker record(s)");
+
+            if (dialogues.Count == 0) { failures.Add("dialogues.json deserialized to 0 dialogues (mapping break)"); return; }
+            if (speakers.Count == 0)  { failures.Add("dialogues.json has no 'speakers' block (card standard: name+affiliation+portrait per speaker)"); return; }
+
+            // 1) Every speaker record carries a name + affiliation; a DECLARED portrait path loads.
+            foreach (var s in speakers)
+            {
+                if (s == null || string.IsNullOrEmpty(s.Name))
+                { failures.Add("speakers block contains a record with null/empty name"); continue; }
+                if (string.IsNullOrEmpty(s.Affiliation))
+                    failures.Add($"speaker '{s.Name}' has no affiliation (card standard requires guild/shop affiliation)");
+                string portraitState = "silhouette";
+                if (!string.IsNullOrEmpty(s.Portrait))
+                {
+                    var sp = Resources.Load<Sprite>(s.Portrait);
+                    if (sp == null) failures.Add($"speaker '{s.Name}' declares portrait '{s.Portrait}' but Resources.Load<Sprite> returned null (dangling path)");
+                    else portraitState = s.Portrait;
+                }
+                log.AppendLine($"  S {s.Name} | affiliation='{s.Affiliation}' | portrait={portraitState}");
+            }
+
+            // 2) Every spoken line's speaker resolves to a record (the card can always render
+            //    name + affiliation); every legacy per-node `portrait` command arg loads.
+            foreach (var d in dialogues)
+            {
+                if (d == null || d.Nodes == null) continue;
+                foreach (var node in d.Nodes)
+                {
+                    if (node == null) continue;
+                    if (node.Lines != null)
+                        foreach (var line in node.Lines)
+                        {
+                            if (line == null || string.IsNullOrEmpty(line.Speaker)) continue; // narration is legal
+                            if (DeNelle.Core.Dialogue.DialogueCatalog.FindSpeaker(line.Speaker) == null)
+                                failures.Add($"dialogue '{d.Id}' node '{node.Id}': speaker '{line.Speaker}' has no speakers-block record (card cannot show affiliation)");
+                        }
+                    if (node.Commands != null)
+                        foreach (var cmd in node.Commands)
+                        {
+                            if (cmd == null || cmd.Verb != "portrait") continue;
+                            string path = (cmd.Args != null && cmd.Args.Count > 0) ? cmd.Args[0] : null;
+                            if (string.IsNullOrEmpty(path) || Resources.Load<Sprite>(path) == null)
+                                failures.Add($"dialogue '{d.Id}' node '{node.Id}': `portrait` command path '{path}' does not resolve a sprite");
+                        }
+                }
+            }
+        }
+
         private static void CheckGuideContent(List<string> failures, StringBuilder log)
         {
             GuideContentCatalog.Reload();
