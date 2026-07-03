@@ -118,7 +118,10 @@ namespace DeNelle.Core.UI
             prt.anchoredPosition = new Vector2(0f, -14f);
             prt.sizeDelta = new Vector2(BannerWidth, BannerHeight);
             var pimg = plate.GetComponent<Image>();
-            pimg.color = new Color(0.03f, 0.03f, 0.04f, 0.86f);   // UiStyle StoneNiche family
+            // Obsidian plate: the single ObsidianFill hue at a translucent alpha so the
+            // strip reads as the kit's black-panel language (play area shows through).
+            pimg.color = new Color(ElarionUiKit.ObsidianFill.r, ElarionUiKit.ObsidianFill.g,
+                                   ElarionUiKit.ObsidianFill.b, 0.86f);
             pimg.raycastTarget = false;
 
             // Gold accent rule along the bottom edge (kit chrome vocabulary).
@@ -177,7 +180,7 @@ namespace DeNelle.Core.UI
             st.fontSize = 15f;
             st.color = ElarionUi.ParchmentDim;
             st.alignment = TextAlignmentOptions.Center;
-            st.text = "Skip ▸";
+            st.text = "Skip >";   // ASCII only (no glyphs in TMP)
             st.raycastTarget = false;
 
             _skipHost.SetActive(false);

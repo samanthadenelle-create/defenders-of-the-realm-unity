@@ -116,7 +116,10 @@ namespace DeNelle.Core.UI
             _group.interactable = false;
             _rootRect = (RectTransform)transform;
 
-            Color dim = new Color(0f, 0f, 0f, DimAlpha);
+            // Obsidian-tinted dim (not pure black) so the scrim reads as the kit's
+            // warm-obsidian language; the gold pulse ring completes the black+gold pairing.
+            Color dim = new Color(ElarionUiKit.ObsidianFill.r, ElarionUiKit.ObsidianFill.g,
+                                  ElarionUiKit.ObsidianFill.b, DimAlpha);
             for (int i = 0; i < 4; i++)
             {
                 var r = new GameObject("Dim" + i, typeof(RectTransform), typeof(Image));

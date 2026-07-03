@@ -20,7 +20,7 @@
 //   - Prepare() then wait (bounded by a timeout) before Play(); skipOnDrop=false so
 //     a slow decoder doesn't snap frames (the SplashLoading lesson, lines 150-160).
 //
-// SKIPPABLE: a visible "Skip ›" gold button + a full-screen invisible tap target +
+// SKIPPABLE: a visible "Skip >" gold button + a full-screen invisible tap target +
 // ANY keyboard key all end the intro immediately. On natural end (loopPointReached)
 // it also advances. Advance = SceneRouter.GoHeroSelect() — the SAME next step the
 // slate sequence used, so TitleController's "Play Intro" call site is unchanged.
@@ -293,20 +293,21 @@ namespace DeNelle.DialogueUI
             // the screen over the playing video (owner 2026-06-28). SetActive hides children.
             band.gameObject.SetActive(false);
 
+            // Kit tokens: parchment body text + gold title (obsidian/gold language).
             _caption = ElarionUiKit.Label(band.transform, "", 0.10f, 0.92f,
-                new Color(0.93f, 0.90f, 0.82f, 1f), 40, TextAlignmentOptions.Center,
+                ElarionUi.Parchment, 40, TextAlignmentOptions.Center,
                 0.05f, 0.95f, spacing: 0.5f);
 
             _title = ElarionUiKit.Label(root, "", 0.40f, 0.62f, ElarionUi.Gold, 92,
                 TextAlignmentOptions.Center, 0.05f, 0.95f, spacing: 2f, bold: true);
             _title.text = "";
             _subtitle = ElarionUiKit.Label(root, "", 0.34f, 0.40f,
-                new Color(0.93f, 0.90f, 0.82f, 1f), 40, TextAlignmentOptions.Center);
+                ElarionUi.Parchment, 40, TextAlignmentOptions.Center);
             _subtitle.name = "Subtitle";
             _subtitle.text = "";
 
-            // Visible Skip button (top-right) — ends the intro immediately.
-            ElarionUiKit.Button(root, "Skip  ›", ElarionUiKit.ButtonKind.Gold,
+            // Visible Skip button (top-right) — ends the intro immediately. ASCII only (no glyphs).
+            ElarionUiKit.Button(root, "Skip  >", ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.74f, 0.92f), new Vector2(0.96f, 0.975f), EndIntro);
 
             // Dip overlay on top — starts opaque so the first frame/slate fades in.
