@@ -301,8 +301,11 @@ namespace DeNelle.Village
             go.tag = "Player";                               // WO-450: canonical hero tag for all consumers
             // TKT-8: seat at the scene's hero-start marker when present (Village2 / raid scenes put the
             // entry point elsewhere — the old hardcoded (6,1,4) put the hero off-map there). Falls back
-            // to MainCastle_Hall's (6,1,4) so the hub is unchanged.
-            go.transform.position = FindSpawnMarkerPosition() ?? new Vector3(6f, 1f, 4f);
+            // to MainCastle_Hall's courtyard spot (6, liftY+1, 4): WO-593 raised the castle onto its
+            // plinth (PlayerPrefs "castle.liftY", default 3), so the old fixed y=1 was 2m UNDER the
+            // raised floor. The fallback rides the same tunable base the builder authors from.
+            go.transform.position = FindSpawnMarkerPosition()
+                ?? new Vector3(6f, UnityEngine.PlayerPrefs.GetFloat("castle.liftY", 3f) + 1f, 4f);
 
             // Drop the primitive collider so HeroLocomotion's CapsuleCast can't
             // self-block (it sweeps against OTHER colliders for walls).

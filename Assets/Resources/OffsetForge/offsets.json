@@ -149,6 +149,26 @@
             },
             "scale": 1.0,
             "fullOverride": false
+        },
+        {
+            "id": "bridge_south",
+            "rot": {
+                "x": 0.0,
+                "y": 90.0,
+                "z": 0.0
+            },
+            "pos": {
+                "x": -4.5,
+                "y": -0.5,
+                "z": -53.4
+            },
+            "scale": 1.0,
+            "scaleXyz": {
+                "x": 2.049,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "fullOverride": false
         }
     ]
 }

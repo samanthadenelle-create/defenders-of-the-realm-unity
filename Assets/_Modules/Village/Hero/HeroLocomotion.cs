@@ -853,8 +853,14 @@ namespace DeNelle.Village
         // Endpoints MUST match CastleHubBuilder.BuildSeamlessOuterWorldSeam's
         // NavLink_CastleToOuterWorld (start on castle navmesh, end on OuterWorld).
         // Castle<->OuterWorld seam endpoints — the original in-world SLIDE crossing (kept working).
-        private static readonly Vector3 SeamCastleEnd     = new Vector3(-4.37f, 0f, -63f);
-        private static readonly Vector3 SeamOuterWorldEnd = new Vector3(-4.37f, 0f, -76f);
+        // WO-593 island raise: the CASTLE end rides the tunable base lift (PlayerPrefs "castle.liftY",
+        // default 3 — the same key CastleHubBuilder authors the raised footprint from). A y=0 castle
+        // end warped the agent 3m below the raised castle nav edge and stranded/mis-seated the hero
+        // on slide-in; the OuterWorld end stays at terrain level (y=0). Properties (not static
+        // readonly) so the tuned lift is read live, and the arrival Warp additionally snaps to the
+        // baked navmesh (see TryTraverseSeamLink) so the landing derives from the mesh, not a constant.
+        private static Vector3 SeamCastleEnd     => new Vector3(-4.37f, UnityEngine.PlayerPrefs.GetFloat("castle.liftY", 3f), -63f);
+        private static Vector3 SeamOuterWorldEnd => new Vector3(-4.37f, 0f, -76f);
         private bool _crossingSeam;
         private Vector3 _seamTarget;
         private float _seamReengageAt;
@@ -874,13 +880,19 @@ namespace DeNelle.Village
                 {
                     // Arrived: re-place the agent on the FAR navmesh (Warp re-binds the agent to
                     // whatever surface is under the point), then HAND CONTROL BACK to the agent.
+                    // WO-593: snap the warp target to the BAKED mesh first (4m vertical tolerance
+                    // covers the castle.liftY raise) so the landing derives from the navmesh, not
+                    // the endpoint constant — a mis-tuned lift can't strand the hero off-mesh.
+                    Vector3 warpTarget = _seamTarget;
+                    if (UnityEngine.AI.NavMesh.SamplePosition(_seamTarget, out UnityEngine.AI.NavMeshHit seamHit, 4f, UnityEngine.AI.NavMesh.AllAreas))
+                        warpTarget = seamHit.position;
                     if (_agent != null && _agent.enabled)
                     {
-                        _agent.Warp(_seamTarget);
+                        _agent.Warp(warpTarget);
                         _agent.updatePosition = true;   // agent drives the transform again
                         _agent.updateRotation = true;
                     }
-                    else transform.position = _seamTarget;
+                    else transform.position = warpTarget;
                     _crossingSeam = false;
                     _isTeleporting = false;
                     _seamReengageAt = Time.time + 1.0f;            // cooldown so we don't bounce back
@@ -916,6 +928,10 @@ namespace DeNelle.Village
                     WarpTo(partner.transform.position, transform.rotation);
                     _crossArmed = false;   // re-arms below once the hero leaves all crossing radii
                     Debug.Log($"[HeroLocomotion] crossing '{c.crossingId}' -> spawned at partner {partner.transform.position}.");
+                    // WO-602: roll the passive paired-crossing FIRE up into the RuntimeSeam flow so a
+                    // fleet run PROVES the walk-in return functions (the exit-only coverage hole).
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("RuntimeSeam",
+                        $"crossing '{c.crossingId}' FIRED at {c.transform.position} — warped hero to {partner.transform.position}.");
                     return true;
                 }
             }
@@ -1085,7 +1101,9 @@ namespace DeNelle.Village
         {
             try
             {
-                var t = System.Type.GetType("DeNelle.HUD.VirtualDPadLean, DeNelle.HUD");
+                // P23 (HUD_OBSIDIAN §1.11): VirtualDPadLean is DELETED; the HUD kit's four
+                // round controller buttons write DeNelle.HUD.Kit.HudMoveInput.Move instead.
+                var t = System.Type.GetType("DeNelle.HUD.Kit.HudMoveInput, DeNelle.HUD");
                 if (t == null) return Vector2.zero;
                 var p = t.GetProperty("Move", BindingFlags.Public | BindingFlags.Static);
                 if (p == null) return Vector2.zero;

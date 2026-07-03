@@ -25,8 +25,10 @@
 // visual is restored, nothing breaks).
 // =============================================================================
 
+using System.Collections.Generic;
 using DeNelle.Core;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 
 namespace DeNelle.Village
@@ -78,6 +80,14 @@ namespace DeNelle.Village
         };
 
         private const string MarkerPrefix = "LightSkin_";   // child added on swap (idempotency guard)
+
+        /// <summary>
+        /// Hosts placed by <see cref="TryPlace"/> this session (e.g. the colosseum). The
+        /// AutoPilot PROP-SEATING oracle walks this list and asserts each prop's visual
+        /// base sits on the floor beneath it (owner F8 2026-07-02 "in ground not on ground").
+        /// Dead entries are pruned by the reader; never cleared here (idempotent adds).
+        /// </summary>
+        public static readonly List<GameObject> RuntimePlacedProps = new List<GameObject>();
 
         /// <summary>A NEW model dropped at a world position (no baked structure to swap).</summary>
         private struct Place
@@ -131,7 +141,31 @@ namespace DeNelle.Village
         {
             if (FindByName(p.name) != null) return;   // already placed this scene
             var host = new GameObject(p.name);
-            host.transform.position = p.worldPos;
+            // OWNER F8 2026-07-02 "in ground not on ground" (the half-buried colosseum ring):
+            // the Places table authors worldPos in the PRE-RAISE castle frame (y=0), but the
+            // WO-593 island raise lifted the courtyard floor to castle.liftY (3). VisualFactory
+            // SeatOnGround seats the model base at the HOST's y, so a y=0 host buried the prop
+            // 3m under the raised floor. Derive the host y from the FLOOR at this XZ instead of
+            // trusting the authored constant: sample the baked navmesh (the courtyard sheet rides
+            // the real floor height), falling back to a physics raycast, then the authored y.
+            Vector3 seated = p.worldPos;
+            string floorSource = "authored";
+            if (NavMesh.SamplePosition(new Vector3(p.worldPos.x, p.worldPos.y, p.worldPos.z),
+                    out NavMeshHit navHit, 10f, NavMesh.AllAreas))
+            {
+                seated.y = navHit.position.y;
+                floorSource = "navmesh";
+            }
+            else if (Physics.Raycast(new Vector3(p.worldPos.x, p.worldPos.y + 50f, p.worldPos.z),
+                         Vector3.down, out RaycastHit rayHit, 100f, ~0, QueryTriggerInteraction.Ignore))
+            {
+                seated.y = rayHit.point.y;
+                floorSource = "raycast";
+            }
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Hub",
+                $"place '{p.name}': authored y={p.worldPos.y:0.###} -> floor y={seated.y:0.###} " +
+                $"(source={floorSource}) — host seated on the real floor, not the pre-raise frame.");
+            host.transform.position = seated;
             var opts = SkinOptions.Structure(p.sizeM);
             opts.LocalRotation = Quaternion.Euler(p.pitchDeg, p.yawDeg, p.rollDeg);
             var vis = VisualFactory.Skin(host.transform, p.modelPath, opts);
@@ -147,7 +181,8 @@ namespace DeNelle.Village
             // collider at all — the inject path is visual-only. Fit one to the final visible mesh so
             // it's solid. Done AFTER scale so the box matches what the player sees.
             EnsureStructureCollider(host, vis);
-            Debug.Log("[HubStructureVisualInjector] placed " + p.name + " (" + p.modelPath + ") at " + p.worldPos + ".");
+            if (!RuntimePlacedProps.Contains(host)) RuntimePlacedProps.Add(host);   // PROP-SEATING oracle registry
+            Debug.Log("[HubStructureVisualInjector] placed " + p.name + " (" + p.modelPath + ") at " + host.transform.position + ".");
         }
 
         private static void TrySwap(Swap s)
@@ -263,7 +298,7 @@ namespace DeNelle.Village
         // Name match across the loaded scene(s). Runs once per hub load (not per frame).
         private static Transform FindByName(string name)
         {
-            foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            foreach (var t in Object.FindObjectsByType<Transform>())
                 if (t != null && t.name == name) return t;
             return null;
         }

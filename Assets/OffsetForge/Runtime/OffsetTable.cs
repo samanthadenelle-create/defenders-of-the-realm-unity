@@ -66,6 +66,10 @@ namespace OffsetForge
         public Vec3 rot;   // euler degrees (x,y,z)
         public Vec3 pos;   // local position
         public float scale = 1f;
+        // Optional NON-uniform 3-axis scale. Additive: absent/zero in JSON => use the uniform `scale`
+        // above (back-compat; hero/prop consumers ignore this). Lets a consumer that genuinely needs a
+        // stretched axis (e.g. a widened bridge deck) persist it. Consumer picks scaleXyz when non-zero.
+        public Vec3 scaleXyz = new Vec3(0f, 0f, 0f);
         // WO-577: when true, the consumer seats from the geometry VERTICAL baseline and treats
         // rot/pos/scale as the absolute in-hand delta (bypassing its own grip inference). Default
         // false = the offset is a nudge on top of the consumer's geometric grip. Additive field;
@@ -103,6 +107,7 @@ namespace OffsetForge
                 existing.rot = entry.rot;
                 existing.pos = entry.pos;
                 existing.scale = entry.scale;
+                existing.scaleXyz = entry.scaleXyz;
                 existing.fullOverride = entry.fullOverride;
             }
             else

@@ -76,7 +76,7 @@ namespace DeNelle.Editor
 
             var surfType = ResolveType("Unity.AI.Navigation.NavMeshSurface");
             var surfaces = surfType != null
-                ? UnityEngine.Object.FindObjectsByType(surfType, FindObjectsSortMode.None)
+                ? UnityEngine.Object.FindObjectsByType(surfType)
                 : Array.Empty<UnityEngine.Object>();
             foreach (var s in surfaces)
             {
@@ -89,7 +89,7 @@ namespace DeNelle.Editor
             }
 
             int linkCount = 0;
-            foreach (var go in UnityEngine.Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var go in UnityEngine.Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include))
             {
                 foreach (var c in go.GetComponents<Component>())
                 {
@@ -104,7 +104,7 @@ namespace DeNelle.Editor
 
             foreach (var frag in new[] { "Plane", "Dungeon_Stairs_Stone" })
             {
-                foreach (var go in UnityEngine.Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                foreach (var go in UnityEngine.Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include))
                 {
                     if (go.name.IndexOf(frag, StringComparison.OrdinalIgnoreCase) < 0) continue;
                     var comps = go.GetComponents<Component>();
@@ -137,7 +137,7 @@ namespace DeNelle.Editor
             var startP = linkType.GetProperty("startPoint");
             var endP   = linkType.GetProperty("endPoint");
 
-            var links = UnityEngine.Object.FindObjectsByType(linkType, FindObjectsSortMode.None);
+            var links = UnityEngine.Object.FindObjectsByType(linkType);
             int valid = 0, dead = 0, bridging = 0;
             foreach (var l in links)
             {
@@ -178,7 +178,7 @@ namespace DeNelle.Editor
             if (linkType == null) { Debug.LogError("[CastleTroopWallNav] NavMeshLink type not found."); return; }
 
             int removed = 0;
-            foreach (var go in UnityEngine.Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var go in UnityEngine.Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include))
             {
                 var links = go.GetComponents(linkType);
                 for (int i = 1; i < links.Length; i++) // keep [0], drop the rest
@@ -204,7 +204,7 @@ namespace DeNelle.Editor
             var surfType = ResolveType("Unity.AI.Navigation.NavMeshSurface");
             if (surfType == null) { Debug.LogError("[CastleTroopWallNav] NavMeshSurface type not found."); return 0; }
 
-            var surfaces = UnityEngine.Object.FindObjectsByType(surfType, FindObjectsSortMode.None);
+            var surfaces = UnityEngine.Object.FindObjectsByType(surfType);
             if (surfaces.Length == 0) { Debug.LogError("[CastleTroopWallNav] no NavMeshSurface in scene."); return 0; }
 
             var build    = surfType.GetMethod("BuildNavMesh", Type.EmptyTypes);
@@ -311,7 +311,7 @@ namespace DeNelle.Editor
         {
             var list = new List<(string, Vector3)>();
             var seen = new HashSet<int>();
-            foreach (var go in UnityEngine.Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var go in UnityEngine.Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include))
             {
                 if (!seen.Add(go.GetInstanceID())) continue;
                 bool match = false;
@@ -339,7 +339,7 @@ namespace DeNelle.Editor
             var surfType = ResolveType("Unity.AI.Navigation.NavMeshSurface");
             if (surfType == null) return 0;
             var dataProp = surfType.GetProperty("navMeshData");
-            var surfaces = UnityEngine.Object.FindObjectsByType(surfType, FindObjectsSortMode.None);
+            var surfaces = UnityEngine.Object.FindObjectsByType(surfType);
             int n = 0;
             foreach (var s in surfaces)
             {

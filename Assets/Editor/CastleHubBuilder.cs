@@ -60,6 +60,58 @@ namespace DeNelle.Editor
         private const string RootName = "CastleHubRoot";
         private const string NavFloorName = "NavMeshFloor_Invisible_Walkable";
 
+        // WO-593 castle-island raise height. A tunable VARIABLE (owner directive: NOT a const) so the
+        // castle can be raised/lowered without a recompile — set PlayerPrefs "castle.liftY" then re-bake.
+        // Default 3. Applied at EVERY authoring site (walls, floor, nav, Heart, gate strips, inner ring,
+        // contents) — a root move alone strands the loose CastleSide_* walls and the world-space
+        // .position sites re-stamp at y=0 on the next rebake. One value, reproduced by every regen.
+        public static float CastleFootprintLiftY = 3f;
+
+        /// <summary>Refresh the island-raise height from PlayerPrefs "castle.liftY" (default 3).
+        /// Called at the top of every build/bake entry so the tuned value drives the whole footprint.</summary>
+        private static void LoadFootprintLiftY()
+        {
+            CastleFootprintLiftY = PlayerPrefs.GetFloat("castle.liftY", 3f);
+        }
+
+        // WO-593 base PLINTH — a raised stone platform that IS the "castle base = footprint". It fills
+        // the gap under the raised castle so it sits on solid ground instead of floating above the y=0
+        // terrain, and its outer face is the inner moat wall (the moat water plane at -0.4 laps against
+        // it). GEOMETRY only — NO terrain regen. Top rides CastleFootprintLiftY; sides drop past the
+        // waterline. Footprint just inside the square moat ring (MoatCentreRadius ~46). (WO-594 will
+        // make PlinthHalf a measured value instead of this const.)
+        private const float PlinthHalf     = 44f;   // just inside the moat (46); covers the +-42 walls + lip
+        private const float PlinthBottomY  = -3f;    // below WaterY (-0.4) so the moat reads against the base
+
+        private static void BuildBasePlinth(Transform parent)
+        {
+            var existing = GameObject.Find("CastleBasePlinth");
+            if (existing != null) Object.DestroyImmediate(existing);
+
+            var plinth = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            plinth.name = "CastleBasePlinth";
+            if (parent != null) plinth.transform.SetParent(parent, false);
+
+            float topY    = CastleFootprintLiftY;
+            float centreY = (topY + PlinthBottomY) * 0.5f;
+            float height  = topY - PlinthBottomY;
+            plinth.transform.position   = new Vector3(0f, centreY, 0f);   // WORLD absolute (root offset must not double it)
+            plinth.transform.rotation   = Quaternion.identity;
+            plinth.transform.localScale = new Vector3(PlinthHalf * 2f, height, PlinthHalf * 2f);
+
+            var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            if (sh != null)
+            {
+                var mat = new Material(sh) { name = "CastleBasePlinth_Stone" };
+                if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(0.55f, 0.55f, 0.57f));
+                if (mat.HasProperty("_Color"))     mat.SetColor("_Color",     new Color(0.55f, 0.55f, 0.57f));
+                var r = plinth.GetComponent<MeshRenderer>();
+                if (r != null) r.sharedMaterial = mat;
+            }
+            Log("WO-593: base plinth built — top y=" + topY + ", half=" + PlinthHalf +
+                " (fills the gap under the raised castle; moat wall; no terrain regen).");
+        }
+
         // Pack roots (validated against catalogs + on-disk)
         private const string PolyRoot =
             "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Medieval_M/";
@@ -80,8 +132,9 @@ namespace DeNelle.Editor
             // Optional: if user wants a truly fresh scene, they created a blank one before running.
             // We populate whatever scene is active.
 
+            LoadFootprintLiftY();   // WO-593: refresh the base height from PlayerPrefs before authoring
             var root = new GameObject(RootName);
-            root.transform.position = Vector3.zero;
+            root.transform.position = new Vector3(0f, CastleFootprintLiftY, 0f);   // WO-593 island raise (base)
 
             Debug.Log("[CastleHubBuilder] Building Central Castle Hub (CastleHubRoot) from Quaternius + polyperfect packs...");
 
@@ -393,6 +446,7 @@ namespace DeNelle.Editor
             // NavMeshAgent hero can traverse the WHOLE castle and cross the gate. The visual
             // qFloorWood tiles only cover the central ~±16 plaza; this fills the rest.
             BuildNavMeshFloor(root.transform);
+            BuildBasePlinth(root.transform);   // WO-593: raised stone base fills the gap under the castle (no terrain regen)
 
             // T-002/T-005: Heart of Elarion — the enemy target + lose condition. Without it
             // WaveManager._heart is null and Enemy.DriveNav() early-returns (enemies freeze /
@@ -441,10 +495,20 @@ namespace DeNelle.Editor
 
         private static void BuildInnerWallRing(Transform parent, GameObject wallStone)
         {
-            // Idempotent: remove any prior ring so we never stack duplicates.
+            // RING RETIRED (owner F8 2026-06-27 "you added walls inside, not at the gates" +
+            // F8 2026-07-02 "Wall in middle?"): the concentric courtyard ring is REJECTED design.
+            // The owner hand-removed it once; this builder kept resurrecting it on every batch
+            // rebake (the 07-02 recurrence). This method is now destroy-only so ANY rebuild path
+            // (BuildCastleHub or either batch entry) permanently clears it instead of re-adding it.
             var prior = GameObject.Find(InnerRingName);
             if (prior != null) Object.DestroyImmediate(prior);
+            Log("BuildInnerWallRing: inner CoC ring RETIRED (owner F8 2026-06-27 / 2026-07-02) — prior ring " +
+                (prior != null ? "removed" : "absent") + ", nothing rebuilt.");
+        }
 
+        private static void BuildInnerWallRing_RETIRED(Transform parent, GameObject wallStone)
+        {
+            // Original ring construction kept for reference only — NOT called anywhere.
             if (wallStone == null)
             {
                 Debug.LogWarning("[CastleHubBuilder] Wall_Medieval_Stone prefab missing — inner CoC wall ring skipped (LogWarning, not fatal).");
@@ -528,7 +592,7 @@ namespace DeNelle.Editor
             if (span < 1f) return;
             float mid = (a + b) * 0.5f;
             Vector3 pos = sideCenter + along * mid;
-            pos.y = 0f;
+            pos.y = CastleFootprintLiftY;   // WO-593: inner ring rises with the island (was world 0, re-stamped on rebake)
 
             var w = (GameObject)PrefabUtility.InstantiatePrefab(wallStone);
             w.name = "InnerWall_" + suffix;
@@ -698,9 +762,12 @@ namespace DeNelle.Editor
         //  re-author of the gates keeps the strips aligned automatically.
         //
         //  Strip footprint (per gate, in the gate's own outward frame BEFORE rotation):
-        //   • width  (across the opening) ~12m  — matches the medium gate clear span
-        //   • length (courtyard -> out)   ~26m  — ~8m inside the wall to overlap the
-        //     courtyard floor + ~18m outward (well past the >=10m requirement) onto terrain.
+        //   • width  (across the opening) 15m — matches the masonry clear span (GateClearHalf)
+        //   • length (courtyard -> out) ~11.4m — ~8m inside the wall to overlap the courtyard
+        //     floor + outward only AS FAR AS THE PLINTH EDGE (PlinthHalf). Post-WO-593 raise the
+        //     strip rides at y=liftY, so any reach past the plinth edge bakes a walkable catwalk
+        //     in mid-air (F8 2026-07-02 flag_14); the descent beyond the edge belongs to the
+        //     bridge/ramps + the RuntimeRegionGate sloped approach deck.
         //  A Unity Plane is 10x10m at scale 1, centered on its transform, so we size it
         //  via localScale and rotate it by the side angle so the length axis runs radially
         //  outward from origin.
@@ -736,8 +803,14 @@ namespace DeNelle.Editor
             // visually intact; only the walk lane widens.
             const float halfWidth   = 7.5f; // 15m across the opening (matches GateClearHalf masonry clear)
             const float insideReach = 8f;   // overlap courtyard floor (inside the wall)
-            const float outsideReach = 18f; // >=10m out onto terrain
-            float length = insideReach + outsideReach; // 26m total along the radial axis
+            // F8 2026-07-02 flag_14 "walking in the air off the bridge": the strip is stamped at
+            // y=CastleFootprintLiftY (WO-593 raise), so its old 18m outward reach (to r≈58.6) baked a
+            // 15m-wide WALKABLE CATWALK hovering liftY above the outer ground past the plinth edge —
+            // the hero could nav-walk beside/over the bridge in mid-air and off its sides. DERIVE the
+            // reach so the strip ends AT the plinth edge (r=PlinthHalf): the descent beyond it is the
+            // bridge/ramps' job (CastleMoatBuilder) + the RuntimeRegionGate sloped approach.
+            float outsideReach = Mathf.Max(2f, PlinthHalf - Mathf.Abs(southGate.z)); // 44 - 40.6 = 3.4m, ends at the plinth edge
+            float length = insideReach + outsideReach; // ~11.4m total along the radial axis
             float centerOffset = (outsideReach - insideReach) * 0.5f; // shift strip center outward
 
             foreach (var g in poses)
@@ -748,7 +821,7 @@ namespace DeNelle.Editor
 
                 // Center the strip between the courtyard-overlap end and the terrain end.
                 Vector3 center = g.worldPos + outward * centerOffset;
-                center.y = 0f; // OWNER-VALIDATED 2026-06-12: at the gate base (y=0), forced walkable
+                center.y = CastleFootprintLiftY; // WO-593: gate strip rises with the island (was world 0, re-stamped on rebake)
 
                 // Plane is 10m square at scale 1: X = width axis, Z = length axis. The
                 // length axis must run OUTWARD (along 'outward'); a plane's local +Z maps to
@@ -1270,6 +1343,39 @@ namespace DeNelle.Editor
         }
 
         // =====================================================================
+        //  Scene debris cleanup shared by both batch entry points. Removes:
+        //  - The owner's leftover hand-planes "Plane".."Plane (3)" — they render (z-fight
+        //    "ground flash"), over-extend the navmesh, AND "Plane (2)"/"Plane (3)" carry
+        //    hand-added NavMeshLinks authored in the PRE-RAISE (y=0) castle frame: the
+        //    fleet's dangling-link oracle proved them off-mesh after the WO-593 island
+        //    raise (break-log 2026-07-02: "NAVMESH-LINK DANGLING: 'Plane (2)' ... start
+        //    on-mesh=False @ (-12.78, 5.02, -36.21), end on-mesh=False @ (-12.78, 1.48,
+        //    -32.67)"). The old loop only removed "Plane"/"Plane (1)".
+        //  - The stale "SeamlessOuterWorldSeam" subtree (WO-468 Phase 2 side-by-side WALK
+        //    experiment) whose serialized NavLink_CastleToOuterWorld ends at z=-76 in the
+        //    long-gone adjacent-OuterWorld frame — off-mesh every run (break-log 2026-07-02:
+        //    "NAVMESH-LINK DANGLING: 'NavLink_CastleToOuterWorld' ... end on-mesh=False @
+        //    (-4.37, 3.00, -76.00)"). The crossing is WARP by design now (RuntimeRegionGate
+        //    builds the per-gate thresholds + AI links at runtime — CANON_GROUND_TRUTH
+        //    2026-07-01); the serialized link bridges nothing and is retired here. Re-running
+        //    "Defenders/World/Build Seamless OuterWorld Seam" recreates it deliberately.
+        // =====================================================================
+        private static void RemoveSupersededSeamDebris(string logPrefix)
+        {
+            foreach (var n in new[] { "Plane", "Plane (1)", "Plane (2)", "Plane (3)" })
+            {
+                var stray = GameObject.Find(n);
+                if (stray != null) { Object.DestroyImmediate(stray); Log(logPrefix + ": removed leftover hand-plane '" + n + "'."); }
+            }
+            var staleSeam = GameObject.Find("SeamlessOuterWorldSeam");
+            if (staleSeam != null)
+            {
+                Object.DestroyImmediate(staleSeam);
+                Log(logPrefix + ": removed stale 'SeamlessOuterWorldSeam' (NavLink_CastleToOuterWorld) — superseded by the RuntimeRegionGate warp crossing.");
+            }
+        }
+
+        // =====================================================================
         //  Batchmode entry — open MainCastle_Hall, ensure the invisible floor
         //  (courtyard + gate + keep entrance), force the NavMeshSurface to
         //  Physics Colliders, BAKE, and persist the navmesh asset + scene.
@@ -1284,11 +1390,7 @@ namespace DeNelle.Editor
             // Remove the owner's leftover hand-placed planes — they still render (z-fight "ground
             // flash") and over-extend the navmesh way past the walls. The generated invisible
             // floor (renderer-off) replaces them cleanly.
-            foreach (var n in new[] { "Plane", "Plane (1)" })
-            {
-                var stray = GameObject.Find(n);
-                if (stray != null) { Object.DestroyImmediate(stray); Log("BATCH-BAKE: removed leftover hand-plane '" + n + "'."); }
-            }
+            RemoveSupersededSeamDebris("BATCH-BAKE");
 
             // Ensure the generated invisible floor (courtyard + gate + keep entrance) exists.
             var root = GameObject.Find(RootName);
@@ -1371,6 +1473,7 @@ namespace DeNelle.Editor
             const string scenePath = "Assets/Scenes/MainCastle_Hall.unity";
             var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
             Log("BATCH-RECIPE: opened " + scenePath);
+            LoadFootprintLiftY();   // WO-593: base height from PlayerPrefs, before walls/floor/heart author
 
             // 1. Walls from the recipe (+ mirror x4 around world origin).
             CastleWallsFromRecipe.Recreate();
@@ -1380,15 +1483,16 @@ namespace DeNelle.Editor
             EnsureExitSeamAtRecipeGate();
 
             // 3. Recipe-driven walkable floor + gate exit strips + keep interior.
-            foreach (var n in new[] { "Plane", "Plane (1)" })
-            {
-                var stray = GameObject.Find(n);
-                if (stray != null) { Object.DestroyImmediate(stray); Log("BATCH-RECIPE: removed leftover hand-plane '" + n + "'."); }
-            }
+            RemoveSupersededSeamDebris("BATCH-RECIPE");
             var floorRoot = GameObject.Find(RootName);
             Transform parent = floorRoot != null ? floorRoot.transform
                 : (GameObject.Find(RootName + "_FloorHost") ?? new GameObject(RootName + "_FloorHost")).transform;
+            // WO-593: lift the BASE (footprint root) to the island height so the nav floor + every
+            // localPosition child (courtyard, the 8 structures, hero home) rides it. The world-.position
+            // sites (Heart, inner ring, gate strips) set base height absolutely below, so no double-count.
+            parent.position = new Vector3(parent.position.x, CastleFootprintLiftY, parent.position.z);
             BuildNavMeshFloor(parent);
+            BuildBasePlinth(parent);   // WO-593: raised stone base fills the gap under the castle (no terrain regen)
 
             // SINGLE-LEVEL PIVOT (owner 2026-06-12): strip EVERY second-tier element baked into
             // the saved scene (grand stair, upper battlements platform + walls + towers, balcony,
@@ -1412,6 +1516,19 @@ namespace DeNelle.Editor
             //     rebuild the 8 structures, so capture the owner's manual edits (deleted keep+floor,
             //     stray test tree, stray anvil) and ensure the Anvil sits at the blacksmith. Idempotent.
             EnsureCastleTownProps();
+
+            // 3d. WO-593 F8 "Missing Prefab Asset: 'HeroBody'": strip every missing-source prefab
+            //     instance (the stale HeroBody references the size-cut-deleted Mage.fbx, guid
+            //     be1690ec…) so the rebuilt scene saves CLEAN and the scene-open warning is gone.
+            //     Generic + idempotent — future asset deletions can't leave the same debris.
+            int stripped = MissingPrefabInstanceCleaner.CleanOpenScene(scene);
+            Log("BATCH-RECIPE: missing-prefab instance cleanup removed " + stripped + " stale instance(s).");
+
+            // 3e. WO-593 F8 "steps inside the wall": re-seat the 4 perimeter wall stairs flush to the
+            //     wall plane (measures Wall_* runs only) — must run AFTER the recipe rebuild recreates
+            //     them and BEFORE the bake so the navmesh includes the seated stairs.
+            CastleWallStairsSeatFix.RunOnOpenScene(scene);
+            Log("BATCH-RECIPE: wall stairs re-seated flush to the wall plane.");
 
             // 4. Bake every NavMeshSurface (Physics Colliders, All) + persist the asset.
             //    (Mirrors BatchAddFloorAndBakeCastle's proven bake block.)
@@ -1581,6 +1698,17 @@ namespace DeNelle.Editor
             if (keepPrefab != null) { Object.DestroyImmediate(keepPrefab); Log("EnsureCastleTownProps: destroyed leftover GroundLevel_Keep_Hall_Entry."); }
             var keepNav = GameObject.Find("KeepInterior_Nav");
             if (keepNav != null) { Object.DestroyImmediate(keepNav); Log("EnsureCastleTownProps: destroyed leftover KeepInterior_Nav."); }
+
+            // 1b. WO-593 / owner F8 2026-07-02 "Wall in middle?": the wood/iron/steel WALL PREVIEW
+            //     demo row (WallPreview.cs) still sits at courtyard centre in the saved scene
+            //     (MainCastle_Hall.unity 'WallPreview_Row' @ (0,0,0); its steel tier carries the
+            //     pale-blue emissive rune material — the floating pale-blue block in the F8 shot).
+            //     WallPreview.cs's own header says "a castle rebake will wipe this row", but no
+            //     rebuild path ever removed it — do it here so every regen clears the demo debris.
+            //     (The InnerWallRing_CoC — the beige battlemented wall run in the same F8 — is
+            //     cleared by the retired destroy-only BuildInnerWallRing in the same rebuild.)
+            var wallPreview = GameObject.Find("WallPreview_Row");
+            if (wallPreview != null) { Object.DestroyImmediate(wallPreview); Log("EnsureCastleTownProps: destroyed WallPreview_Row demo debris (owner F8 2026-07-02 'Wall in middle?')."); }
 
             // An EMPTY keep root — only destroy if it has no meaningful children. The hero spawn
             // (HeroStartPoint...) lives under it via the home space, so if that subtree exists we
@@ -1931,7 +2059,8 @@ namespace DeNelle.Editor
             {
                 EnsureExitSeamAtRecipeGate();
                 FlowTrace.Step("BridgeSeam",
-                    "exit seam restored at recipe south gate (target OuterWorld (0,0.5,-12), additive) via EnsureExitSeamAtRecipeGate.");
+                    "legacy exit seam purged + plain nav marker restored at the recipe south gate via " +
+                    "EnsureExitSeamAtRecipeGate (trigger RETIRED 2026-07-02 — crossing = RuntimeRegionGate warp gates).");
             });
 
             // --- 4. Rebuild the nav floor (drop Floor_Bridge_Nav from the bake set), bake + persist. ---
@@ -2165,8 +2294,35 @@ namespace DeNelle.Editor
                 StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic);
         }
 
-        // Place the OuterWorld exit seam ONTO the recipe south gate opening so the hero reaches
-        // it as it crosses the gate. Removes any prior (mis-placed) marker/trigger first.
+        // =====================================================================
+        //  LEGACY INTERIOR EXIT SEAM — RETIRED (owner F8 2026-07-02 "travel to outer
+        //  world should not show").
+        // -----------------------------------------------------------------------------
+        //  §12 captured cause: "BATCH-RECIPE: exit seam placed INTERIOR of recipe gate
+        //  (-4.37, 1.50, -37.60) (gate.z+3, radius 12, target OuterWorld (0,0.5,-12))".
+        //  This method used to bake a SceneTransitionTrigger 3m INSIDE the courtyard.
+        //  SceneTransitionTrigger floors every non-walk-up confirm seam's radius to
+        //  ConfirmMinRadius=40m (SceneTransitionTrigger.cs EffRadius), so the baked
+        //  radius-12 trigger actually blanketed the courtyard — the purple "Travel to
+        //  the Outer World" prompt showed at the FOUNTAIN, nowhere near a gate.
+        //
+        //  RETIRE, not gate, because the crossing is fully covered without it (canon
+        //  CANON_GROUND_TRUTH_2026-07-01): the four RuntimeRegionGate warp gates build
+        //  their OWN per-gate SceneTransitionTrigger (suppressPrompt=true, threshold-
+        //  seated OUTSIDE the gate) + HeroLinkCrossing warp pair at runtime. Nothing
+        //  else consumed the baked trigger:
+        //   - the GATE_NAV_OK bake verify (CastleGateNavVerify.VerifyOpenScene) now
+        //     falls back to path-testing the MARKER kept below (assertion preserved);
+        //   - AutoPilot's SEAM-REACHABLE probes whatever triggers exist at runtime
+        //     (the RuntimeRegionGate ones) — unaffected.
+        //
+        //  This method now: (a) PURGES any prior marker + EVERY baked
+        //  SceneTransitionTrigger (so a rebake also scrubs the stale trigger out of
+        //  the saved scene), and (b) leaves a PLAIN nav marker (no trigger, no
+        //  collider, no prompt) at the same interior lane point, seated on the raised
+        //  courtyard floor (CastleFootprintLiftY), so the bake's nav-reachability
+        //  assertion still has its target.
+        // =====================================================================
         private static void EnsureExitSeamAtRecipeGate()
         {
             Vector3 gate = ReadSouthGatePos(); // recipe Gate_South, e.g. (-4.37,0,-40.6)
@@ -2174,67 +2330,26 @@ namespace DeNelle.Editor
             var priorMarker = GameObject.Find("WorldGate_ConnectToOuterWorld_Marker");
             if (priorMarker != null) Object.DestroyImmediate(priorMarker);
             var transTypeClean = FindType("DeNelle.Village.SceneTransitionTrigger");
+            int purged = 0;
             if (transTypeClean != null)
                 foreach (var c in Object.FindObjectsByType(transTypeClean, FindObjectsSortMode.None))
                 {
                     var mb = c as MonoBehaviour;
-                    if (mb != null) Object.DestroyImmediate(mb.gameObject);
+                    if (mb != null) { Object.DestroyImmediate(mb.gameObject); purged++; }
                 }
 
             var root = GameObject.Find(RootName);
             var marker = new GameObject("WorldGate_ConnectToOuterWorld_Marker");
             if (root != null) marker.transform.SetParent(root.transform, false);
-            // T-001 FIX (2026-06-13): seat the trigger INTERIOR-reachable, not 4m OUTSIDE.
-            // The old (gate.z - 4) placement put the seam on the fragile fused-strip navmesh
-            // OUTSIDE the wall, which the NavMeshAgent hero often could not reach (it stalled
-            // at the gate-opening navmesh edge and never tripped the seam -> "cannot exit /
-            // 3rd time / seam issue", 6 occurrences). Move it 3m INSIDE the courtyard side of
-            // the opening (gate.z + 3) where the main CourtyardFloor_Nav is solid + reachable,
-            // and raise the proximity radius 9 -> 14 so it fires as the hero approaches the
-            // gate from the courtyard. This mirrors WireOuterWorldConnection's interior radius-18
-            // reasoning (the hero stops at the navmesh edge well short of the opening).
-            marker.transform.position = new Vector3(gate.x, 1.5f, gate.z + 3f);
+            // Same interior lane point the retired trigger used (gate.z + 3, solid
+            // CourtyardFloor_Nav), but seated at the raised floor height (WO-593 island
+            // raise) so the verify's tight 1.0m navmesh sample lands on the real sheet.
+            marker.transform.position = new Vector3(gate.x, CastleFootprintLiftY, gate.z + 3f);
 
-            var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
-            if (transType == null) { Err("BATCH-RECIPE: SceneTransitionTrigger not found — exit seam NOT wired."); return; }
-
-            var comp = marker.AddComponent(transType);
-            transType.GetField("targetSceneName")?.SetValue(comp, "OuterWorld");
-            // SOUTH-GATE SEAM FIX (2026-06-13): land NEAR the OuterWorld entry, not its midpoint.
-            // OLD value (0,0.5,-80) dropped the hero deep in / past the SOUTH region (Mirewood is
-            // centered at (0,0,-90) — OuterWorldBuilder.RegionCenter), i.e. "yanked to the middle
-            // of OuterWorld" (owner). OuterWorld has NO authored castle-entry/gate marker; its four
-            // regions (E/W/S/N at ±90) fan out from the world ORIGIN (ExteriorTerrain at (-150,-150)
-            // => 300x300 terrain centered on (0,0,0)), so origin IS the natural arrival hub. Land a
-            // few metres SOUTH of origin (-12) so the hero faces INTO the world from the direction
-            // they entered (castle is north of OuterWorld) and can walk out to any region.
-            // NOTE: if/when OuterWorld gains a real castle-gate art marker, measure the exact mouth
-            // from that art and set targetPosition to it + a few metres inward (see report flag).
-            transType.GetField("targetPosition")?.SetValue(comp, new Vector3(0f, 0.5f, -12f));
-            transType.GetField("loadAdditive")?.SetValue(comp, true);
-            // Radius 14 -> 20: the in-game SeamTrace proved the hero's CLOSEST approach is
-            // ~16.7m (he stops at the courtyard navmesh edge short of the interior marker; the
-            // castle + OuterWorld are two separate navmeshes that don't join, which is the whole
-            // reason this seam is proximity-based). 14m never fired. A continuous-navmesh rebake
-            // reported GATE_NAV_OK but that was a SamplePosition false-green (the agent still can't
-            // traverse). 20m fires reliably right at the edge the hero actually reaches.
-            // Radius 20 -> 28: owner-playtest SeamTrace showed the hero's closestEver = 21.7m
-            // (the WO-449 wall-layer rebake shifted the navmesh edge ~5m further out than the
-            // 16.7m we sized 20 for), so 20 missed by 1.7m and never fired. 28 covers 21.7 + margin.
-            // Radius 12, NOT 28: 28 was a GAME-BREAKER — with 4 gates surrounding the ~35m courtyard spawn, a
-            // few steps tripped one and yanked the player out (fade-to-black). 12 only fires when the hero is AT
-            // the gate; the widened nav lane (gate exit strip 7.5 / inner-ring gap 8) lets the hero reach it.
-            transType.GetField("ProximityRadius")?.SetValue(comp, 12f);
-            // OWNER 2026-06-17: AUTO-CROSS, no F-prompt — the exit seam crosses on proximity
-            // (the F-key confirm felt unnatural). Null-safe.
-            transType.GetField("requireConfirm")?.SetValue(comp, false);
-
-            var col = marker.AddComponent<BoxCollider>();
-            col.isTrigger = true;
-            col.size = new Vector3(12f, 6f, 10f);
-
-            Log("BATCH-RECIPE: exit seam placed INTERIOR of recipe gate " + marker.transform.position +
-                " (gate.z+3, radius 12, target OuterWorld (0,0.5,-12) near-origin hub).");
+            Log("BATCH-RECIPE: legacy interior exit seam RETIRED (owner F8 2026-07-02) — purged " +
+                purged + " baked SceneTransitionTrigger(s); plain nav marker kept at " +
+                marker.transform.position + " for the GATE_NAV verify. Crossing = the four " +
+                "RuntimeRegionGate warp gates (CANON_GROUND_TRUTH_2026-07-01).");
         }
 
         // =====================================================================
@@ -2277,7 +2392,7 @@ namespace DeNelle.Editor
             if (existing == null && parent != null) anchor.transform.SetParent(parent, false);
 
             // North-centre plaza, in front of the keep. CLEAN scale-1 anchor (no collider-scale trap).
-            anchor.transform.position = new Vector3(0f, 0f, 12f);
+            anchor.transform.position = new Vector3(0f, CastleFootprintLiftY, 12f);   // WO-593: Heart rises with the island (was world 0, re-stamped on rebake)
             anchor.transform.localScale = Vector3.one;
 
             // Tag "HeartTarget" so EnemyBrain.FindClosestTarget can find it. The tag may not be
@@ -2313,6 +2428,20 @@ namespace DeNelle.Editor
             var priorTree = anchor.transform.Find(TreeChildName);
             if (priorTree != null) Object.DestroyImmediate(priorTree.gameObject);
 
+            // OWNER F8 2026-07-02 "tree of life in ground not on ground": SeatOnGroundOnStart now
+            // derives the tree's visual base from MESH VERTICES (the fbx's authored renderer AABB is
+            // skewed below the root ball, which buried the trunk). Vertex reads in a PLAYER build
+            // require Read/Write Enabled on the import — enforce it here (editor/bake time) so the
+            // robust seat derivation works in the build too, not just in-editor.
+            var treeImporter = AssetImporter.GetAtPath("Assets/Art/Tree_Of_Life.fbx") as ModelImporter;
+            if (treeImporter != null && !treeImporter.isReadable)
+            {
+                treeImporter.isReadable = true;
+                treeImporter.SaveAndReimport();
+                Log("WireCastleHeart: enabled Read/Write on Tree_Of_Life.fbx so SeatOnGroundOnStart's " +
+                    "mesh-vertex base derivation works in player builds.");
+            }
+
             var treePrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Art/Tree_Of_Life.fbx");
             if (treePrefab == null)
                 Debug.LogWarning("[CastleHubBuilder] WireCastleHeart: Assets/Art/Tree_Of_Life.fbx not found — Heart is functional but has no visible mesh.");
@@ -2329,6 +2458,27 @@ namespace DeNelle.Editor
                 if (matFix != null && tree.GetComponent(matFix) == null) tree.AddComponent(matFix);
                 var seat = FindType("DeNelle.Village.SeatOnGroundOnStart");
                 if (seat != null && tree.GetComponent(seat) == null) tree.AddComponent(seat);
+                // OWNER F8 2026-07-02 "tree STILL reads buried": the derived seat (lowest
+                // vertex on floor) passed the PROP_SEATING oracle, but the fbx's authored
+                // root FLARE belongs ABOVE grade. Author a base lift: default 0.4m, and the
+                // PlayerPrefs key "tree.baseLift" lets the owner felt-tune it live without a
+                // rebake. NOTE: AutoPilotProbes.PropSeatTolerance = 0.75m — a tuned lift
+                // above that must raise the oracle tolerance to match.
+                var seatComp = seat != null ? tree.GetComponent(seat) : null;
+                if (seatComp != null)
+                {
+                    var seatSo = new SerializedObject(seatComp);
+                    var liftProp = seatSo.FindProperty("_baseLiftOverride");
+                    var keyProp  = seatSo.FindProperty("_baseLiftPrefsKey");
+                    if (liftProp != null && keyProp != null)
+                    {
+                        liftProp.floatValue  = 0.4f;
+                        keyProp.stringValue  = "tree.baseLift";
+                        seatSo.ApplyModifiedPropertiesWithoutUndo();
+                        Log("WireCastleHeart: tree base lift authored (0.4m default, PlayerPrefs 'tree.baseLift' tunable).");
+                    }
+                    else Err("WireCastleHeart: SeatOnGroundOnStart._baseLiftOverride/_baseLiftPrefsKey not found — tree base lift NOT authored (stale compile?).");
+                }
                 Log("WireCastleHeart: visible TreeOfLife added from Assets/Art/Tree_Of_Life.fbx (scale 7, Euler(-90,0,0), colliders stripped, ground-seated).");
             }
 

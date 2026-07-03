@@ -8,7 +8,7 @@
       "to": "OuterWorld",
       "approachWidth": 7.0,
       "approachOverlap": 6.0,
-      "thresholdBackFromGate": 22.0,
+      "thresholdBackFromGate": 13.0,
       "triggerRadius": 8.0,
       "occluder": true,
       "facingYaw": 0
@@ -21,7 +21,7 @@
       "to": "OuterWorld",
       "approachWidth": 7.0,
       "approachOverlap": 6.0,
-      "thresholdBackFromGate": 22.0,
+      "thresholdBackFromGate": 13.0,
       "triggerRadius": 8.0,
       "occluder": true,
       "facingYaw": 90
@@ -34,7 +34,7 @@
       "to": "OuterWorld",
       "approachWidth": 7.0,
       "approachOverlap": 6.0,
-      "thresholdBackFromGate": 22.0,
+      "thresholdBackFromGate": 13.0,
       "triggerRadius": 8.0,
       "occluder": true,
       "facingYaw": 180
@@ -47,7 +47,7 @@
       "to": "OuterWorld",
       "approachWidth": 7.0,
       "approachOverlap": 6.0,
-      "thresholdBackFromGate": 22.0,
+      "thresholdBackFromGate": 13.0,
       "triggerRadius": 8.0,
       "occluder": true,
       "facingYaw": 270

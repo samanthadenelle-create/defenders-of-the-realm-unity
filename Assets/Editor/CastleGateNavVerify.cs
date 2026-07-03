@@ -67,7 +67,7 @@ namespace DeNelle.Editor
 
             var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
             if (transType == null) { Debug.Log("[AllGates] GATE_NAV_FAIL :: SceneTransitionTrigger type not found"); return; }
-            var comps = UnityEngine.Object.FindObjectsByType(transType, FindObjectsSortMode.None);
+            var comps = UnityEngine.Object.FindObjectsByType(transType);
             Debug.Log("[AllGates] trigger count = " + comps.Length);
 
             var fR = transType.GetField("ProximityRadius");
@@ -193,7 +193,7 @@ namespace DeNelle.Editor
             var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
             if (transType == null) { Debug.LogError("[ExitDiag] SceneTransitionTrigger TYPE not found (not compiled?)"); return; }
 
-            var comps = UnityEngine.Object.FindObjectsByType(transType, FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var comps = UnityEngine.Object.FindObjectsByType(transType, FindObjectsInactive.Include);
             Debug.Log("[ExitDiag] SceneTransitionTrigger count (incl inactive) = " + comps.Length);
             foreach (var c in comps)
             {
@@ -297,14 +297,22 @@ namespace DeNelle.Editor
             if (spawnGo == null) { detail = "no hero spawn marker (HeroStartPoint_PlayerSpawn / Capsule) in scene"; return false; }
             Vector3 spawn = spawnGo.transform.position;
 
-            // 3. The south-gate exit trigger (SceneTransitionTrigger / OuterWorldTransitionTrigger).
+            // 3. The exit-lane verify target. Preferred: a baked SceneTransitionTrigger (legacy
+            //    scenes). RETIREMENT FALLBACK (owner F8 2026-07-02 "travel to outer world should
+            //    not show"): CastleHubBuilder.EnsureExitSeamAtRecipeGate no longer bakes a trigger
+            //    (the interior seam's 40m EffRadius prompt blanketed the courtyard; crossing =
+            //    RuntimeRegionGate warp gates, CANON_GROUND_TRUTH_2026-07-01). It keeps a PLAIN
+            //    "WorldGate_ConnectToOuterWorld_Marker" on the gate lane, so the spawn->gate
+            //    reachability assertion is preserved by path-testing the marker instead, with the
+            //    retired trigger's 12m lane radius as the acceptance tolerance.
+            const float RetiredSeamLaneRadius = 12f;   // the retired baked trigger's ProximityRadius
             Vector3 triggerPos = Vector3.zero;
             float radius = 6f;
             bool foundTrigger = false;
             var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
             if (transType != null)
             {
-                var comps = UnityEngine.Object.FindObjectsByType(transType, FindObjectsSortMode.None);
+                var comps = UnityEngine.Object.FindObjectsByType(transType);
                 if (comps != null && comps.Length > 0)
                 {
                     var mb = comps[0] as MonoBehaviour;
@@ -320,8 +328,21 @@ namespace DeNelle.Editor
             Vector3 recipeGate = ReadRecipeSouthGate();
             if (!foundTrigger)
             {
-                detail = "no SceneTransitionTrigger in scene — there is NO wired exit seam at the gate " +
-                         "(recipe south gate is at " + recipeGate + "; wire the trigger there)";
+                var laneMarker = GameObject.Find("WorldGate_ConnectToOuterWorld_Marker");
+                if (laneMarker != null)
+                {
+                    triggerPos = laneMarker.transform.position;
+                    radius = RetiredSeamLaneRadius;
+                    foundTrigger = true;
+                    Debug.Log("[CastleGateNavVerify] no baked SceneTransitionTrigger (RETIRED 2026-07-02) — " +
+                              "verifying spawn -> gate-lane marker at " + triggerPos + " (tolerance " + radius + "m).");
+                }
+            }
+            if (!foundTrigger)
+            {
+                detail = "no SceneTransitionTrigger AND no WorldGate_ConnectToOuterWorld_Marker in scene — " +
+                         "there is NO exit-lane target to verify (recipe south gate is at " + recipeGate +
+                         "; run EnsureExitSeamAtRecipeGate to restore the lane marker)";
                 return false;
             }
 
@@ -380,7 +401,7 @@ namespace DeNelle.Editor
             var surfType = FindType("Unity.AI.Navigation.NavMeshSurface");
             if (surfType == null) return 0;
             var dataProp = surfType.GetProperty("navMeshData");
-            var surfaces = UnityEngine.Object.FindObjectsByType(surfType, FindObjectsSortMode.None);
+            var surfaces = UnityEngine.Object.FindObjectsByType(surfType);
             int n = 0;
             foreach (var s in surfaces)
             {

@@ -120,8 +120,11 @@ namespace DeNelle.Village
         private GateRecipeRow _recipe;
         private Vector3 _gatePos;          // recipe SOUTH-FRAME gate (castle-local, unchanged by re-center). NOT pre-rotated.
         private float   _thresholdZ;       // deck far end (trigger + entry marker), SOUTH-FRAME Z
+        private float   _thresholdY;       // deck-surface Y AT the threshold (WO-593 sloped descent low end;
+                                           // == _gatePos.y until BuildApproachDeck derives the slope)
         private Vector3 _landing;          // OuterWorld landing (SOUTH-FRAME; from WorldGeometry, else fallback)
         private bool    _aiLinkBuilt;
+        private bool    _returnBuilt;      // WO-602: OUTER return entrance built once (Start-or-OnOuterWorldLoaded)
 
         // 4-SIDE SUPPORT (host-rotation about origin). All south math is authored in the SOUTH frame
         // and converted to world by ToWorld() = _yawRot * southPoint (host sits at origin, so a yaw
@@ -156,8 +159,24 @@ namespace DeNelle.Village
             // 1) Source coords at runtime — NEVER hardcode the source gate or the landing. These stay in
             //    the SOUTH FRAME; ToWorld() rotates each authored point onto this side at placement time.
             _gatePos = ReadSouthGatePos();
+
+            // WO-593 island raise (§12 captured proof, break-log 2026-07-02): SPAWN_TO_GATE_FAIL on all
+            // 4 sides — threshold(…, 0.00, ±62.60) vs lastCorner y=3.08/3.09: the recipe is authored in
+            // the PRE-RAISE castle frame (Gate_South y=0), but CastleWallsFromRecipe.cs:57 lifts the wall
+            // parent by CastleHubBuilder.CastleFootprintLiftY (PlayerPrefs "castle.liftY", default 3) and
+            // the gate strips/courtyard nav ride at that height. Lift the whole gate chain (deck fallback,
+            // threshold trigger, HeroLink entry, funnel panels, beacon, AI-link start, weld asserts) by the
+            // SAME base so the courtyard→threshold lane is one welded surface at the real nav height.
+            float baseLift = PlayerPrefs.GetFloat("castle.liftY", 3f);
+            if (baseLift > 0.01f)
+            {
+                _gatePos.y += baseLift;
+                FlowTrace.Step("RuntimeSeam", "gate chain lifted by castle.liftY=" + baseLift.ToString("0.0") +
+                    " (recipe is pre-raise frame; matches CastleWallsFromRecipe wall-parent lift).");
+            }
             float backFromGate = _recipe.thresholdBackFromGate > 0.01f ? _recipe.thresholdBackFromGate : 22f;
             _thresholdZ = _gatePos.z - backFromGate;       // out past the gate, on the castle deck
+            _thresholdY = _gatePos.y;                      // refined to the sloped-deck low end in BuildApproachDeck
             _landing = ResolveOuterWorldLanding();
             FlowTrace.Step("RuntimeSeam",
                 $"coords[{side} facingYaw={_facingYaw:F0}]: gateSouth={_gatePos} thresholdZ={_thresholdZ:F1} landingSouth={_landing} -> WORLD gate={ToWorld(_gatePos)} landing={ToWorld(_landing)} (gate=recipe, landing=WorldGeometry-or-fallback, rotated about castle origin).");
@@ -189,6 +208,7 @@ namespace DeNelle.Village
             if (SceneManager.GetSceneByName(OuterWorldSceneName).isLoaded)
             {
                 BuildAiLink(width);
+                BuildReturnEntrance(width);   // WO-602: the OUTER→courtyard way back home (needs outer ground live)
                 LogSpawnReachability();   // OuterWorld already additive at Start: log full-route reachability now
             }
             else
@@ -209,6 +229,7 @@ namespace DeNelle.Village
             if (scene.name != OuterWorldSceneName || _aiLinkBuilt) return;
             float width = _recipe != null && _recipe.approachWidth > 0.01f ? _recipe.approachWidth : 7f;
             BuildAiLink(width);
+            BuildReturnEntrance(width);   // WO-602: the OUTER→courtyard way back home (outer ground now live)
             // WO-468 4-lane capture: now that BOTH the castle navmesh AND the additive OuterWorld
             // navmesh are live (the real play condition), log whether the hero SPAWN can PATH to this
             // gate's threshold. The Start-time AssertApproachWelded tests only gate-local weld + ran
@@ -226,7 +247,7 @@ namespace DeNelle.Village
                 var spawnGo = GameObject.Find("HeroStartPoint_PlayerSpawn")
                            ?? GameObject.Find("HeroStartPoint_InsidePersonalQuarters");
                 Vector3 spawn = spawnGo != null ? spawnGo.transform.position : Vector3.zero;
-                Vector3 threshold = ToWorld(new Vector3(_gatePos.x, _gatePos.y, _thresholdZ));
+                Vector3 threshold = ToWorld(new Vector3(_gatePos.x, _thresholdY, _thresholdZ));   // sloped-deck low end (WO-593)
                 bool sSpawn = NavMesh.SamplePosition(spawn, out NavMeshHit hS, 5f, NavMesh.AllAreas);
                 bool sThr   = NavMesh.SamplePosition(threshold, out NavMeshHit hT, 2f, NavMesh.AllAreas);
                 if (!sSpawn || !sThr)
@@ -290,22 +311,74 @@ namespace DeNelle.Village
                     deckY = pHit.position.y;
 
                 // The deck spans from the threshold (south end) NORTH past the gate by the full overlap,
-                // so the courtyard-side end sits at gate.z + overlap (north = +Z here; gate.z=-40.6,
-                // threshold.z=-62.6). Centre + length derived from those two ends so the whole overlap is
-                // the weld tongue and nothing is wasted south of the threshold.
+                // so the courtyard-side end sits at gate.z + overlap (north = +Z here; gate.z=-40.6).
+                // WO-593 raise + F8 2026-07-02 flag_14 ("walking in the air off the bridge"): the deck
+                // used to be ONE FLAT plane at courtyard height (y=liftY) all the way to the threshold —
+                // past the plinth edge (r=44) that is a walkable catwalk hovering liftY above the outer
+                // ground, floating OVER the descending bridge/ramps. Split it:
+                //   FLAT TONGUE  courtyard(+overlap) → the plinth edge, at courtyard nav height;
+                //   SLOPED RUN   plinth edge (y=deckY) → threshold (y = MEASURED surface there: the
+                //                bridge/ramp deck when present — now collider-real — else flush terrain),
+                // so the walkable lane FOLLOWS the visible descent instead of flying beside it.
+                const float PlinthEdgeR = 44f;   // = CastleHubBuilder.PlinthHalf (editor const, mirrored — same
+                                                 // convention as CastleMoatBuilder.RampInnerRadius)
                 float courtyardEndZ = _gatePos.z + overlap;        // north end, INSIDE the courtyard
-                float southEndZ     = _thresholdZ;                 // south end, at the trigger
-                float centreZ       = (courtyardEndZ + southEndZ) * 0.5f;
-                float lenZ          = Mathf.Abs(courtyardEndZ - southEndZ);
+                float plinthEdgeZ   = -PlinthEdgeR;                // south-frame plinth edge
+                bool  sloped        = _thresholdZ < plinthEdgeZ - 0.5f && _gatePos.y > 0.5f;
+
+                float flatEndZ = sloped ? plinthEdgeZ : _thresholdZ;
+                float centreZ  = (courtyardEndZ + flatEndZ) * 0.5f;
+                float lenZ     = Mathf.Abs(courtyardEndZ - flatEndZ);
                 // Unity plane = 10m/unit: scale.z = len/10, scale.x = width/10. The plane is ROTATED by
                 // _yawRot so its long (Z) axis points along this gate's true outward axis (yaw=0 => identity).
                 deck = CreateInvisibleWalkableFloor(transform, "RuntimeSeam_Deck_Nav",
                     ToWorld(new Vector3(_gatePos.x, deckY, centreZ)),
                     new Vector3(width / 10f, 1f, lenZ / 10f),
                     _yawRot);
+
+                if (sloped)
+                {
+                    // Low-end Y = the real surface at the threshold XZ: raycast (ignoring triggers) hits
+                    // the stone bridge / ramp deck (both carry colliders now) or the terrain; fallback =
+                    // the ExteriorTerrainBuilder flush level 0 (CastleDepressionDepth=0f within ±62).
+                    Vector3 probeW = ToWorld(new Vector3(_gatePos.x, 0f, _thresholdZ)) + Vector3.up * 25f;
+                    float lowY = 0f; bool measured = false;
+                    if (Physics.Raycast(probeW, Vector3.down, out RaycastHit lh, 60f, ~0, QueryTriggerInteraction.Ignore))
+                    { lowY = lh.point.y; measured = true; }
+                    _thresholdY = lowY;
+
+                    // Contain the lane to the VISIBLE crossing: on the south side clamp the sloped width
+                    // to the measured stone-bridge deck (inside its parapets) so the hero cannot nav-walk
+                    // off the bridge sides (flag_14). Other sides keep the recipe width (their ramps are
+                    // 9m flaring 15.75m — wider than the 7m lane).
+                    float slopeWidth = width;
+                    var bridgeGo = GameObject.Find("RuntimeSeam_Bridge_South");
+                    if (bridgeGo != null && Mathf.Abs(Mathf.DeltaAngle(_facingYaw, 0f)) < 1f)
+                    {
+                        Bounds bb = default; bool have = false;
+                        foreach (var br in bridgeGo.GetComponentsInChildren<Renderer>(true))
+                        { if (br == null) continue; if (!have) { bb = br.bounds; have = true; } else bb.Encapsulate(br.bounds); }
+                        if (have) slopeWidth = Mathf.Min(width, Mathf.Max(3f, bb.size.x - 1.2f));
+                    }
+
+                    float run   = Mathf.Abs(plinthEdgeZ - _thresholdZ);
+                    float drop  = deckY - lowY;
+                    float slen  = Mathf.Sqrt(run * run + drop * drop);
+                    float pitch = -Mathf.Atan2(drop, run) * Mathf.Rad2Deg;   // local +Z (courtyard end) tilts UP — ramp convention
+                    Vector3 slopeCentre = new Vector3(_gatePos.x, (deckY + lowY) * 0.5f, (plinthEdgeZ + _thresholdZ) * 0.5f);
+                    CreateInvisibleWalkableFloor(transform, "RuntimeSeam_Deck_Nav_Slope",
+                        ToWorld(slopeCentre),
+                        new Vector3(slopeWidth / 10f, 1f, slen / 10f),
+                        _yawRot * Quaternion.AngleAxis(pitch, Vector3.right));
+                    FlowTrace.Step("RuntimeSeam",
+                        $"deck[{SideName(_facingYaw)}] SLOPE: plinth edge z={plinthEdgeZ:F1} y={deckY:F2} -> threshold z={_thresholdZ:F1} y={lowY:F2} " +
+                        $"(low end {(measured ? "MEASURED by raycast" : "fallback flush 0")}, pitch {pitch:F1}deg, width {slopeWidth:F1}m" +
+                        $"{(slopeWidth < width - 0.01f ? " clamped to the stone-bridge deck" : "")}) — walk lane follows the descent, no mid-air catwalk (flag_14).");
+                }
+
                 FlowTrace.Step("RuntimeSeam",
                     $"deck[{SideName(_facingYaw)}]: centreSouth=({_gatePos.x:F2},{deckY:F2},{centreZ:F1})->world{ToWorld(new Vector3(_gatePos.x, deckY, centreZ))} len≈{lenZ:F1}m width={width}m " +
-                    $"(threshold {_thresholdZ:F1} → courtyardEnd {courtyardEndZ:F1}, +{overlap:F0}m FULL deck/courtyard overlap north of gate {_gatePos.z:F1}, deckY snapped to courtyard navmesh — overlap is the connect with the Children-only bake).");
+                    $"(flat tongue {courtyardEndZ:F1}→{flatEndZ:F1}{(sloped ? " + sloped run to threshold " + _thresholdZ.ToString("F1") : "")}, +{overlap:F0}m FULL deck/courtyard overlap north of gate {_gatePos.z:F1}, deckY snapped to courtyard navmesh — overlap is the connect with the Children-only bake).");
             });
             if (deck == null)
                 FlowTrace.Fail("RuntimeSeam", "approach deck FAILED to build — the crossing cannot weld; hero will hit the navmesh edge.");
@@ -379,7 +452,7 @@ namespace DeNelle.Village
                 // SetParent, which is what AutoPilot's SEAM-UNREACHABLE measures against) plus a navmesh
                 // sample at both the trigger and the threshold, so a fleet run shows where the trigger
                 // ACTUALLY lands at runtime and whether it sits on the baked mesh (vs the 7045m red herring).
-                Vector3 thresholdWorld = ToWorld(new Vector3(_gatePos.x, _gatePos.y, _thresholdZ));
+                Vector3 thresholdWorld = ToWorld(new Vector3(_gatePos.x, _thresholdY, _thresholdZ));   // sloped-deck low end (WO-593)
                 bool trigOnMesh = NavMesh.SamplePosition(go.transform.position, out NavMeshHit hTrig, 4f, NavMesh.AllAreas);
                 bool thrOnMesh  = NavMesh.SamplePosition(thresholdWorld, out NavMeshHit hThr, 4f, NavMesh.AllAreas);
                 FlowTrace.Step("RuntimeSeam",
@@ -401,7 +474,9 @@ namespace DeNelle.Village
 
                 var entry = new GameObject("RuntimeSeam_HeroLink_Entry");
                 entry.transform.SetParent(transform, false);
-                entry.transform.position = ToWorld(new Vector3(_gatePos.x, _gatePos.y, _thresholdZ));   // WORLD, this side
+                // _thresholdY = the sloped-deck low end (WO-593 descent): the marker must sit ON the
+                // walk surface or its small enterRadius can never be entered (flag_14 follow-through).
+                entry.transform.position = ToWorld(new Vector3(_gatePos.x, _thresholdY, _thresholdZ));   // WORLD, this side
                 var ec = entry.AddComponent<HeroLinkCrossing>();
                 ec.crossingId = id;
                 ec.bidirectional = true;
@@ -412,9 +487,19 @@ namespace DeNelle.Village
                 var dc = dest.AddComponent<HeroLinkCrossing>();
                 dc.crossingId = id;
                 dc.bidirectional = true;
+                // WO-602 (way back home): the OUTER end's default 2m enterRadius was an invisible
+                // pin-point in an open field — the ONLY passive return path, and physically missable
+                // by any approach more than 2m off the exact lane centre (the moat ramps FLARE the
+                // landing to ~1.75x gate width, so most natural approaches missed it). Widen the
+                // OUTER radius to cover the flared ramp-landing lane, derived from the recipe
+                // approach width (half-deck + the component's stock 2m). The courtyard ENTRY keeps
+                // its tight 2m radius so the exit fires exactly at the threshold, unchanged.
+                float destWidth = _recipe.approachWidth > 0.01f ? _recipe.approachWidth : 7f;
+                dc.enterRadius = Mathf.Max(dc.enterRadius, destWidth * 0.5f + 2f);
 
                 FlowTrace.Step("RuntimeSeam",
-                    $"HeroLinkCrossing pair '{id}' — entry@{entry.transform.position} dest@{dest.transform.position}.");
+                    $"HeroLinkCrossing pair '{id}' — entry@{entry.transform.position} (r={ec.enterRadius:F1}) " +
+                    $"dest@{dest.transform.position} (r={dc.enterRadius:F1}, WO-602 widened outer return lane).");
             });
         }
 
@@ -591,7 +676,7 @@ namespace DeNelle.Village
                 // Both rotated to WORLD for this side so the per-gate reachability check samples the
                 // real navmesh (yaw=0 => south values unchanged).
                 var courtyard = ToWorld(new Vector3(0f, _gatePos.y, _gatePos.z + 4f));     // just inside the gate
-                var threshold = ToWorld(new Vector3(_gatePos.x, _gatePos.y, _thresholdZ));
+                var threshold = ToWorld(new Vector3(_gatePos.x, _thresholdY, _thresholdZ));   // sloped-deck low end (WO-593)
 
                 bool sStart = NavMesh.SamplePosition(courtyard, out NavMeshHit hStart, 5f, NavMesh.AllAreas);
                 bool sEnd   = NavMesh.SamplePosition(threshold, out NavMeshHit hEnd, 1.0f, NavMesh.AllAreas);
@@ -634,7 +719,7 @@ namespace DeNelle.Village
                 if (link == null) throw new System.Exception("AddComponent<NavMeshLink> returned null.");
                 // Start on the source deck just past the threshold; end at the OuterWorld landing — both
                 // rotated to WORLD for this side (yaw=0 => south values unchanged).
-                link.startPoint    = ToWorld(new Vector3(_gatePos.x, _gatePos.y, _thresholdZ));
+                link.startPoint    = ToWorld(new Vector3(_gatePos.x, _thresholdY, _thresholdZ));   // sloped-deck low end (WO-593)
                 link.endPoint      = ToWorld(_landing);
                 link.width         = width;
                 link.bidirectional = true;
@@ -647,6 +732,124 @@ namespace DeNelle.Village
             if (!ok)
                 FlowTrace.Fail("RuntimeSeam",
                     "AI NavMeshLink FAILED — reps/troops cannot PATH the crossing. (Hero masked-warp still works; this is the AI-only path.)");
+        }
+
+        // --------------------------------------------------------------------
+        //  PART 6 — OUTER RETURN ENTRANCE (WO-602 "way back home").
+        //  ROOT CAUSE (owner felt-test 2026-07-03 + SceneTransitionTrigger.cs's own
+        //  ledger "The crossing is ONE-WAY: there is no OuterWorld->castle return seam
+        //  wired"): the ONLY return path was the HeroLinkCrossing dest marker — an
+        //  INVISIBLE 2m pin-point on open ground with no prompt (the castle-side
+        //  trigger runs suppressPrompt=true and targets OuterWorld anyway) and no
+        //  visual (Beacon_Pillar is built hidden, owner 2026-06-30). Fix = a SYMMETRIC
+        //  outer-face crossing per gate:
+        //    (a) a SceneTransitionTrigger AT the outer landing (real outer ground,
+        //        generous radius) with the standard visible "Enter Elarion" prompt
+        //        (suppressPrompt=false on the OUTER trigger ONLY — the retired
+        //        interior-seam prompt stays suppressed) warping to the courtyard-side
+        //        landing at y=liftY, NavMesh-snapped;
+        //    (b) a subtle outside-facing affordance: two short glowing gate-posts
+        //        flanking the landing + a point light (NOT the hidden archway pillar —
+        //        the owner's complaint was white beams IN the archways; these are low,
+        //        colored, and outside at the ramp mouth);
+        //    (c) the widened passive HeroLinkCrossing dest radius (BuildHeroCrossingPair)
+        //        remains the walk-in path; this trigger is the visible, tappable read.
+        //  Built beside BuildAiLink (OuterWorld additive) so the outer ground exists
+        //  for the Y-snap. All positions derived from recipe/landing geometry — no
+        //  magic constants.
+        // --------------------------------------------------------------------
+        private void BuildReturnEntrance(float width)
+        {
+            if (_returnBuilt) return;
+            bool ok = Guard.Try("RuntimeSeam", "build OUTER return entrance (WO-602)", () =>
+            {
+                string side = SideName(_facingYaw);
+
+                // OUTER anchor = the SAME landing the exit warps the hero to (WorldGeometry-or-
+                // fallback, rotated for this side). Snap Y to the real outer ground: OuterWorld is
+                // additive-loaded when this runs, so a downward raycast finds the terrain surface.
+                Vector3 outerWorld = ToWorld(_landing);
+                if (Physics.Raycast(outerWorld + Vector3.up * 25f, Vector3.down, out RaycastHit ground, 60f, ~0, QueryTriggerInteraction.Ignore))
+                    outerWorld.y = ground.point.y;
+
+                // COURTYARD return landing: just inside the gate on the raised courtyard. _gatePos.y
+                // already carries castle.liftY (WO-593 lift, applied in Start), and we snap to the
+                // baked castle navmesh so the warp target derives from the mesh, not a constant.
+                // Inset = the deck overlap tongue depth's gate-side third (~6m past the arch) so the
+                // hero lands ON the welded courtyard surface, clear of the arch/funnel panels.
+                float inset = (_recipe.thresholdBackFromGate > 0.01f ? _recipe.thresholdBackFromGate : 22f) * 0.27f;
+                Vector3 courtyardWorld = ToWorld(new Vector3(_gatePos.x, _gatePos.y, _gatePos.z + inset));
+                if (NavMesh.SamplePosition(courtyardWorld, out NavMeshHit cyHit, 4f, NavMesh.AllAreas))
+                    courtyardWorld = cyHit.position;
+
+                // (a) The visible, tappable return trigger — the standard shared prompt path.
+                var go = new GameObject("RuntimeSeam_ReturnTrigger_" + side);
+                go.transform.SetParent(transform, false);
+                go.transform.position = outerWorld;
+
+                var trig = go.AddComponent<SceneTransitionTrigger>();
+                trig.targetSceneName = _recipe.from;      // back INTO the hub (already additive → reposition-only warp)
+                trig.targetPosition  = courtyardWorld;    // y=liftY courtyard landing, navmesh-snapped
+                trig.loadAdditive    = true;              // hub never unloaded; Cross() repositions only
+                trig.suppressPrompt  = false;             // OUTER face ONLY — interior seam prompt stays retired
+                trig.promptOverride  = "Enter Elarion";   // walk-up entry → honors the authored radius (no 40m floor)
+                // Generous, geometry-derived: covers the moat ramp's flared landing (~1.75x gate width).
+                trig.ProximityRadius = Mathf.Max(_recipe.triggerRadius > 0.01f ? _recipe.triggerRadius : 6f, width * 1.5f);
+
+                FlowTrace.Step("RuntimeSeam",
+                    $"OUTER trigger {side} armed at {outerWorld} r={trig.ProximityRadius:F1} -> warps hero to courtyard {courtyardWorld} " +
+                    $"('Enter Elarion' prompt, target '{_recipe.from}'; return crossing now SYMMETRIC — WO-602). " +
+                    "A fire logs as [Flow:Seam] Cross 'RuntimeSeam_ReturnTrigger_" + side + "'.");
+
+                // (b) Subtle outside-facing affordance: two short glowing posts flanking the
+                //     landing lane + a point light. Portal-blue = the established "go here" cue.
+                Color glow = new Color(0.40f, 0.75f, 1.00f);
+                var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                Material postMat = null;
+                if (sh != null)
+                {
+                    postMat = new Material(sh) { name = "ReturnPost_Glow", color = glow };
+                    postMat.EnableKeyword("_EMISSION");
+                    postMat.SetColor("_EmissionColor", glow * 2f);
+                }
+                for (int s = -1; s <= 1; s += 2)
+                {
+                    // Flank the lane in the SOUTH frame (lateral = X), rotated to this side; snap
+                    // each post to its own ground so a sloped landing can't float/bury one.
+                    Vector3 postWorld = ToWorld(new Vector3(_landing.x + s * (width * 0.5f + 0.6f), _landing.y, _landing.z));
+                    if (Physics.Raycast(postWorld + Vector3.up * 25f, Vector3.down, out RaycastHit pg, 60f, ~0, QueryTriggerInteraction.Ignore))
+                        postWorld.y = pg.point.y;
+
+                    var post = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    post.name = "ReturnPost_" + side + (s < 0 ? "_L" : "_R");
+                    post.transform.SetParent(go.transform, true);
+                    post.transform.position = postWorld + Vector3.up * 0.9f;   // half of the 1.8m height
+                    post.transform.rotation = _yawRot;
+                    post.transform.localScale = new Vector3(0.35f, 1.8f, 0.35f);
+                    var pc = post.GetComponent<Collider>();
+                    if (pc != null) Object.Destroy(pc);   // never block the lane
+                    var pr = post.GetComponent<MeshRenderer>();
+                    if (pr != null && postMat != null) pr.sharedMaterial = postMat;   // valid URP mat — never MagentaGuard bait
+                    else if (pr != null) pr.enabled = false;                          // no valid shader → hide rather than magenta
+                }
+                var lightGo = new GameObject("ReturnLight_" + side);
+                lightGo.transform.SetParent(go.transform, true);
+                lightGo.transform.position = outerWorld + Vector3.up * 3f;
+                var light = lightGo.AddComponent<Light>();
+                light.type      = LightType.Point;
+                light.color     = glow;
+                light.intensity = 3f;
+                light.range     = 14f;
+                light.shadows   = LightShadows.None;   // cheap
+
+                _returnBuilt = true;
+                FlowTrace.Step("RuntimeSeam",
+                    $"return AFFORDANCE {side}: 2 glow posts flanking the landing (±{width * 0.5f + 0.6f:F1}m) + point light @ {outerWorld} — " +
+                    "the outside face now READS as the way home (owner canon: no invisible triggers).");
+            });
+            if (!ok)
+                FlowTrace.Fail("RuntimeSeam",
+                    $"OUTER return entrance FAILED to build [{SideName(_facingYaw)}] — the way back home is still the invisible 2m pin-point (WO-602 regression).");
         }
 
         // --------------------------------------------------------------------

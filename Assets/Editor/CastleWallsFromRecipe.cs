@@ -54,7 +54,7 @@ namespace DeNelle.Editor
             // Rebuild the SOUTH side from the recipe.
             var parent = new GameObject(SouthName);
             Undo.RegisterCreatedObjectUndo(parent, "Recreate Castle Walls");
-            parent.transform.position    = V(recipe.parentPos);
+            parent.transform.position    = V(recipe.parentPos) + Vector3.up * CastleHubBuilder.CastleFootprintLiftY;   // WO-593 island raise (mirror preserves Y)
             parent.transform.eulerAngles = V(recipe.parentRot);
 
             int placed = 0;
