@@ -16,8 +16,8 @@
   (BuildPreviewModal row 39 = ⛔ mis-classified as dead, 3 live refs — never delete),
   QA checklist, combined verification plan (~30 named image pairs).
 
-## WAVE 1 STATE — 5 of 6 silos RETURNED and SHELVED (UNCOMMITTED in the working tree)
-All brace/NUL-checked by their agents; a pre-gate was launched (may or may not have finished):
+## WAVE 1 STATE — ALL 6 SILOS RETURNED, GATE-VERIFIED, AND **COMMITTED** (e37c16d2..a97dc4d8)
+SUPERSEDES the lines below where they say shelved/uncommitted/still-running. Per-silo notes:
 - S1 PackStore: Wallet/PackStore.cs full kit conversion + DeNelle.Wallet.asmdef (+UnityEngine.UI,
   +Unity.TextMeshPro). Money contract preserved line-by-line (report in matrix/PM board).
 - S5 End-states: EndStateView/EndStateVM hardened (+FromGameOver), GameOverScreen rebuilt as
@@ -44,8 +44,13 @@ All brace/NUL-checked by their agents; a pre-gate was launched (may or may not h
   S2 (the brief text is reproducible from the board; silo untouched by others).
 
 ## OTHER IN-FLIGHT AT HANDOFF (agent IDs die with the session — re-brief if lost)
-- Onboarding-cycle analysis (owner asked: flow map, coverage vs her tutorial asks, gaps,
-  time estimates — deliverable goes TO HER). Re-run brief: map Splash→Title→StoryIntro→
+- Onboarding-cycle analysis: DONE + committed (docs/ONBOARDING_FLOW_AUDIT_2026-07-03.md;
+  headline: V2 tutorial dark behind ff.tutorialv2, 3 wiring gaps). A TUTORIAL-GAP FIXER
+  agent was IN FLIGHT at handoff (brief: implement prepaidTower grant, scripted town wave
+  via TutorialWaveSpawner.SpawnAt, staged world-encounter rep, wire 3 dead contextual
+  triggers, THEN flip ff.tutorialv2 default ON — silo: Tutorial/V2 + TutorialWaveSpawner +
+  FeatureFlags one line). If lost, re-brief from that sentence + the audit doc.
+- (superseded) old onboarding re-run brief: map Splash→Title→StoryIntro→
   HeroSelect→castle→OnboardingFlow 6-beat→tutorial-steps.json steps→free play, per-beat
   trigger/skippable/duration, coverage vs docs/TUTORIAL_V2_SPEC_2026-07-02.md + her asks
   (first tower, town wave AND world combat taught separately, harvest), Sylas portrait check.
@@ -90,7 +95,8 @@ All brace/NUL-checked by their agents; a pre-gate was launched (may or may not h
 - Branch wip/village2-and-f8-tickets, ~50+ local commits ahead of origin, PUSH HELD for owner.
 - Committed today (highlights): 16-lane morning reconcile, HUD kit L13, bridge stone-height,
   8 WO-F panel conversions (8c0d3696), polish batch, Knight package + importer, water canon.
-- UNCOMMITTED = the wave-1 shelf above (deliberate — commits after verification per lane).
+- Wave-1 fully committed 15:40-15:44 (S1-S6 lanes + docs). Remaining uncommitted = only the
+  deliberate EXCLUDE leftovers (~14 paths) + whatever the tutorial-gap fixer returns.
 
 ## OWNER OPEN DECISIONS (only things that may reach her besides 100%)
 1. Defeat screen secondary action (quit-to-title) — template one-action law vs old behavior.
