@@ -435,5 +435,7 @@ Mixamo PALADIN (Knight_Hero.fbx in the hero package) IS the new hero body — ow
 words: "better render, better details." The dedicated-rig package is body + animations,
 not animation-only. Downstream: HeroBodySwapper/visual pipeline targets the Paladin mesh
 (sword/shield/helmet baked, Sword_joint/Shield_joint attachment bones); Tripo Knight
-retires from the hero slot (enemies unaffected). Remaining open: gap-fill policy
-(victory/block/injured) + package shape (prefab key vs manifest).
+retires from the hero slot (enemies unaffected). **RESOLVED 2026-07-03 (Opus): integration
+landed + committed — package shape = prefab-key (Resources/Heroes/KnightPackage.prefab behind
+ff.heropackage); gap-fill = shared Action set. Remaining = felt-tune only: forwardYaw/height,
+assassinate-clip confirm, EquipmentController duplicate-sword de-dup.**

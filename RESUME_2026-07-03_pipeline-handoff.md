@@ -84,10 +84,15 @@ SUPERSEDES the lines below where they say shelved/uncommitted/still-running. Per
   directional deaths (front/left/right/back/assassinate + default; front + default mapped,
   new self-describing death FBXs imported), prebattle idle = Standing Aim Idle 01, unsheathe =
   reversed Sheathing Sword + swordraw SFX (Downloads), WeaponSkill clips = special-ability pool
-  bound AT SKILL LEVEL (weaponskill-animations.json seam). ⚠ 3 OWNER DECISIONS OPEN: Paladin
-  body vs animation-only (canon says Tripo body!), gap-fill policy (victory/block/injured),
-  package shape (prefab-key vs manifest). Integration plan = the SME review (in this session's
-  transcript + summarized in the dossier context).
+  bound AT SKILL LEVEL (weaponskill-animations.json seam).
+  ✅ RESOLVED THIS SESSION (Opus, hero integration landed + committed): Paladin IS the body
+  (owner ruling); package shape = PREFAB-KEY (Resources/Heroes/KnightPackage.prefab loaded by
+  slug behind ff.heropackage default ON); gap-fill = shared Action set (Shared_Victory_Pose /
+  Shared_Block / injured retargets), owner may swap for dedicated Paladin clips later.
+  ⚠ NEW SMALLER ITEMS from integration (need owner EYES on the exe, not blocking): (1) Paladin
+  forwardYaw=0 + height default — felt-tune his facing/scale in-game; (2) assassinate death
+  clip mapping TENTATIVE (Two_Handed_Sword_Death_1) — confirm; (3) EquipmentController may
+  attach a DUPLICATE sword over the baked Paladin one — §12 verify from the exe, then de-dup.
 - **Bridge/moat verified facts**: south bridge span 22.2m (10.85 local × 2.049), castle end at
   plinth face r=44, water band currently 44→58 (14m), fleet-proven crossing green.
 
