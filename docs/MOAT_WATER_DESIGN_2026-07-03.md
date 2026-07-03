@@ -241,3 +241,10 @@ seam gap the water must cover. Measured: bridge ≈ 22.2m end-to-end (10.85 loca
 2.049 scale), ends bedded on land both sides → open water ≈ the 14m band. STANDING
 ORACLE for any moat/water change: water band must remain fully covered by the bridge
 span (band ⊂ bridge extent) or the crossing visually breaks.
+
+**OWNER RULING (07-03, follow-on):** water must run under the FULL playable span of every
+crossing — the water IS the walk-off containment and the seam enforcement (diegetic;
+invisible rails are a fallback, not the design). Therefore: widen the band to ~18m
+(44→62) AND extend the N/W/E ramps so their landings sit on dry ground beyond 62
+(south bridge already spans to ~66 — no change). The bridge/ramp-span oracle now binds
+every crossing: span must exceed the band with dry bedding both ends.
