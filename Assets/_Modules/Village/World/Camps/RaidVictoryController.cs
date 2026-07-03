@@ -40,11 +40,11 @@
 
 using System.Collections;
 using UnityEngine;
-using UnityEngine.UI;
 using DeNelle.Core;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Village.UI;
 
 namespace DeNelle.Village.World.Camps
 {
@@ -61,7 +61,6 @@ namespace DeNelle.Village.World.Camps
         [SerializeField] private float _autoReturnSeconds = 12f;
 
         private RaidGarrisonSpawner _spawner;
-        private GameObject _ui;
         private bool _handled;     // victory handled once (guards a double OnCleared)
         private bool _returning;   // a return is already in flight
 
@@ -173,9 +172,11 @@ namespace DeNelle.Village.World.Camps
             // STEP 3 — on a NEW claim, unlock the next companion (the rescue beat).
             string joined = newClaim ? UnlockNextCompanion() : null;
 
-            // STEP 4 — show the victory banner + route home (anti-soft-lock).
-            BuildVictoryBanner(configId, joined);
-            StartCoroutine(AutoReturnRoutine());
+            // STEP 4 — show the victory screen + route home (anti-soft-lock). The shared
+            // Obsidian EndState template owns the presentation, the ONE primary action
+            // (Return to Castle -> ReturnHome), the EventSystem, and the auto-dismiss
+            // softlock guard (fed the same _autoReturnSeconds so the timing is unchanged).
+            ShowVictoryScreen(configId, joined);
         }
 
         // The raid's scene-config id: prefer the spawner's stored id (via the public
@@ -258,46 +259,25 @@ namespace DeNelle.Village.World.Camps
         //  STEP 4 — RETURN. Victory banner + route home (never soft-lock).
         // =====================================================================
 
-        private void BuildVictoryBanner(string configId, string joinedCompanionName)
+        private void ShowVictoryScreen(string configId, string joinedCompanionName)
         {
             try
             {
-                if (_ui != null) Destroy(_ui);
-                _ui = ElarionUiKit.BuildModalCanvas("RaidVictoryBanner", 32000);
-                ElarionUiKit.Scrim(_ui.transform, onTapClose: null);
+                // Route the win through the ONE shared Obsidian EndState template. Its
+                // single primary action (Return to Castle) fires ReturnHome, and its
+                // AutoDismissSeconds (fed _autoReturnSeconds) IS the anti-soft-lock guard
+                // that previously lived in AutoReturnRoutine — same route, same timing.
+                EndStateView.Show(EndStateVM.FromRaidVictory(
+                    joinedCompanionName, ReturnHome, _autoReturnSeconds));
 
-                var panel = ElarionUiKit.Panel(_ui.transform, new Vector2(0.22f, 0.34f), new Vector2(0.78f, 0.70f), deep: true);
-
-                ElarionUiKit.Header(panel.transform, "VICTORY", x0: 0.06f, x1: 0.94f, y0: 0.74f, y1: 0.93f);
-
-                string body = joinedCompanionName != null
-                    ? $"The base is CLAIMED — it is yours now.\n\n{joinedCompanionName} joins your party."
-                    : "The base is CLAIMED — it is yours now.";
-                ElarionUiKit.Label(panel.transform, body, 0.10f, 0.40f,
-                    ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
-
-                ElarionUiKit.Button(panel.transform, "Return to Castle", ElarionUiKit.ButtonKind.Gold,
-                    new Vector2(0.28f, 0.10f), new Vector2(0.72f, 0.28f), ReturnHome);
-
-                FlowTrace.Step("Raid", $"RETURN — victory banner shown for '{configId}' " +
+                FlowTrace.Step("Raid", $"RETURN — victory screen shown for '{configId}' " +
                     (joinedCompanionName != null ? $"(+{joinedCompanionName})" : "(party already full)") +
-                    "; tap or auto-return routes to the castle.");
+                    "; tap or auto-dismiss routes to the castle.");
             }
             catch (System.Exception e)
             {
-                // A banner-build failure must NEVER strand the player — fall straight through to return.
-                FlowTrace.Fail("Raid", "victory banner build threw — returning home directly: " + e.Message);
-                ReturnHome();
-            }
-        }
-
-        private IEnumerator AutoReturnRoutine()
-        {
-            float t = Mathf.Max(2f, _autoReturnSeconds);
-            yield return new WaitForSeconds(t);
-            if (!_returning)
-            {
-                FlowTrace.Step("Raid", "auto-return timer elapsed — routing home (anti-soft-lock).");
+                // A presentation failure must NEVER strand the player — fall straight through to return.
+                FlowTrace.Fail("Raid", "victory screen build threw — returning home directly: " + e.Message);
                 ReturnHome();
             }
         }

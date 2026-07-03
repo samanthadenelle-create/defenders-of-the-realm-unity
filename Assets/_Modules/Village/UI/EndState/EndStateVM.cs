@@ -207,6 +207,59 @@ namespace DeNelle.Village.UI
             };
         }
 
+        /// <summary>
+        /// RAID victory (baked RaidBase_* teleport scenes — replaces
+        /// RaidVictoryController's bespoke "VICTORY" banner). The base is claimed and,
+        /// on a new claim, the next companion joins; the ONE way out is
+        /// <paramref name="onReturn"/> (SceneRouter.GoCastle) — the anti-soft-lock
+        /// auto-return is the template's AutoDismissSeconds (fires the same route).
+        /// </summary>
+        public static EndStateVM FromRaidVictory(string joinedCompanionName,
+            Action onReturn, float autoReturnSeconds = 20f)
+        {
+            string body = !string.IsNullOrEmpty(joinedCompanionName)
+                ? "The base is CLAIMED - it is yours now.\n" + joinedCompanionName + " joins your party."
+                : "The base is CLAIMED - it is yours now.";
+
+            return new EndStateVM
+            {
+                Kind = EndStateKind.Victory,
+                Title = "Victory!",
+                Subtitle = body,
+                Emblem = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconCombat),
+                PrimaryLabel = "Return to Castle",
+                PrimaryRoute = "return-home",
+                Primary = onReturn,
+                AutoDismissSeconds = Mathf.Max(2f, autoReturnSeconds),
+            };
+        }
+
+        /// <summary>
+        /// OUTPOST victory in the continuous-walk OuterWorld (replaces
+        /// OutpostVictoryController's bespoke toast). Compact + non-blocking (no scrim):
+        /// the hero KEEPS WALKING — there is no return/teleport (WO-449). The one action
+        /// is a plain dismiss; AutoDismissSeconds clears it so it never lingers.
+        /// </summary>
+        public static EndStateVM FromOutpostVictory(string joinedCompanionName,
+            bool newClaim, float autoDismissSeconds = 4f)
+        {
+            string body = !string.IsNullOrEmpty(joinedCompanionName)
+                ? "The outpost is yours.\n" + joinedCompanionName + " joins your party."
+                : (newClaim ? "The outpost is yours." : "Outpost already claimed.");
+
+            return new EndStateVM
+            {
+                Kind = EndStateKind.Victory,
+                Title = "Outpost Claimed",
+                Subtitle = body,
+                Emblem = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconCombat),
+                PrimaryLabel = "Continue",
+                PrimaryRoute = "dismiss",
+                AutoDismissSeconds = Mathf.Max(1f, autoDismissSeconds),
+                Compact = true,
+            };
+        }
+
         /// <summary>Wave-clear RESULTS banner (replaces WaveCelebrationManager's IMGUI
         /// toast / prefab text): compact, non-blocking, auto-dismissing.</summary>
         public static EndStateVM FromWaveClear(int waveNumber)

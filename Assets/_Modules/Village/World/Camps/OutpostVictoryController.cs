@@ -39,6 +39,7 @@ using DeNelle.Core;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Village.UI;
 
 namespace DeNelle.Village.World.Camps
 {
@@ -237,38 +238,21 @@ namespace DeNelle.Village.World.Camps
             return null;
         }
 
-        // A lightweight, auto-dismissing victory toast (NO scrim, NO buttons — the hero is
-        // still in the open world and keeps moving). Reuses the shared ElarionUiKit like
-        // RaidVictoryController's banner. A build failure must never break the flow.
+        // A lightweight, auto-dismissing victory toast — the hero is still in the open
+        // world and keeps moving. Routes through the ONE shared Obsidian EndState template
+        // in COMPACT mode (no scrim/backdrop, non-blocking); the template owns the
+        // auto-dismiss (AutoDismissSeconds) + teardown, so the hero just keeps walking.
+        // A build failure must never break the flow (Guard.Try).
         private void ShowVictoryToast(string configId, string joinedCompanionName, bool newClaim)
         {
             Guard.Try("Raid", "OutpostVictoryController.ShowVictoryToast", () =>
             {
-                var ui = ElarionUiKit.BuildModalCanvas("OutpostVictoryToast", 32000);
-                var panel = ElarionUiKit.Panel(ui.transform, new Vector2(0.30f, 0.78f), new Vector2(0.70f, 0.93f), deep: true);
-
-                ElarionUiKit.Header(panel.transform, "OUTPOST CLAIMED", x0: 0.06f, x1: 0.94f, y0: 0.55f, y1: 0.92f);
-
-                string body = joinedCompanionName != null
-                    ? $"The outpost is yours.\n{joinedCompanionName} joins your party."
-                    : (newClaim ? "The outpost is yours." : "Outpost already claimed.");
-                ElarionUiKit.Label(panel.transform, body, 0.08f, 0.50f,
-                    ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
+                EndStateView.Show(EndStateVM.FromOutpostVictory(joinedCompanionName, newClaim));
 
                 FlowTrace.Step("Raid", $"TOAST — outpost '{configId}' victory shown " +
                     (joinedCompanionName != null ? $"(+{joinedCompanionName})" : "(party full / re-claim)") +
                     "; hero stays in the open world (no return).");
-
-                // Auto-dismiss so it never lingers over gameplay (no button to tap — the
-                // player just keeps walking). The canvas root destroys itself after a beat.
-                StartCoroutine(DismissAfter(ui, 4f));
             });
-        }
-
-        private IEnumerator DismissAfter(GameObject ui, float seconds)
-        {
-            yield return new WaitForSecondsRealtime(Mathf.Max(0.5f, seconds));
-            if (ui != null) Destroy(ui);
         }
     }
 }
