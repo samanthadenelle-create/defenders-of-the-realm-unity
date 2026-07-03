@@ -1,33 +1,43 @@
 // =============================================================================
-// GameOverScreen — "You Have Fallen" / "The Heart Has Fallen" overlay with a
-// Try Again / Exit choice. DEF-125.
+// GameOverScreen — "You Have Fallen" / "The Root Went Silent" hub defeat flow.
+// DEF-125, re-skinned WO-B (UI conformance audit 2026-07-02 §2e/§3.2).
 // -----------------------------------------------------------------------------
 // Fires on BOTH death contexts (owner 2026-06-02 chose: yes, a screen on hero
 // death — "need a try again option on death"):
 //   • HERO dies (HeroHealth.OnDeath)        -> "You Have Fallen"   (silence)
 //   • HEART/root falls (OnHeartDestroyed)   -> "The Root Went Silent" (+ Defeat music)
-// Both pause the game and offer:  [R] Try Again (reload Village) · [Esc] Title.
 // DEF-141: Defeat music plays on the HEART/root context only, not on hero death.
 //
-// Code-built uGUI (screen-space Canvas + Text via the proven ThreatSkullPlate
-// font path — NO UXML, which doesn't render in player builds). KEYBOARD prompts,
-// not buttons, so there's no EventSystem/click plumbing to fail in WebGL. The
-// pause + reload-on-retry supersede the hero's silent auto-respawn (DEF-102) —
-// the player now chooses. Self-bootstrapping DDOL. Copy is a stub for creative.
-// Follow-up: mobile tap-buttons (current is keyboard-only).
+// PRESENTATION (WO-B): this class is now TRIGGERS + ROUTING only. The screen
+// itself is the ONE shared Obsidian end-state template (EndStateView /
+// EndStateVM.FromGameOver) — real EventSystem kit buttons (EndStateView.Show
+// ensures an EventSystem). The old bespoke overlay (manual Update() pointer
+// hit-testing against RectTransforms because builds lacked an EventSystem —
+// the audit §2e defect) is RETIRED, along with its TryGetTap/BuildOverlay/
+// BuildTapButton plumbing.
+//
+// ONE way out (owner button law, read from the template): the end-state exposes
+// exactly ONE primary action — TRY AGAIN (reload the defeat scene / run the
+// caller's retry). The old second LEAVE-to-Title button is deliberately dropped;
+// ShowDefeat keeps its onLeave parameter for the WO-320 API shape (no live
+// callers today) and uses it as the retry FALLBACK when no onRetry was given.
+//
+// The pause (Time.timeScale = 0) + reload-on-retry supersede the hero's silent
+// auto-respawn (DEF-102) — the player chooses. EndStateView is pause-safe: its
+// reveal tween runs on unscaled time, and this VM never auto-dismisses (an
+// auto-fired Retry would reload the scene without player intent).
+// Self-bootstrapping DDOL. Copy is DEF-141/WO-235 locked canon.
 // =============================================================================
 
 using UnityEngine;
-using UnityEngine.UI;
-using TMPro;
 using UnityEngine.SceneManagement;
 using DeNelle.Core;
-using DeNelle.Core.UI;
-using DeNelle.Village.UI;   // WO-333: force-close LevelUpSkillPopup on game-over
+using DeNelle.Core.Diagnostics;
+using DeNelle.Village.UI;   // EndStateView/VM (the shared template) + LevelUpSkillPopup
 
 namespace DeNelle.Village
 {
-    /// <summary>Hero/Heart death overlay with [R] retry / [Esc] exit key prompts.</summary>
+    /// <summary>Hero/Heart death trigger hub — shows the shared Obsidian end-state with Try Again.</summary>
     public sealed class GameOverScreen : MonoBehaviour
     {
         public static GameOverScreen Instance { get; private set; }
@@ -42,16 +52,14 @@ namespace DeNelle.Village
 
         private HeartController _heart;
         private HeroHealth _hero;
-        private GameObject _overlay;
         private bool _shown;
-        private RectTransform _retryBtn;   // mobile tap target — Try Again
-        private RectTransform _exitBtn;    // mobile tap target — Leave to Title
         private float _lastHookAttempt;    // DEF-136: throttle the per-frame Hook() scene search
 
         // WO-320: scene-agnostic defeat entry. When non-null these are invoked on
-        // Retry / Leave instead of the Village2 SceneRouter defaults, so callers in
-        // OTHER scenes (e.g. Defend-the-Tower) can reuse this exact panel with their
-        // own return-scene wiring. Village2's hooked path leaves these null.
+        // Retry instead of the hub SceneRouter default, so callers in OTHER scenes
+        // can reuse this exact flow with their own return-scene wiring. The hub
+        // hooked path leaves these null. _onLeave is kept for the WO-320 API shape
+        // (the shared template has ONE exit) and serves as the retry fallback.
         private System.Action _onRetry;
         private System.Action _onLeave;
         private string _defeatScene;       // scene active when defeat showed — Retry reloads THIS
@@ -81,13 +89,13 @@ namespace DeNelle.Village
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
+            // The end-state view tears itself down on sceneLoaded (its own hook);
+            // this class only resets its trigger state for the incoming scene.
             _shown = false;
-            if (_overlay != null) { Destroy(_overlay); _overlay = null; }
-            _retryBtn = null; _exitBtn = null;
             Time.timeScale = 1f;
             _heart = null;
             _hero = null;
-            ClearCustomActions(); // WO-320: don't let a DTT retry/leave action survive the scene swap
+            ClearCustomActions(); // WO-320: don't let a caller retry/leave action survive the scene swap
             if (IsDefeatScene(scene.name)) Hook();
         }
 
@@ -119,47 +127,6 @@ namespace DeNelle.Village
                 _lastHookAttempt = Time.unscaledTime;
                 Hook();
             }
-            if (!_shown) return;
-
-            // Mobile/touch: poll the pointer against the button rects (owner 2026-06-02:
-            // "stuck at the dead screen, i dont have an esc or b button"). uGUI buttons
-            // need an EventSystem the build doesn't have, so we hit-test manually — the
-            // same EventSystem-free approach as VirtualJoystick. Retry/Exit are reached
-            // by the on-screen TRY AGAIN / LEAVE tap buttons (no keyboard prompts).
-            bool retry = false, exit = false;
-            if (TryGetTap(out Vector2 tap))
-            {
-                if (_retryBtn != null && RectTransformUtility.RectangleContainsScreenPoint(_retryBtn, tap, null)) retry = true;
-                else if (_exitBtn != null && RectTransformUtility.RectangleContainsScreenPoint(_exitBtn, tap, null)) exit = true;
-            }
-
-            if (retry)
-            {
-                Time.timeScale = 1f;
-                // WO-320: prefer the caller-supplied retry (e.g. reload the DTT scene);
-                // fall back to the Village2 reload when no custom action was provided.
-                if (_onRetry != null) { var a = _onRetry; ClearCustomActions(); a(); }
-                else SceneRouter.LoadScene(string.IsNullOrEmpty(_defeatScene) ? SceneRouter.Village : _defeatScene);
-            }
-            else if (exit)
-            {
-                Time.timeScale = 1f;
-                if (_onLeave != null) { var a = _onLeave; ClearCustomActions(); a(); }
-                else SceneRouter.LoadScene(SceneRouter.Title);
-            }
-        }
-
-        /// <summary>First-touch / mouse-down screen position this frame (no EventSystem).</summary>
-        private static bool TryGetTap(out Vector2 pos)
-        {
-            if (Input.touchCount > 0)
-            {
-                var t = Input.GetTouch(0);
-                if (t.phase == UnityEngine.TouchPhase.Began) { pos = t.position; return true; }
-            }
-            if (Input.GetMouseButtonDown(0)) { pos = (Vector2)Input.mousePosition; return true; }
-            pos = default;
-            return false;
         }
 
         // DEF-141 / WO-235 locked canon copy for Heartwood (root) destruction.
@@ -171,9 +138,10 @@ namespace DeNelle.Village
 
         /// <summary>
         /// WO-320: scene-agnostic defeat panel. Any scene (e.g. Defend-the-Tower) can
-        /// call this to show the SAME pause + Retry/Leave overlay with its OWN wiring,
-        /// without depending on the Village2 hook gate. Retry/Leave run the supplied
-        /// callbacks (e.g. reload the DTT/return scene) instead of the Village defaults.
+        /// call this to show the SAME pause + Try-Again end-state with its OWN wiring,
+        /// without depending on the hub hook gate. Retry runs <paramref name="onRetry"/>
+        /// (falling back to <paramref name="onLeave"/>, then the scene reload) — the
+        /// shared template exposes ONE primary action (owner button law).
         /// Self-bootstraps the singleton if a scene calls before AfterSceneLoad.
         /// </summary>
         public static void ShowDefeat(string title, string body,
@@ -188,7 +156,7 @@ namespace DeNelle.Village
         {
             _onRetry = onRetry;
             _onLeave = onLeave;
-            // Defeat context = "the thing you defended fell" → play the somber track,
+            // Defeat context = "the thing you defended fell" -> play the somber track,
             // matching the Heart/root branch (hero death is silence, but a DTT loss is
             // a structure loss). isHeartDestroyed routes the music in Show().
             Show(title, string.IsNullOrEmpty(body)
@@ -222,62 +190,27 @@ namespace DeNelle.Village
             if (isHeartDestroyed)
                 CoreServices.Audio?.PlayMusic(DeNelle.Core.Audio.MusicTrack.Defeat);
             Time.timeScale = 0f;
-            BuildOverlay(title, body);
+
+            // WO-B: the ONE shared Obsidian end-state template renders the screen
+            // (real EventSystem buttons — EndStateView ensures one; the old manual
+            // hit-test overlay is retired). Primary = Try Again -> OnRetry().
+            FlowTrace.Step("EndState",
+                $"hub game-over ({(isHeartDestroyed ? "heart-fell" : "hero-fell")}) in '{_defeatScene}' -> shared end-state.");
+            EndStateView.Show(EndStateVM.FromGameOver(isHeartDestroyed, title, body, OnRetry));
         }
 
-        private void BuildOverlay(string title, string body)
+        /// <summary>The single end-state action: unpause and rerun the fight — the
+        /// caller-supplied retry (WO-320) when present, else reload the defeat scene.</summary>
+        private void OnRetry()
         {
-            _overlay = new GameObject("GameOverOverlay");
-            DontDestroyOnLoad(_overlay);
-
-            var canvas = _overlay.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 32760;   // above all gameplay UI
-            var scaler = _overlay.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1280f, 720f);
-
-            var rootT = _overlay.transform;
-
-            // Full-screen dark scrim behind the modal — the shared kit scrim tint.
-            ElarionUiKit.Scrim(rootT);
-
-            // Framed dark-glass card (the TOWN-HUD panel language: deep glass + gold rim).
-            var card = ElarionUiKit.Panel(rootT, new Vector2(0.10f, 0.30f), new Vector2(0.90f, 0.82f),
-                                          deep: true, innerRim: true);
-            var cardT = card.transform;
-
-            // Gilt title banner (kit Header glyph + gilt rule) — the "fallen" headline.
-            ElarionUiKit.Header(cardT, title, x0: 0.06f, x1: 0.94f, y0: 0.80f, y1: 0.94f);
-
-            // Body narrative — warm parchment, centred, multi-line.
-            ElarionUiKit.Label(cardT, body, 0.40f, 0.76f, ElarionUi.Parchment,
-                               ElarionUi.FontHead, TextAlignmentOptions.Center,
-                               0.08f, 0.92f);
-
-            // Prompt hint — muted parchment under the body.
-            ElarionUiKit.Label(cardT, "Tap a button below",
-                               0.30f, 0.40f, ElarionUi.ParchmentDim,
-                               ElarionUi.FontLabel, TextAlignmentOptions.Center,
-                               0.08f, 0.92f);
-
-            // Tap buttons (mobile) — kit Confirm (green) / Danger (red), side by side.
-            // Manual hit-testing in Update() (no EventSystem in builds), so we keep
-            // their RectTransforms rather than relying on Button.onClick.
-            _retryBtn = BuildTapButton("TRY AGAIN", ElarionUiKit.ButtonKind.Confirm,
-                                       new Vector2(0.10f, 0.08f), new Vector2(0.49f, 0.24f), cardT);
-            _exitBtn  = BuildTapButton("LEAVE",     ElarionUiKit.ButtonKind.Danger,
-                                       new Vector2(0.51f, 0.08f), new Vector2(0.90f, 0.24f), cardT);
-        }
-
-        /// <summary>A code-built tap button styled via the shared kit (rounded glass fill +
-        /// rim + bold parchment label). Returns its RectTransform for manual hit-testing in
-        /// <see cref="Update"/> (no EventSystem in builds — we don't wire Button.onClick).</summary>
-        private RectTransform BuildTapButton(string label, ElarionUiKit.ButtonKind kind,
-                                             Vector2 anchorMin, Vector2 anchorMax, Transform parent)
-        {
-            var btn = ElarionUiKit.Button(parent, label, kind, anchorMin, anchorMax);
-            return btn.GetComponent<RectTransform>();
+            Time.timeScale = 1f;
+            _shown = false;
+            // WO-320: prefer the caller-supplied retry (e.g. reload the DTT scene);
+            // onLeave is the legacy secondary — used only as a fallback route when a
+            // caller wired ONLY onLeave. Default: reload the scene where we fell.
+            var retry = _onRetry ?? _onLeave;
+            if (retry != null) { ClearCustomActions(); retry(); }
+            else SceneRouter.LoadScene(string.IsNullOrEmpty(_defeatScene) ? SceneRouter.Village : _defeatScene);
         }
     }
 }

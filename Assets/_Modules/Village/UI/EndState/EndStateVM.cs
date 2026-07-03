@@ -180,6 +180,33 @@ namespace DeNelle.Village.UI
             };
         }
 
+        /// <summary>
+        /// HUB game-over (GameOverScreen routes here — audit §2e: its bespoke
+        /// EventSystem-free manual hit-test overlay is retired). Heart-fell and
+        /// hero-fell share this shape; the caller supplies the copy (the DEF-141 /
+        /// WO-235 locked canon strings live in GameOverScreen). ONE way out (owner
+        /// button law): Try Again — the old Leave-to-Title second exit is dropped
+        /// because the template exposes exactly one primary action. NEVER
+        /// auto-dismisses: an auto-fired Retry would reload the scene without
+        /// player intent (the game is paused under this screen; the view's tween
+        /// runs on unscaled time, so the pause is safe).
+        /// </summary>
+        public static EndStateVM FromGameOver(bool heartFell, string title, string body,
+                                              Action onRetry)
+        {
+            return new EndStateVM
+            {
+                Kind = heartFell ? EndStateKind.Defeat : EndStateKind.HeroDeath,
+                Title = title,
+                Subtitle = body,
+                Emblem = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield),
+                PrimaryLabel = "Try Again",
+                PrimaryRoute = "retry",
+                Primary = onRetry,
+                AutoDismissSeconds = 0f,   // deliberate: no softlock-guard here — Retry must be chosen
+            };
+        }
+
         /// <summary>Wave-clear RESULTS banner (replaces WaveCelebrationManager's IMGUI
         /// toast / prefab text): compact, non-blocking, auto-dismissing.</summary>
         public static EndStateVM FromWaveClear(int waveNumber)

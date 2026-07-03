@@ -79,7 +79,8 @@ namespace DeNelle.Village.UI
                 if (c != null) c.overrideSorting = true;
                 chrome = ElarionUiKit.BuildObsidianPanel(canvas.transform, vm.Title,
                     new Vector2(0.15f, 0.64f), new Vector2(0.85f, 0.86f),
-                    onClose: null, withBackdrop: false, frameName: RpgUiCatalog.FrameCore);
+                    onClose: null, withBackdrop: false, frameName: RpgUiCatalog.FrameCore,
+                    medallionIcon: "crest");   // explicit: the socket seats the crest family, never blank
             }
             else
             {
@@ -88,7 +89,8 @@ namespace DeNelle.Village.UI
                 var modal = ElarionUiKit.BuildObsidianModal("EndState", vm.Title,
                     new Vector2(0.08f, 0.53f - half), new Vector2(0.92f, 0.53f + half),
                     onClose: null,   // scrim stays a pure raycast-blocker — no second way out
-                    frameName: RpgUiCatalog.FrameCore);
+                    frameName: RpgUiCatalog.FrameCore,
+                    medallionIcon: "crest");   // explicit: the socket seats the crest family, never blank
                 canvas = modal.canvas;
                 chrome = modal.chrome;
             }
