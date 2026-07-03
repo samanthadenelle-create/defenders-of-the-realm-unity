@@ -4,7 +4,9 @@ using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UI;
+using TMPro;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Core.Platform
 {
@@ -31,7 +33,7 @@ namespace DeNelle.Core.Platform
 
         private IPiPlatform _pi;
         private Button _button;
-        private Text _label;
+        private TMP_Text _label;
         private bool _signingIn; // guard: auto-fire + manual click must not double-run (orphans the shared TCS)
 
         /// <summary>Spawns the controller once at boot if not already present.</summary>
@@ -52,7 +54,20 @@ namespace DeNelle.Core.Platform
             // ASYNC, so IsAvailable can be false for the first moments after boot — gating the
             // button on it (the old bug) hid the sign-in entirely in the Pi Desktop preview.
             BuildButton();
+            // Earns-its-place (owner 2026-07-02): the button lives where a login DECISION makes
+            // sense — the Title/menu context — not riding the HUD all game. Auto sign-in still
+            // runs everywhere; once signed in the button is gone for good.
+            UnityEngine.SceneManagement.SceneManager.activeSceneChanged += (_, __) => UpdateButtonVisibility();
+            UpdateButtonVisibility();
             WaitForPiThenAutoSignIn().Forget();
+        }
+
+        private void UpdateButtonVisibility()
+        {
+            if (_button == null) return;
+            string scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+            bool menuContext = scene == "Title" || scene == "HeroSelect";
+            _button.transform.parent.gameObject.SetActive(!IsSignedIn && menuContext);
         }
 
         /// <summary>Manual trigger (the button).</summary>
@@ -188,38 +203,33 @@ namespace DeNelle.Core.Platform
         [Serializable]
         private class VerifyResp { public bool success; public string uid; public string username; public string error; }
 
-        // --- minimal self-contained corner button (only built when Pi is available) ---
+        // --- corner button, dressed by the shared kit (rounded glass + kit font + shared
+        // press feedback) so it reads as OUR chrome, not a pasted web widget. Pi identity
+        // survives as the violet fill over the kit's rounded sprite. Own overlay canvas is
+        // deliberate: this is a DDOL cross-scene widget that must outlive every scene canvas.
         private void BuildButton()
         {
             var canvasGo = new GameObject("PiSignInCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             canvasGo.transform.SetParent(transform, false);
+            // WO-596 privacy: the button can show the Pi username — hide it from bug-report captures.
+            DeNelle.Core.Diagnostics.PrivacySensitiveUi.Register(canvasGo);
             var canvas = canvasGo.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 5000;
 
-            var btnGo = new GameObject("PiSignInButton", typeof(Image), typeof(Button));
-            btnGo.transform.SetParent(canvasGo.transform, false);
-            var rt = btnGo.GetComponent<RectTransform>();
+            var holder = new GameObject("PiSignInButton", typeof(RectTransform));
+            holder.transform.SetParent(canvasGo.transform, false);
+            var rt = holder.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f);
             rt.pivot = new Vector2(1f, 1f);
             rt.anchoredPosition = new Vector2(-16f, -16f);
             rt.sizeDelta = new Vector2(220f, 56f);
-            btnGo.GetComponent<Image>().color = new Color(0.43f, 0.30f, 0.78f, 0.95f); // Pi violet
 
-            _button = btnGo.GetComponent<Button>();
-            _button.onClick.AddListener(SignIn);
-
-            var labelGo = new GameObject("Label", typeof(Text));
-            labelGo.transform.SetParent(btnGo.transform, false);
-            var lrt = labelGo.GetComponent<RectTransform>();
-            lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one; lrt.offsetMin = lrt.offsetMax = Vector2.zero;
-            _label = labelGo.GetComponent<Text>();
-            _label.alignment = TextAnchor.MiddleCenter;
-            _label.color = Color.white;
-            _label.fontSize = 20;
-            _label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
-                          ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
-            _label.text = "Sign in with Pi";
+            _button = ElarionUiKit.Button(holder.transform, "Sign in with Pi", ElarionUiKit.ButtonKind.Quiet,
+                                          Vector2.zero, Vector2.one, SignIn);
+            if (_button.targetGraphic is Image img)
+                img.color = new Color(0.43f, 0.30f, 0.78f, 0.95f); // Pi violet over the kit's rounded glass
+            _label = _button.GetComponentInChildren<TMP_Text>();
         }
 
         private void SetButton(string text, bool interactable)

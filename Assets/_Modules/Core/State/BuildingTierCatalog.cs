@@ -33,6 +33,9 @@ namespace DeNelle.Core.State
     {
         [JsonProperty("id")] public string Id;
         [JsonProperty("name")] public string Name;
+        /// <summary>One-line CONCRETE player-facing effect ("Farm +25% yield") rendered on the
+        /// perk-grid tile (owner directive 2026-07-02). Authored in building-tiers.json.</summary>
+        [JsonProperty("effect")] public string Effect;
         /// <summary>Gold (economy Coins) cost to research this perk.</summary>
         [JsonProperty("goldCost")] public int GoldCost;
         /// <summary>Sprite id under Resources/HudItems/BuildingUpgrades/&lt;iconId&gt;; defaults to <see cref="Id"/>.</summary>
@@ -55,6 +58,9 @@ namespace DeNelle.Core.State
         /// <summary>WO-432 tech-gate — this tier (and its research) is locked until the global Village/
         /// Stronghold Tier (Heart of Elarion) reaches this value. 0 = no gate (always available).</summary>
         [JsonProperty("requiresVillageTier")] public int RequiresVillageTier;
+        /// <summary>One-line concrete player-facing effect ("Wood +35%, offline bucket holds more") —
+        /// shown on the perk-grid tile (owner verbiage law 2026-07-02). Authored in building-tiers.json v4.</summary>
+        [JsonProperty("effect")] public string Effect;
         /// <summary>Cumulative perk contribution at this tier (unset fields = no-op 1.0/false).</summary>
         [JsonProperty("modifiers")] public GameModifiers Modifiers = new GameModifiers();
         /// <summary>WO-432 — Gold-cost research perks UNLOCKED at this tier (buyable once the building

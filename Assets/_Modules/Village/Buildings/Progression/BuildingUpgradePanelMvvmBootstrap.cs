@@ -1,20 +1,19 @@
 // =============================================================================
-// BuildingUpgradePanelMvvmBootstrap — spawns the code-built MVVM upgrade panel
-// (BuildingUpgradePanelMvvm) once per gameplay scene, ONLY when the feature flag
-// is ON. Mirrors BuildingUpgradePanelBootstrap's lifecycle.
+// BuildingUpgradePanelMvvmBootstrap — spawns the code-built MVVM enhancement
+// (perk-grid) panel BuildingUpgradePanelMvvm once per gameplay scene, when
+// FeatureFlags.BuildingUpgradePanel is ON (DEFAULT ON — this is the live panel).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Buildings.Progression
 //
-// FLAG GATE: the MVVM panel and the legacy UIDocument BuildingUpgradePanel BOTH
-// register PanelId.BuildingUpgrade (last writer wins). To avoid a double-register
-// race, EXACTLY ONE is spawned:
-//   * flag ON  -> this bootstrap spawns the MVVM panel; the legacy bootstrap
-//                 short-circuits (it checks the same flag and does NOT spawn).
-//   * flag OFF -> this bootstrap does nothing; the legacy UIDocument panel spawns.
+// FLAG GATE (history): the flag used to arbitrate against a legacy UIDocument
+// BuildingUpgradePanel twin (both registered PanelId.BuildingUpgrade). The twin
+// was DELETED 2026-07-02 (UI Blink conformance audit §3.1 — dead since the flag
+// defaulted ON). Flag OFF now means NO building-enhancement panel spawns at all
+// (kept only as a kill-switch, not a legacy toggle).
 //
-// The MVVM panel is pure code-built uGUI (it builds its own Canvas on Open), so —
-// unlike the UIDocument panel — it needs NO PanelSettings. It just needs a hero in
-// the scene (Title / HeroSelect skip), matching the legacy bootstrap's gate.
+// The MVVM panel is pure code-built uGUI (it builds its own Canvas on Open), so
+// it needs NO PanelSettings. It just needs a hero in the scene (Title /
+// HeroSelect skip).
 // =============================================================================
 
 using DeNelle.Core.Diagnostics;
@@ -38,7 +37,7 @@ namespace DeNelle.Village.Buildings.Progression
         private static void SpawnInScene(Scene scene)
         {
             if (!scene.IsValid()) return;
-            if (!DeNelle.Core.FeatureFlags.BuildingUpgradePanel) return; // flag OFF -> legacy panel owns the id
+            if (!DeNelle.Core.FeatureFlags.BuildingUpgradePanel) return; // kill-switch (legacy twin deleted 2026-07-02)
 
             // WO-550: base-building upgrade (town) does NOT bootstrap in enemy-owned RAID scenes
             // (Village2); the home hub (MainCastle_Hall) is unaffected. Gate on the ACTIVE scene.
@@ -50,7 +49,7 @@ namespace DeNelle.Village.Buildings.Progression
 
             // GLOBAL dedupe across all loaded scenes.
             foreach (var existing in Object.FindObjectsByType<BuildingUpgradePanelMvvm>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         FindObjectsInactive.Include))
             {
                 if (existing != null)
                 {
@@ -79,7 +78,7 @@ namespace DeNelle.Village.Buildings.Progression
 
         private static Transform FindHero()
         {
-            var hero = Object.FindObjectOfType<DeNelle.Village.HeroLocomotion>();
+            var hero = Object.FindAnyObjectByType<DeNelle.Village.HeroLocomotion>();
             return hero != null ? hero.transform : null;
         }
     }

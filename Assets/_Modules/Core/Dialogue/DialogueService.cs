@@ -33,6 +33,12 @@ namespace DeNelle.Core.Dialogue
         /// <summary>Raised when the active dialogue ends (naturally or via Stop()). Pair of Started.</summary>
         public static event Action Ended;
 
+        /// <summary>WO-T1 (Tutorial V2) — like <see cref="Ended"/> but carries the dialogue id that
+        /// ended, so a listener (TutorialSignals "dialogue.ended:&lt;id&gt;") can key on WHICH
+        /// conversation finished without tracking Play() calls itself. Additive — the
+        /// parameterless <see cref="Ended"/> is unchanged and still fires.</summary>
+        public static event Action<string> EndedWithId;
+
         public static DialogueViewModel ActiveVm { get; private set; }
         public static bool IsRunning => ActiveVm != null && ActiveVm.IsOpen;
 
@@ -48,7 +54,12 @@ namespace DeNelle.Core.Dialogue
             }
             var vm = new DialogueViewModel();
             ActiveVm = vm;
-            vm.Closed += () => { if (ReferenceEquals(ActiveVm, vm)) ActiveVm = null; Ended?.Invoke(); };
+            vm.Closed += () =>
+            {
+                if (ReferenceEquals(ActiveVm, vm)) ActiveVm = null;
+                Ended?.Invoke();
+                EndedWithId?.Invoke(dialogueId);   // WO-T1 — id-carrying twin of Ended
+            };
 
             FlowTrace.Step("Dialogue", $"Play '{dialogueId}'.");
             Opened?.Invoke(vm);              // View builds + binds BEFORE the first line fires

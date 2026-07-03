@@ -28,6 +28,22 @@ namespace DeNelle.Core.Dialogue
         [JsonProperty("text")] public string Text;
     }
 
+    /// <summary>
+    /// The NPC-card record for one speaker (owner-ratified card standard, 2026-07-02 audit):
+    /// every dialogue card shows NAME + guild/shop AFFILIATION + PORTRAIT. Declared once in
+    /// the catalog's top-level "speakers" block and looked up by the line's speaker name —
+    /// data-driven, replacing the imperative per-node `portrait` command (which remains as a
+    /// back-compat override). portrait = Resources sprite path (e.g. "Portraits/farm");
+    /// empty/null portrait = the view renders its styled silhouette placeholder.
+    /// </summary>
+    [Serializable]
+    public sealed class DialogueSpeaker
+    {
+        [JsonProperty("name")] public string Name;
+        [JsonProperty("affiliation")] public string Affiliation;
+        [JsonProperty("portrait")] public string Portrait;   // Resources path; empty => silhouette
+    }
+
     /// <summary>A player choice. requires = optional condition key (hidden if false);
     /// goto = node id to jump to when chosen (empty/"end" ends the dialogue).</summary>
     [Serializable]
@@ -86,6 +102,7 @@ namespace DeNelle.Core.Dialogue
     public sealed class DialogueCatalogData
     {
         [JsonProperty("version")] public int Version;
+        [JsonProperty("speakers")] public List<DialogueSpeaker> Speakers = new List<DialogueSpeaker>();
         [JsonProperty("dialogues")] public List<DialogueDef> Dialogues = new List<DialogueDef>();
     }
 
@@ -100,6 +117,24 @@ namespace DeNelle.Core.Dialogue
 
         public static IReadOnlyList<DialogueDef> Dialogues
         { get { EnsureLoaded(); return _data.Dialogues; } }
+
+        /// <summary>The catalog's speaker records (name + affiliation + portrait). May be empty.</summary>
+        public static IReadOnlyList<DialogueSpeaker> Speakers
+        { get { EnsureLoaded(); return _data.Speakers ?? (IReadOnlyList<DialogueSpeaker>)new List<DialogueSpeaker>(); } }
+
+        /// <summary>Resolve the card record for a line's speaker name (case-insensitive).
+        /// Null when the speaker is unknown/narration — the view falls back gracefully.</summary>
+        public static DialogueSpeaker FindSpeaker(string speakerName)
+        {
+            if (string.IsNullOrEmpty(speakerName)) return null;
+            EnsureLoaded();
+            var list = _data.Speakers;
+            if (list == null) return null;
+            foreach (var s in list)
+                if (s != null && !string.IsNullOrEmpty(s.Name) &&
+                    string.Equals(s.Name, speakerName, StringComparison.OrdinalIgnoreCase)) return s;
+            return null;
+        }
 
         public static DialogueDef Find(string id)
         {

@@ -70,6 +70,10 @@ namespace DeNelle.Village
                 case "OpenUpgrade":    PanelRouter.Open(PanelId.BuildingUpgrade, a0); break;
                 case "OpenShop":       PanelRouter.Open(PanelId.PartyShop, a0); break;
                 case "OpenCraft":      PanelRouter.Open(PanelId.Crafting); break;
+                // Apothecary NPC (owner F8 2026-07-02): the herbalist's card-first dialogue ends
+                // by opening the consumable-crafting / alchemy bench — the SAME panel the station's
+                // own BuildingInteractable opens (BuildingType.ApothecaryWorkbench route).
+                case "OpenAlchemy":    PanelRouter.Open(PanelId.ConsumableCrafting); break;
                 case "OpenTalents":    PanelRouter.Open(PanelId.HeroTalents); break;
                 case "OpenCosmetics":  PanelRouter.Open(PanelId.CosmeticShop); break;
                 case "OpenPetSkills":  PanelRouter.Open(PanelId.PetSkillTree); break;
@@ -150,7 +154,7 @@ namespace DeNelle.Village
         private static void OpenEquipPanel()
         {
             if (PanelBlockedByBattle("OpenEquip")) return;
-            var panel = Object.FindObjectOfType<DeNelle.Village.Hero.EquipmentPanel>();
+            var panel = Object.FindAnyObjectByType<DeNelle.Village.Hero.EquipmentPanel>();
             if (panel == null) panel = new GameObject("EquipmentPanelHost").AddComponent<DeNelle.Village.Hero.EquipmentPanel>();
             panel.Open();
         }
@@ -158,7 +162,7 @@ namespace DeNelle.Village
         private static void OpenArenaPanel()
         {
             if (PanelBlockedByBattle("OpenArena")) return;
-            var panel = Object.FindObjectOfType<DeNelle.Village.Arena.ArenaPanel>();
+            var panel = Object.FindAnyObjectByType<DeNelle.Village.Arena.ArenaPanel>();
             if (panel == null) panel = new GameObject("ArenaPanelHost").AddComponent<DeNelle.Village.Arena.ArenaPanel>();
             panel.Open();
         }
@@ -210,7 +214,7 @@ namespace DeNelle.Village
         private void StartAutowalk(string destName)
         {
             if (_autoWalk == null) _autoWalk = EnsureHost().AddComponent<TutorialAutoWalk>();
-            var hero = Object.FindObjectOfType<HeroLocomotion>();
+            var hero = Object.FindAnyObjectByType<HeroLocomotion>();
             if (hero != null) _autoWalk.SetHero(hero);
             Transform t = ResolveTransform(destName);
             if (t != null) _autoWalk.WalkTo(t.position);
@@ -244,14 +248,14 @@ namespace DeNelle.Village
         // Self-heal a PetDeployer if the scene ships none (mirrors DialogueCommandBridge.EnsurePetDeployer).
         private PetDeployer EnsurePetDeployer()
         {
-            var deployer = Object.FindObjectOfType<PetDeployer>();
+            var deployer = Object.FindAnyObjectByType<PetDeployer>();
             if (deployer != null) return deployer;
 
             var go = new GameObject("PetDeployer");
             deployer = go.AddComponent<PetDeployer>();
 
             Vector3 heartPos = Vector3.zero;
-            var heart = Object.FindObjectOfType<HeartController>();
+            var heart = Object.FindAnyObjectByType<HeartController>();
             if (heart != null) heartPos = heart.transform.position;
             deployer.SetHeartPosition(heartPos);
 
@@ -282,7 +286,7 @@ namespace DeNelle.Village
                     return StoryCompanionInjector.Instance != null ? StoryCompanionInjector.Instance.CompanionTransform : null;
                 case "pet":
                 {
-                    var pet = Object.FindObjectOfType<Pet>();
+                    var pet = Object.FindAnyObjectByType<Pet>();
                     return pet != null ? pet.transform : null;
                 }
                 case "hero":
@@ -290,7 +294,7 @@ namespace DeNelle.Village
                     return HeroTransform();
                 case "village_tour":
                 {
-                    var heart = Object.FindObjectOfType<HeartController>();
+                    var heart = Object.FindAnyObjectByType<HeartController>();
                     return heart != null ? heart.transform : HeroTransform();
                 }
             }
@@ -300,7 +304,7 @@ namespace DeNelle.Village
 
         private Transform HeroTransform()
         {
-            var loco = Object.FindObjectOfType<HeroLocomotion>();
+            var loco = Object.FindAnyObjectByType<HeroLocomotion>();
             if (loco != null) return loco.transform;
             var tagged = GameObject.FindWithTag("Player");
             return tagged != null ? tagged.transform : null;

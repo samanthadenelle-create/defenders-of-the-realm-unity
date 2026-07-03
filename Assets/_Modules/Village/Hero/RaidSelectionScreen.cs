@@ -29,6 +29,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
 using DeNelle.Village;
+using DeNelle.Village.UI;   // StarRatingRow (tofu-proof star row)
 
 namespace DeNelle.Village.Hero
 {
@@ -61,7 +62,7 @@ namespace DeNelle.Village.Hero
         /// </summary>
         public static void Open()
         {
-            var existing = FindFirstObjectByType<RaidSelectionScreen>();
+            var existing = FindAnyObjectByType<RaidSelectionScreen>();
             if (existing == null)
             {
                 var host = new GameObject("RaidSelectionScreen");
@@ -212,10 +213,14 @@ namespace DeNelle.Village.Hero
                 ElarionUi.Ink, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
             badgeLbl.raycastTarget = false;
 
-            // 3-star target time — m:ss in gilt, mid band.
+            // 3-star target time — m:ss in gilt, mid band. Tofu fix (2026-07-02):
+            // ★ (U+2605) is in NO project SDF font (scanned — zero m_Unicode:9733
+            // hits), so the old "★★★" text rendered as boxes in builds. Procedural
+            // gold diamonds instead (EndStateView's pattern via StarRatingRow).
+            StarRatingRow.Build(card.transform, 3, 3, 0.05f, 0.40f, 0.20f, 0.58f, sizePx: 11f);
             var timeLabel = ElarionUiKit.Label(card.transform,
-                "★★★  Target: " + FormatTime(def.recommendedClearTime), 0.38f, 0.60f,
-                ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.05f, 0.95f);
+                "Target: " + FormatTime(def.recommendedClearTime), 0.38f, 0.60f,
+                ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.22f, 0.95f);
             timeLabel.raycastTarget = false;
 
             // Reward hint — resource multiplier + Echo-Shard drop, bottom band.

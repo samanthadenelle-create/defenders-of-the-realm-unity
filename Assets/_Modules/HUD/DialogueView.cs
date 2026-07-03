@@ -31,6 +31,7 @@ namespace DeNelle.HUD
         private DialogueViewModel _vm;
         private GameObject _ui;
         private TMPro.TextMeshProUGUI _speaker;
+        private TMPro.TextMeshProUGUI _affiliation;   // guild/shop sub-line under the name (card standard)
         private TMPro.TextMeshProUGUI _body;
         private RectTransform _box;       // the dialogue box (tap to advance)
         private RectTransform _optionsCol;
@@ -43,6 +44,12 @@ namespace DeNelle.HUD
         private void OnOpened(DialogueViewModel vm)
         {
             if (_vm != null) Unbind();
+            // A per-node `portrait` command override is scoped to ITS dialogue: clear the sticky
+            // static at every open so the previous conversation's forced portrait can't leak onto
+            // this one (the speakers block is now the data-driven default; the command re-fires
+            // within a dialogue when an override is authored).
+            DeNelle.Core.DialoguePortrait.Forced = null;
+            _lastCardKey = null;
             _vm = vm;
             _vm.Changed += Repaint;
             _vm.Closed += OnClosed;
@@ -98,9 +105,13 @@ namespace DeNelle.HUD
             tapBtn.transition = Selectable.Transition.None;
             tapBtn.onClick.AddListener(OnBoxTapped);
 
-            // Speaker name → header zone (left, gilt). Body text → body zone. (Drop, no re-style.)
-            _speaker = MakeLabel(headerZone, "Speaker", Vector2.zero, Vector2.one,
-                22, ElarionUi.Gilt, TMPro.FontStyles.Bold, TMPro.TextAlignmentOptions.Left);
+            // Speaker name → header zone (left, gilt) with the guild/shop AFFILIATION as a
+            // dim sub-line beneath it (owner-ratified card standard: name + affiliation +
+            // portrait on every NPC card). Body text → body zone. (Drop, no re-style.)
+            _speaker = MakeLabel(headerZone, "Speaker", new Vector2(0f, 0.42f), Vector2.one,
+                22, ElarionUi.Gilt, TMPro.FontStyles.Bold, TMPro.TextAlignmentOptions.BottomLeft);
+            _affiliation = MakeLabel(headerZone, "Affiliation", Vector2.zero, new Vector2(1f, 0.42f),
+                12, ElarionUi.ParchmentDim, TMPro.FontStyles.Italic, TMPro.TextAlignmentOptions.TopLeft);
             _body = MakeLabel(bodyZone, "Body", new Vector2(0.0f, 0.14f), new Vector2(1.0f, 1.0f),
                 16, ElarionUi.Parchment, TMPro.FontStyles.Normal, TMPro.TextAlignmentOptions.TopLeft);
 
@@ -114,7 +125,7 @@ namespace DeNelle.HUD
             if (chrome.layout != null && chrome.layout.medallion != null)
             {
                 _portrait = ElarionUiKit.Portrait(chrome.layout.medallion,
-                    ResolveSpeakerPortrait(_vm != null ? _vm.Speaker : null), active: false);
+                    ResolveSpeakerPortrait(_vm != null ? _vm.Speaker : null, out _), active: false);
                 if (_portrait != null && _portrait.image != null) _portrait.image.raycastTarget = false;
             }
 
@@ -146,6 +157,13 @@ namespace DeNelle.HUD
             if (!open) return;
 
             if (_speaker != null) { _speaker.text = _vm.Speaker; _speaker.gameObject.SetActive(!string.IsNullOrEmpty(_vm.Speaker)); }
+            if (_affiliation != null)
+            {
+                var rec = DialogueCatalog.FindSpeaker(_vm.Speaker);
+                string aff = rec != null ? rec.Affiliation : null;
+                _affiliation.text = aff ?? "";
+                _affiliation.gameObject.SetActive(!string.IsNullOrEmpty(aff));
+            }
             if (_body != null) _body.text = _vm.Text;
             RefreshPortrait();
 
@@ -177,34 +195,45 @@ namespace DeNelle.HUD
             }
         }
 
-        // ── Speaker → portrait mapping (WO-583) ──────────────────────────────────
-        // The dialogue line carries only a speaker NAME (e.g. "Miller"), not a class, so the old
-        // PortraitForClass(Speaker) call always returned null and the medallion stayed blank. Resolve
-        // by priority, never blank / never throw:
-        //   1) an AUTHORED per-node portrait — the dialogues.json `portrait` command sets
-        //      DeNelle.Core.DialoguePortrait.Forced to a Resources sprite path (e.g. "Portraits/farm");
-        //   2) the speaker name mapped to a class portrait (Knight/Ranger/Wizard/Healer);
-        //   3) null → RefreshPortrait draws the warm crest placeholder disc.
-        private static Sprite ResolveSpeakerPortrait(string speaker)
+        // ── Speaker → portrait mapping (WO-583; speakers block, card standard 2026-07-02) ──
+        // The card is DATA-DRIVEN: the catalog's top-level `speakers` block declares
+        // { name, affiliation, portrait } per speaker. Resolve by priority, never blank /
+        // never throw:
+        //   1) an AUTHORED per-node `portrait` command (back-compat OVERRIDE) — sets
+        //      DeNelle.Core.DialoguePortrait.Forced to a Resources sprite path;
+        //   2) the speakers-block record's portrait path (the data-driven default);
+        //   3) the speaker name mapped to a class portrait (Knight/Ranger/Wizard/Healer);
+        //   4) null → RefreshPortrait draws the styled SILHOUETTE (never a raw tinted disc).
+        private static Sprite ResolveSpeakerPortrait(string speaker, out string source)
         {
             string forced = DeNelle.Core.DialoguePortrait.Forced;
             if (!string.IsNullOrEmpty(forced))
             {
                 var sp = Resources.Load<Sprite>(forced);
-                if (sp != null) return sp;
+                if (sp != null) { source = forced + " (command)"; return sp; }
+            }
+            var rec = DialogueCatalog.FindSpeaker(speaker);
+            if (rec != null && !string.IsNullOrEmpty(rec.Portrait))
+            {
+                var sp = Resources.Load<Sprite>(rec.Portrait);
+                if (sp != null) { source = rec.Portrait; return sp; }
             }
             var cls = ElarionUiKit.PortraitForClass(speaker);
-            if (cls != null) return cls;
+            if (cls != null) { source = "class:" + speaker; return cls; }
+            source = "silhouette";
             return null;
         }
 
-        // Repaint the medallion portrait from the current speaker / forced portrait. Called every
-        // Repaint so a per-node portrait command (or a speaker change) updates the socket live;
-        // falls back to the placeholder disc when nothing resolves.
+        // Repaint the medallion portrait from the current speaker / speakers block / forced
+        // override. Called every Repaint so a per-node portrait command (or a speaker change)
+        // updates the socket live; a speaker with no resolvable art gets the styled hooded
+        // silhouette — NEVER the raw tan placeholder disc (the "Sylas yellow blank").
+        private string _lastCardKey;   // one FlowTrace card line per speaker, not per tap
         private void RefreshPortrait()
         {
             if (_portrait == null || _portrait.image == null) return;
-            var sp = ResolveSpeakerPortrait(_vm != null ? _vm.Speaker : null);
+            string speaker = _vm != null ? _vm.Speaker : null;
+            var sp = ResolveSpeakerPortrait(speaker, out string source);
             if (sp != null)
             {
                 _portrait.image.sprite = sp;
@@ -213,9 +242,86 @@ namespace DeNelle.HUD
             }
             else
             {
-                _portrait.image.sprite = ElarionUiKit.CircleSprite;
-                _portrait.image.color = ElarionUiKit.PortraitPlaceholder;
+                _portrait.image.sprite = SilhouetteSprite;
+                _portrait.image.color = Color.white;
+                _portrait.image.preserveAspect = true;
             }
+
+            var rec = DialogueCatalog.FindSpeaker(speaker);
+            string card = (speaker ?? "<narration>") + "|" + source;
+            if (card != _lastCardKey)
+            {
+                _lastCardKey = card;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue",
+                    $"card {(string.IsNullOrEmpty(speaker) ? "<narration>" : speaker)}: " +
+                    $"affiliation={(rec != null && !string.IsNullOrEmpty(rec.Affiliation) ? rec.Affiliation : "<none>")} " +
+                    $"portrait={source}");
+            }
+        }
+
+        // ── Silhouette placeholder (card standard: styled, never a flat tinted circle) ───
+        // Procedurally drawn ONCE into a Texture2D and cached: a dark obsidian-toned disc
+        // carrying a near-black hooded-figure bust (hood peak + head + shoulders), so an
+        // unportraited speaker (Sylas / Brom / Sable) reads as "a person, art pending"
+        // instead of a raw color quad. Pure UnityEngine drawing — no kit change needed.
+        private static Sprite _silhouette;
+        private static Sprite SilhouetteSprite
+        {
+            get
+            {
+                if (_silhouette == null) _silhouette = BuildSilhouetteSprite();
+                return _silhouette;
+            }
+        }
+
+        private static Sprite BuildSilhouetteSprite()
+        {
+            const int size = 96;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            tex.wrapMode = TextureWrapMode.Clamp;
+
+            var clear  = new Color(0f, 0f, 0f, 0f);
+            var disc   = new Color(0.16f, 0.15f, 0.19f, 1f);   // dark obsidian slate
+            var figure = new Color(0.045f, 0.04f, 0.06f, 1f);  // near-black hooded figure
+
+            float c = (size - 1) * 0.5f;
+            float rDisc = size * 0.5f - 1f;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = x - c, dy = y - c;
+                    if (dx * dx + dy * dy > rDisc * rDisc) { tex.SetPixel(x, y, clear); continue; }
+
+                    // Normalized coords (0..1, y up).
+                    float nx = x / (float)(size - 1);
+                    float ny = y / (float)(size - 1);
+
+                    bool inFigure = false;
+                    // Head: circle centred just above middle.
+                    float hx = nx - 0.5f, hy = ny - 0.58f;
+                    if (hx * hx + hy * hy <= 0.155f * 0.155f) inFigure = true;
+                    // Hood peak: triangle rising above the head to a point.
+                    if (!inFigure && ny >= 0.58f && ny <= 0.82f)
+                    {
+                        float half = 0.16f * (1f - (ny - 0.58f) / 0.24f);   // narrows to the peak
+                        if (Mathf.Abs(nx - 0.5f) <= half) inFigure = true;
+                    }
+                    // Shoulders: wide ellipse low in the disc.
+                    if (!inFigure)
+                    {
+                        float sx = (nx - 0.5f) / 0.34f, sy = (ny - 0.12f) / 0.30f;
+                        if (sx * sx + sy * sy <= 1f && ny < 0.42f) inFigure = true;
+                    }
+
+                    tex.SetPixel(x, y, inFigure ? figure : disc);
+                }
+            }
+            tex.Apply(false, true);
+            var sp = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
+            sp.name = "DialogueSilhouette";
+            return sp;
         }
 
         private static TMPro.TextMeshProUGUI MakeLabel(Transform parent, string name, Vector2 aMin, Vector2 aMax,
@@ -228,7 +334,7 @@ namespace DeNelle.HUD
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
             ElarionUiKit.EnsureFont(t);
             t.fontSize = size; t.color = col; t.fontStyle = style; t.alignment = align;
-            t.enableWordWrapping = true; t.raycastTarget = false;
+            t.textWrappingMode = TMPro.TextWrappingModes.Normal; t.raycastTarget = false;
             return t;
         }
     }

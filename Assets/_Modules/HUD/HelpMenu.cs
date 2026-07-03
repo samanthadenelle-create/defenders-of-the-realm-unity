@@ -1,11 +1,10 @@
 // =============================================================================
 // HelpMenu — small in-game overlay reachable from a "?" button in the HUD.
 // Surfaces three actions:
-//   • Report Bug — captures a screenshot to disk + opens the default mail
-//     client with a populated mailto: to samanthadenelle@gmail.com (owner-
-//     authorised destination, 2026-05-19). Auto-attaching the screenshot
-//     requires a backend upload step — until that lands, the user attaches
-//     the file from the printed path.
+//   • Report Bug — WO-596: opens the player bug-report form (BugReportView:
+//     Obsidian master-frame, clean-frame screenshot + note + trace tail,
+//     POSTed to the live -v2 api/bug-report). The old mailto + dead-domain
+//     POST stub is RETIRED.
 //   • Controls — static text describing WASD + 1/2/3/4 + Build hotkeys.
 //   • Credits — DeNelle Studios + KayKit + Tripo attribution.
 // -----------------------------------------------------------------------------
@@ -14,10 +13,7 @@
 // =============================================================================
 
 using System;
-using System.IO;
-using System.Text;
 using UnityEngine;
-using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 using DeNelle.Core.UI;
@@ -28,9 +24,6 @@ namespace DeNelle.HUD
     [DisallowMultipleComponent]
     public sealed class HelpMenu : MonoBehaviour
     {
-        public const string BugReportEmail = "samanthadenelle@gmail.com";
-        public const string BugReportEndpoint = "https://defenders-of-the-realm.vercel.app/api/bug-report";
-
         private UIDocument _document;
         private VisualElement _root;
         private VisualElement _overlay;
@@ -66,7 +59,7 @@ namespace DeNelle.HUD
                 var ps = ScriptableObject.CreateInstance<PanelSettings>();
                 ps.name = "HelpRuntimePanelSettings";
                 foreach (var existing in UnityEngine.Object.FindObjectsByType<UIDocument>(
-                             FindObjectsInactive.Include, FindObjectsSortMode.None))
+                             FindObjectsInactive.Include))
                 {
                     if (existing == _document || existing.panelSettings == null) continue;
                     if (existing.panelSettings.themeStyleSheet != null)
@@ -263,96 +256,16 @@ namespace DeNelle.HUD
                 $"picking={(_overlay != null ? _overlay.pickingMode.ToString() : "n/a")} timeScale={Time.timeScale}");
         }
 
+        /// <summary>
+        /// WO-596 — route to the player bug-report form. The old stub (mailto to a
+        /// personal address + POST to the retired non-"-v2" domain) is retired.
+        /// Close FIRST so the form's clean-frame capture never includes this menu.
+        /// </summary>
         private void OnReportBug()
         {
-            try
-            {
-                string dir = Path.Combine(Application.persistentDataPath, "BugReports");
-                Directory.CreateDirectory(dir);
-                string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                string shot = Path.Combine(dir, $"screenshot_{stamp}.png");
-                ScreenCapture.CaptureScreenshot(shot);
-
-                string scene = SceneManager.GetActiveScene().name;
-                string textBody =
-                    $"What happened:\n\n\n" +
-                    $"Steps to reproduce:\n\n\n" +
-                    $"--- auto-captured ---\n" +
-                    $"Scene: {scene}\n" +
-                    $"Time:  {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n" +
-                    $"Build: {Application.version} ({Application.unityVersion})\n" +
-                    $"Device: {SystemInfo.deviceModel} / {SystemInfo.operatingSystem}\n" +
-                    $"Screen: {Screen.width}x{Screen.height}\n" +
-                    $"Screenshot: {shot}";
-
-                // 1) POST the report to the live Vercel endpoint (lands in
-                //    Postgres alongside the React app's existing reports).
-                StartCoroutine(PostBugReport(textBody, scene));
-
-                // 2) Also open the user's default mail client so the
-                //    screenshot can be attached (the API endpoint accepts text
-                //    only and caps the description at 4 000 chars).
-                string subject = Uri.EscapeDataString($"[DotR] Bug — {scene} @ {stamp}");
-                string body = Uri.EscapeDataString(textBody +
-                    $"\n(Please attach the screenshot file above.)");
-                Application.OpenURL($"mailto:{BugReportEmail}?subject={subject}&body={body}");
-
-                ShowToast($"Screenshot saved to {shot}");
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning("[HelpMenu] Bug report failed: " + ex.Message);
-                ShowToast("Bug report failed — see log.");
-            }
-        }
-
-        /// <summary>
-        /// POSTs the bug-report text to the live Vercel endpoint. Failure is
-        /// logged but does not break the mailto fallback that runs in parallel.
-        /// </summary>
-        private System.Collections.IEnumerator PostBugReport(string description, string scene)
-        {
-            string payload = "{\"description\":" + JsonEncode(description) +
-                             ",\"context\":{\"route\":" + JsonEncode(scene) +
-                             ",\"appVersion\":" + JsonEncode(Application.version) + "}}";
-            byte[] bytes = Encoding.UTF8.GetBytes(payload);
-            using (var req = new UnityWebRequest(BugReportEndpoint, "POST"))
-            {
-                req.uploadHandler = new UploadHandlerRaw(bytes);
-                req.downloadHandler = new DownloadHandlerBuffer();
-                req.SetRequestHeader("Content-Type", "application/json");
-                req.timeout = 10;
-                yield return req.SendWebRequest();
-
-                if (req.result == UnityWebRequest.Result.Success)
-                    Debug.Log("[HelpMenu] Bug report posted: " + req.downloadHandler.text);
-                else
-                    Debug.LogWarning("[HelpMenu] Bug report POST failed: " + req.error + " — mailto fallback still ran.");
-            }
-        }
-
-        /// <summary>Minimal JSON-string encoder for the bug-report payload.</summary>
-        private static string JsonEncode(string s)
-        {
-            var sb = new StringBuilder(s.Length + 16);
-            sb.Append('"');
-            foreach (var c in s)
-            {
-                switch (c)
-                {
-                    case '\\': sb.Append("\\\\"); break;
-                    case '"':  sb.Append("\\\""); break;
-                    case '\n': sb.Append("\\n"); break;
-                    case '\r': sb.Append("\\r"); break;
-                    case '\t': sb.Append("\\t"); break;
-                    default:
-                        if (c < 0x20) sb.AppendFormat("\\u{0:x4}", (int)c);
-                        else sb.Append(c);
-                        break;
-                }
-            }
-            sb.Append('"');
-            return sb.ToString();
+            FlowTrace.Step("BugReport", "Settings → Report a bug — opening BugReportView");
+            Close();
+            BugReportView.Open();
         }
 
         private void OnShowControls()
@@ -418,7 +331,7 @@ namespace DeNelle.HUD
             // borrow one and never built its UI — Open() then silently no-op'd and "dev
             // tools went nowhere" (T-030). We spawn-or-find it and hand it OUR live
             // PanelSettings (the Help menu just rendered with it) so it can build now.
-            var admin = UnityEngine.Object.FindFirstObjectByType<AdminOverlay>(FindObjectsInactive.Include);
+            var admin = UnityEngine.Object.FindAnyObjectByType<AdminOverlay>(FindObjectsInactive.Include);
             if (admin == null)
             {
                 var go = new GameObject("AdminOverlay");

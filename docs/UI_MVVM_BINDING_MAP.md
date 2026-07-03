@@ -92,7 +92,7 @@ data, weld instead of seam.
 | **Equipment** | `Village/Hero/EquipmentPanel.cs` | `Inventory` (paperdoll) / `Characters` | `EquipVM`: Data{ Portrait, Stats, Slots[SlotVM], HP/MP }; Cmds{ Equip(slot,item), Unequip(slot), Close } |
 | **Crafting** | `Village/Crafting/VillageCraftingPanel.cs` | `Crafting` | `CraftVM`: Data{ Recipes[RecipeVM], Selected, CanCraft, Inputs }; Cmds{ Select, Craft, Close } |
 | **Enchant / socket** | *(none yet)* | `Enchanting`, `Socketing` | `EnchantVM`/`SocketVM`: Data{ Item, Slots, Gems, Cost }; Cmds{ Apply, Remove, Close } |
-| **Building upgrade** | `Village/Buildings/Progression/BuildingUpgradePanel.cs` | `Crafting`/`QuestPanel` shell | `UpgradeVM`: Data{ Name, Level, NextCost, CanAfford }; Cmds{ Upgrade, Close } |
+| **Building upgrade** | `Village/Buildings/Progression/BuildingUpgradePanelMvvm.cs` (UIDocument twin DELETED 2026-07-02) | Obsidian master frame (FrameCore) | `BuildingUpgradeVM`: Perks grid{ id, name, effect, cost, state }; CostFor/EffectFor/LockReason; Cmds{ UnlockPerk, Close } |
 | **Talent / tech tree** | `HUD/HeroTalentPanel.cs` | `TalentTree` | `TalentVM`: Data{ Nodes[NodeVM], Points }; Cmds{ Learn(node), Reset, Close } |
 | **Pet / companion** | `HUD/PetSkillTreePanel.cs` | `PetPanel` | `PetVM`: Data{ Pet, Skills[NodeVM], Bond }; Cmds{ Learn, Summon/Dismiss, Close } |
 | **Cosmetic / monetize** | `HUD/CosmeticShopPanel.cs` | `MerchantPanel` (reskinned) | `StoreVM`: Data{ Packs[ItemVM], Wallet }; Cmds{ Buy, Close } |

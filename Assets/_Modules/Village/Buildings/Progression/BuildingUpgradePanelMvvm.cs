@@ -1,23 +1,32 @@
 // =============================================================================
-// BuildingUpgradePanelMvvm — the building-upgrade VIEW (MVVM slice). A DUMB SKIN:
-// it builds presentation (ElarionUiKit dark-glass + gold frame) and BINDS a
-// BuildingUpgradeVM. ALL state/logic (family decide, tier ladder, affordability,
-// execute) lives in the VM — the View never reads game state.
+// BuildingUpgradePanelMvvm — the building ENHANCEMENT (perk-grid) VIEW (MVVM).
+// A DUMB SKIN: it builds presentation through the ElarionUiKit MASTER FRAME
+// (BuildObsidianPanel + drop-zones, UI_BLINK_TEMPLATE_CANON) and BINDS a
+// BuildingUpgradeVM. ALL state/logic (affordability, unlock, tier gating) lives
+// in the VM — the View never reads game state (audit 2026-07-02 §3.1 finish).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Buildings.Progression
 //
-// Code-built uGUI ONLY (no UXML — §8). MIRRORS ShopPanel exactly: BuildModalCanvas
-// (sortingOrder 31000 + overrideSorting) + Scrim(onTapClose) + PanelFramed, a big
-// main "Upgrade Building" ButtonPack(Gold), and a dynamic, layout-driven scroll
-// grid of tier cards (VerticalLayoutGroup + ContentSizeFitter + per-row
-// LayoutElement — the ShopPanel anti-collapse rendering mechanism).
+// Owner redo 2026-07-02: a Warcraft-3-style PERK GRID of tiles (kit slot plates,
+// RpgUiCatalog RoleSlot — empty tiers still read as a grid). Each tile: perk
+// icon, name, COST, one-line concrete EFFECT (from the perk data). Tap a tile to
+// unlock. States: owned=lit, next/affordable=gold affordance, locked=dimmed +
+// requirement line. VERBIAGE LAW: "Unlock perk"/"Enhancement" language only.
+// ONE shared Close (the Obsidian chrome's); no other buttons — one action = one
+// tile (the old duplicate "big CTA" button is gone, per the button law).
 //
-// SHIPS BEHIND FeatureFlags.BuildingUpgradePanel (OFF). Its bootstrap only spawns it
-// (and suppresses the legacy UIDocument BuildingUpgradePanel) when the flag is ON,
-// so the two never double-register PanelId.BuildingUpgrade. Distinct GameObject
-// name ("BuildingUpgradePanelMvvm") so it can't collide with the UIDocument panel.
+// Code-built uGUI ONLY (no UXML — §8). Chrome = BuildObsidianPanel(FrameCore):
+// title -> layout.header, grid -> layout.body, wallet -> layout.footer.
+// Smoothness (owner 2026-07-02): eased open/close (scale+fade, ~0.18s/0.14s,
+// via the local PanelOpenCloseFx below — no shared kit tween exists yet; flagged
+// for promotion to ElarionUiKit) + button ColorTint fade (never snap).
+//
+// SHIPS BEHIND FeatureFlags.BuildingUpgradePanel (default ON since WO-476 — this
+// panel IS the live upgrade surface; the legacy UIDocument twin was DELETED
+// 2026-07-02). Distinct GameObject name ("BuildingUpgradePanelMvvm").
 // =============================================================================
 
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -29,32 +38,34 @@ namespace DeNelle.Village.Buildings.Progression
     [DisallowMultipleComponent]
     public sealed class BuildingUpgradePanelMvvm : MonoBehaviour, IPanelView
     {
-        private static readonly Color CurrentTint = new Color(1.18f, 1.12f, 0.92f, 1f);
+        // Owned (lit) tile tint — warm gilt lift over the slot plate.
+        private static readonly Color OwnedTint = new Color(1.18f, 1.12f, 0.92f, 1f);
+        // Locked tile dim — the plate greys down + drops alpha.
+        private static readonly Color LockedTint = new Color(0.52f, 0.52f, 0.55f, 0.80f);
 
         private BuildingUpgradeVM _vm;
-        private string _buildingId;
 
         private GameObject _ui;
-        private GameObject _contentRoot;
-        private RectTransform _scrollContent;
-        private TMPro.TextMeshProUGUI _headerLabel;
+        private GameObject _contentRoot;          // scroll host inside layout.body
+        private RectTransform _scrollContent;     // GridLayoutGroup content
+        private GridLayoutGroup _grid;
         private TMPro.TextMeshProUGUI _walletText;
         private TMPro.TextMeshProUGUI _statusText;
-        private TMPro.TextMeshProUGUI _mainBtnLabel;
-        private Button _mainBtn;
 
         private PanelHandle _panelHandle;
 
-        // Rows recorded per rebuild as (id, plate Image) so Render can hold the current tier.
-        private readonly List<(string id, Image plate)> _rowPlates = new List<(string id, Image plate)>();
-
         public bool IsOpen => _ui != null;
 
-        // ── Registration (mirror VillageCraftingPanel / the old UIDocument panel) ──
+        private const int   GridColumns   = 2;
+        private const float TileHeightPx  = 210f;
+        private const float TileGapPx     = 12f;
+        private const float ButtonFadeSec = 0.12f;   // hover/press transition — never snap
+
+        // ── Registration (mirror HeroSkillTreePanelMvvm) ──────────────────────────
 
         private void Awake()
         {
-            _panelHandle = PanelManager.Register("Building Upgrade", Close, () => IsOpen);
+            _panelHandle = PanelManager.Register("Building Enhancements", Close, () => IsOpen);
             PanelRouter.Register(PanelId.BuildingUpgrade, OpenGeneric);
             PanelRouter.Register(PanelId.BuildingUpgrade, (System.Action<string>)Open);
         }
@@ -70,28 +81,20 @@ namespace DeNelle.Village.Buildings.Progression
             PanelRouter.Unregister(PanelId.BuildingUpgrade, (System.Action<string>)Open);
         }
 
-        // PanelRouter plain (no-context) open — no focus building; pick the first city tier
-        // building so a generic open still shows something useful.
-        private void OpenGeneric() => Open(DefaultBuildingId());
+        // PanelRouter plain (no-context) open — the VM resolves the default building
+        // (View-side catalog reads removed per the audit §3.1).
+        private void OpenGeneric() => Open(null);
 
-        private static string DefaultBuildingId()
-        {
-            var all = DeNelle.Core.State.BuildingTierCatalog.All;
-            if (all != null && all.Count > 0 && all[0] != null) return all[0].Id;
-            return ResourceBuildingProgression.FarmId;
-        }
-
-        // ── Open: build chrome, construct + bind the VM ───────────────────────────
+        // ── Open: construct + bind the VM, build chrome ───────────────────────────
 
         public void Open(string buildingId)
         {
             Close();
-            _buildingId = string.IsNullOrEmpty(buildingId) ? DefaultBuildingId() : buildingId;
 
-            // Construct the VM FIRST so the chrome's title (and its drop-shadow) can be composed
-            // ONCE from the live building name — single clean string, no stale "Upgrade Building"
-            // shadow showing through the building-name title (the old overlap bug).
-            _vm = new BuildingUpgradeVM(_buildingId, EconomyService.Instance, Close);
+            // VM FIRST — it resolves the default building + economy handle itself
+            // (BuildingUpgradeVM.CreateDefault), so this View never touches a service,
+            // and the chrome's title composes ONCE from the live building name.
+            _vm = BuildingUpgradeVM.CreateDefault(buildingId, Close);
 
             BuildChrome();
 
@@ -103,8 +106,6 @@ namespace DeNelle.Village.Buildings.Progression
                 // Rejected (e.g. in battle) — NotifyOpened already invoked our Close.
                 return;
             }
-
-            Debug.Log($"[BuildingUpgradePanelMvvm] Opened for '{_buildingId}'. Bound BuildingUpgradeVM (MVVM).");
         }
 
         // ── IPanelView ────────────────────────────────────────────────────────────
@@ -129,61 +130,29 @@ namespace DeNelle.Village.Buildings.Progression
         {
             if (_vm == null) return;
 
-            // Header text is composed ONCE in BuildChrome ("Upgrade: <Building>") so the gilt title and
-            // its drop-shadow stay in sync — deliberately NOT re-texted here (re-texting only the gilt
-            // label left the shadow reading the stale "Upgrade Building", the title-overlap bug).
-
             if (_walletText != null)
-                _walletText.text = $"Wood: {_vm.Wood}   Food: {_vm.Food}   Iron: {_vm.Iron}   Crystals: {_vm.Crystals}";
+                _walletText.text = $"Wood: {_vm.Wood}   Food: {_vm.Food}   Iron: {_vm.Iron}   Crystals: {_vm.Crystals}   Gold: {_vm.Coins}";
 
             if (_statusText != null) _statusText.text = _vm.Status;
 
-            if (_mainBtnLabel != null) _mainBtnLabel.text = _vm.MainButtonLabel;
-            if (_mainBtn != null)
-            {
-                _mainBtn.interactable = _vm.MainButtonEnabled;
-                ApplyMainButtonState(_vm.IsMaxed);
-            }
-
-            RebuildList();
+            RebuildGrid();
         }
 
-        private void RebuildList()
+        private void RebuildGrid()
         {
             ClearContent();
-            _rowPlates.Clear();
 
-            var listRoot = BuildScrollContent(_vm.Upgrades.Count);
-            foreach (var item in _vm.Upgrades)
-                CreateRow(listRoot, item);
+            var gridRoot = BuildScrollContent();
+            foreach (var item in _vm.Perks)
+                CreateTile(gridRoot, item);
             FinalizeScroll();
         }
 
-        // ── Main button state: FULLY INERT when maxed, live gold CTA otherwise ─────
-        // Maxed (no upgrade left): kill the Selectable transition so there is NO hover/
-        // selection highlight "circle", and dim the plate + label so it reads as a settled
-        // "Maxed" chip — not a clickable CTA. Otherwise restore the standard gold-button
-        // feedback (ColorTint); the merely-unaffordable case stays a live CTA that simply
-        // greys via the disabled colour, so the upgrade path is never broken.
-        private void ApplyMainButtonState(bool inert)
-        {
-            if (_mainBtn == null) return;
-            var img = _mainBtn.targetGraphic as Image;
-            if (inert)
-            {
-                _mainBtn.transition = Selectable.Transition.None;
-                if (img != null) img.color = new Color(0.30f, 0.27f, 0.22f, 0.85f);   // dim, settled
-                if (_mainBtnLabel != null) _mainBtnLabel.color = ElarionUi.ParchmentDim;
-            }
-            else
-            {
-                ElarionUiKit.StyleButtonColors(_mainBtn);   // restore ColorTint + colour block
-                if (img != null) img.color = Color.white;   // gold pack sprite shows at full
-                if (_mainBtnLabel != null) _mainBtnLabel.color = ElarionUi.Parchment;
-            }
-        }
-
-        // ── Chrome (presentation only; mirrors ShopPanel.BuildChrome) ─────────────
+        // ── Chrome — MASTER FRAME ONLY (UI_BLINK_TEMPLATE_CANON §2-§4) ────────────
+        // BuildObsidianPanel(FrameCore) supplies frame + header title + the ONE shared
+        // Close. This View drops chrome-less content into the returned drop-zones:
+        //   layout.header -> title (pre-built), layout.body -> perk grid + status,
+        //   layout.footer -> wallet strip. No per-screen cards/wells/rims.
 
         private void BuildChrome()
         {
@@ -192,78 +161,72 @@ namespace DeNelle.Village.Buildings.Progression
             if (canvas != null) canvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, onTapClose: () => _vm?.Close());
 
-            // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header + ONE Close.
-            // Compose the title ONCE here ("Upgrade: <Building>") so the gilt title and its drop-shadow
-            // carry the SAME text — Render no longer re-texts the header (that left the shadow stale).
-            string titleText = "Upgrade: " + (_vm != null ? _vm.Title : "Building");
+            string titleText = (_vm != null ? _vm.Title : "Building") + " Enhancements";
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, titleText,
                 new Vector2(0.14f, 0.07f), new Vector2(0.86f, 0.93f), () => _vm?.Close(),
-                headerX0: 0.04f, headerX1: 0.96f);
-            var panel = chrome.content.transform;
-            _headerLabel = chrome.title;
+                frameName: RpgUiCatalog.FrameCore);
 
-            // Wallet readout under the header.
-            var walletGo = new GameObject("Wallet", typeof(TMPro.TextMeshProUGUI));
-            walletGo.transform.SetParent(panel, false);
-            var wr = walletGo.GetComponent<RectTransform>();
-            wr.anchorMin = new Vector2(0.04f, 0.82f); wr.anchorMax = new Vector2(0.96f, 0.88f);
-            wr.offsetMin = Vector2.zero; wr.offsetMax = Vector2.zero;
-            _walletText = walletGo.GetComponent<TMPro.TextMeshProUGUI>();
-            _walletText.fontSize = ElarionUi.FontLabel;
-            _walletText.color = ElarionUi.Gilt;
-            _walletText.alignment = TMPro.TextAlignmentOptions.Center;
-            _walletText.raycastTarget = false;
-
-            // Scroll list area (the tier grid).
-            _contentRoot = new GameObject("Content", typeof(RectTransform));
-            _contentRoot.transform.SetParent(panel, false);
-            var cr = _contentRoot.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0.04f, 0.20f); cr.anchorMax = new Vector2(0.96f, 0.80f);
-            cr.offsetMin = Vector2.zero; cr.offsetMax = Vector2.zero;
-
-            // Big main "Upgrade Building" CTA.
-            _mainBtn = ElarionUiKit.ButtonPack(panel, "Upgrade Building", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.30f, 0.085f), new Vector2(0.70f, 0.165f),
-                () => _vm?.UpgradeNext(),
-                packSpriteName: DeNelle.Core.FeatureFlags.BlinkChrome ? RpgUiCatalog.ButtonConfirm : RpgUiCatalog.ButtonGold);
-            _mainBtnLabel = _mainBtn != null ? _mainBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
-            if (_mainBtnLabel != null)
+            // Zones: frame path returns layout; procedural fallback (art absent) does not —
+            // synthesize equivalent zones over chrome.content so the screen never blanks.
+            RectTransform body, footer;
+            if (chrome.layout != null)
             {
-                _mainBtnLabel.color = ElarionUi.Parchment; _mainBtnLabel.fontStyle = TMPro.FontStyles.Bold;
-                _mainBtnLabel.outlineColor = new Color32(20, 12, 4, 235); _mainBtnLabel.outlineWidth = 0.22f;
-                _mainBtnLabel.transform.SetAsLastSibling();
+                body   = chrome.layout.body;
+                footer = chrome.layout.footer;
+            }
+            else
+            {
+                body   = MakeZone(chrome.content.transform, "Zone_Body",   new Vector2(0.04f, 0.10f), new Vector2(0.96f, 0.875f));
+                footer = MakeZone(chrome.content.transform, "Zone_Footer", new Vector2(0.06f, 0.030f), new Vector2(0.94f, 0.095f));
             }
 
-            // Close is the SHARED top-right Obsidian Close button (WO-554) — no per-panel footer Close.
+            // Smooth the shared Close button's tint transition too.
+            SoftenButton(chrome.close);
 
-            // Status line (bottom band).
-            var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
-            statusGo.transform.SetParent(panel, false);
-            var sRect = statusGo.GetComponent<RectTransform>();
-            sRect.anchorMin = new Vector2(0.34f, 0.03f); sRect.anchorMax = new Vector2(0.94f, 0.075f);
-            sRect.offsetMin = Vector2.zero; sRect.offsetMax = Vector2.zero;
-            _statusText = statusGo.GetComponent<TMPro.TextMeshProUGUI>();
-            _statusText.fontSize = ElarionUi.FontLabel;
-            _statusText.color = ElarionUi.ParchmentDim;
-            _statusText.alignment = TMPro.TextAlignmentOptions.Center;
-            _statusText.raycastTarget = false;
+            // FOOTER zone: live wallet readout (through the VM).
+            _walletText = MakeLine(footer, "Wallet", ElarionUi.Gilt, ElarionUi.FontLabel,
+                new Vector2(0f, 0f), new Vector2(1f, 1f));
+
+            // BODY zone: perk grid (scrolling) above a thin status line.
+            _contentRoot = MakeZone(body, "GridHost", new Vector2(0f, 0.075f), new Vector2(1f, 1f)).gameObject;
+            _statusText = MakeLine(body, "Status", ElarionUi.ParchmentDim, ElarionUi.FontLabel,
+                new Vector2(0f, 0f), new Vector2(1f, 0.065f));
+
+            // Eased open (owner smoothness directive): scale 0.92->1 + fade 0->1, ease-out.
+            var fx = _ui.AddComponent<PanelOpenCloseFx>();
+            fx.PlayOpen(chrome.root != null ? chrome.root.transform as RectTransform : null);
         }
 
-        // ── Scroll list (the ShopPanel anti-collapse rendering mechanism) ─────────
-
-        private const float RowHeightPx = 72f;
-        private const float RowGapPx    = 4f;
-
-        private Transform BuildScrollContent(int rowCount)
+        private static RectTransform MakeZone(Transform parent, string name, Vector2 min, Vector2 max)
         {
-            var well = ElarionUiKit.Well(_contentRoot.transform, Vector2.zero, Vector2.one);
-            var wImg = well.GetComponent<Image>();
-            if (wImg != null)
-            {
-                wImg.raycastTarget = false;
-                if (DeNelle.Core.FeatureFlags.BlinkChrome) { var c = wImg.color; c.a = 0f; wImg.color = c; }
-            }
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            return rt;
+        }
 
+        private static TMPro.TextMeshProUGUI MakeLine(Transform parent, string name, Color color,
+            float fontSize, Vector2 min, Vector2 max)
+        {
+            var go = new GameObject(name, typeof(TMPro.TextMeshProUGUI));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+            t.fontSize = fontSize;
+            t.color = color;
+            t.alignment = TMPro.TextAlignmentOptions.Center;
+            t.raycastTarget = false;
+            return t;
+        }
+
+        // ── Scroll grid (GridLayoutGroup; anti-collapse via ContentSizeFitter) ────
+
+        private Transform BuildScrollContent()
+        {
             var viewport = new GameObject("Viewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
             viewport.transform.SetParent(_contentRoot.transform, false);
             var vr = viewport.GetComponent<RectTransform>();
@@ -281,14 +244,13 @@ namespace DeNelle.Village.Buildings.Progression
             cr.anchoredPosition = Vector2.zero;
             cr.sizeDelta = new Vector2(0f, 0f);
 
-            var vlg = content.AddComponent<VerticalLayoutGroup>();
-            vlg.childAlignment = TextAnchor.UpperCenter;
-            vlg.spacing = RowGapPx;
-            vlg.padding = new RectOffset(4, 4, 4, 4);
-            vlg.childControlWidth = true;
-            vlg.childControlHeight = true;
-            vlg.childForceExpandWidth = true;
-            vlg.childForceExpandHeight = false;
+            _grid = content.AddComponent<GridLayoutGroup>();
+            _grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            _grid.constraintCount = GridColumns;
+            _grid.spacing = new Vector2(TileGapPx, TileGapPx);
+            _grid.padding = new RectOffset(4, 4, 4, 4);
+            _grid.childAlignment = TextAnchor.UpperCenter;
+            _grid.cellSize = new Vector2(300f, TileHeightPx);   // corrected in FinalizeScroll
 
             var fitter = content.AddComponent<ContentSizeFitter>();
             fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
@@ -310,106 +272,175 @@ namespace DeNelle.Village.Buildings.Progression
         {
             if (_scrollContent == null) return;
             Canvas.ForceUpdateCanvases();
+            // Size the grid cells from the REAL content width (2 columns fill it).
+            if (_grid != null)
+            {
+                float w = _scrollContent.rect.width;
+                if (w > 1f)
+                {
+                    float cell = (w - _grid.padding.horizontal - TileGapPx * (GridColumns - 1)) / GridColumns;
+                    _grid.cellSize = new Vector2(cell, TileHeightPx);
+                }
+            }
             var contentArea = _contentRoot != null ? _contentRoot.transform as RectTransform : null;
             if (contentArea != null) LayoutRebuilder.ForceRebuildLayoutImmediate(contentArea);
             LayoutRebuilder.ForceRebuildLayoutImmediate(_scrollContent);
         }
 
-        // ── Tier card row (presentation; data from the bound ItemVM) ──────────────
+        // ── Perk TILE (presentation; data from the bound ItemVM) ──────────────────
+        // Kit slot plate (RpgUiCatalog RoleSlot / SlotItem) so empty/locked tiers still
+        // read as a grid. Layout inside the tile (fraction anchors):
+        //   icon (top center) / name / effect one-liner / cost-or-requirement line.
+        // States: owned = lit (gilt tint + "UNLOCKED"), next = gold outline affordance,
+        // locked = dimmed plate + requirement line. Tap = _vm.Select(id) (unlock).
 
-        private void CreateRow(Transform parent, ItemVM item)
+        private void CreateTile(Transform parent, ItemVM item)
         {
-            var row = new GameObject("TierRow_" + item.Id, typeof(Image), typeof(Button), typeof(LayoutElement));
-            row.transform.SetParent(parent, false);
-            var le = row.GetComponent<LayoutElement>();
-            le.preferredHeight = RowHeightPx;
-            le.minHeight = RowHeightPx;
+            var tile = new GameObject("PerkTile_" + item.Id, typeof(Image), typeof(Button));
+            tile.transform.SetParent(parent, false);
 
-            var rowImg = row.GetComponent<Image>();
-            DressRowPlate(rowImg);
-            _rowPlates.Add((item.Id, rowImg));
-
-            // Current-tier (Equipped flag) holds a brighter plate so the ladder reads at a glance.
+            var plate = tile.GetComponent<Image>();
+            DressTilePlate(plate);
             if (item.Equipped)
             {
-                var c = rowImg.color;
-                rowImg.color = new Color(c.r * CurrentTint.r, c.g * CurrentTint.g, c.b * CurrentTint.b, c.a);
+                var c = plate.color;
+                plate.color = new Color(c.r * OwnedTint.r, c.g * OwnedTint.g, c.b * OwnedTint.b, c.a);
             }
-
-            var rowBtn = row.GetComponent<Button>();
-            rowBtn.targetGraphic = rowImg;
-            ElarionUiKit.StyleButtonColors(rowBtn);
-            rowBtn.interactable = !item.Locked && !item.Equipped;
-            // Owned/locked rows are non-actionable -> drop the Selectable transition so they show no
-            // hover/selection highlight either (consistent with the inert main button when maxed).
-            if (!rowBtn.interactable) rowBtn.transition = Selectable.Transition.None;
-            string id = item.Id;
-            rowBtn.onClick.AddListener(() => _vm?.Select(id));
-
-            // WO-432 — a research-perk row shows its icon at the LEFT (Resources/HudIcons/BuildingUpgrades/
-            // <IconName>, the owner's <Building>_T1_<Perk> sprites); tier rows have none. When an icon is
-            // present the name/cost shift right to make room. Missing icon = no icon (row still reads).
-            float textX0 = 0.04f;
-            if (item.IconRole == BuildingUpgradeVM.IconRolePerk && !string.IsNullOrEmpty(item.IconName))
+            else if (item.Locked)
             {
-                var icon = Resources.Load<Sprite>("HudIcons/BuildingUpgrades/" + item.IconName);
-                if (icon != null)
-                {
-                    var iconGo = new GameObject("PerkIcon", typeof(Image));
-                    iconGo.transform.SetParent(row.transform, false);
-                    var irt = iconGo.GetComponent<RectTransform>();
-                    irt.anchorMin = new Vector2(0.02f, 0.12f); irt.anchorMax = new Vector2(0.14f, 0.88f);
-                    irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
-                    var iImg = iconGo.GetComponent<Image>();
-                    iImg.sprite = icon;
-                    iImg.preserveAspect = true;
-                    iImg.raycastTarget = false;
-                    textX0 = 0.17f;   // name/cost start after the icon
-                }
+                var c = plate.color;
+                plate.color = new Color(c.r * LockedTint.r, c.g * LockedTint.g, c.b * LockedTint.b, c.a * LockedTint.a);
             }
 
-            // Name (tier/perk label).
-            ElarionUiKit.Label(row.transform, item.Name, 0.50f, 0.95f, ElarionUi.Parchment,
-                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, textX0, 0.74f, bold: true);
+            var btn = tile.GetComponent<Button>();
+            btn.targetGraphic = plate;
+            ElarionUiKit.StyleButtonColors(btn);
+            SoftenButton(btn);
+            btn.interactable = !item.Locked && !item.Equipped;
+            // Owned/locked tiles are non-actionable -> drop the Selectable transition so they
+            // show no hover/selection highlight (they read as settled state, not a CTA).
+            if (!btn.interactable) btn.transition = Selectable.Transition.None;
+            string id = item.Id;
+            btn.onClick.AddListener(() => _vm?.Select(id));
 
-            // Cost / state line (from the VM — affordability colour mapped from item.Affordable).
-            string costLine = _vm != null ? _vm.CostFor(item.Id) : "";
-            Color costColor = item.Equipped ? ElarionUi.Gilt
-                            : item.Locked ? ElarionUi.ParchmentDim
-                            : (item.Affordable ? ElarionUi.Affordable : ElarionUi.Danger);
-            ElarionUiKit.Label(row.transform, costLine, 0.06f, 0.50f, costColor,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, textX0, 0.74f);
+            // GOLD AFFORDANCE — the unlockable-now tile carries a gold outline glow.
+            if (btn.interactable && item.Affordable)
+            {
+                var outline = tile.AddComponent<Outline>();
+                outline.effectColor = ElarionUiKit.ObsidianTrim;
+                outline.effectDistance = new Vector2(3f, 3f);
+            }
 
-            // State chip on the right.
-            string chip = item.Equipped ? "OWNED" : item.Locked ? "LOCKED" : "NEXT";
-            Color chipColor = item.Equipped ? ElarionUi.Gilt : item.Locked ? ElarionUi.ParchmentDim : ElarionUi.Affordable;
-            ElarionUiKit.Label(row.transform, chip, 0.30f, 0.70f, chipColor,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Right, 0.76f, 0.96f, bold: true);
+            float dim = item.Locked ? 0.55f : 1f;
+
+            // ICON — perk sprite (WO-432 <Building>_T1_<Perk> art) or, for tier/villagetier
+            // tiles with no art, a numeral/crest glyph so the grid stays uniform.
+            Sprite icon = null;
+            if (item.IconRole == BuildingUpgradeVM.IconRolePerk && !string.IsNullOrEmpty(item.IconName))
+                icon = Resources.Load<Sprite>("HudIcons/BuildingUpgrades/" + item.IconName);
+            if (icon != null)
+            {
+                var iconGo = new GameObject("Icon", typeof(Image));
+                iconGo.transform.SetParent(tile.transform, false);
+                var irt = iconGo.GetComponent<RectTransform>();
+                irt.anchorMin = new Vector2(0.32f, 0.50f); irt.anchorMax = new Vector2(0.68f, 0.94f);
+                irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
+                var iImg = iconGo.GetComponent<Image>();
+                iImg.sprite = icon;
+                iImg.preserveAspect = true;
+                iImg.raycastTarget = false;
+                iImg.color = new Color(1f, 1f, 1f, dim);
+            }
+            else
+            {
+                string glyph = item.Id == BuildingUpgradeVM.VillageTierRowId
+                    ? ElarionUi.CrestGlyph
+                    : TierGlyph(item.Id);
+                var g = ElarionUiKit.Label(tile.transform, glyph, 0.50f, 0.94f,
+                    new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, dim),
+                    ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+                g.raycastTarget = false;
+            }
+
+            // NAME.
+            var nameLbl = ElarionUiKit.Label(tile.transform, item.Name, 0.345f, 0.50f,
+                new Color(ElarionUi.Parchment.r, ElarionUi.Parchment.g, ElarionUi.Parchment.b, dim),
+                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+            nameLbl.raycastTarget = false;
+
+            // EFFECT — the one-line concrete payoff, from the perk data (VM-relayed).
+            string effect = _vm != null ? _vm.EffectFor(item.Id) : "";
+            var effLbl = ElarionUiKit.Label(tile.transform, effect, 0.20f, 0.345f,
+                new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.85f * dim),
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
+            effLbl.raycastTarget = false;
+
+            // BOTTOM LINE — owned: "UNLOCKED"; locked: the requirement; else the COST.
+            string bottom;
+            Color bottomColor;
+            if (item.Equipped)
+            {
+                bottom = "UNLOCKED";
+                bottomColor = ElarionUi.Gilt;
+            }
+            else if (item.Locked)
+            {
+                bottom = !string.IsNullOrEmpty(item.LockReason) ? item.LockReason : "Locked";
+                bottomColor = ElarionUi.ParchmentDim;
+            }
+            else
+            {
+                bottom = _vm != null ? _vm.CostFor(item.Id) : "";
+                bottomColor = item.Affordable ? ElarionUi.Affordable : ElarionUi.Danger;
+            }
+            var botLbl = ElarionUiKit.Label(tile.transform, bottom, 0.05f, 0.20f,
+                new Color(bottomColor.r, bottomColor.g, bottomColor.b, dim),
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: !item.Locked);
+            botLbl.raycastTarget = false;
         }
 
-        private static void DressRowPlate(Image rowImg)
+        private static string TierGlyph(string id)
         {
-            if (rowImg == null) return;
+            // "tier-3" -> "III"-style numeral read; fall back to the raw digit.
+            int dash = id != null ? id.LastIndexOf('-') : -1;
+            string n = dash >= 0 && dash < id.Length - 1 ? id.Substring(dash + 1) : "";
+            return string.IsNullOrEmpty(n) ? "◆" : n;
+        }
+
+        private static void DressTilePlate(Image plateImg)
+        {
+            if (plateImg == null) return;
             if (DeNelle.Core.FeatureFlags.BlinkChrome)
             {
                 var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotItem);
                 if (plate != null)
                 {
-                    rowImg.sprite = plate;
-                    rowImg.type   = Image.Type.Sliced;
-                    rowImg.color  = Color.white;
+                    plateImg.sprite = plate;
+                    plateImg.type   = Image.Type.Sliced;
+                    plateImg.color  = Color.white;
                     return;
                 }
             }
-            rowImg.color = ElarionUiKit.Cell;
-            ElarionUiKit.ApplyRounded(rowImg);
+            plateImg.color = ElarionUiKit.Cell;
+            ElarionUiKit.ApplyRounded(plateImg);
         }
 
-        // ── Teardown (mirror ShopPanel) ──────────────────────────────────────────
+        // Smooth hover/press: keep the kit ColorTint block but give it a real fade
+        // (never snap) — owner smoothness directive 2026-07-02.
+        private static void SoftenButton(Button btn)
+        {
+            if (btn == null || btn.transition != Selectable.Transition.ColorTint) return;
+            var colors = btn.colors;
+            colors.fadeDuration = ButtonFadeSec;
+            btn.colors = colors;
+        }
+
+        // ── Teardown ──────────────────────────────────────────────────────────────
 
         private void ClearContent()
         {
             _scrollContent = null;
+            _grid = null;
             if (_contentRoot == null) return;
             for (int i = _contentRoot.transform.childCount - 1; i >= 0; i--)
             {
@@ -425,15 +456,78 @@ namespace DeNelle.Village.Buildings.Progression
             _vm = null;
             _walletText = null;
             _statusText = null;
-            _mainBtnLabel = null;
-            _mainBtn = null;
-            _headerLabel = null;
-            if (_ui != null) Destroy(_ui);
+            if (_ui != null)
+            {
+                // Eased close (owner smoothness directive): the dying canvas fades/scales out on
+                // its own FX component, then destroys itself — panel state is already cleared, so
+                // an immediate re-Open builds a fresh canvas without waiting.
+                var fx = _ui.GetComponent<PanelOpenCloseFx>();
+                if (fx != null && fx.isActiveAndEnabled) fx.PlayCloseAndDestroy();
+                else Destroy(_ui);
+            }
             _ui = null;
             _contentRoot = null;
             _scrollContent = null;
-            _rowPlates.Clear();
+            _grid = null;
             PanelManager.NotifyClosed(_panelHandle);
+        }
+    }
+
+    /// <summary>
+    /// Minimal shared open/close tween for THIS panel family (no kit tween exists yet —
+    /// flagged for promotion into ElarionUiKit). Ease-out scale 0.92-&gt;1 + fade-in on open
+    /// (~0.18s); ease-in fade/scale-out then self-destroy on close (~0.14s). Unscaled time
+    /// (panels open while gameplay may be paused); CanvasGroup blocks input while closing.
+    /// </summary>
+    internal sealed class PanelOpenCloseFx : MonoBehaviour
+    {
+        private const float OpenSec  = 0.18f;
+        private const float CloseSec = 0.14f;
+
+        private CanvasGroup _group;
+        private RectTransform _scaled;
+        private bool _closing;
+
+        public void PlayOpen(RectTransform scaleTarget)
+        {
+            _group = gameObject.GetComponent<CanvasGroup>();
+            if (_group == null) _group = gameObject.AddComponent<CanvasGroup>();
+            _scaled = scaleTarget;
+            _group.alpha = 0f;
+            if (_scaled != null) _scaled.localScale = Vector3.one * 0.92f;
+            StartCoroutine(Ease(open: true, OpenSec, onDone: null));
+        }
+
+        public void PlayCloseAndDestroy()
+        {
+            if (_closing) return;
+            _closing = true;
+            if (_group == null) _group = gameObject.GetComponent<CanvasGroup>();
+            if (_group == null) _group = gameObject.AddComponent<CanvasGroup>();
+            _group.interactable = false;
+            _group.blocksRaycasts = false;
+            StartCoroutine(Ease(open: false, CloseSec, onDone: () => Destroy(gameObject)));
+        }
+
+        private IEnumerator Ease(bool open, float duration, System.Action onDone)
+        {
+            float t = 0f;
+            while (t < duration)
+            {
+                t += Time.unscaledDeltaTime;
+                float x = Mathf.Clamp01(t / duration);
+                // open = ease-OUT cubic; close = ease-IN cubic (owner-specified feel).
+                float k = open ? 1f - Mathf.Pow(1f - x, 3f) : 1f - Mathf.Pow(x, 3f);
+                if (_group != null) _group.alpha = k;
+                // open: k 0->1 grows 0.92->1; close: k 1->0 shrinks 1->0.94 (panel rect, not
+                // the canvas root — scale on an overlay canvas root does not render).
+                if (_scaled != null)
+                    _scaled.localScale = Vector3.one * Mathf.Lerp(open ? 0.92f : 0.94f, 1f, k);
+                yield return null;
+            }
+            if (_group != null) _group.alpha = open ? 1f : 0f;
+            if (_scaled != null && open) _scaled.localScale = Vector3.one;
+            onDone?.Invoke();
         }
     }
 }

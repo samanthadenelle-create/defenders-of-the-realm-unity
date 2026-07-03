@@ -385,6 +385,198 @@ namespace DeNelle.Core.Diagnostics
             try { return SceneManager.GetActiveScene().name; } catch { return "?"; }
         }
 
+        // =====================================================================
+        // WO-596 — player bug report: the F8 capture path, factored callable.
+        // ---------------------------------------------------------------------
+        // The player-facing bug-report form (BugReportView, HUD asm) reuses THIS
+        // harness's proven clean-frame trick (screenshot BEFORE the form draws,
+        // same as FlagHere) but needs BYTES (POSTable) instead of a disk PNG,
+        // and must run on WebGL where the full harness never installs (Install()
+        // early-outs — its file writes are sandboxed). So:
+        //   * a lightweight TRACE-TAIL ring installs on ALL platforms (incl.
+        //     WebGL) and keeps the last N [Flow:*]/error lines in memory;
+        //   * CaptureForReport() is a static coroutine: hide privacy-registered
+        //     UI (PrivacySensitiveUi) → wait for the rendered frame → grab the
+        //     backbuffer as a Texture2D → JPEG re-encode under a size cap →
+        //     restore UI → hand back bytes + tail. All guarded; never throws.
+        // The F8 flow above is UNCHANGED (owner's own capture path stays as-is).
+        // =====================================================================
+
+        /// <summary>Result of <see cref="CaptureForReport"/>: a size-capped JPEG of the
+        /// clean frame (null when capture failed or produced nothing under the cap),
+        /// the recent trace tail, and the active scene name.</summary>
+        public sealed class ReportCapture
+        {
+            public byte[]   ScreenshotJpg;
+            public string[] TraceTail;
+            public string   Scene;
+        }
+
+        // ---- trace-tail ring (all platforms, incl. WebGL) -----------------------
+        const int TailCap        = 80;    // last N kept lines
+        const int TailLineMax    = 300;   // per-line clamp so the ring stays tiny
+        static readonly Queue<string> s_tail = new Queue<string>(TailCap);
+        static bool s_tailInstalled;
+        static bool s_inTailHandler;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        static void InstallReportTail()
+        {
+            if (s_tailInstalled) return;
+            s_tailInstalled = true;
+            try { Application.logMessageReceived += OnTailLog; }
+            catch { /* a diagnostic must never break startup */ }
+        }
+
+        static void OnTailLog(string condition, string stack, LogType type)
+        {
+            if (s_inTailHandler) return;                      // never recurse on our own logging
+            s_inTailHandler = true;
+            try
+            {
+                bool isFlow  = !string.IsNullOrEmpty(condition) && condition.Contains("[Flow:");
+                bool isBreak = type == LogType.Error || type == LogType.Exception || type == LogType.Assert;
+                if (!isFlow && !isBreak) return;              // tail = [Flow:*] lines + hard breaks only
+
+                string line = (isBreak && !isFlow ? type + ": " : "") + Truncate(condition, TailLineMax);
+                lock (s_tail)
+                {
+                    while (s_tail.Count >= TailCap) s_tail.Dequeue();   // drop-oldest, bounded
+                    s_tail.Enqueue(line);
+                }
+            }
+            catch { }
+            finally { s_inTailHandler = false; }
+        }
+
+        /// <summary>Snapshot of the recent [Flow:*]/error lines (oldest first).</summary>
+        public static string[] RecentTraceTail()
+        {
+            try { lock (s_tail) { return s_tail.ToArray(); } }
+            catch { return Array.Empty<string>(); }
+        }
+
+        // ---- clean-frame byte capture -------------------------------------------
+        const int ReportJpgMaxBytes = 300 * 1024;  // WO-596 size cap (~300KB re-encoded)
+        const int ReportMaxDim      = 1280;        // downscale huge frames before encoding
+
+        /// <summary>
+        /// WO-596 — capture the CLEAN frame (privacy-registered UI hidden for the frame,
+        /// same one-frame trick as the F8 note box) as size-capped JPEG bytes + the recent
+        /// trace tail. Run via StartCoroutine BEFORE the report form builds its own UI so
+        /// the form is never in its own screenshot. <paramref name="onDone"/> always fires
+        /// (with a null ScreenshotJpg on capture failure — the report still sends).
+        /// </summary>
+        public static System.Collections.IEnumerator CaptureForReport(Action<ReportCapture> onDone)
+        {
+            var result = new ReportCapture();
+            result.TraceTail = RecentTraceTail();
+            try { result.Scene = SceneManager.GetActiveScene().name; } catch { result.Scene = "?"; }
+
+            IDisposable hide = null;
+            try { hide = PrivacySensitiveUi.HideForCapture(); }
+            catch { }
+
+            // Let the hide (and any just-closed menu) leave the render, then capture the
+            // END of the rendered frame — the same "screenshot the clean frame first"
+            // ordering FlagHere() uses, but into memory instead of a sandboxed file.
+            yield return null;
+            yield return new WaitForEndOfFrame();
+
+            try
+            {
+                var tex = ScreenCapture.CaptureScreenshotAsTexture();
+                if (tex != null)
+                {
+                    result.ScreenshotJpg = EncodeReportJpg(tex);
+                    UnityEngine.Object.Destroy(tex);
+                }
+                else FlowTrace.Warn("BugReport", "CaptureForReport: backbuffer grab returned null — sending without screenshot");
+            }
+            catch (Exception e)
+            {
+                FlowTrace.Fail("BugReport", $"CaptureForReport screenshot threw: {e.GetType().Name}: {e.Message}");
+            }
+            finally
+            {
+                try { hide?.Dispose(); } catch { }
+            }
+
+            FlowTrace.Step("BugReport",
+                $"clean-frame capture done — jpg={(result.ScreenshotJpg != null ? result.ScreenshotJpg.Length : 0)}B " +
+                $"tail={result.TraceTail.Length} lines scene='{result.Scene}'");
+            try { onDone?.Invoke(result); } catch (Exception e) { SafeStaticWarn(e); }
+        }
+
+        /// <summary>Downscale + JPEG-encode under <see cref="ReportJpgMaxBytes"/>; steps the
+        /// quality down before giving up. Returns null when nothing fits the cap.</summary>
+        static byte[] EncodeReportJpg(Texture2D src)
+        {
+            Texture2D work = null;
+            try
+            {
+                work = DownscaleForReport(src, ReportMaxDim);
+                int[] qualities = { 75, 55, 35 };
+                foreach (int q in qualities)
+                {
+                    byte[] jpg = (work != null ? work : src).EncodeToJPG(q);
+                    if (jpg != null && jpg.Length <= ReportJpgMaxBytes) return jpg;
+                }
+                FlowTrace.Warn("BugReport", "screenshot exceeds the 300KB cap even at quality 35 — dropped");
+                return null;
+            }
+            catch (Exception e)
+            {
+                FlowTrace.Fail("BugReport", $"JPEG re-encode threw: {e.GetType().Name}: {e.Message}");
+                return null;
+            }
+            finally
+            {
+                if (work != null && work != src) UnityEngine.Object.Destroy(work);
+            }
+        }
+
+        /// <summary>GPU-blit downscale so a 4K frame doesn't blow the JPEG cap (WebGL-safe:
+        /// RenderTexture + ReadPixels, no threads). Returns the source when already small.</summary>
+        static Texture2D DownscaleForReport(Texture2D src, int maxDim)
+        {
+            if (src == null) return null;
+            int big = Mathf.Max(src.width, src.height);
+            if (big <= maxDim) return src;
+
+            float s = (float)maxDim / big;
+            int w = Mathf.Max(1, Mathf.RoundToInt(src.width * s));
+            int h = Mathf.Max(1, Mathf.RoundToInt(src.height * s));
+
+            RenderTexture rt = null;
+            var prev = RenderTexture.active;
+            try
+            {
+                rt = RenderTexture.GetTemporary(w, h, 0);
+                Graphics.Blit(src, rt);
+                RenderTexture.active = rt;
+                var outTex = new Texture2D(w, h, TextureFormat.RGB24, false);
+                outTex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                outTex.Apply(false);
+                return outTex;
+            }
+            catch (Exception e)
+            {
+                FlowTrace.Warn("BugReport", $"downscale failed ({e.Message}) — encoding full-size frame");
+                return src;
+            }
+            finally
+            {
+                RenderTexture.active = prev;
+                if (rt != null) RenderTexture.ReleaseTemporary(rt);
+            }
+        }
+
+        static void SafeStaticWarn(Exception e)
+        {
+            try { Debug.LogWarning("[BreakCapture] report-capture internal: " + e.Message); } catch { }
+        }
+
         // ---- the one place a break is recorded --------------------------------
         void Record(string kind, string message, string stack, bool screenshot)
         {

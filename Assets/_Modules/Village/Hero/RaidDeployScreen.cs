@@ -39,6 +39,7 @@ using UnityEngine.UI;
 using DeNelle.Core.UI;
 using DeNelle.Core.State;
 using DeNelle.Village;
+using DeNelle.Village.UI;   // StarRatingRow (tofu-proof star row)
 
 namespace DeNelle.Village.Hero
 {
@@ -62,7 +63,7 @@ namespace DeNelle.Village.Hero
         public static void Open(SceneConfigDef def)
         {
             if (def == null) { Debug.LogWarning("[RaidDeployScreen] Open(null) ignored."); return; }
-            var existing = FindFirstObjectByType<RaidDeployScreen>();
+            var existing = FindAnyObjectByType<RaidDeployScreen>();
             if (existing == null)
             {
                 var host = new GameObject("RaidDeployScreen");
@@ -119,8 +120,13 @@ namespace DeNelle.Village.Hero
                 0f, 1f, ElarionUi.Ink, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
             badgeLbl.raycastTarget = false;
 
-            var timeLbl = ElarionUiKit.Label(panel, "★★★ Target: " + FormatTime(_def != null ? _def.recommendedClearTime : 0f),
-                0.885f, 0.925f, ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Right, 0.45f, 0.90f, bold: true);
+            // Tofu fix (2026-07-02): ★ (U+2605) is in NO project SDF font (scanned —
+            // zero m_Unicode:9733 hits), so the old "★★★" text rendered as boxes in
+            // builds. Procedural gold diamonds instead (EndStateView's pattern via
+            // the shared StarRatingRow), then a plain font-safe "Target:" label.
+            StarRatingRow.Build(panel, 3, 3, 0.45f, 0.885f, 0.515f, 0.925f, sizePx: 12f);
+            var timeLbl = ElarionUiKit.Label(panel, "Target: " + FormatTime(_def != null ? _def.recommendedClearTime : 0f),
+                0.885f, 0.925f, ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.525f, 0.90f, bold: true);
             timeLbl.raycastTarget = false;
         }
 

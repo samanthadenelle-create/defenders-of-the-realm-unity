@@ -1,5 +1,19 @@
 {
-  "version": 1,
+  "version": 2,
+  "speakers": [
+    { "name": "Miller",      "affiliation": "Windmill",         "portrait": "Portraits/farm" },
+    { "name": "Woodcutter",  "affiliation": "Lumbermill",       "portrait": "Portraits/lumbermill" },
+    { "name": "Echo Warden", "affiliation": "Echo Hollow",      "portrait": "Portraits/pet-house" },
+    { "name": "Arcanist",    "affiliation": "Arcane Tower",     "portrait": "Portraits/arcane-tower" },
+    { "name": "Drillmaster", "affiliation": "Barracks",         "portrait": "Portraits/barracks" },
+    { "name": "Brom",        "affiliation": "Town Crier",       "portrait": "Portraits/brom" },
+    { "name": "Sylas",       "affiliation": "Ranger Companion", "portrait": "HeroPortraits/Sylas" },
+    { "name": "Coppin",      "affiliation": "Marketplace",      "portrait": "Portraits/market" },
+    { "name": "Blacksmith",  "affiliation": "Forge",            "portrait": "Portraits/forge" },
+    { "name": "Armorer",     "affiliation": "Armorer's Hall",   "portrait": "Portraits/armorer" },
+    { "name": "Sable",       "affiliation": "Jeweler's Bench",  "portrait": "Portraits/jeweler" },
+    { "name": "Herbalist",   "affiliation": "Apothecary",       "portrait": "Portraits/apothecary" }
+  ],
   "dialogues": [
     {
       "id": "brom_intro",
@@ -298,6 +312,301 @@
           "lines": [
             { "speaker": "Drillmaster", "text": "Recruits sharpen by the hour, Keeper. Give the word and they'll march - Elarion's walls won't hold themselves." },
             { "speaker": "Drillmaster", "text": "Strengthen the barracks and I'll turn out steadier blades for the line." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "market",
+      "startNode": "talk",
+      "nodes": [
+        {
+          "id": "talk",
+          "lines": [
+            { "speaker": "Coppin", "text": "Fresh stock off the morning carts, Keeper - tools, trinkets, and whatever the caravans dared to carry through the Dimming." },
+            { "speaker": "Coppin", "text": "Come, have a look before the good pieces go." }
+          ],
+          "next": "open"
+        },
+        {
+          "id": "open",
+          "commands": [
+            { "verb": "OpenShop", "args": ["market"] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "forge",
+      "startNode": "talk",
+      "nodes": [
+        {
+          "id": "talk",
+          "lines": [
+            { "speaker": "Blacksmith", "text": "The steel sings today, Keeper. Blades honed, hafts trued - a forge only rests when the walls do." },
+            { "speaker": "Blacksmith", "text": "Take up what the line needs." }
+          ],
+          "next": "open"
+        },
+        {
+          "id": "open",
+          "commands": [
+            { "verb": "OpenShop", "args": ["forge"] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "armorer",
+      "startNode": "talk",
+      "nodes": [
+        {
+          "id": "talk",
+          "lines": [
+            { "speaker": "Armorer", "text": "Plate, mail, and good boiled leather, Keeper - armor that holds when the wall does not." },
+            { "speaker": "Armorer", "text": "Step in and let's fit you proper." }
+          ],
+          "next": "open"
+        },
+        {
+          "id": "open",
+          "commands": [
+            { "verb": "OpenShop", "args": ["armorer"] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "jeweler",
+      "startNode": "talk",
+      "nodes": [
+        {
+          "id": "talk",
+          "lines": [
+            { "speaker": "Sable", "text": "Careful hands, Keeper - everything on this bench remembers a purpose. Rings, amulets, stones that still hold a little light." },
+            { "speaker": "Sable", "text": "Come, look closer." }
+          ],
+          "next": "open"
+        },
+        {
+          "id": "open",
+          "commands": [
+            { "verb": "OpenShop", "args": ["jeweler"] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "apothecary",
+      "startNode": "talk",
+      "nodes": [
+        {
+          "id": "talk",
+          "lines": [
+            { "speaker": "Herbalist", "text": "Mind the fumes, Keeper - every tincture on this bench is a small argument with the Dimming." },
+            { "speaker": "Herbalist", "text": "Bring me herbs and I'll bring you back from anything. Step up to the bench." }
+          ],
+          "next": "open"
+        },
+        {
+          "id": "open",
+          "commands": [
+            { "verb": "OpenAlchemy", "args": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_move_to_sylas",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "Ho, Keeper! Over here - by the gate. Quickly now, before the light thins." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_meet_sylas",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "Sylas, Scout of the Reach. I know your name, Keeper - the whole town does." },
+            { "speaker": "Sylas", "text": "Hear me: when the horns sound, they come for the gates. And they WILL sound." },
+            { "speaker": "Sylas", "text": "So we make ready first. Walk with me." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_first_tower",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "Before the horns sound, we build. See that gate? The last attack came through there." },
+            { "speaker": "Sylas", "text": "Tap BUILD and raise a watchtower - this first one is on me." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_first_tower_done",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "Look at it stand! That's YOURS, Keeper - and it holds this gate with you." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_town_wave",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "In town they come in WAVES, at the gates. Your towers hold the line - and you fight beside them." },
+            { "speaker": "Sylas", "text": "Horns! Here they come - to the gate, Keeper!" }
+          ],
+          "commands": [
+            { "verb": "play_sfx", "args": ["horn_warning"] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_town_wave_done",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "The line held - you and that tower of yours, together. That is how home is kept." },
+            { "speaker": "Sylas", "text": "Take your due - a defender earns their keep." }
+          ],
+          "commands": [
+            { "verb": "grant_resources_for_towers", "args": ["1"] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_world_encounter",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "Out there is DIFFERENT. No walls. No towers." },
+            { "speaker": "Sylas", "text": "When something finds you in the open, it's you alone in the fight - start to finish. Go and learn it." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_world_encounter_win",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "Alone - and enough. Remember the feel of that, Keeper." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_world_encounter_retry",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "Up, Keeper! The field forgives nothing - but it teaches fast. Again." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_return_home",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "Home now. In town: waves at the gates, your towers beside you. Out there: just you." },
+            { "speaker": "Sylas", "text": "Two fights, Keeper. Always know which one you're in." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_freedom",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "And look - the Tree stirs. You drove the dark back, and Elarion ANSWERED." },
+            { "speaker": "Sylas", "text": "When the horn calls DEFEND, fortify every gate. Venture out. Grow stronger. Defend better." },
+            { "speaker": "Sylas", "text": "It's all yours now, Keeper. I'll be by the gate." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_ctx_echo_assign",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "A new Echo has answered! Set it to a harvest - wood, iron or grain - and it will tend the work on its own." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_ctx_first_spend",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "Coin enough to build, Keeper. Walls don't raise themselves - put it to work." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_ctx_gear_equip",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "New steel in your pack? Iron serves no one in a chest - equip it." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_ctx_talents",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            { "speaker": "Sylas", "text": "A talent earned! Open your talents and shape how you fight, Keeper." }
           ]
         }
       ]

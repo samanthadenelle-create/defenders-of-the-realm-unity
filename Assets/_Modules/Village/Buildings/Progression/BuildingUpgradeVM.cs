@@ -1,21 +1,25 @@
 // =============================================================================
-// BuildingUpgradeVM — the building-upgrade panel's PURE ViewModel (MVVM slice).
+// BuildingUpgradeVM — the building ENHANCEMENT (perk-grid) panel's PURE ViewModel.
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Buildings.Progression
 //
-// ALL upgrade-panel STATE + LOGIC lives here, view-agnostic. Mirrors ShopVM:
+// Owner redo 2026-07-02: the panel is a Warcraft-3-style PERK GRID — every tier
+// and research perk is a TILE the player taps to UNLOCK. VERBIAGE LAW: "Unlock
+// perk" / "Enhancement" language only; the words "Upgrade Building" never appear.
+//
+// ALL grid STATE + LOGIC lives here, view-agnostic. Mirrors ShopVM:
 //   * implements DeNelle.Core.UI.Mvvm.IPanelViewModel (Title / Changed / Close / Dispose)
-//   * NO UnityEngine UI types (no GameObject/Image/Sprite/RectTransform/Color); the
-//     View resolves all presentation. Math uses System.Math, not UnityEngine.Mathf,
-//     so the VM is unit-testable without a scene (ARCHITECTURE_PRINCIPLES §2 / §2c).
-//   * the View binds it, re-renders on Changed, and routes user input back as
-//     commands; the View NEVER reads game state (ui-mvvm-binding-seam rule).
+//   * NO UnityEngine UI types; unit-testable without a scene (ARCHITECTURE_PRINCIPLES §2/§2c).
+//   * the View binds it, re-renders on Changed, and routes taps back as commands;
+//     the View NEVER reads game state (ui-mvvm-binding-seam rule).
+//   * per-tile cost/effect strings are exposed via CostFor(id)/EffectFor(id); the
+//     one-line concrete EFFECT comes from building-tiers.json (tier/perk "effect").
 //
 // TWO building families, decided EXACTLY like DialogueCommandBridge.CmdStructureStatus:
 //   * CITY tier buildings  — BuildingTierCatalog.IsUpgradable(id): the WO-430 tier
-//     ladder. UpgradeNext() spends via BuildingUpgradeService.TryUpgrade(id, tier+1).
+//     ladder. Unlocking the next tier spends via BuildingUpgradeService.TryUpgrade.
 //   * LEGACY resource buildings — ResourceBuildingProgression.IsResourceBuilding(id):
-//     Farm/Lumbermill/Forge level curve. UpgradeNext() calls ResourceBuildingState.TryUpgrade(id).
+//     Farm/Lumbermill/Forge level curve via ResourceBuildingState.TryUpgrade(id).
 //
 // The model-side execute math is UNCHANGED — this VM only orchestrates + formats.
 // =============================================================================
@@ -33,23 +37,23 @@ using EcoCost = DeNelle.Village.ResourceCost;
 namespace DeNelle.Village.Buildings.Progression
 {
     /// <summary>
-    /// Pure ViewModel for the building-upgrade panel. Exposes the tier ladder as
-    /// <see cref="Upgrades"/> (one <see cref="ItemVM"/> per authored tier) plus a big
-    /// main-button (label + enabled) and a status line. Raises <see cref="Changed"/>
-    /// after each upgrade and on any economy / modifier / level change.
+    /// Pure ViewModel for the building enhancement (perk-grid) panel. Exposes every tier +
+    /// research perk as <see cref="Perks"/> (one <see cref="ItemVM"/> tile each: owned=lit,
+    /// next=gold affordance, locked=dim + requirement line) plus a status line. Raises
+    /// <see cref="Changed"/> after each unlock and on any economy / modifier / level change.
     /// </summary>
     public sealed class BuildingUpgradeVM : IPanelViewModel, IDisposable
     {
-        /// <summary>Row id for the synthetic "Upgrade Village Tier" affordance (the Heart-of-Elarion
-        /// tech-gate). Injected at the TOP of every city/resource building's upgrade list so the player
-        /// has ONE place to raise the global Village/Stronghold Tier that unlocks the WO-432 tier-2+
-        /// building upgrades + research perks. Tapping it routes to VillageTierService.TryUpgrade().</summary>
+        /// <summary>Tile id for the synthetic "Unlock Village Tier" affordance (the Heart-of-Elarion
+        /// tech-gate). Injected at the TOP of every city/resource building's grid so the player has
+        /// ONE place to raise the global Village/Stronghold Tier that unlocks the WO-432 tier-2+
+        /// enhancements + research perks. Tapping it routes to VillageTierService.TryUpgrade().</summary>
         public const string VillageTierRowId = "villagetier";
 
-        /// <summary>Icon role key on each tier's ItemVM (the View maps it to art; no game state).</summary>
+        /// <summary>Icon role key on each tier tile (the View maps it to art; no game state).</summary>
         public const string IconRoleTier = "tier";
-        /// <summary>Icon role key on each research-perk row (the View maps it to the perk's
-        /// Resources/HudItems/BuildingUpgrades/&lt;iconId&gt; sprite). WO-432.</summary>
+        /// <summary>Icon role key on each research-perk tile (the View maps it to the perk's
+        /// Resources/HudIcons/BuildingUpgrades/&lt;iconId&gt; sprite). WO-432.</summary>
         public const string IconRolePerk = "perk";
 
         private readonly string _buildingId;
@@ -64,10 +68,29 @@ namespace DeNelle.Village.Buildings.Progression
         private readonly Action<string> _levelHandler;
         private bool _disposed;
 
-        private readonly List<ItemVM> _upgrades = new List<ItemVM>();
-        // Per-tier cost string, keyed by the tier's ItemVM.Id — the View reads it through
-        // CostFor(id) so it renders cost text purely from VM data (no catalog re-pull).
+        private readonly List<ItemVM> _perks = new List<ItemVM>();
+        // Per-tile cost/effect strings, keyed by the tile's ItemVM.Id — the View reads them
+        // through CostFor(id)/EffectFor(id) so it renders purely from VM data (no catalog re-pull).
         private readonly Dictionary<string, string> _costById = new Dictionary<string, string>();
+        private readonly Dictionary<string, string> _effectById = new Dictionary<string, string>();
+
+        /// <summary>
+        /// The View-side entry point (audit §3.1): resolves the economy handle + the default
+        /// building HERE so the View never touches EconomyService/BuildingTierCatalog itself.
+        /// A null/empty buildingId falls back to the first catalog building (generic open).
+        /// </summary>
+        public static BuildingUpgradeVM CreateDefault(string buildingId, Action onClose)
+        {
+            if (string.IsNullOrEmpty(buildingId)) buildingId = DefaultBuildingId();
+            return new BuildingUpgradeVM(buildingId, EconomyService.Instance, onClose);
+        }
+
+        private static string DefaultBuildingId()
+        {
+            var all = BuildingTierCatalog.All;
+            if (all != null && all.Count > 0 && all[0] != null) return all[0].Id;
+            return ResourceBuildingProgression.FarmId;
+        }
 
         public BuildingUpgradeVM(string buildingId, IEconomy economy, Action onClose)
         {
@@ -90,6 +113,17 @@ namespace DeNelle.Village.Buildings.Progression
             ResourceBuildingState.LevelChanged += _levelHandler;
 
             Rebuild();
+
+            // §12 open trace: "[Flow:Upgrade] <building> grid: N perks, M owned, next=<id>".
+            int owned = 0;
+            string next = null;
+            foreach (var p in _perks)
+            {
+                if (p.Equipped) owned++;
+                else if (next == null && !p.Locked) next = p.Id;
+            }
+            FlowTrace.Step("Upgrade", _buildingId + " grid: " + _perks.Count + " perks, "
+                + owned + " owned, next=" + (next ?? "none"));
         }
 
         // ── IPanelViewModel ───────────────────────────────────────────────────
@@ -118,26 +152,21 @@ namespace DeNelle.Village.Buildings.Progression
         /// <summary>Highest authored tier/level.</summary>
         public int MaxTier { get; private set; }
 
-        /// <summary>One row per authored tier (name + Affordable + current/next/locked flags). Never null.</summary>
-        public IReadOnlyList<ItemVM> Upgrades => _upgrades;
-
-        /// <summary>The big main button's label ("Upgrade Building" / "Maxed" / "Locked").</summary>
-        public string MainButtonLabel { get; private set; }
-
-        /// <summary>Whether the main "Upgrade Building" button is enabled (affordable next tier exists).</summary>
-        public bool MainButtonEnabled { get; private set; }
-
-        /// <summary>True when there is NO further upgrade possible (fully maxed, or a building with no
-        /// upgrades). The View uses this to render the main button as a FULLY INERT, dimmed "Maxed"
-        /// chip — no hover/selection highlight — vs. the merely-unaffordable case (still a live CTA).</summary>
-        public bool IsMaxed { get; private set; }
+        /// <summary>One TILE per tier + research perk (name + Affordable + owned/locked flags +
+        /// LockReason requirement line). The View lays these out as the perk grid. Never null.</summary>
+        public IReadOnlyList<ItemVM> Perks => _perks;
 
         /// <summary>Last action / hint line for the status row.</summary>
         public string Status { get; private set; }
 
-        /// <summary>The cost string for a tier row id (View renders it from here — no catalog re-pull).</summary>
+        /// <summary>The cost string for a tile id (View renders it from here — no catalog re-pull).</summary>
         public string CostFor(string id) =>
             id != null && _costById.TryGetValue(id, out var c) ? c : "";
+
+        /// <summary>The one-line concrete EFFECT for a tile id ("Farm +25% yield" / "offline bucket
+        /// holds more") — sourced from building-tiers.json "effect" (or derived for legacy levels).</summary>
+        public string EffectFor(string id) =>
+            id != null && _effectById.TryGetValue(id, out var e) ? e : "";
 
         /// <summary>Live wallet readout (View rebuilds its "Wood … Food … Crystals" line from these).</summary>
         public int Wood     => _economy?.Wood ?? 0;
@@ -148,22 +177,22 @@ namespace DeNelle.Village.Buildings.Progression
 
         // ── Commands ────────────────────────────────────────────────────────────
 
-        /// <summary>Buy the NEXT tier/level (city -> BuildingUpgradeService, resource -> ResourceBuildingState).</summary>
+        /// <summary>Unlock the NEXT tier/level (city -> BuildingUpgradeService, resource -> ResourceBuildingState).</summary>
         public void UpgradeNext()
         {
             if (_isCity)
             {
                 int next = CurrentTier + 1;
-                if (next > MaxTier) { Status = "This is already at its highest level."; Raise(); return; }
+                if (next > MaxTier) { Status = "Every enhancement here is already unlocked."; Raise(); return; }
 
                 // WO-432 TIER GATE — mirror BuildingUpgradeService's gate so a tier-locked
-                // upgrade reports an HONEST reason, not the generic "can't afford" (the service
+                // unlock reports an HONEST reason, not the generic "can't afford" (the service
                 // returns a bare false for BOTH cases). Resources are fine; she's village-tier-gated.
                 var nextDef = BuildingTierCatalog.TierOf(_buildingId, next);
                 int villageTier = GameStateService.Instance?.State?.VillageTier ?? 0;
                 if (nextDef != null)
                 {
-                    FlowTrace.Step("BuildingUpgrade", "UpgradeNext " + _buildingId + " tier=" + next
+                    FlowTrace.Step("Upgrade", "unlock " + _buildingId + " tier=" + next
                         + " requiresVillageTier=" + nextDef.RequiresVillageTier
                         + " villageTier=" + villageTier
                         + " gated=" + (nextDef.RequiresVillageTier > villageTier));
@@ -177,9 +206,12 @@ namespace DeNelle.Village.Buildings.Progression
                 }
 
                 bool ok = BuildingUpgradeService.TryUpgrade(_buildingId, next);
-                Status = ok
-                    ? "Upgraded to Tier " + next + "."
-                    : "You can't afford that yet.";
+                if (ok)
+                {
+                    Status = "Tier " + next + " unlocked.";
+                    FlowTrace.Step("Upgrade", _buildingId + " unlocked tier-" + next);
+                }
+                else Status = "You can't afford that yet.";
                 Rebuild();
                 Raise();
                 return;
@@ -191,31 +223,33 @@ namespace DeNelle.Village.Buildings.Progression
                 switch (result)
                 {
                     case UpgradeResult.Upgraded:
-                        Status = "Upgraded to Level " + ResourceBuildingState.GetLevel(_buildingId) + ".";
+                        Status = "Level " + ResourceBuildingState.GetLevel(_buildingId) + " unlocked.";
+                        FlowTrace.Step("Upgrade", _buildingId + " unlocked level-"
+                            + ResourceBuildingState.GetLevel(_buildingId));
                         break;
                     case UpgradeResult.Insufficient: Status = "You can't afford that yet."; break;
-                    case UpgradeResult.MaxLevel:     Status = "This is already at its highest level."; break;
-                    case UpgradeResult.NeedMagic:    Status = "That tier needs Magic to unlock."; break;
-                    default:                         Status = "Nothing to upgrade here."; break;
+                    case UpgradeResult.MaxLevel:     Status = "Every enhancement here is already unlocked."; break;
+                    case UpgradeResult.NeedMagic:    Status = "That enhancement needs Magic to unlock."; break;
+                    default:                         Status = "Nothing to unlock here."; break;
                 }
                 Rebuild();
                 Raise();
                 return;
             }
 
-            Status = "Nothing to upgrade here.";
+            Status = "Nothing to unlock here.";
             Raise();
         }
 
-        /// <summary>Tier-card tap. The ladder buys the NEXT tier only, so tapping the next
-        /// tier upgrades; tapping any other tier just re-states the hint (no model change).</summary>
+        /// <summary>Perk-tile tap. The ladder unlocks the NEXT tier only, so tapping the next
+        /// tier tile unlocks it; tapping any other tier just re-states the hint (no model change).</summary>
         public void Select(string tierId)
         {
             if (string.IsNullOrEmpty(tierId)) return;
-            // WO-481 — the "Upgrade Village Tier" row (the Heart-of-Elarion tech-gate). Raise the
+            // WO-481 — the "Unlock Village Tier" tile (the Heart-of-Elarion tech-gate). Raise the
             // global Village/Stronghold Tier with Crystals via VillageTierService; on success the
-            // newly-gated tier-2+ building upgrades + research perks open immediately (Rebuild repaints
-            // the now-unlocked rows because the per-tier RequiresVillageTier gate now passes).
+            // newly-gated tier-2+ enhancements + research perks open immediately (Rebuild repaints
+            // the now-unlocked tiles because the per-tier RequiresVillageTier gate now passes).
             if (tierId == VillageTierRowId)
             {
                 if (VillageTierService.IsMax)
@@ -235,8 +269,9 @@ namespace DeNelle.Village.Buildings.Progression
                 if (VillageTierService.TryUpgrade())
                 {
                     int n = VillageTierService.Current;
-                    FlowTrace.Step("Progression", "village tier -> " + n + " (unlocks tier-" + n + "+ upgrades).");
-                    Status = "Village Tier raised to " + n + " — higher building tiers unlocked.";
+                    FlowTrace.Step("Upgrade", _buildingId + " unlocked villagetier-" + n
+                        + " (unlocks tier-" + n + "+ enhancements).");
+                    Status = "Village Tier raised to " + n + " — higher enhancements unlocked.";
                 }
                 else
                 {
@@ -246,49 +281,53 @@ namespace DeNelle.Village.Buildings.Progression
                 Raise();
                 return;
             }
-            // WO-432 — a research-perk row ("perk:<perkId>"): buy it with Gold (Coins).
+            // WO-432 — a research-perk tile ("perk:<perkId>"): unlock it with Gold (Coins).
             if (tierId.StartsWith("perk:", StringComparison.Ordinal))
             {
                 string perkId = tierId.Substring("perk:".Length);
                 if (BuildingPerkService.TryResearch(_buildingId, perkId))
-                    Status = "Researched.";
+                {
+                    Status = "Perk unlocked.";
+                    FlowTrace.Step("Upgrade", _buildingId + " unlocked perk " + perkId);
+                }
                 else
                 {
                     BuildingPerkService.CanResearch(_buildingId, perkId, out string why);
-                    Status = !string.IsNullOrEmpty(why) ? why : "Can't research that yet.";
+                    Status = !string.IsNullOrEmpty(why) ? why : "Can't unlock that perk yet.";
                 }
                 Rebuild();
                 Raise();
                 return;
             }
             if (tierId == NextTierId()) { UpgradeNext(); return; }
-            Status = "Tap the next tier to upgrade.";
+            Status = "Tap the gold tile to unlock the next enhancement.";
             Raise();
         }
 
-        // ── Build the rows + button/title/status (no Unity types) ────────────────
+        // ── Build the tiles + title/status (no Unity types) ─────────────────────
 
         private void Rebuild()
         {
-            _upgrades.Clear();
+            _perks.Clear();
             _costById.Clear();
+            _effectById.Clear();
 
             if (_isCity) BuildCity();
             else if (_isResource) BuildResource();
             else BuildUnknown();
 
-            // WO-481 — surface the Heart-of-Elarion Village Tier control as the FIRST row of every
-            // building's upgrade list (the building-upgrade panel is the surface the player already
-            // opens with F at any upgrade building, so this needs zero new UI). This is the SOLE
-            // caller of VillageTierService.TryUpgrade — without it GameState.VillageTier is stuck at
-            // 0 and every RequiresVillageTier > 0 building tier / research perk is permanently locked.
+            // WO-481 — surface the Heart-of-Elarion Village Tier control as the FIRST tile of every
+            // building's grid (the enhancement panel is the surface the player already opens with F
+            // at any upgrade building, so this needs zero new UI). This is the SOLE caller of
+            // VillageTierService.TryUpgrade — without it GameState.VillageTier is stuck at 0 and
+            // every RequiresVillageTier > 0 tier / research perk is permanently locked.
             PrependVillageTierRow();
         }
 
         /// <summary>
-        /// Inserts the synthetic "Upgrade Village Tier" row at the top of <see cref="_upgrades"/>.
+        /// Inserts the synthetic "Unlock Village Tier" tile at the top of <see cref="Perks"/>.
         /// Cost source = VillageTierService.NextCost() (Crystals, the premium progression currency;
-        /// felt-tunable in VillageTierService). The View renders it like any tier row; tapping it
+        /// felt-tunable in VillageTierService). The View renders it like any tile; tapping it
         /// routes to <see cref="Select"/> which calls VillageTierService.TryUpgrade().
         /// </summary>
         private void PrependVillageTierRow()
@@ -301,12 +340,15 @@ namespace DeNelle.Village.Buildings.Progression
 
             string name = maxed
                 ? "Village Tier " + cur + " (Max)"
-                : "Upgrade Village Tier " + cur + " -> " + (cur + 1);
+                : "Unlock Village Tier " + (cur + 1);
             _costById[VillageTierRowId] = maxed ? "Maxed" : (cost + " Crystals");
+            _effectById[VillageTierRowId] = maxed
+                ? "Every tier gate is open"
+                : "Opens tier-" + (cur + 1) + " enhancements everywhere";
 
-            // equipped=maxed -> renders the OWNED chip + gilt; locked=false so a non-max row is always tappable.
-            _upgrades.Insert(0, new ItemVM(VillageTierRowId, name, IconRoleTier, VillageTierRowId, 0, "",
-                                           affordable, rarity: null, equipped: maxed, locked: false));
+            // equipped=maxed -> renders as an owned (lit) tile; locked=false so a non-max tile is always tappable.
+            _perks.Insert(0, new ItemVM(VillageTierRowId, name, IconRoleTier, VillageTierRowId, 0, "",
+                                        affordable, rarity: null, equipped: maxed, locked: false));
         }
 
         private void BuildCity()
@@ -315,6 +357,7 @@ namespace DeNelle.Village.Buildings.Progression
             Title = def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : Titleize(_buildingId);
             CurrentTier = ModifierService.TierOf(_buildingId);
             MaxTier = BuildingTierCatalog.MaxTier(_buildingId);
+            int villageTier = GameStateService.Instance?.State?.VillageTier ?? 0;
 
             if (def != null && def.Tiers != null)
             {
@@ -324,24 +367,30 @@ namespace DeNelle.Village.Buildings.Progression
                     int tier = t.Tier;
                     bool isCurrent = tier <= CurrentTier;
                     bool isNext = tier == CurrentTier + 1;
-                    bool locked = tier > CurrentTier + 1;
+                    bool gated = isNext && t.RequiresVillageTier > villageTier;
+                    bool locked = tier > CurrentTier + 1 || gated;
+                    string lockReason = null;
+                    if (gated) lockReason = "Requires Village Tier " + t.RequiresVillageTier;
+                    else if (tier > CurrentTier + 1) lockReason = "Unlock Tier " + (tier - 1) + " first";
 
                     var cost = new EcoCost { Wood = t.CostWood, Food = t.CostFood, Crystals = t.CostCrystal };
-                    bool affordable = isNext && (_economy == null || _economy.CanAfford(cost));
+                    bool affordable = isNext && !gated && (_economy == null || _economy.CanAfford(cost));
                     string costStr = CostString(cost);
 
                     string id = TierId(tier);
-                    string name = (!string.IsNullOrEmpty(t.Name) ? t.Name : ("Tier " + tier));
-                    _costById[id] = isCurrent ? "Owned" : costStr;
-                    // Equipped flag carries "current/owned"; Locked carries "not yet reachable".
-                    _upgrades.Add(new ItemVM(id, name, IconRoleTier, id, 0, "", affordable,
-                                             rarity: null, equipped: isCurrent, locked: locked));
+                    string name = "Tier " + tier + " — " + (!string.IsNullOrEmpty(t.Name) ? t.Name : ("Tier " + tier));
+                    _costById[id] = isCurrent ? "Unlocked" : costStr;
+                    _effectById[id] = t.Effect ?? "";
+                    // Equipped flag carries "owned/lit"; Locked carries "not yet reachable" (+ reason).
+                    _perks.Add(new ItemVM(id, name, IconRoleTier, id, 0, "", affordable,
+                                          rarity: null, equipped: isCurrent, locked: locked,
+                                          lockReason: lockReason));
                 }
             }
 
-            // WO-432 RESEARCH ROWS — every perk unlocked at a REACHED tier shows as a Gold-cost row
-            // under the tier ladder (owned = OWNED chip; gate-not-met = LOCKED; else NEXT + affordability
-            // colour). A perk-row tap routes to BuildingPerkService via Select("perk:<id>"). Rows are
+            // WO-432 RESEARCH TILES — every perk unlocked at a REACHED tier shows as a Gold-cost tile
+            // in the grid (owned = lit; gate-not-met = dimmed + requirement; else gold affordance).
+            // A perk-tile tap routes to BuildingPerkService via Select("perk:<id>"). Tiles are
             // View-agnostic (a future Blink prefab View binds the same data — WO-435).
             if (def != null && def.Tiers != null)
             {
@@ -352,33 +401,31 @@ namespace DeNelle.Village.Buildings.Progression
                     {
                         if (p == null || string.IsNullOrEmpty(p.Id)) continue;
                         bool owned = BuildingPerkService.IsOwned(_buildingId, p.Id);
-                        bool can = !owned && BuildingPerkService.CanResearch(_buildingId, p.Id, out _);
+                        string why = null;
+                        bool can = !owned && BuildingPerkService.CanResearch(_buildingId, p.Id, out why);
                         bool affordable = can && (_economy == null || _economy.Coins >= p.GoldCost);
                         string rid = "perk:" + p.Id;
-                        string pname = (p.IsSignature ? "★ " : "") + (!string.IsNullOrEmpty(p.Name) ? p.Name : p.Id);
-                        _costById[rid] = owned ? "Researched" : (p.GoldCost + " Gold");
+                        // Signature marker is ASCII "*" not "★" (tofu fix 2026-07-02): U+2605 is
+                        // in NO project SDF font (scanned — zero m_Unicode:9733 hits), so ★
+                        // rendered as a box in builds. A VM emits strings (no procedural Image
+                        // like StarRatingRow/EndStateView), so the font-safe ASCII star it is.
+                        string pname = (p.IsSignature ? "* " : "") + (!string.IsNullOrEmpty(p.Name) ? p.Name : p.Id);
+                        _costById[rid] = owned ? "Unlocked" : (p.GoldCost + " Gold");
+                        _effectById[rid] = p.Effect ?? "";
                         string iconKey = string.IsNullOrEmpty(p.IconId) ? p.Id : p.IconId;
-                        _upgrades.Add(new ItemVM(rid, pname, IconRolePerk, iconKey, 0, "", affordable,
-                                                 rarity: null, equipped: owned, locked: !owned && !can));
+                        bool perkLocked = !owned && !can;
+                        _perks.Add(new ItemVM(rid, pname, IconRolePerk, iconKey, 0, "", affordable,
+                                              rarity: null, equipped: owned, locked: perkLocked,
+                                              lockReason: perkLocked && !string.IsNullOrEmpty(why)
+                                                  ? why : (perkLocked ? "Unlock Tier " + t.Tier + " first" : null)));
                     }
                 }
             }
 
-            bool maxed = CurrentTier >= MaxTier;
-            IsMaxed = maxed;
-            if (maxed)
-            {
-                MainButtonLabel = "Maxed";
-                MainButtonEnabled = false;
-            }
-            else
-            {
-                MainButtonLabel = "Upgrade Building";
-                var nextCost = NextCity();
-                MainButtonEnabled = _economy == null || _economy.CanAfford(nextCost);
-            }
             if (string.IsNullOrEmpty(Status))
-                Status = maxed ? "Fully upgraded." : "Tap Upgrade Building to advance a tier.";
+                Status = CurrentTier >= MaxTier
+                    ? "Every enhancement here is unlocked."
+                    : "Tap the gold tile to unlock the next enhancement.";
         }
 
         private void BuildResource()
@@ -399,7 +446,7 @@ namespace DeNelle.Village.Buildings.Progression
                     bool isNext = level == CurrentTier + 1;
                     bool locked = level > CurrentTier + 1;
 
-                    // A resource row's cost is the cost FROM the previous level (the cost the
+                    // A resource tile's cost is the cost FROM the previous level (the cost the
                     // player pays to reach THIS level). Level 1 is owned by default (no cost).
                     string costStr;
                     bool affordable = false;
@@ -417,31 +464,22 @@ namespace DeNelle.Village.Buildings.Progression
                     }
 
                     string id = TierId(level);
-                    string name = "Level " + level + "  (+" + lvl.YieldPerTick + " "
-                                  + ResourceBuildingProgression.LabelFor(lvl.Yields) + ")";
-                    _costById[id] = isCurrent ? "Owned" : costStr;
-                    _upgrades.Add(new ItemVM(id, name, IconRoleTier, id, 0, "", affordable,
-                                             rarity: null, equipped: isCurrent, locked: locked));
+                    string name = "Level " + level;
+                    _costById[id] = isCurrent ? "Unlocked" : costStr;
+                    // Legacy levels have no authored effect string — derive the concrete yield line
+                    // ("+6 Food per tick") from the level def, the owner's "Farm +25% yield" shape.
+                    _effectById[id] = "+" + lvl.YieldPerTick + " "
+                                      + ResourceBuildingProgression.LabelFor(lvl.Yields) + " per tick";
+                    _perks.Add(new ItemVM(id, name, IconRoleTier, id, 0, "", affordable,
+                                          rarity: null, equipped: isCurrent, locked: locked,
+                                          lockReason: locked ? "Unlock Level " + (level - 1) + " first" : null));
                 }
             }
 
-            bool maxed = ResourceBuildingState.IsMaxLevel(_buildingId);
-            IsMaxed = maxed;
-            if (maxed)
-            {
-                MainButtonLabel = "Maxed";
-                MainButtonEnabled = false;
-            }
-            else
-            {
-                MainButtonLabel = "Upgrade Building";
-                var cur = ResourceBuildingState.CurrentDef(_buildingId);
-                MainButtonEnabled = cur != null
-                    && ResourceLedger.CanAfford(cur.UpgradeCost)
-                    && (cur.MagicCost <= 0 || ResourceLedger.MagicBalance() >= cur.MagicCost);
-            }
             if (string.IsNullOrEmpty(Status))
-                Status = maxed ? "Fully upgraded." : "Tap Upgrade Building to advance a level.";
+                Status = ResourceBuildingState.IsMaxLevel(_buildingId)
+                    ? "Every enhancement here is unlocked."
+                    : "Tap the gold tile to unlock the next enhancement.";
         }
 
         private void BuildUnknown()
@@ -449,23 +487,12 @@ namespace DeNelle.Village.Buildings.Progression
             Title = Titleize(_buildingId);
             CurrentTier = 0;
             MaxTier = 0;
-            MainButtonLabel = "Nothing to upgrade";
-            MainButtonEnabled = false;
-            IsMaxed = true;   // no upgrade path -> render the main button fully inert
-            if (string.IsNullOrEmpty(Status)) Status = "This building has no upgrades.";
+            if (string.IsNullOrEmpty(Status)) Status = "This building has no enhancements.";
         }
 
         // ── Helpers (pure) ───────────────────────────────────────────────────────
 
         private string NextTierId() => TierId(CurrentTier + 1);
-
-        private EcoCost NextCity()
-        {
-            var def = BuildingTierCatalog.TierOf(_buildingId, CurrentTier + 1);
-            return def != null
-                ? new EcoCost { Wood = def.CostWood, Food = def.CostFood, Crystals = def.CostCrystal }
-                : new EcoCost();
-        }
 
         private static string TierId(int tier) => "tier-" + tier;
 
