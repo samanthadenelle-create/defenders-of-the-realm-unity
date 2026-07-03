@@ -341,6 +341,14 @@ namespace DeNelle.Village
             // animator playback to half speed. Works regardless of which controller is
             // loaded (it's a multiplier on all clip playback). Tune via HeroAnimSpeed.
             anim.speed = HeroAnimSpeed;
+            // STRIDE-POLISH (2026-07-02): runtime cadence knob. The baked locomotion
+            // timeScales (HeroAnimatorFactory.ApplyLocomotionCadence: walk x2 / run x3
+            // against this 0.5x global) net walk 1.0x / run 1.5x. Those are BAKE-TIME;
+            // this enforcer lets the owner felt-tune cadence live via PlayerPrefs
+            // "anim.runCadence" (default 1.5 = baked = zero change), scaling anim.speed
+            // ONLY while the base layer is in Locomotion/InjuredLocomotion — cast/
+            // attack/hit pacing (WO-217 + ShapeAttackTempo hitstop) is untouched.
+            HeroLocomotionCadence.Attach(gameObject, anim, HeroAnimSpeed);
             // Keep animating even when the follow camera frames just past the hero
             // edge, else Unity freezes the rig and it T-poses on re-entry to view.
             anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
@@ -1043,6 +1051,17 @@ namespace DeNelle.Village
                 baked.DisableKeyword("_NORMALMAP");
                 baked.DisableKeyword("_METALLICSPECGLOSSMAP");
                 baked.DisableKeyword("_OCCLUSIONMAP");
+
+                // SEE-THROUGH JOINTS FIX (owner ticket 2026-07-02 "I can see through parts of the
+                // hero: shoulders, knees, elbows"): the Tripo self-rigged bodies are OPEN SHELLS —
+                // Knight.fbx is 26 separate armor parts (tripo_part_0..25 in its import skeleton),
+                // each a single-sided surface. `new Material(URP/Lit)` defaults to back-face cull
+                // (_Cull=2), so when skinning bends a joint and the shells separate, the camera
+                // looks straight through the open shell interior = a hole in the hero. Render
+                // double-sided (same DEF-6 fix RetargetMaterialsToUrp already applies) so the
+                // shell's inner face shows instead of a see-through gap. Trivial fill cost on a
+                // low-poly body.
+                if (baked.HasProperty("_Cull")) baked.SetFloat("_Cull", 0f); // 0 = Off (double-sided)
 
                 // Knight armour sheen — keep metallic LOW so the basecolor atlas drives the
                 // visible colour. ROOT CAUSE of the "colorless Knight" in the WebGL build:

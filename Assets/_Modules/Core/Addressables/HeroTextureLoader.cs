@@ -54,7 +54,11 @@ namespace DeNelle.Core
         /// Guarded — a throw at any step degrades to the Resources fallback so the caller never
         /// gets a hard exception; a total miss returns null (callers already handle a null atlas).
         /// </summary>
-        public static Texture2D Load(string resourcesRelativePath)
+        /// <param name="optional">True when the caller treats a total miss as an EXPECTED,
+        /// intentional state (e.g. the pet basecolor PNGs purged for size in 2774fb50 —
+        /// the tint/extracted-material fallback is the design, not a failure). A miss then
+        /// logs FlowTrace.Step instead of Fail, so it never lands in the break-log.</param>
+        public static Texture2D Load(string resourcesRelativePath, bool optional = false)
         {
             if (string.IsNullOrEmpty(resourcesRelativePath)) return null;
 
@@ -90,8 +94,17 @@ namespace DeNelle.Core
                 result = Resources.Load<Texture2D>(address);
             });
             if (result == null)
-                FlowTrace.Fail("HeroAssets",
-                    $"hero texture '{address}' not found via Addressables OR Resources — caller falls back to tint.");
+            {
+                if (optional)
+                    // Owner F8 2026-07-02 (flame-pup): the pet basecolor PNGs were PURGED for size
+                    // (2774fb50; flame-pup.png was a 16.4MB LFS asset) and the pets render from their
+                    // extracted .fbm materials — a miss here is the intended state, not a break.
+                    FlowTrace.Step("HeroAssets",
+                        $"optional texture '{address}' absent (purged-for-size asset) — caller's tint fallback is intentional.");
+                else
+                    FlowTrace.Fail("HeroAssets",
+                        $"hero texture '{address}' not found via Addressables OR Resources — caller falls back to tint.");
+            }
             return result;
         }
 

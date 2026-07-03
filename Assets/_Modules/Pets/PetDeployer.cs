@@ -476,7 +476,12 @@ namespace DeNelle.Pets
                     var petFixer = visual.AddComponent<DeNelle.Core.TripoMaterialFixer>();
                     if (petFixer != null && def != null)
                     {
-                        petFixer.SetFallbackTexture("Textures/" + def.Species);
+                        // OPTIONAL (owner F8 2026-07-02): the Resources/Textures/<species>.png
+                        // basecolors were purged for size in 2774fb50 (flame-pup.png alone was a
+                        // 16.4MB LFS asset; the 208MB->3.4MB WebGL win). The pets' real look comes
+                        // from their extracted .fbm materials via ForceRebuildAll below — a miss
+                        // here is the intended state (Step, not Fail).
+                        petFixer.SetFallbackTexture("Textures/" + def.Species, optional: true);
                         petFixer.SetFallbackTint(def.TintColor);
                         // Owner 2026-05-25: dim the pet "aura/beams" to a minimal
                         // affinity-coloured glow (fire red / ice white / aether violet).

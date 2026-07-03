@@ -58,6 +58,16 @@ namespace DeNelle.Editor
         private const string TankCastFbx   = "Assets/Action/Knight/standing taunt battlecry.fbx";
         private const string TankIdleFbx   = "Assets/Action/Knight/sword and shield idle.fbx";
 
+        // ── ANTI-CHOP crossfades (owner 2026-07-02 "enemy anims off/choppy") ──
+        // The v1 transitions cut in at 0.05–0.08s — a visible snap-pop on every
+        // attack/hit/cast entry, and a 0.10–0.12s snap back into locomotion. Polished
+        // bands: actions blend IN over 0.10s (still reads snappy) and blend BACK into
+        // locomotion over 0.20s (the 0.15–0.25 locomotion band). Named so the live
+        // OrcHumanoid.controller yaml and this factory stay in lock-step on regen.
+        private const float ActionBlendIn = 0.10f; // Any -> Attack/WindUp/Cast/Hit
+        private const float LocoBlendBack = 0.20f; // action state -> Locomotion return
+        private const float DeathBlendIn  = 0.15f; // Any -> Dead (soften the collapse)
+
         // Override asset paths (each IS a RuntimeAnimatorController — Resources.Load works).
         private const string MageOverridePath    = "Assets/Resources/Enemies/OrcHumanoid_Mage.controller";
         private const string WarriorOverridePath = "Assets/Resources/Enemies/OrcHumanoid_Warrior.controller";
@@ -161,45 +171,45 @@ namespace DeNelle.Editor
             var sAtk = sm.AddState("Attack");
             sAtk.motion = s_baseAttack != null ? s_baseAttack : s_idle;
             var toAtk = sm.AddAnyStateTransition(sAtk);
-            toAtk.hasExitTime = false; toAtk.duration = 0.08f; toAtk.canTransitionToSelf = false;
+            toAtk.hasExitTime = false; toAtk.duration = ActionBlendIn; toAtk.canTransitionToSelf = false;
             toAtk.AddCondition(AnimatorConditionMode.If, 0f, "Attack");
             var atkBack = sAtk.AddTransition(locoState);
-            atkBack.hasExitTime = true; atkBack.exitTime = 0.8f; atkBack.duration = 0.12f;
+            atkBack.hasExitTime = true; atkBack.exitTime = 0.8f; atkBack.duration = LocoBlendBack;
 
             // ── WindUp telegraph — Any -> WindUp on the trigger, returns to Loco ─
             // The readable wind-up pose before a cast / heavy attack lands.
             var sWindUp = sm.AddState("WindUp");
             sWindUp.motion = s_windup != null ? s_windup : s_idle;
             var toWind = sm.AddAnyStateTransition(sWindUp);
-            toWind.hasExitTime = false; toWind.duration = 0.05f; toWind.canTransitionToSelf = false;
+            toWind.hasExitTime = false; toWind.duration = ActionBlendIn; toWind.canTransitionToSelf = false;
             toWind.AddCondition(AnimatorConditionMode.If, 0f, "WindUp");
             var windBack = sWindUp.AddTransition(locoState);
-            windBack.hasExitTime = true; windBack.exitTime = 0.85f; windBack.duration = 0.1f;
+            windBack.hasExitTime = true; windBack.exitTime = 0.85f; windBack.duration = LocoBlendBack;
 
             // ── Cast — Any -> Cast on the trigger, returns to Locomotion ──────
             // The mage spell-cast state (the WindUp telegraph fires just before it).
             var sCast = sm.AddState("Cast");
             sCast.motion = s_baseCast != null ? s_baseCast : (s_baseAttack != null ? s_baseAttack : s_idle);
             var toCast = sm.AddAnyStateTransition(sCast);
-            toCast.hasExitTime = false; toCast.duration = 0.06f; toCast.canTransitionToSelf = false;
+            toCast.hasExitTime = false; toCast.duration = ActionBlendIn; toCast.canTransitionToSelf = false;
             toCast.AddCondition(AnimatorConditionMode.If, 0f, "Cast");
             var castBack = sCast.AddTransition(locoState);
-            castBack.hasExitTime = true; castBack.exitTime = 0.85f; castBack.duration = 0.12f;
+            castBack.hasExitTime = true; castBack.exitTime = 0.85f; castBack.duration = LocoBlendBack;
 
             // ── Hit — Any -> Hit on the trigger, returns to Locomotion ───────
             var sHit = sm.AddState("Hit");
             sHit.motion = s_hit != null ? s_hit : s_idle;
             var toHit = sm.AddAnyStateTransition(sHit);
-            toHit.hasExitTime = false; toHit.duration = 0.05f; toHit.canTransitionToSelf = false;
+            toHit.hasExitTime = false; toHit.duration = ActionBlendIn; toHit.canTransitionToSelf = false;
             toHit.AddCondition(AnimatorConditionMode.If, 0f, "Hit");
             var hitBack = sHit.AddTransition(locoState);
-            hitBack.hasExitTime = true; hitBack.exitTime = 0.8f; hitBack.duration = 0.12f;
+            hitBack.hasExitTime = true; hitBack.exitTime = 0.8f; hitBack.duration = LocoBlendBack;
 
             // ── Dead — Any -> Dead on the bool (latched, no return) ──────────
             var sDead = sm.AddState("Dead");
             sDead.motion = s_death != null ? s_death : s_idle;
             var toDead = sm.AddAnyStateTransition(sDead);
-            toDead.hasExitTime = false; toDead.duration = 0.1f; toDead.canTransitionToSelf = false;
+            toDead.hasExitTime = false; toDead.duration = DeathBlendIn; toDead.canTransitionToSelf = false;
             toDead.AddCondition(AnimatorConditionMode.If, 0f, "Dead");
 
             EditorUtility.SetDirty(ctrl);

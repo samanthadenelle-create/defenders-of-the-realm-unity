@@ -240,14 +240,22 @@ namespace DeNelle.Editor
             locoState.motion = blend;
             // Null-guarded children: only add the clips that loaded. Always have at
             // least one motion so the state isn't empty.
-            // Thresholds tuned to HeroLocomotion's actual feed: _moveSpeed = 6, so
-            // Speed (= Velocity.magnitude) ramps 0→6. The hero has ONE move speed,
-            // so 6 must land in the WALK band (else it skips walk → straight to run,
-            // the "skips walk" bug). Walk centred at 6; Run only if speed exceeds ~9.
+            // WALK-FEEL FIX (owner ticket 2026-07-02 "animations didn't feel like walking"):
+            // HeroLocomotion feeds Speed = Velocity.magnitude with _moveSpeed = 6, so full
+            // stick = 6 m/s — a RUN pace. The old tree centred WALK at 6 (Run at an
+            // unreachable 9), so the hero always glided at 6 m/s on a walk-cadence clip;
+            // on top of that HeroBodySwapper.HeroAnimSpeed halves ALL animator playback
+            // (0.5×), halving the stride cadence again → heavy foot-slide. New bands:
+            // idle@0 / walk@2 / run@6 — full speed plays the RUN clip. Per-child timeScale
+            // compensates the 0.5× global so LOCOMOTION cadence roughly matches distance
+            // travelled without touching the tuned cast/attack playback: walk ×2 (net 1.0×,
+            // ~Mixamo walk cadence at ~2 m/s) and run ×3 (net 1.5×, ~4.5 m/s visual stride
+            // at 6 m/s travel — close enough to read as running, tune here if needed).
             var added = new List<float>();
             if (idle != null) { blend.AddChild(idle, 0f);  added.Add(0f); }
-            if (walk != null) { blend.AddChild(walk, 6f);  added.Add(6f); }
-            if (run  != null) { blend.AddChild(run,  9f);  added.Add(9f); }
+            if (walk != null) { blend.AddChild(walk, 2f);  added.Add(2f); }
+            if (run  != null) { blend.AddChild(run,  6f);  added.Add(6f); }
+            ApplyLocomotionCadence(blend);
             if (added.Count == 0)
                 Debug.LogWarning($"[HeroAnimatorFactory] {spec.slug}: no locomotion clips found — " +
                                  "Locomotion state is empty.");
@@ -413,11 +421,13 @@ namespace DeNelle.Editor
             injuredState.motion = injTree;
 
             int injChildren = 0;
-            // Match the healthy thresholds (idle@0 / walk@6 / run@9) so the swap reads at
-            // the same Speed bands the hero already feeds.
+            // Match the healthy thresholds (idle@0 / walk@2 / run@6, walk-feel fix — see
+            // the Locomotion tree above) so the swap reads at the same Speed bands the
+            // hero already feeds. Same cadence compensation for the 0.5× global playback.
             if (injIdle != null) { injTree.AddChild(injIdle, 0f); injChildren++; }
-            if (injWalk != null) { injTree.AddChild(injWalk, 6f); injChildren++; }
-            if (injRun  != null) { injTree.AddChild(injRun,  9f); injChildren++; }
+            if (injWalk != null) { injTree.AddChild(injWalk, 2f); injChildren++; }
+            if (injRun  != null) { injTree.AddChild(injRun,  6f); injChildren++; }
+            ApplyLocomotionCadence(injTree);
             if (injChildren == 0)
                 Debug.LogWarning($"[HeroAnimatorFactory] {spec.slug}: no injured/healthy locomotion " +
                                  "clips — InjuredLocomotion state is empty.");
@@ -429,6 +439,24 @@ namespace DeNelle.Editor
             var fromInjured = injuredState.AddTransition(locoState);
             fromInjured.hasExitTime = false; fromInjured.duration = 0.2f;
             fromInjured.AddCondition(AnimatorConditionMode.IfNot, 0f, "Injured");
+        }
+
+        /// <summary>
+        /// WALK-FEEL FIX (2026-07-02): per-child timeScale on the locomotion blend children to
+        /// cancel HeroBodySwapper.HeroAnimSpeed's global 0.5× playback for LOCOMOTION only (the
+        /// tuned cast/attack playback keeps the 0.5×). Walk (threshold 2) ×2 → net 1.0× cadence;
+        /// Run (threshold 6) ×3 → net 1.5× cadence, approximating a 6 m/s stride. Idle stays ×1
+        /// (a half-speed idle reads calm, not broken). Keyed off the thresholds set above.
+        /// </summary>
+        private static void ApplyLocomotionCadence(BlendTree tree)
+        {
+            var kids = tree.children;                    // BlendTree.children returns a copy
+            for (int i = 0; i < kids.Length; i++)
+            {
+                if      (kids[i].threshold >= 5.9f) kids[i].timeScale = 3f; // run  @6 → net 1.5×
+                else if (kids[i].threshold >= 1.9f) kids[i].timeScale = 2f; // walk @2 → net 1.0×
+            }
+            tree.children = kids;                        // write the modified copy back
         }
 
         /// <summary>

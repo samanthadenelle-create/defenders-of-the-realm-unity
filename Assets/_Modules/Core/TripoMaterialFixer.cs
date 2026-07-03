@@ -121,7 +121,15 @@ namespace DeNelle.Core
         /// </summary>
         public void ForceRebuildAll() => _forceRebuild = true;
 
-        public void SetFallbackTexture(string resourcesPath) => _fallbackTextureName = resourcesPath;
+        /// <param name="optional">True when a missing fallback texture is an EXPECTED state
+        /// (owner F8 2026-07-02: the pet basecolor PNGs were purged for size in 2774fb50; the
+        /// pets' real look comes from their extracted .fbm materials). Downgrades the miss
+        /// from Warn/Fail to Step so it never lands in the break-log.</param>
+        public void SetFallbackTexture(string resourcesPath, bool optional = false)
+        {
+            _fallbackTextureName = resourcesPath;
+            _fallbackOptional = optional;
+        }
 
         /// <summary>
         /// Forces a solid fallback colour on every material rebuilt by this
@@ -137,6 +145,7 @@ namespace DeNelle.Core
             _hasFallbackTint = true;
         }
 
+        private bool _fallbackOptional;
         private bool _hasEmissionOverride;
         private Color _emissionOverride = Color.black;
         private const float EmissionOverrideIntensity = 0.30f; // owner: "very minimal"
@@ -187,11 +196,20 @@ namespace DeNelle.Core
                 // WO-545: Addressables-first/Resources-fallback seam (was Resources.Load). Generic
                 // over the path — hero atlases ("Heroes/Textures/*") resolve from the migrated
                 // bundle; enemy atlases ("Enemies/OrcTex/*", not migrated) fall back to Resources.
-                fallbackTex = HeroTextureLoader.Load(_fallbackTextureName);
+                fallbackTex = HeroTextureLoader.Load(_fallbackTextureName, _fallbackOptional);
             if (!string.IsNullOrEmpty(_fallbackTextureName) && fallbackTex == null)
-                FlowTrace.Warn("TripoMatFix",
-                    $"'{gameObject.name}': fallback texture '{_fallbackTextureName}' did not load from Resources — " +
-                    "rebuilt materials will fall back to tint/source only.");
+            {
+                if (_fallbackOptional)
+                    // Expected miss (e.g. pet basecolor PNGs purged for size, 2774fb50) —
+                    // the source materials / tint carry the look. Step, never break-log noise.
+                    FlowTrace.Step("TripoMatFix",
+                        $"'{gameObject.name}': optional fallback texture '{_fallbackTextureName}' absent (by design) — " +
+                        "source materials / tint carry the look.");
+                else
+                    FlowTrace.Warn("TripoMatFix",
+                        $"'{gameObject.name}': fallback texture '{_fallbackTextureName}' did not load from Resources — " +
+                        "rebuilt materials will fall back to tint/source only.");
+            }
             FlowTrace.Step("TripoMatFix",
                 $"{gameObject.name}: fallbackPath='{_fallbackTextureName}', loaded={fallbackTex != null}, tintActive={_hasFallbackTint}");
 
@@ -336,6 +354,14 @@ namespace DeNelle.Core
             }
             if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", smoothness);
             if (m.HasProperty("_Metallic"))   m.SetFloat("_Metallic", metallic);
+            // SEE-THROUGH JOINTS FIX (2026-07-02, same pipeline as the hero): Tripo self-rigged
+            // bodies (orc family etc.) are OPEN SHELLS of separate parts; URP/Lit's default
+            // back-face cull (_Cull=2) turns bend-joint shell separations (shoulders/knees/
+            // elbows) into see-through holes. Render double-sided — the DEF-6 precedent
+            // (HeroBodySwapper.RetargetMaterialsToUrp) — so shell interiors show instead of
+            // holes. Uniform across the cache (not part of MatKey) — every rebuilt material
+            // gets the same value, so cache identity is unaffected.
+            if (m.HasProperty("_Cull")) m.SetFloat("_Cull", 0f); // 0 = Off (double-sided)
 
             s_matCache[key] = m;
             s_cacheNew++;

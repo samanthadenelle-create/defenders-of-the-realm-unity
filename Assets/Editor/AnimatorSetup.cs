@@ -366,15 +366,19 @@ namespace DeNelle.Editor
 
             // ── Transitions ──────────────────────────────────────────────────
             // Idle <-> Move on the Speed float (the codex's locomotion blend).
+            // ANTI-CHOP (2026-07-02): 0.12s read as a pop every time an enemy
+            // stopped/started (the binary Idle<->Move gate crosses often); 0.2s
+            // sits in the 0.15–0.25 locomotion crossfade band. Pairs with the
+            // damped Speed feed in Enemy.DriveAnimator (the flicker fix).
             var idleToMove = idle.AddTransition(move);
             idleToMove.AddCondition(AnimatorConditionMode.Greater, MoveThreshold, PSpeed);
             idleToMove.hasExitTime = false;
-            idleToMove.duration = 0.12f;
+            idleToMove.duration = 0.2f;
 
             var moveToIdle = move.AddTransition(idle);
             moveToIdle.AddCondition(AnimatorConditionMode.Less, MoveThreshold, PSpeed);
             moveToIdle.hasExitTime = false;
-            moveToIdle.duration = 0.12f;
+            moveToIdle.duration = 0.2f;
 
             // Attack — fired by the Attack trigger from Idle OR Move; plays once
             // (hasExitTime) then returns to Idle (locomotion re-resolves itself).
@@ -462,7 +466,7 @@ namespace DeNelle.Editor
             var t = from.AddTransition(to);
             t.AddCondition(AnimatorConditionMode.If, 0f, trigger);
             t.hasExitTime = false;
-            t.duration = 0.08f;
+            t.duration = 0.1f;   // ANTI-CHOP 2026-07-02: was 0.08 — still snappy, no pop
         }
 
         /// <summary>
@@ -475,7 +479,7 @@ namespace DeNelle.Editor
             var t = from.AddTransition(idle);
             t.hasExitTime = true;
             t.exitTime = exitTime;    // most of the clip plays before returning
-            t.duration = 0.12f;
+            t.duration = 0.2f;   // ANTI-CHOP 2026-07-02: was 0.12 — locomotion-band return
         }
 
         /// <summary>
@@ -487,7 +491,7 @@ namespace DeNelle.Editor
             var t = from.AddTransition(death);
             t.AddCondition(AnimatorConditionMode.If, 0f, PDead);
             t.hasExitTime = false;
-            t.duration = 0.1f;
+            t.duration = 0.15f;  // ANTI-CHOP 2026-07-02: was 0.1 — soften the collapse entry
         }
 
         // =====================================================================
