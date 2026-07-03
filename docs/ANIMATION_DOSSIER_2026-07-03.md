@@ -438,4 +438,4 @@ not animation-only. Downstream: HeroBodySwapper/visual pipeline targets the Pala
 retires from the hero slot (enemies unaffected). **RESOLVED 2026-07-03 (Opus): integration
 landed + committed — package shape = prefab-key (Resources/Heroes/KnightPackage.prefab behind
 ff.heropackage); gap-fill = shared Action set. Remaining = felt-tune only: forwardYaw/height,
-assassinate-clip confirm, EquipmentController duplicate-sword de-dup.**
+assassinate-clip confirm, EquipmentController duplicate-sword de-dup, and INJURED clip — owner keeping the state (2026-07-03) but will source a better animation than the current Action/Enemies placeholder retarget.**

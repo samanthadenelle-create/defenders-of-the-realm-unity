@@ -383,6 +383,9 @@ namespace DeNelle.Editor
             }
 
             // ── Injured locomotion (package gap — Action/Enemies injured set) ────
+            // KEPT per owner 2026-07-03 (reversed the brief "86 it"): the structure stays
+            // wired; the current Action/Enemies retargets are a PLACEHOLDER until the owner
+            // sources better dedicated Paladin injured clips — swap InjuredIdle/Walk/RunFbx.
             var injIdle = FbxClip(InjuredIdleFbx) ?? idle;
             var injWalk = FbxClip(InjuredWalkFbx) ?? walk;
             var injRun  = FbxClip(InjuredRunFbx)  ?? run;

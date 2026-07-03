@@ -201,8 +201,14 @@ namespace DeNelle.HUD.Kit
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.10f, 0.55f), new Vector2(0.98f, 0.98f), () =>
                 {
-                    if (!PanelRouter.Open(PanelId.GameGuide))
-                        FlowTrace.Warn("HudKit", "settings tapped but no GameGuide opener registered");
+                    // Owner 2026-07-03: the gear/Menu opens the HELP/SETTINGS card (Report Bug /
+                    // Controls / Reset / Dev Tools / Credits) — restoring the prior behavior the
+                    // kit conversion broke by routing the gear straight to the Game Guide. Game
+                    // Guide is reachable FROM Settings; keep it as the fallback if Help is absent.
+                    if (DeNelle.HUD.HelpMenu.Instance != null)
+                        DeNelle.HUD.HelpMenu.Instance.ToggleOverlay();
+                    else if (!PanelRouter.Open(PanelId.GameGuide))
+                        FlowTrace.Warn("HudKit", "settings tapped but neither HelpMenu nor GameGuide available");
                 });
             Register("settingsButton", WrapAsWidget("settingsButton", settings.gameObject));
 
