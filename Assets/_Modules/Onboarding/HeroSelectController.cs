@@ -4,8 +4,12 @@
 // THE SCREEN (WO-C conversion 2026-07-03, coverage matrix row #18; layout per the
 // owner's pinned Blink CHARACTER-CREATION design, canon memory hero-select-blink-
 // creation-carousel / WO-559):
-//   CHROME     : the Blink Obsidian master frame (FrameCharacter = Stats_Panel) via
+//   CHROME     : the Blink Obsidian master frame (FrameCore = Core_Panel) via
 //                ElarionUiKit.BuildObsidianPanel — code-built uGUI, NO UIDocument,
+//                (owner F8 2026-07-03: swapped OFF FrameCharacter/Stats_Panel — its
+//                 arch-constrained body zone [y 0.110-0.605] cramped the 3-column
+//                 creation layout and pushed the confirm CTA out of the frame; FrameCore
+//                 [body y 0.075-0.855] gives the full-height well the layout needs.)
 //                NO UXML, NO borrowed PanelSettings. The kit's shared Close is
 //                HIDDEN (this is a forced-flow screen; confirm is the only exit).
 //   LEFT       : the CLASS COLUMN — one Obsidian button per HeroCatalog entry
@@ -190,16 +194,13 @@ namespace DeNelle.Onboarding
             _chrome = ElarionUiKit.BuildObsidianPanel(_canvas.transform,
                 FallbackLocale(TitleKey, "Choose Your Hero"),
                 new Vector2(0.015f, 0.02f), new Vector2(0.985f, 0.98f), onClose: null,
-                frameName: RpgUiCatalog.FrameCharacter, medallionIcon: "crest");
+                frameName: RpgUiCatalog.FrameCore, medallionIcon: "crest");
             if (_chrome.close != null) _chrome.close.gameObject.SetActive(false);
 
             // Drop-zones (frame art present) or content fallback (procedural panel).
             Transform body = _chrome.layout != null && _chrome.layout.body != null
                 ? _chrome.layout.body.transform
                 : _chrome.content.transform;
-            Transform footer = _chrome.layout != null && _chrome.layout.footer != null
-                ? _chrome.layout.footer.transform
-                : null;
 
             // Subtitle eyebrow across the top of the body well.
             var subtitle = ElarionUiKit.Label(body, FallbackLocale(SubtitleKey, "Only one may answer the call."),
@@ -208,16 +209,22 @@ namespace DeNelle.Onboarding
             subtitle.raycastTarget = false;
 
             // ── The three stage containers (fraction-anchored inside the body well).
-            _classColumn = MakeZone(body, "ClassColumn", new Vector2(0.000f, 0.020f), new Vector2(0.215f, 0.920f));
-            _stageCenter = MakeZone(body, "HeroStage",   new Vector2(0.235f, 0.020f), new Vector2(0.590f, 0.920f));
-            _stageRight  = MakeZone(body, "SpecsPanel",  new Vector2(0.610f, 0.020f), new Vector2(1.000f, 0.920f));
+            // Owner F8 2026-07-03: lifted the stage floor from 0.020 -> 0.145 so the
+            // bottom of the (now full-height FrameCore) body well is reserved for the
+            // confirm CTA — "move everything up a little so the [CTA] stays in the frame."
+            _classColumn = MakeZone(body, "ClassColumn", new Vector2(0.000f, 0.145f), new Vector2(0.215f, 0.920f));
+            _stageCenter = MakeZone(body, "HeroStage",   new Vector2(0.235f, 0.145f), new Vector2(0.590f, 0.920f));
+            _stageRight  = MakeZone(body, "SpecsPanel",  new Vector2(0.610f, 0.145f), new Vector2(1.000f, 0.920f));
 
             BuildClassColumn();
 
-            // ── Footer confirm CTA — Obsidian GREEN, the one exit.
-            Transform ctaParent = footer != null ? footer : body;
-            Vector2 ctaMin = footer != null ? new Vector2(0.30f, 0.02f) : new Vector2(0.36f, 0.000f);
-            Vector2 ctaMax = footer != null ? new Vector2(0.70f, 0.98f) : new Vector2(0.64f, 0.075f);
+            // ── Confirm CTA — Obsidian GREEN, the one exit. Anchored in the RESERVED
+            // bottom band of the body well (not the thin filigree footer strip) so it is
+            // guaranteed to sit comfortably INSIDE the frame art on every aspect (the
+            // owner's out-of-frame F8 was the footer-anchored CTA falling below the art).
+            Transform ctaParent = body;
+            Vector2 ctaMin = new Vector2(0.34f, 0.020f);
+            Vector2 ctaMax = new Vector2(0.66f, 0.120f);
             _confirmButton = ElarionUiKit.BuildObsidianButton(ctaParent,
                 FallbackLocale(DiveKey, "Enter Elarion"),
                 ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
@@ -405,9 +412,10 @@ namespace DeNelle.Onboarding
                 soon.raycastTarget = false;
             }
 
-            // Name (gold, big) + role (amber) under the portrait.
+            // Name + role under the portrait. Owner F8 2026-07-03: the playable hero's
+            // name (Knight) uses WHITE so it pops against the frame; a locked hero stays dim.
             var nameLabel = ElarionUiKit.Label(_stageCenter, CanonStrings.Locale(info.NameKey),
-                0.115f, 0.205f, playable ? ElarionUi.Gold : ElarionUi.ParchmentDim,
+                0.115f, 0.205f, playable ? Color.white : ElarionUi.ParchmentDim,
                 ElarionUi.FontTitle, TextAlignmentOptions.Center, 0.02f, 0.98f, spacing: 1f, bold: true);
             nameLabel.raycastTarget = false;
 

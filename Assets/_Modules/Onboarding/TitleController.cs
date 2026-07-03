@@ -253,37 +253,49 @@ namespace DeNelle.Onboarding
             ElarionUiKit.EnsureFont(tagline, ElarionUiKit.FontRole.Body);
         }
 
-        /// <summary>The vertical Obsidian button stack, bottom-centre over the art.</summary>
+        /// <summary>The Obsidian button row (owner F8 2026-07-03): small, clean, rounded
+        /// buttons on ONE horizontal row, bottom-centre over the art. "Start New" label
+        /// is forced WHITE for high contrast ("pops").</summary>
         private void BuildButtonColumn(Transform parent)
         {
-            var column = new GameObject("TitleButtons", typeof(RectTransform));
-            column.transform.SetParent(parent, false);
-            var rt = (RectTransform)column.transform;
-            rt.anchorMin = new Vector2(0.28f, 0.055f);
-            rt.anchorMax = new Vector2(0.72f, 0.34f);
+            var row = new GameObject("TitleButtons", typeof(RectTransform));
+            row.transform.SetParent(parent, false);
+            var rt = (RectTransform)row.transform;
+            // A single low, wide band — small clean buttons side-by-side. Kept a healthy
+            // ~7% screen-height so the touch target stays tappable on mobile.
+            rt.anchorMin = new Vector2(0.10f, 0.070f);
+            rt.anchorMax = new Vector2(0.90f, 0.140f);
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
 
             // Continue is Green and only present when a save exists (owner spec) —
-            // resuming players see it first; fresh installs see Start New on top.
+            // resuming players see it first; fresh installs see Start New leftmost.
             bool hasSave = HasExistingSave();
             var entries = new System.Collections.Generic.List<(string label,
-                ElarionUiKit.ObsidianButtonColor color, System.Action onClick)>();
+                ElarionUiKit.ObsidianButtonColor color, System.Action onClick, bool whiteLabel)>();
             if (hasSave)
-                entries.Add(("Continue", ElarionUiKit.ObsidianButtonColor.Green, OnContinue));
-            entries.Add(("Start New", ElarionUiKit.ObsidianButtonColor.Yellow, OnStartNew));
-            entries.Add(("Play Intro", ElarionUiKit.ObsidianButtonColor.Gray, OnPlayIntro));
+                entries.Add(("Continue", ElarionUiKit.ObsidianButtonColor.Green, OnContinue, false));
+            entries.Add(("Start New", ElarionUiKit.ObsidianButtonColor.Yellow, OnStartNew, true));
+            entries.Add(("Play Intro", ElarionUiKit.ObsidianButtonColor.Gray, OnPlayIntro, false));
 
-            // Even vertical distribution inside the column, top to bottom.
-            const float slotGap = 0.06f;
-            float slotH = (1f - slotGap * (entries.Count - 1)) / entries.Count;
+            // Even HORIZONTAL distribution across the row, left to right.
+            const float slotGap = 0.03f;
+            float slotW = (1f - slotGap * (entries.Count - 1)) / entries.Count;
             for (int i = 0; i < entries.Count; i++)
             {
-                float y1 = 1f - i * (slotH + slotGap);
-                float y0 = y1 - slotH;
+                float x0 = i * (slotW + slotGap);
+                float x1 = x0 + slotW;
                 var e = entries[i];
-                ElarionUiKit.BuildObsidianButton(column.transform, e.label,
+                var btn = ElarionUiKit.BuildObsidianButton(row.transform, e.label,
                     ElarionUiKit.ObsidianButtonStyle.Style1, e.color,
-                    new Vector2(0f, y0), new Vector2(1f, y1), e.onClick);
+                    new Vector2(x0, 0f), new Vector2(x1, 1f), e.onClick);
+
+                // Owner F8: "make the start new text white as well" — force the label
+                // TMP colour to white for high contrast where requested.
+                if (e.whiteLabel && btn != null)
+                {
+                    var lbl = btn.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);
+                    if (lbl != null) lbl.color = Color.white;
+                }
             }
         }
 
