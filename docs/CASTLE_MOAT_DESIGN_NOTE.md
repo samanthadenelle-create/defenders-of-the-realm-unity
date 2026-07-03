@@ -1,3 +1,7 @@
+> **SUPERSEDED (owner ruling 2026-07-03):** the moat band width is ~14m (the live
+> CastleMoatBuilder r=44..58 band) — it must cover the SEAM from castle plinth to
+> OuterWorld terrain. Any '~3 units wide' figure below is STALE.
+
 # Castle Moat + Four Drawbridges — Design Note (WO-509 frame)
 
 Status: DESIGN NOTE + first-pass visual BONES shipped (`CastleMoatBuilder`, flag `ff.castlemoat`).
