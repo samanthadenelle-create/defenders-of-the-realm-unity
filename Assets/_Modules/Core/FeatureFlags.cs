@@ -343,9 +343,10 @@ namespace DeNelle.Core
         /// standard dialogue template, completion signals via <c>TutorialSignals</c>, tutorial_* telemetry
         /// through EventTracker. The legacy <c>TutorialDirector</c> FTUE stands down while this is ON
         /// (it is deleted only in WO-T5, after the flip is fleet-verified + owner felt-verified).
-        /// Default OFF ("unflag when proven") — the orchestrator flips it after fleet verification.
-        /// PlayerPrefs "ff.tutorialv2".</summary>
-        public static bool TutorialV2 => Get("tutorialv2", defaultOn: false);
+        /// Default ON since 2026-07-03: the WO-T3/T4 self-driving fixes landed (prepaid-tower grant,
+        /// scripted town wave, staged world rep, contextual triggers) — V2 is now the runnable FTUE.
+        /// PlayerPrefs "ff.tutorialv2" = 0 to force the legacy director.</summary>
+        public static bool TutorialV2 => Get("tutorialv2", defaultOn: true);
 
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)

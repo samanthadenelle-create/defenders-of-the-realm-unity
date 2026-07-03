@@ -10,6 +10,13 @@
 // it is the ONLY V2-path caller of GameStateService.FinishOnboarding() and it
 // kicks WaveManager.BeginLoop (the same handoff the legacy director does).
 //
+// WO-T3/T4 self-driving steps (2026-07-03): grant.prepaidTower credits one
+// watchtower's crystals through GameStateService (idempotent per save); a step
+// completing on wave.cleared spawns the scripted teaching wave via
+// TutorialWaveSpawner (and polls its IsCleared, since it bypasses the wave
+// loop); a step completing on arena.resolved:win stages ONE guaranteed rep via
+// the OverworldEncounterSpawner factory chain once the hero crosses out.
+//
 // Contextual one-shot steps (flowId "contextual") ride the SAME registry: armed
 // on their trigger signal, they play a short line + spotlight, never pause
 // pressure, never gate, auto-complete, and persist "tutorial_ctx:<id>" so they
@@ -55,6 +62,24 @@ namespace DeNelle.Village
         /// GameState.SeenTutorials is an existing SerializableDict, SaveSchema.cs:254).</summary>
         private const string SeenPrefix = "tutorial_v2:";
         private const string CtxSeenPrefix = "tutorial_ctx:";
+        private const string GrantSeenPrefix = "tutorial_v2_grant:";
+
+        // ── WO-T3: prepaid-tower grant ("this first one is on me") ─────────────
+        // One watchtower's crystal cost, credited through the SAME store BuildMenu
+        // charges (GameStateService.AddCrystals -> GameState.Resources.Crystals,
+        // BuildMenu.OnConfirmBuild). 150 = the Flame/Ice Tower cost — Flame is the
+        // menu's default-selected variant AND (with Ice) the only variant the stub
+        // material counts can afford (BuildMenu.GetMaterialCount: wood 20 / stone 5
+        // — Stone Tower needs stone 10, Aether needs 8, so both are un-buildable
+        // today). Owner-tunable; move to catalog data with the WO-31 "Week 6" table.
+        private const int PrepaidTowerCrystals = 150;
+
+        // ── Scripted town wave (spec step 4: "HORN BLAST", no Start-Wave press) ─
+        private const int TownWaveCount = 3;
+
+        // ── Staged world encounter (spec step 5: a guaranteed rep, not a hunt) ──
+        private const float StagedRepMinDistance = 10f;   // ahead of the hero — outside AggroRange(8)
+        private const float StagedRepMaxDistance = 16f;
 
         /// <summary>True while a pausePressure step runs — a hold OTHER systems may
         /// consult so mid-tutorial steps that FOLLOW the town wave don't re-open the
@@ -78,6 +103,16 @@ namespace DeNelle.Village
 
         private HeroLocomotion _hero;
         private WaveManager _wave;
+
+        // Scripted town-wave runtime state (step 'town_wave', WO-T4).
+        private TutorialWaveSpawner _tutorialWave;
+        private bool _townWaveArmed;          // scripted wave requested for the current step
+        private bool _townWaveSpawnSettled;   // SpawnAt finished — IsCleared is meaningful now
+
+        // Staged world-encounter runtime state (step 'world_encounter', WO-T4).
+        private bool _stagedRepPending;       // waiting for the hero to cross into OuterWorld
+        private bool _stagedRepDone;          // one rep staged (or staging abandoned) this step
+        private float _nextStageProbeAt;      // 1 Hz staging probe
 
         // Contextual runtime state.
         private TutorialStepDef _activeCtx;
@@ -154,6 +189,8 @@ namespace DeNelle.Village
 
                 case Phase.AwaitCompletion:
                     TickProximityProbe();
+                    TickScriptedWave();
+                    TickStagedEncounter();
                     TickWatchdog();
                     break;
             }
@@ -216,11 +253,10 @@ namespace DeNelle.Village
             // the explicit per-step lock for anything else that pushes pressure.
             PressureHeld = step.PausePressure;
 
-            // Grants: the guided-build prepaid tower is the WO-T3 slice (it drives the
-            // redone build flow). Note it visibly so a T1 run self-reports the gap.
+            // Grant (WO-T3): the guided-build prepaid tower — credit one watchtower's
+            // cost through the SAME economy seam BuildMenu charges. Idempotent per save.
             if (step.Grant != null && step.Grant.PrepaidTower)
-                FlowTrace.Once("Tutorial", "grant-prepaid-" + step.Id,
-                    $"step '{step.Id}' declares grant.prepaidTower — applied by the guided-build slice (WO-T3).");
+                ApplyPrepaidTowerGrant(step);
 
             // CLEAR the completion latch BEFORE the intro plays: a stale earlier raise
             // must not complete the step, but a raise DURING the intro must (e.g. a
@@ -228,6 +264,23 @@ namespace DeNelle.Village
             if (!string.IsNullOrEmpty(_awaitSignal)) TutorialSignals.Clear(_awaitSignal);
             _completionArmed = true;
             _phase = Phase.AwaitCompletion;
+
+            // WO-T4 self-driving combat steps — keyed on the COMPLETION SIGNAL (data-
+            // driven: no step-id branching), so the json stays the only content source.
+            //  * wave.cleared      -> spawn the scripted teaching wave (spec step 4:
+            //    "HORN BLAST" — the step must complete WITHOUT the player pressing
+            //    Start Wave; the loop is held closed by the !Onboarded gate anyway).
+            //  * arena.resolved:win -> stage ONE guaranteed rep once the hero crosses
+            //    into OuterWorld (spec step 5 — no hunting for a random encounter).
+            if (string.Equals(_awaitSignal, TutorialSignals.WaveCleared, StringComparison.OrdinalIgnoreCase))
+                StartScriptedTownWave(step);
+            if (string.Equals(_awaitSignal, TutorialSignals.ArenaWin, StringComparison.OrdinalIgnoreCase))
+            {
+                _stagedRepPending = true;
+                _stagedRepDone = false;
+                _nextStageProbeAt = 0f;
+                FlowTrace.Step("Tutorial", $"step '{step.Id}' will stage one guaranteed rep once the hero enters an OuterWorld roster region.");
+            }
 
             // Presentation (Core kit affordances — read the step model only).
             if (step.Objective != null && !string.IsNullOrEmpty(step.Objective.Text))
@@ -291,6 +344,10 @@ namespace DeNelle.Village
         private void CompleteCurrentStep(bool skipped)
         {
             _completionArmed = false;
+            // Disarm the step-scoped combat drivers so a late scripted-wave clear or a
+            // still-pending rep stage can never fire into a LATER step.
+            _townWaveArmed = false;
+            _stagedRepPending = false;
             var step = _step;
 
             if (!skipped)
@@ -341,6 +398,203 @@ namespace DeNelle.Village
             GameStateService.Instance?.FinishOnboarding();
             if (_wave == null) _wave = FindAnyObjectByType<WaveManager>();
             _wave?.BeginLoop().Forget();
+        }
+
+        // =====================================================================
+        //  WO-T3 — grant.prepaidTower ("this first one is on me")
+        // =====================================================================
+
+        /// <summary>
+        /// Credits one watchtower's crystal cost through the SAME store BuildMenu
+        /// charges (GameStateService.AddCrystals -> GameState.Resources.Crystals,
+        /// BuildMenu.OnConfirmBuild BuildMenu.cs:403). Idempotent PER SAVE: the
+        /// grant persists a SeenTutorials flag (the same mechanism step completion
+        /// uses) BEFORE crediting, so a re-entered/replayed step never re-grants.
+        /// </summary>
+        private void ApplyPrepaidTowerGrant(TutorialStepDef step)
+        {
+            var svc = GameStateService.Instance;
+            var state = svc != null ? svc.State : null;
+            if (svc == null || state == null)
+            {
+                FlowTrace.Warn("Tutorial", $"step '{step.Id}' grant.prepaidTower — GameStateService unavailable, grant skipped (player pays from the starter wallet).");
+                return;
+            }
+
+            string key = GrantSeenPrefix + step.Id;
+            if (state.SeenTutorials != null &&
+                state.SeenTutorials.TryGetValue(key, out bool granted) && granted)
+            {
+                FlowTrace.Step("Tutorial", $"step '{step.Id}' grant.prepaidTower already granted on this save — not re-granted.");
+                return;
+            }
+
+            svc.MarkTutorialSeen(key);               // persist FIRST — a re-entry can never double-pay
+            svc.AddCrystals(PrepaidTowerCrystals);   // clamps, persists, raises ResourcesChanged (HUD + BuildMenu re-render)
+            FlowTrace.Step("Tutorial", $"step '{step.Id}' grant.prepaidTower APPLIED: +{PrepaidTowerCrystals} crystals " +
+                $"(one watchtower — BuildMenu default variant cost) via GameStateService.AddCrystals; balance now {state.Resources.Crystals}.");
+        }
+
+        // =====================================================================
+        //  WO-T4 — scripted town wave (spec step 4: horn blast, no Start-Wave press)
+        // =====================================================================
+
+        private void StartScriptedTownWave(TutorialStepDef step)
+        {
+            _townWaveArmed = false;
+            _townWaveSpawnSettled = false;
+
+            if (_wave == null) _wave = FindAnyObjectByType<WaveManager>();
+            var gate = NearestGateToHero();
+            if (_tutorialWave == null)
+            {
+                _tutorialWave = FindAnyObjectByType<TutorialWaveSpawner>();
+                if (_tutorialWave == null) _tutorialWave = gameObject.AddComponent<TutorialWaveSpawner>();
+            }
+            _tutorialWave.SetWaveManager(_wave);
+
+            _townWaveArmed = true;
+            FlowTrace.Step("Tutorial", $"step '{step.Id}' scripted town wave: SpawnAt({(gate != null ? gate.SpawnId : "NULL-gate")}, {TownWaveCount}) " +
+                "via TutorialWaveSpawner (wave loop stays closed — the !Onboarded gate holds).");
+            RunScriptedTownWave(gate).Forget();
+        }
+
+        private async UniTaskVoid RunScriptedTownWave(WaveSpawnPoint gate)
+        {
+            // SpawnAt awaits the enemy catalog before any enemy exists; IsCleared would
+            // read true (spawn-requested, none live) during that await — so the clear
+            // poll (TickScriptedWave) only arms once the spawn has actually settled.
+            await _tutorialWave.SpawnAt(gate, TownWaveCount);
+            _townWaveSpawnSettled = true;
+        }
+
+        /// <summary>
+        /// The scripted wave bypasses WaveManager's wave loop (TutorialWaveSpawner owns
+        /// the spawned enemies' lifecycle; WaveManager.OnWaveCleared never fires for it),
+        /// so the flow polls the spawner's own all-dead check and raises the bus signal
+        /// itself. A skipped spawn (no WaveManager / no gate / empty catalog) reads
+        /// IsCleared=true by the spawner's proceed-don't-wedge contract — the step then
+        /// completes rather than stranding (the spawner already logged the warning).
+        /// </summary>
+        private void TickScriptedWave()
+        {
+            if (!_townWaveArmed || !_townWaveSpawnSettled) return;
+            if (_tutorialWave == null || !_tutorialWave.IsCleared) return;
+            _townWaveArmed = false;
+            FlowTrace.Step("Tutorial", "scripted town wave CLEARED (all tutorial enemies dead) — raising 'wave.cleared'.");
+            TutorialSignals.Raise(TutorialSignals.WaveCleared);
+        }
+
+        /// <summary>Nearest wave gate to the hero — the same nearest-gate rule the legacy
+        /// director and TutorialWorldAnchors.ResolveNearestGate use ("the gate the tower covers").</summary>
+        private WaveSpawnPoint NearestGateToHero()
+        {
+            if (_hero == null) _hero = FindAnyObjectByType<HeroLocomotion>();
+            Vector3 from = _hero != null ? _hero.transform.position : Vector3.zero;
+
+            WaveSpawnPoint best = null;
+            float bestSqr = float.MaxValue;
+            foreach (var p in FindObjectsByType<WaveSpawnPoint>(FindObjectsSortMode.None))
+            {
+                if (p == null) continue;
+                float sqr = (p.transform.position - from).sqrMagnitude;
+                if (sqr < bestSqr) { bestSqr = sqr; best = p; }
+            }
+            return best;
+        }
+
+        // =====================================================================
+        //  WO-T4 — staged world encounter (spec step 5: one guaranteed rep)
+        // =====================================================================
+
+        /// <summary>
+        /// Once the hero has crossed into an OuterWorld roster region, stages ONE rep at
+        /// a guaranteed near anchor (10-16m ahead, navmesh-snapped, path-complete) through
+        /// the SAME factory chain OverworldEncounterSpawner.SpawnRep drives — EnemyFactory
+        /// .Build -> Enemy.Configure -> RepEngageWatcher.Init (def values mirror SpawnRep,
+        /// OverworldEncounterSpawner.cs:313-343; migrate both onto the spec's fixed-anchor
+        /// SpawnRep overload when that lands, spec §2.6). Retries at 1 Hz until an anchor
+        /// resolves; never wedges — the STEP-STUCK watchdog still covers abandonment.
+        /// </summary>
+        private void TickStagedEncounter()
+        {
+            if (!_stagedRepPending || _stagedRepDone) return;
+            if (Time.unscaledTime < _nextStageProbeAt) return;
+            _nextStageProbeAt = Time.unscaledTime + 1f;
+
+            if (!FeatureFlags.OverworldEncounter)
+            {
+                // RepEngageWatcher is inert while the flag is off — a staged rep could
+                // never engage. Stand down loudly; arena.resolved:win must then come
+                // from the player finding a fight by other means (or the watchdog reports).
+                _stagedRepDone = true;
+                FlowTrace.Warn("Tutorial", "staged encounter SKIPPED: ff.overworldencounter is OFF — no rep can engage; step relies on the watchdog.");
+                return;
+            }
+            if (!OverworldEncounterSpawner.OuterWorldLoaded()) return;   // world not streamed in yet
+            if (_hero == null) { _hero = FindAnyObjectByType<HeroLocomotion>(); if (_hero == null) return; }
+
+            Vector3 heroPos = _hero.transform.position;
+            bool inOuter = false;
+            Guard.Try("Tutorial", "staged-rep zone check", () => inOuter =
+                DeNelle.Core.World.RegionSpawnTable.HasRoster(DeNelle.Core.World.ZoneManager.GetZone(heroPos)));
+            if (!inOuter) return;   // hero still castle-side — wait for the crossing
+
+            // Anchor: ahead of the hero, just outside the rep's 8m aggro ring, on the
+            // navmesh, in an OuterWorld roster zone, with a COMPLETE path from the hero
+            // (the same candidate gates SpawnRep applies — guaranteed reachable).
+            Vector3 anchor = Vector3.zero;
+            bool anchorFound = false;
+            var path = new UnityEngine.AI.NavMeshPath();
+            Vector3 fwd = _hero.transform.forward; fwd.y = 0f;
+            if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
+            fwd.Normalize();
+            for (int attempt = 0; attempt < 8 && !anchorFound; attempt++)
+            {
+                float yaw = UnityEngine.Random.Range(-40f, 40f);
+                float dist = UnityEngine.Random.Range(StagedRepMinDistance, StagedRepMaxDistance);
+                Vector3 cand = heroPos + Quaternion.Euler(0f, yaw, 0f) * fwd * dist;
+                if (!UnityEngine.AI.NavMesh.SamplePosition(cand, out var hit, 8f, UnityEngine.AI.NavMesh.AllAreas)) continue;
+                bool candInOuter = false;
+                Guard.Try("Tutorial", "staged-rep anchor zone gate", () => candInOuter =
+                    DeNelle.Core.World.RegionSpawnTable.HasRoster(DeNelle.Core.World.ZoneManager.GetZone(hit.position)));
+                if (!candInOuter) continue;
+                if (UnityEngine.AI.NavMesh.CalculatePath(heroPos, hit.position, UnityEngine.AI.NavMesh.AllAreas, path)
+                    && path.status == UnityEngine.AI.NavMeshPathStatus.PathComplete)
+                { anchor = hit.position; anchorFound = true; }
+            }
+            if (!anchorFound) return;   // retry next tick — the hero keeps walking, candidates change
+
+            // Def mirrors OverworldEncounterSpawner.SpawnRep's rep exactly (owner-tuned
+            // 2026-07-01 values): field-killable hook, zero contact damage, +5% chase.
+            var def = new EnemyDef
+            {
+                Id = "orc-warrior", Name = "Orc Warleader", DisplayName = "Orc Warband", Ai = "walker",
+                Hp = 98f, MoveSpeed = 6.3f, ContactDamage = 0f,
+                AttackInterval = 1.5f, Height = 2.0f, AggroRadius = 8f,
+                XpReward = 42, GlimmerReward = 9,
+            };
+
+            Enemy enemy = null;
+            Guard.Try("Tutorial", "stage tutorial rep", () =>
+            {
+                enemy = EnemyFactory.Build(def, anchor, Quaternion.identity, transform);
+                if (enemy == null) return;
+                enemy.gameObject.name = "OrcRep_Tutorial";
+                enemy.Configure("orc-rep-tutorial", def, null);    // no Heart — tethered hook, not a marcher
+                enemy.SetBrainTargetPosition(anchor);              // idle at its anchor until it sees you
+                int threat = 1;
+                Guard.Try("Tutorial", "staged-rep zone threat", () =>
+                    threat = Mathf.Max(1, DeNelle.Core.World.ZoneManager.ThreatLevel(anchor)));
+                enemy.gameObject.AddComponent<RepEngageWatcher>()
+                     .Init(new[] { "orc-warrior", "orc-tank", "orc-mage" }, threat);   // the SpawnRep OrcFamily
+            });
+
+            _stagedRepDone = true;
+            if (enemy != null)
+                FlowTrace.Step("Tutorial", $"staged tutorial rep 'OrcRep_Tutorial' at {anchor} ({Vector3.Distance(heroPos, anchor):0.0}m from hero) — engage pops the BattleArena; win raises 'arena.resolved:win'.");
+            else
+                FlowTrace.Fail("Tutorial", "staged tutorial rep FAILED to build (EnemyFactory returned null) — step relies on natural reps / the watchdog.");
         }
 
         // =====================================================================

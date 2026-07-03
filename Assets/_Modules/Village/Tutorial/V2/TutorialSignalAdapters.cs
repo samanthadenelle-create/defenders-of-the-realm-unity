@@ -14,14 +14,24 @@
 //   arena.resolved:win/loss ← BattleArena.OnBattleEnded (BattleArena.cs:191, raised :1564)
 //   economy.can_afford_upgrade ← GameStateService.ResourcesChanged, first time (post-
 //                          Onboarded) the wallet covers the cheapest tower
+//   echo.born:2          ← EchoService.EchoUnlocked (EchoService.cs:78, raised on the
+//                          wave-5 unlock :305 and GrantEcho :335) when the new count >= 2
+//   skillpoint.earned:first ← HeroProgression.OnAnyLevelUp (static, HeroProgression.cs:69,
+//                          raised :195) — EVERY hero level banks a skill point
+//                          (ApplyLevelRewards -> SkillSystem.GrantSkillPoint, :181), so the
+//                          first level-up IS the first skill point earned. Raised every
+//                          level; the flow's tutorial_ctx one-shot persistence dedupes.
 //
 // dialogue.ended:<id> / panel.opened:<id> are wired CORE-side
 // (TutorialCoreSignalAdapter); hero.reached:<anchor> is the TutorialFlow probe.
 //
-// KNOWN-UNWIRED contextual triggers (no source event exists in the tree yet —
-// noted per spec "where one is missing, note it"; they FlowTrace.Once so a run
-// self-reports the gap): echo.born:2, inventory.gear_added:first,
-// skillpoint.earned:first.
+// KNOWN-UNWIRED contextual trigger (no source event exists in the tree yet —
+// noted per spec "where one is missing, note it"; it FlowTrace.Onces so a run
+// self-reports the gap): inventory.gear_added:first — there is NO discrete
+// "gear entered the inventory" event: GearLoadout.OnGearChanged fires on every
+// equip/refresh incl. the initial loadout (wrong semantics), and
+// VillageInventory.Changed is a mixed materials+gear larder with no item-type
+// payload. Wire it when a real gear-acquired event lands.
 //
 // Sources that spawn late (TowerPlacementSystem self-bootstraps; BattleArena
 // stages on first encounter) are subscribed by a 1 Hz discovery tick — no
@@ -51,27 +61,33 @@ namespace DeNelle.Village
         private BuildMenu _buildMenu;
         private WaveManager _wave;
         private Arena.BattleArena _arena;
+        private EchoService _echo;
         private bool _economyHooked;
         private bool _affordRaised;   // session guard; per-save one-shot lives in TutorialFlow
 
         private void OnEnable()
         {
             BuildModeController.BuildModeChanged += OnBuildModeChanged;
+            // skillpoint.earned:first — the static level-up relay survives HeroProgression
+            // instance swaps (DEF-261); every level banks a point, so level 1 = first point.
+            HeroProgression.OnAnyLevelUp += OnAnyLevelUp;
 
-            // Self-report the contextual triggers that have no source yet (spec note).
+            // Self-report the contextual trigger that still has no source (spec note).
             FlowTrace.Once("Tutorial", "unwired-ctx-signals",
-                "contextual triggers with NO source event in the tree yet: 'echo.born:2', " +
-                "'inventory.gear_added:first', 'skillpoint.earned:first' — their hints stay dormant " +
-                "until those systems emit an event to adapt.");
+                "contextual trigger with NO source event in the tree yet: 'inventory.gear_added:first' " +
+                "(no discrete gear-acquired event; OnGearChanged fires on init/equip-swap, " +
+                "VillageInventory.Changed carries no item type) — its hint stays dormant.");
         }
 
         private void OnDisable()
         {
             BuildModeController.BuildModeChanged -= OnBuildModeChanged;
+            HeroProgression.OnAnyLevelUp -= OnAnyLevelUp;
             if (_tps != null) _tps.OnTowerPlaced -= OnTowerPlaced;
             if (_buildMenu != null) _buildMenu.BuildingPlaced -= OnBuildingPlaced;
             if (_wave != null) _wave.OnWaveCleared.RemoveListener(OnWaveCleared);
             if (_arena != null) _arena.OnBattleEnded -= OnBattleEnded;
+            if (_echo != null) _echo.EchoUnlocked -= OnEchoUnlocked;
             var svc = GameStateService.Instance;
             if (_economyHooked && svc != null) svc.ResourcesChanged.RemoveListener(OnResourcesChanged);
         }
@@ -120,6 +136,12 @@ namespace DeNelle.Village
                     _arena.OnBattleEnded += OnBattleEnded;
                 }
             }
+            if (_echo == null && EchoService.Instance != null)
+            {
+                _echo = EchoService.Instance;
+                _echo.EchoUnlocked -= OnEchoUnlocked;
+                _echo.EchoUnlocked += OnEchoUnlocked;
+            }
             if (!_economyHooked)
             {
                 var svc = GameStateService.Instance;
@@ -149,6 +171,20 @@ namespace DeNelle.Village
 
         private void OnBattleEnded(Arena.EncounterParams _, bool won) =>
             TutorialSignals.Raise(won ? TutorialSignals.ArenaWin : TutorialSignals.ArenaLoss);
+
+        // echo.born:2 — EchoService raises EchoUnlocked with the NEW count (wave-5 unlock
+        // or GrantEcho); the ctx_echo_assign hint wants the second birth. Re-raises are
+        // harmless: the flow's tutorial_ctx one-shot persistence fires the hint once per save.
+        private void OnEchoUnlocked(int newCount)
+        {
+            if (newCount >= 2) TutorialSignals.Raise(TutorialSignals.EchoBornSecond);
+        }
+
+        // skillpoint.earned:first — every hero level banks a skill point
+        // (HeroProgression.ApplyLevelRewards -> SkillSystem.GrantSkillPoint), so the first
+        // level-up IS the first point. Raised each level; the flow one-shot dedupes.
+        private void OnAnyLevelUp(int _) =>
+            TutorialSignals.Raise(TutorialSignals.FirstSkillPoint);
 
         private void OnResourcesChanged()
         {
