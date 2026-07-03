@@ -134,7 +134,7 @@ namespace DeNelle.Village
         private void PushWaveProgress()
         {
             if (_setWaveProgress == null) return;
-            if (_wave == null) _wave = FindFirstObjectByType<WaveManager>();
+            if (_wave == null) _wave = FindAnyObjectByType<WaveManager>();
             int current = _wave != null ? _wave.CurrentWaveId : 0;
             // WaveManager exposes no public total-wave count → pass 0 (HUD shows "Wave N").
             _waveArgs[0] = current;
@@ -146,7 +146,7 @@ namespace DeNelle.Village
         {
             if (_setTownMetrics == null) return;
 
-            if (_heart == null) _heart = FindFirstObjectByType<HeartController>();
+            if (_heart == null) _heart = FindAnyObjectByType<HeartController>();
             float heartPct01 = _heart != null ? Mathf.Clamp01(_heart.Hp / 100f) : 1f;
 
             // WO-403 — live tower count + party population read from the O(1) registries
@@ -189,7 +189,7 @@ namespace DeNelle.Village
             if (_setLookoutStatus == null) return;
             // Placeholder: no dedicated lookout system → 1 (alert) while a wave is
             // live, 0 (calm) otherwise.
-            if (_wave == null) _wave = FindFirstObjectByType<WaveManager>();
+            if (_wave == null) _wave = FindAnyObjectByType<WaveManager>();
             int status = 0;
             if (_wave != null)
             {

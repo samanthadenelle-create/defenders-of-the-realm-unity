@@ -160,7 +160,7 @@ namespace DeNelle.HUD
             t.color = col;
             t.fontStyle = style;
             t.alignment = align;
-            t.enableWordWrapping = true;
+            t.textWrappingMode = TMPro.TextWrappingModes.Normal;
             t.raycastTarget = false; // let the card's Button receive the click
         }
     }

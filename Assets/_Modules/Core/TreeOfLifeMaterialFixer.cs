@@ -324,7 +324,7 @@ namespace DeNelle.Core
         // Walks to the generic tree's own root and destroys the whole prop. Idempotent.
         private static void RemoveGenericTreesAtOrigin()
         {
-            var all = Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+            var all = Object.FindObjectsByType<Renderer>();
             // Collect distinct generic roots first so destroying one doesn't invalidate the loop.
             var doomed = new System.Collections.Generic.HashSet<GameObject>();
             foreach (var r in all)
@@ -376,7 +376,7 @@ namespace DeNelle.Core
         // anywhere). Distinct from FindCentrepieceTree, which would also accept a generic.
         private static GameObject FindCanonicalCentrepieceTree()
         {
-            var all = Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+            var all = Object.FindObjectsByType<Renderer>();
             GameObject best = null;
             float bestDist = float.MaxValue;
             // Pass 1: canonical tree inside the centre plaza.
@@ -563,7 +563,7 @@ namespace DeNelle.Core
         // A non-grey, textured material another tree in the scene already uses.
         private static Material FindSiblingTreeMaterial(GameObject exclude)
         {
-            var all = Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+            var all = Object.FindObjectsByType<Renderer>();
             foreach (var r in all)
             {
                 if (r == null) continue;

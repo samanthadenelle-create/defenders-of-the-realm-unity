@@ -252,7 +252,7 @@ namespace DeNelle.Village
         private static void AttachToAll()
         {
             if (SceneManager.GetActiveScene().name != TargetScene) return;
-            var buildings = Object.FindObjectsByType<Building>(FindObjectsSortMode.None);
+            var buildings = Object.FindObjectsByType<Building>();
             foreach (var b in buildings)
             {
                 if (b != null && b.GetComponent<StructureAttackAlert>() == null)

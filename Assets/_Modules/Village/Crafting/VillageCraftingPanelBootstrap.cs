@@ -49,7 +49,7 @@ namespace DeNelle.Village.Crafting
 
             // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<VillageCraftingPanel>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         FindObjectsInactive.Include))
             {
                 if (existing != null)
                 {
@@ -75,7 +75,7 @@ namespace DeNelle.Village.Crafting
 
         private static Transform FindHero()
         {
-            var hero = UnityEngine.Object.FindObjectOfType<HeroLocomotion>();
+            var hero = UnityEngine.Object.FindAnyObjectByType<HeroLocomotion>();
             return hero != null ? hero.transform : null;
         }
 
@@ -84,7 +84,7 @@ namespace DeNelle.Village.Crafting
             // Reuse an existing UIDocument's PanelSettings so we don't try to
             // load by Resources path. Same trick as DailyQuestHudBootstrap.
             var docs = UnityEngine.Object.FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsInactive.Include);
             foreach (var d in docs)
                 if (d != null && d.panelSettings != null) return d.panelSettings;
             return null;

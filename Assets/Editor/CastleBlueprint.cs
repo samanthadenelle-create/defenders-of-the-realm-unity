@@ -95,7 +95,7 @@ namespace DeNelle.Editor
             var transType = FindType("DeNelle.Village.SceneTransitionTrigger");
             if (transType != null)
             {
-                var comps = UnityEngine.Object.FindObjectsByType(transType, FindObjectsInactive.Include, FindObjectsSortMode.None);
+                var comps = UnityEngine.Object.FindObjectsByType(transType, FindObjectsInactive.Include);
                 foreach (var c in comps)
                 {
                     var mb = c as MonoBehaviour; if (mb == null) continue;
@@ -218,7 +218,7 @@ namespace DeNelle.Editor
             var surfType = FindType("Unity.AI.Navigation.NavMeshSurface");
             if (surfType == null) return 0;
             var dataProp = surfType.GetProperty("navMeshData");
-            var surfaces = UnityEngine.Object.FindObjectsByType(surfType, FindObjectsSortMode.None);
+            var surfaces = UnityEngine.Object.FindObjectsByType(surfType);
             int n = 0;
             foreach (var s in surfaces)
             {

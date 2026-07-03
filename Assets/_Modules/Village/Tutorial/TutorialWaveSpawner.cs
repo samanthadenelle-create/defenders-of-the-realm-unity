@@ -86,7 +86,7 @@ namespace DeNelle.Village
             // enemies still march the Heart (not a forward-fallback heading).
             HeartController heartCtrl = _wave.Heart != null
                 ? _wave.Heart
-                : FindObjectOfType<HeartController>();
+                : FindAnyObjectByType<HeartController>();
             Transform heart = heartCtrl != null ? heartCtrl.transform : null;
             Vector3 basePos = spawnPoint.transform.position;
             Vector3 heading = spawnPoint.HeadingToGate;

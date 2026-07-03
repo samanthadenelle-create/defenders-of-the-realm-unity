@@ -61,7 +61,7 @@ namespace DeNelle.HUD
             if (_doc.panelSettings == null)
             {
                 foreach (var existing in UnityEngine.Object.FindObjectsByType<UIDocument>(
-                             FindObjectsInactive.Include, FindObjectsSortMode.None))
+                             FindObjectsInactive.Include))
                 {
                     if (existing == _doc || existing.panelSettings == null) continue;
                     _doc.panelSettings = existing.panelSettings;

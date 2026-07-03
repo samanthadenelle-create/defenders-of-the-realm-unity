@@ -1514,7 +1514,7 @@ namespace DeNelle.Village
             // must not stomp the previewed pose (WO-577).
             if (_seatingEditActive) return;
             if (_combatExplicit || _gripRoot == null) return;
-            if (_waveManager == null) _waveManager = Object.FindObjectOfType<WaveManager>();
+            if (_waveManager == null) _waveManager = Object.FindAnyObjectByType<WaveManager>();
             bool active = _waveManager != null &&
                           (_waveManager.Phase == WavePhase.Countdown ||
                            _waveManager.Phase == WavePhase.Active);

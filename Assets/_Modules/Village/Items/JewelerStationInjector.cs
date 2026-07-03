@@ -142,7 +142,7 @@ namespace DeNelle.Village
         private static bool AlreadyPresent()
         {
             if (GameObject.Find(HolderName) != null) return true;
-            foreach (var b in FindObjectsByType<Building>(FindObjectsSortMode.None))
+            foreach (var b in FindObjectsByType<Building>())
             {
                 if (b == null) continue;
                 if (b.Type == BuildingType.JewelersBench) return true;

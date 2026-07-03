@@ -32,7 +32,7 @@ namespace DeNelle.HUD
         {
             // GLOBAL dedupe (across ALL loaded scenes) — a second copy would just
             // double the dump lines, never change behaviour. One is enough.
-            if (Object.FindFirstObjectByType<PointerInterceptDiagnostic>(FindObjectsInactive.Include) != null)
+            if (Object.FindAnyObjectByType<PointerInterceptDiagnostic>(FindObjectsInactive.Include) != null)
                 return;
 
             var go = new GameObject("PointerInterceptDiagnostic");

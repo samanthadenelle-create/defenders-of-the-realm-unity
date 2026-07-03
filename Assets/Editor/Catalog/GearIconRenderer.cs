@@ -290,7 +290,7 @@ namespace DeNelle.Editor.Catalog
         /// the resulting Texture2D to PNG. Returns null when no preview could be produced.</summary>
         private static byte[] RenderPreviewPng(GameObject prefab)
         {
-            int instanceId = prefab.GetInstanceID();
+            var entityId = prefab.GetEntityId(); // was GetInstanceID — only consumed by IsLoadingAssetPreview below
 
             // Kick off the async preview request.
             Texture2D preview = AssetPreview.GetAssetPreview(prefab);
@@ -300,7 +300,7 @@ namespace DeNelle.Editor.Catalog
             {
                 // Yield to the editor preview-render loop. AssetPreview renders on the main
                 // thread between ticks; pumping the asset DB + a tiny spin lets it complete.
-                if (!AssetPreview.IsLoadingAssetPreview(instanceId) && polls > 2)
+                if (!AssetPreview.IsLoadingAssetPreview(entityId) && polls > 2)
                 {
                     // Not loading and still null after a couple of ticks: re-request once
                     // (the cache may have evicted/not-started) then keep polling.

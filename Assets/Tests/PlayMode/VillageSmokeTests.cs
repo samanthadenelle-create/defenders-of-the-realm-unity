@@ -87,7 +87,7 @@ namespace DeNelle.Tests.PlayMode
         public IEnumerator force_begin_next_wave_advances_the_loop()
         {
             yield return LoadVillage();
-            var wm = Object.FindObjectOfType<WaveManager>();
+            var wm = Object.FindAnyObjectByType<WaveManager>();
             Assert.That(wm, Is.Not.Null, "Village scene must contain a WaveManager.");
 
             wm.ForceBeginNextWave();
@@ -101,7 +101,7 @@ namespace DeNelle.Tests.PlayMode
         public IEnumerator short_run_logs_no_null_reference_exception()
         {
             yield return LoadVillage();
-            var wm = Object.FindObjectOfType<WaveManager>();
+            var wm = Object.FindAnyObjectByType<WaveManager>();
             if (wm != null) wm.ForceBeginNextWave();
 
             for (int i = 0; i < 90; i++) yield return null;  // ~1.5s headless run

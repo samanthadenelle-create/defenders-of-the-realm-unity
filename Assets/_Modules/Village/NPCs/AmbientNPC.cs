@@ -448,7 +448,7 @@ namespace DeNelle.Village
         private Transform ResolveHeroFallback()
         {
             foreach (var t in
-                     UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
+                     UnityEngine.Object.FindObjectsByType<Transform>())
             {
                 if (t != null && t.name.StartsWith("Hero")) return t;
             }

@@ -19,8 +19,8 @@ namespace DeNelle.Editor
             var bridgeType = FindType(TypeWaveHudBridge);
             if (waveType == null || hudType == null || bridgeType == null) return;
 
-            var wave = UnityEngine.Object.FindObjectOfType(waveType);
-            var hud = UnityEngine.Object.FindObjectOfType(hudType);
+            var wave = UnityEngine.Object.FindAnyObjectByType(waveType);
+            var hud = UnityEngine.Object.FindAnyObjectByType(hudType);
             if (wave == null || hud == null) return;
 
             var waveGo = ((Component)wave).gameObject;
@@ -41,7 +41,7 @@ namespace DeNelle.Editor
             var waveType = FindType(TypeWaveManager);
             var bridgeType = FindType(TypeDailyQuestCombatBridge);
             if (waveType == null || bridgeType == null) return;
-            var wave = UnityEngine.Object.FindObjectOfType(waveType);
+            var wave = UnityEngine.Object.FindAnyObjectByType(waveType);
             if (wave == null) return;
             var waveGo = ((Component)wave).gameObject;
             if (waveGo.GetComponent(bridgeType) == null)

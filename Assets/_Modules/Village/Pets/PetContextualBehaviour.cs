@@ -30,7 +30,7 @@
 // ARCHITECTURE (non-negotiable):
 //   * GetComponent caches happen in Awake.
 //   * Event sub/unsub happens ONLY in OnEnable / OnDisable.
-//   * No FindObjectOfType — we use a serialized WaveManager ref with a guarded
+//   * No FindAnyObjectByType — we use a serialized WaveManager ref with a guarded
 //     FindObjectsByType fallback resolved once in Awake.
 //   * HP detection is throttled (never a per-frame Find / string lookup).
 //   * All animator parameter names are cached `static readonly int` hashes — no
@@ -238,20 +238,20 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Resolves the scene's WaveManager without FindObjectOfType. There is one
+        /// Resolves the scene's WaveManager without FindAnyObjectByType. There is one
         /// wave loop per Village scene; FindObjectsByType + a guard is the
         /// approved discovery path (see WaveManager.ResolveSceneRefs).
         /// </summary>
         private static WaveManager ResolveWaveManager()
         {
-            var all = Object.FindObjectsByType<WaveManager>(FindObjectsSortMode.None);
+            var all = Object.FindObjectsByType<WaveManager>();
             return (all != null && all.Length > 0) ? all[0] : null;
         }
 
-        /// <summary>Resolves the Heart without FindObjectOfType (guarded fallback).</summary>
+        /// <summary>Resolves the Heart without FindAnyObjectByType (guarded fallback).</summary>
         private static HeartController ResolveHeart()
         {
-            var all = Object.FindObjectsByType<HeartController>(FindObjectsSortMode.None);
+            var all = Object.FindObjectsByType<HeartController>();
             return (all != null && all.Length > 0) ? all[0] : null;
         }
     }

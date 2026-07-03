@@ -26,7 +26,7 @@ namespace DeNelle.Editor
 
             // 1) Strip the blocking collider from ChokePointGate (1) (and any ChokePointGate variant the owner flagged).
             int stripped = 0;
-            foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            foreach (var t in Object.FindObjectsByType<Transform>())
             {
                 if (t == null) continue;
                 string n = t.name;

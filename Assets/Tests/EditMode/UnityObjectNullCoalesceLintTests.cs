@@ -43,7 +43,7 @@ namespace DeNelle.Tests.EditMode
     // KNOWN LIMITS (documented honestly):
     //   * Heuristic, not a type analysis. It keys on the GetComponent family (the
     //     overwhelming source of the trap), not on every method that returns a
-    //     UnityEngine.Object. A `FindObjectOfType<T>() ?? fallback` would slip through;
+    //     UnityEngine.Object. A `FindAnyObjectByType<T>() ?? fallback` would slip through;
     //     widen the regex if a real instance of that shape ever ships.
     //   * Comment-stripped scan, so a doc-comment mentioning `GetComponent<X>() ??`
     //     (e.g. the ActorAnimator header example) can never trip the lint.

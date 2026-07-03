@@ -126,12 +126,12 @@ namespace DeNelle.Village
 
         private void OnSceneLoaded(Scene s, LoadSceneMode m) => RefreshHeroPresence();
 
-        // Single source of truth for the hero gate. Cheap FindFirstObjectByType, called
+        // Single source of truth for the hero gate. Cheap FindAnyObjectByType, called
         // only on sceneLoaded + a 0.5s throttle (never per-frame) — mirrors
         // VirtualJoystick.ApplyVisibility's pattern.
         private void RefreshHeroPresence()
         {
-            _heroPresent = Object.FindFirstObjectByType<HeroLocomotion>() != null;
+            _heroPresent = Object.FindAnyObjectByType<HeroLocomotion>() != null;
             if (!_heroPresent)
             {
                 // Drop any in-progress finger claims so we don't resume mid-drag later.

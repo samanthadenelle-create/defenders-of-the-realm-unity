@@ -129,7 +129,7 @@ namespace DeNelle.Village
             var capsule = GetCapsuleMesh();
             if (capsule == null) return;
 
-            var filters = Object.FindObjectsByType<MeshFilter>(FindObjectsSortMode.None);
+            var filters = Object.FindObjectsByType<MeshFilter>();
             int hidden = 0;
             foreach (var mf in filters)
             {

@@ -50,7 +50,7 @@ namespace DeNelle.Village
 
             if (_heartT == null)
             {
-                var heart = UnityEngine.Object.FindObjectOfType<HeartController>();
+                var heart = UnityEngine.Object.FindAnyObjectByType<HeartController>();
                 if (heart != null) _heartT = heart.transform;
             }
             Vector3 c = _heartT != null ? _heartT.position : Vector3.zero;
@@ -111,7 +111,7 @@ namespace DeNelle.Village
             try { DeNelle.Village.Talents.WisdomCurrencyService.Instance?.Grant(wisdomPerWave); } catch { }
             try { DeNelle.Cosmetics.GlimmerCurrencyService.Instance?.TryAddGlimmer(glimmerPerWave); } catch { }
 
-            if (_repair == null) _repair = UnityEngine.Object.FindObjectOfType<WallRepairController>();
+            if (_repair == null) _repair = UnityEngine.Object.FindAnyObjectByType<WallRepairController>();
             if (_repair != null) { try { _repair.SurfaceWorstRepair(); } catch { } }
 
             CancelInvoke(nameof(ReturnToVillageMusic));
@@ -131,7 +131,7 @@ namespace DeNelle.Village
 
         private void PulseHeart()
         {
-            var heart = UnityEngine.Object.FindObjectOfType<HeartController>();
+            var heart = UnityEngine.Object.FindAnyObjectByType<HeartController>();
             Vector3 p = heart != null ? heart.transform.position : Vector3.zero;
             try
             {
@@ -275,9 +275,9 @@ namespace DeNelle.Village
 
         private static void TrySpawn()
         {
-            var wave = UnityEngine.Object.FindObjectOfType<WaveManager>();
+            var wave = UnityEngine.Object.FindAnyObjectByType<WaveManager>();
             if (wave == null) return;   // not a wave scene (Title/HeroSelect/etc.)
-            if (UnityEngine.Object.FindObjectOfType<WaveFeedbackDirector>() != null) return;
+            if (UnityEngine.Object.FindAnyObjectByType<WaveFeedbackDirector>() != null) return;
 
             // Inactive-then-activate so Bind() runs before OnEnable subscribes.
             var go = new GameObject("WaveFeedbackDirector");

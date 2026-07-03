@@ -42,7 +42,7 @@ namespace DeNelle.Village
         // DISABLED for the Village2 redesign (2026-06-04): AccessX/LaneZ are the OLD
         // VillageSceneBuilder rampart coords; in generated Village2 the lift lands nowhere.
         // Rampart access is being hand-designed — re-enable once it's recipe/coord-driven.
-        private const bool EnabledForVillage2 = false;
+        private static readonly bool EnabledForVillage2 = false; // readonly (not const) so the gated branch doesn't emit CS0162
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()

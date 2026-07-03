@@ -214,7 +214,7 @@ namespace DeNelle.Village
                 return lo;
             }
 
-            var fallback = UnityEngine.Object.FindObjectOfType<GearLoadout>();
+            var fallback = UnityEngine.Object.FindAnyObjectByType<GearLoadout>();
             if (fallback == null)
                 FlowTrace.Warn("CompanionGear",
                     "no 'Player'-tagged hero and no GearLoadout anywhere in the scene — equip will be skipped.");

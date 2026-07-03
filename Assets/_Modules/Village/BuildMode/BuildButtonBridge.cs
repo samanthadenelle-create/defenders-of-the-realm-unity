@@ -78,12 +78,12 @@ namespace DeNelle.Village
         private static void TryWire()
         {
             // Find the HUD controller by type name (it's in DeNelle.HUD, which Village
-            // can't reference). It's a MonoBehaviour, so FindObjectsOfType-style search
+            // can't reference). It's a MonoBehaviour, so FindObjectsByType-style search
             // via the resolved Type.
             System.Type hudType = ResolveHudType();
             if (hudType == null) return;
 
-            var hud = Object.FindObjectOfType(hudType) as Component;
+            var hud = Object.FindAnyObjectByType(hudType) as Component;
             if (hud == null) return;   // not a village scene / HUD not up yet
 
             // The public BuildRequested field is a UnityEngine.Events.UnityEvent.

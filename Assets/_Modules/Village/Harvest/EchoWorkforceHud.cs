@@ -177,7 +177,7 @@ namespace DeNelle.Village
         // -- helpers --------------------------------------------------------------
         private static void EnsureEventSystem()
         {
-            if (FindObjectOfType<EventSystem>() == null)
+            if (FindAnyObjectByType<EventSystem>() == null)
             {
                 var es = new GameObject("EventSystem");
                 es.AddComponent<EventSystem>();

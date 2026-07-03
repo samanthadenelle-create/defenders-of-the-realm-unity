@@ -109,7 +109,7 @@ namespace DeNelle.Village
         {
             if (_document == null) return;
             UIDocument hud = null, any = null;
-            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include))
             {
                 // Require a THEMED PanelSettings — adopting an unthemed one renders the palette
                 // blank (the empty-palette bug: in MainCastle_Hall the HUD is uGUI, so the only
@@ -134,7 +134,7 @@ namespace DeNelle.Village
             // (the palette is inline-styled, so it renders even if no theme USS is available).
             var created = ScriptableObject.CreateInstance<PanelSettings>();
             created.name = "BuildPaletteRuntimePanelSettings";
-            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include))
             {
                 if (doc != null && doc.panelSettings != null && doc.panelSettings.themeStyleSheet != null)
                 { created.themeStyleSheet = doc.panelSettings.themeStyleSheet; break; }

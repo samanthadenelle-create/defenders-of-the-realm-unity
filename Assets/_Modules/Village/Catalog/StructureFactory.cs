@@ -527,7 +527,7 @@ namespace DeNelle.Village
 
                     // Register with the live scene controller so the placed building joins
                     // the roster (null-safe: a headless / controller-less scene just skips it).
-                    var controller = Object.FindObjectOfType<VillageController>();
+                    var controller = Object.FindAnyObjectByType<VillageController>();
                     if (controller != null) controller.RegisterBuilding(b);
                     break;
                 }

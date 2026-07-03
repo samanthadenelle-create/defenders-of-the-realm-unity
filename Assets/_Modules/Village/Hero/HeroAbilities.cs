@@ -1065,7 +1065,7 @@ namespace DeNelle.Village
         {
             if (_wave == null)
             {
-                var found = FindObjectsByType<WaveManager>(FindObjectsSortMode.None);
+                var found = FindObjectsByType<WaveManager>();
                 _wave = found.Length > 0 ? found[0] : null;
             }
             var boss = _wave?.LiveApexBoss;

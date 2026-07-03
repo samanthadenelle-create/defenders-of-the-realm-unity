@@ -104,7 +104,7 @@ namespace DeNelle.Village
 
         /// <summary>
         /// Finds the hero's Animator. Caches it once resolved. Uses
-        /// FindObjectsByType (NOT the deprecated FindObjectOfType) with a length
+        /// FindObjectsByType (NOT the deprecated FindAnyObjectByType) with a length
         /// guard, then drills to the Animator on the swapped-in "HeroBody" child the
         /// same way HeroLocomotion / HeroAbilities do.
         /// </summary>
@@ -112,7 +112,7 @@ namespace DeNelle.Village
         {
             if (_heroAnimator != null) return _heroAnimator;
 
-            var heroes = FindObjectsByType<HeroLocomotion>(FindObjectsSortMode.None);
+            var heroes = FindObjectsByType<HeroLocomotion>();
             if (heroes == null || heroes.Length == 0) return null;
 
             Transform heroRoot = heroes[0].transform;

@@ -53,7 +53,7 @@ namespace DeNelle.Village
         {
             using var _ = FlowTrace.Enter("BuildingSign", "Inject (sign every Building)");
 
-            var buildings = FindObjectsByType<Building>(FindObjectsSortMode.None);
+            var buildings = FindObjectsByType<Building>();
             if (buildings == null || buildings.Length == 0)
             {
                 FlowTrace.Warn("BuildingSign", "Inject: found 0 Building(s) to sign — none signed this pass.");

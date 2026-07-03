@@ -46,7 +46,6 @@ namespace DeNelle.Village
         private Transform       _hero;
         private HeroLocomotion  _heroLoco;
         private bool            _heroFound;
-        private bool            _isInRange;
         private bool            _storeOpen;
         private GameObject      _promptGo;
         private float           _nextProximityCheck;
@@ -65,7 +64,7 @@ namespace DeNelle.Village
             // Auto-find PackStore if root not assigned.
             if (_storeUiRoot == null)
             {
-                var ps = Object.FindObjectOfType<DeNelle.Wallet.PackStore>(true);
+                var ps = Object.FindAnyObjectByType<DeNelle.Wallet.PackStore>(FindObjectsInactive.Include);
                 if (ps != null) _storeUiRoot = ps.gameObject;
             }
         }
@@ -96,7 +95,6 @@ namespace DeNelle.Village
             // BuildingInteractable's parameterized Yarn hook (merchant NPC) now, so this
             // legacy watcher no longer grabs F / the shared button / shows a prompt (that
             // would double-open with the hook). The Realm Store keeps its own entry points.
-            _isInRange = false;
             HidePrompt();
             MobileInteractButton.Release(this);
         }
@@ -209,7 +207,7 @@ namespace DeNelle.Village
         private void ResolveHero()
         {
             if (_heroFound) return;
-            var loco = Object.FindObjectOfType<HeroLocomotion>();
+            var loco = Object.FindAnyObjectByType<HeroLocomotion>();
             if (loco != null)
             {
                 _hero     = loco.transform;

@@ -132,7 +132,7 @@ namespace DeNelle.Village
             _partyTargets.Clear();
             var hero = HeroHealth.Instance;
             if (hero != null) _partyTargets.Add(hero);
-            foreach (var c in FindObjectsByType<StoryCompanion>(FindObjectsSortMode.None))
+            foreach (var c in FindObjectsByType<StoryCompanion>())
                 if (c != null) _partyTargets.Add(c);
         }
 
@@ -215,7 +215,7 @@ namespace DeNelle.Village
             // just the live enemy bodies + the dragon). Identical target set, no full-scene
             // enumeration. Same Faction==Hostile gate preserved.
             _hostiles.Clear();
-            foreach (var d in FindObjectsByType<EnemyDamageable>(FindObjectsSortMode.None))
+            foreach (var d in FindObjectsByType<EnemyDamageable>())
             {
                 if (d == null || d.Faction != CombatFaction.Hostile) continue;
                 // TOWERS DEFEND THE TOWN AUTONOMOUSLY (owner 2026-06-28): roaming overworld
@@ -229,7 +229,7 @@ namespace DeNelle.Village
                 // engages the hero. Every hostile faction in range is acquired — no skip.
                 _hostiles.Add(d);
             }
-            foreach (var d in FindObjectsByType<DragonBoss>(FindObjectsSortMode.None))
+            foreach (var d in FindObjectsByType<DragonBoss>())
                 if (d != null && d.Faction == CombatFaction.Hostile)
                     _hostiles.Add(d);
         }

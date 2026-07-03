@@ -284,6 +284,13 @@ namespace DeNelle.Village
             _previewCam.nearClipPlane = 0.1f;
             _previewCam.farClipPlane = 10000f; // rig is at y=-5000; far must reach the camera→object span
             _previewCam.targetTexture = _rt;
+            // Fleet ticket 2026-07-02 (x52, MainCastle_Hall): "Attachment 0 was created with 1
+            // samples but 2 samples were requested" — the URP asset ships m_MSAA:2 but this RT
+            // is created with the default antiAliasing=1, so URP's opaque/transparent passes
+            // request 2 samples into a 1-sample attachment (EndRenderPass / RenderTexture.Create
+            // cascades follow). Match the other preview cams (TowerPreviewCamera/HeroPreviewViewer):
+            // no MSAA on an offscreen preview.
+            _previewCam.allowMSAA = false;
 
             // URP: a runtime-created Camera needs UniversalAdditionalCameraData to render
             // (the SRP only walks cameras it knows about). Mark it a self-contained Base

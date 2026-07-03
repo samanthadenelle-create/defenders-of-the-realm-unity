@@ -369,7 +369,7 @@ namespace DeNelle.Village
         {
             var tagged = GameObject.FindWithTag("Player");
             if (tagged != null) return tagged.transform;
-            foreach (var t in FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            foreach (var t in FindObjectsByType<Transform>())
                 if (t != null && t.name.StartsWith("Hero")) return t;
             return null;
         }
@@ -464,7 +464,7 @@ namespace DeNelle.Village
         {
             var tagged = GameObject.FindWithTag("Player");
             if (tagged != null) { _hero = tagged.transform; return; }
-            var loco = FindObjectOfType<HeroLocomotion>();
+            var loco = FindAnyObjectByType<HeroLocomotion>();
             if (loco != null) _hero = loco.transform;
         }
 

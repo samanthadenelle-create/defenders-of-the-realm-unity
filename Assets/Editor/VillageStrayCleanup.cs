@@ -38,7 +38,7 @@ namespace DeNelle.Editor
                 return;
             }
 
-            var found = UnityEngine.Object.FindObjectsByType(dcType, FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var found = UnityEngine.Object.FindObjectsByType(dcType, FindObjectsInactive.Include);
             int removed = 0;
             foreach (var o in found)
             {
@@ -124,7 +124,7 @@ namespace DeNelle.Editor
         public static void DiagnoseVillage()
         {
             EditorSceneManager.OpenScene(VillagePath, OpenSceneMode.Single);
-            var all = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var all = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include);
             var sb = new System.Text.StringBuilder();
 
             sb.AppendLine("[VDiag] ===== PORTALS =====");
@@ -204,7 +204,7 @@ namespace DeNelle.Editor
         public static void FixBuildingMeshPlacement()
         {
             var scene = EditorSceneManager.OpenScene(VillagePath, OpenSceneMode.Single);
-            var all = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var all = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include);
             int fixedCount = 0;
 
             foreach (var t in all)
@@ -269,7 +269,7 @@ namespace DeNelle.Editor
         public static void FixDungeonPortals()
         {
             var scene = EditorSceneManager.OpenScene(VillagePath, OpenSceneMode.Single);
-            var all = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var all = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include);
 
             string[] portalNames = { "DungeonPortal_HealersCottage", "DungeonPortal_FolksGranary" };
             Vector3[] targets     = { new Vector3(-12f, 0f, 8f),       new Vector3(12f, 0f, 8f) };

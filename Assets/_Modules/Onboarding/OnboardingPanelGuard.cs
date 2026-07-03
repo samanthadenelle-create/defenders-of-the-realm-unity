@@ -106,7 +106,7 @@ namespace DeNelle.Onboarding
             string active = SceneManager.GetActiveScene().name;
 
             UIDocument[] docs = Object.FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsInactive.Include);
 
             // Audit P1 fix (no restore on return to onboarding): returning to an
             // onboarding scene (e.g. Village -> Title via PauseController.GoTitle)

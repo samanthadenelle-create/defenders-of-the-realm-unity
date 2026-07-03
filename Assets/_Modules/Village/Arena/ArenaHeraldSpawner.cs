@@ -18,7 +18,7 @@
 //     (DEF-203). Suppressed automatically in Build Mode + while a modal panel is open
 //     (MobileInteractButton.Suppressed / PanelManager.AnyOpen).
 //   * Panel lifecycle MIRRORS ShopPanel's entry (NPCCommandBridge.CmdOpenShop):
-//     FindFirstObjectByType<ArenaPanel>() or create a host GameObject, then Open().
+//     FindAnyObjectByType<ArenaPanel>() or create a host GameObject, then Open().
 //
 // DDOL singleton: Destroy(this), NOT the host (CLAUDE.md "singleton dedup destroys
 // host"). Village -> Core only; cross-module reads are null-conditional.
@@ -189,7 +189,7 @@ namespace DeNelle.Village.Arena
         // =====================================================================
         private void OpenArena()
         {
-            if (_panel == null) _panel = FindFirstObjectByType<ArenaPanel>();
+            if (_panel == null) _panel = FindAnyObjectByType<ArenaPanel>();
             if (_panel == null)
             {
                 var host = new GameObject("ArenaPanelHost");

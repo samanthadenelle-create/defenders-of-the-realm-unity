@@ -143,11 +143,14 @@ namespace DeNelle.Editor
             // ScatterTrees call lower in this method.
             return;
             // A few scattered trees on the northern open ground (§6.5).
+            // Kept (not deleted) for an easy revert — pragma silences the intentional CS0162.
+#pragma warning disable 0162
             ScatterTrees(northern, new[]
             {
                 new Vector3(-9f, 0f, 16f), new Vector3(9f, 0f, 15f),
                 new Vector3(-20f, 0f, 6f), new Vector3(21f, 0f, 17f),
             });
+#pragma warning restore 0162
         }
 
         /// <summary>Instantiates one city-dressing building from a <see cref="DressDef"/>.</summary>

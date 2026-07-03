@@ -891,7 +891,7 @@ namespace DeNelle.Editor
             var esType = System.Type.GetType(
                 "UnityEngine.EventSystems.EventSystem, UnityEngine.UI");
             if (esType == null) return;
-            var existing = UnityEngine.Object.FindObjectOfType(esType);
+            var existing = UnityEngine.Object.FindAnyObjectByType(esType);
             if (existing != null) return;
 
             var go = new GameObject("EventSystem");

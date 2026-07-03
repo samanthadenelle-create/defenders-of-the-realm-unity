@@ -118,7 +118,7 @@ namespace DeNelle.Editor
             if (!OpenVillage2(out Scene scene)) return;
 
             // --- Main Camera (mirror VillageSceneBuilder.Scene.cs CreateCamera) ---
-            var existingCam = Object.FindFirstObjectByType<Camera>();
+            var existingCam = Object.FindAnyObjectByType<Camera>();
             if (existingCam == null)
             {
                 var cameraGo = new GameObject("Main Camera");
@@ -143,7 +143,7 @@ namespace DeNelle.Editor
             else Log($"Camera already present ('{existingCam.name}') — idempotent skip.");
 
             // --- Directional Light (mirror Wiring.cs CreateDirectionalLight, DEF-109) ---
-            var existingLight = Object.FindFirstObjectByType<Light>();
+            var existingLight = Object.FindAnyObjectByType<Light>();
             if (existingLight == null)
             {
                 var lightGo = new GameObject("Directional Light");
@@ -175,8 +175,8 @@ namespace DeNelle.Editor
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, Village2ScenePath);
 
-            int camCount   = Object.FindObjectsByType<Camera>(FindObjectsSortMode.None).Length;
-            int lightCount = Object.FindObjectsByType<Light>(FindObjectsSortMode.None).Length;
+            int camCount   = Object.FindObjectsByType<Camera>().Length;
+            int lightCount = Object.FindObjectsByType<Light>().Length;
             Log($"VERIFY: cameras={camCount} (expect 1), directional lights={lightCount} (expect >=1). " +
                 $"Saved {Village2ScenePath}.");
             Log("=== PHASE B0 DONE — open Village2.unity and the Game view should now render (no longer black) ===");
@@ -217,7 +217,7 @@ namespace DeNelle.Editor
             System.Type heartType = FindType(TypeHeartController);
             if (heartType != null)
             {
-                var hearts = Object.FindObjectsByType(heartType, FindObjectsSortMode.None);
+                var hearts = Object.FindObjectsByType(heartType);
                 foreach (var h in hearts)
                 {
                     var mb = h as MonoBehaviour;
@@ -328,7 +328,7 @@ namespace DeNelle.Editor
             else Log("HeartController already on the anchor - idempotent skip.");
 
             EditorSceneManager.SaveScene(scene, Village2ScenePath);
-            var hearts = Object.FindObjectsByType(heartType, FindObjectsSortMode.None);
+            var hearts = Object.FindObjectsByType(heartType);
             Log($"VERIFY: HeartController instances = {hearts.Length} (expect 1).");
             foreach (var h in hearts)
             {
@@ -368,7 +368,7 @@ namespace DeNelle.Editor
         {
             var esType = FindType(TypeEventSystem);
             if (esType == null) { Warn("EventSystem type not resolvable — UI clicks will be dead."); return; }
-            if (Object.FindFirstObjectByType(esType) != null) { Log("EventSystem already present — idempotent skip."); return; }
+            if (Object.FindAnyObjectByType(esType) != null) { Log("EventSystem already present — idempotent skip."); return; }
 
             var go = new GameObject("EventSystem");
             go.AddComponent(esType);
@@ -394,7 +394,7 @@ namespace DeNelle.Editor
 
             var so = new SerializedObject(controller);
             var heartType = FindType(TypeHeartController);
-            Component heart = heartType != null ? Object.FindFirstObjectByType(heartType) as Component : null;
+            Component heart = heartType != null ? Object.FindAnyObjectByType(heartType) as Component : null;
             if (heart != null) SetObjectField(so, "_heart", heart);
             else Warn("No HeartController in scene — run B1 (Wire Heart) first; controller _heart left null.");
             so.ApplyModifiedPropertiesWithoutUndo();
@@ -431,7 +431,7 @@ namespace DeNelle.Editor
         {
             var hudType = FindType(TypeVillageHud);
             if (hudType == null) { Err("VillageHudController not found (is DeNelle.HUD compiled?)."); return null; }
-            var existing = Object.FindFirstObjectByType(hudType) as Component;
+            var existing = Object.FindAnyObjectByType(hudType) as Component;
             if (existing != null) { Log("VillageHudController already present — idempotent skip."); return existing; }
 
             var go = new GameObject("VillageHud");
@@ -467,7 +467,7 @@ namespace DeNelle.Editor
             if (root == null) { Err("No 'Village2' root. Aborting."); return; }
 
             var heartType = FindType(TypeHeartController);
-            Component heart = heartType != null ? Object.FindFirstObjectByType(heartType) as Component : null;
+            Component heart = heartType != null ? Object.FindAnyObjectByType(heartType) as Component : null;
 
             GameObject hero = ImportHero(root.transform, heart);
             WireCameraTargetToHero(hero);
@@ -588,7 +588,7 @@ namespace DeNelle.Editor
         // =====================================================================
         public static void AddSceneDefaultsToActiveScene()
         {
-            var existingCam = Object.FindFirstObjectByType<Camera>();
+            var existingCam = Object.FindAnyObjectByType<Camera>();
             if (existingCam == null)
             {
                 var cameraGo = new GameObject("Main Camera");
@@ -607,7 +607,7 @@ namespace DeNelle.Editor
             }
             else Log($"AddSceneDefaults: camera already present ('{existingCam.name}') — idempotent skip.");
 
-            var existingLight = Object.FindFirstObjectByType<Light>();
+            var existingLight = Object.FindAnyObjectByType<Light>();
             if (existingLight == null)
             {
                 var lightGo = new GameObject("Directional Light");
@@ -674,7 +674,7 @@ namespace DeNelle.Editor
             if (root == null) { Err("No 'Village2' root. Aborting."); return; }
 
             var heartType = FindType(TypeHeartController);
-            Component heart = heartType != null ? Object.FindFirstObjectByType(heartType) as Component : null;
+            Component heart = heartType != null ? Object.FindAnyObjectByType(heartType) as Component : null;
 
             ImportSpawnPoints(root.transform);
             ImportWaveManager(root.transform, heart);
@@ -761,7 +761,7 @@ namespace DeNelle.Editor
             var hudType = FindType(TypeVillageHud);
             var bridgeType = FindType(TypeWaveHudBridge);
             if (wmType == null || hudType == null || bridgeType == null) { Warn("WaveHudBridge wiring skipped — a type was missing."); return; }
-            var wm = Object.FindFirstObjectByType(wmType) as Component;
+            var wm = Object.FindAnyObjectByType(wmType) as Component;
             if (wm == null) { Warn("WaveHudBridge wiring skipped — WaveManager missing."); return; }
             var bridge = wm.GetComponent(bridgeType) ?? wm.gameObject.AddComponent(bridgeType);
             var so = new SerializedObject(bridge);
@@ -1072,7 +1072,7 @@ namespace DeNelle.Editor
 
             Scene src = EditorSceneManager.OpenScene(Village2ScenePath, OpenSceneMode.Single);
             System.Type heartType = FindType(TypeHeartController);
-            int srcHearts = heartType != null ? Object.FindObjectsByType(heartType, FindObjectsSortMode.None).Length : 0;
+            int srcHearts = heartType != null ? Object.FindObjectsByType(heartType).Length : 0;
             GameObject srcRoot = FindRoot(src, "Village2");
             int srcObjs = srcRoot != null ? srcRoot.transform.childCount : 0;
             if (srcHearts < 1) { Err($"Source {Village2ScenePath} has no HeartController — refusing to swap a bare shell. Run B1 first. Aborting."); return; }
@@ -1108,7 +1108,7 @@ namespace DeNelle.Editor
 
             // Verify Village.unity now holds the generated village.
             Scene check = EditorSceneManager.OpenScene(VillageScenePath, OpenSceneMode.Single);
-            int liveHearts = heartType != null ? Object.FindObjectsByType(heartType, FindObjectsSortMode.None).Length : -1;
+            int liveHearts = heartType != null ? Object.FindObjectsByType(heartType).Length : -1;
             GameObject liveRoot = FindRoot(check, "Village2");
             Log($"VERIFY: Village.unity scene='{check.name}' rootObj='{(liveRoot != null ? liveRoot.name : "?")}' heart={liveHearts}. Village_Legacy.unity = rollback.");
             Log("=== PHASE D DONE — next: OuterWorldBuilder.BakeWorldNavMesh, then D2 verify ===");

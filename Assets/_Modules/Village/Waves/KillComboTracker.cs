@@ -237,7 +237,7 @@ namespace DeNelle.Village
 
         private static void TryInstall()
         {
-            if (FindObjectOfType<WaveManager>() == null) return;
+            if (FindAnyObjectByType<WaveManager>() == null) return;
             if (Instance != null) return;
 
             var go = new GameObject("[KillComboTracker]");

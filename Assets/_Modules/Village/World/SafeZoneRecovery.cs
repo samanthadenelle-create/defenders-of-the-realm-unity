@@ -75,7 +75,7 @@ namespace DeNelle.Village
             {
                 HeroHealth.Instance?.RestoreToFull();
 
-                var abilities = Object.FindFirstObjectByType<HeroAbilities>();
+                var abilities = Object.FindAnyObjectByType<HeroAbilities>();
                 abilities?.RestoreManaToFull();
 
                 FlowTrace.Step("SafeZone",

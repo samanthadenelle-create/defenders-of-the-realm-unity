@@ -421,7 +421,7 @@ namespace DeNelle.Village
         /// </summary>
         private static Transform FindHeroTransform()
         {
-            var loco = FindFirstObjectByType<HeroLocomotion>();
+            var loco = FindAnyObjectByType<HeroLocomotion>();
             if (loco != null) return loco.transform;
             return TryFindByTag("Player");
         }

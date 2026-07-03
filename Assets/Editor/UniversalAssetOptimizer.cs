@@ -108,7 +108,9 @@ public class UniversalAssetOptimizer : EditorWindow
                 if (importer == null) continue;
 
                 importer.meshCompression = ModelImporterMeshCompression.High;
-                importer.optimizeMesh = true;
+                // optimizeMesh=true equates to both of these true (per Unity's deprecation note).
+                importer.optimizeMeshPolygons = true;
+                importer.optimizeMeshVertices = true;
                 importer.importBlendShapes = false;
                 importer.importCameras = false;
                 importer.importLights = false;

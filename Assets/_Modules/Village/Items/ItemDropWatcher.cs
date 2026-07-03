@@ -51,7 +51,7 @@ namespace DeNelle.Village.Items
         private void Scan()
         {
             // Subscribe any new enemies.
-            var enemies = Object.FindObjectsByType<Enemy>(FindObjectsSortMode.None);
+            var enemies = Object.FindObjectsByType<Enemy>();
             if (enemies != null)
             {
                 foreach (var e in enemies)
@@ -65,7 +65,7 @@ namespace DeNelle.Village.Items
             }
 
             // Subscribe any new bosses.
-            var bosses = Object.FindObjectsByType<DragonBoss>(FindObjectsSortMode.None);
+            var bosses = Object.FindObjectsByType<DragonBoss>();
             if (bosses != null)
             {
                 foreach (var b in bosses)

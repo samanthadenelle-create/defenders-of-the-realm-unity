@@ -105,7 +105,7 @@ namespace DeNelle.Village.UI
 
         private static SeatingEditorOverlay FindOrCreate()
         {
-            var existing = FindObjectOfType<SeatingEditorOverlay>();
+            var existing = FindAnyObjectByType<SeatingEditorOverlay>();
             if (existing == null)
             {
                 var go = new GameObject("SeatingEditorOverlay");
@@ -575,7 +575,7 @@ namespace DeNelle.Village.UI
         private static EquipmentController ResolveHeroEquipment()
         {
             EquipmentController fallback = null;
-            foreach (var e in FindObjectsByType<EquipmentController>(FindObjectsSortMode.None))
+            foreach (var e in FindObjectsByType<EquipmentController>())
             {
                 if (e == null) continue;
                 if (fallback == null) fallback = e;
@@ -602,7 +602,7 @@ namespace DeNelle.Village.UI
             if (_document.panelSettings != null) return;
 
             UIDocument hud = null, any = null;
-            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include))
             {
                 if (doc == null || doc == _document || doc.panelSettings == null) continue;
                 if (any == null) any = doc;

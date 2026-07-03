@@ -49,7 +49,7 @@ namespace DeNelle.HUD
         private void Start()
         {
             // No ?? on UnityEngine.Object: GetComponent can return a fake-null that ?? won't fall through.
-            var doc = GetComponent<UIDocument>(); if (doc == null) doc = FindObjectOfType<UIDocument>();
+            var doc = GetComponent<UIDocument>(); if (doc == null) doc = FindAnyObjectByType<UIDocument>();
             if (doc?.rootVisualElement != null)
             {
                 _panel           = doc.rootVisualElement.Q<VisualElement>("progress-panel");

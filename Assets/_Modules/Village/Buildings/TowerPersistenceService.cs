@@ -81,7 +81,7 @@ namespace DeNelle.Village
         private void Snapshot()
         {
             using var _ = FlowTrace.Enter("TowerPersist", "Snapshot");
-            var towers = FindObjectsByType<Tower>(FindObjectsSortMode.None);
+            var towers = FindObjectsByType<Tower>();
             _records.Clear();
             int kept = 0, skippedNull = 0;
             for (int i = 0; i < towers.Length; i++)
@@ -114,7 +114,7 @@ namespace DeNelle.Village
                 FlowTrace.Step("TowerPersist", "Restore: no records to restore (clean slate).");
                 return;
             }
-            if (FindObjectsByType<Tower>(FindObjectsSortMode.None).Length > 0)
+            if (FindObjectsByType<Tower>().Length > 0)
             {
                 FlowTrace.Step("TowerPersist", "Restore: towers already present in scene — skipping rebuild.");
                 return;   // already present

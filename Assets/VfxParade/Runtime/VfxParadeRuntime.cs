@@ -156,7 +156,7 @@ namespace VfxParade
 #if UNITY_2023_1_OR_NEWER
             return UnityEngine.Object.FindAnyObjectByType<VfxParadeRuntime>();
 #else
-            return UnityEngine.Object.FindObjectOfType<VfxParadeRuntime>();
+            return UnityEngine.Object.FindAnyObjectByType<VfxParadeRuntime>();
 #endif
         }
 
@@ -644,7 +644,7 @@ namespace VfxParade
 #if UNITY_2023_1_OR_NEWER
             var es = UnityEngine.Object.FindAnyObjectByType<EventSystem>();
 #else
-            var es = UnityEngine.Object.FindObjectOfType<EventSystem>();
+            var es = UnityEngine.Object.FindAnyObjectByType<EventSystem>();
 #endif
             if (es != null) return;
             var go = new GameObject("EventSystem");

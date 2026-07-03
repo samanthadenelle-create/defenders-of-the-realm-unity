@@ -36,7 +36,7 @@ namespace DeNelle.Editor
             // 1) Make the big invisible nav floor VISIBLE + warm, dropped below the plaza tiles.
             int enabled = 0;
             var lit = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            foreach (var mr in Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+            foreach (var mr in Object.FindObjectsByType<MeshRenderer>())
             {
                 if (mr == null) continue;
                 string n = mr.name;
@@ -56,7 +56,7 @@ namespace DeNelle.Editor
 
             // 2) Neutralize the pink-mauve camera background.
             int cams = 0;
-            foreach (var cam in Object.FindObjectsByType<Camera>(FindObjectsSortMode.None))
+            foreach (var cam in Object.FindObjectsByType<Camera>())
             {
                 if (cam == null) continue;
                 if (cam.clearFlags == CameraClearFlags.SolidColor)

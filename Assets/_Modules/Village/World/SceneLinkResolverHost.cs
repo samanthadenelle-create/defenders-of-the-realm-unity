@@ -51,7 +51,7 @@ namespace DeNelle.Village
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Init()
         {
-            if (FindFirstObjectByType<SceneLinkResolverHost>() != null) return;   // already present
+            if (FindAnyObjectByType<SceneLinkResolverHost>() != null) return;   // already present
             var go = new GameObject("__SceneLinkResolver");
             go.hideFlags = HideFlags.HideInHierarchy;
             Object.DontDestroyOnLoad(go);
@@ -179,7 +179,7 @@ namespace DeNelle.Village
                         $"spawnPoint '{link.spawnPoint}' not found in '{link.toScene}' — using targetPosition {landing}.");
                 }
 
-                var loco = FindFirstObjectByType<HeroLocomotion>();
+                var loco = FindAnyObjectByType<HeroLocomotion>();
                 if (loco == null)
                     FlowTrace.Warn("Resolver", $"no HeroLocomotion in '{link.toScene}' — cannot warp hero to {landing}.");
                 loco?.WarpTo(landing);

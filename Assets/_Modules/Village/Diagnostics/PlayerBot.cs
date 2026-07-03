@@ -41,7 +41,7 @@ namespace DeNelle.Village
             string scene = SceneManager.GetActiveScene().name;
             // Only the hub gameplay scenes (don't run in menus).
             if (scene != "MainCastle_Hall" && scene != "Village2") return;
-            if (FindFirstObjectByType<PlayerBot>() != null) return;
+            if (FindAnyObjectByType<PlayerBot>() != null) return;
             var go = new GameObject("[PlayerBot]");
             DontDestroyOnLoad(go);
             go.AddComponent<PlayerBot>();

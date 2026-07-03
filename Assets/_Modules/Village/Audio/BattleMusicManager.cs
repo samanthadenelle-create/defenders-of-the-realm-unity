@@ -26,7 +26,7 @@
 //
 // HOW IT LISTENS (no WaveManager edits — listen only, per WO-372)
 //   WaveManager (same DeNelle.Village assembly) exposes public UnityEvent fields.
-//   We FIND the live WaveManager (FindFirstObjectByType) and AddListener to its
+//   We FIND the live WaveManager (FindAnyObjectByType) and AddListener to its
 //   EXISTING events — exactly how HeroPoseController / TownHudBridge subscribe.
 //   We add NO hook inside WaveManager. Mapping:
 //      OnWaveStarted        → Combat   (general loop)        — unless it's a boss wave
@@ -232,7 +232,7 @@ namespace DeNelle.Village
             if (_wave != null) return;
             // Prefer the canonical singleton (active-scene WaveManager) so we subscribe
             // to the SAME instance the trigger drives; fall back to Find pre-Awake.
-            var wave = WaveManager.Instance ?? FindFirstObjectByType<WaveManager>();
+            var wave = WaveManager.Instance ?? FindAnyObjectByType<WaveManager>();
             if (wave == null) return;
 
             _wave = wave;

@@ -89,7 +89,7 @@ namespace DeNelle.Village
                 Debug.Log("[WorldSceneLoader] TERRAINDIAG ambientMode=" + RenderSettings.ambientMode +
                     " ambientLight=" + RenderSettings.ambientLight + " ambientIntensity=" + RenderSettings.ambientIntensity +
                     " skybox='" + (RenderSettings.skybox != null ? RenderSettings.skybox.name : "NULL") + "'");
-                foreach (var L in UnityEngine.Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
+                foreach (var L in UnityEngine.Object.FindObjectsByType<Light>())
                     Debug.Log("[WorldSceneLoader] TERRAINDIAG light '" + L.name + "' type=" + L.type +
                         " intensity=" + L.intensity + " on=" + (L.enabled && L.gameObject.activeInHierarchy) +
                         " scene='" + L.gameObject.scene.name + "'");

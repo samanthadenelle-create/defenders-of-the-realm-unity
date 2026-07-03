@@ -116,7 +116,7 @@ namespace DeNelle.Village
 
         private static void AttachToHeart()
         {
-            var hearts = Object.FindObjectsByType<HeartController>(FindObjectsSortMode.None);
+            var hearts = Object.FindObjectsByType<HeartController>();
             foreach (var heart in hearts)
             {
                 if (heart == null) continue;

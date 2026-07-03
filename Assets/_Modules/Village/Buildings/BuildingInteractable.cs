@@ -21,7 +21,7 @@
 // panel registered yet shows a clean "coming soon" note instead of a wrong panel.
 //
 // DEF-213 root cause this replaces: the old code mapped every building through a
-// reflection-driven Toggle() of a panel found by FindObjectOfType, and EVERY
+// reflection-driven Toggle() of a panel found by FindAnyObjectByType, and EVERY
 // BuildingInteractable in the scene listened for the same global F key. With
 // overlapping proximity radii a single F press fired several buildings at once
 // (e.g. Arcane Tower's Hero Talents AND a neighbour's Companion panel), and the
@@ -90,7 +90,7 @@ namespace DeNelle.Village
         private void ResolveHero()
         {
             // Reflection-free direct find — HeroLocomotion lives in this asmdef.
-            var hero = UnityEngine.Object.FindObjectOfType<HeroLocomotion>();
+            var hero = UnityEngine.Object.FindAnyObjectByType<HeroLocomotion>();
             if (hero != null) _hero = hero.transform;
         }
 

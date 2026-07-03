@@ -86,7 +86,7 @@ namespace DeNelle.Village
         // the scene as the one that "chose" the player.
         private static Pet ResolveStarterPet()
         {
-            return FindObjectOfType<Pet>();
+            return FindAnyObjectByType<Pet>();
         }
 
         // Species-flavoured default name (WO example: "Scrap" for Crow, "Fang" for
@@ -228,7 +228,7 @@ namespace DeNelle.Village
         private static PanelSettings FindPanelSettings()
         {
             var docs = UnityEngine.Object.FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsInactive.Include);
             foreach (var d in docs)
                 if (d != null && d.panelSettings != null) return d.panelSettings;
             return null;

@@ -490,7 +490,7 @@ namespace DeNelle.Village.Hero
             t.fontSize = 12;
             t.color = col;
             t.alignment = TMPro.TextAlignmentOptions.TopLeft;
-            t.enableWordWrapping = true;
+            t.textWrappingMode = TMPro.TextWrappingModes.Normal;
         }
 
         // ── Accept flow ───────────────────────────────────────────────────────────

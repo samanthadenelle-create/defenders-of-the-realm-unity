@@ -82,7 +82,7 @@ namespace DeNelle.Core
                     return;
                 }
 
-                var renderers = Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+                var renderers = Object.FindObjectsByType<Renderer>();
                 if (renderers == null || renderers.Length == 0) return;
 
                 var seen = new HashSet<Material>();
@@ -219,7 +219,7 @@ namespace DeNelle.Core
                 // the Terrain. Keeps the broken-shader auto-recovery.
                 int terrainFixed = 0;
                 if (_terrainLit == null) _terrainLit = Shader.Find("Universal Render Pipeline/Terrain/Lit");
-                var terrains = Object.FindObjectsByType<Terrain>(FindObjectsSortMode.None);
+                var terrains = Object.FindObjectsByType<Terrain>();
                 FlowTrace.Step("FloorDiag", $"sweep '{sceneName}': {(terrains != null ? terrains.Length : 0)} Terrain(s); URP-Terrain-Lit-found={_terrainLit != null}.");
                 if (terrains != null)
                 {
@@ -258,7 +258,7 @@ namespace DeNelle.Core
                     " sun=" + (sun != null ? (sun.name + " color=" + sun.color + " intensity=" + sun.intensity) : "<none>"));
                 // Ground-like Renderers (in case the visible floor is a Renderer, not the Terrain).
                 int gdump = 0;
-                foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+                foreach (var r in Object.FindObjectsByType<Renderer>())
                 {
                     if (r == null || !IsGroundLike(r) || gdump >= 12) continue;
                     var m0 = (r.sharedMaterials != null && r.sharedMaterials.Length > 0) ? r.sharedMaterials[0] : null;

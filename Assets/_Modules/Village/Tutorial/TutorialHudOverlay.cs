@@ -230,7 +230,7 @@ namespace DeNelle.Village
             string hudName = yarnName.Replace('_', '-');
 
             var docs = UnityEngine.Object.FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsInactive.Include);
             foreach (var d in docs)
             {
                 if (d == null || d.rootVisualElement == null) continue;
@@ -243,7 +243,7 @@ namespace DeNelle.Village
         private static PanelSettings FindPanelSettings()
         {
             var docs = UnityEngine.Object.FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsInactive.Include);
             foreach (var d in docs)
                 if (d != null && d.panelSettings != null) return d.panelSettings;
             return null;

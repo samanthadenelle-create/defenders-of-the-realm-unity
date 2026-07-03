@@ -137,7 +137,7 @@ namespace DeNelle.Village
                 // runtime seam objects (prefix __RuntimeSeam_ or contains RuntimeSeam_Trigger)
                 Guard.Try(Sys, "section2-runtimeseams", () =>
                 {
-                    var all = Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                    var all = Object.FindObjectsByType<Transform>(FindObjectsInactive.Include);
                     foreach (var t in all)
                     {
                         if (t == null) continue;
@@ -154,7 +154,7 @@ namespace DeNelle.Village
                                   ?? System.Type.GetType("DeNelle.Village.SceneTransitionTrigger");
                     if (sttType != null)
                     {
-                        var comps = Object.FindObjectsByType(sttType, FindObjectsInactive.Include, FindObjectsSortMode.None);
+                        var comps = Object.FindObjectsByType(sttType, FindObjectsInactive.Include);
                         FlowTrace.Step(Sys, $"SceneTransitionTrigger count={comps.Length}");
                         foreach (var c in comps)
                         {

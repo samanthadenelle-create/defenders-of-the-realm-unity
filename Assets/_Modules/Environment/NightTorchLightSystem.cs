@@ -161,7 +161,7 @@ public sealed class NightTorchLightSystem : MonoBehaviour
             var spots = new List<Vector3>();
 
             // Gates — VillageSceneBuilder names them "Gate-North-Main" etc.
-            var all = Object.FindObjectsByType<Transform>(FindObjectsSortMode.None);
+            var all = Object.FindObjectsByType<Transform>();
             foreach (var t in all)
             {
                 if (t == null) continue;
@@ -188,7 +188,7 @@ public sealed class NightTorchLightSystem : MonoBehaviour
         /// spawning a competing light at the same place.</summary>
         private void AttachToExistingTorches()
         {
-            var torches = Object.FindObjectsByType<TorchFireController>(FindObjectsSortMode.None);
+            var torches = Object.FindObjectsByType<TorchFireController>();
             if (torches == null) return;
             int i = 1000;
             foreach (var tc in torches)

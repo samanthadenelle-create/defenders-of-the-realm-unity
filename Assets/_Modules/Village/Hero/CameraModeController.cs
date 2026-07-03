@@ -382,7 +382,7 @@ namespace DeNelle.Village
         {
             // Cache the live WaveManager; re-resolve if it was destroyed (scene change).
             // Prefer the canonical singleton (active-scene WaveManager); fall back to Find.
-            if (_waveManager == null) _waveManager = WaveManager.Instance ?? FindObjectOfType<WaveManager>();
+            if (_waveManager == null) _waveManager = WaveManager.Instance ?? FindAnyObjectByType<WaveManager>();
             if (_waveManager == null) return false;
             var phase = _waveManager.Phase;
             return phase == WavePhase.Countdown || phase == WavePhase.Active;
@@ -397,7 +397,7 @@ namespace DeNelle.Village
                     "DeNelle.BattleATB.BattleController, DeNelle.BattleATB");
             }
             if (_battleControllerType == null) return false;
-            var bc = FindObjectOfType(_battleControllerType) as Behaviour;
+            var bc = FindAnyObjectByType(_battleControllerType) as Behaviour;
             return bc != null && bc.isActiveAndEnabled;
         }
 

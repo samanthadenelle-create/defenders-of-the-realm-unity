@@ -199,7 +199,7 @@ namespace DeNelle.Editor
             RenderSettings.fogColor = new Color(0.03f, 0.03f, 0.04f);
             RenderSettings.fogDensity = 0.025f;
             // Dim any directional sun the defaults added.
-            foreach (var l in Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
+            foreach (var l in Object.FindObjectsByType<Light>())
                 if (l != null && l.type == LightType.Directional) l.intensity = 0.12f;
         }
 

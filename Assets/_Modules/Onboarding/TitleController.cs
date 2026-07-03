@@ -444,7 +444,7 @@ namespace DeNelle.Onboarding
                       $"screen={Screen.width}x{Screen.height}");
 
             var allDocs = FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsInactive.Include);
             foreach (var d in allDocs)
             {
                 var root = d != null ? d.rootVisualElement : null;

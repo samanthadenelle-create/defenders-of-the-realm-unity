@@ -204,7 +204,7 @@ namespace DeNelle.Village.World.Camps
         {
             // Subscribe to every Enemy currently alive (idempotent: -= then +=).
             var enemies = UnityEngine.Object.FindObjectsByType<Enemy>(
-                FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+                FindObjectsInactive.Exclude);
             foreach (var e in enemies)
             {
                 if (e == null) continue;
@@ -218,7 +218,7 @@ namespace DeNelle.Village.World.Camps
         {
             if (!_subscribed) return;
             var enemies = UnityEngine.Object.FindObjectsByType<Enemy>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsInactive.Include);
             foreach (var e in enemies)
             {
                 if (e != null) e.Died -= HandleEnemyDied;

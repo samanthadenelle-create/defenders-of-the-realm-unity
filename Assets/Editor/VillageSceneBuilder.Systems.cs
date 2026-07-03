@@ -288,7 +288,7 @@ namespace DeNelle.Editor
             if (spawnType == null) return;
 
             var spawns = UnityEngine.Object.FindObjectsByType(
-                spawnType, FindObjectsSortMode.None);
+                spawnType);
             prop.arraySize = spawns.Length;
             for (int i = 0; i < spawns.Length; i++)
                 prop.GetArrayElementAtIndex(i).objectReferenceValue = spawns[i];

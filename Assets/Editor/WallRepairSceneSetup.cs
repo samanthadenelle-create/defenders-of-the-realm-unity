@@ -198,9 +198,9 @@ namespace DeNelle.Editor
         {
 #if UNITY_2023_1_OR_NEWER
             var found = UnityEngine.Object.FindObjectsByType(hudControllerType,
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsInactive.Include);
 #else
-            var found = UnityEngine.Object.FindObjectsOfType(hudControllerType, true);
+            var found = UnityEngine.Object.FindObjectsByType(hudControllerType, true);
 #endif
             return (found != null && found.Length > 0) ? found[0] as Component : null;
         }

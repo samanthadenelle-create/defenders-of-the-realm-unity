@@ -482,7 +482,7 @@ namespace DeNelle.Village
             // the hero"). The hero definitively carries HeroLocomotion, so lock onto that.
             if (heroGo == null)
             {
-                var loco = FindFirstObjectByType<HeroLocomotion>();
+                var loco = FindAnyObjectByType<HeroLocomotion>();
                 if (loco != null) heroGo = loco.gameObject;
             }
             // Additional fallback for baked hero names (e.g. "Hero (Blaise)", "Hero (Knight)" etc.)
@@ -490,7 +490,7 @@ namespace DeNelle.Village
             // hero appears late on web load / editor scene load.
             if (heroGo == null)
             {
-                foreach (var t in FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                foreach (var t in FindObjectsByType<Transform>(FindObjectsInactive.Include))
                 {
                     if (t != null && t.name.StartsWith("Hero ("))
                     {

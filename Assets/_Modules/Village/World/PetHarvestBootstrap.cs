@@ -54,7 +54,7 @@ namespace DeNelle.Village
         // runtime placeholder DROP in Village2 is gated off. Flip to true (or pass
         // -spawnPlaceholderMineNodes on the command line) to restore the dev placeholders
         // when the node system is re-enabled with real art + mobile input.
-        private const bool SpawnPlaceholderNodes = false;
+        private static readonly bool SpawnPlaceholderNodes = false; // readonly (not const) so the gated branch doesn't emit CS0162
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -107,7 +107,7 @@ namespace DeNelle.Village
             // DEF-258: never drop placeholder nodes unless explicitly re-enabled.
             if (!PlaceholderNodesEnabled()) return;
             // Idempotent: if the village already has nodes (a future hand-placed pass), skip.
-            if (UnityEngine.Object.FindFirstObjectByType<MineNode>() != null) return;
+            if (UnityEngine.Object.FindAnyObjectByType<MineNode>() != null) return;
 
             // A small cluster near the village centre — inside the pet's ~28m harvest detect
             // (PetHarvester) so the deployed Warden finds + works them. One node per
@@ -198,11 +198,11 @@ namespace DeNelle.Village
             if (petObjects.Length == 0)
             {
                 // Fallback: any object with a component whose name contains "Pet"
-                petObjects = FindObjectsByType<GameObject>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+                petObjects = FindObjectsByType<GameObject>(FindObjectsInactive.Exclude);
                 // (In real code a proper Pet registry or event would be better.)
             }
 
-            var sites = FindObjectsByType<HarvestSite>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            var sites = FindObjectsByType<HarvestSite>(FindObjectsInactive.Exclude);
             if (sites.Length == 0 || petObjects.Length == 0) return;
 
             int assigned = 0;

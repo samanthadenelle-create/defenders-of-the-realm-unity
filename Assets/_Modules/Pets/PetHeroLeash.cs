@@ -223,7 +223,7 @@ namespace DeNelle.Pets
                     }
                 }
                 if (s_heroType == null) return null;
-                var found = UnityEngine.Object.FindObjectOfType(s_heroType) as Component;
+                var found = UnityEngine.Object.FindAnyObjectByType(s_heroType) as Component;
                 return found != null ? found.transform : null;
             }
             catch (System.Exception e)

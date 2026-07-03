@@ -64,7 +64,7 @@ namespace DeNelle.Village
                 // Prefer the camera that owns the validated SmartMobileCamera rig.
                 SmartMobileCamera smc = null;
                 var rigs = Object.FindObjectsByType<SmartMobileCamera>(
-                    FindObjectsInactive.Include, FindObjectsSortMode.None);
+                    FindObjectsInactive.Include);
                 if (rigs != null && rigs.Length > 0) smc = rigs[0];
 
                 Camera cam = smc != null ? smc.GetComponent<Camera>() : Camera.main;

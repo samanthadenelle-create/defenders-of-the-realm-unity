@@ -107,7 +107,7 @@ namespace DeNelle.Village.Items
         /// </summary>
         private static void ApplyHeal(ConsumableDef def)
         {
-            var hero = Object.FindFirstObjectByType<HeroHealth>();
+            var hero = Object.FindAnyObjectByType<HeroHealth>();
             if (hero == null)
             {
                 Debug.Log("[ConsumableUse] no hero found to heal.");
@@ -143,7 +143,7 @@ namespace DeNelle.Village.Items
                 return;
             }
 
-            var hero = Object.FindFirstObjectByType<HeroAbilities>();
+            var hero = Object.FindAnyObjectByType<HeroAbilities>();
             if (hero == null)
             {
                 Debug.Log("[ConsumableUse] no hero mana pool found (HeroAbilities) for: " + def.Id);

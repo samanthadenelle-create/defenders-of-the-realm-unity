@@ -82,7 +82,7 @@ namespace DeNelle.Village.World
         /// </summary>
         public static void FixOutpostConnectors()
         {
-            var triggers = Object.FindObjectsByType<SceneTransitionTrigger>(FindObjectsSortMode.None);
+            var triggers = Object.FindObjectsByType<SceneTransitionTrigger>();
             if (triggers == null || triggers.Length == 0) return;
 
             int fixedCount = 0;

@@ -167,7 +167,7 @@ namespace DeNelle.Village.Hero
 
             // Hero origin for the direction hint (component lookup per canon §7; no HeroTarget tag).
             Vector3 origin = Vector3.zero;
-            var hero = FindFirstObjectByType<HeroLocomotion>();
+            var hero = FindAnyObjectByType<HeroLocomotion>();
             if (hero != null) origin = hero.transform.position;
 
             DeNelle.Village.World.Camps.EnemyOutpost nearest = null;

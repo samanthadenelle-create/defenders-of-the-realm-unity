@@ -13,7 +13,7 @@
 // HOW IT LISTENS (no WaveManager edits — listen only, per WO-365):
 //   WaveManager (same DeNelle.Village assembly) exposes public UnityEvent fields:
 //     OnWaveStarted / OnWaveCleared / OnBreach (WaveNumberEvent : UnityEvent<int>)
-//     OnDefeat (UnityEvent). We FIND the live WaveManager (FindObjectOfType) and
+//     OnDefeat (UnityEvent). We FIND the live WaveManager (FindAnyObjectByType) and
 //     AddListener / RemoveListener to those existing events — exactly how
 //     HeroVictoryPoseBridge + the HUD bridges subscribe. We add NO hook inside
 //     WaveManager. Mapping:
@@ -207,7 +207,7 @@ namespace DeNelle.Village
         {
             if (_animator == null)
             {
-                var heroes = FindObjectsByType<HeroLocomotion>(FindObjectsSortMode.None);
+                var heroes = FindObjectsByType<HeroLocomotion>();
                 if (heroes != null && heroes.Length > 0)
                 {
                     Transform heroRoot = heroes[0].transform;
@@ -246,7 +246,7 @@ namespace DeNelle.Village
         private void TryResolveAndSubscribeWave()
         {
             if (_wave != null) return;
-            var wave = FindFirstObjectByType<WaveManager>();
+            var wave = FindAnyObjectByType<WaveManager>();
             if (wave == null) return;
 
             _wave = wave;
@@ -367,7 +367,7 @@ namespace DeNelle.Village
             }
             else
             {
-                var heroes = FindObjectsByType<HeroLocomotion>(FindObjectsSortMode.None);
+                var heroes = FindObjectsByType<HeroLocomotion>();
                 if (heroes != null && heroes.Length > 0) heroRoot = heroes[0].transform;
             }
             if (heroRoot == null) return _weaponBuf;

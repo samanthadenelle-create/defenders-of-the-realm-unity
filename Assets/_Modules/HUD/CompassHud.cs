@@ -415,7 +415,7 @@ namespace DeNelle.HUD
             tmp.color = color;
             tmp.alignment = align;
             tmp.raycastTarget = false;
-            tmp.enableWordWrapping = false;
+            tmp.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
             tmp.overflowMode = TextOverflowModes.Overflow;
             return tmp;
         }

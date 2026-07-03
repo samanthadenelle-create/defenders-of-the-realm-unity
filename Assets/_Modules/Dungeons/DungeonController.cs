@@ -453,7 +453,7 @@ namespace DeNelle.Dungeons
             // The CinemachineCamera is a controller, not a renderer — the real
             // Camera is the one with the CinemachineBrain (usually Camera.main).
             if (Camera.main != null) return Camera.main;
-            return Object.FindFirstObjectByType<Camera>();
+            return Object.FindAnyObjectByType<Camera>();
         }
 
         // ── Interactable + actor wiring ──────────────────────────────────────

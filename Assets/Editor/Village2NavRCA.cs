@@ -30,7 +30,7 @@ namespace DeNelle.Editor
             Log($"spawn={spawn}  stronghold={keep}");
 
             // --- NavMeshLinks ---
-            foreach (var link in Object.FindObjectsByType<NavMeshLink>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var link in Object.FindObjectsByType<NavMeshLink>(FindObjectsInactive.Include))
             {
                 if (link == null) continue;
                 Vector3 a = link.transform.TransformPoint(link.startPoint);

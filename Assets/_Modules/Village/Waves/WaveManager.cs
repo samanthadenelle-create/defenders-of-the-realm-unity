@@ -431,7 +431,7 @@ namespace DeNelle.Village
         // WaveManager is NOT a DontDestroyOnLoad global — there is a WaveManager
         // baked into BOTH MainCastle_Hall (the home hub / start scene) and
         // Village2 (the raid target). With those scenes loaded additively,
-        // FindObjectOfType<WaveManager>() enumerates in a NON-deterministic order,
+        // FindAnyObjectByType<WaveManager>() enumerates in a NON-deterministic order,
         // so a consumer (BattleMusic / TowerSwap / CameraMode / the AutoPilot
         // TriggerWave probe) could resolve a DIFFERENT instance than the one being
         // triggered/watched — the "works ~5/12, fails ~9/12" race that surfaced as
@@ -856,7 +856,7 @@ namespace DeNelle.Village
             if (_spawnPoints == null || _spawnPoints.Count == 0)
             {
                 _spawnPoints = new List<WaveSpawnPoint>(
-                    FindObjectsByType<WaveSpawnPoint>(FindObjectsSortMode.None));
+                    FindObjectsByType<WaveSpawnPoint>());
             }
 
             // A wave with no spawn markers can spawn ZERO enemies and then "clear"

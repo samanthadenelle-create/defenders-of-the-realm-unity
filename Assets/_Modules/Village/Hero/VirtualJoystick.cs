@@ -84,7 +84,7 @@ namespace DeNelle.Village
             // Show only on a touch/mobile target AND when there's a hero to drive (covers
             // Village + OuterWorld + any gameplay scene, and survives the hero spawning a
             // frame after scene-load). Desktop uses WASD/mouse — never show the stick there.
-            bool show = IsTouchTarget() && FindFirstObjectByType<HeroLocomotion>() != null;
+            bool show = IsTouchTarget() && FindAnyObjectByType<HeroLocomotion>() != null;
             if (_canvas != null && _canvas.gameObject.activeSelf != show)
                 _canvas.gameObject.SetActive(show);
             if (!show) { Move = Vector2.zero; _tracking = false; }

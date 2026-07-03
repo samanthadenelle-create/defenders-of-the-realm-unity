@@ -54,7 +54,7 @@ namespace DeNelle.Audio
             // additive OuterWorld load fires sceneLoaded with a new scene and a
             // per-scene check missed the live instance, spawning a duplicate.
             foreach (var existing in Object.FindObjectsByType<MusicSelectionPanel>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         FindObjectsInactive.Include))
             {
                 if (existing != null)
                 {
@@ -78,7 +78,7 @@ namespace DeNelle.Audio
         private static PanelSettings FindPanelSettings()
         {
             var docs = Object.FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsInactive.Include);
             foreach (var d in docs)
                 if (d != null && d.panelSettings != null) return d.panelSettings;
             return null;

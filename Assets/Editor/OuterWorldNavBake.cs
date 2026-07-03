@@ -72,7 +72,7 @@ namespace DeNelle.Editor
                 return;
             }
 
-            var found = Object.FindObjectsByType(surfType, FindObjectsSortMode.None);
+            var found = Object.FindObjectsByType(surfType);
             Object surf;
             if (found.Length > 0)
             {

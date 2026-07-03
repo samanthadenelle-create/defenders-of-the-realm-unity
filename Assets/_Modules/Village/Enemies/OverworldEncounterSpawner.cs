@@ -445,7 +445,7 @@ namespace DeNelle.Village
             if (string.IsNullOrEmpty(repId)) return;
             Guard.Try("Encounter", "loss rep despawn", () =>
             {
-                var watchers = FindObjectsOfType<RepEngageWatcher>();
+                var watchers = FindObjectsByType<RepEngageWatcher>();
                 if (watchers == null) return;
                 foreach (var w in watchers)
                 {

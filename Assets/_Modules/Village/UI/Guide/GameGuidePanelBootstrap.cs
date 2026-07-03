@@ -39,7 +39,7 @@ namespace DeNelle.Village
 
             // GLOBAL dedupe across all loaded scenes — one guide host is enough.
             foreach (var existing in Object.FindObjectsByType<GameGuidePanel>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         FindObjectsInactive.Include))
             {
                 if (existing != null) return;
             }

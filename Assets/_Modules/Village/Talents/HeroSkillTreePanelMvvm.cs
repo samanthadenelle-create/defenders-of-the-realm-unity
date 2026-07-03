@@ -491,7 +491,7 @@ namespace DeNelle.Village.Talents
                 "Tap any node to read what it does before you confirm.",
                 0.475f, 0.735f, ElarionUi.Parchment, ElarionUi.FontLabel,
                 TMPro.TextAlignmentOptions.TopLeft, txX0, txX1);
-            _detailDesc.enableWordWrapping = true;
+            _detailDesc.textWrappingMode = TMPro.TextWrappingModes.Normal;
 
             _detailState = ElarionUiKit.Label(panel, "", 0.41f, 0.465f, ElarionUi.Affordable,
                 ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);

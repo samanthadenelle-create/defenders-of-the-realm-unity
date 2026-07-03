@@ -210,7 +210,7 @@ namespace DeNelle.Core.Diagnostics
             int t = 0, e = 0;
             Guard.Try("Perf", "count-types", () =>
             {
-                var all = Object.FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None);
+                var all = Object.FindObjectsByType<MonoBehaviour>();
                 for (int i = 0; i < all.Length; i++)
                 {
                     var mb = all[i];

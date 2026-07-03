@@ -102,7 +102,7 @@ namespace DeNelle.BattleATB
                 {
                     var t = FindType(typeName);
                     if (t == null) continue;
-                    var found = UnityEngine.Object.FindObjectsByType(t, FindObjectsSortMode.None);
+                    var found = UnityEngine.Object.FindObjectsByType(t);
                     if (found == null) continue;
                     foreach (var obj in found)
                     {

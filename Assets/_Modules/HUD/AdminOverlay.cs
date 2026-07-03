@@ -102,7 +102,7 @@ namespace DeNelle.HUD
                 else
                 {
                     foreach (var existing in UnityEngine.Object.FindObjectsByType<UIDocument>(
-                                 FindObjectsInactive.Include, FindObjectsSortMode.None))
+                                 FindObjectsInactive.Include))
                     {
                         if (existing == _document || existing.panelSettings == null) continue;
                         if (existing.panelSettings.themeStyleSheet != null)
@@ -351,7 +351,7 @@ namespace DeNelle.HUD
             var menuType = Type.GetType("DeNelle.Village.TowerPlacementRotateMenu, DeNelle.Village");
             if (menuType == null) return false;
 
-            var menu = UnityEngine.Object.FindObjectOfType(menuType);
+            var menu = UnityEngine.Object.FindAnyObjectByType(menuType);
             if (menu == null)
             {
                 var go = new GameObject("DevOrientMenu");
@@ -437,7 +437,7 @@ namespace DeNelle.HUD
             if (_waveManagerInstance != null) return;
             _waveManagerType = Type.GetType("DeNelle.Village.WaveManager, DeNelle.Village");
             if (_waveManagerType == null) return;
-            _waveManagerInstance = UnityEngine.Object.FindObjectOfType(_waveManagerType);
+            _waveManagerInstance = UnityEngine.Object.FindAnyObjectByType(_waveManagerType);
         }
 #endif
 

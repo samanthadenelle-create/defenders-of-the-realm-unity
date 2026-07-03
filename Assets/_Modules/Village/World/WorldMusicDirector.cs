@@ -107,7 +107,7 @@ namespace DeNelle.Village
             if (_hero != null) return _hero;
             var tagged = GameObject.FindGameObjectWithTag("Player");
             if (tagged != null) { _hero = tagged.transform; return _hero; }
-            var hh = HeroHealth.Instance ?? FindFirstObjectByType<HeroHealth>();
+            var hh = HeroHealth.Instance ?? FindAnyObjectByType<HeroHealth>();
             if (hh != null) { _hero = hh.transform; return _hero; }
             return null;
         }

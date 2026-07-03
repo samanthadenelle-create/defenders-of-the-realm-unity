@@ -590,7 +590,7 @@ namespace DeNelle.Editor
             }
             else
             {
-                var wm = UnityEngine.Object.FindFirstObjectByType(wmType) as Component;
+                var wm = UnityEngine.Object.FindAnyObjectByType(wmType) as Component;
                 if (wm == null)
                 {
                     fails.Add("no WaveManager in the playable scene (DEFEND button has nothing behind it)");
@@ -775,7 +775,7 @@ namespace DeNelle.Editor
             Type heartType = FindType(TypeHeartController);
             if (heartType == null) { detail = $"type {TypeHeartController} not found (DeNelle.Village compiled?)"; return false; }
 
-            var heart = UnityEngine.Object.FindFirstObjectByType(heartType) as Component;
+            var heart = UnityEngine.Object.FindAnyObjectByType(heartType) as Component;
             if (heart == null) { detail = "no HeartController (Tree of Life) in the playable scene"; return false; }
 
             Vector3 p = heart.transform.position;

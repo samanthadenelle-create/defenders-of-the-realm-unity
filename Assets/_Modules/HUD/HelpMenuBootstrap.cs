@@ -33,7 +33,7 @@ namespace DeNelle.HUD
             // per-scene check would miss the live MainCastle_Hall instance and
             // spawn a second full-screen panel that steals pointer events.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<HelpMenu>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         FindObjectsInactive.Include))
             {
                 if (existing != null)
                 {

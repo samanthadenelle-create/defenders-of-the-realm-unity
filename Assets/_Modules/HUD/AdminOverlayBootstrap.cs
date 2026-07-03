@@ -30,7 +30,7 @@ namespace DeNelle.HUD
             // A per-scene check let the additive OuterWorld load spawn a second
             // AdminOverlay that intercepted the Dev-tools button.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<AdminOverlay>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         FindObjectsInactive.Include))
             {
                 if (existing != null)
                 {

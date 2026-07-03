@@ -180,7 +180,7 @@ namespace DeNelle.Village.World.Camps
         // not a garrison from any other additively-loaded scene.
         private GarrisonController FindGarrisonInThisScene()
         {
-            var all = FindObjectsByType<GarrisonController>(FindObjectsSortMode.None);
+            var all = FindObjectsByType<GarrisonController>();
             if (all == null) return null;
             var myScene = gameObject.scene;
             for (int i = 0; i < all.Length; i++)

@@ -153,7 +153,7 @@ namespace DeNelle.Village
         {
             if (_hudType == null) _hudType = ResolveHudType();
             if (_hudType == null) return;                 // HUD assembly not loaded yet — retry next frame
-            var hud = FindObjectOfType(_hudType) as Component;
+            var hud = FindAnyObjectByType(_hudType) as Component;
             if (hud == null) return;                      // HUD not spawned yet — retry next frame
             var field = _hudType.GetField("InventoryRequested",
                 System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);

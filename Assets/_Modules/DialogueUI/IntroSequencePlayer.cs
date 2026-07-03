@@ -63,7 +63,7 @@ namespace DeNelle.DialogueUI
         public static void Play()
         {
             // If one is somehow already running, don't double-spawn.
-            if (UnityEngine.Object.FindObjectOfType<IntroSequenceDriver>() != null) return;
+            if (UnityEngine.Object.FindAnyObjectByType<IntroSequenceDriver>() != null) return;
 
             var go = new GameObject("IntroSequence");
             UnityEngine.Object.DontDestroyOnLoad(go);

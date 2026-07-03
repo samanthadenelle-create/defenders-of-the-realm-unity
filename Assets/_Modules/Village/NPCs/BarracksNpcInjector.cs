@@ -276,7 +276,7 @@ namespace DeNelle.Village
         // CastleHubBuilder places it at (0,0,12), the fallback if the controller isn't up yet.
         private static Vector3 HeartCenter()
         {
-            var h = FindFirstObjectByType<HeartController>();
+            var h = FindAnyObjectByType<HeartController>();
             return h != null ? h.transform.position : new Vector3(0f, 0f, 12f);
         }
 
@@ -284,7 +284,7 @@ namespace DeNelle.Village
         {
             var tagged = GameObject.FindWithTag("Player");
             if (tagged != null) return tagged.transform;
-            foreach (var t in FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            foreach (var t in FindObjectsByType<Transform>())
                 if (t != null && t.name.StartsWith("Hero")) return t;
             return null;
         }

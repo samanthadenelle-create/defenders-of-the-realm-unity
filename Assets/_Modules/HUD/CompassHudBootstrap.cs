@@ -36,7 +36,7 @@ namespace DeNelle.HUD
             if (!scene.IsValid()) return;
             // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<CompassHud>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         FindObjectsInactive.Include))
             {
                 if (existing != null)
                 {
@@ -69,7 +69,7 @@ namespace DeNelle.HUD
         {
             var t = System.Type.GetType("DeNelle.Village.HeroLocomotion, DeNelle.Village");
             if (t == null) return null;
-            var obj = UnityEngine.Object.FindObjectOfType(t) as Component;
+            var obj = UnityEngine.Object.FindAnyObjectByType(t) as Component;
             return obj != null ? obj.transform : null;
         }
     }
@@ -100,7 +100,7 @@ namespace DeNelle.HUD
 
             Compass.Targets.Clear();
             var found = UnityEngine.Object.FindObjectsByType(
-                _enemyType, FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+                _enemyType, FindObjectsInactive.Exclude);
             foreach (UnityEngine.Object o in found)
             {
                 if (o is Component c) Compass.Targets.Add(c.transform);

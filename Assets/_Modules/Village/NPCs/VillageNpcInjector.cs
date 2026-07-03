@@ -89,7 +89,7 @@ namespace DeNelle.Village
             using var _ = FlowTrace.Enter("Village", "VillageNpcInjector.Inject");
 
             // Remove the baked placeholder townsfolk (capture the parent root + count).
-            var existing = FindObjectsByType<AmbientNPC>(FindObjectsSortMode.None);
+            var existing = FindObjectsByType<AmbientNPC>();
             Transform root = null;
             foreach (var npc in existing)
             {
@@ -268,7 +268,7 @@ namespace DeNelle.Village
         // hero rig is named "Hero (...)"; the project defines no "Player" tag).
         private static Transform ResolveHero()
         {
-            foreach (var t in FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            foreach (var t in FindObjectsByType<Transform>())
                 if (t != null && t.name.StartsWith("Hero")) return t;
             return null;
         }

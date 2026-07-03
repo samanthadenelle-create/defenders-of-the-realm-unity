@@ -93,13 +93,13 @@ namespace DeNelle.Village
 
         private void Hook()
         {
-            if (_heart == null) _heart = FindFirstObjectByType<HeartController>();
+            if (_heart == null) _heart = FindAnyObjectByType<HeartController>();
             if (_heart != null)
             {
                 _heart.OnHeartDestroyed -= ShowHeartFell;
                 _heart.OnHeartDestroyed += ShowHeartFell;
             }
-            if (_hero == null) _hero = HeroHealth.Instance ?? FindFirstObjectByType<HeroHealth>();
+            if (_hero == null) _hero = HeroHealth.Instance ?? FindAnyObjectByType<HeroHealth>();
             if (_hero != null)
             {
                 _hero.OnDeath -= ShowHeroFell;
@@ -110,7 +110,7 @@ namespace DeNelle.Village
         private void Update()
         {
             // Late-resolve hero/heart if they spawned after this bootstrap. DEF-136:
-            // FindFirstObjectByType is a scene-wide search; running it every frame churns
+            // FindAnyObjectByType is a scene-wide search; running it every frame churns
             // on mobile. Throttle to once per ~0.5s and stop once both refs resolve.
             if ((_heart == null || _hero == null)
                 && IsDefeatScene(SceneManager.GetActiveScene().name)
@@ -214,7 +214,7 @@ namespace DeNelle.Village
             // WO-333: the level-up skill-point panel (LevelUpSkillPopup) is a persistent
             // HUD layer that otherwise stays open BEHIND the game-over overlay. Force-close
             // any open instances before we build the overlay. Null-guarded per CLAUDE.md §10.
-            foreach (var p in FindObjectsByType<LevelUpSkillPopup>(FindObjectsSortMode.None))
+            foreach (var p in FindObjectsByType<LevelUpSkillPopup>())
                 if (p != null) p.Hide();
             // DEF-141 / WO-235: the somber Defeat track (GameOver.mp3) belongs to the
             // Heartwood/root destruction ONLY. Hero death is silence (single tone) — so

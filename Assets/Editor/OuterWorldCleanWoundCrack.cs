@@ -16,7 +16,7 @@ namespace DeNelle.Editor
         {
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
             int removed = 0;
-            foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            foreach (var t in Object.FindObjectsByType<Transform>())
             {
                 if (t != null && t.name == "DistantWoundCrack")
                 { Object.DestroyImmediate(t.gameObject); removed++; }

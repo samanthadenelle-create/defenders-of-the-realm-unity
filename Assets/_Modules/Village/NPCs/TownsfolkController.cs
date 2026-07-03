@@ -48,7 +48,7 @@ namespace DeNelle.Village
             if (_hero == null)
             {
                 foreach (var t in
-                         FindObjectsByType<Transform>(FindObjectsSortMode.None))
+                         FindObjectsByType<Transform>())
                 {
                     if (t != null && t.name.StartsWith("Hero")) { _hero = t; break; }
                 }

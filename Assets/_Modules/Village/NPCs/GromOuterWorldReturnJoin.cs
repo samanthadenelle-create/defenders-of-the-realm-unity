@@ -74,7 +74,7 @@ namespace DeNelle.Village
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
-            if (FindObjectOfType<GromOuterWorldReturnJoin>() != null) return;
+            if (FindAnyObjectByType<GromOuterWorldReturnJoin>() != null) return;
             new GameObject("GromOuterWorldReturnJoin").AddComponent<GromOuterWorldReturnJoin>();
         }
 
@@ -140,7 +140,7 @@ namespace DeNelle.Village
             _resolveTimer -= Time.deltaTime;
             if (_resolveTimer > 0f) return;
             _resolveTimer = 0.75f;
-            foreach (var t in FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            foreach (var t in FindObjectsByType<Transform>())
                 if (t != null && t.name.StartsWith("Hero")) { _hero = t; return; }
         }
 
@@ -239,7 +239,7 @@ namespace DeNelle.Village
 
         private static StoryCompanion ResolveCompanion(HeroClass cls)
         {
-            foreach (var c in FindObjectsByType<StoryCompanion>(FindObjectsSortMode.None))
+            foreach (var c in FindObjectsByType<StoryCompanion>())
                 if (c != null && c.Hero == cls) return c;
             var injector = StoryCompanionInjector.Instance;
             return injector != null ? injector.Companion : null;

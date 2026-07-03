@@ -69,7 +69,7 @@ namespace DeNelle.Village
 
         private void ResolveWave()
         {
-            var found = FindObjectsByType<WaveManager>(FindObjectsSortMode.None);
+            var found = FindObjectsByType<WaveManager>();
             _wave = found.Length > 0 ? found[0] : null;
         }
 

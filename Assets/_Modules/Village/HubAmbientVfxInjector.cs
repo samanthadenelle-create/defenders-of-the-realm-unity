@@ -75,7 +75,12 @@ namespace DeNelle.Village
         private const float TreeAuraSizeMin      = 0.18f;  // mote size range (m)
         private const float TreeAuraSizeMax      = 0.42f;
         // Soft mystical teal-green glow -- the "life force" read. Alpha < 1 = additive-soft.
-        private static readonly Color TreeAuraColor = new Color(0.45f, 0.95f, 0.70f, 0.55f);
+        // BLOOM-AWARE retune (2026-07-02): post-processing is now LIVE project-wide
+        // (WorldFeelInjector: bloom 0.45 / threshold 0.9). This colour was authored
+        // blind to bloom; a mild HDR lift (~1.25x, peaks just over the 0.9 threshold
+        // after the alpha fade) lets a few motes catch a gentle halo -- "alive",
+        // never a blowout. Owner dials by eye.
+        private static readonly Color TreeAuraColor = new Color(0.58f, 1.20f, 0.90f, 0.50f);
 
         // ---- (2) CORNER-TOWER ACCENTS ---------------------------------------
         // A small warm flickering flame/ember glow perched at the top of each
@@ -88,7 +93,9 @@ namespace DeNelle.Village
         private const float TowerAccentSizeMax    = 0.55f;
         private const float TowerAccentSpread     = 0.5f;  // emit-sphere radius at the tower top (m)
         // Warm torch-amber. Slightly higher alpha than the tree so the points read.
-        private static readonly Color TowerAccentColor = new Color(1.0f, 0.62f, 0.22f, 0.70f);
+        // BLOOM-AWARE (2026-07-02): mild HDR lift so the brazier points catch the live
+        // bloom like real embers (threshold 0.9) -- see TreeAuraColor note.
+        private static readonly Color TowerAccentColor = new Color(1.35f, 0.80f, 0.28f, 0.70f);
         // Fallback tower-top height used only if the tower's renderer bounds can't
         // be measured (e.g. pack not imported). CastleHubBuilder's Tower_Castle_Round
         // is a few metres tall; this is a safe stand-in so the glow is never buried.
@@ -205,7 +212,7 @@ namespace DeNelle.Village
         private int AttachTowerAccents(Transform holder)
         {
             int attached = 0;
-            var all = FindObjectsByType<Transform>(FindObjectsSortMode.None);
+            var all = FindObjectsByType<Transform>();
             foreach (var t in all)
             {
                 if (t == null || t.name == null) continue;
@@ -360,7 +367,7 @@ namespace DeNelle.Village
         private Transform ResolveTreeTransform(out Vector3 basePos)
         {
             // 1. The visible tree mesh by name (CastleHubBuilder names it TreeOfLife_Visual).
-            var all = FindObjectsByType<Transform>(FindObjectsSortMode.None);
+            var all = FindObjectsByType<Transform>();
             Transform treeVisual = null;
             Transform heartAnchor = null;
             foreach (var t in all)
@@ -384,7 +391,7 @@ namespace DeNelle.Village
             }
 
             // 3. HeartController component (same lookup CastleVendorNpcInjector uses).
-            var heart = FindFirstObjectByType<HeartController>();
+            var heart = FindAnyObjectByType<HeartController>();
             if (heart != null)
             {
                 basePos = heart.transform.position;

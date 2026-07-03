@@ -114,7 +114,7 @@ namespace DeNelle.Village
             // GameObject.FindWithTag("HeroTarget") threw a UnityException. Resolve the
             // hero by component (same fix as the enemy AI), then fall back to the
             // built-in "Player" tag, which is always safe.
-            var loco = FindFirstObjectByType<HeroLocomotion>();
+            var loco = FindAnyObjectByType<HeroLocomotion>();
             var heroGo = loco != null ? loco.gameObject : null;
             if (heroGo == null) heroGo = GameObject.FindWithTag("Player");
             if (heroGo != null)
@@ -164,7 +164,7 @@ namespace DeNelle.Village
 
         private static void UpgradeLastTower()
         {
-            var towers = FindObjectsByType<Tower>(FindObjectsSortMode.None);
+            var towers = FindObjectsByType<Tower>();
             if (towers.Length == 0) { Debug.Log("[TowerLoopDev] No built towers yet — place one (B) and let it finish."); return; }
             var t = towers[towers.Length - 1];
             bool ok = t.Upgrade();

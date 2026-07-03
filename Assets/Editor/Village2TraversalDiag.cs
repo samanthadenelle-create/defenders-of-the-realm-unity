@@ -50,7 +50,7 @@ namespace DeNelle.Editor
             {
                 Log($"--- colliders within 8m of Spawn_Gate {gate.transform.position} ---");
                 int c = 0;
-                foreach (var col in Object.FindObjectsByType<Collider>(FindObjectsSortMode.None))
+                foreach (var col in Object.FindObjectsByType<Collider>())
                 {
                     if (col == null || col.isTrigger) continue;
                     if (Vector3.Distance(col.bounds.center, gate.transform.position) > 8f) continue;

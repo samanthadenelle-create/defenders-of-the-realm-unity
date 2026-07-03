@@ -320,7 +320,7 @@ namespace DeNelle.Core
             {
                 var t = System.Type.GetType("DeNelle.Village.HeroLocomotion, DeNelle.Village");
                 if (t == null) return null;
-                var found = UnityEngine.Object.FindFirstObjectByType(t);
+                var found = UnityEngine.Object.FindAnyObjectByType(t);
                 return found as MonoBehaviour;
             }
             catch (Exception e) { FlowTrace.Warn("SceneRouter", $"FindHeroLocomotion reflected lookup threw: {e.GetType().Name}: {e.Message}"); return null; }
@@ -464,7 +464,7 @@ namespace DeNelle.Core
         {
             try
             {
-                var tree = UnityEngine.Object.FindFirstObjectByType<DeNelle.Core.TreeOfLifeMaterialFixer>();
+                var tree = UnityEngine.Object.FindAnyObjectByType<DeNelle.Core.TreeOfLifeMaterialFixer>();
                 if (tree != null)
                 {
                     tree.transform.position = new Vector3(0f, -0.25f, 0f);

@@ -37,7 +37,7 @@ namespace DeNelle.Village
         /// <summary>
         /// The active hero's progression. Set in OnEnable / cleared in OnDisable so
         /// the DEF-77 LevelUpSkillPopup can subscribe to <see cref="OnLevelUp"/>
-        /// without FindObjectOfType (DEF-77 CP1 Issue 6). Single hero per run.
+        /// without FindAnyObjectByType (DEF-77 CP1 Issue 6). Single hero per run.
         /// </summary>
         public static HeroProgression Instance { get; private set; }
 

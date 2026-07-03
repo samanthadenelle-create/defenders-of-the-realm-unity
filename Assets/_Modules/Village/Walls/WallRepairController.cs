@@ -324,9 +324,9 @@ namespace DeNelle.Village
         private static void AddDamagedOfType<T>(List<RepairTarget> into) where T : Component
         {
 #if UNITY_2023_1_OR_NEWER
-            var found = UnityEngine.Object.FindObjectsByType<T>(FindObjectsSortMode.None);
+            var found = UnityEngine.Object.FindObjectsByType<T>();
 #else
-            var found = UnityEngine.Object.FindObjectsOfType<T>();
+            var found = UnityEngine.Object.FindObjectsByType<T>();
 #endif
             foreach (var c in found)
             {

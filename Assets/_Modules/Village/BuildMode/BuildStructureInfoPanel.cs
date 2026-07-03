@@ -84,7 +84,7 @@ namespace DeNelle.Village
         {
             if (_document == null) return;
             UIDocument hud = null, any = null;
-            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include))
             {
                 if (doc == null || doc == _document || doc.panelSettings == null) continue;
                 if (any == null) any = doc;

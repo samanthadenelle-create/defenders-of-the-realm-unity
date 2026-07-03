@@ -235,7 +235,7 @@ namespace DeNelle.Village
 #if UNITY_2023_1_OR_NEWER
             return UnityEngine.Object.FindAnyObjectByType<WallRepairController>();
 #else
-            return UnityEngine.Object.FindObjectOfType<WallRepairController>();
+            return UnityEngine.Object.FindAnyObjectByType<WallRepairController>();
 #endif
         }
     }

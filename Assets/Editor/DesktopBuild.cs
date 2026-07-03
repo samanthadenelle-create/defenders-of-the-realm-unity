@@ -53,7 +53,7 @@ namespace DeNelle.Editor
             // The reflection bridges (audio / pets / dungeon) need their reflected
             // types preserved under IL2CPP stripping (link.xml was removed); keep
             // stripping minimal so WebGL doesn't strip them. Gzip = Vercel-friendly.
-            try { PlayerSettings.SetManagedStrippingLevel(BuildTargetGroup.WebGL, ManagedStrippingLevel.Minimal); } catch (System.Exception e) { Debug.LogWarning("[DesktopBuild] stripping-level set failed: " + e.Message); }
+            try { PlayerSettings.SetManagedStrippingLevel(UnityEditor.Build.NamedBuildTarget.WebGL, ManagedStrippingLevel.Minimal); } catch (System.Exception e) { Debug.LogWarning("[DesktopBuild] stripping-level set failed: " + e.Message); }
             try { PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip; } catch (System.Exception e) { Debug.LogWarning("[DesktopBuild] WebGL compression set failed: " + e.Message); }
             try { PlayerSettings.WebGL.exceptionSupport = WebGLExceptionSupport.None; } catch { }
 

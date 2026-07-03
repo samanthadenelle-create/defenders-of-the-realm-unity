@@ -31,7 +31,7 @@ namespace DeNelle.Village.Hero
         /// DialogueCommandBridge.OpenRumorBoard so the HUD and dialogue paths share one surface.</summary>
         private static void OpenRumorBoard()
         {
-            var panel = Object.FindObjectOfType<RumorBoardPanel>();
+            var panel = Object.FindAnyObjectByType<RumorBoardPanel>();
             if (panel == null)
                 panel = new GameObject("RumorBoardPanelHost").AddComponent<RumorBoardPanel>();
             panel.Open();

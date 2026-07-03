@@ -135,7 +135,7 @@ namespace DeNelle.Editor
             Village2Playable.ImportVillageHud(root.transform);
 
             var heartType = FindType(TypeHeartController);
-            Component heart = heartType != null ? Object.FindFirstObjectByType(heartType) as Component : null;
+            Component heart = heartType != null ? Object.FindAnyObjectByType(heartType) as Component : null;
 
             GameObject hero = Village2Playable.ImportHero(root.transform, heart);
             Village2Playable.WireCameraTargetToHero(hero);

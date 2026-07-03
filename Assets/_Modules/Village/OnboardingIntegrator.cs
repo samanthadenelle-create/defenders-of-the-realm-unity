@@ -87,10 +87,10 @@ namespace DeNelle.Village
             if (_wired) return;
 
             // ── Resolve the village-side gameplay components (same assembly) ──
-            _buildMenu    = FindObjectOfType<BuildMenu>();
-            _waveManager  = FindObjectOfType<WaveManager>();
-            _controller   = GetComponent<VillageController>(); if (_controller == null) _controller = FindObjectOfType<VillageController>();
-            _petDeployer  = FindObjectOfType<DeNelle.Pets.PetDeployer>();
+            _buildMenu    = FindAnyObjectByType<BuildMenu>();
+            _waveManager  = FindAnyObjectByType<WaveManager>();
+            _controller   = GetComponent<VillageController>(); if (_controller == null) _controller = FindAnyObjectByType<VillageController>();
+            _petDeployer  = FindAnyObjectByType<DeNelle.Pets.PetDeployer>();
 
             // ── Resolve OnboardingFlow by reflection (cross-asmdef) ──────────
             Type flowType = ResolveType(TypeOnboardingFlow);
@@ -104,7 +104,7 @@ namespace DeNelle.Village
                 return;
             }
 
-            _flow = FindObjectOfType(flowType);
+            _flow = FindAnyObjectByType(flowType);
             if (_flow == null)
             {
                 Debug.LogWarning("[OnboardingIntegrator] No OnboardingFlow in the scene — " +

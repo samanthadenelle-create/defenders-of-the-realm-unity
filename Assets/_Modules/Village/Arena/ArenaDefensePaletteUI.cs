@@ -63,7 +63,7 @@ namespace DeNelle.Village.Arena
         {
             if (_document == null) return;
             UIDocument hud = null, any = null;
-            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include))
             {
                 if (doc == null || doc == _document || doc.panelSettings == null) continue;
                 if (any == null) any = doc;
@@ -84,7 +84,7 @@ namespace DeNelle.Village.Arena
                 created.name = "ArenaRuntimePanelSettings";
                 created.scaleMode = PanelScaleMode.ScaleWithScreenSize;
                 created.referenceResolution = new Vector2Int(1080, 1920);
-                foreach (var d in FindObjectsByType<UIDocument>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                foreach (var d in FindObjectsByType<UIDocument>(FindObjectsInactive.Include))
                     if (d != null && d.panelSettings != null && d.panelSettings.themeStyleSheet != null)
                     { created.themeStyleSheet = d.panelSettings.themeStyleSheet; break; }
                 _document.panelSettings = created;

@@ -181,7 +181,7 @@ namespace DeNelle.Core.State
                 return;
             }
 
-            var found = FindObjectsByType(wmType, FindObjectsSortMode.None);
+            var found = FindObjectsByType(wmType);
             if (found == null || found.Length == 0)
             {
                 // Normal — most scenes have no WaveManager. Not a failure.

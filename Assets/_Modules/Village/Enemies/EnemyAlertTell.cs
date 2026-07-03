@@ -91,7 +91,7 @@ namespace DeNelle.Village
             if (c != null) return c;
             var smc = SmartMobileCamera.Instance;
             if (smc != null) { var cc = smc.GetComponent<Camera>(); if (cc != null) return cc; }
-            return Object.FindFirstObjectByType<Camera>();
+            return Object.FindAnyObjectByType<Camera>();
         }
     }
 }

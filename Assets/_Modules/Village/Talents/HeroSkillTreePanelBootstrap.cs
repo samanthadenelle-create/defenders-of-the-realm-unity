@@ -52,7 +52,7 @@ namespace DeNelle.Village.Talents
         {
             // GLOBAL dedupe across all loaded scenes.
             foreach (var existing in Object.FindObjectsByType<T>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         FindObjectsInactive.Include))
             {
                 if (existing != null)
                 {
@@ -69,7 +69,7 @@ namespace DeNelle.Village.Talents
 
         private static Transform FindHero()
         {
-            var hero = Object.FindObjectOfType<DeNelle.Village.HeroLocomotion>();
+            var hero = Object.FindAnyObjectByType<DeNelle.Village.HeroLocomotion>();
             return hero != null ? hero.transform : null;
         }
     }

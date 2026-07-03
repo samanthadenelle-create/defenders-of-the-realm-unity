@@ -241,7 +241,7 @@ namespace DeNelle.Editor
         private static List<Component> MarkersWithId(Type type, string id)
         {
             var result = new List<Component>();
-            var all = UnityEngine.Object.FindObjectsByType(type, FindObjectsSortMode.None);
+            var all = UnityEngine.Object.FindObjectsByType(type);
             foreach (var o in all)
             {
                 var c = o as Component;

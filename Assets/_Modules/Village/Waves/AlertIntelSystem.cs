@@ -72,7 +72,7 @@ namespace DeNelle.Village
 
         private static void Attach()
         {
-            var managers = Object.FindObjectsByType<WaveManager>(FindObjectsSortMode.None);
+            var managers = Object.FindObjectsByType<WaveManager>();
             if (managers == null || managers.Length == 0) return;   // not a wave scene
 
             var go = managers[0].gameObject;
@@ -165,7 +165,7 @@ namespace DeNelle.Village
         /// </summary>
         private static string DescribeApproach()
         {
-            var points = Object.FindObjectsByType<WaveSpawnPoint>(FindObjectsSortMode.None);
+            var points = Object.FindObjectsByType<WaveSpawnPoint>();
             if (points == null || points.Length == 0)
                 return "the gates";
 

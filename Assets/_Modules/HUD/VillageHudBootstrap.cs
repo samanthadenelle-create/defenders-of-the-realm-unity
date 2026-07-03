@@ -18,7 +18,7 @@
 //   A RuntimeInitializeOnLoadMethod(AfterSceneLoad) bootstrap (mirroring
 //   BattleHudVisibilityManager.Bootstrap) that, on EVERY scene load, ENSURES
 //   exactly one VillageHudController exists in the active gameplay scenes. If the
-//   village scene already authored one, FindObjectOfType finds it and we do
+//   village scene already authored one, FindAnyObjectByType finds it and we do
 //   nothing (idempotent). If a battle scene has none, we spawn a self-contained
 //   host GameObject and add the controller — its own Start() then builds the
 //   full code uGUI HUD and registers via CoreServices.RegisterHud.
@@ -94,7 +94,7 @@ namespace DeNelle.HUD
 
                 // Idempotent: if any loaded scene already has a HUD (e.g. the
                 // village scene authored one), do nothing.
-                if (Object.FindObjectOfType<VillageHudController>() != null) return;
+                if (Object.FindAnyObjectByType<VillageHudController>() != null) return;
 
                 var go = new GameObject("VillageHUD (bootstrapped)");
                 // Parent to the just-loaded scene so it unloads with that scene

@@ -181,14 +181,14 @@ namespace DeNelle.Village.World.Camps
         // one. Heart/origin centre, project "Enemy" layer mask, save-bond ranks.
         private static PetDeployer EnsurePetDeployer()
         {
-            var deployer = FindObjectOfType<PetDeployer>();
+            var deployer = FindAnyObjectByType<PetDeployer>();
             if (deployer != null) return deployer;
 
             var go = new GameObject("PetDeployer");
             deployer = go.AddComponent<PetDeployer>();
 
             Vector3 heartPos = Vector3.zero;
-            var heart = FindObjectOfType<HeartController>();
+            var heart = FindAnyObjectByType<HeartController>();
             if (heart != null) heartPos = heart.transform.position;
             deployer.SetHeartPosition(heartPos);
 

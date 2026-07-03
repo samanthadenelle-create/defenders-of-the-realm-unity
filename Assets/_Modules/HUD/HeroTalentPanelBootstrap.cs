@@ -45,7 +45,7 @@ namespace DeNelle.HUD
 
             // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in Object.FindObjectsByType<HeroTalentPanel>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         FindObjectsInactive.Include))
             {
                 if (existing != null)
                 {
@@ -74,14 +74,14 @@ namespace DeNelle.HUD
         {
             var t = System.Type.GetType("DeNelle.Village.HeroLocomotion, DeNelle.Village");
             if (t == null) return null;
-            var obj = Object.FindObjectOfType(t) as Component;
+            var obj = Object.FindAnyObjectByType(t) as Component;
             return obj != null ? obj.transform : null;
         }
 
         private static PanelSettings FindPanelSettings()
         {
             var docs = Object.FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsInactive.Include);
             foreach (var d in docs)
                 if (d != null && d.panelSettings != null) return d.panelSettings;
             return null;

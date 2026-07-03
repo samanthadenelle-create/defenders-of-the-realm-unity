@@ -1874,7 +1874,7 @@ namespace DeNelle.Editor
                                  "resolvable — dungeon HUD button clicks may not fire.");
                 return;
             }
-            var existing = UnityEngine.Object.FindObjectOfType(esType);
+            var existing = UnityEngine.Object.FindAnyObjectByType(esType);
             if (existing != null) return;
 
             var go = new GameObject("EventSystem");

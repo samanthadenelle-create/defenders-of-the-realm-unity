@@ -132,9 +132,9 @@ namespace DeNelle.Village.World
         {
             // MineNodes (scene-placed reserves + runtime bootstrap nodes).
 #if UNITY_2023_1_OR_NEWER
-            var mines = Object.FindObjectsByType<MineNode>(FindObjectsSortMode.None);
+            var mines = Object.FindObjectsByType<MineNode>();
 #else
-            var mines = Object.FindObjectsOfType<MineNode>();
+            var mines = Object.FindObjectsByType<MineNode>();
 #endif
             if (mines != null)
                 foreach (var m in mines)

@@ -66,7 +66,7 @@ namespace DeNelle.Village
         private void ResolveHero()
         {
             if (_heroFound) return;
-            var hero = UnityEngine.Object.FindObjectOfType<HeroLocomotion>();
+            var hero = UnityEngine.Object.FindAnyObjectByType<HeroLocomotion>();
             if (hero != null) { _hero = hero.transform; _heroFound = true; }
         }
 

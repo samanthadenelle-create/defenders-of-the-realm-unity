@@ -155,7 +155,7 @@ namespace DeNelle.Editor
                 Log("NavMeshSurface type not found (Unity.AI.Navigation package) — relying on whatever navmesh is active.");
                 return;
             }
-            Object[] surfaces = Object.FindObjectsByType(t, FindObjectsSortMode.None);
+            Object[] surfaces = Object.FindObjectsByType(t);
             Log($"NavMeshSurface components in scene: {(surfaces == null ? 0 : surfaces.Length)} (not rebuilt)");
         }
 

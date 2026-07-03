@@ -30,14 +30,14 @@ namespace DeNelle.Village
         {
             // DungeonEntrance is the runtime-built portal; DungeonPortal is the
             // alternate (Buildings) variant. Cover both.
-            foreach (var e in Object.FindObjectsOfType<DungeonEntrance>(true))
+            foreach (var e in Object.FindObjectsByType<DungeonEntrance>(FindObjectsInactive.Include))
             {
                 if (e == null) continue;
                 if (e.GetComponent<PortalVFXController>() == null)
                     e.gameObject.AddComponent<PortalVFXController>();
             }
 
-            foreach (var p in Object.FindObjectsOfType<DungeonPortal>(true))
+            foreach (var p in Object.FindObjectsByType<DungeonPortal>(FindObjectsInactive.Include))
             {
                 if (p == null) continue;
                 if (p.GetComponent<PortalVFXController>() == null)

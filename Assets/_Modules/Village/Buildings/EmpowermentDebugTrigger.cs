@@ -34,7 +34,7 @@ namespace DeNelle.Village
             if (!DeNelle.Core.FeatureFlags.DevHotkeys) return;
             if (!Input.GetKeyDown(KeyCode.F8)) return;
 
-            var towers = FindObjectsByType<Tower>(FindObjectsSortMode.None);
+            var towers = FindObjectsByType<Tower>();
             if (towers == null || towers.Length == 0)
             {
                 Debug.Log("[EmpowermentDebug] F8: no towers in scene to empower.");

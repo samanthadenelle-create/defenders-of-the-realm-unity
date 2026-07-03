@@ -53,7 +53,7 @@ namespace DeNelle.Village.Hud
         // Last pushed snapshot (change-gate so the model's [Flow:HUD] transition trace
         // only fires when an input actually changes).
         private HudContext _ctx = (HudContext)(-1);
-        private bool _inVillage, _combat, _modal;
+        private bool _inVillage, _combat, _modal, _buildMode;
         private bool _pushedOnce;
 
         public HudContextEvaluator(IHudModel model, Transform _host) : base(model, 0.20f) { }
@@ -69,9 +69,16 @@ namespace DeNelle.Village.Hud
 
             bool inVillage = IsInTownRing(scene);
             bool modal = PanelManager.AnyOpen;
+            // P4 (HUD_OBSIDIAN §3.3): the 4th space type. Read via the existing
+            // BuildModeController seam (same assembly, read-only — Enter/Exit already
+            // maintain IsActive + broadcast BuildModeChanged; no new seam needed).
+            bool buildMode = IsBuildModeActive();
 
-            // Precedence: Modal overlays everything; else Battle; else Town; else Overworld.
+            // Precedence: Modal overlays everything; else BuildMode (an edit session owns
+            // the screen and freezes waves — BuildModeController.Enter/FreezeWaves — so it
+            // outranks a residual combat signal); else Battle; else Town; else Overworld.
             HudContext ctx = modal ? HudContext.Modal
+                           : buildMode ? HudContext.BuildMode
                            : combat ? HudContext.Battle
                            : inVillage ? HudContext.Town
                            : HudContext.Overworld;
@@ -80,15 +87,25 @@ namespace DeNelle.Village.Hud
             FlowTrace.Throttle("HUD", "ctx-eval", 1f,
                 $"context inputs: wave={IsWaveActive()} battleLock={BattleLock.IsInBattle()} " +
                 $"raid={HubScenes.IsRaid(scene)} enemyScene={HubScenes.IsEnemyOwnedScene(scene)} " +
-                $"inVillage={inVillage} modal={modal} scene='{scene}' -> {ctx}");
+                $"inVillage={inVillage} modal={modal} buildMode={buildMode} scene='{scene}' -> {ctx}");
 
-            if (_pushedOnce && ctx == _ctx && inVillage == _inVillage && combat == _combat && modal == _modal)
+            if (_pushedOnce && ctx == _ctx && inVillage == _inVillage && combat == _combat &&
+                modal == _modal && buildMode == _buildMode)
                 return;
 
-            _ctx = ctx; _inVillage = inVillage; _combat = combat; _modal = modal; _pushedOnce = true;
+            _ctx = ctx; _inVillage = inVillage; _combat = combat; _modal = modal;
+            _buildMode = buildMode; _pushedOnce = true;
             // HudContextModel.Set fires Changed only on a real Context change but ALWAYS
-            // traces the transition ([Flow:HUD] context A->B) per the frozen contract.
-            Model.Context.Set(ctx, inVillage, combat, modal);
+            // traces the state; a real change also emits the fleet-assertable
+            // "[Flow:HudModel] context A->B" transition line (P4 contract).
+            Model.Context.Set(ctx, inVillage, combat, modal, buildMode);
+        }
+
+        /// <summary>P4: true while a Build Mode edit session is live (BuildModeController.IsActive).</summary>
+        private static bool IsBuildModeActive()
+        {
+            var bmc = BuildModeController.Instance;
+            return bmc != null && bmc.IsActive;
         }
 
         /// <summary>WO-579: village wave in its ACTIVE (fighting) phase — Battle context. The calm
@@ -111,7 +128,7 @@ namespace DeNelle.Village.Hud
         {
             if (!HubScenes.IsHub(scene)) return false;
 
-            if (_hero == null || !_hero) _hero = Object.FindFirstObjectByType<HeroLocomotion>();
+            if (_hero == null || !_hero) _hero = Object.FindAnyObjectByType<HeroLocomotion>();
             if (_hero == null) return true; // hero not spawned -> default to town
 
             Vector3 p = _hero.transform.position;

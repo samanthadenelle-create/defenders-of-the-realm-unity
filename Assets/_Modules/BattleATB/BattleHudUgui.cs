@@ -402,7 +402,7 @@ namespace DeNelle.BattleATB
             _logText.fontSize = ElarionUi.FontMicro;
             _logText.color = ElarionUi.ParchmentDim;
             _logText.alignment = TextAlignmentOptions.BottomLeft; // newest line at the bottom
-            _logText.enableWordWrapping = true;
+            _logText.textWrappingMode = TMPro.TextWrappingModes.Normal;
             _logText.overflowMode = TextOverflowModes.Truncate;
             _logText.raycastTarget = false;
         }

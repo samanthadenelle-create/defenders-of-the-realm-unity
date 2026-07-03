@@ -148,7 +148,7 @@ namespace DeNelle.Village
             // WO-450: resolve the hero by component (HeroLocomotion — every hero variant
             // carries it), not the (undeclared) "HeroTarget" tag; the hero now carries the
             // built-in "Player" tag as a fallback.
-            var loco = FindFirstObjectByType<HeroLocomotion>();
+            var loco = FindAnyObjectByType<HeroLocomotion>();
             _heroTransform = loco != null ? loco.transform : TryFindByTag("Player");
 
             _petTransform = TryFindByTag("PetTarget");

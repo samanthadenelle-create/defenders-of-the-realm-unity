@@ -85,13 +85,13 @@ namespace DeNelle.Village
         {
             Tower.AnyLongPressed += OnTowerLongPressed;
             // Prefer the canonical singleton (active-scene WaveManager); fall back to Find.
-            _waveManager = WaveManager.Instance ?? FindObjectOfType<WaveManager>();
+            _waveManager = WaveManager.Instance ?? FindAnyObjectByType<WaveManager>();
             if (_waveManager != null)
                 _waveManager.OnWaveCleared.AddListener(OnWaveCleared);
 
             // Try to find WalletService if not wired in inspector.
             if (_wallet == null)
-                _wallet = FindObjectOfType<DeNelle.Wallet.WalletConnectDialog>()
+                _wallet = FindAnyObjectByType<DeNelle.Wallet.WalletConnectDialog>()
                     ?.GetComponentInParent<DeNelle.Wallet.WalletService>();
         }
 

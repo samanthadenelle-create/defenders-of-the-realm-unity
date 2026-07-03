@@ -249,7 +249,7 @@ namespace DeNelle.HUD
             AppendUguiStack(sb, PointFor(ScreenLocation.Middle));
 
             sb.Append("  -- Canvases --\n");
-            foreach (var c in Object.FindObjectsByType<Canvas>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var c in Object.FindObjectsByType<Canvas>(FindObjectsInactive.Include))
             {
                 if (!c.isRootCanvas) continue;
                 bool gr = c.TryGetComponent<GraphicRaycaster>(out _);
@@ -257,7 +257,7 @@ namespace DeNelle.HUD
             }
 
             sb.Append("  -- UIDocuments --\n");
-            foreach (var d in Object.FindObjectsByType<UIDocument>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var d in Object.FindObjectsByType<UIDocument>(FindObjectsInactive.Include))
             {
                 var ps = d.panelSettings;
                 bool liveP = d.rootVisualElement != null && d.rootVisualElement.panel != null;
@@ -304,7 +304,7 @@ namespace DeNelle.HUD
         {
             sb.Append($"  UI-Toolkit pick @ {pt}:\n");
             int live = 0;
-            foreach (var d in Object.FindObjectsByType<UIDocument>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var d in Object.FindObjectsByType<UIDocument>(FindObjectsInactive.Include))
             {
                 var root = d.rootVisualElement;
                 if (root == null || root.panel == null) continue;
@@ -320,7 +320,7 @@ namespace DeNelle.HUD
         {
             var hits = new List<RectTransform>();
             if (string.IsNullOrEmpty(buttonName)) return hits;
-            foreach (var rt in Object.FindObjectsByType<RectTransform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var rt in Object.FindObjectsByType<RectTransform>(FindObjectsInactive.Include))
             {
                 if (rt.name.IndexOf(buttonName, System.StringComparison.OrdinalIgnoreCase) >= 0)
                     hits.Add(rt);

@@ -49,7 +49,7 @@ namespace DeNelle.Village
 
         private static void Attach()
         {
-            var managers = Object.FindObjectsByType<WaveManager>(FindObjectsSortMode.None);
+            var managers = Object.FindObjectsByType<WaveManager>();
             if (managers.Length == 0) return;   // not a wave scene — nothing to wire
 
             var go = managers[0].gameObject;

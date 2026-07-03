@@ -79,7 +79,7 @@ namespace DeNelle.Village
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
-            if (FindObjectOfType<ElaraWaveThreeJoin>() != null) return;
+            if (FindAnyObjectByType<ElaraWaveThreeJoin>() != null) return;
             new GameObject("ElaraWaveThreeJoin").AddComponent<ElaraWaveThreeJoin>();
         }
 
@@ -98,7 +98,7 @@ namespace DeNelle.Village
             if (_hooked) return;
             if (!ShouldStillTry) { Destroy(gameObject); return; }
 
-            if (_wave == null) _wave = FindObjectOfType<WaveManager>();
+            if (_wave == null) _wave = FindAnyObjectByType<WaveManager>();
             if (_wave != null)
             {
                 _wave.OnWaveCleared.AddListener(OnWaveCleared);
@@ -283,7 +283,7 @@ namespace DeNelle.Village
 
         private static StoryCompanion ResolveCompanion(HeroClass cls)
         {
-            foreach (var c in FindObjectsByType<StoryCompanion>(FindObjectsSortMode.None))
+            foreach (var c in FindObjectsByType<StoryCompanion>())
                 if (c != null && c.Hero == cls) return c;
             // Fall back to the injector's representative companion.
             var injector = StoryCompanionInjector.Instance;

@@ -113,9 +113,9 @@ namespace DeNelle.Village
             if (AttachFillIndicators)
             {
 #if UNITY_2023_1_OR_NEWER
-                var nodes = Object.FindObjectsByType<MineNode>(FindObjectsSortMode.None);
+                var nodes = Object.FindObjectsByType<MineNode>();
 #else
-                var nodes = Object.FindObjectsOfType<MineNode>();
+                var nodes = Object.FindObjectsByType<MineNode>();
 #endif
                 for (int i = 0; i < nodes.Length; i++) NodeFillIndicator.Attach(nodes[i]);
             }

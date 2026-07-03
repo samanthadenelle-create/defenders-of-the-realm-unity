@@ -30,9 +30,9 @@ namespace DeNelle.Village
 
             // The current scene's WaveManager (null in non-wave scenes).
 #if UNITY_2023_1_OR_NEWER
-            var wm = Object.FindFirstObjectByType<WaveManager>();
+            var wm = Object.FindAnyObjectByType<WaveManager>();
 #else
-            var wm = Object.FindObjectOfType<WaveManager>();
+            var wm = Object.FindAnyObjectByType<WaveManager>();
 #endif
             if (wm == _subscribed) return;   // already bound to this one (or both null)
 

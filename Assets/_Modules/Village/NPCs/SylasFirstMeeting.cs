@@ -90,7 +90,6 @@ namespace DeNelle.Village
         private TutorialDialogue _dialogue;
 
         private HeroClass _companionClass = HeroClass.Ranger;
-        private bool _running;
 
         // =====================================================================
         //  Bootstrap (no scene edit)
@@ -99,7 +98,7 @@ namespace DeNelle.Village
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
-            if (FindObjectOfType<SylasFirstMeeting>() != null) return;
+            if (FindAnyObjectByType<SylasFirstMeeting>() != null) return;
             new GameObject("SylasFirstMeeting").AddComponent<SylasFirstMeeting>();
         }
 
@@ -179,7 +178,6 @@ namespace DeNelle.Village
         private async UniTask Run()
         {
             s_ranThisSession = true;
-            _running = true;
 
             try
             {
@@ -254,7 +252,6 @@ namespace DeNelle.Village
             }
             finally
             {
-                _running = false;
                 Destroy(gameObject, 0.5f);
             }
         }
@@ -344,7 +341,7 @@ namespace DeNelle.Village
         // village hero rig is named "Hero (...)"; the project defines no "Player" tag.
         private static Transform ResolveHero()
         {
-            foreach (var t in UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            foreach (var t in UnityEngine.Object.FindObjectsByType<Transform>())
                 if (t != null && t.name.StartsWith("Hero")) return t;
             return null;
         }

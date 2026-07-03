@@ -112,9 +112,9 @@ namespace DeNelle.Village.Population
         private void BindWaves()
         {
 #if UNITY_2023_1_OR_NEWER
-            var wm = Object.FindFirstObjectByType<WaveManager>();
+            var wm = Object.FindAnyObjectByType<WaveManager>();
 #else
-            var wm = Object.FindObjectOfType<WaveManager>();
+            var wm = Object.FindAnyObjectByType<WaveManager>();
 #endif
             if (wm == _wave) return;
 
@@ -137,9 +137,9 @@ namespace DeNelle.Village.Population
         {
             _hookedOutposts.RemoveWhere(o => o == null);
 #if UNITY_2023_1_OR_NEWER
-            var outposts = Object.FindObjectsByType<EnemyOutpost>(FindObjectsSortMode.None);
+            var outposts = Object.FindObjectsByType<EnemyOutpost>();
 #else
-            var outposts = Object.FindObjectsOfType<EnemyOutpost>();
+            var outposts = Object.FindObjectsByType<EnemyOutpost>();
 #endif
             if (outposts == null) return;
             foreach (var o in outposts)

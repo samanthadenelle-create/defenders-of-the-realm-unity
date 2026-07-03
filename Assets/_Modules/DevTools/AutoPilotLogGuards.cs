@@ -110,7 +110,7 @@ namespace DeNelle.DevTools
         private void ScanPanels(string cause)
         {
             var docs = UnityEngine.Object.FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsInactive.Include);
             if (docs == null || docs.Length == 0) return;
 
             string activeScene = SceneManager.GetActiveScene().name ?? "";

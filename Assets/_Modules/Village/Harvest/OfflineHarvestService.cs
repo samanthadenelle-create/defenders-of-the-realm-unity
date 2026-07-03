@@ -248,9 +248,9 @@ namespace DeNelle.Village
         private void AccruePets(OfflineHarvestResult result, double cappedSec)
         {
 #if UNITY_2023_1_OR_NEWER
-            var nodes = Object.FindObjectsByType<MineNode>(FindObjectsSortMode.None);
+            var nodes = Object.FindObjectsByType<MineNode>();
 #else
-            var nodes = Object.FindObjectsOfType<MineNode>();
+            var nodes = Object.FindObjectsByType<MineNode>();
 #endif
             if (nodes == null) return;
             for (int i = 0; i < nodes.Length; i++)

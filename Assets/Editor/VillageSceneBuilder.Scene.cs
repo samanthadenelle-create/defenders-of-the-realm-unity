@@ -65,7 +65,7 @@ namespace DeNelle.Editor
                                  "type not resolvable — HUD button clicks will not fire.");
                 return;
             }
-            var existing = UnityEngine.Object.FindObjectOfType(esType);
+            var existing = UnityEngine.Object.FindAnyObjectByType(esType);
             if (existing != null) return;
 
             var go = new GameObject("EventSystem");
@@ -88,8 +88,8 @@ namespace DeNelle.Editor
             var bridgeType = FindType(TypeBuildMenuHudBridge);
             if (buildMenuType == null || hudType == null || bridgeType == null) return;
 
-            var buildMenu = UnityEngine.Object.FindObjectOfType(buildMenuType);
-            var hud = UnityEngine.Object.FindObjectOfType(hudType);
+            var buildMenu = UnityEngine.Object.FindAnyObjectByType(buildMenuType);
+            var hud = UnityEngine.Object.FindAnyObjectByType(hudType);
             if (buildMenu == null || hud == null) return;
 
             var menuGo = ((Component)buildMenu).gameObject;
@@ -112,8 +112,8 @@ namespace DeNelle.Editor
             var bridgeType = FindType(TypeHeroAbilitiesHudBridge);
             if (heroAbilitiesType == null || hudType == null || bridgeType == null) return;
 
-            var abilities = UnityEngine.Object.FindObjectOfType(heroAbilitiesType);
-            var hud = UnityEngine.Object.FindObjectOfType(hudType);
+            var abilities = UnityEngine.Object.FindAnyObjectByType(heroAbilitiesType);
+            var hud = UnityEngine.Object.FindAnyObjectByType(hudType);
             if (abilities == null || hud == null) return;
 
             var heroGo = ((Component)abilities).gameObject;
@@ -134,7 +134,7 @@ namespace DeNelle.Editor
             var interactableType = FindType(TypeBuildingInteractable);
             if (buildingType == null || interactableType == null) return;
             foreach (var b in UnityEngine.Object.FindObjectsByType(
-                         buildingType, FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         buildingType, FindObjectsInactive.Include))
             {
                 if (b is Component c && c.GetComponent(interactableType) == null)
                     c.gameObject.AddComponent(interactableType);

@@ -505,7 +505,7 @@ namespace DeNelle.HUD
 
             // GLOBAL dedupe across all loaded scenes.
             foreach (var existing in Object.FindObjectsByType<__VIEWCLASS__>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         FindObjectsInactive.Include))
             {
                 if (existing != null) return;
             }

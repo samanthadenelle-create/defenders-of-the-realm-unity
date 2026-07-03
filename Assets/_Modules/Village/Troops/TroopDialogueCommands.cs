@@ -39,7 +39,7 @@ namespace DeNelle.Village
         // OpenShop/OpenCraft/OpenEquip verb pattern.
         public static void ShowTrainingUI()
         {
-            var panel = UnityEngine.Object.FindObjectOfType<DeNelle.Village.Hero.TroopTrainingPanel>();
+            var panel = UnityEngine.Object.FindAnyObjectByType<DeNelle.Village.Hero.TroopTrainingPanel>();
             if (panel == null)
                 panel = new GameObject("TroopTrainingPanelHost")
                     .AddComponent<DeNelle.Village.Hero.TroopTrainingPanel>();

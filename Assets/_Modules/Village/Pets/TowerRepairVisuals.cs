@@ -22,7 +22,7 @@
 //
 // ARCHITECTURE (non-negotiable):
 //   * GetComponent / renderer caches happen in Awake.
-//   * No FindObjectOfType — serialized Heart ref with a guarded FindObjectsByType
+//   * No FindAnyObjectByType — serialized Heart ref with a guarded FindObjectsByType
 //     fallback resolved once in Awake.
 //   * Detection is throttled (HP polled on an interval, never per-frame Find).
 //   * Emission uses a MaterialPropertyBlock — never per-renderer material
@@ -177,10 +177,10 @@ namespace DeNelle.Village
 
         private void ClearEmission() => ApplyEmission(Color.black);
 
-        /// <summary>Resolves the Heart without FindObjectOfType (guarded fallback).</summary>
+        /// <summary>Resolves the Heart without FindAnyObjectByType (guarded fallback).</summary>
         private static HeartController ResolveHeart()
         {
-            var all = Object.FindObjectsByType<HeartController>(FindObjectsSortMode.None);
+            var all = Object.FindObjectsByType<HeartController>();
             return (all != null && all.Length > 0) ? all[0] : null;
         }
     }

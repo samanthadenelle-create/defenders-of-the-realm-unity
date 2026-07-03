@@ -63,7 +63,7 @@ namespace DeNelle.HUD
         private static bool IsAnyOverlayOpen()
         {
             if (HelpMenu.Instance != null && HelpMenu.Instance.IsOpen) return true;
-            var admin = Object.FindFirstObjectByType<AdminOverlay>(FindObjectsInactive.Include);
+            var admin = Object.FindAnyObjectByType<AdminOverlay>(FindObjectsInactive.Include);
             return admin != null && admin.IsOpen;
         }
 
@@ -133,7 +133,7 @@ namespace DeNelle.HUD
         private void DumpUiToolkit(Vector2 screenPos)
         {
             var docs = Object.FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsInactive.Include);
             if (docs == null || docs.Length == 0)
             {
                 FlowTrace.Step("UI", "[POINTER-DUMP] UITK: no UIDocuments in scene");

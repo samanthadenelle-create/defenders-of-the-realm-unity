@@ -491,8 +491,8 @@ namespace DeNelle.Village
             if (_alliesCache == null || _petsCache == null || _allyCacheTimer <= 0f)
             {
                 _allyCacheTimer = AllyCacheInterval;
-                _alliesCache = FindObjectsByType<StoryCompanion>(FindObjectsSortMode.None);
-                _petsCache   = FindObjectsByType<DeNelle.Pets.Pet>(FindObjectsSortMode.None);
+                _alliesCache = FindObjectsByType<StoryCompanion>();
+                _petsCache   = FindObjectsByType<DeNelle.Pets.Pet>();
             }
 
             // — Other companions (including a wounded self) —
@@ -765,7 +765,7 @@ namespace DeNelle.Village
         {
             if (_heroT != null) return;
             // KNOWN SUSPECT (OuterWorld additive seam): the hero rig is torn down/rebuilt
-            // and FindFirstObjectByType<HeroLocomotion>() momentarily returns null, so the
+            // and FindAnyObjectByType<HeroLocomotion>() momentarily returns null, so the
             // companion strands with _heroT == null. Throttle a Warn while we have no hero
             // so a capture shows HOW LONG it stays stranded; Once on re-acquire names the fix.
             FlowTrace.Throttle("Companion", $"hero-null-{GetInstanceID()}", 1f,
@@ -799,10 +799,10 @@ namespace DeNelle.Village
             var byTag = GameObject.FindWithTag("Player");
             if (byTag != null) return byTag.transform;
 
-            var hero = UnityEngine.Object.FindFirstObjectByType<HeroLocomotion>();
+            var hero = UnityEngine.Object.FindAnyObjectByType<HeroLocomotion>();
             if (hero != null) return hero.transform;
 
-            foreach (var t in UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            foreach (var t in UnityEngine.Object.FindObjectsByType<Transform>())
             {
                 if (t != null && t.name.StartsWith("Hero (")) return t;
             }

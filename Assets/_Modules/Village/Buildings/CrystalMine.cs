@@ -562,7 +562,7 @@ namespace DeNelle.Village
 
         private void ResolveWave()
         {
-            var found = FindObjectsByType<WaveManager>(FindObjectsSortMode.None);
+            var found = FindObjectsByType<WaveManager>();
             _wave = found.Length > 0 ? found[0] : null;
         }
 
@@ -571,7 +571,7 @@ namespace DeNelle.Village
         private void ResolveHero()
         {
             if (_heroFound) return;
-            var loco = FindAnyObjectByType<HeroLocomotion>();   // bug-triage P2: FindObjectOfType is deprecated in Unity 6
+            var loco = FindAnyObjectByType<HeroLocomotion>();   // bug-triage P2: FindAnyObjectByType is deprecated in Unity 6
             if (loco == null) return;
             _hero = loco.transform;
             _heroLoco = loco;

@@ -165,7 +165,7 @@ namespace DeNelle.Editor
         {
             string prefix = "Building-" + id + " ";
             foreach (var go in UnityEngine.Object.FindObjectsByType<GameObject>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         FindObjectsInactive.Include))
                 if (go != null && go.name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                     return go;
             return null;

@@ -83,7 +83,7 @@ namespace DeNelle.Core.Diagnostics
             // --- All lights (with POSITION — to prove which sit over the floor) ---
             int li = 0;
             var activeLights = new System.Collections.Generic.List<Light>();
-            foreach (var l in Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
+            foreach (var l in Object.FindObjectsByType<Light>())
             {
                 if (l == null) continue;
                 bool on = l.enabled && l.gameObject.activeInHierarchy && l.intensity > 0.01f;
@@ -97,7 +97,7 @@ namespace DeNelle.Core.Diagnostics
             // (low + flat + within 40m of origin) — regardless of name, so a second
             // floor layer / decal / overlay that MagentaGuard's name match missed shows up.
             int gi = 0;
-            foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+            foreach (var r in Object.FindObjectsByType<Renderer>())
             {
                 if (r == null) continue;
                 var b = r.bounds;
@@ -134,7 +134,7 @@ namespace DeNelle.Core.Diagnostics
 
             // --- Post-processing volumes (URP) by reflection (color grading suspect) --
             int vi = 0;
-            foreach (var mb in Object.FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None))
+            foreach (var mb in Object.FindObjectsByType<MonoBehaviour>())
             {
                 if (mb == null) continue;
                 var tn = mb.GetType().Name;

@@ -381,7 +381,7 @@ namespace DeNelle.Village
         private bool PointerOverPickableUI(Vector2 screenPos, out string blocker)
         {
             blocker = null;
-            var docs = Object.FindObjectsByType<UIDocument>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            var docs = Object.FindObjectsByType<UIDocument>(FindObjectsInactive.Exclude);
             if (docs == null) return false;
             float bestSort = float.MinValue;
             foreach (var doc in docs)
@@ -766,7 +766,7 @@ namespace DeNelle.Village
         /// </summary>
         private bool OverlapsExistingStructure(Bounds footprintAabb, GameObject ignore = null)
         {
-            var all = FindObjectsByType<PlacedStructure>(FindObjectsSortMode.None);
+            var all = FindObjectsByType<PlacedStructure>();
             foreach (var ps in all)
             {
                 if (ps == null) continue;
@@ -793,7 +793,7 @@ namespace DeNelle.Village
         /// </summary>
         private bool IsTooCloseToGate(Bounds footprintAabb)
         {
-            var gates = FindObjectsByType<Gate>(FindObjectsSortMode.None);
+            var gates = FindObjectsByType<Gate>();
             foreach (var gate in gates)
             {
                 if (gate == null) continue;
@@ -1518,7 +1518,7 @@ namespace DeNelle.Village
         private void FreezeWaves()
         {
             _frozenWaves.Clear();
-            foreach (var wm in FindObjectsByType<WaveManager>(FindObjectsSortMode.None))
+            foreach (var wm in FindObjectsByType<WaveManager>())
             {
                 if (wm == null || !wm.enabled) continue;
                 wm.enabled = false;   // stops the wave loop's Update/coroutine progression
@@ -1826,7 +1826,7 @@ namespace DeNelle.Village
                 return;
             }
 
-            var menu = FindObjectOfType<TowerPlacementRotateMenu>();
+            var menu = FindAnyObjectByType<TowerPlacementRotateMenu>();
             if (menu == null)
             {
                 var mgo = new GameObject("DevOrientMenu");

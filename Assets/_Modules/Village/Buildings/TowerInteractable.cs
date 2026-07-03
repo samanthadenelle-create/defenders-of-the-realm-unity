@@ -53,7 +53,7 @@ namespace DeNelle.Village
         private void ResolveHero()
         {
             // Reflection-free direct find — HeroLocomotion lives in this asmdef.
-            var hero = FindObjectOfType<HeroLocomotion>();
+            var hero = FindAnyObjectByType<HeroLocomotion>();
             if (hero != null) _hero = hero.transform;
         }
 

@@ -101,7 +101,7 @@ namespace DeNelle.Core
         {
             using var _t = FlowTrace.Enter("EnvTreeFix", "FixAllTrees");
 
-            var all = Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+            var all = Object.FindObjectsByType<Renderer>();
             if (all == null || all.Length == 0) return;
 
             // First pass: find ONE good tree material to share across white trees so the

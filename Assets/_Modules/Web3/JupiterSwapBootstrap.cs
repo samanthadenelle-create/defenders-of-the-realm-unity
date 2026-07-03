@@ -76,7 +76,7 @@ namespace DeNelle.Web3
             // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             // One host total, not one per scene.
             foreach (var existing in Object.FindObjectsByType<JupiterSwapService>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         FindObjectsInactive.Include))
             {
                 if (existing != null)
                 {
@@ -141,7 +141,7 @@ namespace DeNelle.Web3
             // Borrow from an existing scene UIDocument so we never render a black
             // null-panel and never need a PanelSettings-by-name Resources load.
             var docs = Object.FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsInactive.Include);
             foreach (var d in docs)
                 if (d != null && d.panelSettings != null) return d.panelSettings;
             return null;

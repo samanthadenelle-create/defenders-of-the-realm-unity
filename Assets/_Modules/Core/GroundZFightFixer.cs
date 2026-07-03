@@ -171,7 +171,7 @@ namespace DeNelle.Core
         // so repeated loads never drift it down. Small tiles → no >60m footprint guard.
         private static void FixHubFloorTiles()
         {
-            var all = Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
+            var all = Object.FindObjectsByType<MeshRenderer>();
             int lowered = 0;
             foreach (var mr in all)
             {
@@ -274,7 +274,7 @@ namespace DeNelle.Core
         // centred on origin anyway).
         private static Vector3 HubFloorCentreXZ()
         {
-            var all = Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
+            var all = Object.FindObjectsByType<MeshRenderer>();
             double sx = 0, sz = 0; int n = 0;
             foreach (var mr in all)
             {
@@ -351,7 +351,7 @@ namespace DeNelle.Core
         // at/below TargetY (re-load) is skipped, so repeated loads never drift it down.
         private static void FixGarrisonFloor()
         {
-            var all = Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
+            var all = Object.FindObjectsByType<MeshRenderer>();
             int lowered = 0;
             foreach (var mr in all)
             {
@@ -427,7 +427,7 @@ namespace DeNelle.Core
         // so a scaled primitive Plane is measured correctly.
         private static GameObject FindBakedGroundPlane()
         {
-            var all = Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
+            var all = Object.FindObjectsByType<MeshRenderer>();
             GameObject best = null;
             float bestDist = float.MaxValue;
             foreach (var mr in all)

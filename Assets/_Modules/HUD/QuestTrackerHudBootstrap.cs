@@ -42,7 +42,7 @@ namespace DeNelle.HUD
 
             // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<QuestTrackerHud>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         FindObjectsInactive.Include))
             {
                 if (existing != null)
                 {
@@ -66,7 +66,7 @@ namespace DeNelle.HUD
         {
             var t = System.Type.GetType("DeNelle.Village.HeroLocomotion, DeNelle.Village");
             if (t == null) return null;
-            var obj = UnityEngine.Object.FindObjectOfType(t) as Component;
+            var obj = UnityEngine.Object.FindAnyObjectByType(t) as Component;
             return obj != null ? obj.transform : null;
         }
 
@@ -75,7 +75,7 @@ namespace DeNelle.HUD
             // Pull from an existing UIDocument in the scene so we don't load a
             // Resources asset by name. Mirrors DailyQuestHudBootstrap.
             var docs = UnityEngine.Object.FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsInactive.Include);
             foreach (var d in docs)
                 if (d != null && d.panelSettings != null) return d.panelSettings;
             return null;

@@ -4,7 +4,7 @@
 // -----------------------------------------------------------------------------
 // namespace DeNelle.Village.UI. DEF-77 Correction Pass 1 + clarification applied:
 //   • Subscribes in OnEnable / unsubscribes in OnDisable to HeroProgression.OnLevelUp
-//     (→ Show) and SkillSystem.OnSkillsChanged (→ UpdateUI). NO FindObjectOfType
+//     (→ Show) and SkillSystem.OnSkillsChanged (→ UpdateUI). NO FindAnyObjectByType
 //     anywhere (CP1 Issue 6) — both are reached via their static Instance.
 //   • Spending goes through SkillSystem.SpendPoint(type); the panel never mutates
 //     skill fields directly.
@@ -103,7 +103,7 @@ namespace DeNelle.Village.UI
         // /FloatingXpText) stay. Show() is hard-gated to a no-op so nothing ever pops up to allocate;
         // the unspent-Wisdom announcement + skill-tree entry point now lives on the HUD's pulsing
         // skill-tree badge (VillageHudController). Code kept (not deleted) for an easy revert.
-        private const bool PopupRetired = true;
+        private static readonly bool PopupRetired = true; // readonly (not const) so the retired branches don't emit CS0162
 
         /// <summary>Reveal the popup (arg = the level just reached — title text only).</summary>
         private void Show(int newLevel)

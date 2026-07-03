@@ -95,7 +95,7 @@ namespace DeNelle.Village
             // CONCRETE hostile IDamageable implementors instead (engine-filtered to the live
             // enemy bodies + the dragon). Identical target set; no full-scene enumeration.
             _hostiles.Clear();
-            foreach (var d in FindObjectsByType<EnemyDamageable>(FindObjectsSortMode.None))
+            foreach (var d in FindObjectsByType<EnemyDamageable>())
             {
                 if (d == null || d.Faction != CombatFaction.Hostile) continue;
                 // TOWERS DEFEND THE TOWN AUTONOMOUSLY (owner 2026-06-28, mirrors DefenseTower):
@@ -107,7 +107,7 @@ namespace DeNelle.Village
                 // faction in range is acquired.
                 _hostiles.Add(d);
             }
-            foreach (var d in FindObjectsByType<DragonBoss>(FindObjectsSortMode.None))
+            foreach (var d in FindObjectsByType<DragonBoss>())
                 if (d != null && d.Faction == CombatFaction.Hostile)
                     _hostiles.Add(d);
         }

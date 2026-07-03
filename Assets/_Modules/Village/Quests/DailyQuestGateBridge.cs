@@ -112,7 +112,7 @@ namespace DeNelle.Village
         {
             _gates.Clear();
             // Unity 6 API; include inactive so a gate disabled for a frame still counts.
-            var found = Object.FindObjectsByType<Gate>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var found = Object.FindObjectsByType<Gate>(FindObjectsInactive.Include);
             if (found == null) return;
             _gates.AddRange(found);
 

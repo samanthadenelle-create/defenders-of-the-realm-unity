@@ -344,7 +344,7 @@ namespace DeNelle.Pets
         /// </summary>
         private void RequestRedeploy()
         {
-            var deployer = FindObjectOfType<PetDeployer>();
+            var deployer = FindAnyObjectByType<PetDeployer>();
             if (deployer == null) return;
             deployer.SyncDeployedToSlots(ActiveSlotSpecies);
         }

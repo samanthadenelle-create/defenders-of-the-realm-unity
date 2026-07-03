@@ -72,8 +72,8 @@ namespace DeNelle.Village
 
                 // Idempotent: a bridge already exists, or a VillageController will
                 // attach its own (the Village scene) — do nothing either way.
-                if (Object.FindObjectOfType<HeartHudBridge>() != null) return;
-                if (Object.FindObjectOfType<VillageController>() != null) return;
+                if (Object.FindAnyObjectByType<HeartHudBridge>() != null) return;
+                if (Object.FindAnyObjectByType<VillageController>() != null) return;
 
                 var go = new GameObject("HeartHudBridge (bootstrapped)");
                 // Parent to the just-loaded gameplay scene so it unloads with it

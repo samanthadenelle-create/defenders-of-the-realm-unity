@@ -151,7 +151,7 @@ namespace DeNelle.Village.UI
             if (_list == null) return;
             _list.Clear();
 
-            var towers = FindObjectsByType<Tower>(FindObjectsSortMode.None);
+            var towers = FindObjectsByType<Tower>();
             if (towers.Length == 0)
             {
                 var none = new Label("No towers placed yet.");

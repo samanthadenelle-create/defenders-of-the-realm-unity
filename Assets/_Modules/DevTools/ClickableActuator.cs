@@ -176,8 +176,7 @@ namespace DeNelle.DevTools
                 UIDocument[] docs;
                 try
                 {
-                    docs = UnityEngine.Object.FindObjectsByType<UIDocument>(
-                        FindObjectsSortMode.None);
+                    docs = UnityEngine.Object.FindObjectsByType<UIDocument>();
                 }
                 catch (Exception ex)
                 {
@@ -501,7 +500,7 @@ namespace DeNelle.DevTools
         private static string PickTopmostUiToolkit(Vector2 screenPt, UiToolkitButton ignore)
         {
             UIDocument[] docs;
-            try { docs = UnityEngine.Object.FindObjectsByType<UIDocument>(FindObjectsSortMode.None); }
+            try { docs = UnityEngine.Object.FindObjectsByType<UIDocument>(); }
             catch { return null; }
             if (docs == null) return null;
 

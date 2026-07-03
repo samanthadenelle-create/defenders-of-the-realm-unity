@@ -127,7 +127,7 @@ namespace DeNelle.Pets
     /// <summary>
     /// Static reflection cache + node discovery for <see cref="MineNodeHandle"/>.
     /// Resolves the MineNode <see cref="Type"/> and its public members once, then
-    /// finds nearby live nodes via <c>FindObjectsOfType</c> filtered by distance.
+    /// finds nearby live nodes via <c>FindObjectsByType</c> filtered by distance.
     /// (MineNode exposes no central registry, so a throttled scene query is the
     /// reuse-without-new-infra path; PetHarvester throttles the scan so this never
     /// runs per-frame.)
@@ -173,7 +173,7 @@ namespace DeNelle.Pets
         /// <summary>
         /// Returns the nearest live, non-depleted, unclaimed MineNode within
         /// <paramref name="radius"/> of <paramref name="from"/>, or null. Discovery
-        /// is a (throttled-by-caller) <c>FindObjectsOfType(MineNode)</c> filtered by
+        /// is a (throttled-by-caller) <c>FindObjectsByType(MineNode)</c> filtered by
         /// distance — no per-frame allocation beyond the cached scratch list.
         /// </summary>
         internal static MineNodeHandle FindNearest(Vector3 from, float radius)
@@ -182,7 +182,7 @@ namespace DeNelle.Pets
             if (s_mineNodeType == null) return null;
 
             UnityEngine.Object[] all;
-            try { all = UnityEngine.Object.FindObjectsOfType(s_mineNodeType); }
+            try { all = UnityEngine.Object.FindObjectsByType(s_mineNodeType); }
             catch { return null; }
             if (all == null || all.Length == 0) return null;
 

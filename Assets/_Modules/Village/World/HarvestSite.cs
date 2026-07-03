@@ -142,7 +142,7 @@ namespace DeNelle.Village.World
 
         private void TryLinkNearbyNode()
         {
-            var nodes = FindObjectsByType<MineNode>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            var nodes = FindObjectsByType<MineNode>(FindObjectsInactive.Exclude);
             MineNode best = null;
             float bestDist = ClaimRadius * ClaimRadius;
 

@@ -401,7 +401,7 @@ namespace DeNelle.Editor
             SetObjectField(so, "_document", uiDoc);
             // _buildCamera — leave blank: BuildMenu.Awake() defaults to Camera.main
             //   (the village Main Camera). Explicitly wiring it would need a
-            //   FindObjectOfType<Camera>; the default is the documented behaviour.
+            //   FindAnyObjectByType<Camera>; the default is the documented behaviour.
             // _groundMask — the placement raycast must hit only the ground. The
             //   village ground tiles are on the Default layer (layer 0); restrict
             //   the mask to Default so the raycast does not snag on buildings.

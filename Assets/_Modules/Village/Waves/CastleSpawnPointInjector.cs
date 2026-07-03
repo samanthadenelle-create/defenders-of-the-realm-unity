@@ -117,7 +117,7 @@ namespace DeNelle.Village
 
             // If the scene somehow already HAS real WaveSpawnPoints (e.g. baked in
             // later), don't compete — WaveManager would find both. Skip injection.
-            var existing = FindObjectsByType<WaveSpawnPoint>(FindObjectsSortMode.None);
+            var existing = FindObjectsByType<WaveSpawnPoint>();
             if (existing != null && existing.Length > 0)
             {
                 Debug.Log($"[CastleSpawnPointInjector] {existing.Length} WaveSpawnPoint(s) already present — skipping injection.");

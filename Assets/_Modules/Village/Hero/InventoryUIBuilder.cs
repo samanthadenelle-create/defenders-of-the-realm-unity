@@ -303,7 +303,7 @@ namespace DeNelle.Village
         {
             if (DeNelle.Core.UI.PanelRouter.Open(DeNelle.Core.UI.PanelId.EquipmentPanel))
                 return;
-            var panel = FindObjectOfType<DeNelle.Village.Hero.EquipmentPanel>();
+            var panel = FindAnyObjectByType<DeNelle.Village.Hero.EquipmentPanel>();
             if (panel == null)
                 panel = new GameObject("EquipmentPanelHost").AddComponent<DeNelle.Village.Hero.EquipmentPanel>();
             panel.Open();   // NotifyOpened closes this inventory (it is the registered open panel)

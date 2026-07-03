@@ -54,7 +54,7 @@ namespace DeNelle.Editor
             var boxMax = new Vector3( 8f, 10f, -10f);
             var box = new Bounds((boxMin + boxMax) * 0.5f, boxMax - boxMin);
 
-            foreach (var col in Object.FindObjectsByType<Collider>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var col in Object.FindObjectsByType<Collider>(FindObjectsInactive.Include))
             {
                 if (col == null) continue;
                 if (!col.bounds.Intersects(box)) continue;
@@ -163,7 +163,7 @@ namespace DeNelle.Editor
             NavMeshSurface[] surfaces;
             try
             {
-                surfaces = Object.FindObjectsByType<NavMeshSurface>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                surfaces = Object.FindObjectsByType<NavMeshSurface>(FindObjectsInactive.Include);
             }
             catch (System.Exception ex)
             {

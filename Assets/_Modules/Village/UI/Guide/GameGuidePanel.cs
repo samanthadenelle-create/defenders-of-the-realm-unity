@@ -243,7 +243,7 @@ namespace DeNelle.Village
             t.fontSize = ElarionUi.FontLabel;
             t.color = selected ? ElarionUi.Parchment : ElarionUi.ParchmentDim;
             t.alignment = TextAlignmentOptions.Left;
-            t.enableWordWrapping = true;
+            t.textWrappingMode = TMPro.TextWrappingModes.Normal;
             t.fontStyle = selected ? FontStyles.Bold : FontStyles.Normal;
             t.raycastTarget = false;
         }
@@ -259,7 +259,7 @@ namespace DeNelle.Village
             t.fontSize = size;
             t.color = color;
             t.alignment = TextAlignmentOptions.TopLeft;
-            t.enableWordWrapping = true;
+            t.textWrappingMode = TMPro.TextWrappingModes.Normal;
             t.raycastTarget = false;
             if (bold) t.fontStyle = FontStyles.Bold;
         }

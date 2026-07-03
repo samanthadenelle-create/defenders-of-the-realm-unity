@@ -153,12 +153,12 @@ namespace DeNelle.Village.Hero
             _targetAdapters.Clear();
             _targetBodies.Clear();
 
-            _equip = FindObjectOfType<HeroEquipment>();
+            _equip = FindAnyObjectByType<HeroEquipment>();
             var hero = GameObject.FindWithTag("Player");
             if (_equip == null && hero != null) _equip = hero.AddComponent<HeroEquipment>();
             if (hero == null)
             {
-                var loco = FindObjectOfType<HeroLocomotion>();
+                var loco = FindAnyObjectByType<HeroLocomotion>();
                 if (loco != null) hero = loco.gameObject;
             }
             if (hero != null)
@@ -172,7 +172,7 @@ namespace DeNelle.Village.Hero
                 _targetBodies.Add(ResolveBody(hero));
             }
 
-            foreach (var comp in FindObjectsByType<StoryCompanion>(FindObjectsSortMode.None))
+            foreach (var comp in FindObjectsByType<StoryCompanion>())
             {
                 if (comp == null) continue;
                 var cl = comp.GetComponent<GearLoadout>();
@@ -878,7 +878,7 @@ namespace DeNelle.Village.Hero
         // Active hero's class for the header (no loadout needed) — mirrors ResolveHeroJob's source.
         private static string ResolveActiveHeroJob()
         {
-            var ha = FindObjectOfType<HeroAbilities>();
+            var ha = FindAnyObjectByType<HeroAbilities>();
             string j = ha != null ? ha.HeroClass : null;
             return string.IsNullOrEmpty(j) ? AbilityCatalog.DefaultClass : j;
         }
