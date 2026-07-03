@@ -4,25 +4,32 @@
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
 // When the player taps a placed structure (armed == null), BuildModeController
-// selects it and shows this small action panel: MOVE / SELL (with its 50%-refund
-// amount) / CANCEL. It raises callbacks the controller wires to its move + sell +
-// deselect verbs. The placement palette stays the CREATE strip; this is the EDIT
-// panel for an already-placed structure.
+// selects it and shows this small action panel: MOVE / UPGRADE / SELL (with its
+// 50%-refund amount) / CANCEL. It raises callbacks the controller wires to its
+// move + sell + upgrade + deselect verbs. The placement palette stays the CREATE
+// strip; this is the EDIT panel for an already-placed structure.
 //
-// CODE-BUILT, NO UXML (repo rule: .uxml UIDocuments render empty in player builds).
-// Adopts a sibling UIDocument's PanelSettings the same way BuildPaletteUI does so
-// it renders, and sorts ABOVE the palette.
+// WO-D conversion (2026-07-03, coverage matrix row #37): UIDocument/UITK bar ->
+// code-built uGUI on the Obsidian kit language. IN-WORLD-ADJACENT strip, not a
+// modal: keeps its centre-top position + behaviour, restyled as a slot-plate bar
+// (RpgUiCatalog RoleSlot "slot_action") carrying kit buttons (BuildObsidianButton)
+// on its own overlay canvas, above the palette. "Cancel" clears the selection and
+// IS this strip's close affordance, so its GameObject is named "CloseButton" per
+// the close convention (label stays "Cancel").
 // =============================================================================
 
 using System;
+using TMPro;
 using UnityEngine;
-using UnityEngine.UIElements;
+using UnityEngine.UI;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Village
 {
     /// <summary>
-    /// The Build Mode edit-action panel for a selected structure: Move / Sell /
-    /// Cancel. Built in code so it renders in player builds; mirrors BuildPaletteUI.
+    /// The Build Mode edit-action panel for a selected structure: Move / Upgrade /
+    /// Sell / Cancel. Built in code (uGUI + Obsidian kit) so it renders in player
+    /// builds; mirrors BuildPaletteUI's canvas ownership.
     /// </summary>
     public sealed class BuildSelectionUI : MonoBehaviour
     {
@@ -38,43 +45,19 @@ namespace DeNelle.Village
         /// <summary>Raised when CANCEL is tapped — clear the selection.</summary>
         public event Action OnCancelRequested;
 
-        private UIDocument _document;
-        private VisualElement _root;
-        private Label _titleLabel;
+        // Above the palette strip (900), below kit modals (31000).
+        private const int SortingOrder = 910;
+
+        private GameObject _canvas;   // own overlay canvas (kit BuildModalCanvas)
+        private TextMeshProUGUI _titleLabel;
         private Button _sellBtn;
+        private TMP_Text _sellLabel;
         private Button _upgradeBtn;
+        private TMP_Text _upgradeLabel;
 
-        private void Awake()
+        private void OnDestroy()
         {
-            _document = GetComponent<UIDocument>();
-            if (_document == null) _document = gameObject.AddComponent<UIDocument>();
-            AdoptPanelSettings();
-        }
-
-        /// <summary>
-        /// Adopt a sibling UIDocument's PanelSettings so the panel renders (mirrors
-        /// BuildPaletteUI). Sorts above the palette so the action panel is on top.
-        /// </summary>
-        private void AdoptPanelSettings()
-        {
-            if (_document == null) return;
-            UIDocument hud = null, any = null;
-            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include))
-            {
-                if (doc == null || doc == _document || doc.panelSettings == null) continue;
-                if (any == null) any = doc;
-                if (doc.gameObject.name.IndexOf("Hud", StringComparison.OrdinalIgnoreCase) >= 0) { hud = doc; break; }
-            }
-            var src = hud ?? any;
-            if (src != null)
-            {
-                _document.panelSettings = src.panelSettings;
-                _document.sortingOrder = src.sortingOrder + 8;   // above HUD + palette
-            }
-            else
-            {
-                Debug.LogWarning("[BuildSelectionUI] No sibling PanelSettings found — panel will not render.");
-            }
+            if (_canvas != null) Destroy(_canvas);
         }
 
         // ── Show / Hide ────────────────────────────────────────────────────────
@@ -82,7 +65,7 @@ namespace DeNelle.Village
         /// <summary>
         /// Show the action panel for a structure (S5: with its upgrade state). The title
         /// carries the current/max tier; the Upgrade button shows the next-tier cost, greys +
-        /// reads "MAX" at the ceiling, and greys when the player can't yet afford the step.
+        /// reads "Max Tier" at the ceiling, and greys when the player can't yet afford the step.
         /// </summary>
         /// <param name="structureName">Display label.</param>
         /// <param name="refund">Sell refund total (units across all pools).</param>
@@ -94,6 +77,7 @@ namespace DeNelle.Village
                          int upgradeCostTotal, bool canAffordUpgrade)
         {
             EnsureBuilt();
+            if (_canvas == null) return;
 
             int lvl = Mathf.Max(1, level);
             int max = Mathf.Max(1, maxLevel);
@@ -103,94 +87,124 @@ namespace DeNelle.Village
                 string baseName = string.IsNullOrEmpty(structureName) ? "Structure" : structureName;
                 _titleLabel.text = max > 1 ? $"{baseName}  (Lv {lvl}/{max})" : baseName;
             }
-            if (_sellBtn != null)
-                _sellBtn.text = "Sell  ◆ " + Mathf.Max(0, refund);
+            if (_sellLabel != null)
+                _sellLabel.text = "Sell (" + Mathf.Max(0, refund) + ")";   // ASCII — no crystal glyph in TMP
 
             if (_upgradeBtn != null)
             {
                 bool upgradeable = max > 1;
-                _upgradeBtn.style.display = upgradeable ? DisplayStyle.Flex : DisplayStyle.None;
+                _upgradeBtn.gameObject.SetActive(upgradeable);
                 if (upgradeable)
                 {
                     bool atMax = lvl >= max;
                     if (atMax)
                     {
-                        _upgradeBtn.text = "Max Tier";
-                        _upgradeBtn.SetEnabled(false);
+                        if (_upgradeLabel != null) _upgradeLabel.text = "Max Tier";
+                        _upgradeBtn.interactable = false;
                     }
                     else
                     {
-                        _upgradeBtn.text = "Upgrade  ◆ " + Mathf.Max(0, upgradeCostTotal);
-                        _upgradeBtn.SetEnabled(canAffordUpgrade);
+                        if (_upgradeLabel != null) _upgradeLabel.text = "Upgrade (" + Mathf.Max(0, upgradeCostTotal) + ")";
+                        _upgradeBtn.interactable = canAffordUpgrade;
                     }
                 }
             }
 
-            if (_root != null) _root.style.display = DisplayStyle.Flex;
+            _canvas.SetActive(true);
         }
 
         public void Hide()
         {
-            if (_root != null) _root.style.display = DisplayStyle.None;
+            if (_canvas != null) _canvas.SetActive(false);
         }
 
         private void EnsureBuilt()
         {
-            if (_root != null) return;
-            var docRoot = _document != null ? _document.rootVisualElement : null;
-            if (docRoot == null) return;
+            if (_canvas != null) return;
 
-            _root = new VisualElement { name = "build-selection-root" };
-            _root.style.position = Position.Absolute;
-            // Anchored centre-top so it never overlaps the bottom palette strip.
-            _root.style.top = 90;
-            _root.style.left = 0; _root.style.right = 0;
-            _root.style.flexDirection = FlexDirection.Row;
-            _root.style.justifyContent = Justify.Center;
-            _root.pickingMode = PickingMode.Ignore;   // click-through except the bar
-            docRoot.Add(_root);
+            _canvas = ElarionUiKit.BuildModalCanvas("BuildSelectionCanvas", SortingOrder);
 
-            var bar = new VisualElement();
-            bar.style.flexDirection = FlexDirection.Row;
-            bar.style.alignItems = Align.Center;
-            bar.style.paddingLeft = 12; bar.style.paddingRight = 12;
-            bar.style.paddingTop = 8; bar.style.paddingBottom = 8;
-            bar.style.backgroundColor = new Color(0.06f, 0.08f, 0.14f, 0.95f);
-            _root.Add(bar);
+            // Slot-plate bar anchored centre-top so it never overlaps the bottom palette
+            // strip. Only the bar raycasts — the rest of the screen stays click-through.
+            var bar = new GameObject("SelectionBar", typeof(RectTransform), typeof(Image));
+            bar.transform.SetParent(_canvas.transform, false);
+            var brt = (RectTransform)bar.transform;
+            brt.anchorMin = new Vector2(0.5f, 1f);
+            brt.anchorMax = new Vector2(0.5f, 1f);
+            brt.pivot = new Vector2(0.5f, 1f);
+            brt.anchoredPosition = new Vector2(0f, -110f);
+            brt.sizeDelta = new Vector2(880f, 170f);
 
-            _titleLabel = new Label("Structure");
-            _titleLabel.style.color = Color.white;
-            _titleLabel.style.fontSize = 15;
-            _titleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            _titleLabel.style.marginRight = 14;
-            bar.Add(_titleLabel);
+            var img = bar.GetComponent<Image>();
+            var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotAction);
+            if (plate != null)
+            {
+                img.sprite = plate;
+                img.type = Image.Type.Sliced;
+                img.fillCenter = true;
+                img.color = Color.white;
+            }
+            else
+            {
+                img.color = ElarionUiKit.ObsidianFill;   // art-absent fallback: kit obsidian
+            }
+            img.raycastTarget = true;   // eat taps on the bar so they can't fall through
 
-            var moveBtn = new Button(() => OnMoveRequested?.Invoke()) { text = "Move" };
-            StyleButton(moveBtn, new Color(0.20f, 0.42f, 0.66f, 0.98f));
-            bar.Add(moveBtn);
+            // Title row (top band).
+            _titleLabel = MakeText(bar.transform, "Structure", 17, ElarionUi.Gilt, FontStyles.Bold,
+                TextAlignmentOptions.Center, new Vector2(0.04f, 0.62f), new Vector2(0.96f, 0.94f));
+
+            // Action row (bottom band): Move / Upgrade / Sell / Cancel kit buttons.
+            var moveBtn = ElarionUiKit.BuildObsidianButton(bar.transform, "Move",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.035f, 0.10f), new Vector2(0.255f, 0.56f),
+                () => OnMoveRequested?.Invoke());
 
             // S5 — the UPGRADE verb (the CoC sink). Hidden for non-upgradeable structures
             // (maxLevel == 1) and disabled at the tier ceiling / when unaffordable; Show()
             // sets its text + enabled state per the selected structure's tier each time.
-            _upgradeBtn = new Button(() => OnUpgradeRequested?.Invoke()) { text = "Upgrade" };
-            StyleButton(_upgradeBtn, new Color(0.24f, 0.56f, 0.30f, 0.98f));
-            bar.Add(_upgradeBtn);
+            _upgradeBtn = ElarionUiKit.BuildObsidianButton(bar.transform, "Upgrade",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
+                new Vector2(0.275f, 0.10f), new Vector2(0.495f, 0.56f),
+                () => OnUpgradeRequested?.Invoke());
+            _upgradeLabel = _upgradeBtn.GetComponentInChildren<TMP_Text>(true);
 
-            _sellBtn = new Button(() => OnSellRequested?.Invoke()) { text = "Sell" };
-            StyleButton(_sellBtn, new Color(0.62f, 0.40f, 0.20f, 0.98f));
-            bar.Add(_sellBtn);
+            _sellBtn = ElarionUiKit.BuildObsidianButton(bar.transform, "Sell",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Red,
+                new Vector2(0.515f, 0.10f), new Vector2(0.735f, 0.56f),
+                () => OnSellRequested?.Invoke());
+            _sellLabel = _sellBtn.GetComponentInChildren<TMP_Text>(true);
 
-            var cancelBtn = new Button(() => OnCancelRequested?.Invoke()) { text = "Cancel" };
-            StyleButton(cancelBtn, new Color(0.30f, 0.32f, 0.40f, 0.98f));
-            bar.Add(cancelBtn);
+            // Cancel clears the selection — this strip's close affordance, so it carries
+            // the canonical close name while keeping its "Cancel" label.
+            var cancelBtn = ElarionUiKit.BuildObsidianButton(bar.transform, "Cancel",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.755f, 0.10f), new Vector2(0.965f, 0.56f),
+                () => OnCancelRequested?.Invoke());
+            cancelBtn.gameObject.name = "CloseButton";
+
+            _canvas.SetActive(false);   // built hidden; Show shows it
         }
 
-        private static void StyleButton(Button b, Color bg)
+        // ── uGUI helper (LeaderboardPanel/VillageCraftingPanel shape) ─────────
+        private static TextMeshProUGUI MakeText(Transform parent, string text, float size,
+            Color color, FontStyles style, TextAlignmentOptions align, Vector2 min, Vector2 max)
         {
-            b.style.height = 32; b.style.minWidth = 84;
-            b.style.marginLeft = 4; b.style.marginRight = 4;
-            b.style.color = Color.white;
-            b.style.backgroundColor = bg;
+            var go = new GameObject("Text", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var t = go.AddComponent<TextMeshProUGUI>();
+            t.text = text;
+            t.fontSize = size;
+            t.color = color;
+            t.fontStyle = style;
+            t.alignment = align;
+            t.raycastTarget = false;
+            t.textWrappingMode = TextWrappingModes.Normal;
+            ElarionUiKit.EnsureFont(t);
+            return t;
         }
     }
 }

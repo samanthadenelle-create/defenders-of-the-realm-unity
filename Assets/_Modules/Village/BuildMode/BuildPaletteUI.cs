@@ -6,18 +6,24 @@
 // A horizontal strip of buildable cards at the bottom of the screen, populated
 // straight from CatalogRegistry (the SAME buckets StructureFactory builds from —
 // no parallel BuildableItem type, per the WO build-ready update). Each card shows
-// the entry's display name + crystal cost; unaffordable cards grey out. Tapping a
-// card arms it for placement via the OnEntrySelected callback.
+// the entry's display name + cost; unaffordable cards grey out. Tapping a card
+// arms it for placement via the OnEntrySelected callback.
 //
-// CODE-BUILT, NO UXML (repo rule: .uxml UIDocuments render empty in player builds
-// — see BuildMenu.ShowCodeFallbackMenu). Owns its own UIDocument + PanelSettings,
-// adopting a sibling's PanelSettings the same way BuildMenu does so it renders.
+// WO-D conversion (2026-07-03, coverage matrix row #36): UIDocument/UITK strip ->
+// code-built uGUI on the Obsidian kit language. This is an IN-WORLD-ADJACENT
+// strip, NOT a full modal: it keeps its bottom-of-screen position + behaviour,
+// restyled with kit buttons (BuildObsidianButton) and slot plates (RpgUiCatalog
+// RoleSlot "slot_action") on its own overlay canvas — no PanelSettings adoption
+// needed any more (that was a UIDocument requirement). "Done" exits Build Mode
+// and IS this strip's close affordance, so its GameObject is named "CloseButton"
+// per the close convention (label stays "Done").
 // =============================================================================
 
 using System;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
-using UnityEngine.UIElements;
+using UnityEngine.UI;
 using DeNelle.Core.Catalog;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
@@ -27,8 +33,8 @@ namespace DeNelle.Village
 {
     /// <summary>
     /// The Build Mode structure palette. Lists CatalogRegistry entries as tappable
-    /// cards and raises <see cref="OnEntrySelected"/> when one is armed. Built in
-    /// code so it renders in player builds.
+    /// slot-plate cards and raises <see cref="OnEntrySelected"/> when one is armed.
+    /// Built in code (uGUI + Obsidian kit) so it renders in player builds.
     /// </summary>
     public sealed class BuildPaletteUI : MonoBehaviour
     {
@@ -44,7 +50,7 @@ namespace DeNelle.Village
         /// </summary>
         public event Action<CatalogEntry> OnCardTapped;
 
-        /// <summary>Raised when the palette's Exit button is tapped.</summary>
+        /// <summary>Raised when the palette's Done/exit button is tapped.</summary>
         public event Action OnExitRequested;
 
         /// <summary>
@@ -66,19 +72,14 @@ namespace DeNelle.Village
             "jeweler",
         };
 
-        private UIDocument _document;
-        private VisualElement _root;
-        private VisualElement _strip;
-        private Label _balanceLabel;
-        private Button _orientBtn;     // shown only while an entry is armed
-        private string _armedId;
+        // Strips sit ABOVE the HUD but BELOW kit modals (BuildObsidianModal defaults 31000).
+        private const int SortingOrder = 900;
 
-        private void Awake()
-        {
-            _document = GetComponent<UIDocument>();
-            if (_document == null) _document = gameObject.AddComponent<UIDocument>();
-            AdoptPanelSettings();
-        }
+        private GameObject _canvas;           // own overlay canvas (kit BuildModalCanvas)
+        private Transform _stripContent;      // horizontal-layout card host inside the scroll
+        private TextMeshProUGUI _balanceLabel;
+        private Button _orientBtn;            // shown only while an entry is armed
+        private string _armedId;
 
         private void OnEnable()
         {
@@ -96,54 +97,14 @@ namespace DeNelle.Village
             if (svc != null) svc.ResourcesChanged.RemoveListener(OnResourcesChanged);
         }
 
-        private void OnResourcesChanged()
+        private void OnDestroy()
         {
-            if (_root != null && _root.style.display == DisplayStyle.Flex) Render();
+            if (_canvas != null) Destroy(_canvas);
         }
 
-        /// <summary>
-        /// Adopt a sibling UIDocument's PanelSettings so the palette renders (the
-        /// builder leaves new docs without one → invisible). Mirrors BuildMenu.
-        /// </summary>
-        private void AdoptPanelSettings()
+        private void OnResourcesChanged()
         {
-            if (_document == null) return;
-            UIDocument hud = null, any = null;
-            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include))
-            {
-                // Require a THEMED PanelSettings — adopting an unthemed one renders the palette
-                // blank (the empty-palette bug: in MainCastle_Hall the HUD is uGUI, so the only
-                // sibling was the dev console's unthemed runtime PanelSettings).
-                if (doc == null || doc == _document || doc.panelSettings == null ||
-                    doc.panelSettings.themeStyleSheet == null) continue;
-                if (any == null) any = doc;
-                if (doc.gameObject.name.IndexOf("Hud", StringComparison.OrdinalIgnoreCase) >= 0) { hud = doc; break; }
-            }
-            var src = hud ?? any;
-            if (src != null)
-            {
-                _document.panelSettings = src.panelSettings;
-                _document.sortingOrder = src.sortingOrder + 6;   // above HUD + BuildMenu
-                FlowTrace.Step("BuildPalette", $"adopted PanelSettings from '{src.gameObject.name}' (sort={_document.sortingOrder})");
-                return;
-            }
-
-            // NO themed sibling (the castle hub HUD is uGUI — no UIDocument to borrow). Build our
-            // OWN PanelSettings at runtime so the palette ALWAYS renders, instead of dead-ending
-            // invisible. Mirrors DevBootstrap.ResolvePanelSettings — the proven no-sibling fallback
-            // (the palette is inline-styled, so it renders even if no theme USS is available).
-            var created = ScriptableObject.CreateInstance<PanelSettings>();
-            created.name = "BuildPaletteRuntimePanelSettings";
-            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include))
-            {
-                if (doc != null && doc.panelSettings != null && doc.panelSettings.themeStyleSheet != null)
-                { created.themeStyleSheet = doc.panelSettings.themeStyleSheet; break; }
-            }
-            _document.panelSettings = created;
-            _document.sortingOrder = 130;   // above the town HUD
-            FlowTrace.Step("BuildPalette", created.themeStyleSheet != null
-                ? "no themed sibling — built runtime PanelSettings (borrowed a theme)"
-                : "no themed sibling/theme — built runtime PanelSettings (inline-styled palette still renders)");
+            if (_canvas != null && _canvas.activeSelf) Render();
         }
 
         // ── Show / Hide ────────────────────────────────────────────────────────
@@ -151,13 +112,13 @@ namespace DeNelle.Village
         public void Show()
         {
             EnsureBuilt();
-            if (_root != null) _root.style.display = DisplayStyle.Flex;
+            if (_canvas != null) _canvas.SetActive(true);
             Render();
         }
 
         public void Hide()
         {
-            if (_root != null) _root.style.display = DisplayStyle.None;
+            if (_canvas != null) _canvas.SetActive(false);
             _armedId = null;
             UpdateOrientButton();
         }
@@ -171,78 +132,94 @@ namespace DeNelle.Village
         public void SetArmed(string id)
         {
             _armedId = id;
-            if (_root != null && _root.style.display == DisplayStyle.Flex) Render();
+            if (_canvas != null && _canvas.activeSelf) Render();
             else UpdateOrientButton();
         }
 
         private void EnsureBuilt()
         {
-            if (_root != null) return;
-            var docRoot = _document != null ? _document.rootVisualElement : null;
-            if (docRoot == null)
-            {
-                // WebGL silent-blank cause #1: doc has no panel/root yet → nothing builds.
-                FlowTrace.Warn("BuildPalette", _document == null
-                    ? "EnsureBuilt: no UIDocument — palette cannot build"
-                    : "EnsureBuilt: UIDocument.rootVisualElement is null (no PanelSettings?) — palette cannot build");
-                return;
-            }
+            if (_canvas != null) return;
 
-            _root = new VisualElement { name = "build-palette-root" };
-            _root.style.position = Position.Absolute;
-            _root.style.left = 0; _root.style.right = 0; _root.style.bottom = 0;
-            _root.style.flexDirection = FlexDirection.Column;
-            // The root is click-through; the bar inside receives taps.
-            _root.pickingMode = PickingMode.Ignore;
-            docRoot.Add(_root);
+            _canvas = ElarionUiKit.BuildModalCanvas("BuildPaletteCanvas", SortingOrder);
 
-            // Top row: balance + exit. Stone bar with a gilt under-rule.
-            var topBar = new VisualElement();
-            topBar.style.flexDirection = FlexDirection.Row;
-            topBar.style.justifyContent = Justify.SpaceBetween;
-            topBar.style.alignItems = Align.Center;
-            topBar.style.paddingLeft = 14; topBar.style.paddingRight = 14;
-            topBar.style.paddingTop = 6; topBar.style.paddingBottom = 6;
-            topBar.style.backgroundColor = ElarionUi.PanelStone;
-            topBar.style.borderBottomWidth = 2;
-            topBar.style.borderBottomColor = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f);
+            // Bottom-anchored dock: top bar (balance + Orient + Done) over the card tray.
+            // Only the dock's own graphics raycast — everything above it stays click-through
+            // so world taps still land placements.
+            var dock = new GameObject("PaletteDock", typeof(RectTransform));
+            dock.transform.SetParent(_canvas.transform, false);
+            var drt = (RectTransform)dock.transform;
+            drt.anchorMin = new Vector2(0f, 0f);
+            drt.anchorMax = new Vector2(1f, 0f);
+            drt.pivot = new Vector2(0.5f, 0f);
+            drt.anchoredPosition = Vector2.zero;
+            drt.sizeDelta = new Vector2(0f, 300f);
 
-            _balanceLabel = new Label("❖ 0");
-            _balanceLabel.style.color = ElarionUi.Aether;
-            _balanceLabel.style.fontSize = ElarionUi.FontHead;
-            _balanceLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            topBar.Add(_balanceLabel);
+            // Top row: obsidian fill + gold under-rule (the kit panel language).
+            var topBar = ElarionUiKit.AddImage(dock.transform, "TopBar",
+                new Vector2(0f, 0.72f), new Vector2(1f, 1f), ElarionUiKit.ObsidianFill, rounded: false);
+            var rule = ElarionUiKit.AddImage(topBar.transform, "GoldRule",
+                new Vector2(0f, 0f), new Vector2(1f, 0f), ElarionUiKit.ObsidianTrim, rounded: false);
+            var rrt = rule.GetComponent<RectTransform>();
+            rrt.sizeDelta = new Vector2(0f, 2f);
+            rrt.pivot = new Vector2(0.5f, 0f);
+            var ruleImg = rule.GetComponent<Image>();
+            if (ruleImg != null) ruleImg.raycastTarget = false;
 
-            // Right-side button cluster: Orient (armed-only) + Done.
-            var rightCluster = new VisualElement();
-            rightCluster.style.flexDirection = FlexDirection.Row;
+            _balanceLabel = MakeText(topBar.transform, "Crystals: 0", 18, ElarionUi.Gilt,
+                FontStyles.Bold, TextAlignmentOptions.Left,
+                new Vector2(0.02f, 0.10f), new Vector2(0.50f, 0.90f));
 
             // Orient — opens the 3-axis orient editor on the ARMED entry (no id typing).
-            _orientBtn = new Button(() => { if (!string.IsNullOrEmpty(_armedId)) OnOrientRequested?.Invoke(_armedId); })
-                { text = "Orient" };
-            ElarionUi.StyleButton(_orientBtn, ElarionUi.ButtonKind.Neutral);
-            _orientBtn.style.minWidth = 88;
-            _orientBtn.style.marginRight = 8;
-            _orientBtn.style.display = DisplayStyle.None;   // shown only while armed
-            rightCluster.Add(_orientBtn);
+            _orientBtn = ElarionUiKit.BuildObsidianButton(topBar.transform, "Orient",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.56f, 0.10f), new Vector2(0.76f, 0.90f),
+                () => { if (!string.IsNullOrEmpty(_armedId)) OnOrientRequested?.Invoke(_armedId); });
+            _orientBtn.gameObject.SetActive(false);   // shown only while armed
 
-            var exitBtn = new Button(() => OnExitRequested?.Invoke()) { text = "Done" };
-            ElarionUi.StyleButton(exitBtn, ElarionUi.ButtonKind.Gold);
-            exitBtn.style.minWidth = 88;
-            rightCluster.Add(exitBtn);
-            topBar.Add(rightCluster);
-            _root.Add(topBar);
+            // Done exits Build Mode — the strip's close affordance, so it carries the
+            // canonical close name while keeping its "Done" label.
+            var exitBtn = ElarionUiKit.BuildObsidianButton(topBar.transform, "Done",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.78f, 0.10f), new Vector2(0.98f, 0.90f),
+                () => OnExitRequested?.Invoke());
+            exitBtn.gameObject.name = "CloseButton";
 
-            // Bottom row: scrollable horizontal card strip in a recessed stone tray.
-            var scroll = new ScrollView(ScrollViewMode.Horizontal);
-            scroll.style.height = 128;
-            scroll.style.backgroundColor = ElarionUi.PanelStoneDark;
-            scroll.style.paddingTop = 4; scroll.style.paddingBottom = 4;
-            scroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
-            scroll.verticalScrollerVisibility = ScrollerVisibility.Hidden;
-            _strip = scroll.contentContainer;
-            _strip.style.flexDirection = FlexDirection.Row;
-            _root.Add(scroll);
+            // Bottom: horizontal-scrolling slot-plate card tray in a recessed dark well.
+            var tray = ElarionUiKit.AddImage(dock.transform, "CardTray",
+                new Vector2(0f, 0f), new Vector2(1f, 0.72f),
+                new Color(0f, 0f, 0f, 0.55f), rounded: false);
+
+            var scrollGo = new GameObject("Scroll", typeof(RectTransform), typeof(ScrollRect), typeof(RectMask2D), typeof(Image));
+            scrollGo.transform.SetParent(tray.transform, false);
+            var srt = scrollGo.GetComponent<RectTransform>();
+            srt.anchorMin = Vector2.zero; srt.anchorMax = Vector2.one;
+            srt.offsetMin = Vector2.zero; srt.offsetMax = Vector2.zero;
+            scrollGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.01f);   // raycast surface for drag-scroll
+
+            var contentGo = new GameObject("Content", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(ContentSizeFitter));
+            contentGo.transform.SetParent(scrollGo.transform, false);
+            var crt = contentGo.GetComponent<RectTransform>();
+            crt.anchorMin = new Vector2(0f, 0f); crt.anchorMax = new Vector2(0f, 1f);
+            crt.pivot = new Vector2(0f, 0.5f);
+            crt.offsetMin = Vector2.zero; crt.offsetMax = Vector2.zero;
+            var layout = contentGo.GetComponent<HorizontalLayoutGroup>();
+            layout.spacing = 10f;
+            layout.padding = new RectOffset(12, 12, 10, 10);
+            layout.childControlWidth = false;    // cards keep their fixed width
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = true;
+            contentGo.GetComponent<ContentSizeFitter>().horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            var scroll = scrollGo.GetComponent<ScrollRect>();
+            scroll.content = crt;
+            scroll.horizontal = true;
+            scroll.vertical = false;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 24f;
+
+            _stripContent = contentGo.transform;
+            _canvas.SetActive(false);   // built hidden; Show shows it
         }
 
         // ── Render ──────────────────────────────────────────────────────────────
@@ -251,14 +228,14 @@ namespace DeNelle.Village
         {
             FlowTrace.Step("BuildPalette", "palette-build-start");
             EnsureBuilt();
-            if (_strip == null)
+            if (_stripContent == null)
             {
-                // built-but-no-strip → the doc root never resolved (see EnsureBuilt warn).
-                FlowTrace.Warn("BuildPalette", "Render aborted: _strip is null (palette never built)");
+                FlowTrace.Warn("BuildPalette", "Render aborted: strip content is null (palette never built)");
                 return;
             }
 
-            _strip.Clear();
+            for (int i = _stripContent.childCount - 1; i >= 0; i--)
+                Destroy(_stripContent.GetChild(i).gameObject);
             UpdateBalance();
             UpdateOrientButton();
 
@@ -281,30 +258,60 @@ namespace DeNelle.Village
             FlowTrace.Step("BuildPalette", $"catalog-count: registry={CatalogRegistry.Count} candidates={candidates.Count} (types={_types.Length})");
 
             // §12: guard EACH card build so one bad entry (missing field / service throw /
-            // ElarionUi quirk) is logged + skipped instead of blanking the whole palette —
+            // kit quirk) is logged + skipped instead of blanking the whole palette —
             // the WebGL "shows nothing, no error" silent-failure class becomes a logged line.
             var built = Guard.TryEach("BuildPalette", "build card", candidates,
-                e => _strip.Add(BuildCard(e)));
+                e => BuildCard(e));
             FlowTrace.Step("BuildPalette", $"rows-added: built={built.built} failed={built.failed}");
 
             if (built.built == 0)
             {
-                var none = new Label(candidates.Count == 0
-                    ? "No buildables registered."
-                    : "Buildables failed to load.");
-                none.style.color = Color.white;
-                none.style.paddingLeft = 12; none.style.paddingTop = 12;
-                _strip.Add(none);
+                var none = MakeText(_stripContent, candidates.Count == 0
+                        ? "No buildables registered."
+                        : "Buildables failed to load.",
+                    14, ElarionUi.Parchment, FontStyles.Italic, TextAlignmentOptions.Left,
+                    Vector2.zero, Vector2.one);
+                var lrt = none.GetComponent<RectTransform>();
+                lrt.sizeDelta = new Vector2(360f, 0f);
+                none.gameObject.AddComponent<LayoutElement>().preferredWidth = 360f;
             }
         }
 
-        private VisualElement BuildCard(CatalogEntry e)
+        private void BuildCard(CatalogEntry e)
         {
             DeNelle.Core.Catalog.ResourceCost cost = CostFor(e);
             bool affordable = CanAfford(cost);
             bool armed = e.id == _armedId;
 
-            var card = new Button(() =>
+            // Slot-plate card: the Blink "slot_action" plate as the face (Obsidian fill
+            // fallback when the mirrored art is absent), a Button over the whole plate.
+            var cardGo = new GameObject("Card_" + e.id, typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
+            cardGo.transform.SetParent(_stripContent, false);
+            var rt = cardGo.GetComponent<RectTransform>();
+            rt.sizeDelta = new Vector2(160f, 0f);
+            cardGo.GetComponent<LayoutElement>().preferredWidth = 160f;
+
+            var img = cardGo.GetComponent<Image>();
+            var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotAction);
+            if (plate != null)
+            {
+                img.sprite = plate;
+                img.type = Image.Type.Sliced;
+                img.fillCenter = true;
+                // Armed = gilt-tinted plate; rest = the plate's own obsidian face.
+                img.color = armed ? ElarionUi.Gilt : Color.white;
+            }
+            else
+            {
+                img.color = armed
+                    ? new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.35f)
+                    : ElarionUiKit.ObsidianFill;
+            }
+
+            var btn = cardGo.GetComponent<Button>();
+            btn.targetGraphic = img;
+            btn.interactable = affordable;
+            btn.onClick.AddListener(() =>
             {
                 // WO-352 — if a preview subscriber is attached, defer arming: raise
                 // OnCardTapped so the controller shows the Structure Info Preview panel
@@ -318,38 +325,20 @@ namespace DeNelle.Village
                 OnEntrySelected?.Invoke(e);
                 Render();   // refresh the armed highlight
             });
-            card.style.width = 116; card.style.height = 108;
-            card.style.marginLeft = 6; card.style.marginRight = 6;
-            card.style.marginTop = 8; card.style.marginBottom = 8;
-            card.style.paddingTop = 8; card.style.paddingBottom = 8;
-            card.style.paddingLeft = 8; card.style.paddingRight = 8;
-            card.style.flexDirection = FlexDirection.Column;
-            card.style.justifyContent = Justify.SpaceBetween;
-            // Armed = gilt-rimmed gold glow; rest = stone slot.
-            card.style.backgroundColor = armed ? ElarionUi.AetherDim : ElarionUi.PanelStone;
-            ElarionUi.SetRadius(card, ElarionUi.RadiusMd);
-            ElarionUi.SetBorderWidth(card, armed ? 2 : 1);
-            ElarionUi.SetBorderColor(card, armed
-                ? ElarionUi.Gilt
-                : new Color(ElarionUi.StoneTrim.r, ElarionUi.StoneTrim.g, ElarionUi.StoneTrim.b, 0.5f));
-            card.style.opacity = affordable ? 1f : 0.45f;
-            card.SetEnabled(affordable);
 
-            var nameLabel = new Label(string.IsNullOrEmpty(e.displayName) ? e.id : e.displayName);
-            nameLabel.style.color = ElarionUi.Parchment;
-            nameLabel.style.fontSize = ElarionUi.FontLabel;
-            nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            nameLabel.style.whiteSpace = WhiteSpace.Normal;
-            card.Add(nameLabel);
+            // Unaffordable cards grey out as a whole (plate + labels).
+            if (!affordable) cardGo.AddComponent<CanvasGroup>().alpha = 0.45f;
 
-            var costLabel = new Label(CostLabel(cost));
-            costLabel.style.color = affordable ? ElarionUi.Affordable : ElarionUi.Danger;
-            costLabel.style.fontSize = ElarionUi.FontLabel;
-            costLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            costLabel.style.whiteSpace = WhiteSpace.Normal;
-            card.Add(costLabel);
+            var nameLabel = MakeText(cardGo.transform,
+                string.IsNullOrEmpty(e.displayName) ? e.id : e.displayName,
+                14, armed ? ElarionUi.Ink : ElarionUi.Parchment, FontStyles.Bold,
+                TextAlignmentOptions.Center, new Vector2(0.06f, 0.42f), new Vector2(0.94f, 0.92f));
+            nameLabel.raycastTarget = false;
 
-            return card;
+            var costLabel = MakeText(cardGo.transform, CostLabel(cost), 13,
+                affordable ? ElarionUi.Affordable : ElarionUi.Danger, FontStyles.Bold,
+                TextAlignmentOptions.Center, new Vector2(0.06f, 0.08f), new Vector2(0.94f, 0.40f));
+            costLabel.raycastTarget = false;
         }
 
         // ── Cost resolution (mirrors BuildModeController — crystals-only fallback) ──
@@ -376,7 +365,7 @@ namespace DeNelle.Village
             return CrystalBalance >= cost.crystals;   // service-less fallback
         }
 
-        /// <summary>Compact per-resource cost string for the card (skips zero slots).</summary>
+        /// <summary>Compact per-resource cost string for the card (skips zero slots; ASCII only).</summary>
         private static string CostLabel(DeNelle.Core.Catalog.ResourceCost c)
         {
             if (c.IsZero) return "Free";
@@ -384,21 +373,20 @@ namespace DeNelle.Village
             if (c.wood     > 0) parts.Add(c.wood     + "W");
             if (c.food     > 0) parts.Add(c.food     + "F");
             if (c.iron     > 0) parts.Add(c.iron     + "I");
-            if (c.crystals > 0) parts.Add("❖" + c.crystals);
+            if (c.crystals > 0) parts.Add(c.crystals + "C");
             return string.Join("  ", parts);
         }
 
         private void UpdateBalance()
         {
-            if (_balanceLabel != null) _balanceLabel.text = "❖ " + CrystalBalance;
+            if (_balanceLabel != null) _balanceLabel.text = "Crystals: " + CrystalBalance;
         }
 
         /// <summary>Show the Orient button only while an entry is armed.</summary>
         private void UpdateOrientButton()
         {
             if (_orientBtn != null)
-                _orientBtn.style.display = string.IsNullOrEmpty(_armedId)
-                    ? DisplayStyle.None : DisplayStyle.Flex;
+                _orientBtn.gameObject.SetActive(!string.IsNullOrEmpty(_armedId));
         }
 
         /// <summary>The persisted crystal wallet (WO-131 — the single source of truth).</summary>
@@ -409,6 +397,27 @@ namespace DeNelle.Village
                 var svc = GameStateService.Instance;
                 return svc != null && svc.State != null ? svc.State.Resources.Crystals : 0;
             }
+        }
+
+        // ── uGUI helper (LeaderboardPanel/VillageCraftingPanel shape) ─────────
+        private static TextMeshProUGUI MakeText(Transform parent, string text, float size,
+            Color color, FontStyles style, TextAlignmentOptions align, Vector2 min, Vector2 max)
+        {
+            var go = new GameObject("Text", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var t = go.AddComponent<TextMeshProUGUI>();
+            t.text = text;
+            t.fontSize = size;
+            t.color = color;
+            t.fontStyle = style;
+            t.alignment = align;
+            t.raycastTarget = false;
+            t.textWrappingMode = TextWrappingModes.Normal;
+            ElarionUiKit.EnsureFont(t);
+            return t;
         }
     }
 }

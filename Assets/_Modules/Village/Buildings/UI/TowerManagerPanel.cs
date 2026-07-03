@@ -3,27 +3,31 @@
 // level + range/damage; selecting one highlights it in-world with a marker and
 // exposes per-tower Upgrade / Raze (acts on the SELECTED tower, not the last one).
 // -----------------------------------------------------------------------------
-// Code-built UI (renders in player builds, unlike .uxml). Self-installs on a
-// borrowed PanelSettings (the MusicToggleBootstrap pattern) and toggles with the
-// M key; the BuildMenu's "Manage Towers" button also toggles it via Instance.
+// WO-D conversion (2026-07-03, coverage matrix row #40): UIDocument/UITK card ->
+// code-built uGUI on the Obsidian master frame (BuildObsidianModal: FrameCore +
+// shield medallion + the ONE shared Close), per the HelpMenu reference recipe.
+// Self-install no longer needs a borrowed PanelSettings (that was a UIDocument
+// requirement) — the kit modal owns its canvas. Contracts preserved: Instance,
+// Toggle()/Show()/Hide(), the PanelManager "Tower Manager" arbiter handle, the
+// 0.5s live refresh, the in-world selection marker, TryUpgrade/Raze verbs.
 // =============================================================================
 
 using UnityEngine;
-using UnityEngine.UIElements;
 using UnityEngine.SceneManagement;
+using TMPro;
 using DeNelle.Core.UI;
 
 namespace DeNelle.Village.UI
 {
     /// <summary>Lists + manages placed towers (level, range/damage, select → upgrade/raze).</summary>
-    [RequireComponent(typeof(UIDocument))]
+    [DisallowMultipleComponent]
     public sealed class TowerManagerPanel : MonoBehaviour
     {
         public static TowerManagerPanel Instance { get; private set; }
 
-        private VisualElement _root, _panel, _actions;
-        private ScrollView _list;
-        private Label _detail;
+        private ElarionUiKit.ObsidianModal _modal;
+        private Transform _bodyHost;          // frame body drop-zone — rows + actions
+        private TextMeshProUGUI _detail;      // footer strip — selected-tower readout
         private Tower _selected;
         private GameObject _marker;
         private bool _visible;
@@ -32,7 +36,7 @@ namespace DeNelle.Village.UI
         // PanelManager mutual-exclusion handle (one panel at a time).
         private PanelHandle _panelHandle;
 
-        // --- self-install on a borrowed PanelSettings (renders in builds) --------
+        // --- self-install (kit modal — no PanelSettings needed any more) ---------
         private static bool s_hooked;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -50,34 +54,23 @@ namespace DeNelle.Village.UI
         private static void Install()
         {
             if (Instance != null) return;
-            PanelSettings ps = null; float top = float.MinValue;
-            foreach (var d in Object.FindObjectsByType<UIDocument>(FindObjectsInactive.Include))
-            {
-                if (d == null || d.panelSettings == null) continue;
-                if (d.sortingOrder >= top) { top = d.sortingOrder; ps = d.panelSettings; }
-            }
-            if (ps == null) return;
-
             var go = new GameObject("TowerManagerPanel");
-            go.SetActive(false);
-            var doc = go.AddComponent<UIDocument>();
-            doc.panelSettings = ps;
-            doc.sortingOrder = top + 70;
             go.AddComponent<TowerManagerPanel>();
-            go.SetActive(true);
         }
 
-        private void Awake() => Instance = this;
-        private void OnDestroy() { if (Instance == this) Instance = null; ClearMarker(); }
-
-        private void OnEnable()
+        private void Awake()
         {
-            BuildUi();
+            Instance = this;
             // Register with the modal arbiter so opening this closes any other panel
             // (and vice-versa). Probe = the panel's own visibility flag.
-            if (_panelHandle == null)
-                _panelHandle = PanelManager.Register("Tower Manager", Hide, () => _visible);
-            Hide();
+            _panelHandle = PanelManager.Register("Tower Manager", Hide, () => _visible);
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+            ClearMarker();
+            if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
         }
 
         private void Update()
@@ -92,71 +85,65 @@ namespace DeNelle.Village.UI
 
         public void Show()
         {
-            if (_panel == null) return;
+            EnsureBuilt();
+            if (_modal == null || _modal.canvas == null) return;
             _visible = true;
-            _panel.style.display = DisplayStyle.Flex;
-            // Announce open: closes any previously-open panel. Battle-lock may reject.
-            if (!PanelManager.NotifyOpened(_panelHandle)) { Hide(); return; }
+            _modal.canvas.SetActive(true);
+            // Announce open: closes any previously-open panel. Battle-lock may reject —
+            // revert and stay hidden (VillageCraftingPanel pattern).
+            if (!PanelManager.NotifyOpened(_panelHandle))
+            {
+                _visible = false;
+                _modal.canvas.SetActive(false);
+                return;
+            }
             Refresh();
         }
+
         public void Hide()
         {
             _visible = false;
-            if (_panel != null) _panel.style.display = DisplayStyle.None;
+            if (_modal != null && _modal.canvas != null) _modal.canvas.SetActive(false);
             PanelManager.NotifyClosed(_panelHandle);
         }
 
-        // --- UI ------------------------------------------------------------------
-        private void BuildUi()
+        // --- UI (kit modal, lazy on first Show) ------------------------------------
+        private void EnsureBuilt()
         {
-            if (_panel != null) return;
-            var doc = GetComponent<UIDocument>();
-            _root = doc != null ? doc.rootVisualElement : null;
-            if (_root == null) return;
-            _root.pickingMode = PickingMode.Ignore;   // only the panel captures clicks
+            if (_modal != null && _modal.canvas != null) return;
 
-            _panel = new VisualElement { name = "tower-manager" };
-            var s = _panel.style;
-            s.position = Position.Absolute; s.left = 20f; s.top = 80f; s.width = 300f;
-            s.paddingTop = 14f; s.paddingBottom = 14f; s.paddingLeft = 16f; s.paddingRight = 16f;
-            // Dark-stone fill + runic-gold rim + rounding from the shared TOWN-HUD palette.
-            ElarionUi.StylePanel(_panel, dark: true);
+            _modal = ElarionUiKit.BuildObsidianModal("TowerManagerUI", "Towers",
+                new Vector2(0.18f, 0.12f), new Vector2(0.82f, 0.88f), Hide,
+                frameName: RpgUiCatalog.FrameCore, medallionIcon: "shield");
 
-            var title = new Label("Towers   (press M)");
-            title.style.color = ElarionUi.Gilt; title.style.fontSize = ElarionUi.FontHead;
-            title.style.unityFontStyleAndWeight = FontStyle.Bold; title.style.marginBottom = 8f;
-            _panel.Add(title);
-            _panel.Add(ElarionUi.MakeRule());
+            var layout = _modal.chrome.layout;
+            _bodyHost = layout != null && layout.body != null
+                ? (Transform)layout.body
+                : _modal.chrome.content.transform;
 
-            _list = new ScrollView(ScrollViewMode.Vertical);
-            _list.style.maxHeight = 260f; _list.style.marginBottom = 8f;
-            ElarionUi.StyleWell(_list);
-            _panel.Add(_list);
+            // Footer strip carries the selected-tower readout.
+            var footHost = layout != null && layout.footer != null
+                ? (Transform)layout.footer
+                : _modal.chrome.content.transform;
+            _detail = MakeText(footHost, "Select a tower to manage.", 13, ElarionUi.ParchmentDim,
+                FontStyles.Italic, TextAlignmentOptions.Center,
+                new Vector2(0.01f, 0f), new Vector2(0.99f, 1f));
 
-            _detail = new Label("Select a tower to manage.");
-            _detail.style.color = ElarionUi.ParchmentDim; _detail.style.fontSize = ElarionUi.FontLabel;
-            _detail.style.whiteSpace = WhiteSpace.Normal; _detail.style.marginBottom = 6f;
-            _panel.Add(_detail);
-
-            _actions = new VisualElement();
-            _panel.Add(_actions);
-
-            _panel.Add(Btn("Close", ElarionUi.ButtonKind.Gold, Hide));
-
-            _root.Add(_panel);
+            _modal.canvas.SetActive(false);   // built hidden; Show shows it
         }
 
         private void Refresh()
         {
-            if (_list == null) return;
-            _list.Clear();
+            if (_bodyHost == null) return;
+            for (int i = _bodyHost.childCount - 1; i >= 0; i--)
+                Destroy(_bodyHost.GetChild(i).gameObject);
 
             var towers = FindObjectsByType<Tower>();
             if (towers.Length == 0)
             {
-                var none = new Label("No towers placed yet.");
-                none.style.color = ElarionUi.ParchmentDim; none.style.fontSize = ElarionUi.FontLabel;
-                _list.Add(none);
+                MakeText(_bodyHost, "No towers placed yet.", 14, ElarionUi.ParchmentDim,
+                    FontStyles.Italic, TextAlignmentOptions.Center,
+                    new Vector2(0.08f, 0.85f), new Vector2(0.92f, 0.95f));
                 _selected = null; ClearMarker();
             }
             else
@@ -164,20 +151,25 @@ namespace DeNelle.Village.UI
                 // Drop a stale selection if its tower was destroyed.
                 if (_selected == null) ClearMarker();
 
+                const float rowH = 0.08f, gap = 0.014f;
+                float top = 0.97f;
                 for (int i = 0; i < towers.Length; i++)
                 {
                     var t = towers[i];
                     bool sel = ReferenceEquals(t, _selected);
-                    var row = Btn($"Tower {i + 1}  —  Lv {t.CurrentLevel}   (rng {t.CurrentRange:0}, dmg {t.CurrentDamage:0})",
-                        ElarionUi.ButtonKind.Neutral, () => Select(t));
-                    row.style.height = 32f; row.style.fontSize = ElarionUi.FontLabel;
-                    if (sel)
-                    {
-                        // Selected row reads with the aether-violet accent (selection canon).
-                        row.style.backgroundColor = ElarionUi.AetherDim;
-                        ElarionUi.SetBorderColor(row, ElarionUi.Aether);
-                    }
-                    _list.Add(row);
+                    // ASCII-only label (no glyphs — missing from the TMP font).
+                    string label = (sel ? "> " : "")
+                                 + $"Tower {i + 1}  -  Lv {t.CurrentLevel}   (rng {t.CurrentRange:0}, dmg {t.CurrentDamage:0})";
+                    Tower captured = t;
+                    ElarionUiKit.BuildObsidianButton(_bodyHost, label,
+                        ElarionUiKit.ObsidianButtonStyle.Style1,
+                        // Selected row reads with the Yellow accent (selection canon).
+                        sel ? ElarionUiKit.ObsidianButtonColor.Yellow
+                            : ElarionUiKit.ObsidianButtonColor.Gray,
+                        new Vector2(0.06f, top - rowH), new Vector2(0.94f, top),
+                        () => Select(captured));
+                    top -= rowH + gap;
+                    if (top < 0.24f) break;   // bounded: leave room for the action row
                 }
             }
             RefreshDetail();
@@ -187,38 +179,35 @@ namespace DeNelle.Village.UI
 
         private void RefreshDetail()
         {
-            if (_actions == null) return;
-            _actions.Clear();
-
-            if (_selected == null) { if (_detail != null) _detail.text = "Select a tower to manage."; return; }
+            if (_selected == null)
+            {
+                if (_detail != null) _detail.text = "Select a tower to manage.";
+                return;
+            }
 
             if (_detail != null)
-                _detail.text = $"Selected: Lv {_selected.CurrentLevel}/{Tower.MaxLevel}   •   rng {_selected.CurrentRange:0}   dmg {_selected.CurrentDamage:0}";
+                _detail.text = $"Selected: Lv {_selected.CurrentLevel}/{Tower.MaxLevel}   |   rng {_selected.CurrentRange:0}   dmg {_selected.CurrentDamage:0}";
 
-            var row = new VisualElement();
-            row.style.flexDirection = FlexDirection.Row;
-
+            // Action row along the base of the body well.
             // DEPRECATED (owner 2026-06-27, tower-upgrade CONSOLIDATION): this Upgrade
             // button was one of three duplicate paths and called the FREE Tower.Upgrade().
             // The canonical surface is now the proximity HUD context button
             // (TowerInteractable -> HudBuildingFocus -> Tower.TryUpgrade). This button is
             // no longer free — it routes through the single cost-enforced Tower.TryUpgrade.
-            // RAZE + tower SELECTION below are PRESERVED (this panel is their only home).
-            var up = Btn("Upgrade", ElarionUi.ButtonKind.Confirm, () =>
-            {
-                if (_selected != null) { _selected.TryUpgrade(); Refresh(); }
-            });
-            up.style.flexGrow = 1f; up.style.marginRight = 4f;
-            row.Add(up);
+            // RAZE + tower SELECTION are PRESERVED (this panel is their only home).
+            ElarionUiKit.BuildObsidianButton(_bodyHost, "Upgrade",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
+                new Vector2(0.10f, 0.03f), new Vector2(0.48f, 0.13f), () =>
+                {
+                    if (_selected != null) { _selected.TryUpgrade(); Refresh(); }
+                });
 
-            var raze = Btn("Raze", ElarionUi.ButtonKind.Danger, () =>
-            {
-                if (_selected != null) { Destroy(_selected.gameObject); _selected = null; ClearMarker(); Refresh(); }
-            });
-            raze.style.flexGrow = 1f;
-            row.Add(raze);
-
-            _actions.Add(row);
+            ElarionUiKit.BuildObsidianButton(_bodyHost, "Raze",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Red,
+                new Vector2(0.52f, 0.03f), new Vector2(0.90f, 0.13f), () =>
+                {
+                    if (_selected != null) { Destroy(_selected.gameObject); _selected = null; ClearMarker(); Refresh(); }
+                });
         }
 
         // --- in-world selection marker (bright unlit sphere above the tower) -----
@@ -251,15 +240,25 @@ namespace DeNelle.Village.UI
 
         private void ClearMarker() { if (_marker != null) Destroy(_marker); _marker = null; }
 
-        private static Button Btn(string label, ElarionUi.ButtonKind kind, System.Action onClick)
+        // ── uGUI helper (LeaderboardPanel/VillageCraftingPanel shape) ─────────
+        private static TextMeshProUGUI MakeText(Transform parent, string text, float size,
+            Color color, FontStyles style, TextAlignmentOptions align, Vector2 min, Vector2 max)
         {
-            var b = new Button(onClick) { text = label };
-            // Shared themed button: stone/gold/green/red fill + gold rim + rounding +
-            // hover/press feedback, sourced from the TOWN-HUD palette.
-            ElarionUi.StyleButton(b, kind);
-            b.style.marginTop = 3f; b.style.marginBottom = 3f;
-            b.style.unityTextAlign = TextAnchor.MiddleCenter;
-            return b;
+            var go = new GameObject("Text", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var t = go.AddComponent<TextMeshProUGUI>();
+            t.text = text;
+            t.fontSize = size;
+            t.color = color;
+            t.fontStyle = style;
+            t.alignment = align;
+            t.raycastTarget = false;
+            t.textWrappingMode = TextWrappingModes.Normal;
+            ElarionUiKit.EnsureFont(t);
+            return t;
         }
     }
 }
