@@ -23,8 +23,12 @@ namespace DeNelle.Core.Combat
     /// <summary>Which quadrant a hit came from, relative to the victim's facing.</summary>
     public enum HitDirection { Front = 0, Left = 1, Right = 2, Gut = 3 }
 
-    /// <summary>Which way the actor falls on death.</summary>
-    public enum DeathDirection { Fall = 0, Left = 1, Right = 2 }
+    /// <summary>Which way the actor falls on death. 3-5 added 2026-07-03 for the Paladin
+    /// hero package's DIRECTIONAL DEATHS (owner design): the DeathDir int selector in
+    /// KnightPackage.controller maps 0 Fall / 1 Left / 2 Right / 3 Front / 4 Back /
+    /// 5 Assassinate. Additive — old values unchanged; the runtime driver is a follow-up
+    /// (undriven, DeathDir stays 0 = Fall, the default death, which is safe).</summary>
+    public enum DeathDirection { Fall = 0, Left = 1, Right = 2, Front = 3, Back = 4, Assassinate = 5 }
 
     /// <summary>Sharp facing-change turn direction (optional locomotion polish).</summary>
     public enum TurnDirection { None = 0, Left = -1, Right = 1 }
