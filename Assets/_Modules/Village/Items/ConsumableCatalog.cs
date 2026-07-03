@@ -59,6 +59,9 @@ namespace DeNelle.Village.Items
         [JsonProperty("duration")] public float Duration;   // seconds; 0 = instant
         [JsonProperty("usableInFight")] public bool UsableInFight = true;
         [JsonProperty("glyph")] public string Glyph;
+        // WO-598: authored gold BUY price at goods vendors (the Market shelf). 0/absent =
+        // VendorStockResolver.PriceFor's kind default. Shelf price is CONTENT, not code.
+        [JsonProperty("price")] public int Price;
 
         // WO-Item-1: the catalog⊥repo LOOK half (docs/ITEM_MODEL.md §3). prefabPath =
         // the world/loot model, iconPath = the inventory/store sprite. Both NULL for now

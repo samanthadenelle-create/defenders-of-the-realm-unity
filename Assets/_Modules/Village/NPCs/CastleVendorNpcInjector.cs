@@ -29,6 +29,7 @@
 // existing village interaction code does (no reflection, no cross-asmdef ref).
 // =============================================================================
 
+using System.Collections;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.UI;
 using UnityEngine;
@@ -114,6 +115,13 @@ namespace DeNelle.Village
                     return new Vendor { BodyRes = BodyMerchant, StructureId = "jeweler",      Label = "Jeweler",    Arch = TownsfolkDialogue.Archetype.Quartermaster };
                 case "marketplace":
                     return new Vendor { BodyRes = BodyMerchant, StructureId = "market",       Label = "Marketplace", Arch = TownsfolkDialogue.Archetype.Quartermaster };
+                case "apothecary":
+                    // Owner F8 2026-07-02 ("should have a NPC"): the Apothecary is a RUNTIME
+                    // station (CraftingStationInjector) with no baked marker, so it's spawned by
+                    // the deferred pass below, not the marker loop. structureId "apothecary" has
+                    // an authored conversation (dialogues.json) ending in OpenAlchemy — the same
+                    // ConsumableCrafting panel the station's own interact opens.
+                    return new Vendor { BodyRes = BodyPeasantA, StructureId = "apothecary",   Label = "Apothecary", Arch = TownsfolkDialogue.Archetype.Villager };
             }
             // Unknown role -> generic merchant talking to the market. Never silently skip,
             // so a future storefront still gets a working NPC.
@@ -163,7 +171,7 @@ namespace DeNelle.Village
 
             // Collect the storefront interact markers by name (prefix + suffix). They are
             // empty children CastleHubBuilder placed at the front of each building.
-            var all = FindObjectsByType<Transform>(FindObjectsSortMode.None);
+            var all = FindObjectsByType<Transform>();
             int placed = 0;
             foreach (var t in all)
             {
@@ -187,6 +195,58 @@ namespace DeNelle.Village
                 FlowTrace.Step("Village",
                     $"CastleVendorNpcInjector: placed {placed} static vendor NPCs at castle storefronts.");
             Debug.Log($"[CastleVendorNpcInjector] placed {placed} static vendor NPCs at castle storefronts.");
+
+            // Owner F8 2026-07-02 ("Interact: Apothecary" bare prompt — "should have a NPC"):
+            // the Apothecary is a RUNTIME station (CraftingStationInjector), so it has no baked
+            // "NPC_*_Interactable" marker for the loop above to find. Deferred pass: wait for the
+            // station's Building to exist (injector order is nondeterministic), then spawn its
+            // herbalist through the SAME SpawnVendor path as every storefront NPC.
+            StopCoroutine(nameof(SpawnApothecaryWhenReady));
+            StartCoroutine(nameof(SpawnApothecaryWhenReady));
+        }
+
+        // Deferred apothecary NPC: polls (a few frames, ~6s cap) for the runtime-injected
+        // Apothecary Building, then reuses SpawnVendor with a synthetic marker child so the
+        // placement/interaction/sign composition is identical to the baked storefronts.
+        private IEnumerator SpawnApothecaryWhenReady()
+        {
+            const float TimeoutSeconds = 6f;
+            float deadline = Time.unscaledTime + TimeoutSeconds;
+            while (Time.unscaledTime < deadline)
+            {
+                if (SceneManager.GetActiveScene().name != TargetScene) yield break; // scene moved on
+                if (GameObject.Find("CastleVendor_Apothecary") != null ||
+                    GameObject.Find("CastleVendor_Apothecary_Placeholder") != null)
+                    yield break;                                                    // already placed
+
+                Building station = null;
+                foreach (var b in FindObjectsByType<Building>())
+                    if (b != null && b.Type == BuildingType.ApothecaryWorkbench) { station = b; break; }
+
+                if (station != null)
+                {
+                    var holder = GameObject.Find(HolderName);
+                    if (holder == null) yield break;   // injector re-ran / tearing down
+
+                    // Synthetic marker AT the station (parent = station transform) — SpawnVendor
+                    // reads the marker-to-parent distance (<1m => default 5m front offset) and
+                    // faces the NPC toward the Heart, exactly like the baked markers.
+                    var marker = new GameObject("NPC_Apothecary_Marker (runtime)");
+                    marker.transform.SetParent(station.transform, false);
+
+                    bool ok = SpawnVendor(marker.transform, "Apothecary", ResolveHero(), holder.transform);
+                    Destroy(marker);
+                    if (ok) FlowTrace.Step("Village",
+                        "CastleVendorNpcInjector: apothecary NPC placed at the runtime station (deferred pass).");
+                    else FlowTrace.Fail("Village",
+                        "CastleVendorNpcInjector: apothecary NPC spawn FAILED at the runtime station.");
+                    yield break;
+                }
+                yield return null;
+            }
+            // Station never appeared — self-report (the bare-prompt symptom would persist).
+            FlowTrace.Warn("Village",
+                "CastleVendorNpcInjector: apothecary station never appeared within 6s — no apothecary NPC placed.");
         }
 
         /// <summary>Spawns ONE static NPC at the marker and attaches the interaction.</summary>
@@ -194,7 +254,7 @@ namespace DeNelle.Village
         // places it at (0,0,12), the fallback used if the controller isn't up yet.
         private static Vector3 HeartCenter()
         {
-            var h = FindFirstObjectByType<HeartController>();
+            var h = FindAnyObjectByType<HeartController>();
             return h != null ? h.transform.position : new Vector3(0f, 0f, 12f);
         }
 
@@ -392,7 +452,7 @@ namespace DeNelle.Village
         {
             var tagged = GameObject.FindWithTag("Player");
             if (tagged != null) return tagged.transform;
-            foreach (var t in FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            foreach (var t in FindObjectsByType<Transform>())
                 if (t != null && t.name.StartsWith("Hero")) return t;
             return null;
         }
@@ -588,7 +648,7 @@ namespace DeNelle.Village
         {
             var tagged = GameObject.FindWithTag("Player");
             if (tagged != null) { _hero = tagged.transform; return; }
-            var loco = FindObjectOfType<HeroLocomotion>();
+            var loco = FindAnyObjectByType<HeroLocomotion>();
             if (loco != null) _hero = loco.transform;
         }
 

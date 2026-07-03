@@ -173,6 +173,8 @@ namespace DeNelle.Village.Hero
         }
 
         // The visible empty-state copy per mode/filter — the never-blank fallback.
+        // WO-598: the BUY empty state reads the vendor's AUTHORED emptyLine (vendors.json
+        // via VendorStockResolver) — a vendor never renders "No wares in stock." raw.
         private string EmptyShopNote()
         {
             if (_vm == null) return "Nothing available.";
@@ -180,7 +182,7 @@ namespace DeNelle.Village.Hero
             {
                 case ShopMode.Sell:  return "Nothing to sell.";
                 case ShopMode.Equip: return "No gear to equip.";
-                default:             return "No wares in stock.";
+                default:             return VendorStockResolver.EmptyLineFor(_vm.VendorContext);
             }
         }
 
@@ -456,7 +458,7 @@ namespace DeNelle.Village.Hero
 
             _detailsDesc = ElarionUiKit.Label(pane.transform, "Tap an item to inspect it.", 0.02f, 0.31f,
                 ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Top, 0.06f, 0.94f);
-            _detailsDesc.enableWordWrapping = true;
+            _detailsDesc.textWrappingMode = TMPro.TextWrappingModes.Normal;
             _detailsDesc.raycastTarget = false;
         }
 
@@ -736,9 +738,9 @@ namespace DeNelle.Village.Hero
         {
             var byTag = GameObject.FindWithTag("Player");
             if (byTag != null) return byTag;
-            var loco = FindFirstObjectByType<HeroLocomotion>();
+            var loco = FindAnyObjectByType<HeroLocomotion>();
             if (loco != null) return loco.gameObject;
-            foreach (var t in FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            foreach (var t in FindObjectsByType<Transform>())
             {
                 if (t != null && t.name.StartsWith("Hero (")) return t.gameObject;
             }

@@ -144,6 +144,11 @@ namespace DeNelle.Village.Hero
         public const string IconRoleWeapon    = "weapon";
         public const string IconRoleArmor     = "armor";
         public const string IconRoleCraftable = "craftable";
+        // WO-598 goods/jeweler bands (the View resolves iconPath first, then a glyph fallback).
+        public const string IconRolePotion    = "potion";
+        public const string IconRoleMaterial  = "material";
+        public const string IconRoleAccessory = "accessory";
+        public const string IconRoleGem       = "gem";
 
         private readonly string _vendorContext;
         private readonly string _displayName;
@@ -190,12 +195,22 @@ namespace DeNelle.Village.Hero
             _memberLevels = memberLevels ?? Array.Empty<int>();
             _onClose = onClose;
 
+            // WO-598: the vendor's declared stock query (vendors.json) decides the shelf.
+            // Layout drives which list this shop builds (gear / goods / jeweler) and the
+            // View's per-trade chrome (Market shows NO equip tabs / paper-doll — flag_03).
+            Layout = VendorStockResolver.LayoutFor(_vendorContext);
+            EmptyLine = VendorStockResolver.EmptyLineFor(_vendorContext);
+
             _storeKinds = VendorStockContract.AllowedFor(_vendorContext.ToLowerInvariant());
-            // A party gear shop only deals weapons/armor (potions are general-goods). If the
-            // contract resolved to potions-only (or nothing useful), fall back to BOTH gear kinds
-            // so a mis-tagged vendor still shows wearable gear rather than an empty screen.
-            _storeKinds &= (GearKind.Weapon | GearKind.Armor);
-            if (_storeKinds == GearKind.None) _storeKinds = GearKind.Weapon | GearKind.Armor;
+            if (Layout == VendorLayout.Gear)
+            {
+                // A GEAR shop only deals weapons/armor. If the contract resolved to nothing
+                // useful, fall back to BOTH gear kinds so a mis-tagged vendor still shows
+                // wearable gear rather than an empty screen. (WO-598: this fallback no longer
+                // applies to goods/jeweler layouts — it was the "Market sells swords" root.)
+                _storeKinds &= (GearKind.Weapon | GearKind.Armor);
+                if (_storeKinds == GearKind.None) _storeKinds = GearKind.Weapon | GearKind.Armor;
+            }
 
             if (_economy != null)
             {
@@ -255,9 +270,19 @@ namespace DeNelle.Village.Hero
         /// Rebuild, ahead of the TYPE predicate, so toggling a chip never strips the other chips.</summary>
         public IReadOnlyList<PartyShopType> AvailableTypes => _availableTypes;
 
+        /// <summary>WO-598: this vendor's declared shelf presentation (gear / goods / jeweler).
+        /// The View binds per-trade chrome off this — the Market never shows equip context.</summary>
+        public VendorLayout Layout { get; }
+
+        /// <summary>WO-598: the AUTHORED empty-shelf line (never null/empty). The View renders
+        /// this instead of a raw "No wares in stock." when a query resolves 0 items.</summary>
+        public string EmptyLine { get; }
+
         /// <summary>Whether this vendor offers BOTH gear kinds (so the category selector is useful).
-        /// A weapon-only or armor-only vendor pins the category and hides the selector.</summary>
+        /// A weapon-only or armor-only vendor pins the category and hides the selector; non-gear
+        /// layouts (goods/jeweler, WO-598) never show the weapons/armor selector at all.</summary>
         public bool CategorySelectorVisible =>
+            Layout == VendorLayout.Gear &&
             (_storeKinds & GearKind.Weapon) != 0 && (_storeKinds & GearKind.Armor) != 0;
 
         /// <summary>The party-member chips (one per member; the selected one flagged). Never null.</summary>
@@ -487,8 +512,16 @@ namespace DeNelle.Village.Hero
             else BuildSell();
         }
 
-        // -- BUY - the catalog gear the SELECTED member can equip, gated by store type ------
+        // -- BUY dispatch (WO-598): the vendor's declared layout picks the shelf ------
         private void BuildBuy()
+        {
+            if (Layout == VendorLayout.Goods)   { BuildBuyGoods();   return; }
+            if (Layout == VendorLayout.Jeweler) { BuildBuyJeweler(); return; }
+            BuildBuyGear();
+        }
+
+        // -- BUY (gear) - the catalog gear the SELECTED member can equip, gated by store type ------
+        private void BuildBuyGear()
         {
             var member = SelectedMember;
             string job = SelectedJob;
@@ -497,25 +530,24 @@ namespace DeNelle.Village.Hero
             // ?12: guard the catalog read so a parse/IO failure logs + is skipped instead of throwing.
             DeNelle.Core.Diagnostics.Guard.Try("PartyShop", "reload gear catalog", () => GearCatalog.Reload());
 
-            // RECONCILED FILTER: ask the ONE shoppable resolver what this vendor offers the selected
-            // member (ShopCatalog.Shoppable folds VendorStockContract kinds + WeaponFitsClass/
-            // ArmorFitsClass + level into a single list, and surfaces craftables when the vendor
-            // allows GearKind.Craftable). Note: _storeKinds is the gear-narrowed mask the VM applies
-            // for SELL; for BUY we pass the raw vendor context so the resolver can also yield craftables.
-            // SHOW-ALL (owner 2026-07-01): includeIneligible:true returns the WHOLE catalog category
-            // tagged with Eligible/LockReason, so the shop shows every item and LOCKS (greys, hint
-            // "Requires Lv X" / "Class: Y") the ones above the hero's level or the wrong class.
-            var shoppable = ShopCatalog.Shoppable(_vendorContext, job, level, includeIneligible: true);
+            // RECONCILED FILTER (WO-598): ask the ONE VendorStockResolver what this vendor stocks
+            // for the selected member. The resolver folds the vendor's declared stock QUERY
+            // (vendors.json categories) + the ROSTER gate (an item NO currently-playable class can
+            // use — Mage wands under ff.knightonly — is EXCLUDED, never a locked row; the flag_08
+            // fix) + class/level eligibility into one list. SHOW-ALL survives for legitimate
+            // aspiration: level-gated (and roster-obtainable wrong-class) items come back locked
+            // with a LockReason ("Requires Lv X"), so progression still shows.
+            var shoppable = VendorStockResolver.Resolve(_vendorContext, job, level);
 
             // Category "dropdown": ALL shows the combined list ARMOR-FIRST then weapons (armor/
             // weapons-first, STORE_EQUIP_SPEC); WEAPONS / ARMOR narrow to one kind. Craftables
             // always pass (a crafting vendor's only stock). Reorder so armor leads in ALL.
-            var ordered = new List<ShoppableEntry>(shoppable.Count);
+            var ordered = new List<VendorWare>(shoppable.Count);
             if (_category != PartyShopCategory.Weapons)
-                foreach (var e in shoppable) if (e.Kind == ShoppableKind.Armor) ordered.Add(e);
+                foreach (var e in shoppable) if (e.Kind == VendorWareKind.Armor) ordered.Add(e);
             if (_category != PartyShopCategory.Armor)
-                foreach (var e in shoppable) if (e.Kind == ShoppableKind.Weapon) ordered.Add(e);
-            foreach (var e in shoppable) if (e.Kind == ShoppableKind.Craftable) ordered.Add(e);
+                foreach (var e in shoppable) if (e.Kind == VendorWareKind.Weapon) ordered.Add(e);
+            foreach (var e in shoppable) if (e.Kind == VendorWareKind.Craftable) ordered.Add(e);
 
             // ?12 INSTRUMENT (affordability live-RCA, no logic change): ONCE per rebuild, capture the
             // exact context the affordability check sees - whether the economy/state are bound and what
@@ -531,7 +563,7 @@ namespace DeNelle.Village.Hero
             {
                 switch (entry.Kind)
                 {
-                    case ShoppableKind.Weapon:
+                    case VendorWareKind.Weapon:
                     {
                         var w = GearCatalog.FindWeapon(entry.Id);
                         if (w == null) continue;
@@ -556,7 +588,7 @@ namespace DeNelle.Village.Hero
                         _currentStock.Add((w.id, GearKind.Weapon));
                         break;
                     }
-                    case ShoppableKind.Armor:
+                    case VendorWareKind.Armor:
                     {
                         var a = GearCatalog.FindArmor(entry.Id);
                         if (a == null) continue;
@@ -581,7 +613,7 @@ namespace DeNelle.Village.Hero
                         _currentStock.Add((a.id, GearKind.Armor));
                         break;
                     }
-                    case ShoppableKind.Craftable:
+                    case VendorWareKind.Craftable:
                     {
                         AddBuyCraftableRow(entry.Craftable);
                         _currentStock.Add((entry.Id, GearKind.Craftable));
@@ -590,9 +622,9 @@ namespace DeNelle.Village.Hero
                 }
             }
 
-            string who = member != null ? (string.IsNullOrEmpty(member.TargetName) ? "this hero" : member.TargetName) : "this hero";
+            // WO-598: an empty shelf reads the vendor's AUTHORED line, never a raw fallback.
             Status = _items.Count == 0
-                ? "No gear here fits " + who + " yet."
+                ? EmptyLine
                 : "Tap a row to BUY (auto-equips) or EQUIP what you own.";
 
             // ?12: no silent blank - record WHY the BUY list is empty (data vs filtered).
@@ -687,8 +719,273 @@ namespace DeNelle.Village.Hero
                 true, null, equipped: false, locked: false));
         }
 
-        // -- SELL - owned gear (any kind the shop type accepts), credits coins, same screen --
+        // =====================================================================
+        //  WO-598 GOODS shelf (Market): consumables + crafting materials. A flat
+        //  purchase list - NO equip context, NO weapons/armor. Rows come from the
+        //  vendor's resolved query; the VM only maps them to ItemVM rows.
+        // =====================================================================
+        private void BuildBuyGoods()
+        {
+            foreach (var ware in VendorStockResolver.Resolve(_vendorContext, SelectedJob, SelectedLevel))
+            {
+                switch (ware.Kind)
+                {
+                    case VendorWareKind.Consumable: AddBuyConsumableRow(ware.Id); break;
+                    case VendorWareKind.Material:   AddBuyMaterialRow(ware.Id, IconRoleMaterial, GearKind.Material); break;
+                    // Any other band on a goods vendor is a data mistake; the resolver
+                    // already traces the query, so just skip (never render wrong-trade rows).
+                }
+            }
+
+            Status = _items.Count == 0
+                ? EmptyLine
+                : "Tap a row to view it, then Purchase.";
+        }
+
+        // =====================================================================
+        //  WO-598 JEWELER shelf: rings + amulets (accessories.json) + gems (the
+        //  crystal material band). Never weapons/armor (flag_11 fix). Accessories
+        //  are bought here and equipped from the Character screen (EquipVM slots).
+        // =====================================================================
+        private void BuildBuyJeweler()
+        {
+            foreach (var ware in VendorStockResolver.Resolve(_vendorContext, SelectedJob, SelectedLevel))
+            {
+                switch (ware.Kind)
+                {
+                    case VendorWareKind.Ring:
+                    case VendorWareKind.Amulet:
+                        AddBuyAccessoryRow(ware.Id, ware.Eligible, ware.LockReason);
+                        break;
+                    case VendorWareKind.Gem:
+                        AddBuyMaterialRow(ware.Id, IconRoleGem, GearKind.Material);
+                        break;
+                }
+            }
+
+            Status = _items.Count == 0
+                ? EmptyLine
+                : "Tap a row to view it, then Purchase. Equip jewelry from the Character screen.";
+        }
+
+        // -- WO-598 goods row builders (data from the catalogs; zero shelf lists here) --
+
+        private void AddBuyConsumableRow(string id)
+        {
+            var def = DeNelle.Village.Items.ConsumableCatalog.Find(id);
+            if (def == null) return;
+            string name = string.IsNullOrEmpty(def.DisplayName) ? def.Id : def.DisplayName;
+            int price = VendorStockResolver.PriceFor(def);
+            var cost = new ResourceCost(coins: price);
+            bool affordable = _economy == null || _economy.CanAfford(cost);
+            int owned = VillageInventory.Instance != null ? VillageInventory.Instance.Get(id) : 0;
+
+            string stats = Cap(def.KindRaw ?? "consumable") +
+                           (string.IsNullOrEmpty(def.EffectRaw) ? "" : "   " + def.EffectRaw) +
+                           (owned > 0 ? "   (owned " + owned + ")" : "");
+            _rowDetails[id] = new PartyShopDetail(stats, "", DescribeConsumable(def),
+                def.IconPath, IconRolePotion, id);
+            _rowActions[id] = () => BuyGoods(id, name, cost);
+            _items.Add(new ItemVM(id, name, IconRolePotion, id, price, "gold", affordable));
+            _currentStock.Add((id, GearKind.Potion));
+        }
+
+        private void AddBuyMaterialRow(string id, string iconRole, GearKind stockKind)
+        {
+            var def = DeNelle.Village.Items.MaterialCatalog.Find(id);
+            if (def == null) return;
+            string name = string.IsNullOrEmpty(def.DisplayName) ? def.Id : def.DisplayName;
+            int price = VendorStockResolver.PriceFor(def);
+            var cost = new ResourceCost(coins: price);
+            bool affordable = _economy == null || _economy.CanAfford(cost);
+            int owned = VillageInventory.Instance != null ? VillageInventory.Instance.Get(id) : 0;
+
+            string stats = Cap(def.Category ?? "material") + (owned > 0 ? "   (owned " + owned + ")" : "");
+            string desc = iconRole == IconRoleGem
+                ? "A cut stone for the jeweler's bench - fuel for ring and amulet work."
+                : "A crafting ingredient for the workshop's recipes.";
+            _rowDetails[id] = new PartyShopDetail(stats, "", desc, def.IconPath, iconRole, id);
+            _rowActions[id] = () => BuyGoods(id, name, cost);
+            _items.Add(new ItemVM(id, name, iconRole, id, price, "gold", affordable));
+            _currentStock.Add((id, stockKind));
+        }
+
+        private void AddBuyAccessoryRow(string id, bool eligible, string lockReason)
+        {
+            var ac = GearCatalog.FindAccessory(id);
+            if (ac == null) return;
+            string name = string.IsNullOrEmpty(ac.name) ? ac.id : ac.name;
+            var cost = GearCatalog.GetBuyCost(ac);
+            bool owned = _store != null && _store.OwnedQuantity(id) > 0;
+            bool affordable = owned || _economy == null || _economy.CanAfford(cost);
+
+            _rowDetails[id] = new PartyShopDetail(AccessoryStats(ac), "",
+                DescribeGear(ac.job, ac.rarity), ac.iconPath, IconRoleAccessory, id);
+
+            if (!eligible)
+            {
+                string reason = string.IsNullOrEmpty(lockReason) ? "Locked" : lockReason;
+                _rowActions[id] = () => { Status = name + " - " + reason + "."; };
+                _items.Add(new ItemVM(id, name, IconRoleAccessory, id, cost.Coins, "gold",
+                    affordable: false, ac.rarity, equipped: false, locked: true, lockReason: reason));
+            }
+            else
+            {
+                _rowActions[id] = () => BuyAccessory(ac);
+                _items.Add(new ItemVM(id, name, IconRoleAccessory, id, owned ? 0 : cost.Coins, "gold",
+                    affordable, ac.rarity));
+            }
+            _currentStock.Add((id, GearKind.Accessory));
+        }
+
+        private void BuyGoods(string id, string name, ResourceCost cost)
+        {
+            if (_economy == null) { Status = "Economy unavailable."; return; }
+            if (!_economy.TrySpend(cost))
+            {
+                Status = "Not enough gold for " + name + " - needs " + CostString(cost) + ".";
+                return;
+            }
+            VillageInventory.Instance?.Add(id, 1);
+            PushHud();
+            Status = "Purchased " + name + "!";
+            Rebuild();
+        }
+
+        private void BuyAccessory(AccessoryDef ac)
+        {
+            if (ac == null) return;
+            if (_economy == null) { Status = "Economy unavailable."; return; }
+            var cost = GearCatalog.GetBuyCost(ac);
+            if (!_economy.TrySpend(cost))
+            {
+                Status = "Not enough gold for " + Display(ac.name, ac.id) + " - needs " + CostString(cost) + ".";
+                return;
+            }
+            VillageInventory.Instance?.Add(ac.id, 1);
+            PushHud();
+            Status = "Purchased " + Display(ac.name, ac.id) + "! Equip it from the Character screen.";
+            Rebuild();
+        }
+
+        private static string AccessoryStats(AccessoryDef ac)
+        {
+            if (ac == null) return "Accessory";
+            var bits = new List<string>();
+            int dmg = RoundToInt(Max(0f, ac.damageMult) * 100f);
+            int def = RoundToInt(Max(0f, ac.defense) * 100f);
+            if (dmg > 0) bits.Add("+" + dmg + "% dmg");
+            if (def > 0) bits.Add("+" + def + "% def");
+            if (ac.hpBonus > 0) bits.Add("+" + ac.hpBonus + " hp");
+            return bits.Count > 0 ? string.Join("   ", bits) : "Accessory";
+        }
+
+        private static string DescribeConsumable(DeNelle.Village.Items.ConsumableDef def)
+        {
+            if (def == null) return "";
+            switch (def.Effect)
+            {
+                case DeNelle.Village.Items.ConsumableEffect.Heal: return "Restores health in a pinch.";
+                case DeNelle.Village.Items.ConsumableEffect.Mana: return "Restores mana in a pinch.";
+                case DeNelle.Village.Items.ConsumableEffect.Rest: return "A camp kit - full rest out of combat.";
+                case DeNelle.Village.Items.ConsumableEffect.Buff: return "A combat tonic - temporary edge.";
+                default: return "A consumable good.";
+            }
+        }
+
+        // -- SELL dispatch (WO-598): each trade buys back its OWN bands ------------
         private void BuildSell()
+        {
+            if (Layout == VendorLayout.Goods)   { BuildSellGoods();   return; }
+            if (Layout == VendorLayout.Jeweler) { BuildSellJeweler(); return; }
+            BuildSellGear();
+        }
+
+        // -- WO-598 SELL (goods): owned consumables + non-gem materials, 50% refund --
+        private void BuildSellGoods()
+        {
+            var inv = VillageInventory.Instance;
+            if (inv == null) { Status = "No inventory."; return; }
+
+            foreach (var kv in inv.Counts)
+            {
+                if (kv.Value <= 0) continue;
+                string id = kv.Key;
+                var cDef = DeNelle.Village.Items.ConsumableCatalog.Find(id);
+                var mDef = cDef == null ? DeNelle.Village.Items.MaterialCatalog.Find(id) : null;
+                if (cDef == null && (mDef == null || VendorStockResolver.IsGem(mDef))) continue;
+
+                int price = cDef != null ? VendorStockResolver.PriceFor(cDef) : VendorStockResolver.PriceFor(mDef);
+                AddSellGoodsRow(id,
+                    cDef != null ? cDef.DisplayName : mDef.DisplayName,
+                    cDef != null ? cDef.IconPath : mDef.IconPath,
+                    cDef != null ? IconRolePotion : IconRoleMaterial,
+                    kv.Value, price);
+            }
+
+            Status = _items.Count == 0
+                ? "Nothing in your pack this stall would buy."
+                : "Tap an item to SELL it for coins.";
+        }
+
+        // -- WO-598 SELL (jeweler): owned accessories + gems, 50% refund ------------
+        private void BuildSellJeweler()
+        {
+            var inv = VillageInventory.Instance;
+            if (inv == null) { Status = "No inventory."; return; }
+
+            foreach (var kv in inv.Counts)
+            {
+                if (kv.Value <= 0) continue;
+                string id = kv.Key;
+                var ac = GearCatalog.FindAccessory(id);
+                if (ac != null)
+                {
+                    var refund = ScaleCost(GearCatalog.GetBuyCost(ac), 0.50f);
+                    string name = (string.IsNullOrEmpty(ac.name) ? ac.id : ac.name) + " x" + kv.Value;
+                    _rowDetails[id] = new PartyShopDetail(AccessoryStats(ac), "",
+                        DescribeGear(ac.job, ac.rarity), ac.iconPath, IconRoleAccessory, id);
+                    string idCopy = id; var refundCopy = refund;
+                    _rowActions[id] = () => SellGoods(idCopy, refundCopy);
+                    _items.Add(new ItemVM(id, name, IconRoleAccessory, id, refund.Coins, "gold", true, ac.rarity));
+                    continue;
+                }
+                var mDef = DeNelle.Village.Items.MaterialCatalog.Find(id);
+                if (mDef == null || !VendorStockResolver.IsGem(mDef)) continue;
+                AddSellGoodsRow(id, mDef.DisplayName, mDef.IconPath, IconRoleGem,
+                    kv.Value, VendorStockResolver.PriceFor(mDef));
+            }
+
+            Status = _items.Count == 0
+                ? "No jewelry or cut stones in your pack to sell."
+                : "Tap an item to SELL it for coins.";
+        }
+
+        private void AddSellGoodsRow(string id, string displayName, string iconPath, string iconRole,
+                                     int owned, int buyPrice)
+        {
+            string name = (string.IsNullOrEmpty(displayName) ? id : displayName) + " x" + owned;
+            var refund = new ResourceCost(coins: System.Math.Max(1, RoundToInt(buyPrice * 0.5f)));
+            _rowDetails[id] = new PartyShopDetail("Owned " + owned, "", "From your pack.", iconPath, iconRole, id);
+            string idCopy = id; var refundCopy = refund;
+            _rowActions[id] = () => SellGoods(idCopy, refundCopy);
+            _items.Add(new ItemVM(id, name, iconRole, id, refund.Coins, "gold", true));
+        }
+
+        private void SellGoods(string id, ResourceCost refund)
+        {
+            var inv = VillageInventory.Instance;
+            if (inv == null || inv.Get(id) <= 0) { Status = "You don't own that."; return; }
+            if (!inv.TryConsume(id, 1)) { Status = "Couldn't sell that."; return; }
+            _economy?.Grant(refund);
+            PushHud();
+            Status = "Sold for +" + CostString(refund) + ".";
+            SelectedId = null;
+            Rebuild();
+        }
+
+        // -- SELL (gear) - owned gear (any kind the shop type accepts), credits coins, same screen --
+        private void BuildSellGear()
         {
             var member = SelectedMember;
 
@@ -851,6 +1148,9 @@ namespace DeNelle.Village.Hero
         private string ResolveTitle()
         {
             if (!string.IsNullOrEmpty(_displayName)) return _displayName;
+            // WO-598: a registered vendor's header is CONTENT (vendors.json displayName).
+            string authored = VendorStockResolver.DisplayNameFor(_vendorContext);
+            if (!string.IsNullOrEmpty(authored)) return authored;
             string vc = _vendorContext.ToLowerInvariant();
             if (vc.Contains("armor") || vc.Contains("blacksmith")) return "Armorer's Shop";
             if (vc.Contains("forge") || vc.Contains("smith")) return "The Forge";

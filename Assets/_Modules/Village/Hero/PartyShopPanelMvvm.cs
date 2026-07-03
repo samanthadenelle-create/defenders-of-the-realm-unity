@@ -173,7 +173,7 @@ namespace DeNelle.Village.Hero
             var hero = GameObject.FindWithTag("Player");
             if (hero == null)
             {
-                var loco = FindFirstObjectByType<HeroLocomotion>();
+                var loco = FindAnyObjectByType<HeroLocomotion>();
                 if (loco != null) hero = loco.gameObject;
             }
             if (hero != null)
@@ -188,7 +188,7 @@ namespace DeNelle.Village.Hero
             }
 
             // Companions: each StoryCompanion body carries a GearLoadout bound to its class.
-            foreach (var comp in FindObjectsByType<StoryCompanion>(FindObjectsSortMode.None))
+            foreach (var comp in FindObjectsByType<StoryCompanion>())
             {
                 if (comp == null) continue;
                 var cl = comp.GetComponent<GearLoadout>();
@@ -260,6 +260,15 @@ namespace DeNelle.Village.Hero
             if (_memberLabel != null) _memberLabel.text = _vm.MemberLabel;
             if (_walletText != null) _walletText.text = $"Gold: {_vm.Coins}";
             if (_statusText != null) _statusText.text = _vm.Status;
+
+            // WO-598 per-trade chrome: only a GEAR vendor shows the equip context (party
+            // selector, member header, Equip button). The Market/Jeweler are goods counters
+            // - no paper-doll, no equip affordances (flag_03/flag_11). Binding only; the
+            // widgets are still built once in BuildChrome.
+            bool gearTrade = _vm.Layout == VendorLayout.Gear;
+            if (_partyBar != null) _partyBar.SetActive(gearTrade);
+            if (_memberLabel != null) _memberLabel.gameObject.SetActive(gearTrade);
+            if (_equipBtn != null) _equipBtn.gameObject.SetActive(gearTrade);
 
             RebuildPartyBar();
             HighlightTab(_vm.Tab);
@@ -615,7 +624,11 @@ namespace DeNelle.Village.Hero
                 else
                     FlowTrace.Fail("Store",
                         $"PartyShop had {wantCount} item(s) but built 0 rows ({failed} failed) - showing empty-state row (built-but-broken).");
-                CreateEmptyStateRow(listRoot, _vm.Tab == PartyShopTab.Sell ? "Nothing to sell." : "No wares in stock.");
+                // WO-598: the BUY empty state is the vendor's AUTHORED emptyLine (vendors.json)
+                // - never the raw "No wares in stock." (flag_11). SELL keeps a neutral line.
+                CreateEmptyStateRow(listRoot, _vm.Tab == PartyShopTab.Sell
+                    ? "Nothing to sell."
+                    : (!string.IsNullOrEmpty(_vm.EmptyLine) ? _vm.EmptyLine : "No wares in stock."));
             }
 
             FinalizeScroll();
@@ -982,6 +995,14 @@ namespace DeNelle.Village.Hero
         private void BuildPreviewModelOrFallback(string id, PartyShopDetail detail, ItemVM? item)
         {
             if (string.IsNullOrEmpty(id)) { ShowSpriteFallback(detail, item, "no-id"); return; }
+            // WO-598: goods/jeweler rows (consumable/material/gem/accessory) have no 3D gear
+            // model - straight to the 2D iconPath sprite / glyph, never a dead weapon lookup.
+            if (detail.IconRole != PartyShopVM.IconRoleWeapon &&
+                detail.IconRole != PartyShopVM.IconRoleArmor)
+            {
+                ShowSpriteFallback(detail, item, "non-gear");
+                return;
+            }
             if (_rigModelId == id && (_rigVisual != null || _rigHandleOpen)) return;   // already mounted
 
             // Resolve the def for prefabPath via the same key the rows use (role-keyed catalog find).
@@ -1128,7 +1149,21 @@ namespace DeNelle.Village.Hero
             {
                 if (_previewSprite != null) _previewSprite.color = new Color(0f, 0f, 0f, 0f);
                 if (_previewGlyph != null)
-                    _previewGlyph.text = detail.IconRole == PartyShopVM.IconRoleArmor ? "[]" : "/";
+                    _previewGlyph.text = GlyphForRole(detail.IconRole);
+            }
+        }
+
+        // Never-blank ASCII glyph per icon role (WO-598 added the goods/jeweler bands).
+        private static string GlyphForRole(string role)
+        {
+            switch (role)
+            {
+                case PartyShopVM.IconRoleArmor:     return "[]";
+                case PartyShopVM.IconRolePotion:    return "!";
+                case PartyShopVM.IconRoleMaterial:  return "*";
+                case PartyShopVM.IconRoleGem:       return "+";
+                case PartyShopVM.IconRoleAccessory: return "o";
+                default:                            return "/";
             }
         }
 
@@ -1175,6 +1210,11 @@ namespace DeNelle.Village.Hero
             _rigCam.farClipPlane = 10000f;
             _rigCam.targetTexture = _rigRt;
             _rigCam.cullingMask = 1 << PreviewLayer;
+            // Fleet ticket 2026-07-02 (x52, MainCastle_Hall): URP asset m_MSAA:2 vs this RT's
+            // default antiAliasing=1 → "Attachment 0 was created with 1 samples but 2 samples
+            // were requested" whenever this rig cam renders. Offscreen preview needs no MSAA —
+            // match TowerPreviewCamera / HeroPreviewViewer.
+            _rigCam.allowMSAA = false;
 
             var urp = camGo.AddComponent<UniversalAdditionalCameraData>();
             urp.renderType = CameraRenderType.Base;
@@ -1316,12 +1356,15 @@ namespace DeNelle.Village.Hero
                 var s = ItemIconCatalog.ForArmor(a);
                 return s != null ? s : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield);
             }
-            else
+            if (role == PartyShopVM.IconRoleWeapon)
             {
                 var w = GearCatalog.FindWeapon(item.Id);
                 var s = ItemIconCatalog.ForWeapon(w);
                 return s != null ? s : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSword);
             }
+            // WO-598 goods/jeweler bands: try the sliced item-icon art by id/name; a miss
+            // returns null so the caller draws the role glyph (never a wrong sword icon).
+            return ItemIconCatalog.ForConsumable(item.Id, item.Name);
         }
 
         private static Color DeltaColor(string delta)

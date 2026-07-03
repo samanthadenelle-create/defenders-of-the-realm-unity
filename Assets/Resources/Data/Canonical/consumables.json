@@ -6,7 +6,8 @@
     "magnitude": "heal amount (HP) for heal/rest; percent or flat for buffs (deferred).",
     "duration": "seconds for timed buffs/HoT/food (deferred); 0 = instant.",
     "usableInFight": "true = potions/food usable mid-fight; false = rest-only (tent kits).",
-    "iconPath": "Resources sprite path (ItemIcons/<id>); glyph is the ASCII fallback."
+    "iconPath": "Resources sprite path (ItemIcons/<id>); glyph is the ASCII fallback.",
+    "price": "gold BUY price at goods vendors (Market). WO-598: the shelf price is CONTENT, not code."
   },
   "version": 1,
   "consumables": [
@@ -19,7 +20,8 @@
       "magnitudePct": 30,
       "duration": 0,
       "usableInFight": true,
-      "glyph": "!"
+      "glyph": "!",
+      "price": 8
     },
     {
       "id": "greater-heal-potion",
@@ -30,7 +32,8 @@
       "magnitudePct": 30,
       "duration": 0,
       "usableInFight": true,
-      "glyph": "!"
+      "glyph": "!",
+      "price": 20
     },
     {
       "id": "cons_mana_draught",
@@ -41,7 +44,8 @@
       "magnitudePct": 30,
       "duration": 10,
       "usableInFight": true,
-      "glyph": "*"
+      "glyph": "*",
+      "price": 12
     },
     {
       "id": "traveler-rations",
@@ -51,7 +55,8 @@
       "magnitude": 25,
       "duration": 0,
       "usableInFight": true,
-      "glyph": "%"
+      "glyph": "%",
+      "price": 6
     },
     {
       "id": "scout-tent-kit",
@@ -61,7 +66,8 @@
       "magnitude": 9999,
       "duration": 0,
       "usableInFight": false,
-      "glyph": "^"
+      "glyph": "^",
+      "price": 25
     },
     {
       "id": "cons_mending_salve",
@@ -72,7 +78,8 @@
       "duration": 6,
       "usableInFight": true,
       "glyph": "+",
-      "iconPath": "ItemIcons/cons_mending_salve"
+      "iconPath": "ItemIcons/cons_mending_salve",
+      "price": 10
     },
     {
       "id": "cons_ironbark_tonic",
@@ -83,7 +90,8 @@
       "duration": 30,
       "usableInFight": true,
       "glyph": "#",
-      "iconPath": "ItemIcons/cons_ironbark_tonic"
+      "iconPath": "ItemIcons/cons_ironbark_tonic",
+      "price": 14
     },
     {
       "id": "cons_emberfire_bomb",
@@ -94,7 +102,8 @@
       "duration": 0,
       "usableInFight": true,
       "glyph": "o",
-      "iconPath": "ItemIcons/cons_emberfire_bomb"
+      "iconPath": "ItemIcons/cons_emberfire_bomb",
+      "price": 16
     },
     {
       "id": "cons_swiftstep_elixir",
@@ -105,7 +114,8 @@
       "duration": 45,
       "usableInFight": true,
       "glyph": ">",
-      "iconPath": "ItemIcons/cons_swiftstep_elixir"
+      "iconPath": "ItemIcons/cons_swiftstep_elixir",
+      "price": 14
     },
     {
       "id": "cons_arcane_clarity",
@@ -116,7 +126,8 @@
       "duration": 60,
       "usableInFight": true,
       "glyph": "*",
-      "iconPath": "ItemIcons/cons_arcane_clarity"
+      "iconPath": "ItemIcons/cons_arcane_clarity",
+      "price": 16
     },
     {
       "id": "cons_suppressing_smoke",
@@ -127,7 +138,8 @@
       "duration": 8,
       "usableInFight": true,
       "glyph": "~",
-      "iconPath": "ItemIcons/cons_suppressing_smoke"
+      "iconPath": "ItemIcons/cons_suppressing_smoke",
+      "price": 12
     },
     {
       "id": "cons_heartward_draught",
@@ -138,7 +150,8 @@
       "duration": 0,
       "usableInFight": true,
       "glyph": "+",
-      "iconPath": "ItemIcons/cons_heartward_draught"
+      "iconPath": "ItemIcons/cons_heartward_draught",
+      "price": 28
     },
     {
       "id": "cons_elarion_blessing",
@@ -149,7 +162,8 @@
       "duration": 0,
       "usableInFight": true,
       "glyph": "!",
-      "iconPath": "ItemIcons/cons_elarion_blessing"
+      "iconPath": "ItemIcons/cons_elarion_blessing",
+      "price": 60
     },
     {
       "id": "cons_field_poultice",
@@ -159,7 +173,8 @@
       "magnitude": 60,
       "duration": 0,
       "usableInFight": true,
-      "glyph": "+"
+      "glyph": "+",
+      "price": 14
     },
     {
       "id": "cons_hearthfire_stew",
@@ -169,7 +184,8 @@
       "magnitude": 80,
       "duration": 0,
       "usableInFight": true,
-      "glyph": "%"
+      "glyph": "%",
+      "price": 10
     },
     {
       "id": "cons_wardens_campfire",
@@ -179,7 +195,8 @@
       "magnitude": 9999,
       "duration": 0,
       "usableInFight": false,
-      "glyph": "^"
+      "glyph": "^",
+      "price": 30
     },
     {
       "id": "cons_purifying_draught",
@@ -189,7 +206,8 @@
       "magnitude": 50,
       "duration": 0,
       "usableInFight": true,
-      "glyph": "+"
+      "glyph": "+",
+      "price": 12
     }
   ]
 }

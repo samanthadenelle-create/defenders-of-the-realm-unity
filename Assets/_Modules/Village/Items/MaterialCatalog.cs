@@ -45,6 +45,9 @@ namespace DeNelle.Village.Items
         [JsonProperty("category")] public string Category;  // herb | crystal | fungus | ...
         [JsonProperty("glyph")] public string Glyph;        // ASCII fallback
         [JsonProperty("iconPath")] public string IconPath;  // Resources sprite path (ItemIcons/<id>)
+        // WO-598: authored gold BUY price at goods/jeweler vendors (Market materials,
+        // Jeweler gems). 0/absent = VendorStockResolver.PriceFor's default.
+        [JsonProperty("price")] public int Price;
     }
 
     [Serializable]

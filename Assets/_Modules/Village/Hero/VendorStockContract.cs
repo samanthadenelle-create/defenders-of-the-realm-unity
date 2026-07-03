@@ -17,6 +17,12 @@
 // Because both sides read the same AllowedFor() mapping, the bot is checking the
 // intent, not a duplicated copy of it. Keep this file pure data/logic (no
 // UnityEngine dependency) so the editor/bot assembly can reference it freely.
+//
+// WO-598 (vendor wares content mapping): AllowedFor now consults the vendors.json
+// REGISTRY first (VendorRegistry — categories → kinds), so the mapping is CONTENT
+// for the registered vendors (forge/armorer/market/jeweler) and the heuristic below
+// is the fallback for unregistered contexts. VendorRegistry loads via CanonicalJson
+// (graceful: registry absent ⇒ heuristic unchanged). One truth, all consumers.
 // =============================================================================
 
 using System;
@@ -40,6 +46,10 @@ namespace DeNelle.Village
         Craftable = 8,
         // WO-543: ACCESSORIES (rings + amulets) — sold exclusively at the Jeweler (Sable Vey).
         Accessory = 16,
+        // WO-598: CRAFTING MATERIALS as shoppable (the Market's second band next to
+        // consumables; the crystal/gem sub-band is Jeweler stock). Additive flag —
+        // existing bitmask consumers test their own flags explicitly and ignore this.
+        Material = 32,
     }
 
     /// <summary>
@@ -77,6 +87,14 @@ namespace DeNelle.Village
             if (string.IsNullOrEmpty(vendorContext))
                 return GearKind.Weapon | GearKind.Armor | GearKind.Potion;
 
+            // ── WO-598: the vendors.json REGISTRY is consulted FIRST (one truth). A
+            //    registered vendor's kinds derive from its declared stock-query categories,
+            //    so the legacy shop, ShopCatalog, the MVVM PartyShop AND the AutoPilot
+            //    oracle all read the same mapping. Unregistered contexts (and a missing/
+            //    broken vendors.json) fall through to the heuristic below unchanged. ──
+            var registered = RegistryKinds(vendorContext);
+            if (registered != GearKind.None) return registered;
+
             string ctx = vendorContext.ToLowerInvariant();
 
             // Armor specialists. Note: "armor" must be tested before any generic
@@ -113,6 +131,36 @@ namespace DeNelle.Village
 
             // Unknown vendor -> safe general default (never broken / never empty).
             return GearKind.Weapon | GearKind.Armor | GearKind.Potion;
+        }
+
+        /// <summary>
+        /// WO-598: map a registered vendor's declared stock-query categories (vendors.json)
+        /// to GearKind flags. GearKind.None when the vendor is unregistered / the registry is
+        /// absent — the caller then uses the legacy heuristic. Never throws (registry loads
+        /// gracefully; a null Categories yields None).
+        /// </summary>
+        private static GearKind RegistryKinds(string vendorContext)
+        {
+            var v = VendorRegistry.Find(vendorContext);
+            if (v == null || v.Categories == null) return GearKind.None;
+
+            GearKind kinds = GearKind.None;
+            foreach (var raw in v.Categories)
+            {
+                switch ((raw ?? string.Empty).Trim().ToLowerInvariant())
+                {
+                    case "weapon": case "weapons":           kinds |= GearKind.Weapon;    break;
+                    case "armor": case "armors":             kinds |= GearKind.Armor;     break;
+                    case "consumable": case "consumables":   kinds |= GearKind.Potion;    break;
+                    case "material": case "materials":
+                    case "gem": case "gems":                 kinds |= GearKind.Material;  break;
+                    case "ring": case "rings":
+                    case "amulet": case "amulets":
+                    case "accessory": case "accessories":    kinds |= GearKind.Accessory; break;
+                    case "craftable": case "craftables":     kinds |= GearKind.Craftable; break;
+                }
+            }
+            return kinds;
         }
     }
 }

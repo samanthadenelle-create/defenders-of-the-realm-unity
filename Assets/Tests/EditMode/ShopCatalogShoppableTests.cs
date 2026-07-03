@@ -64,18 +64,29 @@ namespace DeNelle.Tests.EditMode
         [Test]
         public void mage_weapon_context_returns_only_mage_or_any_weapons()
         {
-            // "forge" -> Weapon kind. job = mage, generous level.
+            // "forge" -> Weapon|Armor kinds (WO-598: the vendors.json registry declares the
+            // Forge as the full gear trade — weapons + armor). job = mage, generous level.
             var list = ShopCatalog.Shoppable("forge", "mage", 99);
 
             foreach (var e in list)
             {
-                Assert.That(e.Kind, Is.EqualTo(ShoppableKind.Weapon),
-                    "a weapon-only vendor must surface only weapon entries");
-                var w = GearCatalog.FindWeapon(e.Id);
-                Assert.That(w, Is.Not.Null, $"entry '{e.Id}' must resolve to a real weapon def");
-                // class fit: a mage may only see "mage"/"any"/empty weapons — never a ranger-only one.
-                Assert.That(GearCatalog.WeaponFitsClass(w, "mage"), Is.True,
-                    $"weapon '{w.id}' (job='{w.job}') must fit a mage — a ranger-only weapon leaked through");
+                Assert.That(e.Kind, Is.EqualTo(ShoppableKind.Weapon).Or.EqualTo(ShoppableKind.Armor),
+                    "a gear vendor must surface only weapon/armor entries");
+                if (e.Kind == ShoppableKind.Weapon)
+                {
+                    var w = GearCatalog.FindWeapon(e.Id);
+                    Assert.That(w, Is.Not.Null, $"entry '{e.Id}' must resolve to a real weapon def");
+                    // class fit: a mage may only see "mage"/"any"/empty weapons — never a ranger-only one.
+                    Assert.That(GearCatalog.WeaponFitsClass(w, "mage"), Is.True,
+                        $"weapon '{w.id}' (job='{w.job}') must fit a mage — a ranger-only weapon leaked through");
+                }
+                else
+                {
+                    var a = GearCatalog.FindArmor(e.Id);
+                    Assert.That(a, Is.Not.Null, $"entry '{e.Id}' must resolve to a real armor def");
+                    Assert.That(GearCatalog.ArmorFitsClass(a, "mage"), Is.True,
+                        $"armor '{a.id}' (weight='{a.weight}') must fit a mage — a heavy piece leaked through");
+                }
             }
         }
 
