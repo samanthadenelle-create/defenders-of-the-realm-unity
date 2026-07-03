@@ -133,6 +133,14 @@ namespace DeNelle.Core.UI
         public float TapTarget = ElarionUi.TapTarget;
         public Vector2 CellSize = new Vector2(78f, 72f);
 
+        // ── A3 GLOBAL CHROME-TINT HOOK (HUD_OBSIDIAN_ARCHITECTURE amendment A3) ──
+        // Every piece of Blink CHROME art the factory renders (panel frames, bar frames, plates,
+        // tabs, close, toast plates, chat core...) is tinted by THIS ONE value — pack art ships
+        // untinted (white) until the owner's palette ruling ("Blink structure, black-gold-warm
+        // palette" proposed); when she rules, the ruling lands in this single field. Content
+        // colours (rarity, semantic greens/reds, currency gold) are NOT chrome and never use it.
+        public UColor ChromeTint = UColor.white;
+
         // ── Default icon concept (when a View has no specific concept) ──
         public string DefaultIconConcept = "inventory";
 
@@ -147,11 +155,18 @@ namespace DeNelle.Core.UI
         /// </summary>
         public static UiTheme ForObsidian()
         {
+            // DIFFERENTIATED (2026-07-03, HUD_OBSIDIAN P1 — was a ForDefault() placeholder, flagged
+            // by BLINK_OBSIDIAN_UI_UNDERSTANDING §6): Obsidian leans the primary CTA onto the real
+            // 5x4 Obsidian yellow (the kit's ButtonKind shim resolves it sprite-first), keeps the
+            // untinted forged-steel chrome (ChromeTint stays white until the A3 palette ruling),
+            // and keeps the dark slot family. Null-safe throughout — absent art falls back.
             return new UiTheme
             {
                 WindowPanel = RpgUiCatalog.PanelWindowDark,
                 SlotItem    = RpgUiCatalog.SlotItem,
                 SlotTalent  = "slot_talent",
+                ButtonPrimaryDefault = "button1_yellow",   // Obsidian family CTA (falls back if unmirrored)
+                ChromeTint  = UColor.white,                 // A3: untinted until the owner's ruling
             };
         }
 

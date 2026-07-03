@@ -12,8 +12,12 @@ namespace DeNelle.Core.HudModel
 {
     // ── Enums ────────────────────────────────────────────────────────────────
 
-    /// <summary>The top-level HUD presentation context (which layout/affordances are live).</summary>
-    public enum HudContext { Town, Overworld, Battle, Modal }
+    /// <summary>
+    /// The top-level HUD presentation context (which layout/affordances are live).
+    /// BuildMode appended (P4, HUD_OBSIDIAN_ARCHITECTURE_2026-07-03 §3.3) — the 4th space
+    /// type (Town/World/Battle/BuildMode); appended LAST so existing comparisons are unmoved.
+    /// </summary>
+    public enum HudContext { Town, Overworld, Battle, Modal, BuildMode }
 
     /// <summary>A combat role classification, used for target colouring/iconography.</summary>
     public enum HudRole { None, Warrior, Tank, Mage }

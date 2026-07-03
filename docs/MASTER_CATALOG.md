@@ -231,6 +231,10 @@ Breach (from Village2 / dungeon) ─► GoBattle(BattleParams) ─► ATBBattle 
 
 ## 3. STALE / RISK LEDGER (consolidated, prioritized)
 
+> **2026-07-03:** the 07-02→03 convergence session touched ~50 systems (see
+> `CANON_GROUND_TRUTH_2026-07-03.md`); per-area docs village-systems/resources-art have same-breath
+> notes; full catalog refresh queued.
+
 Every flag the 18 section agents raised, in one prioritized list.
 **P1 = blocks/misleads work or breaks a platform · P2 = wrong behavior but contained ·
 P3 = dead/stale, cleanup.**

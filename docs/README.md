@@ -1,4 +1,4 @@
-> ⚠ **STALE — pre-pivot process/state doc** (stale branch `feat/tower-core-loop`, Linear board, or Solana/tower-defense framing). Board = Notion; branch = `wip/village2-and-f8-tickets`. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md`.
+> ⚠ **STALE — pre-pivot process/state doc** (stale branch `feat/tower-core-loop`, Linear board, or Solana/tower-defense framing). Board = Notion; branch = `wip/village2-and-f8-tickets`. Live reality: `CANON_GROUND_TRUTH_2026-07-03.md`.
 
 # docs/ — Index
 
@@ -53,6 +53,8 @@ indexed separately in `../PROJECT_INDEX.md`.
   `dungeons-3d-unity-layout-spec.md`
 - Other: `CAMERA_INPUT_OVERHAUL.md`, `CHARACTER_CREATOR.md`, `CHARACTER_REFACTOR_PLAN.md`,
   `audio-mix-spec.md`
+- `TUTORIAL_V2_SPEC_2026-07-02.md` — **Tutorial V2** (7 owner-ratified steps, tutorial-steps.json + interpreter; BUILT behind `ff.tutorialv2`, default OFF)
+- `MONETIZATION_REVIEW_2026-07-02.md` — monetization review (Curiosity Shop; loot boxes NO-GO mainnet / GO testnet; dev wallet banked)
 
 ## Narrative
 
@@ -64,6 +66,7 @@ indexed separately in `../PROJECT_INDEX.md`.
 
 - `v2-unity-port-spec.md`, `v2-unity-port-backend-spec.md`, `draft-backend-endpoints`
 - `admin-console-spec.md`, `webgl-hosting-notes.md`, `wallets-of-record.md`
+- `WEBGL_DELIVERY_PLAN_2026-07-03.md` — **WO-545 Addressables streaming blueprint** (boot target 15–25MB, Cloudflare R2 remote; "what CAN stream, SHOULD stream")
 
 ## Process / QA / audits (mostly dated — newest wins)
 
@@ -72,6 +75,8 @@ indexed separately in `../PROJECT_INDEX.md`.
 - `QA_player_sanity_pass_2026-05-30.md`, `acceptance_verification_2026-05-30.md`,
   `VISION_GAP_ANALYSIS_2026-05-30.md`, `bug-triage.md`, `diagnosis-report.md`,
   `village-review-suggestions.md`, `recovery-work-orders.md`, `claude-code-work-order.md`
+- `UI_BLINK_CONFORMANCE_AUDIT_2026-07-02.md` — screen-by-screen UI audit against the Blink template canon (+ owner addenda; source of the extended UI canon rules)
+- `PUBLISHER_CRITIQUE_2026-07-03.md` — publisher-lens critique (pass-with-revisit; ranks the seam un-stack #1)
 - Subfolders: `audit/`, `qa/`, `roadmap/`, `port-notes/`
 
 ## Media

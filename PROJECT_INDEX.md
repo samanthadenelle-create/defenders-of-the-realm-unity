@@ -4,19 +4,21 @@ How to navigate the ~370 markdown files at project root without reading them all
 Code map: `Assets/_Modules/README.md`. Assets map: `Assets/README.md`.
 Docs index: `docs/README.md`.
 
-> **Branch = `wip/village2-and-f8-tickets`** (HEAD `8aa24c32`). The live anchor of current reality is
-> `CANON_GROUND_TRUTH_2026-06-26.md`. Several files this index historically called "living/current" are now
+> **Branch = `wip/village2-and-f8-tickets`**. The live anchor of current reality is
+> `CANON_GROUND_TRUTH_2026-07-03.md` (updated 2026-07-03). Several files this index historically called "living/current" are now
 > STALE (pre-pivot: tower-defense + Solana + party-of-4 + Blink) — corrected per `CANON_READINESS_LEDGER_2026-06-26.md`.
 
 ## Living documents (read these; they are current)
 
 | File | Purpose |
 |---|---|
-| `CANON_GROUND_TRUTH_2026-06-26.md` | **The single live anchor of current reality — read FIRST** |
+| `CANON_GROUND_TRUTH_2026-07-03.md` | **The single live anchor of current reality — read FIRST** (supersedes the 07-01 / 06-28 / 06-26 anchors, now frozen) |
+| `RESUME_2026-07-03_morning.md` | **The live work thread / session resume** — 07-02→03 convergence session results + owner decisions + next steps |
+| `RESUME_2026-06-30_seam-unstack.md` | Seam un-stack (WO-453) resume path — still parked as of 07-03; FROZEN-VALID |
 | `CLAUDE.md` | **Agent rules — read first, non-negotiable** (§15 = canon maintenance) |
 | `SESSION_CANON_LOADER.md` | At-a-glance SME primer (current state + key files) |
-| `docs/HANDOVER.md` | Operator's manual + newest 2026-06-26 session block |
-| `PIPELINE_STATE.md` | Pipeline/build state (2026-06-26 block at top) |
+| `docs/HANDOVER.md` | Operator's manual + newest 2026-07-03 session block |
+| `PIPELINE_STATE.md` | Pipeline/build state (current block + 2026-07-03 delta at top) |
 | `docs/COMBAT_PIVOT_NORTHSTAR.md` | Single-Knight pivot — supersedes Blink/party-of-4 canon |
 | `docs/MASTER_CATALOG.md` | Verified-from-code SME catalog (code mechanics current) |
 | `PARALLEL_LANES.md` | Which work lanes can run simultaneously |
@@ -41,6 +43,7 @@ The unit of work. **Moved out of root into `WorkOrders/` 2026-06-22** to declutt
   WO-136s, two WO-129s/137s/152s/179s); WO numbers ≥182 supersede earlier
   same-topic WOs (e.g. WO-198 supersedes WO-129 pipeline reconciliation)
 - `_SUPERSEDED` suffix = dead, ignore (e.g. `WORK_ORDER_43_..._SUPERSEDED.md`)
+- **WOs 596–602** (2026-07-02→03 arc): 596 player bug report · 597 bot popup-close oracle · 598 vendor wares content mapping · 599 combat locks modals · 600 uncraftable recipe ingredients · 601 NPC portrait art brief · 602 way back home ("Enter Elarion" return crossings). Numbering runs through **602**.
 
 ## Design docs (root-level; deeper specs live in `docs/`)
 

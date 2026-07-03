@@ -20,6 +20,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using DeNelle.Core.Combat;
 using DeNelle.Core.Diagnostics;   // WO-449 §12: FlowTrace on the melee LoS gate
+using DeNelle.Core.UI;            // P23: CombatText — pooled/capped/deduped stamps (§1.8)
 
 namespace DeNelle.Village
 {
@@ -380,7 +381,11 @@ namespace DeNelle.Village
             CombatFeedbackManager.Parry(pos);
             GameSfx.PlaySwordClash();   // metallic deflect clang
             _riposteArmedUntil = Time.time + RiposteWindow;
-            DamageNumberSpawner.SpawnLabel("PARRY!", pos + Vector3.up * 1.4f, new Color(0.6f, 0.9f, 1f), 1.4f);
+            // P23 §0 fix (HUD_OBSIDIAN §1.8): the old DamageNumberSpawner.SpawnLabel (:140) was
+            // pooled but UNCAPPED + UN-DEDUPED world-space TextMesh at 1.4x — every parried hit
+            // inside the 0.25s window stacked another giant label. CombatText is the pooled(6)/
+            // capped/0.5s-deduped screen-space stamp: repeats become ONE "PARRY! x N".
+            CombatText.Show(CombatTextKind.Parry, "PARRY!", pos + Vector3.up * 1.4f);
         }
 
         // ── Attack flow ───────────────────────────────────────────────────────
@@ -630,8 +635,8 @@ namespace DeNelle.Village
 
                 if (riposte)
                 {
-                    DamageNumberSpawner.SpawnLabel("RIPOSTE!", transform.position + Vector3.up * 1.8f,
-                        new Color(1f, 0.85f, 0.2f), 1.6f);
+                    // P23 §0 fix (§1.8): screen-space pooled stamp — never a stacking 1.6x TextMesh.
+                    CombatText.Show(CombatTextKind.Riposte, "RIPOSTE!", transform.position + Vector3.up * 1.8f);
                     _riposteArmedUntil = 0f;   // one empowered counter per parry
                 }
             }
@@ -735,9 +740,15 @@ namespace DeNelle.Village
             _swingTrail.endWidth = 0f;
 
             // Colour gradient: bright at the swing edge -> transparent tail.
+            // BLOOM-AWARE (2026-07-02): post-processing is now live (WorldFeelInjector,
+            // bloom threshold 0.9). A mild HDR head (~1.6x) lets the swing arc catch a
+            // soft halo at the blade edge -- rarity colours (WeaponVfxMap) still read
+            // true through the tail. Kept well under the 2-4 point-core band: a trail
+            // is a large screen-space ribbon, not a point core.
+            Color head = new Color(_trailColor.r * 1.6f, _trailColor.g * 1.6f, _trailColor.b * 1.6f, _trailColor.a);
             var grad = new Gradient();
             grad.SetKeys(
-                new[] { new GradientColorKey(_trailColor, 0f), new GradientColorKey(_trailColor, 1f) },
+                new[] { new GradientColorKey(head, 0f), new GradientColorKey(_trailColor, 0.35f), new GradientColorKey(_trailColor, 1f) },
                 new[] { new GradientAlphaKey(_trailColor.a, 0f), new GradientAlphaKey(0f, 1f) });
             _swingTrail.colorGradient = grad;
         }

@@ -4,36 +4,37 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
-// SEAM (least cross-level exposure — owner directive): the HUD's Talk method + event
-// are NOT on IVillageHud (Core stays clean); this Village-side bridge reaches them by
-// REFLECTION, exactly like HeroAbilitiesHudBridge does AbilityRequested. So "Talk"
-// lives only in HUD + this bridge — Core never learns it exists.
+// P23 ROOT-CAUSE FIX (§0 "talk button not appearing", HUD_OBSIDIAN 2026-07-03):
+// the old bridge hooked the PER-SCENE VillageHudController by ONE-SHOT reflection
+// (cached MethodInfo + instance, `_hooked = true`, MaxResolveAttempts = 240).
+// After any scene swap the cached instance was DESTROYED; PushAvailable invoked
+// a dead target, OnDisable never ran (the bridge itself is DontDestroyOnLoad),
+// and once the attempt budget drained it could never re-hook — so availability
+// was never pushed again and the Talk button never appeared. PROOF: the hook
+// design at :25/:36/:62/:83-105 vs. VillageHudBootstrap's per-scene, non-DDoL
+// HUD ("Per-scene-ensure keeps exactly one live HUD", VillageHudBootstrap.cs).
 //
-// NO per-frame scan: availability is an O(1) read of TalkPromptRegistry.Count on a
-// throttled poll, pushed to the HUD only on CHANGE (edge-triggered). The HUD-resolve
-// scan stops the moment it hooks (capped). Honors the OuterWorld-leak hardening lesson.
+// THE FIX: no reflection, no cached instance. Availability pushes the Core
+// static PostureSignals.SetTalkAvailable (cannot go stale); the Talk press
+// registers into HudCommands.RegisterTalk (re-registered every scene load).
+// The HUD kit binds both. NO per-frame scan: availability stays an O(1)
+// TalkPromptRegistry.Count read on a throttled poll, pushed edge-triggered.
 // =============================================================================
-using System.Reflection;
 using UnityEngine;
-using UnityEngine.Events;
+using UnityEngine.SceneManagement;
+using DeNelle.Core.Diagnostics;
+using DeNelle.Core.HUD;
+using DeNelle.Core.HudModel;
 
 namespace DeNelle.Village
 {
+    /// <summary>Pushes talk availability + handles Talk presses (see header).</summary>
     public sealed class TalkHudBridge : MonoBehaviour
     {
         private const float PollInterval = 0.25f;
-        private const int   MaxResolveAttempts = 240;   // ~60s of throttled hook attempts, then give up
 
         private float _timer;
-        private int _resolveAttempts;
         private Transform _hero;
-
-        private Object _hud;                 // VillageHudController (held as Object — no DeNelle.HUD ref)
-        private MethodInfo _setTalkAvailable; // SetTalkAvailable(bool)
-        private UnityEvent _talkRequested;    // TalkRequested
-        private UnityAction _onTalk;
-        private readonly object[] _availArgs = new object[1];
-        private bool _hooked;
         private bool _lastAvailable;
         private bool _haveLast;
 
@@ -42,15 +43,19 @@ namespace DeNelle.Village
         {
             var go = new GameObject("TalkHudBridge");
             DontDestroyOnLoad(go);
-            go.AddComponent<TalkHudBridge>();
+            var bridge = go.AddComponent<TalkHudBridge>();
+            // Re-register the press handler on every scene load (never-stale law).
+            SceneManager.sceneLoaded += (_, __) => bridge.RegisterTalkHandler();
+            bridge.RegisterTalkHandler();
         }
 
-        private void OnDisable()
+        private void RegisterTalkHandler()
         {
-            if (_talkRequested != null && _onTalk != null) _talkRequested.RemoveListener(_onTalk);
-            _talkRequested = null;
-            _onTalk = null;
-            _hooked = false;
+            HudCommands.RegisterTalk(OnTalkPressed);
+            _hero = null;          // re-resolve the hero for the new scene
+            _haveLast = false;     // force an availability re-push
+            FlowTrace.Step("HudKit", "TalkHudBridge: talk handler registered (scene '" +
+                           SceneManager.GetActiveScene().name + "')");
         }
 
         private void Update()
@@ -59,49 +64,14 @@ namespace DeNelle.Village
             if (_timer > 0f) return;
             _timer = PollInterval;
 
-            if (!_hooked) { TryHook(); if (!_hooked) return; }
-
-            // O(1) registry read — NOT a scan. Push to the HUD only when it changes.
+            // O(1) registry read — NOT a scan. Push only on change (edge-triggered).
             bool available = TalkPromptRegistry.Count > 0;
             if (!_haveLast || available != _lastAvailable)
             {
                 _lastAvailable = available;
                 _haveLast = true;
-                PushAvailable(available);
+                PostureSignals.SetTalkAvailable(available);   // Core static — cannot go stale
             }
-        }
-
-        private void PushAvailable(bool available)
-        {
-            if (_setTalkAvailable == null || _hud == null) return;
-            _availArgs[0] = available;
-            _setTalkAvailable.Invoke(_hud, _availArgs);
-        }
-
-        private void TryHook()
-        {
-            if (_resolveAttempts++ > MaxResolveAttempts) return;
-
-            if (_hud == null)
-            {
-                foreach (var mb in FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include))
-                    if (mb != null && mb.GetType().Name == "VillageHudController") { _hud = mb; break; }
-            }
-            if (_hud == null) return;
-
-            var t = _hud.GetType();
-            _setTalkAvailable = t.GetMethod("SetTalkAvailable",
-                BindingFlags.Public | BindingFlags.Instance, null, new[] { typeof(bool) }, null);
-
-            var field = t.GetField("TalkRequested", BindingFlags.Public | BindingFlags.Instance);
-            _talkRequested = field?.GetValue(_hud) as UnityEvent;
-
-            if (_setTalkAvailable == null || _talkRequested == null) return;
-
-            _onTalk = OnTalkPressed;
-            _talkRequested.AddListener(_onTalk);
-            _hooked = true;
-            _haveLast = false;   // force an initial push on the next tick
         }
 
         private void OnTalkPressed()

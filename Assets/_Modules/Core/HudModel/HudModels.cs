@@ -38,12 +38,18 @@ namespace DeNelle.Core.HudModel
         public int Level { get; private set; }
         /// <summary>Hero class identifier.</summary>
         public string ClassId { get; private set; }
+        /// <summary>
+        /// Unspent Wisdom (skill points). P4 (HUD_OBSIDIAN §3.3): replaces the HUD's
+        /// reflection pull of WisdomCurrencyService (VillageHudController.cs:1486-1497) —
+        /// the producer reads the service directly (Village-side) and pushes it here.
+        /// </summary>
+        public int Wisdom { get; private set; }
 
         /// <summary>Raised after any field changes.</summary>
         public event Action Changed;
 
         /// <summary>Producer-only mutator: assign all fields, fire Changed, trace (throttled).</summary>
-        public void Set(int hp, int maxHp, int mana, int maxMana, int xp, int xpToNext, int level, string classId)
+        public void Set(int hp, int maxHp, int mana, int maxMana, int xp, int xpToNext, int level, string classId, int wisdom)
         {
             Hp = hp;
             MaxHp = maxHp;
@@ -53,8 +59,9 @@ namespace DeNelle.Core.HudModel
             XpToNext = xpToNext;
             Level = level;
             ClassId = classId;
+            Wisdom = wisdom;
             Changed?.Invoke();
-            FlowTrace.Throttle("HUD", "herovitals", 1f, $"HP {Hp}/{MaxHp} MP {Mana}/{MaxMana} XP {Xp}/{XpToNext} Lv{Level} [{ClassId}]");
+            FlowTrace.Throttle("HUD", "herovitals", 1f, $"HP {Hp}/{MaxHp} MP {Mana}/{MaxMana} XP {Xp}/{XpToNext} Lv{Level} Wis{Wisdom} [{ClassId}]");
         }
     }
 
@@ -416,15 +423,22 @@ namespace DeNelle.Core.HudModel
         public bool CombatActive { get; private set; }
         /// <summary>Whether a modal is open.</summary>
         public bool ModalOpen { get; private set; }
+        /// <summary>
+        /// Whether a Build Mode edit session is live (P4, HUD_OBSIDIAN §3.3 — the 4th
+        /// space type; replaces the BuildModeHudBridge hack as the HUD's source of truth).
+        /// </summary>
+        public bool BuildModeActive { get; private set; }
 
         /// <summary>Raised ONLY when <see cref="Context"/> actually changes value.</summary>
         public event Action Changed;
 
         /// <summary>
         /// Producer-only mutator: assign all fields. Fires Changed ONLY when the Context
-        /// value actually changes, but ALWAYS FlowTraces the transition.
+        /// value actually changes, but ALWAYS FlowTraces the state. On a real context
+        /// change it ALSO emits the fleet-assertable transition line
+        /// "[Flow:HudModel] context A->B" (P4 acceptance: the autopilot transition matrix).
         /// </summary>
-        public void Set(HudContext ctx, bool inVillage, bool combat, bool modal)
+        public void Set(HudContext ctx, bool inVillage, bool combat, bool modal, bool buildMode)
         {
             bool contextChanged = Context != ctx;
             var prev = Context;
@@ -433,9 +447,60 @@ namespace DeNelle.Core.HudModel
             InVillage = inVillage;
             CombatActive = combat;
             ModalOpen = modal;
+            BuildModeActive = buildMode;
 
-            if (contextChanged) Changed?.Invoke();
-            FlowTrace.Step("HUD", $"context {(contextChanged ? prev + " -> " + ctx : ctx.ToString())} (village={InVillage} combat={CombatActive} modal={ModalOpen})");
+            if (contextChanged)
+            {
+                // The transition-matrix line the fleet asserts on (P4 contract):
+                // e.g. "[Flow:HudModel] context Town->BuildMode".
+                FlowTrace.Step("HudModel", $"context {prev}->{ctx}");
+                Changed?.Invoke();
+            }
+            FlowTrace.Step("HUD", $"context {(contextChanged ? prev + " -> " + ctx : ctx.ToString())} (village={InVillage} combat={CombatActive} modal={ModalOpen} build={BuildModeActive})");
+        }
+    }
+
+    // ── Cast (enemy telegraph) ────────────────────────────────────────────────
+
+    /// <summary>
+    /// The currently-visible enemy cast telegraph (P4, HUD_OBSIDIAN §1.7/§3.4 — feeds
+    /// BuildCastBar). One cast at a time (V1 single cast bar; latest cast wins). Fed by
+    /// the CastProducer from the Enemy.RootedCast seam. Pure data — no scene refs.
+    /// </summary>
+    public sealed class CastModel
+    {
+        /// <summary>Display name of the casting enemy.</summary>
+        public string CasterName { get; private set; }
+        /// <summary>Display name of the ability being cast.</summary>
+        public string AbilityName { get; private set; }
+        /// <summary>Normalised cast progress (0..1).</summary>
+        public float Progress01 { get; private set; }
+        /// <summary>Whether a cast is live (the cast bar should show).</summary>
+        public bool Visible { get; private set; }
+
+        /// <summary>Raised after the cast state changes (set, progressed, or cleared).</summary>
+        public event Action Changed;
+
+        /// <summary>Producer-only mutator: assign the live cast, fire Changed, trace (throttled — hot).</summary>
+        public void Set(string casterName, string abilityName, float progress01)
+        {
+            CasterName = casterName;
+            AbilityName = abilityName;
+            Progress01 = progress01 < 0f ? 0f : progress01 > 1f ? 1f : progress01;
+            Visible = true;
+            Changed?.Invoke();
+            FlowTrace.Throttle("HudModel", "cast", 1f, $"cast '{CasterName}' {AbilityName} {Progress01:F2}");
+        }
+
+        /// <summary>Producer-only mutator: clear the cast (bar hides), fire Changed, trace.</summary>
+        public void Clear()
+        {
+            CasterName = null;
+            AbilityName = null;
+            Progress01 = 0f;
+            Visible = false;
+            Changed?.Invoke();
+            FlowTrace.Step("HudModel", "cast cleared");
         }
     }
 
@@ -469,6 +534,8 @@ namespace DeNelle.Core.HudModel
         EchoModel Echo { get; }
         /// <summary>The HUD-context model.</summary>
         HudContextModel Context { get; }
+        /// <summary>The enemy cast-telegraph model (P4 — feeds BuildCastBar).</summary>
+        CastModel Cast { get; }
     }
 
     /// <summary>
@@ -500,5 +567,7 @@ namespace DeNelle.Core.HudModel
         public EchoModel Echo { get; } = new EchoModel();
         /// <inheritdoc/>
         public HudContextModel Context { get; } = new HudContextModel();
+        /// <inheritdoc/>
+        public CastModel Cast { get; } = new CastModel();
     }
 }

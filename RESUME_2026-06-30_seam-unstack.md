@@ -1,6 +1,7 @@
 # RESUME — 2026-06-30 — Castle↔OuterWorld seam: un-stack OuterWorld
 
 > Save point for the owner's office switch. Read this first to resume. Dated/frozen.
+> **Status 2026-07-03:** still parked; encounter-return 7.1km confirmed 6/6 by fleet 07-03; publisher critique ranks closing it #1. This doc remains the resume path (FROZEN-VALID).
 
 > ## 🟢 LATEST — 2026-06-30 (afternoon, THIS machine) — ROLLBACK RECONCILED + TERRAIN FIXED + COMMITTED
 > **This supersedes the office-session "UN-STACK" block below for CURRENT state.** The un-stack

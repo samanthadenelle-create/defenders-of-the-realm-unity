@@ -35,6 +35,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.UI;
+using DeNelle.Core.UI;   // P23: RpgUiCatalog nameplate art (sprite-first, §1.10)
 
 namespace DeNelle.Village
 {
@@ -89,6 +90,7 @@ namespace DeNelle.Village
         private Canvas _canvas;
         private RectTransform _fillRect;
         private Image _fillImg;
+        private bool _usesPackFill;   // P23: true when the Blink nameplate fill art bound
         private Transform _cam;
         private bool _built;
 
@@ -238,19 +240,26 @@ namespace DeNelle.Village
             trackImg.color = TrackColor;
             StretchToCanvas(trackGo.GetComponent<RectTransform>(), 0f);
 
-            // Fill (left-anchored, width scaled by fraction).
+            // Fill — P23 CONVERSION to THE ONE FILL-BINDING CONTRACT (HUD_OBSIDIAN §1.1,
+            // the same law that fixes the 9/145 bug): NON-NULL sprite + Filled/Horizontal/
+            // Left + fillAmount as the ONLY width mutation. This kills the old sizeDelta-
+            // width pattern (the :466 site the architecture doc names). Sprite-first: the
+            // pack's nameplate fill for the unit kind (enemy vs friendly), chip fallback.
             var fillGo = new GameObject("Fill");
             fillGo.transform.SetParent(canvasGo.transform, false);
             _fillImg = fillGo.AddComponent<Image>();
-            _fillImg.sprite = chip; _fillImg.type = Image.Type.Simple;
-            _fillImg.color = HealthyColor;
+            var packFill = RpgUiCatalog.Get(RpgUiCatalog.RoleHud,
+                _destroyOnDead ? RpgUiCatalog.HudNameplateHealthEnemy : RpgUiCatalog.HudNameplateHealth);
+            _usesPackFill = packFill != null;
+            _fillImg.sprite = _usesPackFill ? packFill : chip;   // never null (§1.1 rule 1)
+            _fillImg.type = Image.Type.Filled;
+            _fillImg.fillMethod = Image.FillMethod.Horizontal;
+            _fillImg.fillOrigin = (int)Image.OriginHorizontal.Left;
+            _fillImg.color = _usesPackFill ? Color.white : HealthyColor;
+            _fillImg.raycastTarget = false;
+            _fillImg.fillAmount = 1f;
             _fillRect = fillGo.GetComponent<RectTransform>();
-            _fillRect.anchorMin = new Vector2(0f, 0f);
-            _fillRect.anchorMax = new Vector2(0f, 1f);
-            _fillRect.pivot     = new Vector2(0f, 0.5f);
-            _fillRect.offsetMin = Vector2.zero;
-            _fillRect.offsetMax = Vector2.zero;
-            _fillRect.sizeDelta = new Vector2(_barSize.x, 0f);
+            StretchToCanvas(_fillRect, 0f);   // full-stretch; fillAmount does the width
 
             // WO-512 slice 3: LOCK highlight overlay - a red outline ring grown OUTWARD past
             // the chip + a bright caret marker above it. Both start hidden; LateUpdate enables
@@ -462,21 +471,32 @@ namespace DeNelle.Village
                 _lockCaret.color = lc;
             }
 
-            if (_fillRect != null)
-                _fillRect.sizeDelta = new Vector2(_barSize.x * frac, 0f);
-
             if (_fillImg != null)
             {
-                Color c = frac <= CritThreshold ? CriticalColor
-                        : frac <= WarnThreshold ? WarningColor
-                        :                          HealthyColor;
-                // Critical: gentle pulse so a near-dead unit reads at a glance.
-                if (frac <= CritThreshold)
+                // §1.1 rule 3: the ONLY width mutation is fillAmount (never sizeDelta).
+                _fillImg.fillAmount = frac;
+
+                if (_usesPackFill)
                 {
-                    float pulse = 0.65f + 0.35f * Mathf.Abs(Mathf.Sin(Time.time * 6f));
-                    c.a = pulse;
+                    // Coloured pack fill stays white; only the critical pulse rides alpha.
+                    var pc = Color.white;
+                    if (frac <= CritThreshold)
+                        pc.a = 0.65f + 0.35f * Mathf.Abs(Mathf.Sin(Time.time * 6f));
+                    _fillImg.color = pc;
                 }
-                _fillImg.color = c;
+                else
+                {
+                    Color c = frac <= CritThreshold ? CriticalColor
+                            : frac <= WarnThreshold ? WarningColor
+                            :                          HealthyColor;
+                    // Critical: gentle pulse so a near-dead unit reads at a glance.
+                    if (frac <= CritThreshold)
+                    {
+                        float pulse = 0.65f + 0.35f * Mathf.Abs(Mathf.Sin(Time.time * 6f));
+                        c.a = pulse;
+                    }
+                    _fillImg.color = c;
+                }
             }
 
             // WO-302: keep cancelling the host scale every frame so a late-settling

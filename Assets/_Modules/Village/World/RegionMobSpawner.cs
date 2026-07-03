@@ -194,6 +194,13 @@ namespace DeNelle.Village
                 bool wantAggro = playerInRange && !mob.Leashing;
                 if (wantAggro)
                 {
+                    // P23 (HUD_OBSIDIAN A4.5): the ENGAGEMENT WINDOW — a live pursuit is
+                    // re-reported every drive tick; the report self-expires (PursuitTtl)
+                    // when the chase ends by ANY path (leash, death, despawn, scene swap),
+                    // so the HUD's hostile(prebattle) posture can never stick on.
+                    if (mob.Aggroed || playerInRange)
+                        DeNelle.Core.HudModel.PostureSignals.ReportPursuit(mob.Enemy.GetInstanceID());
+
                     if (!mob.Aggroed)
                     {
                         // Begin the chase — capture home territory for the leash.

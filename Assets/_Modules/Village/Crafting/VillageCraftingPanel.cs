@@ -225,7 +225,10 @@ namespace DeNelle.Village.Crafting
 
             // 44x44 min touch target (DEF-218) so the close button is reachable
             // with a finger on mobile, not just a mouse. Themed Danger chip.
-            var closeBtn = new Button(Close) { text = "X" };
+            // Named "CloseButton" (fleet-9500 RCA): the close convention — and the popup-close
+            // oracle — match by name/label containing "close"; an anonymous "X" was invisible
+            // to it, so the oracle clicked a foreign panel's Close and Workshop read NO_CLOSE.
+            var closeBtn = new Button(Close) { text = "X", name = "CloseButton" };
             ElarionUi.StyleButton(closeBtn, ElarionUi.ButtonKind.Danger);
             closeBtn.style.width = 44; closeBtn.style.minHeight = 44; closeBtn.style.height = 44;
             closeBtn.style.fontSize = 18;

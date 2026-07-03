@@ -74,7 +74,7 @@ namespace DeNelle.HUD
             if (_doc.panelSettings == null)
             {
                 foreach (var existing in UnityEngine.Object.FindObjectsByType<UIDocument>(
-                             FindObjectsInactive.Include, FindObjectsSortMode.None))
+                             FindObjectsInactive.Include))
                 {
                     if (existing == _doc || existing.panelSettings == null) continue;
                     _doc.panelSettings = existing.panelSettings;
@@ -338,7 +338,10 @@ namespace DeNelle.HUD
             glimmerChip.style.marginRight = 10;
             headerRight.Add(glimmerChip);
 
-            var closeBtn = new Button(ToggleOverlay);
+            // CloseOverlay, NOT ToggleOverlay (fleet-9500 RCA): a close affordance must be
+            // idempotent — a double-dispatched click on a toggle closed then RE-OPENED the
+            // shop (AnyOpen=True after 'Close'), the captured POPUP_NO_CLOSE.
+            var closeBtn = new Button(CloseOverlay);
             ShopTheme.StyleCloseButton(closeBtn);
             headerRight.Add(closeBtn);
 

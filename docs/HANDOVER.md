@@ -1,6 +1,6 @@
 # HANDOVER — the one sheet a new session reads to be productive now
 
-> **Read order for a new session:** ★ the SESSION HANDOVER block immediately below (2026-06-28) →
+> **Read order for a new session:** ★ the SESSION HANDOVER block immediately below (2026-07-03) →
 > this sheet → `docs/MASTER_CATALOG.md` (mandatory, be the SME) → `docs/ARCHITECTURE.md` (the
 > architecture hub) → the relevant `docs/MASTER_CATALOG/<area>.md` for what you're about to touch.
 > **ALSO MANDATORY before any work:** read `OVERNIGHT_AUTOPILOT_LOG.md` (the overnight run's full
@@ -15,7 +15,37 @@
 
 ---
 
-## ★★ SESSION HANDOVER — 2026-06-28 (READ FIRST — anchored to `CANON_GROUND_TRUTH_2026-06-28.md`) ★★
+## ★★ SESSION HANDOVER — 2026-07-03 (READ FIRST — anchored to `CANON_GROUND_TRUTH_2026-07-03.md`) ★★
+
+**WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`; the 07-02→03 **convergence session** (~25
+specialist agents, two felt-tests, 46 F8 flags all triaged) is in the tree, uncommitted — commit lanes
+being staged by explicit path, **push held for owner felt-pass**. Current focus = **THE FEEL ARC**
+(owner: "the most important thing is how it FEELS"; the ten-year-old test is the standing quality bar) —
+this supersedes web/Pi stabilization as the live thread. Owner verdict after the convergence build:
+"I love the terrain… feels like there is something real now."
+
+**LANDED (fleet-verified):** **south vertical slice 6/6** round trips, `tapped=False` (masked warp
+mid-bridge both ways — the natural raise→moat→water→bridge seam works; N/W/E waits for south "feels
+perfect"). Post-processing was structurally DEAD until 07-02 — fixed (WorldFeelInjector, `ff.worldfeel`,
+dusk palette) + terrain relief/treelines. Character/combat/UI feel passes across ~50 systems (double-sided
+materials, anim cadence/smoothing, HUD-bleed fix, NPC cards, vendors data-mapped, WO-596 bug report,
+end-state template). **Tutorial V2 BUILT** behind `ff.tutorialv2` (default OFF — flip after its own fleet
+pass). Vercel preview = full convergence build; prod stays on the 07-01 Pi build until promoted.
+
+**BINDING RULE RATIFIED:** **read-before-assert for EVERYTHING** — code and non-code; memory lines are
+pointers, never answers. Plus the extended UI canon (earns-its-place, one action = one button, no dead
+buttons, shared currency chip) and "what CAN stream, SHOULD stream."
+
+**OPEN OWNER DECISIONS:** un-park seam un-stack WO-453 (encounter-return strands ~7.1km, publisher
+critique #1) · promote preview→prod · push authorization · wall stairs · ramp decks · necromancer 50%
+beat · caster cast clip · dungeon theme · CastleMoat default-ON.
+
+**NEXT:** owner south walk → commit lanes → **WO-545 Addressables streaming**
+(`docs/WEBGL_DELIVERY_PLAN_2026-07-03.md`). Resume doc: `RESUME_2026-07-03_morning.md`.
+
+---
+
+## ★ SESSION HANDOVER — 2026-06-28 (⚠ SUPERSEDED by the 2026-07-03 block above — kept for history) ★
 
 **WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`, HEAD `7c05cd1b`, **nothing pushed**. The
 single-Knight-pivot arc plus the WO-560→584 arc landed: overworld real-time **BattleArena** (lock-on

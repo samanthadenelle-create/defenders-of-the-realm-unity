@@ -1,3 +1,5 @@
+> ⚠ **SUPERSEDED 2026-07-03** — the live anchor is now `CANON_GROUND_TRUTH_2026-07-03.md`. This file is frozen history; do not treat as current.
+
 # CANON GROUND TRUTH — 2026-07-01
 
 > **Purpose:** the single anchor of *current reality*, derived ONLY from verified sources

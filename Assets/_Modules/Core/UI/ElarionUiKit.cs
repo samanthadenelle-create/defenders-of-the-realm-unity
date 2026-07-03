@@ -44,8 +44,11 @@ namespace DeNelle.Core.UI
     /// header, rarity slot/card, label). Each method returns the created object so
     /// callers can parent children / restyle / wire events. Stateless + WebGL-safe.
     /// </summary>
-    public static class ElarionUiKit
+    public static partial class ElarionUiKit
     {
+        // NOTE (HUD_OBSIDIAN_ARCHITECTURE_2026-07-03 §1): the Obsidian widget family
+        // (BuildObsidianBar/Button/ActionSlot/CastBar/TargetFrame/Nameplate/...) lives in
+        // the sibling partial file ElarionUiKitObsidian.cs (same single Kit-team owner).
         // ── Sleek surface tints (the dark-glass language, consolidated) ───────
         // These were duplicated verbatim across ArenaPanel / HeroInventory* / HUD.
         // Centralised here so the whole game's glass depth reads identically.
@@ -232,15 +235,30 @@ namespace DeNelle.Core.UI
             public RectTransform medallion;
             /// <summary>Footer strip (wallet / actions) along the base, or null.</summary>
             public RectTransform footer;
+            /// <summary>LEFT half of a PRE-SPLIT body well (dark obsidian — icon/card LISTS live here),
+            /// or null for single-well frames. Owner ruling 2026-07-03 (FrameCrafting is the
+            /// master-detail template): dark wells carry lists, parchment wells carry prose/detail.</summary>
+            public RectTransform bodyLeft;
+            /// <summary>RIGHT half of a PRE-SPLIT body well (parchment — DETAIL/prose lives here),
+            /// or null for single-well frames.</summary>
+            public RectTransform bodyRight;
         }
 
         /// <summary>Per-frame zone rects (fractions: xMin,yMin,xMax,yMax of the panel).
-        /// hasMedallion/hasFooter flag optional regions. Measured from the Blink art.</summary>
+        /// hasMedallion/hasFooter/hasSplitBody flag optional regions. MEASURED FROM THE REAL ART
+        /// PIXELS (owner ruling 2026-07-03) — the committed Resources/RpgUi/frame PNGs were column/
+        /// row-sampled (dark-well vs parchment vs border classification) to place every zone;
+        /// see the P1 report for the sampling method. `close` is the per-frame Close anchor
+        /// (Stats_Panel designs it into the top-right square notch).</summary>
         private struct FrameZones
         {
-            public Vector4 header, body, medallion, footer;
-            public bool hasMedallion, hasFooter;
+            public Vector4 header, body, medallion, footer, close;
+            public Vector4 bodyLeft, bodyRight;
+            public bool hasMedallion, hasFooter, hasSplitBody;
         }
+
+        /// <summary>The default Close anchor when a frame has no designed notch (the legacy corner chip rect).</summary>
+        private static readonly Vector4 DefaultCloseZone = new Vector4(0.865f, 0.928f, 0.978f, 0.984f);
 
         /// <summary>The drop-zone rects for a named frame (defaults are a sane full-well layout).</summary>
         private static FrameZones ZonesFor(string frameName)
@@ -251,8 +269,10 @@ namespace DeNelle.Core.UI
                 header   = new Vector4(0.10f, 0.905f, 0.82f, 0.975f),
                 body     = new Vector4(0.06f, 0.10f, 0.94f, 0.875f),
                 footer   = new Vector4(0.08f, 0.030f, 0.92f, 0.095f),
+                close    = DefaultCloseZone,
                 hasFooter = true,
                 hasMedallion = false,
+                hasSplitBody = false,
             };
             switch (frameName)
             {
@@ -265,16 +285,78 @@ namespace DeNelle.Core.UI
                     z.footer      = new Vector4(0.07f, 0.030f, 0.93f, 0.095f);
                     break;
                 case RpgUiCatalog.FrameCharacter:
-                    z.body = new Vector4(0.07f, 0.10f, 0.93f, 0.86f);
+                    // Stats_Panel (1232x1828, pixel-measured): top-left square medallion socket
+                    // (left of the vertical divider carved into the top band), header band right of
+                    // it, the designed CLOSE notch top-right, the stat-row well below the portrait
+                    // arch, bottom filigree footer. Owner-assigned anatomy (2026-07-03 ruling).
+                    z.medallion   = new Vector4(0.045f, 0.900f, 0.165f, 0.985f);
+                    z.hasMedallion = true;
+                    z.header      = new Vector4(0.190f, 0.905f, 0.865f, 0.975f);
+                    z.close       = new Vector4(0.875f, 0.910f, 0.965f, 0.980f); // the top-right square notch
+                    z.body        = new Vector4(0.060f, 0.110f, 0.940f, 0.605f); // below the portrait arch
+                    z.footer      = new Vector4(0.090f, 0.050f, 0.910f, 0.105f);
                     break;
                 case RpgUiCatalog.FrameCrafting:
+                    // THE master-detail template (owner ruling 2026-07-03, "spot on, 100% perfect").
+                    // 2182x1567, pixel-measured: the body is PRE-SPLIT — dark obsidian well left
+                    // (scrollable LIST zone) / parchment well right (DETAIL zone); the dark/parchment
+                    // seam sits at x=0.486 of the frame. Medallion = the top-left circle socket;
+                    // footer = the action strip (Craft button) between the wells and the base border.
+                    z.medallion   = new Vector4(0.014f, 0.885f, 0.097f, 0.990f);
+                    z.hasMedallion = true;
+                    z.header      = new Vector4(0.115f, 0.900f, 0.860f, 0.975f);
+                    z.close       = new Vector4(0.900f, 0.915f, 0.975f, 0.985f);
+                    z.body        = new Vector4(0.030f, 0.150f, 0.955f, 0.875f);
+                    z.bodyLeft    = new Vector4(0.030f, 0.150f, 0.482f, 0.875f); // dark well: lists
+                    z.bodyRight   = new Vector4(0.490f, 0.150f, 0.955f, 0.875f); // parchment: detail
+                    z.hasSplitBody = true;
+                    z.footer      = new Vector4(0.060f, 0.085f, 0.940f, 0.145f); // action strip
+                    break;
                 case RpgUiCatalog.FrameMerchant:
-                    // Landscape frames: header band, wide well, footer.
+                    // Landscape frame: header band, wide well, footer.
                     z.header = new Vector4(0.10f, 0.88f, 0.85f, 0.965f);
                     z.body   = new Vector4(0.05f, 0.115f, 0.95f, 0.845f);
                     break;
+                case RpgUiCatalog.FrameSettings:
+                    // 1936x1461, pixel-measured: full-bleed dark slab with a top-centre tab (the
+                    // header); no footer strip designed in. Close rides just inside the top-right.
+                    z.header    = new Vector4(0.290f, 0.905f, 0.710f, 0.995f);
+                    z.close     = new Vector4(0.895f, 0.790f, 0.970f, 0.865f);
+                    z.body      = new Vector4(0.060f, 0.120f, 0.940f, 0.865f);
+                    z.hasFooter = false;
+                    break;
+                case RpgUiCatalog.FrameOptions:
+                    // 824x1363, pixel-measured: narrow portrait frame, top tab header, bottom band.
+                    z.header = new Vector4(0.230f, 0.900f, 0.770f, 0.975f);
+                    z.close  = new Vector4(0.870f, 0.815f, 0.950f, 0.875f);
+                    z.body   = new Vector4(0.080f, 0.150f, 0.920f, 0.875f);
+                    z.footer = new Vector4(0.240f, 0.065f, 0.760f, 0.125f);
+                    break;
+                case RpgUiCatalog.FrameLoot:
+                    // 720x1138, pixel-measured: top-left title plate (used as the medallion socket),
+                    // header band right of it, deep well, thin band above the bottom filigree.
+                    z.medallion   = new Vector4(0.100f, 0.850f, 0.290f, 0.990f);
+                    z.hasMedallion = true;
+                    z.header      = new Vector4(0.330f, 0.870f, 0.900f, 0.960f);
+                    z.close       = new Vector4(0.860f, 0.885f, 0.945f, 0.955f);
+                    z.body        = new Vector4(0.075f, 0.145f, 0.925f, 0.800f);
+                    z.footer      = new Vector4(0.100f, 0.070f, 0.900f, 0.125f);
+                    break;
+                case RpgUiCatalog.FramePet:
+                    // 1230x1484, pixel-measured: same family as Stats_Panel — top-left medallion
+                    // socket, header band, centred portrait arch, well below it, bottom filigree.
+                    z.medallion   = new Vector4(0.045f, 0.895f, 0.175f, 0.985f);
+                    z.hasMedallion = true;
+                    z.header      = new Vector4(0.200f, 0.900f, 0.860f, 0.975f);
+                    z.close       = new Vector4(0.870f, 0.910f, 0.960f, 0.980f);
+                    z.body        = new Vector4(0.060f, 0.115f, 0.940f, 0.510f); // below the pet arch
+                    z.footer      = new Vector4(0.090f, 0.045f, 0.910f, 0.100f);
+                    break;
                 case RpgUiCatalog.FrameDialogue:
+                case RpgUiCatalog.FrameDialogue2:
                     // Landscape strip: portrait socket FAR-LEFT, speaker-name header + body text right.
+                    // frame_dialogue_2 (NPC card variant) shares the measured Dialogue anatomy until
+                    // its art lands (P0 gap-fill) and is re-sampled.
                     z.medallion   = new Vector4(0.012f, 0.16f, 0.178f, 0.88f);
                     z.hasMedallion = true;
                     z.header      = new Vector4(0.205f, 0.64f, 0.96f, 0.93f);
@@ -337,7 +419,7 @@ namespace DeNelle.Core.UI
                 var fimg = frameGo.GetComponent<Image>();
                 fimg.sprite = frameSprite;
                 fimg.type = Image.Type.Simple;   // full ornate background, drawn to the rect
-                fimg.color = Color.white;
+                fimg.color = ChromeTint;         // A3 global chrome-tint hook (white until the palette ruling)
                 fimg.raycastTarget = true;       // eat taps so they can't fall through
                 chrome.root = frameGo;
 
@@ -357,6 +439,14 @@ namespace DeNelle.Core.UI
                 };
                 if (z.hasMedallion) layout.medallion = Zone(chrome.content.transform, "Zone_Medallion", z.medallion);
                 if (z.hasFooter)    layout.footer    = Zone(chrome.content.transform, "Zone_Footer",    z.footer);
+                if (z.hasSplitBody)
+                {
+                    // Pre-split master-detail well (owner ruling 2026-07-03): dark well = lists,
+                    // parchment well = detail. Both are ALSO covered by the full `body` zone for
+                    // screens that want one well; split-aware screens use these instead.
+                    layout.bodyLeft  = Zone(chrome.content.transform, "Zone_BodyLeft",  z.bodyLeft);
+                    layout.bodyRight = Zone(chrome.content.transform, "Zone_BodyRight", z.bodyRight);
+                }
                 chrome.layout = layout;
 
                 // Gold title sits in the header zone (no procedural shadow/rule — the frame has the band).
@@ -366,7 +456,8 @@ namespace DeNelle.Core.UI
                     TextAlignmentOptions.Center, 0f, 1f, spacing: 4f, bold: true);
                 chrome.title.raycastTarget = false;
 
-                chrome.close = ObsidianCloseButton(chrome.content.transform, onClose);
+                // Close sits in the frame's MEASURED close zone (Stats_Panel's top-right notch etc.).
+                chrome.close = ObsidianCloseButton(chrome.content.transform, onClose, z.close);
                 return chrome;
             }
 
@@ -419,38 +510,69 @@ namespace DeNelle.Core.UI
 
         /// <summary>
         /// The ONE standard Close button used by every panel (built by <see cref="BuildObsidianPanel"/>;
-        /// exposed for surfaces that build their own chrome). A compact gold-trimmed chip in the
-        /// TOP-RIGHT corner labelled "Close", wired to <paramref name="onClose"/>. Consistent
-        /// placement + look everywhere — replaces the per-panel "X" buttons.
+        /// exposed for surfaces that build their own chrome). SPRITE-FIRST 3-STATE Close (§1.3,
+        /// HUD_OBSIDIAN_ARCHITECTURE): the real Blink <c>Close_Button</c> art with SpriteSwap
+        /// (normal / highlighted=on / pressed+disabled=off) and NO text chip. When the art is absent
+        /// (fresh clone / ff.blinkchrome-OFF fallback state) it degrades to the legacy gold-trimmed
+        /// "Close" chip so the button can never blank. When <paramref name="zone"/> is supplied
+        /// (the frame's MEASURED close rect from <see cref="ZonesFor"/>) the button sits there;
+        /// otherwise the legacy top-right corner anchor. All ~19 panel Closes route through here —
+        /// the per-consumer <paramref name="onClose"/> wiring stays each package's responsibility.
         /// </summary>
-        public static Button ObsidianCloseButton(Transform parent, Action onClose)
+        public static Button ObsidianCloseButton(Transform parent, Action onClose, Vector4? zone = null)
         {
             var go = new GameObject("CloseButton", typeof(Image), typeof(UnityEngine.UI.Button));
             go.transform.SetParent(parent, false);
             var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.865f, 0.928f);
-            rt.anchorMax = new Vector2(0.978f, 0.984f);
+            Vector4 zn = zone ?? DefaultCloseZone;
+            rt.anchorMin = new Vector2(zn.x, zn.y);
+            rt.anchorMax = new Vector2(zn.z, zn.w);
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
 
             var img = go.GetComponent<Image>();
-            img.color = ObsidianTrim;          // gold trim chip
-            ApplyRounded(img);
-
-            // Inner black so it reads as gold-bordered (matches the panel language).
-            var inner = AddImage(go.transform, "Inner", Vector2.zero, Vector2.one, ObsidianFill);
-            var innerRt = inner.GetComponent<RectTransform>();
-            innerRt.offsetMin = new Vector2(2f, 2f); innerRt.offsetMax = new Vector2(-2f, -2f);
-            var innerImg = inner.GetComponent<Image>();
-            if (innerImg != null) innerImg.raycastTarget = false;
-
             var btn = go.GetComponent<UnityEngine.UI.Button>();
             btn.targetGraphic = img;
-            StyleButtonColors(btn);
-            if (onClose != null) btn.onClick.AddListener(() => onClose());
 
-            var lbl = Label(go.transform, "Close", 0f, 1f, ElarionUi.Gilt, ElarionUi.FontLabel,
-                            TextAlignmentOptions.Center, 0f, 1f, bold: true);
-            lbl.raycastTarget = false;
+            var closeNormal = RpgUiCatalog.Get(RpgUiCatalog.RoleButton, RpgUiCatalog.ButtonCloseNormal);
+            if (closeNormal != null)
+            {
+                // 3-state art: SpriteSwap between the pack's Normal / On / Off states. Off doubles
+                // as pressed AND disabled (the pack's dimmed state). No label — the art carries the X.
+                img.sprite = closeNormal;
+                img.type = Image.Type.Simple;
+                img.preserveAspect = true;   // the round close art must never stretch oval
+                img.color = ChromeTint;      // A3 hook
+                var on  = RpgUiCatalog.Get(RpgUiCatalog.RoleButton, RpgUiCatalog.ButtonCloseOn);
+                var off = RpgUiCatalog.Get(RpgUiCatalog.RoleButton, RpgUiCatalog.ButtonCloseOff);
+                btn.transition = Selectable.Transition.SpriteSwap;
+                var ss = btn.spriteState;
+                ss.highlightedSprite = on  != null ? on  : closeNormal;
+                ss.selectedSprite    = ss.highlightedSprite;
+                ss.pressedSprite     = off != null ? off : closeNormal;
+                ss.disabledSprite    = off != null ? off : closeNormal;
+                btn.spriteState = ss;
+            }
+            else
+            {
+                // Null-art fallback: the legacy gold-trimmed "Close" chip (unchanged look).
+                img.color = ObsidianTrim;          // gold trim chip
+                ApplyRounded(img);
+
+                // Inner black so it reads as gold-bordered (matches the panel language).
+                var inner = AddImage(go.transform, "Inner", Vector2.zero, Vector2.one, ObsidianFill);
+                var innerRt = inner.GetComponent<RectTransform>();
+                innerRt.offsetMin = new Vector2(2f, 2f); innerRt.offsetMax = new Vector2(-2f, -2f);
+                var innerImg = inner.GetComponent<Image>();
+                if (innerImg != null) innerImg.raycastTarget = false;
+
+                StyleButtonColors(btn);
+
+                var lbl = Label(go.transform, "Close", 0f, 1f, ElarionUi.Gilt, ElarionUi.FontLabel,
+                                TextAlignmentOptions.Center, 0f, 1f, bold: true);
+                lbl.raycastTarget = false;
+            }
+
+            if (onClose != null) btn.onClick.AddListener(() => onClose());
             return btn;
         }
 
@@ -507,10 +629,24 @@ namespace DeNelle.Core.UI
             var cardGo = new GameObject("Card", typeof(RectTransform), typeof(Image));
             cardGo.transform.SetParent(parent, false);
             var bg = cardGo.GetComponent<Image>();
-            bg.color = ObsidianFill;
-            ApplyRounded(bg);
             bg.raycastTarget = false;
-            AddInnerRim(cardGo, ObsidianTrim);   // soft gold rim (gold-trim canon)
+            // SPRITE-FIRST (§1.5): the real Blink Notification plate (tone → variant), 9-sliced with
+            // Fill Center, tinted only by the A3 chrome hook. Procedural obsidian card = null-art fallback.
+            var notif = RpgUiCatalog.Get(RpgUiCatalog.RoleElement, ToastPlateName(tone));
+            if (notif == null) notif = RpgUiCatalog.Get(RpgUiCatalog.RoleElement, RpgUiCatalog.ElementNotif1);
+            if (notif != null)
+            {
+                bg.sprite = notif;
+                bg.type = Image.Type.Sliced;
+                bg.fillCenter = true;
+                bg.color = ChromeTint;
+            }
+            else
+            {
+                bg.color = ObsidianFill;
+                ApplyRounded(bg);
+                AddInnerRim(cardGo, ObsidianTrim);   // soft gold rim (gold-trim canon)
+            }
 
             var accentGo = new GameObject("Accent", typeof(RectTransform), typeof(Image));
             accentGo.transform.SetParent(cardGo.transform, false);
@@ -669,6 +805,15 @@ namespace DeNelle.Core.UI
         public static Button Button(Transform parent, string label, ButtonKind kind,
                                     Vector2 anchorMin, Vector2 anchorMax, Action onClick = null)
         {
+            // BACK-COMPAT SHIM (§1.2): ButtonKind routes SPRITE-FIRST into the Obsidian 5x4 button
+            // family — Gold→(Style1,Yellow), Confirm→(Style2,Green), Danger→(Style1,Red),
+            // Quiet→(Style1,Gray) — so EVERY existing panel upgrades in this one place. When the
+            // mirrored art is absent the procedural button below renders unchanged (the
+            // ff.blinkchrome-OFF / fresh-clone state — dual-state contract, BLINK_OBSIDIAN doc §3.6).
+            MapButtonKind(kind, out var obStyle, out var obColor);
+            if (RpgUiCatalog.Get(RpgUiCatalog.RoleButton, ObsidianButtonSpriteName(obStyle, obColor)) != null)
+                return BuildObsidianButton(parent, label, obStyle, obColor, anchorMin, anchorMax, onClick);
+
             var go = new GameObject("Btn_" + label, typeof(Image), typeof(UnityEngine.UI.Button));
             go.transform.SetParent(parent, false);
             var r = go.GetComponent<RectTransform>();
@@ -715,7 +860,7 @@ namespace DeNelle.Core.UI
             cb.selectedColor    = cb.highlightedColor;
             cb.disabledColor    = new Color(0.5f, 0.5f, 0.5f, 0.5f);
             cb.colorMultiplier  = 1f;
-            cb.fadeDuration     = 0.07f;
+            cb.fadeDuration     = 0.12f;   // owner smoothness directive 2026-07-02: state changes ease, never snap
             button.colors = cb;
         }
 
@@ -1090,16 +1235,61 @@ namespace DeNelle.Core.UI
         /// <summary>Which vital/progress a bar shows — drives the fill colour + pack frame/fill ids.</summary>
         public enum BarKind { Hp, Mp, Xp, Atb, Castle }
 
-        /// <summary>Handle returned by <see cref="Bar"/>: the track rect, the
-        /// fillAmount-driven fill Image, and the optional inline value label.</summary>
+        /// <summary>Handle returned by <see cref="Bar"/> / <see cref="BuildObsidianBar"/>: the track
+        /// rect, the fillAmount-driven fill Image, the optional inline value label, and the ornate
+        /// frame overlay. Drive it via <see cref="SetValue"/> — THE fill-binding contract (§1.1):
+        /// the fill sprite is ALWAYS non-null, type Filled/Horizontal/Left, the ONLY width mutation
+        /// is <c>fillAmount = cur/max</c> (never sizeDelta, never anchors), and bar + value label are
+        /// written ATOMICALLY by the same call so they can never disagree.</summary>
         public sealed class BarHandle
         {
             /// <summary>The recessed Well track the fill rides in.</summary>
             public RectTransform track;
-            /// <summary>The Image.Type.Filled fill — drive its fillAmount [0..1].</summary>
+            /// <summary>The Image.Type.Filled fill — drive via <see cref="SetValue"/> (or fillAmount directly).</summary>
             public Image fill;
             /// <summary>Optional inline value label centred over the fill (null if not requested).</summary>
             public TMP_Text valueLabel;
+            /// <summary>The ornate frame overlay Image (non-raycast, drawn above the fill); may be null.</summary>
+            public Image frame;
+
+            // Last shown ints — the label string is only rebuilt when a visible digit changes
+            // (mobile lens: no per-frame alloc when swept by a tween/producer).
+            private int _shownCur = int.MinValue, _shownMax = int.MinValue;
+
+            /// <summary>Write bar + label atomically, easing the fill to cur/max (0.12s, owner
+            /// smoothness directive). THE one sanctioned update path (§1.1).</summary>
+            public void SetValue(float cur, float max) { Apply(cur, max, animate: true); }
+
+            /// <summary>Write bar + label atomically with NO easing (per-frame sweeps / first paint).</summary>
+            public void SetImmediate(float cur, float max) { Apply(cur, max, animate: false); }
+
+            /// <summary>Blank the value label + drop the digit cache (a TOTAL Clear() shows an EMPTY
+            /// value, not "0/1" — §1.10; the next SetValue rewrites it whatever the numbers).</summary>
+            public void ResetLabel()
+            {
+                _shownCur = int.MinValue; _shownMax = int.MinValue;
+                if (valueLabel != null) valueLabel.text = "";
+            }
+
+            private void Apply(float cur, float max, bool animate)
+            {
+                if (fill == null) return;
+                max = Mathf.Max(1f, max);                       // §1.1: cur / Mathf.Max(1, max)
+                cur = Mathf.Clamp(cur, 0f, max);
+                float target = cur / max;
+                if (animate && Application.isPlaying) UiKitTween.FillTo(fill, target, 0.12f);
+                else { UiKitTween.CancelFill(fill); fill.fillAmount = target; }
+
+                if (valueLabel != null)
+                {
+                    int ci = Mathf.CeilToInt(cur), mi = Mathf.CeilToInt(max);
+                    if (ci != _shownCur || mi != _shownMax)
+                    {
+                        _shownCur = ci; _shownMax = mi;
+                        valueLabel.text = ci + "/" + mi;        // same call as the fill — atomic
+                    }
+                }
+            }
         }
 
         /// <summary>

@@ -10,9 +10,18 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
 
 ---
 
-## CURRENT STATE — 2026-06-28 (supersedes ALL blocks below; anchored to `CANON_GROUND_TRUTH_2026-06-28.md`)
+## CURRENT STATE — 2026-06-28 (supersedes ALL blocks below; anchor now `CANON_GROUND_TRUTH_2026-07-03.md`)
 
 > The 2026-06-09 and 2026-05-29 blocks below are kept for history. Where they conflict, **this block wins.**
+
+- **2026-07-03 delta (see the anchor for full detail):** current focus = **THE FEEL ARC** (ten-year-old
+  test is the quality bar); south vertical slice fleet-proven 6/6 (natural seam: raise→moat→water→bridge),
+  owner felt-pass pending. Post-processing was structurally DEAD until 07-02 (null postProcessData) —
+  fixed via WorldFeelInjector (`ff.worldfeel`, dusk palette) + terrain relief/treelines. **Tutorial V2
+  BUILT** behind `ff.tutorialv2` (default OFF, 7 steps, tutorial-steps.json + interpreter + telemetry).
+  Monetization reviewed 07-02 (`docs/MONETIZATION_REVIEW_2026-07-02.md`: Curiosity Shop; loot boxes
+  NO-GO mainnet / GO testnet). Next headline = WO-545 Addressables streaming
+  (`docs/WEBGL_DELIVERY_PLAN_2026-07-03.md`).
 
 - **Branch:** `wip/village2-and-f8-tickets` (the `feat/tower-core-loop` name everywhere below is STALE).
   HEAD `7c05cd1b` (2026-06-28); nothing pushed this arc.
@@ -32,8 +41,12 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
 - **Economy:** Echo workforce wired (1–4 echoes, offline real-clock, **save v27**); village-tier upgrade
   unlocks the WO-432 building-upgrade tree; store redesign (WO-501) + gear balance (WO-500).
 - **Dialogue:** Yarn being DROPPED for custom MVVM dialogue (WO-455).
-- **Distribution:** itch web build LIVE (`html5`); Vercel parked (payload too big); Pi backend = Cloudflare Worker.
-- **WO numbering:** WO specs now run through **584** (authority = `MASTER_PIPELINES_BACKLOG_2026-06-06.md`
+- **Distribution (updated 2026-07-03):** itch web build LIVE; **game IS live on Vercel** (the stale
+  "Vercel parked/blocked" claim is WRONG — preview `defenders-of-the-realm-v2-69mafg5pj` = the full
+  convergence build at 79.7MB Brotli data; production stays on the 07-01 verified Pi sign-in build
+  until owner promotes). Pi backend = Cloudflare Worker.
+- **WO numbering (updated 2026-07-03):** WO specs now run through **602** (596–602 = the 07-02→03 arc,
+  e.g. WO-596 bug report, WO-602 return crossings); previously through **584** (authority = `MASTER_PIPELINES_BACKLOG_2026-06-06.md`
   + `CLI_LANES_WO_NUMBERS.md`, not filesystem max; the WO-560→584 arc = UI Blink template, title rebrand,
   dungeon/outpost/arena consolidation, wave-loop-in-hub).
 - **In-flight (do NOT push):** HEAD targeting sweep `ff.enemystructureaware` is UNVERIFIED (0 sweep acquires).
