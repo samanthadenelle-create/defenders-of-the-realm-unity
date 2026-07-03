@@ -95,6 +95,13 @@ namespace DeNelle.DevTools
         private float _nextStranded;
         private float _nextHeroRefresh;
 
+        // ── PROP-SEATING (owner F8 2026-07-02 "in ground not on ground" x2) ───
+        // One CHEAP pass per scene load, delayed so runtime injectors
+        // (HubStructureVisualInjector) + SeatOnGroundOnStart.Start() have run.
+        private const float PropSeatDelay     = 5f;     // seconds after load/arm
+        private const float PropSeatTolerance = 0.75f;  // allowed base-vs-floor gap (lips/steps)
+        private float _propSeatAt = -1f;                 // realtime to run at (-1 = nothing scheduled)
+
         // ── raid-destination name detection (UNEXPECTED-CROSS) ───────────────
         // A scene whose name marks it as a raid target. Town traversal should never
         // load one of these unless the bot is in an intentional raid/cross phase.
@@ -129,7 +136,8 @@ namespace DeNelle.DevTools
             if (_armed) return;
             _armed = true;
             SceneManager.sceneLoaded += OnSceneLoaded;
-            FlowTrace.Step(Tag, "AutoPilotProbes ARMED — UNEXPECTED-CROSS, COPLANAR-FLOOR, WALL-CLIP, DUAL-NAVMESH/STRANDED, NAVMESH-LINK, SEAM-REACHABLE active.");
+            _propSeatAt = Time.realtimeSinceStartup + PropSeatDelay;   // cover the already-loaded scene
+            FlowTrace.Step(Tag, "AutoPilotProbes ARMED — UNEXPECTED-CROSS, COPLANAR-FLOOR, WALL-CLIP, DUAL-NAVMESH/STRANDED, NAVMESH-LINK, SEAM-REACHABLE, PROP-SEATING active.");
         }
 
         /// <summary>
@@ -154,6 +162,9 @@ namespace DeNelle.DevTools
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             if (!_armed) return;
+            // PROP-SEATING: (re)schedule the once-per-load seating pass for EVERY scene load
+            // (delayed so injectors + SeatOnGroundOnStart.Start() have seated their props first).
+            _propSeatAt = Time.realtimeSinceStartup + PropSeatDelay;
             try
             {
                 string name = scene.name ?? string.Empty;
@@ -257,6 +268,72 @@ namespace DeNelle.DevTools
                 try { CheckStranded(now); }
                 catch (Exception ex) { FlowTrace.Warn(Tag, "STRANDED check threw: " + ex.Message); }
             }
+
+            if (_propSeatAt > 0f && now >= _propSeatAt)
+            {
+                _propSeatAt = -1f;   // once per scene load (re-armed by OnSceneLoaded)
+                try { CheckPropSeating(); }
+                catch (Exception ex) { FlowTrace.Warn(Tag, "PROP-SEATING check threw: " + ex.Message); }
+            }
+        }
+
+        // =====================================================================
+        //  PROBE: PROP-SEATING (owner F8 2026-07-02 "tree of life in ground not on
+        //  ground" + the half-buried colosseum ring — "bots should catch these").
+        //  Once per scene load (delayed PropSeatDelay so runtime injectors +
+        //  SeatOnGroundOnStart.Start() have seated): for every REGISTERED seated
+        //  object — SeatOnGroundOnStart users (the Heart tree et al) + the props
+        //  HubStructureVisualInjector.TryPlace placed — measure the VISUAL BASE
+        //  with the exact same derivation the seat uses
+        //  (SeatOnGroundOnStart.MeasureVisualBaseY: collider → mesh-vertex →
+        //  renderer bounds) and assert it sits within PropSeatTolerance of the
+        //  navmesh floor beneath. Violation = FlowTrace.Fail "PROP_SEATING :: ..."
+        //  so the break-log carries name + base y + floor y.
+        // =====================================================================
+        private void CheckPropSeating()
+        {
+            var targets = new List<Transform>();
+            var seen = new HashSet<Transform>();
+
+            foreach (var s in UnityEngine.Object.FindObjectsByType<SeatOnGroundOnStart>(FindObjectsSortMode.None))
+                if (s != null && seen.Add(s.transform)) targets.Add(s.transform);
+            foreach (var go in HubStructureVisualInjector.RuntimePlacedProps)
+                if (go != null && seen.Add(go.transform)) targets.Add(go.transform);
+
+            int checkedCount = 0, violations = 0;
+            foreach (var t in targets)
+            {
+                // Combined renderer bounds (fallback base + the XZ probe point).
+                Bounds b = default; bool have = false;
+                foreach (var r in t.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (r == null) continue;
+                    if (!have) { b = r.bounds; have = true; } else b.Encapsulate(r.bounds);
+                }
+                if (!have) continue;   // nothing visible — nothing to seat-check
+
+                float baseY = SeatOnGroundOnStart.MeasureVisualBaseY(t, b, out string src);
+
+                // Floor beneath = the baked/welded navmesh at the prop's footprint.
+                if (!NavMesh.SamplePosition(new Vector3(b.center.x, baseY, b.center.z),
+                        out NavMeshHit hit, 6f, NavMesh.AllAreas))
+                    continue;          // no walkable floor near (e.g. decorative off-mesh) — skip
+                float floorY = hit.position.y;
+                float delta = baseY - floorY;
+                checkedCount++;
+
+                if (Mathf.Abs(delta) > PropSeatTolerance)
+                {
+                    violations++;
+                    FlowTrace.Fail(Tag,
+                        $"PROP_SEATING :: '{t.name}' base y={baseY:F2} floor y={floorY:F2} " +
+                        $"(delta {delta:F2}m > tol {PropSeatTolerance:F2}, base source={src}) — prop " +
+                        (delta < 0f ? "BURIED in" : "FLOATING above") + " the floor.");
+                }
+            }
+            FlowTrace.Step(Tag,
+                $"PROP-SEATING census: {checkedCount} seated prop(s) checked, {violations} violation(s) " +
+                $"(tolerance {PropSeatTolerance:F2}m; once per scene load).");
         }
 
         private void RefreshHero()
@@ -283,8 +360,7 @@ namespace DeNelle.DevTools
 
         private void CheckCoplanarFloors()
         {
-            var renderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(
-                FindObjectsSortMode.None);
+            var renderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>();
             if (renderers == null || renderers.Length < 2) return;
 
             // Collect only the large, opaque, horizontal floor candidates.
@@ -441,7 +517,7 @@ namespace DeNelle.DevTools
             // was written for. Suppress here; the sibling CheckNavMeshLinks() probe already flags the REAL
             // link-less overlap (WO-453 class). This crude AABB check was firing 6/6/fleet as a false
             // positive after the un-stack.
-            if (UnityEngine.Object.FindObjectsByType<Unity.AI.Navigation.NavMeshLink>(FindObjectsSortMode.None).Length > 0)
+            if (UnityEngine.Object.FindObjectsByType<Unity.AI.Navigation.NavMeshLink>().Length > 0)
                 return;
 
             // Build per-scene XZ footprints of NavMesh coverage. We approximate a scene's
@@ -499,7 +575,7 @@ namespace DeNelle.DevTools
         private void CheckNavMeshLinks()
         {
             var links = UnityEngine.Object.FindObjectsByType<Unity.AI.Navigation.NavMeshLink>(
-                FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+                FindObjectsInactive.Exclude);
 
             // One-shot census so a run's report names EXACTLY what links exist + where.
             if (!_navLinkCensusDone)
@@ -715,7 +791,7 @@ namespace DeNelle.DevTools
                 return;
 
             var seams = UnityEngine.Object.FindObjectsByType<SceneTransitionTrigger>(
-                FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+                FindObjectsInactive.Exclude);
 
             if (!_seamCensusDone)
             {
@@ -831,7 +907,7 @@ namespace DeNelle.DevTools
         // =====================================================================
         private void CheckMagentaMaterials()
         {
-            var renderers = UnityEngine.Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+            var renderers = UnityEngine.Object.FindObjectsByType<Renderer>();
             if (renderers == null) return;
             foreach (var r in renderers)
             {

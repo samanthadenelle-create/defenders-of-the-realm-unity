@@ -63,6 +63,23 @@ namespace DeNelle.DevTools
             if (_spawned) return;
             _spawned = true;
 
+            // ── Publisher polish (2026-07-02): kill the always-on red strip ──────
+            // In a Development build UNITY'S OWN "Development Console" overlay (the
+            // red error strip — NOT this DevPanel, which starts closed behind F1)
+            // pops whenever any error/exception logs; it sat in 29 of 32 owner
+            // felt-test screenshots. Errors still reach Player.log + the F8
+            // BreakCaptureHarness, so the strip is pure noise. Gate its visibility
+            // behind an explicit opt-in: PlayerPrefs "dev.console" = 1 restores it.
+            // developerConsoleEnabled=false is the load-bearing half — visible=false
+            // alone only hides the CURRENT strip; the engine re-shows it on the next
+            // error unless the console is disabled outright. Dev tooling itself
+            // (this panel, F8, logs) is untouched.
+            if (PlayerPrefs.GetInt("dev.console", 0) != 1)
+            {
+                Debug.developerConsoleEnabled = false;
+                Debug.developerConsoleVisible = false;
+            }
+
             var go = new GameObject(PanelObjectName);
             Object.DontDestroyOnLoad(go);
 
@@ -113,7 +130,7 @@ namespace DeNelle.DevTools
 
             // Look for a sibling UIDocument with a usable (themed) PanelSettings.
             foreach (var doc in Object.FindObjectsByType<UIDocument>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         FindObjectsInactive.Include))
             {
                 if (doc != null && doc.panelSettings != null &&
                     doc.panelSettings.themeStyleSheet != null)
@@ -125,7 +142,7 @@ namespace DeNelle.DevTools
             created.name = "DevRuntimePanelSettings";
             created.scaleMode = PanelScaleMode.ConstantPixelSize;   // dev tool — fixed px
             foreach (var doc in Object.FindObjectsByType<UIDocument>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         FindObjectsInactive.Include))
             {
                 if (doc != null && doc.panelSettings != null &&
                     doc.panelSettings.themeStyleSheet != null)

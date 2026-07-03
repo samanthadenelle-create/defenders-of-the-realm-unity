@@ -45,6 +45,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UIElements;   // WO-597: UQueryExtensions.Query for the UITK close-affordance scan (types stay fully qualified to avoid Button ambiguity)
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.UI;
 using DeNelle.Village;
@@ -66,7 +67,7 @@ namespace DeNelle.DevTools
     public sealed class AutoPilotDriver : MonoBehaviour
     {
         // ── tunables (realtime seconds) ──────────────────────────────────────
-        private const float GlobalCapSeconds   = 240f;  // ~4 min hard cap on the whole run
+        private const float GlobalCapSeconds   = 300f;  // ~5 min hard cap on the whole run (240→300 WO-597: the AssertPopupClose oracle adds a bounded panel-walk; without headroom the cap would abort the late outpost/encounter phases)
         private const float WalkToGateTimeout   = 25f;   // per-gate approach
         private const float VendorTimeout       = 20f;   // per-vendor open+actuate+close
         private const float ContractTimeout     = 12f;   // per-vendor-context contract assertion
@@ -75,10 +76,12 @@ namespace DeNelle.DevTools
         private const float HudPanelTimeout     = 15f;   // per-panel open+actuate+close
         private const float WaveTimeout         = 30f;   // wait for the wave phase to advance (bumped 20→30: covers the bounded start-retry window; player keeps a ~45s countdown)
         private const float ExitTimeout         = 30f;   // walk into the south exit
+        private const float HomeReturnTimeout   = 90f;   // WO-602 — round trip: (self-armed exit leg if needed) + walk out ~20m + walk back to the gate landing + warp in
         private const float SettleSeconds        = 0.4f;  // brief pause after an open/close
         private const float BootTimeout          = 30f;   // load MainCastle_Hall + settle
         private const float ResolveHeroTimeout   = 15f;   // hero may spawn after scene load
         private const float OuterWalkTimeout     = 60f;   // WO-449: poll outpost realize (~10s) + walk ~70m + engage
+        private const float PopupCloseWaitSeconds = 3f;   // WO-597: bounded close-wait per panel — a hang IS the bug; the bound converts it into a named POPUP_NO_CLOSE Fail instead of the generic softlock
 
         // WO-449 ANTI-WARP: the continuous-walk loop must NEVER teleport. A single-frame
         // hero displacement beyond this many metres is a WARP (the bug this phase guards),
@@ -115,6 +118,15 @@ namespace DeNelle.DevTools
 
         // Per-phase result rows for the summary file.
         private readonly List<PhaseResult> _phases = new List<PhaseResult>();
+
+        // WO-597: per-panel POPUP-CLOSABLE verdicts (PASS / OPEN_FAILED / NO_CLOSE /
+        // NOT_REGISTERED), written into autopilot-summary.json alongside the phases.
+        private readonly List<PopupCloseResult> _popupVerdicts = new List<PopupCloseResult>();
+
+        // WO-602 — the exit phase actually crossed (fast-path: HomeReturnRoundTrip skips its
+        // self-armed exit leg when this latched; the round trip is ATTEMPTED either way).
+        private bool _exitCrossed;
+        private readonly List<HomeReturnResult> _homeReturnVerdicts = new List<HomeReturnResult>();
 
         /// <summary>
         /// Configure + start the bot. <paramref name="quitOnDone"/> false (the
@@ -235,6 +247,13 @@ namespace DeNelle.DevTools
                 // WarpTo path keeps its body (the #2 bare-pill hero-side check). Read-only diagnosis; cleans up.
                 yield return RunPhase("DiagGarrisonRoster", DiagGarrisonRoster());
                 yield return RunPhase("OpenEachHUDPanel", OpenEachHUDPanel());
+                // WO-597 slice 1: the POPUP-CLOSABLE oracle — registry-driven walk of every
+                // PanelId: open -> assert a close affordance exists (the shared master-frame
+                // Close) -> trigger it -> assert actually closed. Violations land as
+                // error-level FlowTrace.Fail("PopupClose", "POPUP_NO_CLOSE :: ...") /
+                // "POPUP_OPEN_FAILED :: ..." so break-log ranks them; per-panel verdicts go
+                // into autopilot-summary.json (popupClose[]).
+                yield return RunPhase("AssertPopupClose", AssertPopupClose());
                 yield return RunPhase("TriggerWave", TriggerWave());
                 // WO-452 tranche C: combat invariants during the (just-triggered) wave — hero HP
                 // never goes negative while still alive, >=1 placed tower actually fired in the
@@ -246,6 +265,12 @@ namespace DeNelle.DevTools
                 // the bot's own exit). Clear it again right after.
                 _probes?.SetIntentionalCrossPhase(true);
                 yield return RunPhase("AttemptExitCastle", AttemptExitCastle());
+                // WO-602 ROUND TRIP: after a successful exit, walk outward ~20m then navigate back
+                // to the nearest gate's OUTER return entrance and assert the hero re-enters the
+                // courtyard (y≈liftY AND inside the plinth footprint). Exit-only coverage is how
+                // "no way back home" shipped unfelt. Stays inside the intentional-cross window
+                // (the return is a deliberate seam warp too).
+                yield return RunPhase("HomeReturnRoundTrip", HomeReturnRoundTrip());
                 _probes?.SetIntentionalCrossPhase(false);
 
                 // WO-449: the continuous-walk raid loop — walk to a live OuterWorld outpost and
@@ -386,7 +411,7 @@ namespace DeNelle.DevTools
             while (build < 4f) { build += Time.deltaTime; yield return null; }
 
             var found = new System.Collections.Generic.List<DeNelle.Village.Enemy>();
-            foreach (var e in UnityEngine.Object.FindObjectsByType<DeNelle.Village.Enemy>(FindObjectsSortMode.None))
+            foreach (var e in UnityEngine.Object.FindObjectsByType<DeNelle.Village.Enemy>())
                 if (e != null && e.gameObject.name.StartsWith("ArenaEnemy_")) found.Add(e);
 
             int skinned = 0, orcCtrl = 0;
@@ -437,7 +462,7 @@ namespace DeNelle.DevTools
         // Find a live overworld rep object (named "OrcRep_*" by the spawner's SpawnRep).
         private static GameObject FindRepObject()
         {
-            foreach (var e in UnityEngine.Object.FindObjectsByType<DeNelle.Village.Enemy>(FindObjectsSortMode.None))
+            foreach (var e in UnityEngine.Object.FindObjectsByType<DeNelle.Village.Enemy>())
                 if (e != null && e.gameObject.name.StartsWith("OrcRep_")) return e.gameObject;
             return null;
         }
@@ -451,13 +476,18 @@ namespace DeNelle.DevTools
         // Background guard: dismiss any Yarn dialogue that auto-starts, so the bot never
         // stalls inside a conversation it cannot read headless. Runs ~1/sec for the bot's
         // lifetime (the host GameObject is destroyed on quit, ending this loop).
+        // WO-597: the popup-close oracle deliberately opens a structure dialogue CARD to
+        // verdict the dialogue view as a closable surface — pause the suppressor while it
+        // does, or the 1s Stop() loop below would kill the card mid-assertion.
+        private bool _pauseDialogueSuppression;
+
         private IEnumerator SuppressDialogue()
         {
             while (true)
             {
                 try
                 {
-                    if (DialogueService.IsRunning)
+                    if (!_pauseDialogueSuppression && DialogueService.IsRunning)
                     {
                         DialogueService.Stop();
                         FlowTrace.Step("Auto", "SuppressDialogue: dismissed an auto-started dialogue (skip-Yarn).");
@@ -749,8 +779,10 @@ namespace DeNelle.DevTools
                 case "AssertSaveRoundTrip": return 20f;       // WO-452 D — save/load round-trip
                 case "AssertCombatInvariants": return 20f;    // WO-452 C — ~12s defense window + slack
                 case "OpenEachHUDPanel":  return HudPanelTimeout * 8f;
+                case "AssertPopupClose":  return 100f;  // WO-597: ~13 registered ids x (settle + bounded 3s close-wait worst case) + the dialogue-card row
                 case "TriggerWave":       return WaveTimeout;
                 case "AttemptExitCastle": return ExitTimeout;
+                case "HomeReturnRoundTrip": return HomeReturnTimeout;   // WO-602 — walk out 20m + walk back + warp
                 case "BootToGameplay":    return BootTimeout;
                 case "ResolveHero":       return ResolveHeroTimeout;
                 case "WalkToOuterWorldOutpost": return OuterWalkTimeout;
@@ -849,8 +881,7 @@ namespace DeNelle.DevTools
         // =====================================================================
         private IEnumerator WalkToEachGate()
         {
-            var gates = UnityEngine.Object.FindObjectsByType<SceneTransitionTrigger>(
-                FindObjectsSortMode.None);
+            var gates = UnityEngine.Object.FindObjectsByType<SceneTransitionTrigger>();
             if (gates == null || gates.Length == 0)
             {
                 FlowTrace.Warn("Auto", "WalkToEachGate: no SceneTransitionTrigger in scene.");
@@ -924,8 +955,7 @@ namespace DeNelle.DevTools
             while (Time.realtimeSinceStartup - t0Discover < 5f)
             {
                 attempts++;
-                buildings = UnityEngine.Object.FindObjectsByType<BuildingInteractable>(
-                    FindObjectsSortMode.None);
+                buildings = UnityEngine.Object.FindObjectsByType<BuildingInteractable>();
                 if (buildings != null && buildings.Length > 0) break;
                 yield return Wait(0.5f);
             }
@@ -1053,7 +1083,7 @@ namespace DeNelle.DevTools
             // One reusable ShopPanel host: find an existing one, else create our own.
             // Re-Open(ctx) closes the prior surface, so vendors never stack. We destroy
             // the host we created at the end.
-            ShopPanel panel = UnityEngine.Object.FindObjectOfType<ShopPanel>();
+            ShopPanel panel = UnityEngine.Object.FindAnyObjectByType<ShopPanel>();
             bool createdHost = false;
             GameObject host = null;
             if (panel == null)
@@ -1174,8 +1204,7 @@ namespace DeNelle.DevTools
         // =====================================================================
         private IEnumerator AssertVendorTalkRoute()
         {
-            var vendors = UnityEngine.Object.FindObjectsByType<CastleNpcInteractable>(
-                FindObjectsSortMode.None);
+            var vendors = UnityEngine.Object.FindObjectsByType<CastleNpcInteractable>();
             if (vendors == null || vendors.Length == 0)
             {
                 _lastDetail = "0 CastleNpcInteractable found (not in MainCastle_Hall?)";
@@ -1266,7 +1295,7 @@ namespace DeNelle.DevTools
             }
 
             // One reusable ShopPanel host (mirror of AssertVendorContracts' teardown).
-            ShopPanel panel = UnityEngine.Object.FindObjectOfType<ShopPanel>();
+            ShopPanel panel = UnityEngine.Object.FindAnyObjectByType<ShopPanel>();
             bool createdHost = false;
             GameObject host = null;
             if (panel == null)
@@ -1645,7 +1674,7 @@ namespace DeNelle.DevTools
                 catch (Exception ex) { FlowTrace.Warn(Tag, "AssertCombatInvariants: ForceSpawnNextWaveNow threw " + ex.Message); }
             }
 
-            bool towersExist = UnityEngine.Object.FindObjectsByType<TowerCombat>(FindObjectsSortMode.None).Length > 0;
+            bool towersExist = UnityEngine.Object.FindObjectsByType<TowerCombat>().Length > 0;
 
             const float Window = 12f;   // defense window
             float t0 = Time.realtimeSinceStartup;
@@ -1771,6 +1800,540 @@ namespace DeNelle.DevTools
         }
 
         // =====================================================================
+        //  PHASE: AssertPopupClose (WO-597 slice 1 — the POPUP-CLOSABLE oracle)
+        //  Every popup the game can open MUST have a WORKING close trigger
+        //  (owner 2026-07-02). REGISTRY-DRIVEN: enumerates the full PanelId enum
+        //  (the panel registry — a new panel = a new enum value + Register call,
+        //  so new panels are auto-covered) and for each registered id:
+        //    open  -> assert a close AFFORDANCE exists (the shared master-frame
+        //             chrome Close — ElarionUiKit.ObsidianCloseButton builds the
+        //             ONE standard uGUI button named "CloseButton"; a *close*
+        //             -named uGUI/UITK button also counts. Programmatic
+        //             PanelManager.CloseOpen is NOT an affordance, and there is
+        //             no global ESC->close router today, so no button = NO_CLOSE)
+        //    click -> the affordance, the way a player would
+        //    assert-> actually closed: the modal arbiter record cleared
+        //             (PanelManager.AnyOpen false — this is also what releases
+        //             the suppressed world input/prompts) AND the affordance
+        //             gone/inactive in the hierarchy.
+        //  VERDICTS (per panel, into autopilot-summary.json popupClose[]):
+        //    PASS           — closed via its own affordance within the bound
+        //    OPEN_FAILED    — PanelRouter.Open false / nothing recorded open (the
+        //                     'open action ran but NO panel recorded open' class;
+        //                     kept DISTINCT from NO_CLOSE so tickets separate
+        //                     can't-open from can't-close)
+        //    NO_CLOSE       — no affordance, the handler threw, or still open
+        //                     after the bounded wait (a hang IS the bug: the bound
+        //                     converts a stuck panel into the named Fail below,
+        //                     never the generic 180s softlock)
+        //    NOT_REGISTERED — no opener registered in this scene (informational)
+        //  Violations are ERROR-LEVEL: FlowTrace.Fail("PopupClose",
+        //  "POPUP_NO_CLOSE :: <panel> — <attempted route>") / "POPUP_OPEN_FAILED
+        //  :: <panel> — ..." so they land in break-log.jsonl headless and rank as
+        //  tickets. After a violation the run FORCE-CONTINUES (arbiter force-close,
+        //  then destroy the stuck modal root, then scene reload as last resort) so
+        //  one broken panel doesn't cost coverage of the rest.
+        // =====================================================================
+        private IEnumerator AssertPopupClose()
+        {
+            // Registry-driven enumeration: the PanelId enum IS the registry surface.
+            var ids = new List<PanelId>();
+            foreach (PanelId pid in Enum.GetValues(typeof(PanelId))) ids.Add(pid);
+            Shuffle(ids);   // seeded order — chaos seeds walk the registry in different orders
+
+            int pass = 0, openFailed = 0, noClose = 0, unregistered = 0;
+            foreach (PanelId id in ids)
+            {
+                float tPanel = Time.realtimeSinceStartup;
+
+                // BATTLE-AWARE (fleet-9000 RCA): PanelManager REJECTS every gameplay panel
+                // while BattleLock.IsInBattle() (WO-437) — opening during a wave/engagement
+                // is DESIGNED to fail. One run's popup phase overlapping a garrison wave
+                // produced OPEN_FAILED x12 false positives. Wait (bounded) for the battle to
+                // end; if it doesn't, record SKIPPED_IN_BATTLE — not a Fail.
+                float battleWait = 0f;
+                while (DeNelle.Core.Combat.BattleLock.IsInBattle() && battleWait < 20f)
+                {
+                    yield return Wait(1f);
+                    battleWait += 1f;
+                }
+                if (DeNelle.Core.Combat.BattleLock.IsInBattle())
+                {
+                    FlowTrace.Warn("PopupClose", $"'{id}' skipped — BattleLock still in battle after {battleWait:F0}s (panel opens are designed-rejected in battle).");
+                    _popupVerdicts.Add(new PopupCloseResult
+                    {
+                        panel = id.ToString(), verdict = "SKIPPED_IN_BATTLE", route = "",
+                        seconds = battleWait, detail = "battle-lock active through the whole wait window — open rejection would be by design, not a defect",
+                    });
+                    continue;
+                }
+
+                if (!PanelRouter.IsRegistered(id))
+                {
+                    unregistered++;
+                    _popupVerdicts.Add(new PopupCloseResult
+                    {
+                        panel = id.ToString(), verdict = "NOT_REGISTERED", route = "",
+                        seconds = 0f, detail = "no opener registered in this scene — skipped",
+                    });
+                    continue;
+                }
+
+                // Clean slate: nothing may be open before this id's open, else the
+                // arbiter signals below are ambiguous.
+                if (PanelManager.AnyOpen) { PanelManager.CloseOpen(); yield return Wait(SettleSeconds); }
+
+                FlowTrace.Step("PopupClose", $"opening '{id}' for the close-affordance oracle.");
+                bool okOpen = false;
+                try { okOpen = PanelRouter.Open(id); }
+                catch (Exception ex) { FlowTrace.Warn("PopupClose", $"PanelRouter.Open({id}) threw at the seam: {ex.Message}"); }
+                yield return Wait(SettleSeconds);
+
+                if (!okOpen || !PanelManager.AnyOpen)
+                {
+                    openFailed++;
+                    string why = !okOpen
+                        ? "PanelRouter.Open returned false (opener threw, or open action ran but NO panel recorded open — the WO-465 invisible class)"
+                        : "Open returned true but PanelManager.AnyOpen is false after settle";
+                    FlowTrace.Fail("PopupClose", $"POPUP_OPEN_FAILED :: {id} — {why}.");
+                    _popupVerdicts.Add(new PopupCloseResult
+                    {
+                        panel = id.ToString(), verdict = "OPEN_FAILED", route = "PanelRouter.Open",
+                        seconds = Time.realtimeSinceStartup - tPanel, detail = why,
+                    });
+                    PanelManager.CloseOpen();   // release any half-open record
+                    yield return Wait(SettleSeconds);
+                    continue;
+                }
+
+                string openName = PanelManager.OpenPanelName ?? id.ToString();
+
+                // 1) A close AFFORDANCE must exist on the open surface.
+                UnityEngine.UI.Button uClose = FindUGuiCloseButton();
+                UnityEngine.UIElements.Button tkClose = uClose == null ? FindUiToolkitCloseButton() : null;
+                string route;
+                if (uClose == null && tkClose == null)
+                {
+                    noClose++;
+                    route = "searched active uGUI 'CloseButton'/*close* + visible UITK *close* buttons — none found";
+                    FlowTrace.Fail("PopupClose", $"POPUP_NO_CLOSE :: {id} — no close affordance on open panel '{openName}' ({route}).");
+                    _popupVerdicts.Add(new PopupCloseResult
+                    {
+                        panel = id.ToString(), verdict = "NO_CLOSE", route = route,
+                        seconds = Time.realtimeSinceStartup - tPanel,
+                        detail = "panel opened but exposes no Close control a player could tap",
+                    });
+                    yield return ForceContinueAfterStuckPanel(id, null, null);
+                    continue;
+                }
+
+                // 2) TRIGGER it the way a player would.
+                route = uClose != null
+                    ? $"uGUI button '{uClose.name}'"
+                    : $"UITK button '{(string.IsNullOrEmpty(tkClose.name) ? tkClose.text : tkClose.name)}'";
+                bool clicked = false;
+                try
+                {
+                    if (uClose != null) { uClose.onClick?.Invoke(); }
+                    else { ClickUiToolkitButton(tkClose); }
+                    clicked = true;
+                    FlowTrace.Step("PopupClose", $"'{id}': triggered close via {route}.");
+                }
+                catch (Exception ex)
+                {
+                    FlowTrace.Fail("PopupClose", $"POPUP_NO_CLOSE :: {id} — close handler THREW via {route}: {ex.Message}");
+                }
+
+                // 3) BOUNDED close-wait -> assert actually closed. The bound converts a
+                //    panel that swallows input and never closes into the named Fail.
+                bool closed = false;
+                float t0 = Time.realtimeSinceStartup;
+                while (clicked && Time.realtimeSinceStartup - t0 < PopupCloseWaitSeconds)
+                {
+                    if (IsPopupFullyClosed(uClose, tkClose)) { closed = true; break; }
+                    yield return null;
+                }
+
+                float took = Time.realtimeSinceStartup - tPanel;
+                if (clicked && closed)
+                {
+                    pass++;
+                    _popupVerdicts.Add(new PopupCloseResult
+                    {
+                        panel = id.ToString(), verdict = "PASS", route = route,
+                        seconds = took, detail = $"closed + input released in {Time.realtimeSinceStartup - t0:0.00}s",
+                    });
+                    FlowTrace.Step("PopupClose", $"'{id}': PASS — closed via {route}.");
+                }
+                else
+                {
+                    noClose++;
+                    string detail = clicked
+                        ? $"clicked {route} but panel still open after {PopupCloseWaitSeconds:0}s (AnyOpen={PanelManager.AnyOpen}, open='{PanelManager.OpenPanelName ?? "<none>"}') — stuck/hang converted to this named Fail"
+                        : $"close trigger threw via {route}";
+                    if (clicked)   // the throw case already emitted its own POPUP_NO_CLOSE above
+                        FlowTrace.Fail("PopupClose", $"POPUP_NO_CLOSE :: {id} — {detail}.");
+                    _popupVerdicts.Add(new PopupCloseResult
+                    {
+                        panel = id.ToString(), verdict = "NO_CLOSE", route = route,
+                        seconds = took, detail = detail,
+                    });
+                    yield return ForceContinueAfterStuckPanel(id, uClose, tkClose);
+                }
+
+                yield return Wait(SettleSeconds);
+            }
+
+            // RIPPLE (NPC card lane, 2026-07-02): PlayStructure("market"/...) now shows a
+            // 2-node DIALOGUE CARD first (auto-advances to OpenShop -> PartyShop). The card
+            // view is itself a closable popup surface — verdict it too. (The registry walk
+            // above is unaffected: it opens panels via PanelRouter.Open directly, so the
+            // card-first flow can never read as OPEN_FAILED there.)
+            yield return AssertDialogueCardClose();
+
+            FlowTrace.Step("PopupClose",
+                $"oracle done: {pass} PASS, {openFailed} OPEN_FAILED, {noClose} NO_CLOSE, {unregistered} NOT_REGISTERED of {ids.Count} PanelIds (+1 dialogue-card row).");
+            _lastDetail = $"{pass} pass / {openFailed} open-failed / {noClose} no-close / {unregistered} unregistered (+card)";
+        }
+
+        // WO-597 + NPC-card ripple: verdict the structure-dialogue CARD as a closable
+        // surface. Opens the market card via the REAL seam (DialogueService.PlayStructure),
+        // asserts the shared chrome Close exists on the DialogueView, triggers it, and
+        // asserts the dialogue actually ended. The card's own auto-advance to OpenShop ->
+        // PartyShop is the EXPECTED card-first flow, NOT a close failure — if a shop panel
+        // pops during/after the close it is closed via the arbiter and the row still passes.
+        private IEnumerator AssertDialogueCardClose()
+        {
+            const string RowName = "DialogueCard(market)";
+            float tRow = Time.realtimeSinceStartup;
+            _pauseDialogueSuppression = true;   // hold off the 1s SuppressDialogue Stop() loop
+
+            bool played = false;
+            try { played = DialogueService.PlayStructure("market", "PopupCloseOracle"); }
+            catch (Exception ex) { FlowTrace.Warn("PopupClose", "PlayStructure('market') threw: " + ex.Message); }
+            yield return Wait(SettleSeconds);
+
+            try
+            {
+                if (!played || !DialogueService.IsRunning)
+                {
+                    // Not routable in this scene (or it already auto-completed into the shop —
+                    // the card-first flow). Neither is a can't-open ticket: record informational.
+                    string note = !played
+                        ? "PlayStructure('market') not routable in this scene — skipped"
+                        : "card auto-completed before the probe (card-first flow ran through to OpenShop)";
+                    _popupVerdicts.Add(new PopupCloseResult
+                    {
+                        panel = RowName, verdict = "NOT_REGISTERED", route = "DialogueService.PlayStructure",
+                        seconds = Time.realtimeSinceStartup - tRow, detail = note,
+                    });
+                    FlowTrace.Step("PopupClose", $"'{RowName}': {note}.");
+                    PanelManager.CloseOpen();   // if the flow already opened the shop, release it
+                }
+                else
+                {
+                    // Card is up — the DialogueView builds the shared Obsidian chrome, so the
+                    // ONE standard Close must be present.
+                    UnityEngine.UI.Button uClose = FindUGuiCloseButton();
+                    if (uClose == null)
+                    {
+                        FlowTrace.Fail("PopupClose", $"POPUP_NO_CLOSE :: {RowName} — dialogue card is running but no Close affordance found (searched active uGUI 'CloseButton'/*close*).");
+                        _popupVerdicts.Add(new PopupCloseResult
+                        {
+                            panel = RowName, verdict = "NO_CLOSE", route = "searched uGUI 'CloseButton'/*close* — none found",
+                            seconds = Time.realtimeSinceStartup - tRow, detail = "dialogue card exposes no Close control",
+                        });
+                        DialogueService.Stop();   // force-continue
+                    }
+                    else
+                    {
+                        string route = $"uGUI button '{uClose.name}'";
+                        bool clicked = false;
+                        try { uClose.onClick?.Invoke(); clicked = true; }
+                        catch (Exception ex) { FlowTrace.Fail("PopupClose", $"POPUP_NO_CLOSE :: {RowName} — close handler THREW via {route}: {ex.Message}"); }
+
+                        _cardCloseClicked = clicked; _cardCloseRoute = route;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("PopupClose", $"'{RowName}' probe threw: {ex.Message}");
+            }
+
+            // Bounded close-wait (outside the try — coroutines can't yield in a try/catch).
+            if (_cardCloseClicked)
+            {
+                bool ended = false;
+                float t0 = Time.realtimeSinceStartup;
+                while (Time.realtimeSinceStartup - t0 < PopupCloseWaitSeconds)
+                {
+                    if (!DialogueService.IsRunning) { ended = true; break; }
+                    yield return null;
+                }
+
+                // Card-first flow tolerance: closing/advancing the card may legitimately land
+                // in the shop (OpenShop command). An open shop after the card ended is the NEW
+                // expected flow, not a close failure — release it and note it.
+                bool shopPopped = PanelManager.AnyOpen;
+                if (shopPopped) PanelManager.CloseOpen();
+
+                if (ended)
+                {
+                    _popupVerdicts.Add(new PopupCloseResult
+                    {
+                        panel = RowName, verdict = "PASS", route = _cardCloseRoute,
+                        seconds = Time.realtimeSinceStartup - tRow,
+                        detail = shopPopped ? "card closed; card-first flow opened the shop (expected) — released via arbiter" : "card closed cleanly",
+                    });
+                    FlowTrace.Step("PopupClose", $"'{RowName}': PASS — closed via {_cardCloseRoute}{(shopPopped ? " (shop popped per card-first flow, released)" : "")}.");
+                }
+                else
+                {
+                    FlowTrace.Fail("PopupClose", $"POPUP_NO_CLOSE :: {RowName} — clicked {_cardCloseRoute} but the dialogue is still running after {PopupCloseWaitSeconds:0}s (stuck card).");
+                    _popupVerdicts.Add(new PopupCloseResult
+                    {
+                        panel = RowName, verdict = "NO_CLOSE", route = _cardCloseRoute,
+                        seconds = Time.realtimeSinceStartup - tRow, detail = "card still running after bounded close-wait",
+                    });
+                    try { DialogueService.Stop(); } catch { }   // force-continue
+                }
+                _cardCloseClicked = false; _cardCloseRoute = null;
+            }
+
+            // Cleanup: never leave a card or shop open for the next phase; resume suppression.
+            try { if (DialogueService.IsRunning) DialogueService.Stop(); } catch { }
+            PanelManager.CloseOpen();
+            _pauseDialogueSuppression = false;
+            yield return Wait(SettleSeconds);
+        }
+
+        // Scratch state for AssertDialogueCardClose (set inside its try block; the bounded
+        // wait must yield OUTSIDE try/catch, so the two halves hand off through these).
+        private bool _cardCloseClicked;
+        private string _cardCloseRoute;
+
+        // "Actually closed": the modal arbiter record is cleared (this is also what
+        // un-suppresses world prompts/input — MobileInteractButton reads AnyOpen) AND
+        // the close affordance itself is gone/inactive (guards the inverse of the
+        // invisible-scrim class: a panel that clears its record but stays on screen).
+        private static bool IsPopupFullyClosed(UnityEngine.UI.Button uClose, UnityEngine.UIElements.Button tkClose)
+        {
+            if (PanelManager.AnyOpen) return false;
+            if (uClose != null && uClose.isActiveAndEnabled) return false;      // Unity-fake-null => destroyed => closed
+            if (tkClose != null)
+            {
+                try
+                {
+                    // ANCESTOR-AWARE (fleet-9500 PetSkillTree false NO_CLOSE): UITK panels close
+                    // by hiding the OVERLAY ancestor — the button's OWN resolvedStyle.display
+                    // stays Flex forever, so checking only the button reads every properly
+                    // closed panel as "still open". Walk the parent chain: any display:None
+                    // ancestor means the affordance is gone from screen.
+                    if (tkClose.panel != null && tkClose.enabledInHierarchy)
+                    {
+                        bool anyHidden = false;
+                        for (var ve = (UnityEngine.UIElements.VisualElement)tkClose; ve != null; ve = ve.parent)
+                        {
+                            if (ve.resolvedStyle.display == UnityEngine.UIElements.DisplayStyle.None)
+                            {
+                                anyHidden = true;
+                                break;
+                            }
+                        }
+                        if (!anyHidden) return false;
+                    }
+                }
+                catch { /* detached element mid-teardown => treat as closed */ }
+            }
+            return true;
+        }
+
+        // The shared master-frame Close: ElarionUiKit.ObsidianCloseButton names the ONE
+        // standard button "CloseButton" (obsidian black+gold canon — no per-panel X).
+        // Prefer that exact name; accept any *close*-named button as a legacy affordance.
+        // Among candidates pick the topmost (highest root-canvas sortingOrder) so we hit
+        // the OPEN modal's Close, not a HUD leftover underneath.
+        private static UnityEngine.UI.Button FindUGuiCloseButton()
+        {
+            UnityEngine.UI.Button best = null;
+            long bestScore = long.MinValue;
+            UnityEngine.UI.Button[] all;
+            try { all = Resources.FindObjectsOfTypeAll<UnityEngine.UI.Button>(); }
+            catch (Exception ex) { FlowTrace.Warn("PopupClose", "uGUI close scan failed: " + ex.Message); return null; }
+            if (all == null) return null;
+
+            foreach (var b in all)
+            {
+                if (b == null || !b.isActiveAndEnabled || !b.interactable) continue;
+                if (!b.gameObject.scene.IsValid()) continue;   // skip prefab assets
+                string n = b.name ?? "";
+                bool exact = string.Equals(n, "CloseButton", StringComparison.OrdinalIgnoreCase);
+                if (!exact && n.IndexOf("close", StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                int sort = 0;
+                var cv = b.GetComponentInParent<Canvas>();
+                if (cv != null)
+                {
+                    var rootCv = cv.rootCanvas != null ? cv.rootCanvas : cv;
+                    sort = rootCv.sortingOrder;
+                }
+                long score = (long)sort * 10 + (exact ? 1 : 0);
+                if (score > bestScore) { bestScore = score; best = b; }
+            }
+            return best;
+        }
+
+        // UITK fallback (code-built UIDocument panels): a visible, enabled Button whose
+        // name or label contains "close".
+        private static UnityEngine.UIElements.Button FindUiToolkitCloseButton()
+        {
+            UnityEngine.UIElements.UIDocument[] docs;
+            try { docs = UnityEngine.Object.FindObjectsByType<UnityEngine.UIElements.UIDocument>(); }
+            catch (Exception ex) { FlowTrace.Warn("PopupClose", "UITK close scan failed: " + ex.Message); return null; }
+            if (docs == null) return null;
+
+            foreach (var d in docs)
+            {
+                if (d == null || d.rootVisualElement == null) continue;
+                // DEV-SURFACE EXCLUSION (fleet-9000 RCA): dev builds carry always-visible
+                // UITK overlays (dev panel, admin, help) whose close buttons this scan found
+                // FIRST — the oracle clicked 'dev-panel-close' while the panel under test
+                // (Workshop) sat untouched, and a foreign 'Close' staying visible flipped
+                // PetSkillTree's verdict to NO_CLOSE even though AnyOpen went false. Only
+                // the panel under test's own surface counts as a player affordance.
+                string host = d.gameObject != null ? d.gameObject.name : "";
+                if (host.IndexOf("dev", StringComparison.OrdinalIgnoreCase) >= 0
+                    || host.IndexOf("admin", StringComparison.OrdinalIgnoreCase) >= 0
+                    || host.IndexOf("help", StringComparison.OrdinalIgnoreCase) >= 0
+                    || host.IndexOf("debug", StringComparison.OrdinalIgnoreCase) >= 0)
+                    continue;
+                List<UnityEngine.UIElements.Button> buttons;
+                try { buttons = d.rootVisualElement.Query<UnityEngine.UIElements.Button>().ToList(); }
+                catch { continue; }
+                foreach (var b in buttons)
+                {
+                    if (b == null) continue;
+                    if (!b.enabledInHierarchy) continue;
+                    // ANCESTOR-AWARE (fleet-9500 Workshop RCA): a hidden panel hides its OVERLAY
+                    // ancestor, not each child — checking only the button's own display let this
+                    // scan return foreign Close buttons from closed panels (the oracle then
+                    // clicked another panel's handler and verdicted Workshop NO_CLOSE). Skip any
+                    // button with a display:None ancestor.
+                    bool hidden = false;
+                    for (var ve = (UnityEngine.UIElements.VisualElement)b; ve != null; ve = ve.parent)
+                    {
+                        if (ve.resolvedStyle.display == UnityEngine.UIElements.DisplayStyle.None)
+                        {
+                            hidden = true;
+                            break;
+                        }
+                    }
+                    if (hidden) continue;
+                    string n = b.name ?? ""; string t = b.text ?? "";
+                    if (n.StartsWith("dev-", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (n.IndexOf("close", StringComparison.OrdinalIgnoreCase) >= 0
+                        || t.IndexOf("close", StringComparison.OrdinalIgnoreCase) >= 0)
+                        return b;
+                }
+            }
+            return null;
+        }
+
+        // Synthesize a real click on a UITK button (same seam ClickableActuator uses:
+        // SendEvent assigns the target, so the Clickable manipulator runs the handlers).
+        private static void ClickUiToolkitButton(UnityEngine.UIElements.Button b)
+        {
+            // FLEET-9700 PROOF the Mouse/ClickEvent path never ran the handler in the built
+            // player: with the finder fixed to each panel's OWN close button, all three UITK
+            // panels stayed open (AnyOpen=True) after the "click" — Unity 6's Clickable listens
+            // to POINTER events (manual Mouse events don't synthesize them), and a pooled
+            // ClickEvent without a target dispatches nowhere. NavigationSubmitEvent is the
+            // supported programmatic activation — Clickable handles it and invokes clicked
+            // synchronously. The legacy events are kept for any non-Clickable listeners.
+            using (var submit = UnityEngine.UIElements.NavigationSubmitEvent.GetPooled())
+            {
+                submit.target = b;
+                b.SendEvent(submit);
+            }
+            Vector2 c = b.worldBound.center;
+            using (var down = UnityEngine.UIElements.MouseDownEvent.GetPooled(c, 0, 1, Vector2.zero))
+                b.SendEvent(down);
+            using (var up = UnityEngine.UIElements.MouseUpEvent.GetPooled(c, 0, 1, Vector2.zero))
+                b.SendEvent(up);
+        }
+
+        // FORCE-CONTINUE after a violation so one broken panel never costs the rest of
+        // the run's coverage. Escalation ladder:
+        //   1. PanelManager.CloseOpen() — arbiter force-close (always clears the record).
+        //   2. If the panel's UI is STILL on screen, destroy/disable its root outright
+        //      (the stuck modal would otherwise cover every later surface).
+        //   3. If teardown itself threw, reload the boot scene + re-resolve the hero.
+        private IEnumerator ForceContinueAfterStuckPanel(PanelId id,
+            UnityEngine.UI.Button uClose, UnityEngine.UIElements.Button tkClose)
+        {
+            PanelManager.CloseOpen();
+            yield return Wait(SettleSeconds);
+            if (IsPopupFullyClosed(uClose, tkClose)) yield break;   // recovered — continue the sweep
+
+            bool tornDown = false;
+            try
+            {
+                if (uClose != null && uClose.isActiveAndEnabled)
+                {
+                    var cv = uClose.GetComponentInParent<Canvas>();
+                    var root = cv != null ? (cv.rootCanvas != null ? cv.rootCanvas : cv).gameObject : uClose.gameObject;
+                    FlowTrace.Warn("PopupClose", $"'{id}' still visible after arbiter force-close — destroying stuck modal root '{root.name}' to recover coverage.");
+                    UnityEngine.Object.Destroy(root);
+                    tornDown = true;
+                }
+                else if (tkClose != null && tkClose.panel != null)
+                {
+                    // Find the UIDocument hosting the stuck element and disable it.
+                    var docs = UnityEngine.Object.FindObjectsByType<UnityEngine.UIElements.UIDocument>();
+                    if (docs != null)
+                        foreach (var d in docs)
+                            if (d != null && d.rootVisualElement != null && d.rootVisualElement.panel == tkClose.panel)
+                            {
+                                FlowTrace.Warn("PopupClose", $"'{id}' still visible after arbiter force-close — disabling stuck UIDocument '{d.name}' to recover coverage.");
+                                d.gameObject.SetActive(false);
+                                tornDown = true;
+                                break;
+                            }
+                }
+                else
+                {
+                    // No affordance handle to trace a root from (the NO-affordance case) —
+                    // the arbiter record is already cleared; nothing more to tear down.
+                    tornDown = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("PopupClose", $"'{id}' stuck-panel teardown threw: {ex.Message} — falling back to scene reload.");
+            }
+            yield return Wait(SettleSeconds);
+            if (tornDown) yield break;
+
+            // Last resort: reload the boot scene so the rest of the run keeps coverage.
+            FlowTrace.Warn("PopupClose", $"'{id}' unrecoverable in-place — reloading '{TargetScene}' to continue the run.");
+            try { SceneManager.LoadScene(TargetScene); }
+            catch (Exception ex) { FlowTrace.Fail("PopupClose", $"recovery scene reload threw: {ex.Message}"); yield break; }
+            float t0 = Time.realtimeSinceStartup;
+            while (Time.realtimeSinceStartup - t0 < BootTimeout && ActiveScene() != TargetScene) yield return null;
+            for (int i = 0; i < 3; i++) yield return null;
+            _hero = null;
+            float t1 = Time.realtimeSinceStartup;
+            while (_hero == null && Time.realtimeSinceStartup - t1 < ResolveHeroTimeout)
+            {
+                _hero = UnityEngine.Object.FindAnyObjectByType<HeroLocomotion>();
+                if (_hero != null) break;
+                yield return null;
+            }
+            FlowTrace.Step("PopupClose", $"recovery reload complete (hero {(_hero != null ? "re-resolved" : "NOT found — later walk phases will skip")}).");
+        }
+
+        // =====================================================================
         //  PHASE: TriggerWave
         //  WaveManager.ForceBeginNextWave(), then poll until the phase advances
         //  off its current value (or timeout -> Fail).
@@ -1851,8 +2414,7 @@ namespace DeNelle.DevTools
         // =====================================================================
         private IEnumerator AttemptExitCastle()
         {
-            var gates = UnityEngine.Object.FindObjectsByType<SceneTransitionTrigger>(
-                FindObjectsSortMode.None);
+            var gates = UnityEngine.Object.FindObjectsByType<SceneTransitionTrigger>();
             if (gates == null || gates.Length == 0)
             {
                 FlowTrace.Warn("Auto", "AttemptExitCastle: no SceneTransitionTrigger to exit through.");
@@ -1860,14 +2422,43 @@ namespace DeNelle.DevTools
                 yield break;
             }
 
-            // Pick the south-most gate (smallest world Z) as the "exit" — same
-            // selection the gate sweep uses; it's the wired castle->OuterWorld seam.
+            // Pick the exit gate NAVMESH-DERIVED, not "south-most" (§12 captured proof,
+            // fleet 2026-07-02: OuterWorld loads ADDITIVELY and is UN-STACKED far south of
+            // the castle, so the global south-most SceneTransitionTrigger is the Outpost1
+            // cave portal at z≈-404 — on a DISJOINT navmesh the courtyard hero can never
+            // path to. 4/6 runs stalled 30s driving at it; the 2 "passes" were chaos runs
+            // whose hero already stood in OuterWorld. The old comment's "south-most = the
+            // wired castle->OuterWorld seam" was a pre-unstack layout assumption.)
+            // Selection: among triggers the hero can actually PATH to on the live navmesh
+            // (NavMesh.CalculatePath complete — lift-aware for free, it reads the baked
+            // y=liftY courtyard), pick the south-most. Fall back to global south-most
+            // (the old behavior, loud-warned) only if nothing is reachable.
             SceneTransitionTrigger exit = null;
             float minZ = float.MaxValue;
+            SceneTransitionTrigger exitAny = null;
+            float minZAny = float.MaxValue;
+            Vector3 heroPos = _hero != null ? _hero.transform.position : Vector3.zero;
             foreach (var g in gates)
             {
                 if (g == null) continue;
-                if (g.transform.position.z < minZ) { minZ = g.transform.position.z; exit = g; }
+                // WO-602: skip RETURN triggers — a trigger targeting the CURRENT hub scene is a
+                // way BACK IN (the outer "Enter Elarion" entrances), not an exit. Without this the
+                // south return trigger (souther than the deck trigger + AI-link-reachable) would
+                // win the south-most pick and the phase would test the return, not the exit.
+                if (string.Equals(g.targetSceneName, ActiveScene(), StringComparison.Ordinal)) continue;
+                float z = g.transform.position.z;
+                if (z < minZAny) { minZAny = z; exitAny = g; }
+                if (_hero != null && NavReachable(heroPos, g.transform.position) && z < minZ)
+                {
+                    minZ = z;
+                    exit = g;
+                }
+            }
+            if (exit == null && exitAny != null)
+            {
+                FlowTrace.Warn("Auto", $"AttemptExitCastle: NO trigger is navmesh-reachable from the hero @ {heroPos} — " +
+                    $"falling back to global south-most '{exitAny.name}' @ {exitAny.transform.position} (likely a cross-scene stall).");
+                exit = exitAny;
             }
             // No exit trigger OR no hero is NOT a ticket-worthy failure — there is
             // simply nothing to attempt (e.g. a scene with no wired seam, or the hero
@@ -1909,7 +2500,12 @@ namespace DeNelle.DevTools
             bool reachedProximity = false;
             bool tapped = false;
             float closestToGate = float.MaxValue;   // closest the hero ever got to the gate
-            while (Time.realtimeSinceStartup - t0 < ExitTimeout)
+            // Walk budget runs 2s SHORTER than the phase watchdog (RunPhase also uses
+            // ExitTimeout): with equal budgets the wrapper always killed this coroutine
+            // first, so the diagnostic Fail branches below NEVER emitted (fleet 2026-07-02:
+            // 4 runs logged only the generic "AttemptExitCastle TIMEOUT", detail="").
+            float walkBudget = Mathf.Max(5f, ExitTimeout - 2f);
+            while (Time.realtimeSinceStartup - t0 < walkBudget)
             {
                 // Hero (or its GameObject) could be destroyed/unloaded mid-walk — bail
                 // cleanly rather than NRE on `_hero.transform`.
@@ -1951,6 +2547,7 @@ namespace DeNelle.DevTools
                 float finalDist = _hero != null ? Vector3.Distance(_hero.transform.position, warpTarget) : 0f;
                 FlowTrace.Step("Auto", $"AttemptExitCastle: CROSSED — hero warped to '{targetScene}' target {warpTarget} (now {finalDist:0.0}m from landing).");
                 _lastDetail = $"crossed to {targetScene} (warped to target)";
+                _exitCrossed = true;   // WO-602: arms the HomeReturnRoundTrip phase
             }
             else if (!reachedProximity)
             {
@@ -1975,6 +2572,213 @@ namespace DeNelle.DevTools
                 FlowTrace.Fail("Auto", $"AttemptExitCastle: tapped seam but it did NOT cross — hero reached closest {closestToGate:0.0}m of gate '{gateName}' " +
                     $"(radius {radius:0.0}m), tapped the 'Travel to {targetScene}' prompt, but no warp to target {warpTarget} within {ExitTimeout:0}s.");
                 _lastDetail = $"tapped but no cross (reached {closestToGate:0.0}m / radius {radius:0.0}m, no warp)";
+            }
+        }
+
+        // =====================================================================
+        //  PHASE: HomeReturnRoundTrip (WO-602 — runs right after AttemptExitCastle)
+        //  The owner shipped "no way back into town" because the fleet only ever
+        //  tested the EXIT. This closes the loop: after a successful exit, walk
+        //  OUTWARD ~20m from the landing, then navigate back to the nearest gate's
+        //  OUTER return entrance (the RuntimeSeam_ReturnTrigger_* built by
+        //  RuntimeRegionGate.BuildReturnEntrance) and assert the hero is back on
+        //  the courtyard: |y - castle.liftY| <= 0.5 AND horizontal r < 44 (inside
+        //  the plinth footprint, CastleHubBuilder.PlinthHalf). Two return paths can
+        //  satisfy it: the passive HeroLinkCrossing dest warp (widened lane) fires
+        //  on the walk-in, or the bot taps the visible "Enter Elarion" prompt —
+        //  exactly what a player would do. On failure: FlowTrace.Fail("AutoTest",
+        //  "HOME_RETURN_FAIL :: ...") and force-continue. Per-run verdict row goes
+        //  into autopilot-summary.json (homeReturn[]), like the popupClose rows.
+        //
+        //  ORACLE WIDENING (2026-07-02 — fleet ran 1 PASS + 5 SKIPPED): the phase
+        //  no longer skips when the exit phase didn't latch _exitCrossed (chaos
+        //  wander / bot warped to Outpost1 / seam stall). It SELF-ARMS instead:
+        //  WarpTo the courtyard, run the exit leg itself (same confirm-to-cross
+        //  sequence AttemptExitCastle drives), then the round trip — so every run
+        //  produces an ATTEMPTED PASS/FAIL verdict. SKIPPED remains only for the
+        //  genuinely impossible state: no hero.
+        // =====================================================================
+        private IEnumerator HomeReturnRoundTrip()
+        {
+            const float PlinthHalf = 44f;         // = CastleHubBuilder.PlinthHalf (courtyard footprint)
+            const float SelfArmExitBudget = 25f;  // widen: courtyard-warp + walk into the seam + confirm-tap
+            const float WalkOutBudget     = 15f;  // leg 1: walk ~20m outward from the landing
+            const float ReturnLegBudget   = 40f;  // leg 2: navigate back + re-enter (25+15+40 < HomeReturnTimeout-2)
+            float t0 = Time.realtimeSinceStartup;
+
+            if (_hero == null)
+            {
+                // The ONLY remaining SKIP: with no hero there is nothing to drive.
+                FlowTrace.Warn("Auto", "HomeReturnRoundTrip: no hero — impossible to attempt, skipping.");
+                _lastDetail = "skipped (no hero)";
+                _homeReturnVerdicts.Add(new HomeReturnResult { gate = "n/a", verdict = "SKIPPED", seconds = 0f, detail = _lastDetail });
+                yield break;
+            }
+
+            float liftY = PlayerPrefs.GetFloat("castle.liftY", 3f);
+
+            if (!_exitCrossed)
+            {
+                // SELF-ARM: route the hero home (the WarpTo helper every other phase
+                // uses — self-logs its navmesh sample), then run the exit leg here.
+                FlowTrace.Step("Auto", "HomeReturnRoundTrip: exit phase never crossed — self-arming (warp to courtyard + run the exit leg first).");
+                try { _hero.WarpTo(new Vector3(0f, liftY, 0f)); }
+                catch (Exception ex) { FlowTrace.Warn("Auto", "HomeReturnRoundTrip: courtyard warp threw " + ex.Message); }
+                yield return null;   // let the warp settle a frame
+
+                // Pick the exit seam with AttemptExitCastle's calibrated predicate:
+                // never a RETURN trigger (target == hub is the way back IN), prefer a
+                // navmesh-reachable trigger, south-most wins; global south-most fallback.
+                string hubScene = ActiveScene();
+                SceneTransitionTrigger exit = null;    float minZ    = float.MaxValue;
+                SceneTransitionTrigger exitAny = null; float minZAny = float.MaxValue;
+                Vector3 heroPos = _hero.transform.position;
+                foreach (var g in UnityEngine.Object.FindObjectsByType<SceneTransitionTrigger>())
+                {
+                    if (g == null || string.Equals(g.targetSceneName, hubScene, StringComparison.Ordinal)) continue;
+                    float z = g.transform.position.z;
+                    if (z < minZAny) { minZAny = z; exitAny = g; }
+                    if (NavReachable(heroPos, g.transform.position) && z < minZ) { minZ = z; exit = g; }
+                }
+                if (exit == null) exit = exitAny;
+                if (exit == null)
+                {
+                    FlowTrace.Fail("AutoTest", "HOME_RETURN_FAIL :: gate=<none> — self-armed leg found NO exit seam " +
+                        "(no SceneTransitionTrigger leaves the hub), so the round trip cannot start (WO-602 widen).");
+                    _lastDetail = "self-arm: no exit seam";
+                    _homeReturnVerdicts.Add(new HomeReturnResult { gate = "none", verdict = "FAIL",
+                        seconds = Time.realtimeSinceStartup - t0, detail = _lastDetail });
+                    yield break;   // force-continue: the run proceeds to the next phase regardless
+                }
+
+                // Drive the exit exactly as AttemptExitCastle does: walk in, tap the
+                // seam's "Travel to ..." confirm, and treat the warp-to-landing as
+                // the authoritative crossing signal.
+                Vector3 exitWarpTarget = exit.targetPosition;
+                float exitRadius = Mathf.Max(1f, exit.ProximityRadius);
+                Vector3 exitGatePos = exit.transform.position;
+                string exitName = exit.name;
+                FlowTrace.Step("Auto", $"HomeReturnRoundTrip: self-armed exit via '{exitName}' @ {exitGatePos} (radius {exitRadius:0.0}m).");
+                _hero.SetAutoWalk(exit.transform);
+                bool crossedOut = false;
+                float tExit = Time.realtimeSinceStartup;
+                while (Time.realtimeSinceStartup - tExit < SelfArmExitBudget)
+                {
+                    if (_hero == null) break;
+                    Vector3 pos = _hero.transform.position;
+                    if (Vector3.Distance(pos, exitWarpTarget) < 8f) { crossedOut = true; break; }
+                    if (HorizontalDistance(pos, exitGatePos) <= exitRadius + 0.5f &&
+                        MobileInteractButton.IsActive && MobileInteractButton.InvokeActive())
+                        FlowTrace.Step("Auto", $"HomeReturnRoundTrip: self-armed leg tapped seam '{exitName}'.");
+                    yield return null;
+                }
+                if (_hero != null) _hero.ClearAutoWalk();
+                if (!crossedOut || _hero == null)
+                {
+                    Vector3 hp0 = _hero != null ? _hero.transform.position : Vector3.zero;
+                    FlowTrace.Fail("AutoTest", $"HOME_RETURN_FAIL :: gate={exitName} heroPos={hp0} — self-armed exit leg never crossed " +
+                        $"(no warp to {exitWarpTarget} within {SelfArmExitBudget:0}s), so the return could not be exercised (WO-602 widen).");
+                    _lastDetail = "self-arm: exit leg never crossed";
+                    _homeReturnVerdicts.Add(new HomeReturnResult { gate = "none", verdict = "FAIL",
+                        seconds = Time.realtimeSinceStartup - t0, detail = _lastDetail });
+                    yield break;   // force-continue
+                }
+                FlowTrace.Step("Auto", "HomeReturnRoundTrip: self-armed exit crossed — proceeding with the round trip.");
+            }
+
+            bool BackHome() => _hero != null
+                && Mathf.Abs(_hero.transform.position.y - liftY) <= 0.5f
+                && HorizontalDistance(_hero.transform.position, Vector3.zero) < PlinthHalf;
+
+            // 1) Walk OUTWARD ~20m from the castle (radially away from the origin) so the
+            //    return is a real approach, not a residual overlap with the landing radii.
+            Vector3 start = _hero.transform.position;
+            Vector3 outward = start; outward.y = 0f;
+            outward = outward.sqrMagnitude > 0.01f ? outward.normalized : Vector3.back;
+            var outMarker = new GameObject("__AutoPilot_HomeReturn_OutMarker");
+            outMarker.transform.position = start + outward * 20f;
+            _hero.SetAutoWalk(outMarker.transform);
+            float tOut = Time.realtimeSinceStartup;   // leg-relative: t0 may already carry the self-armed exit leg
+            while (Time.realtimeSinceStartup - tOut < WalkOutBudget)
+            {
+                if (_hero == null) break;
+                if (HorizontalDistance(_hero.transform.position, start) >= 18f) break;
+                yield return null;
+            }
+            if (_hero != null) _hero.ClearAutoWalk();
+            UnityEngine.Object.Destroy(outMarker);
+            Vector3 farPos = _hero != null ? _hero.transform.position : start;
+            FlowTrace.Step("Auto", $"HomeReturnRoundTrip: walked out to {farPos} ({HorizontalDistance(farPos, start):0.0}m from landing) — now returning home.");
+
+            // 2) Find the nearest OUTER return entrance (a SceneTransitionTrigger whose target
+            //    IS the hub scene — the same predicate AttemptExitCastle now excludes).
+            SceneTransitionTrigger ret = null;
+            float bestD = float.MaxValue;
+            string hub = ActiveScene();
+            foreach (var g in UnityEngine.Object.FindObjectsByType<SceneTransitionTrigger>())
+            {
+                if (g == null || !string.Equals(g.targetSceneName, hub, StringComparison.Ordinal)) continue;
+                float d = HorizontalDistance(farPos, g.transform.position);
+                if (d < bestD) { bestD = d; ret = g; }
+            }
+            string gateName = ret != null ? ret.name : "<none>";
+            // Side suffix for the verdict/fail line ("RuntimeSeam_ReturnTrigger_South" -> "South").
+            string gateSide = gateName.Contains("_") ? gateName.Substring(gateName.LastIndexOf('_') + 1) : gateName;
+
+            if (ret == null || _hero == null)
+            {
+                Vector3 hp = _hero != null ? _hero.transform.position : Vector3.zero;
+                FlowTrace.Fail("AutoTest", $"HOME_RETURN_FAIL :: gate=<none> heroPos={hp} — NO outer return entrance exists " +
+                    "(no SceneTransitionTrigger targets the hub scene). The way back home is unwired (WO-602).");
+                _lastDetail = "no outer return entrance found";
+                _homeReturnVerdicts.Add(new HomeReturnResult { gate = "none", verdict = "FAIL",
+                    seconds = Time.realtimeSinceStartup - t0, detail = _lastDetail });
+                yield break;   // force-continue: the run proceeds to the next phase regardless
+            }
+
+            // 3) Drive back to the gate's outer landing; the passive HeroLinkCrossing lane may
+            //    warp us in en route, else tap the visible "Enter Elarion" prompt like a player.
+            FlowTrace.Step("Auto", $"HomeReturnRoundTrip: navigating back to '{gateName}' @ {ret.transform.position} " +
+                $"(r={ret.ProximityRadius:0.0}m, {bestD:0.0}m away) — assert courtyard y≈{liftY:0.0} r<{PlinthHalf:0}.");
+            _hero.SetAutoWalk(ret.transform);
+            bool home = false;
+            bool tapped = false;
+            float closest = float.MaxValue;
+            Vector3 retPos = ret.transform.position;
+            float retRadius = Mathf.Max(1f, ret.ProximityRadius);
+            float tRet = Time.realtimeSinceStartup;   // leg-relative budget; legs sum to < HomeReturnTimeout-2 so the Fail below emits
+            while (Time.realtimeSinceStartup - tRet < ReturnLegBudget)
+            {
+                if (_hero == null) break;
+                if (BackHome()) { home = true; break; }
+                float d = HorizontalDistance(_hero.transform.position, retPos);
+                if (d < closest) closest = d;
+                if (d <= retRadius + 0.5f && MobileInteractButton.IsActive && MobileInteractButton.InvokeActive())
+                {
+                    tapped = true;
+                    FlowTrace.Step("Auto", $"HomeReturnRoundTrip: bot tapped 'Enter Elarion' on '{gateName}'.");
+                }
+                yield return null;
+            }
+            if (_hero != null) _hero.ClearAutoWalk();
+
+            float secs = Time.realtimeSinceStartup - t0;
+            if (home)
+            {
+                Vector3 hp = _hero.transform.position;
+                FlowTrace.Step("AutoTest", $"HOME_RETURN_OK :: gate={gateSide} heroPos={hp} " +
+                    $"(y within 0.5 of liftY={liftY:0.0}, r={HorizontalDistance(hp, Vector3.zero):0.0}<{PlinthHalf:0}; tapped={tapped}) in {secs:0.0}s.");
+                _lastDetail = $"returned home via {gateSide} (tapped={tapped})";
+                _homeReturnVerdicts.Add(new HomeReturnResult { gate = gateSide, verdict = "PASS", seconds = secs, detail = _lastDetail });
+            }
+            else
+            {
+                Vector3 hp = _hero != null ? _hero.transform.position : Vector3.zero;
+                FlowTrace.Fail("AutoTest", $"HOME_RETURN_FAIL :: gate={gateSide} heroPos={hp} — hero never re-entered the courtyard " +
+                    $"(closest {closest:0.0}m of return radius {retRadius:0.0}m, tapped={tapped}) within {ReturnLegBudget:0}s (WO-602).");
+                _lastDetail = $"return FAILED via {gateSide} (closest {closest:0.0}m, tapped={tapped})";
+                _homeReturnVerdicts.Add(new HomeReturnResult { gate = gateSide, verdict = "FAIL", seconds = secs, detail = _lastDetail });
+                // force-continue: no throw/abort — the remaining phases still run.
             }
         }
 
@@ -2194,6 +2998,8 @@ namespace DeNelle.DevTools
                     seed = _seed,                       // WO-452 tranche E: reproducibility
                     runId = _runId ?? "",               // WO-452 tranche E: replay handle
                     phases = _phases.ToArray(),
+                    popupClose = _popupVerdicts.ToArray(),   // WO-597: per-panel POPUP-CLOSABLE verdicts
+                    homeReturn = _homeReturnVerdicts.ToArray(),   // WO-602: home-return round-trip verdict
                 };
                 // Fleet mode: write into persistentDataPath/autopilot-runs/<id>/ so it
                 // sits beside this run's break-log.jsonl and the aggregator can count
@@ -2229,6 +3035,20 @@ namespace DeNelle.DevTools
             return Vector3.Distance(a, b);
         }
 
+        // Can the hero PATH from `from` to `to` on the live baked navmesh? Both ends are
+        // sampled (4m — trigger markers float ~1.5m above the surface, and the raised
+        // castle courtyard bakes at y=castle.liftY) then a full path is calculated;
+        // only PathComplete counts (a partial path = the Outpost1 cross-scene stall).
+        private static bool NavReachable(Vector3 from, Vector3 to)
+        {
+            const float SampleTol = 4f;
+            if (!UnityEngine.AI.NavMesh.SamplePosition(from, out var a, SampleTol, UnityEngine.AI.NavMesh.AllAreas)) return false;
+            if (!UnityEngine.AI.NavMesh.SamplePosition(to,   out var b, SampleTol, UnityEngine.AI.NavMesh.AllAreas)) return false;
+            var path = new UnityEngine.AI.NavMeshPath();
+            return UnityEngine.AI.NavMesh.CalculatePath(a.position, b.position, UnityEngine.AI.NavMesh.AllAreas, path)
+                   && path.status == UnityEngine.AI.NavMeshPathStatus.PathComplete;
+        }
+
         // Seeded Fisher-Yates in-place shuffle of the per-phase work order so distinct
         // seeds explore distinct paths. Uses _rng (seeded in Begin). Null-safe.
         private void Shuffle<T>(IList<T> list)
@@ -2254,6 +3074,29 @@ namespace DeNelle.DevTools
             public string detail;
         }
 
+        // WO-597: one POPUP-CLOSABLE verdict per PanelId, serialized into
+        // autopilot-summary.json (popupClose[]) alongside the phase rows.
+        [Serializable]
+        private struct PopupCloseResult
+        {
+            public string panel;    // PanelId name (e.g. "PartyShop")
+            public string verdict;  // PASS / OPEN_FAILED / NO_CLOSE / NOT_REGISTERED
+            public string route;    // the close route attempted (e.g. "uGUI button 'CloseButton'")
+            public float seconds;   // wall time spent on this panel
+            public string detail;   // one-line why (matches the break-log Fail message)
+        }
+
+        // WO-602: one HOME-RETURN round-trip verdict per run, serialized into
+        // autopilot-summary.json (homeReturn[]) alongside the popupClose rows.
+        [Serializable]
+        private struct HomeReturnResult
+        {
+            public string gate;     // gate side attempted (e.g. "South") or "none"/"n/a"
+            public string verdict;  // PASS / FAIL / SKIPPED
+            public float seconds;   // wall time spent on the round trip
+            public string detail;   // one-line why (matches the break-log line)
+        }
+
         [Serializable]
         private struct RunSummary
         {
@@ -2263,6 +3106,8 @@ namespace DeNelle.DevTools
             public int seed;        // WO-452 tranche E — the run's seed (for replay)
             public string runId;    // WO-452 tranche E — the run id (namespaces output)
             public PhaseResult[] phases;
+            public PopupCloseResult[] popupClose;   // WO-597 — per-panel closable verdicts
+            public HomeReturnResult[] homeReturn;   // WO-602 — per-run home-return round-trip verdict
         }
     }
 }

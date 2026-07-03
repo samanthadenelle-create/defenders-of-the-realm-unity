@@ -298,7 +298,7 @@ namespace DeNelle.DevTools
             // (AdminOverlay). Remove after confirming no tool is lost. The 5-tap corner gesture is
             // disabled: the tap-zone is no longer created/registered, so this menu cannot spawn.
             // The Settings -> DevTools menu is the single dev-tools entry. (OnCornerTapped kept.)
-            const bool F10CornerTapRetired = true;
+            bool F10CornerTapRetired = true; // non-const so the retired branch doesn't emit CS0162
             if (!F10CornerTapRetired)
             {
                 _cornerTap = new Label("") { name = CornerTapName };
@@ -523,7 +523,7 @@ namespace DeNelle.DevTools
             else { SetMetric("wave", "—"); SetMetric("phase", "no WaveManager"); SetMetric("countdown", "—"); }
 
             // ── Live enemies + family breakdown ────────────────────────────────
-            var enemies = UnityEngine.Object.FindObjectsByType<Enemy>(FindObjectsSortMode.None);
+            var enemies = UnityEngine.Object.FindObjectsByType<Enemy>();
             if (enemies == null || enemies.Length == 0)
             {
                 SetMetric("enemies", "0");
@@ -756,6 +756,8 @@ namespace DeNelle.DevTools
             // ── SCENE ────────────────────────────────────────────────────────
             var scene = AddGroup("Scene jump");
             AddButton(scene, "Title", () => JumpScene(SceneRouter.Title));
+            AddButton(scene, "Castle (hub)", () => JumpScene(SceneRouter.Castle));
+            AddButton(scene, "Outpost1", () => JumpScene("Outpost1"));   // owner 2026-07-03: dev port for outpost testing (skips the cave walk)
             AddButton(scene, "Village", () => JumpScene(SceneRouter.Village));
             AddButton(scene, "Dungeon", () => JumpScene(SceneRouter.DungeonHealersCottage));
             AddButton(scene, "ATBBattle", () => JumpScene(SceneRouter.ATBBattle));
@@ -780,6 +782,14 @@ namespace DeNelle.DevTools
             AddButton(wallet, "Mock SKR", () => MockWallet(CurrencyKind.Skr));
             AddButton(wallet, "Mock ALL rails", MockWalletAll);
 
+            // ── UI KIT DEMO (HUD_OBSIDIAN P1 — single sanctioned insertion) ──
+            // Spawns the ElarionUiKit Obsidian widget showcase (every §1 widget at 3
+            // sizes, live SetValue sweep, 9/145 fill-contract proof, both factory
+            // modes) so the orchestrator can screenshot-verify the kit. Kit-team
+            // owned; this one AddButton line is the only DevPanel touch.
+            var uiKit = AddGroup("UI Kit demo (P1)");
+            AddButton(uiKit, "Toggle Obsidian kit demo", ElarionUiKitDemo.Toggle);
+
             // ── CHEATS ───────────────────────────────────────────────────────
             var cheats = AddGroup("Cheats");
             AddToggleButton(cheats, "God-mode: ON", "God-mode: OFF",
@@ -790,11 +800,36 @@ namespace DeNelle.DevTools
             var autopilot = AddGroup("AutoPilot (QA bot)");
             AddButton(autopilot, "Run AutoPilot", RunAutoPilot);
 
+            // ── ANIMATION (feel tuning + KayKit proof) ───────────────────────
+            // Stride-polish runtime knob (HeroLocomotionCadence, PlayerPrefs
+            // "anim.runCadence"; 1.5 = the baked default) + the KayKit knight
+            // side-by-side animation proof (proof-before-decision; editor-only
+            // load of the gitignored pack, §4-guarded no-op when absent).
+            var animFeel = AddGroup("Animation (feel)");
+            AddButton(animFeel, "Spawn KayKit Knight (anim proof)", KayKitAnimProof.SpawnBesideHero);
+            AddButton(animFeel, "Despawn KayKit proof", KayKitAnimProof.Despawn);
+            AddButton(animFeel, "Run cadence -0.1", () => NudgeRunCadence(-0.1f));
+            AddButton(animFeel, "Run cadence +0.1", () => NudgeRunCadence(+0.1f));
+            AddButton(animFeel, "Run cadence reset (1.5)",
+                () => SetRunCadence(HeroLocomotionCadence.BakedNetRunCadence));
+
             RefreshToggleButtons();
 
             int wiredButtons = _groupList != null
                 ? _groupList.Query<Button>().ToList().Count : 0;
             FlowTrace.Step("UI", $"DevPanel action groups built — wired {wiredButtons} buttons");
+        }
+
+        /// <summary>Nudges the hero locomotion-cadence knob (stride-polish, 2026-07-02).</summary>
+        private static void NudgeRunCadence(float delta)
+            => SetRunCadence(HeroLocomotionCadence.RunCadence + delta);
+
+        /// <summary>Sets + logs the hero locomotion-cadence knob ("anim.runCadence").</summary>
+        private static void SetRunCadence(float value)
+        {
+            HeroLocomotionCadence.RunCadence = value;
+            Debug.Log($"[DevPanel] anim.runCadence = {HeroLocomotionCadence.RunCadence:0.00} " +
+                      "(net run-clip cadence multiplier; 1.5 = baked default, applies live in locomotion)");
         }
 
         /// <summary>Adds a captioned action group and returns its button row.</summary>
