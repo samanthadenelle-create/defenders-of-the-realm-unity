@@ -11,7 +11,15 @@
 // lore tidbit so the wait feels intentional and on-brand. Hidden + destroyed the
 // moment the new scene is active.
 //
-// BUILD-SAFETY: built entirely in CODE with uGUI (Canvas / Image / Text) — NOT
+// WO-C restyle (2026-07-03): the legacy uGUI Text (LegacyRuntime.ttf) labels are
+// now TMP through ElarionUiKit.EnsureFont (the kit's proven font chain), the
+// unicode ring spinner is a rotating gold diamond Image (NO unicode glyphs in
+// TMP — ASCII rule), and the progress strip is THE kit bar
+// (ElarionUiKit.BuildObsidianBar, Loading kind) — it renders the Blink loading
+// bar art when the mirrored pack is present and degrades to the procedural
+// track+fill otherwise. Dark obsidian backdrop, gold title, parchment lore.
+//
+// BUILD-SAFETY: built entirely in CODE with uGUI (Canvas / Image / TMP) — NOT
 // UI Toolkit and NOT UXML. This sidesteps BOTH project landmines:
 //   • "UXML/UIDocuments don't render in player builds" (CLAUDE.md §8), and
 //   • the UIDocument PanelSettings-null regression (a UIDocument needs a
@@ -22,22 +30,23 @@
 // driven by SceneRouter.LoadVillageWithLoader.
 // =============================================================================
 
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace DeNelle.Core.UI
 {
     /// <summary>
-    /// A self-contained, code-built (uGUI, no UXML / no PanelSettings) full-screen
-    /// loading overlay shown during the async village scene load. Created via
-    /// <see cref="Show"/>; driven + torn down by <see cref="SceneRouter"/>.
+    /// A self-contained, code-built (uGUI + TMP, no UXML / no PanelSettings)
+    /// full-screen loading overlay shown during the async village scene load.
+    /// Created via <see cref="Show"/>; driven + torn down by <see cref="SceneRouter"/>.
     /// </summary>
     public sealed class VillageLoadOverlay : MonoBehaviour
     {
         private CanvasGroup _group;
         private RectTransform _spinner;
-        private Image _progressFill;
-        private Text _loreLabel;
+        private ElarionUiKit.BarHandle _progress;
+        private TextMeshProUGUI _loreLabel;
 
         private float _spinSpeed = 220f;     // deg / sec
         private float _loreTimer;
@@ -100,18 +109,18 @@ namespace DeNelle.Core.UI
             }
             else
             {
-                bg.color = new Color(0.024f, 0.016f, 0.047f, 1f);   // deep dusk
+                bg.color = ElarionUi.PanelStoneDark;   // deep obsidian
             }
 
-            // A subtle scrim so text reads over any busy bg.
+            // A dark obsidian scrim so text reads over any busy bg.
             var scrim = NewImage("Scrim", transform);
             Stretch(scrim.rectTransform);
-            scrim.color = new Color(0.02f, 0.015f, 0.04f, 0.55f);
+            scrim.color = new Color(0.02f, 0.015f, 0.025f, 0.60f);
 
-            // ── Title ────────────────────────────────────────────────────────────
-            var title = NewText("Title", transform, "Loading Elarion…", 64, FontStyle.Bold);
+            // ── Title (gold, TMP) ─────────────────────────────────────────────────
+            var title = NewText("Title", transform, "Loading Elarion...", 64, bold: true);
             title.color = ElarionUi.Gilt;
-            title.alignment = TextAnchor.MiddleCenter;
+            title.alignment = TextAlignmentOptions.Center;
             var tRt = title.rectTransform;
             tRt.anchorMin = new Vector2(0.5f, 0.5f);
             tRt.anchorMax = new Vector2(0.5f, 0.5f);
@@ -119,41 +128,50 @@ namespace DeNelle.Core.UI
             tRt.anchoredPosition = new Vector2(0, 160);
             tRt.sizeDelta = new Vector2(900, 120);
 
-            // ── Spinner (a rotating ring glyph) ───────────────────────────────────
-            var spin = NewText("Spinner", transform, "✦", 96, FontStyle.Bold);
-            spin.color = ElarionUi.Gold;
-            spin.alignment = TextAnchor.MiddleCenter;
-            _spinner = spin.rectTransform;
+            // ── Spinner — a rotating gold DIAMOND Image (no unicode glyph in TMP) ─
+            var spinGo = new GameObject("Spinner", typeof(RectTransform), typeof(Image));
+            spinGo.transform.SetParent(transform, false);
+            var spinImg = spinGo.GetComponent<Image>();
+            spinImg.sprite = ElarionUiKit.SolidSprite;
+            spinImg.color = ElarionUi.Gold;
+            spinImg.raycastTarget = false;
+            _spinner = spinGo.GetComponent<RectTransform>();
             _spinner.anchorMin = new Vector2(0.5f, 0.5f);
             _spinner.anchorMax = new Vector2(0.5f, 0.5f);
             _spinner.pivot = new Vector2(0.5f, 0.5f);
             _spinner.anchoredPosition = new Vector2(0, 20);
-            _spinner.sizeDelta = new Vector2(160, 160);
+            _spinner.sizeDelta = new Vector2(72, 72);
+            _spinner.localRotation = Quaternion.Euler(0f, 0f, 45f);   // square -> diamond
 
-            // ── Progress bar (track + fill) ───────────────────────────────────────
-            var track = NewImage("ProgressTrack", transform);
-            track.color = new Color(0.110f, 0.086f, 0.058f, 0.97f);
-            var trRt = track.rectTransform;
-            trRt.anchorMin = new Vector2(0.5f, 0.5f);
-            trRt.anchorMax = new Vector2(0.5f, 0.5f);
-            trRt.pivot = new Vector2(0.5f, 0.5f);
-            trRt.anchoredPosition = new Vector2(0, -120);
-            trRt.sizeDelta = new Vector2(640, 18);
+            // A dark inner square so the diamond reads as a gold RING, not a slab.
+            var spinInner = NewImage("SpinnerInner", spinGo.transform);
+            spinInner.color = new Color(0.02f, 0.015f, 0.025f, 1f);
+            var siRt = spinInner.rectTransform;
+            siRt.anchorMin = Vector2.zero; siRt.anchorMax = Vector2.one;
+            siRt.offsetMin = new Vector2(10f, 10f);
+            siRt.offsetMax = new Vector2(-10f, -10f);
+            spinInner.raycastTarget = false;
 
-            _progressFill = NewImage("ProgressFill", track.transform);
-            _progressFill.color = ElarionUi.Gold;
-            _progressFill.type = Image.Type.Filled;
-            _progressFill.fillMethod = Image.FillMethod.Horizontal;
-            _progressFill.fillOrigin = (int)Image.OriginHorizontal.Left;
-            _progressFill.fillAmount = 0.05f;
-            Stretch(_progressFill.rectTransform);
+            // ── Progress bar — THE kit bar (Blink loading art when mirrored) ──────
+            var barHost = new GameObject("ProgressBar", typeof(RectTransform));
+            barHost.transform.SetParent(transform, false);
+            var bRt = (RectTransform)barHost.transform;
+            bRt.anchorMin = new Vector2(0.5f, 0.5f);
+            bRt.anchorMax = new Vector2(0.5f, 0.5f);
+            bRt.pivot = new Vector2(0.5f, 0.5f);
+            bRt.anchoredPosition = new Vector2(0, -120);
+            bRt.sizeDelta = new Vector2(640, 34);
+            _progress = ElarionUiKit.BuildObsidianBar(barHost.transform,
+                ElarionUiKit.ObsidianBarKind.Loading, Vector2.zero, Vector2.one);
+            _progress.SetImmediate(0.05f, 1f);
 
-            // ── Rotating lore tidbit ──────────────────────────────────────────────
+            // ── Rotating lore tidbit (parchment, TMP) ─────────────────────────────
             _loreIndex = Random.Range(0, Lore.Length);
-            var lore = NewText("Lore", transform, Lore[_loreIndex], 30, FontStyle.Italic);
-            lore.color = new Color(0.78f, 0.74f, 0.66f, 1f);   // ParchmentDim
-            lore.alignment = TextAnchor.MiddleCenter;
-            lore.horizontalOverflow = HorizontalWrapMode.Wrap;
+            var lore = NewText("Lore", transform, Lore[_loreIndex], 30, bold: false);
+            lore.fontStyle = FontStyles.Italic;
+            lore.color = ElarionUi.ParchmentDim;
+            lore.alignment = TextAlignmentOptions.Center;
+            lore.textWrappingMode = TextWrappingModes.Normal;
             _loreLabel = lore;
             var lRt = lore.rectTransform;
             lRt.anchorMin = new Vector2(0.5f, 0.5f);
@@ -165,7 +183,7 @@ namespace DeNelle.Core.UI
 
         private void Update()
         {
-            // Spin the ring (unscaled — a paused timescale during load must not freeze it).
+            // Spin the diamond (unscaled — a paused timescale during load must not freeze it).
             if (_spinner != null)
                 _spinner.Rotate(0f, 0f, -_spinSpeed * Time.unscaledDeltaTime);
 
@@ -182,8 +200,8 @@ namespace DeNelle.Core.UI
         /// <summary>Sets the progress bar fill (0..1). Clamped + given a small floor so it always reads as "moving".</summary>
         public void SetProgress(float t)
         {
-            if (_progressFill != null)
-                _progressFill.fillAmount = Mathf.Clamp(t, 0.05f, 1f);
+            if (_progress != null)
+                _progress.SetImmediate(Mathf.Clamp(t, 0.05f, 1f), 1f);
         }
 
         /// <summary>Hides + destroys the overlay (call once the new scene is active).</summary>
@@ -201,20 +219,19 @@ namespace DeNelle.Core.UI
             return go.GetComponent<Image>();
         }
 
-        private static Text NewText(string name, Transform parent, string text, int size, FontStyle style)
+        private static TextMeshProUGUI NewText(string name, Transform parent, string text,
+            int size, bool bold)
         {
-            var go = new GameObject(name, typeof(RectTransform), typeof(Text));
+            var go = new GameObject(name, typeof(RectTransform), typeof(TextMeshProUGUI));
             go.transform.SetParent(parent, false);
-            var t = go.GetComponent<Text>();
+            var t = go.GetComponent<TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(t);   // the kit's proven TMP font chain (assign BEFORE .text)
             t.text = text;
             t.fontSize = size;
-            t.fontStyle = style;
-            // LegacyRuntime is the built-in default font on modern Unity (Arial was removed);
-            // fall back to Arial for older editors.
-            t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
-                     ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
-            t.horizontalOverflow = HorizontalWrapMode.Overflow;
-            t.verticalOverflow = VerticalWrapMode.Overflow;
+            if (bold) t.fontStyle = FontStyles.Bold;
+            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.overflowMode = TextOverflowModes.Overflow;
+            t.raycastTarget = false;
             return t;
         }
 

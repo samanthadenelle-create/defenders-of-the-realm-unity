@@ -6,7 +6,9 @@
         "DeNelle.Data",
         "Unity.Localization",
         "UniTask",
-        "Unity.Timeline"
+        "Unity.Timeline",
+        "UnityEngine.UI",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
