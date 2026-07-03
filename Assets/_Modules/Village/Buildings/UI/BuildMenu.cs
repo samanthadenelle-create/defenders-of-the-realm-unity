@@ -172,7 +172,7 @@ namespace DeNelle.Village
             // as everything else. (Awake runs before OnEnable's BindElements, so the
             // root reflects the correct panel by the time we query it.)
             UIDocument hud = null, any = null;
-            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include))
             {
                 if (doc == null || doc == _document || doc.panelSettings == null) continue;
                 if (any == null) any = doc;
@@ -205,6 +205,7 @@ namespace DeNelle.Village
             if (_closeButton != null) _closeButton.clicked -= Close;
             var svc = GameStateService.Instance;
             if (svc != null) svc.ResourcesChanged.RemoveListener(OnResourcesChanged);
+            UnhookPlacementRelay();   // WO-T1 — never leave a stale relay across a teardown
         }
 
         /// <summary>Re-render the open menu when crystals change (dev grant, wave reward).</summary>
@@ -376,7 +377,7 @@ namespace DeNelle.Village
 
                 _codePanel.Add(CodeMenuButton("Upgrade Last Tower", ElarionUi.ButtonKind.Confirm, () =>
                 {
-                    var towers = UnityEngine.Object.FindObjectsByType<Tower>(FindObjectsSortMode.None);
+                    var towers = UnityEngine.Object.FindObjectsByType<Tower>();
                     if (towers.Length > 0)
                     {
                         var t = towers[towers.Length - 1];
@@ -389,7 +390,7 @@ namespace DeNelle.Village
 
                 _codePanel.Add(CodeMenuButton("Raze Last Tower", ElarionUi.ButtonKind.Danger, () =>
                 {
-                    var towers = UnityEngine.Object.FindObjectsByType<Tower>(FindObjectsSortMode.None);
+                    var towers = UnityEngine.Object.FindObjectsByType<Tower>();
                     if (towers.Length > 0) { Destroy(towers[towers.Length - 1].gameObject); SetStatus("Razed the last tower."); }
                     else SetStatus("No towers to raze.");
                     HideCodeFallbackMenu();
@@ -629,9 +630,48 @@ namespace DeNelle.Village
             if (TowerPlacementSystem.Instance == null)
                 new GameObject("TowerPlacementSystem").AddComponent<TowerPlacementSystem>();
             // Pass the already-paid cost so TowerPlacementSystem does NOT charge again.
+            // WO-T1 FIX — BuildingPlaced was declared (line ~142) + subscribed
+            // (OnboardingIntegrator.cs:143) but NEVER raised: this menu stopped
+            // instantiating buildings itself when placement moved to
+            // TowerPlacementSystem (the real commit = PlaceTower, TowerPlacementSystem
+            // .cs:355 OnTowerPlaced). Relay that commit for placements THIS menu
+            // initiated so the menu's own event finally fires.
+            HookPlacementRelay(TowerPlacementSystem.Instance);
             TowerPlacementSystem.Instance.StartPlacing(data, prepaid: true);
             Close();   // hide the menu so the world click lands the placement
             SetStatus($"Click a clear tile to raise the {v.DisplayName}.");
+        }
+
+        // ── WO-T1: BuildingPlaced relay (menu-initiated placements) ───────────
+        // One-shot: armed per OnConfirmBuild, fires on the next committed placement,
+        // then unhooks (TowerPlacementSystem cancels arming after each placement too).
+        private TowerPlacementSystem _relayHooked;
+
+        private void HookPlacementRelay(TowerPlacementSystem tps)
+        {
+            if (tps == null) return;
+            UnhookPlacementRelay();
+            _relayHooked = tps;
+            tps.OnTowerPlaced += OnMenuInitiatedTowerPlaced;
+        }
+
+        private void UnhookPlacementRelay()
+        {
+            if (_relayHooked != null)
+            {
+                _relayHooked.OnTowerPlaced -= OnMenuInitiatedTowerPlaced;
+                _relayHooked = null;
+            }
+        }
+
+        private void OnMenuInitiatedTowerPlaced(DeNelle.Core.Data.TowerData _)
+        {
+            UnhookPlacementRelay();
+            // The tower body is raised by TowerConstructionQueue over buildTime (DEF-76),
+            // so no live Building/def exists at commit — both live subscribers
+            // (OnboardingIntegrator.OnBuildingPlaced ignores its args; tutorial adapters
+            // only need the fact) treat the args as optional.
+            BuildingPlaced?.Invoke(null, null);
         }
 
         // ── Upgrade Tower screen ──────────────────────────────────────────────
@@ -653,7 +693,7 @@ namespace DeNelle.Village
             // WO-127 root cause: enumerate LIVE Tower components (the type whose
             // _currentLevel actually upgrades), not the separate Building type whose
             // serialized Level never mutates.
-            var towers = UnityEngine.Object.FindObjectsByType<Tower>(FindObjectsSortMode.None);
+            var towers = UnityEngine.Object.FindObjectsByType<Tower>();
 
             // Drop a selection that no longer exists in the scene.
             if (_selectedTowerForUpgrade == null ||
@@ -826,7 +866,7 @@ namespace DeNelle.Village
                     if (t != null) break;
                 }
                 if (t == null) { Debug.LogWarning("[BuildMenu] WallRepairController not found."); return; }
-                var inst = UnityEngine.Object.FindObjectOfType(t) as Component;
+                var inst = UnityEngine.Object.FindAnyObjectByType(t) as Component;
                 if (inst == null) { Debug.LogWarning("[BuildMenu] WallRepairController not in scene."); return; }
                 var m = t.GetMethod("RepairNearestDamagedWall")
                         ?? t.GetMethod("ConfirmRepair")

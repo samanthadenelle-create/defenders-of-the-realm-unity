@@ -95,7 +95,6 @@ namespace DeNelle.Village
         // ── Scene refs ───────────────────────────────────────────────────────
         private HeroLocomotion _hero;
         private WaveManager _wave;
-        private bool _running;
         private bool _towerPlaced;
 
         // =====================================================================
@@ -105,7 +104,7 @@ namespace DeNelle.Village
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
-            if (FindObjectOfType<TutorialDirector>() != null) return;
+            if (FindAnyObjectByType<TutorialDirector>() != null) return;
             var go = new GameObject("TutorialDirector");
             go.AddComponent<TutorialDirector>();
         }
@@ -124,6 +123,16 @@ namespace DeNelle.Village
 
         private void Start()
         {
+            // WO-T1 (Tutorial V2, ff.tutorialv2): while the data-driven TutorialFlow is
+            // ON, this legacy director stands down COMPLETELY (no ForceSkip side effects,
+            // no FinishOnboarding, no learn-by-doing hooks) — TutorialFlow is the single
+            // finisher on the V2 path. Deleted only in WO-T5 after the flip is verified.
+            if (DeNelle.Core.FeatureFlags.TutorialV2)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
             if (!ShouldRun)
             {
                 // Returning player (or dev-skip) — nothing to teach. If a first-run
@@ -165,7 +174,6 @@ namespace DeNelle.Village
         private async UniTask Run()
         {
             s_ranThisSession = true;
-            _running = true;
 
             // Suppress the legacy OnboardingFlow coach-marks FIRST (before they can
             // show), so the two first-run surfaces never overlap. The wave loop is
@@ -325,7 +333,7 @@ namespace DeNelle.Village
             }
 
             // First breach bark — reuses the wave manager's OnBreach UnityEvent.
-            if (_wave == null) _wave = FindObjectOfType<WaveManager>();
+            if (_wave == null) _wave = FindAnyObjectByType<WaveManager>();
             if (_wave != null)
                 _wave.OnBreach.AddListener(OnFirstBreachBark);
         }
@@ -579,7 +587,6 @@ namespace DeNelle.Village
 
         private void FinishTutorial()
         {
-            _running = false;
 
             // Hand control back to the player + restore the companion's ambient voice.
             _autoWalk?.Stop();
@@ -600,7 +607,7 @@ namespace DeNelle.Village
             GameStateService.Instance?.FinishOnboarding();
 
             // Kick Wave 1 — BeginLoop is the loop's entry the integrator uses.
-            if (_wave == null) _wave = FindObjectOfType<WaveManager>();
+            if (_wave == null) _wave = FindAnyObjectByType<WaveManager>();
             _wave?.BeginLoop().Forget();
 
             Debug.Log("[TutorialDirector] Tutorial complete — Onboarded persisted, wave loop kicked.");
@@ -619,8 +626,8 @@ namespace DeNelle.Village
 
         private void ResolveSceneRefs()
         {
-            _hero = FindObjectOfType<HeroLocomotion>();
-            _wave = FindObjectOfType<WaveManager>();
+            _hero = FindAnyObjectByType<HeroLocomotion>();
+            _wave = FindAnyObjectByType<WaveManager>();
         }
 
         private void BuildSubComponents()
@@ -659,7 +666,7 @@ namespace DeNelle.Village
             {
                 Type flowType = ResolveType("DeNelle.Onboarding.OnboardingFlow");
                 if (flowType == null) return;
-                var flow = FindObjectOfType(flowType);
+                var flow = FindAnyObjectByType(flowType);
                 if (flow == null) return;
                 // Disable the legacy coach-mark overlay so it never shows alongside
                 // the FTUE — the SAME Onboarded flag still gets set by FinishTutorial,
@@ -758,7 +765,7 @@ namespace DeNelle.Village
         private WaveSpawnPoint NearestSpawnPoint()
         {
             Vector3 from = _hero != null ? _hero.transform.position : transform.position;
-            var points = FindObjectsByType<WaveSpawnPoint>(FindObjectsSortMode.None);
+            var points = FindObjectsByType<WaveSpawnPoint>();
             WaveSpawnPoint best = null;
             float bestSqr = float.MaxValue;
             foreach (var p in points)
@@ -775,7 +782,7 @@ namespace DeNelle.Village
         private WaveSpawnPoint SecondSpawnPoint()
         {
             Vector3 from = _hero != null ? _hero.transform.position : transform.position;
-            var points = FindObjectsByType<WaveSpawnPoint>(FindObjectsSortMode.None);
+            var points = FindObjectsByType<WaveSpawnPoint>();
             WaveSpawnPoint nearest = NearestSpawnPoint();
             WaveSpawnPoint second = null;
             float bestSqr = float.MaxValue;

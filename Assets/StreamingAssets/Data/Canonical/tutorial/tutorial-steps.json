@@ -1,0 +1,144 @@
+{
+  "version": 1,
+  "flowId": "ftue_v2",
+  "steps": [
+    {
+      "id": "move_to_sylas",
+      "order": 10,
+      "scene": "MainCastle_Hall",
+      "trigger": { "type": "prev_complete" },
+      "pausePressure": true,
+      "dialogue": { "intro": "tut_move_to_sylas" },
+      "highlight": ["world.sylas"],
+      "completion": { "signal": "hero.reached:sylas_anchor" },
+      "skippable": true,
+      "objective": { "text": "Walk to Sylas, the scout by the gate" }
+    },
+    {
+      "id": "meet_sylas",
+      "order": 20,
+      "scene": "MainCastle_Hall",
+      "trigger": { "type": "prev_complete" },
+      "pausePressure": true,
+      "dialogue": { "intro": "tut_meet_sylas" },
+      "highlight": ["world.sylas"],
+      "completion": { "signal": "dialogue.ended:tut_meet_sylas" },
+      "skippable": true,
+      "objective": { "text": "Speak with Sylas" }
+    },
+    {
+      "id": "first_tower",
+      "order": 30,
+      "scene": "MainCastle_Hall",
+      "trigger": { "type": "prev_complete" },
+      "pausePressure": true,
+      "dialogue": { "intro": "tut_first_tower", "outro": "tut_first_tower_done" },
+      "highlight": ["hud.build_button"],
+      "grant": { "prepaidTower": true },
+      "completion": { "signal": "build.tower_placed" },
+      "skippable": false,
+      "objective": { "text": "Raise your first watchtower", "count": 1 }
+    },
+    {
+      "id": "town_wave",
+      "order": 40,
+      "scene": "MainCastle_Hall",
+      "trigger": { "type": "prev_complete" },
+      "pausePressure": true,
+      "dialogue": { "intro": "tut_town_wave", "outro": "tut_town_wave_done" },
+      "highlight": ["hud.wave_button", "world.gate_direction"],
+      "completion": { "signal": "wave.cleared" },
+      "skippable": false,
+      "objective": { "text": "Defend the gate — clear the wave" }
+    },
+    {
+      "id": "world_encounter",
+      "order": 50,
+      "scene": "MainCastle_Hall",
+      "trigger": { "type": "prev_complete" },
+      "pausePressure": false,
+      "dialogue": { "intro": "tut_world_encounter", "outro": "tut_world_encounter_win" },
+      "highlight": ["world.gate_direction"],
+      "completion": { "signal": "arena.resolved:win" },
+      "skippable": false,
+      "objective": { "text": "Venture out and win your first field battle" }
+    },
+    {
+      "id": "return_home",
+      "order": 60,
+      "scene": "MainCastle_Hall",
+      "trigger": { "type": "prev_complete" },
+      "pausePressure": true,
+      "dialogue": { "intro": "tut_return_home" },
+      "highlight": [],
+      "completion": { "signal": "hero.reached:hub_anchor" },
+      "skippable": true,
+      "objective": { "text": "Return home through the gate" }
+    },
+    {
+      "id": "freedom",
+      "order": 70,
+      "scene": "MainCastle_Hall",
+      "trigger": { "type": "prev_complete" },
+      "pausePressure": true,
+      "dialogue": { "intro": "tut_freedom" },
+      "highlight": [],
+      "completion": { "signal": "dialogue.ended:tut_freedom" },
+      "skippable": false,
+      "objective": { "text": "Elarion is yours" }
+    },
+
+    {
+      "id": "ctx_echo_assign",
+      "order": 1010,
+      "flowId": "contextual",
+      "trigger": { "type": "signal", "signal": "echo.born:2" },
+      "pausePressure": false,
+      "dialogue": { "intro": "tut_ctx_echo_assign" },
+      "highlight": [],
+      "completion": { "signal": "dialogue.ended:tut_ctx_echo_assign" },
+      "skippable": true,
+      "oneShot": true,
+      "objective": { "text": "A new Echo has joined — assign it to a harvest" }
+    },
+    {
+      "id": "ctx_first_spend",
+      "order": 1020,
+      "flowId": "contextual",
+      "trigger": { "type": "signal", "signal": "economy.can_afford_upgrade" },
+      "pausePressure": false,
+      "dialogue": { "intro": "tut_ctx_first_spend" },
+      "highlight": ["hud.build_button"],
+      "completion": { "signal": "dialogue.ended:tut_ctx_first_spend" },
+      "skippable": true,
+      "oneShot": true,
+      "objective": { "text": "You can afford to fortify — put that coin to work" }
+    },
+    {
+      "id": "ctx_gear_equip",
+      "order": 1030,
+      "flowId": "contextual",
+      "trigger": { "type": "signal", "signal": "inventory.gear_added:first" },
+      "pausePressure": false,
+      "dialogue": { "intro": "tut_ctx_gear_equip" },
+      "highlight": [],
+      "completion": { "signal": "dialogue.ended:tut_ctx_gear_equip" },
+      "skippable": true,
+      "oneShot": true,
+      "objective": { "text": "New gear in your pack — equip it" }
+    },
+    {
+      "id": "ctx_talents",
+      "order": 1040,
+      "flowId": "contextual",
+      "trigger": { "type": "signal", "signal": "skillpoint.earned:first" },
+      "pausePressure": false,
+      "dialogue": { "intro": "tut_ctx_talents" },
+      "highlight": [],
+      "completion": { "signal": "dialogue.ended:tut_ctx_talents" },
+      "skippable": true,
+      "oneShot": true,
+      "objective": { "text": "A talent point earned — shape how you fight" }
+    }
+  ]
+}

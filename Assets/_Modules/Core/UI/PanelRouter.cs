@@ -6,7 +6,7 @@
 // (DeNelle.Village) needs to open panels that live in DeNelle.HUD
 // (HeroTalentPanel, PetSkillTreePanel, CosmeticShopPanel) — but Village must NOT
 // reference HUD (CLAUDE.md §5). The old code bridged that gap with
-// System.Reflection (FindObjectOfType(typeName).Toggle()), which (a) was fragile,
+// System.Reflection (FindAnyObjectByType(typeName).Toggle()), which (a) was fragile,
 // (b) used Toggle() so a 2nd interaction CLOSED the panel, and (c) had no way to
 // map a SPECIFIC building to its ONE correct panel — every building funnelled
 // through the same handful of reflection calls.
@@ -140,6 +140,22 @@ namespace DeNelle.Core.UI
                 _contextOpeners.Remove(id);
         }
 
+        /// <summary>WO-T1 (Tutorial V2) — raised after a panel opened AND verified visible
+        /// (both the plain and context Open paths route through <see cref="VerifyOpenedVisible"/>).
+        /// TutorialSignals maps this to "panel.opened:&lt;PanelId&gt;". Additive; never throws
+        /// back into the opener (subscriber exceptions are guarded).</summary>
+        public static event Action<PanelId> PanelOpened;
+
+        // Raise PanelOpened without letting a subscriber fault the open path.
+        private static void RaisePanelOpened(PanelId id)
+        {
+            try { PanelOpened?.Invoke(id); }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("UI", "PanelRouter.PanelOpened subscriber threw for '" + id + "': " + ex.Message);
+            }
+        }
+
         /// <summary>True when a panel is registered for <paramref name="id"/>.</summary>
         public static bool IsRegistered(PanelId id) =>
             _openers.ContainsKey(id) || _contextOpeners.ContainsKey(id);
@@ -187,6 +203,7 @@ namespace DeNelle.Core.UI
             }
             FlowTrace.Step("UI",
                 "PanelRouter: '" + id + "' opened and verified visible (open panel='" + PanelManager.OpenPanelName + "').");
+            RaisePanelOpened(id);   // WO-T1 — tutorial "panel.opened:<id>" signal source
             return true;
         }
 
