@@ -1106,6 +1106,16 @@ namespace DeNelle.Village
         {
             try
             {
+                // Feel pass 2026-07-02: player-facing shake toggle. PlayerPrefs "camerashake"
+                // (1 = on, DEFAULT ON; 0 = off) — a comfort/accessibility dial every shake
+                // caller inherits because this bridge is the single shake entry point.
+                if (PlayerPrefs.GetInt("camerashake", 1) == 0) return;
+
+                // Never shake while a dialogue/panel has suppressed hero input (the same gate
+                // PlayerAttackController honors) — a camera kick under a conversation or an
+                // open panel reads as a glitch, not feedback.
+                if (HeroLocomotion.InputSuppressed) return;
+
                 Component target = FindShakeTarget(out MethodInfo shake);
                 if (target == null || shake == null) return;
                 shake.Invoke(target, new object[] { intensity, duration });
@@ -1133,8 +1143,7 @@ namespace DeNelle.Village
             }
 
             // Fall back to any MonoBehaviour in the scene exposing Shake(float,float).
-            foreach (var mb in UnityEngine.Object.FindObjectsByType<MonoBehaviour>(
-                         FindObjectsSortMode.None))
+            foreach (var mb in UnityEngine.Object.FindObjectsByType<MonoBehaviour>())
             {
                 var m = MatchShake(mb);
                 if (m != null) { shake = m; return mb; }

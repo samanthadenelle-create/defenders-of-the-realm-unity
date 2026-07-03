@@ -70,7 +70,7 @@ namespace DeNelle.Village
         // shot still "connects" exactly as before. Assigning a real _arrowPrefab /
         // _spellOrbPrefab always wins regardless of this flag. Mirrors the established
         // PetHarvestBootstrap placeholder-gate pattern (const default + command-line opt-in).
-        private const bool ShowPlaceholderProjectiles = false;
+        private static readonly bool ShowPlaceholderProjectiles = false; // readonly (not const) so the gated branch doesn't emit CS0162
 
         /// <summary>Whether the code-built placeholder projectile visuals should spawn.
         /// Off by default (WO-280); opt back in via the const above or the
@@ -196,16 +196,32 @@ namespace DeNelle.Village
         /// </summary>
         private IEnumerator PlayCastBurst(Vector3 pos, Color col, float duration)
         {
-            var go = new GameObject("CastBurst");
-            go.transform.position = pos;
+            // POOLED (owner directive 2026-07-02): rent the host + particle unit from
+            // AbilityVfxPool instead of a per-shot new GameObject + Destroy — the unit
+            // arrives reset, with the shared URP soft-dot material already applied
+            // (no per-cast material instantiation, no GC churn). Pre-boot fallback
+            // below keeps the first shots alive before the pool bootstraps.
+            var pool = AbilityVfxPool.Instance;
+            GameObject host;
+            ParticleSystem ps;
+            if (pool != null)
+            {
+                host = pool.RentHost("CastBurst", pos);
+                ps = pool.RentUnit(host, "CastBurstPS", pos);
+            }
+            else
+            {
+                host = new GameObject("CastBurst");
+                host.transform.position = pos;
+                ps = host.AddComponent<ParticleSystem>();
+                // ParticleSystem.playOnAwake defaults to true — stop BEFORE configuring
+                // (Unity forbids setting main.duration on a playing system).
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                // URP soft-dot material so the burst reads as a soft glow, not opaque squares.
+                AbilityVfxKit.ApplyParticleMaterial(
+                    host.GetComponent<ParticleSystemRenderer>(), AbilityVfxKit.SoftDotTexture);
+            }
 
-            var ps = go.AddComponent<ParticleSystem>();
-            // ParticleSystem.playOnAwake defaults to true, so it begins playing the instant
-            // AddComponent runs — and Unity forbids setting main.duration while a system is
-            // playing ("Setting the duration while system is still playing is not supported").
-            // Stop it (and disable auto-play) BEFORE configuring, then drive it via the
-            // explicit ps.Play() below. Identical visual; kills the 44x log spam.
-            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             var main = ps.main;
             main.playOnAwake     = false;
             main.duration        = duration;
@@ -223,7 +239,8 @@ namespace DeNelle.Village
             emission.SetBursts(new[] { burst });
 
             ps.Play();
-            Destroy(go, duration + 0.5f);
+            if (pool != null) pool.ReturnHostAfter(host, duration + 0.5f);
+            else Destroy(host, duration + 0.5f);
             yield return null;
         }
 

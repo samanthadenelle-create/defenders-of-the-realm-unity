@@ -77,6 +77,7 @@ namespace DeNelle.Village.Hud
             _producers.Add(new WorldMetricsProducer(_model));
             _producers.Add(new MomentumProducer(_model));
             _producers.Add(new EchoProducer(_model));
+            _producers.Add(new CastProducer(_model));   // P4 — enemy cast telegraph -> CastModel
 
             FlowTrace.Step("HUD", $"HudModelHost up — {_producers.Count} producers ticking the Core HUD model (DARK).");
         }
@@ -165,6 +166,12 @@ namespace DeNelle.Village.Hud
         /// </summary>
         protected static string FriendlyName(Enemy en, EnemyRole role)
         {
+            // Owner ticket ("Orc Mage Wizard" — two stacked titles): the CATALOG display
+            // name is the single source of truth when present ("Orcish Mage"). The
+            // GameObject-name parse below is only the fallback for def-less enemies.
+            string catalog = en != null ? en.DisplayName : null;
+            if (!string.IsNullOrEmpty(catalog)) return catalog;
+
             string raw = en != null ? en.name : null;
             if (string.IsNullOrEmpty(raw)) return RoleName(role);
             raw = raw.Replace("(Clone)", "").Trim();
@@ -191,8 +198,9 @@ namespace DeNelle.Village.Hud
                 if (w.Length > 1) sb.Append(w.Substring(1).ToLowerInvariant());
             }
             string family = sb.ToString().Trim();
-            string roleName = RoleName(role);
-            return string.IsNullOrEmpty(family) ? roleName : family + " " + roleName;
+            // ONE precise title, never two stacked ("Orc Mage" + "Wizard" was the bug):
+            // the parsed family name stands alone; the role word only fills a blank.
+            return string.IsNullOrEmpty(family) ? RoleName(role) : family;
         }
 
         protected static string RoleName(EnemyRole role)
@@ -201,7 +209,7 @@ namespace DeNelle.Village.Hud
             {
                 case EnemyRole.Tank:     return "Tank";
                 case EnemyRole.Healer:   return "Healer";
-                case EnemyRole.Ranged:   return "Wizard";
+                case EnemyRole.Ranged:   return "Mage";
                 case EnemyRole.MiniBoss: return "Boss";
                 default:                 return "DPS";
             }

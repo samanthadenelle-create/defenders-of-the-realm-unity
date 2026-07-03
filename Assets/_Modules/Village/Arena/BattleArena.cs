@@ -298,7 +298,7 @@ namespace DeNelle.Village.Arena
             // open world stays in memory (additive intent), so without this its reps keep roaming/
             // chasing/aggroing + running home combat — bleeding rumble/feedback into the battle and
             // double-simulating (choppy). One static gate removes all three sources at once; reps
-            // resume on Resolve. (Static so no per-rep FindObjectsOfType scan is needed.)
+            // resume on Resolve. (Static so no per-rep FindObjectsByType scan is needed.)
             RepEngageWatcher.PauseAll();
 
             // WO-556 ITEM 2: roll the rare boss. On a hit, append the boss id to the family so
@@ -406,7 +406,12 @@ namespace DeNelle.Village.Arena
             }
 
             // 5) Present: battle HUD + combat BGM. (Presentation layer; logic already staged.)
-            Guard.Try("BattleArena", "show combat HUD", () => ArenaHudBridge.SetVisible(true));
+            // HOME-HUD ISOLATION (owner F8 flag_25 2026-07-02, §12 captured): the home/village HUD
+            // (resource scroll, Chat/Ranks/Music stack, Settings, harvest glyphs, wave timer) BLED
+            // through the battle HUD — this call was SetVisible(true), i.e. it re-SHOWED the home
+            // HUD at stage time. Hide it for the fight; ReturnHomeWithFade restores it under black.
+            Guard.Try("BattleArena", "hide home HUD for battle", () => ArenaHudBridge.SetVisible(false));
+            FlowTrace.Step("BattleArena", "HOME HUD hidden for battle (restored on return).");
             Guard.Try("BattleArena", "build battle overlay", () =>
             {
                 _hud = BattleArenaHud.Create();
@@ -466,6 +471,12 @@ namespace DeNelle.Village.Arena
                 {
                     var go = UnityEngine.Object.Instantiate(stage, _arenaRoot.transform, false);
                     go.name = "ArenaLandscape";
+                    // ARENA VISUAL COHERENCE (owner F8 flag_25 2026-07-02 "this looks awful"): the
+                    // forest-clearing prefab (green lawn + toy-tree ring) was ALWAYS used, even when
+                    // the resolved biome paints a dark stone colosseum backdrop — a visual-vocabulary
+                    // clash. For the STONE biomes, retheme the same prefab in place: swap the Ground
+                    // to the biome's real stone material + strip the tree silhouettes (rocks stay).
+                    RethemeLandscapeForBiome(go, _activeBiome);
                 });
                 FlowTrace.Step("BattleArena", "BuildArena: loaded landscape prefab 'Arena/ForestClearingArena'.");
             }
@@ -524,6 +535,64 @@ namespace DeNelle.Village.Arena
             floor.layer = 0; // Default layer so ArenaNavMeshBaker (PhysicsColliders) bakes it.
             floor.transform.localScale = new Vector3((ArenaHalfWidth * 2f) / 10f + 0.4f, 1f, (ArenaHalfDepth * 2f) / 10f + 0.4f);
             ApplyGroundTheme(floor, theme);
+        }
+
+        // ---------------------------------------------------------------------
+        //  ARENA VISUAL COHERENCE (feel pass 2026-07-02, ff.combatfeel; §12 capture:
+        //  F8 flag_25 — green lawn + toy trees under a stone colosseum backdrop).
+        //  For STONE biomes (cavern/dungeon/volcanic/castle) the forest-clearing
+        //  prefab is rethemed IN PLACE — presentation only, geometry untouched:
+        //    1) Ground child -> the biome's real stone material (the SAME
+        //       Resources/Arena mats ApplyGroundTheme uses: castle->Dwarven_Ground,
+        //       else Floor_Sharp_Stones) so the floor matches the painted backdrop.
+        //    2) EdgeProps tree silhouettes deactivated (Rock_* props stay — stone
+        //       vocabulary). Forest/ruins biomes keep the authored clearing as-is.
+        //  Flag OFF (ff.combatfeel=0) = exact legacy look. Skip-safe throughout.
+        // ---------------------------------------------------------------------
+        private static void RethemeLandscapeForBiome(GameObject landscape, string biome)
+        {
+            if (landscape == null || !FeatureFlags.CombatFeel) return;
+            string key = (biome ?? "").ToLowerInvariant();
+            bool stone = key == ArenaBiomeDressing.Cavern || key == ArenaBiomeDressing.Dungeon
+                      || key == ArenaBiomeDressing.Volcanic || key == ArenaBiomeDressing.Castle;
+            if (!stone)
+            {
+                FlowTrace.Step("BattleArena", "RETHEME skipped: biome '" + key + "' keeps the forest clearing.");
+                return;
+            }
+
+            Guard.Try("BattleArena", "retheme landscape for stone biome", () =>
+            {
+                // 1) Ground -> the biome's stone material (reuse ApplyGroundTheme's mapping:
+                //    'castle' -> Dwarven_Ground, everything else stone -> 'cavern' sharp stones).
+                string groundTheme = key == ArenaBiomeDressing.Castle ? "castle" : "cavern";
+                int grounds = 0;
+                foreach (var mr in landscape.GetComponentsInChildren<MeshRenderer>(true))
+                {
+                    if (mr == null) continue;
+                    if (mr.gameObject.name.IndexOf("Ground", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    ApplyGroundTheme(mr.gameObject, groundTheme);
+                    grounds++;
+                }
+
+                // 2) Strip the tree silhouettes from the edge ring; keep the rocks.
+                int treesHidden = 0;
+                foreach (var t in landscape.GetComponentsInChildren<Transform>(true))
+                {
+                    if (t == null || !t.gameObject.activeSelf) continue;
+                    if (t.name.IndexOf("Tree", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    t.gameObject.SetActive(false);
+                    treesHidden++;
+                }
+
+                // ORACLE FIRE-POINT (permanent, behind the FlowTrace toggle): prove the retheme
+                // ran on the real staging path — grounds swapped + trees hidden per biome.
+                FlowTrace.Step("BattleArena",
+                    "RETHEME applied biome=" + key + " groundTheme=" + groundTheme +
+                    " grounds=" + grounds + " treesHidden=" + treesHidden + " (ff.combatfeel).");
+                if (grounds == 0)
+                    FlowTrace.Warn("BattleArena", "RETHEME: no 'Ground' renderer found in landscape prefab — floor keeps the grass material.");
+            });
         }
 
         // Strip every collider so an edge prop is a pure silhouette (never blocks the kite/navmesh).
@@ -1104,15 +1173,18 @@ namespace DeNelle.Village.Arena
             // to the verified Orc_Necromancer model (heaviest orc silhouette). Height 2.6 so it
             // reads visibly bigger than the family. Stats well above the family so it is a real
             // boss beat, lightly threat-scaled like the rest.
-            if (s.Contains("warlord") || s.Contains("boss")) { display = "Orc Warlord"; hp = 520; dmg = 34; spd = 2.6f; atk = 1.8f; height = 2.6f; }
+            // Owner 2026-07-02 — PRECISE one-title display names ("Orcish Mage", never a
+            // stacked "Orc Mage Wizard"); the HUD target frame/cycle list read this
+            // DisplayName via Enemy.DisplayName (single source of truth).
+            if (s.Contains("warlord") || s.Contains("boss")) { display = "Orcish Warlord"; hp = 520; dmg = 34; spd = 2.6f; atk = 1.8f; height = 2.6f; }
             // 2026-07-01 owner call — early overworld orcs ~35% softer (HP+dmg ×0.65) so new
             // players aren't slaughtered. Warlord (boss above) left intact. NOTE: these are
             // HARDCODED here (not read from enemies.json) — see follow-up ticket to make the arena
             // read the canonical enemy catalog so future balance is a data tune, not a code edit.
-            else if (s.Contains("tank"))       { display = "Orc Bulwark";    hp = 124; dmg = 12; spd = 2.2f; atk = 1.6f; height = 2.3f; }
-            else if (s.Contains("mage"))  { display = "Orc Spiritcaller"; hp = 55; dmg = 14; spd = 3.0f; atk = 1.4f; height = 1.9f; }
-            else if (s.Contains("warrior")) { display = "Orc Warleader"; hp = 78; dmg = 16; spd = 3.2f; atk = 1.2f; height = 2.0f; }
-            else                          { display = "Orc Raider";     hp = 65; dmg = 10; spd = 3.0f; atk = 1.2f; height = 1.9f; }
+            else if (s.Contains("tank"))    { display = "Orcish Bulwark"; hp = 124; dmg = 12; spd = 2.2f; atk = 1.6f; height = 2.3f; }
+            else if (s.Contains("mage"))    { display = "Orcish Mage";    hp = 55;  dmg = 14; spd = 3.0f; atk = 1.4f; height = 1.9f; }
+            else if (s.Contains("warrior")) { display = "Orcish Warrior"; hp = 78;  dmg = 16; spd = 3.2f; atk = 1.2f; height = 2.0f; }
+            else                            { display = "Orcish Raider";  hp = 65;  dmg = 10; spd = 3.0f; atk = 1.2f; height = 1.9f; }
 
             return new EnemyDef
             {
@@ -1448,6 +1520,8 @@ namespace DeNelle.Village.Arena
                     // No params (defensive): tear down immediately, no warp/fade needed.
                     foreach (var e in capturedSurvivors) if (e != null) Guard.Try("BattleArena", "despawn enemy", () => Destroy(e.gameObject));
                     if (capturedStage != null) Destroy(capturedStage);
+                    // HOME-HUD ISOLATION: no masked return runs on this path, so restore here.
+                    Guard.Try("BattleArena", "restore home HUD (no-encounter path)", () => ArenaHudBridge.SetVisible(true));
                 }
             };
 
@@ -1592,6 +1666,10 @@ namespace DeNelle.Village.Arena
             ReacquireFollowCamera();
             ClearHeroTargetLock();
 
+            // HOME-HUD ISOLATION: restore the home/village HUD (hidden at stage time) under
+            // black, so it is back the moment the fade reveals home. Null-safe bridge.
+            Guard.Try("BattleArena", "restore home HUD", () => ArenaHudBridge.SetVisible(true));
+
             yield return null;   // let the camera snap settle one frame under black
 
             FlowTrace.Step("BattleArena", "FADE IN: home arrival (masked return complete).");
@@ -1623,7 +1701,7 @@ namespace DeNelle.Village.Arena
 
             // 1) XP — unchanged path (HeroProgression via reflection).
             int xp = Mathf.RoundToInt((20 + 8 * family + 4 * threat) * mult);
-            var prog = GameObject.FindObjectOfType(Type.GetType("DeNelle.Village.HeroProgression, DeNelle.Village")) as MonoBehaviour;
+            var prog = GameObject.FindAnyObjectByType(Type.GetType("DeNelle.Village.HeroProgression, DeNelle.Village")) as MonoBehaviour;
             if (prog != null)
             {
                 var add = prog.GetType().GetMethod("AddXp", new[] { typeof(float) });

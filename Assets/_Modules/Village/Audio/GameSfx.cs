@@ -111,11 +111,37 @@ namespace DeNelle.Village
 
         // WO-111 new SFX (combat / world / progression). All via CoreServices.Audio
         // (mixer for mobile). Generated or Resources/Sfx/ override.
+        // Feel pass 2026-07-02 (ff.combatfeel): the recorded clash VARIANT pool. One repeated
+        // identical clash reads mechanical; four authored takes (Resources/Sfx/SwordClash +
+        // SwordClash2..4, mirrored from Assets/Audio/SFX/Combat/sword_clash_1..4.wav) picked at
+        // random make every landed hit read fresh. Loaded once; missing variants simply shrink
+        // the pool (a fresh clone with only the synth fallback still works). Flag OFF = the
+        // legacy single-clip behaviour exactly.
+        private static AudioClip[] s_swordClashPool;
+
         public static void PlaySwordClash()
         {
             if (s_swordClash == null)
                 s_swordClash = Resources.Load<AudioClip>("Sfx/SwordClash") ?? GenerateSwordClash();
-            CoreServices.Audio?.PlaySfx(s_swordClash, 0.65f);
+
+            if (!DeNelle.Core.FeatureFlags.CombatFeel)
+            {
+                CoreServices.Audio?.PlaySfx(s_swordClash, 0.65f);
+                return;
+            }
+
+            if (s_swordClashPool == null)
+            {
+                var pool = new System.Collections.Generic.List<AudioClip> { s_swordClash };
+                for (int i = 2; i <= 4; i++)
+                {
+                    var c = Resources.Load<AudioClip>("Sfx/SwordClash" + i);
+                    if (c != null) pool.Add(c);
+                }
+                s_swordClashPool = pool.ToArray();
+            }
+            var clip = s_swordClashPool[Random.Range(0, s_swordClashPool.Length)];
+            CoreServices.Audio?.PlaySfx(clip, 0.65f);
         }
 
         public static void PlaySpellCast()

@@ -11,9 +11,10 @@
 //        If the Volume or Bloom component is absent the spike is skipped
 //        gracefully. Same for all other optional systems (VFXManager, etc.).
 //
-// Floating text: instantiates waveTextPrefab (a world-space GameObject with a
-//   TextMeshPro component). Falls back to an IMGUI toast when the prefab is
-//   null so the text still appears in builds.
+// Results banner: routes through the ONE shared Obsidian end-state template
+//   (DeNelle.Village.UI.EndStateView, compact wave-results variant — UI audit
+//   2026-07-02 §3.2 WO-B). The old world-space prefab text + IMGUI OnGUI toast
+//   are RETIRED (the IMGUI path was a LEGACY-verdict surface in the audit).
 //
 // Time.timeScale: always restored in a finally-equivalent path — the ease-back
 //   coroutine always runs to completion via WaitForSecondsRealtime.
@@ -67,11 +68,8 @@ namespace DeNelle.Village
         [SerializeField] private int     _celebrationBursts = 3;
         [SerializeField] private float   _burstSpread       = 4f;
 
-        [Header("Floating Text")]
-        [Tooltip("World-space prefab with a TextMeshPro component. " +
-                 "Falls back to IMGUI toast when null.")]
-        [SerializeField] private GameObject _waveTextPrefab;
-        [Tooltip("World-space anchor for floating text (centre of village). " +
+        [Header("Celebration Anchor")]
+        [Tooltip("World-space anchor for the VFX bursts (centre of village). " +
                  "Falls back to Vector3.zero + up when null.")]
         [SerializeField] private Transform  _textSpawnPoint;
 
@@ -81,10 +79,6 @@ namespace DeNelle.Village
         // ── Bloom runtime handle ──────────────────────────────────────────────
         private UnityEngine.Rendering.Universal.Bloom _bloom;
         private bool _bloomAvailable;
-
-        // ── IMGUI toast fallback ──────────────────────────────────────────────
-        private string _toastText;
-        private float  _toastTimer;
 
         // ─────────────────────────────────────────────────────────────────────
 
@@ -155,8 +149,10 @@ namespace DeNelle.Village
                 yield return new WaitForSecondsRealtime(0.12f);
             }
 
-            // 5. Floating "Wave X Cleared!" text.
-            SpawnWaveText(waveNumber, origin);
+            // 5. "Wave X Cleared!" results banner — the shared end-state template
+            //    (compact variant: non-blocking, auto-dismissing, one Continue).
+            DeNelle.Village.UI.EndStateView.Show(
+                DeNelle.Village.UI.EndStateVM.FromWaveClear(waveNumber));
 
             // 6. Camera shake.
             float shakeIntensity = mobile ? 0.25f : 0.42f;
@@ -235,69 +231,6 @@ namespace DeNelle.Village
             Time.timeScale = 1f;
         }
 
-        private void SpawnWaveText(int waveNumber, Vector3 origin)
-        {
-            string text = $"Wave {waveNumber} Cleared!";
-
-            if (_waveTextPrefab != null)
-            {
-                Vector3 spawnPos = origin + Vector3.up * 2.5f;
-                var obj = Instantiate(_waveTextPrefab, spawnPos, Quaternion.identity);
-
-                // Try TextMeshPro (TMPro.TMP_Text via GetComponent — no hard TMPro dep).
-                var tmp = obj.GetComponent("TMP_Text") as UnityEngine.UI.Text
-                       ?? obj.GetComponent<UnityEngine.UI.Text>();
-                if (tmp != null) tmp.text = text;
-                // TMPro path via reflection so no hard assembly reference is needed.
-                else
-                {
-                    var comp = obj.GetComponent("TextMeshPro")
-                            ?? obj.GetComponentInChildren<Component>();
-                    if (comp != null)
-                    {
-                        var textProp = comp.GetType().GetProperty("text");
-                        textProp?.SetValue(comp, text);
-                    }
-                }
-
-                Destroy(obj, 2.5f);
-            }
-            else
-            {
-                // IMGUI toast fallback — visible without a prefab in builds.
-                _toastText  = text;
-                _toastTimer = 2.5f;
-            }
-        }
-
-        // ── IMGUI toast fallback ──────────────────────────────────────────────
-
-        private void Update()
-        {
-            if (_toastTimer > 0f) _toastTimer -= Time.unscaledDeltaTime;
-        }
-
-        private void OnGUI()
-        {
-            if (_toastTimer <= 0f || string.IsNullOrEmpty(_toastText)) return;
-
-            float alpha = Mathf.Clamp01(_toastTimer);   // fade out in last second
-            GUI.color = new Color(1f, 0.95f, 0.5f, alpha);
-
-            var style = new GUIStyle(GUI.skin.label)
-            {
-                fontSize  = 28,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter,
-                normal    = { textColor = new Color(1f, 0.95f, 0.5f, alpha) }
-            };
-
-            float w = Screen.width;
-            float h = Screen.height;
-            GUI.Label(new Rect(0f, h * 0.3f, w, 50f), _toastText, style);
-            GUI.color = Color.white;
-        }
-
         // ── Bootstrap — auto-install when WaveManager is present ─────────────
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -312,14 +245,14 @@ namespace DeNelle.Village
 
         private static void TryInstall()
         {
-            if (FindObjectOfType<WaveManager>() == null) return;
+            if (FindAnyObjectByType<WaveManager>() == null) return;
             if (Instance != null) return;
 
             var go  = new GameObject("[WaveCelebrationManager]");
             var mgr = go.AddComponent<WaveCelebrationManager>();
 
             // Wire to WaveManager's OnWaveCleared event.
-            var wave = FindObjectOfType<WaveManager>();
+            var wave = FindAnyObjectByType<WaveManager>();
             if (wave != null)
                 wave.OnWaveCleared.AddListener(mgr.PlayWaveClear);
 

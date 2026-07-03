@@ -208,6 +208,11 @@ namespace DeNelle.Village
             if (_gear == null) _gear = GetComponent<GearLoadout>();
             _appliedGearHpBonus = EffectiveBonus;
             _hp = MaxHp;
+            // HP-desync ticket 2026-07-02: prove the resolved max + its composition at spawn so the
+            // next capture shows exactly which instance owns which pool (base + gear + talent = N).
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HeroHealth",
+                $"max resolved: base {_maxHp:F0} + gear {GearHpBonus} + talent {TalentHpBonus} = {MaxHp:F0} " +
+                $"(id={GetInstanceID()} scene='{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}')");
             OnHealthChanged?.Invoke(_hp, MaxHp);
         }
 
@@ -223,6 +228,11 @@ namespace DeNelle.Village
             _appliedGearHpBonus = now;
             if (delta > 0) _hp += delta;           // grow with the new max
             _hp = Mathf.Min(_hp, MaxHp);           // clamp to the (possibly smaller) max
+            // HP-desync ticket 2026-07-02: the effective max just CHANGED (gear equip/unequip or a
+            // talent learn/respec) — re-log the composition so every capture can name the live pool.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HeroHealth",
+                $"max resolved: base {_maxHp:F0} + gear {GearHpBonus} + talent {TalentHpBonus} = {MaxHp:F0} " +
+                $"(id={GetInstanceID()} changed by {delta:+#;-#;0})");
             OnHealthChanged?.Invoke(_hp, MaxHp);
         }
 
@@ -339,9 +349,12 @@ namespace DeNelle.Village
             // 100/100. Log WHICH HeroHealth instance + scene actually takes damage — if this id/scene
             // differs from the one the HUD binds (the [Flow:HUD] HP line), the arena spawns a SECOND
             // hero and the overworld HUD stays bound to the untouched 100/100 body. Proves it from data.
+            // NOTE (HP-desync ticket 2026-07-02): log the EFFECTIVE max (base + gear + talent) —
+            // the previous line logged the bare serialized _maxHp (100), which read as a third
+            // "scale" next to the HUD's effective 155/120 and mis-diagnosed a desync that wasn't.
             DeNelle.Core.Diagnostics.FlowTrace.Step("HeroHealth",
                 $"TakeDamage id={GetInstanceID()} scene='{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}' " +
-                $"amount={amount:F1} hpBefore={_hp:F1}/{_maxHp:F1} invuln={(Time.time < _invulnUntil)}");
+                $"amount={amount:F1} hpBefore={_hp:F1}/{MaxHp:F1} (base={_maxHp:F0}) invuln={(Time.time < _invulnUntil)}");
             if (_hp <= 0f || amount <= 0f) return;
             // DEF-102: post-respawn grace — ignore damage during the invuln window
             // so a hero respawning into a lingering melee isn't instantly re-killed.
@@ -657,7 +670,7 @@ namespace DeNelle.Village
                 MoveSpeedMultiplier = injured ? InjuredMoveScale : 1f;
                 _heartbeatCooldown = 0f;   // let the first beat land promptly on entry
                 Debug.Log($"[HeroHealth] Injured stance {(injured ? "ON" : "OFF")} " +
-                          $"(hp={Mathf.CeilToInt(_hp)}/{Mathf.CeilToInt(_maxHp)}, frac={Fraction:F2}).");
+                          $"(hp={Mathf.CeilToInt(_hp)}/{Mathf.CeilToInt(MaxHp)}, frac={Fraction:F2}).");
             }
 
             // Optional heartbeat cue while wounded — paced ~1/sec, routed through the

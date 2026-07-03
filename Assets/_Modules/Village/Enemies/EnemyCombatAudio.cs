@@ -59,11 +59,29 @@ namespace DeNelle.Village
         /// No-op when the audio service is not yet registered. Call this only as a
         /// FALLBACK — when the enemy's type-set provided no death clip.
         /// </summary>
+        // Feel pass 2026-07-02 (ff.combatfeel): second authored death take (Resources/Sfx/
+        // EnemyDeath2, mirrored from Assets/Audio/SFX/Combat/enemy_death_2.wav) so back-to-back
+        // kills don't play the identical grunt. Null when not present (fresh clone) — the pool
+        // degrades to the single clip. Flag OFF = legacy single-clip behaviour.
+        private static AudioClip s_deathClip2;
+        private static bool s_deathClip2Tried;
+
         public static void PlayDeath()
         {
             if (s_deathClip == null)
                 s_deathClip = Resources.Load<AudioClip>("Sfx/EnemyDeath") ?? GenerateDeath();
-            CoreServices.Audio?.PlaySfx(s_deathClip, 0.6f);
+
+            AudioClip clip = s_deathClip;
+            if (DeNelle.Core.FeatureFlags.CombatFeel)
+            {
+                if (!s_deathClip2Tried)
+                {
+                    s_deathClip2 = Resources.Load<AudioClip>("Sfx/EnemyDeath2");
+                    s_deathClip2Tried = true;
+                }
+                if (s_deathClip2 != null && Random.value < 0.5f) clip = s_deathClip2;
+            }
+            CoreServices.Audio?.PlaySfx(clip, 0.6f);
         }
 
         /// <summary>

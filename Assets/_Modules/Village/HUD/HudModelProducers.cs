@@ -39,22 +39,35 @@ namespace DeNelle.Village.Hud
 {
     // ── HeroVitals ────────────────────────────────────────────────────────────
 
-    /// <summary>Fills <see cref="HeroVitalsModel"/> from HeroHealth + HeroAbilities + HeroProgression.</summary>
+    /// <summary>
+    /// Fills <see cref="HeroVitalsModel"/> from HeroHealth + HeroAbilities + HeroProgression
+    /// + WisdomCurrencyService (P4: wisdom through the model — retires the HUD's reflection
+    /// pull of the service, VillageHudController.cs:1486-1497).
+    /// </summary>
     internal sealed class HeroVitalsProducer : HudProducer
     {
         private HeroAbilities _abilities;
         private HeroHealth _health;
         private HeroProgression _prog;
         // last-pushed snapshot for change-gating
-        private int _hp = int.MinValue, _maxHp, _mana, _maxMana, _xp, _xpToNext, _level;
+        private int _hp = int.MinValue, _maxHp, _mana, _maxMana, _xp, _xpToNext, _level, _wisdom;
         private string _classId;
 
         public HeroVitalsProducer(IHudModel m) : base(m, 0.20f) { }
 
         protected override void Poll()
         {
-            if (_health == null || !_health) _health = HeroHealth.Instance;
-            if (_abilities == null || !_abilities) _abilities = Object.FindFirstObjectByType<HeroAbilities>();
+            // HP-desync ticket 2026-07-02: FOLLOW HeroHealth.Instance, don't cache-forever. The old
+            // "resolve only when null" left this producer bound to a stale-but-alive hero body when a
+            // scene spawned a fresh hero (Instance moved) — the HUD then showed the untouched body's
+            // pool (93/155) while the real body took the hits (92/100 in the capture). One authoritative
+            // source: the CURRENT HeroHealth.Instance, and HeroAbilities from that SAME body.
+            var inst = HeroHealth.Instance;
+            if (inst != null && !ReferenceEquals(_health, inst)) { _health = inst; _abilities = null; }
+            else if (_health == null || !_health) _health = inst;
+            if ((_abilities == null || !_abilities) && _health != null)
+                _abilities = _health.GetComponent<HeroAbilities>();
+            if (_abilities == null || !_abilities) _abilities = Object.FindAnyObjectByType<HeroAbilities>();
             if (_prog == null || !_prog) _prog = HeroProgression.Instance;
 
             // No hero resolved yet -> leave the model at default (don't push zeros over a stale-but-valid value).
@@ -68,13 +81,18 @@ namespace DeNelle.Village.Hud
             int xpToNext= _prog != null ? Mathf.RoundToInt(_prog.XpToNext) : _xpToNext;
             int level   = _prog != null ? _prog.Level : _level;
             string cls  = _abilities != null && !string.IsNullOrEmpty(_abilities.HeroClass) ? _abilities.HeroClass : (_classId ?? "knight");
+            // P4: unspent Wisdom straight off the service (Village -> Village, no reflection).
+            // Singleton is Bootstrap-created; keep the last value while it is not up yet.
+            var wis = DeNelle.Village.Talents.WisdomCurrencyService.Instance;
+            int wisdom = wis != null ? wis.Wisdom : Mathf.Max(0, _wisdom);
 
             if (hp == _hp && maxHp == _maxHp && mana == _mana && maxMana == _maxMana &&
-                xp == _xp && xpToNext == _xpToNext && level == _level && cls == _classId) return;
+                xp == _xp && xpToNext == _xpToNext && level == _level && cls == _classId &&
+                wisdom == _wisdom) return;
 
             _hp = hp; _maxHp = maxHp; _mana = mana; _maxMana = maxMana;
-            _xp = xp; _xpToNext = xpToNext; _level = level; _classId = cls;
-            Model.HeroVitals.Set(hp, maxHp, mana, maxMana, xp, xpToNext, level, cls);
+            _xp = xp; _xpToNext = xpToNext; _level = level; _classId = cls; _wisdom = wisdom;
+            Model.HeroVitals.Set(hp, maxHp, mana, maxMana, xp, xpToNext, level, cls, wisdom);
         }
     }
 
@@ -95,8 +113,15 @@ namespace DeNelle.Village.Hud
 
         protected override void Poll()
         {
-            if (_health == null || !_health) _health = HeroHealth.Instance;
-            if (_abilities == null || !_abilities) _abilities = Object.FindFirstObjectByType<HeroAbilities>();
+            // HP-desync ticket 2026-07-02: follow HeroHealth.Instance (see HeroVitalsProducer.Poll) —
+            // slot 0 must show the SAME hero body the game is damaging, and its mana must come from
+            // the HeroAbilities on that same body (stale-cached abilities = the frozen-at-full MP frame).
+            var inst = HeroHealth.Instance;
+            if (inst != null && !ReferenceEquals(_health, inst)) { _health = inst; _abilities = null; }
+            else if (_health == null || !_health) _health = inst;
+            if ((_abilities == null || !_abilities) && _health != null)
+                _abilities = _health.GetComponent<HeroAbilities>();
+            if (_abilities == null || !_abilities) _abilities = Object.FindAnyObjectByType<HeroAbilities>();
 
             var members = new List<PartyMemberRecord>(4);
 
@@ -256,7 +281,7 @@ namespace DeNelle.Village.Hud
 
         protected override void Poll()
         {
-            if (_indicator == null || !_indicator) _indicator = Object.FindFirstObjectByType<HeroTargetIndicator>();
+            if (_indicator == null || !_indicator) _indicator = Object.FindAnyObjectByType<HeroTargetIndicator>();
 
             IDamageable cur = _indicator != null ? _indicator.CurrentTarget : null;
             var curMb = cur as MonoBehaviour;
@@ -296,10 +321,10 @@ namespace DeNelle.Village.Hud
 
         protected override void Poll()
         {
-            if (_hero == null || !_hero) _hero = Object.FindFirstObjectByType<HeroAbilities>();
+            if (_hero == null || !_hero) _hero = Object.FindAnyObjectByType<HeroAbilities>();
             Vector3 me = _hero != null ? _hero.transform.position : Vector3.zero;
 
-            var enemies = Object.FindObjectsByType<Enemy>(FindObjectsSortMode.None);
+            var enemies = Object.FindObjectsByType<Enemy>();
             System.Array.Sort(enemies, (a, b) =>
             {
                 if (a == null) return 1; if (b == null) return -1;
@@ -344,7 +369,7 @@ namespace DeNelle.Village.Hud
 
         protected override void Poll()
         {
-            if (_abilities == null || !_abilities) _abilities = Object.FindFirstObjectByType<HeroAbilities>();
+            if (_abilities == null || !_abilities) _abilities = Object.FindAnyObjectByType<HeroAbilities>();
 
             string cls = _abilities != null && !string.IsNullOrEmpty(_abilities.HeroClass) ? _abilities.HeroClass : "knight";
             var slots = new List<AbilitySlotRecord>(4);
@@ -400,14 +425,14 @@ namespace DeNelle.Village.Hud
 
         protected override void Poll()
         {
-            if (_heart == null || !_heart) _heart = Object.FindFirstObjectByType<HeartController>();
+            if (_heart == null || !_heart) _heart = Object.FindAnyObjectByType<HeartController>();
             if (_heart == null) return; // no Heart in this scene -> leave at default
 
             int heartHp = Mathf.CeilToInt(Mathf.Max(0f, _heart.Hp));
             int maxHp = Mathf.CeilToInt(HeartMaxHp);
             float pct = HeartMaxHp > 0f ? Mathf.Clamp01(_heart.Hp / HeartMaxHp) : 0f;
 
-            var towersArr = Object.FindObjectsByType<Tower>(FindObjectsSortMode.None);
+            var towersArr = Object.FindObjectsByType<Tower>();
             int towers = towersArr != null ? towersArr.Length : 0;
 
             if (heartHp == _heartHp && towers == _towers) return;
@@ -501,5 +526,85 @@ namespace DeNelle.Village.Hud
 
         private void Unbind() { if (_bound && _echo != null) _echo.Changed -= Push; _bound = false; }
         public override void Dispose() => Unbind();
+    }
+
+    // ── Cast (enemy telegraph) ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Fills <see cref="CastModel"/> from the Enemy rooted-cast seam (P4, HUD_OBSIDIAN
+    /// §3.4): subscribes Enemy.CastStarted/CastEnded (push) and interpolates Progress01
+    /// on its own fast poll, change-gated to 2% buckets so the model never fires on an
+    /// unchanged value. One cast bar (V1): the LATEST cast wins; an ended earlier cast is
+    /// ignored once superseded. SELF-EXPIRES on (start + windUp) or a dead/destroyed
+    /// caster — a caster destroyed mid-cast kills its coroutine before CastEnded fires.
+    /// </summary>
+    internal sealed class CastProducer : HudProducer
+    {
+        private Enemy _caster;
+        private string _ability;
+        private float _start = -1f, _duration = 1f;
+        private int _lastBucket = -1;
+        private bool _visible;
+
+        public CastProducer(IHudModel m) : base(m, 0.10f)
+        {
+            Enemy.CastStarted += OnCastStarted;
+            Enemy.CastEnded += OnCastEnded;
+        }
+
+        private void OnCastStarted(Enemy caster, string ability, float windUpSeconds)
+        {
+            if (caster == null) return;
+            _caster = caster;
+            _ability = ability;
+            _duration = Mathf.Max(0.05f, windUpSeconds);
+            _start = Time.time;
+            _lastBucket = -1;          // force the first push of the new cast
+            Push(0f);
+        }
+
+        private void OnCastEnded(Enemy caster)
+        {
+            // Only the cast we are tracking may clear the bar (a superseded cast's
+            // end event must not kill the newer cast's bar).
+            if (!ReferenceEquals(caster, _caster)) return;
+            Hide();
+        }
+
+        protected override void Poll()
+        {
+            if (_start < 0f) return;   // no live cast
+            // Self-expiry: destroyed/dead casters end the coroutine without CastEnded.
+            if (_caster == null || !_caster || _caster.IsDead) { Hide(); return; }
+            float t = Mathf.Clamp01((Time.time - _start) / _duration);
+            if (t >= 1f) { Hide(); return; }
+            Push(t);
+        }
+
+        // Change gate: 2% progress buckets — a poll with an unchanged bucket writes nothing.
+        private void Push(float t01)
+        {
+            int bucket = Mathf.RoundToInt(t01 * 50f);
+            if (_visible && bucket == _lastBucket) return;
+            _visible = true;
+            _lastBucket = bucket;
+            Model.Cast.Set(FriendlyName(_caster, RoleOf(_caster)), _ability, t01);
+        }
+
+        private void Hide()
+        {
+            _start = -1f;
+            _caster = null;
+            if (!_visible) return;     // change gate: never clear an already-clear model
+            _visible = false;
+            _lastBucket = -1;
+            Model.Cast.Clear();
+        }
+
+        public override void Dispose()
+        {
+            Enemy.CastStarted -= OnCastStarted;
+            Enemy.CastEnded -= OnCastEnded;
+        }
     }
 }

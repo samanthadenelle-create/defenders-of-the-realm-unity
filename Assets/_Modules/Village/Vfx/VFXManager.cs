@@ -628,7 +628,30 @@ namespace DeNelle.Village
                 {
                     var src = mats[i];
                     if (src == null) continue;
-                    if (!IsLegacyParticleShader(src.shader)) continue;
+                    if (!IsLegacyParticleShader(src.shader))
+                    {
+                        // Owner F8 "spells so pixelated" (§12, read from the asset YAML):
+                        // the Spells Pack mats our mirrored projectile/explosion prefabs use
+                        // (Glow.mat, Spell 4.mat, Trail.mat, …) are ALREADY on the URP
+                        // particle shader but only HALF-upgraded — texture stranded in the
+                        // legacy _MainTex slot (_BaseMap NULL) and surface left OPAQUE
+                        // (_Surface 0, _ZWrite 1, One/Zero blend) → untextured opaque
+                        // billboard SQUARES. The legacy-only skip above left them broken;
+                        // finish the migration in place (shared heal, idempotent).
+                        if (AbilityVfxKit.HealHalfUpgradedParticleMaterial(src)) reshaded++;
+
+                        // A ParticleSystemRenderer trail slot bulk-stomped with the opaque
+                        // MagentaFix_DefaultLit URP/Lit material renders solid grey ribbons —
+                        // point the trail at the (healed) slot-0 particle material instead.
+                        if (i > 0 && r is ParticleSystemRenderer && mats[0] != null &&
+                            src.name.StartsWith("MagentaFix", System.StringComparison.Ordinal))
+                        {
+                            mats[i] = mats[0];
+                            changed = true;
+                            reshaded++;
+                        }
+                        continue;
+                    }
 
                     bool additive = SourceWantsAdditive(src);
 
@@ -843,16 +866,23 @@ namespace DeNelle.Village
             // generic Aoe nova so nothing is ever silently missing.
             switch (type)
             {
-                // ── Aether impacts ────────────────────────────────────────────
-                case VFXType.Impact_Aether:
+                // ── Arcane cast chain (2026-07-02 spell language) ─────────────
+                // WINDUP: a gathering glow at the caster's hand, sized to the >=1s
+                // enemy-caster telegraph — replaces the old generic Strike tracer
+                // (owner F8 flag_15: casts must read as a charge, not a hit).
                 case VFXType.Cast_MageCharge:
                 case VFXType.Cast_NecromancerSummon:
                 case VFXType.Cast_EnemyCaster:
-                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Strike, _aetherColor, position, 1.5f, position + rotation * Vector3.forward * 2f);
+                    AbilityVfxKit.SpawnCastWindup(SpellSchool.Arcane, position + Vector3.up * 1.4f, 1.0f);
+                    break;
+
+                // IMPACT: flash + shard fan + grounded ring (flat side down).
+                case VFXType.Impact_Aether:
+                    AbilityVfxKit.SpawnSchoolImpact(SpellSchool.Arcane, position, 1.5f);
                     break;
 
                 case VFXType.Impact_ExplosionAether:
-                    AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Meteor, _aetherColor, position, 2.5f, position);
+                    AbilityVfxKit.SpawnSchoolImpact(SpellSchool.Arcane, position, 2.5f);
                     break;
 
                 case VFXType.Aura_Necromancer:
@@ -862,10 +892,14 @@ namespace DeNelle.Village
                     break;
 
                 // ── Flame impacts ─────────────────────────────────────────────
+                // Fire-school impact language (ember core + grounded scorch ring).
                 case VFXType.Impact_Flame:
+                case VFXType.Juice_GroundDecal_Flame:
+                    AbilityVfxKit.SpawnSchoolImpact(SpellSchool.Fire, position, 1.6f);
+                    break;
+
                 case VFXType.Impact_ExplosionFire:
                 case VFXType.Death_Tiefling:
-                case VFXType.Juice_GroundDecal_Flame:
                     AbilityVfxKit.SpawnAbilityVfx(AbilityEffect.Meteor, _flameColor, position, 2f, position);
                     break;
 
@@ -886,6 +920,8 @@ namespace DeNelle.Village
                     break;
 
                 // ── Healing ───────────────────────────────────────────────────
+                // Nature/heal school: the green-gold rising motes (BuildHeal column) —
+                // already the intended language; colour comes from the school body.
                 case VFXType.Impact_Heal:
                 case VFXType.Cast_Heal:
                     // CLI ④ dedup: Juice_LevelUp / Juice_WaveClear removed here — they

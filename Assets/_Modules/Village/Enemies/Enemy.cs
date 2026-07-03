@@ -205,6 +205,13 @@ namespace DeNelle.Village
         // overworld (solo brain) contexts.
         private Vector3 _lastAnimPos;
         private bool _hasLastAnimPos;
+        // ANTI-CHOP (owner 2026-07-02 "enemy anims off/choppy"): exponentially smoothed
+        // Speed feed for the Animator. Raw NavMeshAgent velocity fluctuates every frame
+        // (avoidance / accel / formation-slot drift / the delta-estimator below), so an
+        // undamped feed makes the 1-D locomotion blend flicker across its thresholds
+        // (idle<->walk<->run pops). Only the ANIM feed is damped; gameplay reads raw.
+        private float _animSpeedSmoothed;
+        private const float AnimSpeedDampSecs = 0.12f; // ~response time of the smoothing
 
         // ── DEF-21 / DEF-72: EnemyBrain nav-target override ──────────────────
         // DEF-21: EnemyBrain.Update() calls SetBrainTarget each frame with a role-
@@ -357,6 +364,19 @@ namespace DeNelle.Village
 
         /// <summary>The <c>enemies.json</c> def id this enemy was spawned from.</summary>
         public string EnemyDefId => _enemyDefId;
+
+        /// <summary>
+        /// The PRECISE catalog display name for this enemy ("Orcish Mage"), sourced from
+        /// the def it was configured with (enemies.json / BuildEncounterDef / garrison
+        /// blocks). HUD surfaces (target frame, target-cycle list) read THIS field —
+        /// never a GameObject-name parse + role concatenation (owner: the target frame
+        /// showed "Orc Mage Wizard", two stacked titles). Null/empty when no def was
+        /// supplied; callers fall back to their friendly-parse.
+        /// </summary>
+        public string DisplayName =>
+            _def == null ? null
+            : !string.IsNullOrEmpty(_def.DisplayName) ? _def.DisplayName
+            : _def.Name;
 
         /// <summary>Current hit points.</summary>
         public float Hp => _hp;
@@ -823,11 +843,21 @@ namespace DeNelle.Village
             _lastAnimPos = transform.position;
             _hasLastAnimPos = true;
 
+            // ANTI-CHOP (2026-07-02): smooth the anim feed (~0.12s response) before it
+            // drives the Speed float. The raw value jumps frame-to-frame (agent accel /
+            // avoidance / the estimator above), and both enemy controller families read
+            // Speed against hard bands (OrcHumanoid 1-D tree walk@1.5/run@3.5; the KayKit
+            // HumanoidEnemy Idle<->Move gate at 0.1) — an undamped feed pops the blend.
+            // Framerate-independent exponential smoothing; gameplay keeps the raw speed.
+            _animSpeedSmoothed = Mathf.Lerp(_animSpeedSmoothed, speed,
+                1f - Mathf.Exp(-Time.deltaTime / AnimSpeedDampSecs));
+            float animSpeed = _animSpeedSmoothed < 0.02f ? 0f : _animSpeedSmoothed; // settle to true idle
+
             // Drive the (new) ActorAnimator for locomotion (idle/walk/run blendtree in the
             // shared enemy controllers). Also keep the legacy direct _animator.SetFloat
             // for any old listeners. Guarded inside ActorAnimator.
-            _actor?.SetLocomotion(speed);
-            _animator.SetFloat(AnimSpeed, speed);
+            _actor?.SetLocomotion(animSpeed);
+            _animator.SetFloat(AnimSpeed, animSpeed);
 
             // WO-491: wounded stance below the low-HP cutoff — the orc reads "hurt" (limp /
             // stagger locomotion sub-tree). Flag-gated + guarded inside ActorAnimator
@@ -1101,7 +1131,7 @@ namespace DeNelle.Village
             _heroResolveTimer = 1f;   // cheap: at most once/sec per enemy
             if (valid) return;
 
-            var loco = FindFirstObjectByType<HeroLocomotion>();   // WO-450: component lookup
+            var loco = FindAnyObjectByType<HeroLocomotion>();   // WO-450: component lookup
             _heroTransform = loco != null ? loco.transform : SafeFindByTag("Player");
 
             // WO-419: trace the acquire across the seam — confirms a brain-less OuterWorld
@@ -1332,6 +1362,21 @@ namespace DeNelle.Village
         // (and the TickContactAttack telegraph) from overlapping it.
         private bool _casting;
 
+        // ── P4 cast-telegraph push seam (HUD_OBSIDIAN_ARCHITECTURE_2026-07-03 §3.4) ──
+        // The rooted cast had NO push seam (all state private to the RootedCast coroutine),
+        // so the HUD CastModel producer could not observe it. Smallest additive event pair
+        // on the existing static-event pattern (BuildModeController.BuildModeChanged):
+        // fired only from RootedCast, no behaviour change. NOTE: if the caster is destroyed
+        // mid-cast the coroutine dies and CastEnded never fires — subscribers must ALSO
+        // self-expire on (start + windUpSeconds) / a dead caster.
+        /// <summary>Raised when a rooted telegraphed cast begins: (caster, abilityName, windUpSeconds).</summary>
+        public static event System.Action<Enemy, string, float> CastStarted;
+        /// <summary>Raised when that cast's wind-up completes or is released.</summary>
+        public static event System.Action<Enemy> CastEnded;
+
+        // Display name for the rooted-cast ability (the visible arcane orb the cast fires).
+        private const string RootedCastAbilityName = "Arcane Orb";
+
         // Visible-cast VFX for ranged/mage casters (owner F8: "could not tell he was casting").
         // Lazily added so the enemy fires a real arcane orb that the player SEES leave + land.
         private RangedAttackVFX _castVfx;
@@ -1359,6 +1404,9 @@ namespace DeNelle.Village
             // not tell he was casting"). A sub-second wind-up doesn't register; hold >=1.0s so
             // the WindUp pose reads as a deliberate, reactable channel before the strike.
             windUp = Mathf.Max(windUp, 1.0f);
+
+            // P4 cast seam — announce the telegraph so the HUD cast bar can track it.
+            CastStarted?.Invoke(this, RootedCastAbilityName, windUp);
 
             // Root the agent for the cast (commit to it — no slide while casting).
             bool wasStopped = false;
@@ -1416,6 +1464,9 @@ namespace DeNelle.Village
             // Resume movement (only if WE rooted it — don't un-stop a contact-locked agent).
             if (_agent != null && _agent.isOnNavMesh && !wasStopped && _currentTarget == null)
                 _agent.isStopped = false;
+
+            // P4 cast seam — the wind-up is complete (orb released / damage committed).
+            CastEnded?.Invoke(this);
 
             _casting = false;
         }
@@ -1850,6 +1901,7 @@ namespace DeNelle.Village
             {
                 if (_hasDeadParam) _animator.SetBool(AnimDead, false);
                 if (_hasSpeedParam) _animator.SetFloat(AnimSpeed, 0f);
+                _animSpeedSmoothed = 0f; // anti-chop feed restarts clean on revive
                 // Rebind drops any in-flight death-clip pose so the controller restarts
                 // clean at its default (idle) state on the next frame.
                 if (_animator.runtimeAnimatorController != null && _animator.isActiveAndEnabled)

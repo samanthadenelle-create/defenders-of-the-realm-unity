@@ -241,6 +241,19 @@ namespace DeNelle.Village
                 {
                     var m = mats[i];
                     if (m == null || m.shader == null) continue;
+
+                    // Owner F8 "spells so pixelated" — the trail slot of the mirrored
+                    // Projectile_* prefabs was bulk-stomped with the OPAQUE untextured
+                    // MagentaFix_DefaultLit URP/Lit material → solid ribbons. Re-point the
+                    // trail at the slot-0 particle material (checked every pass; cheap).
+                    if (i > 0 && r is ParticleSystemRenderer && mats[0] != null &&
+                        m.name.StartsWith("MagentaFix", System.StringComparison.Ordinal))
+                    {
+                        mats[i] = mats[0];
+                        changed = true;
+                        continue;
+                    }
+
                     if (_fixedMaterials.Contains(m)) continue;
 
                     string sn = m.shader.name;
@@ -253,9 +266,33 @@ namespace DeNelle.Village
 
                     if (builtinParticle)
                     {
+                        // Owner F8 flag_15 console ("Material 'Glow' ... doesn't have a
+                        // texture property '_MainTex'"): the URP particle shader does NOT
+                        // declare _MainTex, so reading it AFTER the swap errors and loses
+                        // the texture. Capture the legacy texture + tint BEFORE swapping,
+                        // then seat them in the URP slots.
+                        Texture legacyTex = m.HasProperty("_MainTex") ? m.GetTexture("_MainTex") : m.mainTexture;
+                        Color legacyTint =
+                            m.HasProperty("_TintColor") ? m.GetColor("_TintColor") :
+                            m.HasProperty("_Color")     ? m.GetColor("_Color")     : Color.white;
+
                         m.shader = _urpParticleShader;
+
+                        if (legacyTex != null && m.HasProperty("_BaseMap") && m.GetTexture("_BaseMap") == null)
+                            m.SetTexture("_BaseMap", legacyTex);
+                        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", legacyTint);
                         changed = true;
                     }
+
+                    // Owner F8 "spells so pixelated" (§12, cause read from the asset YAML —
+                    // Spells Pack Glow.mat / Spell 4.mat): whether the material was JUST
+                    // remapped above or the asset upgrader half-migrated it long ago, the
+                    // texture sits stranded in legacy _MainTex with _BaseMap NULL and the
+                    // surface is OPAQUE → the enemy caster's arcane orb rendered as
+                    // untextured opaque SQUARES. Finish the migration (idempotent heal).
+                    if (AbilityVfxKit.HealHalfUpgradedParticleMaterial(m))
+                        changed = true;
+
                     _fixedMaterials.Add(m); // examined once either way
                 }
                 if (changed) r.sharedMaterials = mats;
