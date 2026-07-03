@@ -1,28 +1,40 @@
 // =============================================================================
 // PackStore — the five-pack store UI + purchase flow (spec Part 3 store row)
 // -----------------------------------------------------------------------------
-// C# + UI Toolkit port of src/modules/store/ (StorePage.tsx + storeItems.ts).
 // Renders the five canonical packs from the canonical packs.json (Hearth Spark
-// → Founder's Vow) into a UI Toolkit document, each card showing its USD
-// reference plus per-currency amounts (SOL / USDC / SKR). The purchase flow
-// calls WalletService.Pay(); on confirmation it applies the pack contents to
-// GameState through GameStateService.
+// → Founder's Vow), each card showing its USD reference plus per-currency
+// amounts (SOL / USDC / SKR). The purchase flow calls WalletService.Pay(); on
+// confirmation it applies the pack contents to GameState through
+// GameStateService.
+//
+// WO-F conversion (2026-07-03, coverage matrix PackStore row): UIDocument/UITK
+// -> code-built uGUI on the Obsidian master frame (ElarionUiKit.
+// BuildObsidianModal: FrameMerchant + coin medallion + the ONE shared Close +
+// scrim), per the CosmeticShopPanel / LeaderboardPanel reference recipe.
+// Scroll list composed inline (ScrollRect + VerticalLayoutGroup). The modal is
+// built LAZILY on first open (OnEnable); open/close = canvas SetActive — the
+// MarketplaceInteractor contract (SetActive on this GameObject) is unchanged.
+//
+// Money flow UNCHANGED: async UniTask purchase (never async void), per-pack
+// currency rail selection (SOL / USDC / SKR chips), PackCatalog render loop,
+// PackPurchased event, treasury-transparency line, CurrencyDisclaimer, and the
+// cozy-covenant reassurance line from StorePage.tsx ("You are never required
+// to spend anything. Ever.") rendered verbatim. CloseStore() still routes
+// through MarketplaceInteractor via reflection (re-enables HeroLocomotion — the
+// soft-lock guard) with the locomotion-re-enable fallback.
 //
 // Devnet-only in the v2 foundation — the WalletService ships over the
 // StubWalletProvider, so the whole store runs end-to-end without the Solana
 // Unity SDK installed.
-//
-// async UniTask for the purchase flow (never async void). The cozy-covenant
-// reassurance line from StorePage.tsx ("You are never required to spend
-// anything. Ever.") is rendered verbatim.
 // =============================================================================
 
 using System;
 using System.Collections.Generic;
 using System.Text;
 using Cysharp.Threading.Tasks;
+using TMPro;
 using UnityEngine;
-using UnityEngine.UIElements;
+using UnityEngine.UI;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
@@ -34,40 +46,20 @@ namespace DeNelle.Wallet
     /// drives the SOL / USDC / SKR purchase flow through <see cref="WalletService"/>,
     /// and applies confirmed pack contents to <see cref="GameStateService"/>.
     /// </summary>
-    [RequireComponent(typeof(UIDocument))]
+    [DisallowMultipleComponent]
     public sealed class PackStore : MonoBehaviour
     {
-        [Tooltip("UIDocument hosting PackStore.uxml. Falls back to the component on this GameObject.")]
-        [SerializeField] private UIDocument _document;
-
         [Tooltip("Default currency rail a pack is bought in. SOL / USDC / SKR.")]
         [SerializeField] private CurrencyKind _defaultCurrency = CurrencyKind.Skr;
 
-        // Element names expected in PackStore.uxml.
-        private const string PackListName = "pack-list";
-        private const string StatusBannerName = "store-status";
-        private const string TreasuryLabelName = "store-treasury";
-        private const string DisclaimerLabelName = "store-disclaimer";
-
-        // USS class names — styled by PackStore.uss.
-        private const string CardClass = "pack-card";
-        private const string CardNameClass = "pack-card__name";
-        private const string CardTaglineClass = "pack-card__tagline";
-        private const string CardUsdClass = "pack-card__usd";
-        private const string CardPricesClass = "pack-card__prices";
-        private const string CardPriceChipClass = "pack-card__price-chip";
-        private const string CardPriceChipSelectedClass = "pack-card__price-chip--selected";
-        private const string CardContentsClass = "pack-card__contents";
-        private const string CardBuyClass = "pack-card__buy";
-        private const string CardOwnedClass = "pack-card__owned";
-        private const string CardFounderTagClass = "pack-card__founder-tag";
-
         private WalletService _wallet;
 
-        private VisualElement _packList;
-        private Label _statusBanner;
-        private Label _treasuryLabel;
-        private Label _disclaimerLabel;
+        // Kit modal (lazy-built on first open) + the surfaces Render() fills.
+        private ElarionUiKit.ObsidianModal _modal;
+        private Transform _listContent;                 // ScrollRect content — pack cards
+        private TextMeshProUGUI _statusBanner;          // purchase status surface
+        private TextMeshProUGUI _treasuryLabel;         // rewards-distributor transparency line
+        private TextMeshProUGUI _disclaimerLabel;       // PackCatalog.CurrencyDisclaimer
 
         // Per-pack currency selection (SKU → chosen rail).
         private readonly Dictionary<string, CurrencyKind> _selectedCurrency = new Dictionary<string, CurrencyKind>();
@@ -82,15 +74,31 @@ namespace DeNelle.Wallet
 
         private void Awake()
         {
-            if (_document == null) _document = GetComponent<UIDocument>();
             // Defaults to the devnet StubWalletProvider — no Solana SDK needed.
             _wallet = new WalletService();
         }
 
         private void OnEnable()
         {
-            BindElements();
+            // MarketplaceInteractor opens the store by SetActive(true) on this
+            // GameObject — build the kit modal lazily on first open, then show.
+            EnsureBuilt();
+            if (_modal != null && _modal.canvas != null)
+                _modal.canvas.SetActive(true);
             Render();
+        }
+
+        private void OnDisable()
+        {
+            // MarketplaceInteractor closes by SetActive(false) — hide the canvas.
+            if (_modal != null && _modal.canvas != null)
+                _modal.canvas.SetActive(false);
+        }
+
+        private void OnDestroy()
+        {
+            if (_modal != null && _modal.canvas != null)
+                Destroy(_modal.canvas);
         }
 
         /// <summary>
@@ -106,147 +114,92 @@ namespace DeNelle.Wallet
         }
 
         // =====================================================================
-        //  UI Toolkit binding
+        //  UI construction (kit modal, lazy on first open)
         // =====================================================================
 
-        // -----------------------------------------------------------------
-        // PLAYER-BUILD FIX: this project's UXML templates render EMPTY in
-        // player builds (a known, recurring trap), so root.Q<>() lookups
-        // against PackStore.uxml return null and Render() bails — the player
-        // sees the panel behind us (the talent tree, shared PanelSettings)
-        // and feels soft-locked. We therefore IGNORE the UXML entirely and
-        // construct the whole container scaffold in code with inline styles,
-        // assigning _packList / _statusBanner / _treasuryLabel /
-        // _disclaimerLabel to the code-built elements. Render() is unchanged.
-        // -----------------------------------------------------------------
-        private void BindElements()
+        private void EnsureBuilt()
         {
-            using var _ = FlowTrace.Enter("Store", "BindElements (code-built scaffold)");
-            var root = _document != null ? _document.rootVisualElement : null;
-            if (root == null)
+            if (_modal != null && _modal.canvas != null) return;
+            using var _ = FlowTrace.Enter("Store", "EnsureBuilt (kit modal)");
+
+            _modal = ElarionUiKit.BuildObsidianModal("PackStoreUI", "Realm Store",
+                new Vector2(0.14f, 0.05f), new Vector2(0.86f, 0.95f), CloseStore,
+                frameName: RpgUiCatalog.FrameMerchant, medallionIcon: "coin");
+
+            if (_modal == null || _modal.canvas == null)
             {
-                // No UIDocument root -> the whole store cannot draw and Render() will bail. This is a
+                // No modal -> the whole store cannot draw and Render() will bail. This is a
                 // blank-screen / soft-lock risk; surface it loudly so it self-reports, never silent.
-                FlowTrace.Fail("Store", "BindElements: UIDocument rootVisualElement is null — store cannot build, player would see a blank/soft-locked panel.");
+                FlowTrace.Fail("Store", "EnsureBuilt: kit modal failed to build — store cannot draw, player would see a blank/soft-locked panel.");
                 return;
             }
 
-            // 1) Wipe any blank/garbage UXML content.
-            root.Clear();
+            var layout = _modal.chrome.layout;
+            var body = layout != null && layout.body != null
+                ? (Transform)layout.body
+                : _modal.chrome.content.transform;
 
-            // 2) Full-screen scrim so the store visibly covers whatever is behind
-            //    it (no see-through to the talent tree).
-            var overlay = new VisualElement { name = "store-overlay-root" };
-            ShopTheme.StyleScrim(overlay);
-            overlay.style.justifyContent = Justify.Center;
-            overlay.style.paddingTop = 24;
-            overlay.style.paddingBottom = 24;
-            overlay.style.paddingLeft = 24;
-            overlay.style.paddingRight = 24;
-            root.Add(overlay);
+            // Treasury transparency line (spec Week 7 — the v1 "treasury
+            // transparency" pattern) — top of the body well.
+            _treasuryLabel = MakeText(body, string.Empty, 12, ElarionUi.ParchmentDim,
+                FontStyles.Normal, TextAlignmentOptions.Center,
+                new Vector2(0.02f, 0.93f), new Vector2(0.98f, 0.99f));
 
-            // Centered themed shop-window frame — the cards live in a column inside.
-            var panel = new VisualElement { name = "store-content-panel" };
-            panel.style.flexDirection = FlexDirection.Column;
-            panel.style.flexGrow = 1;
-            panel.style.width = new StyleLength(Length.Percent(100f));
-            panel.style.maxWidth = 720;
-            panel.style.maxHeight = new StyleLength(Length.Percent(94f));
-            panel.style.alignSelf = Align.Center;
-            ShopTheme.StylePanelFrame(panel);
-            overlay.Add(panel);
+            // Purchase status banner — the only purchase-feedback surface.
+            _statusBanner = MakeText(body, string.Empty, 13, ElarionUi.Gold,
+                FontStyles.Normal, TextAlignmentOptions.Center,
+                new Vector2(0.02f, 0.865f), new Vector2(0.98f, 0.925f));
 
-            // Header: crest title + close, with a gilt rule beneath.
-            var header = new VisualElement();
-            header.style.flexDirection = FlexDirection.Row;
-            header.style.justifyContent = Justify.SpaceBetween;
-            header.style.alignItems = Align.Center;
-            panel.Add(header);
+            // Scrollable pack-card list (inline ScrollRect column).
+            var scrollHost = ZoneRect(body, "PackScroll", new Vector2(0.02f, 0.02f), new Vector2(0.98f, 0.86f));
+            _listContent = BuildScrollColumn(scrollHost);
 
-            header.Add(ShopTheme.MakeTitle("Realm Store"));
-
-            var closeBtn = new Button(CloseStore) { name = "store-close-btn" };
-            ShopTheme.StyleCloseButton(closeBtn);
-            header.Add(closeBtn);
-
-            panel.Add(ShopTheme.MakeRule());
-
-            // Subtitle / treasury line (assigned to _treasuryLabel).
-            _treasuryLabel = new Label(string.Empty) { name = TreasuryLabelName };
-            _treasuryLabel.style.fontSize = 12;
-            _treasuryLabel.style.color = ShopTheme.ParchmentDim;
-            _treasuryLabel.style.marginBottom = 6;
-            _treasuryLabel.style.whiteSpace = WhiteSpace.Normal;
-            _treasuryLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-            panel.Add(_treasuryLabel);
-
-            // Status banner (assigned to _statusBanner).
-            _statusBanner = new Label(string.Empty) { name = StatusBannerName };
-            _statusBanner.style.fontSize = 13;
-            _statusBanner.style.color = ShopTheme.Glimmer;
-            _statusBanner.style.marginBottom = 8;
-            _statusBanner.style.minHeight = 18;
-            _statusBanner.style.whiteSpace = WhiteSpace.Normal;
-            _statusBanner.style.unityTextAlign = TextAnchor.MiddleCenter;
-            panel.Add(_statusBanner);
-
-            // Scrollable card list (themed well, no OS scrollbar) — assign its
-            // contentContainer to _packList so the existing Render() loop keeps
-            // working verbatim.
-            var scroll = new ScrollView(ScrollViewMode.Vertical) { name = "pack-scroll" };
-            scroll.style.flexGrow = 1;
-            scroll.style.marginBottom = 10;
-            scroll.style.width = new StyleLength(Length.Percent(100f));
-            ShopTheme.StyleScrollWell(scroll);
-            panel.Add(scroll);
-            _packList = scroll.contentContainer;
-            if (_packList != null) _packList.name = PackListName;
-
-            panel.Add(ShopTheme.MakeRule());
-
-            // Disclaimer (assigned to _disclaimerLabel).
-            _disclaimerLabel = new Label(string.Empty) { name = DisclaimerLabelName };
-            _disclaimerLabel.style.fontSize = 11;
-            _disclaimerLabel.style.color = ShopTheme.ParchmentDim;
-            _disclaimerLabel.style.marginBottom = 4;
-            _disclaimerLabel.style.whiteSpace = WhiteSpace.Normal;
-            _disclaimerLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-            panel.Add(_disclaimerLabel);
-
-            // Cozy-covenant reassurance line (verbatim from StorePage.tsx).
-            var covenant = new Label("You are never required to spend anything. Ever.")
+            // Footer zone: currency disclaimer + the cozy-covenant line.
+            var footHost = layout != null && layout.footer != null ? (Transform)layout.footer : null;
+            if (footHost != null)
             {
-                name = "store-covenant"
-            };
-            covenant.style.fontSize = 11;
-            covenant.style.color = ShopTheme.Aether;
-            covenant.style.marginBottom = 4;
-            covenant.style.unityFontStyleAndWeight = FontStyle.Italic;
-            covenant.style.unityTextAlign = TextAnchor.MiddleCenter;
-            panel.Add(covenant);
+                _disclaimerLabel = MakeText(footHost, string.Empty, 11, ElarionUi.ParchmentDim,
+                    FontStyles.Normal, TextAlignmentOptions.Center,
+                    new Vector2(0.02f, 0.42f), new Vector2(0.98f, 0.98f));
+                MakeText(footHost, "You are never required to spend anything. Ever.",
+                    11, ElarionUi.Gold, FontStyles.Italic, TextAlignmentOptions.Center,
+                    new Vector2(0.02f, 0.02f), new Vector2(0.98f, 0.42f));
+            }
+            else
+            {
+                // Frame has no footer zone — fold the lines into the base of the body.
+                _disclaimerLabel = MakeText(body, string.Empty, 11, ElarionUi.ParchmentDim,
+                    FontStyles.Normal, TextAlignmentOptions.Center,
+                    new Vector2(0.02f, -0.055f), new Vector2(0.98f, -0.005f));
+                MakeText(body, "You are never required to spend anything. Ever.",
+                    11, ElarionUi.Gold, FontStyles.Italic, TextAlignmentOptions.Center,
+                    new Vector2(0.02f, -0.105f), new Vector2(0.98f, -0.055f));
+            }
+
+            _modal.canvas.SetActive(false);   // built hidden; OnEnable shows it
 
             // VERIFY the scaffold actually built — the card list container is what Render() fills, and
             // the status banner is the only purchase-feedback surface. If either is null the store would
             // silently render nothing / give no purchase feedback; Fail loudly so it self-reports.
-            if (_packList == null)
-                FlowTrace.Fail("Store", "BindElements: _packList container is null after build — cards cannot render (blank store).");
+            if (_listContent == null)
+                FlowTrace.Fail("Store", "EnsureBuilt: _listContent container is null after build — cards cannot render (blank store).");
             else if (_statusBanner == null)
-                FlowTrace.Warn("Store", "BindElements: _statusBanner is null after build — purchase status/errors will have no on-screen surface.");
+                FlowTrace.Warn("Store", "EnsureBuilt: _statusBanner is null after build — purchase status/errors will have no on-screen surface.");
             else
-                FlowTrace.Step("Store", "BindElements: scaffold built — pack list + status banner ready.");
+                FlowTrace.Step("Store", "EnsureBuilt: kit modal built — pack list + status banner ready.");
         }
 
         /// <summary>
-        /// Closes the store exactly the way the Escape key does in
-        /// MarketplaceInteractor. PackStore lives in DeNelle.Wallet, which
-        /// CANNOT reference DeNelle.Village (one-way asmdef dependency:
-        /// Village → Wallet), so we drive the interactor's private CloseStore()
-        /// via reflection. That path re-enables HeroLocomotion AND clears the
-        /// interactor's _storeOpen flag, so the hero is fully controllable and
-        /// the store can be reopened — no soft-lock. If no interactor is found
-        /// (e.g. a standalone test scene) we fall back to disabling this
-        /// GameObject and re-enabling any disabled HeroLocomotion by name, so
-        /// the hero is never left frozen.
+        /// Closes the store exactly the way MarketplaceInteractor does. PackStore
+        /// lives in DeNelle.Wallet, which CANNOT reference DeNelle.Village
+        /// (one-way asmdef dependency: Village → Wallet), so we drive the
+        /// interactor's private CloseStore() via reflection. That path
+        /// re-enables HeroLocomotion AND clears the interactor's _storeOpen
+        /// flag, so the hero is fully controllable and the store can be
+        /// reopened — no soft-lock. If no interactor is found (e.g. a
+        /// standalone test scene) we fall back to disabling this GameObject and
+        /// re-enabling any disabled HeroLocomotion by name, so the hero is
+        /// never left frozen.
         /// </summary>
         private void CloseStore()
         {
@@ -326,17 +279,21 @@ namespace DeNelle.Wallet
         public void Render()
         {
             using var _ = FlowTrace.Enter("Store", "Render");
-            if (_packList == null)
+            if (_listContent == null)
             {
-                FlowTrace.Fail("Store", "Render: _packList is null — no cards can be drawn (store would appear empty). Did BindElements run/succeed?");
+                // Lazy build: SetWalletService may legitimately arrive before the
+                // first open — not a failure, just nothing to draw into yet.
+                FlowTrace.Warn("Store", "Render: modal not built yet (lazy) — skipped.");
                 return;
             }
-            _packList.Clear();
+
+            for (int i = _listContent.childCount - 1; i >= 0; i--)
+                Destroy(_listContent.GetChild(i).gameObject);
 
             // Transparency: show the public Rewards Distributor address
             // (spec Week 7 — the v1 "treasury transparency" pattern).
             if (_treasuryLabel != null)
-                _treasuryLabel.text = $"Rewards Distributor — {WalletService.RewardsDistributorAddress}";
+                _treasuryLabel.text = $"Rewards Distributor - {WalletService.RewardsDistributorAddress}";
 
             if (_disclaimerLabel != null)
                 _disclaimerLabel.text = PackCatalog.CurrencyDisclaimer;
@@ -352,7 +309,6 @@ namespace DeNelle.Wallet
                     FlowTrace.Warn("Store", $"Render: BuildPackCard returned null for pack '{pack.Sku}' — card skipped.");
                     continue;
                 }
-                _packList.Add(card);
                 built++;
             }
 
@@ -364,7 +320,7 @@ namespace DeNelle.Wallet
                 FlowTrace.Step("Store", $"Render: built {built} pack card(s).");
         }
 
-        private VisualElement BuildPackCard(PackDef pack)
+        private GameObject BuildPackCard(PackDef pack)
         {
             if (pack == null)
             {
@@ -384,103 +340,81 @@ namespace DeNelle.Wallet
                 });
             });
 
-            var card = new VisualElement { name = $"pack-{pack.Sku}" };
-            card.AddToClassList(CardClass);
-            // Themed pack-card slot (inline styles survive the build USS trap).
-            ShopTheme.StyleCard(card);
-            card.style.flexDirection = FlexDirection.Column;
+            var cardGo = new GameObject($"pack-{pack.Sku}", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
+            cardGo.transform.SetParent(_listContent, false);
+            cardGo.GetComponent<LayoutElement>().preferredHeight = 132f;
+            var bg = cardGo.GetComponent<Image>();
+            var slotSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, "slot_item");
+            if (slotSprite != null) { bg.sprite = slotSprite; bg.type = Image.Type.Sliced; bg.color = Color.white; }
+            else bg.color = new Color(0f, 0f, 0f, 0.35f);
 
+            var card = cardGo.transform;
+
+            // Launch-window tag (founder packs only).
             if (pack.FounderOnly)
             {
-                var tag = new Label("Launch window only") { name = $"pack-{pack.Sku}-founder" };
-                tag.AddToClassList(CardFounderTagClass);
-                tag.style.fontSize = 11;
-                tag.style.color = new Color(1.00f, 0.82f, 0.45f, 1f);
-                tag.style.unityFontStyleAndWeight = FontStyle.Bold;
-                tag.style.marginBottom = 2;
-                card.Add(tag);
+                MakeText(card, "Launch window only", 11, new Color(1.00f, 0.82f, 0.45f, 1f),
+                    FontStyles.Bold, TextAlignmentOptions.Left,
+                    new Vector2(0.03f, 0.86f), new Vector2(0.68f, 0.98f));
             }
 
-            var nameLabel = new Label(pack.Name);
-            nameLabel.AddToClassList(CardNameClass);
-            nameLabel.style.fontSize = 18;
-            nameLabel.style.color = ShopTheme.Parchment;
-            nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            card.Add(nameLabel);
-
-            var tagline = new Label(pack.Tagline);
-            tagline.AddToClassList(CardTaglineClass);
-            tagline.style.fontSize = 13;
-            tagline.style.color = ShopTheme.ParchmentDim;
-            tagline.style.whiteSpace = WhiteSpace.Normal;
-            tagline.style.marginBottom = 4;
-            card.Add(tagline);
+            // Name / tagline / USD reference / contents — left column.
+            MakeText(card, pack.Name, 16, ElarionUi.Parchment, FontStyles.Bold,
+                TextAlignmentOptions.Left, new Vector2(0.03f, 0.68f), new Vector2(0.68f, 0.86f));
+            MakeText(card, pack.Tagline, 12, ElarionUi.ParchmentDim, FontStyles.Italic,
+                TextAlignmentOptions.TopLeft, new Vector2(0.03f, 0.44f), new Vector2(0.68f, 0.68f));
 
             // USD reference (§4.1 — shown for transparency on every wallet rail).
-            var usd = new Label($"{pack.UsdReference} reference");
-            usd.AddToClassList(CardUsdClass);
-            usd.style.fontSize = 12;
-            usd.style.color = ShopTheme.ParchmentDim;
-            usd.style.marginBottom = 4;
-            card.Add(usd);
-
-            // Per-currency rail chips — SOL / USDC / SKR (the React "currency rail tabs").
-            var prices = new VisualElement();
-            prices.AddToClassList(CardPricesClass);
-            prices.style.flexDirection = FlexDirection.Row;
-            prices.style.flexWrap = Wrap.Wrap;
-            prices.style.marginBottom = 4;
-            foreach (var currency in new[] { CurrencyKind.Sol, CurrencyKind.Usdc, CurrencyKind.Skr })
-            {
-                var rail = currency; // capture
-                var chip = new Button { text = pack.AmountLabel(rail) };
-                chip.AddToClassList(CardPriceChipClass);
-                bool selected = SelectedCurrency(pack.Sku) == rail;
-                if (selected)
-                    chip.AddToClassList(CardPriceChipSelectedClass);
-                ShopTheme.StyleChip(chip, selected);
-                chip.clicked += () =>
-                {
-                    _selectedCurrency[pack.Sku] = rail;
-                    Render();
-                };
-                prices.Add(chip);
-            }
-            card.Add(prices);
+            MakeText(card, $"{pack.UsdReference} reference", 12, ElarionUi.ParchmentDim,
+                FontStyles.Normal, TextAlignmentOptions.Left,
+                new Vector2(0.03f, 0.28f), new Vector2(0.68f, 0.44f));
 
             // Contents summary — cosmetics + economy + convenience (§5).
-            var contents = new Label(DescribeContents(pack));
-            contents.AddToClassList(CardContentsClass);
-            contents.style.fontSize = 12;
-            contents.style.color = new Color(0.78f, 0.82f, 0.90f, 1f);
-            contents.style.whiteSpace = WhiteSpace.Normal;
-            contents.style.marginBottom = 6;
-            card.Add(contents);
+            MakeText(card, DescribeContents(pack), 12, new Color(0.78f, 0.82f, 0.90f, 1f),
+                FontStyles.Normal, TextAlignmentOptions.TopLeft,
+                new Vector2(0.03f, 0.04f), new Vector2(0.68f, 0.28f));
+
+            // Per-currency rail chips — SOL / USDC / SKR (the React "currency rail
+            // tabs"), small Obsidian buttons; the selected rail is Yellow.
+            var rails = new[] { CurrencyKind.Sol, CurrencyKind.Usdc, CurrencyKind.Skr };
+            for (int i = 0; i < rails.Length; i++)
+            {
+                var rail = rails[i]; // capture
+                bool selected = SelectedCurrency(pack.Sku) == rail;
+                float x0 = 0.70f + i * 0.096f;
+                float x1 = x0 + 0.088f;
+                ElarionUiKit.BuildObsidianButton(card, pack.AmountLabel(rail),
+                    ElarionUiKit.ObsidianButtonStyle.Style1,
+                    selected ? ElarionUiKit.ObsidianButtonColor.Yellow
+                             : ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(x0, 0.60f), new Vector2(x1, 0.94f),
+                    () =>
+                    {
+                        _selectedCurrency[pack.Sku] = rail;
+                        Render();
+                    });
+            }
 
             // Buy / Owned control.
             if (IsOwned(pack.Sku))
             {
-                var owned = new Label("Owned");
-                owned.AddToClassList(CardOwnedClass);
-                owned.style.fontSize = 14;
-                owned.style.color = ShopTheme.Owned;
-                owned.style.unityFontStyleAndWeight = FontStyle.Bold;
-                card.Add(owned);
+                MakeText(card, "Owned", 15, new Color(0.55f, 0.90f, 0.55f, 1f), FontStyles.Bold,
+                    TextAlignmentOptions.Center, new Vector2(0.70f, 0.10f), new Vector2(0.985f, 0.52f));
             }
             else
             {
-                var rail = SelectedCurrency(pack.Sku);
-                var buy = new Button { text = $"{ShopTheme.CoinGlyph}  Buy — {pack.AmountLabel(rail)}" };
-                buy.AddToClassList(CardBuyClass);
-                ShopTheme.StyleButton(buy, ShopTheme.ButtonKind.Confirm);
-                buy.style.alignSelf = Align.FlexStart;
-                buy.style.minWidth = 190;
-                buy.SetEnabled(!_purchaseInFlight);
-                buy.clicked += () => Purchase(pack, rail).Forget();
-                card.Add(buy);
+                var selectedRail = SelectedCurrency(pack.Sku);
+                var buy = ElarionUiKit.BuildObsidianButton(card,
+                    $"Buy - {pack.AmountLabel(selectedRail)}",
+                    ElarionUiKit.ObsidianButtonStyle.Style1,
+                    _purchaseInFlight ? ElarionUiKit.ObsidianButtonColor.Gray
+                                      : ElarionUiKit.ObsidianButtonColor.Yellow,
+                    new Vector2(0.70f, 0.10f), new Vector2(0.985f, 0.52f),
+                    () => Purchase(pack, SelectedCurrency(pack.Sku)).Forget());
+                buy.interactable = !_purchaseInFlight;
             }
 
-            return card;
+            return cardGo;
         }
 
         private CurrencyKind SelectedCurrency(string sku)
@@ -512,18 +446,18 @@ namespace DeNelle.Wallet
                     foreach (var item in c.Convenience) tokens += item != null ? item.Count : 0;
                     if (tokens > 0)
                     {
-                        if (sb.Length > 0) sb.Append("  •  ");
+                        if (sb.Length > 0) sb.Append(", ");
                         sb.Append(tokens).Append(" convenience tokens");
                     }
                 }
             }
-            return sb.Length > 0 ? sb.ToString() : "—";
+            return sb.Length > 0 ? sb.ToString() : "-";
         }
 
         private static void AppendAmount(StringBuilder sb, int amount, string label)
         {
             if (amount <= 0) return;
-            if (sb.Length > 0) sb.Append("  •  ");
+            if (sb.Length > 0) sb.Append(", ");
             sb.Append(amount.ToString("N0")).Append(' ').Append(label);
         }
 
@@ -548,7 +482,7 @@ namespace DeNelle.Wallet
 
             if (_purchaseInFlight)
             {
-                SetStatus("A purchase is already in progress…");
+                SetStatus("A purchase is already in progress...");
                 return PaymentResult.Failure(pack.Sku, currency, "Purchase already in progress.");
             }
 
@@ -565,7 +499,7 @@ namespace DeNelle.Wallet
                 // The USDC / SOL flow (§7.4): wallet must be connected first.
                 if (!_wallet.IsConnected)
                 {
-                    SetStatus("Connecting wallet…");
+                    SetStatus("Connecting wallet...");
                     var account = await _wallet.Connect();
                     if (!account.IsValid)
                     {
@@ -575,7 +509,7 @@ namespace DeNelle.Wallet
                     }
                 }
 
-                SetStatus($"Confirming {pack.AmountLabel(currency)} on {_wallet.NetworkLabel}…");
+                SetStatus($"Confirming {pack.AmountLabel(currency)} on {_wallet.NetworkLabel}...");
                 var result = await _wallet.Pay(pack, currency);
 
                 if (result.Ok)
@@ -584,7 +518,7 @@ namespace DeNelle.Wallet
                     // entitlement; it self-reports if GameState is unavailable (paid-for content lost).
                     ApplyPackContents(pack);
                     FlowTrace.Step("Store", $"Purchase '{pack.Sku}' confirmed — tx {result.TxSignature}, contents applied.");
-                    SetStatus($"{pack.Name} unlocked — tx {Shorten(result.TxSignature)}.");
+                    SetStatus($"{pack.Name} unlocked - tx {Shorten(result.TxSignature)}.");
                     PackPurchased?.Invoke(pack, result);
 
                     // WO2: analytics — purchase confirmed.
@@ -599,7 +533,7 @@ namespace DeNelle.Wallet
                 else
                 {
                     FlowTrace.Fail("Store", $"Purchase '{pack.Sku}' ({currency}) FAILED: {result.Error}");
-                    SetStatus($"Purchase failed — {result.Error}");
+                    SetStatus($"Purchase failed - {result.Error}");
                 }
                 return result;
             }
@@ -607,7 +541,7 @@ namespace DeNelle.Wallet
             {
                 FlowTrace.Fail("Store",
                     $"Purchase '{pack.Sku}' ({currency}) THREW: {ex.GetType().Name}: {ex.Message} — outcome indeterminate; if a charge settled the entitlement may be lost.");
-                SetStatus($"Purchase failed — {ex.Message}");
+                SetStatus($"Purchase failed - {ex.Message}");
                 return PaymentResult.Failure(pack.Sku, currency, ex.Message);
             }
             finally
@@ -697,7 +631,73 @@ namespace DeNelle.Wallet
         private static string Shorten(string signature)
         {
             if (string.IsNullOrEmpty(signature) || signature.Length < 8) return signature ?? string.Empty;
-            return $"{signature.Substring(0, 4)}…{signature.Substring(signature.Length - 4)}";
+            return $"{signature.Substring(0, 4)}...{signature.Substring(signature.Length - 4)}";
+        }
+
+        // =====================================================================
+        //  uGUI helpers (same shapes as LeaderboardPanel / CosmeticShopPanel)
+        // =====================================================================
+
+        private static Transform ZoneRect(Transform parent, string name, Vector2 min, Vector2 max)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            return go.transform;
+        }
+
+        private static Transform BuildScrollColumn(Transform host)
+        {
+            var scrollGo = new GameObject("Scroll", typeof(RectTransform), typeof(ScrollRect), typeof(RectMask2D), typeof(Image));
+            scrollGo.transform.SetParent(host, false);
+            var srt = scrollGo.GetComponent<RectTransform>();
+            srt.anchorMin = Vector2.zero; srt.anchorMax = Vector2.one;
+            srt.offsetMin = Vector2.zero; srt.offsetMax = Vector2.zero;
+            scrollGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.25f);
+
+            var contentGo = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            contentGo.transform.SetParent(scrollGo.transform, false);
+            var crt = contentGo.GetComponent<RectTransform>();
+            crt.anchorMin = new Vector2(0f, 1f); crt.anchorMax = Vector2.one;
+            crt.pivot = new Vector2(0.5f, 1f);
+            crt.offsetMin = Vector2.zero; crt.offsetMax = Vector2.zero;
+            var layout = contentGo.GetComponent<VerticalLayoutGroup>();
+            layout.spacing = 6f;
+            layout.padding = new RectOffset(8, 8, 8, 8);
+            layout.childControlHeight = false;
+            layout.childControlWidth = true;
+            layout.childForceExpandHeight = false;
+            contentGo.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            var scroll = scrollGo.GetComponent<ScrollRect>();
+            scroll.content = crt;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 24f;
+            return contentGo.transform;
+        }
+
+        private static TextMeshProUGUI MakeText(Transform parent, string text, float size,
+            Color color, FontStyles style, TextAlignmentOptions align, Vector2 min, Vector2 max)
+        {
+            var go = new GameObject("Text", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var t = go.AddComponent<TextMeshProUGUI>();
+            t.text = text;
+            t.fontSize = size;
+            t.color = color;
+            t.fontStyle = style;
+            t.alignment = align;
+            t.raycastTarget = false;
+            t.textWrappingMode = TextWrappingModes.Normal;
+            ElarionUiKit.EnsureFont(t);
+            return t;
         }
     }
 }
