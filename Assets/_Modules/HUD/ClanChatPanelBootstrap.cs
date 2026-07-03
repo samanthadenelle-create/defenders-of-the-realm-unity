@@ -1,12 +1,16 @@
 // =============================================================================
-// ClanChatPanelBootstrap — auto-spawns a ClanChatPanel in any scene that has
-// a hero present. Mirrors DailyQuestHudBootstrap so the chat hotkey (Y) only
-// lights up in the gameplay scenes (Village, Dungeon), never Title.
+// ClanChatPanelBootstrap — auto-spawns a ClanChatPanel in any gameplay scene
+// that has a hero present. Mirrors LeaderboardPanelBootstrap so the social chat
+// only lights up in the gameplay scenes (Village, Dungeon), never Title.
+// -----------------------------------------------------------------------------
+// WO-F conversion (2026-07-03): ClanChatPanel is now a code-built uGUI Obsidian
+// modal that builds its OWN ScreenSpaceOverlay canvas lazily on first open — it no
+// longer needs a UIDocument / PanelSettings. The bootstrap just spawns the bare
+// component; opening is driven by the kit HUD chat dock (HudKitController).
 // =============================================================================
 
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UIElements;
 using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.HUD
@@ -49,16 +53,10 @@ namespace DeNelle.HUD
 
             if (FindHero() == null) return; // Title / HeroSelect skip.
 
-            var panel = FindPanelSettings();
-            if (panel == null) return;
-
             var go = new GameObject("ClanChatPanel");
             SceneManager.MoveGameObjectToScene(go, scene);
-            var ui = go.AddComponent<UIDocument>();
-            ui.panelSettings = panel;
-            ui.sortingOrder = 85; // above the daily-quest stack (80), below modals
             go.AddComponent<ClanChatPanel>();
-            FlowTrace.Step("UI", "ClanChatPanel created (single instance)");
+            FlowTrace.Step("UI", "ClanChatPanel created (single instance, code-built kit modal)");
         }
 
         private static Transform FindHero()
@@ -67,15 +65,6 @@ namespace DeNelle.HUD
             if (t == null) return null;
             var obj = UnityEngine.Object.FindAnyObjectByType(t) as Component;
             return obj != null ? obj.transform : null;
-        }
-
-        private static PanelSettings FindPanelSettings()
-        {
-            var docs = UnityEngine.Object.FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include);
-            foreach (var d in docs)
-                if (d != null && d.panelSettings != null) return d.panelSettings;
-            return null;
         }
     }
 }

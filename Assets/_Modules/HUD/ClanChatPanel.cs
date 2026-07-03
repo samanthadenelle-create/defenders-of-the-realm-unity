@@ -1,61 +1,66 @@
 // =============================================================================
-// ClanChatPanel — toggleable team-chat panel for the Clans stub. Press Y to
-// open/close (standard chat hotkey across MMOs / co-op games).
+// ClanChatPanel — toggleable team-chat panel for the Clans stub.
 // -----------------------------------------------------------------------------
-// Reads ClanService.Instance directly because DeNelle.HUD already references
-// DeNelle.Core — no reflection needed (unlike AdminOverlay).
+// WO-F conversion (2026-07-03, coverage matrix row #51): UIDocument/UITK panel
+// -> code-built uGUI on the Obsidian master frame (BuildObsidianModal: FrameCore
+// + medallion + the ONE shared Close + tap-outside scrim), per the LeaderboardPanel
+// / HelpMenu reference recipe. Row #51 flagged ClanChat as having NO close at all —
+// the kit chrome's shared Close now fixes that AND it registers with PanelManager
+// so opening closes other panels and the arbiter can dismiss it (was squatting over
+// Talents/Upgrade in every bot capture). Opens via Toggle() (the kit HUD dock calls
+// it directly); reads ClanService.Instance directly (DeNelle.HUD -> DeNelle.Core).
 //
-// Layout:
-//   • Header — clan tag + name + "Create" / "Leave" button.
-//   • When not in a clan — inline create form (name + tag fields).
+// Layout (in the frame's body well):
+//   • Status strip — clan tag + name (or "no clan"); Create/Leave action button.
+//   • Create form — name + tag input fields + "Found Clan" (only when not in a clan).
 //   • Scrollable message list — oldest at top, newest at bottom.
-//   • Phrase chip rail — one tap = post that phrase.
-//   • "Custom…" button reveals a TextField + Send for ≤140 char free text.
+//   • Phrase-chip rail — one-tap Obsidian buttons that post a templated phrase.
+//   • Composer — "Custom..." reveals an input + Send for <=140 char free text.
 //
-// Single-player only. The network bridge will swap ClanService for a thin
-// remote wrapper later (§7.1 of the React design doc).
+// Single-player only. The network bridge will swap ClanService for a thin remote
+// wrapper later (§7.1 of the React design doc).
 // =============================================================================
 
-using System.Collections.Generic;
 using DeNelle.Core.Services;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
+using TMPro;
 using UnityEngine;
-using UnityEngine.UIElements;
+using UnityEngine.UI;
 
 namespace DeNelle.HUD
 {
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(UIDocument))]
     public sealed class ClanChatPanel : MonoBehaviour
     {
-        private UIDocument _doc;
-        private VisualElement _root;
-        private VisualElement _panel;
-        private VisualElement _header;
-        private VisualElement _body;
-        private ScrollView _messageScroll;
-        private VisualElement _chipRail;
-        private VisualElement _composer;
-        private VisualElement _createForm;
-        private Label _headerTitle;
-        private Button _headerButton;
-        private TextField _customField;
-        private VisualElement _customRow;
+        private ElarionUiKit.ObsidianModal _modal;
+        private Transform _statusHost;
+        private Transform _actionHost;
+        private Transform _createForm;
+        private Transform _messageScrollHost;
+        private Transform _listContent;    // message ScrollRect content (VerticalLayoutGroup)
+        private Transform _chipContent;     // phrase-chip ScrollRect content
+        private Transform _composerHost;
+        private Transform _customRow;
+        private TMP_InputField _createNameField;
+        private TMP_InputField _createTagField;
+        private TMP_InputField _customField;
 
         private bool _visible;
         private bool _customOpen;
-        private TextField _createNameField;
-        private TextField _createTagField;
+
+        // Modal arbiter membership (eyes-on pass 2026-07-03: the open chat squatted OVER
+        // the Talents/Upgrade modals in every bot capture — it never told PanelManager it
+        // was open, so nothing ever closed it; and it exposed NO close affordance at all).
+        private PanelHandle _panelHandle;
 
         private void Awake()
         {
-            _doc = GetComponent<UIDocument>();
+            _panelHandle = PanelManager.Register("Clan Chat", () => SetVisible(false), () => _visible);
         }
 
         private void OnEnable()
         {
-            Build();
             if (ClanService.Instance != null)
                 ClanService.Instance.Changed += Repaint;
         }
@@ -66,303 +71,199 @@ namespace DeNelle.HUD
                 ClanService.Instance.Changed -= Repaint;
         }
 
-        // Mobile-first: the 'Y' keyboard open is REMOVED. The panel opens via Toggle()
-        // (public), reached by its on-screen / world-interactable path. No Update key poll.
+        private void OnDestroy()
+        {
+            if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
+        }
 
+        // Mobile-first: the panel opens via Toggle() (public), called by the kit HUD chat
+        // dock (HudKitController.OpenClanChat). No key poll, no 'Y' hotkey.
         public void Toggle() => SetVisible(!_visible);
-
-        // Modal arbiter membership (eyes-on pass 2026-07-03: the open chat squatted OVER the
-        // Talents/Upgrade modals in every bot capture — it never told PanelManager it was open,
-        // so nothing ever closed it; and it exposed NO close affordance at all).
-        private PanelHandle _panelHandle;
-        private PanelHandle Handle =>
-            _panelHandle ??= PanelManager.Register("Clan Chat", () => SetVisible(false), () => _visible);
 
         private void SetVisible(bool on)
         {
-            if (on) FlowTrace.Step("ClanChat", "SetVisible(true) — opening clan chat panel.");
-            _visible = on;
-            if (on && _panel == null)
-                FlowTrace.Fail("ClanChat",
-                    "SetVisible(true): _panel is NULL — Build never produced a panel (no PanelSettings/root?). Open is a no-op.");
-            if (_panel != null)
-                _panel.style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
-            if (on) { PanelManager.NotifyOpened(Handle); Repaint(); }
-            else PanelManager.NotifyClosed(Handle);
-        }
-
-        // ── UI construction ──────────────────────────────────────────────────
-
-        private void Build()
-        {
-            using var _ = FlowTrace.Enter("ClanChat", "Build");
-            // V (WO-465 class): this UIDocument adopts no PanelSettings. With none set,
-            // rootVisualElement is null and the old `if (_root == null) return;` produced an
-            // invisible panel with no symptom. Fail-loud so a run reports why it never showed.
-            if (_doc != null && _doc.panelSettings == null)
-                FlowTrace.Fail("ClanChat",
-                    "Build: UIDocument has NO PanelSettings — rootVisualElement will be null and the " +
-                    "clan chat panel renders invisible. Wire a PanelSettings on the ClanChat UIDocument.");
-            _root = _doc != null ? _doc.rootVisualElement : null;
-            if (_root == null)
+            if (on)
             {
-                FlowTrace.Fail("ClanChat",
-                    "Build: rootVisualElement is NULL (no UIDocument/PanelSettings) — clan chat UI cannot be built; panel will be empty.");
-                return;
+                FlowTrace.Step("ClanChat", "SetVisible(true) — opening clan chat panel.");
+                EnsureBuilt();
             }
-            _root.pickingMode = PickingMode.Ignore; // don't block HUD beneath
-            _root.style.position = Position.Absolute;
-            _root.style.left = 0; _root.style.right = 0;
-            _root.style.top = 0;  _root.style.bottom = 0;
-
-            _panel = new VisualElement();
-            _panel.name = "ClanChatPanel";
-            _panel.style.position = Position.Absolute;
-            _panel.style.left = 16;
-            _panel.style.bottom = 16;
-            _panel.style.width = 360;
-            _panel.style.maxHeight = 460;
-            _panel.style.backgroundColor = new StyleColor(ElarionUi.PanelStoneDark);
-            _panel.style.borderTopLeftRadius = 12; _panel.style.borderTopRightRadius = 12;
-            _panel.style.borderBottomLeftRadius = 12; _panel.style.borderBottomRightRadius = 12;
-            _panel.style.borderLeftWidth = 2; _panel.style.borderRightWidth = 2;
-            _panel.style.borderTopWidth = 2; _panel.style.borderBottomWidth = 2;
-            var panelRim = new StyleColor(new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f));
-            _panel.style.borderLeftColor   = panelRim;
-            _panel.style.borderRightColor  = panelRim;
-            _panel.style.borderTopColor    = panelRim;
-            _panel.style.borderBottomColor = panelRim;
-            _panel.style.paddingLeft = 12; _panel.style.paddingRight = 12;
-            _panel.style.paddingTop = 10;  _panel.style.paddingBottom = 10;
-            _panel.style.flexDirection = FlexDirection.Column;
-            _panel.style.display = DisplayStyle.None;
-            _panel.pickingMode = PickingMode.Position;
-            _root.Add(_panel);
-
-            BuildHeader();
-            BuildBody();
-            Repaint();
+            if (_modal == null || _modal.canvas == null) { _visible = false; return; }
+            _visible = on;
+            _modal.canvas.SetActive(on);
+            if (on)
+            {
+                if (!PanelManager.NotifyOpened(_panelHandle))
+                {
+                    _visible = false;
+                    _modal.canvas.SetActive(false);   // battle-lock reject — never force-show
+                    return;
+                }
+                Repaint();
+            }
+            else
+            {
+                PanelManager.NotifyClosed(_panelHandle);
+            }
         }
 
-        private void BuildHeader()
+        // ── UI construction (kit modal, lazy on first open) ──────────────────
+        private void EnsureBuilt()
         {
-            _header = new VisualElement();
-            _header.style.flexDirection = FlexDirection.Row;
-            _header.style.justifyContent = Justify.SpaceBetween;
-            _header.style.alignItems = Align.Center;
-            _header.style.marginBottom = 8;
-            _panel.Add(_header);
+            if (_modal != null && _modal.canvas != null) return;
+            using var _ = FlowTrace.Enter("ClanChat", "EnsureBuilt");
 
-            _headerTitle = new Label("Clan Chat");
-            _headerTitle.style.color = new StyleColor(ElarionUi.Gilt);
-            _headerTitle.style.fontSize = 14;
-            _headerTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
-            _headerTitle.style.flexGrow = 1;
-            _header.Add(_headerTitle);
+            _modal = ElarionUiKit.BuildObsidianModal("ClanChatUI", "Clan Chat",
+                new Vector2(0.24f, 0.10f), new Vector2(0.76f, 0.92f), () => SetVisible(false),
+                frameName: RpgUiCatalog.FrameCore, medallionIcon: "crest");
 
-            _headerButton = new Button(OnHeaderButton) { text = "Create" };
-            _headerButton.style.fontSize = 11;
-            _headerButton.style.paddingLeft = 10; _headerButton.style.paddingRight = 10;
-            _headerButton.style.paddingTop = 3;   _headerButton.style.paddingBottom = 3;
-            _header.Add(_headerButton);
+            var body = _modal.chrome.layout != null && _modal.chrome.layout.body != null
+                ? (Transform)_modal.chrome.layout.body
+                : _modal.chrome.content.transform;
 
-            // Close affordance (audit + fleet 2026-07-03: this panel had NO close at all —
-            // once opened it could only be dismissed by re-toggling the opener). Named per
-            // the close convention so the popup oracle finds it.
-            var closeBtn = new Button(() => SetVisible(false)) { text = "Close", name = "CloseButton" };
-            closeBtn.style.fontSize = 11;
-            closeBtn.style.marginLeft = 6;
-            closeBtn.style.paddingLeft = 10; closeBtn.style.paddingRight = 10;
-            closeBtn.style.paddingTop = 3;   closeBtn.style.paddingBottom = 3;
-            _header.Add(closeBtn);
-        }
+            // Status strip + Create/Leave action button (top of the well).
+            _statusHost = ZoneRect(body, "StatusStrip", new Vector2(0.03f, 0.90f), new Vector2(0.72f, 1.00f));
+            _actionHost = ZoneRect(body, "ActionHost",  new Vector2(0.73f, 0.90f), new Vector2(0.99f, 1.00f));
 
-        private void BuildBody()
-        {
-            _body = new VisualElement();
-            _body.style.flexDirection = FlexDirection.Column;
-            _body.style.flexGrow = 1;
-            _panel.Add(_body);
+            // Create form (shown only when not in a clan) — occupies the message region.
+            _createForm = ZoneRect(body, "CreateForm", new Vector2(0.03f, 0.30f), new Vector2(0.97f, 0.88f));
+            _createNameField = MakeInputField(_createForm, "Clan name", "Ember Wardens", 24,
+                new Vector2(0f, 0.78f), new Vector2(1f, 0.94f));
+            _createTagField = MakeInputField(_createForm, "Tag (2-4)", "EMBR", 4,
+                new Vector2(0f, 0.58f), new Vector2(1f, 0.74f));
+            ElarionUiKit.BuildObsidianButton(_createForm, "Found Clan",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.30f, 0.40f), new Vector2(0.70f, 0.54f), OnConfirmCreate);
 
-            // Create form (visible only when not in a clan)
-            _createForm = new VisualElement();
-            _createForm.style.flexDirection = FlexDirection.Column;
-            _createForm.style.marginBottom = 6;
-            _createForm.style.display = DisplayStyle.None;
-            _body.Add(_createForm);
+            // Message scroll list (shown only when in a clan).
+            _messageScrollHost = ZoneRect(body, "MessageScroll", new Vector2(0.03f, 0.30f), new Vector2(0.97f, 0.88f));
+            _listContent = BuildScrollColumn(_messageScrollHost);
 
-            _createNameField = new TextField("Clan name") { value = "Ember Wardens" };
-            _createNameField.style.marginBottom = 4;
-            _createForm.Add(_createNameField);
+            // Phrase-chip rail (Obsidian buttons, scrollable, category-grouped).
+            var chipHost = ZoneRect(body, "ChipRail", new Vector2(0.03f, 0.11f), new Vector2(0.97f, 0.29f));
+            _chipContent = BuildScrollColumn(chipHost);
 
-            _createTagField = new TextField("Tag (2–4)") { value = "EMBR" };
-            _createTagField.style.marginBottom = 4;
-            _createForm.Add(_createTagField);
+            // Composer (Custom... toggle + input + Send).
+            _composerHost = ZoneRect(body, "Composer", new Vector2(0.03f, 0.00f), new Vector2(0.97f, 0.10f));
+            ElarionUiKit.BuildObsidianButton(_composerHost, "Custom...",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0f, 0.05f), new Vector2(0.20f, 0.95f), ToggleCustomRow);
+            _customRow = ZoneRect(_composerHost, "CustomRow", new Vector2(0.21f, 0.05f), new Vector2(1f, 0.95f));
+            _customField = MakeInputField(_customRow, "Say something...", "", ClanService.CustomTextMaxChars,
+                new Vector2(0f, 0f), new Vector2(0.80f, 1f));
+            ElarionUiKit.BuildObsidianButton(_customRow, "Send",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
+                new Vector2(0.82f, 0f), new Vector2(1f, 1f), OnSendCustom);
+            _customRow.gameObject.SetActive(false);
 
-            var confirmRow = new VisualElement();
-            confirmRow.style.flexDirection = FlexDirection.Row;
-            confirmRow.style.justifyContent = Justify.FlexEnd;
-            _createForm.Add(confirmRow);
-
-            var confirmBtn = new Button(OnConfirmCreate) { text = "Found Clan" };
-            confirmRow.Add(confirmBtn);
-
-            // Message scroll
-            _messageScroll = new ScrollView(ScrollViewMode.Vertical);
-            _messageScroll.style.flexGrow = 1;
-            _messageScroll.style.minHeight = 160;
-            _messageScroll.style.maxHeight = 260;
-            _messageScroll.style.marginBottom = 6;
-            _messageScroll.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.25f));
-            _messageScroll.style.borderTopLeftRadius = 6; _messageScroll.style.borderTopRightRadius = 6;
-            _messageScroll.style.borderBottomLeftRadius = 6; _messageScroll.style.borderBottomRightRadius = 6;
-            _messageScroll.style.paddingLeft = 6; _messageScroll.style.paddingRight = 6;
-            _messageScroll.style.paddingTop = 4;  _messageScroll.style.paddingBottom = 4;
-            _body.Add(_messageScroll);
-
-            // Phrase chip rail (wraps; one-tap send)
-            _chipRail = new VisualElement();
-            _chipRail.style.flexDirection = FlexDirection.Row;
-            _chipRail.style.flexWrap = Wrap.Wrap;
-            _chipRail.style.marginBottom = 4;
-            _body.Add(_chipRail);
-
-            // Composer (custom message)
-            _composer = new VisualElement();
-            _composer.style.flexDirection = FlexDirection.Column;
-            _body.Add(_composer);
-
-            var customToggleRow = new VisualElement();
-            customToggleRow.style.flexDirection = FlexDirection.Row;
-            customToggleRow.style.justifyContent = Justify.FlexStart;
-            _composer.Add(customToggleRow);
-
-            var customToggleBtn = new Button(ToggleCustomRow) { text = "Custom…" };
-            customToggleBtn.style.fontSize = 11;
-            customToggleRow.Add(customToggleBtn);
-
-            _customRow = new VisualElement();
-            _customRow.style.flexDirection = FlexDirection.Row;
-            _customRow.style.marginTop = 4;
-            _customRow.style.display = DisplayStyle.None;
-            _composer.Add(_customRow);
-
-            _customField = new TextField { maxLength = ClanService.CustomTextMaxChars };
-            _customField.style.flexGrow = 1;
-            _customField.style.marginRight = 6;
-            _customRow.Add(_customField);
-
-            var sendBtn = new Button(OnSendCustom) { text = "Send" };
-            _customRow.Add(sendBtn);
+            _modal.canvas.SetActive(false);   // built hidden; SetVisible shows it
         }
 
         // ── Repaint ──────────────────────────────────────────────────────────
 
         private void Repaint()
         {
-            if (_panel == null || !_visible) return;
+            if (_modal == null || !_visible) return;
             var svc = ClanService.Instance;
             if (svc == null) return;
+
+            // Action button (Create / Leave) — rebuilt so its label + color reflect state.
+            for (int i = _actionHost.childCount - 1; i >= 0; i--)
+                Destroy(_actionHost.GetChild(i).gameObject);
+            ElarionUiKit.BuildObsidianButton(_actionHost, svc.InClan ? "Leave" : "Create",
+                ElarionUiKit.ObsidianButtonStyle.Style1,
+                svc.InClan ? ElarionUiKit.ObsidianButtonColor.Red : ElarionUiKit.ObsidianButtonColor.Green,
+                new Vector2(0f, 0.05f), new Vector2(1f, 0.95f), OnHeaderButton);
+
+            for (int i = _statusHost.childCount - 1; i >= 0; i--)
+                Destroy(_statusHost.GetChild(i).gameObject);
 
             if (svc.InClan)
             {
                 var clan = svc.Current;
                 var tag  = string.IsNullOrEmpty(clan.Tag) ? "" : $"[{clan.Tag}] ";
-                _headerTitle.text = $"{tag}{clan.Name}";
-                _headerButton.text = "Leave";
-                _createForm.style.display = DisplayStyle.None;
-                _messageScroll.style.display = DisplayStyle.Flex;
-                _chipRail.style.display = DisplayStyle.Flex;
-                _composer.style.display = DisplayStyle.Flex;
+                MakeText(_statusHost, $"{tag}{clan.Name}", 18, ElarionUi.Gilt, FontStyles.Bold,
+                    TextAlignmentOptions.Left, Vector2.zero, Vector2.one);
+
+                _createForm.gameObject.SetActive(false);
+                _messageScrollHost.gameObject.SetActive(true);
+                _chipContent.parent.parent.gameObject.SetActive(true);
+                _composerHost.gameObject.SetActive(true);
                 RebuildMessages(svc);
                 RebuildChips(svc);
             }
             else
             {
-                _headerTitle.text = "Clan Chat — no clan";
-                _headerButton.text = "Create";
-                _createForm.style.display = DisplayStyle.Flex;
-                _messageScroll.style.display = DisplayStyle.None;
-                _chipRail.style.display = DisplayStyle.None;
-                _composer.style.display = DisplayStyle.None;
+                MakeText(_statusHost, "No clan yet", 18, ElarionUi.ParchmentDim, FontStyles.Italic,
+                    TextAlignmentOptions.Left, Vector2.zero, Vector2.one);
+
+                _createForm.gameObject.SetActive(true);
+                _messageScrollHost.gameObject.SetActive(false);
+                _chipContent.parent.parent.gameObject.SetActive(false);
+                _composerHost.gameObject.SetActive(false);
             }
         }
 
         private void RebuildMessages(ClanService svc)
         {
-            _messageScroll.Clear();
+            for (int i = _listContent.childCount - 1; i >= 0; i--)
+                Destroy(_listContent.GetChild(i).gameObject);
+
             var msgs = svc.Messages;
             if (msgs == null || msgs.Count == 0)
             {
                 FlowTrace.Step("ClanChat",
-                    "RebuildMessages: no messages yet — showing visible 'Send a phrase…' hint (expected empty, not a failure).");
-                var hint = new Label("Send a phrase below to start the chat.");
-                hint.style.color = new StyleColor(ElarionUi.ParchmentDim);
-                hint.style.fontSize = 11;
-                hint.style.unityFontStyleAndWeight = FontStyle.Italic;
-                hint.style.marginTop = 6; hint.style.marginBottom = 6;
-                _messageScroll.Add(hint);
+                    "RebuildMessages: no messages yet — showing visible 'Send a phrase...' hint (expected empty, not a failure).");
+                AddMessageRow("", "Send a phrase below to start the chat.", true);
+                return;
             }
-            else
+
+            foreach (var m in msgs)
             {
-                foreach (var m in msgs)
-                {
-                    if (m == null) continue;
-                    _messageScroll.Add(BuildMessageRow(m, svc.AccountId));
-                }
+                if (m == null) continue;
+                var meta = (m.SenderId == svc.AccountId ? "You" : (m.SenderName ?? "?"))
+                           + (m.IsCustom ? " - custom" : "");
+                AddMessageRow(meta, m.Text ?? "...", false);
             }
-            // Auto-scroll to bottom on the next layout pass.
-            _messageScroll.schedule.Execute(() =>
-            {
-                _messageScroll.scrollOffset =
-                    new Vector2(0, float.MaxValue);
-            }).StartingIn(0);
         }
 
-        private static VisualElement BuildMessageRow(ChatMessage m, string localAccountId)
+        private void AddMessageRow(string meta, string body, bool hint)
         {
-            var row = new VisualElement();
-            row.style.flexDirection = FlexDirection.Column;
-            row.style.marginBottom = 4;
+            var rowGo = new GameObject("Msg", typeof(RectTransform), typeof(LayoutElement));
+            rowGo.transform.SetParent(_listContent, false);
+            var le = rowGo.GetComponent<LayoutElement>();
+            le.preferredHeight = string.IsNullOrEmpty(meta) ? 40f : 48f;
+            var rrt = rowGo.GetComponent<RectTransform>();
+            rrt.sizeDelta = new Vector2(rrt.sizeDelta.x, le.preferredHeight);
 
-            var meta = new Label((m.SenderId == localAccountId ? "You" : (m.SenderName ?? "?"))
-                                 + (m.IsCustom ? " · custom" : ""));
-            meta.style.color = new StyleColor(ElarionUi.ParchmentDim);
-            meta.style.fontSize = 10;
-            row.Add(meta);
+            if (!string.IsNullOrEmpty(meta))
+                MakeText(rowGo.transform, meta, 11, ElarionUi.ParchmentDim, FontStyles.Normal,
+                    TextAlignmentOptions.TopLeft, new Vector2(0f, 0.66f), new Vector2(1f, 1f));
 
-            var body = new Label(m.Text ?? "…");
-            body.style.color = new StyleColor(ElarionUi.Parchment);
-            body.style.fontSize = 12;
-            body.style.whiteSpace = WhiteSpace.Normal;
-            row.Add(body);
-
-            return row;
+            var bodyColor = hint ? ElarionUi.ParchmentDim : ElarionUi.Parchment;
+            var bodyStyle = hint ? FontStyles.Italic : FontStyles.Normal;
+            MakeText(rowGo.transform, body, 13, bodyColor, bodyStyle,
+                TextAlignmentOptions.TopLeft, new Vector2(0f, 0f),
+                new Vector2(1f, string.IsNullOrEmpty(meta) ? 1f : 0.66f));
         }
 
         private void RebuildChips(ClanService svc)
         {
-            _chipRail.Clear();
-            // Cap the chip rail at a comfortable density — full catalogue (24)
-            // wraps cleanly into 3 short rows; no further pagination.
+            for (int i = _chipContent.childCount - 1; i >= 0; i--)
+                Destroy(_chipContent.GetChild(i).gameObject);
+
             var phrases = ChatPhraseCatalog.Phrases;
-            // R (WORST offender): a null/empty phrase catalogue previously left the chip rail
+            // Never-blank contract: a null/empty phrase catalogue previously left the rail
             // utterly blank with NO fallback and NO trace — the chat read as broken. Show a
-            // visible placeholder AND self-report (data-empty) instead of a silent empty rail.
+            // visible placeholder AND self-report (data-empty).
             if (phrases == null || phrases.Count == 0)
             {
                 FlowTrace.Warn("ClanChat",
                     $"RebuildChips: ChatPhraseCatalog.Phrases is {(phrases == null ? "null" : "empty")} — " +
-                    "no quick-phrase chips to show; rendering visible 'Custom… to chat' fallback (data-empty).");
-                var fallback = new Label("No quick phrases — use Custom… below to chat.");
-                fallback.style.color = new StyleColor(ElarionUi.ParchmentDim);
-                fallback.style.fontSize = 11;
-                fallback.style.unityFontStyleAndWeight = FontStyle.Italic;
-                fallback.style.width = new Length(100, LengthUnit.Percent);
-                fallback.style.marginTop = 4; fallback.style.marginBottom = 4;
-                _chipRail.Add(fallback);
+                    "no quick-phrase chips; rendering visible 'Custom... to chat' fallback (data-empty).");
+                AddChipFallback();
                 return;
             }
+
             int chipCount = 0;
             string lastCategory = null;
             foreach (var p in phrases)
@@ -371,31 +272,54 @@ namespace DeNelle.HUD
                 if (p.Category != lastCategory)
                 {
                     lastCategory = p.Category;
-                    var divider = new Label(ResolveCategoryLabel(p.Category));
-                    divider.style.color = new StyleColor(new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f));
-                    divider.style.fontSize = 10;
-                    divider.style.unityFontStyleAndWeight = FontStyle.Bold;
-                    divider.style.width = new Length(100, LengthUnit.Percent);
-                    divider.style.marginTop = 4;
-                    divider.style.marginBottom = 2;
-                    _chipRail.Add(divider);
+                    AddChipDivider(ResolveCategoryLabel(p.Category));
                 }
-                _chipRail.Add(BuildChip(p));
+                AddChip(p);
                 chipCount++;
             }
-            // All phrases were null entries -> rail still empty. Keep the never-blank contract.
             if (chipCount == 0)
             {
                 FlowTrace.Warn("ClanChat",
-                    "RebuildChips: every phrase entry was null — rendering visible 'Custom… to chat' fallback (data-empty).");
-                var fallback = new Label("No quick phrases — use Custom… below to chat.");
-                fallback.style.color = new StyleColor(ElarionUi.ParchmentDim);
-                fallback.style.fontSize = 11;
-                fallback.style.unityFontStyleAndWeight = FontStyle.Italic;
-                fallback.style.width = new Length(100, LengthUnit.Percent);
-                fallback.style.marginTop = 4; fallback.style.marginBottom = 4;
-                _chipRail.Add(fallback);
+                    "RebuildChips: every phrase entry was null — rendering visible 'Custom... to chat' fallback (data-empty).");
+                AddChipFallback();
             }
+        }
+
+        private void AddChipDivider(string label)
+        {
+            var go = new GameObject("Divider", typeof(RectTransform), typeof(LayoutElement));
+            go.transform.SetParent(_chipContent, false);
+            go.GetComponent<LayoutElement>().preferredHeight = 16f;
+            var drt = go.GetComponent<RectTransform>();
+            drt.sizeDelta = new Vector2(drt.sizeDelta.x, 16f);
+            MakeText(go.transform, label, 11,
+                new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f),
+                FontStyles.Bold, TextAlignmentOptions.Left, Vector2.zero, Vector2.one);
+        }
+
+        private void AddChip(ChatPhraseDef p)
+        {
+            var label = string.IsNullOrEmpty(p.Emoji) ? p.Text : $"{p.Emoji} {p.Text}";
+            var host = new GameObject("Chip", typeof(RectTransform), typeof(LayoutElement));
+            host.transform.SetParent(_chipContent, false);
+            host.GetComponent<LayoutElement>().preferredHeight = 32f;
+            var hrt = host.GetComponent<RectTransform>();
+            hrt.sizeDelta = new Vector2(hrt.sizeDelta.x, 32f);
+            ElarionUiKit.BuildObsidianButton(host.transform, label,
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                Vector2.zero, Vector2.one, () => OnSendPhrase(p.Id));
+        }
+
+        private void AddChipFallback()
+        {
+            var go = new GameObject("ChipFallback", typeof(RectTransform), typeof(LayoutElement));
+            go.transform.SetParent(_chipContent, false);
+            go.GetComponent<LayoutElement>().preferredHeight = 28f;
+            var frt = go.GetComponent<RectTransform>();
+            frt.sizeDelta = new Vector2(frt.sizeDelta.x, 28f);
+            MakeText(go.transform, "No quick phrases — use Custom... below to chat.", 12,
+                ElarionUi.ParchmentDim, FontStyles.Italic,
+                TextAlignmentOptions.Left, Vector2.zero, Vector2.one);
         }
 
         private static string ResolveCategoryLabel(string key)
@@ -405,22 +329,6 @@ namespace DeNelle.HUD
             return key ?? "Phrases";
         }
 
-        private VisualElement BuildChip(ChatPhraseDef p)
-        {
-            var label = string.IsNullOrEmpty(p.Emoji) ? p.Text : $"{p.Emoji} {p.Text}";
-            var chip = new Button(() => OnSendPhrase(p.Id)) { text = label };
-            chip.style.fontSize = 11;
-            chip.style.marginRight = 4;
-            chip.style.marginBottom = 4;
-            chip.style.paddingLeft = 8; chip.style.paddingRight = 8;
-            chip.style.paddingTop = 2;  chip.style.paddingBottom = 2;
-            chip.style.backgroundColor = new StyleColor(ElarionUi.AetherDim);
-            chip.style.color = new StyleColor(ElarionUi.Parchment);
-            chip.style.borderTopLeftRadius = 10; chip.style.borderTopRightRadius = 10;
-            chip.style.borderBottomLeftRadius = 10; chip.style.borderBottomRightRadius = 10;
-            return chip;
-        }
-
         // ── Event handlers ───────────────────────────────────────────────────
 
         private void OnHeaderButton()
@@ -428,15 +336,15 @@ namespace DeNelle.HUD
             var svc = ClanService.Instance;
             if (svc == null) return;
             if (svc.InClan) svc.LeaveClan();
-            else _createForm.style.display = DisplayStyle.Flex;
+            // else: the create form is already visible (not-in-clan state) — no-op.
         }
 
         private void OnConfirmCreate()
         {
             var svc = ClanService.Instance;
             if (svc == null) return;
-            var name = _createNameField != null ? _createNameField.value : "Ember Wardens";
-            var tag  = _createTagField  != null ? _createTagField.value  : "EMBR";
+            var name = _createNameField != null ? _createNameField.text : "Ember Wardens";
+            var tag  = _createTagField  != null ? _createTagField.text  : "EMBR";
             svc.CreateClan(name, tag);
         }
 
@@ -451,18 +359,121 @@ namespace DeNelle.HUD
         {
             _customOpen = !_customOpen;
             if (_customRow != null)
-                _customRow.style.display = _customOpen ? DisplayStyle.Flex : DisplayStyle.None;
+                _customRow.gameObject.SetActive(_customOpen);
             if (_customOpen && _customField != null)
-                _customField.Focus();
+                _customField.ActivateInputField();
         }
 
         private void OnSendCustom()
         {
             var svc = ClanService.Instance;
             if (svc == null || !svc.InClan) return;
-            var text = _customField != null ? _customField.value : null;
+            var text = _customField != null ? _customField.text : null;
             svc.AddCustomMessage(text);
-            if (_customField != null) _customField.value = string.Empty;
+            if (_customField != null) _customField.text = string.Empty;
+        }
+
+        // ── uGUI helpers (mirrors LeaderboardPanel) ──────────────────────────
+
+        private static Transform ZoneRect(Transform parent, string name, Vector2 min, Vector2 max)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            return go.transform;
+        }
+
+        private static TextMeshProUGUI MakeText(Transform parent, string text, float size,
+            Color color, FontStyles style, TextAlignmentOptions align, Vector2 min, Vector2 max)
+        {
+            var go = new GameObject("Text", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var t = go.AddComponent<TextMeshProUGUI>();
+            t.text = text;
+            t.fontSize = size;
+            t.color = color;
+            t.fontStyle = style;
+            t.alignment = align;
+            t.raycastTarget = false;
+            t.textWrappingMode = TextWrappingModes.Normal;
+            ElarionUiKit.EnsureFont(t);
+            return t;
+        }
+
+        // Inline ScrollRect + VerticalLayoutGroup content column (canonical helper copied from
+        // CosmeticShopPanel/LeaderboardPanel — the SME referenced it but omitted the definition,
+        // gate CS0103). Returns the content transform rows/chips are added to.
+        private static Transform BuildScrollColumn(Transform host)
+        {
+            var scrollGo = new GameObject("Scroll", typeof(RectTransform), typeof(ScrollRect), typeof(RectMask2D), typeof(Image));
+            scrollGo.transform.SetParent(host, false);
+            var srt = scrollGo.GetComponent<RectTransform>();
+            srt.anchorMin = Vector2.zero; srt.anchorMax = Vector2.one;
+            srt.offsetMin = Vector2.zero; srt.offsetMax = Vector2.zero;
+            scrollGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.25f);
+
+            var contentGo = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            contentGo.transform.SetParent(scrollGo.transform, false);
+            var crt = contentGo.GetComponent<RectTransform>();
+            crt.anchorMin = new Vector2(0f, 1f); crt.anchorMax = Vector2.one;
+            crt.pivot = new Vector2(0.5f, 1f);
+            crt.offsetMin = Vector2.zero; crt.offsetMax = Vector2.zero;
+            var layout = contentGo.GetComponent<VerticalLayoutGroup>();
+            layout.spacing = 6f;
+            layout.padding = new RectOffset(8, 8, 8, 8);
+            layout.childControlHeight = false;
+            layout.childControlWidth = true;
+            layout.childForceExpandHeight = false;
+            contentGo.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            var scroll = scrollGo.GetComponent<ScrollRect>();
+            scroll.content = crt;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 24f;
+            return contentGo.transform;
+        }
+
+        // Inline TMP_InputField over a translucent rounded well (mirrors BugReportView).
+        private static TMP_InputField MakeInputField(Transform parent, string placeholder,
+            string initialValue, int maxLength, Vector2 min, Vector2 max)
+        {
+            var host = new GameObject("Input", typeof(Image), typeof(TMP_InputField));
+            host.transform.SetParent(parent, false);
+            var rt = (RectTransform)host.transform;
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var bg = host.GetComponent<Image>();
+            bg.color = new Color(0f, 0f, 0f, 0.45f);
+            ElarionUiKit.ApplyRounded(bg);
+
+            var areaGo = new GameObject("TextArea", typeof(RectTransform), typeof(RectMask2D));
+            areaGo.transform.SetParent(host.transform, false);
+            var art = (RectTransform)areaGo.transform;
+            art.anchorMin = Vector2.zero; art.anchorMax = Vector2.one;
+            art.offsetMin = new Vector2(10f, 4f); art.offsetMax = new Vector2(-10f, -4f);
+
+            var text = ElarionUiKit.Label(areaGo.transform, "", 0f, 1f,
+                ElarionUi.Parchment, ElarionUi.FontBody, TextAlignmentOptions.Left, 0f, 1f);
+            var ph = ElarionUiKit.Label(areaGo.transform, placeholder, 0f, 1f,
+                ElarionUi.ParchmentDim, ElarionUi.FontBody, TextAlignmentOptions.Left, 0f, 1f);
+            ph.fontStyle = FontStyles.Italic;
+
+            var field = host.GetComponent<TMP_InputField>();
+            field.targetGraphic = bg;
+            field.textViewport  = art;
+            field.textComponent = text;
+            field.placeholder   = ph;
+            field.lineType      = TMP_InputField.LineType.SingleLine;
+            field.characterLimit = maxLength;
+            field.text = initialValue ?? "";
+            return field;
         }
     }
 }
