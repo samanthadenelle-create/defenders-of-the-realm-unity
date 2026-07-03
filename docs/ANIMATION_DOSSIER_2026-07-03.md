@@ -429,3 +429,11 @@ swing. Wire through the existing canonical `weaponskill-animations.json` seam
 data — the skill def row carries its clip key). The HUD hot-swap slots (quick-swap 1-4 /
 Hero Loadout) inherit the animation with the skill automatically; slots know nothing about
 clips. One definition, every surface follows — her lookup-table-over-control-flow pattern.
+
+**OWNER RULING (07-03 ~16:00, CANON — supersedes the Tripo-Knight hero body):** the
+Mixamo PALADIN (Knight_Hero.fbx in the hero package) IS the new hero body — owner's
+words: "better render, better details." The dedicated-rig package is body + animations,
+not animation-only. Downstream: HeroBodySwapper/visual pipeline targets the Paladin mesh
+(sword/shield/helmet baked, Sword_joint/Shield_joint attachment bones); Tripo Knight
+retires from the hero slot (enemies unaffected). Remaining open: gap-fill policy
+(victory/block/injured) + package shape (prefab key vs manifest).
