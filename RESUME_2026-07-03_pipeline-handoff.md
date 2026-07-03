@@ -145,3 +145,19 @@ SUPERSEDES the lines below where they say shelved/uncommitted/still-running. Per
   Windows build for her felt-test, (3) wrap. The 15:48 Windows exe = her Fable benchmark —
   preserve it (copy aside before overwriting Builds/Windows).
 - Next session boots with SAMANTHA.md (she pastes it) — confirm everything before working.
+
+## WAVE 2 IN FLIGHT (~17:05, Opus, owner at dinner — "keep the team busy, UI perfect")
+Baseline GATE_OK before fan-out. 6 SMEs, file-disjoint:
+- HERO BUGS (HeroBodySwapper+EquipmentController): T-2 two-swords + T-3 shield-180 (EquipmentController
+  skip prop-attach on package body); T-4 coloring + T-5 no-hud-in-battle = DIAGNOSE (§12, F8-proven).
+- FRONT-END POLISH (TitleController+HeroSelectController): T-6 Title buttons in a row/white/rounded;
+  T-7 HeroSelect white Knight text + move content up so Confirm stays in frame (FrameCharacter cramp).
+- ClanChat full kit restyle (ClanChatPanel+bootstrap).
+- Raid/Outpost victory → EndStateView (RaidVictoryController+OutpostVictoryController+EndStateVM factory).
+- Tutorial chrome kit styling (UiSpotlight+ObjectiveBannerUi+IntroSequencePlayer).
+- Moat water SLICE 1 (CastleMoatBuilder): 18m band, ALL crossings clone the south bridge, annulus mesh.
+QUEUED into wave-2 build (already committed, need rebuild to take effect): gear→Help/DevTools restore
+(HudKitController), injured KEPT as placeholder. Next: collect 6 returns → gate combined → build exe
+(hero+screens+tutorial+moat) → windowed captures → image pairs for owner review.
+F8 felt-test findings T-2..T-8 recorded on PM board. Injured swap candidates: Action/Enemies
+"injured hurting idle" / "injured stumble idle" (owner to pick). Benchmark exe safe at fable-benchmark/.
