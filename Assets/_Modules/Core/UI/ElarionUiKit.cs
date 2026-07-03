@@ -510,9 +510,11 @@ namespace DeNelle.Core.UI
                 }
                 chrome.layout = layout;
 
-                // Gold title sits in the header zone (no procedural shadow/rule — the frame has the band).
-                chrome.title = Label(layout.header,
-                    (DeNelle.Core.FeatureFlags.BlinkChrome ? "" : ElarionUi.CrestGlyph + "  ") + (title ?? ""),
+                // Gold title sits in the header zone (no procedural shadow/rule — the frame has
+                // the band). NO crest glyph on the frame path (eyes-on 2026-07-03: the glyph is
+                // missing from the TMP font and rendered as an asterisk-box on every framed
+                // panel; the ornate frame IS the ornament).
+                chrome.title = Label(layout.header, title ?? "",
                     0f, 1f, ElarionUi.Gilt, ElarionUi.FontTitle,
                     TextAlignmentOptions.Center, 0f, 1f, spacing: 4f, bold: true);
                 chrome.title.raycastTarget = false;

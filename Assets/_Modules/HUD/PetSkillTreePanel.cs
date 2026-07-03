@@ -1,20 +1,17 @@
 // =============================================================================
-// PetSkillTreePanel — opens with the P key. Shows a tabbed inspect/unlock
-// surface over the player's three pets:
-//   row of tabs (Aether Sprite / Flame Pup / Ice Wolf)
-//   vertical flow of node cards:
-//     starter  (top)
-//     tier1 a + tier1 b
-//     tier2 a + tier2 b
-//     ultimate (bottom)
-// Each card surfaces name, tier badge, type badge, description, cooldown for
-// active skills, unlock-level requirement. Locked nodes render at 35% opacity.
-// A node whose prereqs are met sprouts an Unlock button that calls into
-// PetUnlockTracker.TryUnlock.
+// PetSkillTreePanel — the Echo (pet) skill-tree inspect/unlock surface.
+// Tabs per species (Aether Sprite / Flame Pup / Ice Wolf); vertical flow of
+// node cards in tier order (starter → tier1 → tier2 → ultimate). Each card:
+// name, tier/type badges, description, cooldown + unlock-level meta, and the
+// Unlock action (or the honest lock reason). Locked nodes render at 35% alpha.
 // -----------------------------------------------------------------------------
-// Cross-asmdef: DeNelle.HUD does NOT reference DeNelle.Pets — the entire
-// catalog is reached via reflection (see PetUnlockTracker / PetHeroLeash for
-// the bridge pattern). All catalog access tolerates a null Type / null
+// WO-F conversion (2026-07-03, coverage matrix row #5): UIDocument/UITK ->
+// code-built uGUI on the Obsidian master frame (BuildObsidianModal: FramePet —
+// the pack's pet panel — + medallion + the ONE shared Close + scrim), per the
+// HelpMenu reference recipe. Node cards ride an inline ScrollRect column.
+//
+// Cross-asmdef bridge UNCHANGED: DeNelle.HUD does NOT reference DeNelle.Pets —
+// the catalog is reached via reflection; every access tolerates a null Type /
 // instance and falls back to an empty view + warning.
 // =============================================================================
 
@@ -22,8 +19,9 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using TMPro;
 using UnityEngine;
-using UnityEngine.UIElements;
+using UnityEngine.UI;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
 
@@ -32,17 +30,13 @@ namespace DeNelle.HUD
     [DisallowMultipleComponent]
     public sealed class PetSkillTreePanel : MonoBehaviour
     {
-        private UIDocument _doc;
-        private VisualElement _root;
-        private VisualElement _overlay;
-        private VisualElement _tabsRow;
-        private VisualElement _treeColumn;
-        private Label _headerLabel;
-        private Label _statusLabel;
+        private ElarionUiKit.ObsidianModal _modal;
+        private Transform _tabHost;
+        private Transform _treeContent;    // ScrollRect content column
+        private TextMeshProUGUI _statusLabel;
 
         private bool _open;
         private string _activeSpecies;
-        // Modal arbiter handle (DEF-212): one panel open at a time.
         private PanelHandle _panelHandle;
 
         // Reflection cache — resolved lazily on first show.
@@ -56,39 +50,9 @@ namespace DeNelle.HUD
 
         private void Awake()
         {
-            _doc = GetComponent<UIDocument>();
-            if (_doc == null) _doc = gameObject.AddComponent<UIDocument>();
-            if (_doc.panelSettings == null)
-            {
-                foreach (var existing in UnityEngine.Object.FindObjectsByType<UIDocument>(
-                             FindObjectsInactive.Include))
-                {
-                    if (existing == _doc || existing.panelSettings == null) continue;
-                    _doc.panelSettings = existing.panelSettings;
-                    break;
-                }
-            }
-            if (_doc.panelSettings == null)
-            {
-                // V (WO-465 class — WORST offender): this previously disabled itself with ZERO
-                // logging, so the Pet Skills panel just never appeared and nothing said why.
-                // Fail-loud: no PanelSettings -> rootVisualElement is null -> the panel cannot
-                // render. Self-report instead of silently disabling.
-                FlowTrace.Fail("PetSkillTree",
-                    "Awake: no PanelSettings resolved (none on this UIDocument and none borrowable " +
-                    "from another scene UIDocument) — Pet Skills CANNOT render; disabling. " +
-                    "Wire a PanelSettings or ensure another UI panel exists first.");
-                enabled = false;
-                return;
-            }
-            FlowTrace.Step("PetSkillTree", $"Awake: PanelSettings resolved ('{_doc.panelSettings.name}').");
-            _doc.sortingOrder = 105; // above DailyQuestHud (80), below HelpMenu (?) but visible
-
             _panelHandle = PanelManager.Register("Pet Skills", Close, () => _open);
             // DEF-213: let the Pet House interaction open this panel by id.
             PanelRouter.Register(PanelId.PetSkillTree, Open);
-            BuildUi();
-            SetOpen(false);
         }
 
         private void OnEnable()
@@ -106,6 +70,7 @@ namespace DeNelle.HUD
         private void OnDestroy()
         {
             PanelRouter.Unregister(PanelId.PetSkillTree, Open);
+            if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
         }
 
         public bool IsOpen => _open;
@@ -117,107 +82,58 @@ namespace DeNelle.HUD
 
         private void SetOpen(bool open)
         {
-            if (open) FlowTrace.Step("PetSkillTree", "SetOpen(true) — opening Pet Skills panel.");
-            _open = open;
-            if (open && _overlay == null)
-                FlowTrace.Fail("PetSkillTree",
-                    "SetOpen(true): _overlay is NULL — BuildUi never produced an overlay (no PanelSettings/root?). Open is a no-op.");
-            if (_overlay != null)
+            if (open)
             {
-                _overlay.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
-                // Closed scrim must not eat pointer input (invisible click-blocker).
-                _overlay.pickingMode = open ? PickingMode.Position : PickingMode.Ignore;
+                FlowTrace.Step("PetSkillTree", "SetOpen(true) — opening Pet Skills panel.");
+                EnsureBuilt();
             }
-            // Route through the modal arbiter so opening this closes any other panel,
-            // and closing clears our slot (DEF-212).
-            if (open) PanelManager.NotifyOpened(_panelHandle);
-            else PanelManager.NotifyClosed(_panelHandle);
-            if (open) Repaint();
+            if (_modal == null || _modal.canvas == null) { _open = false; return; }
+            _open = open;
+            _modal.canvas.SetActive(open);
+            // Route through the modal arbiter (DEF-212); battle-lock may reject —
+            // revert and stay hidden, never force-show.
+            if (open)
+            {
+                if (!PanelManager.NotifyOpened(_panelHandle))
+                {
+                    _open = false;
+                    _modal.canvas.SetActive(false);
+                    return;
+                }
+                Repaint();
+            }
+            else
+            {
+                PanelManager.NotifyClosed(_panelHandle);
+            }
         }
 
-        // ── Build ────────────────────────────────────────────────────────────
+        // ── Build (kit modal, lazy on first open) ────────────────────────────
 
-        private void BuildUi()
+        private void EnsureBuilt()
         {
+            if (_modal != null && _modal.canvas != null) return;
             using var _ = FlowTrace.Enter("PetSkillTree", "BuildUi");
-            _root = _doc.rootVisualElement;
-            if (_root == null)
-            {
-                FlowTrace.Fail("PetSkillTree",
-                    "BuildUi: _doc.rootVisualElement is NULL (PanelSettings present but no root) — " +
-                    "Pet Skills UI cannot be built; panel will be empty.");
-                return;
-            }
-            _root.pickingMode = PickingMode.Ignore; // don't block HUD beneath
-            _root.Clear();
-            _root.pickingMode = PickingMode.Ignore;
 
-            _overlay = new VisualElement { name = "PetSkillTreeOverlay" };
-            ElarionUi.StyleScrim(_overlay);
-            // Start non-picking so the closed/never-opened scrim never blocks input.
-            _overlay.pickingMode = PickingMode.Ignore;
-            // Anchor the card near the top (tabbed sheet) rather than centred.
-            _overlay.style.flexDirection = FlexDirection.Column;
-            _overlay.style.justifyContent = Justify.FlexStart;
-            _overlay.style.paddingTop = 48;
-            _overlay.RegisterCallback<MouseDownEvent>(evt =>
-            {
-                if (evt.target == _overlay) Close();
-            });
-            _root.Add(_overlay);
+            _modal = ElarionUiKit.BuildObsidianModal("PetSkillTreeUI", "Echo Skill Trees",
+                new Vector2(0.24f, 0.06f), new Vector2(0.76f, 0.94f), Close,
+                frameName: RpgUiCatalog.FramePet, medallionIcon: "tree");
 
-            var card = new VisualElement { name = "PetSkillTreeCard" };
-            card.style.width = 560;
-            card.style.maxHeight = new Length(86f, LengthUnit.Percent);
-            card.style.paddingLeft = 16; card.style.paddingRight = 16;
-            card.style.paddingTop = 14;  card.style.paddingBottom = 14;
-            // Elarion stone panel + gold rim (canon).
-            ElarionUi.StylePanel(card, dark: true);
-            _overlay.Add(card);
+            // FULL content area, not just the frame's lower body zone (eyes-on 2026-07-03:
+            // FramePet's portrait arch sat EMPTY above the tabs — half the panel read blank).
+            // The species tab BLOCK lives where the arch is (two wrapped rows fit ~12 species);
+            // the tree scroll fills the rest.
+            var body = _modal.chrome.content.transform;
 
-            // Header row: title + close button.
-            var headerRow = new VisualElement();
-            headerRow.style.flexDirection = FlexDirection.Row;
-            headerRow.style.justifyContent = Justify.SpaceBetween;
-            headerRow.style.alignItems = Align.Center;
-            headerRow.style.marginBottom = 10;
-            card.Add(headerRow);
+            _tabHost = ZoneRect(body, "SpeciesTabs", new Vector2(0.07f, 0.665f), new Vector2(0.93f, 0.855f));
 
-            _headerLabel = new Label("Echo Skill Trees");
-            _headerLabel.style.color = new StyleColor(ElarionUi.Gilt);
-            _headerLabel.style.fontSize = ElarionUi.FontHead;
-            _headerLabel.style.letterSpacing = 1.5f;
-            _headerLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            headerRow.Add(_headerLabel);
+            var scrollHost = ZoneRect(body, "TreeScroll", new Vector2(0.07f, 0.115f), new Vector2(0.93f, 0.655f));
+            _treeContent = BuildScrollColumn(scrollHost);
 
-            var closeBtn = new Button(() => Close()) { text = "Close (P)" };
-            StyleSecondaryButton(closeBtn);
-            headerRow.Add(closeBtn);
+            _statusLabel = MakeText(body, "", 13, ElarionUi.Gold, FontStyles.Normal,
+                TextAlignmentOptions.Left, new Vector2(0.08f, 0.055f), new Vector2(0.92f, 0.11f));
 
-            // Thin gilt underline beneath the header (canon).
-            card.Add(ElarionUi.MakeRule());
-
-            _tabsRow = new VisualElement { name = "PetSkillTreeTabs" };
-            _tabsRow.style.flexDirection = FlexDirection.Row;
-            _tabsRow.style.justifyContent = Justify.SpaceBetween;
-            _tabsRow.style.marginBottom = 12;
-            card.Add(_tabsRow);
-
-            var scroll = new ScrollView(ScrollViewMode.Vertical);
-            scroll.style.flexGrow = 1;
-            card.Add(scroll);
-
-            _treeColumn = new VisualElement { name = "PetSkillTreeColumn" };
-            _treeColumn.style.flexDirection = FlexDirection.Column;
-            _treeColumn.style.alignItems = Align.Stretch;
-            scroll.Add(_treeColumn);
-
-            _statusLabel = new Label("");
-            _statusLabel.style.marginTop = 8;
-            _statusLabel.style.color = new StyleColor(ElarionUi.Gold);
-            _statusLabel.style.fontSize = ElarionUi.FontMicro;
-            _statusLabel.style.unityTextAlign = TextAnchor.MiddleLeft;
-            card.Add(_statusLabel);
+            _modal.canvas.SetActive(false);   // built hidden; SetOpen shows it
         }
 
         // ── Repaint ──────────────────────────────────────────────────────────
@@ -225,25 +141,19 @@ namespace DeNelle.HUD
         private void Repaint()
         {
             using var _ = FlowTrace.Enter("PetSkillTree", "Repaint");
-            if (_tabsRow == null || _treeColumn == null)
-            {
-                FlowTrace.Fail("PetSkillTree",
-                    "Repaint: tabs/tree containers are NULL — BuildUi never produced them (no root?). Repaint is a no-op.");
-                return;
-            }
-            _tabsRow.Clear();
-            _treeColumn.Clear();
+            if (!_open || _tabHost == null || _treeContent == null) return;
+
+            for (int i = _tabHost.childCount - 1; i >= 0; i--)
+                Destroy(_tabHost.GetChild(i).gameObject);
+            for (int i = _treeContent.childCount - 1; i >= 0; i--)
+                Destroy(_treeContent.GetChild(i).gameObject);
             _statusLabel.text = "";
 
             if (!ResolveBridge())
             {
-                // Roll-up: catalog asmdef unavailable -> visible note kept (R), self-reported (data-empty cause).
                 FlowTrace.Warn("PetSkillTree",
                     "Repaint: DeNelle.Pets catalog bridge unavailable — showing the visible 'catalog not available' note.");
-                var note = new Label("Echo catalog is not available. Try restarting the scene.");
-                note.style.color = new StyleColor(ElarionUi.Danger);
-                note.style.fontSize = ElarionUi.FontLabel;
-                _treeColumn.Add(note);
+                AddNoteRow("Echo catalog is not available. Try restarting the scene.", ElarionUi.Danger);
                 return;
             }
 
@@ -252,10 +162,7 @@ namespace DeNelle.HUD
             {
                 FlowTrace.Warn("PetSkillTree",
                     "Repaint: catalog returned 0 pet trees — showing the visible 'No pet trees defined' note (data-empty).");
-                var note = new Label("No pet trees defined.");
-                note.style.color = new StyleColor(ElarionUi.ParchmentDim);
-                note.style.fontSize = ElarionUi.FontLabel;
-                _treeColumn.Add(note);
+                AddNoteRow("No pet trees defined.", ElarionUi.ParchmentDim);
                 return;
             }
 
@@ -263,27 +170,38 @@ namespace DeNelle.HUD
             if (string.IsNullOrEmpty(_activeSpecies) || GetTreeByReflection(_activeSpecies) == null)
                 _activeSpecies = ExtractSpecies(trees[0]);
 
-            // Tabs.
+            // Species tabs (Yellow = active) — WRAPPED rows of 4 (eyes-on 2026-07-03:
+            // ~12 species crushed into one row rendered as unreadable slivers).
+            const int perRow = 4;
+            int rows = Mathf.Max(1, Mathf.CeilToInt(trees.Count / (float)perRow));
             for (int i = 0; i < trees.Count; i++)
             {
                 var t = trees[i];
                 string species = ExtractSpecies(t);
                 string display = ExtractDisplayName(t);
-                _tabsRow.Add(BuildTab(species, display));
+                int row = i / perRow, col = i % perRow;
+                float w = 1f / perRow, h = 1f / rows;
+                float x0 = 0.005f + col * w, x1 = x0 + w - 0.01f;
+                float y1 = 1f - row * h - 0.02f, y0 = y1 - h + 0.04f;
+                string label = string.IsNullOrEmpty(display) ? species : display;
+                bool active = string.Equals(species, _activeSpecies, StringComparison.Ordinal);
+                ElarionUiKit.BuildObsidianButton(_tabHost, label,
+                    ElarionUiKit.ObsidianButtonStyle.Style1,
+                    active ? ElarionUiKit.ObsidianButtonColor.Yellow
+                           : ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(x0, y0), new Vector2(x1, y1),
+                    () => { _activeSpecies = species; Repaint(); });
             }
 
             // Body.
-            var active = GetTreeByReflection(_activeSpecies);
-            if (active == null)
+            var activeTree = GetTreeByReflection(_activeSpecies);
+            if (activeTree == null)
             {
-                var note = new Label("Selected tree could not be loaded.");
-                note.style.color = new StyleColor(ElarionUi.Danger);
-                note.style.fontSize = ElarionUi.FontLabel;
-                _treeColumn.Add(note);
+                AddNoteRow("Selected tree could not be loaded.", ElarionUi.Danger);
                 return;
             }
 
-            // Header sub-line — pet level.
+            // Level sub-line.
             int petLevel = PetUnlockTracker.Instance != null
                 ? PetUnlockTracker.Instance.LevelOf(_activeSpecies)
                 : 1;
@@ -291,15 +209,10 @@ namespace DeNelle.HUD
                 ? PetUnlockTracker.Instance.XpOf(_activeSpecies)
                 : 0;
             int need = PetUnlockTracker.XpForLevel(petLevel);
-            var levelLine = new Label($"Level {petLevel}  ·  XP {xp}/{need}");
-            levelLine.style.color = new StyleColor(ElarionUi.Aether);
-            levelLine.style.fontSize = ElarionUi.FontLabel;
-            levelLine.style.marginBottom = 8;
-            levelLine.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _treeColumn.Add(levelLine);
+            AddNoteRow($"Level {petLevel}  ·  XP {xp}/{need}", ElarionUi.Aether, bold: true);
 
-            // Group by tier.
-            var skills = ExtractSkills(active);
+            // Group by tier and render starter → tier1 → tier2 → ultimate.
+            var skills = ExtractSkills(activeTree);
             var byTier = new Dictionary<string, List<object>>(StringComparer.OrdinalIgnoreCase)
             {
                 { "starter",  new List<object>() },
@@ -317,59 +230,23 @@ namespace DeNelle.HUD
                 }
                 list.Add(s);
             }
-
-            // Render in vertical flow: starter → tier1 → tier2 → ultimate.
-            AppendTierRow(byTier["starter"],  centered: true);
-            AppendTierRow(byTier["tier1"]);
-            AppendTierRow(byTier["tier2"]);
-            AppendTierRow(byTier["ultimate"], centered: true);
+            foreach (var tier in new[] { "starter", "tier1", "tier2", "ultimate" })
+                foreach (var s in byTier[tier])
+                    BuildNodeCard(s);
         }
 
-        private void AppendTierRow(List<object> skills, bool centered = false)
+        private void AddNoteRow(string text, Color color, bool bold = false)
         {
-            if (skills == null || skills.Count == 0) return;
-            var row = new VisualElement();
-            row.style.flexDirection = FlexDirection.Row;
-            row.style.justifyContent = centered ? Justify.Center : Justify.SpaceBetween;
-            row.style.marginBottom = 10;
-            foreach (var s in skills) row.Add(BuildNodeCard(s));
-            _treeColumn.Add(row);
-        }
-
-        // ── Tabs ─────────────────────────────────────────────────────────────
-
-        private VisualElement BuildTab(string species, string display)
-        {
-            bool active = string.Equals(species, _activeSpecies, StringComparison.Ordinal);
-            var btn = new Button(() =>
-            {
-                _activeSpecies = species;
-                Repaint();
-            })
-            {
-                text = string.IsNullOrEmpty(display) ? species : display,
-            };
-            btn.style.flexGrow = 1;
-            btn.style.marginLeft = 2; btn.style.marginRight = 2;
-            btn.style.paddingTop = 6; btn.style.paddingBottom = 6;
-            btn.style.color = new StyleColor(active ? ElarionUi.Gilt : ElarionUi.ParchmentDim);
-            btn.style.backgroundColor = new StyleColor(active
-                ? ElarionUi.PanelStone
-                : ElarionUi.PanelStoneDark);
-            btn.style.borderLeftWidth = 0; btn.style.borderRightWidth = 0;
-            btn.style.borderTopWidth = 0;  btn.style.borderBottomWidth = active ? 2 : 1;
-            btn.style.borderBottomColor = new StyleColor(active
-                ? ElarionUi.Gold
-                : new Color(ElarionUi.StoneTrim.r, ElarionUi.StoneTrim.g, ElarionUi.StoneTrim.b, 0.5f));
-            btn.style.borderTopLeftRadius = 6; btn.style.borderTopRightRadius = 6;
-            btn.style.borderBottomLeftRadius = 0; btn.style.borderBottomRightRadius = 0;
-            btn.style.unityFontStyleAndWeight = active ? FontStyle.Bold : FontStyle.Normal;
-            return btn;
+            var rowGo = new GameObject("Note", typeof(RectTransform), typeof(LayoutElement));
+            rowGo.transform.SetParent(_treeContent, false);
+            rowGo.GetComponent<LayoutElement>().preferredHeight = 30f;
+            MakeText(rowGo.transform, text, 14, color, bold ? FontStyles.Bold : FontStyles.Normal,
+                TextAlignmentOptions.Center, Vector2.zero, Vector2.one);
         }
 
         // ── Node card ────────────────────────────────────────────────────────
 
-        private VisualElement BuildNodeCard(object skill)
+        private void BuildNodeCard(object skill)
         {
             string id = ExtractString(skill, "Id") ?? "";
             string name = ExtractString(skill, "Name") ?? id;
@@ -391,110 +268,56 @@ namespace DeNelle.HUD
 
             bool canUnlock = !unlocked && CanUnlockByReflection(id, petLevel, unlockedSet);
 
-            var card = new VisualElement();
-            card.style.flexGrow = 1;
-            card.style.marginLeft = 4; card.style.marginRight = 4;
-            card.style.paddingLeft = 10; card.style.paddingRight = 10;
-            card.style.paddingTop = 8;   card.style.paddingBottom = 8;
-            card.style.minWidth = 220;
-            card.style.maxWidth = 260;
-            card.style.borderTopLeftRadius = 8; card.style.borderTopRightRadius = 8;
-            card.style.borderBottomLeftRadius = 8; card.style.borderBottomRightRadius = 8;
-            card.style.borderLeftWidth = 1; card.style.borderRightWidth = 1;
-            card.style.borderTopWidth = 1;  card.style.borderBottomWidth = 1;
-            Color rim = unlocked ? ElarionUi.Affordable
-                       : canUnlock ? ElarionUi.Gold
-                                   : ElarionUi.StoneTrim;
-            Color bg  = unlocked
-                ? new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.16f)
-                : ElarionUi.PanelStoneDark;
-            card.style.backgroundColor = new StyleColor(bg);
-            card.style.borderLeftColor = new StyleColor(rim);
-            card.style.borderRightColor = new StyleColor(rim);
-            card.style.borderTopColor = new StyleColor(rim);
-            card.style.borderBottomColor = new StyleColor(rim);
+            var cardGo = new GameObject("Node", typeof(RectTransform), typeof(Image), typeof(LayoutElement), typeof(CanvasGroup));
+            cardGo.transform.SetParent(_treeContent, false);
+            cardGo.GetComponent<LayoutElement>().preferredHeight = 118f;
+            var bg = cardGo.GetComponent<Image>();
+            var slotSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, "slot_talent");
+            if (slotSprite != null) { bg.sprite = slotSprite; bg.type = Image.Type.Sliced; }
+            // Unlocked = affirmative tint; unlockable = gold; locked = plain.
+            bg.color = unlocked
+                ? new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.55f)
+                : canUnlock ? new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f)
+                            : Color.white;
             // Locked = 35% opacity per spec.
-            card.style.opacity = unlocked ? 1f : (canUnlock ? 1f : 0.35f);
+            cardGo.GetComponent<CanvasGroup>().alpha = (unlocked || canUnlock) ? 1f : 0.35f;
 
-            // Name (12pt bold).
-            var nameLabel = new Label(name);
-            nameLabel.style.color = new StyleColor(ElarionUi.Parchment);
-            nameLabel.style.fontSize = ElarionUi.FontLabel;
-            nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            card.Add(nameLabel);
+            MakeText(cardGo.transform, name, 16, ElarionUi.Parchment, FontStyles.Bold,
+                TextAlignmentOptions.Left, new Vector2(0.04f, 0.72f), new Vector2(0.70f, 0.97f));
+            // Badge line: tier + type, palette-graded (canon set, not ad-hoc rainbow).
+            MakeText(cardGo.transform,
+                $"<color=#{ColorUtility.ToHtmlStringRGB(TierBadgeColor(tier))}>{tier.ToUpperInvariant()}</color>   " +
+                $"<color=#{ColorUtility.ToHtmlStringRGB(TypeBadgeColor(type))}>{type.ToUpperInvariant()}</color>",
+                11, ElarionUi.ParchmentDim, FontStyles.Bold,
+                TextAlignmentOptions.Left, new Vector2(0.04f, 0.56f), new Vector2(0.70f, 0.72f));
+            MakeText(cardGo.transform, desc, 12, ElarionUi.ParchmentDim, FontStyles.Italic,
+                TextAlignmentOptions.TopLeft, new Vector2(0.04f, 0.22f), new Vector2(0.70f, 0.54f));
+            MakeText(cardGo.transform, BuildMetaLine(type, cd, unlockLevel), 11, ElarionUi.ParchmentDim,
+                FontStyles.Normal, TextAlignmentOptions.Left,
+                new Vector2(0.04f, 0.04f), new Vector2(0.70f, 0.20f));
 
-            // Badge row.
-            var badges = new VisualElement();
-            badges.style.flexDirection = FlexDirection.Row;
-            badges.style.marginTop = 2; badges.style.marginBottom = 4;
-            badges.Add(BuildBadge(tier, TierBadgeColor(tier)));
-            badges.Add(BuildBadge(type, TypeBadgeColor(type)));
-            card.Add(badges);
-
-            // Description.
-            var descLabel = new Label(desc);
-            descLabel.style.color = new StyleColor(ElarionUi.ParchmentDim);
-            descLabel.style.fontSize = ElarionUi.FontMicro;
-            descLabel.style.whiteSpace = WhiteSpace.Normal;
-            descLabel.style.marginBottom = 4;
-            card.Add(descLabel);
-
-            // Meta row: cooldown (if active) + unlock-level requirement.
-            var meta = new Label(BuildMetaLine(type, cd, unlockLevel));
-            meta.style.color = new StyleColor(ElarionUi.ParchmentDim);
-            meta.style.fontSize = ElarionUi.FontMicro;
-            meta.style.marginBottom = 6;
-            card.Add(meta);
-
-            // Status / button.
+            // Status / action, right column.
             if (unlocked)
             {
-                var owned = new Label("Unlocked");
-                owned.style.color = new StyleColor(ElarionUi.Affordable);
-                owned.style.fontSize = ElarionUi.FontMicro;
-                owned.style.unityFontStyleAndWeight = FontStyle.Bold;
-                owned.style.unityTextAlign = TextAnchor.MiddleCenter;
-                card.Add(owned);
+                MakeText(cardGo.transform, "Unlocked", 14, ElarionUi.Affordable, FontStyles.Bold,
+                    TextAlignmentOptions.Center, new Vector2(0.72f, 0.35f), new Vector2(0.97f, 0.65f));
             }
             else if (canUnlock)
             {
-                var btn = new Button(() => OnUnlockClicked(id, name)) { text = "Unlock" };
-                StylePrimaryButton(btn);
-                card.Add(btn);
+                ElarionUiKit.BuildObsidianButton(cardGo.transform, "Unlock",
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
+                    new Vector2(0.72f, 0.30f), new Vector2(0.97f, 0.70f),
+                    () => OnUnlockClicked(id, name));
             }
             else
             {
-                string lockReason = LockReason(skill, petLevel, unlockedSet);
-                var locked = new Label(lockReason);
-                locked.style.color = new StyleColor(ElarionUi.Gold);
-                locked.style.fontSize = ElarionUi.FontMicro;
-                locked.style.whiteSpace = WhiteSpace.Normal;
-                locked.style.unityTextAlign = TextAnchor.MiddleCenter;
-                card.Add(locked);
+                MakeText(cardGo.transform, LockReason(skill, petLevel, unlockedSet), 11,
+                    ElarionUi.Gold, FontStyles.Normal, TextAlignmentOptions.Center,
+                    new Vector2(0.72f, 0.15f), new Vector2(0.97f, 0.85f));
             }
-
-            return card;
         }
 
-        private static VisualElement BuildBadge(string text, Color tint)
-        {
-            var b = new VisualElement();
-            b.style.marginRight = 4;
-            b.style.paddingLeft = 6; b.style.paddingRight = 6;
-            b.style.paddingTop = 1;  b.style.paddingBottom = 1;
-            b.style.borderTopLeftRadius = 6; b.style.borderTopRightRadius = 6;
-            b.style.borderBottomLeftRadius = 6; b.style.borderBottomRightRadius = 6;
-            b.style.backgroundColor = new StyleColor(new Color(tint.r * 0.35f, tint.g * 0.35f, tint.b * 0.35f, 0.85f));
-            var lbl = new Label(text);
-            lbl.style.color = new StyleColor(tint);
-            lbl.style.fontSize = 9;
-            lbl.style.unityFontStyleAndWeight = FontStyle.Bold;
-            b.Add(lbl);
-            return b;
-        }
-
-        // Tier badge tints — graded across the Elarion accent palette (canon)
-        // so they read as ONE designed set, not ad-hoc rainbow.
+        // Tier badge tints — graded across the Elarion accent palette (canon).
         private static Color TierBadgeColor(string tier) => tier?.ToLowerInvariant() switch
         {
             "starter"  => ElarionUi.ParchmentDim,
@@ -551,38 +374,13 @@ namespace DeNelle.HUD
                 _statusLabel.text = "Unlock tracker unavailable.";
                 return;
             }
-            if (PetUnlockTracker.Instance.TryUnlock(skillId))
-            {
-                _statusLabel.text = $"Unlocked: {name}";
-            }
-            else
-            {
-                _statusLabel.text = $"Cannot unlock {name} yet.";
-            }
+            _statusLabel.text = PetUnlockTracker.Instance.TryUnlock(skillId)
+                ? $"Unlocked: {name}"
+                : $"Cannot unlock {name} yet.";
             Repaint();
         }
 
-        // ── Button styling ───────────────────────────────────────────────────
-
-        private static void StylePrimaryButton(Button b)
-        {
-            // Gold CTA (canon).
-            ElarionUi.StyleButton(b, ElarionUi.ButtonKind.Gold);
-            b.style.minHeight = StyleKeyword.Auto;
-            b.style.marginTop = 2;
-            b.style.paddingTop = 4; b.style.paddingBottom = 4;
-        }
-
-        private static void StyleSecondaryButton(Button b)
-        {
-            // Neutral stone (canon).
-            ElarionUi.StyleButton(b, ElarionUi.ButtonKind.Neutral);
-            b.style.minHeight = StyleKeyword.Auto;
-            b.style.paddingLeft = 10; b.style.paddingRight = 10;
-            b.style.paddingTop = 4;   b.style.paddingBottom = 4;
-        }
-
-        // ── Catalog reflection bridge ───────────────────────────────────────
+        // ── Catalog reflection bridge (UNCHANGED) ───────────────────────────
 
         private static bool ResolveBridge()
         {
@@ -750,6 +548,71 @@ namespace DeNelle.HUD
                 return list;
             }
             catch (Exception e) { FlowTrace.Warn("PetSkillTree", $"ExtractStringList('{field}') reflected read threw: {e.GetType().Name}: {e.Message}"); return null; }
+        }
+
+        // ── uGUI helpers (same shapes as LeaderboardPanel / CosmeticShopPanel) ──
+
+        private static Transform ZoneRect(Transform parent, string name, Vector2 min, Vector2 max)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            return go.transform;
+        }
+
+        private static Transform BuildScrollColumn(Transform host)
+        {
+            var scrollGo = new GameObject("Scroll", typeof(RectTransform), typeof(ScrollRect), typeof(RectMask2D), typeof(Image));
+            scrollGo.transform.SetParent(host, false);
+            var srt = scrollGo.GetComponent<RectTransform>();
+            srt.anchorMin = Vector2.zero; srt.anchorMax = Vector2.one;
+            srt.offsetMin = Vector2.zero; srt.offsetMax = Vector2.zero;
+            scrollGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.25f);
+
+            var contentGo = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            contentGo.transform.SetParent(scrollGo.transform, false);
+            var crt = contentGo.GetComponent<RectTransform>();
+            crt.anchorMin = new Vector2(0f, 1f); crt.anchorMax = Vector2.one;
+            crt.pivot = new Vector2(0.5f, 1f);
+            crt.offsetMin = Vector2.zero; crt.offsetMax = Vector2.zero;
+            var layout = contentGo.GetComponent<VerticalLayoutGroup>();
+            layout.spacing = 6f;
+            layout.padding = new RectOffset(8, 8, 8, 8);
+            layout.childControlHeight = false;
+            layout.childControlWidth = true;
+            layout.childForceExpandHeight = false;
+            contentGo.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            var scroll = scrollGo.GetComponent<ScrollRect>();
+            scroll.content = crt;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 24f;
+            return contentGo.transform;
+        }
+
+        private static TextMeshProUGUI MakeText(Transform parent, string text, float size,
+            Color color, FontStyles style, TextAlignmentOptions align, Vector2 min, Vector2 max)
+        {
+            var go = new GameObject("Text", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var t = go.AddComponent<TextMeshProUGUI>();
+            t.text = text;
+            t.fontSize = size;
+            t.color = color;
+            t.fontStyle = style;
+            t.alignment = align;
+            t.raycastTarget = false;
+            t.richText = true;
+            t.textWrappingMode = TextWrappingModes.Normal;
+            ElarionUiKit.EnsureFont(t);
+            return t;
         }
     }
 }

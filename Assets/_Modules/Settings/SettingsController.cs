@@ -1,368 +1,208 @@
 // =============================================================================
 // SettingsController — drives the options menu (audit P0-8 §2.1).
 // -----------------------------------------------------------------------------
-// The MonoBehaviour behind SettingsScreen.uxml — the settings screen the
-// missing-components audit (§2.1) says does not exist anywhere in the project.
+// WO-F conversion (2026-07-03, coverage matrix row #47): the UXML screen
+// (SettingsScreen.uxml — canon-flagged "UXML does not render in builds", §8)
+// is RETIRED. The screen is now code-built uGUI on the Obsidian master frame
+// (BuildObsidianModal: FrameSettings + the ONE shared Close + scrim).
 //
-// WHAT IT OFFERS:
+// WHAT IT OFFERS (unchanged):
 //   * Audio    — Master / Music / SFX volume sliders + a global mute toggle.
-//   * Gameplay — a three-way difficulty selector (Easy / Normal / Hard),
-//                buttons built at runtime from Difficulty. Difficulty scales
-//                the WaveManager between-wave countdown (DifficultyTuning):
-//                Easy ~10 min, Normal ~5 min, Hard ~3 min between waves.
-//   * Graphics — a three-tier quality selector (Seeker_Low / Seeker_High /
-//                Desktop), buttons built at runtime from QualityTier.
-//   * Comfort  — a screen-shake on/off toggle (accessibility — audit §2.7).
-//   * A "Reset to defaults" and a "Back" button.
+//   * Gameplay — Easy / Normal / Hard difficulty selector + blurb.
+//   * Graphics — Seeker_Low / Seeker_High / Desktop quality selector.
+//   * Comfort  — screen-shake on/off toggle (accessibility — audit §2.7).
+//   * Help     — Game Guide button (WO-588); Reset to defaults.
+//   * Back     = the chrome's shared Close (raises SettingsClosed for the
+//     pause overlay, exactly as before).
 //
-// PERSISTENCE: every control writes straight through SettingsModel, which
-// persists immediately (PlayerPrefs + the Core save layer) and applies the
-// value live (AudioMixerBridge / SeekerBootstrap / ScreenShakeSetting). There
-// is no separate "save" step — changes are durable the moment they are made,
-// and SettingsBootstrap re-applies them on the next launch.
-//
-// MODAL, not a HUD: the screen is shown / hidden by Open() / Close(); while
-// open it paints a full-screen scrim and captures input. It does NOT own a
-// scene — the pause overlay (or a future title Options button) shows it as an
-// overlay UIDocument. SettingsClosed fires when the player taps Back so the
-// opener (e.g. PauseController) can return focus to itself.
-//
-// Lives in DeNelle.Settings; references DeNelle.Core only — module isolation.
+// PERSISTENCE unchanged: every control writes straight through SettingsModel
+// (persists immediately + applies live). Public API unchanged: Open() /
+// Close() / IsOpen / SettingsClosed — PauseController's wiring still holds.
 // =============================================================================
 
 using System;
 using DeNelle.Core.State;
+using DeNelle.Core.UI;
+using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.UIElements;
+using UnityEngine.UI;
 using UnityEngine.Audio;
 
 namespace DeNelle.Settings
 {
     /// <summary>
-    /// Drives the options menu: audio sliders, the quality-tier selector and the
-    /// screen-shake toggle. Modal — <see cref="Open"/> / <see cref="Close"/>
+    /// Drives the options menu: audio sliders, quality/difficulty selectors and
+    /// the screen-shake toggle. Modal — <see cref="Open"/> / <see cref="Close"/>
     /// show and hide it; every control persists + applies through
-    /// <see cref="SettingsModel"/>. Lives on the settings overlay
-    /// <see cref="UIDocument"/>.
+    /// <see cref="SettingsModel"/>.
     /// </summary>
-    [RequireComponent(typeof(UIDocument))]
     public sealed class SettingsController : MonoBehaviour
     {
-        [Header("UI")]
-        [Tooltip("UIDocument hosting SettingsScreen.uxml. Falls back to the component on this GameObject.")]
-        [SerializeField] private UIDocument _document;
-
         [Header("Audio mixer (optional)")]
         [Tooltip("The project AudioMixer. Optional — if left empty, AudioMixerBridge resolves it " +
-                 "from Resources/Audio/GameAudioMixer, and no-ops safely until the Audio-system " +
-                 "agent's mixer asset exists. Assign it here once that mixer ships.")]
+                 "from Resources/Audio/GameAudioMixer, and no-ops safely until the mixer asset exists.")]
         [SerializeField] private AudioMixer _audioMixer;
-
-        [Header("Behaviour")]
-        [Tooltip("Hide the settings screen on Awake so it starts closed.")]
-        [SerializeField] private bool _startHidden = true;
 
         [Header("Events")]
         [Tooltip("Raised when the player taps Back / closes the screen. The opener " +
                  "(e.g. the pause overlay) listens to restore its own focus.")]
         public UnityEvent SettingsClosed = new UnityEvent();
 
-        // ── UXML element names — the binding contract with SettingsScreen.uxml ─
-        private const string RootName = "settings-root";
-        private const string MasterSliderName = "settings-master-slider";
-        private const string MasterValueName = "settings-master-value";
-        private const string MusicSliderName = "settings-music-slider";
-        private const string MusicValueName = "settings-music-value";
-        private const string SfxSliderName = "settings-sfx-slider";
-        private const string SfxValueName = "settings-sfx-value";
-        private const string MuteToggleName = "settings-mute-toggle";
-        private const string QualityRowName = "settings-quality-row";
-        private const string DifficultyRowName = "settings-difficulty-row";
-        private const string ScrollName = "settings-scroll";
-        // WO-588: the runtime-built "Help" section + Game Guide button (no UXML — §8).
-        private const string GuideSectionName = "settings-guide-section";
-        private const string DifficultyBlurbName = "settings-difficulty-blurb";
-        private const string ShakeToggleName = "settings-shake-toggle";
-        private const string AudioSeamName = "settings-audio-seam";
-        private const string ResetButtonName = "settings-reset-button";
-        private const string BackButtonName = "settings-back-button";
+        private ElarionUiKit.ObsidianModal _modal;
+        private Slider _masterSlider, _musicSlider, _sfxSlider;
+        private TextMeshProUGUI _masterValue, _musicValue, _sfxValue;
+        private Toggle _muteToggle, _shakeToggle;
+        private Transform _qualityRow, _difficultyRow;
+        private TextMeshProUGUI _difficultyBlurb, _audioSeam;
 
-        // ── USS class names — styled by SettingsScreen.uss ───────────────────
-        private const string TierButtonClass = "quality-tier-button";
-        private const string TierButtonActiveClass = "quality-tier-button--active";
-        private const string DifficultyButtonClass = "difficulty-button";
-        private const string DifficultyButtonActiveClass = "difficulty-button--active";
-
-        // ── Bound UI elements ────────────────────────────────────────────────
-        private VisualElement _root;
-        private Slider _masterSlider;
-        private Label _masterValue;
-        private Slider _musicSlider;
-        private Label _musicValue;
-        private Slider _sfxSlider;
-        private Label _sfxValue;
-        private Toggle _muteToggle;
-        private VisualElement _qualityRow;
-        private VisualElement _difficultyRow;
-        private Label _difficultyBlurb;
-        private Toggle _shakeToggle;
-        private Label _audioSeam;
-        private Button _resetButton;
-        private Button _backButton;
-
-        // One quality-tier button paired with the tier it selects.
-        private readonly Button[] _tierButtons = new Button[3];
         private static readonly QualityTier[] Tiers =
         {
             QualityTier.SeekerLow, QualityTier.SeekerHigh, QualityTier.Desktop,
         };
-
-        // One difficulty button paired with the difficulty it selects.
-        private readonly Button[] _difficultyButtons = new Button[3];
         private static readonly Difficulty[] Difficulties =
         {
             Difficulty.Easy, Difficulty.Normal, Difficulty.Hard,
         };
 
-        private bool _bound;
         private bool _open;
+        private bool _suppressCallbacks;
 
         /// <summary>True while the settings screen is open and visible.</summary>
         public bool IsOpen => _open;
 
-        // =====================================================================
-        //  Lifecycle
-        // =====================================================================
-
         private void Awake()
         {
-            if (_document == null) _document = GetComponent<UIDocument>();
-
-            // Hand a directly-assigned mixer to the bridge — it takes priority
-            // over the Resources lookup. Null is fine: the bridge then resolves
-            // lazily and no-ops if the asset is still absent.
+            // Hand a directly-assigned mixer to the bridge — priority over the
+            // Resources lookup. Null is fine: the bridge resolves lazily.
             if (_audioMixer != null)
                 AudioMixerBridge.SetMixer(_audioMixer);
         }
 
-        private void OnEnable()
+        private void OnDestroy()
         {
-            BindElements();
-            if (_startHidden) SetVisible(false);
-        }
-
-        private void OnDisable()
-        {
-            UnregisterCallbacks();
-            _bound = false;
-        }
-
-        // =====================================================================
-        //  UI Toolkit binding
-        // =====================================================================
-
-        private void BindElements()
-        {
-            _root = _document != null ? _document.rootVisualElement : null;
-            if (_root == null)
-            {
-                Debug.LogWarning("[SettingsController] No UIDocument root — settings screen will not display.");
-                return;
-            }
-
-            _masterSlider = _root.Q<Slider>(MasterSliderName);
-            _masterValue = _root.Q<Label>(MasterValueName);
-            _musicSlider = _root.Q<Slider>(MusicSliderName);
-            _musicValue = _root.Q<Label>(MusicValueName);
-            _sfxSlider = _root.Q<Slider>(SfxSliderName);
-            _sfxValue = _root.Q<Label>(SfxValueName);
-            _muteToggle = _root.Q<Toggle>(MuteToggleName);
-            _qualityRow = _root.Q<VisualElement>(QualityRowName);
-            _difficultyRow = _root.Q<VisualElement>(DifficultyRowName);
-            _difficultyBlurb = _root.Q<Label>(DifficultyBlurbName);
-            _shakeToggle = _root.Q<Toggle>(ShakeToggleName);
-            _audioSeam = _root.Q<Label>(AudioSeamName);
-            _resetButton = _root.Q<Button>(ResetButtonName);
-            _backButton = _root.Q<Button>(BackButtonName);
-
-            BuildQualityButtons();
-            BuildDifficultyButtons();
-            BuildGameGuideButton();
-            RegisterCallbacks();
-            RefreshFromModel();
-            _bound = true;
-        }
-
-        // WO-417: code-built UIToolkit text renders BLANK when the PanelSettings theme carries no
-        // default font ("all rows blank — backgrounds draw, glyphs don't"). Mirror the proven
-        // AdminOverlay.AdminFont() fix: assign a built-in fallback font to every dynamically-built
-        // button so the labels render regardless of the theme. (NOTE: any UXML-authored labels in
-        // this panel are a SEPARATE concern — UXML text in builds is canon-flagged unreliable,
-        // CLAUDE.md §8; if rows from UXML stay blank, that needs a code-built rebuild, a bigger WO.)
-        private static Font _uiFont;
-        private static Font UiFont()
-        {
-            if (_uiFont == null) _uiFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            return _uiFont;
-        }
-
-        /// <summary>Builds the three quality-tier buttons into the quality row once.</summary>
-        private void BuildQualityButtons()
-        {
-            if (_qualityRow == null) return;
-            _qualityRow.Clear();
-
-            for (int i = 0; i < Tiers.Length; i++)
-            {
-                QualityTier tier = Tiers[i];
-                var button = new Button { name = $"quality-tier-{i}", text = SettingsModel.TierLabel(tier) };
-                button.AddToClassList(TierButtonClass);
-                { var f = UiFont(); if (f != null) button.style.unityFont = f; }
-                // Capture the tier in a local so the closure binds the right value.
-                QualityTier captured = tier;
-                button.clicked += () => OnQualityTierClicked(captured);
-                _qualityRow.Add(button);
-                _tierButtons[i] = button;
-            }
-        }
-
-        /// <summary>
-        /// Builds the three difficulty buttons (Easy / Normal / Hard) into the
-        /// difficulty row once. Mirrors <see cref="BuildQualityButtons"/>.
-        /// </summary>
-        private void BuildDifficultyButtons()
-        {
-            if (_difficultyRow == null) return;
-            _difficultyRow.Clear();
-
-            for (int i = 0; i < Difficulties.Length; i++)
-            {
-                Difficulty difficulty = Difficulties[i];
-                var button = new Button
-                {
-                    name = $"difficulty-{i}",
-                    text = DifficultyTuning.Label(difficulty),
-                };
-                button.AddToClassList(DifficultyButtonClass);
-                { var f = UiFont(); if (f != null) button.style.unityFont = f; }
-                // Capture the difficulty in a local so the closure binds right.
-                Difficulty captured = difficulty;
-                button.clicked += () => OnDifficultyClicked(captured);
-                _difficultyRow.Add(button);
-                _difficultyButtons[i] = button;
-            }
-        }
-
-        /// <summary>
-        /// WO-588: appends a "Help" section with a single "Game Guide" button to the
-        /// settings scroll at runtime (code-built — no UXML authoring, §8). Tapping it
-        /// closes Settings and opens the opt-in Game Guide codex via PanelRouter. Mirrors
-        /// the runtime-button pattern of <see cref="BuildDifficultyButtons"/>. Idempotent:
-        /// a re-bind removes the prior section before re-adding it.
-        /// </summary>
-        private void BuildGameGuideButton()
-        {
-            if (_root == null) return;
-            var scroll = _root.Q<ScrollView>(ScrollName);
-
-            // Re-bind safety: drop any previously-built section so we never duplicate it.
-            VisualElement searchRoot = scroll != null ? (VisualElement)scroll : _root;
-            var prior = searchRoot.Q<VisualElement>(GuideSectionName);
-            if (prior != null) prior.RemoveFromHierarchy();
-
-            var section = new VisualElement { name = GuideSectionName };
-
-            var caption = new Label("Help");
-            caption.AddToClassList("settings-section-caption");
-            section.Add(caption);
-
-            var row = new VisualElement();
-            row.AddToClassList("settings-row");
-
-            var guideButton = new Button(OnGameGuideClicked)
-            {
-                name = "settings-guide-button",
-                text = "Game Guide",
-            };
-            guideButton.AddToClassList("settings-button");
-            guideButton.AddToClassList("settings-button--primary");
-            { var f = UiFont(); if (f != null) guideButton.style.unityFont = f; }
-            row.Add(guideButton);
-            section.Add(row);
-
-            if (scroll != null) scroll.Add(section);
-            else _root.Add(section);
-        }
-
-        /// <summary>
-        /// Opens the Game Guide codex. Closes Settings first so the modal arbiter
-        /// (PanelManager, one-panel-at-a-time) swaps cleanly to the guide.
-        /// </summary>
-        private void OnGameGuideClicked()
-        {
-            Close();
-            DeNelle.Core.UI.PanelRouter.Open(DeNelle.Core.UI.PanelId.GameGuide);
-        }
-
-        private void RegisterCallbacks()
-        {
-            if (_masterSlider != null) _masterSlider.RegisterValueChangedCallback(OnMasterChanged);
-            if (_musicSlider != null) _musicSlider.RegisterValueChangedCallback(OnMusicChanged);
-            if (_sfxSlider != null) _sfxSlider.RegisterValueChangedCallback(OnSfxChanged);
-            if (_muteToggle != null) _muteToggle.RegisterValueChangedCallback(OnMuteChanged);
-            if (_shakeToggle != null) _shakeToggle.RegisterValueChangedCallback(OnShakeChanged);
-            if (_resetButton != null) _resetButton.clicked += OnResetClicked;
-            if (_backButton != null) _backButton.clicked += OnBackClicked;
-        }
-
-        private void UnregisterCallbacks()
-        {
-            if (_masterSlider != null) _masterSlider.UnregisterValueChangedCallback(OnMasterChanged);
-            if (_musicSlider != null) _musicSlider.UnregisterValueChangedCallback(OnMusicChanged);
-            if (_sfxSlider != null) _sfxSlider.UnregisterValueChangedCallback(OnSfxChanged);
-            if (_muteToggle != null) _muteToggle.UnregisterValueChangedCallback(OnMuteChanged);
-            if (_shakeToggle != null) _shakeToggle.UnregisterValueChangedCallback(OnShakeChanged);
-            if (_resetButton != null) _resetButton.clicked -= OnResetClicked;
-            if (_backButton != null) _backButton.clicked -= OnBackClicked;
+            if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
         }
 
         // =====================================================================
         //  Public API — Open / Close (the pause overlay drives these)
         // =====================================================================
 
-        /// <summary>
-        /// Opens the settings screen. Re-reads the persisted values into every
-        /// control first so the screen always reflects the current state.
-        /// </summary>
+        /// <summary>Opens the settings screen; re-reads persisted values first.</summary>
         public void Open()
         {
-            if (!_bound) BindElements();
+            EnsureBuilt();
+            if (_modal == null || _modal.canvas == null) return;
             RefreshFromModel();
-            SetVisible(true);
+            _modal.canvas.SetActive(true);
             _open = true;
         }
 
-        /// <summary>
-        /// Closes the settings screen and raises <see cref="SettingsClosed"/>.
-        /// Equivalent to the player tapping Back.
-        /// </summary>
+        /// <summary>Closes the settings screen and raises <see cref="SettingsClosed"/>.</summary>
         public void Close()
         {
-            SetVisible(false);
+            if (_modal != null && _modal.canvas != null) _modal.canvas.SetActive(false);
             _open = false;
             SettingsClosed?.Invoke();
+        }
+
+        // =====================================================================
+        //  Build (kit modal, lazy on first open)
+        // =====================================================================
+
+        private void EnsureBuilt()
+        {
+            if (_modal != null && _modal.canvas != null) return;
+
+            // Chrome Close = Back (raises SettingsClosed via Close()).
+            _modal = ElarionUiKit.BuildObsidianModal("SettingsUI", "Settings",
+                new Vector2(0.26f, 0.05f), new Vector2(0.74f, 0.95f), Close,
+                sortingOrder: 32000,   // settings sits above every other modal
+                frameName: RpgUiCatalog.FrameSettings, medallionIcon: "settings");
+
+            var layout = _modal.chrome.layout;
+            var body = layout != null && layout.body != null
+                ? (Transform)layout.body
+                : _modal.chrome.content.transform;
+
+            float y = 0.985f;
+            // ── Audio ────────────────────────────────────────────────────────
+            y = Caption(body, "Audio", y);
+            (_masterSlider, _masterValue) = SliderRow(body, "Master", ref y, OnMasterChanged);
+            (_musicSlider,  _musicValue)  = SliderRow(body, "Music",  ref y, OnMusicChanged);
+            (_sfxSlider,    _sfxValue)    = SliderRow(body, "SFX",    ref y, OnSfxChanged);
+            _muteToggle = ToggleRow(body, "Mute all audio", ref y, OnMuteChanged);
+            _audioSeam = MakeText(body, "Audio mixer not wired yet — volumes persist and apply when it lands.",
+                11, ElarionUi.ParchmentDim, FontStyles.Italic, TextAlignmentOptions.Left,
+                new Vector2(0.06f, y - 0.030f), new Vector2(0.94f, y));
+            y -= 0.038f;
+
+            // ── Gameplay ─────────────────────────────────────────────────────
+            y = Caption(body, "Gameplay", y);
+            _difficultyRow = ZoneRect(body, "DifficultyRow", new Vector2(0.06f, y - 0.055f), new Vector2(0.94f, y));
+            y -= 0.062f;
+            _difficultyBlurb = MakeText(body, "", 11, ElarionUi.ParchmentDim, FontStyles.Italic,
+                TextAlignmentOptions.Left, new Vector2(0.06f, y - 0.035f), new Vector2(0.94f, y));
+            y -= 0.045f;
+
+            // ── Graphics ─────────────────────────────────────────────────────
+            y = Caption(body, "Graphics", y);
+            _qualityRow = ZoneRect(body, "QualityRow", new Vector2(0.06f, y - 0.055f), new Vector2(0.94f, y));
+            y -= 0.068f;
+
+            // ── Comfort ──────────────────────────────────────────────────────
+            y = Caption(body, "Comfort", y);
+            _shakeToggle = ToggleRow(body, "Screen shake", ref y, OnShakeChanged);
+
+            // ── Help + Reset (WO-588) ────────────────────────────────────────
+            y = Caption(body, "Help", y);
+            ElarionUiKit.BuildObsidianButton(body, "Game Guide",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.06f, y - 0.055f), new Vector2(0.48f, y), OnGameGuideClicked);
+            ElarionUiKit.BuildObsidianButton(body, "Reset Defaults",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Red,
+                new Vector2(0.52f, y - 0.055f), new Vector2(0.94f, y), OnResetClicked);
+
+            BuildSelectorButtons();
+            _modal.canvas.SetActive(false);   // built hidden; Open shows it
+        }
+
+        // Rebuilt whole so the active selection re-colors (Yellow = active).
+        private void BuildSelectorButtons()
+        {
+            for (int i = _qualityRow.childCount - 1; i >= 0; i--)
+                Destroy(_qualityRow.GetChild(i).gameObject);
+            for (int i = _difficultyRow.childCount - 1; i >= 0; i--)
+                Destroy(_difficultyRow.GetChild(i).gameObject);
+
+            for (int i = 0; i < Tiers.Length; i++)
+            {
+                QualityTier captured = Tiers[i];
+                float x0 = 0.005f + i / 3f, x1 = x0 + 1f / 3f - 0.01f;
+                ElarionUiKit.BuildObsidianButton(_qualityRow, SettingsModel.TierLabel(captured),
+                    ElarionUiKit.ObsidianButtonStyle.Style1,
+                    SettingsModel.Quality == captured ? ElarionUiKit.ObsidianButtonColor.Yellow
+                                                      : ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(x0, 0.05f), new Vector2(x1, 0.95f),
+                    () => OnQualityTierClicked(captured));
+            }
+            for (int i = 0; i < Difficulties.Length; i++)
+            {
+                Difficulty captured = Difficulties[i];
+                float x0 = 0.005f + i / 3f, x1 = x0 + 1f / 3f - 0.01f;
+                ElarionUiKit.BuildObsidianButton(_difficultyRow, DifficultyTuning.Label(captured),
+                    ElarionUiKit.ObsidianButtonStyle.Style1,
+                    SettingsModel.Difficulty == captured ? ElarionUiKit.ObsidianButtonColor.Yellow
+                                                         : ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(x0, 0.05f), new Vector2(x1, 0.95f),
+                    () => OnDifficultyClicked(captured));
+            }
         }
 
         // =====================================================================
         //  Refresh — pull every persisted value into the controls
         // =====================================================================
 
-        /// <summary>
-        /// Loads every control from <see cref="SettingsModel"/>. The slider /
-        /// toggle writes here are guarded by <see cref="_suppressCallbacks"/> so
-        /// setting them programmatically does not echo back as a "changed" event.
-        /// </summary>
         private void RefreshFromModel()
         {
             _suppressCallbacks = true;
@@ -371,13 +211,15 @@ namespace DeNelle.Settings
                 if (_masterSlider != null) _masterSlider.value = SettingsModel.MasterVolume;
                 if (_musicSlider != null) _musicSlider.value = SettingsModel.MusicVolume;
                 if (_sfxSlider != null) _sfxSlider.value = SettingsModel.SfxVolume;
-                if (_muteToggle != null) _muteToggle.value = SettingsModel.Muted;
-                if (_shakeToggle != null) _shakeToggle.value = SettingsModel.ScreenShake;
+                if (_muteToggle != null) _muteToggle.isOn = SettingsModel.Muted;
+                if (_shakeToggle != null) _shakeToggle.isOn = SettingsModel.ScreenShake;
 
                 UpdateVolumeLabels();
-                UpdateQualityHighlight(SettingsModel.Quality);
-                UpdateDifficultyHighlight(SettingsModel.Difficulty);
-                UpdateAudioSeamNotice();
+                BuildSelectorButtons();
+                if (_difficultyBlurb != null)
+                    _difficultyBlurb.text = DifficultyTuning.Blurb(SettingsModel.Difficulty);
+                if (_audioSeam != null)
+                    _audioSeam.gameObject.SetActive(!AudioMixerBridge.HasMixer);
             }
             finally
             {
@@ -385,95 +227,52 @@ namespace DeNelle.Settings
             }
         }
 
-        private bool _suppressCallbacks;
-
-        /// <summary>Refreshes the three percentage labels next to the volume sliders.</summary>
         private void UpdateVolumeLabels()
         {
-            if (_masterValue != null && _masterSlider != null)
-                _masterValue.text = FormatPercent(_masterSlider.value);
-            if (_musicValue != null && _musicSlider != null)
-                _musicValue.text = FormatPercent(_musicSlider.value);
-            if (_sfxValue != null && _sfxSlider != null)
-                _sfxValue.text = FormatPercent(_sfxSlider.value);
-        }
-
-        /// <summary>Marks the active tier button and clears the others.</summary>
-        private void UpdateQualityHighlight(QualityTier active)
-        {
-            for (int i = 0; i < _tierButtons.Length; i++)
-            {
-                if (_tierButtons[i] == null) continue;
-                _tierButtons[i].EnableInClassList(TierButtonActiveClass, Tiers[i] == active);
-            }
-        }
-
-        /// <summary>
-        /// Marks the active difficulty button, clears the others, and refreshes
-        /// the blurb under the row so the player sees what the choice changes.
-        /// </summary>
-        private void UpdateDifficultyHighlight(Difficulty active)
-        {
-            for (int i = 0; i < _difficultyButtons.Length; i++)
-            {
-                if (_difficultyButtons[i] == null) continue;
-                _difficultyButtons[i].EnableInClassList(
-                    DifficultyButtonActiveClass, Difficulties[i] == active);
-            }
-            if (_difficultyBlurb != null)
-                _difficultyBlurb.text = DifficultyTuning.Blurb(active);
-        }
-
-        /// <summary>
-        /// Shows the audio-mixer seam notice only while the mixer asset is
-        /// absent — once the Audio-system agent's mixer is wired, it hides itself.
-        /// </summary>
-        private void UpdateAudioSeamNotice()
-        {
-            if (_audioSeam == null) return;
-            bool show = !AudioMixerBridge.HasMixer;
-            _audioSeam.style.display = show ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_masterValue != null && _masterSlider != null) _masterValue.text = FormatPercent(_masterSlider.value);
+            if (_musicValue != null && _musicSlider != null) _musicValue.text = FormatPercent(_musicSlider.value);
+            if (_sfxValue != null && _sfxSlider != null) _sfxValue.text = FormatPercent(_sfxSlider.value);
         }
 
         // =====================================================================
         //  Control callbacks — each persists + applies through SettingsModel
         // =====================================================================
 
-        private void OnMasterChanged(ChangeEvent<float> evt)
+        private void OnMasterChanged(float v)
         {
             if (_suppressCallbacks) return;
-            SettingsModel.MasterVolume = evt.newValue;
+            SettingsModel.MasterVolume = v;
             SettingsModel.ApplyAudio();
             UpdateVolumeLabels();
         }
 
-        private void OnMusicChanged(ChangeEvent<float> evt)
+        private void OnMusicChanged(float v)
         {
             if (_suppressCallbacks) return;
-            SettingsModel.MusicVolume = evt.newValue;
+            SettingsModel.MusicVolume = v;
             SettingsModel.ApplyAudio();
             UpdateVolumeLabels();
         }
 
-        private void OnSfxChanged(ChangeEvent<float> evt)
+        private void OnSfxChanged(float v)
         {
             if (_suppressCallbacks) return;
-            SettingsModel.SfxVolume = evt.newValue;
+            SettingsModel.SfxVolume = v;
             SettingsModel.ApplyAudio();
             UpdateVolumeLabels();
         }
 
-        private void OnMuteChanged(ChangeEvent<bool> evt)
+        private void OnMuteChanged(bool on)
         {
             if (_suppressCallbacks) return;
-            SettingsModel.Muted = evt.newValue;
+            SettingsModel.Muted = on;
             SettingsModel.ApplyAudio();
         }
 
-        private void OnShakeChanged(ChangeEvent<bool> evt)
+        private void OnShakeChanged(bool on)
         {
             if (_suppressCallbacks) return;
-            SettingsModel.ScreenShake = evt.newValue;
+            SettingsModel.ScreenShake = on;
             SettingsModel.ApplyScreenShake();
         }
 
@@ -481,20 +280,17 @@ namespace DeNelle.Settings
         {
             SettingsModel.Quality = tier;
             SettingsModel.ApplyQuality();
-            UpdateQualityHighlight(tier);
+            BuildSelectorButtons();
         }
 
-        /// <summary>
-        /// A difficulty button was tapped. Persists the choice through
-        /// <see cref="SettingsModel.Difficulty"/> (which routes to the save layer)
-        /// and re-highlights the row. The WaveManager reads the persisted value
-        /// when it next enters a countdown, so a mid-session change takes effect
-        /// from the following wave's build window — no extra apply step needed.
-        /// </summary>
+        /// <summary>Persists the difficulty (the WaveManager reads it at the next
+        /// countdown — no extra apply step needed) and re-highlights the row.</summary>
         private void OnDifficultyClicked(Difficulty difficulty)
         {
             SettingsModel.Difficulty = difficulty;
-            UpdateDifficultyHighlight(difficulty);
+            BuildSelectorButtons();
+            if (_difficultyBlurb != null)
+                _difficultyBlurb.text = DifficultyTuning.Blurb(difficulty);
         }
 
         private void OnResetClicked()
@@ -503,50 +299,173 @@ namespace DeNelle.Settings
             RefreshFromModel();
         }
 
-        private void OnBackClicked()
+        /// <summary>WO-588: closes Settings first so the modal arbiter swaps cleanly.</summary>
+        private void OnGameGuideClicked()
         {
             Close();
+            PanelRouter.Open(PanelId.GameGuide);
         }
 
         // =====================================================================
-        //  Internals
+        //  Composed uGUI controls (Blink-skinned)
         // =====================================================================
 
-        /// <summary>Formats a 0..1.5 volume value as a rounded percentage string.</summary>
+        /// <summary>Section caption; returns the next row's top y.</summary>
+        private float Caption(Transform body, string text, float y)
+        {
+            MakeText(body, text, 15, ElarionUi.Gilt, FontStyles.Bold,
+                TextAlignmentOptions.Left, new Vector2(0.05f, y - 0.035f), new Vector2(0.95f, y));
+            return y - 0.042f;
+        }
+
+        /// <summary>Label + Blink-skinned slider + % value, one row. Advances y.</summary>
+        private (Slider, TextMeshProUGUI) SliderRow(Transform body, string label, ref float y,
+            Action<float> onChanged)
+        {
+            float top = y, bottom = y - 0.048f;
+            MakeText(body, label, 13, ElarionUi.Parchment, FontStyles.Normal,
+                TextAlignmentOptions.Left, new Vector2(0.06f, bottom), new Vector2(0.24f, top));
+
+            var host = ZoneRect(body, "Slider_" + label, new Vector2(0.26f, bottom + 0.012f), new Vector2(0.82f, top - 0.012f));
+            var sliderGo = new GameObject("Slider", typeof(RectTransform), typeof(Slider));
+            sliderGo.transform.SetParent(host, false);
+            var srt = sliderGo.GetComponent<RectTransform>();
+            srt.anchorMin = Vector2.zero; srt.anchorMax = Vector2.one;
+            srt.offsetMin = Vector2.zero; srt.offsetMax = Vector2.zero;
+
+            // Track (Blink bar sprite when mirrored; dark bar fallback).
+            var trackGo = new GameObject("Track", typeof(RectTransform), typeof(Image));
+            trackGo.transform.SetParent(sliderGo.transform, false);
+            var trt = trackGo.GetComponent<RectTransform>();
+            trt.anchorMin = new Vector2(0f, 0.3f); trt.anchorMax = new Vector2(1f, 0.7f);
+            trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
+            var trackImg = trackGo.GetComponent<Image>();
+            var barSprite = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, "panel_bar");
+            if (barSprite != null) { trackImg.sprite = barSprite; trackImg.type = Image.Type.Sliced; }
+            else trackImg.color = new Color(0f, 0f, 0f, 0.6f);
+
+            // Fill.
+            var fillAreaGo = new GameObject("FillArea", typeof(RectTransform));
+            fillAreaGo.transform.SetParent(sliderGo.transform, false);
+            var fart = fillAreaGo.GetComponent<RectTransform>();
+            fart.anchorMin = new Vector2(0f, 0.32f); fart.anchorMax = new Vector2(1f, 0.68f);
+            fart.offsetMin = Vector2.zero; fart.offsetMax = Vector2.zero;
+            var fillGo = new GameObject("Fill", typeof(RectTransform), typeof(Image));
+            fillGo.transform.SetParent(fillAreaGo.transform, false);
+            var fillImg = fillGo.GetComponent<Image>();
+            fillImg.color = ElarionUi.Gold;
+
+            // Handle.
+            var handleAreaGo = new GameObject("HandleArea", typeof(RectTransform));
+            handleAreaGo.transform.SetParent(sliderGo.transform, false);
+            var hart = handleAreaGo.GetComponent<RectTransform>();
+            hart.anchorMin = new Vector2(0f, 0f); hart.anchorMax = new Vector2(1f, 1f);
+            hart.offsetMin = Vector2.zero; hart.offsetMax = Vector2.zero;
+            var handleGo = new GameObject("Handle", typeof(RectTransform), typeof(Image));
+            handleGo.transform.SetParent(handleAreaGo.transform, false);
+            var hrt = handleGo.GetComponent<RectTransform>();
+            hrt.sizeDelta = new Vector2(22f, 0f);
+            var handleImg = handleGo.GetComponent<Image>();
+            handleImg.color = ElarionUi.Gilt;
+
+            var slider = sliderGo.GetComponent<Slider>();
+            slider.fillRect = fillGo.GetComponent<RectTransform>();
+            slider.handleRect = hrt;
+            slider.targetGraphic = handleImg;
+            slider.minValue = 0f;
+            slider.maxValue = SettingsModel.MaxVolume;
+            slider.onValueChanged.AddListener(v => onChanged(v));
+
+            var valueLabel = MakeText(body, "100%", 12, ElarionUi.ParchmentDim, FontStyles.Normal,
+                TextAlignmentOptions.Right, new Vector2(0.84f, bottom), new Vector2(0.94f, top));
+
+            y = bottom - 0.010f;
+            return (slider, valueLabel);
+        }
+
+        /// <summary>Label + uGUI Toggle (gold check), one row. Advances y.</summary>
+        private Toggle ToggleRow(Transform body, string label, ref float y, Action<bool> onChanged)
+        {
+            float top = y, bottom = y - 0.045f;
+            MakeText(body, label, 13, ElarionUi.Parchment, FontStyles.Normal,
+                TextAlignmentOptions.Left, new Vector2(0.06f, bottom), new Vector2(0.70f, top));
+
+            var host = ZoneRect(body, "Toggle_" + label, new Vector2(0.86f, bottom + 0.004f), new Vector2(0.94f, top - 0.004f));
+            var toggleGo = new GameObject("Toggle", typeof(RectTransform), typeof(Toggle));
+            toggleGo.transform.SetParent(host, false);
+            var trt = toggleGo.GetComponent<RectTransform>();
+            trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one;
+            trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
+
+            var boxGo = new GameObject("Box", typeof(RectTransform), typeof(Image));
+            boxGo.transform.SetParent(toggleGo.transform, false);
+            var brt = boxGo.GetComponent<RectTransform>();
+            brt.anchorMin = Vector2.zero; brt.anchorMax = Vector2.one;
+            brt.offsetMin = Vector2.zero; brt.offsetMax = Vector2.zero;
+            var boxImg = boxGo.GetComponent<Image>();
+            boxImg.color = new Color(0f, 0f, 0f, 0.6f);
+
+            var checkGo = new GameObject("Check", typeof(RectTransform), typeof(Image));
+            checkGo.transform.SetParent(boxGo.transform, false);
+            var crt = checkGo.GetComponent<RectTransform>();
+            crt.anchorMin = new Vector2(0.18f, 0.18f); crt.anchorMax = new Vector2(0.82f, 0.82f);
+            crt.offsetMin = Vector2.zero; crt.offsetMax = Vector2.zero;
+            var checkImg = checkGo.GetComponent<Image>();
+            checkImg.color = ElarionUi.Gold;
+
+            var toggle = toggleGo.GetComponent<Toggle>();
+            toggle.targetGraphic = boxImg;
+            toggle.graphic = checkImg;
+            toggle.onValueChanged.AddListener(v => onChanged(v));
+
+            y = bottom - 0.012f;
+            return toggle;
+        }
+
         private static string FormatPercent(float value)
         {
             return $"{Mathf.RoundToInt(Mathf.Clamp(value, 0f, SettingsModel.MaxVolume) * 100f)}%";
         }
 
-        /// <summary>Shows / hides the whole settings overlay.</summary>
-        private void SetVisible(bool visible)
+        private static Transform ZoneRect(Transform parent, string name, Vector2 min, Vector2 max)
         {
-            var root = _root ?? (_document != null ? _document.rootVisualElement : null);
-            if (root != null)
-                root.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            return go.transform;
+        }
+
+        private static TextMeshProUGUI MakeText(Transform parent, string text, float size,
+            Color color, FontStyles style, TextAlignmentOptions align, Vector2 min, Vector2 max)
+        {
+            var go = new GameObject("Text", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var t = go.AddComponent<TextMeshProUGUI>();
+            t.text = text;
+            t.fontSize = size;
+            t.color = color;
+            t.fontStyle = style;
+            t.alignment = align;
+            t.raycastTarget = false;
+            t.textWrappingMode = TextWrappingModes.Normal;
+            ElarionUiKit.EnsureFont(t);
+            return t;
         }
     }
 }
 
 // =============================================================================
-// INTEGRATOR NOTES — wiring the settings screen.
-// -----------------------------------------------------------------------------
-//   1. Create a GameObject with a UIDocument; assign SettingsScreen.uxml as its
-//      Source Asset. Add this SettingsController component beside it. Put it on
-//      a Canvas / panel sort-order ABOVE the HUD and the pause overlay so it
-//      renders on top.
-//
-//   2. AudioMixer: once the Audio-system agent ships the mixer, assign it to
-//      the "Audio Mixer" field here (or place it at Resources/Audio/
-//      GameAudioMixer.mixer). Until then the sliders persist and the screen
-//      shows the seam notice. The exposed parameters MUST be named MasterVol /
-//      MusicVol / SfxVol — see AudioMixerBridge.
-//
-//   3. The pause overlay opens this screen: see PauseController, which holds a
-//      serialized reference to this component and calls Open(). This controller
-//      raises SettingsClosed on Back so the pause overlay can re-show itself.
-//
-//   4. The settings GameObject can be marked DontDestroyOnLoad and shared
-//      across scenes, or instanced per scene that needs options — either works;
-//      SettingsModel is static so no state is lost across scene loads.
+// INTEGRATOR NOTES — the settings screen is fully code-built now.
+//   1. Add SettingsController to any GameObject (no UIDocument needed). The
+//      kit modal builds lazily on first Open() at sortingOrder 32000.
+//   2. AudioMixer: assign the field (or place the asset at Resources/Audio/
+//      GameAudioMixer). Until then the sliders persist and the seam notice shows.
+//   3. PauseController holds a serialized reference and calls Open(); this
+//      controller raises SettingsClosed on Back/Close so pause can re-show.
+//   4. SettingsModel is static — no state is lost across scene loads.
 // =============================================================================

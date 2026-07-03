@@ -175,6 +175,12 @@ namespace DeNelle.DevTools
         {
             if (_started) yield break;
             _started = true;
+            // FOCUS-LOSS IMMUNITY (windowed runs 13:51 + 14:01, 2026-07-03): a -Graphics bot
+            // run FROZE the moment the owner used her machine (window unfocused ->
+            // OnApplicationPause in the log, break-log dead after t=110, killed at the cap)
+            // because the player defaults to pausing in background while the driver's
+            // realtime budgets keep expiring. A bot run must never pause on focus loss.
+            Application.runInBackground = true;
             _runStartRealtime = Time.realtimeSinceStartup;
             FlowTrace.Step("Auto", $"AutoPilot START (quitOnDone={_quitOnDone}, seed={_seed}, run='{_runId ?? "<none>"}', scene='{ActiveScene()}').");
 

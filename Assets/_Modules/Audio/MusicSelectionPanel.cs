@@ -10,23 +10,19 @@
 //   • AudioService.PlayAmbientContext / IsStateCue — combat-state music OVERRIDES
 //     the jukebox pick, returning to it afterwards.
 // This file is JUST the selection UI on top of that — no new audio system
-// (CLAUDE.md §5/§9, WO-162 constraint). It lives in the Audio assembly (not HUD)
-// so it can call AudioService directly without crossing the HUD→Core-only rule;
-// UIElements is part of the engine, available with no extra asmdef reference.
+// (CLAUDE.md §5/§9, WO-162 constraint).
 //
-// CODE-BUILT UI (no UXML — PIPELINE_STATE §8: "UXML in builds does NOT work").
-// The whole visual tree is constructed in C#. Toggled with the J key in any
-// scene that has a hero; spawned by MusicSelectionPanelBootstrap.
-//
-// Preview + selected-state + persistence are all delegated to AudioService:
-//   - tapping a row calls SetAmbientChoice (persists; plays live if in-context)
-//   - the chosen row shows a checkmark, read back from GetAmbientChoice on open.
+// WO-F conversion (2026-07-03, coverage matrix row #46): UIDocument/UITK card ->
+// code-built uGUI on the Obsidian master frame (BuildObsidianModal: FrameCore +
+// medallion + the ONE shared Close + tap-outside scrim), per the HelpMenu
+// reference recipe. Track rows are Obsidian buttons rebuilt each open so a
+// context change (village -> overworld) shows the right set + checkmark.
+// Toggle()/Open() stay public — the HUD kit's dock reaches them by reflection.
 // =============================================================================
 
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UIElements;
-using DeNelle.Core.UI;   // shared Elarion theme — jukebox matches the one game UI
+using DeNelle.Core.UI;   // shared Elarion kit — jukebox matches the one game UI
 
 namespace DeNelle.Audio
 {
@@ -37,120 +33,76 @@ namespace DeNelle.Audio
     /// ambient-context path; combat/victory/defeat music still overrides.
     /// </summary>
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(UIDocument))]
     public sealed class MusicSelectionPanel : MonoBehaviour
     {
         /// <summary>Key that toggles the jukebox panel open/closed.</summary>
         public const KeyCode ToggleKey = KeyCode.J;
 
-        /// <summary>WO-563: public open/toggle so a reachable HUD button (SocialAccessCluster) can
-        /// surface the jukebox on touch — the J key is keyboard-only + gated behind DevHotkeys, so
-        /// it was unreachable on mobile/WebGL. Mirrors ClanChatPanel/LeaderboardPanel.Toggle().</summary>
+        /// <summary>WO-563: public open/toggle so a reachable HUD button (the kit dock) can
+        /// surface the jukebox on touch — the J key is keyboard-only + gated behind DevHotkeys.</summary>
         public void Toggle() => SetOpen(!_open);
         public void Open()   => SetOpen(true);
 
-        private UIDocument _doc;
-        private VisualElement _overlay;
-        private VisualElement _rowList;
+        private ElarionUiKit.ObsidianModal _modal;
+        private Transform _rowHost;   // the frame's body zone — rows rebuilt into it each open
         private bool _open;
 
         // PanelManager mutual-exclusion handle (one panel at a time).
         private DeNelle.Core.UI.PanelHandle _panelHandle;
 
-        // Rebuilt each open so a context change (village -> overworld) shows the
-        // right track set and the right checkmark.
         private void Awake()
         {
-            _doc = GetComponent<UIDocument>();
-            if (_doc == null) _doc = gameObject.AddComponent<UIDocument>();
-
-            if (_doc.panelSettings == null)
-            {
-                foreach (var existing in FindObjectsByType<UIDocument>(
-                             FindObjectsInactive.Include))
-                {
-                    if (existing == _doc || existing.panelSettings == null) continue;
-                    _doc.panelSettings = existing.panelSettings;
-                    break;
-                }
-            }
-
-            if (_doc.panelSettings == null)
-            {
-                Debug.LogWarning("[MusicSelectionPanel] No PanelSettings available — jukebox hidden.");
-                enabled = false;
-                return;
-            }
-
-            _doc.sortingOrder = 96; // above HUD chips, near the cosmetic shop (95)
-            BuildTree();
-            // Register with the modal arbiter so opening the jukebox closes any other
-            // panel (and vice-versa). Probe = the panel's own open flag.
             _panelHandle = PanelManager.Register("Jukebox", () => SetOpen(false), () => _open);
-            SetOpen(false);
+        }
+
+        private void OnDestroy()
+        {
+            if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
         }
 
         private void Update()
         {
             // WO-437: the global 'J' open is gated behind the global DevHotkeys
-            // kill-switch (default OFF) — and blocked during battle — so it no longer
-            // spams the "13 windows" in a build and is dead in the editor too unless a
-            // dev opts in (PlayerPrefs ff.devhotkeys=1). ESC-close stays (only acts
-            // when this panel is already open; it does not steal the key globally).
+            // kill-switch (default OFF) — and blocked during battle. ESC-close stays
+            // (only acts when this panel is already open).
             if (DeNelle.Core.FeatureFlags.DevHotkeys
                 && Input.GetKeyDown(ToggleKey)
                 && !DeNelle.Core.Combat.BattleLock.IsInBattle())
                 SetOpen(!_open);
 
-            // Escape closes when open (does not steal the key globally).
             if (_open && Input.GetKeyDown(KeyCode.Escape))
                 SetOpen(false);
         }
 
-        // ── UI construction (code-built, no UXML) ────────────────────────────
-
-        private void BuildTree()
+        // ── UI construction (kit modal, lazy on first open) ─────────────────
+        private void EnsureBuilt()
         {
-            var root = _doc.rootVisualElement;
-            root.Clear();
-            root.style.flexGrow = 1;
+            if (_modal != null && _modal.canvas != null) return;
 
-            // Full-screen dim scrim that centres the panel card (shared palette).
-            _overlay = new VisualElement();
-            _overlay.style.flexGrow = 1;
-            _overlay.style.justifyContent = Justify.Center;
-            _overlay.style.alignItems = Align.Center;
-            _overlay.style.backgroundColor = ElarionUi.Scrim;
-            root.Add(_overlay);
+            _modal = ElarionUiKit.BuildObsidianModal("JukeboxUI", "Jukebox",
+                new Vector2(0.30f, 0.14f), new Vector2(0.70f, 0.86f), () => SetOpen(false),
+                frameName: RpgUiCatalog.FrameCore, medallionIcon: "music");
 
-            // Warm-stone card with a runic-gold rim (the one game UI language).
-            var card = new VisualElement();
-            card.style.width = 360;
-            card.style.paddingTop = 16;
-            card.style.paddingBottom = 16;
-            card.style.paddingLeft = 18;
-            card.style.paddingRight = 18;
-            ElarionUi.StylePanel(card, dark: true);
-            _overlay.Add(card);
+            var body = _modal.chrome.layout != null && _modal.chrome.layout.body != null
+                ? _modal.chrome.layout.body.transform
+                : _modal.chrome.content.transform;
 
-            // Gilt crest title + a single gold underline rule.
-            card.Add(ElarionUi.MakeTitle("Jukebox"));
-            card.Add(ElarionUi.MakeRule());
+            ElarionUiKit.Label(body,
+                "Pick the music for where you are. Battle music still takes over during fights.",
+                0.90f, 1.00f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
+                TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
 
-            var sub = new Label("Pick the music for where you are. Battle music still takes over during fights.");
-            sub.style.fontSize = ElarionUi.FontLabel;
-            sub.style.color = ElarionUi.ParchmentDim;
-            sub.style.whiteSpace = WhiteSpace.Normal;
-            sub.style.marginBottom = 10;
-            card.Add(sub);
+            // Rows live in a dedicated host under the body so RebuildRows can clear
+            // them without touching the subtitle.
+            var hostGo = new GameObject("TrackRows", typeof(RectTransform));
+            hostGo.transform.SetParent(body, false);
+            var hrt = hostGo.GetComponent<RectTransform>();
+            hrt.anchorMin = new Vector2(0f, 0f);
+            hrt.anchorMax = new Vector2(1f, 0.88f);
+            hrt.offsetMin = Vector2.zero; hrt.offsetMax = Vector2.zero;
+            _rowHost = hostGo.transform;
 
-            _rowList = new VisualElement();
-            card.Add(_rowList);
-
-            var close = new Button(() => SetOpen(false)) { text = "Close" };
-            ElarionUi.StyleButton(close, ElarionUi.ButtonKind.Gold);
-            close.style.marginTop = 12;
-            card.Add(close);
+            _modal.canvas.SetActive(false);   // built hidden; SetOpen shows it
         }
 
         // Rebuilds the track rows for the player's CURRENT ambient context, with a
@@ -158,15 +110,16 @@ namespace DeNelle.Audio
         // are always current.
         private void RebuildRows()
         {
-            if (_rowList == null) return;
-            _rowList.Clear();
+            if (_rowHost == null) return;
+            for (int i = _rowHost.childCount - 1; i >= 0; i--)
+                Destroy(_rowHost.GetChild(i).gameObject);
 
             var svc = AudioService.Instance;
             if (svc == null)
             {
-                var warn = new Label("Audio not ready.");
-                warn.style.color = ElarionUi.Danger;
-                _rowList.Add(warn);
+                ElarionUiKit.Label(_rowHost, "Audio not ready.", 0.85f, 0.97f,
+                    ElarionUi.Danger, ElarionUi.FontBody,
+                    TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
                 return;
             }
 
@@ -177,33 +130,28 @@ namespace DeNelle.Audio
                 chosen = AudioService.DefaultTrackFor(context);
 
             IReadOnlyList<MusicChoice> choices = AudioService.AmbientChoicesFor(context);
+            const float rowH = 0.115f, gap = 0.02f;
+            float top = 0.97f;
             foreach (var choice in choices)
             {
                 MusicTrack track = choice.Track;
-                var row = new Button(() => OnPick(track)) { text = string.Empty };
-                StyleRow(row, isSelected: track == chosen);
-
-                var name = new Label(choice.DisplayName);
-                name.style.flexGrow = 1;
-                name.style.fontSize = ElarionUi.FontBody;
-                name.style.color = ElarionUi.Parchment;
-                row.Add(name);
-
-                if (track == chosen)
-                {
-                    var check = new Label("✓"); // ✓
-                    check.style.fontSize = 16;
-                    check.style.color = ElarionUi.Affordable;
-                    row.Add(check);
-                }
-
-                _rowList.Add(row);
+                bool isSelected = track == chosen;
+                // Selected row = Green family (the pack's own affirmative), rest Gray.
+                // ASCII marker (eyes-on 2026-07-03: ✓ is missing from the TMP font).
+                ElarionUiKit.BuildObsidianButton(_rowHost,
+                    (isSelected ? "»  " : "") + choice.DisplayName,
+                    ElarionUiKit.ObsidianButtonStyle.Style1,
+                    isSelected ? ElarionUiKit.ObsidianButtonColor.Green
+                               : ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(0.06f, top - rowH), new Vector2(0.94f, top),
+                    () => OnPick(track));
+                top -= rowH + gap;
+                if (top - rowH < 0f) break;   // bounded: never overflow the well
             }
         }
 
         // Selecting a track persists the pick and previews it immediately (the
-        // service plays it live when the player is in this ambient context and not
-        // mid-combat-cue — exactly the WO-162 "previews + shows as selected" spec).
+        // service plays it live when in this ambient context and not mid-combat-cue).
         private void OnPick(MusicTrack track)
         {
             var svc = AudioService.Instance;
@@ -214,9 +162,10 @@ namespace DeNelle.Audio
 
         private void SetOpen(bool open)
         {
+            if (open) EnsureBuilt();
+            if (_modal == null || _modal.canvas == null) { _open = false; return; }
             _open = open;
-            if (_overlay != null)
-                _overlay.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
+            _modal.canvas.SetActive(open);
             if (open)
             {
                 // Announce open: closes any previously-open panel. Battle-lock may reject
@@ -224,7 +173,7 @@ namespace DeNelle.Audio
                 if (!PanelManager.NotifyOpened(_panelHandle))
                 {
                     _open = false;
-                    if (_overlay != null) _overlay.style.display = DisplayStyle.None;
+                    _modal.canvas.SetActive(false);
                     return;
                 }
                 RebuildRows();
@@ -233,26 +182,6 @@ namespace DeNelle.Audio
             {
                 PanelManager.NotifyClosed(_panelHandle);
             }
-        }
-
-        // ── Style helpers ────────────────────────────────────────────────────
-
-        private static void StyleRow(Button row, bool isSelected)
-        {
-            row.style.flexDirection = FlexDirection.Row;
-            row.style.alignItems = Align.Center;
-            row.style.height = 40;
-            row.style.marginTop = 4;
-            row.style.marginBottom = 0;
-            row.style.paddingLeft = 12;
-            row.style.paddingRight = 12;
-            // Selected row glows aether-violet (the runic accent); rest is warm stone.
-            row.style.backgroundColor = isSelected ? ElarionUi.AetherDim : ElarionUi.PanelStone;
-            ElarionUi.SetRadius(row, ElarionUi.RadiusSm);
-            ElarionUi.SetBorderWidth(row, 1);
-            ElarionUi.SetBorderColor(row, isSelected
-                ? new Color(ElarionUi.Aether.r, ElarionUi.Aether.g, ElarionUi.Aether.b, 0.7f)
-                : new Color(ElarionUi.StoneTrim.r, ElarionUi.StoneTrim.g, ElarionUi.StoneTrim.b, 0.4f));
         }
     }
 }

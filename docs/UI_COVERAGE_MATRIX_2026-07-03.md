@@ -158,3 +158,85 @@ editor session — a watcher auto-launches the proof chain when it closes):
   replaces any bespoke close row, (5) preserve every action handler verbatim.
 - Known stale artifact: `panel_EquipmentPanel.png` in ui-shots is -nographics noise
   (05:43) — EquipmentPanel is NOT_REGISTERED in the hub walk; needs its own capture route.
+
+**2026-07-03 ~12:15 — round 11:50 verified + committed (512d3289); WO-F conversion #2**
+- VERIFIED by fresh captures: emblems seated on Talent/Merchant/Crafting frames (shield/
+  sword/potion visible), Clan Chat bleed gone, tracker card stands down. Four frames' zones
+  were the gap (Talent/Quest/Core measured in; Merchant socket added) — resolver chain proven
+  by the Crafting frames working first.
+- OPEN: small icon pair still floats right-edge during modals — likely the KIT DOCK not
+  standing down in modal posture (dock intents live in HudKitController :596; verify the
+  modal occupancy row clears the dock area) OR a legacy launcher. One trace read to settle.
+- OPEN: talent-grid red locked-node text readability; Equipment + HelpMenu capture routes.
+- **#46 Jukebox (MusicSelectionPanel): CONVERTED** per the HelpMenu recipe — kit FrameCore
+  modal, dynamic track rows as Obsidian buttons (selected = Green + ✓), arbiter contract
+  kept (battle-lock reject honored), Toggle()/Open() reflection seam kept for the kit dock;
+  bootstrap no longer needs a UIDocument/PanelSettings host (menu-scene guard inlined —
+  Audio can't reference HUD). DeNelle.Audio.asmdef += UnityEngine.UI. IN VERIFICATION
+  (queued behind the owner's editor session; watcher armed).
+- **#50 Leaderboard: CONVERTED** per the recipe — kit FrameCore modal (combat medallion),
+  profile strip + 3 Obsidian metric tabs (active=Yellow, rebuilt on switch) + uGUI
+  ScrollRect ranked list (local row gold-tinted) + the honest source-badge footer; service
+  API calls preserved verbatim; bootstrap host-free. KIT ASK logged: no shared scroll
+  widget in the kit yet — Leaderboard + the demo both compose ScrollRect inline; extract
+  `ElarionUiKit.BuildScrollColumn` when a third caller appears. IN VERIFICATION.
+- **#2 Workshop (VillageCraftingPanel): CONVERTED** — kit FrameCrafting master-detail
+  (the owner-ratified split template): bodyLeft dark well = recipe Obsidian buttons
+  (selected=Yellow, ✓/✗ affordability), bodyRight parchment well = detail in dark INK
+  (light text is unreadable on parchment — new Ink/InkDim/InkGood/InkBad palette),
+  footer strip = larder readout; Craft CTA Green/Gray + interactable gate. API preserved
+  verbatim (Instance/Toggle/Open/Close/IsOpen, PanelRouter PanelId.Crafting, arbiter
+  "Workshop", VillageInventory.Changed, TryCraft/CanCraft/Get, glyphs). Bootstrap
+  host-free; VillageCraftingPanelInput untouched (routes via PanelRouter). IN VERIFICATION.
+- **#4 CosmeticShop: CONVERTED** — kit FrameMerchant modal (coin medallion), category
+  tabs (Yellow=active), inline ScrollRect card list, per-card preview (RawImage render or
+  tinted swatch on slot_item plate), DEF-197 "short by N" price honesty, Buy/Equip/
+  Equipped/Locked state machine + toasts preserved exactly, reflection bridge into
+  DeNelle.Cosmetics preserved character-for-character; bootstrap host-free. ShopTheme
+  helpers no longer used by this panel. IN VERIFICATION.
+- **#5 PetSkillTree: CONVERTED** — kit FramePet modal (tree medallion), species tabs
+  (Yellow=active), scroll column of node cards on slot_talent plates (unlocked=green
+  tint, unlockable=gold, locked=35% CanvasGroup alpha per spec), tier/type badges as
+  palette-graded rich text, Unlock action + honest LockReason preserved; DeNelle.Pets
+  reflection bridge + all Extract* accessors preserved verbatim; P-key driver untouched;
+  bootstrap host-free. IN VERIFICATION.
+- **#47 Settings: CONVERTED** — the UXML screen (SettingsScreen.uxml, canon-flagged
+  empty-in-builds) RETIRED; code-built kit FrameSettings modal at sortingOrder 32000
+  (settings above every modal): composed uGUI sliders (Blink panel_bar track + gold
+  fill/handle) with % labels, mute/shake toggles, quality + difficulty selector rows
+  (Yellow=active, rebuilt on switch), difficulty blurb, audio-seam notice, Game Guide +
+  Reset Defaults; Back = the chrome Close (raises SettingsClosed — PauseController's
+  contract intact); SettingsModel write-through unchanged. DeNelle.Settings.asmdef +=
+  UnityEngine.UI + Unity.TextMeshPro (lesson from the Audio gate failure, applied
+  proactively). PauseController (#47's opener) still UIDocument — its own conversion NEXT.
+- **#54 DailyQuestHud: modal stand-down added** (same pattern as QuestTracker); full
+  restyle still queued.
+- **#47b PauseController: CONVERTED** — PauseOverlay.uxml RETIRED; kit FrameOptions modal
+  at 31500 (below Settings 32000): Resume (Green) / Settings (only when wired — no dead
+  control) / Quit to Title (Red); chrome Close = Resume; PauseGate seam, timeScale
+  capture/restore, OnApplicationPause auto-pause, SettingsClosed re-show, and the
+  quit-unfreezes-first ordering all preserved verbatim. IN VERIFICATION.
+- **Focus-loss immunity (driver)**: windowed runs 13:51 + 14:01 FROZE when the owner used
+  her machine (window unfocused → player background-pauses while realtime budgets expire;
+  proof: break-log dead after t=110 + OnApplicationPause in Player.log; the focused 11:50
+  runs completed on identical code). `AutoPilotDriver.RunAll` now sets
+  `Application.runInBackground = true`. Needs the next build to take effect.
+- **#59 PackStore SURVEYED (next conversion, do on fresh budget — real-money surface):**
+  703 lines, already code-built UITK (ignores its UXML — immune to the empty-trap), styled
+  via ShopTheme. Contract to preserve verbatim: WalletService purchase flow (async UniTask,
+  never async void), per-pack currency rail selection (SOL/USDC/SKR chips), PackCatalog
+  render loop, PackPurchased event, treasury-transparency line, CurrencyDisclaimer, the
+  cozy covenant "You are never required to spend anything. Ever." VERBATIM, and CloseStore's
+  reflection route through MarketplaceInteractor.CloseStore (re-enables HeroLocomotion —
+  soft-lock guard) with the locomotion-re-enable fallback. Target: FrameMerchant kit modal
+  + scroll card column per the CosmeticShop recipe.
+- Conversion queue remaining: PackStore (#59), BuildMenu (#35), DailyQuest restyle (#54),
+  then front-end (WO-C), build-mode (WO-D), end-states (WO-B), deletion sweep (G).
+- ORPHANED ASSETS after #47/#47b: SettingsScreen.uxml/.uss + PauseOverlay.uxml (+ any
+  authoring GameObjects wiring UIDocument source assets) — deletion-sweep candidates once
+  verification passes.
+- NOTE for the verification chain: SIX conversions ride the next gate (HelpMenu, Jukebox,
+  Leaderboard, Workshop, CosmeticShop, PetSkillTree) + the asmdef edit. If the gate names
+  errors, fix per file — the recipe is proven, typos are the likely class. After gate:
+  build + windowed run + the popup oracle verdict on all six (their closes are now the
+  chrome's shared Close, which the oracle finds by name).

@@ -1,64 +1,55 @@
 // =============================================================================
-// VillageCraftingPanel — UI Toolkit panel for the Workshop crafting station.
+// VillageCraftingPanel — the Workshop crafting station panel.
 // -----------------------------------------------------------------------------
-// Layout:
-//   ┌─────────────────────────────────────────────┐
-//   │ Workshop                              [ X ] │
-//   ├──────────────┬──────────────────────────────┤
-//   │ Recipes      │ <Selected recipe name>       │
-//   │ • Torch      │ <description>                │
-//   │              │                              │
-//   │              │ Ingredients:                 │
-//   │              │  ✓ Dry Reed       1/1        │
-//   │              │  ✗ Ember Resin    0/1        │
-//   │              │                              │
-//   │              │ Output: T  Torch             │
-//   │              │ [        Craft        ]      │
-//   ├──────────────┴──────────────────────────────┤
-//   │ Larder: Reed x5 · Cloth x5 · Resin x5       │
-//   └─────────────────────────────────────────────┘
+// WO-F conversion (2026-07-03, coverage matrix row #2): UIDocument/UITK card ->
+// code-built uGUI on the Obsidian MASTER-DETAIL template (BuildObsidianModal:
+// FrameCrafting — the owner-ratified "spot on 100% perfect" split frame).
+//   • bodyLeft  (dark well)      = recipe rows (Obsidian buttons, selected=Yellow,
+//                                  ✓/✗ affordability suffix)
+//   • bodyRight (parchment well) = selected recipe detail: description,
+//                                  ingredient checklist, output, Craft CTA
+//                                  (dark-INK text — the well is parchment)
+//   • footer    (action strip)   = the larder readout
+// The ONE shared Close is the chrome's (the old per-panel "X" chip is retired).
 //
-// The panel is spawned by VillageCraftingPanelBootstrap. Public API:
-//   • Toggle()  — flip visibility
-//   • Open()    — show + refresh
-//   • Close()   — hide
-//   • IsOpen   — read-only state
-//
-// Single instance: BuildingInteractable (which we cannot modify) routes the
-// Workshop F press to a "Workshop crafting — Week 7" toast. We piggy-back via
-// VillageCraftingPanelBootstrap's separate proximity watcher.
+// Public API preserved: Toggle() / Open() / Close() / IsOpen / Instance;
+// PanelRouter.Register(PanelId.Crafting, Open); arbiter handle "Workshop";
+// VillageInventory.Changed -> Repaint. Spawned by VillageCraftingPanelBootstrap.
 // =============================================================================
 
 using System.Collections.Generic;
 using System.Text;
 using DeNelle.Core.UI;
+using TMPro;
 using UnityEngine;
-using UnityEngine.UIElements;
 
 namespace DeNelle.Village.Crafting
 {
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(UIDocument))]
     public sealed class VillageCraftingPanel : MonoBehaviour
     {
         public static VillageCraftingPanel Instance { get; private set; }
 
-        private UIDocument _doc;
-        private VisualElement _root;
-        private VisualElement _shell;        // the modal card
-        private VisualElement _recipeList;
-        private VisualElement _detailPane;
-        private VisualElement _footerStrip;
+        private ElarionUiKit.ObsidianModal _modal;
+        private Transform _recipeHost;   // bodyLeft — dark list well
+        private Transform _detailHost;   // bodyRight — parchment detail well
+        private TextMeshProUGUI _larder; // footer strip readout
 
         private string _selectedRecipeId;
-        // Modal arbiter handle (DEF-212): one panel open at a time.
+        private bool _open;
         private PanelHandle _panelHandle;
 
-        public bool IsOpen => _shell != null && _shell.style.display.value != DisplayStyle.None;
+        // Dark ink for text sitting ON the parchment well (light Parchment text
+        // is unreadable there — the well IS parchment).
+        private static readonly Color Ink     = new Color(0.16f, 0.12f, 0.08f, 1f);
+        private static readonly Color InkDim  = new Color(0.34f, 0.28f, 0.20f, 1f);
+        private static readonly Color InkGood = new Color(0.10f, 0.42f, 0.16f, 1f);
+        private static readonly Color InkBad  = new Color(0.55f, 0.12f, 0.10f, 1f);
+
+        public bool IsOpen => _open;
 
         private void Awake()
         {
-            _doc = GetComponent<UIDocument>();
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             _panelHandle = PanelManager.Register("Workshop", Close, () => IsOpen);
@@ -68,7 +59,6 @@ namespace DeNelle.Village.Crafting
 
         private void OnEnable()
         {
-            Build();
             if (VillageInventory.Instance != null)
                 VillageInventory.Instance.Changed += Repaint;
         }
@@ -83,6 +73,7 @@ namespace DeNelle.Village.Crafting
         private void OnDestroy()
         {
             PanelRouter.Unregister(PanelId.Crafting, Open);
+            if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
         }
 
         // ── Public open/close ───────────────────────────────────────────────
@@ -94,19 +85,17 @@ namespace DeNelle.Village.Crafting
 
         public void Open()
         {
-            if (_shell == null) Build();
-            if (_shell == null) return;
-            _shell.style.display = DisplayStyle.Flex;
-            // Arbiter closes any other open panel first (DEF-212).
-            PanelManager.NotifyOpened(_panelHandle);
-            // Dim + capture input only while open, so a closed panel never eats
-            // touches or leaves a permanent darkened backdrop on screen. DEF-212
-            // item 5: near-opaque so world-space labels don't bleed through.
-            if (_root != null)
+            EnsureBuilt();
+            if (_modal == null || _modal.canvas == null) return;
+            _open = true;
+            _modal.canvas.SetActive(true);
+            // Arbiter closes any other open panel first (DEF-212); battle-lock may
+            // reject — revert and stay hidden, never force-show.
+            if (!PanelManager.NotifyOpened(_panelHandle))
             {
-                _root.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.92f));
-                _root.pickingMode = PickingMode.Position;
-                _root.Focus(); // so the ESC KeyDownEvent reaches us on desktop
+                _open = false;
+                _modal.canvas.SetActive(false);
+                return;
             }
             if (string.IsNullOrEmpty(_selectedRecipeId))
             {
@@ -118,235 +107,113 @@ namespace DeNelle.Village.Crafting
 
         public void Close()
         {
-            if (_shell == null) return;
-            _shell.style.display = DisplayStyle.None;
-            // Release the backdrop so the HUD beneath is interactive again.
-            if (_root != null)
-            {
-                _root.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0f));
-                _root.pickingMode = PickingMode.Ignore;
-            }
+            if (_modal == null || _modal.canvas == null) { _open = false; return; }
+            _open = false;
+            _modal.canvas.SetActive(false);
             PanelManager.NotifyClosed(_panelHandle);
         }
 
-        // ── Build ────────────────────────────────────────────────────────────
+        // ── Build (kit modal, lazy on first open) ───────────────────────────
 
-        private void Build()
+        private void EnsureBuilt()
         {
-            _root = _doc.rootVisualElement;
-            if (_root == null) return;
-            _root.pickingMode = PickingMode.Ignore; // don't block HUD beneath
+            if (_modal != null && _modal.canvas != null) return;
 
-            _root.Clear();
-            _root.style.position = Position.Absolute;
-            _root.style.left = 0; _root.style.right = 0;
-            _root.style.top = 0;  _root.style.bottom = 0;
-            _root.style.alignItems = Align.Center;
-            _root.style.justifyContent = Justify.Center;
-            // Mobile close affordance: a tap on the dimmed backdrop (i.e. NOT inside
-            // the card) dismisses the panel — the canonical touch exit alongside the X
-            // chip. The desktop Escape key trigger was removed (DEF-218).
-            _root.RegisterCallback<PointerDownEvent>(OnBackdropPointerDown);
+            _modal = ElarionUiKit.BuildObsidianModal("WorkshopUI", "Workshop",
+                new Vector2(0.10f, 0.08f), new Vector2(0.90f, 0.92f), Close,
+                frameName: RpgUiCatalog.FrameCrafting, medallionIcon: "hammer");
 
-            _shell = new VisualElement { name = "CraftingShell" };
-            _shell.style.width = 760;
-            _shell.style.maxWidth = new Length(95, LengthUnit.Percent);
-            _shell.style.height = 520;
-            _shell.style.maxHeight = new Length(95, LengthUnit.Percent);
-            _shell.style.flexDirection = FlexDirection.Column;
-            // Dark-stone sheet + runic-gold rim — the shared Elarion theme panel.
-            ElarionUi.StylePanel(_shell, dark: true);
-            ElarionUi.SetRadius(_shell, ElarionUi.RadiusLg);
-            _root.Add(_shell);
+            var layout = _modal.chrome.layout;
+            _recipeHost = layout != null && layout.bodyLeft != null
+                ? (Transform)layout.bodyLeft
+                : _modal.chrome.content.transform;
+            _detailHost = layout != null && layout.bodyRight != null
+                ? (Transform)layout.bodyRight
+                : _modal.chrome.content.transform;
 
-            BuildHeader(_shell);
+            var footHost = layout != null && layout.footer != null
+                ? (Transform)layout.footer
+                : _modal.chrome.content.transform;
+            _larder = MakeText(footHost, "", 14, ElarionUi.Parchment, FontStyles.Normal,
+                TextAlignmentOptions.Left, new Vector2(0.01f, 0f), new Vector2(0.99f, 1f));
 
-            var body = new VisualElement { name = "Body" };
-            body.style.flexDirection = FlexDirection.Row;
-            body.style.flexGrow = 1;
-            body.style.paddingLeft = 12; body.style.paddingRight = 12;
-            body.style.paddingTop = 8; body.style.paddingBottom = 8;
-            _shell.Add(body);
-
-            _recipeList = new VisualElement { name = "RecipeList" };
-            _recipeList.style.width = 230;
-            _recipeList.style.flexDirection = FlexDirection.Column;
-            _recipeList.style.marginRight = 10;
-            _recipeList.style.paddingTop = 6; _recipeList.style.paddingBottom = 6;
-            _recipeList.style.paddingLeft = 6; _recipeList.style.paddingRight = 6;
-            // Recessed well — darker stone, lightly framed (shared theme).
-            ElarionUi.StyleWell(_recipeList);
-            body.Add(_recipeList);
-
-            _detailPane = new VisualElement { name = "DetailPane" };
-            _detailPane.style.flexGrow = 1;
-            _detailPane.style.flexDirection = FlexDirection.Column;
-            _detailPane.style.paddingTop = 8; _detailPane.style.paddingBottom = 8;
-            _detailPane.style.paddingLeft = 14; _detailPane.style.paddingRight = 14;
-            // Recessed well — darker stone, lightly framed (shared theme).
-            ElarionUi.StyleWell(_detailPane);
-            body.Add(_detailPane);
-
-            _footerStrip = new VisualElement { name = "FooterStrip" };
-            _footerStrip.style.flexDirection = FlexDirection.Row;
-            _footerStrip.style.flexWrap = Wrap.Wrap;
-            _footerStrip.style.alignItems = Align.Center;
-            _footerStrip.style.paddingLeft = 14; _footerStrip.style.paddingRight = 14;
-            _footerStrip.style.paddingTop = 8; _footerStrip.style.paddingBottom = 10;
-            _footerStrip.style.borderTopWidth = 1;
-            _footerStrip.style.borderTopColor = new StyleColor(new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.45f));
-            _shell.Add(_footerStrip);
-
-            // Start hidden; opened by bootstrap.
-            _shell.style.display = DisplayStyle.None;
-
-            Repaint();
-        }
-
-        private void BuildHeader(VisualElement parent)
-        {
-            var header = new VisualElement { name = "Header" };
-            header.style.flexDirection = FlexDirection.Row;
-            header.style.alignItems = Align.Center;
-            header.style.justifyContent = Justify.SpaceBetween;
-            header.style.paddingLeft = 16; header.style.paddingRight = 10;
-            header.style.paddingTop = 10; header.style.paddingBottom = 10;
-            header.style.borderBottomWidth = 1;
-            header.style.borderBottomColor = new StyleColor(new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.45f));
-            parent.Add(header);
-
-            // Gilt crest glyph + title — the shared header voice (matches MakeTitle).
-            var title = new Label(ElarionUi.CrestGlyph + "  Workshop");
-            title.style.color = new StyleColor(ElarionUi.Gilt);
-            title.style.fontSize = ElarionUi.FontTitle;
-            title.style.unityFontStyleAndWeight = FontStyle.Bold;
-            title.style.letterSpacing = 1.5f;
-            header.Add(title);
-
-            // 44x44 min touch target (DEF-218) so the close button is reachable
-            // with a finger on mobile, not just a mouse. Themed Danger chip.
-            // Named "CloseButton" (fleet-9500 RCA): the close convention — and the popup-close
-            // oracle — match by name/label containing "close"; an anonymous "X" was invisible
-            // to it, so the oracle clicked a foreign panel's Close and Workshop read NO_CLOSE.
-            var closeBtn = new Button(Close) { text = "X", name = "CloseButton" };
-            ElarionUi.StyleButton(closeBtn, ElarionUi.ButtonKind.Danger);
-            closeBtn.style.width = 44; closeBtn.style.minHeight = 44; closeBtn.style.height = 44;
-            closeBtn.style.fontSize = 18;
-            closeBtn.style.paddingLeft = 0; closeBtn.style.paddingRight = 0;
-            closeBtn.style.marginTop = 0; closeBtn.style.marginBottom = 0;
-            header.Add(closeBtn);
+            _modal.canvas.SetActive(false);   // built hidden; Open shows it
         }
 
         // ── Repaint ─────────────────────────────────────────────────────────
 
         private void Repaint()
         {
-            if (_recipeList == null || _detailPane == null) return;
+            if (!_open || _recipeHost == null || _detailHost == null) return;
 
-            _recipeList.Clear();
+            // Recipe rows (dark well, left).
+            for (int i = _recipeHost.childCount - 1; i >= 0; i--)
+                Destroy(_recipeHost.GetChild(i).gameObject);
+
             var recipes = CraftingRecipeCatalog.All;
+            var inv = VillageInventory.Instance;
             if (recipes == null || recipes.Count == 0)
             {
-                var empty = new Label("No recipes loaded.");
-                empty.style.color = new StyleColor(ElarionUi.ParchmentDim);
-                empty.style.fontSize = ElarionUi.FontLabel;
-                _recipeList.Add(empty);
+                MakeText(_recipeHost, "No recipes loaded.", 14, ElarionUi.ParchmentDim,
+                    FontStyles.Italic, TextAlignmentOptions.Center,
+                    new Vector2(0.05f, 0.88f), new Vector2(0.95f, 0.98f));
             }
             else
             {
+                const float rowH = 0.105f, gap = 0.015f;
+                float top = 0.98f;
                 foreach (var r in recipes)
                 {
                     if (r == null) continue;
-                    _recipeList.Add(BuildRecipeRow(r));
+                    string id = r.Id;
+                    bool selected = id == _selectedRecipeId;
+                    bool canCraft = inv != null && inv.CanCraft(id);
+                    // ASCII markers (eyes-on 2026-07-03: ✓/✗ are missing from the TMP font
+                    // and rendered as boxes in the 14:46 capture).
+                    string label = (string.IsNullOrEmpty(r.DisplayName) ? id : r.DisplayName)
+                                 + (canCraft ? "  +" : "  -");
+                    ElarionUiKit.BuildObsidianButton(_recipeHost, label,
+                        ElarionUiKit.ObsidianButtonStyle.Style1,
+                        selected ? ElarionUiKit.ObsidianButtonColor.Yellow
+                                 : ElarionUiKit.ObsidianButtonColor.Gray,
+                        new Vector2(0.04f, top - rowH), new Vector2(0.96f, top),
+                        () => { _selectedRecipeId = id; Repaint(); });
+                    top -= rowH + gap;
+                    if (top - rowH < 0f) break;   // bounded: never overflow the well
                 }
             }
 
-            _detailPane.Clear();
-            var selected = CraftingRecipeCatalog.Find(_selectedRecipeId);
-            if (selected != null) BuildDetail(_detailPane, selected);
+            // Detail (parchment well, right — dark ink).
+            for (int i = _detailHost.childCount - 1; i >= 0; i--)
+                Destroy(_detailHost.GetChild(i).gameObject);
+            var selectedRecipe = CraftingRecipeCatalog.Find(_selectedRecipeId);
+            if (selectedRecipe != null) BuildDetail(selectedRecipe);
             else
-            {
-                var hint = new Label("Select a recipe.");
-                hint.style.color = new StyleColor(ElarionUi.ParchmentDim);
-                _detailPane.Add(hint);
-            }
+                MakeText(_detailHost, "Select a recipe.", 15, InkDim, FontStyles.Italic,
+                    TextAlignmentOptions.Center, new Vector2(0.05f, 0.45f), new Vector2(0.95f, 0.55f));
 
-            BuildFooter();
+            BuildLarder();
         }
 
-        private VisualElement BuildRecipeRow(RecipeDef recipe)
-        {
-            bool selected = recipe.Id == _selectedRecipeId;
-            var inv = VillageInventory.Instance;
-            bool canCraft = inv != null && inv.CanCraft(recipe.Id);
-
-            var row = new Button(() => { _selectedRecipeId = recipe.Id; Repaint(); });
-            row.style.marginBottom = 4;
-            row.style.paddingLeft = 10; row.style.paddingRight = 10;
-            row.style.paddingTop = 8; row.style.paddingBottom = 8;
-            row.style.borderTopLeftRadius = 6;
-            row.style.borderTopRightRadius = 6;
-            row.style.borderBottomLeftRadius = 6;
-            row.style.borderBottomRightRadius = 6;
-            row.style.backgroundColor = new StyleColor(selected
-                ? ElarionUi.StoneTrim
-                : ElarionUi.PanelStoneDark);
-            ApplyBorder(row,
-                selected ? ElarionUi.Gilt
-                         : new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.35f),
-                selected ? 2 : 1);
-
-            row.text = string.Empty;
-            row.style.flexDirection = FlexDirection.Row;
-            row.style.alignItems = Align.Center;
-            row.style.justifyContent = Justify.SpaceBetween;
-
-            var name = new Label(string.IsNullOrEmpty(recipe.DisplayName) ? recipe.Id : recipe.DisplayName);
-            name.style.color = new StyleColor(ElarionUi.Parchment);
-            name.style.fontSize = ElarionUi.FontLabel;
-            name.style.flexGrow = 1;
-            row.Add(name);
-
-            var badge = new Label(canCraft ? "✓" : "✗"); // ✓ / ✗
-            badge.style.color = new StyleColor(canCraft
-                ? ElarionUi.Affordable
-                : ElarionUi.Danger);
-            badge.style.fontSize = 14;
-            badge.style.marginLeft = 6;
-            row.Add(badge);
-
-            return row;
-        }
-
-        private void BuildDetail(VisualElement parent, RecipeDef recipe)
+        private void BuildDetail(RecipeDef recipe)
         {
             var inv = VillageInventory.Instance;
+            string display = string.IsNullOrEmpty(recipe.DisplayName) ? recipe.Id : recipe.DisplayName;
 
-            var title = new Label(string.IsNullOrEmpty(recipe.DisplayName) ? recipe.Id : recipe.DisplayName);
-            title.style.color = new StyleColor(ElarionUi.Gilt);
-            title.style.fontSize = ElarionUi.FontHead;
-            title.style.unityFontStyleAndWeight = FontStyle.Bold;
-            title.style.marginBottom = 4;
-            parent.Add(title);
-            parent.Add(ElarionUi.MakeRule());
+            MakeText(_detailHost, display, 20, Ink, FontStyles.Bold,
+                TextAlignmentOptions.Left, new Vector2(0.06f, 0.90f), new Vector2(0.94f, 0.99f));
 
+            float y = 0.88f;
             if (!string.IsNullOrEmpty(recipe.Description))
             {
-                var desc = new Label(recipe.Description);
-                desc.style.color = new StyleColor(ElarionUi.ParchmentDim);
-                desc.style.fontSize = ElarionUi.FontLabel;
-                desc.style.whiteSpace = WhiteSpace.Normal;
-                desc.style.marginBottom = 10;
-                parent.Add(desc);
+                MakeText(_detailHost, recipe.Description, 14, InkDim, FontStyles.Normal,
+                    TextAlignmentOptions.TopLeft, new Vector2(0.06f, y - 0.14f), new Vector2(0.94f, y));
+                y -= 0.16f;
             }
 
-            var ingHeader = new Label("Ingredients");
-            ingHeader.style.color = new StyleColor(ElarionUi.Gold);
-            ingHeader.style.fontSize = ElarionUi.FontLabel;
-            ingHeader.style.unityFontStyleAndWeight = FontStyle.Bold;
-            ingHeader.style.marginTop = 4;
-            ingHeader.style.marginBottom = 4;
-            parent.Add(ingHeader);
+            MakeText(_detailHost, "Ingredients", 15, Ink, FontStyles.Bold,
+                TextAlignmentOptions.Left, new Vector2(0.06f, y - 0.06f), new Vector2(0.94f, y));
+            y -= 0.07f;
 
             if (recipe.Ingredients != null)
             {
@@ -355,79 +222,36 @@ namespace DeNelle.Village.Crafting
                     if (line == null) continue;
                     int have = inv != null ? inv.Get(line.IngredientId) : 0;
                     bool ok = have >= line.Count;
-
-                    var row = new VisualElement();
-                    row.style.flexDirection = FlexDirection.Row;
-                    row.style.alignItems = Align.Center;
-                    row.style.marginBottom = 3;
-
-                    var check = new Label(ok ? "✓" : "✗"); // ✓ / ✗
-                    check.style.color = new StyleColor(ok
-                        ? ElarionUi.Affordable
-                        : ElarionUi.Danger);
-                    check.style.fontSize = 14;
-                    check.style.width = 18;
-                    row.Add(check);
-
-                    var label = new Label(CraftingRecipeCatalog.DisplayNameFor(line.IngredientId));
-                    label.style.color = new StyleColor(ok
-                        ? ElarionUi.Parchment
-                        : ElarionUi.ParchmentDim);
-                    label.style.fontSize = ElarionUi.FontLabel;
-                    label.style.flexGrow = 1;
-                    row.Add(label);
-
-                    var counts = new Label($"{have}/{line.Count}");
-                    counts.style.color = new StyleColor(ElarionUi.ParchmentDim);
-                    counts.style.fontSize = ElarionUi.FontLabel;
-                    counts.style.marginLeft = 8;
-                    row.Add(counts);
-
-                    parent.Add(row);
+                    MakeText(_detailHost,
+                        (ok ? "+  " : "-  ") + CraftingRecipeCatalog.DisplayNameFor(line.IngredientId),
+                        14, ok ? InkGood : InkBad, FontStyles.Normal,
+                        TextAlignmentOptions.Left, new Vector2(0.08f, y - 0.055f), new Vector2(0.70f, y));
+                    MakeText(_detailHost, $"{have}/{line.Count}", 14, InkDim, FontStyles.Normal,
+                        TextAlignmentOptions.Right, new Vector2(0.70f, y - 0.055f), new Vector2(0.92f, y));
+                    y -= 0.06f;
                 }
             }
 
             // Output preview.
-            var outHeader = new Label("Output");
-            outHeader.style.color = new StyleColor(ElarionUi.Gold);
-            outHeader.style.fontSize = ElarionUi.FontLabel;
-            outHeader.style.unityFontStyleAndWeight = FontStyle.Bold;
-            outHeader.style.marginTop = 12;
-            outHeader.style.marginBottom = 4;
-            parent.Add(outHeader);
-
-            var outRow = new VisualElement();
-            outRow.style.flexDirection = FlexDirection.Row;
-            outRow.style.alignItems = Align.Center;
-            outRow.style.marginBottom = 12;
-
-            if (!string.IsNullOrEmpty(recipe.ResultGlyph))
-            {
-                var glyph = new Label(recipe.ResultGlyph);
-                glyph.style.color = new StyleColor(ElarionUi.Gilt);
-                glyph.style.fontSize = 20;
-                glyph.style.width = 28;
-                glyph.style.unityTextAlign = TextAnchor.MiddleCenter;
-                glyph.style.unityFontStyleAndWeight = FontStyle.Bold;
-                outRow.Add(glyph);
-            }
-
+            y -= 0.03f;
             int held = inv != null ? inv.Get(recipe.OutputId) : 0;
-            var outLabel = new Label($"{(string.IsNullOrEmpty(recipe.DisplayName) ? recipe.Id : recipe.DisplayName)}  x1  (have {held})");
-            outLabel.style.color = new StyleColor(ElarionUi.Parchment);
-            outLabel.style.fontSize = ElarionUi.FontLabel;
-            outRow.Add(outLabel);
-            parent.Add(outRow);
+            string glyph = string.IsNullOrEmpty(recipe.ResultGlyph) ? "" : recipe.ResultGlyph + "  ";
+            MakeText(_detailHost, "Output", 15, Ink, FontStyles.Bold,
+                TextAlignmentOptions.Left, new Vector2(0.06f, y - 0.06f), new Vector2(0.94f, y));
+            y -= 0.065f;
+            MakeText(_detailHost, $"{glyph}{display}  x1  (have {held})", 14, Ink, FontStyles.Normal,
+                TextAlignmentOptions.Left, new Vector2(0.08f, y - 0.055f), new Vector2(0.94f, y));
 
-            // Craft button.
+            // Craft CTA — Green when affordable, Gray (still tappable; repaint keeps
+            // it honest) when short.
             bool canCraft = inv != null && inv.CanCraft(recipe.Id);
-            var craftBtn = new Button(() => OnCraftClicked(recipe)) { text = "Craft" };
-            // Shared CTA: gilt-rimmed gold glass when affordable, stone-grey Disabled
-            // when short — same as the build / store / upgrade buttons.
-            ElarionUi.StyleButton(craftBtn, canCraft ? ElarionUi.ButtonKind.Gold : ElarionUi.ButtonKind.Disabled);
-            craftBtn.style.marginTop = 8;
-            craftBtn.SetEnabled(canCraft);
-            parent.Add(craftBtn);
+            var btn = ElarionUiKit.BuildObsidianButton(_detailHost, "Craft",
+                ElarionUiKit.ObsidianButtonStyle.Style1,
+                canCraft ? ElarionUiKit.ObsidianButtonColor.Green
+                         : ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.28f, 0.03f), new Vector2(0.72f, 0.13f),
+                () => OnCraftClicked(recipe));
+            btn.interactable = canCraft;
         }
 
         private void OnCraftClicked(RecipeDef recipe)
@@ -447,30 +271,18 @@ namespace DeNelle.Village.Crafting
             Repaint();
         }
 
-        private void BuildFooter()
+        private void BuildLarder()
         {
-            if (_footerStrip == null) return;
-            _footerStrip.Clear();
-
-            var label = new Label("Larder:");
-            label.style.color = new StyleColor(ElarionUi.Gold);
-            label.style.fontSize = ElarionUi.FontLabel;
-            label.style.unityFontStyleAndWeight = FontStyle.Bold;
-            label.style.marginRight = 10;
-            _footerStrip.Add(label);
-
+            if (_larder == null) return;
             var inv = VillageInventory.Instance;
             if (inv == null || inv.Counts.Count == 0)
             {
-                var empty = new Label("(empty)");
-                empty.style.color = new StyleColor(ElarionUi.ParchmentDim);
-                empty.style.fontSize = ElarionUi.FontLabel;
-                _footerStrip.Add(empty);
+                _larder.text = "Larder:  (empty)";
                 return;
             }
 
-            // Stable order: ingredients first (in catalog order), then any
-            // recipe outputs (also in catalog order).
+            // Stable order: ingredients first (catalog order), then recipe outputs,
+            // then any orphan keys (defensive) — same ordering as the old panel.
             var seen = new HashSet<string>();
             var ordered = new List<string>();
             foreach (var ing in CraftingRecipeCatalog.Ingredients)
@@ -484,51 +296,22 @@ namespace DeNelle.Village.Crafting
                 if (seen.Contains(r.Id)) continue;
                 if (inv.Get(r.Id) > 0) { ordered.Add(r.Id); seen.Add(r.Id); }
             }
-            // Catch any orphan keys (defensive).
             foreach (var kv in inv.Counts)
-            {
                 if (!seen.Contains(kv.Key)) ordered.Add(kv.Key);
-            }
 
+            var sb = new StringBuilder("Larder:  ");
+            bool first = true;
             foreach (var id in ordered)
             {
                 int n = inv.Get(id);
                 if (n <= 0) continue;
-                _footerStrip.Add(BuildLarderChip(id, n));
+                if (!first) sb.Append("  ·  ");
+                string glyph = ResolveGlyph(id);
+                if (!string.IsNullOrEmpty(glyph)) sb.Append(glyph).Append(' ');
+                sb.Append(CraftingRecipeCatalog.DisplayNameFor(id)).Append(" x").Append(n);
+                first = false;
             }
-        }
-
-        private static VisualElement BuildLarderChip(string id, int count)
-        {
-            var chip = new VisualElement();
-            chip.style.flexDirection = FlexDirection.Row;
-            chip.style.alignItems = Align.Center;
-            chip.style.marginRight = 10;
-            chip.style.marginBottom = 2;
-            chip.style.paddingLeft = 8; chip.style.paddingRight = 8;
-            chip.style.paddingTop = 3; chip.style.paddingBottom = 3;
-            chip.style.borderTopLeftRadius = 5;
-            chip.style.borderTopRightRadius = 5;
-            chip.style.borderBottomLeftRadius = 5;
-            chip.style.borderBottomRightRadius = 5;
-            chip.style.backgroundColor = new StyleColor(ElarionUi.PanelStoneDark);
-            ApplyBorder(chip, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.35f), 1);
-
-            var glyph = ResolveGlyph(id);
-            if (!string.IsNullOrEmpty(glyph))
-            {
-                var g = new Label(glyph);
-                g.style.color = new StyleColor(ElarionUi.Gilt);
-                g.style.fontSize = ElarionUi.FontLabel;
-                g.style.marginRight = 4;
-                chip.Add(g);
-            }
-
-            var label = new Label($"{CraftingRecipeCatalog.DisplayNameFor(id)} x{count}");
-            label.style.color = new StyleColor(ElarionUi.Parchment);
-            label.style.fontSize = ElarionUi.FontLabel;
-            chip.Add(label);
-            return chip;
+            _larder.text = sb.ToString();
         }
 
         private static string ResolveGlyph(string id)
@@ -540,29 +323,26 @@ namespace DeNelle.Village.Crafting
             return null;
         }
 
-        // Tap-outside-to-close for touch (DEF-218). Fires only when the press
-        // landed on the dimmed backdrop itself, never on the card or its children,
-        // so taps inside the panel are never swallowed as a "close".
-        private void OnBackdropPointerDown(PointerDownEvent evt)
-        {
-            if (!IsOpen) return;
-            if (evt.target == _root)
-            {
-                Close();
-                evt.StopPropagation();
-            }
-        }
+        // ── uGUI helper ──────────────────────────────────────────────────────
 
-        private static void ApplyBorder(VisualElement ve, Color color, float width)
+        private static TextMeshProUGUI MakeText(Transform parent, string text, float size,
+            Color color, FontStyles style, TextAlignmentOptions align, Vector2 min, Vector2 max)
         {
-            ve.style.borderLeftColor = new StyleColor(color);
-            ve.style.borderRightColor = new StyleColor(color);
-            ve.style.borderTopColor = new StyleColor(color);
-            ve.style.borderBottomColor = new StyleColor(color);
-            ve.style.borderLeftWidth = width;
-            ve.style.borderRightWidth = width;
-            ve.style.borderTopWidth = width;
-            ve.style.borderBottomWidth = width;
+            var go = new GameObject("Text", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var t = go.AddComponent<TextMeshProUGUI>();
+            t.text = text;
+            t.fontSize = size;
+            t.color = color;
+            t.fontStyle = style;
+            t.alignment = align;
+            t.raycastTarget = false;
+            t.textWrappingMode = TextWrappingModes.Normal;
+            ElarionUiKit.EnsureFont(t);
+            return t;
         }
     }
 }

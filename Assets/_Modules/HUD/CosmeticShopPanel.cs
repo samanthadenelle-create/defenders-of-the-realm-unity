@@ -1,43 +1,46 @@
 // =============================================================================
-// CosmeticShopPanel - the in-game Cosmetic Shop UI (UI Toolkit). Opened via its
-// world interactable (Marketplace). Two-column layout: a category
-// strip on the left (Hero / Pet / Village), a vertical card list on the right.
-// Each card shows the preview swatch, name, description, Glimmer price, and a
-// single action button (Buy / Equip / Equipped / Locked).
+// CosmeticShopPanel - the in-game Cosmetic Shop UI. Opened via its world
+// interactable (Marketplace). Category tabs (Hero / Pet / Village) + a
+// scrollable card list; each card shows the preview, name, description,
+// Glimmer price (with DEF-197 "short by N" honesty) and ONE action button
+// (Buy / Equip / Equipped / Locked).
 // -----------------------------------------------------------------------------
-// Reflection bridge: DeNelle.HUD does not reference DeNelle.Cosmetics (asmdef
-// isolation - same rule that PetHeroLeash follows for DeNelle.Village). We
-// resolve the catalog + service types lazily by name, cache the MethodInfo /
-// PropertyInfo handles, and treat any miss as "shop unavailable". This keeps
-// the HUD compiling even if the Cosmetics module is stripped from a build.
+// WO-F conversion (2026-07-03, coverage matrix row #4): UIDocument/UITK ->
+// code-built uGUI on the Obsidian master frame (BuildObsidianModal:
+// FrameMerchant + coin medallion + the ONE shared Close + scrim), per the
+// HelpMenu reference recipe. Scroll list composed inline (ScrollRect +
+// VerticalLayoutGroup) like LeaderboardPanel.
 //
-// Spawned by CosmeticShopPanelBootstrap once a scene has a hero (mirrors
-// DailyQuestHudBootstrap so Title / HeroSelect stay quiet).
+// Reflection bridge UNCHANGED: DeNelle.HUD does not reference DeNelle.Cosmetics
+// (asmdef isolation). Catalog + service resolved lazily by name; any miss =
+// "shop unavailable" so the HUD compiles even with Cosmetics stripped.
+//
+// Spawned by CosmeticShopPanelBootstrap once a scene has a hero.
 // =============================================================================
 
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using TMPro;
 using UnityEngine;
-using UnityEngine.UIElements;
+using UnityEngine.UI;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.HUD
 {
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(UIDocument))]
     public sealed class CosmeticShopPanel : MonoBehaviour
     {
-        private UIDocument _doc;
-        private VisualElement _root;
-        private VisualElement _overlay;
-        private VisualElement _cardList;
-        private Label _glimmerLabel;
-        private Label _toast;
+        private ElarionUiKit.ObsidianModal _modal;
+        private Transform _tabHost;
+        private Transform _listContent;      // ScrollRect content
+        private TextMeshProUGUI _glimmerLabel;
+        private ElarionUiKit.ToastParts _toast;
         private float _toastUntil;
         private string _activeCategory = "hero";
+        private bool _open;
 
         // Reflection handles into DeNelle.Cosmetics. Cached after first hit.
         private static Type s_serviceType;
@@ -63,53 +66,23 @@ namespace DeNelle.HUD
 
         private object _serviceInstance;
         private Delegate _changedHandler;
-        // Modal arbiter handle (DEF-212). CloseOverlay is the close action; the
-        // overlay's display state is the is-open probe.
+        // Modal arbiter handle (DEF-212). CloseOverlay is the close action.
         private PanelHandle _panelHandle;
 
         private void Awake()
         {
-            _doc = GetComponent<UIDocument>();
-            if (_doc == null) _doc = gameObject.AddComponent<UIDocument>();
-            if (_doc.panelSettings == null)
-            {
-                foreach (var existing in UnityEngine.Object.FindObjectsByType<UIDocument>(
-                             FindObjectsInactive.Include))
-                {
-                    if (existing == _doc || existing.panelSettings == null) continue;
-                    _doc.panelSettings = existing.panelSettings;
-                    break;
-                }
-            }
-            if (_doc.panelSettings == null)
-            {
-                // V (WO-465 class): no PanelSettings means rootVisualElement is null and
-                // the panel would silently render nothing / disable itself. Self-report at
-                // Fail so the run pinpoints WHY the shop never showed instead of a blank.
-                FlowTrace.Fail("CosmeticShop",
-                    "Awake: no PanelSettings resolved (none on this UIDocument and none borrowable " +
-                    "from another UIDocument in the scene) — shop CANNOT render; disabling. " +
-                    "Wire a PanelSettings on the CosmeticShop UIDocument or ensure another UI panel exists first.");
-                enabled = false;
-                return;
-            }
-            FlowTrace.Step("CosmeticShop", $"Awake: PanelSettings resolved ('{_doc.panelSettings.name}').");
-            _doc.sortingOrder = 95; // above HUD chips, below the Help overlay (100)
             _panelHandle = PanelManager.Register("Cosmetic Shop", CloseOverlay, IsOverlayOpen);
             // DEF-213: let the Marketplace / Store interaction open this panel by id.
             PanelRouter.Register(PanelId.CosmeticShop, OpenOverlay);
         }
 
-        private bool IsOverlayOpen() =>
-            _overlay != null && _overlay.style.display.value != DisplayStyle.None;
+        private bool IsOverlayOpen() => _open;
 
         private void OnEnable()
         {
             ResolveBridge();
             _serviceInstance = ResolveServiceInstance();
-            BuildUi();
             SubscribeChanged();
-            Repaint();
         }
 
         private void OnDisable()
@@ -120,22 +93,21 @@ namespace DeNelle.HUD
         private void OnDestroy()
         {
             PanelRouter.Unregister(PanelId.CosmeticShop, OpenOverlay);
+            if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
         }
 
         private void Update()
         {
-            // WO-437: the global 'C' hotkey is REMOVED. The Cosmetic Shop opens only via
-            // its world interactable (Marketplace -> PanelRouter.Open(PanelId.CosmeticShop)).
-            // The panel is unchanged + still battle-locked by PanelManager.
-
-            if (_toast != null && _toastUntil > 0f && Time.unscaledTime > _toastUntil)
+            // WO-437: no global hotkey — opens only via the Marketplace interactable.
+            if (_toast != null && _toast.card != null && _toastUntil > 0f
+                && Time.unscaledTime > _toastUntil)
             {
-                _toast.style.display = DisplayStyle.None;
+                _toast.card.SetActive(false);
                 _toastUntil = 0f;
             }
         }
 
-        // ─── Reflection bridge ───────────────────────────────────────────────
+        // ─── Reflection bridge (UNCHANGED) ───────────────────────────────────
 
         private static void ResolveBridge()
         {
@@ -244,8 +216,6 @@ namespace DeNelle.HUD
             if (_serviceInstance == null || s_changedEvent == null) return;
             try
             {
-                // Wrap Repaint in an Action so the reflected event (declared as
-                // `event Action`) can target a private instance method.
                 Action onChanged = Repaint;
                 _changedHandler = Delegate.CreateDelegate(s_changedEvent.EventHandlerType,
                     onChanged.Target, onChanged.Method);
@@ -274,183 +244,113 @@ namespace DeNelle.HUD
             _changedHandler = null;
         }
 
-        // ─── UI construction ─────────────────────────────────────────────────
+        // ─── UI construction (kit modal, lazy on first open) ─────────────────
 
-        private void BuildUi()
+        private void EnsureBuilt()
         {
+            if (_modal != null && _modal.canvas != null) return;
             using var _ = FlowTrace.Enter("CosmeticShop", "BuildUi");
-            _root = _doc.rootVisualElement;
-            if (_root == null)
-            {
-                // Built-but-invisible guard: a live UIDocument with a PanelSettings should hand
-                // back a root. A null root here means the panel will be blank with no other
-                // symptom — Fail so the run says so instead of silently returning.
-                FlowTrace.Fail("CosmeticShop",
-                    "BuildUi: _doc.rootVisualElement is NULL (PanelSettings present but no root) — " +
-                    "shop UI cannot be built; panel will be empty.");
-                return;
-            }
-            _root.pickingMode = PickingMode.Ignore; // don't block HUD beneath
-            _root.Clear();
-            _root.pickingMode = PickingMode.Ignore;
-            _root.style.position = Position.Absolute;
-            _root.style.left = 0; _root.style.right = 0;
-            _root.style.top = 0;  _root.style.bottom = 0;
 
-            _overlay = new VisualElement { name = "cosmetic-shop-overlay" };
-            ElarionUi.StyleScrim(_overlay);
-            // DEF-212 item 5: bump the scrim to near-opaque so world-space labels
-            // ("Arcane Tower") behind the modal don't bleed through the edges of the
-            // shop card. Local override only — the shared ElarionUi.Scrim is untouched.
-            _overlay.style.backgroundColor = new StyleColor(new Color(0.03f, 0.02f, 0.06f, 0.98f));
-            _overlay.style.display = DisplayStyle.None;
-            // Closed scrim must NOT intercept pointer input (else the hidden full-screen
-            // overlay eats all world/store clicks before first open). Open/Close toggle this.
-            _overlay.pickingMode = PickingMode.Ignore;
-            _root.Add(_overlay);
+            _modal = ElarionUiKit.BuildObsidianModal("CosmeticShopUI", "Cosmetic Shop",
+                new Vector2(0.14f, 0.06f), new Vector2(0.86f, 0.94f), CloseOverlay,
+                frameName: RpgUiCatalog.FrameMerchant, medallionIcon: "coin");
 
-            // Town-HUD canon shop-window frame (dark-glass 9-slice rounded panel + gold rim).
-            var card = new VisualElement();
-            card.style.width = 720;
-            card.style.maxWidth = 880;
-            card.style.height = 520;
-            card.style.flexDirection = FlexDirection.Column;
-            card.style.paddingTop = 18; card.style.paddingBottom = 18;
-            card.style.paddingLeft = 22; card.style.paddingRight = 22;
-            ElarionUi.StylePanel(card, dark: true);
-            _overlay.Add(card);
+            var layout = _modal.chrome.layout;
+            var body = layout != null && layout.body != null
+                ? (Transform)layout.body
+                : _modal.chrome.content.transform;
 
-            // Header: crest title + Glimmer chip + close.
-            var header = new VisualElement();
-            header.style.flexDirection = FlexDirection.Row;
-            header.style.justifyContent = Justify.SpaceBetween;
-            header.style.alignItems = Align.Center;
-            card.Add(header);
+            // Glimmer chip — header zone, right side (the frame's close notch is
+            // further right; the chip sits inside the header band).
+            var headHost = layout != null && layout.header != null
+                ? (Transform)layout.header
+                : body;
+            _glimmerLabel = MakeText(headHost, "0", 16, ElarionUi.Gold, FontStyles.Bold,
+                TextAlignmentOptions.Right, new Vector2(0.70f, 0.1f), new Vector2(0.99f, 0.9f));
 
-            header.Add(ElarionUi.MakeTitle("Cosmetic Shop"));
+            // Category tabs across the top of the well.
+            _tabHost = ZoneRect(body, "TabRail", new Vector2(0.02f, 0.90f), new Vector2(0.98f, 0.99f));
+            BuildTabs();
 
-            var headerRight = new VisualElement();
-            headerRight.style.flexDirection = FlexDirection.Row;
-            headerRight.style.alignItems = Align.Center;
-            header.Add(headerRight);
-
-            var glimmerChip = ShopTheme.MakeGlimmerChip(out _glimmerLabel, 0);
-            glimmerChip.style.marginRight = 10;
-            headerRight.Add(glimmerChip);
-
-            // CloseOverlay, NOT ToggleOverlay (fleet-9500 RCA): a close affordance must be
-            // idempotent — a double-dispatched click on a toggle closed then RE-OPENED the
-            // shop (AnyOpen=True after 'Close'), the captured POPUP_NO_CLOSE.
-            var closeBtn = new Button(CloseOverlay);
-            ShopTheme.StyleCloseButton(closeBtn);
-            headerRight.Add(closeBtn);
-
-            card.Add(ElarionUi.MakeRule());
-
-            // Body: two columns.
-            var body = new VisualElement();
-            body.style.flexDirection = FlexDirection.Row;
-            body.style.flexGrow = 1;
-            card.Add(body);
-
-            // Left rail: category tabs.
-            var rail = new VisualElement();
-            rail.style.width = 160;
-            rail.style.flexDirection = FlexDirection.Column;
-            rail.style.marginRight = 12;
-            body.Add(rail);
-
-            rail.Add(BuildTab("Hero",    "hero"));
-            rail.Add(BuildTab("Pet",     "pet"));
-            rail.Add(BuildTab("Village", "village"));
-
-            // Right side: scrollable card list (themed well, no OS scrollbar).
-            var scroller = new ScrollView(ScrollViewMode.Vertical);
-            scroller.style.flexGrow = 1;
-            ShopTheme.StyleScrollWell(scroller);
-            body.Add(scroller);
-
-            _cardList = scroller.contentContainer;
+            // Scrollable card list.
+            var scrollHost = ZoneRect(body, "CardScroll", new Vector2(0.02f, 0.09f), new Vector2(0.98f, 0.89f));
+            _listContent = BuildScrollColumn(scrollHost);
 
             // Anti-FOMO footer (spec Section 9).
-            card.Add(ElarionUi.MakeRule());
-            var footer = new Label("Beauty is earned, never required.");
-            footer.style.fontSize = ElarionUi.FontMicro;
-            footer.style.unityFontStyleAndWeight = FontStyle.Italic;
-            footer.style.color = ElarionUi.ParchmentDim;
-            footer.style.unityTextAlign = TextAnchor.MiddleCenter;
-            footer.style.marginTop = 2;
-            card.Add(footer);
+            MakeText(body, "Beauty is earned, never required.", 12, ElarionUi.ParchmentDim,
+                FontStyles.Italic, TextAlignmentOptions.Center,
+                new Vector2(0.10f, 0.01f), new Vector2(0.90f, 0.07f));
 
-            // Toast under the card.
-            _toast = new Label(string.Empty);
-            _toast.style.position = Position.Absolute;
-            _toast.style.bottom = 40; _toast.style.left = 0; _toast.style.right = 0;
-            _toast.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _toast.style.color = ElarionUi.Parchment;
-            _toast.style.fontSize = ElarionUi.FontLabel;
-            _toast.style.display = DisplayStyle.None;
-            _root.Add(_toast);
+            // Toast — low center of the modal canvas.
+            _toast = ElarionUiKit.ToastCard(_modal.canvas.transform,
+                ElarionUiKit.ToastTone.Gold, accentLeft: true, TextAnchor.MiddleCenter);
+            var trt = _toast.card.GetComponent<RectTransform>();
+            trt.anchorMin = new Vector2(0.20f, 0.015f);
+            trt.anchorMax = new Vector2(0.80f, 0.075f);
+            trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
+            _toast.card.SetActive(false);
+
+            _modal.canvas.SetActive(false);   // built hidden; OpenOverlay shows it
         }
 
-        private Button BuildTab(string label, string category)
+        private void BuildTabs()
         {
-            var b = new Button(() => { _activeCategory = category; Repaint(); }) { text = label };
-            b.userData = category;
-            ShopTheme.StyleTab(b, category == _activeCategory);
-            return b;
+            for (int i = _tabHost.childCount - 1; i >= 0; i--)
+                Destroy(_tabHost.GetChild(i).gameObject);
+            AddTab("Hero", "hero", 0);
+            AddTab("Pet", "pet", 1);
+            AddTab("Village", "village", 2);
+        }
+
+        private void AddTab(string label, string category, int index)
+        {
+            float x0 = 0.005f + index * (1f / 3f);
+            float x1 = x0 + (1f / 3f) - 0.01f;
+            ElarionUiKit.BuildObsidianButton(_tabHost, label,
+                ElarionUiKit.ObsidianButtonStyle.Style1,
+                category == _activeCategory ? ElarionUiKit.ObsidianButtonColor.Yellow
+                                            : ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(x0, 0.05f), new Vector2(x1, 0.95f),
+                () => { _activeCategory = category; BuildTabs(); Repaint(); });
         }
 
         private void Repaint()
         {
-            if (_root == null) return;
+            if (!_open || _modal == null || _listContent == null) return;
 
             // Refresh service handle in case the bootstrap raced us.
             if (_serviceInstance == null) _serviceInstance = ResolveServiceInstance();
 
             if (_glimmerLabel != null)
-                _glimmerLabel.text = CurrentGlimmer().ToString("N0");
+                _glimmerLabel.text = CurrentGlimmer().ToString("N0") + "  Glimmer";
 
-            // Re-apply themed tab state (selected vs unselected). Tabs carry their
-            // category in userData.
-            if (_overlay != null)
-            {
-                _overlay.Query<Button>().ForEach(btn =>
-                {
-                    if (btn.userData is string cat)
-                        ShopTheme.StyleTab(btn, cat == _activeCategory);
-                });
-            }
-
-            if (_cardList == null) return;
-            _cardList.Clear();
+            for (int i = _listContent.childCount - 1; i >= 0; i--)
+                Destroy(_listContent.GetChild(i).gameObject);
 
             int cardCount = 0;
             foreach (var def in CatalogByCategory(_activeCategory))
             {
                 if (def == null) continue;
-                _cardList.Add(BuildCard(def));
+                BuildCard(def);
                 cardCount++;
             }
             if (cardCount == 0)
             {
-                // Empty-data roll-up (data-empty vs built-but-invisible split): a category
-                // with zero cards is shown to the player AND self-reported, so a missing/empty
-                // catalog never reads as a blank panel with no trace.
+                // Empty-data roll-up: a category with zero cards is shown AND self-reported,
+                // so a missing/empty catalog never reads as a blank panel with no trace.
                 FlowTrace.Warn("CosmeticShop",
                     $"Repaint: category '{_activeCategory}' produced 0 cosmetic cards — " +
-                    "showing the visible empty-state placeholder (data-empty: catalog returned nothing for this category).");
-                var empty = new Label("Nothing here yet - check back next season.");
-                empty.style.color = ElarionUi.ParchmentDim;
-                empty.style.unityFontStyleAndWeight = FontStyle.Italic;
-                empty.style.fontSize = ElarionUi.FontLabel;
-                empty.style.marginTop = 12;
-                empty.style.unityTextAlign = TextAnchor.MiddleCenter;
-                _cardList.Add(empty);
+                    "showing the visible empty-state placeholder (data-empty).");
+                var rowGo = new GameObject("Empty", typeof(RectTransform), typeof(LayoutElement));
+                rowGo.transform.SetParent(_listContent, false);
+                rowGo.GetComponent<LayoutElement>().preferredHeight = 48f;
+                MakeText(rowGo.transform, "Nothing here yet - check back next season.", 14,
+                    ElarionUi.ParchmentDim, FontStyles.Italic, TextAlignmentOptions.Center,
+                    Vector2.zero, Vector2.one);
             }
         }
 
-        private VisualElement BuildCard(object def)
+        private void BuildCard(object def)
         {
             string id          = s_defIdField?.GetValue(def) as string ?? string.Empty;
             string category    = s_defCategoryField?.GetValue(def) as string ?? string.Empty;
@@ -464,143 +364,94 @@ namespace DeNelle.HUD
             bool equipped = owned && string.Equals(EquippedFor(category), id, StringComparison.OrdinalIgnoreCase);
             bool isAchievement = unlockMethod == "achievement";
 
-            // DEF-197: compute affordability once, up front, so BOTH the price line
-            // and the Buy button reflect it against the live Glimmer balance (the
-            // DEF-29 earn path feeds CurrentGlimmer()). A buyable item the player
-            // can't yet afford now reads "short by N" in muted gold at the row, not
-            // just a greyed button — the *why* is visible without guessing.
+            // DEF-197: affordability computed once so the price line + button agree.
             bool isBuyable  = !owned && !isAchievement && glimmerCost > 0;
             int  balance    = CurrentGlimmer();
             bool affordable = balance >= glimmerCost;
             int  shortfall  = isBuyable && !affordable ? glimmerCost - balance : 0;
 
-            var card = new VisualElement();
-            card.style.flexDirection = FlexDirection.Row;
-            card.style.alignItems = Align.Center;
-            // Town-HUD canon card slot: dark-glass fill + thin gold rim + rounding.
-            card.style.backgroundColor = ElarionUi.PanelStoneDark;
-            card.style.marginBottom = 8;
-            card.style.paddingTop = 10; card.style.paddingBottom = 10;
-            card.style.paddingLeft = 12; card.style.paddingRight = 12;
-            ElarionUi.SetRadius(card, ElarionUi.RadiusMd);
-            ElarionUi.SetBorderWidth(card, 1);
-            ElarionUi.SetBorderColor(card, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.22f));
+            var cardGo = new GameObject("Card", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
+            cardGo.transform.SetParent(_listContent, false);
+            cardGo.GetComponent<LayoutElement>().preferredHeight = 92f;
+            var bg = cardGo.GetComponent<Image>();
+            var slotSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, "slot_item");
+            if (slotSprite != null) { bg.sprite = slotSprite; bg.type = Image.Type.Sliced; bg.color = Color.white; }
+            else bg.color = new Color(0f, 0f, 0f, 0.35f);
 
-            // Framed item-portrait slot — prefers a real preview render; falls back
-            // to a framed gem tile (never a bare swatch). Preview textures land in a
-            // later art pass; until then the tint reads the cosmetic's accent colour.
-            var iconSlot = ShopTheme.MakeIconSlot(ResolvePreviewTexture(def), preview, 60f);
-            card.Add(iconSlot);
-
-            var text = new VisualElement();
-            text.style.flexDirection = FlexDirection.Column;
-            text.style.flexGrow = 1;
-            card.Add(text);
-
-            var name = new Label(displayName);
-            name.style.fontSize = ElarionUi.FontBody;
-            name.style.unityFontStyleAndWeight = FontStyle.Bold;
-            name.style.color = ElarionUi.Parchment;
-            text.Add(name);
-
-            var desc = new Label(description);
-            desc.style.fontSize = ElarionUi.FontMicro;
-            desc.style.color = ElarionUi.ParchmentDim;
-            desc.style.unityFontStyleAndWeight = FontStyle.Italic;
-            desc.style.whiteSpace = WhiteSpace.Normal;
-            desc.style.marginTop = 2;
-            text.Add(desc);
-
-            // Price line — coin glyph + amount in gold (matches the header chip).
-            // DEF-197: when a buyable item is out of reach the coin + price dim to a
-            // muted gold so the gold "reads" as unavailable at a glance.
-            Color priceTint = (isBuyable && !affordable) ? ElarionUi.ParchmentDim : ElarionUi.Gold;
-            var priceRow = new VisualElement();
-            priceRow.style.flexDirection = FlexDirection.Row;
-            priceRow.style.alignItems = Align.Center;
-            priceRow.style.marginTop = 4;
-            if (!isAchievement && glimmerCost > 0)
+            // Preview tile — real render when present, tinted swatch fallback.
+            var iconGo = new GameObject("Preview", typeof(RectTransform));
+            iconGo.transform.SetParent(cardGo.transform, false);
+            var irt = iconGo.GetComponent<RectTransform>();
+            irt.anchorMin = new Vector2(0.015f, 0.14f);
+            irt.anchorMax = new Vector2(0.115f, 0.86f);
+            irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
+            var tex = ResolvePreviewTexture(def);
+            if (tex != null)
             {
-                var coin = new Label(ElarionUi.CrestGlyph);
-                coin.style.fontSize = ElarionUi.FontLabel;
-                coin.style.color = priceTint;
-                coin.style.marginRight = 4;
-                priceRow.Add(coin);
+                var raw = iconGo.AddComponent<RawImage>();
+                raw.texture = tex;
+                raw.raycastTarget = false;
             }
-            string priceText;
-            if (isAchievement)
-                priceText = owned ? "Earned" : "Earn via play";
-            else if (glimmerCost > 0)
-                priceText = $"{glimmerCost:N0} Glimmer";
             else
-                priceText = "Free";
-            var price = new Label(priceText);
-            price.style.fontSize = ElarionUi.FontLabel;
-            price.style.color = priceTint;
-            priceRow.Add(price);
-            // DEF-197: affordability hint — how much more Glimmer is needed.
-            if (shortfall > 0)
             {
-                var need = new Label($"  (short {shortfall:N0})");
-                need.style.fontSize = ElarionUi.FontMicro;
-                need.style.unityFontStyleAndWeight = FontStyle.Italic;
-                need.style.color = ElarionUi.ParchmentDim;
-                priceRow.Add(need);
+                var tile = iconGo.AddComponent<Image>();
+                tile.color = preview;
+                tile.raycastTarget = false;
             }
-            text.Add(priceRow);
 
-            var actionBtn = new Button { text = "Buy" };
-            actionBtn.style.minWidth = 92;
-            actionBtn.style.marginLeft = 10;
+            // Name / description / price column.
+            MakeText(cardGo.transform, displayName, 16, ElarionUi.Parchment, FontStyles.Bold,
+                TextAlignmentOptions.Left, new Vector2(0.13f, 0.60f), new Vector2(0.72f, 0.95f));
+            MakeText(cardGo.transform, description, 12, ElarionUi.ParchmentDim, FontStyles.Italic,
+                TextAlignmentOptions.TopLeft, new Vector2(0.13f, 0.30f), new Vector2(0.72f, 0.58f));
 
+            string priceText;
+            if (isAchievement) priceText = owned ? "Earned" : "Earn via play";
+            else if (glimmerCost > 0) priceText = $"{glimmerCost:N0} Glimmer" + (shortfall > 0 ? $"   (short {shortfall:N0})" : "");
+            else priceText = "Free";
+            Color priceTint = (isBuyable && !affordable) ? ElarionUi.ParchmentDim : ElarionUi.Gold;
+            MakeText(cardGo.transform, priceText, 13, priceTint, FontStyles.Normal,
+                TextAlignmentOptions.Left, new Vector2(0.13f, 0.05f), new Vector2(0.72f, 0.28f));
+
+            // ONE action button — state machine unchanged.
             if (equipped)
             {
-                actionBtn.text = "Equipped";
-                ElarionUi.StyleButton(actionBtn, ElarionUi.ButtonKind.Confirm);
-                actionBtn.SetEnabled(false);
+                var b = ElarionUiKit.BuildObsidianButton(cardGo.transform, "Equipped",
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
+                    new Vector2(0.74f, 0.28f), new Vector2(0.985f, 0.72f), null);
+                b.interactable = false;
             }
             else if (owned)
             {
-                actionBtn.text = "Equip";
-                ElarionUi.StyleButton(actionBtn, ElarionUi.ButtonKind.Gold);
-                actionBtn.clicked += () => { EquipId(id); ShowToast($"Equipped {displayName}"); };
+                ElarionUiKit.BuildObsidianButton(cardGo.transform, "Equip",
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                    new Vector2(0.74f, 0.28f), new Vector2(0.985f, 0.72f),
+                    () => { EquipId(id); ShowToast($"Equipped {displayName}"); Repaint(); });
             }
             else if (isAchievement)
             {
-                actionBtn.text = "Locked";
-                ElarionUi.StyleButton(actionBtn, ElarionUi.ButtonKind.Disabled);
-                actionBtn.SetEnabled(false);
+                var b = ElarionUiKit.BuildObsidianButton(cardGo.transform, "Locked",
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(0.74f, 0.28f), new Vector2(0.985f, 0.72f), null);
+                b.interactable = false;
             }
             else
             {
-                // DEF-197: 'affordable' is hoisted above so the price line + button
-                // agree on one live-balance check.
-                actionBtn.text = "Buy";
-                ElarionUi.StyleButton(actionBtn,
-                    affordable ? ElarionUi.ButtonKind.Gold : ElarionUi.ButtonKind.Disabled);
-                actionBtn.SetEnabled(affordable);
-                actionBtn.clicked += () =>
-                {
-                    if (TryPurchase(id))
+                var b = ElarionUiKit.BuildObsidianButton(cardGo.transform, "Buy",
+                    ElarionUiKit.ObsidianButtonStyle.Style1,
+                    affordable ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(0.74f, 0.28f), new Vector2(0.985f, 0.72f),
+                    () =>
                     {
-                        ShowToast($"Unlocked {displayName}");
-                        EquipId(id);
-                    }
-                    else
-                    {
-                        ShowToast("Not enough Glimmer.");
-                    }
-                };
+                        if (TryPurchase(id)) { ShowToast($"Unlocked {displayName}"); EquipId(id); }
+                        else ShowToast("Not enough Glimmer.");
+                        Repaint();
+                    });
+                b.interactable = affordable;
             }
-
-            card.Add(actionBtn);
-            return card;
         }
 
-        // Optional real preview render, loaded by cosmetic id from Resources. When
-        // absent (the current state — previews are a later art pass) we return null
-        // and the icon slot falls back to a framed gem tile. Cached per id so the
-        // Resources lookup runs once per item.
+        // Optional real preview render, loaded by cosmetic id from Resources. Cached.
         private static readonly Dictionary<string, Texture2D> s_previewCache = new Dictionary<string, Texture2D>();
 
         private Texture2D ResolvePreviewTexture(object def)
@@ -612,9 +463,7 @@ namespace DeNelle.HUD
             try { tex = Resources.Load<Texture2D>($"Cosmetics/Previews/{id}"); }
             catch (Exception ex)
             {
-                // Missing previews are EXPECTED (later art pass) — a throw is not. Warn so a real
-                // Resources fault surfaces; the framed-gem fallback (null tex) still renders.
-                FlowTrace.Warn("CosmeticShop", $"ResolvePreviewTexture('{id}') threw: {ex.GetType().Name}: {ex.Message} — using framed-gem fallback.");
+                FlowTrace.Warn("CosmeticShop", $"ResolvePreviewTexture('{id}') threw: {ex.GetType().Name}: {ex.Message} — using swatch fallback.");
                 tex = null;
             }
             s_previewCache[id] = tex;
@@ -637,42 +486,110 @@ namespace DeNelle.HUD
 
         public void ToggleOverlay()
         {
-            if (_overlay == null) return;
-            if (IsOverlayOpen()) CloseOverlay();
+            if (_open) CloseOverlay();
             else OpenOverlay();
         }
 
         public void OpenOverlay()
         {
             using var _ = FlowTrace.Enter("CosmeticShop", "OpenOverlay");
-            if (_overlay == null)
+            EnsureBuilt();
+            if (_modal == null || _modal.canvas == null)
             {
-                FlowTrace.Fail("CosmeticShop",
-                    "OpenOverlay: _overlay is NULL — BuildUi never produced an overlay (no PanelSettings/root?). Open is a no-op.");
+                FlowTrace.Fail("CosmeticShop", "OpenOverlay: kit modal failed to build — open is a no-op.");
                 return;
             }
-            _overlay.style.display = DisplayStyle.Flex;
-            _overlay.pickingMode = PickingMode.Position;
-            // Tell the arbiter we're open; it closes any other panel first.
-            PanelManager.NotifyOpened(_panelHandle);
+            _open = true;
+            _modal.canvas.SetActive(true);
+            // Tell the arbiter we're open; it closes any other panel first. Battle-lock
+            // may reject — revert and stay hidden.
+            if (!PanelManager.NotifyOpened(_panelHandle))
+            {
+                _open = false;
+                _modal.canvas.SetActive(false);
+                return;
+            }
             Repaint();
         }
 
         public void CloseOverlay()
         {
-            if (_overlay == null) return;
-            _overlay.style.display = DisplayStyle.None;
-            _overlay.pickingMode = PickingMode.Ignore;
-            // Clear our slot. No-op if the manager already swapped us out.
+            if (_modal == null || _modal.canvas == null) { _open = false; return; }
+            _open = false;
+            _modal.canvas.SetActive(false);
             PanelManager.NotifyClosed(_panelHandle);
         }
 
         private void ShowToast(string message)
         {
-            if (_toast == null) return;
-            _toast.text = message;
-            _toast.style.display = DisplayStyle.Flex;
+            if (_toast == null || _toast.card == null || _toast.label == null) return;
+            _toast.label.text = message;
+            _toast.card.SetActive(true);
             _toastUntil = Time.unscaledTime + 3f;
+        }
+
+        // ─── uGUI helpers (same shapes as LeaderboardPanel) ──────────────────
+
+        private static Transform ZoneRect(Transform parent, string name, Vector2 min, Vector2 max)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            return go.transform;
+        }
+
+        private static Transform BuildScrollColumn(Transform host)
+        {
+            var scrollGo = new GameObject("Scroll", typeof(RectTransform), typeof(ScrollRect), typeof(RectMask2D), typeof(Image));
+            scrollGo.transform.SetParent(host, false);
+            var srt = scrollGo.GetComponent<RectTransform>();
+            srt.anchorMin = Vector2.zero; srt.anchorMax = Vector2.one;
+            srt.offsetMin = Vector2.zero; srt.offsetMax = Vector2.zero;
+            scrollGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.25f);
+
+            var contentGo = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            contentGo.transform.SetParent(scrollGo.transform, false);
+            var crt = contentGo.GetComponent<RectTransform>();
+            crt.anchorMin = new Vector2(0f, 1f); crt.anchorMax = Vector2.one;
+            crt.pivot = new Vector2(0.5f, 1f);
+            crt.offsetMin = Vector2.zero; crt.offsetMax = Vector2.zero;
+            var layout = contentGo.GetComponent<VerticalLayoutGroup>();
+            layout.spacing = 6f;
+            layout.padding = new RectOffset(8, 8, 8, 8);
+            layout.childControlHeight = false;
+            layout.childControlWidth = true;
+            layout.childForceExpandHeight = false;
+            contentGo.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            var scroll = scrollGo.GetComponent<ScrollRect>();
+            scroll.content = crt;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 24f;
+            return contentGo.transform;
+        }
+
+        private static TextMeshProUGUI MakeText(Transform parent, string text, float size,
+            Color color, FontStyles style, TextAlignmentOptions align, Vector2 min, Vector2 max)
+        {
+            var go = new GameObject("Text", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var t = go.AddComponent<TextMeshProUGUI>();
+            t.text = text;
+            t.fontSize = size;
+            t.color = color;
+            t.fontStyle = style;
+            t.alignment = align;
+            t.raycastTarget = false;
+            t.textWrappingMode = TextWrappingModes.Normal;
+            ElarionUiKit.EnsureFont(t);
+            return t;
         }
     }
 }

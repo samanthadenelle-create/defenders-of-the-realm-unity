@@ -60,14 +60,10 @@ namespace DeNelle.Village.Crafting
 
             if (FindHero() == null) return; // Title / HeroSelect skip.
 
-            var panelSettings = FindPanelSettings();
-            if (panelSettings == null) return;
-
+            // WO-F conversion (2026-07-03): the panel is a kit uGUI modal now — no
+            // UIDocument/PanelSettings host needed (old FindPanelSettings gate removed).
             var go = new GameObject("VillageCraftingPanel");
             SceneManager.MoveGameObjectToScene(go, scene);
-            var ui = go.AddComponent<UIDocument>();
-            ui.panelSettings = panelSettings;
-            ui.sortingOrder = 120; // above HUD chips / below admin overlay
             go.AddComponent<VillageCraftingPanel>();
             go.AddComponent<VillageCraftingPanelInput>();
             FlowTrace.Step("UI", "VillageCraftingPanel created (single instance)");
@@ -77,17 +73,6 @@ namespace DeNelle.Village.Crafting
         {
             var hero = UnityEngine.Object.FindAnyObjectByType<HeroLocomotion>();
             return hero != null ? hero.transform : null;
-        }
-
-        private static PanelSettings FindPanelSettings()
-        {
-            // Reuse an existing UIDocument's PanelSettings so we don't try to
-            // load by Resources path. Same trick as DailyQuestHudBootstrap.
-            var docs = UnityEngine.Object.FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include);
-            foreach (var d in docs)
-                if (d != null && d.panelSettings != null) return d.panelSettings;
-            return null;
         }
     }
 

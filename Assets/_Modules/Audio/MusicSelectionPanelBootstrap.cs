@@ -63,25 +63,20 @@ namespace DeNelle.Audio
                 }
             }
 
-            var panel = FindPanelSettings();
-            if (panel == null) return; // no HUD canvas in this scene — stay quiet.
+            // WO-F conversion (2026-07-03): the panel is a kit uGUI modal now — no
+            // UIDocument/PanelSettings needed. The old "spawn only where a HUD canvas
+            // exists" gate is replaced by the enemy-owned suppression above plus this
+            // front-end guard (menu scenes own their UI; the jukebox is gameplay-only —
+            // same list as VillageHudBootstrap.MenuScenes, inlined: Audio can't
+            // reference DeNelle.HUD under the cross-assembly rule).
+            string active = SceneManager.GetActiveScene().name;
+            foreach (var menu in new[] { "Title", "HeroSelect", "PetSelect", "Intro", "Store", "GameOver" })
+                if (string.Equals(active, menu, System.StringComparison.OrdinalIgnoreCase)) return;
 
             var go = new GameObject("MusicSelectionPanel");
             SceneManager.MoveGameObjectToScene(go, scene);
-            var ui = go.AddComponent<UIDocument>();
-            ui.panelSettings = panel;
-            ui.sortingOrder = 96; // matches the panel's own sortingOrder
             go.AddComponent<MusicSelectionPanel>();
             FlowTrace.Step("UI", "MusicSelectionPanel created (single instance)");
-        }
-
-        private static PanelSettings FindPanelSettings()
-        {
-            var docs = Object.FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include);
-            foreach (var d in docs)
-                if (d != null && d.panelSettings != null) return d.panelSettings;
-            return null;
         }
     }
 }

@@ -55,12 +55,24 @@ namespace DeNelle.HUD
             Build();
             if (DailyQuestService.Instance != null)
                 DailyQuestService.Instance.SetChanged += Repaint;
+            // MODAL DISCIPLINE (eyes-on pass 2026-07-03: floating chips overlapped open
+            // modal frames in the bot captures — this widget predates the kit's occupancy
+            // rows): hide while any modal is open, like the kit's `modal` posture.
+            PanelManager.OpenStateChanged += SyncModalVisibility;
+            SyncModalVisibility();
         }
 
         private void OnDisable()
         {
             if (DailyQuestService.Instance != null)
                 DailyQuestService.Instance.SetChanged -= Repaint;
+            PanelManager.OpenStateChanged -= SyncModalVisibility;
+        }
+
+        private void SyncModalVisibility()
+        {
+            if (_root == null) return;
+            _root.style.display = PanelManager.AnyOpen ? DisplayStyle.None : DisplayStyle.Flex;
         }
 
         private void Build()

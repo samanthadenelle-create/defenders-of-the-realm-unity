@@ -3,7 +3,9 @@
     "rootNamespace": "DeNelle.Audio",
     "references": [
         "DeNelle.Core",
-        "UniTask"
+        "UniTask",
+        "UnityEngine.UI",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -3,7 +3,9 @@
     "rootNamespace": "DeNelle.Settings",
     "references": [
         "DeNelle.Core",
-        "UniTask"
+        "UniTask",
+        "UnityEngine.UI",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

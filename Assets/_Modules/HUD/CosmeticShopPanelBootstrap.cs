@@ -51,14 +51,10 @@ namespace DeNelle.HUD
 
             if (FindHero() == null) return; // skip Title / HeroSelect
 
-            var panel = FindPanelSettings();
-            if (panel == null) return;
-
+            // WO-F conversion (2026-07-03): the panel is a kit uGUI modal now — no
+            // UIDocument/PanelSettings host needed (old FindPanelSettings gate removed).
             var go = new GameObject("CosmeticShopPanel");
             SceneManager.MoveGameObjectToScene(go, scene);
-            var ui = go.AddComponent<UIDocument>();
-            ui.panelSettings = panel;
-            ui.sortingOrder = 95; // above HUD chips, below Help (100)
             go.AddComponent<CosmeticShopPanel>();
             FlowTrace.Step("UI", "CosmeticShopPanel created (single instance)");
         }
@@ -69,15 +65,6 @@ namespace DeNelle.HUD
             if (t == null) return null;
             var obj = UnityEngine.Object.FindAnyObjectByType(t) as Component;
             return obj != null ? obj.transform : null;
-        }
-
-        private static PanelSettings FindPanelSettings()
-        {
-            var docs = UnityEngine.Object.FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include);
-            foreach (var d in docs)
-                if (d != null && d.panelSettings != null) return d.panelSettings;
-            return null;
         }
     }
 }

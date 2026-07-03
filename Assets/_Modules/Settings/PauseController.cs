@@ -1,94 +1,58 @@
 // =============================================================================
 // PauseController — the pause overlay + Time.timeScale handling (audit P0-10).
 // -----------------------------------------------------------------------------
-// The missing-components audit §2.3: "No pause menu, no Time.timeScale
-// handling, no pause input action. A tower-defense game with wave timers and
-// an ATB battle needs pause for both UX and platform compliance." This is that
-// system — the MonoBehaviour behind PauseOverlay.uxml.
+// WO-F conversion (2026-07-03, coverage matrix row #47b): the UXML overlay
+// (PauseOverlay.uxml — canon §8: UXML does not render in builds) is RETIRED.
+// The overlay is now a code-built kit modal (FrameOptions, narrow portrait):
+// Resume / Settings / Quit to Title; the chrome's shared Close = Resume.
 //
-// WHAT IT DOES:
-//   * Toggles pause on the Esc key (new Input System) and via a public
-//     TogglePause() the HUD's pause button can call.
-//   * On pause: sets Time.timeScale = 0 (freezes wave timers, the ATB tick,
-//     enemy movement) and shows the overlay. On resume: restores the previous
-//     timeScale and hides it.
-//   * The overlay has Resume / Settings / Quit-to-Title.
-//       - Resume   -> Resume().
-//       - Settings -> opens the SettingsController screen over the top; the
-//                     pause panel hides while settings are up and re-shows
-//                     when SettingsController raises SettingsClosed.
-//       - Quit     -> restores timeScale (never leave the next scene frozen)
-//                     and SceneRouter.GoTitle().
+// WHAT IT DOES (unchanged):
+//   * Pause via the HUD PAUSE/BACK button through Core PauseGate
+//     (PauseToggleRequested when no modal is open) + public TogglePause().
+//   * On pause: Time.timeScale = 0 (freezes wave timers, the ATB tick, enemy
+//     movement) + show. On resume: restore the captured pre-pause timeScale.
+//   * Settings opens SettingsController over the top; the pause panel hides
+//     and re-shows on SettingsClosed. Quit restores timeScale FIRST, then
+//     SceneRouter.GoTitle().
+//   * OnApplicationPause(true) auto-pauses (platform compliance §2.3);
+//     never auto-resumes.
 //
-// PLATFORM COMPLIANCE: OnApplicationPause(true) — Android backgrounding / an
-// incoming call — auto-pauses, the behaviour the audit explicitly calls for.
-//
-// MODULE ISOLATION: DeNelle.Settings references DeNelle.Core only. Pausing is
-// done with the engine-global Time.timeScale, so this needs no reference to any
-// gameplay module — wave managers, the ATB engine and hero movement all read
-// Time.timeScale / Time.deltaTime and freeze for free. Quit-to-Title uses the
-// Core SceneRouter. The HUD pause button is wired by the integrator (the HUD
-// module cannot see DeNelle.Settings) — see the integrator notes below.
-//
-// Lives in DeNelle.Settings; references DeNelle.Core only.
+// MODULE ISOLATION unchanged: DeNelle.Settings references DeNelle.Core only.
 // =============================================================================
 
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.UIElements;
 using DeNelle.Core;
 using DeNelle.Core.UI;
 
 namespace DeNelle.Settings
 {
     /// <summary>
-    /// Drives the pause overlay: Esc-to-pause, <see cref="Time.timeScale"/>
-    /// freeze, and the Resume / Settings / Quit menu. Lives on the pause overlay
-    /// <see cref="UIDocument"/>.
+    /// Drives the pause overlay: PauseGate-driven toggle, <see cref="Time.timeScale"/>
+    /// freeze, and the Resume / Settings / Quit menu (code-built kit modal).
     /// </summary>
-    [RequireComponent(typeof(UIDocument))]
     public sealed class PauseController : MonoBehaviour
     {
-        [Header("UI")]
-        [Tooltip("UIDocument hosting PauseOverlay.uxml. Falls back to the component on this GameObject.")]
-        [SerializeField] private UIDocument _document;
-
         [Header("Settings screen")]
         [Tooltip("The settings screen the Settings button opens. Optional — if unassigned the " +
                  "Settings button is hidden. SettingsController lives in this same module.")]
         [SerializeField] private SettingsController _settings;
 
         [Header("Input")]
-        // Mobile-first (keyboard-removal sweep): the Esc-to-pause field + Update() poll were
-        // removed — Escape is gone on touch hardware. Pause/back is driven by the HUD's
-        // on-screen PAUSE/BACK button via PauseGate.PauseToggleRequested (see OnEnable).
         [Tooltip("Auto-pause when the app is backgrounded (incoming call / task switch). " +
                  "Platform-compliance behaviour — recommended on for mobile builds.")]
         [SerializeField] private bool _pauseOnApplicationPause = true;
 
         [Header("Events")]
-        [Tooltip("Raised whenever the pause state changes — argument is the new IsPaused value. " +
-                 "Gameplay can listen to e.g. silence the HUD or stop input polling.")]
+        [Tooltip("Raised whenever the pause state changes — argument is the new IsPaused value.")]
         public UnityEvent<bool> PauseStateChanged = new UnityEvent<bool>();
 
-        // ── UXML element names — the binding contract with PauseOverlay.uxml ──
-        private const string RootName = "pause-root";
-        private const string ResumeButtonName = "pause-resume-button";
-        private const string SettingsButtonName = "pause-settings-button";
-        private const string QuitButtonName = "pause-quit-button";
-
-        // ── Bound UI elements ────────────────────────────────────────────────
-        private VisualElement _root;
-        private Button _resumeButton;
-        private Button _settingsButton;
-        private Button _quitButton;
-
-        private bool _bound;
+        private ElarionUiKit.ObsidianModal _modal;
         private bool _paused;
 
         // The timeScale captured at the moment of pausing — restored on resume.
-        // Captured (rather than assumed 1) so pausing while a slow-motion or
-        // fast-forward effect is active restores that, not a hard 1.0.
+        // Captured (rather than assumed 1) so pausing during a slow-motion or
+        // fast-forward effect restores that, not a hard 1.0.
         private float _timeScaleBeforePause = 1f;
 
         /// <summary>True while the game is paused and the overlay is showing.</summary>
@@ -98,66 +62,39 @@ namespace DeNelle.Settings
         //  Lifecycle
         // =====================================================================
 
-        private void Awake()
-        {
-            if (_document == null) _document = GetComponent<UIDocument>();
-        }
-
         private void OnEnable()
         {
-            BindElements();
-            SetOverlayVisible(false); // start un-paused.
-
-            // Mobile-first (keyboard-removal sweep): Escape is gone. The HUD's on-screen
-            // PAUSE/BACK button now drives the back/pause decision through the Core
-            // PauseGate — when no modal is open the gate raises PauseToggleRequested, which
-            // we handle here exactly as the old Escape "else → TogglePause()" branch did.
-            // (The modal-close branch is handled inside PauseGate via PanelManager.)
+            // Mobile-first: the HUD's on-screen PAUSE/BACK button drives the back/pause
+            // decision through the Core PauseGate — when no modal is open the gate raises
+            // PauseToggleRequested (the modal-close branch lives in PauseGate/PanelManager).
             PauseGate.PauseToggleRequested -= OnPauseToggleRequested;
             PauseGate.PauseToggleRequested += OnPauseToggleRequested;
+
+            if (_settings != null)
+            {
+                _settings.SettingsClosed.RemoveListener(OnSettingsClosed);
+                _settings.SettingsClosed.AddListener(OnSettingsClosed);
+            }
         }
 
         private void OnDisable()
         {
-            if (_resumeButton != null) _resumeButton.clicked -= OnResumeClicked;
-            if (_settingsButton != null) _settingsButton.clicked -= OnSettingsClicked;
-            if (_quitButton != null) _quitButton.clicked -= OnQuitClicked;
-            if (_settings != null) _settings.SettingsClosed.RemoveListener(OnSettingsClosed);
             PauseGate.PauseToggleRequested -= OnPauseToggleRequested;
-            _bound = false;
+            if (_settings != null) _settings.SettingsClosed.RemoveListener(OnSettingsClosed);
         }
 
-        /// <summary>
-        /// Handles the Core <see cref="PauseGate.PauseToggleRequested"/> seam — raised by
-        /// the HUD PAUSE/BACK button when no modal is open. Toggles pause, the touch-path
-        /// equivalent of the removed Escape "else → TogglePause()" branch.
-        /// </summary>
-        private void OnPauseToggleRequested()
-        {
-            TogglePause();
-        }
+        private void OnPauseToggleRequested() => TogglePause();
 
         private void OnDestroy()
         {
             // Safety net: never leave the engine frozen if this object dies
             // (scene unload, domain reload) while paused.
             if (_paused) Time.timeScale = _timeScaleBeforePause;
+            if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
         }
 
-        // Mobile-first (keyboard-removal sweep): the Esc-key Update() poll was REMOVED.
-        // The single owner of the back/pause decision (close the open modal, else toggle
-        // pause) now lives in Core's PauseGate.RequestBack(), invoked by the HUD's on-screen
-        // PAUSE/BACK button. When no modal is open the gate raises PauseToggleRequested,
-        // which this controller handles in OnPauseToggleRequested (→ TogglePause). The
-        // modal-close half is handled by PauseGate via PanelManager. Behaviour-identical to
-        // the retired Escape handler; reachable by TAP on keyboard-less hardware.
-
-        /// <summary>
-        /// Auto-pauses when the OS backgrounds the app (incoming call, task
-        /// switch) — platform-compliance behaviour the audit §2.3 calls for.
-        /// Only ever pauses; it never auto-resumes, so the player chooses when
-        /// to return.
-        /// </summary>
+        /// <summary>Auto-pauses when the OS backgrounds the app — platform-compliance
+        /// behaviour (audit §2.3). Only ever pauses; never auto-resumes.</summary>
         private void OnApplicationPause(bool isBackgrounded)
         {
             if (_pauseOnApplicationPause && isBackgrounded && !_paused)
@@ -165,83 +102,70 @@ namespace DeNelle.Settings
         }
 
         // =====================================================================
-        //  UI Toolkit binding
+        //  Build (kit modal, lazy on first pause)
         // =====================================================================
 
-        private void BindElements()
+        private void EnsureBuilt()
         {
-            _root = _document != null ? _document.rootVisualElement : null;
-            if (_root == null)
-            {
-                Debug.LogWarning("[PauseController] No UIDocument root — pause overlay will not display.");
-                return;
-            }
+            if (_modal != null && _modal.canvas != null) return;
 
-            _resumeButton = _root.Q<Button>(ResumeButtonName);
-            _settingsButton = _root.Q<Button>(SettingsButtonName);
-            _quitButton = _root.Q<Button>(QuitButtonName);
+            // Chrome Close = Resume. Sits above gameplay panels (31000), below
+            // Settings (32000) so the settings screen opens over the top.
+            _modal = ElarionUiKit.BuildObsidianModal("PauseUI", "Paused",
+                new Vector2(0.34f, 0.24f), new Vector2(0.66f, 0.76f), Resume,
+                sortingOrder: 31500,
+                frameName: RpgUiCatalog.FrameOptions, medallionIcon: "settings");
 
-            if (_resumeButton != null)
-            {
-                _resumeButton.clicked -= OnResumeClicked;
-                _resumeButton.clicked += OnResumeClicked;
-            }
-            if (_settingsButton != null)
-            {
-                _settingsButton.clicked -= OnSettingsClicked;
-                _settingsButton.clicked += OnSettingsClicked;
-                // No settings screen wired — hide the button rather than offer a dead control.
-                _settingsButton.style.display = _settings != null ? DisplayStyle.Flex : DisplayStyle.None;
-            }
-            if (_quitButton != null)
-            {
-                _quitButton.clicked -= OnQuitClicked;
-                _quitButton.clicked += OnQuitClicked;
-            }
+            var layout = _modal.chrome.layout;
+            var body = layout != null && layout.body != null
+                ? (Transform)layout.body
+                : _modal.chrome.content.transform;
 
+            ElarionUiKit.BuildObsidianButton(body, "Resume",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
+                new Vector2(0.10f, 0.74f), new Vector2(0.90f, 0.92f), Resume);
+            // Settings button only when a settings screen is wired — never a dead control.
             if (_settings != null)
             {
-                _settings.SettingsClosed.RemoveListener(OnSettingsClosed);
-                _settings.SettingsClosed.AddListener(OnSettingsClosed);
+                ElarionUiKit.BuildObsidianButton(body, "Settings",
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(0.10f, 0.50f), new Vector2(0.90f, 0.68f), OnSettingsClicked);
             }
+            ElarionUiKit.BuildObsidianButton(body, "Quit to Title",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Red,
+                new Vector2(0.10f, 0.26f), new Vector2(0.90f, 0.44f), OnQuitClicked);
 
-            _bound = true;
+            _modal.canvas.SetActive(false);   // built hidden; Pause shows it
         }
 
         // =====================================================================
         //  Public API — pause control (HUD pause button calls these)
         // =====================================================================
 
-        /// <summary>Pauses if running, resumes if paused. The Esc key and a HUD pause button call this.</summary>
+        /// <summary>Pauses if running, resumes if paused.</summary>
         public void TogglePause()
         {
             if (_paused) Resume();
             else Pause();
         }
 
-        /// <summary>
-        /// Pauses the game: captures and zeroes <see cref="Time.timeScale"/>
-        /// (freezing wave timers, the ATB tick and movement) and shows the
-        /// overlay. Idempotent — a second call while paused does nothing.
-        /// </summary>
+        /// <summary>Pauses the game: captures + zeroes <see cref="Time.timeScale"/>
+        /// and shows the overlay. Idempotent.</summary>
         public void Pause()
         {
             if (_paused) return;
-            if (!_bound) BindElements();
+            EnsureBuilt();
 
             _timeScaleBeforePause = Time.timeScale;
             Time.timeScale = 0f;
             _paused = true;
 
-            SetOverlayVisible(true);
+            if (_modal != null && _modal.canvas != null) _modal.canvas.SetActive(true);
             PauseStateChanged?.Invoke(true);
         }
 
-        /// <summary>
-        /// Resumes the game: restores the pre-pause <see cref="Time.timeScale"/>
-        /// and hides the overlay (and the settings screen, if it was left open).
-        /// Idempotent — a call while running does nothing.
-        /// </summary>
+        /// <summary>Resumes: restores the pre-pause <see cref="Time.timeScale"/> and
+        /// hides the overlay (and the settings screen, if open). Idempotent.</summary>
         public void Resume()
         {
             if (!_paused) return;
@@ -252,7 +176,7 @@ namespace DeNelle.Settings
             if (_settings != null && _settings.IsOpen)
                 _settings.Close();
 
-            SetOverlayVisible(false);
+            if (_modal != null && _modal.canvas != null) _modal.canvas.SetActive(false);
             PauseStateChanged?.Invoke(false);
         }
 
@@ -260,86 +184,48 @@ namespace DeNelle.Settings
         //  Button handlers
         // =====================================================================
 
-        private void OnResumeClicked()
-        {
-            Resume();
-        }
-
-        /// <summary>
-        /// Opens the settings screen over the pause panel. The pause panel hides
-        /// itself while settings are up (the game stays frozen — settings is a
-        /// child of the paused state) and re-shows on <see cref="OnSettingsClosed"/>.
-        /// </summary>
+        /// <summary>Opens settings over the pause panel; the pause panel hides while
+        /// settings is up (the game stays frozen) and re-shows on SettingsClosed.</summary>
         private void OnSettingsClicked()
         {
             if (_settings == null) return;
-            SetOverlayVisible(false); // tuck the pause panel behind the settings screen.
+            if (_modal != null && _modal.canvas != null) _modal.canvas.SetActive(false);
             _settings.Open();
         }
 
         /// <summary>Re-shows the pause panel when the settings screen closes (still paused).</summary>
         private void OnSettingsClosed()
         {
-            if (_paused) SetOverlayVisible(true);
+            if (_paused && _modal != null && _modal.canvas != null)
+                _modal.canvas.SetActive(true);
         }
 
-        /// <summary>
-        /// Quits to the Title scene. Restores <see cref="Time.timeScale"/> FIRST —
-        /// the next scene must never load frozen — then routes via the Core
-        /// <see cref="SceneRouter"/>.
-        /// </summary>
+        /// <summary>Quits to Title. Restores <see cref="Time.timeScale"/> FIRST — the
+        /// next scene must never load frozen — then routes via SceneRouter.</summary>
         private void OnQuitClicked()
         {
-            // Always un-freeze before leaving, regardless of paused flag state.
             Time.timeScale = _timeScaleBeforePause <= 0f ? 1f : _timeScaleBeforePause;
             _paused = false;
 
             if (_settings != null && _settings.IsOpen)
                 _settings.Close();
-            SetOverlayVisible(false);
+            if (_modal != null && _modal.canvas != null) _modal.canvas.SetActive(false);
 
             SceneRouter.GoTitle();
-        }
-
-        // =====================================================================
-        //  Internals
-        // =====================================================================
-
-        /// <summary>Shows / hides the pause overlay scrim + panel.</summary>
-        private void SetOverlayVisible(bool visible)
-        {
-            var root = _root ?? (_document != null ? _document.rootVisualElement : null);
-            if (root != null)
-                root.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
         }
     }
 }
 
 // =============================================================================
-// INTEGRATOR NOTES — wiring the pause overlay.
-// -----------------------------------------------------------------------------
-//   1. Create a GameObject with a UIDocument; assign PauseOverlay.uxml as its
-//      Source Asset. Add this PauseController component beside it. Sort it
-//      ABOVE the HUD but BELOW the settings overlay (settings opens on top).
-//      One per gameplay scene (Village, Dungeon, ATBBattle), or a shared
-//      DontDestroyOnLoad object — either works.
-//
-//   2. Settings: assign a SettingsController (PauseOverlay's "Settings" button
-//      opens it). If left empty the Settings button hides itself.
-//
-//   3. HUD pause button: the DeNelle.HUD module cannot see DeNelle.Settings, so
-//      the integrator wires the HUD's pause button to PauseController. Either:
-//        - add a pause Button to VillageHud.uxml and, in the village scene
-//          builder, hook it: pauseButton.clicked += pauseController.TogglePause;
-//        - or call pauseController.TogglePause() from wherever the HUD raises a
-//          pause request. (Esc already works with no wiring on desktop.)
-//
-//   4. Esc-to-pause uses the new Input System (UnityEngine.InputSystem). On
-//      keyboard-less hardware Keyboard.current is null and the HUD pause button
-//      is the pause control — so step 3 is REQUIRED for mobile.
-//
-//   5. Time.timeScale = 0 freezes everything that reads Time.deltaTime — wave
-//      timers, the ATB tick, enemy/hero movement. Any system that must keep
-//      running while paused (UI animations, this overlay) should use
-//      Time.unscaledDeltaTime. UI Toolkit transitions are unscaled already.
+// INTEGRATOR NOTES — the pause overlay is fully code-built now.
+//   1. Add PauseController to any GameObject (no UIDocument needed). The kit
+//      modal builds lazily on first Pause() at sortingOrder 31500 (below the
+//      Settings screen's 32000 — settings opens on top).
+//   2. Settings: assign a SettingsController; if left empty the Settings button
+//      never builds (no dead control).
+//   3. HUD pause button: raises PauseGate.RequestBack() — when no modal is open
+//      the gate raises PauseToggleRequested, handled here. REQUIRED for mobile.
+//   4. Time.timeScale = 0 freezes everything reading Time.deltaTime. Systems
+//      that must run while paused use Time.unscaledDeltaTime; uGUI input works
+//      frozen (EventSystem is unscaled).
 // =============================================================================
