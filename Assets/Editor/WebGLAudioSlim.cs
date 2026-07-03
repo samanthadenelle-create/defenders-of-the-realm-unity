@@ -36,12 +36,13 @@ namespace DeNelle.Editor
                             || lower.Contains("victory") || lower.Contains("defeat")
                             || lower.Contains("gameover") || lower.Contains("title");
 
-                // Size comes from the low-bitrate Vorbis RE-ENCODE, not loadType.
-                // WebGL audio is finicky with Streaming, so keep everything
-                // CompressedInMemory (decode-on-play) — WebGL-safe.
+                // Size comes from the low-bitrate Vorbis RE-ENCODE, not loadType — so DecompressOnLoad
+                // keeps the size win. CompressedInMemory + Vorbis is FMOD-ILLEGAL on WebGL (FMOD's
+                // compressed-sample path only supports MP3/XMA/ADPCM) → "Cannot create FMOD::Sound"
+                // on every clip. DecompressOnLoad decodes Vorbis to PCM at load = WebGL-safe, same size.
                 var s = imp.GetOverrideSampleSettings(Platform);
                 s.compressionFormat = AudioCompressionFormat.Vorbis;
-                s.loadType = AudioClipLoadType.CompressedInMemory;
+                s.loadType = AudioClipLoadType.DecompressOnLoad;
                 s.quality = isMusic ? 0.30f : 0.45f;
 
                 imp.SetOverrideSampleSettings(Platform, s);
@@ -50,7 +51,7 @@ namespace DeNelle.Editor
             }
 
             Debug.Log($"WEBGL_AUDIO_SLIM_OK :: WebGL audio override set on {changed} AudioClip(s) " +
-                      $"(music=Streaming q0.30, sfx=CompressedInMemory q0.45); skipped {skipped}. " +
+                      $"(DecompressOnLoad + Vorbis, music q0.30 / sfx q0.45); skipped {skipped}. " +
                       "Desktop/default settings untouched; no texture/mesh changed.");
         }
     }
