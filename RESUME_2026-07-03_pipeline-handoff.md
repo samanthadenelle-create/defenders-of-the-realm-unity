@@ -119,3 +119,24 @@ SUPERSEDES the lines below where they say shelved/uncommitted/still-running. Per
 - End-of-session artifact: Builds/Windows/DefendersOfTheRealm.exe (BUILD_OK 15:48).
 - Quality-bar rules in force: preflight gate per edit, §12 captured-data-before-fix, brace/NUL
   per file, image-pair sign-off, verify-before-delete. The next session inherits identical rules.
+
+## FINAL WRAP STATE (~16:15 — Fable quota 100%, swap imminent)
+- OWNER RULING landed: PALADIN = the new hero BODY (canon; dossier + memory updated).
+- TUTORIAL FIXES: agent RETURNED — all landed in tree (TutorialFlow grant +150 crystals
+  idempotent, scripted town wave via TutorialWaveSpawner + self-raised WaveCleared, staged
+  world-encounter rep via the SpawnRep factory chain, echo.born:2 + skillpoint.earned:first
+  wired, gear_added honestly unwired — no source event; ff.tutorialv2 default flipped ON).
+  Gate was RUNNING at wrap — check Builds/compile-gate.log; if GATE_OK, COMMIT the tutorial
+  lane (TutorialFlow.cs, TutorialSignalAdapters.cs, FeatureFlags.cs); if GATE_FAIL, the CS
+  lines name the fix.
+- HERO INTEGRATION: agent IN FLIGHT (wire Paladin package into runtime: KnightPackage
+  controller builder from extracted clips implementing posture tree + DeathDirection
+  selector + skill-bound abilities + single cadence authority; HeroBodySwapper repoint with
+  Tripo fallback; weapon-attach disabled for baked Paladin gear). If lost, the FULL brief is
+  reproducible from this file + the dossier addenda + the rigging SME review facts.
+- OWNER SEQUENCE ORDERED: (1) WebGL build queued FIRST (build-webgl.ps1, detached — survives
+  session end; output per docs/WEBGL_DELIVERY_PLAN; do NOT deploy without her word),
+  (2) hero integration lands -> gate -> KnightPackageControllerBuilder.Build batchmode ->
+  Windows build for her felt-test, (3) wrap. The 15:48 Windows exe = her Fable benchmark —
+  preserve it (copy aside before overwriting Builds/Windows).
+- Next session boots with SAMANTHA.md (she pastes it) — confirm everything before working.
