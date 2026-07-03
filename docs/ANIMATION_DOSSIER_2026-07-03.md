@@ -382,3 +382,50 @@ candidate clip already imported. The work is controller states + a posture drive
 4. Death float repro → F8: the FlowTrace `SnapBodyToGround(...)` line (`Enemy.cs:2215`) prints
    ground/footGap/pivotY — reads directly onto §5.2 suspects 2 vs 3.
 5. Remember: everything animation-touched is **uncommitted** — bank or bounce before layering more.
+
+---
+
+## OWNER SPEC ADDENDUM (2026-07-03 afternoon — Knight hero package, BINDING for the controller build)
+
+The dedicated Knight package (`Assets/HeroPackages/Knight/`, extracted clips in
+`Animations/Extracted/`) ships **DIRECTIONAL DEATHS by owner design** — the death animation
+is selected by the killing hit's direction relative to the hero, plus one special:
+
+| Trigger | Death clip (owner mapping) |
+|---|---|
+| Hit from FRONT | `Signature_Death_Forward.anim` (Death - Forward.fbx — owner-mapped 07-03) |
+| Hit from LEFT | left-hit death |
+| Hit from RIGHT | right-hit death |
+| Hit from BACK | back death |
+| SPECIAL: assassinate | the assassinate take |
+| DEFAULT / direction unknown | `Combat_Weapon_Combat_Movement_Locked_Death.anim` (Combat Movement Locked\Death.fbx — owner-mapped 07-03) |
+
+Implementation shape (her data-table style): the postbattle/death node of the master posture
+tree resolves through a small direction→clip lookup (dot/cross of attacker→hero vector vs
+hero forward), assassinate flagged by the killing ability. NOT one canned death clip.
+The eight extracted `*_Death*` takes map to this table — final clip-to-slot assignment is
+the owner's to confirm against the takes (names alone don't say which is which; she knows).
+
+Also owner-confirmed: the eight Death.fbx files are all DIFFERENT takes (not duplicates) —
+the path-based extraction names preserved every one.
+
+**Gap update (owner, 07-03):** pre-combat UNSHEATHE is covered — package `Sheathing Sword`
+reversed (state speed -1) or the repo's `Assets/Action/Knight` draw-sword clips copied in;
+owner also has the draw SFX (`swordraw-89023.mp3`, Downloads) to pair with the
+hostile(prebattle) posture flip. Remaining gaps: victory pose, block, injured locomotion.
+
+**Owner mapping (07-03):** hostile(prebattle) combat idle = `Standing Aim Idle 01`
+(extracted: `Combat_Weapon_Combat_Movement_Locked_Standing_Aim_Idle_01.anim`) — owner
+ruling; supersedes the SME's "rifle-flavored, dead weight" note. Prebattle sequence:
+posture flip → unsheathe (reversed Sheathing Sword + draw SFX) → Standing Aim Idle 01 loop.
+
+**Owner design note (07-03):** the WeaponSkill melee variants (Combo, Downward Slice,
+Inward/Outward Slash, Stabbing, Swing, BackSwing, 360 High, GreatSword Swing, Fists) are
+the SPECIAL-ABILITY animation pool — talent-tree/ability unlocks each get a signature
+swing. Wire through the existing canonical `weaponskill-animations.json` seam
+(ability id → clip key), pure data. All 61 package clips extracted as of 15:25.
+
+**Owner binding rule (07-03):** ability→animation is bound AT THE SKILL (skill-tree level
+data — the skill def row carries its clip key). The HUD hot-swap slots (quick-swap 1-4 /
+Hero Loadout) inherit the animation with the skill automatically; slots know nothing about
+clips. One definition, every surface follows — her lookup-table-over-control-flow pattern.
