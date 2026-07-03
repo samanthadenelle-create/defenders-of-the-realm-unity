@@ -1764,6 +1764,19 @@ namespace DeNelle.DevTools
 
         private IEnumerator OpenEachHUDPanel()
         {
+            // BATTLE-AWARE (run 10603: this phase opened 0/12 while the battle-aware popup
+            // oracle right after it passed 11 — DiagGarrisonRoster's spawns leave battle-lock
+            // briefly raised and PanelManager designed-rejects every open). Same bounded
+            // wait the popup oracle uses.
+            float battleWait = 0f;
+            while (DeNelle.Core.Combat.BattleLock.IsInBattle() && battleWait < 20f)
+            {
+                yield return Wait(1f);
+                battleWait += 1f;
+            }
+            if (battleWait > 0f)
+                FlowTrace.Step("Auto", $"OpenEachHUDPanel: waited {battleWait:F0}s for battle-lock to clear.");
+
             int opened = 0, registered = 0;
             // Seeded panel order so different bots open panels in different sequences.
             var panelIds = new List<PanelId>();
