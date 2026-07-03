@@ -164,7 +164,7 @@ namespace DeNelle.Village.Buildings.Progression
             string titleText = (_vm != null ? _vm.Title : "Building") + " Enhancements";
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, titleText,
                 new Vector2(0.14f, 0.07f), new Vector2(0.86f, 0.93f), () => _vm?.Close(),
-                frameName: RpgUiCatalog.FrameCore);
+                frameName: RpgUiCatalog.FrameCore, medallionIcon: "hammer");
 
             // Zones: frame path returns layout; procedural fallback (art absent) does not —
             // synthesize equivalent zones over chrome.content so the screen never blanks.

@@ -433,7 +433,8 @@ namespace DeNelle.Village.Talents
             // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header + ONE Close.
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Skills",
                 new Vector2(0.07f, 0.05f), new Vector2(0.93f, 0.95f), () => { if (_vm != null) _vm.Close(); },
-                headerX0: 0.04f, headerX1: 0.74f, frameName: RpgUiCatalog.FrameTalent);
+                headerX0: 0.04f, headerX1: 0.74f, frameName: RpgUiCatalog.FrameTalent,
+                medallionIcon: "talent");
             // Fit ALL content into the frame's BODY drop-zone (the templated well) instead of
             // floating over the whole panel rect — the old 0..1-over-content layout overlapped the
             // frame's ornate border. Every sub-builder now lays out (in fractions) INSIDE the body

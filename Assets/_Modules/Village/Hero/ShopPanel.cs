@@ -275,7 +275,8 @@ namespace DeNelle.Village.Hero
             // comes from the VM (vm.Title) — set after Bind in Render via _headerLabel.
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Vendor Wares",
                 new Vector2(0.14f, 0.07f), new Vector2(0.86f, 0.93f), () => _vm?.Close(),
-                headerX0: 0.04f, headerX1: 0.96f, frameName: RpgUiCatalog.FrameMerchant);
+                headerX0: 0.04f, headerX1: 0.96f, frameName: RpgUiCatalog.FrameMerchant,
+                medallionIcon: "coin");
             var panel = chrome.content.transform;
             _headerLabel = chrome.title;
 

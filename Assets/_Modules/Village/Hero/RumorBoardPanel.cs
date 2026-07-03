@@ -72,7 +72,7 @@ namespace DeNelle.Village.Hero
             // bespoke header + a custom red Close button.
             var modal = ElarionUiKit.BuildObsidianModal("RumorBoardPanelUI", "Brom's Rumor Board",
                 new Vector2(0.08f, 0.1f), new Vector2(0.92f, 0.9f), Close, sortingOrder: 1000,
-                frameName: RpgUiCatalog.FrameQuest);
+                frameName: RpgUiCatalog.FrameQuest, medallionIcon: "quest");
             _ui = modal.canvas;
             var panel = modal.chrome.content;
             // WO-582: fit content into the frame's BODY drop-zone (the templated well) instead of

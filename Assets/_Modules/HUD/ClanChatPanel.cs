@@ -71,6 +71,13 @@ namespace DeNelle.HUD
 
         public void Toggle() => SetVisible(!_visible);
 
+        // Modal arbiter membership (eyes-on pass 2026-07-03: the open chat squatted OVER the
+        // Talents/Upgrade modals in every bot capture — it never told PanelManager it was open,
+        // so nothing ever closed it; and it exposed NO close affordance at all).
+        private PanelHandle _panelHandle;
+        private PanelHandle Handle =>
+            _panelHandle ??= PanelManager.Register("Clan Chat", () => SetVisible(false), () => _visible);
+
         private void SetVisible(bool on)
         {
             if (on) FlowTrace.Step("ClanChat", "SetVisible(true) — opening clan chat panel.");
@@ -80,7 +87,8 @@ namespace DeNelle.HUD
                     "SetVisible(true): _panel is NULL — Build never produced a panel (no PanelSettings/root?). Open is a no-op.");
             if (_panel != null)
                 _panel.style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
-            if (on) Repaint();
+            if (on) { PanelManager.NotifyOpened(Handle); Repaint(); }
+            else PanelManager.NotifyClosed(Handle);
         }
 
         // ── UI construction ──────────────────────────────────────────────────
@@ -157,6 +165,16 @@ namespace DeNelle.HUD
             _headerButton.style.paddingLeft = 10; _headerButton.style.paddingRight = 10;
             _headerButton.style.paddingTop = 3;   _headerButton.style.paddingBottom = 3;
             _header.Add(_headerButton);
+
+            // Close affordance (audit + fleet 2026-07-03: this panel had NO close at all —
+            // once opened it could only be dismissed by re-toggling the opener). Named per
+            // the close convention so the popup oracle finds it.
+            var closeBtn = new Button(() => SetVisible(false)) { text = "Close", name = "CloseButton" };
+            closeBtn.style.fontSize = 11;
+            closeBtn.style.marginLeft = 6;
+            closeBtn.style.paddingLeft = 10; closeBtn.style.paddingRight = 10;
+            closeBtn.style.paddingTop = 3;   closeBtn.style.paddingBottom = 3;
+            _header.Add(closeBtn);
         }
 
         private void BuildBody()

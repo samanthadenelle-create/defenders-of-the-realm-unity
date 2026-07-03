@@ -313,9 +313,49 @@ namespace DeNelle.Core.UI
                     z.footer      = new Vector4(0.060f, 0.085f, 0.940f, 0.145f); // action strip
                     break;
                 case RpgUiCatalog.FrameMerchant:
-                    // Landscape frame: header band, wide well, footer.
-                    z.header = new Vector4(0.10f, 0.88f, 0.85f, 0.965f);
+                    // Landscape use of the portrait Merchant_Panel (1005x1507, pixel-measured
+                    // 2026-07-03): big top-left circle socket, header band right of it, the
+                    // designed close notch top-right. Fleet eyes-on pass caught the socket
+                    // rendering EMPTY — this case previously declared no medallion at all.
+                    z.medallion   = new Vector4(0.040f, 0.845f, 0.260f, 0.990f);
+                    z.hasMedallion = true;
+                    z.close  = new Vector4(0.905f, 0.935f, 0.960f, 0.970f);
+                    z.header = new Vector4(0.28f, 0.88f, 0.85f, 0.965f);
                     z.body   = new Vector4(0.05f, 0.115f, 0.95f, 0.845f);
+                    break;
+                case RpgUiCatalog.FrameTalent:
+                    // Talent_Tree_Panel (2779x1843, pixel-measured 2026-07-03): landscape frame,
+                    // circle socket top-left, deco header band, close notch top-right. Previously
+                    // fell to the DEFAULT zones (no medallion) — the socket art rendered empty.
+                    z.medallion   = new Vector4(0.014f, 0.870f, 0.100f, 0.992f);
+                    z.hasMedallion = true;
+                    z.header      = new Vector4(0.12f, 0.900f, 0.86f, 0.975f);
+                    z.close       = new Vector4(0.945f, 0.935f, 0.988f, 0.988f);
+                    z.body        = new Vector4(0.035f, 0.115f, 0.965f, 0.855f);
+                    break;
+                case RpgUiCatalog.FrameQuest:
+                    // Quest_Log_Panel (2190x1570, pixel-measured 2026-07-03): split master-detail
+                    // like FrameCrafting — dark list well LEFT, parchment detail RIGHT (parchment
+                    // top sits lower, under its own deco band). Circle socket top-left. Previously
+                    // DEFAULT zones (no medallion, no split).
+                    z.medallion   = new Vector4(0.028f, 0.850f, 0.125f, 0.992f);
+                    z.hasMedallion = true;
+                    z.header      = new Vector4(0.14f, 0.900f, 0.86f, 0.975f);
+                    z.close       = new Vector4(0.948f, 0.925f, 0.982f, 0.965f);
+                    z.body        = new Vector4(0.035f, 0.115f, 0.968f, 0.858f);
+                    z.bodyLeft    = new Vector4(0.035f, 0.115f, 0.495f, 0.858f);
+                    z.bodyRight   = new Vector4(0.505f, 0.115f, 0.966f, 0.760f);
+                    z.hasSplitBody = true;
+                    break;
+                case RpgUiCatalog.FrameCore:
+                    // Core_Panel (1210x1815, pixel-measured 2026-07-03): portrait frame, circle
+                    // socket top-left, header band, close notch top-right. Previously DEFAULT
+                    // zones (no medallion).
+                    z.medallion   = new Vector4(0.037f, 0.868f, 0.220f, 0.988f);
+                    z.hasMedallion = true;
+                    z.header      = new Vector4(0.24f, 0.900f, 0.88f, 0.972f);
+                    z.close       = new Vector4(0.930f, 0.935f, 0.978f, 0.972f);
+                    z.body        = new Vector4(0.055f, 0.075f, 0.945f, 0.855f);
                     break;
                 case RpgUiCatalog.FrameSettings:
                     // 1936x1461, pixel-measured: full-bleed dark slab with a top-centre tab (the
@@ -389,7 +429,7 @@ namespace DeNelle.Core.UI
         public static PanelChrome BuildObsidianPanel(Transform parent, string title,
             Vector2 anchorMin, Vector2 anchorMax, Action onClose,
             float headerX0 = 0.06f, float headerX1 = 0.94f, bool withBackdrop = true,
-            string frameName = null)
+            string frameName = null, string medallionIcon = null)
         {
             var chrome = new PanelChrome();
 
@@ -437,7 +477,28 @@ namespace DeNelle.Core.UI
                     header = Zone(chrome.content.transform, "Zone_Header", z.header),
                     body   = Zone(chrome.content.transform, "Zone_Body",   z.body),
                 };
-                if (z.hasMedallion) layout.medallion = Zone(chrome.content.transform, "Zone_Medallion", z.medallion);
+                if (z.hasMedallion)
+                {
+                    layout.medallion = Zone(chrome.content.transform, "Zone_Medallion", z.medallion);
+                    // SEAT AN EMBLEM (eyes-on pass 2026-07-03: every panel rendered the Blink
+                    // template's socket EMPTY — a black oval). The socket is a drop-zone; the
+                    // panel names its concept, the resolver falls back to a generic crest so no
+                    // socket ever ships blank. Inset so the circular rim stays visible.
+                    Sprite emblem = UiStyle.Icon(
+                        string.IsNullOrEmpty(medallionIcon) ? "crest" : medallionIcon,
+                        "crest", "emblem", "shield", "settings");
+                    if (emblem != null)
+                    {
+                        var em = AddImage(layout.medallion, "MedallionEmblem",
+                            new Vector2(0.16f, 0.16f), new Vector2(0.84f, 0.84f),
+                            Color.white, rounded: false);
+                        var emImg = em.GetComponent<Image>();
+                        emImg.sprite = emblem;
+                        emImg.type = Image.Type.Simple;
+                        emImg.preserveAspect = true;
+                        emImg.raycastTarget = false;
+                    }
+                }
                 if (z.hasFooter)    layout.footer    = Zone(chrome.content.transform, "Zone_Footer",    z.footer);
                 if (z.hasSplitBody)
                 {
@@ -497,14 +558,14 @@ namespace DeNelle.Core.UI
         /// <summary>Build a complete Obsidian modal (canvas + scrim + chrome) in one call.</summary>
         public static ObsidianModal BuildObsidianModal(string name, string title,
             Vector2 anchorMin, Vector2 anchorMax, Action onClose, int sortingOrder = 31000,
-            string frameName = null)
+            string frameName = null, string medallionIcon = null)
         {
             var canvas = BuildModalCanvas(name, sortingOrder);
             var c = canvas.GetComponent<Canvas>();
             if (c != null) c.overrideSorting = true;
             Scrim(canvas.transform, onClose);
             var chrome = BuildObsidianPanel(canvas.transform, title, anchorMin, anchorMax, onClose,
-                frameName: frameName);
+                frameName: frameName, medallionIcon: medallionIcon);
             return new ObsidianModal { canvas = canvas, chrome = chrome };
         }
 

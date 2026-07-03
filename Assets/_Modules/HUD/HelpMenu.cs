@@ -1,15 +1,18 @@
 // =============================================================================
-// HelpMenu — small in-game overlay reachable from a "?" button in the HUD.
-// Surfaces three actions:
-//   • Report Bug — WO-596: opens the player bug-report form (BugReportView:
-//     Obsidian master-frame, clean-frame screenshot + note + trace tail,
-//     POSTed to the live -v2 api/bug-report). The old mailto + dead-domain
-//     POST stub is RETIRED.
-//   • Controls — static text describing WASD + 1/2/3/4 + Build hotkeys.
-//   • Credits — DeNelle Studios + KayKit + Tripo attribution.
+// HelpMenu — the Settings/Help modal reachable from the HUD gear button.
+// Surfaces: Report Bug (WO-596 BugReportView), Controls, Reset Hero & Pet,
+// Dev tools (dev builds only), Credits.
 // -----------------------------------------------------------------------------
-// Builds its UI at runtime so it works in any scene without needing UXML
-// authored per-scene. Spawned by HelpMenuBootstrap (RuntimeInitializeOnLoad).
+// WO-F conversion (2026-07-03, coverage matrix row #44): UIDocument/UITK panel
+// -> code-built uGUI on the Obsidian master frame (BuildObsidianModal: Blink
+// FrameCore + medallion + the ONE shared Close + tap-outside scrim). The old
+// UITK card (legacy LegacyRuntime.ttf text, own runtime PanelSettings, borrowed
+// theme) is retired — this file is the REFERENCE conversion for the rest of the
+// UIDocument family. Spawned by HelpMenuBootstrap (RuntimeInitializeOnLoad).
+//
+// AdminOverlay handoff kept: "Dev tools" lends AdminOverlay a runtime
+// PanelSettings (AdminOverlay is still UITK); we synthesize one on demand now
+// that this menu no longer renders through a UIDocument itself.
 // =============================================================================
 
 using System;
@@ -24,246 +27,146 @@ namespace DeNelle.HUD
     [DisallowMultipleComponent]
     public sealed class HelpMenu : MonoBehaviour
     {
-        private UIDocument _document;
-        private VisualElement _root;
-        private VisualElement _overlay;
-        private Label _toast;
-        private float _toastUntil;
         public static HelpMenu Instance { get; private set; }
 
-        // DEF-212 modal arbiter handle. The gear/Help menu is a full-screen modal
-        // (its backdrop is pickingMode.Position and eats input), so it MUST route
-        // through PanelManager like every other panel — otherwise it stacks over
-        // open content (e.g. the dialogue portrait) and an invisible-but-pickable
-        // backdrop can trap the player when another panel opens behind it.
+        private ElarionUiKit.ObsidianModal _modal;
+        private ElarionUiKit.ToastParts _toast;
+        private float _toastUntil;
+
+        // DEF-212 modal arbiter handle. The Help menu is a full-screen modal, so it
+        // MUST route through PanelManager like every other panel — otherwise it stacks
+        // over open content and its scrim can trap the player.
         private PanelHandle _panelHandle;
 
         private void Awake()
         {
             Instance = this;
-            _document = GetComponent<UIDocument>();
-            if (_document == null) _document = gameObject.AddComponent<UIDocument>();
-            // OWN, privately-named PanelSettings (RCA 2026-06-13). We USED to BORROW
-            // another UIDocument's panelSettings — but in the castle hub the only one
-            // available is the shared "OnboardingPanelSettings" asset, and
-            // OnboardingPanelGuard disables EVERY doc whose panel is named
-            // "OnboardingPanelSettings" (it matches by NAME) in non-onboarding scenes —
-            // tearing our borrowed panel down → panel=<null>, so Settings (and the dev
-            // tools that borrow our panel) rendered nothing ("still cant get to settings").
-            // Create our OWN PanelSettings with a unique name the guard can't match, and
-            // borrow only the themeStyleSheet so fonts/colors still inherit. WO-417's
-            // explicit LegacyRuntime.ttf guarantees text renders even if no theme is found.
-            // (Pattern: DevBootstrap / ArenaDefensePaletteUI runtime PanelSettings.)
-            if (_document.panelSettings == null)
-            {
-                var ps = ScriptableObject.CreateInstance<PanelSettings>();
-                ps.name = "HelpRuntimePanelSettings";
-                foreach (var existing in UnityEngine.Object.FindObjectsByType<UIDocument>(
-                             FindObjectsInactive.Include))
-                {
-                    if (existing == _document || existing.panelSettings == null) continue;
-                    if (existing.panelSettings.themeStyleSheet != null)
-                    {
-                        ps.themeStyleSheet = existing.panelSettings.themeStyleSheet;
-                        break;
-                    }
-                }
-                _document.panelSettings = ps;
-            }
-            if (_document.panelSettings == null)
-            {
-                Debug.LogWarning("[HelpMenu] No PanelSettings available in scene — Help button hidden.");
-                enabled = false;
-                return;
-            }
-            // Render above every other UI in the scene — including the uGUI
-            // TOWN-HUD canvas (sortingOrder 140 in VillageHudController), whose
-            // top-right mini-map otherwise drew over + ate the gear's raycasts.
-            // UIToolkit panels and uGUI Screen-Space-Overlay canvases sort by
-            // their own sortingOrder, so this must exceed the town canvas.
-            _document.sortingOrder = 2700;   // above the town HUD (140) + inventory modal (2600) — settings menu is top-most
-            // FIX (RCA 2026-06-21): UIDocument.sortingOrder doesn't reliably reach PanelSettings.sortingOrder
-            // (input dispatch reads the PanelSettings, which stayed 0). Set it on our OWN runtime PanelSettings.
-            if (_document.panelSettings != null) _document.panelSettings.sortingOrder = 2700;
-            BuildUi();
-            // DEF-212: register with the single-modal arbiter AFTER BuildUi so _overlay exists.
-            // Opening the Help menu now closes any other open panel; closing clears our slot.
             _panelHandle = PanelManager.Register("Help", Close, () => IsOpen);
         }
 
         private void OnDestroy()
         {
             if (Instance == this) Instance = null;
+            if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
         }
 
-        /// <summary>True while the Help overlay is visible (its backdrop is pickable).</summary>
-        public bool IsOpen =>
-            _overlay != null && _overlay.style.display != DisplayStyle.None;
+        /// <summary>True while the Help modal is visible.</summary>
+        public bool IsOpen => _modal != null && _modal.canvas != null && _modal.canvas.activeSelf;
 
-        /// <summary>The live PanelSettings this menu rendered with — lent to AdminOverlay
-        /// so "Dev tools" works in scenes that ship no UIDocument of their own (T-030).</summary>
-        public PanelSettings ActivePanelSettings =>
-            _document != null ? _document.panelSettings : null;
+        // ── AdminOverlay handoff (T-030) ─────────────────────────────────────────
+        // AdminOverlay is still UITK and needs a PanelSettings to render. This menu
+        // no longer owns a UIDocument, so we synthesize a runtime PanelSettings on
+        // demand (own unique name — OnboardingPanelGuard matches by name and must
+        // never tear this down; theme borrowed from any live doc so fonts inherit).
+        private PanelSettings _adminPanelSettings;
+        public PanelSettings ActivePanelSettings
+        {
+            get
+            {
+                if (_adminPanelSettings != null) return _adminPanelSettings;
+                _adminPanelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+                _adminPanelSettings.name = "HelpRuntimePanelSettings";
+                _adminPanelSettings.sortingOrder = 2700;
+                foreach (var existing in UnityEngine.Object.FindObjectsByType<UIDocument>(
+                             FindObjectsInactive.Include))
+                {
+                    if (existing == null || existing.panelSettings == null) continue;
+                    if (existing.panelSettings.themeStyleSheet != null)
+                    {
+                        _adminPanelSettings.themeStyleSheet = existing.panelSettings.themeStyleSheet;
+                        break;
+                    }
+                }
+                return _adminPanelSettings;
+            }
+        }
 
         private void Update()
         {
-            if (_toast != null && _toastUntil > 0f && Time.unscaledTime > _toastUntil)
+            if (_toast != null && _toast.card != null && _toastUntil > 0f
+                && Time.unscaledTime > _toastUntil)
             {
-                _toast.style.display = DisplayStyle.None;
+                _toast.card.SetActive(false);
                 _toastUntil = 0f;
             }
         }
 
-        // ── UI construction ────────────────────────────────────────────────────
-        private void BuildUi()
+        // ── UI construction (lazy — first open builds) ───────────────────────────
+        private void EnsureBuilt()
         {
-            _root = _document.rootVisualElement;
-            if (_root == null) return;
-            _root.Clear();
-            _root.pickingMode = PickingMode.Ignore;
-            _root.style.position = Position.Absolute;
-            _root.style.left = 0; _root.style.right = 0;
-            _root.style.top = 0;  _root.style.bottom = 0;
+            if (_modal != null && _modal.canvas != null) return;
 
-            // Launcher RETIRED (WO-411): the TOWN-HUD's themed gear (VillageHudController top-right,
-            // hud_settings art) now opens this menu via HelpMenu.Instance.ToggleOverlay() — one gear,
-            // no floating duplicate.
+            _modal = ElarionUiKit.BuildObsidianModal("HelpMenuUI", "Help",
+                new Vector2(0.28f, 0.16f), new Vector2(0.72f, 0.86f), Close,
+                frameName: RpgUiCatalog.FrameCore, medallionIcon: "settings");
 
-            // The overlay panel — hidden until launcher tapped.
-            _overlay = new VisualElement { name = "help-overlay" };
-            _overlay.style.position = Position.Absolute;
-            _overlay.style.left = 0; _overlay.style.right = 0;
-            _overlay.style.top = 0;  _overlay.style.bottom = 0;
-            // Full-screen dim behind the modal — sourced from the shared palette.
-            _overlay.style.backgroundColor = ElarionUi.Scrim;
-            _overlay.style.alignItems = Align.Center;
-            _overlay.style.justifyContent = Justify.Center;
-            _overlay.style.display = DisplayStyle.None;
-            _root.Add(_overlay);
+            var body = _modal.chrome.layout != null && _modal.chrome.layout.body != null
+                ? _modal.chrome.layout.body.transform
+                : _modal.chrome.content.transform;
 
-            // ── POINTER-REACH TRACE (does not change behaviour) ──────────────
-            // "Dev tools dead after Yarn": the Settings overlay OPENS after a Yarn
-            // dialogue, but the click on its buttons never reaches OnOpenDevTools.
-            // Register at TrickleDown (capture phase) on the Settings root so the next
-            // F8 run shows whether ANY pointer event reaches this panel after Yarn,
-            // and which element is the target/captures it. If this never fires while a
-            // click is happening, a higher panel (see CompanionDialoguePresenter's
-            // UIDocument dump) is intercepting before Settings ever sees the pointer.
-            _overlay.RegisterCallback<PointerDownEvent>(evt =>
-            {
-                var target = evt.target as VisualElement;
-                FlowTrace.Step("UI",
-                    $"pointer hit Settings overlay — target='{(target != null ? target.name : "?")}' " +
-                    $"type={(evt.target != null ? evt.target.GetType().Name : "null")} " +
-                    $"pos={evt.position} (TrickleDown/capture on help-overlay)");
-            }, TrickleDown.TrickleDown);
-
-            // The card routes through the shared StylePanel (dark stone fill + runic-gold
-            // rim + rounding) so it reads as part of the TOWN-HUD presentation language.
-            var card = new VisualElement();
-            card.style.minWidth = 380;
-            card.style.maxWidth = 480;
-            card.style.paddingTop = 24;    card.style.paddingBottom = 24;
-            card.style.paddingLeft = 28;   card.style.paddingRight = 28;
-            ElarionUi.StylePanel(card, dark: true);
-            _overlay.Add(card);
-
-            var title = new Label("Help");
-            title.style.fontSize = ElarionUi.FontTitle;
-            title.style.unityFontStyleAndWeight = FontStyle.Bold;
-            { var tf = HelpFont(); if (tf != null) title.style.unityFont = tf; }
-            title.style.color = ElarionUi.Gilt;
-            title.style.letterSpacing = 1.5f;
-            title.style.marginBottom = 16;
-            card.Add(title);
-
-            card.Add(MakeButton("Report a bug",        OnReportBug));
-            card.Add(MakeButton("Controls",            OnShowControls));
-            card.Add(MakeButton("Reset Hero & Pet",    OnResetProgress, ElarionUi.ButtonKind.Danger));
-            // SECURITY (LB-11 / E-DEVTOOLS): the "Dev tools" launcher opens AdminOverlay, which
-            // hosts resource/Wisdom/level GRANT buttons. The launcher is compile-stripped from
-            // release builds so a player can never reach the admin overlay through the Settings
-            // bar. (AdminOverlay also enforces a real owner-wallet runtime gate + strips its own
-            // grant buttons — belt and suspenders.) Editor + DEVELOPMENT builds keep the entry.
+            // Action rows stacked down the body well. Close is the chrome's ONE shared
+            // Close — the old bespoke "Close" row is gone (obsidian-panel-chrome canon).
+            ElarionUiKit.BuildObsidianButton(body, "Report a Bug",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.10f, 0.82f), new Vector2(0.90f, 0.94f), OnReportBug);
+            ElarionUiKit.BuildObsidianButton(body, "Controls",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.10f, 0.68f), new Vector2(0.90f, 0.80f), OnShowControls);
+            ElarionUiKit.BuildObsidianButton(body, "Reset Hero & Pet",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Red,
+                new Vector2(0.10f, 0.54f), new Vector2(0.90f, 0.66f), OnResetProgress);
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
-            var devToolsButton = MakeButton("Dev tools", OnOpenDevTools);
-            FlowTrace.Step("UI", "Dev tools button wired (HelpMenu Settings card)");
-            card.Add(devToolsButton);
+            // SECURITY (LB-11 / E-DEVTOOLS): the "Dev tools" launcher opens AdminOverlay
+            // (grant buttons) — compile-stripped from release builds with its handler.
+            ElarionUiKit.BuildObsidianButton(body, "Dev Tools",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.10f, 0.40f), new Vector2(0.90f, 0.52f), OnOpenDevTools);
+            FlowTrace.Step("UI", "Dev tools button wired (HelpMenu Obsidian card)");
 #endif
-            card.Add(MakeButton("Credits",             OnShowCredits));
-            card.Add(MakeButton("Close",               Close, ElarionUi.ButtonKind.Gold));
+            ElarionUiKit.BuildObsidianButton(body, "Credits",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.10f, 0.26f), new Vector2(0.90f, 0.38f), OnShowCredits);
 
-            // Toast (status messages) — appears low-center, fades after 3 s.
-            _toast = new Label(string.Empty);
-            _toast.style.position = Position.Absolute;
-            _toast.style.bottom = 80; _toast.style.left = 0; _toast.style.right = 0;
-            _toast.style.unityTextAlign = TextAnchor.MiddleCenter;
-            { var tf = HelpFont(); if (tf != null) _toast.style.unityFont = tf; }
-            _toast.style.color = ElarionUi.Parchment;
-            _toast.style.fontSize = ElarionUi.FontBody;
-            _toast.style.display = DisplayStyle.None;
-            _root.Add(_toast);
-        }
+            // Toast (status messages) — kit ToastCard, low-center, fades after 5s.
+            _toast = ElarionUiKit.ToastCard(_modal.canvas.transform,
+                ElarionUiKit.ToastTone.Info, accentLeft: true, TextAnchor.MiddleCenter);
+            var trt = _toast.card.GetComponent<RectTransform>();
+            trt.anchorMin = new Vector2(0.14f, 0.045f);
+            trt.anchorMax = new Vector2(0.86f, 0.115f);
+            trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
+            _toast.card.SetActive(false);
 
-        // WO-417: explicit font so the settings text renders even if the borrowed PanelSettings'
-        // theme has no default font (blank purple rows = backgrounds draw, glyphs don't).
-        private static Font _helpFont;
-        private static Font HelpFont()
-        {
-            if (_helpFont == null) _helpFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            return _helpFont;
-        }
-
-        private static Button MakeButton(string label, Action onClick,
-                                         ElarionUi.ButtonKind kind = ElarionUi.ButtonKind.Neutral)
-        {
-            var b = new Button(onClick) { text = label };
-            // Shared themed button: stone/gold/green/red fill + hover/press feedback +
-            // rounding + rim, sourced from the palette (TOWN-HUD language). StyleButton
-            // sets size/colour/border; we keep the explicit font so glyphs render even
-            // when the borrowed PanelSettings' theme has no default font (WO-417).
-            ElarionUi.StyleButton(b, kind);
-            b.style.marginTop = 6; b.style.marginBottom = 6;
-            var f = HelpFont(); if (f != null) b.style.unityFont = f;
-            return b;
+            _modal.canvas.SetActive(false);   // built hidden; SetOpen shows it
         }
 
         // ── Actions ────────────────────────────────────────────────────────────
         public void ToggleOverlay()
         {
-            FlowTrace.Step("UI", $"Settings open requested (gear → ToggleOverlay; currently open={IsOpen})");
+            FlowTrace.Step("UI", $"Settings open requested (gear -> ToggleOverlay; currently open={IsOpen})");
             SetOpen(!IsOpen);
         }
 
-        /// <summary>Explicitly hide the Help overlay (Close button + modal-arbiter close).</summary>
+        /// <summary>Explicitly hide the Help modal (shared Close + modal-arbiter close).</summary>
         public void Close() => SetOpen(false);
 
         private void SetOpen(bool open)
         {
-            if (_overlay == null) return;
-            _overlay.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
-            _overlay.pickingMode = open ? PickingMode.Position : PickingMode.Ignore;
+            if (open) EnsureBuilt();
+            if (_modal == null || _modal.canvas == null) return;
+            _modal.canvas.SetActive(open);
             // Route through the modal arbiter (DEF-212): opening closes any other open
-            // panel; closing clears our slot so an invisible backdrop can never linger
-            // and trap input. NotifyOpened/Closed are no-ops if state is unchanged, so
-            // the Close callback the handle invokes won't recurse.
+            // panel; closing clears our slot. NotifyOpened/Closed are no-ops when state
+            // is unchanged, so the handle's Close callback won't recurse.
             if (open) PanelManager.NotifyOpened(_panelHandle);
             else PanelManager.NotifyClosed(_panelHandle);
-            // Did the menu actually show? (overlay null/zero-size or non-pickable backdrop
-            // = "Settings dead" symptom — and report the live timeScale that can freeze it.)
-            FlowTrace.Step("UI", $"Settings {(open ? "shown" : "hidden")} — overlayExists={_overlay != null} " +
-                $"display={(_overlay != null ? _overlay.style.display.value.ToString() : "n/a")} " +
-                $"picking={(_overlay != null ? _overlay.pickingMode.ToString() : "n/a")} timeScale={Time.timeScale}");
+            FlowTrace.Step("UI", $"Settings {(open ? "shown" : "hidden")} — kit modal active={_modal.canvas.activeSelf} timeScale={Time.timeScale}");
         }
 
-        /// <summary>
-        /// WO-596 — route to the player bug-report form. The old stub (mailto to a
-        /// personal address + POST to the retired non-"-v2" domain) is retired.
-        /// Close FIRST so the form's clean-frame capture never includes this menu.
-        /// </summary>
+        /// <summary>WO-596 — route to the player bug-report form. Close FIRST so the
+        /// form's clean-frame capture never includes this menu.</summary>
         private void OnReportBug()
         {
-            FlowTrace.Step("BugReport", "Settings → Report a bug — opening BugReportView");
+            FlowTrace.Step("BugReport", "Settings -> Report a bug — opening BugReportView");
             Close();
             BugReportView.Open();
         }
@@ -278,12 +181,8 @@ namespace DeNelle.HUD
             ShowToast("Defenders of the Realm v2 — DeNelle Studios. Models: KayKit + Tripo. Audio: original soundtrack.");
         }
 
-        /// <summary>
-        /// Resets save state via reflection so the player can redo hero + pet
-        /// selection. GameStateService.Reset() is the carve-out helper that
-        /// wipes progression but keeps wallet binding (per its existing
-        /// contract). After reset, route back to HeroSelect.
-        /// </summary>
+        /// <summary>Resets save state via reflection so the player can redo hero + pet
+        /// selection, then routes back to HeroSelect.</summary>
         private void OnResetProgress()
         {
             try
@@ -317,20 +216,14 @@ namespace DeNelle.HUD
             }
         }
 
-        /// <summary>
-        /// Opens the AdminOverlay so the owner can trigger waves / give
-        /// crystals / mute / etc. without hunting for the Ctrl+Shift+A chord.
-        /// SECURITY (LB-11): compile-stripped from release builds along with its launcher.
-        /// </summary>
+        /// <summary>Opens the AdminOverlay (owner tools). SECURITY (LB-11):
+        /// compile-stripped from release builds along with its launcher.</summary>
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
         private void OnOpenDevTools()
         {
-            FlowTrace.Step("UI", "DevPanel toggle/click reached (HelpMenu 'Dev tools' → AdminOverlay)");
-            // Find the AdminOverlay (its bootstrap spawns one per scene). In MainCastle_Hall
-            // the scene ships NO UIDocument/PanelSettings, so AdminOverlay.Awake couldn't
-            // borrow one and never built its UI — Open() then silently no-op'd and "dev
-            // tools went nowhere" (T-030). We spawn-or-find it and hand it OUR live
-            // PanelSettings (the Help menu just rendered with it) so it can build now.
+            FlowTrace.Step("UI", "DevPanel toggle/click reached (HelpMenu 'Dev tools' -> AdminOverlay)");
+            // Spawn-or-find AdminOverlay and hand it a live PanelSettings (T-030: hub
+            // scenes ship no UIDocument of their own; without this Open() no-ops).
             var admin = UnityEngine.Object.FindAnyObjectByType<AdminOverlay>(FindObjectsInactive.Include);
             if (admin == null)
             {
@@ -346,8 +239,7 @@ namespace DeNelle.HUD
                 return;
             }
             FlowTrace.Step("UI", "DevPanel built — opening AdminOverlay");
-            // Close Help FIRST, then open Admin. Both route through PanelManager, so the
-            // arbiter also enforces single-modal; doing it explicitly keeps order clear.
+            // Close Help FIRST, then open Admin — both route through PanelManager.
             Close();
             admin.Open();
         }
@@ -355,9 +247,9 @@ namespace DeNelle.HUD
 
         private void ShowToast(string message)
         {
-            if (_toast == null) return;
-            _toast.text = message;
-            _toast.style.display = DisplayStyle.Flex;
+            if (_toast == null || _toast.card == null || _toast.label == null) return;
+            _toast.label.text = message;
+            _toast.card.SetActive(true);
             _toastUntil = Time.unscaledTime + 5f;
         }
     }

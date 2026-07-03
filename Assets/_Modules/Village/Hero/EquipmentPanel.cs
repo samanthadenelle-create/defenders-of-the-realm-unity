@@ -100,7 +100,7 @@ namespace DeNelle.Village.Hero
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, headerName,
                 new Vector2(0.12f, 0.06f), new Vector2(0.88f, 0.95f),
                 () => _vm?.Close(), headerX0: 0.10f, headerX1: 0.90f,
-                frameName: RpgUiCatalog.FrameCharacter);
+                frameName: RpgUiCatalog.FrameCharacter, medallionIcon: "armor");
             var panel = chrome.content;
 
             // UI_BLINK_TEMPLATE_CANON §3/§4: drop content into the frame's BODY drop-zone

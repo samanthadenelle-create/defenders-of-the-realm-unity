@@ -235,7 +235,8 @@ namespace DeNelle.Village.Items
             // SHARED Obsidian chrome: black panel + gold trim + gold header + ONE Close.
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Jeweler's Bench",
                 new Vector2(0.07f, 0.05f), new Vector2(0.93f, 0.95f), () => { if (_vm != null) _vm.Close(); },
-                headerX0: 0.04f, headerX1: 0.96f, frameName: RpgUiCatalog.FrameCrafting);
+                headerX0: 0.04f, headerX1: 0.96f, frameName: RpgUiCatalog.FrameCrafting,
+                medallionIcon: "gem");
             var panel = chrome.content.transform;
             _headerLabel = chrome.title;
 

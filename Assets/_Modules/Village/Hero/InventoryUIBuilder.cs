@@ -47,7 +47,7 @@ namespace DeNelle.Village
             var panelChrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "INVENTORY",
                 new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.97f),
                 Close, headerX0: 0.05f, headerX1: 0.80f,
-                frameName: RpgUiCatalog.FrameInventory);
+                frameName: RpgUiCatalog.FrameInventory, medallionIcon: "bag");
             var panel = panelChrome.content;
 
             // Left: Narrow portrait area to match mockup exactly - ornate gold frame with hero portrait, Lvl, name, colored bars, stats.

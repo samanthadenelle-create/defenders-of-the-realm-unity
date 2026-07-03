@@ -36,6 +36,12 @@ namespace DeNelle.HUD
                 QuestService.Instance.QuestChanged += Repaint;
                 _subscribed = true;
             }
+            // MODAL DISCIPLINE (eyes-on pass 2026-07-03: the tracker card overlapped the open
+            // Gear Shop / Talents frames in the bot captures — this widget predates the kit's
+            // hud-areas occupancy, so it must observe the arbiter itself): hide while any
+            // modal is open, exactly like the kit's `modal` posture stands the HUD down.
+            PanelManager.OpenStateChanged += SyncModalVisibility;
+            SyncModalVisibility();
         }
 
         private void OnDisable()
@@ -43,6 +49,12 @@ namespace DeNelle.HUD
             if (_subscribed && QuestService.Instance != null)
                 QuestService.Instance.QuestChanged -= Repaint;
             _subscribed = false;
+            PanelManager.OpenStateChanged -= SyncModalVisibility;
+        }
+
+        private void SyncModalVisibility()
+        {
+            if (_ui != null) _ui.SetActive(!PanelManager.AnyOpen);
         }
 
         private void OnDestroy() { if (_ui != null) Destroy(_ui); }
