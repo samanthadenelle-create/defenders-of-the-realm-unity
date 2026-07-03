@@ -207,10 +207,41 @@ namespace DeNelle.Editor
         // hole under the castle is carved separately (NavMeshModifierVolume), so 0f is visual-only.
         private const float CastleDepressionDepth = 0f;
 
+        // ── WORLDFEEL relief (owner felt-test 2026-07-01: "very flat — I want TERRAIN") ──
+        // Gentle long-wavelength perlin undulation layered onto the biome heights so the
+        // mid-band lawn (the flat ring between the castle clear-zone and the biome ramps)
+        // reads as rolling ground instead of a billiard table. DELIBERATELY gentle
+        // (amplitude ~±1.8 m over ~110 m wavelengths) — decoration, not restructuring:
+        // the terrain origin/levels are untouched (OuterWorldNavBake level-sample landmine).
+        //
+        // PROTECTED FLAT LANES (relief is masked OFF here — play-critical walkability):
+        //   * castle surroundings: plinth / moat ring / bridge+ramp landings (r≈44-60)
+        //     and the enemy spawn arcs (z≈-60..-64, 12 m outside each gate) — all inside
+        //     the ReliefFlatRadius full-flat disc;
+        //   * the walk-to raid-outpost anchors (~70 m out a gate + footprint) — inside
+        //     the same disc;
+        //   * the cave road / portal approach (x≈0, z -76..-700, trigger z≈-404..-420):
+        //     relief is added BEFORE the WO-468 corridor flatten, so CorridorWeight
+        //     lerps it back to Y=0 exactly like the biome heights;
+        //   * the castle footprint itself: the SeamWeight depression lerp flattens last.
+        private const float ReliefAmplitude   = 1.8f;   // max undulation (m) — gentle, walkable everywhere
+        private const float ReliefFrequency   = 0.009f; // ~110 m dominant wavelength (long, rolling)
+        private const float ReliefFlatRadius  = 95f;    // full-flat disc around origin (covers moat/spawns/outpost anchors)
+        private const float ReliefBlendRadius = 140f;   // relief fades in between FlatRadius and this
+
         // ── Tree budget (§9.6) ───────────────────────────────────────────────
         // WO-468 Phase 1: bumped 320 -> 1000 so the ~11x-larger terrain isn't
-        // sparse. The path-corridor reject (below) keeps the cave road clear.
-        private const int TreeTargetCount = 1000;
+        // sparse. WORLDFEEL 2026-07-02: 1000 -> 2400 (owner: "world feels empty";
+        // 1000 trees on a 1000x1000 terrain = 1 tree per 1000 m² — sparse). Terrain
+        // trees are billboarded past treeBillboardDistance, so this stays cheap.
+        // The path-corridor reject (below) keeps the cave road clear.
+        private const int TreeTargetCount = 2400;
+
+        // WORLDFEEL: horizon tree-line — within this band of the terrain edge the
+        // scatter keep-chance is floored high so every horizon reads as a treeline
+        // silhouette instead of empty ground meeting an empty sky.
+        private const float HorizonBandWidth = 90f;
+        private const float HorizonKeepChance = 0.8f;
 
         // ── Splat layer indices ──────────────────────────────────────────────
         private const int LayerGrass = 0;
@@ -458,7 +489,34 @@ namespace DeNelle.Editor
             h += wS * SouthHeight(worldX, cz);
             h += wE * EastHeight(worldX, cz);
             h += wW * WestHeight(worldX, cz);
+
+            // WORLDFEEL: gentle rolling relief on top of the biome fields. Added at
+            // this single chokepoint so CreateTerrainData, WorldHeightAt, the splat
+            // slope rules and the tree/rock ground-sampling all see the SAME surface.
+            // The corridor flatten + castle depression are applied AFTER this by every
+            // caller, so the protected lanes stay exactly flat.
+            h += ReliefHeight(worldX, cz);
             return h;
+        }
+
+        /// <summary>
+        /// WORLDFEEL undulation term (world metres): long-wavelength fbm perlin,
+        /// amplitude <see cref="ReliefAmplitude"/>, masked to ZERO inside
+        /// <see cref="ReliefFlatRadius"/> of the terrain-centered origin (castle
+        /// surroundings / moat / bridge landings / spawn arcs / walk-to outpost
+        /// anchors) and smoothly fading to full beyond <see cref="ReliefBlendRadius"/>.
+        /// Coordinates are terrain-CENTERED (same space as the biome fields).
+        /// </summary>
+        private static float ReliefHeight(float x, float cz)
+        {
+            float r = Mathf.Sqrt(x * x + cz * cz);
+            if (r <= ReliefFlatRadius) return 0f;
+            float mask = r >= ReliefBlendRadius
+                ? 1f
+                : Mathf.SmoothStep(0f, 1f, (r - ReliefFlatRadius) / (ReliefBlendRadius - ReliefFlatRadius));
+            // PerlinFbm returns ~±0.5 -> x2 gives ±1 -> scale by amplitude.
+            float n = PerlinFbm(x * ReliefFrequency + 101f, cz * ReliefFrequency + 57f, 3) * 2f;
+            return n * ReliefAmplitude * mask;
         }
 
         // ── North: rising forest -> pine -> rock -> snow (§9.2) ──────────────
@@ -630,15 +688,31 @@ namespace DeNelle.Editor
                     if (cz < 0f && y < -6f)
                         wDead = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(-6f, -11f, y));
 
-                    // Grass is whatever the other layers don't claim.
-                    wGrass = Mathf.Max(0f, 1f - wStone - wSnow - wDead);
+                    // WORLDFEEL meadow mottling (owner 2026-07-01: "flat single-tone
+                    // green lawn to the horizon"): two independent low-frequency perlin
+                    // patch fields shift a little dry stone + worn earth into the grass
+                    // so flat ground reads as varied meadow instead of one flat colour.
+                    // Gated OUT of the snow/dead extremes (they own their look).
+                    float wMud = 0f;
+                    if (wSnow < 0.4f && wDead < 0.4f)
+                    {
+                        float dry = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.60f, 0.82f,
+                            Mathf.PerlinNoise(worldX * 0.016f + 91f, worldZ * 0.016f + 47f))) * 0.30f;
+                        float worn = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.62f, 0.84f,
+                            Mathf.PerlinNoise(worldX * 0.011f + 13f, worldZ * 0.011f + 77f))) * 0.20f;
+                        wStone = Mathf.Max(wStone, dry);
+                        wMud = worn;
+                    }
 
-                    float total = wGrass + wStone + wSnow + wDead;
+                    // Grass is whatever the other layers don't claim.
+                    wGrass = Mathf.Max(0f, 1f - wStone - wSnow - wDead - wMud);
+
+                    float total = wGrass + wStone + wSnow + wDead + wMud;
                     if (total < 0.0001f) { wGrass = 1f; total = 1f; }
 
                     splat[z, x, LayerGrass] = wGrass / total;
                     splat[z, x, LayerStone] = wStone / total;
-                    splat[z, x, LayerMud] = 0f;
+                    splat[z, x, LayerMud] = wMud / total;
                     splat[z, x, LayerSnow] = wSnow / total;
                     splat[z, x, LayerDead] = wDead / total;
                 }
@@ -683,14 +757,28 @@ namespace DeNelle.Editor
         /// <summary>Builds a small solid-colour texture asset (terrain layers need a diffuse texture).</summary>
         private static Texture2D MakeSolidTexture(Color c)
         {
-            // A subtly noised 32x32 keeps the terrain from reading dead-flat.
-            var tex = new Texture2D(32, 32, TextureFormat.RGB24, true);
-            var px = new Color[32 * 32];
-            for (int i = 0; i < px.Length; i++)
+            // WORLDFEEL 2026-07-02: was a 32x32 pixel-noise tint (±0.06) that still read
+            // dead-flat at play distance. Now 64x64 with a LOW-FREQUENCY perlin mottle
+            // (±22% luminance patches, seeded per-colour so each layer mottles uniquely)
+            // + fine grain, so every layer carries visible tonal variation when tiled.
+            const int size = 64;
+            var tex = new Texture2D(size, size, TextureFormat.RGB24, true);
+            var px = new Color[size * size];
+            float seed = c.r * 17f + c.g * 31f + c.b * 47f;   // per-layer mottle offset
+            for (int y = 0; y < size; y++)
             {
-                float n = (float)(_rng.NextDouble() - 0.5) * 0.06f;
-                px[i] = new Color(
-                    Mathf.Clamp01(c.r + n), Mathf.Clamp01(c.g + n), Mathf.Clamp01(c.b + n));
+                for (int x = 0; x < size; x++)
+                {
+                    // Low-frequency mottle (reads as patches when the layer tiles) ...
+                    float m = (Mathf.PerlinNoise(x * 0.09f + seed, y * 0.09f + seed * 1.7f) - 0.5f) * 0.44f;
+                    // ... plus fine per-pixel grain.
+                    float g = (float)(_rng.NextDouble() - 0.5) * 0.05f;
+                    float k = 1f + m;
+                    px[y * size + x] = new Color(
+                        Mathf.Clamp01(c.r * k + g),
+                        Mathf.Clamp01(c.g * k + g),
+                        Mathf.Clamp01(c.b * k + g));
+                }
             }
             tex.SetPixels(px);
             tex.Apply();
@@ -972,6 +1060,14 @@ namespace DeNelle.Editor
                                             : _rng.Next(protoList.Count));
                 }
 
+                // WORLDFEEL: horizon tree-line — floor the keep-chance high near the
+                // terrain edge so every horizon direction reads as a treeline silhouette
+                // (owner 2026-07-01: the horizon was empty ground meeting an empty sky).
+                // The north rock/snow line (y > 20 'continue' above) still wins there.
+                float edgeDist = TerrainSizeXZ * 0.5f - Mathf.Max(Mathf.Abs(worldX), Mathf.Abs(cz));
+                if (edgeDist < HorizonBandWidth)
+                    keepChance = Mathf.Max(keepChance, HorizonKeepChance);
+
                 if (_rng.NextDouble() > keepChance) continue;
 
                 // Heightmap-normalised height for the instance (0..1).
@@ -1039,11 +1135,14 @@ namespace DeNelle.Editor
             }
 
             // ── Scattered boulders on slopes ─────────────────────────────────
-            // Owner direction 2026-05-20 ("rocks in front of door"): the
-            // wilderness boulder scatter landed several rocks right outside
-            // the cardinal gates, reading as obstacles. Disabled until we
-            // add a per-gate exclusion radius.
-            int boulderTarget = 0;
+            // Owner direction 2026-05-20 ("rocks in front of door"): the old
+            // scatter landed rocks right outside the cardinal gates. WORLDFEEL
+            // 2026-07-02 re-enables it (owner: "world feels empty") with the
+            // exclusion that was missing then: a hard 130 m clear radius around
+            // the origin keeps every gate exit / moat lane / spawn arc / walk-to
+            // outpost anchor rock-free; boulders live out in the wilderness.
+            const float BoulderOriginClearRadius = 130f;
+            int boulderTarget = 140;
             int attempts = 0;
             while (_rockCount < boulderTarget && attempts < boulderTarget * 20)
             {
@@ -1054,6 +1153,9 @@ namespace DeNelle.Editor
                 float worldZ = ((float)_rng.NextDouble() - 0.5f) * TerrainSizeXZ + TerrainCenterZ;
                 float cz = worldZ - TerrainCenterZ;
                 if (SeamWeight(worldX, worldZ) > 0.05f) continue;
+                // WORLDFEEL: hard origin clear-zone — no boulders near the castle
+                // gates / moat lanes / spawn arcs / outpost anchors (see boulderTarget note).
+                if (Mathf.Sqrt(worldX * worldX + cz * cz) < BoulderOriginClearRadius) continue;
                 // WO-468: keep the cave road clear of boulders too (matches PaintTrees).
                 if (DistanceToCavePath(worldX, worldZ) <
                     CavePathFlattenHalf + CavePathFlattenFalloff + 3f) continue;
@@ -1215,19 +1317,33 @@ namespace DeNelle.Editor
                 ApplyColor(mountain, new Color(0.42f, 0.45f, 0.52f));
             }
             mountain.transform.SetParent(lmRoot.transform, false);
-            // Pivot is center; scale.y/2 = 20 puts the base flush with Y=0.
-            mountain.transform.position = new Vector3(20f, 20f, 230f);
+            // F8 2026-07-02 flag_18 ("why is that mountain in scenery floating?"): the mesh path
+            // hardcoded y=20 (a CUBE-pivot assumption — base flush at Y=0 for the 40-tall cube),
+            // but the WORLDFEEL relief + biome fields mean the FINAL surface at (20,230) is NOT 0,
+            // and the FBX pivot is not the cube's centre. Seat it from MEASURED renderer bounds on
+            // the SAMPLED final surface (WorldHeightAt = the same chokepoint the heightmap uses),
+            // bedded 2m in so the skirt melts into the ground.
+            {
+                float groundY = WorldHeightAt(20f, 230f);
+                mountain.transform.position = new Vector3(20f, groundY, 230f);
+                Bounds mb = default; bool haveMb = false;
+                foreach (var mr in mountain.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (mr == null) continue;
+                    if (!haveMb) { mb = mr.bounds; haveMb = true; } else mb.Encapsulate(mr.bounds);
+                }
+                if (haveMb)
+                    mountain.transform.position += Vector3.up * (groundY - mb.min.y - 2f);
+                _notes.Add("DistantMountainPeak seated: ground(20,230)=" + groundY.ToString("0.0") +
+                    (haveMb ? " (bounds-seated, base bedded 2m)" : " (no renderer bounds; pivot at ground)"));
+            }
 
-            // ── Western tower silhouette (Mira's place -- just a hint) ──────
-            var tower = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            tower.name = "DistantTowerSilhouette";
-            tower.transform.SetParent(lmRoot.transform, false);
-            tower.transform.localScale = new Vector3(7f, 26f, 7f);
-            // Cylinder pivot is center; base sits at Y=0 when position.y =
-            // scale.y/2 = 13. Previous Y=24 floated the base 11 m off the
-            // ground (owner 2026-05-20: structure-in-sky bug).
-            tower.transform.position = new Vector3(-228f, 13f, -30f);
-            ApplyColor(tower, new Color(0.30f, 0.30f, 0.38f));
+            // ── Western tower silhouette — RETIRED 2026-07-02 (owner F8 flag_24 "what is this?
+            // big random cylinder"). The 7x26m primitive cylinder at (-228, -30) sits well INSIDE
+            // the walkable 1000m terrain, so the owner met it up close as an unexplained prop, not
+            // a horizon silhouette. Removed at the source so no rebuild re-adds it — same treatment
+            // as the southern "Wound" crack (2026-06-21). If Mira's tower returns it should be a
+            // real model seated on WorldHeightAt, beyond the playable edge.
 
             // ── Southern "Wound" crack — REMOVED 2026-06-21 (owner). It was a primitive cube (so it
             // carried a default BoxCollider) with a violet glow, reading as a purple slab/wall in the play
@@ -1268,16 +1384,18 @@ namespace DeNelle.Editor
                     sky.shader = skyShader;
                 }
 
-                // Dawn: a low sun, warm-tinted, gentle atmosphere thickness so
-                // the horizon blooms pink-violet.
-                sky.SetFloat("_SunSize", 0.045f);
-                sky.SetFloat("_SunSizeConvergence", 4f);
-                sky.SetFloat("_AtmosphereThickness", 1.35f);
-                // Sky tint -- a soft cool-blue zenith.
-                sky.SetColor("_SkyTint", new Color(0.52f, 0.58f, 0.78f));
-                // Ground tint -- warm pink-violet horizon haze.
-                sky.SetColor("_GroundColor", new Color(0.78f, 0.62f, 0.70f));
-                sky.SetFloat("_Exposure", 1.15f);
+                // WORLDFEEL 2026-07-02: dusk "hold the last light" palette — warm amber
+                // horizon, deep dusk-blue zenith, visible low sun. Matches the runtime
+                // WorldFeelInjector values exactly so the baked scene and the runtime
+                // pass agree (ff.worldfeel=0 falls back to THIS baked sky).
+                sky.SetFloat("_SunSize", 0.05f);
+                sky.SetFloat("_SunSizeConvergence", 4.5f);
+                sky.SetFloat("_AtmosphereThickness", 1.25f);
+                // Sky tint -- deep dusk-blue zenith.
+                sky.SetColor("_SkyTint", new Color(0.42f, 0.50f, 0.72f));
+                // Ground tint -- warm amber "last light" horizon.
+                sky.SetColor("_GroundColor", new Color(0.86f, 0.62f, 0.44f));
+                sky.SetFloat("_Exposure", 1.25f);
                 EditorUtility.SetDirty(sky);
 
                 RenderSettings.skybox = sky;
@@ -1299,8 +1417,7 @@ namespace DeNelle.Editor
             // Reuse the scene's existing directional light if the interior
             // builder made one; otherwise create a dawn sun.
             Light sun = null;
-            foreach (var l in UnityEngine.Object.FindObjectsByType<Light>(
-                         FindObjectsSortMode.None))
+            foreach (var l in UnityEngine.Object.FindObjectsByType<Light>())
             {
                 if (l.type == LightType.Directional) { sun = l; break; }
             }
@@ -1311,29 +1428,29 @@ namespace DeNelle.Editor
                 sun.type = LightType.Directional;
                 sun.shadows = LightShadows.Soft;
             }
-            // Sun ~15deg above the horizon (§9.5), warm dawn colour.
-            sun.transform.rotation = Quaternion.Euler(15f, -28f, 0f);
-            sun.color = new Color(1f, 0.86f, 0.74f);
-            sun.intensity = 1.05f;
+            // WORLDFEEL: low warm dusk sun, long shadows (matches WorldFeelInjector).
+            sun.transform.rotation = Quaternion.Euler(24f, -38f, 0f);
+            sun.color = new Color(1.00f, 0.84f, 0.64f);
+            sun.intensity = 1.15f;
             RenderSettings.sun = sun;
 
-            // ── Ambient -- soft dawn gradient ───────────────────────────────
+            // ── Ambient -- warm dusk trilight (matches WorldFeelInjector) ───
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.52f, 0.55f, 0.70f);
-            RenderSettings.ambientEquatorColor = new Color(0.62f, 0.55f, 0.58f);
-            RenderSettings.ambientGroundColor = new Color(0.30f, 0.28f, 0.26f);
+            RenderSettings.ambientSkyColor = new Color(0.46f, 0.50f, 0.66f);
+            RenderSettings.ambientEquatorColor = new Color(0.62f, 0.52f, 0.44f);
+            RenderSettings.ambientGroundColor = new Color(0.30f, 0.26f, 0.22f);
 
-            // ── Atmospheric fog -- light dawn haze (§9.5) ───────────────────
+            // ── Atmospheric fog -- warm dusk haze (matches WorldFeelInjector) ─
             // Exponential-squared fog so distant terrain reads soft, near
             // terrain stays crisp. Tuned dense enough to soften the horizon
-            // but light enough that the 300u terrain is fully visible.
+            // but light enough that the terrain is fully visible.
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogColor = new Color(0.80f, 0.74f, 0.80f); // pink-violet haze
+            RenderSettings.fogColor = new Color(0.78f, 0.66f, 0.58f); // warm dusk haze
             // §9.5 wants a denser-south / lighter-east gradient. Built-in fog
             // is uniform; we pick a mid density that suits the whole map and
             // leave the per-direction gradient as a volumetric follow-up note.
-            RenderSettings.fogDensity = 0.0014f;
+            RenderSettings.fogDensity = 0.0012f;
             _notes.Add("Fog is uniform exponential-squared (built-in); per-direction " +
                        "density gradient (denser south) deferred to a volumetric pass");
 

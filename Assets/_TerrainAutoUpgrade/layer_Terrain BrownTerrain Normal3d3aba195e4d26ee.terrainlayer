@@ -6,11 +6,11 @@ TerrainLayer:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Exterior_Snow
-  m_DiffuseTexture: {fileID: -8600458243675651560, guid: 71af267a01f8af14e851d47985fb6877, type: 2}
-  m_NormalMapTexture: {fileID: 0}
+  m_Name: layer_Terrain BrownTerrain Normal3d3aba195e4d26ee
+  m_DiffuseTexture: {fileID: 2800000, guid: 30832f73b66f9a74a975d8967e90e474, type: 3}
+  m_NormalMapTexture: {fileID: 2800000, guid: df61ec0f5361d6f4cb0f2110c8748757, type: 3}
   m_MaskMapTexture: {fileID: 0}
-  m_TileSize: {x: 16, y: 16}
+  m_TileSize: {x: 15, y: 15}
   m_TileOffset: {x: 0, y: 0}
   m_Specular: {r: 0, g: 0, b: 0, a: 0}
   m_Metallic: 0
