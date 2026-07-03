@@ -1,12 +1,18 @@
 # DeNelle Studios — Project Canon Loader
 
-> ## ▶ LIVE THREAD (2026-07-01) — READ BEFORE WORKING
-> Current focus = **web / Pi stabilization** (pre-release DoD: consolidated deploy, sign-in works, core loop
-> playable, zero P0s). **Pi sign-in is RESOLVED** (COOP/COEP drop was the root); web observability (`WebTrace`
-> `?trace=1` → `api/trace` → Neon) + localhost dev WebGL bots shipped. Read the live anchor
-> **`CANON_GROUND_TRUTH_2026-07-01.md`** + **`SESSION_BOOT_DIRECTIVE.md`**.
-> The **seam un-stack (WO-453) is PARKED** in `stash@{0}` — `WorldGeometry.cs` not in the tree; resume via
-> `RESUME_2026-06-30_seam-unstack.md` when we return to it. The built exe still ping-pongs the seam.
+> ## ▶ LIVE THREAD (2026-07-03) — READ BEFORE WORKING
+> Current focus = **THE FEEL ARC** (owner: "the most important thing is how it FEELS"; quality bar =
+> the ten-year-old test). The 07-02→03 convergence session (~25 agents) landed: world feel (post-processing
+> was structurally DEAD until now — fixed; dusk sky, terrain relief), castle-raise fallout (all fixed),
+> character/anim/combat feel, NPC cards, vendors data-mapped, WC3 perk grid, end-state template, Tutorial V2
+> (built, ff.tutorialv2 OFF), new fleet oracles. **South vertical slice fleet-proven 6/6 (masked warp fires
+> mid-bridge)** — owner felt-pass pending; N/W/E waits for south "feels perfect". Read the live anchor
+> **`CANON_GROUND_TRUTH_2026-07-03.md`** + **`RESUME_2026-07-03_morning.md`** + `SESSION_BOOT_DIRECTIVE.md`.
+> **Next headline = WO-545 full Addressables** ("what CAN stream SHOULD stream") — blueprint in
+> `docs/WEBGL_DELIVERY_PLAN_2026-07-03.md`. Vercel preview of the convergence build is LIVE
+> (`defenders-of-the-realm-v2-69mafg5pj.vercel.app`); prod stays on the 07-01 Pi-sign-in build until promoted.
+> Seam un-stack (WO-453) still PARKED in `stash@{0}` (encounter-return strands 7.1km — publisher critique #1;
+> owner decision pending). **BINDING owner rule 07-03: read-before-assert applies to EVERYTHING (code + non-code).**
 
 **READ THIS FIRST on any new session (owner directive 2026-06-20).** Every CLI/agent
 loads this before doing anything, to stay an SME. It is the fast-path summary; the
@@ -37,14 +43,14 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   (implement + headless-verify) → PO (felt-verify + close). Shared board = the Task list; log
   every hand-off. Full spec: `docs/TICKET_PIPELINE.md`.
 
-## Current State (2026-07-01 — anchored to `CANON_GROUND_TRUTH_2026-07-01.md`)
-- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). HEAD `36c901f2`; upstream exists, **19 commits ahead** (local-only). Save schema **v28** (WO-587).
-- **Pre-release web/Pi stabilization is the live focus.** Pi sign-in RESOLVED; Vercel still blocked by the 100 MB per-file limit (→ WO-545). Seam un-stack PARKED in `stash@{0}`.
+## Current State (updated 2026-07-03 — anchored to `CANON_GROUND_TRUTH_2026-07-03.md`)
+- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). The 07-02→03 convergence session is in the tree, uncommitted — commit lanes staged by path, **push held for owner felt-pass**. Save schema **v28** (WO-587).
+- **THE FEEL ARC is the live focus** (2026-07-03 — supersedes web/Pi stabilization): ten-year-old test = quality bar; south vertical slice fleet-proven 6/6; Tutorial V2 built behind `ff.tutorialv2` (OFF). Pi sign-in RESOLVED; **game IS live on Vercel** (preview = convergence build at 79.7MB Brotli — the "blocked by 100MB" claim is stale; WO-545 Addressables is still the next headline). Seam un-stack PARKED in `stash@{0}` (publisher critique ranks closing it #1).
 - **Title:** **"Echoes of Elarion"** (chapter) within the **"Defenders of the Realm"** series; tagline **"Hold the last light."** (WO-570).
 - **Combat space:** WO-584 consolidation (READY) — one warp-in space primitive, 3 skins (dungeon/outpost/arena), ownership flip; replaces flat ATB dungeon (`ff.atbdungeon` OFF).
 - **Game:** Echoes of Elarion / Defenders of the Realm (Unity 6 / URP). **V1 = ONE controllable hero
   (Knight "Grom") in an overworld with isolated real-time BattleArena combat.** Base-defense/tower-defense
-  is V2-gated behind `ff.basebuilding`. (itch web build LIVE; Solana→Pi/Cloudflare backend; Vercel parked.)
+  is V2-gated behind `ff.basebuilding`. (itch web build LIVE; Solana→Pi/Cloudflare backend; Vercel LIVE — prod = 07-01 Pi build, preview = 07-03 convergence build.)
 - **Hero Rig:** a **single Tripo self-rigged model**, static armor, **NO mesh-swap**. *Blink full-body rig
   is JUNKED (06-22)* — Blink survives only as a **UI re-skin kit** (`BlinkChrome` flag), not the hero body.
 - **Combat:** animated real-time battle = the **OVERWORLD BattleArena** (lock-on WO-512, 9-zone HUD).
@@ -58,7 +64,7 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
 - **In-flight:** HEAD targeting sweep (`ff.enemystructureaware`) is **UNVERIFIED** — do not push until proven.
 
 ## Key Files to Remember
-- `CANON_GROUND_TRUTH_2026-06-28.md` (the single live anchor of current reality — read FIRST; supersedes the 06-26 snapshot)
+- `CANON_GROUND_TRUTH_2026-07-03.md` (the single live anchor of current reality — read FIRST; supersedes the 07-01 / 06-28 / 06-26 snapshots)
 - `docs/COMBAT_PIVOT_NORTHSTAR.md` (single-Knight pivot — supersedes all "Blink/party-of-4" canon)
 - `docs/ARCHITECTURE_PRINCIPLES.md` · `docs/ARCHITECTURE.md` (hub)
 - `docs/TICKET_PIPELINE.md` (QA→CLI→PO ticket lifecycle, BINDING)

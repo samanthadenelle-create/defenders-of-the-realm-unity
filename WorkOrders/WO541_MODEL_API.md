@@ -75,3 +75,5 @@ public static partial class CoreServices {
 ## Assembly law (binding)
 Models live in DeNelle.Core (primitives + Core enums only — NO UnityEngine UI, NO Village types).
 Village WRITES (refs Core). HUD/BattleATB READ (ref Core). Never a Village↔HUD edge.
+
+> AMENDMENT 2026-07-03 (P4, HUD-Obsidian program): HeroVitalsModel.Set gains `wisdom`; HudContextModel.Set gains `buildMode` (+ HudContext.BuildMode appended enum-safe); new CastModel {CasterName, AbilityName, Progress01, Visible}. Additive only; all existing comparisons unmoved. See docs/HUD_OBSIDIAN_ARCHITECTURE_2026-07-03.md.

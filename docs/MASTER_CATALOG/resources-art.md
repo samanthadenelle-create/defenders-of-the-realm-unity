@@ -245,3 +245,5 @@ VFX SO), Structures (20 prefabs + 3 Tripo FBX), NPCs (4), Towers (4 SO), Dungeon
 HudIcons (~24 root + 4 class folders ×5), RpgUi (6 role folders, ~24 sprites), ItemIcons (8),
 ProjectileIcons (2), Portraits (7), PetPortraits (3), VFX/Projectiles (9). Plus Art source
 folders (~12) and 2 gitignored pack trees. ~12 art-consumer classes documented; 11 FLAGS.
+
+> UPDATE 2026-07-03: GameSfx sword-clash = 4-take variant pool (Sfx/SwordClash..4); EnemyCombatAudio death = 2 takes (EnemyDeath2). Gated ff.combatfeel (default ON).

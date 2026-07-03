@@ -152,8 +152,7 @@ Only two files in `Combat/` (ns `DeNelle.Village`); the heavier combat lives in 
   - static `ResourceLedger` (read/spend Wood/Iron/etc).
 - **ResourceBuildingState.cs (146)** — runtime level + upgrade behaviour. `enum UpgradeResult`; `event LevelChanged`; `GetLevel(id)`; `CurrentDef(id)`; `CurrentYield(id)`; `IsMaxLevel(id)`; `TryUpgrade(id)`; `ResetAll()`.
 - **TechTree.cs (82)** — Magic-gated tech-node ledger. `const ArcaneForgeNodeId="arcane_forge"`; `event NodeUnlocked`; `IsUnlocked(id)`; `Unlock(id)`; `UnlockedNodes`; `ResetAll()`.
-- **BuildingUpgradePanel.cs (594)** — MB, code-built UI-Toolkit upgrade panel for Farm/Lumbermill/Forge. `Instance`; `IsOpen`; `Toggle()`; `OpenFocused(id)`; `Open()/Close()`.
-- **BuildingUpgradePanelBootstrap.cs (114)** — static. Auto-spawns BuildingUpgradePanel in any hero-present scene (mirrors VillageCraftingPanelBootstrap). `EnsureFirst()` via `[RIOLM AfterSceneLoad]`; + internal `BuildingUpgradePanelInput` MB. LIVE.
+- ~~BuildingUpgradePanel.cs / BuildingUpgradePanelBootstrap.cs~~ — **DELETED 2026-07-02** (UI Blink conformance audit §3.1: dead UIDocument twin, flag-suppressed since `ff.buildingupgradepanel` defaulted ON). The live surface is **BuildingUpgradePanelMvvm.cs** — Warcraft-3-style enhancement PERK GRID (kit slot-plate tiles: icon + name + cost + one-line effect from `building-tiers.json` "effect"; owned=lit / next=gold / locked=dim+requirement), built via `ElarionUiKit.BuildObsidianPanel(FrameCore)` drop-zones, bound to **BuildingUpgradeVM.cs** (`CreateDefault()` resolves economy + default building; `Perks`/`CostFor`/`EffectFor`; `Select(id)` unlocks; `[Flow:Upgrade]` traces on open + unlock). Spawned by **BuildingUpgradePanelMvvmBootstrap.cs** (+ ResourceBuildingHarvester); flag OFF = kill-switch, no panel.
 
 ---
 
@@ -214,3 +213,5 @@ Only two files in `Combat/` (ns `DeNelle.Village`); the heavier combat lives in 
 - **NPCCommandBridge is dead** — all its vendor/station Yarn verbs (OpenShop/OpenUpgrade/OpenCraft/
   OpenEquip/OpenArena/OpenRumorBoard/LearnRecipe) were consolidated into DialogueCommandBridge so each
   Yarn action name registers exactly once (YarnSpinner throws on duplicate names). Do not re-add them.
+
+> STALE-FIX 2026-07-03: ArenaHudBridge — a staged battle now HIDES the home HUD (BattleArena stage) and restores it under the return fade; the FOCUS panel hosts Heal only (red Attack duplicate removed).

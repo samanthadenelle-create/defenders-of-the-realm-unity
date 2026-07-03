@@ -358,6 +358,23 @@ self-heals the wire each frame until bound (the "BAG dead in castle" fix). Code-
 ### HeroInventoryController (split) — `HeroInventoryController.cs` + `InventoryUIBuilder.cs` / `InventoryPaperDoll.cs` / `InventoryGrid.cs` / `InventorySidebar.cs` (DeNelle.Village.Hero ns, partial class)
 **MonoBehaviour** singleton (partial across 5 files for maintainability; no behaviour change). Full-screen code-built uGUI inventory + gear modal (same Open/Close/Toggle/Ensure, same GearLoadout drive, same W/A Tech dark-wood+gold styling via ElarionUiKit + Tech hud pack sprites for sockets/tabs/cells). Tabs Weapons/Armor/Outfits/Consumables, paper-doll, 4-col grid, detail sidebar with TechPrimary EQUIP. PanelManager registered. **DATA GAP unchanged.** (Split executed to resolve prior monolithic 1573-line state while preserving 100% prior layout/Tech W/A polish and calls from HeroEquipHud/VillageHud.)
 
+### VendorRegistry `VendorRegistry.cs` — `DeNelle.Village` (WO-598)
+Static loader for `vendors.json` (Resources/StreamingAssets via CanonicalJson + Newtonsoft, mirrors MaterialCatalog).
+`VendorDef{Id,DisplayName,Layout(gear|goods|jeweler),Categories[],ClassFilter,MaxReqLevel,EmptyLine}`. `All`,
+`Find(vendorContext)` (exact id first, then substring), `EmptyLineFor(id)`, `Reload()`. THE vendor/shops registry:
+each shoppable vendor's shelf is a declared QUERY over the item catalogs, never a hardcoded list. Consulted FIRST by
+`VendorStockContract.AllowedFor` (categories→GearKind flags — one truth for legacy shop, ShopCatalog, PartyShop, AutoPilot).
+Graceful: missing registry ⇒ legacy heuristic unchanged.
+
+### VendorStockResolver `VendorStockResolver.cs` — `DeNelle.Village.Hero` (WO-598)
+Static. `Resolve(vendorContext, job, level, rosterOverride?) → IReadOnlyList<VendorWare>` — resolves the vendor's
+query against GearCatalog (weapons/armor, ROSTER-FILTERED: items no currently-playable class can use are EXCLUDED —
+Knight-only V1 ⇒ no Mage wands; level-gated rows return locked "Requires Lv N"), ConsumableCatalog + MaterialCatalog
+(Market goods; gems = crystal band → Jeweler), GearCatalog.Accessories (rings/amulets), CraftableCatalogRegistry.
+Also `LayoutFor`, `EmptyLineFor` (never null — authored line or safe default), `DisplayNameFor`, `PriceFor(Consumable|Material)`
+(data `price` field first), `RosterClasses()` (ff.knightonly). §12: Guard.TryEach per loop; traces
+`[Flow:Vendor] <id> resolved N items (query: …)`. Regression: `DataRegression.CheckVendorStock`.
+
 ### ShopPanel `ShopPanel.cs` — `DeNelle.Village.Hero` (994 lines)
 **MonoBehaviour**. Code-built vendor shop (BUY/SELL/EQUIP). `void Open(string vendorContext)`. Opened via Yarn "OpenShop"
 (NPCCommandBridge). Uses EconomyService (TrySpend/Grant ResourceCost), VillageInventory (Add/Get/TryConsume), GearLoadout

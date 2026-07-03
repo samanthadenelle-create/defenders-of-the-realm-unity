@@ -1,0 +1,76 @@
+# Publisher Critique — Defenders of the Realm: Echoes of Elarion
+**Reviewer role:** external publisher acquisition lead · **Date:** 2026-07-03
+**Evidence base:** 32 felt-test screenshots (`QA_F8_ARCHIVE/fleet-preserved_2026-07-02_203039/flag_00–31.png`) + `docs/issues/castle_raised_render.png`; `CANON_GROUND_TRUTH_2026-07-01.md`; `docs/COMBAT_PIVOT_NORTHSTAR.md`; `docs/PATH_TO_V1.md`; `docs/TUTORIAL_V2_SPEC_2026-07-02.md`; `docs/MONETIZATION_REVIEW_2026-07-02.md`; `docs/UI_BLINK_CONFORMANCE_AUDIT_2026-07-02.md`; `Builds/autopilot-tickets.md` (6-run fleet); WorkOrders 590–599.
+
+---
+
+## 1. Verdict
+
+**Pass — with a genuine revisit clause.** We would not offer terms on today's build, and we would keep the file open, which we do for fewer than one in ten solo submissions. The design brain behind this project is real: the pivot doc (one controlled hero, everything else autonomous, perf-by-construction), the seven-step tutorial spec, and the monetization review are the most disciplined design documents I've seen from a team of any size this year — most funded studios do not write a loot-box compliance analysis this honest. The development *process* (headless bot fleet with oracles, flow tracing, a ranked defect ledger the team generates against itself) is publisher-grade infrastructure. But the *product on screen* is 6–9 months behind the paperwork. The fleet's own data says the core loop does not close — `AssertEncounterBattle … hero NOT returned (dist 7099.3m)` reproduced **6/6 runs** — meaning the one thing V1 is supposed to be (walk → fight → win → return → grow) fails every single automated playthrough at the "return" step. The screenshots show a first frame that would die on a store page: untextured box-geometry castle walls, a featureless ground plane, a gray placeholder cylinder standing in for a landmark, "Mine Iron" as a raw purple rectangle, a Victory screen that renders five colored bars with no text on them. Meanwhile the skill tree, the Forge/Jeweler panels, and the Grom key art show the team *can* hit a shippable bar — the game is two different games depending on which pixel you look at. The honest UI audit says it itself: **3 conformant surfaces out of ~66**. Revisit when the loop closes in the fleet, the tutorial exists, and the first-frame art pass lands. If those three things happen by the end of Q3, this becomes an interesting conversation, because the Pi testbed angle is a legitimately unusual asset (see §5).
+
+---
+
+## 2. Scores
+
+| Criterion | Score | The evidence line that sets it |
+|---|---:|---|
+| **Market fit 2026 (hybrid TD+ARPG, mobile/web)** | 5/10 | The defend→venture→grow hybrid is a real, retention-proven shape (COMBAT_PIVOT_NORTHSTAR's economic web is coherent), and mobile/web TD-ARPG has an audience — but it's a crowded lane where the winners (e.g. survivor-likes, Kingshot-class hybrids) compete on minute-one spectacle, which flag_16/19/24 (box walls, empty plains, placeholder cylinder) cannot survive. The Pi wedge is honestly evaluated below — it is a *learning* market, not a revenue market. |
+| **First 5 minutes (FTUE)** | 3/10 | TUTORIAL_V2_SPEC §1.4: "**The default path teaches nothing**" — 3 hardcoded bubble lines, three overlapping tutorial systems suppressing each other by reflection, zero tutorial telemetry. The spec'd fix (7 mandatory steps, 5–7 min, funnel events) is excellent — and **not built**. Today's cold open: a genuinely handsome hero card (flag_00) → dumped into a hub whose walls are untextured boxes with a "Start Wave" button that lies (wave never advances past 1 in 20 of 32 screenshots). The 3 is for the title/hero-select art carrying real first-impression weight. |
+| **Core loop & retention depth** | 4/10 | The fleet's own ledger, 6/6 runs: `WalkToEachGate TIMEOUT (>150s)` and `AssertEncounterRealPath: hero NOT returned (dist 7099.3m)` — engage and arena work, the **return home** leg is broken, so the loop is open-ended in the literal worst sense. Content depth for 2026 retention: one hero, one enemy family, wave counter stuck at "Wave 1," a leaderboard that says on its own face *"placeholder rivals until the online ladder is connected"* (flag_28). The echo/life-force idle layer is wired (save v28) and is the right return-hook — but the tree in flag_08 is one static mesh; nothing on screen sells "the world answers you." Design 8/10, playable reality 3/10 → 4. |
+| **Polish & production quality** | 3/10 | Specifics from tonight's screenshots: Victory screen renders **five unlabeled colored bars** + "+156 XP" (flag_15) — the loop's payoff moment is broken UI; Rumor Board has a raw tan rectangle covering half the panel with unstyled green ACCEPT blocks (flag_01); Alchemy shows the same tan-overlay bleed (flag_07); a magenta/no-material Stone Gate ghost in build mode (flag_30); dev console with red shader/texture errors (`'flame-pup' not found`, `'_MainTex'` spam) visible in **~90% of the 32 captures**, overlapping gameplay and even the hero-select lore text (flag_00); "Interact: Apothecary"/"Mine Iron" as bare purple quads (flag_05, flag_17); clipped right-edge HUD ("Music" renders as "sic", flag_02); bottom bar shipping owner-admitted untested numbers (0/0 towers, population 0). Against that: the Skill Tree (flag_20–23), Forge (flag_09), and Jeweler (flag_03) are near-shippable, and the Obsidian black+gold language is a real identity. The two floors this game has are very far apart. |
+| **Monetization** | 6/10 | MONETIZATION_REVIEW is the strongest doc in the repo: priced-for-curiosity Pi shop (1–15 π), server-verified two-phase payments, idempotent orders, privacy-by-construction (HMAC pseudonyms), loot boxes correctly gated to Testnet with a seven-condition compliance stack, and the killer line: *"Sell nothing that resolves to nothing."* Holes I'd poke: (1) **sellable today: nothing** — §1.5's own words; four WOs stand between now and a single transaction; (2) hero-outfit SKUs are undeliverable post-Blink (the audit admits it) so the shelf leans on pet skins/palettes in a game whose pets are retired from play; (3) the revenue ceiling is ~$0.12/π against a 2–5% payer rate on a testbed population — this is a telemetry instrument, priced accordingly. As a *revenue model* it's a 3; as a *learning machine* it's an 8; weighted 6 because the doc itself defines learnings as the product. |
+| **USPs / differentiation** | 5/10 | Genuinely differentiating: (a) **the living-tree economy fantasy** — territory reclaimed = life force = harvest rate, "lore + math are the same sentence" — is a fresh frame no competitor owns, *if it ever becomes visible on screen*; (b) **the Pi focus group** — a captive, content-starved audience of millions with verified sign-in already working is a distribution wedge almost no indie has; (c) the one-hero intimacy inside a base game is a defensible feel. Table stakes wearing a USP costume: TD+ARPG hybrid (common), skill trees/gear/crafting (expected), "blockchain-adjacent" (a liability, correctly neutered — SKR non-custodial, V1 zero crypto). Score capped at 5 because none of the three real USPs is currently *experiencable* — the tree doesn't visibly answer, the Pi shop doesn't exist, and the Knight's kit is untuned per PATH_TO_V1 §3. |
+| **Technical & design risk** | 4/10 (10 = low risk) | Risks: **bus factor = 1** (solo owner + AI fleet; no second human can ship this); **26 UIToolkit surfaces that provably don't render in builds** (UI audit §4 — "UXML in builds does NOT work" was learned the hard way and half the game still sits on that stack); WebGL 100 MB Vercel blocker parks the better deploy target (WO-545 unstarted); the world seam is a parked stash (`stash@{0}`), with SEAM-UNREACHABLE errors in 3/6 fleet runs; outposts/dungeons flagged OFF; blockchain optics require constant explaining to platforms and press even in the clean non-custodial posture. Mitigations that earn back points: the instrumentation culture (FlowTrace/Guard/break-log→ticket pipeline) is the best solo-dev risk control I've seen, canon docs prevent knowledge loss, and the data-driven architecture (catalogs, save v28 additive) is genuinely sound. |
+
+**Composite read: ~4.3/10 today, with an unusually high ceiling for the input costs involved.**
+
+---
+
+## 3. The five changes that most move the commercial needle (in order)
+
+1. **Close the loop and make the fleet prove it. (P0 — blocks everything.)**
+   `AssertEncounterBattle` return-home fails 6/6; `WalkToEachGate` times out 6/6; four SEAM-UNREACHABLE triggers. Until a bot can walk out, win, and *come home* every run, there is no game to publish, price, or tutorial-ize. This is PATH_TO_V1's own serial spine (SEAM-FV → C2 reward loop-close → KIT-FV) — finish that doc's checklist before any new surface. Existing lanes: PATH_TO_V1 §5, the parked un-stack (`RESUME_2026-06-30_seam-unstack.md`), C2 in `BattleArena.GrantWinReward`.
+
+2. **Build Tutorial V2 — the seven mandatory steps, with the funnel.**
+   The spec (WO-T1–T5, `TUTORIAL_V2_SPEC_2026-07-02.md`) is already better than what most partners ship; it is also the single highest-ROI item for the Pi focus group, because `tutorial_step_*` events turn every Pioneer session into data. First-tower-in-90-seconds and the two-combat-modes teaching arc directly attack the current cold-open (which teaches nothing, per the spec's own audit). Nothing about this needs new design — it needs the five WO slices executed.
+
+3. **One ruthless first-frame art pass: the castle exterior, the ground, and the prompts.**
+   Every store page, every hackathon judge, every Pioneer sees flag_16/flag_19 first: box-geometry walls, an empty green void, a gray cylinder. The fix is scoped already — WO-594 (measure-driven castle base), WO-595 (KayKit dungeon kit — the KayKit library is sitting gitignored and uncatalogued), WO-593 (gates/cliffs/wayfinding) — plus three cheap kills: strip the dev console from felt-test builds (it's IN 29 of 32 screenshots), replace the purple-quad interact prompts with the kit toast, and fix the no-material magenta gate ghost. This is days of work that changes every screenshot the game ever produces.
+
+4. **Ship the end-state template + the conformance top-of-list (the payoff moments).**
+   The Victory screen — the emotional climax of the loop — currently renders unlabeled colored bars (flag_15). UI audit WO-B (one Obsidian `EndStateScreen` for victory/defeat/tree-death, real rewards rows, real buttons) plus WO-C (title/hero-select off UIToolkit) plus the owner's single currency component covers the moments players screenshot and share. The skill tree proves the bar is reachable; make win/lose/death meet it.
+
+5. **Stand up the Pi Curiosity Shop rail (WO-A → WO-D) and hit July 31 with the Testnet build.**
+   The monetization review is decision-complete; four small slices (~1 week combined by its own estimates) produce the first live purchase funnel. Even at trivial Pi prices, `store_pay_*` conversion curves per price point are exactly the dataset that makes the *next* publisher conversation different — walk in with "n Pioneers, x% tap-through at 1π vs 15π, y% equip-after-buy" and this project stops being a pitch and starts being evidence. Hold WO-E (Echo Cache) until the deterministic baseline exists, per the doc's own sequencing.
+
+---
+
+## 4. What to double down on
+
+- **The bot fleet + instrumentation culture.** Six seeded chaos runs producing a ranked, reproducible defect ledger is something funded studios fail to build. It is also your pitch asset: "our QA is automated and our defects are receipts" reads as de-risking to any partner.
+- **The Obsidian/Blink UI kit where it's actually applied.** The skill tree (flag_20–23) is the proof the game can look intentional. Finish the convergence; never author another off-kit panel.
+- **The Tripo key-art + NPC card direction.** The Grom card (flag_00) is store-page quality. The name+guild+portrait NPC card standard makes a cheap world feel authored — it's the highest polish-per-dollar lever you own.
+- **The telemetry-as-product framing.** Learnings-per-week as the KPI is the correct posture for a solo pre-release project, and the privacy stance ("we count taps, not people") is a real differentiator inside Pi's rules.
+- **Docs-as-canon discipline.** The ground-truth anchor + same-breath updates is why an outside reviewer could audit this project in one evening. Keep it.
+
+## 5. What to STOP doing (cut from V1 — be brave)
+
+- **All social systems.** ClanChat (hardcoded "Ember Wardens," no close button), Leaderboard (placeholder rivals admitted in the UI copy, flag_28), Ranks/Chat side-rail buttons on the HUD. Nobody is in a clan in a solo pre-release testbed. Every one of these is a LEGACY UIDocument surface on the audit's redo list — cutting them deletes debt instead of paying it.
+- **Pet Skill Tree + Music Selection panels.** Pets are retired from combat by canon; a music picker is not a V1 feature. Both are popup-family redo items (WO-F) — cut instead of converting.
+- **The dungeon/outpost chain breadth.** Dungeons are already flagged OFF pending the resolver — keep them off through V1. The WO-590/591/595 lane (water features, base-defense V2, dungeon kit *for dungeons*) is V2 gravity pulling on a V1 that can't walk home yet. (KayKit assets themselves: yes — but spent on the *castle*, §3.3.)
+- **ATB remnants and the second hero classes.** The carousel arrows implying Ranger/Wizard write a check V1 doesn't cash; Knight-only is canon — present it that way.
+- **The Echo Cache loot-box experiment (for now)** — the review's own sequencing says it's meaningless without two weeks of deterministic baseline. Don't spend July's scarce days on it.
+- **Untested numbers on screen.** The owner already ruled it: tower 0/0 and population readouts come off the bar until they're real. Every fake number on screen is a trust leak in a game asking people to pay real (if tiny) money.
+
+---
+
+## 6. The pitch (one screen, to players)
+
+> **The realm is down to one knight, one wall, and one tree that refuses to die.**
+> *Echoes of Elarion* is a defend-and-venture RPG you can play in your browser in thirty seconds. By day you hold the line — raise towers, brace the gates, and stand in the shield-wall yourself when the horns sound, because in this town the hero fights *beside* the walls, not behind a cursor. Then you push out: past the gates the rules change — no towers, no walls, just you, your sword, and whatever found your scent, fought start-to-finish in close, committed combat where every wind-up is a warning and every block is a choice.
+> And here's the hook: **the world keeps score.** Every warband you break, every mile of dark you push back, feeds the Heart of Elarion — the great tree at the center of your town — and the tree *answers*: spirits drift out from its branches to gather wood, iron, and grain while you're away, more of them the more world you've reclaimed. Come back tomorrow and your victories are still working for you. Defend home. Venture out. Grow stronger. Defend better.
+> One knight. One tree. The last light in Elarion — and it holds because *you* held.
+
+---
+
+*Read-only review; no code or assets were modified. All claims trace to the artifacts cited in the header.*
