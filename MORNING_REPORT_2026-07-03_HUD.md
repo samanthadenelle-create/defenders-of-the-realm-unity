@@ -143,7 +143,14 @@ Dossier ready at `docs/ANIMATION_DOSSIER_2026-07-03.md` — walk-blend structura
 skate), prebattle InCombat stance wiring (pre-drilled, unused), dying-in-air repro plan,
 pets' dead controller path, KayKit-vs-Tripo retarget blocker, plus your open decisions list.
 
-## 6. Commits
+## 6. Commits — DONE (16 lanes, explicit path, push HELD for your word)
 
-13 lanes mapped by explicit path (L1–L12 + LX), held per protocol; canon anchor
-`CANON_GROUND_TRUTH_2026-07-03.md` refreshed. **Push waits for your word.**
+`8944f81d..5d8b2ec1` — LX shared → L1 audio → L2 castle/bridge-seam → L3 world → L4 anim →
+L5 combat+L5b vfx-pool → L6 ui → L7 vendors → L8 tutorial → L9 devtools/oracle → L10 sweep →
+L11 data → L12 docs → **L13 `925464df` feat(hud): the Blink Obsidian HUD kit rebuild** → L14 metas.
+Branch `wip/village2-and-f8-tickets` now **45 ahead of origin, local-only. Push waits for your word.**
+
+13 leftover paths deliberately unstaged for your ruling: the map's EXCLUDE list (QA_F8_ARCHIVE/,
+_opener_frames/, two docs zips, open-wos.txt, rename_armor_images.py) + `link.xml` deletion
+(generated Addressables file — recommend re-generate, not commit-the-delete), docs/issues PNGs,
+tools/AudioGen/, ProjectSettings/Packages/, Action.meta + Economy.meta orphans.
