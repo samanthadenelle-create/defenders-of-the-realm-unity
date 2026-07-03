@@ -1,48 +1,47 @@
 // =============================================================================
-// TitleController — the Title scene orchestrator (Week 1)
+// TitleController — the Title scene orchestrator (Week 1 -> WO-C uGUI conversion)
 // -----------------------------------------------------------------------------
-// Port of src/modules/onboarding/LandingPage.tsx. Owns the Title scene's
-// arrival sequence and the persistent title screen itself.
+// WO-C part 1 (2026-07-03, coverage matrix row #15): UIDocument/UITK title
+// -> code-built uGUI on the Blink Obsidian kit (ElarionUiKit). The title is the
+// FIRST-IMPRESSION surface, so it now renders through the same proven uGUI path
+// as the rest of the game (HelpMenu is the reference conversion) instead of the
+// UI Toolkit panel that fought four other UIDocuments over the one shared
+// "OnboardingPanelSettings" asset (the duplicate-UIDocument input-eating bug).
+// This controller no longer renders through a UIDocument AT ALL; the legacy
+// scene documents it used to own are explicitly DISABLED in Awake so they can
+// neither draw nor steal input.
 //
-// FIRST-LAUNCH ARRIVAL SEQUENCE (mirrors the React boot path
-// StudioBumper -> StoryIntro -> LandingPage):
-//   1. SplashLoading        — the DeNelle Studios studio bumper (~3s video).
-//   2. StoryIntroController — the three-line cold open (~5s), first launch only.
-//   3. The title screen      — Heart-Wing banner, tagline, Connect Wallet, Start.
-// A returning player (GameState.Onboarded == true) skips step 2; the bumper
-// still plays as a brand beat. The bumper and story intro are SEPARATE
-// GameObjects (each with its own UIDocument) wired into the serialized fields
-// below by OnboardingSceneBuilder.
+// FLOW CONTRACT (preserved verbatim from the UITK version):
+//   * Owner 2026-06-04 SPLASH GATE — the scene opens on a static title screen;
+//     the first button press is the browser's audio-unlock gesture.
+//   * Continue    -> resume into the Castle home hub (persists Knight at the
+//                    load source if the save carries no HeroClass — V1 single-hero).
+//   * Start New   -> full save + dialogue reset, fast-path onboarding
+//                    (OnboardingMode.ChooseFastPath), route to the HeroSelect
+//                    carousel (WO-559: HeroClass=None so the carousel builds).
+//   * Play Intro  -> OnboardingMode.ChooseFullTutorial + clear persisted hero,
+//                    then the 9-screen cinematic via Core.IntroLauncher; falls
+//                    back to the StoryIntro cold-open when no intro player is
+//                    registered (build without dialogue assets).
+//   * DEF-253 watchdog — the cold-open fallback can never strand the player:
+//     SafeStage times each stage out AND an unscaled Update timer force-returns
+//     to the title menu.
 //
-// THE TITLE SCREEN itself is a UI Toolkit document (TitleScreen.uxml/.uss). Every
-// canon string on it — the game title "Echoes of Elarion", the series line
-// "Defenders of the Realm", the tagline "Hold the last light.", the "DeNelle
-// Studios" credit — is loaded from canon-strings.json via CanonStrings at runtime.
-// NONE are baked into the .uxml (v2 port-spec Part 4).
+// The old in-Title 4-card hero-select (BuildTitleScreen) is RETIRED: WO-559
+// moved hero selection to the HeroSelect carousel scene and no route reached
+// the in-Title cards any more (only the watchdog fallback did, showing a screen
+// the real flow never used). The watchdog now returns to the title MENU instead.
+// With it go the UITK-only workarounds it dragged along (NeutralizeOverlayPanels,
+// the WebGL orphan re-assert, PANELDIAG) — none apply to a uGUI canvas.
 //
-//   Connect Wallet button — Week-1 stub: logs and no-ops (the real Solana flow
-//                            is the Week-7 Wallet module).
-//   Hero cards            — the landing IS the hero-select (see the 2026-06-03
-//                            note below): tap a card, confirm, route to PetSelect
-//                            (Title -> PetSelect -> Village). The standalone
-//                            HeroSelect scene is no longer the visible landing.
+// Visuals: full-screen title art (Resources/Title/Title_L landscape,
+// Title_H portrait — the title text is baked into this art), with a vertical
+// stack of Obsidian family buttons (Continue = Green when a save exists,
+// Start New = Yellow, Play Intro = Gray). When the art is missing the screen
+// falls back to an obsidian backdrop with the kit-typography title block
+// (CanonStrings — never hardcoded, v2 port-spec Part 4) so it can never blank.
 //
 // async UniTask for the arrival flow — never async void (port-spec Part 3).
-//
-// 2026-06-03 — RECURRING-REGRESSION FIX (the title landing is the CANONICAL
-// hero-select). The owner lands on THIS screen (not HeroSelectController), so
-// this is where the four hero cards must live. The old title screen BOUND to
-// UXML element names (_root.Q<VisualElement>("hero-flank-left") …); per
-// CLAUDE.md §8 the UXML root comes up EMPTY in the WebGL player build, so every
-// Q<>() returned null and the portraits / styling / click-wiring all silently
-// no-op'd — "four players, no player cards, not styled to work." The fix mirrors
-// HeroSelectController's rewrite: the entire hero-pick area is now BUILT IN CODE
-// (dragon top-half, four evenly-distributed bottom cards, a selected-hero detail
-// card below), inline-styled with flex / percent so it re-flows in BOTH
-// landscape and portrait, and guarded by a VerifyFourCardsEven assert. There is
-// no longer any UXML element this landing depends on, so a UXML that does not
-// render cannot break it. The card pick routes straight onward to PetSelect, so
-// the standalone HeroSelect scene is not a confusing second hero-pick surface.
 // =============================================================================
 
 using Cysharp.Threading.Tasks;
@@ -51,113 +50,60 @@ using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
 using UnityEngine;
-using UnityEngine.UIElements;
+using UnityEngine.UI;
 
 namespace DeNelle.Onboarding
 {
     /// <summary>
-    /// Drives the Title scene: the studio-bumper -> cold-open -> title-screen
-    /// arrival sequence, and the title screen's tagline / buttons.
+    /// Drives the Title scene: the splash-gate title menu (Continue / Start New /
+    /// Play Intro) and the cold-open fallback arrival sequence. Code-built uGUI
+    /// on the Obsidian kit — no UIDocument.
     /// </summary>
-    [RequireComponent(typeof(UIDocument))]
     public sealed class TitleController : MonoBehaviour
     {
         [Header("Arrival sequence")]
-        [Tooltip("The studio bumper — plays first. Optional; skipped if unassigned.")]
+        [Tooltip("The studio bumper — CUT (owner 2026-06-04) but kept wired by OnboardingSceneBuilder.")]
         [SerializeField] private SplashLoading _splash;
 
-        [Tooltip("The three-line cold open — plays on first launch only. Optional.")]
+        [Tooltip("The cold-open cinematic — the Play-Intro fallback when IntroLauncher is absent.")]
         [SerializeField] private StoryIntroController _storyIntro;
 
-        [Header("Title screen")]
-        [Tooltip("The Title scene's UI Toolkit document (TitleScreen.uxml).")]
-        [SerializeField] private UIDocument _titleDocument;
+        [Header("Legacy (WO-C)")]
+        [Tooltip("The retired Title UIDocument (TitleScreen.uxml). Still wired by " +
+                 "OnboardingSceneBuilder; disabled in Awake so it cannot render or eat input.")]
+        [SerializeField] private UnityEngine.UIElements.UIDocument _titleDocument;
 
-        [Tooltip("The Heart-Wing banner image — heart-wing.jpg imported as a Sprite.")]
-        [SerializeField] private Sprite _heartWingBanner;
+        // ── Code-built uGUI title menu ────────────────────────────────────────
+        private GameObject _canvas;              // the whole title screen
+        private Image _backdropFill;             // obsidian floor — never blank
+        private Image _backdropArt;              // Title_L / Title_H cover art
+        private AspectRatioFitter _backdropFitter;
+        private bool _backdropArtLandscape;      // which orientation art is loaded
+        private bool _backdropArtLoaded;
+        private readonly Sprite[] _titleArt = new Sprite[2];   // [0]=portrait, [1]=landscape
 
-        // ── Code-built title / hero-select elements (no UXML dependency) ─────
-        private VisualElement _root;
-        private VisualElement _dragonStage;   // top half — dragon art
-        private VisualElement _cardRow;       // bottom — 4 hero cards
-        private VisualElement _detailCard;    // below cards — selected-hero details
-        private Label _detailName;
-        private Label _detailRole;
-        private Label _detailBlurb;
-        private Button _connectWalletButton;
-
-        // WO-329 stat-card rows (real per-hero values from HeroCatalog).
-        private Label _statHp;
-        private Label _statAttack;
-        private Label _statSpeed;
-        private Label _statAbility;
-
-        // One card VisualElement per hero, in HeroCatalog order.
-        private readonly VisualElement[] _cards = new VisualElement[HeroCatalog.Heroes.Length];
-
-        private bool _hasSelection;
-        private HeroClass _selectedHero;
-
-        // DEF-263: selecting a hero routes to PetSelect IMMEDIATELY — one tap = go.
-        // The DEF-230 confirm-beat timer (_autoAdvanceArmed/_autoAdvanceAt + the
-        // Update branch) is gone; OnCardClicked now calls AdvanceToPetSelect()
-        // directly. _advancing still guards against a double-route (a late second
-        // tap before the scene actually swaps).
-        private bool _advancing;
-
-        // ── Palette — SOURCED from the shared ElarionUi town-HUD language ────
-        // (WO restyle: the onboarding screens read as ONE designed game, matching
-        // the town HUD — dark glass + ornate gold-rune frames — not the retired
-        // hardcoded purple/amber. Role-named locals keep the layout code below
-        // unchanged while every colour now resolves from the canonical palette.)
-        private static readonly Color ColBackground  = ElarionUi.PanelStoneDark;                                   // full-screen stone
-        private static readonly Color ColPanelDark    = ElarionUi.PanelStone;                                       // roster panel fill
-        private static readonly Color ColCardIdle     = ElarionUi.PanelStoneDark;                                   // card rest fill
-        private static readonly Color ColCardActive   = ElarionUi.PanelStone;                                       // card selected fill
-        private static readonly Color ColAmber        = ElarionUi.Gold;                                             // CTA / accents → runic gold
-        private static readonly Color ColVioletBorder = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f); // soft gold rim
-        private static readonly Color ColTextBright   = ElarionUi.Parchment;                                        // primary text
-        private static readonly Color ColTextMuted    = ElarionUi.ParchmentDim;                                     // secondary text
-
-        // Panel-render diagnostic (temporary).
-        private bool _titleBuilt;
-        private int _diagFrames;
-
-        // DEF-253 hard auto-advance watchdog: if the arrival flow (bumper/cold-open)
-        // stalls — a WebGL video that never completes, an await that never resolves —
-        // the player gets stuck on the song screen forever. This plain-Update timer
-        // FORCE-shows the title (hero select) after a max wait, independent of any
-        // UniTask await. Belt-and-braces on top of RunArrival's SafeStage timeouts.
-        private float _arrivalStart;
-        private bool _introPlaying;   // the 9-screen cinematic owns the screen (suppresses the watchdog)
-        private const float MaxIntroSeconds = 8f;
-
-        // DEF-253 WebGL orphan re-assert: on WebGL the UIDocument can recreate its
-        // rootVisualElement AFTER BuildTitleScreen runs, detaching the code-built cards
-        // (console: TitleScreen rootChildCount=0, card-row worldBound=NaN → blank screen).
-        // If the built title's live root is empty, we rebuild into it. Bounded so a
-        // perpetually-recreating panel can't loop forever.
-        private int _reassertCount;
-        private const int MaxReasserts = 8;
-
-        // Owner 2026-06-04: web-standard SPLASH GATE. Browsers block audio until a user
-        // gesture, and the auto-running boot was WebGL-fragile. So we open on a static
-        // "press any button to start" splash; the tap unlocks audio AND starts the
-        // StoryIntro WITH sound. _splashActive = the gate is up + awaiting the tap.
+        // Owner 2026-06-04: web-standard SPLASH GATE. Browsers block audio until a
+        // user gesture; the first button press on this menu is that gesture.
+        // _splashActive = the menu is up and accepting a choice.
         private bool _splashActive;
 
-        // DEF-204: VerifyFourCardsEven now SELF-HEALS (rebuilds a malformed row)
-        // instead of only logging. This guard prevents an infinite rebuild loop —
-        // we only attempt the auto-correct once per build.
-        private bool _cardHealAttempted;
+        // The 9-screen cinematic / cold-open owns the screen (suppresses the watchdog).
+        private bool _introPlaying;
+
+        // DEF-253 hard watchdog: if the cold-open fallback stalls (a WebGL await that
+        // never resolves), this plain-Update unscaled timer force-returns to the title
+        // menu. Belt-and-braces on top of RunArrival's SafeStage timeouts.
+        private bool _arrivalRunning;
+        private float _arrivalStart;
+        private const float MaxIntroSeconds = 8f;
+
+        private void Awake()
+        {
+            DisableLegacyUiDocuments();
+        }
 
         private void OnEnable()
         {
-            // Hide the title screen until the arrival sequence has finished, so
-            // the player does not see it flash behind the bumper / cold open.
-            if (_titleDocument != null)
-                SetTitleVisible(false);
-
             // Animated star/comet background — replaces the React build's
             // landing-page parallax that owners said pulled players in during
             // the 10-15 s decision window. Spawned once per Title scene load.
@@ -167,182 +113,233 @@ namespace DeNelle.Onboarding
 
         private void Start()
         {
-            _arrivalStart = Time.unscaledTime;   // DEF-253 watchdog clock
-            // Owner 2026-06-04: open on a SPLASH GATE, not the auto-running intro. The
-            // tap is the browser's required audio-unlock gesture, so the StoryIntro then
-            // plays WITH sound; it also makes boot robust (a static splash renders
-            // reliably on WebGL). The bumper (Grok .m4v) stays cut; StoryIntro runs after the tap.
-            ShowSplashGate();
-        }
-
-        // ── Splash gate: press anywhere → unlock audio → StoryIntro → title ──────
-        private void ShowSplashGate()
-        {
-            var root = _titleDocument != null ? _titleDocument.rootVisualElement : null;
-            if (root == null) { RunArrival().Forget(); return; }   // no doc — fall back to direct arrival
-
-            // WO-335 ROOT-CAUSE FIX (title button hitboxes misaligned / dead). The
-            // bumper, story-intro AND title UIDocuments all share ONE
-            // OnboardingPanelSettings panel (OnboardingSceneBuilder assigns the same
-            // asset to all three). In the splash-gate flow the bumper / story-intro
-            // overlays NEVER run Play() — so their roots are never built and never
-            // neutralised. A freshly-enabled UIDocument root defaults to
-            // PickingMode.Position and fills the panel; because the bumper doc has
-            // the HIGHEST sortingOrder (20) it composites ON TOP of the title doc
-            // (sortingOrder 0) and its empty-but-pickable root SWALLOWS every pointer
-            // event meant for the visible Start / Play / Continue buttons below it.
-            // The buttons render in the title panel but the picks land on the unseen
-            // overlay panel above — exactly the "visible buttons don't match the
-            // clickable areas" symptom. The PanelSettings scale mode is already
-            // correct (ScaleWithScreenSize, 1920×1080, match 0.5), so visual and
-            // hit-test share the same transform — the misalignment is the stacked
-            // empty overlay panels, not a scale mismatch. Make those overlay roots
-            // un-pickable + collapsed so picks fall through to the title buttons.
-            NeutralizeOverlayPanels();
-
-            _root = root;
-            BuildSplashInto(root);
+            using var _ = FlowTrace.Enter("Onboarding", "TitleController.Start (uGUI title menu)");
+            BuildTitleMenu();
             SetTitleVisible(true);
             _splashActive = true;
         }
 
+        private void OnDestroy()
+        {
+            if (_canvas != null) Destroy(_canvas);
+        }
+
         /// <summary>
-        /// WO-335: makes the bumper + story-intro overlay UIDocument roots
-        /// un-pickable and collapsed so they cannot intercept pointer events on the
-        /// shared OnboardingPanelSettings panel (they out-sort the title doc). We do
-        /// NOT disable the documents or null their panelSettings — that would tear
-        /// down the SHARED panel and blank the title (DEF-211). We only collapse +
-        /// un-pick their own roots, which renders nothing and steals no picks.
+        /// WO-C: this controller renders in uGUI now, but the Title scene (built by
+        /// OnboardingSceneBuilder before the conversion) still carries the legacy
+        /// UIDocuments — the "TitleScreen UIDocument" and the one RequireComponent
+        /// used to force onto this GameObject. Five enabled documents sharing the
+        /// one OnboardingPanelSettings asset was the input-eating duplicate-panel
+        /// bug, so disable ours explicitly: they render nothing for us any more and
+        /// must not keep a PanelRaycaster in the click stack.
         /// </summary>
-        private void NeutralizeOverlayPanels()
+        private void DisableLegacyUiDocuments()
         {
-            NeutralizeDoc(_splash != null ? _splash.GetComponent<UIDocument>() : null);
-            NeutralizeDoc(_storyIntro != null ? _storyIntro.GetComponent<UIDocument>() : null);
-        }
-
-        private static void NeutralizeDoc(UIDocument doc)
-        {
-            try
+            Guard.Try("Onboarding", "disable legacy Title UIDocuments", () =>
             {
-                var r = doc != null ? doc.rootVisualElement : null;
-                if (r == null) return;
-                r.style.display = DisplayStyle.None;   // renders nothing
-                r.pickingMode = PickingMode.Ignore;    // steals no pointer picks
-            }
-            catch (System.Exception e)
-            {
-                FlowTrace.Warn("Onboarding", $"WO-335 overlay neutralise skipped: {e.GetType().Name}: {e.Message}");
-            }
+                int disabled = 0;
+                if (_titleDocument != null && _titleDocument.enabled)
+                {
+                    _titleDocument.enabled = false;
+                    disabled++;
+                }
+                var own = GetComponent<UnityEngine.UIElements.UIDocument>();
+                if (own != null && own.enabled)
+                {
+                    own.enabled = false;
+                    disabled++;
+                }
+                // Census note: the bumper (SplashLoading) + MusicSelectionPanel docs are
+                // owned by their controllers and are deliberately NOT touched here.
+                FlowTrace.Step("Onboarding",
+                    $"WO-C: disabled {disabled} legacy Title UIDocument(s) — the title renders via uGUI now " +
+                    $"(bumper wired={_splash != null}, left to its owner).");
+            });
         }
 
-        private void BuildSplashInto(VisualElement root)
+        // =====================================================================
+        //  Title menu (code-built uGUI on the Obsidian kit)
+        // =====================================================================
+
+        private void BuildTitleMenu()
         {
-            root.Clear();
-            root.style.flexGrow = 1f;
-            root.style.flexDirection = FlexDirection.Column;
-            root.style.justifyContent = Justify.FlexEnd;   // buttons sit at the bottom over the art
-            root.style.alignItems = Align.Center;
-            root.pickingMode = PickingMode.Position;
+            if (_canvas != null) return;
 
-            // Background art — landscape (Title_L) on wide screens, portrait (Title_H) on tall;
-            // re-applied on resize so it swaps with orientation. Title text is baked into the art.
-            ApplySplashBackground(root);
-            root.RegisterCallback<GeometryChangedEvent>(_ => ApplySplashBackground(root));
+            _canvas = ElarionUiKit.BuildModalCanvas("TitleScreenUI", 100);
+            SceneRootAdopt(_canvas);
 
-            // Bottom button row: Play Intro / Start New / Continue (any click unlocks WebGL audio).
-            var row = new VisualElement();
-            row.style.flexDirection = FlexDirection.Row;
-            row.style.justifyContent = Justify.Center;
-            row.style.alignItems = Align.Center;
-            row.style.marginBottom = 40;
-            row.Add(MakeMenuButton("Play Intro", OnPlayIntro));
-            row.Add(MakeMenuButton("Start New",  OnStartNew));
-            row.Add(MakeMenuButton("Continue",   OnContinue));
-            root.Add(row);
+            // Obsidian floor — the screen can NEVER blank, even with no art on disk.
+            var fillGo = new GameObject("BackdropFill", typeof(Image));
+            fillGo.transform.SetParent(_canvas.transform, false);
+            Stretch(fillGo);
+            _backdropFill = fillGo.GetComponent<Image>();
+            _backdropFill.color = ElarionUiKit.ObsidianFill;
+            _backdropFill.raycastTarget = true;   // eat stray taps outside the buttons
+
+            // Cover art (title text is baked into the art). AspectRatioFitter in
+            // EnvelopeParent mode reproduces the old ScaleAndCrop: the art always
+            // covers the screen, cropping the overflow edge, never letterboxing.
+            var artGo = new GameObject("BackdropArt", typeof(Image), typeof(AspectRatioFitter));
+            artGo.transform.SetParent(_canvas.transform, false);
+            Stretch(artGo);
+            _backdropArt = artGo.GetComponent<Image>();
+            _backdropArt.raycastTarget = false;
+            _backdropArt.preserveAspect = false;
+            _backdropFitter = artGo.GetComponent<AspectRatioFitter>();
+            _backdropFitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+            ApplyBackdropArt(force: true);
+
+            // Art-missing fallback: the kit-typography title block (canon strings).
+            if (!_backdropArtLoaded)
+                BuildTitleTextBlock(_canvas.transform);
+
+            BuildButtonColumn(_canvas.transform);
+
+            FlowTrace.Step("Onboarding",
+                $"Title menu built (uGUI) — art={( _backdropArtLoaded ? "loaded" : "MISSING (text fallback)")} " +
+                $"saveExists={HasExistingSave()}.");
         }
 
-        private void ApplySplashBackground(VisualElement root)
+        /// <summary>Landscape/portrait cover art, swapped when the orientation flips.</summary>
+        private void ApplyBackdropArt(bool force = false)
         {
             bool landscape = Screen.width >= Screen.height;
-            var tex = Resources.Load<Texture2D>(landscape ? "Title/Title_L" : "Title/Title_H");
-            if (tex != null)
+            if (!force && _backdropArtLoaded && landscape == _backdropArtLandscape) return;
+
+            int slot = landscape ? 1 : 0;
+            if (_titleArt[slot] == null)
             {
-                root.style.backgroundImage = new StyleBackground(tex);
-                root.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+                var tex = Resources.Load<Texture2D>(landscape ? "Title/Title_L" : "Title/Title_H");
+                if (tex != null)
+                    _titleArt[slot] = Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height),
+                                                    new Vector2(0.5f, 0.5f), 100f);
             }
-            else root.style.backgroundColor = ColBackground;
+
+            var sprite = _titleArt[slot];
+            if (sprite == null)
+            {
+                if (_backdropArt != null) _backdropArt.enabled = false;
+                _backdropArtLoaded = false;
+                FlowTrace.Warn("Onboarding",
+                    $"Title art Resources/Title/{(landscape ? "Title_L" : "Title_H")} not found — obsidian + text fallback.");
+                return;
+            }
+
+            _backdropArt.enabled = true;
+            _backdropArt.sprite = sprite;
+            _backdropFitter.aspectRatio = sprite.rect.height > 0f
+                ? sprite.rect.width / sprite.rect.height : 1f;
+            _backdropArtLandscape = landscape;
+            _backdropArtLoaded = true;
         }
 
-        private Button MakeMenuButton(string label, System.Action onClick)
+        /// <summary>Game title / series / tagline in the kit's title typography —
+        /// shown only when the cover art (which bakes the title in) is absent.</summary>
+        private static void BuildTitleTextBlock(Transform parent)
         {
-            var b = new Button(() => onClick?.Invoke()) { text = label };
-            b.style.marginLeft = 12; b.style.marginRight = 12;
-            b.style.paddingLeft = 26; b.style.paddingRight = 26;
-            b.style.paddingTop = 12;  b.style.paddingBottom = 12;
-            b.style.fontSize = 22;
-            b.style.color = ColTextBright;
-            b.style.backgroundColor = ColPanelDark;
-            b.style.unityFontStyleAndWeight = FontStyle.Bold;
-            b.style.borderTopWidth = 1; b.style.borderBottomWidth = 1;
-            b.style.borderLeftWidth = 1; b.style.borderRightWidth = 1;
-            b.style.borderTopColor = ColAmber; b.style.borderBottomColor = ColAmber;
-            b.style.borderLeftColor = ColAmber; b.style.borderRightColor = ColAmber;
-            return b;
+            var title = ElarionUiKit.Label(parent, CanonStrings.GameTitle,
+                0.70f, 0.84f, ElarionUi.Parchment, 64,
+                TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, spacing: 3f, bold: true);
+            ElarionUiKit.EnsureFont(title, ElarionUiKit.FontRole.Title);
+
+            var series = ElarionUiKit.Label(parent, CanonStrings.GameSubtitle,
+                0.655f, 0.70f, ElarionUi.Gold, 26,
+                TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, spacing: 5f, bold: true);
+            ElarionUiKit.EnsureFont(series, ElarionUiKit.FontRole.Title);
+
+            var tagline = ElarionUiKit.Label(parent, CanonStrings.Tagline,
+                0.60f, 0.65f, ElarionUi.ParchmentDim, 24,
+                TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
+            ElarionUiKit.EnsureFont(tagline, ElarionUiKit.FontRole.Body);
         }
 
-        // Start New: skip to the hero-select cards (the title IS the hero-select).
+        /// <summary>The vertical Obsidian button stack, bottom-centre over the art.</summary>
+        private void BuildButtonColumn(Transform parent)
+        {
+            var column = new GameObject("TitleButtons", typeof(RectTransform));
+            column.transform.SetParent(parent, false);
+            var rt = (RectTransform)column.transform;
+            rt.anchorMin = new Vector2(0.28f, 0.055f);
+            rt.anchorMax = new Vector2(0.72f, 0.34f);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+
+            // Continue is Green and only present when a save exists (owner spec) —
+            // resuming players see it first; fresh installs see Start New on top.
+            bool hasSave = HasExistingSave();
+            var entries = new System.Collections.Generic.List<(string label,
+                ElarionUiKit.ObsidianButtonColor color, System.Action onClick)>();
+            if (hasSave)
+                entries.Add(("Continue", ElarionUiKit.ObsidianButtonColor.Green, OnContinue));
+            entries.Add(("Start New", ElarionUiKit.ObsidianButtonColor.Yellow, OnStartNew));
+            entries.Add(("Play Intro", ElarionUiKit.ObsidianButtonColor.Gray, OnPlayIntro));
+
+            // Even vertical distribution inside the column, top to bottom.
+            const float slotGap = 0.06f;
+            float slotH = (1f - slotGap * (entries.Count - 1)) / entries.Count;
+            for (int i = 0; i < entries.Count; i++)
+            {
+                float y1 = 1f - i * (slotH + slotGap);
+                float y0 = y1 - slotH;
+                var e = entries[i];
+                ElarionUiKit.BuildObsidianButton(column.transform, e.label,
+                    ElarionUiKit.ObsidianButtonStyle.Style1, e.color,
+                    new Vector2(0f, y0), new Vector2(1f, y1), e.onClick);
+            }
+        }
+
+        /// <summary>True when persisted progress exists — a chosen hero or a completed
+        /// onboarding. Gates the Continue button (fresh installs have nothing to resume).</summary>
+        private static bool HasExistingSave()
+        {
+            var svc = GameStateService.Instance;
+            if (svc == null || svc.State == null) return false;
+            return svc.State.HeroClass.ToNullable().HasValue || svc.State.Onboarded;
+        }
+
+        // =====================================================================
+        //  Menu actions (flow contract preserved from the UITK version)
+        // =====================================================================
+
+        // Start New: a genuinely FRESH game, routed to the HeroSelect carousel.
         private void OnStartNew()
         {
             if (!_splashActive) return;
             _splashActive = false;
 
-            // Start New = a genuinely FRESH game. Wipe the save progression (this also
-            // clears SeenTutorials, so once-only recruit/intro beats replay) AND all
-            // Yarn dialogue state — the $-toggle variable storage and the gameplay→
-            // dialogue event latches — so no stale toggle from a prior run carries over
-            // (the cause of dialogue restart / option corruption + stale vendor state).
-            // Continue does NOT do this (OnContinue just loads the save). Both resets
-            // run BEFORE we build the hero-select and load any gameplay scene.
+            // Wipe the save progression (this also clears SeenTutorials, so once-only
+            // recruit/intro beats replay) AND all dialogue state — the $-toggle
+            // variable storage and the gameplay->dialogue event latches — so no stale
+            // toggle from a prior run carries over. Continue does NOT do this.
             GameStateService.Instance?.ResetToNewGame();
             DeNelle.Core.DialogueResetService.ResetForNewGame();
 
             // DEF onboarding fast-path (owner: fast into battle). "Start New" takes the
             // FAST PATH — a brief companion hook in the village then straight to Wave 1.
-            // The full 7-scene FTUE / cinematic is reserved for "Play Intro" below.
             DeNelle.Core.OnboardingMode.ChooseFastPath();
 
-            // WO-559 ROUTING FIX: "Start New" now opens the NEW HeroSelect CAROUSEL scene
-            // instead of the old in-Title 4-card grid (BuildTitleScreen). ResetToNewGame
-            // above set HeroClass = None and Save()'d, so HeroSelectController.IsIntroComplete()
-            // is false and the carousel BUILDS (it only self-skips to the castle when a hero
-            // is already persisted — i.e. a returning player via Continue). The old 4-card
-            // BuildTitleScreen path is left intact but is no longer routed to from New Game.
+            // WO-559: route to the HeroSelect CAROUSEL scene. ResetToNewGame set
+            // HeroClass=None and Save()'d, so the carousel BUILDS instead of
+            // self-skipping to the castle.
             FlowTrace.Step("Onboarding", "OnStartNew: routing to the HeroSelect carousel (fresh HeroClass=None).");
             SceneRouter.GoHeroSelect();
         }
 
-        // Play Intro: the full 9-screen cinematic intro (Yarn, on the dialogue spine)
-        // which ends by transitioning to hero select. Routed via Core.IntroLauncher so
-        // Onboarding stays decoupled from the dialogue stack. Falls back to the 3-line
-        // StoryIntro cold-open if the intro player isn't registered (e.g. a build
-        // without the dialogue assets).
+        // Play Intro: the full 9-screen cinematic intro, which ends by routing to
+        // hero select itself. Falls back to the StoryIntro cold-open if the intro
+        // player isn't registered (a build without the dialogue assets).
         private void OnPlayIntro()
         {
             if (!_splashActive) return;
             _splashActive = false;
-            // DEF onboarding: "Play Intro" opts INTO the full tutorial experience —
-            // the cinematic intro here, then the full FTUE companion meeting in the
-            // village (TutorialDirector / CompanionMeetingTrigger read this flag).
+
+            // "Play Intro" opts INTO the full tutorial experience — the cinematic
+            // here, then the full FTUE companion meeting in the village.
             DeNelle.Core.OnboardingMode.ChooseFullTutorial();
 
-            // WO-559 ROUTING FIX: the intro ends by routing to the HeroSelect CAROUSEL
-            // (IntroSequencePlayer.EndIntro -> SceneRouter.GoHeroSelect). That carousel
-            // SELF-SKIPS straight to the castle when a hero is already persisted
-            // (HeroSelectController.IsIntroComplete -> HeroClass != None). "Play Intro" is
-            // a fresh playthrough, so clear the persisted hero HERE (HeroClass = None +
-            // Save) so the carousel BUILDS after the intro rather than skipping past it to
-            // the castle. This does NOT touch the "Continue" path (OnContinue), so a
-            // returning player who resumes still routes straight to the castle.
+            // WO-559: the intro ends at the HeroSelect carousel, which SELF-SKIPS to
+            // the castle when a hero is already persisted. Play Intro is a fresh
+            // playthrough, so clear the persisted hero HERE so the carousel builds.
+            // Does NOT touch the Continue path.
             var svc = GameStateService.Instance;
             if (svc != null && svc.State != null)
             {
@@ -353,8 +350,8 @@ namespace DeNelle.Onboarding
 
             if (DeNelle.Core.IntroLauncher.Play != null)
             {
-                // The cinematic owns the screen until it transitions to hero select;
-                // hide any title UI under it and stop the watchdog/reassert (Update).
+                // The cinematic owns the screen until it routes onward; hide the
+                // title menu under it and suppress the watchdog.
                 _introPlaying = true;
                 SetTitleVisible(false);
                 DeNelle.Core.IntroLauncher.Play.Invoke();
@@ -365,16 +362,16 @@ namespace DeNelle.Onboarding
             }
         }
 
-        // Continue: resume into the Castle home hub (loads the save). The player travels
-        // out to the village TD loop from there. No-save falls into a fresh hub.
+        // Continue: resume into the Castle home hub (loads the save).
         private void OnContinue()
         {
             if (!_splashActive) return;
             _splashActive = false;
-            // START-FLOW GUARANTEE: Continue routes straight to the castle (no hero-select), so if a
-            // loaded/stale save has no HeroClass persisted, the body builder would reach build with an
-            // unset class. Set it HERE at the source (load layer) before routing — ChooseHero persists
-            // + saves it. V1 is single-hero (Knight); ChooseHero also applies the KnightOnly force.
+            // START-FLOW GUARANTEE: Continue routes straight to the castle (no
+            // hero-select), so if a loaded/stale save has no HeroClass persisted the
+            // body builder would reach build with an unset class. Set it HERE at the
+            // load source before routing. V1 is single-hero (Knight); ChooseHero also
+            // applies the KnightOnly force.
             var svc = GameStateService.Instance;
             if (svc != null && (svc.State == null || !svc.State.HeroClass.ToNullable().HasValue))
             {
@@ -385,919 +382,84 @@ namespace DeNelle.Onboarding
             SceneRouter.GoCastle();
         }
 
-        // Temporary panel-render diagnostic — logs the title panel's state a
-        // beat after it is built, from a plain Update so it runs regardless of
-        // any UI Toolkit layout/scheduler issue. Also enumerates every other
-        // UIDocument in the scene: if the bumper/cold-open roots are still
-        // attached to the shared panel they can intercept Title-button picks.
-        private void Update()
-        {
-            // While the 9-screen cinematic intro is playing it OWNS the screen and ends
-            // by loading the hero-select scene itself — so suppress the title watchdog +
-            // reassert, which would otherwise force the hero-select cards up on top of
-            // the intro after MaxIntroSeconds (the "intro on top" bug, inverted).
-            if (_introPlaying) return;
-
-            // DEF-253 BLOCKER watchdog: if the arrival flow stalled (WebGL video that
-            // never completes, an await that never resolves), the player is stuck on the
-            // song screen forever. Force the title (hero select) up after the max wait,
-            // independent of any UniTask await. Runs once (BuildTitleScreen sets _titleBuilt).
-            if (!_titleBuilt && !_splashActive && Time.unscaledTime - _arrivalStart > MaxIntroSeconds)
-            {
-                FlowTrace.Warn("Onboarding", "DEF-253 watchdog tripped — force-advancing past the intro to the title/hero-select (never-stuck fallback).");
-                if (_storyIntro != null) _storyIntro.ForceHide();
-                BuildTitleScreen();
-                SetTitleVisible(true);
-                return;
-            }
-
-            // DEF-253 WebGL orphan re-assert: if the title built but its LIVE root is
-            // empty, WebGL recreated the rootVisualElement and detached the code-built
-            // cards (console: rootChildCount=0, card-row worldBound=NaN). Rebuild into
-            // the current root. Bounded (MaxReasserts) so a recreating panel can't loop.
-            if ((_splashActive || _titleBuilt) && _reassertCount < MaxReasserts)
-            {
-                var liveRoot = _titleDocument != null ? _titleDocument.rootVisualElement : null;
-                if (liveRoot != null && liveRoot.childCount == 0)
-                {
-                    _reassertCount++;
-                    FlowTrace.Warn("Onboarding", $"Root orphaned (childCount=0) — rebuilding {(_splashActive ? "splash" : "title")} (#{_reassertCount}) so the screen is never left blank.");
-                    if (_splashActive) BuildSplashInto(liveRoot);
-                    else { _titleBuilt = false; BuildTitleScreen(); }
-                    SetTitleVisible(true);
-                    return;
-                }
-            }
-
-            // DEF-263: hero pick now routes IMMEDIATELY from OnCardClicked (one tap
-            // = go) — the DEF-230 confirm-beat timer that used to live here is gone.
-
-            if (!_titleBuilt || _diagFrames < 0) return;
-            if (++_diagFrames < 120) return;
-            _diagFrames = -1;
-            var rt = _titleDocument != null ? _titleDocument.rootVisualElement : null;
-            Debug.Log($"[TitleController] PANELDIAG docEnabled=" +
-                      $"{_titleDocument != null && _titleDocument.isActiveAndEnabled} " +
-                      $"panelSettings={_titleDocument != null && _titleDocument.panelSettings != null} " +
-                      $"rootPanel={rt != null && rt.panel != null} " +
-                      $"worldBound={(rt != null ? rt.worldBound.ToString() : "n/a")} " +
-                      $"screen={Screen.width}x{Screen.height}");
-
-            var allDocs = FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include);
-            foreach (var d in allDocs)
-            {
-                var root = d != null ? d.rootVisualElement : null;
-                bool attached = root != null && root.panel != null;
-                Debug.Log($"[TitleController] PANELDIAG doc='{d.gameObject.name}' " +
-                          $"enabled={d.enabled} active={d.gameObject.activeInHierarchy} " +
-                          $"sortingOrder={d.sortingOrder} " +
-                          $"attachedToPanel={attached} " +
-                          $"rootDisplay={(root != null ? root.style.display.ToString() : "n/a")} " +
-                          $"rootPicking={(root != null ? root.pickingMode.ToString() : "n/a")} " +
-                          $"rootChildCount={(root != null ? root.childCount.ToString() : "n/a")}");
-            }
-
-            if (_cardRow != null)
-                Debug.Log($"[TitleController] PANELDIAG card-row worldBound=" +
-                          $"{_cardRow.worldBound} cards={_cardRow.childCount}");
-        }
+        // =====================================================================
+        //  Cold-open fallback (Play Intro without a registered IntroLauncher)
+        // =====================================================================
 
         /// <summary>
-        /// Runs the full first-launch arrival sequence, then reveals the title
-        /// screen. Each stage is awaited so the next only starts when the
-        /// previous has fully faded out.
+        /// Plays the StoryIntro cold-open then returns to the title menu. Each stage
+        /// is time-boxed (SafeStage) AND covered by the DEF-253 Update watchdog so a
+        /// stalled WebGL await can never strand the player on a dead screen.
         /// </summary>
         private async UniTask RunArrival()
         {
-            Debug.Log("[TitleController] Arrival: start.");
+            FlowTrace.Step("Onboarding", "Arrival (cold-open fallback): start.");
+            _arrivalRunning = true;
+            _arrivalStart = Time.unscaledTime;
+            SetTitleVisible(false);
 
-            // Stage 1 — studio bumper: CUT (owner 2026-06-04). It was a Grok-made .m4v
-            // that "VideoPlayer cannot play" on WebGL and stalled the boot ~6s before the
-            // SafeStage timeout caught it. We skip straight to the cold-open StoryIntro
-            // (kept). The _splash SerializeField stays assigned but is never played.
-            if (_titleBuilt) return;
-
-            // Stage 2 — cold open (story intro), same guard. CRITICAL: the cold
-            // open is a 14-beat cinematic. If SafeStage merely STOPPED AWAITING on
-            // timeout, Play()'s beat loop would keep running and render beats ON TOP
-            // of the title (the recurring "intro on top" bug). So we pass
-            // ForceHide as the on-timeout/exception KILL: SafeStage now CANCELS the
-            // cinematic (not just stops awaiting it) the instant it times out, BEFORE
-            // proceeding. ForceHide cancels the CTS, blanks + detaches the overlay,
-            // and marks finished — so the loop breaks immediately and cannot overlay.
+            // The cold open is a multi-beat cinematic: SafeStage passes ForceHide as
+            // the on-timeout KILL so a timed-out cinematic is genuinely CANCELLED
+            // (CTS cancelled, overlay torn down), not merely abandoned to render on.
             if (_storyIntro != null)
-                await SafeStage(_storyIntro.Play(), "storyIntro",
-                                () => { if (!_titleBuilt) _storyIntro.ForceHide(); });
-            if (_titleBuilt) return;   // watchdog won mid-storyIntro — don't clear its title
+                await SafeStage(_storyIntro.Play(), "storyIntro", () => _storyIntro.ForceHide());
             // Belt-and-braces: ForceHide is idempotent — ensure the overlay is down
-            // even on the success path (where SafeStage did not need to invoke it).
+            // even on the success path.
             if (_storyIntro != null) _storyIntro.ForceHide();
-            Debug.Log("[TitleController] Arrival: storyIntro stage done.");
 
-            // Stage 3 — the title screen (always reached now).
-            BuildTitleScreen();
+            if (!_arrivalRunning) return;   // watchdog already returned us to the menu
+            _arrivalRunning = false;
             SetTitleVisible(true);
-            Debug.Log("[TitleController] Arrival: title screen built + visible.");
+            _splashActive = true;
+            FlowTrace.Step("Onboarding", "Arrival: cold-open done — title menu restored.");
         }
 
         /// <summary>
         /// Awaits an arrival stage but never lets it hang the boot: on timeout or
-        /// exception it logs and returns so the title screen is always reached.
-        /// (WebGL: the bumper video / async stages can stall indefinitely.)
-        ///
-        /// ROOT-CAUSE FIX (DEF-211): a bare timeout only STOPS AWAITING the stage —
-        /// the underlying loop keeps running. For a cinematic stage that means its
-        /// remaining beats render OVER the title. <paramref name="onTimeout"/> is the
-        /// authoritative KILL for the stage: when the stage times out or throws, we
-        /// invoke it BEFORE returning so the stage is genuinely CANCELLED (CTS
-        /// cancelled, overlay torn down), not merely abandoned. Pass
-        /// <c>StoryIntroController.ForceHide</c> for the cold-open stage.
+        /// exception it invokes <paramref name="onTimeout"/> (the authoritative KILL
+        /// — pass <c>StoryIntroController.ForceHide</c>) and returns, so the title
+        /// menu is always reachable. UNSCALED timeout (DEF-253): a scaled .Timeout
+        /// never elapses if anything set Time.timeScale=0.
         /// </summary>
         private static async UniTask SafeStage(UniTask stage, string name, System.Action onTimeout = null)
         {
             try
             {
-                // UNSCALED timeout (DEF-253): a scaled .Timeout never elapses if anything
-                // set Time.timeScale=0 during the bumper/loading — the splash await then
-                // hangs forever (observed: only the unscaled watchdog fired, never this).
                 await stage.Timeout(System.TimeSpan.FromSeconds(6f),
                                     Cysharp.Threading.Tasks.DelayType.UnscaledDeltaTime);
             }
             catch (System.Exception e)
             {
-                // Cancel the underlying stage NOW — do not just stop awaiting it,
-                // or its loop will keep rendering beats over the next screen.
                 try { onTimeout?.Invoke(); }
                 catch (System.Exception killEx)
                 {
-                    Debug.LogWarning($"[TitleController] Arrival stage '{name}' kill threw: {killEx.Message}");
+                    FlowTrace.Warn("Onboarding", $"Arrival stage '{name}' kill threw: {killEx.Message}");
                 }
-                Debug.LogWarning($"[TitleController] Arrival stage '{name}' skipped " +
-                                 $"(timeout/exception) — cancelled + proceeding to title. {e.Message}");
+                FlowTrace.Warn("Onboarding",
+                    $"Arrival stage '{name}' skipped (timeout/exception) — cancelled + returning to the title. {e.Message}");
             }
         }
 
-        // =====================================================================
-        //  Title screen
-        // =====================================================================
-
-        /// <summary>
-        /// Builds the entire title / hero-select landing IN CODE on a cleared
-        /// root — NO UXML element is read by name, so a UXML that fails to render
-        /// in the WebGL build (CLAUDE.md §8) cannot break this screen. Layout:
-        ///   root (column)
-        ///     ├─ dragon stage  (top HALF — heart-wing art, ScaleAndCrop)
-        ///     └─ roster panel  (bottom half)
-        ///          ├─ title + tagline + CTA
-        ///          ├─ card row   (4 hero cards, flex-even, re-flows on resize)
-        ///          └─ detail card (selected-hero name / role / blurb)
-        ///   + a top-right Connect Wallet button (absolute).
-        /// </summary>
-        private void BuildTitleScreen()
+        private void Update()
         {
-            using var _ = FlowTrace.Enter("Onboarding", "TitleController.BuildTitleScreen");
-            if (_titleBuilt) { FlowTrace.Step("Onboarding", "BuildTitleScreen: already built — no-op."); return; }   // build once — RunArrival or the DEF-253 watchdog, whichever first
-            if (_titleDocument == null)
+            // Orientation flip — swap the landscape/portrait cover art.
+            if (_backdropArt != null && _canvas != null && _canvas.activeSelf)
+                ApplyBackdropArt();
+
+            // While the 9-screen cinematic plays it OWNS the screen and routes onward
+            // itself — never force the title up over it.
+            if (_introPlaying) return;
+
+            // DEF-253 BLOCKER watchdog: if the cold-open fallback stalled past every
+            // SafeStage timeout, force the title menu back (never-stuck fallback).
+            if (_arrivalRunning && Time.unscaledTime - _arrivalStart > MaxIntroSeconds)
             {
-                // P0 — blank title is the worst first impression. Fail-loud to the break-log.
-                FlowTrace.Fail("Onboarding", "BuildTitleScreen: NO title UIDocument assigned — cannot build the title/hero-select. BLANK FIRST IMPRESSION.");
-                return;
-            }
-
-            _root = _titleDocument.rootVisualElement;
-            if (_root == null)
-            {
-                // P0 — the document exists but its root is null this frame (UIDocument not
-                // attached / rebuilding). A silent return here leaves the player on a BLANK
-                // title — the worst first impression. Fail-loud; the Update reassert/watchdog
-                // will rebuild once the live root resolves (never-blank fallback path).
-                FlowTrace.Fail("Onboarding", "BuildTitleScreen: title UIDocument.rootVisualElement is NULL — cannot build yet. BLANK title risk; awaiting reassert/watchdog rebuild.");
-                return;
-            }
-
-            // We own the tree now — wipe whatever the UXML did (or didn't) build.
-            _root.Clear();
-            // DEF-253: do NOT set _titleDocument.visualTreeAsset = null here. Assigning
-            // visualTreeAsset RECREATES the UIDocument's rootVisualElement on the next
-            // layout pass — which fired AFTER we build the cards into the OLD root,
-            // orphaning them (Player.log: cards=4 but doc rootChildCount=0, card-row
-            // worldBound=NaN → the blank/stuck title). _root.Clear() already removes any
-            // UXML content, and nothing re-instantiates it unless the doc is re-enabled
-            // (it isn't), so the DEF-211 detach is unnecessary and was the actual cause.
-            _root.style.flexGrow = 1f;
-            _root.style.flexDirection = FlexDirection.Column;
-            _root.style.alignItems = Align.Stretch;
-            _root.style.justifyContent = Justify.FlexStart;
-            _root.style.backgroundColor = ColBackground;
-
-            _cardHealAttempted = false;   // fresh build — re-arm the self-heal
-
-            // WO-335: re-assert the overlay panels are un-pickable now the hero-select
-            // is the live screen, in case the splash-gate path was skipped (e.g. the
-            // DEF-253 watchdog or the OnPlayIntro fallback reached here directly).
-            NeutralizeOverlayPanels();
-
-            BuildDragonStage();   // top half (acceptance #4)
-            BuildRosterPanel();   // bottom half — title + 4 cards + detail
-            BuildConnectWallet(); // top-right stub button
-
-            // Initial selection state + a re-flow pass once we know the size.
-            PreselectFromSave();
-            RefreshSelectionVisuals();
-
-            // Re-flow the responsive layout on every screen-size / orientation
-            // change — this keeps the four cards evenly centred in BOTH
-            // landscape and portrait without fixed pixel positions.
-            _root.RegisterCallback<GeometryChangedEvent>(OnRootGeometryChanged);
-
-            _titleBuilt = true;
-
-            // Verify now in case geometry already resolved (don't wait a frame).
-            ReflowForSize(_root.resolvedStyle.width, _root.resolvedStyle.height);
-
-            // V — prove the screen actually built: root has children AND the card row
-            // carries cards. A built-but-empty title is a blank first impression, so a
-            // zero on either count Fails to the break-log (split data-empty vs. invisible).
-            int rootChildren = _root.childCount;
-            int cardCount = _cardRow != null ? _cardRow.childCount : 0;
-            if (rootChildren == 0 || cardCount == 0)
-            {
-                FlowTrace.Fail("Onboarding",
-                    $"BuildTitleScreen VERIFY FAILED — rootChildren={rootChildren} cards={cardCount}. " +
-                    "Title built but EMPTY (blank first impression). VerifyFourCardsEven self-heal will retry.");
-            }
-            else
-            {
-                FlowTrace.Step("Onboarding",
-                    $"BuildTitleScreen VERIFY ok — rootChildren={rootChildren} cards={cardCount}.");
-            }
-        }
-
-        // ── Top half: dragon banner ─────────────────────────────────────────
-        private void BuildDragonStage()
-        {
-            _dragonStage = new VisualElement { name = "title-dragon-stage" };
-            _dragonStage.style.height = Length.Percent(50f);   // top HALF (acceptance #4)
-            _dragonStage.style.flexGrow = 0f;
-            _dragonStage.style.flexShrink = 0f;
-            _dragonStage.style.flexDirection = FlexDirection.Column;
-            _dragonStage.style.justifyContent = Justify.FlexStart;
-            _dragonStage.style.alignItems = Align.Center;
-            _dragonStage.pickingMode = PickingMode.Ignore;
-
-            // The dragon: the Heart-Wing banner art. Inspector sprite first (set
-            // in the editor build), else Resources/heart-wing (WebGL-safe — the
-            // code-built landing has no serialized sprite in the player build).
-            if (_heartWingBanner != null)
-            {
-                _dragonStage.style.backgroundImage = new StyleBackground(_heartWingBanner);
-                _dragonStage.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
-            }
-            else
-            {
-                var dragonTex = Resources.Load<Texture2D>("heart-wing");
-                if (dragonTex != null)
-                {
-                    _dragonStage.style.backgroundImage = new StyleBackground(dragonTex);
-                    _dragonStage.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
-                }
-                else
-                {
-                    _dragonStage.style.backgroundColor = ElarionUi.PanelStoneDark;
-                    Debug.LogWarning("[TitleController] Resources/heart-wing not found — dragon stage is a flat band.");
-                }
-            }
-
-            _root.Add(_dragonStage);
-        }
-
-        // ── Bottom half: title + roster + detail ────────────────────────────
-        private void BuildRosterPanel()
-        {
-            var roster = new VisualElement { name = "title-roster-panel" };
-            roster.style.flexGrow = 1f;          // remaining bottom half
-            roster.style.flexShrink = 1f;
-            roster.style.flexBasis = 0f;
-            roster.style.backgroundColor = ColPanelDark;
-            roster.style.flexDirection = FlexDirection.Column;
-            roster.style.alignItems = Align.Stretch;
-            roster.style.justifyContent = Justify.FlexStart;
-            roster.style.paddingTop = 10f;
-            roster.style.paddingBottom = 14f;
-            roster.style.paddingLeft = 10f;
-            roster.style.paddingRight = 10f;
-
-            // Game title — canon string "Echoes of Elarion", never hardcoded (port-spec Part 4).
-            var gameTitle = new Label(CanonStrings.GameTitle);
-            gameTitle.style.fontSize = 28f;
-            gameTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
-            gameTitle.style.color = ColTextBright;
-            gameTitle.style.unityTextAlign = TextAnchor.MiddleCenter;
-            gameTitle.style.whiteSpace = WhiteSpace.Normal;
-            gameTitle.style.flexShrink = 0f;
-            roster.Add(gameTitle);
-
-            // Series / franchise line — small caps under the title ("Defenders of the
-            // Realm"; this game is a chapter of that saga). Canon string, never hardcoded.
-            var seriesLine = new Label(CanonStrings.GameSubtitle);
-            seriesLine.style.marginTop = 1f;
-            seriesLine.style.fontSize = 12f;
-            seriesLine.style.unityFontStyleAndWeight = FontStyle.Bold;
-            seriesLine.style.color = ColAmber;
-            seriesLine.style.unityTextAlign = TextAnchor.MiddleCenter;
-            seriesLine.style.whiteSpace = WhiteSpace.Normal;
-            seriesLine.style.flexShrink = 0f;
-            roster.Add(seriesLine);
-
-            // Tagline.
-            var tagline = new Label(CanonStrings.Tagline);
-            tagline.style.marginTop = 2f;
-            tagline.style.fontSize = 13f;
-            tagline.style.color = ColTextMuted;
-            tagline.style.unityTextAlign = TextAnchor.MiddleCenter;
-            tagline.style.whiteSpace = WhiteSpace.Normal;
-            tagline.style.flexShrink = 0f;
-            roster.Add(tagline);
-
-            // CTA — tells the player the cards are tappable.
-            var cta = new Label("✦ Select your Hero to begin ✦");
-            cta.style.marginTop = 6f;
-            cta.style.marginBottom = 6f;
-            cta.style.fontSize = 14f;
-            cta.style.unityFontStyleAndWeight = FontStyle.Bold;
-            cta.style.color = ColAmber;
-            cta.style.unityTextAlign = TextAnchor.MiddleCenter;
-            cta.style.flexShrink = 0f;
-            roster.Add(cta);
-
-            // The four hero cards — an evenly distributed flex row (acceptance #2).
-            // DEF-204 ROOT FIX: SpaceBetween + per-card maxWidth:25%/flexBasis:0
-            // let the row collapse/wrap in portrait so two heroes shared one card
-            // ("Thrain + Grom"). Center + NoWrap forces all four onto ONE centred
-            // row that never wraps; equal flex-grow + symmetric margins keep them
-            // evenly sized.
-            _cardRow = new VisualElement { name = "title-card-row" };
-            _cardRow.style.flexDirection = FlexDirection.Row;
-            _cardRow.style.justifyContent = Justify.Center; // centred, single row
-            _cardRow.style.flexWrap = Wrap.NoWrap;          // never wrap to a 2nd line
-            _cardRow.style.alignItems = Align.Stretch;
-            _cardRow.style.flexGrow = 1f;
-            _cardRow.style.flexShrink = 1f;
-            _cardRow.style.alignSelf = Align.Stretch;
-            roster.Add(_cardRow);
-
-            BuildCards();
-
-            // Selected-hero play-card details — BELOW the four cards (acceptance #3).
-            BuildDetailCard();
-            roster.Add(_detailCard);
-
-            _root.Add(roster);
-        }
-
-        /// <summary>Builds the four hero cards into the card row.</summary>
-        private void BuildCards()
-        {
-            if (_cardRow == null) return;
-
-            // DEF-211: a broken roster must SCREAM, not silently render an empty /
-            // merged card row. Log loudly (do NOT throw) and still build whatever
-            // heroes exist so the landing degrades gracefully rather than crashing.
-            if (HeroCatalog.Heroes == null || HeroCatalog.Heroes.Length != 4)
-            {
-                int count = HeroCatalog.Heroes != null ? HeroCatalog.Heroes.Length : 0;
-                FlowTrace.Fail("Onboarding",
-                    $"BuildCards: HERO ROSTER BROKEN — expected 4 heroes, HeroCatalog.Heroes has {count}. " +
-                    "The hero-select row will be wrong. Building whatever exists (graceful degrade).");
-            }
-
-            _cardRow.Clear();
-            for (int i = 0; i < HeroCatalog.Heroes.Length; i++)
-            {
-                HeroCardInfo info = HeroCatalog.Heroes[i];
-                VisualElement card = BuildCard(info);
-                _cardRow.Add(card);
-                _cards[i] = card;
-            }
-        }
-
-        /// <summary>
-        /// Builds one RICH hero card (matching HeroSelectController's framed card,
-        /// owner-preferred 2026-06-03): portrait + name + CLASS TITLE (role) + the
-        /// full BLURB inline, all inside the card. Sized with flex (NOT a fixed
-        /// pixel width) so the four cards share the row evenly and re-flow in both
-        /// orientations.
-        /// </summary>
-        private VisualElement BuildCard(HeroCardInfo info)
-        {
-            var card = new VisualElement { name = $"title-hero-card-{info.Hero}" };
-
-            // Even distribution — equal flex-grow, no fixed width / x position.
-            card.style.flexGrow = 1f;
-            card.style.flexShrink = 1f;
-            card.style.flexBasis = 0f;
-            card.style.marginLeft = 5f;
-            card.style.marginRight = 5f;
-            card.style.maxWidth = Length.Percent(25f);   // never wider than its even quarter
-            card.style.minWidth = 0f;
-
-            float radius = 12f;
-            card.style.borderTopLeftRadius = radius;
-            card.style.borderTopRightRadius = radius;
-            card.style.borderBottomLeftRadius = radius;
-            card.style.borderBottomRightRadius = radius;
-            SetBorderWidth(card, 2f);
-            SetBorderColor(card, ColVioletBorder);
-            card.style.backgroundColor = ColCardIdle;
-            card.style.overflow = Overflow.Hidden;
-            card.style.flexDirection = FlexDirection.Column;
-            card.style.alignItems = Align.Stretch;
-
-            // Portrait — owner's character-named art (Thrain/Grom/Sylas/Elara).
-            // The character art is tall/portrait; with ScaleAndCrop centred, a
-            // square-ish slot crops the face off. Load as a Sprite (Texture2D
-            // fallback), ScaleAndCrop, and TOP-anchor so the head / upper body is
-            // what shows — matching how HeroSelectController frames image 4.
-            var portrait = new VisualElement { name = "portrait" };
-            portrait.style.flexGrow = 1f;
-            portrait.style.minHeight = 96f;   // taller slot so the head + torso read clearly
-            portrait.style.alignItems = Align.Center;
-            portrait.style.justifyContent = Justify.Center;
-            portrait.style.backgroundColor = new Color(0f, 0f, 0f, 0.30f);   // dark backing well (town-HUD niche)
-            portrait.pickingMode = PickingMode.Ignore;
-
-            string slug = SlugFor(info.Hero);
-            FramePortrait(portrait, slug, info);
-            card.Add(portrait);
-
-            // Element-coloured accent strip.
-            var accent = new VisualElement();
-            accent.style.height = 4f;
-            accent.style.flexShrink = 0f;
-            accent.style.backgroundColor = info.Accent;
-            accent.pickingMode = PickingMode.Ignore;
-            card.Add(accent);
-
-            // ── Rich copy block (name + class title + blurb), inside the card ──
-            var copy = new VisualElement { name = "card-copy" };
-            copy.style.flexShrink = 0f;
-            copy.style.paddingTop = 6f;
-            copy.style.paddingBottom = 8f;
-            copy.style.paddingLeft = 6f;
-            copy.style.paddingRight = 6f;
-            copy.pickingMode = PickingMode.Ignore;
-
-            // Hero name.
-            var nameLabel = new Label(CanonStrings.Locale(info.NameKey));
-            nameLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-            nameLabel.style.fontSize = 14f;
-            nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            nameLabel.style.color = ColTextBright;
-            nameLabel.style.whiteSpace = WhiteSpace.Normal;
-            nameLabel.style.flexShrink = 0f;
-            nameLabel.pickingMode = PickingMode.Ignore;
-            copy.Add(nameLabel);
-
-            // Class title (role) — Frostweaver / Lightbearer / Wood Warden / Divine Healer.
-            var roleLabel = new Label(CanonStrings.Locale(info.RoleKey));
-            roleLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-            roleLabel.style.marginTop = 1f;
-            roleLabel.style.fontSize = 11f;
-            roleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            roleLabel.style.color = info.Accent;
-            roleLabel.style.whiteSpace = WhiteSpace.Normal;
-            roleLabel.style.flexShrink = 0f;
-            roleLabel.pickingMode = PickingMode.Ignore;
-            copy.Add(roleLabel);
-
-            // Full blurb INLINE in the card.
-            var blurbLabel = new Label(CanonStrings.Locale(info.BlurbKey));
-            blurbLabel.style.unityTextAlign = TextAnchor.UpperCenter;
-            blurbLabel.style.marginTop = 5f;
-            blurbLabel.style.fontSize = 11f;
-            blurbLabel.style.color = ColTextMuted;
-            blurbLabel.style.whiteSpace = WhiteSpace.Normal;
-            blurbLabel.style.flexShrink = 1f;
-            blurbLabel.pickingMode = PickingMode.Ignore;
-            copy.Add(blurbLabel);
-
-            card.Add(copy);
-
-            // Whole card is the hit target — tap selects (and shows the detail).
-            HeroClass captured = info.Hero;
-            card.pickingMode = PickingMode.Position;
-            card.RegisterCallback<PointerEnterEvent>(_ =>
-                card.style.scale = new StyleScale(new Scale(new Vector3(1.04f, 1.04f, 1f))));
-            card.RegisterCallback<PointerLeaveEvent>(_ =>
-                card.style.scale = new StyleScale(new Scale(Vector3.one)));
-            card.RegisterCallback<PointerDownEvent>(_ => OnCardClicked(captured));
-
-            return card;
-        }
-
-        /// <summary>
-        /// Frames a hero portrait into its slot so the WHOLE character FITS the
-        /// slot without crop or overflow. WO-328: the old ScaleAndCrop cropped the
-        /// art to fill, which overflowed/clipped the card at mobile aspect ratios.
-        /// Now uses backgroundSize = contain (fit-in-parent, never crop), TOP-
-        /// anchored so any letterbox gap lands at the bottom and the head/upper
-        /// body always reads. The card already clips (overflow: Hidden) so nothing
-        /// spills past the rounded corners. Loads as a Sprite first (matching
-        /// HeroSelectController, which the owner prefers), Texture2D fallback, then
-        /// a glyph fallback.
-        /// </summary>
-        private static void FramePortrait(VisualElement portrait, string slug, HeroCardInfo info)
-        {
-            if (portrait == null) return;
-
-            var sprite = Resources.Load<Sprite>($"HeroPortraits/{slug}");
-            if (sprite != null)
-            {
-                portrait.style.backgroundImage = new StyleBackground(sprite);
-                FitPortraitContain(portrait);
-                return;
-            }
-
-            var tex = Resources.Load<Texture2D>($"HeroPortraits/{slug}");
-            if (tex != null)
-            {
-                portrait.style.backgroundImage = new StyleBackground(tex);
-                FitPortraitContain(portrait);
-                return;
-            }
-
-            // No art on disk — element-coloured glyph fallback (R: never a blank slot).
-            // Warn so a missing portrait self-reports without breaking the card.
-            FlowTrace.Warn("Onboarding",
-                $"FramePortrait: no Resources/HeroPortraits/{slug} sprite or texture — using '{info.Glyph}' glyph fallback (card still renders).");
-            var glyph = new Label(info.Glyph);
-            glyph.style.fontSize = 44f;
-            glyph.style.unityFontStyleAndWeight = FontStyle.Bold;
-            glyph.style.color = info.Accent;
-            glyph.pickingMode = PickingMode.Ignore;
-            portrait.Add(glyph);
-        }
-
-        /// <summary>
-        /// WO-328: fits the WHOLE portrait inside its slot with no crop and no
-        /// overflow, regardless of card aspect ratio. backgroundSize = Contain
-        /// scales the image to fit entirely within the slot (uniform scale, never
-        /// cropped); the TOP anchor parks the image at the top so any letterbox
-        /// gap from a portrait-shaped image in a shorter slot lands at the bottom
-        /// (head/upper body always visible). Both are guarded — an older UI
-        /// Toolkit without BackgroundSize/BackgroundPosition falls back to the
-        /// ScaleToFit mode below, which also fits-without-crop.
-        /// </summary>
-        private static void FitPortraitContain(VisualElement portrait)
-        {
-            if (portrait == null) return;
-
-            // Base fit: ScaleToFit fits the image inside the slot without crop
-            // on every UI Toolkit version (the safe floor if BackgroundSize is
-            // unavailable). backgroundSize = Contain then makes the intent explicit.
-            portrait.style.unityBackgroundScaleMode = ScaleMode.ScaleToFit;
-
-            try
-            {
-                portrait.style.backgroundSize =
-                    new BackgroundSize(BackgroundSizeType.Contain);
-            }
-            catch (System.Exception)
-            {
-                // Older UI Toolkit without BackgroundSize — ScaleToFit above already
-                // fits the portrait inside the slot without cropping.
-            }
-
-            try
-            {
-                portrait.style.backgroundPositionY =
-                    new BackgroundPosition(BackgroundPositionKeyword.Top);
-            }
-            catch (System.Exception)
-            {
-                // Older UI Toolkit without BackgroundPosition — keep centred fit.
-            }
-        }
-
-        /// <summary>
-        /// WO-329: builds the selected-hero STAT CARD that sits BELOW the four rich
-        /// cards. Before WO-329 this was a slim bar that only showed a "Selected: X"
-        /// status line — tapping a hero showed portrait + name but no stats. It now
-        /// renders a real play-card: an info column (name + class/role, HP/Attack/
-        /// Speed pip ratings, and the hero's signature ability + effect) on the left,
-        /// with the "Choose this Hero" confirm CTA on the right. Values come from
-        /// HeroCatalog (WebGL-safe, no cross-module JSON dependency). Before a pick
-        /// it shows the "Tap a hero to begin" hint instead of the old static line.
-        /// </summary>
-        private void BuildDetailCard()
-        {
-            _detailCard = new VisualElement { name = "title-hero-detail-card" };
-            _detailCard.style.marginTop = 10f;
-            _detailCard.style.flexShrink = 0f;
-            _detailCard.style.alignSelf = Align.Stretch;
-            _detailCard.style.flexDirection = FlexDirection.Row;
-            _detailCard.style.alignItems = Align.Center;
-            _detailCard.style.justifyContent = Justify.SpaceBetween;
-            _detailCard.style.paddingTop = 10f;
-            _detailCard.style.paddingBottom = 10f;
-            _detailCard.style.paddingLeft = 14f;
-            _detailCard.style.paddingRight = 14f;
-            float r = 12f;
-            _detailCard.style.borderTopLeftRadius = r;
-            _detailCard.style.borderTopRightRadius = r;
-            _detailCard.style.borderBottomLeftRadius = r;
-            _detailCard.style.borderBottomRightRadius = r;
-            SetBorderWidth(_detailCard, 1f);
-            SetBorderColor(_detailCard, ColVioletBorder);
-            _detailCard.style.backgroundColor = ElarionUi.PanelStone;
-
-            // ── Left: hero info + stat block ────────────────────────────────
-            var info = new VisualElement { name = "title-hero-statblock" };
-            info.style.flexGrow = 1f;
-            info.style.flexShrink = 1f;
-            info.style.flexDirection = FlexDirection.Column;
-            info.pickingMode = PickingMode.Ignore;
-
-            // "Selected: <name> — <class title>" header line.
-            _detailName = new Label(string.Empty);
-            _detailName.style.flexShrink = 1f;
-            _detailName.style.fontSize = 15f;
-            _detailName.style.unityFontStyleAndWeight = FontStyle.Bold;
-            _detailName.style.color = ColTextBright;
-            _detailName.style.whiteSpace = WhiteSpace.Normal;
-            info.Add(_detailName);
-
-            // Stat pip rows — HP / Attack / Speed (real ratings from HeroCatalog).
-            _statHp     = MakeStatRow(info);
-            _statAttack = MakeStatRow(info);
-            _statSpeed  = MakeStatRow(info);
-
-            // Signature ability line.
-            _statAbility = new Label(string.Empty);
-            _statAbility.style.marginTop = 4f;
-            _statAbility.style.fontSize = 11f;
-            _statAbility.style.color = ColTextMuted;
-            _statAbility.style.whiteSpace = WhiteSpace.Normal;
-            info.Add(_statAbility);
-
-            _detailCard.Add(info);
-
-            // Kept (assigned in RefreshDetailCard) but not added to the tree — the
-            // role + blurb live inline in each card, so they are not repeated here.
-            _detailRole = new Label(string.Empty);
-            _detailBlurb = new Label(string.Empty);
-
-            // ── Right: confirm CTA — persists the pick and routes onward ────
-            var confirm = new Button(OnChooseHeroClicked) { text = "Choose this Hero →", name = "title-choose-hero" };
-            confirm.style.marginLeft = 10f;
-            confirm.style.flexShrink = 0f;
-            confirm.style.height = 42f;
-            confirm.style.minWidth = 170f;
-            confirm.style.fontSize = 15f;
-            confirm.style.unityFontStyleAndWeight = FontStyle.Bold;
-            SetBorderWidth(confirm, 0f);
-            float br = 10f;
-            confirm.style.borderTopLeftRadius = br;
-            confirm.style.borderTopRightRadius = br;
-            confirm.style.borderBottomLeftRadius = br;
-            confirm.style.borderBottomRightRadius = br;
-            confirm.style.backgroundColor = ElarionUi.GoldButton;
-            confirm.style.color = ElarionUi.Ink;   // dark ink on gold CTA (town-HUD button)
-            _detailCard.Add(confirm);
-        }
-
-        /// <summary>Adds one stat row label to the stat block and returns it.</summary>
-        private Label MakeStatRow(VisualElement parent)
-        {
-            var row = new Label(string.Empty);
-            row.style.marginTop = 2f;
-            row.style.fontSize = 12f;
-            row.style.unityFontStyleAndWeight = FontStyle.Bold;
-            row.style.color = ColTextMuted;
-            row.style.whiteSpace = WhiteSpace.Normal;
-            row.pickingMode = PickingMode.Ignore;
-            parent.Add(row);
-            return row;
-        }
-
-        /// <summary>Renders a 1-5 rating as filled/empty pips, e.g. "●●●○○".</summary>
-        private static string Pips(int value)
-        {
-            int v = Mathf.Clamp(value, 0, 5);
-            return new string('●', v) + new string('○', 5 - v);
-        }
-
-        // ── Connect Wallet — Week-1 stub, pinned top-right ──────────────────
-        private void BuildConnectWallet()
-        {
-            _connectWalletButton = new Button(OnConnectWalletClicked) { text = "Connect Wallet", name = "title-connect-wallet" };
-            _connectWalletButton.style.position = Position.Absolute;
-            _connectWalletButton.style.top = 16f;
-            _connectWalletButton.style.right = 16f;
-            _connectWalletButton.style.left = StyleKeyword.Auto;
-            _connectWalletButton.style.bottom = StyleKeyword.Auto;
-            _connectWalletButton.style.height = 36f;
-            _connectWalletButton.style.fontSize = 13f;
-            SetBorderWidth(_connectWalletButton, 1f);
-            SetBorderColor(_connectWalletButton, ColVioletBorder);
-            _connectWalletButton.style.backgroundColor = new Color(1f, 1f, 1f, 0.06f);
-            _connectWalletButton.style.color = ColTextBright;
-
-            // DEF-204 ROOT FIX (paint order): older UI Toolkit has no z-index, so an
-            // absolute element paints in tree order. Add the Connect-Wallet button
-            // LAST to _root (after the dragon stage + roster panel) so it always
-            // paints on top and is never clipped by / hidden under the roster
-            // content or the Skip overlay.
-            if (_connectWalletButton.parent == _root)
-                _connectWalletButton.RemoveFromHierarchy();
-            _root.Add(_connectWalletButton);
-        }
-
-        // =====================================================================
-        //  Selection
-        // =====================================================================
-
-        /// <summary>
-        /// A hero card was tapped — mark it active, refresh the detail card, and
-        /// route to PetSelect IMMEDIATELY (DEF-263: one tap = go; the DEF-230
-        /// confirm-beat delay is removed). Once the route has fired (_advancing)
-        /// further taps are ignored so a late second tap can't double-route.
-        /// </summary>
-        private void OnCardClicked(HeroClass hero)
-        {
-            if (_advancing) return;   // route already in flight — ignore late taps
-
-            // WO-329: the FIRST tap on a hero now SELECTS it and reveals the stat
-            // card (HP/Attack/Speed + signature ability) below the row — previously
-            // the tap routed instantly to PetSelect so the stat card was never seen.
-            // A SECOND tap on the already-selected hero (or the "Choose this Hero"
-            // CTA) COMMITS and routes onward — preserving the quick tap-to-go feel
-            // (DEF-263) while letting the player read the card first.
-            bool reselect = _hasSelection && hero == _selectedHero;
-
-            _selectedHero = hero;
-            _hasSelection = true;
-            RefreshSelectionVisuals();
-
-            if (reselect)
-            {
-                _advancing = true;
-                AdvanceToPetSelect();
-            }
-        }
-
-        /// <summary>Pre-selects the hero the save already records, if any.</summary>
-        private void PreselectFromSave()
-        {
-            var svc = GameStateService.Instance;
-            HeroClass? saved = svc != null && svc.State != null
-                ? svc.State.HeroClass.ToNullable()
-                : null;
-            if (saved.HasValue)
-            {
-                _selectedHero = saved.Value;
-                _hasSelection = true;
-            }
-        }
-
-        /// <summary>Marks the active card, clears the rest, and refreshes the detail card.</summary>
-        private void RefreshSelectionVisuals()
-        {
-            for (int i = 0; i < _cards.Length; i++)
-            {
-                if (_cards[i] == null) continue;
-                bool active = _hasSelection && HeroCatalog.Heroes[i].Hero == _selectedHero;
-                SetBorderColor(_cards[i], active ? ColAmber : ColVioletBorder);
-                _cards[i].style.backgroundColor = active ? ColCardActive : ColCardIdle;
-            }
-            RefreshDetailCard();
-        }
-
-        /// <summary>
-        /// Updates the slim confirm bar's status line for the current pick. The
-        /// full role + blurb live inline in each rich card, so this bar only shows
-        /// a short "Selected: Name — Class Title" cue next to the Choose CTA.
-        /// </summary>
-        private void RefreshDetailCard()
-        {
-            if (_detailCard == null) return;
-            if (!_hasSelection)
-            {
-                if (_detailName  != null) _detailName.text  = "Tap a hero to choose";
-                if (_statHp      != null) _statHp.text      = string.Empty;
-                if (_statAttack  != null) _statAttack.text  = string.Empty;
-                if (_statSpeed   != null) _statSpeed.text   = string.Empty;
-                if (_statAbility != null) _statAbility.text = string.Empty;
-                return;
-            }
-            HeroCardInfo info = FindInfo(_selectedHero);
-            if (info == null) return;
-
-            if (_detailName != null)
-            {
-                string name = CanonStrings.Locale(info.NameKey);
-                string role = CanonStrings.Locale(info.RoleKey);
-                _detailName.text = string.IsNullOrEmpty(role)
-                    ? $"Selected: {name}"
-                    : $"Selected: {name} — {role}";
-            }
-
-            // WO-329: real per-hero stats from HeroCatalog, glanceable pip ratings.
-            if (_statHp     != null) _statHp.text     = $"HP      {Pips(info.Hp)}";
-            if (_statAttack != null) _statAttack.text = $"Attack  {Pips(info.Attack)}";
-            if (_statSpeed  != null) _statSpeed.text  = $"Speed   {Pips(info.Speed)}";
-            if (_statAbility != null)
-            {
-                string ab = string.IsNullOrEmpty(info.AbilityDesc)
-                    ? info.AbilityName
-                    : $"{info.AbilityName} — {info.AbilityDesc}";
-                _statAbility.text = string.IsNullOrEmpty(ab) ? string.Empty : $"✦ {ab}";
-            }
-            // _detailRole / _detailBlurb intentionally not displayed (inline in cards).
-        }
-
-        // =====================================================================
-        //  Responsive re-flow + self-assert
-        // =====================================================================
-
-        private void OnRootGeometryChanged(GeometryChangedEvent evt)
-        {
-            ReflowForSize(evt.newRect.width, evt.newRect.height);
-        }
-
-        /// <summary>
-        /// Re-flows the layout for the current screen size / orientation. The
-        /// dragon stage is always the top half; the four cards always share the
-        /// row evenly (SpaceBetween + equal flex-grow). No fixed x positions —
-        /// purely flex — so it re-centres identically in landscape and portrait.
-        /// </summary>
-        private void ReflowForSize(float width, float height)
-        {
-            if (!_titleBuilt || _cardRow == null) return;
-            if (width <= 0f || height <= 0f) return;
-
-            bool portrait = height >= width;
-            float gutter = portrait ? 4f : 6f;
-            for (int i = 0; i < _cards.Length; i++)
-            {
-                if (_cards[i] == null) continue;
-                _cards[i].style.marginLeft = gutter;
-                _cards[i].style.marginRight = gutter;
-            }
-
-            // DEF-204 FIX 4: scale the detail card's top gap with orientation so the
-            // confirm bar's spacing reads correctly in both portrait (tighter) and
-            // landscape (looser).
-            if (_detailCard != null)
-                _detailCard.style.marginTop = portrait ? 6f : 10f;
-
-            VerifyFourCardsEven();
-        }
-
-        /// <summary>
-        /// Regression guard that now SELF-HEALS (DEF-204): asserts the four hero
-        /// cards exist and are laid out as an even row (equal flex-grow, no fixed
-        /// widths). If the card COUNT is wrong it logs an error AND rebuilds the row
-        /// once (_cardHealAttempted guards against infinite recursion) so a
-        /// malformed layout auto-corrects in place rather than shipping broken — the
-        /// recurring-regression sentinel that now also repairs itself.
-        /// </summary>
-        private void VerifyFourCardsEven()
-        {
-            int expected = HeroCatalog.Heroes.Length;
-            int actual = _cardRow != null ? _cardRow.childCount : 0;
-            if (actual != expected)
-            {
-                Debug.LogError($"[TitleController] CARD ASSERT FAILED — expected {expected} " +
-                               $"hero cards, found {actual}. The hero row is not evenly built.");
-
-                // Self-heal once: rebuild the card row and re-apply selection
-                // visuals. The guard flag stops this from looping forever if the
-                // rebuild still cannot produce the expected count.
-                if (_cardRow != null && !_cardHealAttempted)
-                {
-                    _cardHealAttempted = true;
-                    Debug.LogError("[TitleController] CARD ASSERT — auto-healing: rebuilding the card row.");
-                    _cardRow.Clear();
-                    BuildCards();
-                    RefreshSelectionVisuals();
-                }
-                return;
-            }
-            for (int i = 0; i < _cards.Length; i++)
-            {
-                if (_cards[i] == null)
-                {
-                    Debug.LogError($"[TitleController] CARD ASSERT FAILED — hero card {i} is null.");
-                    return;
-                }
-                if (_cards[i].resolvedStyle.flexGrow <= 0f)
-                {
-                    Debug.LogError($"[TitleController] CARD ASSERT FAILED — hero card {i} " +
-                                   "has no flex-grow; the row will not distribute evenly.");
-                    return;
-                }
+                FlowTrace.Warn("Onboarding",
+                    "DEF-253 watchdog tripped — force-returning to the title menu (never-stuck fallback).");
+                _arrivalRunning = false;
+                if (_storyIntro != null) _storyIntro.ForceHide();
+                SetTitleVisible(true);
+                _splashActive = true;
             }
         }
 
@@ -1305,104 +467,27 @@ namespace DeNelle.Onboarding
         //  Small helpers
         // =====================================================================
 
-        /// <summary>Canon-roster portrait slug for a hero class.</summary>
-        private static string SlugFor(HeroClass hero) => hero switch
-        {
-            HeroClass.Mage   => "Thrain",
-            HeroClass.Knight => "Grom",
-            HeroClass.Ranger => "Sylas",
-            HeroClass.Cleric => "Elara",
-            _                => hero.ToString(),
-        };
-
-        /// <summary>Catalog entry for a hero class, or null if absent.</summary>
-        private static HeroCardInfo FindInfo(HeroClass hero)
-        {
-            for (int i = 0; i < HeroCatalog.Heroes.Length; i++)
-                if (HeroCatalog.Heroes[i].Hero == hero) return HeroCatalog.Heroes[i];
-            return null;
-        }
-
-        /// <summary>Sets all four border widths of an element.</summary>
-        private static void SetBorderWidth(VisualElement el, float width)
-        {
-            if (el == null) return;
-            el.style.borderTopWidth = width;
-            el.style.borderBottomWidth = width;
-            el.style.borderLeftWidth = width;
-            el.style.borderRightWidth = width;
-        }
-
-        /// <summary>Sets all four border colours of an element.</summary>
-        private static void SetBorderColor(VisualElement el, Color color)
-        {
-            if (el == null) return;
-            el.style.borderTopColor = color;
-            el.style.borderBottomColor = color;
-            el.style.borderLeftColor = color;
-            el.style.borderRightColor = color;
-        }
-
-        private void OnDisable()
-        {
-            if (_connectWalletButton != null) _connectWalletButton.clicked -= OnConnectWalletClicked;
-            if (_root != null) _root.UnregisterCallback<GeometryChangedEvent>(OnRootGeometryChanged);
-        }
-
-        // ── Choose Hero — persist the pick and route onward to PetSelect ─────
-        // Kept as a belt-and-braces second path; the canonical flow now
-        // auto-advances on card select (DEF-230), so this button is optional.
-        private void OnChooseHeroClicked()
-        {
-            if (!_hasSelection)
-            {
-                Debug.Log("[TitleController] Choose-hero pressed with no selection — ignored.");
-                return;
-            }
-            if (_advancing) return;   // auto-advance already routing
-            _advancing = true;
-            RouteToPetSelect();
-        }
-
-        /// <summary>Immediate advance entry (DEF-263): selection IS the commit.</summary>
-        private void AdvanceToPetSelect()
-        {
-            if (!_hasSelection) { _advancing = false; return; }
-            RouteToPetSelect();
-        }
-
-        /// <summary>Persists the chosen hero and routes onward (single route path).</summary>
-        private void RouteToPetSelect()
-        {
-            var svc = GameStateService.Instance;
-            if (svc != null) svc.ChooseHero(_selectedHero);
-
-            // WO-473 / single-hero V1: skip the PetSelect screen — straight to the castle.
-            // The hero pick is already persisted above; PetSelect persists nothing (Echo Hollow owns pets).
-            if (FeatureFlags.BypassPetSelect)
-            {
-                FlowTrace.Step("Onboarding", "RouteToPetSelect: BypassPetSelect ON — GoCastle (PetSelect skipped).");
-                Debug.Log("[TitleController] Hero confirmed: " + _selectedHero + " — bypassing PetSelect, routing to Castle.");
-                SceneRouter.GoCastle();
-                return;
-            }
-
-            Debug.Log("[TitleController] Hero confirmed: " + _selectedHero + " — routing to PetSelect.");
-            SceneRouter.GoPetSelect();
-        }
-
-        // ── Connect Wallet — Week-1 stub (the real flow is the Week-7 module) ─
-        private void OnConnectWalletClicked()
-        {
-            Debug.Log("[TitleController] Connect Wallet CLICK RECEIVED — stub (Week-7 Wallet module ships the real flow).");
-        }
-
-        // ── Visibility helper ────────────────────────────────────────────────
         private void SetTitleVisible(bool visible)
         {
-            var root = _titleDocument != null ? _titleDocument.rootVisualElement : _root;
-            if (root != null)
-                root.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_canvas != null) _canvas.SetActive(visible);
+        }
+
+        /// <summary>Keeps the built canvas in this controller's scene so scene unload
+        /// tears it down with the Title scene (BuildModalCanvas creates at root).</summary>
+        private void SceneRootAdopt(GameObject go)
+        {
+            if (go != null && go.scene != gameObject.scene)
+                UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(go, gameObject.scene);
+        }
+
+        /// <summary>Full-rect stretch for a fresh uGUI element.</summary>
+        private static void Stretch(GameObject go)
+        {
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
         }
     }
 }
