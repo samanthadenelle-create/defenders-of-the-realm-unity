@@ -212,6 +212,13 @@ namespace DeNelle.Village
         // ── Runtime state ────────────────────────────────────────────────────────
         private Animator _animator;
         private GearLoadout _loadout;
+
+        // PACKAGE de-dupe (owner F8 2026-07-03 "holding two swords, shield 180°"): when the hero body
+        // BAKES its own weapon/shield/helmet (Paladin package — HeroBodySwapper tags the SAME root with
+        // PackageBakedGearMarker), the KayKit weapon-mesh + shield-mesh prop attach is SKIPPED so the
+        // baked gear is the only gear visible. Cheap GetComponent on the root — equip is event-driven,
+        // not a hot loop (and LateAttachRetry early-outs on it). Loadout/stat/armor-tint stay fully active.
+        private bool PackageBakedGear => GetComponent<PackageBakedGearMarker>() != null;
         private GameObject _currentWeaponProp;
         private string _currentWeaponId;
         private int _armorTier;
@@ -403,6 +410,7 @@ namespace DeNelle.Village
         private int _attachRetries;
         private void LateAttachRetry()
         {
+            if (PackageBakedGear) return;                // baked-gear hero has no props to attach — nothing to retry
             if (_attachRetries > 180) return;            // ~3s @60fps then give up quietly
             bool nowSubscribed = EnsureLoadoutSubscribed();
             CacheRig();
@@ -497,6 +505,17 @@ namespace DeNelle.Village
 
             string ownerName = name;
             using var _ = FlowTrace.Enter("Equip", $"attach '{weaponId ?? "<null>"}' to '{ownerName}'");
+
+            // PACKAGE de-dupe: the Paladin body bakes its own sword — do NOT attach a second KayKit mesh
+            // (owner F8 "holding two swords"). Loadout still tracks the equipped weapon; only the visible
+            // prop is suppressed. Legacy Tripo Knight (no marker) is unaffected.
+            if (PackageBakedGear)
+            {
+                FlowTrace.Step("Equip",
+                    $"PACKAGE baked-gear hero '{ownerName}' — SKIP weapon-mesh attach for '{weaponId ?? "<null>"}' " +
+                    "(baked Paladin sword wins; de-dupes the second sword).");
+                return;
+            }
 
             // Idempotent: same weapon already shown -> nothing to do.
             if (string.Equals(_currentWeaponId, weaponId, System.StringComparison.OrdinalIgnoreCase)
@@ -1225,6 +1244,17 @@ namespace DeNelle.Village
         public void EquipOffHand(WeaponDef def)
         {
             string id = def != null ? def.id : null;
+
+            // PACKAGE de-dupe: the Paladin body bakes its own shield — do NOT attach a KayKit/Blink shield
+            // (owner F8 "shield is 180 degrees wrong" — that was an ATTACHED shield; skipping it leaves the
+            // correctly-baked one). Loadout still tracks the off-hand; only the visible prop is suppressed.
+            if (PackageBakedGear)
+            {
+                FlowTrace.Step("Equip",
+                    $"PACKAGE baked-gear hero '{name}' — SKIP off-hand/shield attach for '{id ?? "<null>"}' " +
+                    "(baked Paladin shield wins; no wrong-oriented attached shield).");
+                return;
+            }
 
             // Idempotent: same off-hand already shown -> nothing to do.
             if (string.Equals(_currentOffHandId, id, System.StringComparison.OrdinalIgnoreCase)
@@ -2065,4 +2095,17 @@ namespace DeNelle.Village
             return any;
         }
     }
+
+    /// <summary>
+    /// Marker on a hero ROOT whose body BAKES its own weapon/shield/helmet (the Paladin hero package,
+    /// loaded via ff.heropackage in HeroBodySwapper.BuildPackageHeroBody). EquipmentController checks
+    /// for it (PackageBakedGear) and SKIPS the KayKit weapon-mesh + shield-mesh prop attach so the baked
+    /// gear is the only gear shown — no duplicate second sword, no wrongly-oriented attached shield
+    /// (owner F8 2026-07-03). Added by the swapper's package wiring BEFORE the EquipmentController, so even
+    /// the first synchronous equip on AddComponent already sees it. Loadout/stat/armor-tint are unaffected;
+    /// only the visible prop attach is suppressed. The legacy Tripo Knight never carries this marker, so
+    /// its attach path stays byte-for-byte intact.
+    /// </summary>
+    [DisallowMultipleComponent]
+    public sealed class PackageBakedGearMarker : MonoBehaviour { }
 }

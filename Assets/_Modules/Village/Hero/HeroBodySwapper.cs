@@ -479,6 +479,21 @@ namespace DeNelle.Village
             // re-run never double-adds ([DisallowMultipleComponent] would also reject it).
             if (!TryGetComponent(out GearLoadout equipLoadout)) equipLoadout = gameObject.AddComponent<GearLoadout>();
             equipLoadout.Refresh();
+            // PACKAGE (baked sword/shield/helmet — owner F8 2026-07-03 "holding two swords, shield 180°"):
+            // tag the hero ROOT with PackageBakedGearMarker BEFORE adding EquipmentController. AddComponent
+            // fires the controller's OnEnable→EquipBestForHero SYNCHRONOUSLY, so the marker must already be
+            // present for even that FIRST equip to be skipped — otherwise the duplicate KayKit sword attaches
+            // before any later flag could stop it. With the marker, EquipmentController SKIPS the weapon-mesh
+            // + shield-mesh prop attach entirely (baked Paladin gear wins — no second sword, no wrong-oriented
+            // attached shield). Stat/loadout/armor-tint on the controller are unaffected. Legacy Tripo Knight
+            // (usePackage=false) is never marked → its attach path stays byte-for-byte intact.
+            if (usePackage && GetComponent<PackageBakedGearMarker>() == null)
+            {
+                gameObject.AddComponent<PackageBakedGearMarker>();
+                FlowTrace.Step("HeroBody",
+                    "PACKAGE: tagged hero root with PackageBakedGearMarker BEFORE EquipmentController — " +
+                    "the controller will SKIP weapon/shield prop attach (baked gear wins; de-dupes the second sword).");
+            }
             if (GetComponent<EquipmentController>() == null)
                 gameObject.AddComponent<EquipmentController>();
             // Seed the Knight's default SHIELD (off-hand) the first time a Knight body is built —
@@ -609,7 +624,14 @@ namespace DeNelle.Village
             // (ApplyExtractedTexture → flat-steel/class-tint fallback). Blink bodies ship clean URP
             // materials + their own basecolor, so this whole block is BYPASSED — the Blink hero is
             // textured by its prefab. The methods stay in the file for the legacy path.
-            if (!isBlink)
+            // PACKAGE COLORING ROOT CAUSE (owner F8 2026-07-03 "coloring seems wrong"): for a Knight,
+            // ApplyExtractedTexture binds the TRIPO atlas "Heroes/Textures/KnightArmored_basecolor" and
+            // (isCc5Combined path) REPLACES every renderer slot with a material built from it. The Paladin
+            // is a DIFFERENT mesh with DIFFERENT UVs, so that Tripo atlas sampled through Paladin UVs
+            // renders garbage/wrong color. The Paladin ships its OWN materials; RetargetMaterialsToUrp
+            // (run above in the !isBlink block) already converts those to URP AND preserves their own
+            // textures. So the package must NOT run the Tripo texture/tint pass at all — skip it like Blink.
+            if (!isBlink && !usePackage)
             {
                 bool textured = ApplyExtractedTexture(body, cls);
                 if (cls == HeroClass.Knight)
@@ -624,6 +646,14 @@ namespace DeNelle.Village
                     // Safety net: untextured legacy body gets a class tint so it isn't solid white.
                     ApplyClassTint(body, cls);
                 }
+            }
+            else if (usePackage)
+            {
+                FlowTrace.Step("HeroBody",
+                    "PACKAGE: skipped Tripo texture pipeline (ApplyExtractedTexture/FlatSteel/ClassTint) — " +
+                    "the Paladin keeps its OWN materials (RetargetMaterialsToUrp above converts them to URP, " +
+                    "preserving the Paladin's textures). Binding the Tripo KnightArmored atlas onto Paladin UVs " +
+                    "was the wrong-coloring root.");
             }
             // DEF: the Ranger/Archer fires arrows via the projectile system but held
             // NOTHING — give him a visible bow. Bow goes in the LEFT (off/bow) hand
