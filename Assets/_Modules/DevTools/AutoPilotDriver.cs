@@ -88,13 +88,11 @@ namespace DeNelle.DevTools
         // not a walk — the hero's NavMesh walk moves far less than this per frame.
         private const float WalkMaxStepMeters = 3f;
 
-        // The gameplay scene the bot must be in before it can drive. Loading it
-        // single-mode triggers WorldSceneLoader's additive OuterWorld load.
+        // The gameplay scene the bot must be in before it can drive.
         // WO-608: flag-aware. Under ff.MergedWorld the home hub is the single merged
-        // Main_Castle_Overworld scene (content already in-scene → no additive load), so the
-        // headless fleet boots + drives THAT scene for the continuous-walk verification;
-        // OFF = legacy MainCastle_Hall (+ additive OuterWorld). TargetScene / the moat
-        // oracle / the popup-recover reload all derive from this, so they follow the flag.
+        // Main_Castle_Overworld scene (all content in-scene), so the headless fleet boots + drives
+        // THAT scene for the continuous-walk verification; OFF = legacy MainCastle_Hall.
+        // TargetScene / the moat oracle / the popup-recover reload all derive from this, so they follow the flag.
         private static string GameplayScene => DeNelle.Core.FeatureFlags.MergedWorld
             ? "Main_Castle_Overworld"
             : "MainCastle_Hall";
@@ -310,7 +308,7 @@ namespace DeNelle.DevTools
                 yield return RunPhase("HomeReturnRoundTrip", HomeReturnRoundTrip());
                 _probes?.SetIntentionalCrossPhase(false);
 
-                // WO-449: the continuous-walk raid loop — walk to a live OuterWorld outpost and
+                // WO-449: the continuous-walk raid loop — walk to a live outpost and
                 // prove combat triggers ON FOOT (no teleport). This phase loads NO scene, so the
                 // UNEXPECTED-CROSS probe stays ARMED (NOT marked intentional): a re-introduced
                 // raid/outpost teleport would trip AutoPilotProbes' scene-load Fail.
@@ -342,10 +340,9 @@ namespace DeNelle.DevTools
 
         // WO-482 — HEADLESS verify of the overworld-encounter -> isolated BattleArena loop
         // via the REAL trigger path (NOT a BeginEncounter bypass). The old oracle called
-        // BattleArena.BeginEncounter DIRECTLY and a real bug (reps never spawned: the
-        // spawner gated on GetActiveScene()=="OuterWorld", false under additive OuterWorld)
-        // sailed through a green PASS. This drives the ACTUAL chain: warp the hero into an
-        // OuterWorld roster region on navmesh -> force the spawner's REAL SpawnRep ->
+        // BattleArena.BeginEncounter DIRECTLY and would miss bugs in the real spawn path.
+        // This drives the ACTUAL chain: warp the hero into a roster region on navmesh ->
+        // force the spawner's REAL SpawnRep ->
         // warp the hero onto the rep so RepEngageWatcher's OWN Update fires Engage()->
         // BeginEncounter -> assert BattleInProgress -> assert the family staged -> force-win.
         // Every failure is a FlowTrace.Fail so it lands in break-log.jsonl as a ranked ticket.
@@ -358,9 +355,8 @@ namespace DeNelle.DevTools
             int prevFlag = PlayerPrefs.GetInt("ff.overworldencounter", -1);
             PlayerPrefs.SetInt("ff.overworldencounter", 1);
 
-            // 2) Ensure OuterWorld is loaded, then warp the hero to a point that is BOTH on
-            //    navmesh AND classified by ZoneManager as an OUTER roster region (so the
-            //    spawner's HeroInOuterWorld()/anchor are valid). Sample candidate points.
+            // 2) Warp the hero to a point that is BOTH on navmesh AND classified by ZoneManager
+            //    as an OUTER roster region (so the spawner can spawn reps). Sample candidate points.
             Vector3 homePos = _hero.transform.position;
             Vector3[] candidates = { new Vector3(40f, 0f, 40f), new Vector3(60f, 0f, 0f), new Vector3(0f, 0f, 40f), new Vector3(40f, 0f, 0f), new Vector3(-40f, 0f, 40f) };
             Vector3 landing = Vector3.zero;
@@ -377,14 +373,14 @@ namespace DeNelle.DevTools
             if (!placed)
             {
                 _lastDetail = "no on-mesh roster region found -> rep cannot anchor";
-                FlowTrace.Fail(Tag, "AssertEncounterRealPath: no candidate point was BOTH on navmesh AND in an OuterWorld roster region (OuterWorld not loaded / navmesh not baked?) - the real rep path cannot run.");
+                FlowTrace.Fail(Tag, "AssertEncounterRealPath: no candidate point was BOTH on navmesh AND in a roster region (navmesh not baked / zones not defined) - the real rep path cannot run.");
                 RestoreEncounterFlag(prevFlag);
                 yield break;
             }
 
             try { _hero.WarpTo(landing); } catch (Exception ex) { FlowTrace.Warn(Tag, "AssertEncounterRealPath: hero WarpTo threw " + ex.Message); }
             for (int i = 0; i < 3; i++) yield return null;
-            FlowTrace.Step(Tag, "AssertEncounterRealPath: hero warped into OuterWorld roster region @ " + landing + ".");
+            FlowTrace.Step(Tag, "AssertEncounterRealPath: hero warped into roster region @ " + landing + ".");
 
             // 3) Force the spawner's REAL spawn path (SpawnRep) -- do NOT spawn reps ourselves,
             //    do NOT call BeginEncounter. Then wait for a real OrcRep_* to exist.
@@ -987,10 +983,9 @@ namespace DeNelle.DevTools
         // =====================================================================
         private IEnumerator OpenEachVendor()
         {
-            // ROBUST DISCOVERY: FindObjectsByType spans ALL loaded scenes, but the castle's
-            // additive OuterWorld (and any runtime-injected buildings) can load a beat after
-            // MainCastle_Hall becomes active. So RETRY for up to ~5s before concluding 0 —
-            // a building can spawn shortly after scene load. (FindObjectsSortMode.None.)
+            // ROBUST DISCOVERY: FindObjectsByType spans ALL loaded scenes, but buildings can
+            // load a beat after the scene becomes active. So RETRY for up to ~5s before concluding 0 —
+            // runtime-injected buildings can spawn shortly after scene load. (FindObjectsSortMode.None.)
             BuildingInteractable[] buildings = null;
             float t0Discover = Time.realtimeSinceStartup;
             int attempts = 0;
@@ -2488,14 +2483,12 @@ namespace DeNelle.DevTools
         //  PHASE: AttemptExitCastle (LAST)
         //  Walk into the south exit trigger and detect the REAL crossing.
         //
-        //  CALIBRATION (false-positive fix): the castle->OuterWorld seam loads
-        //  OuterWorld ADDITIVELY (SceneTransitionTrigger.loadAdditive=true), so on a
-        //  SUCCESSFUL crossing the ACTIVE scene STAYS MainCastle_Hall — the old
-        //  "did the active scene change?" test therefore ALWAYS timed out (false
-        //  positive). The reliable signal is that the seam WARPS the hero to
-        //  trigger.targetPosition on Cross(). We poll the hero's distance to that
-        //  warp landing instead. (OuterWorld may also already be loaded additively
-        //  at startup, so "OuterWorld isLoaded" is NOT a usable crossing signal.)
+        //  CALIBRATION (false-positive fix): the castle-seam crossing loads the world
+        //  ADDITIVELY (SceneTransitionTrigger.loadAdditive=true), so on a SUCCESSFUL
+        //  crossing the ACTIVE scene STAYS MainCastle_Hall — the old "did the active
+        //  scene change?" test therefore ALWAYS timed out (false positive). The reliable
+        //  signal is that the seam WARPS the hero to trigger.targetPosition on Cross().
+        //  We poll the hero's distance to that warp landing instead.
         //
         //  SUCCESS = hero actually warped to within 8m of the seam's targetPosition.
         //  FAILURE (real, ticket-worthy) = within the timeout the hero never reached
@@ -2512,13 +2505,10 @@ namespace DeNelle.DevTools
                 yield break;
             }
 
-            // Pick the exit gate NAVMESH-DERIVED, not "south-most" (§12 captured proof,
-            // fleet 2026-07-02: OuterWorld loads ADDITIVELY and is UN-STACKED far south of
-            // the castle, so the global south-most SceneTransitionTrigger is the Outpost1
-            // cave portal at z≈-404 — on a DISJOINT navmesh the courtyard hero can never
-            // path to. 4/6 runs stalled 30s driving at it; the 2 "passes" were chaos runs
-            // whose hero already stood in OuterWorld. The old comment's "south-most = the
-            // wired castle->OuterWorld seam" was a pre-unstack layout assumption.)
+            // Pick the exit gate NAVMESH-DERIVED, not "south-most" (§12 captured proof
+            // from prior fleet runs: global south-most was an outpost portal far from the
+            // courtyard on a disjoint navmesh; the hero could never path there. Selection:
+            // among gates the hero can actually PATH to on the live navmesh, pick south-most.)
             // Selection: among triggers the hero can actually PATH to on the live navmesh
             // (NavMesh.CalculatePath complete — lift-aware for free, it reads the baked
             // y=liftY courtyard), pick the south-most. Fall back to global south-most
@@ -3380,8 +3370,8 @@ namespace DeNelle.DevTools
         //  side-effect-free, logs its own MOAT_COMPLETE / MOAT_INCOMPLETE marker to
         //  break-log). Its reachability leg needs a LIVE navmesh, so it must run in
         //  PLAY-MODE AFTER the settle delay (mirrors CastleNavTopologyDiag's ~1.5s
-        //  wait for the RuntimeRegionGate rebake + additive OuterWorld load), NOT at
-        //  boot. Hub-only (the moat builds on MainCastle_Hall); skips cleanly on a
+        //  wait for the RuntimeRegionGate rebake + world load), NOT at boot.
+        //  Hub-only (the moat builds on MainCastle_Hall); skips cleanly on a
         //  --scene override. Guarded — a throw logs + the run continues.
         // =====================================================================
         private IEnumerator VerifyMoatOracle()
@@ -3393,7 +3383,7 @@ namespace DeNelle.DevTools
                 yield break;
             }
 
-            // Settle: let the RuntimeRegionGate rebake + additive OuterWorld navmesh come live
+            // Settle: let the RuntimeRegionGate rebake + world navmesh come live
             // before the reachability leg probes it (else it self-reports INCONCLUSIVE).
             yield return Wait(1.5f);
 

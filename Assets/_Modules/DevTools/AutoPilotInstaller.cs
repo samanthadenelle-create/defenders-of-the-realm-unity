@@ -193,7 +193,7 @@ namespace DeNelle.DevTools
                         }
             }
             catch { }
-            // WebGL fallback: "--run=" -> URL "?...&run=web1", "--scene=" -> "?...&scene=OuterWorld".
+            // WebGL fallback: "--run=" -> URL "?...&run=web1", "--scene=" -> "?...&scene=Village2".
             try
             {
                 string v = UrlQueryValue(prefix.TrimStart('-').TrimEnd('='));

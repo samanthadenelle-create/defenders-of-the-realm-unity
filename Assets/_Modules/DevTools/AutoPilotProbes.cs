@@ -28,7 +28,7 @@
 //                          ProximityRadius. A floating / unreachable seam never fires —
 //                          the player can't cross. Runtime generalisation of the
 //                          editor-only CastleGateNavVerify (regression-guards the
-//                          2026-06-19 castle→OuterWorld bridge fix). Cross-scene seams
+//                          2026-06-19 castle-seam bridge fix). Cross-scene seams
 //                          (across a warp boundary) are census-only, never failed.
 //
 // GATING: this component is spawned ONLY by AutoPilotDriver (an autopilot-only
@@ -509,14 +509,12 @@ namespace DeNelle.DevTools
             int loaded = SceneManager.sceneCount;
             if (loaded < 2) return;
 
-            // ARCHITECTURE UPDATE (un-stacked gated regions, world-architecture memory): the castle and
-            // OuterWorld are now INTENTIONALLY loaded additively and BRIDGED by a NavMeshLink — their AABBs
-            // still overlap (OuterWorld's huge terrain + origin-area objects enclose the castle), but the
-            // navmesh SURFACES are disjoint + connected by the link. A present NavMeshLink means the
-            // multi-navmesh setup is deliberate + bridged, NOT the accidental same-origin stack this probe
-            // was written for. Suppress here; the sibling CheckNavMeshLinks() probe already flags the REAL
-            // link-less overlap (WO-453 class). This crude AABB check was firing 6/6/fleet as a false
-            // positive after the un-stack.
+            // ARCHITECTURE UPDATE (gated regions, bridge architecture): the castle and world
+            // are INTENTIONALLY loaded additively and BRIDGED by a NavMeshLink when needed.
+            // Their AABBs may overlap, but the navmesh SURFACES are disjoint + connected by the link.
+            // A present NavMeshLink means the multi-navmesh setup is deliberate + bridged, NOT the
+            // accidental same-origin stack. Suppress this crude AABB check; the sibling CheckNavMeshLinks()
+            // probe already flags the REAL link-less overlap (the WO-453 class).
             if (UnityEngine.Object.FindObjectsByType<Unity.AI.Navigation.NavMeshLink>().Length > 0)
                 return;
 
@@ -605,8 +603,8 @@ namespace DeNelle.DevTools
             }
 
             // (b) Overlapping additive seam with NO bridging link = warp-only seam (the WO-453
-            //     castle<->OuterWorld show-stopper). For each pair of loaded scenes whose XZ
-            //     footprints overlap, require >=1 NavMeshLink whose endpoints straddle the pair.
+            //     class). For each pair of loaded scenes whose XZ footprints overlap,
+            //     require >=1 NavMeshLink whose endpoints straddle the pair.
             int loaded = SceneManager.sceneCount;
             if (loaded < 2) return;
 
@@ -646,7 +644,7 @@ namespace DeNelle.DevTools
                     if (!_navLinkSeen.Add(key)) continue;
                     FlowTrace.Fail(Tag,
                         $"NAVMESH-LINK MISSING: additive scenes '{sceneBounds[i].Key}' and '{sceneBounds[j].Key}' overlap in XZ " +
-                        "but NO NavMeshLink bridges them — the seam is not walkable (warp-only / strands). This is the WO-453 castle<->OuterWorld class.");
+                        "but NO NavMeshLink bridges them — the seam is not walkable (warp-only / strands). This is the WO-453 class.");
                 }
             }
         }
@@ -753,9 +751,8 @@ namespace DeNelle.DevTools
         //  SceneTransitionTrigger must (a) sit ON the baked navmesh and (b) be
         //  reachable-on-foot from the hero to within its ProximityRadius. A seam the
         //  hero can't walk up to never fires — the player is stuck at the crossing.
-        //  This is the class behind the 2026-06-19 castle→OuterWorld bridge fix (a
-        //  trigger floated 1.5m above the deck, read off-mesh, and the deck never
-        //  fused to the courtyard); this oracle regression-guards it every run.
+        //  This is the class behind the 2026-06-19 castle-seam bridge fix; this oracle
+        //  regression-guards it every run (trigger placement, deck-weld, crossing-fire).
         //
         //  FALSE-POSITIVE DISCIPLINE: a seam in a DIFFERENT scene than the hero sits
         //  legitimately across a warp boundary, so an incomplete path there is NOT a
@@ -815,8 +812,7 @@ namespace DeNelle.DevTools
 
                 // (b) Reachability from the hero — only meaningful when the seam is on-mesh.
                 //   The seam FIRES on PROXIMITY (within ProximityRadius), NOT on path-completeness.
-                //   On the intentional same-origin DUAL-NAVMESH stack (MainCastle_Hall + OuterWorld),
-                //   CalculatePath routinely returns PathPartial even though the hero physically walks
+                //   CalculatePath can return PathPartial even when the hero physically walks
                 //   to within a metre of the trigger and the proximity fires (the 2026-06-19 bridge bot
                 //   pass proved this: PathPartial, closest 1.0m, radius 12m — and the bot DID cross).
                 //   So reachability = "can the hero get within firing range", measured by how close the
@@ -923,9 +919,8 @@ namespace DeNelle.DevTools
                         || sh.name == "Standard"   // built-in Standard renders MAGENTA under URP
                         || sh.name.IndexOf("InternalError", StringComparison.OrdinalIgnoreCase) >= 0;
                     if (!magenta) continue;
-                    // DEFINITIVE identity (two wrong guesses on the OuterWorld 'Body' pink cost a rebuild
-                    // each): dump the FULL root→leaf path + mesh + components + root so the next capture
-                    // names the EXACT object + what spawns it — no third guess.
+                    // DEFINITIVE identity: dump the FULL root→leaf path + mesh + components + root
+                    // so the next capture names the EXACT object + what spawns it.
                     string path = HierarchyPath(r.transform);
                     if (!_magentaSeen.Add(path)) continue;
                     FlowTrace.Fail(Tag, $"MAGENTA-MATERIAL: '{path}' (scene '{r.gameObject.scene.name}') " +
