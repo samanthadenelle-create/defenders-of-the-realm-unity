@@ -120,6 +120,10 @@ namespace DeNelle.Core.UI
                 new Vector2(0.04f, 0.05f), new Vector2(0.97f, 0.56f),
                 new Color(0f, 0f, 0f, 0f), rounded: false);
             statBars.GetComponent<Image>().raycastTarget = false;
+            // WO-437: clip the bars to the StatBars container so no HP/MP fill can bleed past the
+            // nameplate edge. Masking the CONTAINER (not the root plate) keeps the ornate plate
+            // border intact while confining every bar row + fill inside it.
+            statBars.AddComponent<RectMask2D>();
 
             h.HealthFill = BuildNameplateRow(statBars.transform, "Health",
                 new Vector2(0f, 0.52f), new Vector2(1f, 1f),
@@ -150,6 +154,10 @@ namespace DeNelle.Core.UI
             brt.offsetMin = Vector2.zero; brt.offsetMax = Vector2.zero;
             var bgImg = bgGo.GetComponent<Image>();
             bgImg.raycastTarget = false;
+            // WO-437: also clip each bar's fill to its OWN background container, so a >100% or
+            // animating Filled fill can never spill past the bar edge (belt-and-braces with the
+            // StatBars mask). The background Image is the mask graphic; the fill child is clipped.
+            bgGo.AddComponent<RectMask2D>();
             var barBg = RpgUiCatalog.Get(RpgUiCatalog.RoleHud, RpgUiCatalog.HudNameplateBar);
             if (barBg != null)
             {

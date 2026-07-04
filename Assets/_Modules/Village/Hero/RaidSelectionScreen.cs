@@ -88,7 +88,8 @@ namespace DeNelle.Village.Hero
             // WO-562: canonical obsidian chrome (black + gold trim + gold header "RAIDS" + shared
             // Close) replaces PanelFramed + a bespoke Header + a per-panel "X" Danger button.
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "RAIDS",
-                new Vector2(0.16f, 0.06f), new Vector2(0.84f, 0.94f), Close, withBackdrop: false);
+                new Vector2(0.16f, 0.06f), new Vector2(0.84f, 0.94f), Close, withBackdrop: false,
+                frameName: RpgUiCatalog.FrameCore);
             var panel = chrome.content.transform;
 
             // The RAIDS banner image heads the panel (decorative, null-safe).

@@ -251,8 +251,11 @@ namespace DeNelle.HUD
             if (_modal != null && _modal.canvas != null) return;
             using var _ = FlowTrace.Enter("CosmeticShop", "BuildUi");
 
+            // PORTRAIT sizing (UI review 05): Merchant_Panel is a PORTRAIT frame (~1005x1507). Anchor
+            // to a narrow, tall center column so the rendered aspect matches the template instead of
+            // stretching the ornate frame into a landscape slab.
             _modal = ElarionUiKit.BuildObsidianModal("CosmeticShopUI", "Cosmetic Shop",
-                new Vector2(0.14f, 0.06f), new Vector2(0.86f, 0.94f), CloseOverlay,
+                new Vector2(0.33f, 0.05f), new Vector2(0.67f, 0.95f), CloseOverlay,
                 frameName: RpgUiCatalog.FrameMerchant, medallionIcon: "coin");
 
             var layout = _modal.chrome.layout;

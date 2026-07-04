@@ -71,6 +71,8 @@ namespace DeNelle.HUD.Kit
         private ElarionUiKit.CurrencyChipHandle[] _resChips;      // expanded row
         private ElarionUiKit.CurrencyChipHandle _resGoldOnly;     // collapsed variant
         private GameObject _resExpandedRow;
+        private GameObject _resDock;        // WO-440: right-edge tab + collapsible chips container
+        private bool _resPanelOpen;         // WO-440: town collapse state (collapsed by default)
         private Button _talkButton, _fleeButton, _startWaveButton;
         private TMP_Text _fleeLabel;
         private TMP_Text _waveLabel, _waveCountdown;
@@ -78,7 +80,7 @@ namespace DeNelle.HUD.Kit
         private GameObject _waveBlockRoot;
         private ElarionUiKit.NameplateHandle[] _cycleRows;
         private string[] _cycleIds;
-        private ElarionUiKit.ChatDockHandle _chatDock;
+        private ElarionUiKit.SlideDockHandle _slideDock;   // WO-439: left slide-out (Chat/Ranks/Music/Settings)
         private HudCompassWidget _compass;
 
         // model subscriptions (for teardown)
@@ -171,7 +173,6 @@ namespace DeNelle.HUD.Kit
         private void BuildWidgets()
         {
             Transform pool = transform;   // widgets are reparented into areas on ApplyPosture
-            Vector2 z = Vector2.zero, o = Vector2.one;
 
             // ── vitals: WO-432 shared BuildPartyNameplate (name + HP + MP) ──
             _vitals = ElarionUiKit.BuildPartyNameplate(pool, "Hero",
@@ -284,10 +285,9 @@ namespace DeNelle.HUD.Kit
             var cluster = ElarionUiKit.BuildControllerCluster(pool, new Vector2(0.5f, 0.5f), HudMoveInput.Set);
             Register("moveCluster", WrapAsWidget("moveCluster", cluster.root));
 
-            // ── dock: chat/ranks/music (hidden entirely in build mode via the rows) ──
-            _chatDock = ElarionUiKit.BuildChatDock(pool, z, o, OpenClanChat, OpenLeaderboard, OpenJukebox);
-            _chatDock.SetExpanded(false);
-            Register("chatDock", WrapAsWidget("chatDock", _chatDock.root));
+            // ── dock: WO-439 LEFT slide-out (Chat/Leaderboard/Music/Settings), gear tab ──
+            // (hidden entirely in build mode via the occupancy rows, same "chatDock" widget id).
+            BuildSlideDock(pool);
 
             // ── status: the COMMON compass widget (navigation cue) ──
             // The reusable kit compass — cardinal heading + gold objective/region-gate
@@ -507,12 +507,22 @@ namespace DeNelle.HUD.Kit
             // Each chip draws OUR resource icon through the CurrencyChip concept resolver
             // (concept-icons.json gold/wood/iron/food/crystal -> Icons_Obsidian) — the icon
             // choice is DATA, never hard-coded here. Count-tween only, NO flash.
+            // WO-440: the always-visible resources panel now lives in a DOCK — a right-edge tab
+            // (always shown when the widget is occupied) + the collapsible chips panel that the tab
+            // toggles. Collapsed by default; tap the tab to expand, tap again to collapse. SetResources
+            // (OnEconomy) updates the chip values whether the panel is open or closed (labels persist).
+            _resDock = new GameObject("ResourceDock", typeof(RectTransform));
+            _resDock.transform.SetParent(pool, false);
+            var drt = (RectTransform)_resDock.transform;
+            drt.anchorMin = Vector2.zero; drt.anchorMax = Vector2.one;
+            drt.offsetMin = Vector2.zero; drt.offsetMax = Vector2.zero;
+
             _resExpandedRow = new GameObject("ResourceChips", typeof(RectTransform));
-            _resExpandedRow.transform.SetParent(pool, false);
+            _resExpandedRow.transform.SetParent(_resDock.transform, false);
             var rrt = (RectTransform)_resExpandedRow.transform;
-            // Top-left pivot so the fitter grows the frame down/right inside the rail.
-            rrt.anchorMin = new Vector2(0f, 1f); rrt.anchorMax = new Vector2(0f, 1f);
-            rrt.pivot = new Vector2(0f, 1f); rrt.anchoredPosition = Vector2.zero;
+            // Top-RIGHT pivot so the fitter grows the frame down/left, tucked under the right-edge tab.
+            rrt.anchorMin = new Vector2(1f, 1f); rrt.anchorMax = new Vector2(1f, 1f);
+            rrt.pivot = new Vector2(1f, 1f); rrt.anchoredPosition = new Vector2(-6f, -52f);
 
             // Obsidian dark frame + gold inner rim (reused kit chrome, near-black ObsidianFill
             // — NOT the olive Panel()). ignoreLayout so it stretches to the fitter-sized content.
@@ -554,8 +564,23 @@ namespace DeNelle.HUD.Kit
                 var le = _resChips[i].root.AddComponent<LayoutElement>();
                 le.minHeight = 34f; le.preferredHeight = 34f; le.minWidth = 168f;
             }
-            // Tap anywhere on the row toggles nothing in town (always expanded there).
-            Register("resourceChips", WrapAsWidget("resourceChips", _resExpandedRow));
+            // WO-440: right-edge tab that toggles the chips panel (collapsed by default).
+            var resTab = ElarionUiKit.BuildObsidianButton(_resDock.transform, "$",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.95f, 0.86f), new Vector2(1.0f, 0.99f), ToggleResourcePanel);
+            var resTabIcon = UiStyle.Icon("gold", "coin", "resources");
+            if (resTabIcon != null)
+            {
+                var ico = ElarionUiKit.AddImage(resTab.transform, "TabIcon",
+                    new Vector2(0.15f, 0.15f), new Vector2(0.85f, 0.85f), Color.white, rounded: false);
+                var icoImg = ico.GetComponent<Image>();
+                icoImg.sprite = resTabIcon; icoImg.preserveAspect = true; icoImg.raycastTarget = false;
+                var lbl = resTab.GetComponentInChildren<TMP_Text>();
+                if (lbl != null) lbl.gameObject.SetActive(false);   // icon replaces the "$" glyph
+            }
+            _resPanelOpen = false;
+            _resExpandedRow.SetActive(false);   // collapsed by default
+            Register("resourceChips", WrapAsWidget("resourceChips", _resDock));
 
             // Collapsed variant (calm(explore)): gold chip only; TAP expands the row for 6s.
             _resGoldOnly = ElarionUiKit.CurrencyChip(pool, ElarionUiKit.CurrencyKind.Gold,
@@ -744,6 +769,17 @@ namespace DeNelle.HUD.Kit
             FlowTrace.Step("HudKit", "flee armed (tap again within 2s to confirm)");
         }
 
+        // WO-440: right-edge resource tab toggle — expand/collapse the chips panel. Values are
+        // still updated by OnEconomy regardless of this state (labels persist while hidden).
+        private void ToggleResourcePanel() => SetResourcePanelOpen(!_resPanelOpen);
+
+        private void SetResourcePanelOpen(bool open)
+        {
+            _resPanelOpen = open;
+            if (_resExpandedRow != null && _resExpandedRow.activeSelf != open)
+                _resExpandedRow.SetActive(open);
+        }
+
         // Context action (carried over from the old HUD, Core-only): focused upgradable
         // building -> Upgrade; else the Quest/Rumor board.
         private void OnContextAction()
@@ -754,6 +790,53 @@ namespace DeNelle.HUD.Kit
             else if (!string.IsNullOrEmpty(id)) PanelRouter.Open(PanelId.BuildingUpgrade, id);
             else if (!PanelRouter.Open(PanelId.RumorBoard))
                 FlowTrace.Warn("HudKit", "RumorBoard opener not registered — quest board unreachable");
+        }
+
+        // WO-439: the LEFT slide-out dock — a gear tab pinned to the left screen edge (collapsed by
+        // default) that slides open a panel with FOUR tabs: Chat / Leaderboard / Music / Settings.
+        // Built from the shared ElarionUiKit.BuildSlideTab helper; registered under the same "chatDock"
+        // widget id so the hud-areas.json occupancy rows are unchanged. Icons resolve through the HUD's
+        // concept-icon path (UiStyle.Icon) with a text fallback so nothing blanks.
+        private void BuildSlideDock(Transform pool)
+        {
+            _slideDock = ElarionUiKit.BuildSlideTab(pool, ElarionUiKit.SlideEdge.Left,
+                tabYCenter: 0.5f, panelWidthFrac: 0.22f, panelHeightFrac: 0.52f,
+                tabIconConcept: "settings");   // GEAR tab (owner: replaces the down "v/>" trigger)
+
+            AddDockTab(_slideDock.panel, 0, "Chat",        "chat",        OpenClanChat);
+            AddDockTab(_slideDock.panel, 1, "Leaderboard", "leaderboard", OpenLeaderboard);
+            AddDockTab(_slideDock.panel, 2, "Music",       "music",       OpenJukebox);
+            AddDockTab(_slideDock.panel, 3, "Settings",    "settings",    OpenSettings);
+
+            Register("chatDock", WrapAsWidget("chatDock", _slideDock.root));
+        }
+
+        // One labelled + icon-badged tab inside the slide-out (stacked vertically, top-to-bottom).
+        private void AddDockTab(RectTransform panel, int i, string label, string iconConcept, Action onTap)
+        {
+            const int n = 4;
+            float y1 = 1f - (i / (float)n) - 0.02f;
+            float y0 = 1f - ((i + 1) / (float)n) + 0.02f;
+            var btn = ElarionUiKit.BuildObsidianButton(panel, label,
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.06f, y0), new Vector2(0.94f, y1), onTap);
+            var icon = UiStyle.Icon(iconConcept);
+            if (icon != null)
+            {
+                var ico = ElarionUiKit.AddImage(btn.transform, "TabIcon",
+                    new Vector2(0.05f, 0.18f), new Vector2(0.28f, 0.82f), Color.white, rounded: false);
+                var img = ico.GetComponent<Image>();
+                img.sprite = icon; img.preserveAspect = true; img.raycastTarget = false;
+            }
+        }
+
+        // Settings tab -> the Help/Settings card (same target as the gear/Menu button).
+        private void OpenSettings()
+        {
+            if (DeNelle.HUD.HelpMenu.Instance != null)
+                DeNelle.HUD.HelpMenu.Instance.ToggleOverlay();
+            else if (!PanelRouter.Open(PanelId.GameGuide))
+                FlowTrace.Warn("HudKit", "dock: neither HelpMenu nor GameGuide available for Settings");
         }
 
         // ── dock intents (parity with the retired SocialAccessCluster) ──────
@@ -851,6 +934,8 @@ namespace DeNelle.HUD.Kit
                         if (mount != null && row.transform.parent != mount) row.transform.SetParent(mount, false);
                     }
                     row.SetActive(expand);
+                    // WO-440: the explore tap-window shows the full chips panel (not just the tab).
+                    SetResourcePanelOpen(expand);
                 }
             }
         }

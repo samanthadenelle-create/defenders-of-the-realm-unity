@@ -115,8 +115,11 @@ namespace DeNelle.HUD
             if (_modal != null && _modal.canvas != null) return;
             using var _ = FlowTrace.Enter("PetSkillTree", "BuildUi");
 
+            // PORTRAIT sizing (UI review 06): Pet_Panel is a PORTRAIT frame (~1230x1484). Anchor to a
+            // narrow, tall center column so the rendered aspect matches the template instead of
+            // stretching the ornate frame into a near-square landscape slab.
             _modal = ElarionUiKit.BuildObsidianModal("PetSkillTreeUI", "Echo Skill Trees",
-                new Vector2(0.24f, 0.06f), new Vector2(0.76f, 0.94f), Close,
+                new Vector2(0.29f, 0.05f), new Vector2(0.71f, 0.95f), Close,
                 frameName: RpgUiCatalog.FramePet, medallionIcon: "tree");
 
             // FULL content area, not just the frame's lower body zone (eyes-on 2026-07-03:
@@ -270,7 +273,7 @@ namespace DeNelle.HUD
 
             var cardGo = new GameObject("Node", typeof(RectTransform), typeof(Image), typeof(LayoutElement), typeof(CanvasGroup));
             cardGo.transform.SetParent(_treeContent, false);
-            cardGo.GetComponent<LayoutElement>().preferredHeight = 118f;
+            cardGo.GetComponent<LayoutElement>().preferredHeight = 128f;
             var bg = cardGo.GetComponent<Image>();
             var slotSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, "slot_talent");
             if (slotSprite != null) { bg.sprite = slotSprite; bg.type = Image.Type.Sliced; }
@@ -284,15 +287,17 @@ namespace DeNelle.HUD
 
             MakeText(cardGo.transform, name, 16, ElarionUi.Parchment, FontStyles.Bold,
                 TextAlignmentOptions.Left, new Vector2(0.04f, 0.72f), new Vector2(0.70f, 0.97f));
-            // Badge line: tier + type, palette-graded (canon set, not ad-hoc rainbow).
+            // Badge line: tier + type, palette-graded (canon set, not ad-hoc rainbow). UI review 06:
+            // bumped 11->13 for legibility (the sub-labels read dense/muddy at 11 over the textured well).
             MakeText(cardGo.transform,
                 $"<color=#{ColorUtility.ToHtmlStringRGB(TierBadgeColor(tier))}>{tier.ToUpperInvariant()}</color>   " +
                 $"<color=#{ColorUtility.ToHtmlStringRGB(TypeBadgeColor(type))}>{type.ToUpperInvariant()}</color>",
-                11, ElarionUi.ParchmentDim, FontStyles.Bold,
+                13, ElarionUi.ParchmentDim, FontStyles.Bold,
                 TextAlignmentOptions.Left, new Vector2(0.04f, 0.56f), new Vector2(0.70f, 0.72f));
-            MakeText(cardGo.transform, desc, 12, ElarionUi.ParchmentDim, FontStyles.Italic,
+            MakeText(cardGo.transform, desc, 13, ElarionUi.Parchment, FontStyles.Italic,
                 TextAlignmentOptions.TopLeft, new Vector2(0.04f, 0.22f), new Vector2(0.70f, 0.54f));
-            MakeText(cardGo.transform, BuildMetaLine(type, cd, unlockLevel), 11, ElarionUi.ParchmentDim,
+            // Meta line brightened to Parchment (was dim over the textured well) + 11->12.
+            MakeText(cardGo.transform, BuildMetaLine(type, cd, unlockLevel), 12, ElarionUi.Parchment,
                 FontStyles.Normal, TextAlignmentOptions.Left,
                 new Vector2(0.04f, 0.04f), new Vector2(0.70f, 0.20f));
 
@@ -311,7 +316,7 @@ namespace DeNelle.HUD
             }
             else
             {
-                MakeText(cardGo.transform, LockReason(skill, petLevel, unlockedSet), 11,
+                MakeText(cardGo.transform, LockReason(skill, petLevel, unlockedSet), 12,
                     ElarionUi.Gold, FontStyles.Normal, TextAlignmentOptions.Center,
                     new Vector2(0.72f, 0.15f), new Vector2(0.97f, 0.85f));
             }

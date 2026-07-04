@@ -257,6 +257,14 @@ namespace DeNelle.Core.UI
             public Vector4 header, body, medallion, footer, close;
             public Vector4 bodyLeft, bodyRight;
             public bool hasMedallion, hasFooter, hasSplitBody;
+            /// <summary>TWO-TONE FRAME (FrameCrafting / FrameQuest): the frame art bakes a dark
+            /// obsidian well on the LEFT and a tan parchment well on the RIGHT, split at an art seam.
+            /// A screen that drops content into the full <see cref="body"/> straddles that seam, so
+            /// half its content sits on black and half on tan ("reads half-drawn"). When true,
+            /// BuildObsidianPanel paints UNIFORM backing plates over the content wells (dark under the
+            /// full body + list side, parchment under the detail side), so content never depends on
+            /// where the baked seam falls — killing the parchment bleed at the shared kit level.</summary>
+            public bool twoToneBody;
         }
 
         /// <summary>The default Close anchor when a frame has no designed notch. MOBILE-FIRST (owner
@@ -310,10 +318,14 @@ namespace DeNelle.Core.UI
                     z.medallion   = new Vector4(0.014f, 0.885f, 0.097f, 0.990f);
                     z.hasMedallion = true;
                     z.header      = new Vector4(0.115f, 0.900f, 0.860f, 0.975f);
-                    z.body        = new Vector4(0.030f, 0.150f, 0.955f, 0.875f);
+                    // PARCHMENT-BLEED FIX: the full `body` is CONFINED to the dark-left region (== bodyLeft)
+                    // so a single-well screen never straddles the baked dark/parchment seam — its content
+                    // (over the dark backing plate) reads uniformly dark. Split screens use bodyLeft/bodyRight.
+                    z.body        = new Vector4(0.030f, 0.150f, 0.482f, 0.875f);
                     z.bodyLeft    = new Vector4(0.030f, 0.150f, 0.482f, 0.875f); // dark well: lists
                     z.bodyRight   = new Vector4(0.490f, 0.150f, 0.955f, 0.875f); // parchment: detail
                     z.hasSplitBody = true;
+                    z.twoToneBody  = true;   // dark/parchment baked seam — paint uniform well plates
                     z.footer      = new Vector4(0.060f, 0.085f, 0.940f, 0.145f); // action strip
                     break;
                 case RpgUiCatalog.FrameMerchant:
@@ -343,10 +355,12 @@ namespace DeNelle.Core.UI
                     z.medallion   = new Vector4(0.028f, 0.850f, 0.125f, 0.992f);
                     z.hasMedallion = true;
                     z.header      = new Vector4(0.14f, 0.900f, 0.86f, 0.975f);
-                    z.body        = new Vector4(0.035f, 0.115f, 0.968f, 0.858f);
+                    // PARCHMENT-BLEED FIX: full `body` confined to the dark-left region (see FrameCrafting).
+                    z.body        = new Vector4(0.035f, 0.115f, 0.495f, 0.858f);
                     z.bodyLeft    = new Vector4(0.035f, 0.115f, 0.495f, 0.858f);
                     z.bodyRight   = new Vector4(0.505f, 0.115f, 0.966f, 0.760f);
                     z.hasSplitBody = true;
+                    z.twoToneBody  = true;   // dark/parchment baked seam — paint uniform well plates
                     break;
                 case RpgUiCatalog.FrameCore:
                     // Core_Panel (1210x1815, pixel-measured 2026-07-03): portrait frame, circle
@@ -419,6 +433,30 @@ namespace DeNelle.Core.UI
             return rt;
         }
 
+        /// <summary>Uniform dark obsidian well fill for a two-tone frame's content wells (parchment-bleed fix).</summary>
+        private static readonly Color TwoToneWellFill = new Color(0.055f, 0.050f, 0.060f, 0.98f);
+        /// <summary>Uniform warm parchment fill for a two-tone frame's DETAIL well (parchment-bleed fix).</summary>
+        private static readonly Color TwoToneParchmentFill = new Color(0.827f, 0.760f, 0.576f, 1f);
+
+        /// <summary>Paint a UNIFORM backing plate as the FIRST child of a drop-zone so any content
+        /// dropped into it reads on one flat tone — used by the two-tone (FrameCrafting / FrameQuest)
+        /// parchment-bleed fix. Content added to the zone AFTER this call renders on top (SetAsFirstSibling).
+        /// Raycast-off so it never eats taps. No-op on a null zone.</summary>
+        private static void ZoneBacking(RectTransform zone, Color fill)
+        {
+            if (zone == null) return;
+            var go = new GameObject("ZoneBacking", typeof(Image));
+            go.transform.SetParent(zone, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var img = go.GetComponent<Image>();
+            img.color = fill;
+            ApplyRounded(img);
+            img.raycastTarget = false;
+            go.transform.SetAsFirstSibling();
+        }
+
         /// <summary>
         /// THE canonical panel chrome: a near-black panel with a GOLD TRIM border, a gold header
         /// title, and ONE standard Close button — created here ONCE and reused by every panel (DRY).
@@ -478,6 +516,12 @@ namespace DeNelle.Core.UI
                     header = Zone(chrome.content.transform, "Zone_Header", z.header),
                     body   = Zone(chrome.content.transform, "Zone_Body",   z.body),
                 };
+                // PARCHMENT-BLEED FIX (shared): a two-tone frame (FrameCrafting / FrameQuest) bakes a
+                // dark-left / parchment-right seam into its art. A single-well screen that fills the
+                // full body straddles that seam (half black, half tan). Paint a UNIFORM dark obsidian
+                // well plate behind the whole body so ANY content reads on one tone; the parchment is
+                // re-established only under the detail (bodyRight) zone below. Art-seam-independent.
+                if (z.twoToneBody) ZoneBacking(layout.body, TwoToneWellFill);
                 if (z.hasMedallion)
                 {
                     layout.medallion = Zone(chrome.content.transform, "Zone_Medallion", z.medallion);
@@ -508,6 +552,11 @@ namespace DeNelle.Core.UI
                     // screens that want one well; split-aware screens use these instead.
                     layout.bodyLeft  = Zone(chrome.content.transform, "Zone_BodyLeft",  z.bodyLeft);
                     layout.bodyRight = Zone(chrome.content.transform, "Zone_BodyRight", z.bodyRight);
+                    // PARCHMENT-BLEED FIX (cont.): re-establish a UNIFORM parchment plate under the
+                    // DETAIL side only. bodyRight is a LATER sibling than the full-body dark plate, so
+                    // its tan plate renders on top — dark list left, clean parchment detail right, both
+                    // aligned to OUR zones (never the baked art seam). Detail prose reads dark-on-tan.
+                    if (z.twoToneBody) ZoneBacking(layout.bodyRight, TwoToneParchmentFill);
                 }
                 chrome.layout = layout;
 
@@ -1898,6 +1947,249 @@ namespace DeNelle.Core.UI
                     float aOut = Mathf.Clamp01(ro - d + 0.5f);
                     float aIn = Mathf.Clamp01(d - ri + 0.5f);
                     float a = Mathf.Min(aOut, aIn);
+                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+                }
+            }
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+        }
+
+        // =====================================================================
+        // SLIDE TAB / DOCK — an edge-pinned tab that toggles a slide-out panel (WO-439).
+        // ---------------------------------------------------------------------
+        // A reusable collapsible dock: a compact GEAR tab pinned to a screen edge (owner:
+        // "a gear makes more sense than the down arrow") + an obsidian panel that shows on
+        // tap and hides on a second tap. Collapsed by default. Parent your content (a tab
+        // strip, list, etc.) into <see cref="SlideDockHandle.panel"/>. Sprite-first icon via
+        // the concept resolver with a procedural gold-glyph fallback (never blanks).
+        // =====================================================================
+
+        /// <summary>Which screen edge a slide dock pins to.</summary>
+        public enum SlideEdge { Left, Right }
+
+        /// <summary>The live pieces of a <see cref="BuildSlideTab"/> dock.</summary>
+        public sealed class SlideDockHandle
+        {
+            /// <summary>Full-area container (stretch) holding the tab + panel.</summary>
+            public GameObject root;
+            /// <summary>The obsidian slide-out panel — PARENT YOUR CONTENT HERE.</summary>
+            public RectTransform panel;
+            /// <summary>The edge tab button (toggles the panel).</summary>
+            public Button tab;
+            /// <summary>The tab's icon Image (retint / re-sprite if desired).</summary>
+            public Image tabIcon;
+            /// <summary>Optional caller hook fired on every toggle.</summary>
+            public Action<bool> onToggle;
+            /// <summary>Whether the panel is currently expanded.</summary>
+            public bool Expanded { get; private set; }
+            /// <summary>Show/hide the slide-out panel (collapsed by default).</summary>
+            public void SetExpanded(bool v)
+            {
+                Expanded = v;
+                if (panel != null) panel.gameObject.SetActive(v);
+                if (onToggle != null) onToggle(v);
+            }
+        }
+
+        /// <summary>
+        /// Build an edge-pinned slide dock: a compact icon tab at <paramref name="tabYCenter"/> on the
+        /// given <paramref name="edge"/> that toggles an obsidian slide-out panel (collapsed by default).
+        /// Parent your content into the returned <see cref="SlideDockHandle.panel"/>. The tab icon
+        /// resolves from the concept resolver (<paramref name="tabIconConcept"/>, default "settings"/gear)
+        /// with a gold-glyph procedural fallback. Anchors are fractions of <paramref name="parent"/>.
+        /// </summary>
+        public static SlideDockHandle BuildSlideTab(Transform parent, SlideEdge edge,
+            float tabYCenter = 0.5f, float panelWidthFrac = 0.24f, float panelHeightFrac = 0.52f,
+            string tabIconConcept = "settings", Action<bool> onToggle = null)
+        {
+            var h = new SlideDockHandle { onToggle = onToggle };
+            bool left = edge == SlideEdge.Left;
+
+            var root = new GameObject("SlideDock", typeof(RectTransform));
+            root.transform.SetParent(parent, false);
+            var rrt = (RectTransform)root.transform;
+            rrt.anchorMin = Vector2.zero; rrt.anchorMax = Vector2.one;
+            rrt.offsetMin = Vector2.zero; rrt.offsetMax = Vector2.zero;
+            h.root = root;
+
+            float y0 = Mathf.Clamp01(tabYCenter - panelHeightFrac * 0.5f);
+            float y1 = Mathf.Clamp01(tabYCenter + panelHeightFrac * 0.5f);
+
+            // Slide-out panel — obsidian (black + gold trim), pinned to the edge, hidden by default.
+            Vector2 pMin = left ? new Vector2(0f, y0) : new Vector2(1f - panelWidthFrac, y0);
+            Vector2 pMax = left ? new Vector2(panelWidthFrac, y1) : new Vector2(1f, y1);
+            var panel = AddImage(root.transform, "SlidePanel", pMin, pMax, ObsidianFill, rounded: true);
+            AddInnerRim(panel, ObsidianTrim);
+            var pImg = panel.GetComponent<Image>();
+            if (pImg != null) pImg.raycastTarget = true;   // eat taps over the open panel
+            h.panel = (RectTransform)panel.transform;
+
+            // Edge tab — a compact square icon button that toggles the panel.
+            const float tabHalf = 0.055f, tabW = 0.05f;
+            float ty0 = Mathf.Clamp01(tabYCenter - tabHalf), ty1 = Mathf.Clamp01(tabYCenter + tabHalf);
+            Vector2 tMin = left ? new Vector2(0f, ty0) : new Vector2(1f - tabW, ty0);
+            Vector2 tMax = left ? new Vector2(tabW, ty1) : new Vector2(1f, ty1);
+            var tgo = new GameObject("SlideTab", typeof(Image), typeof(Button));
+            tgo.transform.SetParent(root.transform, false);
+            var trt = (RectTransform)tgo.transform;
+            trt.anchorMin = tMin; trt.anchorMax = tMax;
+            trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
+            var tImg = tgo.GetComponent<Image>();
+            tImg.color = ObsidianFill;
+            ApplyRounded(tImg);
+            AddInnerRim(tgo, ObsidianTrim);
+
+            // GEAR icon (owner: replaces the down "v/>" trigger). Sprite-first; gold-glyph fallback.
+            var iconGo = new GameObject("TabIcon", typeof(Image));
+            iconGo.transform.SetParent(tgo.transform, false);
+            var irt = (RectTransform)iconGo.transform;
+            irt.anchorMin = new Vector2(0.15f, 0.15f); irt.anchorMax = new Vector2(0.85f, 0.85f);
+            irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
+            h.tabIcon = iconGo.GetComponent<Image>();
+            h.tabIcon.raycastTarget = false; h.tabIcon.preserveAspect = true;
+            var iconSprite = UiStyle.Icon(string.IsNullOrEmpty(tabIconConcept) ? "settings" : tabIconConcept,
+                                          "gear", "settings", "menu");
+            if (iconSprite != null) { h.tabIcon.sprite = iconSprite; h.tabIcon.color = Color.white; }
+            else
+            {
+                iconGo.SetActive(false);   // no icon art — draw a gold gear glyph instead
+                var glyph = Label(tgo.transform, "⚙", 0f, 1f, ElarionUi.Gilt, ElarionUi.FontTitle,
+                                  TextAlignmentOptions.Center, 0f, 1f, bold: true);
+                glyph.raycastTarget = false;
+            }
+
+            h.tab = tgo.GetComponent<Button>();
+            h.tab.targetGraphic = tImg;
+            StyleButtonColors(h.tab);
+            h.tab.onClick.AddListener(() => h.SetExpanded(!h.Expanded));
+
+            h.SetExpanded(false);   // collapsed by default
+            return h;
+        }
+
+        // =====================================================================
+        // COMPASS — a compact Blink-Obsidian octagon compass (WO-438).
+        // ---------------------------------------------------------------------
+        // A dark octagon frame + gold rim, a centred cardinal label, and a rotating gold
+        // needle. Reusable kit widget; the caller drives it via the handle each frame
+        // (SetCardinal + SetNeedleAngle). Octagon is a lazily-built procedural sprite
+        // (WebGL failure-safe — falls back to the rounded plate), so it never blanks.
+        // =====================================================================
+
+        /// <summary>The live pieces of a <see cref="BuildCompass"/> octagon.</summary>
+        public sealed class CompassHandle
+        {
+            /// <summary>The octagon root GameObject (parent / reposition via this).</summary>
+            public GameObject root;
+            /// <summary>The centred cardinal heading label (N / NE / ...).</summary>
+            public TextMeshProUGUI cardinal;
+            /// <summary>The rotating gold needle (pivoted at the octagon centre, tip up at 0deg).</summary>
+            public RectTransform needle;
+            /// <summary>Set the cardinal heading text.</summary>
+            public void SetCardinal(string s) { if (cardinal != null) cardinal.text = s ?? ""; }
+            /// <summary>Rotate the needle to a bearing in degrees (0 = up/heading, + = clockwise/right).</summary>
+            public void SetNeedleAngle(float deg) { if (needle != null) needle.localRotation = Quaternion.Euler(0f, 0f, -deg); }
+            /// <summary>Show/hide the needle (e.g. hide when there is no objective bearing).</summary>
+            public void SetNeedleVisible(bool v) { if (needle != null && needle.gameObject.activeSelf != v) needle.gameObject.SetActive(v); }
+        }
+
+        /// <summary>Build a compact octagon compass (dark octagon + gold rim + cardinal label + gold
+        /// needle) under <paramref name="parent"/>, anchored by fraction. Drive it via the handle.</summary>
+        public static CompassHandle BuildCompass(Transform parent, Vector2 anchorMin, Vector2 anchorMax)
+        {
+            var h = new CompassHandle();
+
+            var root = new GameObject("CompassOctagon", typeof(Image));
+            root.transform.SetParent(parent, false);
+            var rt = (RectTransform)root.transform;
+            rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            h.root = root;
+
+            // Gold rim octagon (slightly larger, behind) + dark obsidian octagon face.
+            var rimImg = root.GetComponent<Image>();
+            var oct = OctagonSprite;
+            if (oct != null) { rimImg.sprite = oct; rimImg.type = Image.Type.Simple; }
+            rimImg.color = ObsidianTrim;
+            rimImg.raycastTarget = false;
+
+            var face = new GameObject("Face", typeof(Image));
+            face.transform.SetParent(root.transform, false);
+            var frt = (RectTransform)face.transform;
+            frt.anchorMin = Vector2.zero; frt.anchorMax = Vector2.one;
+            frt.offsetMin = new Vector2(3f, 3f); frt.offsetMax = new Vector2(-3f, -3f);
+            var faceImg = face.GetComponent<Image>();
+            if (oct != null) { faceImg.sprite = oct; faceImg.type = Image.Type.Simple; }
+            faceImg.color = new Color(0.04f, 0.04f, 0.05f, 0.96f);
+            faceImg.raycastTarget = false;
+
+            // Rotating gold needle: a thin blade pivoted at the octagon centre, tip pointing up.
+            var needleGo = new GameObject("Needle", typeof(RectTransform));
+            needleGo.transform.SetParent(root.transform, false);
+            h.needle = (RectTransform)needleGo.transform;
+            h.needle.anchorMin = new Vector2(0.5f, 0.5f);
+            h.needle.anchorMax = new Vector2(0.5f, 0.5f);
+            h.needle.pivot = new Vector2(0.5f, 0.5f);
+            h.needle.sizeDelta = new Vector2(10f, 40f);
+            h.needle.anchoredPosition = Vector2.zero;
+            var blade = new GameObject("Blade", typeof(Image));
+            blade.transform.SetParent(needleGo.transform, false);
+            var brt = (RectTransform)blade.transform;
+            brt.anchorMin = new Vector2(0.5f, 0.5f); brt.anchorMax = new Vector2(0.5f, 1f);
+            brt.pivot = new Vector2(0.5f, 1f);
+            brt.offsetMin = new Vector2(-2.5f, 0f); brt.offsetMax = new Vector2(2.5f, 0f);
+            var bladeImg = blade.GetComponent<Image>();
+            bladeImg.color = ElarionUi.Gilt;
+            ApplyRounded(bladeImg);
+            bladeImg.raycastTarget = false;
+
+            // Centred cardinal heading label (drawn over the needle hub).
+            h.cardinal = Label(root.transform, "N", 0f, 1f, ElarionUi.Parchment, ElarionUi.FontLabel,
+                               TextAlignmentOptions.Center, 0f, 1f, spacing: 2f, bold: true);
+            h.cardinal.raycastTarget = false;
+
+            return h;
+        }
+
+        // ── Procedural octagon sprite (lazily built once; WebGL failure-safe) ──
+        private static Sprite _octagon;
+        private static bool _octagonTried;
+        /// <summary>White AA regular-octagon fill for the compass frame (null if the build failed under WebGL).</summary>
+        public static Sprite OctagonSprite
+        {
+            get
+            {
+                if (!_octagonTried)
+                {
+                    _octagonTried = true;
+                    try { _octagon = BuildOctagonSprite(); }
+                    catch (Exception e)
+                    {
+                        Debug.LogWarning("[ElarionUiKit] octagon sprite build failed: " + e.Message);
+                        _octagon = null;
+                    }
+                }
+                return _octagon;
+            }
+        }
+
+        private static Sprite BuildOctagonSprite()
+        {
+            const int size = 64;
+            float half = (size - 1) * 0.5f;
+            // Regular octagon: |u|<=1, |v|<=1, |u|+|v| <= 1+tan(22.5deg) ~= 1.4142 (corners cut).
+            const float diag = 1.41421356f;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float u = (x - half) / half;
+                    float v = (y - half) / half;
+                    float au = Mathf.Abs(u), av = Mathf.Abs(v);
+                    // Signed distance-ish to the octagon edge, scaled to pixels for a ~1px AA band.
+                    float dEdge = Mathf.Max(Mathf.Max(au - 1f, av - 1f), au + av - diag);
+                    float a = Mathf.Clamp01(-dEdge * half + 0.5f);
                     tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
                 }
             }

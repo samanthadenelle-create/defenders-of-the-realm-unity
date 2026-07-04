@@ -25,19 +25,13 @@ namespace DeNelle.Village
         // --- ROOT + CHROME (moved from original BuildRoot) ---
         private void BuildRoot()
         {
-            _ui = new GameObject("HeroInventoryUI");
-
-            var canvas = _ui.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 31000;
-            canvas.overrideSorting = true;
-
-            var scaler = _ui.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1080, 1920);
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 0.5f;
-            _ui.AddComponent<GraphicRaycaster>();
+            // Route the canvas through the kit's ONE standard modal canvas builder (same
+            // 1080x1920 reference / 0.5 match / 31000 band the other Obsidian modals use)
+            // instead of hand-rolling it, so this modal matches the rest. overrideSorting
+            // (not set by the kit) is applied after, preserving the prior behaviour.
+            _ui = ElarionUiKit.BuildModalCanvas("HeroInventoryUI", 31000);
+            var canvas = _ui.GetComponent<Canvas>();
+            if (canvas != null) canvas.overrideSorting = true;
 
             ElarionUiKit.Scrim(_ui.transform, Close);
 
@@ -129,7 +123,12 @@ namespace DeNelle.Village
             ResourceWell(tray.transform, "GoldWell", wx, wx + wW, "o " + coins, "GOLD", GiltInk); wx += wW + wGap;
             ResourceWell(tray.transform, "CrystalWell", wx, wx + wW, "* " + crystals, "CRYSTALS",
                          new Color(0.42f, 0.26f, 0.62f, 1f)); wx += wW + wGap;
-            ResourceWell(tray.transform, "SkrWell", wx, wx + wW, "* SKR", "WALLET",
+            // Premium-currency well: the SYMBOL comes from the active CurrencySkin model
+            // (CurrencySkinResolver.Active — "π"/Pi or "$SKR"), NEVER a hardcoded "SKR"
+            // literal (CurrencySkin canon §: presentation reads the skin, never types the
+            // symbol inline). So this reads correctly under both the Pi and SKR skins.
+            var skin = DeNelle.Core.Platform.CurrencySkinResolver.Active;
+            ResourceWell(tray.transform, "SkrWell", wx, wx + wW, "* " + skin.CurrencySymbol, "WALLET",
                          new Color(0.18f, 0.43f, 0.40f, 1f));
         }
 

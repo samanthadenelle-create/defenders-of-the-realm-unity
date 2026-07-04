@@ -162,35 +162,37 @@ namespace DeNelle.Village.Buildings.Progression
             ElarionUiKit.Scrim(_ui.transform, onTapClose: () => _vm?.Close());
 
             string titleText = (_vm != null ? _vm.Title : "Building") + " Enhancements";
+            // PORTRAIT sizing (UI review 04): Core_Panel is a PORTRAIT frame (~1210x1815). Anchor the
+            // panel to a narrow, tall center column so the rendered aspect matches the template instead
+            // of stretching the ornate frame into a landscape slab.
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, titleText,
-                new Vector2(0.14f, 0.07f), new Vector2(0.86f, 0.93f), () => _vm?.Close(),
+                new Vector2(0.33f, 0.05f), new Vector2(0.67f, 0.95f), () => _vm?.Close(),
                 frameName: RpgUiCatalog.FrameCore, medallionIcon: "hammer");
 
             // Zones: frame path returns layout; procedural fallback (art absent) does not —
-            // synthesize equivalent zones over chrome.content so the screen never blanks.
-            RectTransform body, footer;
-            if (chrome.layout != null)
-            {
-                body   = chrome.layout.body;
-                footer = chrome.layout.footer;
-            }
-            else
-            {
-                body   = MakeZone(chrome.content.transform, "Zone_Body",   new Vector2(0.04f, 0.10f), new Vector2(0.96f, 0.875f));
-                footer = MakeZone(chrome.content.transform, "Zone_Footer", new Vector2(0.06f, 0.030f), new Vector2(0.94f, 0.095f));
-            }
+            // synthesize an equivalent body zone over chrome.content so the screen never blanks.
+            RectTransform body = chrome.layout != null
+                ? chrome.layout.body
+                : MakeZone(chrome.content.transform, "Zone_Body", new Vector2(0.04f, 0.075f), new Vector2(0.96f, 0.855f));
 
             // Smooth the shared Close button's tint transition too.
             SoftenButton(chrome.close);
 
-            // FOOTER zone: live wallet readout (through the VM).
-            _walletText = MakeLine(footer, "Wallet", ElarionUi.Gilt, ElarionUi.FontLabel,
-                new Vector2(0f, 0f), new Vector2(1f, 1f));
+            // BODY zone: perk grid (scrolling) above the wallet + a thin status line. The wallet rides
+            // the dark well's BASE — NOT the frame's clipped bottom-filigree footer band, which squashed
+            // + dimmed the resource line at the very edge (UI review 04). Bright gilt + auto-size so the
+            // full "Wood/Food/Iron/Crystals/Gold" line stays legible + un-clipped in the narrow column.
+            _contentRoot = MakeZone(body, "GridHost", new Vector2(0f, 0.135f), new Vector2(1f, 1f)).gameObject;
 
-            // BODY zone: perk grid (scrolling) above a thin status line.
-            _contentRoot = MakeZone(body, "GridHost", new Vector2(0f, 0.075f), new Vector2(1f, 1f)).gameObject;
+            _walletText = MakeLine(body, "Wallet", ElarionUi.Gilt, ElarionUi.FontLabel,
+                new Vector2(0f, 0.065f), new Vector2(1f, 0.128f));
+            _walletText.enableAutoSizing = true;
+            _walletText.fontSizeMin = 10f;
+            _walletText.fontSizeMax = ElarionUi.FontLabel;
+            _walletText.textWrappingMode = TMPro.TextWrappingModes.Normal;
+
             _statusText = MakeLine(body, "Status", ElarionUi.ParchmentDim, ElarionUi.FontLabel,
-                new Vector2(0f, 0f), new Vector2(1f, 0.065f));
+                new Vector2(0f, 0f), new Vector2(1f, 0.06f));
 
             // Eased open (owner smoothness directive): scale 0.92->1 + fade 0->1, ease-out.
             var fx = _ui.AddComponent<PanelOpenCloseFx>();

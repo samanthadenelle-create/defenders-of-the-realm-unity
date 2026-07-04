@@ -62,8 +62,9 @@ namespace DeNelle.HUD.Kit
         private RectTransform _strip;
         private RectTransform _tickLayer;   // clipped layer holding enemy ticks + the objective chevron
         private TextMeshProUGUI _cardinal;
-        private RectTransform _objMarker;    // gold objective chevron
+        private RectTransform _objMarker;    // gold objective chevron (legacy; superseded by the needle)
         private TextMeshProUGUI _objGlyph;
+        private RectTransform _needle;       // WO-438: rotating gold needle (points to the objective bearing)
         private readonly List<RectTransform> _tickPool = new List<RectTransform>();
         private readonly List<Transform> _enemyBuf = new List<Transform>();
         private Vector3? _objective;
@@ -94,40 +95,33 @@ namespace DeNelle.HUD.Kit
             if (_built) return;
             _built = true;
 
-            // ── Compass strip: a thin top-centre band within the mount ──
-            _strip = NewRect("CompassStrip", (RectTransform)transform);
-            _strip.anchorMin = new Vector2(0.06f, 0.60f);
-            _strip.anchorMax = new Vector2(0.94f, 0.98f);
+            // WO-438: the compass is now a compact Blink-Obsidian OCTAGON (dark octagon frame + gold
+            // rim + centred cardinal label + a rotating gold needle) built from the shared kit helper,
+            // replacing the old wide dark-glass strip. A compact centred square region in the mount.
+            // TODO(dedup): there are TWO compass implementations — this HUD-kit one and the standalone
+            // DeNelle.HUD.CompassHud (uGUI NSEW strip, its own canvas). The CLI should reconcile them
+            // (this kit widget is the intended survivor per the header); left untouched here to avoid
+            // removing a live widget without proof.
+            _strip = NewRect("CompassOct", (RectTransform)transform);
+            _strip.anchorMin = new Vector2(0.42f, 0.34f);
+            _strip.anchorMax = new Vector2(0.58f, 0.99f);
             _strip.offsetMin = Vector2.zero; _strip.offsetMax = Vector2.zero;
 
-            // Dark-glass chip — the shared kit's primary panel glass tint.
-            var stripBg = _strip.gameObject.AddComponent<Image>();
-            stripBg.color = ElarionUiKit.Glass;
-            ElarionUiKit.ApplyRounded(stripBg);
-            stripBg.raycastTarget = false;
+            var compass = ElarionUiKit.BuildCompass(_strip, Vector2.zero, Vector2.one);
+            _cardinal = compass.cardinal;
+            _needle   = compass.needle;
+            if (_cardinal != null) _cardinal.characterSpacing = 6f;
 
-            // Thin faint-gold rim (a slightly larger plate behind the chip).
-            var rim = NewRect("CompassRim", _strip);
-            rim.anchorMin = Vector2.zero; rim.anchorMax = Vector2.one;
-            rim.offsetMin = new Vector2(-1f, -1f);
-            rim.offsetMax = new Vector2(1f, 1f);
-            rim.SetAsFirstSibling();
-            var rimImg = rim.gameObject.AddComponent<Image>();
-            rimImg.color = ElarionUiKit.AccentSoft;
-            ElarionUiKit.ApplyRounded(rimImg);
-            rimImg.raycastTarget = false;
-
-            // Marker layer (enemy ticks + objective chevron): clipped to the strip so
-            // markers slide along it and never spill past the chip. Below the cardinal
-            // label so the heading text stays legible.
+            // Marker layer (enemy threat ticks): clipped to the octagon so ticks never spill past it.
+            // Slides horizontally across the octagon centre as a compact threat band (interim; a radial
+            // placement is a follow-up). Above the octagon face, below the cardinal label.
             var layerGo = new GameObject("CompassMarkers", typeof(RectTransform), typeof(RectMask2D));
             layerGo.transform.SetParent(_strip, false);
             _tickLayer = layerGo.GetComponent<RectTransform>();
-            _tickLayer.anchorMin = Vector2.zero; _tickLayer.anchorMax = Vector2.one;
-            _tickLayer.offsetMin = new Vector2(2f, 2f);
-            _tickLayer.offsetMax = new Vector2(-2f, -2f);
+            _tickLayer.anchorMin = new Vector2(0.12f, 0.42f); _tickLayer.anchorMax = new Vector2(0.88f, 0.58f);
+            _tickLayer.offsetMin = Vector2.zero; _tickLayer.offsetMax = Vector2.zero;
 
-            // Gold objective chevron — the navigation cue (nearest region-gate / seam).
+            // Legacy objective chevron kept but DISABLED — the rotating needle is the objective cue now.
             _objMarker = NewRect("ObjectiveMarker", _tickLayer);
             _objMarker.anchorMin = new Vector2(0.5f, 0.5f);
             _objMarker.anchorMax = new Vector2(0.5f, 0.5f);
@@ -136,11 +130,6 @@ namespace DeNelle.HUD.Kit
             _objGlyph = AddText(_objMarker, "▲", 20f, ElarionUi.Gilt, TextAlignmentOptions.Center);
             _objGlyph.fontStyle = FontStyles.Bold;
             _objMarker.gameObject.SetActive(false);
-
-            // Centred cardinal label.
-            _cardinal = AddText(_strip, "N", 18f, ElarionUi.Parchment, TextAlignmentOptions.Center);
-            _cardinal.fontStyle = FontStyles.Bold;
-            _cardinal.characterSpacing = 12f;
         }
 
         private void LateUpdate()
@@ -201,33 +190,29 @@ namespace DeNelle.HUD.Kit
 #endif
         }
 
-        // Slide the gold chevron to the objective's bearing relative to the heading.
+        // WO-438: rotate the gold NEEDLE to the objective's bearing relative to the heading
+        // (0 = straight ahead/up, + = clockwise/right). Hidden when there is no objective.
         private void UpdateObjective(Vector3 fwd)
         {
-            if (_objMarker == null || _tickLayer == null) return;
+            if (_needle == null) return;
             if (_objective == null || _hero == null || !_hero)
             {
-                if (_objMarker.gameObject.activeSelf) _objMarker.gameObject.SetActive(false);
+                if (_needle.gameObject.activeSelf) _needle.gameObject.SetActive(false);
                 return;
             }
 
             Vector3 to = _objective.Value - _hero.position; to.y = 0f;
             if (to.sqrMagnitude < 1e-4f)
             {
-                if (_objMarker.gameObject.activeSelf) _objMarker.gameObject.SetActive(false);
+                if (_needle.gameObject.activeSelf) _needle.gameObject.SetActive(false);
                 return;
             }
             to.Normalize();
 
             float bearing = Vector3.SignedAngle(fwd, to, Vector3.up);   // + = to the right
-            float x = BearingToStripX(bearing, out bool clamped);
-
-            if (!_objMarker.gameObject.activeSelf) _objMarker.gameObject.SetActive(true);
-            _objMarker.anchoredPosition = new Vector2(x, 0f);
-            // Point the chevron up when the objective is within the fan; tilt toward the
-            // clamped edge when it is off-screen behind/beside you (a "turn this way" cue).
-            float tilt = clamped ? (bearing >= 0f ? -70f : 70f) : 0f;
-            _objMarker.localRotation = Quaternion.Euler(0f, 0f, tilt);
+            if (!_needle.gameObject.activeSelf) _needle.gameObject.SetActive(true);
+            // Tip points to the objective bearing (negate: uGUI +Z is counter-clockwise).
+            _needle.localRotation = Quaternion.Euler(0f, 0f, -bearing);
         }
 
         private void UpdateEnemyTicks(Vector3 fwd)

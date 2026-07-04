@@ -205,7 +205,13 @@ namespace DeNelle.Village.Hero
             _store = new InventoryStore(VillageInventory.Instance, members);
 
             var economy = EconomyService.Instance;   // resolved at the open-site, injected into the pure VM
-            _vm = new PartyShopVM(_vendorContext, economy, _store, members, levels, _displayName, onClose: Close);
+            // UI review 07: the header read "Gear Shop" (the VM's no-context fallback). This IS the
+            // Party Shop surface — default the title to "Party Shop" when opened with no vendor/displayName;
+            // a registered vendor still supplies its own authored name.
+            string headerName = !string.IsNullOrEmpty(_displayName)
+                ? _displayName
+                : (string.IsNullOrEmpty(_vendorContext) ? "Party Shop" : null);
+            _vm = new PartyShopVM(_vendorContext, economy, _store, members, levels, headerName, onClose: Close);
         }
 
         private static int ResolveLevel(GameObject go)
@@ -290,7 +296,7 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.Scrim(_ui.transform, onTapClose: () => _vm?.Close());
 
             // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header + ONE Close.
-            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Gear Shop",
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Party Shop",
                 new Vector2(0.12f, 0.06f), new Vector2(0.88f, 0.94f), () => _vm?.Close(),
                 headerX0: 0.04f, headerX1: 0.96f, frameName: RpgUiCatalog.FrameMerchant,
                 medallionIcon: "sword");

@@ -90,7 +90,7 @@ namespace DeNelle.Village
             // No frameName so it renders identically with ff.blinkchrome ON and OFF.
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Game Guide",
                 new Vector2(0.07f, 0.05f), new Vector2(0.93f, 0.95f), Close,
-                headerX0: 0.06f, headerX1: 0.80f);
+                headerX0: 0.06f, headerX1: 0.80f, frameName: RpgUiCatalog.FrameCore);
             Transform content = chrome.content.transform;
 
             // Left vertical tab rail (scrollable) + right scrollable body.

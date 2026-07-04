@@ -92,7 +92,8 @@ namespace DeNelle.Village.Hero
             string raidName = _def != null && !string.IsNullOrEmpty(_def.displayName)
                 ? _def.displayName : (_def != null ? _def.id : "Raid");
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "RAID: " + raidName,
-                new Vector2(0.10f, 0.05f), new Vector2(0.90f, 0.95f), Close, withBackdrop: false);
+                new Vector2(0.10f, 0.05f), new Vector2(0.90f, 0.95f), Close, withBackdrop: false,
+                frameName: RpgUiCatalog.FrameCore);
             var panel = chrome.content.transform;
 
             BuildHeader(panel);

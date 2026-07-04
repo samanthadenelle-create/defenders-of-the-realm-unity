@@ -84,7 +84,10 @@ namespace DeNelle.Village.Hero
 
             ConstructViewModel();
 
-            _ui = ElarionUiKit.BuildModalCanvas("EquipmentPanel", sortingOrder: 2500);
+            // WO screen-conformance: match the standard modal sorting band (31000) the
+            // other Obsidian modals use (ElarionUiKit.BuildObsidianModal default), so the
+            // panel isn't off-band under/over sibling modals. Was 2500.
+            _ui = ElarionUiKit.BuildModalCanvas("EquipmentPanel", sortingOrder: 31000);
             _ui.transform.SetParent(transform, false);
             var canvas = _ui.GetComponent<Canvas>();
             if (canvas != null) canvas.overrideSorting = true;

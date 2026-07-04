@@ -76,6 +76,12 @@ namespace DeNelle.Village.Talents
             // Take over the legacy UIDocument route id too (the old panel renders empty
             // in player builds — §8); its bootstrap is gated off.
             PanelRouter.Register(PanelId.HeroTalents, Open);
+            // NOTE (screen-conformance worker, for CLI): PanelId.HeroSkillTree (screen 02)
+            // and the legacy PanelId.HeroTalents (screen 01) BOTH route to this same Open →
+            // same HeroSkillTreeVM → identical rendered content. If screens 01 and 02 are
+            // meant to be DISTINCT surfaces (e.g. a pure passive "Talents" view vs. the
+            // interactive skill-tree planner), that is a VM/content-model question — flagged
+            // here rather than redesigned in this dumb-skin View. Left as-is intentionally.
         }
 
         private void OnDestroy()
@@ -246,7 +252,9 @@ namespace DeNelle.Village.Talents
         }
 
         // px centre for an authored (x,y): content anchored top-CENTRE, y grows down.
-        private Vector2 CenterPx(float x, float y) => new Vector2((x - 0.5f) * CW, -(y * CH));
+        // Shifted down by NodeSize/2 (matching the content top pad) so the top-tier row
+        // is fully inside the padded content rect and the bottom-tier row clears the base.
+        private Vector2 CenterPx(float x, float y) => new Vector2((x - 0.5f) * CW, -(y * CH) - NodeSize * 0.5f);
 
         private void BuildEdge(Vector2 a, Vector2 b, bool live)
         {
@@ -276,7 +284,7 @@ namespace DeNelle.Village.Talents
             r.anchorMin = r.anchorMax = new Vector2(0.5f, 1f);
             r.pivot = new Vector2(0.5f, 0.5f);
             r.sizeDelta = new Vector2(CW * 0.5f, 36f);
-            r.anchoredPosition = new Vector2(-CW * 0.22f, -(y * CH));
+            r.anchoredPosition = new Vector2(-CW * 0.22f, -(y * CH) - NodeSize * 0.5f);
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
             ElarionUiKit.EnsureFont(t);
             t.text = text;
@@ -463,7 +471,10 @@ namespace DeNelle.Village.Talents
             _walletText = walletGo.GetComponent<TMPro.TextMeshProUGUI>();
             ElarionUiKit.EnsureFont(_walletText);
             _walletText.fontSize = ElarionUi.FontLabel;
-            _walletText.color = ElarionUi.Gilt;
+            // Brighter Wisdom/Skill-Points readout: the muted Gilt read as faint against the
+            // black frame — use Parchment + bold so the stat line is legible at a glance.
+            _walletText.color = ElarionUi.Parchment;
+            _walletText.fontStyle = TMPro.FontStyles.Bold;
             _walletText.alignment = TMPro.TextAlignmentOptions.Center;
             _walletText.raycastTarget = false;
 
@@ -560,7 +571,12 @@ namespace DeNelle.Village.Talents
             _graphContent = contentGo.GetComponent<RectTransform>();
             _graphContent.anchorMin = _graphContent.anchorMax = new Vector2(0.5f, 1f);
             _graphContent.pivot = new Vector2(0.5f, 1f);
-            _graphContent.sizeDelta = new Vector2(CW, CH);
+            // Pad the scroll content by a full node on top+bottom so the FIRST and LAST
+            // tier rows (authored at y≈0 / y≈1) aren't half-clipped by the viewport — a
+            // node's centre sits at y*CH and its plate extends ±NodeSize/2, which fell
+            // outside a CH-tall content rect (bottom green row was clipped). CenterPx +
+            // BuildSectionLabel shift down by NodeSize/2 to sit inside this padded rect.
+            _graphContent.sizeDelta = new Vector2(CW, CH + NodeSize);
             _graphContent.anchoredPosition = Vector2.zero;
 
             var scroll = areaGo.GetComponent<ScrollRect>();
