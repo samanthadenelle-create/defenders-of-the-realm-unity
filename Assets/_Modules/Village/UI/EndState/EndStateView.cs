@@ -129,16 +129,27 @@ namespace DeNelle.Village.UI
 
             // Drop-zones (sprite-first contract: layout is null on the procedural
             // fallback panel — mirror the default zone fractions on the content).
-            RectTransform body   = chrome.layout != null ? chrome.layout.body
+            RectTransform well   = chrome.layout != null ? chrome.layout.body
                                  : MakeZone(chrome.content.transform, "Zone_Body",   0.06f, 0.10f, 0.94f, 0.875f);
-            RectTransform footer = chrome.layout != null && chrome.layout.footer != null ? chrome.layout.footer
-                                 : MakeZone(chrome.content.transform, "Zone_Footer", 0.08f, 0.030f, 0.92f, 0.095f);
 
-            BuildBody(vm, body);
+            // The Continue button owns its OWN footer band (R4: it was overlapping the last reward
+            // row, "Iron +8"). FrameCore carries NO footer drop-zone (ElarionUiKit.ZonesFor leaves
+            // hasFooter=false for FrameCore, ElarionUiKit.cs:365-373), and the old raw-fraction
+            // fallback footer (panel y .030–.095) OVERLAPPED the body well's base (y .075) — that
+            // overlap is what pushed the button onto the last row. So when there is no real footer
+            // drop-zone, carve the button's band out of the BOTTOM of the body well and hand
+            // BuildBody only the reward well ABOVE it, leaving a guaranteed gap between the two.
+            bool hasFooterZone = chrome.layout != null && chrome.layout.footer != null;
+            RectTransform footer     = hasFooterZone ? chrome.layout.footer
+                                     : MakeZone(well, "Zone_Footer",     0.10f, 0f,    0.90f, 0.16f);
+            RectTransform rewardWell = hasFooterZone ? well
+                                     : MakeZone(well, "Zone_RewardWell", 0f,    0.22f, 1f,    1f);
+
+            BuildBody(vm, rewardWell);
 
             // ONE primary action (Continue / Rise again / ...) — lands LAST in the reveal.
             var btn = ElarionUiKit.Button(footer, vm.PrimaryLabel, ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.24f, 0.02f), new Vector2(0.76f, 0.98f), FirePrimary);
+                new Vector2(0.24f, 0.06f), new Vector2(0.76f, 0.94f), FirePrimary);
             Track(btn.gameObject, 0.25f + vm.Spoils.Count * 0.05f + 0.08f, 0.92f);
 
             // Smooth in: whole panel fades+scales, then the staggered content.
@@ -239,12 +250,19 @@ namespace DeNelle.Village.UI
             var accent = ElarionUiKit.AddImage(plate.transform, "GoldAccent",
                 new Vector2(0f, 0.12f), new Vector2(0.02f, 0.88f), ElarionUiKit.ObsidianTrim, rounded: false);
             accent.GetComponent<Image>().raycastTarget = false;
-            if (row.Icon != null)
+            // Icon: sprite-first from the VM; when the VM had no sheet art for the item (R4: "Wood"
+            // — ItemIconCatalog.ForConsumable("mat_wood") resolves null today, EndStateVM.cs:120-122)
+            // fall back to a generic resource/loot icon so a reward row NEVER blanks its slot. Same
+            // RpgUiCatalog.Get path the other rows resolve through on the model side.
+            var iconSprite = row.Icon != null
+                ? row.Icon
+                : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconInventory);
+            if (iconSprite != null)
             {
                 var go = new GameObject("Icon", typeof(Image));
                 go.transform.SetParent(plate.transform, false);
                 var img = go.GetComponent<Image>();
-                img.sprite = row.Icon;
+                img.sprite = iconSprite;
                 img.preserveAspect = true;
                 img.raycastTarget = false;
                 var rt = img.rectTransform;
@@ -254,7 +272,7 @@ namespace DeNelle.Village.UI
             }
             var label = ElarionUiKit.Label(plate.transform, row.Label ?? "", 0f, 1f,
                 ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.MidlineLeft,
-                row.Icon != null ? 0.17f : 0.06f, 0.68f);
+                iconSprite != null ? 0.17f : 0.06f, 0.68f);
             label.raycastTarget = false;
             var amount = ElarionUiKit.Label(plate.transform, row.Amount ?? "", 0f, 1f,
                 ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.MidlineRight,
