@@ -193,6 +193,13 @@ namespace DeNelle.Editor
             surf.collectObjects = CollectObjects.All;
             surf.useGeometry    = UnityEngine.AI.NavMeshCollectGeometry.PhysicsColliders;
 
+            // P0 (owner 2026-07-04, WO-608): the bake opens the SAVED merged scene fresh, which still
+            // carries the old WO468_CastleNavHole_NotWalkable volume — a NavMeshModifierVolume marks its
+            // AREA regardless of useGeometry, so it would carve a NotWalkable hole at r~44 into this bake
+            // and re-confine the hero. Strip every NotWalkable carve BEFORE BuildNavMesh so the navmesh is
+            // continuous castle-floor -> terrain. (StripSeamRemnants runs it too on the merge path.)
+            StripNotWalkableCarves();
+
             if (!Guard.Try("WorldMerge", "BuildNavMesh", () => surf.BuildNavMesh()))
                 { FlowTrace.Fail("WorldMerge", "BuildNavMesh threw — bake abort."); return; }
 
@@ -300,6 +307,12 @@ namespace DeNelle.Editor
                     "NavLink_CastleToOuterWorld", "RuntimeSeam_Bridge", "RuntimeSeam_Deck",
                     "Drawbridge", "Bridge_Medieval", "CastleMoat", "MoatWater",
                     "WorldGate_ConnectToOuterWorld",
+                    // P0 hero-confinement (owner 2026-07-04, WO-608): the OLD moat baked a
+                    // WO468_CastleNavHole_NotWalkable NavMeshModifierVolume (area 1) at the castle
+                    // footprint; left in the merged scene it carves a NotWalkable hole at r~44 that
+                    // confines the NavMeshAgent hero to a ~10m disc. Name-prefix strip (suspenders);
+                    // StripNotWalkableCarves() below is the area==1 belt.
+                    "WO468_CastleNavHole", "CastleNavHole",
                     // owner F8 2026-07-04 (2nd pass — the ARCH the hero walks through): the overnight
                     // castle->outerworld seam-crossing structure + the raised plinth dais are obsolete in
                     // the flat merged world (no seam, no raise). Destroy them so the ground is truly flat.
@@ -320,6 +333,46 @@ namespace DeNelle.Editor
                 }
                 FlowTrace.Step("WorldMerge",
                     "STRIP SEAM REMNANTS: destroyed " + doomed.Count + " bridge/navlink/moat object(s) — merged ground clean, no invisible barrier.");
+            });
+
+            // Belt to the name-prefix suspenders above: destroy every NotWalkable carve by AREA, not name.
+            StripNotWalkableCarves();
+        }
+
+        // --------------------------------------------------------------------
+        //  STRIP NOTWALKABLE MOAT CARVES (P0 hero-confinement, owner 2026-07-04, WO-608).
+        //  The old moat baked a WO468_CastleNavHole_NotWalkable NavMeshModifierVolume (m_Area==1)
+        //  at the castle footprint (verified in Main_Castle_Overworld.unity: object "WO468_CastleNavHole
+        //  _NotWalkable" carrying a NavMeshModifierVolume). Left in place it carves a NotWalkable hole at
+        //  r~44 that walls the NavMeshAgent hero into a ~10m disc on all sides. The merged world has NO
+        //  moat, so ANY NotWalkable volume is obsolete: destroy every NavMeshModifierVolume with area==1
+        //  (robust — pose/name-independent) BEFORE the bake reads it, so the navmesh bakes continuous from
+        //  the castle floor out to the terrain. Guarded + logged; runs in both merge + bake entry points.
+        // --------------------------------------------------------------------
+        private static void StripNotWalkableCarves()
+        {
+            Guard.Try("WorldMerge", "strip NotWalkable moat carves (NavMeshModifierVolume area==1)", () =>
+            {
+                const int NotWalkableArea = 1;   // Unity built-in NotWalkable navmesh area index
+                var doomed = new List<GameObject>();
+
+                foreach (var vol in UnityEngine.Object.FindObjectsByType<NavMeshModifierVolume>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    if (vol == null) continue;
+                    if (vol.area == NotWalkableArea && vol.gameObject != null && !doomed.Contains(vol.gameObject))
+                        doomed.Add(vol.gameObject);
+                }
+
+                foreach (var go in doomed)
+                {
+                    if (go == null) continue;
+                    FlowTrace.Step("WorldMerge", "strip: destroying NotWalkable carve '" + go.name +
+                        "' (NavMeshModifierVolume m_Area==1) — no r~44 moat hole to confine the hero.");
+                    UnityEngine.Object.DestroyImmediate(go);
+                }
+
+                FlowTrace.Step("WorldMerge", "STRIP NOTWALKABLE CARVES: destroyed " + doomed.Count +
+                    " NotWalkable navmesh volume(s) — merged navmesh bakes continuous (no moat carve at r~44).");
             });
         }
 

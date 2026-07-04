@@ -193,6 +193,17 @@ namespace DeNelle.Village.World
         private static bool MergedBridgesOnly()
         {
             if (!FeatureFlags.MergedWorld) return false;
+            return OnMergedScene();
+        }
+
+        // P0 HERO-CONFINEMENT GUARD (owner 2026-07-04, WO-608) — true whenever the merged single-scene
+        // overworld (Main_Castle_Overworld) is the active OR loaded scene, INDEPENDENT of ff.mergedworld.
+        // The merged world has no seam, so the moat (water + off-navmesh carve at r=44 + BoxCollider ring)
+        // must NEVER build there — the runtime self-boot was re-creating it every scene load and walling the
+        // NavMeshAgent hero into a ~10m disc on all sides. Guarding on the SCENE NAME (not the flag) means a
+        // flag toggle can never re-confine the hero. MainCastle_Hall (the real moat scene) is unaffected.
+        private static bool OnMergedScene()
+        {
             if (SceneManager.GetActiveScene().name == MergedScene) return true;
             Scene merged = SceneManager.GetSceneByName(MergedScene);
             return merged.IsValid() && merged.isLoaded;
@@ -209,9 +220,10 @@ namespace DeNelle.Village.World
             // runtime self-boot is what rebuilds it every scene load (BuildDrawbridges below ran even in
             // bridges-only mode — the bridge the owner kept seeing; BuildWaterRing is the water). Build
             // NOTHING on the merged scene.
-            if (MergedBridgesOnly())
+            if (OnMergedScene())
             {
-                FlowTrace.Step("CastleMoat", "MERGED world — moat + bridges SKIPPED ENTIRELY (owner 2026-07-04: seam gone, nothing to build).");
+                FlowTrace.Step("CastleMoat", "MERGED overworld (" + MergedScene + ") — moat + bridges SKIPPED ENTIRELY (P0 hero-confinement fix, " +
+                    "flag-INDEPENDENT scene guard: no water, no r=" + MoatInnerRadius + " off-navmesh carve, no BoxCollider seal ring; seam gone, nothing to build).");
                 return;
             }
 
