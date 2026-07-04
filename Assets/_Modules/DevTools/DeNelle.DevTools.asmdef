@@ -7,6 +7,7 @@
         "DeNelle.Wallet",
         "DeNelle.HUD",
         "DeNelle.Audio",
+        "DeNelle.Settings",
         "UniTask",
         "Unity.AI.Navigation"
     ],

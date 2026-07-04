@@ -266,6 +266,14 @@ namespace DeNelle.DevTools
                 // run BEFORE TriggerWave so no battle-lock rejects the dock opens. Guarded — a
                 // capture failure logs + continues; captures render only graphics-on.
                 yield return RunPhase("CaptureDockOverlays", CaptureDockOverlays());
+                // UI-fidelity capture for the GAMEPLAY-SCENE panels the PanelRouter sweep can't
+                // reach because they are NOT registered with PanelRouter (they open via their own
+                // singleton / static Open()/Show()/Pause() or need a stub VM). Mirrors
+                // CaptureDockOverlays: force-open each, screenshot panel_<Screen>.png with the token
+                // the assembler expects (see UI_REVIEW/_mapping.json deliveredShot), then close. Runs
+                // BEFORE TriggerWave so no battle-lock rejects a PanelManager open. Fully guarded — a
+                // failing panel logs + continues; captures render only graphics-on.
+                yield return RunPhase("CaptureExtraPanels", CaptureExtraPanels());
                 // Moat completeness oracle — hub-only, runs in play-mode AFTER a settle wait so
                 // its reachability leg sees a live navmesh (mirrors CastleNavTopologyDiag). Emits
                 // its own MOAT_COMPLETE / MOAT_INCOMPLETE marker to break-log.
@@ -2773,6 +2781,258 @@ namespace DeNelle.DevTools
 
             _lastDetail = $"{shot}/{tried} dock overlays captured";
             FlowTrace.Step("Auto", $"CaptureDockOverlays: {shot}/{tried} dock overlays captured (ClanChat/Leaderboard/Jukebox/HelpMenu).");
+        }
+
+        // =====================================================================
+        //  PHASE: CaptureExtraPanels
+        //  UI-fidelity shots for the gameplay-scene panels the PanelRouter sweep
+        //  (OpenEachHUDPanel) can NOT reach because they are not registered with
+        //  PanelRouter — they open via their own singleton / static Open()/Show()/
+        //  Pause() entrypoints (some need a stub VM). Mirrors CaptureDockOverlays:
+        //  force-open each, wait a couple frames, CaptureUiPanel("<Screen>") using
+        //  the SAME token the assembler expects (UI_REVIEW/_mapping.json deliveredShot
+        //  = panel_<Screen>.png), then close. Every open is GUARDED so one failing
+        //  panel can never abort the phase; captures render only graphics-on.
+        //  Runs BEFORE TriggerWave so no battle-lock rejects a PanelManager open.
+        //  FRONT-END screens (HeroSelect, Dialogue) are NOT driven here — they live
+        //  in the front-end scenes the driver bypasses (see TODO at the end).
+        // =====================================================================
+        private int _extraShotCount;
+
+        private IEnumerator CaptureExtraPanels()
+        {
+            _extraShotCount = 0;
+
+            // ── 16 Build Menu — DeNelle.Village.BuildMenu (instance Open/Close; lazy build) ──
+            yield return CaptureComponentPanel<BuildMenu>("BuildMenu", m => m.Open(), m => m.Close());
+
+            // ── 20 Settings — DeNelle.Settings.SettingsController (instance Open/Close) ──
+            yield return CaptureComponentPanel<DeNelle.Settings.SettingsController>("Settings", m => m.Open(), m => m.Close());
+
+            // ── 21 Pause — DeNelle.Settings.PauseController (Pause zeroes timeScale; Resume restores).
+            //    Wait() is WaitForSecondsRealtime so a frozen timeScale never hangs the capture. ──
+            yield return CaptureComponentPanel<DeNelle.Settings.PauseController>("Pause", m => m.Pause(), m => m.Resume());
+
+            // ── 22 Tower Manager — DeNelle.Village.UI.TowerManagerPanel (self-installed singleton) ──
+            yield return CaptureComponentPanel<DeNelle.Village.UI.TowerManagerPanel>("TowerManager", m => m.Show(), m => m.Hide());
+
+            // ── 30 Troop Training — DeNelle.Village.Hero.TroopTrainingPanel (instance Open/Close) ──
+            yield return CaptureComponentPanel<TroopTrainingPanel>("TroopTraining", m => m.Open(), m => m.Close());
+
+            // ── 32 Inventory (bag) — DeNelle.Village.HeroInventoryController (singleton Open/Close) ──
+            yield return CaptureComponentPanel<HeroInventoryController>("Inventory", m => m.Open(), m => m.Close());
+
+            // ── 31 Merchant Shop — DeNelle.Village.Hero.ShopPanel. Close() is private and OnDestroy
+            //    tears down its own modal canvas, so drive it on a THROWAWAY host we destroy to close
+            //    (never touches a real in-scene ShopPanel). Vendor context is a stub so it renders chrome. ──
+            yield return CaptureThrowawayPanel<ShopPanel>("ShopPanel", m => m.Open("merchant", "Merchant"));
+
+            // ── 28 Raid Selection — DeNelle.Village.Hero.RaidSelectionScreen (static self-heal Open) ──
+            {
+                bool opened = Guard.Try("Auto", "CaptureExtraPanels open RaidSelection", () => RaidSelectionScreen.Open());
+                if (opened)
+                {
+                    yield return null;
+                    CaptureUiPanel("RaidSelection");           // -> panel_RaidSelection.png
+                    yield return null;
+                    _extraShotCount++;
+                    FlowTrace.Step("Auto", "CaptureExtraPanels: captured panel_RaidSelection.png.");
+                    var rs = UnityEngine.Object.FindAnyObjectByType<RaidSelectionScreen>();
+                    Guard.Try("Auto", "CaptureExtraPanels close RaidSelection", () => { if (rs != null) rs.Close(); });
+                    yield return Wait(SettleSeconds);
+                }
+                else FlowTrace.Warn("Auto", "CaptureExtraPanels: RaidSelection open threw — skipped.");
+            }
+
+            // ── 29 Raid Deploy — DeNelle.Village.Hero.RaidDeployScreen (static Open(SceneConfigDef)).
+            //    Needs a target def: prefer a real catalog entry; fall back to a minimal stub so the
+            //    chrome still renders (Open(null) is a designed no-op). ──
+            {
+                SceneConfigDef def = null;
+                Guard.Try("Auto", "CaptureExtraPanels resolve raid def", () =>
+                {
+                    def = SceneConfigCatalog.Find("fortified_garrison");
+                    if (def == null)
+                    {
+                        var all = SceneConfigCatalog.All;
+                        if (all != null && all.Count > 0) def = all[0];
+                    }
+                });
+                if (def == null)
+                    def = new SceneConfigDef { id = "capture_raid", displayName = "Raid", difficulty = "Regular" };
+
+                bool opened = Guard.Try("Auto", "CaptureExtraPanels open RaidDeploy", () => RaidDeployScreen.Open(def));
+                if (opened)
+                {
+                    yield return null;
+                    CaptureUiPanel("RaidDeploy");              // -> panel_RaidDeploy.png
+                    yield return null;
+                    _extraShotCount++;
+                    FlowTrace.Step("Auto", "CaptureExtraPanels: captured panel_RaidDeploy.png.");
+                    var rd = UnityEngine.Object.FindAnyObjectByType<RaidDeployScreen>();
+                    Guard.Try("Auto", "CaptureExtraPanels close RaidDeploy", () => { if (rd != null) rd.Close(); });
+                    yield return Wait(SettleSeconds);
+                }
+                else FlowTrace.Warn("Auto", "CaptureExtraPanels: RaidDeploy open threw — skipped.");
+            }
+
+            // ── 23 End State — DeNelle.Village.UI.EndStateView.Show(vm). Build a stub victory VM;
+            //    Destroy(view.gameObject) is the intended teardown (OnDestroy clears the posture flag). ──
+            {
+                DeNelle.Village.UI.EndStateView view = null;
+                bool shown = Guard.Try("Auto", "CaptureExtraPanels show EndState", () =>
+                {
+                    var vm = DeNelle.Village.UI.EndStateVM.FromBattleVictory(
+                        stars: 3, durationSeconds: 42f, xp: 120, wisdom: 30, wood: 15, iron: 8,
+                        gearName: null, onContinue: null, autoTimeoutSeconds: 999f, perfect: false);
+                    view = DeNelle.Village.UI.EndStateView.Show(vm);
+                });
+                if (shown && view != null)
+                {
+                    yield return null;
+                    CaptureUiPanel("EndState");                // -> panel_EndState.png
+                    yield return null;
+                    _extraShotCount++;
+                    FlowTrace.Step("Auto", "CaptureExtraPanels: captured panel_EndState.png.");
+                    Guard.Try("Auto", "CaptureExtraPanels close EndState", () =>
+                    {
+                        if (view != null) UnityEngine.Object.Destroy(view.gameObject);
+                    });
+                    yield return Wait(SettleSeconds);
+                }
+                else FlowTrace.Warn("Auto", "CaptureExtraPanels: EndState show returned null — skipped.");
+            }
+
+            // ── 26 Echo Workforce (Harvest) — DeNelle.Village.EchoWorkforceHud. Show/Hide are private;
+            //    it toggles off the Core HarvestPanelGate event. Only drive an EXISTING (already-Started,
+            //    subscribed) instance — a freshly created one hasn't subscribed yet this frame. ──
+            {
+                var echo = UnityEngine.Object.FindAnyObjectByType<EchoWorkforceHud>();
+                if (echo == null)
+                    FlowTrace.Warn("Auto", "CaptureExtraPanels: no EchoWorkforceHud in scene — skipping EchoWorkforce shot.");
+                else
+                {
+                    bool toggled = Guard.Try("Auto", "CaptureExtraPanels open EchoWorkforce", () => HarvestPanelGate.RequestToggle());
+                    if (toggled)
+                    {
+                        yield return null;
+                        CaptureUiPanel("EchoWorkforce");        // -> panel_EchoWorkforce.png
+                        yield return null;
+                        _extraShotCount++;
+                        FlowTrace.Step("Auto", "CaptureExtraPanels: captured panel_EchoWorkforce.png.");
+                        Guard.Try("Auto", "CaptureExtraPanels close EchoWorkforce", () => HarvestPanelGate.RequestToggle());
+                        yield return Wait(SettleSeconds);
+                    }
+                }
+            }
+
+            // ── 18 Bug Report — DeNelle.HUD.BugReportView.Open() (static self-heal). Awake freezes
+            //    timeScale + builds the form in a coroutine, so give it a beat before the shot; Close()
+            //    is public and restores timeScale on teardown. Reachable in the gameplay scene (HUD asm). ──
+            {
+                bool wasOpen = UnityEngine.Object.FindAnyObjectByType<DeNelle.HUD.BugReportView>() != null;
+                bool opened = Guard.Try("Auto", "CaptureExtraPanels open BugReport", () => DeNelle.HUD.BugReportView.Open());
+                if (opened && !wasOpen)
+                {
+                    yield return Wait(0.5f);                    // let OpenRoutine build the form
+                    CaptureUiPanel("BugReport");                // -> panel_BugReport.png
+                    yield return null;
+                    _extraShotCount++;
+                    FlowTrace.Step("Auto", "CaptureExtraPanels: captured panel_BugReport.png.");
+                    var br = UnityEngine.Object.FindAnyObjectByType<DeNelle.HUD.BugReportView>();
+                    Guard.Try("Auto", "CaptureExtraPanels close BugReport", () => { if (br != null) br.Close(); });
+                    yield return Wait(SettleSeconds);
+                }
+                else if (wasOpen)
+                    FlowTrace.Warn("Auto", "CaptureExtraPanels: a BugReportView was already open — skipping to avoid disturbing it.");
+                else
+                    FlowTrace.Warn("Auto", "CaptureExtraPanels: BugReport open threw — skipped.");
+            }
+
+            // TODO(front-end capture pass): 14 HeroSelect (DeNelle.Onboarding.HeroSelectController) and
+            // 15 Dialogue (DeNelle.HUD.DialogueView, data-driven inline strip) genuinely require the
+            // front-end scenes / a live DialogueRunner conversation that BootToGameplay bypasses — they
+            // are NOT force-driven here (no faked shot). The CLI should capture them via a dedicated
+            // front-end / dialogue-runner capture pass. (BugReport was capturable in-gameplay; done above.)
+
+            _lastDetail = $"{_extraShotCount} extra panels captured";
+            FlowTrace.Step("Auto", $"CaptureExtraPanels: {_extraShotCount} gameplay-scene panels captured " +
+                "(BuildMenu/Settings/Pause/TowerManager/TroopTraining/Inventory/ShopPanel/RaidSelection/RaidDeploy/EndState/EchoWorkforce/BugReport).");
+        }
+
+        // Find-or-create a component of type T, GUARD-open it, screenshot panel_<shotName>.png,
+        // then GUARD-close it. Never destroys the host (some of these register with PanelManager;
+        // a destroyed-but-registered owner would fault a later CloseOpen) — a hidden dormant panel
+        // is harmless for the rest of the run. One failing panel logs + continues.
+        private IEnumerator CaptureComponentPanel<T>(string shotName, Action<T> openFn, Action<T> closeFn)
+            where T : MonoBehaviour
+        {
+            T inst = UnityEngine.Object.FindAnyObjectByType<T>();
+            if (inst == null)
+            {
+                T made = null;
+                Guard.Try("Auto", "CaptureExtraPanels create " + typeof(T).Name, () =>
+                {
+                    made = new GameObject("Capture_" + typeof(T).Name).AddComponent<T>();
+                });
+                inst = made;
+            }
+            if (inst == null)
+            {
+                FlowTrace.Warn("Auto", "CaptureExtraPanels: no " + typeof(T).Name + " (create failed) — skipping " + shotName + ".");
+                yield break;
+            }
+
+            bool opened = Guard.Try("Auto", "CaptureExtraPanels open " + shotName, () => openFn(inst));
+            if (!opened)
+            {
+                FlowTrace.Warn("Auto", "CaptureExtraPanels: open threw for " + shotName + " — skipped.");
+                yield break;
+            }
+
+            yield return null;                              // let the modal build + render this frame
+            CaptureUiPanel(shotName);                       // -> panel_<shotName>.png
+            yield return null;                              // flush ScreenCapture with the panel up
+            _extraShotCount++;
+            FlowTrace.Step("Auto", "CaptureExtraPanels: captured panel_" + shotName + ".png.");
+
+            Guard.Try("Auto", "CaptureExtraPanels close " + shotName, () => closeFn(inst));
+            yield return Wait(SettleSeconds);
+        }
+
+        // Create a THROWAWAY host carrying T, GUARD-open it, screenshot, then DESTROY the host
+        // (its OnDestroy tears down the modal). For panels with no public Close whose OnDestroy
+        // owns cleanup (ShopPanel) — never touches a real in-scene instance.
+        private IEnumerator CaptureThrowawayPanel<T>(string shotName, Action<T> openFn)
+            where T : MonoBehaviour
+        {
+            T inst = null;
+            bool made = Guard.Try("Auto", "CaptureExtraPanels create " + typeof(T).Name, () =>
+            {
+                inst = new GameObject("Capture_" + typeof(T).Name).AddComponent<T>();
+            });
+            if (!made || inst == null)
+            {
+                FlowTrace.Warn("Auto", "CaptureExtraPanels: could not create " + typeof(T).Name + " — skipping " + shotName + ".");
+                yield break;
+            }
+
+            bool opened = Guard.Try("Auto", "CaptureExtraPanels open " + shotName, () => openFn(inst));
+            if (opened)
+            {
+                yield return null;
+                CaptureUiPanel(shotName);                   // -> panel_<shotName>.png
+                yield return null;
+                _extraShotCount++;
+                FlowTrace.Step("Auto", "CaptureExtraPanels: captured panel_" + shotName + ".png.");
+            }
+            else FlowTrace.Warn("Auto", "CaptureExtraPanels: open threw for " + shotName + " — skipped.");
+
+            Guard.Try("Auto", "CaptureExtraPanels destroy " + typeof(T).Name, () =>
+            {
+                if (inst != null) UnityEngine.Object.Destroy(inst.gameObject);
+            });
+            yield return Wait(SettleSeconds);
         }
 
         // =====================================================================
