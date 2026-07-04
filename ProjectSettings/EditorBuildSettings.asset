@@ -27,9 +27,6 @@ EditorBuildSettings:
     path: Assets/Scenes/Dungeon_FolksGranary.unity
     guid: 6f71f9f7476706d4fb7c9a43dddd8021
   - enabled: 1
-    path: Assets/Scenes/OuterWorld.unity
-    guid: 2977fc19ecfa7de46a4ab41135b3e8ff
-  - enabled: 1
     path: Assets/Scenes/MainCastle_Hall.unity
     guid: 0ef9e523aa31ff54b8ca130d950c6f89
   - enabled: 1
