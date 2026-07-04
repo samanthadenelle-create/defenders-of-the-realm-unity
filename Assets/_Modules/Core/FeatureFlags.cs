@@ -71,7 +71,7 @@ namespace DeNelle.Core
         public static bool BaseBuilding => Get("basebuilding", defaultOn: false);
 
         /// <summary>WO-449 — when ON, the raid loop IS the continuous distance-gated WALK: the raid
-        /// target is a live EnemyOutpost spawned in the OuterWorld (~70m out a gate), the hero walks
+        /// target is a live EnemyOutpost spawned in the merged world (~70m out a gate), the hero walks
         /// to it on one continuous NavMesh, combat triggers on approach (Enemy hero-aggro), and clearing
         /// it claims the base + grants the next companion IN PLACE — there is NO DEPLOY screen and NO
         /// teleport (the hero never leaves the open world). When OFF, the legacy
@@ -84,7 +84,7 @@ namespace DeNelle.Core
         /// raid-outpost seams (<see cref="DeNelle.Village.World.SceneTransitionTrigger"/> whose target is a
         /// <c>Garrison_*</c> / <c>Outpost_*</c> / <c>RaidBase_*</c> scene) is SUPPRESSED — the player can NOT
         /// fast-travel to an outpost area; reaching it must be earned by walking (the WO-453 distance-gated
-        /// region vision). The castle&lt;-&gt;OuterWorld crossing is NOT an outpost destination and is never
+        /// region vision). The castle hub transitions are NOT outpost destinations and are never
         /// gated by this flag. Default OFF (owner 2026-06-19: "i dont want that as a fast travel option, at
         /// least not yet"). Flip ON via PlayerPrefs "ff.outposttravel" = 1 to restore the travel prompt.</summary>
         public static bool OutpostTravel => Get("outposttravel", defaultOn: false);
@@ -149,11 +149,11 @@ namespace DeNelle.Core
         public static bool BypassPetSelect => Get("bypasspetselect", defaultOn: true);
 
         /// <summary>WO-467 runtime variant (owner 2026-06-23, "world seam still broken" x3): when ON,
-        /// <c>RuntimeRegionGate</c> self-bootstraps on a hub scene and BUILDS the castle↔OuterWorld
-        /// crossing from the <c>region-gates.json</c> recipe AT RUNTIME — a walkable approach deck welded to the
+        /// <c>RuntimeRegionGate</c> self-bootstraps on a hub scene and BUILDS crossing infrastructure
+        /// from the <c>region-gates.json</c> recipe AT RUNTIME — a walkable approach deck welded to the
         /// source navmesh (runtime <c>NavMeshSurface</c> re-bake, NO editor bake), a deck-seated
         /// <c>SceneTransitionTrigger</c> masked-warp for the hero, a GUID-keyed <c>HeroLinkCrossing</c> entry/dest
-        /// pair, gate-funnel choke panels, and (once OuterWorld is additive-loaded) a narrow cross-scene
+        /// pair, gate-funnel choke panels, and a narrow cross-scene
         /// <c>NavMeshLink</c> for AI. No scene hand-edit, no stale baked coord. Default OFF (2026-07-04):
         /// SUPERSEDED by merged-world (ff.mergedworld ON) — the seam infrastructure is now DEAD CODE pending
         /// removal. Flip to PlayerPrefs "ff.runtimeworldseam" = 1 only to test legacy two-scene seam during
@@ -285,9 +285,8 @@ namespace DeNelle.Core
         /// <summary>WO-608 (owner 2026-07-04) — when ON, the game uses the ONE merged scene
         /// <c>Main_Castle_Overworld</c> (castle + full outer world welded into a single continuous
         /// navmesh, built by <see cref="DeNelle.Editor.WorldMergeBuilder"/>) instead of the legacy
-        /// two-scene additive model. When ON the seam is GONE, so the runtime SKIPS the additive
-        /// OuterWorld load (<see cref="DeNelle.Village.WorldSceneLoader"/>) and SKIPS the castle↔outerworld
-        /// masked warp / RegionGate crossing (<see cref="DeNelle.Village.RuntimeRegionGate"/>) on the
+        /// two-scene additive model. When ON the seam is GONE, so the runtime SKIPS any additive
+        /// world load and SKIPS masked warp / RegionGate crossing (<see cref="DeNelle.Village.RuntimeRegionGate"/>) on the
         /// merged scene — the descent is a plain walk down the 4 bridge ramps on one navmesh. The
         /// additive path + RegionGate primitive stay intact for other hubs / dungeon / outpost / arena
         /// (disable-not-delete). Default OFF until the merged scene is baked + owner felt-verified
@@ -310,7 +309,7 @@ namespace DeNelle.Core
 
         /// <summary>OUTPOST ENTRANCES (owner 2026-06-28: "create a few caves in the bake, we just don't
         /// wire them and flag them on till ready"). When ON, the walk-in CAVE MOUTHS placed in the
-        /// OuterWorld by <see cref="DeNelle.Editor.OuterWorldCavePortalBuilder"/> become live OUTPOST
+        /// merged world by <see cref="DeNelle.Editor.CavePortalBuilder"/> become live OUTPOST
         /// entrances — a deck-seated <c>SceneTransitionTrigger</c> warps the hero into the (future)
         /// loading-zone → outpost RESOLVER. That resolver/loading-zone DOES NOT EXIST YET, so this ships
         /// OFF: the bake places the cave GEOMETRY only and leaves the entrance behavior INERT (no trigger /
@@ -320,8 +319,8 @@ namespace DeNelle.Core
         public static bool OutpostCaves => Get("outpostcaves", defaultOn: true);
 
         /// <summary>DUNGEON ENTRANCES (owner 2026-06-28, same theory as <see cref="OutpostCaves"/>): when
-        /// ON, the KayKit-skinned DUNGEON PORTAL points placed in the OuterWorld by
-        /// <see cref="DeNelle.Editor.OuterWorldCavePortalBuilder"/> become live dungeon entrances routed
+        /// ON, the KayKit-skinned DUNGEON PORTAL points placed in the merged world by
+        /// <see cref="DeNelle.Editor.CavePortalBuilder"/> become live dungeon entrances routed
         /// into the (future) loading-zone → dungeon resolver. Same unbuilt-resolver caveat: the bake places
         /// the portal GEOMETRY only and leaves the behavior INERT until the resolver lands. Kept SEPARATE
         /// from <see cref="OutpostCaves"/> so cave-outposts and portal-dungeons can be enabled
@@ -331,7 +330,7 @@ namespace DeNelle.Core
 
         /// <summary>WORLD FEEL (owner felt-test 2026-07-01: "world feels empty / very flat / not polished").
         /// When ON (default), <c>DeNelle.Village.World.WorldFeelInjector</c> applies the world-aesthetics
-        /// pass at runtime on the outdoor scenes (MainCastle_Hall / OuterWorld / Village2), WITHOUT
+        /// pass at runtime on the outdoor scenes (MainCastle_Hall / Main_Castle_Overworld / Village2), WITHOUT
         /// hand-editing any scene: (1) camera clearFlags forced to Skybox — the hub camera ships
         /// SolidColor near-black (MainCastle_Hall.unity m_ClearFlags:2, bg 0.16/0.17/0.19), which IS the
         /// black-void sky in every screenshot; (2) a dusk "hold the last light" procedural skybox +
@@ -520,7 +519,7 @@ namespace DeNelle.Core
         }
 
         // WO-482 — flip the overworld-encounter battle loop on/off from the menu (no PlayerPrefs
-        // fiddling). ON => orc reps spawn in OuterWorld; engage one -> the isolated BattleArena.
+        // fiddling). ON => orc reps spawn in the merged world; engage one -> the isolated BattleArena.
         private const string OverworldEncounterMenu = "Defenders/Debug/Overworld Encounter (WO-482 battle loop)";
 
         [UnityEditor.MenuItem(OverworldEncounterMenu, priority = 201)]
@@ -529,7 +528,7 @@ namespace DeNelle.Core
             bool on = !OverworldEncounter;
             PlayerPrefs.SetInt("ff.overworldencounter", on ? 1 : 0);
             PlayerPrefs.Save();
-            Debug.Log("[FeatureFlags] ff.overworldencounter = " + (on ? "ON (orc reps spawn in OuterWorld; engage -> BattleArena)" : "OFF"));
+            Debug.Log("[FeatureFlags] ff.overworldencounter = " + (on ? "ON (orc reps spawn in merged world; engage -> BattleArena)" : "OFF"));
         }
 
         [UnityEditor.MenuItem(OverworldEncounterMenu, validate = true)]

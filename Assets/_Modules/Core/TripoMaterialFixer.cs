@@ -30,11 +30,10 @@ namespace DeNelle.Core
         // -------------------------------------------------------------------------
         // P0-2 (PERF AUDIT 2026-06-28, WO-568): shared-material CACHE.
         // The old code allocated an UNSHARED `new Material(lit)` for EVERY renderer
-        // slot of EVERY enemy on EVERY spawn. With ~6 OuterWorld reps continuously
-        // re-topped + arena families re-staged, two identically-skinned orcs never
-        // shared a material -> SRP batching could never coalesce them, and native
-        // material memory churned (rebuilt mats are never Destroy()ed on death, they
-        // accumulate until Resources.UnloadUnusedAssets).
+        // slot of EVERY enemy on EVERY spawn. With continuously re-topped + arena families
+        // re-staged, two identically-skinned orcs never shared a material -> SRP batching
+        // could never coalesce them, and native material memory churned (rebuilt mats are
+        // never Destroy()ed on death, they accumulate until Resources.UnloadUnusedAssets).
         //
         // Fix: build the URP/Lit material ONCE per distinguishing tuple (shader +
         // base map + normal map + emission map + base color + emission color +

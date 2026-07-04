@@ -113,16 +113,15 @@ namespace DeNelle.Core
         /// <summary>The village tower-defense scene (React `/village`).</summary>
         public const string Village = "Village2";
         /// <summary>
-        /// The Central Castle Hub (MainCastle_Hall) — the player's home base and the
+        /// The Central Castle Hub (MainCastle_Hall or Main_Castle_Overworld) — the player's home base and the
         /// new first stop after onboarding. Built by
         /// <c>DeNelle.Editor.CastleHubBuilder.BuildCastleHub</c>. The player arrives
         /// here, then travels out to <see cref="Village"/> for the tower-defense loop.
-        /// OuterWorld streams in additively (see WorldSceneLoader hub list).
         /// <para>
         /// WO-608: flag-aware. When <c>ff.MergedWorld</c> is ON the home hub is the
         /// single merged <c>Main_Castle_Overworld</c> scene (castle + outer world in one
         /// continuous navmesh, no additive stream / seam warp); when OFF this stays the
-        /// legacy two-scene <c>MainCastle_Hall</c> (+ additive OuterWorld). A property, not
+        /// legacy two-scene <c>MainCastle_Hall</c>. A property, not
         /// a const, so it can flip at runtime — verified nothing uses it in a const/case/
         /// attribute context (only GoCastle's fade-load + DevPanel JumpScene, both runtime).
         /// </para>

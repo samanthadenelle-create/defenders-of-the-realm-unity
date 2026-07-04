@@ -6,8 +6,8 @@
 // (overlapping) colliders under the player.
 //
 // ROOT CAUSE: Village2's baked "Ground" plane sits at exactly Y=0, COPLANAR with
-// the additively-loaded OuterWorld ExteriorTerrain (leveled flat to Y=0 across the
-// village footprint by the seam weighting). Two opaque surfaces at the same depth
+// the ExteriorTerrain in the merged world (leveled flat to Y=0 across the
+// village footprint). Two opaque surfaces at the same depth
 // → z-fighting flicker over the entire floor, plus two colliders stacked at Y=0.
 //
 // THE GENERATOR IS ALREADY FIXED — Village2Generator.CreateGroundPlane() now seats
@@ -18,7 +18,7 @@
 //
 // WHAT THIS DOES (asset-independent, always lands):
 //   On every village scene load, find the large (~140x140 m) plane named "Ground"
-//   near the village centre at/around Y=0 and lower it to Y=-0.05. The OuterWorld
+//   near the village centre at/around Y=0 and lower it to Y=-0.05. The merged
 //   terrain then wins the depth test as the single visible floor; the plane stays
 //   in place as the Build-Mode raycast collider (Build Mode positions its ghost by
 //   raycasting this floor collider — so we keep the object, just drop it 5 cm).
@@ -45,13 +45,13 @@ namespace DeNelle.Core
     public static class GroundZFightFixer
     {
         // Target depth for the baked ground plane: 0.5 m below Y=0 so the coplanar
-        // OuterWorld terrain wins the depth test EVERYWHERE. Matches the value
+        // terrain in the merged world wins the depth test EVERYWHERE. Matches the value
         // Village2Generator.CreateGroundPlane() now bakes.
         //   WO-333 update: a 5 cm drop was NOT enough — the terrain RENDER mesh is
         //   LOD-simplified (heightmapPixelError=4) so its visible surface deviates
         //   several cm from the flat heightmap; in patches it dipped below -0.05 and the
         //   plane poked through, giving the MOTTLED dark-grey/green CHECKERBOARD. -0.5 m
-        //   clears all terrain render deviation so the terrain is the single visible floor.
+        //   clears all terrain render deviation so the merged terrain is the single visible floor.
         private const float TargetY = -0.5f;
 
         // CASTLE HUB target — DATA-PROVEN regression fix (2026-06-28, owner F8 "well/castle not
@@ -59,8 +59,8 @@ namespace DeNelle.Core
         // the depth test, not yield. The old code sank the 26 CourtyardFloor tiles to TargetY
         // (-0.5) — correct for Village2 (its "Ground" plane should yield to nicer terrain) but
         // BACKWARDS for the castle. Player.log proved the mover: "[GroundZFightFixer] hub —
-        // lowered 26 CourtyardFloor tiles to Y=-0.5". The sink is old, but f3ef39f9 re-centered
-        // OuterWorld terrain to origin + re-baked the navmesh to y=0.06, raising props (~0) and
+        // lowered 26 CourtyardFloor tiles to Y=-0.5". The sink is old, but re-centering
+        // the merged terrain and re-baking the navmesh to y=0.06 raised props (~0) and
         // the hero (0.06) above the still-sunk plaza → the 0.5m float. Seat the plaza a hair
         // above origin so it sits at prop/hero level (no float) and still wins over any coplanar
         // terrain at y=0. Authored near-zero tiles are left alone by the idempotency guard.
@@ -112,7 +112,7 @@ namespace DeNelle.Core
         }
 
         /// <summary>
-        /// Lower the baked Village2 ground plane to Y=-0.05 so the OuterWorld terrain
+        /// Lower the baked Village2 ground plane to Y=-0.05 so the merged-world terrain
         /// is the single visible floor. Public so a generator or test can call it.
         /// No-op outside a village scene, or when the plane is already lowered.
         /// </summary>
@@ -120,7 +120,7 @@ namespace DeNelle.Core
         {
             // GARRISON / OUTPOST path FIRST, and UNGATED by the active scene.
             // The outpost (Garrison_troll_outpost / _frost_keep / _ruined_keep / hill_fort)
-            // loads ADDITIVELY over the hub/OuterWorld and is NEVER SetActive'd, so
+            // loads ADDITIVELY over the hub/merged world and is NEVER SetActive'd, so
             // GetActiveScene() still reports "MainCastle_*" / "Village*" while the outpost
             // floor is live. InFixableScene()/InHubScene() therefore can never route to it.
             // Run the Garrison pass whenever ANY Garrison_* scene is loaded (cheap +
@@ -136,7 +136,7 @@ namespace DeNelle.Core
 
             // CASTLE HUB path: the plaza floor is a 5x5 GRID of small tiles named
             // "CourtyardFloor_{x}_{z}" (~8 m each) at Y=0.01, coplanar with the
-            // additively-loaded OuterWorld terrain at Y=0 → flashing floor. The big
+            // terrain in the merged world at Y=0 → flashing floor. The big
             // single-plane logic below never matches these (no >60m footprint, and the
             // hub has no "Ground" plane), so the hub gets its OWN pass.
             if (InHubScene())
@@ -160,13 +160,13 @@ namespace DeNelle.Core
                 ground.transform.position = p;
                 Debug.Log("[GroundZFightFixer] WO-333 — lowered baked '" + ground.name +
                           "' plane from Y=" + y.ToString("0.###") + " to Y=" + TargetY +
-                          " so the OuterWorld terrain wins the depth test (no rebake; " +
+                          " so the merged terrain wins the depth test (no rebake; " +
                           "plane kept as the Build-Mode raycast collider).");
             }
         }
 
         // Castle-hub pass: find ALL plaza floor tiles (CourtyardFloor_* / qFloorWood*)
-        // and lower EACH still-high tile to TargetY so the OuterWorld terrain wins the
+        // and lower EACH still-high tile to TargetY so the merged terrain wins the
         // depth test. Idempotent: a tile already at/below TargetY (re-load) is skipped,
         // so repeated loads never drift it down. Small tiles → no >60m footprint guard.
         private static void FixHubFloorTiles()
@@ -208,8 +208,8 @@ namespace DeNelle.Core
         // continuous opaque floor: only ~25 tiny 2 m CourtyardFloor tiles on 8 m centres
         // (~1% coverage, seated near Y=0 by FixHubFloorTiles), while the big nav plane
         // "CourtyardFloor_Nav" (130x130) is renderer-DISABLED (nav-only). So the ground
-        // the player SEES across the whole castle is the additively-loaded OuterWorld
-        // ExteriorTerrain, intentionally depressed to Y=-3.0 under the castle footprint
+        // the player SEES across the whole castle is the ExteriorTerrain in the merged world,
+        // intentionally depressed to Y=-3.0 under the castle footprint
         // (ExteriorTerrainBuilder CastleDepressionDepth=-3 so terrain can't poke through a
         // floor) — but with no floor, the 3 m drop shows EVERYWHERE = "all counter sunk".
         //
@@ -266,7 +266,7 @@ namespace DeNelle.Core
             FlowTrace.Step("GroundZFightFixer",
                 "hub — created '" + HubOpaqueFloorName + "' opaque floor (90x90 m) at Y=0.0, " +
                 "centre (" + centre.x.ToString("0.#") + ", " + centre.z.ToString("0.#") +
-                ") so the depressed OuterWorld terrain no longer shows as 'all counter sunk'.");
+                ") so the depressed merged terrain no longer shows as 'all counter sunk'.");
         }
 
         // Centre the runtime floor on the hub plaza: average the XZ of the seated
@@ -323,7 +323,7 @@ namespace DeNelle.Core
         }
 
         // True when ANY Garrison_* scene is currently loaded (additively or single).
-        // The raid outpost is loaded additively over the hub/OuterWorld and is NEVER
+        // The raid outpost is loaded additively over the hub/merged world and is NEVER
         // SetActive'd, so GetActiveScene() never reports it — we must walk the loaded
         // scene list instead of asking for the active one (the "additive load never
         // becomes active" trap).
@@ -341,8 +341,8 @@ namespace DeNelle.Core
 
         // GARRISON / OUTPOST pass: the outpost floor is a SINGLE large Plane named
         // "GarrisonGround" (open camps) or "DungeonFloor" (caves), built at Y=0 by
-        // GarrisonSceneBuilder.BuildGroundOrFloor — coplanar with the additively-loaded
-        // OuterWorld terrain at Y=0 → the SAME z-fighting flicker the hub had. The big
+        // GarrisonSceneBuilder.BuildGroundOrFloor — coplanar with the merged-world
+        // terrain at Y=0 → the SAME z-fighting flicker the hub had. The big
         // single-plane finder below cannot catch it: (a) the active scene is the hub, not
         // the outpost, so it never routes here, and (b) the outpost plane footprint is
         // ~48-56 m (medium half=16 / large half=20), BELOW the 60 m MinFootprint guard.
@@ -374,7 +374,7 @@ namespace DeNelle.Core
                 string scene = ActiveGarrisonSceneName();
                 FlowTrace.Step("GroundZFightFixer",
                     "Garrison " + scene + " — offset " + lowered + " floor tiles to Y=" +
-                    TargetY + " so the OuterWorld terrain wins the depth test (no rebake).");
+                    TargetY + " so the merged terrain wins the depth test (no rebake).");
             }
         }
 

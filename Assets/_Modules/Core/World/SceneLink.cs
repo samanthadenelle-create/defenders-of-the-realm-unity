@@ -4,7 +4,7 @@
 // Assembly: DeNelle.Core   Namespace: DeNelle.Core.World
 //
 // A SceneLink describes a routable edge in the world graph
-//   Castle(MainCastle_Hall) → OuterWorld → Outpost1 → Dungeon → Outpost2
+//   Castle(Main_Castle_Overworld) → Outpost1 → Dungeon → Outpost2
 //   (+ a portal link from the dungeon back to Outpost2).
 // The resolver (DeNelle.Village.SceneLinkResolverHost, which implements the
 // Core-defined ISceneLinkResolver) loads these rows from

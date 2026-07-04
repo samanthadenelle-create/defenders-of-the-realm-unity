@@ -201,7 +201,7 @@ namespace DeNelle.Core
                 }
 
                 // TERRAIN PASS (owner F8 2026-06-21 "Pink Floor", ran-from-exe): MainCastle_Hall's VISIBLE
-                // floor is the additively-loaded OuterWorld Terrain (the wood courtyard tiles are dropped to
+                // floor is the Terrain in the merged world (the wood courtyard tiles are dropped to
                 // Y=-0.5 by GroundZFightFixer and hidden). A Terrain is NOT a Renderer, so the loop above
                 // never sees it AND the IsGroundLike path excludes "Terrain" shaders — so a stripped URP
                 // Terrain/Lit shader (-> InternalError = pink) is structurally unreachable by the code above.
@@ -210,7 +210,7 @@ namespace DeNelle.Core
                 // "Universal Render Pipeline/Terrain/Lit" in the build (ExteriorTerrainBuilder.EnsureTerrainShaderIncluded).
                 // ── FLOOR-DIAG (owner F8 2026-06-21 "still pink, PERSISTENT") ─────────────────
                 // The narrow shader-broken fix didn't resolve it, so DUMP the full ground state on
-                // every hub/OuterWorld load — the next F8 names the exact pink surface + cause. All
+                // every hub/merged-world load — the next F8 names the exact pink surface + cause. All
                 // [Flow:FloorDiag] Fail lines land in break-log.jsonl. REMOVE once root-caused.
                 // Causes this distinguishes: (a) terrain shader stripped (-> InternalError), (b) terrain
                 // LAYER missing its diffuse texture (magenta even with a valid shader — the modified

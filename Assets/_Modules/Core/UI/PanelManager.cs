@@ -21,7 +21,7 @@
 //
 // No MonoBehaviour / no scene object is required: this is pure static state,
 // reset on domain reload like any static. That keeps it alive across additive
-// scene loads (Village + OuterWorld) without a DDOL host to manage.
+// scene loads (Village + merged world) without a DDOL host to manage.
 // =============================================================================
 
 using System;

@@ -6,7 +6,7 @@
 // and the KayKit hex-pack decoration trees (trees_A_large / trees_B_medium /
 // tree_single_A). The Tree of Life centrepiece is handled SEPARATELY by
 // TreeOfLifeMaterialFixer; this component covers EVERYTHING ELSE that reads as a
-// tree, anywhere in the scene (village ring + scatter + OuterWorld foliage).
+// tree, anywhere in the scene (village ring + scatter + merged-world foliage).
 //
 // ROOT CAUSE
 //   White = the tree material did NOT resolve to a lit URP material at runtime:

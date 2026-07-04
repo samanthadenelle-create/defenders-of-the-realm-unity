@@ -160,7 +160,7 @@ namespace DeNelle.Core
         /// <summary>
         /// The active data-driven scene-link resolver, or null when no
         /// SceneLinkResolverHost is present (it self-bootstraps). Routes the hero
-        /// across the world graph (Castle → OuterWorld → Outpost1 → Dungeon →
+        /// across the world graph (Castle → Outpost1 → Dungeon →
         /// Outpost2 + portal). Always null-check before use
         /// (e.g. CoreServices.SceneLinkResolver?.TravelTo(id)).
         /// </summary>

@@ -245,7 +245,7 @@ namespace DeNelle.Core.Diagnostics
         // A scoped enter/exit trace that follows the execution thread down through every
         // layer. Each nested Enter indents deeper, so one run shows the WHOLE call path and
         // exactly where it stopped. Lightweight readonly struct, zero heap alloc.
-        // USAGE:  using var _ = FlowTrace.Enter("Seam", "Cross to OuterWorld");
+        // USAGE:  using var _ = FlowTrace.Enter("Seam", "Cross to world");
         public static FlowScope Enter(string system, string what) => new FlowScope(system, what);
 
         /// <summary>Enter/exit scope from <see cref="Enter"/>: logs "-&gt; what", indents, and on

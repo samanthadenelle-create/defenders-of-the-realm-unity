@@ -45,9 +45,9 @@ namespace DeNelle.Core.Arena
         /// <summary>The enemy family staged against the hero.</summary>
         public List<FamilyMemberSpec> Family = new List<FamilyMemberSpec>();
 
-        /// <summary>Backdrop theme for the arena dressing: "castle" | "outerworld" | "cavern".
+        /// <summary>Backdrop theme for the arena dressing: "castle" | "world" | "cavern".
         /// Matches the scene the player engaged in so the fight never looks like a void.</summary>
-        public string Context = "outerworld";
+        public string Context = "world";
 
         /// <summary>Where to port the hero back to when the battle resolves.</summary>
         public ReturnSpec Return = new ReturnSpec();
@@ -77,7 +77,7 @@ namespace DeNelle.Core.Arena
 
     public sealed class ReturnSpec
     {
-        public string Scene = "OuterWorld";
+        public string Scene = "Main_Castle_Overworld";
         public Vec3 Position;
         public float Yaw;
     }
