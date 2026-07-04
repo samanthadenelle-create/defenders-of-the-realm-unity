@@ -301,6 +301,17 @@ namespace DeNelle.Village.Hud
             int level = EnemyLevelStub(en);
             bool locked = _indicator != null && _indicator.LockEngaged;
 
+            // Difficulty tell on the TARGET FRAME (mirrors the over-head ThreatSkullPlate).
+            // The kit's Bind only forwards Name (extra=LOCKED) to the frame, so surface the
+            // warning as a rich-text-coloured prefix on the name — gold "!" for caution,
+            // red "!!" for danger — using the SAME owner-tunable ThreatSkullPlate thresholds
+            // (TierFor) so the two surfaces always agree. ASCII glyph = font/WebGL-safe.
+            int playerLevel = HeroProgression.Instance != null ? Mathf.Max(1, HeroProgression.Instance.Level) : 1;
+            int threatTier = ThreatSkullPlate.TierFor(level, playerLevel);
+            if (threatTier > 0)
+                name = (threatTier >= 2 ? "<color=#FF3B30><b>!!</b></color> "
+                                        : "<color=#FFD24A><b>!</b></color> ") + name;
+
             string sig = $"{name}|{level}|{hp}/{maxHp}|{role}|{locked}";
             if (sig == _sig) return;
             _sig = sig;

@@ -38,11 +38,39 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class ThreatSkullPlate : MonoBehaviour
     {
-        // ── Grading thresholds (mob ThreatLevel − player level) ───────────────────
-        /// <summary>Delta at/above which one skull shows (a risky, uphill fight).</summary>
+        // ── Grading thresholds (mob difficulty − player level) — OWNER-TUNABLE ────
+        // THE single tuning point for the whole difficulty-warning tell. Both the
+        // over-head plate (this component) AND the target frame (HudModelProducers.
+        // TargetProducer, via TierFor) read these, so bumping them here moves every
+        // surface at once. delta = enemyDifficulty − playerLevel.
+        /// <summary>Delta at/above which the CAUTION tell shows (one skull — a risky, uphill fight).</summary>
         public const int RiskyDelta = 3;
-        /// <summary>Delta at/above which two skulls show (lethal — likely a loss).</summary>
+        /// <summary>Delta at/above which the DANGER tell shows (two skulls — lethal, likely a loss).</summary>
         public const int LethalDelta = 7;
+
+        /// <summary>
+        /// Shared difficulty tier for a delta (enemyDifficulty − playerLevel):
+        /// 0 = fair fight (no tell), 1 = caution, 2 = danger. THE single owner-tunable
+        /// gate (<see cref="RiskyDelta"/> / <see cref="LethalDelta"/>) so the over-head
+        /// plate and the target frame always agree.
+        /// </summary>
+        public static int TierFor(int enemyDifficulty, int playerLevel)
+        {
+            int delta = enemyDifficulty - playerLevel;
+            return delta >= LethalDelta ? 2 : delta >= RiskyDelta ? 1 : 0;
+        }
+
+        /// <summary>
+        /// Enemy "difficulty" derived from max HP (the Enemy carries no explicit Level).
+        /// Mirrors HudModelHost.EnemyLevelStub so the target frame's "Lv" and this warning
+        /// read exactly one value. Falls back to 1 when the enemy is null.
+        /// </summary>
+        public static int EnemyThreatLevel(Enemy e)
+        {
+            if (e == null) return 1;
+            float maxHp = e.MaxHp > 0.001f ? e.MaxHp : e.Hp;
+            return Mathf.Max(1, Mathf.RoundToInt(maxHp / 25f));
+        }
 
         private static readonly Color SkullColor   = new Color(0.92f, 0.16f, 0.13f, 1f);  // danger red
         private static readonly Color LethalColor  = new Color(1f,    0.30f, 0.10f, 1f);  // hotter orange-red
@@ -75,6 +103,39 @@ namespace DeNelle.Village
             if (plate._built && plate._canvas != null)
                 plate._canvas.transform.localPosition = new Vector3(0f, heightOffset, 0f);
             return plate;
+        }
+
+        /// <summary>
+        /// Universal self-resolving attach used by the enemy nameplate path
+        /// (<see cref="FloatingHealthBar"/>) so EVERY enemy — not just RegionMobSpawner
+        /// roamers — carries the difficulty tell. Resolves the <see cref="Enemy"/> on the
+        /// host and feeds its HP-derived level (<see cref="EnemyThreatLevel"/>) as the threat
+        /// versus the player's level. A no-op on a non-enemy host (e.g. the hero's HP bar).
+        /// The explicit spawner <see cref="Attach"/> (ZoneManager threat) still overrides this
+        /// later for region mobs — Attach reuses the same component, so nothing double-stacks.
+        /// </summary>
+        public static ThreatSkullPlate AttachAuto(GameObject host)
+        {
+            if (host == null) return null;
+            var e = host.GetComponentInParent<Enemy>();
+            if (e == null) return null;   // hero / non-enemy nameplate → no threat tell
+
+            // Sit just above the floating HP bar. The plate's canvas is a child of the host,
+            // so its localPosition.y is scaled by the host's lossyScale.y — convert the desired
+            // WORLD offset into host-local units so wildly-scaled enemy meshes (orc/troll/People
+            // family) place the plate at the same world height above the head.
+            float worldTop = 2.4f;
+            var rend = host.GetComponentInChildren<Renderer>();
+            if (rend != null)
+            {
+                float top = rend.bounds.max.y - host.transform.position.y;
+                if (top > 0.1f) worldTop = top;
+            }
+            float worldOffset = Mathf.Clamp(worldTop, 0.5f, 4f) + 0.6f;   // above the HP bar
+            float scaleY = Mathf.Abs(host.transform.lossyScale.y);
+            if (scaleY < 0.0001f || float.IsNaN(scaleY) || float.IsInfinity(scaleY)) scaleY = 1f;
+
+            return Attach(host, () => EnemyThreatLevel(e), worldOffset / scaleY);
         }
 
         private void Start()

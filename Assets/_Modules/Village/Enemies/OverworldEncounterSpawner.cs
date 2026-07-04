@@ -269,6 +269,9 @@ namespace DeNelle.Village
                     float dist = UnityEngine.Random.Range(SpawnMinDistance, SpawnMaxDistance);
                     Vector3 cand = origin + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * dist;
                     if (!UnityEngine.AI.NavMesh.SamplePosition(cand, out var ch, 8f, UnityEngine.AI.NavMesh.AllAreas)) continue;
+                    // MOAT EXCLUSION: never anchor a rep in the castle moat water / RegionGate seam
+                    // band — re-roll. The moat hides the seam, so this also keeps reps off the cut.
+                    if (MoatExclusion.IsInMoatBand(ch.position)) continue;
                     bool inOuter = false;
                     Guard.Try("Encounter", "rep zone gate", () => inOuter =
                         DeNelle.Core.World.RegionSpawnTable.HasRoster(DeNelle.Core.World.ZoneManager.GetZone(ch.position)));
@@ -310,6 +313,15 @@ namespace DeNelle.Village
                 return;
             }
 
+            // POST-SNAP MOAT RE-CHECK: the 12m navmesh snap can also drift the anchor into the castle
+            // moat water / RegionGate seam band — abort so a snapped point never leaks a rep into the
+            // water or onto the seam (mirrors the castle-safe re-check above).
+            if (MoatExclusion.IsInMoatBand(anchor))
+            {
+                FlowTrace.Warn("Encounter", $"SpawnRep #{index}: final anchor {anchor} snapped into the moat/seam band -> aborting spawn (no water/seam rep).");
+                return;
+            }
+
             var def = new EnemyDef
             {
                 Id = "orc-warrior", Name = "Orc Warleader", DisplayName = "Orc Warband", Ai = "walker",
@@ -340,7 +352,24 @@ namespace DeNelle.Village
                 // RepEngageWatcher's chase target each frame -> the rep never actually chased. The
                 // RepEngageWatcher now fully owns the rep: tether (above) until aggro, then it drives
                 // the brain-position override onto the hero uncontested so the orc runs you down.
-                enemy.gameObject.AddComponent<RepEngageWatcher>().Init(OrcFamily, ZoneThreatAt(anchor));
+                // WO-606: the FAMILY the rep drops to battle + the LEVEL + arena preset now come from the
+                // geotagged SpawnArea at this anchor (data-driven), replacing the hardcoded OrcFamily +
+                // ZoneThreatAt read. When no area is authored/loaded (HasAny == false) OR the anchor is
+                // outside every area, fall back to the legacy family/threat so this stays non-breaking.
+                string[] repFamily = OrcFamily;
+                int repThreat = ZoneThreatAt(anchor);
+                string repPreset = null;
+                if (DeNelle.Core.World.SpawnAreaTable.HasAny)
+                {
+                    var draw = DeNelle.Core.World.SpawnAreaTable.BuildDraw(anchor);
+                    if (draw.Valid && draw.EnemyIds != null && draw.EnemyIds.Length > 0)
+                    {
+                        repFamily = draw.EnemyIds;
+                        repThreat = Mathf.Max(1, draw.Level);
+                        repPreset = draw.ArenaPreset;
+                    }
+                }
+                enemy.gameObject.AddComponent<RepEngageWatcher>().Init(repFamily, repThreat, repPreset);
             });
 
             if (enemy != null)
@@ -385,6 +414,7 @@ namespace DeNelle.Village
     {
         private string[] _family;
         private int _threat;
+        private string _arenaPreset;   // WO-606: forwarded from the resolved SpawnArea (data only today)
         private bool _engaged;
         private bool _stung;
         private Enemy _enemy;
@@ -469,10 +499,11 @@ namespace DeNelle.Village
         private const float TouchFallbackDist = 0.7f;   // used only if a collider radius can't be resolved
         private float _touchDist = -1f;                 // <0 until resolved from real colliders
 
-        public void Init(string[] family, int threat)
+        public void Init(string[] family, int threat, string arenaPreset = null)
         {
             _family = (family != null && family.Length > 0) ? family : new[] { "orc-warrior" };
             _threat = Mathf.Max(1, threat);
+            _arenaPreset = arenaPreset;
             _enemy = GetComponent<Enemy>();
             _leashCenter = transform.position;                    // wander leash centred on the spawn
             // FIELD-KILL DECOUPLE (owner 2026-06-28): damage no longer auto-engages the arena. With
@@ -726,6 +757,7 @@ namespace DeNelle.Village
                 ReturnPosition = hero != null ? hero.transform.position : transform.position,
                 ReturnYaw = hero != null ? hero.transform.eulerAngles.y : 0f,
                 RepId = gameObject.name,
+                ArenaPreset = _arenaPreset,   // WO-606: forward the geotagged area's preset (data only today)
             };
 
             FlowTrace.Step("Encounter", $"ENGAGE rep '{gameObject.name}' -> BattleArena (family [{string.Join(",", _family)}], threat {_threat}, theme '{p.BackdropContext}', hero={(hero != null ? "found" : "NULL")}).");

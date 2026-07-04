@@ -46,5 +46,10 @@ namespace DeNelle.Village.Arena
 
         /// <summary>Optional id of the overworld rep mob that triggered this — consumed (despawned) on victory.</summary>
         public string RepId;
+
+        /// <summary>WO-606: the geotagged spawn-area's arena preset (small|med|large), forwarded from the
+        /// resolved SpawnArea at engage time. BattleArena's footprint has NO size param today, so this is
+        /// carried as data only (a later hook can scale the arena from it). Null/empty = today's fixed size.</summary>
+        public string ArenaPreset;
     }
 }

@@ -124,6 +124,13 @@ namespace DeNelle.Village
             var bar = host.GetComponent<FloatingHealthBar>();
             if (bar == null) bar = host.AddComponent<FloatingHealthBar>();
             bar.Init(fraction, isDead, heightOffset, hideAtFull, destroyOnDead);
+
+            // Difficulty tell (reuse, do not duplicate): give EVERY enemy nameplate the
+            // over-head ThreatSkullPlate warning — previously only RegionMobSpawner roamers
+            // got one. Self-resolves the Enemy; a no-op on the hero's bar (no Enemy). The
+            // spawner's explicit Attach (ZoneManager threat) still overrides it for region
+            // mobs — Attach reuses the same component, so nothing double-stacks.
+            if (host.GetComponent<Enemy>() != null) ThreatSkullPlate.AttachAuto(host);
             return bar;
         }
 

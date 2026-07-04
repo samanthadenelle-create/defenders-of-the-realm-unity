@@ -147,7 +147,12 @@ namespace DeNelle.Village
             // Only run while the player is actually in an outer region. In the safe
             // Village home zone we spawn nothing (and let any stragglers cull out).
             Vector3 pp = _player.position;
-            bool playerOutside = RegionSpawnTable.HasRoster(ZoneManager.GetZone(pp));
+            // WO-606: prefer the geotagged spawn AREAS when authored (data-driven); else the legacy
+            // origin-relative region roster. Outside every authored area = no spawn (emergent exclusion,
+            // composes with the moat carve). Non-breaking: no JSON/areas -> HasAny false -> legacy path.
+            bool playerOutside = SpawnAreaTable.HasAny
+                ? SpawnAreaTable.HasAreaAt(pp)
+                : RegionSpawnTable.HasRoster(ZoneManager.GetZone(pp));
 
             PruneAndDrive(pp);
 
@@ -270,10 +275,11 @@ namespace DeNelle.Village
             }
 
             RegionId region = ZoneManager.GetZone(packPos);
-            if (!RegionSpawnTable.HasRoster(region))
+            bool areaHere = SpawnAreaTable.HasAny && SpawnAreaTable.HasAreaAt(packPos);
+            if (!areaHere && !RegionSpawnTable.HasRoster(region))
             {
-                FlowTrace.Step("RegionMobs", $"TopUpPopulation: {region} has no roster — not an outer region, skipping.");
-                return;   // not an outer region
+                FlowTrace.Step("RegionMobs", $"TopUpPopulation: {region} has no area/roster — not a spawn region, skipping.");
+                return;   // not an outer region / not inside an authored area
             }
 
             float depth = ZoneManager.Depth(packPos);
@@ -295,6 +301,21 @@ namespace DeNelle.Village
             // than budget so a top-up can't overshoot the population target.
             int packSize = Mathf.Clamp(budget, 1, 3);
 
+            // WO-606: when a geotagged area is authored here, the pack's enemy IDS + LEVEL come from
+            // its resolved family/composition (data-driven) instead of the legacy RegionSpawnTable pick.
+            // seedBudget lightly caps a single top-up's pack size (owner-tunable). Falls back per-member
+            // to RegionSpawnTable.PickEnemyId when no area/draw is present (non-breaking).
+            SpawnDraw areaDraw = default;
+            if (SpawnAreaTable.HasAny)
+            {
+                areaDraw = SpawnAreaTable.BuildDraw(origin);
+                if (areaDraw.Valid)
+                {
+                    packSize = Mathf.Clamp(packSize, 1, Mathf.Max(1, Mathf.Min(3, areaDraw.SeedBudget)));
+                    threat = Mathf.Max(threat, areaDraw.Level);
+                }
+            }
+
             for (int i = 0; i < packSize; i++)
             {
                 // Cluster members within a couple metres of the pack origin.
@@ -304,9 +325,19 @@ namespace DeNelle.Village
                 if (NavMesh.SamplePosition(want, out NavMeshHit hit, 6f, NavMesh.AllAreas))
                     pos = hit.position;
 
+                // MOAT EXCLUSION: the pack origin cleared the band, but a clustered member can jitter
+                // into the moat/seam edge — drop just this member rather than spawn it in the water.
+                if (MoatExclusion.IsInMoatBand(pos))
+                {
+                    FlowTrace.Warn("RegionMobs", $"SpawnPack: member {i} jittered into the moat band at {pos} — skipped (no water spawn).");
+                    continue;
+                }
+
                 // Member 0 = the lead (any roster pick → tends to the brute/charger);
                 // later members fill complementary roles for a real squad mix.
-                string enemyId = RegionSpawnTable.PickEnemyId(region, depth, Random.value);
+                string enemyId = (areaDraw.Valid && areaDraw.EnemyIds != null && areaDraw.EnemyIds.Length > 0)
+                    ? areaDraw.EnemyIds[i % areaDraw.EnemyIds.Length]           // WO-606: role-ordered area draw
+                    : RegionSpawnTable.PickEnemyId(region, depth, Random.value); // legacy fallback
                 if (string.IsNullOrEmpty(enemyId)) continue;
 
                 var mob = SpawnMob(enemyId, region, pos, threat);
@@ -365,19 +396,32 @@ namespace DeNelle.Village
         }
 
         // Find a NavMesh-valid point in the spawn ring around the player.
+        // MOAT EXCLUSION: any candidate that snaps into the castle moat water band / RegionGate
+        // seam (MoatExclusion.IsInMoatBand) is REJECTED and re-rolled — never spawn a mob in the
+        // water or on the seam. Retries are capped; a rejection is traced so a headless run shows it.
         private bool TryFindSpawnPoint(Vector3 playerPos, out Vector3 pos)
         {
-            for (int attempt = 0; attempt < 6; attempt++)
+            const int MaxAttempts = 10;   // was 6 — allow a few extra rolls to dodge the moat band
+            int moatRejects = 0;
+            for (int attempt = 0; attempt < MaxAttempts; attempt++)
             {
                 float ang = Random.value * Mathf.PI * 2f;
                 float rad = Random.Range(SpawnRingInner, SpawnRingOuter);
                 Vector3 want = playerPos + new Vector3(Mathf.Cos(ang) * rad, 0f, Mathf.Sin(ang) * rad);
                 if (NavMesh.SamplePosition(want, out NavMeshHit hit, 8f, NavMesh.AllAreas))
                 {
+                    if (MoatExclusion.IsInMoatBand(hit.position))
+                    {
+                        moatRejects++;
+                        continue;   // in the moat/seam band — re-roll
+                    }
                     pos = hit.position;
                     return true;
                 }
             }
+            if (moatRejects > 0)
+                FlowTrace.Warn("RegionMobs",
+                    $"TryFindSpawnPoint: no ring point cleared the moat band in {MaxAttempts} tries ({moatRejects} moat-rejects) — no pack this tick.");
             pos = playerPos;
             return false;
         }
