@@ -518,6 +518,20 @@ namespace DeNelle.Village
             if (anim == null) return;
             _animator = anim;
             RefreshParamCache();
+
+            // §12 (mocap-locomotion retarget verify, owner 2026-07-04): log the wire-path facts ONCE so a
+            // headless AutoPilot run proves the KnightMocap swap took — applyRootMotion (must be false so
+            // HeroLocomotion owns movement), the avatar validity (a Humanoid clip poses ONLY through a valid
+            // avatar; invalid = the T-pose "sliding statue"), and the bound controller name + clip count
+            // (KnightMocap vs Knight, and that its locomotion clips are present).
+            var rac = _animator.runtimeAnimatorController;
+            DeNelle.Core.Diagnostics.FlowTrace.Once("HeroLoco",
+                "wire/" + (_animator != null ? _animator.GetInstanceID().ToString() : "null"),
+                $"SetAnimator wired: controller={(rac != null ? rac.name : "<null>")}, " +
+                $"applyRootMotion={_animator.applyRootMotion}, " +
+                $"avatar={(_animator.avatar != null ? _animator.avatar.name : "<none>")} " +
+                $"(valid={( _animator.avatar != null && _animator.avatar.isValid)}), " +
+                $"clips={(rac != null && rac.animationClips != null ? rac.animationClips.Length : 0)}.");
         }
 
         // WO-139 #9: WaveManager may spawn after the hero, leaving _waveManager
@@ -843,6 +857,21 @@ namespace DeNelle.Village
             // Cheap: only runs while _animator is null, stops once wired.
             ResolveAnimator();
             if (_animator != null && _hasSpeedParam) _animator.SetFloat(AnimSpeed, Velocity.magnitude);
+
+            // §12 (mocap-locomotion retarget verify, owner 2026-07-04): ~1/sec, prove WHICH locomotion
+            // clip is playing at a given Speed (Walk-vs-Run band) AND that the avatar retargeted (a valid
+            // avatar name, not a frozen T-pose). Captured to break-log.jsonl during a headless AutoPilot
+            // walk so the KnightMocap swap can be verified without an owner playtest. Near-zero cost when
+            // FlowTrace is disabled (Allowed() short-circuits before any string work in Throttle).
+            if (_animator != null)
+            {
+                var st = _animator.GetCurrentAnimatorStateInfo(0);
+                var av = _animator.avatar;
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroLoco", "loco", 1f,
+                    $"vel={Velocity.magnitude:F2} m/s | baseState hash={st.shortNameHash} " +
+                    $"nt={st.normalizedTime % 1f:F2} | avatar={(av != null ? av.name : "<none>")} | " +
+                    $"controller={(_animator.runtimeAnimatorController != null ? _animator.runtimeAnimatorController.name : "<null>")}");
+            }
         }
 
         // ── Manual NavMeshLink traversal (WO-468) ────────────────────────────────────

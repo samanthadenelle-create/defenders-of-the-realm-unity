@@ -280,6 +280,19 @@ namespace DeNelle.Core
         /// <see cref="DeNelle.Village.World.CastleMoatBuilder"/>.</summary>
         public static bool CastleMoat => Get("castlemoat", defaultOn: true);
 
+        /// <summary>WO-608 (owner 2026-07-04) — when ON, the game uses the ONE merged scene
+        /// <c>Main_Castle_Overworld</c> (castle + full outer world welded into a single continuous
+        /// navmesh, built by <see cref="DeNelle.Editor.WorldMergeBuilder"/>) instead of the legacy
+        /// two-scene additive model. When ON the seam is GONE, so the runtime SKIPS the additive
+        /// OuterWorld load (<see cref="DeNelle.Village.WorldSceneLoader"/>) and SKIPS the castle↔outerworld
+        /// masked warp / RegionGate crossing (<see cref="DeNelle.Village.RuntimeRegionGate"/>) on the
+        /// merged scene — the descent is a plain walk down the 4 bridge ramps on one navmesh. The
+        /// additive path + RegionGate primitive stay intact for other hubs / dungeon / outpost / arena
+        /// (disable-not-delete). Default OFF until the merged scene is baked + owner felt-verified
+        /// (ten-year-old test: descend the ramp, seam invisible). PlayerPrefs "ff.mergedworld" = 1 to
+        /// preview once the bake lands.</summary>
+        public static bool MergedWorld => Get("mergedworld", defaultOn: false);
+
         /// <summary>The editor-baked south CastleBridgeSeam deck (CastleHubBuilder.AddCastleBridgeSeam).
         /// Default OFF (2026-06-29): the editor deck stacked a 2nd navmesh deck on top of the runtime
         /// RuntimeRegionGate south deck, splitting the south navmesh -> spawn->gate PathPartial. South now
@@ -378,6 +391,19 @@ namespace DeNelle.Core
         /// load degrades to the legacy Tripo Knight (never bodyless). PlayerPrefs "ff.knightv3" = 0 to
         /// restore the Paladin package / legacy Knight.</summary>
         public static bool KnightV3 => Get("knightv3", defaultOn: true);
+
+        /// <summary>STUDIO-MOCAP KNIGHT LOCOMOTION (owner 2026-07-04) — when ON, the KnightV3 body binds
+        /// the studio-mocap locomotion twin <c>Resources/Heroes/KnightMocap.controller</c> instead of
+        /// <c>Knight.controller</c>. KnightMocap is IDENTICAL to the Knight controller EXCEPT its
+        /// Locomotion 1-D blend tree Idle/Walk/Run sources are the professional sword+shield studio-mocap
+        /// clips (idle_ready / walkforward01 / runforward_218667 from
+        /// Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/) — HUMANOID on the SAME CC_Base
+        /// rig, so the retarget is ~1:1 (no lossy cross-rig Mixamo look, the "off" walk the owner flagged).
+        /// Cast/Attack/Hit/Death/Block/Victory/Injured/UpperBody are unchanged. Default OFF until the owner
+        /// felt-approves — the existing Knight.controller is byte-untouched when OFF (a missing KnightMocap
+        /// controller also degrades to Knight). idle/walk/run FORWARD only this pass; strafe/turn/combat are
+        /// Phase 2. PlayerPrefs "ff.mocaploco" = 1 to preview.</summary>
+        public static bool MocapLocomotion => Get("mocaploco", defaultOn: true);   // 2026-07-04: owner felt-approved ("player feels ok") — ON. Studio-mocap idle/walk/run FORWARD; strafe/turn/shield-carry = Phase 2.
 
         /// <summary>SEEKERTHON stake-rewards DEMO surface — when ON, <see cref="DeNelle.Core.Platform.StakeRewardsDemoBootstrap"/>
         /// seeds a real-looking active native SKR stake (~1M, a Genesis holder) into

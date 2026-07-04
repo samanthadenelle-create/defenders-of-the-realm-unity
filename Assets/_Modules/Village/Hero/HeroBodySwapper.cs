@@ -455,7 +455,34 @@ namespace DeNelle.Village
             }
             else
             {
-                controller = DeNelle.Core.HeroAssetLoader.LoadHeroController(slug)
+                // MOCAP LOCOMOTION (owner 2026-07-04, ff.mocaploco): for the KnightV3 body, bind the
+                // studio-mocap locomotion twin KnightMocap.controller instead of Knight.controller. It is
+                // IDENTICAL except its Locomotion Idle/Walk/Run come from the CC_Base studio-mocap clips
+                // (~1:1 retarget vs the lossy cross-rig Mixamo Shared clips — the "off" walk the owner
+                // flagged). OFF (or any non-KnightV3 body) binds exactly as before; a missing KnightMocap
+                // controller falls back to Knight.controller so the hero is never left un-animated.
+                string controllerSlug = slug;
+                // DATA CAPTURE (owner 2026-07-04, §12): prove exactly WHY KnightMocap binds or not —
+                // log both branch conditions + the raw persisted pref BEFORE the decision, and the
+                // resolved controller AFTER the load, so one headless run pinpoints flag-false vs load-null.
+                int  mocapPrefRaw = UnityEngine.PlayerPrefs.GetInt("ff.mocaploco", -1);
+                bool mocapFlag    = DeNelle.Core.FeatureFlags.MocapLocomotion;
+                FlowTrace.Step("HeroBody",
+                    $"MOCAP-DECISION: useKnightV3={useKnightV3} mocapFlag={mocapFlag} prefRaw={mocapPrefRaw} slug={slug}");
+                if (useKnightV3 && mocapFlag)
+                {
+                    controllerSlug = "KnightMocap";
+                    FlowTrace.Step("HeroBody",
+                        "ff.mocaploco ON + KnightV3 — binding KnightMocap.controller (studio-mocap locomotion) instead of Knight.");
+                }
+                var mocapLoaded = DeNelle.Core.HeroAssetLoader.LoadHeroController(controllerSlug);
+                string mocapLoadName = mocapLoaded != null ? mocapLoaded.name : "<null>";
+                FlowTrace.Step("HeroBody",
+                    $"MOCAP-LOAD: requestedSlug={controllerSlug} loaded={mocapLoadName}");
+                controller = mocapLoaded
+                             ?? (controllerSlug != slug
+                                     ? DeNelle.Core.HeroAssetLoader.LoadHeroController(slug)  // mocap twin absent → Knight
+                                     : null)
                              ?? controllerSnapshot;
             }
             // CRITICAL (WO-174 "no walk / statue"): the per-class controllers are built from

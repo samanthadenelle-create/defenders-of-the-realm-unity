@@ -102,6 +102,16 @@ namespace DeNelle.Editor
             // entry is skipped (that slot falls back to the generic Cast). Length may be
             // < 5; only the present indices build states.
             public string[] spellCastClips;
+
+            // MOCAP-LOCOMOTION VARIANT (owner 2026-07-04): optional per-spec overrides for the
+            // Locomotion blend-tree clip basenames. When null (every stock hero) the shared
+            // Idle/Walk/Run constants are used unchanged. BuildKnightMocapController sets these to the
+            // studio-mocap sword+shield clips so KnightMocap.controller swaps ONLY its locomotion
+            // sources — Cast/Attack/Hit/Death/Block/Victory/UpperBody/Injured stay byte-identical to
+            // the stock Knight build.
+            public string idleClipOverride;
+            public string walkClipOverride;
+            public string runClipOverride;
         }
 
         // WO-283 §1 type->folder mapping. Casters (Mage + Cleric) share the Wizard set.
@@ -182,11 +192,67 @@ namespace DeNelle.Editor
             Debug.Log("[HeroAnimatorFactory] BuildAll complete — Knight / Mage / Ranger / Cleric.");
         }
 
+        // MOCAP LOCOMOTION (owner 2026-07-04, ff.mocaploco): the professional studio-mocap sword+shield
+        // locomotion clips (HUMANOID, on the SAME CC_Base rig as KnightV3 → ~1:1 retarget). Each FBX ships
+        // a "0_T-Pose" take alongside the motion take; LoadClip already skips the T-pose by name.
+        private const string MocapMovesDir = "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/";
+        private const string MocapIdleClip = "idle_ready";
+        private const string MocapWalkClip = "walkforward01";
+        private const string MocapRunClip  = "runforward_218667";
+        // The mocap-locomotion twin controller — bound by HeroBodySwapper for the KnightV3 body when
+        // ff.mocaploco is ON. NEVER overwrites Knight.controller.
+        private const string KnightMocapControllerPath = "Assets/Resources/Heroes/KnightMocap.controller";
+
+        /// <summary>
+        /// OWNER 2026-07-04: builds <c>Resources/Heroes/KnightMocap.controller</c> — a twin of the Knight
+        /// controller whose ONLY difference is that its Locomotion (Idle/Walk/Run) sources are the studio
+        /// -mocap sword+shield clips instead of the lossy cross-rig Mixamo Shared clips. Reuses the exact
+        /// same <see cref="Build"/> path (a cloned Knight <see cref="HeroSpec"/> + the mocap locomotion
+        /// overrides + the mocap folder prepended to the search roots), so Cast/Attack/Hit/Death/Block/
+        /// Victory/UpperBody/Injured are produced byte-for-byte identical to the Knight build. Does NOT
+        /// touch Knight.controller (separate output path). Batchmode-callable:
+        /// <c>DeNelle.Editor.HeroAnimatorFactory.BuildKnightMocapController</c>.
+        /// </summary>
+        [MenuItem("Defenders/Animation/Build Knight Mocap Locomotion Controller")]
+        public static void BuildKnightMocapController()
+        {
+            HeroSpec knight = default;
+            bool found = false;
+            foreach (var s in Specs) if (s.slug == "Knight") { knight = s; found = true; break; }
+            if (!found)
+            {
+                Debug.LogError("[HeroAnimatorFactory] Knight spec not found — cannot build KnightMocap.controller.");
+                return;
+            }
+
+            var mocap = knight;   // struct copy — inherits Knight's cast/attack/spell clip sets verbatim
+            mocap.slug           = "KnightMocap";                 // logging only (slug is not used for lookups in Build)
+            mocap.controllerPath = KnightMocapControllerPath;     // NEVER Knight.controller
+            // LoadClip is NON-RECURSIVE — the mocap folder MUST be listed EXPLICITLY, and FIRST so the
+            // locomotion basenames resolve there. Knight/Shared still follow, covering cast/attack/hit/
+            // death/block/victory exactly as the stock Knight build.
+            var roots = new List<string> { MocapMovesDir };
+            roots.AddRange(knight.searchRoots);
+            mocap.searchRoots = roots.ToArray();
+            // ONLY the locomotion sources change (studio-mocap; ~1:1 CC_Base retarget).
+            mocap.idleClipOverride = MocapIdleClip;
+            mocap.walkClipOverride = MocapWalkClip;
+            mocap.runClipOverride  = MocapRunClip;
+
+            Build(mocap);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log($"[HeroAnimatorFactory] KnightMocap.controller built — studio-mocap idle/walk/run " +
+                      $"locomotion ({MocapIdleClip}/{MocapWalkClip}/{MocapRunClip}); every other state matches " +
+                      $"the Knight build → {KnightMocapControllerPath}. Bound for KnightV3 when ff.mocaploco=1.");
+        }
+
         private static void Build(HeroSpec spec)
         {
-            AnimationClip idle    = LoadClip(IdleClip,    spec.searchRoots);
-            AnimationClip walk    = LoadClip(WalkClip,    spec.searchRoots);
-            AnimationClip run     = LoadClip(RunClip,     spec.searchRoots);
+            // Locomotion sources honor the optional per-spec overrides (mocap variant); null → shared constants.
+            AnimationClip idle    = LoadClip(spec.idleClipOverride ?? IdleClip, spec.searchRoots);
+            AnimationClip walk    = LoadClip(spec.walkClipOverride ?? WalkClip, spec.searchRoots);
+            AnimationClip run     = LoadClip(spec.runClipOverride  ?? RunClip,  spec.searchRoots);
             AnimationClip victory = LoadClip(VictoryClip, spec.searchRoots);
             AnimationClip hit     = LoadClip(HitClip,   spec.searchRoots);
             AnimationClip death   = LoadClip(DeathClip, spec.searchRoots);
