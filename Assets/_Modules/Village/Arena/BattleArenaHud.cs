@@ -108,7 +108,7 @@ namespace DeNelle.Village.Arena
             _canvas.sortingOrder = 5000;  // above the gameplay HUD kit (4000)
             var scaler = gameObject.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.referenceResolution = new Vector2(1080f, 1920f);
             gameObject.AddComponent<GraphicRaycaster>();
         }
 

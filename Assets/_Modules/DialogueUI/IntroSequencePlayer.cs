@@ -162,7 +162,7 @@ namespace DeNelle.DialogueUI
             _videoPlayer.renderMode = VideoRenderMode.RenderTexture;
 
             // Full-screen RenderTexture → RawImage surface.
-            _rt = new RenderTexture(1920, 1080, 0) { name = "IntroVideoRT" };
+            _rt = new RenderTexture(1080, 1920, 0) { name = "IntroVideoRT" };
             _videoPlayer.targetTexture = _rt;
             _videoSurface.texture = _rt;
 

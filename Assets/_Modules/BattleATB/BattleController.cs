@@ -148,7 +148,7 @@ namespace DeNelle.BattleATB
             // Self-contained — creates BattleHUD_Canvas if needed. No UIDocument / UXML.
             var hudGo = new GameObject("BattleHudUgui");
             _hudUgui = hudGo.AddComponent<BattleHudUgui>();
-            _hudUgui.Build(); // creates its own ScreenSpaceOverlay Canvas + Scaler (1920x1080 ref)
+            _hudUgui.Build(); // creates its own ScreenSpaceOverlay Canvas + Scaler (1080x1920 ref)
 
             // Wire callbacks (same surface the engine/state expect).
             // WO-93 fix: route through SubmitPlayerAction (the WO-169 single entry
