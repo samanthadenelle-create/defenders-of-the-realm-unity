@@ -79,6 +79,7 @@ namespace DeNelle.HUD.Kit
         private ElarionUiKit.NameplateHandle[] _cycleRows;
         private string[] _cycleIds;
         private ElarionUiKit.ChatDockHandle _chatDock;
+        private HudCompassWidget _compass;
 
         // model subscriptions (for teardown)
         private readonly List<Action> _unsubscribe = new List<Action>();
@@ -288,11 +289,76 @@ namespace DeNelle.HUD.Kit
             _chatDock.SetExpanded(false);
             Register("chatDock", WrapAsWidget("chatDock", _chatDock.root));
 
+            // ── status: the COMMON compass widget (navigation cue) ──
+            // The reusable kit compass — cardinal heading + gold objective/region-gate
+            // bearing + red enemy ticks. Placed by the hud-areas.json "compass" rows into
+            // the top-centre Status area in BOTH calm(town) and calm(explore). Presentation
+            // reads the world through provider delegates (wired below); owns no state.
+            _compass = HudCompassWidget.Create(pool);
+            WireCompassProviders(_compass);
+            Register("compass", WrapAsWidget("compass", _compass.gameObject));
+
             // ── feedback: the CombatTextLayer marker (its own capped/pooled canvas) ──
             var fb = new GameObject("FeedbackLayerMarker", typeof(RectTransform));
             fb.transform.SetParent(pool, false);
             if (Application.isPlaying) { var _ = CombatTextLayer.Instance; }   // ensure the layer exists
             Register("feedbackLayer", fb);
+        }
+
+        // Wire the compass' presentation-only world readers. DeNelle.HUD keeps its
+        // "HUD -> Core only" edge, so the hero/seam/enemy transforms are resolved by
+        // REFLECTION against the DeNelle.Village types (the same loose-reflection seam
+        // HudKit already uses for the jukebox / DailyQuest bridges). The compass polls
+        // these on a ~4 Hz throttle, so the FindObjects scans never hit the hot path.
+        private static void WireCompassProviders(HudCompassWidget compass)
+        {
+            if (compass == null) return;
+            var heroT = Type.GetType("DeNelle.Village.HeroLocomotion, DeNelle.Village");
+            var linkT = Type.GetType("DeNelle.Village.HeroLinkCrossing, DeNelle.Village");
+            var enemyT = Type.GetType("DeNelle.Village.Enemy, DeNelle.Village");
+            Transform heroCache = null;
+
+            compass.HeroProvider = () =>
+            {
+                if ((heroCache == null || !heroCache) && heroT != null)
+                {
+                    var o = UnityEngine.Object.FindAnyObjectByType(heroT) as Component;
+                    heroCache = o != null ? o.transform : null;
+                }
+                return heroCache;
+            };
+
+            // Nearest region-gate seam crossing (HeroLinkCrossing markers) to the hero =
+            // "where do I go" — points at the gate to leave town, and the way home in the open.
+            compass.ObjectiveProvider = () =>
+            {
+                if (linkT == null) return (Vector3?)null;
+                var hero = compass.Hero;
+                if (hero == null || !hero) return (Vector3?)null;
+                Vector3 hp = hero.position;
+                float best = float.MaxValue; Vector3? bestPos = null;
+                var found = UnityEngine.Object.FindObjectsByType(linkT, FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+                foreach (var o in found)
+                {
+                    if (o is Component c && c != null)
+                    {
+                        float d = (c.transform.position - hp).sqrMagnitude;
+                        if (d < best) { best = d; bestPos = c.transform.position; }
+                    }
+                }
+                return bestPos;
+            };
+
+            var enemyBuf = new List<Transform>();
+            compass.EnemyProvider = () =>
+            {
+                enemyBuf.Clear();
+                if (enemyT == null) return enemyBuf;
+                var found = UnityEngine.Object.FindObjectsByType(enemyT, FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+                foreach (var o in found)
+                    if (o is Component c && c != null) enemyBuf.Add(c.transform);
+                return enemyBuf;
+            };
         }
 
         // A stretch wrapper so every widget occupies its area mount uniformly.

@@ -33,6 +33,17 @@ namespace DeNelle.HUD
 
         private static void SpawnInScene(Scene scene)
         {
+            // RETIRED (owner redirect 2026-07-03): the compass now lives in the HUD KIT as
+            // the reusable DeNelle.HUD.Kit.HudCompassWidget, placed by the hud-areas.json
+            // 9-slice occupancy rows (top-centre Status) into BOTH calm(town) + calm(explore).
+            // That gives it the kit's ONE persistent canvas + posture-driven visibility and
+            // adds the objective/region-gate bearing — replacing this standalone canvas, which
+            // was fragile (scene-load spawn RACE with no retry, no DontDestroyOnLoad, no
+            // objective cue). This bootstrap is neutralised (hide-don't-delete for reversibility):
+            // re-enable by removing this early return if the kit compass is ever rolled back.
+            FlowTrace.Once("UI", "compass-retired", "standalone CompassHud retired — compass now served by the HUD kit (HudCompassWidget, 9-slice).");
+            return;
+#pragma warning disable CS0162 // unreachable — retained for reversibility (see note above)
             if (!scene.IsValid()) return;
             // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<CompassHud>(

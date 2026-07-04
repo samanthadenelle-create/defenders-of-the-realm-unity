@@ -6,7 +6,7 @@
       "posture": "calm(town)",
       "areas": [
         { "area": "vitals",      "widgets": ["playerNameplate", "xpBar", "wisdomChip"] },
-        { "area": "status",      "widgets": ["waveBlock", "heartStatus"] },
+        { "area": "status",      "widgets": ["compass", "waveBlock", "heartStatus"] },
         { "area": "system",      "widgets": ["settingsButton"] },
         { "area": "actionRail",  "widgets": ["resourceChips"] },
         { "area": "actionBar",   "widgets": ["buildButton", "talkButton", "bagButton", "questButton"] },
@@ -25,6 +25,7 @@
       "posture": "calm(explore)",
       "areas": [
         { "area": "vitals",      "widgets": ["playerNameplate", "xpBar"] },
+        { "area": "status",      "widgets": ["compass"] },
         { "area": "system",      "widgets": ["settingsButton"] },
         { "area": "actionRail",  "widgets": ["resourceChipsCollapsed", "attackButton"] },
         { "area": "actionBar",   "widgets": ["talkButton", "bagButton"] },
