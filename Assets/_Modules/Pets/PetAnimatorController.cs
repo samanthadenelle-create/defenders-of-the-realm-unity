@@ -31,7 +31,7 @@ namespace DeNelle.Pets
         private static readonly int SpeedHash  = Animator.StringToHash("Speed");
         private static readonly int AttackHash = Animator.StringToHash("Attack");
         private static readonly int HitHash    = Animator.StringToHash("Hit");
-        private static readonly int DeathHash  = Animator.StringToHash("Death");
+        private static readonly int DeadHash  = Animator.StringToHash("Dead");
 
         // WO-163: cached once at load — whether this controller declares each
         // param. Driving an absent param logs "Parameter does not exist" (per
@@ -39,7 +39,7 @@ namespace DeNelle.Pets
         private bool _hasSpeed;
         private bool _hasAttack;
         private bool _hasHit;
-        private bool _hasDeath;
+        private bool _hasDead;
 
         // ── Lifecycle ─────────────────────────────────────────────────────────
 
@@ -57,7 +57,7 @@ namespace DeNelle.Pets
                     if (p.nameHash == SpeedHash)  _hasSpeed  = true;
                     if (p.nameHash == AttackHash) _hasAttack = true;
                     if (p.nameHash == HitHash)    _hasHit    = true;
-                    if (p.nameHash == DeathHash)  _hasDeath  = true;
+                    if (p.nameHash == DeadHash)  _hasDead  = true;
                 }
             }
         }
@@ -82,7 +82,7 @@ namespace DeNelle.Pets
         public void PlayHit()    { if (_animator != null && _hasHit) _animator.SetTrigger(HitHash); }
 
         /// <summary>Trigger the death animation (called when HP reaches zero).</summary>
-        public void PlayDeath()  { if (_animator != null && _hasDeath) _animator.SetTrigger(DeathHash); }
+        public void PlayDeath()  { if (_animator != null && _hasDead) _animator.SetBool(DeadHash, true); }
 
         // ── Animation Events ──────────────────────────────────────────────────
         // These MUST be on the same GameObject as the Animator.
