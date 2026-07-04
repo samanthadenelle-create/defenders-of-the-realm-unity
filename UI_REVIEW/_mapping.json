@@ -1,0 +1,290 @@
+[
+  {
+    "screen": "HeroTalents",
+    "panelId": "HeroTalents",
+    "frame": "FrameTalent",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Talent_Tree_Panel.png",
+    "deliveredShot": "panel_HeroTalents.png",
+    "shotExists": true,
+    "source": "HeroSkillTreePanelMvvm.cs:446 passes frameName: RpgUiCatalog.FrameTalent (also registers legacy PanelId.HeroTalents route, :78). RpgUiImporter.cs:189 maps frame_talent -> Talent_Tree_Panel.png"
+  },
+  {
+    "screen": "HeroSkillTree",
+    "panelId": "HeroSkillTree",
+    "frame": "FrameTalent",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Talent_Tree_Panel.png",
+    "deliveredShot": "panel_HeroSkillTree.png",
+    "shotExists": true,
+    "source": "HeroSkillTreePanelMvvm.cs:446 passes frameName: RpgUiCatalog.FrameTalent; registers PanelId.HeroSkillTree (:75). Same class serves both HeroSkillTree and HeroTalents PanelIds."
+  },
+  {
+    "screen": "Crafting / Workshop",
+    "panelId": "Crafting",
+    "frame": "FrameCrafting",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Crafting_Panel.png",
+    "deliveredShot": "panel_Crafting.png",
+    "shotExists": true,
+    "source": "VillageCraftingPanel.cs:124 passes frameName: RpgUiCatalog.FrameCrafting. RpgUiImporter.cs:185 maps frame_crafting -> Crafting_Panel.png (owner-ratified master-detail split template)"
+  },
+  {
+    "screen": "Building Upgrade",
+    "panelId": "BuildingUpgrade",
+    "frame": "FrameCore",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Core_Panel.png",
+    "deliveredShot": "panel_BuildingUpgrade.png",
+    "shotExists": true,
+    "source": "BuildingUpgradePanelMvvm.cs:167 passes frameName: RpgUiCatalog.FrameCore. RpgUiImporter.cs:187 maps frame_core -> Core_Panel.png. No dedicated upgrade template exists; FrameCore is the generic-frame choice."
+  },
+  {
+    "screen": "Cosmetic Shop",
+    "panelId": "CosmeticShop",
+    "frame": "FrameMerchant",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Merchant_Panel.png",
+    "deliveredShot": "panel_CosmeticShop.png",
+    "shotExists": true,
+    "source": "CosmeticShopPanel.cs:256 passes frameName: RpgUiCatalog.FrameMerchant. RpgUiImporter.cs:190 maps frame_merchant -> Merchant_Panel.png"
+  },
+  {
+    "screen": "Pet Skill Tree",
+    "panelId": "PetSkillTree",
+    "frame": "FramePet",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Pet_Panel.png",
+    "deliveredShot": "panel_PetSkillTree.png",
+    "shotExists": true,
+    "source": "PetSkillTreePanel.cs:120 passes frameName: RpgUiCatalog.FramePet. RpgUiImporter.cs:196 maps frame_pet -> Pet_Panel.png"
+  },
+  {
+    "screen": "Party Shop",
+    "panelId": "PartyShop",
+    "frame": "FrameMerchant",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Merchant_Panel.png",
+    "deliveredShot": "panel_PartyShop.png",
+    "shotExists": true,
+    "source": "PartyShopPanelMvvm.cs:295 passes frameName: RpgUiCatalog.FrameMerchant. RpgUiImporter.cs:190 maps frame_merchant -> Merchant_Panel.png"
+  },
+  {
+    "screen": "Rumor Board",
+    "panelId": "RumorBoard",
+    "frame": "FrameQuest",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Quest_Log_Panel.png",
+    "deliveredShot": "panel_RumorBoard.png",
+    "shotExists": true,
+    "source": "RumorBoardPanel.cs:75 passes frameName: RpgUiCatalog.FrameQuest. RpgUiImporter.cs:192 maps frame_quest -> Quest_Log_Panel.png (quest/rumor board = quest-log master-detail template; appropriate)"
+  },
+  {
+    "screen": "Hero Loadout",
+    "panelId": "HeroLoadout",
+    "frame": "NONE",
+    "templatePng": null,
+    "deliveredShot": "panel_HeroLoadout.png",
+    "shotExists": true,
+    "source": "HeroLoadoutPanelMvvm.cs:251 calls BuildObsidianPanel with NO frameName arg -> frameName defaults null -> generic near-black+gold-trim chrome, NO Blink frame PNG. FLAG: converted to factory but does not adopt any Blink template. If it should match one, FrameTalent/Talent_Tree_Panel would be the family sibling (opened from the skill-tree Equip button)."
+  },
+  {
+    "screen": "Consumable Crafting (Alchemy)",
+    "panelId": "ConsumableCrafting",
+    "frame": "FrameCrafting",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Crafting_Panel.png",
+    "deliveredShot": "panel_ConsumableCrafting.png",
+    "shotExists": true,
+    "source": "CraftingPanelMvvm.cs:233 passes frameName: RpgUiCatalog.FrameCrafting. RpgUiImporter.cs:185 maps frame_crafting -> Crafting_Panel.png"
+  },
+  {
+    "screen": "Jeweler Crafting",
+    "panelId": "JewelerCrafting",
+    "frame": "FrameCrafting",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Crafting_Panel.png",
+    "deliveredShot": "panel_JewelerCrafting.png",
+    "shotExists": true,
+    "source": "JewelerPanelMvvm.cs:238 passes frameName: RpgUiCatalog.FrameCrafting. RpgUiImporter.cs:185 maps frame_crafting -> Crafting_Panel.png"
+  },
+  {
+    "screen": "Equipment / Character paper-doll",
+    "panelId": "EquipmentPanel",
+    "frame": "FrameCharacter",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Stats_Panel.png",
+    "deliveredShot": "panel_EquipmentPanel.png",
+    "shotExists": true,
+    "source": "EquipmentPanel.cs:103 passes frameName: RpgUiCatalog.FrameCharacter. RpgUiImporter.cs:186 maps frame_character -> Stats_Panel.png. NOTE (matrix work-log 07-03): panel_EquipmentPanel.png is stale -nographics noise; EquipmentPanel is NOT_REGISTERED in the hub walk and needs its own capture route."
+  },
+  {
+    "screen": "Game Guide",
+    "panelId": "GameGuide",
+    "frame": "NONE",
+    "templatePng": null,
+    "deliveredShot": "panel_GameGuide.png",
+    "shotExists": true,
+    "source": "GameGuidePanel.cs:91 calls BuildObsidianPanel with NO frameName arg -> null -> generic Obsidian chrome, NO Blink frame PNG. FLAG: converted to factory but adopts no Blink template. A codex/help surface has no dedicated Blink template; FrameCore or FrameQuest would be the closest fit if one is desired."
+  },
+  {
+    "screen": "Hero Select",
+    "panelId": "HeroSelect",
+    "frame": "FrameCore",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Core_Panel.png",
+    "deliveredShot": "panel_HeroSelect.png",
+    "shotExists": false,
+    "source": "HeroSelectController.cs:197 passes frameName: RpgUiCatalog.FrameCore. Header comment (:9) records owner F8 2026-07-03 swapped OFF FrameCharacter/Stats_Panel -> FrameCore (arch didn't suit the carousel). No delivered shot yet (front-end screen, not in the hub panel walk)."
+  },
+  {
+    "screen": "Dialogue view",
+    "panelId": "Dialogue",
+    "frame": "FrameDialogue",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Dialogue_Panel.png",
+    "deliveredShot": "panel_Dialogue.png",
+    "shotExists": false,
+    "source": "DialogueView.cs:88 passes frameName: RpgUiCatalog.FrameDialogue (withBackdrop:false, in-scene bottom strip). RpgUiImporter.cs:191 maps frame_dialogue -> Dialogue_Panel.png. Inline dialogue box, not a hub modal, so no panel_ capture."
+  },
+  {
+    "screen": "Build Menu",
+    "panelId": "BuildMenu",
+    "frame": "FrameCore",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Core_Panel.png",
+    "deliveredShot": "panel_BuildMenu.png",
+    "shotExists": false,
+    "source": "BuildMenu.cs:205 passes frameName: RpgUiCatalog.FrameCore (hammer medallion). No delivered shot yet (build-mode flow not in the captured hub walk)."
+  },
+  {
+    "screen": "Help Menu",
+    "panelId": "HelpMenu",
+    "frame": "FrameCore",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Core_Panel.png",
+    "deliveredShot": "panel_HelpMenu.png",
+    "shotExists": false,
+    "source": "HelpMenu.cs:101 passes frameName: RpgUiCatalog.FrameCore (settings medallion). WO-F reference conversion. No delivered shot yet."
+  },
+  {
+    "screen": "Bug Report",
+    "panelId": "BugReport",
+    "frame": "FrameSettings",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Settings_Panel.png",
+    "deliveredShot": "panel_BugReport.png",
+    "shotExists": false,
+    "source": "BugReportView.cs:127 passes frameName: RpgUiCatalog.FrameSettings. RpgUiImporter.cs:193 maps frame_settings -> Settings_Panel.png. NOTE: a bug-report form on the Settings slab template is a deliberate reuse (no dedicated form template), not a mismatch bug."
+  },
+  {
+    "screen": "Jukebox (Music Selection)",
+    "panelId": "Jukebox",
+    "frame": "FrameCore",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Core_Panel.png",
+    "deliveredShot": "panel_Jukebox.png",
+    "shotExists": false,
+    "source": "MusicSelectionPanel.cs:84 passes frameName: RpgUiCatalog.FrameCore (music medallion). WO-F conversion. No delivered shot yet."
+  },
+  {
+    "screen": "Settings",
+    "panelId": "Settings",
+    "frame": "FrameSettings",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Settings_Panel.png",
+    "deliveredShot": "panel_Settings.png",
+    "shotExists": false,
+    "source": "SettingsController.cs:121 passes frameName: RpgUiCatalog.FrameSettings (sortingOrder 32000). RpgUiImporter.cs:193 maps frame_settings -> Settings_Panel.png. UXML SettingsScreen retired 07-03. No delivered shot yet."
+  },
+  {
+    "screen": "Pause",
+    "panelId": "Pause",
+    "frame": "FrameOptions",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Options_Panel.png",
+    "deliveredShot": "panel_Pause.png",
+    "shotExists": false,
+    "source": "PauseController.cs:117 passes frameName: RpgUiCatalog.FrameOptions (sortingOrder 31500). RpgUiImporter.cs:194 maps frame_options -> Options_Panel.png. PauseOverlay.uxml retired 07-03. No delivered shot yet."
+  },
+  {
+    "screen": "Tower Manager",
+    "panelId": "TowerManager",
+    "frame": "FrameCore",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Core_Panel.png",
+    "deliveredShot": "panel_TowerManager.png",
+    "shotExists": false,
+    "source": "TowerManagerPanel.cs:117 passes frameName: RpgUiCatalog.FrameCore. No delivered shot yet."
+  },
+  {
+    "screen": "End State (victory/defeat/death/results)",
+    "panelId": "EndState",
+    "frame": "FrameCore",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Core_Panel.png",
+    "deliveredShot": "panel_EndState.png",
+    "shotExists": false,
+    "source": "EndStateView.cs:82 and :92 both pass frameName: RpgUiCatalog.FrameCore. WO-B shipped. No delivered shot yet (needs a force-show capture phase)."
+  },
+  {
+    "screen": "Leaderboard",
+    "panelId": "Leaderboard",
+    "frame": "FrameCore",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Core_Panel.png",
+    "deliveredShot": "panel_Leaderboard.png",
+    "shotExists": false,
+    "source": "LeaderboardPanel.cs:100 passes frameName: RpgUiCatalog.FrameCore (combat medallion). WO-F conversion. No dedicated leaderboard template; FrameCore is the generic choice. No delivered shot yet."
+  },
+  {
+    "screen": "Clan Chat",
+    "panelId": "ClanChat",
+    "frame": "FrameCore",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Core_Panel.png",
+    "deliveredShot": "panel_ClanChat.png",
+    "shotExists": false,
+    "source": "ClanChatPanel.cs:117 passes frameName: RpgUiCatalog.FrameCore (crest medallion). WO-F conversion (added real Close). No delivered shot yet."
+  },
+  {
+    "screen": "Echo Workforce (Harvest)",
+    "panelId": "EchoWorkforce",
+    "frame": "NONE",
+    "templatePng": null,
+    "deliveredShot": "panel_EchoWorkforce.png",
+    "shotExists": false,
+    "source": "EchoWorkforceHud.cs:106 calls BuildObsidianModal with NO frameName arg -> null -> generic Obsidian chrome (near-black + gold trim), NO Blink frame PNG. FLAG: factory-built but adopts no Blink template."
+  },
+  {
+    "screen": "Pack Store (IAP)",
+    "panelId": "PackStore",
+    "frame": "FrameMerchant",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Merchant_Panel.png",
+    "deliveredShot": "panel_PackStore.png",
+    "shotExists": false,
+    "source": "PackStore.cs:127 passes frameName: RpgUiCatalog.FrameMerchant (coin medallion). RpgUiImporter.cs:190 maps frame_merchant -> Merchant_Panel.png. No delivered shot yet (real-money surface conversion in flight)."
+  },
+  {
+    "screen": "Raid Selection",
+    "panelId": "RaidSelection",
+    "frame": "NONE",
+    "templatePng": null,
+    "deliveredShot": "panel_RaidSelection.png",
+    "shotExists": false,
+    "source": "RaidSelectionScreen.cs:90 calls BuildObsidianPanel with NO frameName arg (withBackdrop:false) -> null -> generic Obsidian chrome, NO Blink frame PNG. FLAG: factory-built but no Blink template. Matrix marks it STYLED via BuildObsidianPanel, but it uses no template frame."
+  },
+  {
+    "screen": "Raid Deploy",
+    "panelId": "RaidDeploy",
+    "frame": "NONE",
+    "templatePng": null,
+    "deliveredShot": "panel_RaidDeploy.png",
+    "shotExists": false,
+    "source": "RaidDeployScreen.cs:94 calls BuildObsidianPanel with NO frameName arg (withBackdrop:false) -> null -> generic Obsidian chrome, NO Blink frame PNG. FLAG: factory-built but no Blink template."
+  },
+  {
+    "screen": "Troop Training (Barracks)",
+    "panelId": "TroopTraining",
+    "frame": "NONE",
+    "templatePng": null,
+    "deliveredShot": "panel_TroopTraining.png",
+    "shotExists": false,
+    "source": "TroopTrainingPanel.cs:60 calls BuildObsidianPanel with NO frameName arg (withBackdrop:false) -> null -> generic Obsidian chrome, NO Blink frame PNG. FLAG: factory-built but no Blink template."
+  },
+  {
+    "screen": "Merchant Shop",
+    "panelId": "ShopPanel",
+    "frame": "FrameMerchant",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Merchant_Panel.png",
+    "deliveredShot": "panel_ShopPanel.png",
+    "shotExists": false,
+    "source": "ShopPanel.cs:278 passes frameName: RpgUiCatalog.FrameMerchant. RpgUiImporter.cs:190 maps frame_merchant -> Merchant_Panel.png. Delivered-shot filename expected/unverified (not in the current hub panel-walk capture set)."
+  },
+  {
+    "screen": "Inventory (bag)",
+    "panelId": "Inventory",
+    "frame": "FrameInventory",
+    "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Inventory_Panel.png",
+    "deliveredShot": "panel_Inventory.png",
+    "shotExists": false,
+    "source": "InventoryUIBuilder.cs:50 passes frameName: RpgUiCatalog.FrameInventory. RpgUiImporter.cs:184 maps frame_inventory -> Inventory_Panel.png. Delivered-shot filename expected/unverified."
+  }
+]
