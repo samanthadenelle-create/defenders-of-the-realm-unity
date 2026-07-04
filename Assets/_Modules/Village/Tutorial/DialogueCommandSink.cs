@@ -74,8 +74,16 @@ namespace DeNelle.Village
                 // by opening the consumable-crafting / alchemy bench — the SAME panel the station's
                 // own BuildingInteractable opens (BuildingType.ApothecaryWorkbench route).
                 case "OpenAlchemy":    PanelRouter.Open(PanelId.ConsumableCrafting); break;
+                // Jeweler NPC (owner 2026-07-03 "every building needs an NPC as the speaker"): Sable's
+                // dialogue ends by opening the jewelry-crafting bench — the SAME panel the station's own
+                // BuildingInteractable opens (BuildingType.JewelersBench route). Mirrors OpenAlchemy.
+                case "OpenJeweler":    PanelRouter.Open(PanelId.JewelerCrafting); break;
                 case "OpenTalents":    PanelRouter.Open(PanelId.HeroTalents); break;
                 case "OpenCosmetics":  PanelRouter.Open(PanelId.CosmeticShop); break;
+                // Realm Store (SKR/SOL/USDC packs) — the merchant's "Realm Store" option opens the
+                // monetization PackStore, ALONGSIDE the existing Glimmer/gear paths (PackStoreBootstrap
+                // registered the opener + find-or-spawns the store host-free on first open).
+                case "OpenRealmStore": PanelRouter.Open(PanelId.RealmStore); break;
                 case "OpenPetSkills":  PanelRouter.Open(PanelId.PetSkillTree); break;
 
                 // ── Panels via find-or-spawn (no PanelId opener of their own) ──────

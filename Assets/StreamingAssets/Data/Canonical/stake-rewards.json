@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "_note": "Owner-adjustable STAKE -> IN-GAME REWARD table (Seekerthon demo surface). READ-ONLY, NON-CUSTODIAL: the game READS a player's ACTIVE native SKR stake (Solana Mobile / Seeker native staking, Stake.solanamobile) and grants these SMALL cosmetic/flavor perks as a thank-you. It NEVER custodies SKR, NEVER holds a withdrawable balance, NEVER mints. Rewards are deliberately SMALL ('small but something') a token thank-you, never pay-to-win. Tune minStake and rewards freely: a tier is matched as the HIGHEST minStake <= the player's active stake, and a tier unlocks its own rewards PLUS every lower tier's (cumulative). kind = badge | title | cosmetic | trickle. DESKTOP fallback copy; Resources/Data/Canonical/stake-rewards.json (WebGL-safe) wins at load. Keep both + StakeRewardsResolver.DefaultTiers in sync.",
+  "currencySymbol": "SKR",
+  "tiers": [
+    {
+      "id": "seeker",
+      "name": "Seeker",
+      "minStake": 1,
+      "tagline": "You stake with the realm.",
+      "rewards": [
+        { "kind": "badge",   "label": "Seeker Badge",     "detail": "A small profile badge marking you as a staker." },
+        { "kind": "trickle", "label": "Glimmer Trickle",  "detail": "+5 Glimmer per day - a gentle stipend, nothing game-breaking." }
+      ]
+    },
+    {
+      "id": "vanguard",
+      "name": "Vanguard",
+      "minStake": 1000,
+      "tagline": "Your stake steadies the walls.",
+      "rewards": [
+        { "kind": "title",   "label": "Title: \"Vanguard\"", "detail": "A cosmetic name title." },
+        { "kind": "trickle", "label": "Crystal Dust",        "detail": "+10 Crystals per day - a small trickle." }
+      ]
+    },
+    {
+      "id": "warden",
+      "name": "Warden",
+      "minStake": 25000,
+      "tagline": "The realm marks you a Warden.",
+      "rewards": [
+        { "kind": "cosmetic", "label": "Warden Banner Sigil", "detail": "A cosmetic banner sigil flourish." }
+      ]
+    },
+    {
+      "id": "genesis",
+      "name": "Genesis",
+      "minStake": 250000,
+      "tagline": "A founding stake of the realm.",
+      "rewards": [
+        { "kind": "title",    "label": "Title: \"Genesis\"",       "detail": "The founding-staker cosmetic title." },
+        { "kind": "cosmetic", "label": "Genesis Aura Flourish",    "detail": "A small golden aura flourish on your hero in town - purely cosmetic." }
+      ]
+    }
+  ]
+}

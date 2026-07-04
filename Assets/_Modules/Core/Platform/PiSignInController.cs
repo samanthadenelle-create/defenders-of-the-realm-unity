@@ -35,6 +35,9 @@ namespace DeNelle.Core.Platform
         private Button _button;
         private TMP_Text _label;
         private bool _signingIn; // guard: auto-fire + manual click must not double-run (orphans the shared TCS)
+        // WO-603: the active currency/auth/branding skin. AuthMode==PiSdk is the live Pi path
+        // (unchanged); AuthMode==SolanaWallet swaps this corner button to a wallet-connect entry.
+        private CurrencySkin _skin;
 
         /// <summary>Spawns the controller once at boot if not already present.</summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -48,6 +51,9 @@ namespace DeNelle.Core.Platform
 
         private void Start()
         {
+            // WO-603: resolve the active skin BEFORE the button is built (synchronous — skin.json
+            // via Resources + a URL-param read). Default = Pi, so the live path is unchanged.
+            _skin = CurrencySkinResolver.Active;
             _pi = PiPlatform.Current;
             // ALWAYS show the manual "Sign in with Pi" button so the user can trigger sign-in even
             // if auto-detection is delayed/flaky. The Pi SDK (sdk.minepi.com/pi-sdk.js) loads
@@ -59,7 +65,10 @@ namespace DeNelle.Core.Platform
             // runs everywhere; once signed in the button is gone for good.
             UnityEngine.SceneManagement.SceneManager.activeSceneChanged += (_, __) => UpdateButtonVisibility();
             UpdateButtonVisibility();
-            WaitForPiThenAutoSignIn().Forget();
+            // Only the Pi skin auto-triggers Pi sign-in. Under the Solana/$SKR skin the corner
+            // button is a wallet-connect entry (see BuildButton) and Pi polling never runs.
+            if (_skin != null && _skin.AuthMode == SkinAuthMode.PiSdk)
+                WaitForPiThenAutoSignIn().Forget();
         }
 
         private void UpdateButtonVisibility()
@@ -149,6 +158,21 @@ namespace DeNelle.Core.Platform
                     return;
                 }
 
+                // WO-603: NeonDB identity-key selection. DEFAULT OFF (skin.bindIdentityOnAuth=false)
+                // so today's Pi deployment keeps its current identity behaviour (zero regression).
+                // Turning it on binds the skin-appropriate key (Pi UID here) as the NeonDB playerId —
+                // that changes which key writes to NeonDB, so it is gated behind a migration decision
+                // (see WO-603 RESULT). Guarded: never binds a null/empty key.
+                if (_skin != null && _skin.BindIdentityOnAuth)
+                {
+                    string idKey = _skin.ResolveIdentityKey(SignedInUid, null);
+                    if (!string.IsNullOrEmpty(idKey))
+                    {
+                        DeNelle.Core.State.GameStateService.Instance?.BindWallet(idKey);
+                        FlowTrace.Step("Skin", $"Bound NeonDB identity key ({_skin.IdentityKeyKind}) from Pi sign-in.");
+                    }
+                }
+
                 SetButton($"Pi: {SignedInUsername}", false);
                 OnSignedIn?.Invoke(SignedInUid, SignedInUsername);
                 FlowTrace.Step("Pi", $"Signed in as {SignedInUsername} (uid bound to session).");
@@ -225,10 +249,22 @@ namespace DeNelle.Core.Platform
             rt.anchoredPosition = new Vector2(-16f, -16f);
             rt.sizeDelta = new Vector2(220f, 56f);
 
-            _button = ElarionUiKit.Button(holder.transform, "Sign in with Pi", ElarionUiKit.ButtonKind.Quiet,
-                                          Vector2.zero, Vector2.one, SignIn);
+            // WO-603: under the Solana/$SKR skin this corner is a wallet-connect entry, not Pi sign-in.
+            // The full wallet-connect flow lives in DeNelle.Wallet (Core cannot reference it) and is a
+            // flagged follow-up — the button routes through CurrencySkinResolver.RequestWalletConnect(),
+            // which warns (no silent failure) until that handler is subscribed.
+            bool walletSkin = _skin != null && _skin.AuthMode == SkinAuthMode.SolanaWallet;
+            string initialLabel = walletSkin ? "Connect Wallet" : "Sign in with Pi";
+            Action onClick = walletSkin
+                ? (Action)CurrencySkinResolver.RequestWalletConnect
+                : SignIn;
+
+            _button = ElarionUiKit.Button(holder.transform, initialLabel, ElarionUiKit.ButtonKind.Quiet,
+                                          Vector2.zero, Vector2.one, onClick);
             if (_button.targetGraphic is Image img)
-                img.color = new Color(0.43f, 0.30f, 0.78f, 0.95f); // Pi violet over the kit's rounded glass
+                img.color = walletSkin
+                    ? new Color(0.09f, 0.72f, 0.55f, 0.95f)  // Solana/Seeker teal-green over the kit glass
+                    : new Color(0.43f, 0.30f, 0.78f, 0.95f); // Pi violet over the kit's rounded glass
             _label = _button.GetComponentInChildren<TMP_Text>();
         }
 

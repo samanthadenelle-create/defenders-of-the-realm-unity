@@ -54,6 +54,12 @@ namespace DeNelle.Wallet
 
         private WalletService _wallet;
 
+        // Modal-arbiter handle (WO-F door): registers with PanelManager so the
+        // Realm Store obeys the one-panel-at-a-time rule AND so PanelRouter.Open's
+        // post-open VerifyOpenedVisible sees a panel actually recorded open. Purely
+        // additive lifecycle glue — the purchase flow / rails / CloseStore are unchanged.
+        private PanelHandle _panelHandle;
+
         // Kit modal (lazy-built on first open) + the surfaces Render() fills.
         private ElarionUiKit.ObsidianModal _modal;
         private Transform _listContent;                 // ScrollRect content — pack cards
@@ -76,6 +82,14 @@ namespace DeNelle.Wallet
         {
             // Defaults to the devnet StubWalletProvider — no Solana SDK needed.
             _wallet = new WalletService();
+
+            // Modal-arbiter handle: the manager may hide this store when another panel
+            // opens (Close = SetActive(false) -> OnDisable hides the canvas), and its
+            // IsOpen probe reports our real on-screen visibility so PanelRouter.Open's
+            // VerifyOpenedVisible passes instead of Fail-logging a "not visible" ghost.
+            _panelHandle = PanelManager.Register("Realm Store",
+                () => { if (this != null) gameObject.SetActive(false); },
+                () => _modal != null && _modal.canvas != null && _modal.canvas.activeInHierarchy);
         }
 
         private void OnEnable()
@@ -86,6 +100,9 @@ namespace DeNelle.Wallet
             if (_modal != null && _modal.canvas != null)
                 _modal.canvas.SetActive(true);
             Render();
+
+            // Announce to the modal arbiter (closes any other open panel, records us open).
+            if (_panelHandle != null) PanelManager.NotifyOpened(_panelHandle);
         }
 
         private void OnDisable()
@@ -93,6 +110,9 @@ namespace DeNelle.Wallet
             // MarketplaceInteractor closes by SetActive(false) — hide the canvas.
             if (_modal != null && _modal.canvas != null)
                 _modal.canvas.SetActive(false);
+
+            // Clear our record with the arbiter (no-op if we were already swapped out).
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
         }
 
         private void OnDestroy()
@@ -150,8 +170,10 @@ namespace DeNelle.Wallet
                 FontStyles.Normal, TextAlignmentOptions.Center,
                 new Vector2(0.02f, 0.865f), new Vector2(0.98f, 0.925f));
 
-            // Scrollable pack-card list (inline ScrollRect column).
-            var scrollHost = ZoneRect(body, "PackScroll", new Vector2(0.02f, 0.02f), new Vector2(0.98f, 0.86f));
+            // Scrollable pack-card list (inline ScrollRect column). Mobile-first (owner rule):
+            // a compact CENTERED band (0.09–0.91), not full-bleed edge-to-edge cards — the pack
+            // plates read as centered cards with thumb-zone side margins on a phone.
+            var scrollHost = ZoneRect(body, "PackScroll", new Vector2(0.09f, 0.02f), new Vector2(0.91f, 0.86f));
             _listContent = BuildScrollColumn(scrollHost);
 
             // Footer zone: currency disclaimer + the cozy-covenant line.

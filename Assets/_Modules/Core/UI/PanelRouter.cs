@@ -69,6 +69,11 @@ namespace DeNelle.Core.UI
         /// <summary>Game Guide / tutorial codex — GameGuidePanel (tabbed help reference: tabs left,
         /// body right). Opt-in, opened from the Settings panel's "Game Guide" button (WO-588).</summary>
         GameGuide = 12,
+        /// <summary>Realm Store — the SKR/SOL/USDC five-pack monetization store (PackStore,
+        /// DeNelle.Wallet). Host-free: PackStoreBootstrap registers this opener at boot and
+        /// find-or-spawns the store on first open (merchant "Realm Store" option + ?realmstore=1
+        /// demo URL). SEPARATE from the Glimmer cosmetic shop (PanelId.CosmeticShop).</summary>
+        RealmStore = 13,
     }
 
     /// <summary>

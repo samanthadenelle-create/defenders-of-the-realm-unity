@@ -359,6 +359,18 @@ namespace DeNelle.Core
         /// PlayerPrefs "ff.heropackage" = 0 to force the legacy Tripo Knight.</summary>
         public static bool HeroPackage => Get("heropackage", defaultOn: true);
 
+        /// <summary>SEEKERTHON stake-rewards DEMO surface — when ON, <see cref="DeNelle.Core.Platform.StakeRewardsDemoBootstrap"/>
+        /// seeds a real-looking active native SKR stake (~1M, a Genesis holder) into
+        /// <see cref="DeNelle.Core.Platform.StakeRewardsResolver"/> and auto-opens the read-only
+        /// <see cref="DeNelle.Core.UI.StakeRewardsPanel"/>, so the video shows "active stake -> in-game
+        /// rewards, automatically, we never hold your SKR" WITHOUT any live wallet. Purely presentation +
+        /// a mock READ — it custodies nothing, mutates no game state, and mints nothing (canon
+        /// skr-separate-ingame-currency-real-token-readonly). Default OFF so production NEVER shows it.
+        /// Forceable ON for ONE WebGL session via the page URL <c>?stakedemo=1</c> (allow-listed in
+        /// <see cref="ApplyUrlActivationOnce"/>) — no rebuild, no prod-default change. Off-web:
+        /// PlayerPrefs "ff.stakedemo" = 1 (or the Defenders/Debug editor menu).</summary>
+        public static bool StakeDemo => Get("stakedemo", defaultOn: false);
+
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
         {
@@ -378,7 +390,13 @@ namespace DeNelle.Core
         private static readonly System.Collections.Generic.Dictionary<string, string> s_urlActivatableFlags =
             new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase)
             {
-                { "trace", "ff.webtrace" },   // diagnostic-only; safe to flip per session
+                { "trace", "ff.webtrace" },      // diagnostic-only; safe to flip per session
+                // Seekerthon stake-rewards DEMO. Safe to allow-list despite the "no monetization flags"
+                // rule because the surface is READ-ONLY PRESENTATION: it opens an informational panel
+                // over a MOCK stake and mutates NO game/economy state, so a crafted ?stakedemo=1 link
+                // can at most show a cosmetic panel — it can never flip real state. Default OFF => prod
+                // is unaffected unless the demo link is used.
+                { "stakedemo", "ff.stakedemo" },
             };
 
         /// <summary>
@@ -420,7 +438,9 @@ namespace DeNelle.Core
                         PlayerPrefs.SetInt(prefKey, 1);
                         PlayerPrefs.Save();
                         Debug.Log($"[FeatureFlags] ?{key}=1 detected — '{prefKey}' activated for this session.");
-                        return;
+                        // continue (not return) so MULTIPLE allow-listed flags in one URL all activate
+                        // (e.g. ?trace=1&stakedemo=1). Each is independently allow-list-gated above.
+                        continue;
                     }
                 }
             }
@@ -488,6 +508,26 @@ namespace DeNelle.Core
         private static bool ToggleLockOnValidate()
         {
             UnityEditor.Menu.SetChecked(LockOnMenu, LockOn);
+            return true;
+        }
+
+        // Seekerthon — flip the stake-rewards demo surface from the menu (no PlayerPrefs fiddling).
+        // ON => a seeded ~1M SKR stake opens the read-only StakeRewardsPanel on play.
+        private const string StakeDemoMenu = "Defenders/Debug/Stake Rewards Demo (Seekerthon SKR)";
+
+        [UnityEditor.MenuItem(StakeDemoMenu, priority = 203)]
+        private static void ToggleStakeDemo()
+        {
+            bool on = !StakeDemo;
+            PlayerPrefs.SetInt("ff.stakedemo", on ? 1 : 0);
+            PlayerPrefs.Save();
+            Debug.Log("[FeatureFlags] ff.stakedemo = " + (on ? "ON (seeded ~1M SKR stake opens StakeRewardsPanel on play)" : "OFF"));
+        }
+
+        [UnityEditor.MenuItem(StakeDemoMenu, validate = true)]
+        private static bool ToggleStakeDemoValidate()
+        {
+            UnityEditor.Menu.SetChecked(StakeDemoMenu, StakeDemo);
             return true;
         }
 #endif

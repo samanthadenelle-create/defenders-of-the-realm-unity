@@ -326,12 +326,22 @@
             { "speaker": "Coppin", "text": "Fresh stock off the morning carts, Keeper - tools, trinkets, and whatever the caravans dared to carry through the Dimming." },
             { "speaker": "Coppin", "text": "Come, have a look before the good pieces go." }
           ],
-          "next": "open"
+          "options": [
+            { "text": "Show me your wares.", "goto": "open" },
+            { "text": "Show me the Realm Store.", "goto": "open_realm" },
+            { "text": "Just passing through.", "goto": "end" }
+          ]
         },
         {
           "id": "open",
           "commands": [
             { "verb": "OpenShop", "args": ["market"] }
+          ]
+        },
+        {
+          "id": "open_realm",
+          "commands": [
+            { "verb": "OpenRealmStore", "args": [] }
           ]
         }
       ]
@@ -412,6 +422,26 @@
           "id": "open",
           "commands": [
             { "verb": "OpenAlchemy", "args": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "jewelers-bench",
+      "startNode": "talk",
+      "nodes": [
+        {
+          "id": "talk",
+          "lines": [
+            { "speaker": "Sable", "text": "Careful hands, Keeper - everything on this bench remembers a purpose. Rings, amulets, stones that still hold a little light." },
+            { "speaker": "Sable", "text": "Step up to the bench and we'll set a stone together." }
+          ],
+          "next": "open"
+        },
+        {
+          "id": "open",
+          "commands": [
+            { "verb": "OpenJeweler", "args": [] }
           ]
         }
       ]

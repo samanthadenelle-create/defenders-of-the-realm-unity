@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "_note": "WO-603 currency/auth/branding skin table. 'active' selects the skin at runtime (Pi = live production default, zero regression). The Solana/$SKR deployment flips it via ?skin=skr on the page URL or by setting active:'skr' here. One build artifact serves both. Resources copy wins at load; keep both in sync.",
+  "active": "pi",
+  "skins": {
+    "pi": {
+      "skinId": "pi",
+      "currencySymbol": "π",
+      "currencyName": "Pi",
+      "authMode": "PiSdk",
+      "brandingKey": "pi_network",
+      "storeCtaVerb": "Spend Pi",
+      "identityKeyKind": "PiUid",
+      "bindIdentityOnAuth": false
+    },
+    "skr": {
+      "skinId": "skr",
+      "currencySymbol": "$SKR",
+      "currencyName": "SKR",
+      "authMode": "SolanaWallet",
+      "brandingKey": "seeker_skr",
+      "storeCtaVerb": "Spend $SKR",
+      "identityKeyKind": "WalletPubkey",
+      "bindIdentityOnAuth": true
+    }
+  }
+}
