@@ -158,6 +158,19 @@ namespace DeNelle.Village
             FlowTrace.Try("VisualFactory", "wardrobe default-dress",
                 () => { if (BlinkWardrobe.IsDressable(go)) BlinkWardrobe.DressInStarter(go); });
 
+            // WO-436 Step 1 (§12): surface the ACTUAL material name on the skinned body so a headless
+            // capture PROVES Failure A (URP material not applied → the raw FBX surface renders as Unity's
+            // solid unlit-green fallback) instead of guessing. Null-guarded: no renderer/material → Warn
+            // (never a silent blank). sharedMaterial (not .material) — no per-instance material leak.
+            FlowTrace.Try("VisualFactory", "material trace", () =>
+            {
+                var renderer = go.GetComponentInChildren<Renderer>();
+                if (renderer == null || renderer.sharedMaterial == null)
+                    FlowTrace.Warn("EnemyVisual", $"Material on {prefab.name}: NO renderer/material (would render blank/fallback)");
+                else
+                    FlowTrace.Step("EnemyVisual", $"Material on {prefab.name}: {renderer.sharedMaterial.name}");
+            });
+
             return go;
         }
 

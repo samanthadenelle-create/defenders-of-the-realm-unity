@@ -285,6 +285,13 @@ namespace DeNelle.Village
         private readonly Dictionary<Enemy, float> _enemyStuckTime = new Dictionary<Enemy, float>();
         private const float StuckTimeout = 12f;
 
+        // WO-430: per-enemy spawn scatter around the marker (metres, applied ±). Lateral was
+        // ±4.5 — too wide, it pushed the pre-NavMesh-sample XZ off the baked mesh boundary and
+        // the silent SamplePosition miss then stranded the enemy at the raw spawn Y (sky/underground).
+        // Tightened to ±3 to lower the miss probability; depth kept at ±3.
+        private const float SpawnLateralSpread = 3f;
+        private const float SpawnDepthSpread   = 3f;
+
         /// <summary>The apex flying boss for the current wave (null when not an apex wave / dead).</summary>
         private DragonBoss _liveApexBoss;
 
@@ -1434,19 +1441,54 @@ namespace DeNelle.Village
             // Spread each enemy around the spawn marker (lateral + a little depth) so a
             // batch advances as a loose MOB toward the gate/tree instead of stacking on
             // one point and marching single-file. Perpendicular = lateral to the heading.
+            // WO-430: lateral spread tightened 4.5→3 m — the wider spread pushed the
+            // pre-sample XZ OUTSIDE the baked NavMesh boundary more often, and a miss there
+            // used to strand the enemy at the raw spawn-point Y (floating/underground).
             Vector3 lateral = Vector3.Cross(Vector3.up, heading);
-            Vector3 pos = point.transform.position
-                        + lateral * UnityEngine.Random.Range(-4.5f, 4.5f)
-                        + heading * UnityEngine.Random.Range(-3f, 3f);
+            Vector3 rawPoint = point.transform.position;
+            Vector3 pos = rawPoint
+                        + lateral * UnityEngine.Random.Range(-SpawnLateralSpread, SpawnLateralSpread)
+                        + heading * UnityEngine.Random.Range(-SpawnDepthSpread, SpawnDepthSpread);
 
             // Snap the spawn position to the nearest NavMesh sample so a
             // slightly-off-mesh spawn point doesn't strand the enemy off-mesh
             // (NavMeshAgent.isOnNavMesh would stay false → enemy never moves).
-            // Sample within a generous 8 m radius; bail to the raw position if
-            // we somehow have no NavMesh nearby at all.
+            // Sample within a generous 8 m radius; on a miss, DON'T silently keep the
+            // spread XZ at the raw spawn-point Y (WO-430: that was the sky/underground
+            // spawn — the miss was silent). Warn (§12: never silent), then ground-snap
+            // via a downward raycast so the enemy at least lands on the visible surface.
             if (UnityEngine.AI.NavMesh.SamplePosition(
                     pos, out var hit, 8f, UnityEngine.AI.NavMesh.AllAreas))
+            {
                 pos = hit.position;
+            }
+            else
+            {
+                FlowTrace.Warn("Waves",
+                    $"SpawnOne: NavMesh.SamplePosition MISS (no mesh within 8 m) for def " +
+                    $"'{def?.Id ?? "<null>"}' — spawnPoint={rawPoint}, attemptedPos={pos}. " +
+                    $"Falling back to ground-snap raycast instead of the raw spawn Y (would float/sink).");
+
+                // Ground/terrain/default layers only (mirrors Enemy.cs SnapBodyToGround) — this
+                // naturally excludes the enemy's own collider (on the "Enemy" layer). Cast DOWN
+                // from well above the attempted XZ onto the visible surface and spawn at that Y.
+                int groundMask = LayerMask.GetMask("Default", "Terrain", "Ground");
+                if (groundMask == 0) groundMask = Physics.DefaultRaycastLayers;
+                Vector3 rayOrigin = new Vector3(pos.x, pos.y + 50f, pos.z);
+                if (Physics.Raycast(rayOrigin, Vector3.down, out var groundHit, 200f,
+                        groundMask, QueryTriggerInteraction.Ignore))
+                {
+                    pos.y = groundHit.point.y;
+                }
+                else
+                {
+                    // Last resort: keep the raw spawn-point Y (never worse than pre-WO-430).
+                    FlowTrace.Warn("Waves",
+                        $"SpawnOne: ground-snap raycast ALSO missed at XZ=({pos.x:F1},{pos.z:F1}) for def " +
+                        $"'{def?.Id ?? "<null>"}' — using spawn-point Y {rawPoint.y:F1} as last resort.");
+                    pos.y = rawPoint.y;
+                }
+            }
 
             // POOLED: route through EnemyPool so a dead enemy's body is reused instead
             // of Instantiate-per-spawn / Destroy-on-death (the per-spawn GameObject churn

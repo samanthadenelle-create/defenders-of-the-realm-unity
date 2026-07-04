@@ -281,6 +281,12 @@ namespace DeNelle.Village
             GameObject deck = null;
             Guard.Try("RuntimeSeam", "build approach deck", () =>
             {
+                // WO-435: make the VISIBLE bridge deck physically solid + capture the collider/
+                // navmesh-Y diagnostics FIRST — this must run BEFORE the sloped-run raycast below
+                // (line ~346) so that raycast lands on the deck TOP (not the terrain under it),
+                // which is what pins the walk lane's low end to the deck surface (no clip-through).
+                EnsureBridgeDeckCollider();
+
                 // ROOT-CAUSE FIX (data-proven RUNTIME_SEAM_NAV_FAIL / PathPartial, 2026-06-23):
                 // (a) the weld tongue was too SHORT *and* mis-centred. The old math centred the deck
                 //     at the gate↔threshold MIDPOINT and added the overlap to the *total length*, so
@@ -383,6 +389,97 @@ namespace DeNelle.Village
             if (deck == null)
                 FlowTrace.Fail("RuntimeSeam", "approach deck FAILED to build — the crossing cannot weld; hero will hit the navmesh edge.");
             return deck;
+        }
+
+        // --------------------------------------------------------------------
+        //  WO-435 — make the VISIBLE bridge deck physically SOLID (hero clips through/under
+        //  the bridge near "Enter Elarion"). RCA: the walkable descent's low-end Y is fixed by
+        //  a downward raycast (BuildApproachDeck sloped block, QueryTriggerInteraction.Ignore).
+        //  If the visible deck (RuntimeSeam_Bridge_South when present, else the scene prefab
+        //  Drawbridge_Approach) carries NO physics collider on its top face, that raycast MISSES
+        //  the deck and lands on the terrain UNDER it → the nav slope sits at terrain Y while the
+        //  deck floats above (flag_14 "walking in the air off the bridge") / the hero rides below
+        //  the deck (clip-under). A dedicated deck-top BoxCollider makes the deck solid REGARDLESS
+        //  of the navmesh bake, so the raycast + physics both read the true deck surface.
+        //  §12 INSTRUMENT-FIRST: logs collider presence on both candidate bridges + the NavMesh Y
+        //  directly above the deck centre so a headless run splits collider-missing (add box, done)
+        //  from navmesh-Y-wrong (bake stale → REBAKE, orchestrator-run). Idempotent + Guard-wrapped.
+        // --------------------------------------------------------------------
+        private const string BridgeDeckColliderName = "RuntimeSeam_BridgeDeck_Collider";
+
+        private void EnsureBridgeDeckCollider()
+        {
+            Guard.Try("RuntimeSeam", "ensure bridge deck collider (WO-435)", () =>
+            {
+                var seamBridge = GameObject.Find("RuntimeSeam_Bridge_South");
+                var drawbridge = GameObject.Find("Drawbridge_Approach");
+                var bridge = seamBridge != null ? seamBridge : drawbridge;
+
+                // Deck centre = the AABB of the visible deck's renderers (world), else the
+                // south-frame threshold XZ at the current deck Y (pre-slope estimate).
+                Vector3 deckCentre = ToWorld(new Vector3(_gatePos.x, _thresholdY, _thresholdZ));
+                Bounds deckBounds = default; bool haveBounds = false;
+                if (bridge != null)
+                {
+                    foreach (var br in bridge.GetComponentsInChildren<Renderer>(true))
+                    {
+                        if (br == null) continue;
+                        if (!haveBounds) { deckBounds = br.bounds; haveBounds = true; }
+                        else deckBounds.Encapsulate(br.bounds);
+                    }
+                    if (haveBounds) deckCentre = deckBounds.center;
+                }
+
+                // §12 diagnostics: collider presence on each candidate + the NavMesh Y directly
+                // above the deck centre (the editor bake at this point — RebakeSourceSurface runs
+                // later — so navY << deckTopY here proves a STALE bake that a rebake would fix).
+                bool drawHasCol = drawbridge != null && drawbridge.GetComponentInChildren<Collider>(true) != null;
+                bool seamHasCol = seamBridge != null && seamBridge.GetComponentInChildren<Collider>(true) != null;
+                bool navHit = NavMesh.SamplePosition(deckCentre + Vector3.up * 3f, out NavMeshHit nh, 5f, NavMesh.AllAreas);
+                float deckTopY = haveBounds ? deckBounds.max.y : deckCentre.y;
+                FlowTrace.Step("RuntimeSeam",
+                    $"BRIDGE_DECK[{SideName(_facingYaw)}]: Drawbridge_Approach={(drawbridge == null ? "ABSENT" : (drawHasCol ? "HAS-collider" : "NO-collider"))}, " +
+                    $"RuntimeSeam_Bridge_South={(seamBridge == null ? "ABSENT" : (seamHasCol ? "HAS-collider" : "NO-collider"))}; " +
+                    $"deckCentre={deckCentre} deckTopY={deckTopY:F2}; navSample(+3m up) onMesh={navHit} navY={(navHit ? nh.position.y.ToString("F2") : "n/a")} " +
+                    "(navY far BELOW deckTopY => STALE bake, REBAKE recommended; collider handled below).");
+
+                if (bridge == null)
+                {
+                    FlowTrace.Warn("RuntimeSeam",
+                        "BRIDGE_DECK: neither RuntimeSeam_Bridge_South nor Drawbridge_Approach found — cannot add a deck collider (no clip-through fix applied).");
+                    return;
+                }
+                if (!haveBounds)
+                {
+                    FlowTrace.Warn("RuntimeSeam",
+                        $"BRIDGE_DECK: '{bridge.name}' has no renderers to size a deck collider — skipping (cannot size safely).");
+                    return;
+                }
+
+                // Idempotent: our deck-top collider lives on a dedicated child parented to the seam
+                // host (origin, identity scale — no parent-scale distortion). The host subtree is
+                // destroyed + rebuilt on every seam build, so this never accumulates; still check
+                // first per the spec so a re-entry within one build can't double-add.
+                if (transform.Find(BridgeDeckColliderName) != null)
+                {
+                    FlowTrace.Step("RuntimeSeam",
+                        $"BRIDGE_DECK: '{BridgeDeckColliderName}' already present — solid deck already ensured (idempotent no-op).");
+                    return;
+                }
+
+                var colGo = new GameObject(BridgeDeckColliderName);
+                colGo.transform.SetParent(transform, true);              // host @ origin, scale 1
+                colGo.transform.position = new Vector3(deckBounds.center.x, deckBounds.max.y, deckBounds.center.z);
+                colGo.transform.rotation = Quaternion.identity;          // AABB-aligned slab over the deck top
+                var box = colGo.AddComponent<BoxCollider>();
+                const float thickness = 0.5f;                            // thin slab flush with the deck TOP
+                box.size = new Vector3(Mathf.Max(0.5f, deckBounds.size.x), thickness, Mathf.Max(0.5f, deckBounds.size.z));
+                box.center = new Vector3(0f, -thickness * 0.5f, 0f);     // top face sits at deckBounds.max.y
+
+                FlowTrace.Step("RuntimeSeam",
+                    $"BRIDGE_DECK: added '{BridgeDeckColliderName}' BoxCollider over '{bridge.name}' size={box.size} topY={deckBounds.max.y:F2} " +
+                    "— deck is now physically SOLID so the slope raycast pins the walk lane to the deck surface (hero can't clip through/under, WO-435).");
+            });
         }
 
         // Lift of CastleHubBuilder.CreateInvisibleFloor + AddWalkableNavMeshModifier, runtime form:

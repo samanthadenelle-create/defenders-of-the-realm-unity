@@ -123,6 +123,11 @@ namespace DeNelle.Village
             // base name for every other enemy.
             string ctrlName = ControllerForModel(rig, modelName);
             var ctrl = Resources.Load<RuntimeAnimatorController>("Enemies/" + ctrlName);
+            // WO-436 (§12): step in/out of the controller load so a HEADLESS capture PROVES
+            // whether the RuntimeAnimatorController resolved. Failure B (WO-436 RCA) = this load
+            // returns null → the Animator idles in its empty default state → the NavMeshAgent
+            // slides the transform with no clip playing ("no animation, slides across ground").
+            FlowTrace.Step("EnemyAnim", $"Load controller for {modelName}: {(ctrl == null ? "NULL" : "OK")}");
             // WO-491: if the per-role override asset is missing (e.g. controllers not yet
             // rebuilt), fall back to the shared base so the orc still walks/attacks.
             if (ctrl == null && rig == EnemyRig.OrcHumanoid && ctrlName != "OrcHumanoid")
@@ -145,6 +150,12 @@ namespace DeNelle.Village
                 FlowTrace.Warn("Enemy",
                     $"animator: model '{modelName}' -> rig {rig} -> controller 'Enemies/{ctrlName}' " +
                     "MISSING — enemy has no walk/attack/die anim (run EnemyAnimatorSetup)");
+                // WO-436 Step 4 (§12 permanent guard): a null controller after every fallback means
+                // this enemy WILL slide with no animation. Warn under the EnemyAnim tag so it never
+                // silently slides again — a headless capture flags exactly which model type is null.
+                FlowTrace.Warn("EnemyAnim",
+                    $"Controller NULL for {modelName} ('Enemies/{ctrlName}') — enemy will SLIDE with no " +
+                    "animation (run 'Build Animator Controllers' + EnemyAnimatorSetup to populate Resources/Enemies).");
             }
         }
     }

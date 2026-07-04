@@ -21,6 +21,7 @@
 // rebuild always re-attaches it; it can also self-find by tag/name if needed.
 // =============================================================================
 
+using System.Collections;
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
 
@@ -110,6 +111,128 @@ namespace DeNelle.Village
                 $"-> final pos {transform.position}");
             Debug.Log($"[SeatOnGround] '{name}' final position: {transform.position} " +
                       $"(baseY={baseY:0.###} via {baseSource}, groundY={groundY:0.###})");
+
+            // LATE ground-snap (owner F8 2026-07-03 "run a LATE script on raycast to confirm
+            // it's on ground"): the Start seat above runs the same frame the object wakes —
+            // in MainCastle_Hall the castle FLOOR is built by an additive/streamed pass that
+            // may not have finished (or its colliders not yet registered) when Start fires, so
+            // the ray finds no floor and the fallback strands the tree (either sunk below the
+            // real floor, or the ceiling-cap case). Re-run the seat AFTER the scene settles,
+            // casting from WELL ABOVE the authored XZ so it reliably lands on the floor top
+            // even when the tree is currently BURIED below it.
+            StartCoroutine(LateSnapToGround());
+        }
+
+        // Authored XZ never changes (the seat only moves Y), so the current x/z ARE the
+        // authored column the tree stands in. We re-derive a high ray origin from them.
+        // Poll window: mirror the ~1.5s other systems wait for the scene build, but poll
+        // for the floor to actually appear (collider registered) rather than sleep blindly.
+        private const float LateSnapMaxWaitSeconds = 2.5f;
+        private const float LateSnapPollSeconds    = 0.1f;
+        private const float LateSnapRayHeight      = 50f;   // start the down-ray this far above the floor ref
+        private const float LateSnapRayLength      = 120f;  // long enough to reach the floor from that height
+
+        /// <summary>
+        /// Waits until the floor under the authored XZ exists (a downward raycast from high
+        /// above finds ground), then re-seats the visual base onto that floor. Robust to the
+        /// UNDER-FLOOR case because the ray starts WELL ABOVE the authored column, not from the
+        /// tree's (possibly sunken) current top. Leaves the position untouched (and Warns) if no
+        /// ground appears within the settle window.
+        /// </summary>
+        private IEnumerator LateSnapToGround()
+        {
+            // Let the first frames of the additive/streamed build tick by before polling.
+            yield return null;
+            yield return null;
+
+            float floorRef = FallbackGroundY();                 // authored anchor floor (raised castle courtyard, etc.)
+            float originY  = Mathf.Max(transform.position.y, floorRef) + LateSnapRayHeight;
+
+            float waited = 0f;
+            bool found = false;
+            float groundY = 0f;
+            while (waited <= LateSnapMaxWaitSeconds)
+            {
+                if (TryFindFloorBelowAuthoredXZ(originY, floorRef, out groundY))
+                {
+                    found = true;
+                    break;
+                }
+                yield return new WaitForSeconds(LateSnapPollSeconds);
+                waited += LateSnapPollSeconds;
+                // Re-derive origin in case the Start seat / other systems shifted us meanwhile.
+                originY = Mathf.Max(transform.position.y, floorRef) + LateSnapRayHeight;
+            }
+
+            if (!found)
+            {
+                // Guard (§12): no floor appeared — do NOT move; leave the authored/Start position.
+                FlowTrace.Warn("Seat",
+                    $"'{name}' LATE snap: no ground found below authored XZ " +
+                    $"({transform.position.x:0.###}, {transform.position.z:0.###}) after {waited:0.##}s settle " +
+                    $"(floorRef={floorRef:0.###}) — leaving position {transform.position} unchanged.");
+                yield break;
+            }
+
+            // Re-measure the visual base NOW (bounds are live) and drop it onto the found floor.
+            if (!TryGetWorldBounds(out Bounds b))
+            {
+                FlowTrace.Warn("Seat", $"'{name}' LATE snap: no renderers to measure — leaving position unchanged.");
+                yield break;
+            }
+
+            float baseY = MeasureVisualBaseY(transform, b, out string baseSource);
+            float gap   = baseY - groundY;
+
+            float baseLift = _baseLiftOverride;
+            if (!string.IsNullOrEmpty(_baseLiftPrefsKey))
+                baseLift = PlayerPrefs.GetFloat(_baseLiftPrefsKey, _baseLiftOverride);
+
+            Vector3 before = transform.position;
+            if (Mathf.Abs(gap) > 0.0001f || Mathf.Abs(baseLift) > 0.0001f)
+            {
+                Vector3 p = transform.position;
+                p.y -= gap;                          // drop (or lift) the visual base onto the found floor
+                p.y += baseLift;                     // authored lift on top of the derived seat
+                transform.position = p;
+            }
+
+            // §12 capture: prove the LATE seat corrected the base onto the settled floor.
+            FlowTrace.Step("Seat",
+                $"'{name}' LATE snapped (settle {waited:0.##}s): baseY={baseY:0.###} (source={baseSource}) " +
+                $"groundY={groundY:0.###} gap={gap:0.###} baseLift={baseLift:0.###} " +
+                $"pos {before} -> {transform.position}");
+            Debug.Log($"[SeatOnGround] '{name}' LATE snap final position: {transform.position} " +
+                      $"(baseY={baseY:0.###} via {baseSource}, groundY={groundY:0.###}, settle={waited:0.##}s)");
+        }
+
+        /// <summary>
+        /// Casts DOWN from <paramref name="originY"/> (well above the authored column) at this
+        /// object's authored XZ and returns the nearest floor/ground surface directly below.
+        /// Skips our own + our anchor's colliders and any hit meaningfully ABOVE the anchor
+        /// floor (overhead wall-top / arch / hall roof — never the ground the tree stands on),
+        /// then takes the HIGHEST remaining hit (the floor top). Returns false if none.
+        /// </summary>
+        private bool TryFindFloorBelowAuthoredXZ(float originY, float floorRef, out float groundY)
+        {
+            groundY = 0f;
+            Vector3 origin = new Vector3(transform.position.x, originY, transform.position.z);
+            var hits = Physics.RaycastAll(origin, Vector3.down, LateSnapRayLength, _groundMask, QueryTriggerInteraction.Ignore);
+            // Accept floor at/below the anchor floor (+ tolerance); reject overhead ceilings.
+            float floorCeilingY = floorRef + 0.5f;
+            float best = float.NegativeInfinity;
+            bool found = false;
+            foreach (var h in hits)
+            {
+                if (h.collider == null) continue;
+                Transform ct = h.collider.transform;
+                if (ct.IsChildOf(transform)) continue;                                    // self subtree
+                if (transform.parent != null && ct.IsChildOf(transform.parent)) continue; // anchor (blocker capsule) + siblings on it
+                if (h.point.y > floorCeilingY) continue;                                  // overhead geometry — never the ground
+                if (h.point.y > best) { best = h.point.y; found = true; }
+            }
+            if (found) groundY = best;
+            return found;
         }
 
         /// <summary>

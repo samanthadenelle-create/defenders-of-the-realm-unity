@@ -157,6 +157,13 @@ namespace DeNelle.Village
         /// </summary>
         private const float TypeVfxSelfDestructSeconds = 3f;
 
+        // felt-tune knob — owner slowing battle a touch 2026-07-03. A SINGLE central dial that
+        // lengthens EVERY enemy's attack interval by a small factor (1.0 = no change). 1.12 = ~+12%
+        // between strikes, so the battle breathes a touch more without an overhaul. Every enemy
+        // (roamer/wave/tribe/arena) routes through Configure, so all slow together. Fully reversible
+        // — set back to 1.0f to restore the prior cadence. Does NOT touch the hero.
+        private const float EnemyAttackIntervalScale = 1.12f;
+
         // ── Runtime refs / state ──────────────────────────────────────────────
 
         private NavMeshAgent _agent;

@@ -100,6 +100,15 @@ namespace DeNelle.Village.Arena
 
         private const float BattleTimeoutSeconds = 240f; // generous; a stuck fight ends, never soft-locks
 
+        // ── SQUAD FORMATION spacing (owner-adjustable — 2026-07-03 "spawn in a proper formation") ──
+        // Three ranks laid out on the NORTH side facing the SOUTH-standing hero: TANKS front (nearest
+        // the hero), DPS/ranged mid, HEALERS rear. Tune these by eye — they are the whole formation
+        // shape. FormationRearAnchorZ is the rear (healer) rank; each rank forward of it is
+        // FormationRankDepth closer to the hero; members within a rank are FormationLateralGap apart.
+        private const float FormationRearAnchorZ  = ArenaHalfDepth - 3f; // rear (healer) rank Z, just inside the north wall
+        private const float FormationRankDepth    = 4.5f;                // Z gap between ranks (front line = 2 ranks closer)
+        private const float FormationLateralGap   = 3.5f;                // X gap between neighbours within a rank
+
         // WO-556 ITEM 2 — RARE BOSS CHALLENGE. On staging an encounter we roll this chance to
         // ADD a boss mob to the family (a rare, harder fight that pays boss-only loot). Named
         // consts so the owner felt-tunes the rate without code spelunking. The boss id resolves
@@ -1026,15 +1035,36 @@ namespace DeNelle.Village.Arena
             Transform heart = _arenaRoot.transform; // arena-centre tether; hero-aggro (DEF-224) pulls them to the hero
             int n = Mathf.Clamp(p.EnemyIds.Length, 1, 7);   // WO-556: 6 family + 1 rare boss
 
+            // ── PROPER SQUAD FORMATION (owner 2026-07-03: "spawn in a proper formation") ──
+            // The hero stands at the SOUTH edge (see StageRoutine: -ArenaHalfDepth+2) facing NORTH into
+            // the spawn, so "nearest the hero" == the SMALLEST Z on the north side. We rank the family by
+            // ROLE (RoleForId) into a real battle line, facing the hero:
+            //   • FRONT rank  (nearest hero) = TANKS — the wall the hero meets first, spread laterally.
+            //   • MID rank    (a rank back)  = DPS / Ranged / everything else.
+            //   • REAR rank   (furthest)     = HEALERS — protected behind the line.
+            // Spacing is a small owner-adjustable table (below), not scattered literals. If a rank has no
+            // members the others simply close up. Robust: RoleForId always resolves (defaults DPS), and a
+            // solo enemy just spawns at the front-centre — so this degrades gracefully to the old feel.
+            int[] formRank = new int[n];   // 0 = front, 1 = mid, 2 = rear
+            int[] formSlot = new int[n];   // lateral index within the rank (spawn order)
+            int[] rankFill = new int[3];
+            for (int i = 0; i < n; i++)
+            {
+                formRank[i] = FormationRankForRole(RoleForId(p.EnemyIds[i]));
+                formSlot[i] = rankFill[formRank[i]]++;
+            }
+
             for (int i = 0; i < n; i++)
             {
                 string id = p.EnemyIds[i];
                 EnemyDef def = BuildEncounterDef(id, p.Threat);
 
-                // North side, spread on X; leader (i==0) a touch forward toward the hero.
-                float spread = (n <= 1) ? 0f : Mathf.Lerp(-ArenaHalfWidth + 3f, ArenaHalfWidth - 3f, i / (float)(n - 1));
-                float z = ArenaHalfDepth - 2f - (i == 0 ? 1.5f : 0f);
-                Vector3 pos = ArenaCentre + new Vector3(spread, 0f, z);
+                // Rank -> Z (front rank sits FormationRankDepth closer to the hero per rank forward of
+                // the rear anchor). Lateral slot -> X, centred on x=0 and spread by FormationLateralGap.
+                int rankMembers = Mathf.Max(1, rankFill[formRank[i]]);
+                float lateral = (formSlot[i] - (rankMembers - 1) * 0.5f) * FormationLateralGap;
+                float z = FormationRearAnchorZ - (2 - formRank[i]) * FormationRankDepth;
+                Vector3 pos = ArenaCentre + new Vector3(lateral, 0f, z);
                 if (NavMesh.SamplePosition(pos, out NavMeshHit hit, 8f, NavMesh.AllAreas)) pos = hit.position;
 
                 Vector3 toHero = (ArenaCentre + new Vector3(0f, 0f, -ArenaHalfDepth)) - pos; toHero.y = 0f;
@@ -1146,6 +1176,20 @@ namespace DeNelle.Village.Arena
             lead = lead.Replace('-', ' ').Replace('_', ' ').Trim();
             if (lead.Length == 0) return "Foes";
             return char.ToUpperInvariant(lead[0]) + (lead.Length > 1 ? lead.Substring(1) : "");
+        }
+
+        // Map an EnemyRole -> a formation RANK bucket (0 = front line, 1 = mid, 2 = rear) so the
+        // squad spawns as a real battle line facing the hero: TANKS take the front, HEALERS the
+        // protected rear, and DPS/Ranged/everything-else the middle. Owner-tunable by moving a role
+        // between buckets here (data-light, no scattered literals).
+        private static int FormationRankForRole(EnemyRole role)
+        {
+            switch (role)
+            {
+                case EnemyRole.Tank:   return 0;  // front line, nearest the hero
+                case EnemyRole.Healer: return 2;  // rear, furthest from the hero
+                default:               return 1;  // DPS / Ranged / MiniBoss — mid rank behind the tanks
+            }
         }
 
         // Map a family id -> an EnemyBrain role (logic). The orc family: leader=DPS,
