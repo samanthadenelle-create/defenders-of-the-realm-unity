@@ -551,6 +551,12 @@ namespace DeNelle.Village
         // the hero keeps a relaxed idle in town and only draws ready when a wave runs.
         private bool IsWaveInCombat()
         {
+            // KnightMocap V1 (owner 2026-07-04): the braced combat idle + combat-aware action returns
+            // must engage in the ANIMATED OVERWORLD BATTLE, not only during a village wave. An arena
+            // fight may not be driven by a WaveManager, so raise the combat stance whenever a
+            // BattleArena battle is in progress too (same signal footsteps already use, line ~585).
+            // Either signal → InCombat=true → CombatLocomotion (braced idle) instead of the calm idle.
+            if (DeNelle.Village.Arena.BattleArena.AnyBattleInProgress) return true;
             if (_waveManager == null) return false;
             var phase = _waveManager.Phase;
             return phase == WavePhase.Countdown || phase == WavePhase.Active;

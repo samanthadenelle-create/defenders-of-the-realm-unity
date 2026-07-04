@@ -112,6 +112,24 @@ namespace DeNelle.Editor
             public string idleClipOverride;
             public string walkClipOverride;
             public string runClipOverride;
+
+            // COMBAT-STANCE SPLIT + MOCAP COMBAT (owner 2026-07-04, KnightMocap V1). All optional;
+            // null/0 on every stock hero → the shared single-tree, Mixamo-combat build is produced
+            // BYTE-IDENTICAL. Set only by BuildKnightMocapController.
+            //   combatIdleClipOverride — when non-null, builds a SECOND locomotion tree
+            //     ("CombatLocomotion") whose idle is this braced/ready pose (mocap: idle_ready) while
+            //     the DEFAULT Locomotion idle stays the CALM idleClipOverride (mocap: m-standby-idle).
+            //     Locomotion ⇄ CombatLocomotion flips on the InCombat bool (ActorAnimator.SetCombatStance).
+            //     RCA fix: the hero no longer stands sword-ready in town — calm out of combat, braced in.
+            //   blockClipOverride / hitClipOverride — swap Block/Hit onto the SAME CC_Base AccuRig
+            //     (shield_block* / m-ss-damage*) instead of the lossy cross-rig Mixamo Shared clips,
+            //     so the FIGHT shows the purpose-built sword+shield motion.
+            //   combatActionExitTime — >0 lets MORE of the attack/cast swing play before returning
+            //     (readability: wind-up→impact→recovery reads) vs the snappy 0.38 stock cut.
+            public string combatIdleClipOverride;
+            public string blockClipOverride;
+            public string hitClipOverride;
+            public float  combatActionExitTime;
         }
 
         // WO-283 §1 type->folder mapping. Casters (Mage + Cleric) share the Wizard set.
@@ -196,9 +214,28 @@ namespace DeNelle.Editor
         // locomotion clips (HUMANOID, on the SAME CC_Base rig as KnightV3 → ~1:1 retarget). Each FBX ships
         // a "0_T-Pose" take alongside the motion take; LoadClip already skips the T-pose by name.
         private const string MocapMovesDir = "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/";
-        private const string MocapIdleClip = "idle_ready";
+        // The magical-moves pack sits on the SAME CC_Base rig; it carries the calm standby idle and
+        // the sword+shield stagger/damage reactions the sword+shield-moves pack lacks.
+        private const string MocapMagicalDir = "Assets/Action/Knight/Motion/studio-mocap-series-magical-moves/";
+        // CALM default idle (relaxed standby) vs the BRACED in-combat idle (sword+shield ready) — the
+        // combat-stance split. Walk/run are the sword+shield gait for both trees (no calm-gait clip
+        // exists in-pack; the braced walk/run read fine relaxed and are 1:1 on the rig).
+        private const string MocapIdleClip       = "m-standby-idle";   // calm (magical-moves)
+        private const string MocapCombatIdleClip = "idle_ready";       // braced/ready (sword+shield)
         private const string MocapWalkClip = "walkforward01";
         private const string MocapRunClip  = "runforward_218667";
+        // MOCAP COMBAT (owner 2026-07-04): the purpose-built AccuRig sword+shield swings/block/stagger.
+        // A 3-swing combo that ESCALATES for readability (right slash → left slash → spin finisher);
+        // block = raise shield (clear telegraph); hit = sword+shield stagger. All verified Humanoid
+        // (animationType:3) + path-confirmed before referencing.
+        private static readonly string[] MocapAttackClips = { "atk_slashright", "atk_slashleft", "atk_spin" };
+        private static readonly string[] MocapSpellClips  = { null, "atk_stab", "atk_slashleft", "atk_slashright", "atk_spin" };
+        private const string MocapCastClip  = "atk_slashright"; // generic cast + upper-body (moving) swing
+        private const string MocapBlockClip = "shield_blockup";
+        private const string MocapHitClip   = "m-ss-damage-01"; // magical-moves stagger (same rig)
+        // Let more of the AccuRig swing play (wind-up → impact → recovery reads) before returning,
+        // vs the stock 0.38 snappy cut — the fight must SHOW the motion.
+        private const float  MocapActionExitTime = 0.85f;
         // The mocap-locomotion twin controller — bound by HeroBodySwapper for the KnightV3 body when
         // ff.mocaploco is ON. NEVER overwrites Knight.controller.
         private const string KnightMocapControllerPath = "Assets/Resources/Heroes/KnightMocap.controller";
@@ -231,20 +268,35 @@ namespace DeNelle.Editor
             // LoadClip is NON-RECURSIVE — the mocap folder MUST be listed EXPLICITLY, and FIRST so the
             // locomotion basenames resolve there. Knight/Shared still follow, covering cast/attack/hit/
             // death/block/victory exactly as the stock Knight build.
-            var roots = new List<string> { MocapMovesDir };
+            // LoadClip is NON-RECURSIVE — list BOTH mocap folders FIRST (moves = idle_ready/walk/run/atk_*;
+            // magical = m-standby-idle + m-ss-damage stagger), then Knight/Shared cover anything unmapped.
+            var roots = new List<string> { MocapMovesDir, MocapMagicalDir };
             roots.AddRange(knight.searchRoots);
             mocap.searchRoots = roots.ToArray();
-            // ONLY the locomotion sources change (studio-mocap; ~1:1 CC_Base retarget).
-            mocap.idleClipOverride = MocapIdleClip;
-            mocap.walkClipOverride = MocapWalkClip;
-            mocap.runClipOverride  = MocapRunClip;
+            // Locomotion: CALM default idle + BRACED combat idle (the stance split), sword+shield gait.
+            mocap.idleClipOverride       = MocapIdleClip;        // m-standby-idle (calm, default Locomotion)
+            mocap.combatIdleClipOverride = MocapCombatIdleClip;  // idle_ready (braced, InCombat)
+            mocap.walkClipOverride       = MocapWalkClip;
+            mocap.runClipOverride        = MocapRunClip;
+            // Combat onto the AccuRig sword+shield set (the FIGHT shows the purpose-built motion), with
+            // readable swing timing. Melee combo + generic/per-spell casts + block + hit all swap; every
+            // other state stays as the Knight build.
+            mocap.attackClips          = MocapAttackClips;
+            mocap.spellCastClips       = MocapSpellClips;
+            mocap.castClip             = MocapCastClip;
+            mocap.castClipFallback     = null;
+            mocap.blockClipOverride    = MocapBlockClip;
+            mocap.hitClipOverride      = MocapHitClip;
+            mocap.combatActionExitTime = MocapActionExitTime;
 
             Build(mocap);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            Debug.Log($"[HeroAnimatorFactory] KnightMocap.controller built — studio-mocap idle/walk/run " +
-                      $"locomotion ({MocapIdleClip}/{MocapWalkClip}/{MocapRunClip}); every other state matches " +
-                      $"the Knight build → {KnightMocapControllerPath}. Bound for KnightV3 when ff.mocaploco=1.");
+            string atkCombo = string.Join("/", MocapAttackClips);
+            Debug.Log($"[HeroAnimatorFactory] KnightMocap.controller built — calm idle ({MocapIdleClip}) + braced " +
+                      $"combat idle ({MocapCombatIdleClip}) split on InCombat; sword+shield gait ({MocapWalkClip}/{MocapRunClip}); " +
+                      $"AccuRig combat (atk combo {atkCombo}, block {MocapBlockClip}, hit {MocapHitClip}) " +
+                      $"→ {KnightMocapControllerPath}. Bound for KnightV3 when ff.mocaploco=1.");
         }
 
         private static void Build(HeroSpec spec)
@@ -254,11 +306,11 @@ namespace DeNelle.Editor
             AnimationClip walk    = LoadClip(spec.walkClipOverride ?? WalkClip, spec.searchRoots);
             AnimationClip run     = LoadClip(spec.runClipOverride  ?? RunClip,  spec.searchRoots);
             AnimationClip victory = LoadClip(VictoryClip, spec.searchRoots);
-            AnimationClip hit     = LoadClip(HitClip,   spec.searchRoots);
+            AnimationClip hit     = LoadClip(spec.hitClipOverride   ?? HitClip,   spec.searchRoots);
             AnimationClip death   = LoadClip(DeathClip, spec.searchRoots);
             AnimationClip deathL  = LoadClip(DeathLeftClip,  spec.searchRoots);
             AnimationClip deathR  = LoadClip(DeathRightClip, spec.searchRoots);
-            AnimationClip block   = LoadClip(BlockClip, spec.searchRoots);
+            AnimationClip block   = LoadClip(spec.blockClipOverride ?? BlockClip, spec.searchRoots);
             AnimationClip cast    = LoadClip(spec.castClip, spec.searchRoots);
             if (cast == null && !string.IsNullOrEmpty(spec.castClipFallback))
             {
@@ -330,6 +382,17 @@ namespace DeNelle.Editor
                 Debug.LogWarning($"[HeroAnimatorFactory] {spec.slug}: no locomotion clips found — " +
                                  "Locomotion state is empty.");
 
+            // ── COMBAT-STANCE SPLIT (KnightMocap V1) ───────────────────────────
+            // When the spec supplies a braced combat idle, build a SECOND locomotion tree
+            // (CombatLocomotion) and flip Locomotion ⇄ CombatLocomotion on the InCombat bool
+            // (ActorAnimator.SetCombatStance, driven by HeroLocomotion). The default Locomotion
+            // keeps the CALM idle, so the hero is relaxed in town and braced in a fight. Stock
+            // heroes (combatIdleClipOverride == null) get null here → single-tree build unchanged.
+            AnimatorState combatLocoState = BuildCombatLocomotion(ctrl, sm, locoState, walk, run, spec);
+            // Readability: let more of the AccuRig swing play before returning (mocap), else the
+            // stock snappy cut. Shared by Cast / per-spell / Attack returns.
+            float actionExit = spec.combatActionExitTime > 0f ? spec.combatActionExitTime : CastExitTime;
+
             // ── WO-493 #5 / WO-497: Injured locomotion swap ────────────────────
             // A SECOND 1-D blend tree on Speed (the wounded idle/limp/stagger),
             // entered when Injured==true and returned when Injured==false — the hero
@@ -362,10 +425,7 @@ namespace DeNelle.Editor
                 toCast.hasExitTime = false; toCast.duration = 0.05f;
                 toCast.AddCondition(AnimatorConditionMode.If, 0f, "Cast");
                 toCast.AddCondition(AnimatorConditionMode.Less, StandingSpeedMax, "Speed"); // WO-218: standing only
-                var castBack = castState.AddTransition(locoState);
-                castBack.hasExitTime = true;
-                castBack.exitTime = CastExitTime;  // WO-217: return earlier
-                castBack.duration = CastExitDur;   // WO-217: tighter blend
+                AddActionReturn(castState, locoState, combatLocoState, actionExit, CastExitDur);
             }
             else
             {
@@ -378,7 +438,7 @@ namespace DeNelle.Editor
             // gate ON TOP of the same Cast/standing conditions, so when HeroAbilities fires
             // Cast with CastVariant = slot+1 the matching state wins; absent slots (null clip
             // or no spellCastClips) simply leave the generic Cast to cover them.
-            int spellStates = BuildSpellCastStates(sm, locoState, spec);
+            int spellStates = BuildSpellCastStates(sm, locoState, combatLocoState, actionExit, spec);
 
             // ── Victory — Any → Victory on the trigger, returns to Locomotion ──
             if (victory != null)
@@ -397,7 +457,7 @@ namespace DeNelle.Editor
             // Attack state. Mirrors the snappy Cast timing (WO-217). Casters mostly
             // route through Cast at runtime, but the state exists so PlayAttack always
             // animates. Returns to Locomotion after the swing.
-            int attackStates = BuildAttackStates(ctrl, sm, locoState, spec);
+            int attackStates = BuildAttackStates(ctrl, sm, locoState, combatLocoState, actionExit, spec);
 
             // ── WO-285: Hit reaction — Any → Hit on the Hit trigger, back to Loco ──
             if (hit != null)
@@ -408,8 +468,8 @@ namespace DeNelle.Editor
                 toHit.hasExitTime = false; toHit.duration = 0.04f;
                 toHit.canTransitionToSelf = false;
                 toHit.AddCondition(AnimatorConditionMode.If, 0f, "Hit");
-                var hitBack = hitState.AddTransition(locoState);
-                hitBack.hasExitTime = true; hitBack.exitTime = 0.7f; hitBack.duration = 0.1f;
+                // Play most of the stagger, then return combat-aware (braced loco if still InCombat).
+                AddActionReturn(hitState, locoState, combatLocoState, 0.7f, 0.1f);
             }
 
             // ── WO-285: Death — Any → Death on Dead==true (latched), Revive clears ─
@@ -442,9 +502,26 @@ namespace DeNelle.Editor
             {
                 var blockState = sm.AddState("Block");
                 blockState.motion = block;
-                var toBlock = locoState.AddTransition(blockState);
-                toBlock.hasExitTime = false; toBlock.duration = 0.1f;
-                toBlock.AddCondition(AnimatorConditionMode.If, 0f, "Block");
+                // Raise the shield from the calm loco AND (when the stance split exists) the braced
+                // combat loco — otherwise a hero already in CombatLocomotion could never block.
+                var blockFrom = combatLocoState != null
+                    ? new[] { locoState, combatLocoState }
+                    : new[] { locoState };
+                foreach (var from in blockFrom)
+                {
+                    var toBlock = from.AddTransition(blockState);
+                    toBlock.hasExitTime = false; toBlock.duration = 0.1f;
+                    toBlock.AddCondition(AnimatorConditionMode.If, 0f, "Block");
+                }
+                // Release: while still InCombat return to the braced combat loco (added first so it
+                // wins the pick), otherwise the calm loco.
+                if (combatLocoState != null)
+                {
+                    var backCombat = blockState.AddTransition(combatLocoState);
+                    backCombat.hasExitTime = false; backCombat.duration = 0.12f;
+                    backCombat.AddCondition(AnimatorConditionMode.IfNot, 0f, "Block");
+                    backCombat.AddCondition(AnimatorConditionMode.If, 0f, "InCombat");
+                }
                 var blockBack = blockState.AddTransition(locoState);
                 blockBack.hasExitTime = false; blockBack.duration = 0.12f;
                 blockBack.AddCondition(AnimatorConditionMode.IfNot, 0f, "Block");
@@ -529,6 +606,67 @@ namespace DeNelle.Editor
         }
 
         /// <summary>
+        /// KnightMocap V1 (owner 2026-07-04): builds the braced in-combat locomotion tree and wires
+        /// the Locomotion ⇄ CombatLocomotion flip on the InCombat bool. Returns null (no combat tree,
+        /// single-tree build unchanged) unless the spec supplies a combatIdleClipOverride — so every
+        /// stock hero is byte-identical. CombatLocomotion reuses the same walk/run gait; only the idle
+        /// pose differs (calm standby vs sword+shield ready). Same Speed thresholds + cadence as the
+        /// calm tree so the swap reads at the bands the hero already feeds.
+        /// </summary>
+        private static AnimatorState BuildCombatLocomotion(AnimatorController ctrl, AnimatorStateMachine sm,
+                                                           AnimatorState locoState, AnimationClip walk,
+                                                           AnimationClip run, HeroSpec spec)
+        {
+            if (string.IsNullOrEmpty(spec.combatIdleClipOverride)) return null;
+            AnimationClip combatIdle = LoadClip(spec.combatIdleClipOverride, spec.searchRoots);
+            if (combatIdle == null)
+            {
+                Debug.LogWarning($"[HeroAnimatorFactory] {spec.slug}: combat idle '{spec.combatIdleClipOverride}' " +
+                                 "missing — combat-stance split skipped (single Locomotion tree).");
+                return null;
+            }
+
+            var combatLocoState = sm.AddState("CombatLocomotion");
+            var cblend = new BlendTree { name = "CombatLocomotion", blendType = BlendTreeType.Simple1D,
+                                         blendParameter = "Speed", useAutomaticThresholds = false };
+            AssetDatabase.AddObjectToAsset(cblend, ctrl);
+            combatLocoState.motion = cblend;
+            cblend.AddChild(combatIdle, 0f);          // braced/ready idle
+            if (walk != null) cblend.AddChild(walk, 2f);
+            if (run  != null) cblend.AddChild(run,  6f);
+            ApplyLocomotionCadence(cblend);
+
+            // Calm Locomotion → braced CombatLocomotion on InCombat, and back when it clears.
+            var toCombat = locoState.AddTransition(combatLocoState);
+            toCombat.hasExitTime = false; toCombat.duration = 0.25f;
+            toCombat.AddCondition(AnimatorConditionMode.If, 0f, "InCombat");
+            var toCalm = combatLocoState.AddTransition(locoState);
+            toCalm.hasExitTime = false; toCalm.duration = 0.25f;
+            toCalm.AddCondition(AnimatorConditionMode.IfNot, 0f, "InCombat");
+            return combatLocoState;
+        }
+
+        /// <summary>
+        /// Combat-aware return from an action state (attack/cast/hit). When a CombatLocomotion state
+        /// exists, adds a return to it gated on InCombat==true FIRST (so it wins the pick) — the hero
+        /// snaps back to the braced gait after a swing mid-fight instead of flashing the calm idle —
+        /// then the unconditioned return to the calm Locomotion. Stock heroes (combatLoco == null)
+        /// get ONLY the calm return with the same exit timing → byte-identical to the prior build.
+        /// </summary>
+        private static void AddActionReturn(AnimatorState state, AnimatorState locoState,
+                                            AnimatorState combatLocoState, float exitTime, float duration)
+        {
+            if (combatLocoState != null)
+            {
+                var toCombat = state.AddTransition(combatLocoState);
+                toCombat.hasExitTime = true; toCombat.exitTime = exitTime; toCombat.duration = duration;
+                toCombat.AddCondition(AnimatorConditionMode.If, 0f, "InCombat");
+            }
+            var toCalm = state.AddTransition(locoState);
+            toCalm.hasExitTime = true; toCalm.exitTime = exitTime; toCalm.duration = duration;
+        }
+
+        /// <summary>
         /// WO-285: builds the melee Attack state(s). A single clip → one "Attack"
         /// state fired by the Attack trigger. Multiple clips (Knight combo) → one
         /// state per clip ("Attack0/1/2"), each entered when the Attack trigger fires
@@ -537,7 +675,8 @@ namespace DeNelle.Editor
         /// Returns the number of attack states built (0 = no clips found).
         /// </summary>
         private static int BuildAttackStates(AnimatorController ctrl, AnimatorStateMachine sm,
-                                             AnimatorState locoState, HeroSpec spec)
+                                             AnimatorState locoState, AnimatorState combatLocoState,
+                                             float actionExit, HeroSpec spec)
         {
             if (spec.attackClips == null || spec.attackClips.Length == 0) return 0;
 
@@ -562,8 +701,7 @@ namespace DeNelle.Editor
                 if (combo)
                     toAttack.AddCondition(AnimatorConditionMode.Equals, i, "Combo");
 
-                var back = state.AddTransition(locoState);
-                back.hasExitTime = true; back.exitTime = CastExitTime; back.duration = CastExitDur;
+                AddActionReturn(state, locoState, combatLocoState, actionExit, CastExitDur);
                 built++;
             }
             return built;
@@ -578,7 +716,8 @@ namespace DeNelle.Editor
         /// Standing-gated like the generic cast (legs keep moving via the upper-body layer).
         /// Returns the number of per-spell states built.
         /// </summary>
-        private static int BuildSpellCastStates(AnimatorStateMachine sm, AnimatorState locoState, HeroSpec spec)
+        private static int BuildSpellCastStates(AnimatorStateMachine sm, AnimatorState locoState,
+                                                AnimatorState combatLocoState, float actionExit, HeroSpec spec)
         {
             if (spec.spellCastClips == null) return 0;
             string[] slotName = { "0", "q", "w", "e", "r" };
@@ -601,8 +740,7 @@ namespace DeNelle.Editor
                 toState.AddCondition(AnimatorConditionMode.Equals, v, "CastVariant");
                 toState.AddCondition(AnimatorConditionMode.Less, StandingSpeedMax, "Speed");
 
-                var back = state.AddTransition(locoState);
-                back.hasExitTime = true; back.exitTime = CastExitTime; back.duration = CastExitDur;
+                AddActionReturn(state, locoState, combatLocoState, actionExit, CastExitDur);
                 built++;
             }
             return built;

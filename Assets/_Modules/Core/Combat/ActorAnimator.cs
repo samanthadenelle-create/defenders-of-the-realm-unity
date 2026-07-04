@@ -91,11 +91,21 @@ namespace DeNelle.Core.Combat
 
         // ── IActorAnimator ───────────────────────────────────────────────────────
 
+        // Short critically-damped smoothing on the Speed feed (owner 2026-07-04, KnightMocap V1).
+        // HeroLocomotion feeds Speed = travel velocity, which snaps 0→_moveSpeed(6) in a single
+        // frame on digital (keyboard/stick-to-max) input; an un-damped write jumps the 1-D blend
+        // straight past the WALK band (~2) into RUN, so the walk clip never reads. Unity's damped
+        // SetFloat overload eases the animator's Speed toward the target over ~SpeedDampTime, so a
+        // start/stop ramps idle→walk→run (and back) through the walk pose. Universal (also smooths
+        // enemy locomotion); near-zero cost. The RAW velocity is unchanged — only the animator's
+        // view of it is smoothed.
+        private const float SpeedDampTime = 0.12f;
+
         public void SetLocomotion(float worldSpeed)
         {
             EnsureAnimator();
             if (_animator != null && Has(AnimParams.SpeedHash))
-                _animator.SetFloat(AnimParams.SpeedHash, worldSpeed);
+                _animator.SetFloat(AnimParams.SpeedHash, worldSpeed, SpeedDampTime, Time.deltaTime);
         }
 
         public void SetCombatStance(bool inCombat)
