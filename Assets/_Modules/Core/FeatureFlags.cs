@@ -148,15 +148,17 @@ namespace DeNelle.Core
         /// Title/HeroSelect -> PetSelect -> Castle step: PlayerPrefs "ff.bypasspetselect" = 0.</summary>
         public static bool BypassPetSelect => Get("bypasspetselect", defaultOn: true);
 
-        /// <summary>WO-467 runtime variant (owner 2026-06-23, "world seam still broken" x3): when ON
-        /// (default), <c>RuntimeRegionGate</c> self-bootstraps on a hub scene and BUILDS the castle↔OuterWorld
+        /// <summary>WO-467 runtime variant (owner 2026-06-23, "world seam still broken" x3): when ON,
+        /// <c>RuntimeRegionGate</c> self-bootstraps on a hub scene and BUILDS the castle↔OuterWorld
         /// crossing from the <c>region-gates.json</c> recipe AT RUNTIME — a walkable approach deck welded to the
         /// source navmesh (runtime <c>NavMeshSurface</c> re-bake, NO editor bake), a deck-seated
         /// <c>SceneTransitionTrigger</c> masked-warp for the hero, a GUID-keyed <c>HeroLinkCrossing</c> entry/dest
         /// pair, gate-funnel choke panels, and (once OuterWorld is additive-loaded) a narrow cross-scene
-        /// <c>NavMeshLink</c> for AI. No scene hand-edit, no stale baked coord. Flip OFF to fall back to the
-        /// editor-baked seam: PlayerPrefs "ff.runtimeworldseam" = 0. Spec: WORK_ORDER_467 §"Runtime auto-seam".</summary>
-        public static bool RuntimeWorldSeam => Get("runtimeworldseam", defaultOn: true);
+        /// <c>NavMeshLink</c> for AI. No scene hand-edit, no stale baked coord. Default OFF (2026-07-04):
+        /// SUPERSEDED by merged-world (ff.mergedworld ON) — the seam infrastructure is now DEAD CODE pending
+        /// removal. Flip to PlayerPrefs "ff.runtimeworldseam" = 1 only to test legacy two-scene seam during
+        /// due-diligence unwiring. Spec: WORK_ORDER_467 §"Runtime auto-seam".</summary>
+        public static bool RuntimeWorldSeam => Get("runtimeworldseam", defaultOn: false);
 
         /// <summary>WO-491 — when ON (default), low-HP orcs drive the <c>Injured</c> wounded-stance
         /// locomotion (ActorAnimator.SetInjured from Enemy.DriveAnimator below the HP cutoff). This is
@@ -291,7 +293,7 @@ namespace DeNelle.Core
         /// (disable-not-delete). Default OFF until the merged scene is baked + owner felt-verified
         /// (ten-year-old test: descend the ramp, seam invisible). PlayerPrefs "ff.mergedworld" = 1 to
         /// preview once the bake lands.</summary>
-        public static bool MergedWorld => Get("mergedworld", defaultOn: false);
+        public static bool MergedWorld => Get("mergedworld", defaultOn: true);   // TEST-BUILD 07-04: ON for owner merged-world felt-walk; merge lane commit HELD until verified + felt-approved (set final default per owner verdict)
 
         /// <summary>The editor-baked south CastleBridgeSeam deck (CastleHubBuilder.AddCastleBridgeSeam).
         /// Default OFF (2026-06-29): the editor deck stacked a 2nd navmesh deck on top of the runtime
