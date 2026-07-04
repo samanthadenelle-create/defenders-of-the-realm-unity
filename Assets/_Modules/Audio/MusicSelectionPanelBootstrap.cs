@@ -51,7 +51,7 @@ namespace DeNelle.Audio
             }
 
             // GLOBAL dedupe (across ALL loaded scenes) — not per-scene. The
-            // additive OuterWorld load fires sceneLoaded with a new scene and a
+            // additive scene load fires sceneLoaded with a new scene and a
             // per-scene check missed the live instance, spawning a duplicate.
             foreach (var existing in Object.FindObjectsByType<MusicSelectionPanel>(
                          FindObjectsInactive.Include))

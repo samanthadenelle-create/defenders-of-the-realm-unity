@@ -956,7 +956,7 @@ namespace DeNelle.Audio
         {
             /// <summary>In/around the village (town, home). Default track: Village.</summary>
             Village,
-            /// <summary>In the open world (OuterWorld regions). Default track: Overworld.</summary>
+            /// <summary>In the open world. Default track: Overworld.</summary>
             Overworld,
         }
 
@@ -979,8 +979,8 @@ namespace DeNelle.Audio
         /// Enters an ambient context and plays its music — the player's chosen
         /// track for that context (WO-162) if one is set and available, otherwise
         /// the context default (Village / Overworld). This is the ONE entry point
-        /// for "play the explore music": the Village scene loader, an OuterWorld
-        /// region trigger, and combat-end all route through here so the right track
+        /// for "play the explore music": the Village scene loader, exploration regions,
+        /// and combat-end all route through here so the right track
         /// (and the player's pick) always wins. Combat/Victory/Defeat call
         /// PlayMusic directly and OVERRIDE — they never come through here.
         /// </summary>

@@ -41,7 +41,7 @@ namespace DeNelle.Audio
         Victory,
         /// <summary>Battle-loss sting. Default volume 0.5. Does not loop.</summary>
         Defeat,
-        /// <summary>Open-world (OuterWorld) exploration ambient. Default volume 0.4 (soft — long sessions). WO-171.</summary>
+        /// <summary>Open-world exploration ambient. Default volume 0.4 (soft — long sessions). WO-171.</summary>
         Overworld,
         /// <summary>Arena raid BGM — "Echo's theme" (echo_theme.mp3). Default volume 0.4 (soft background). Loops.</summary>
         Arena,
