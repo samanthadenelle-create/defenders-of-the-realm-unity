@@ -230,30 +230,50 @@ namespace DeNelle.Editor
                 : "  Cleric.controller: COPY FAILED");
         }
 
-        /// <summary>Build the Humanoid OrcWarband controller: a Speed blend (Idle/Walk/
-        /// Run) + Attack (trigger) + Death (Dead bool), the params Enemy.cs drives. Hit
-        /// is declared via Enemy's guard only if a react clip exists; we leave it to the
-        /// param-guard (no flinch clip in the library) so SetTrigger("Hit") safely no-ops.</summary>
+        /// <summary>Build the Humanoid OrcWarband controller to the BuildOrcHumanoidController
+        /// blend-tree STANDARD: a Speed 1-D locomotion blend (idle@0 / walk@1.5 / run@3.5,
+        /// useAutomaticThresholds=false) + an InjuredLocomotion sub-tree (Injured bool) +
+        /// Attack / Hit / Death states — the params Enemy.cs / ActorAnimator drive.
+        /// FIXES THE SLIDE (WO route-through-AccuRIG): the prior build looked for a
+        /// non-existent "simple_walk"/"walk" clip, so the Locomotion tree shipped with NO
+        /// walk child (only idle@0 + run@5). A moving orc (~2.4–3.0 m/s) never reached the
+        /// run threshold and stayed in a near-idle blend → slid at walk speed. The walk clip
+        /// is the SAME one OrcHumanoid uses ("standing walk forward"), and the thresholds are
+        /// the same orc-speed-tuned idle@0 / walk@1.5 / run@3.5 (NOT the old walk@2.6 / run@5
+        /// values the orc speed never crossed). Injured clips give the wounded low-HP stance.</summary>
         private static void BuildOrcController(List<string> report)
         {
             string path = EnemyDir + "OrcWarband.controller";
 
+            // Locomotion / shared clips — the EXACT Assets/Action sources BuildOrcHumanoidController
+            // references (walk = "standing walk forward", the OrcHumanoid walk clip — the slide fix).
             AnimationClip idle   = LoadClip("Orc Idle") ?? LoadClip("standing idle 01");
-            AnimationClip walk   = LoadClip("simple_walk") ?? LoadClip("walk");
+            AnimationClip walk   = LoadClip("standing walk forward");
             AnimationClip run    = LoadClip("standing run forward");
             AnimationClip attack = LoadClip("Sword And Shield Attack");
+            AnimationClip hit    = LoadClipAtPath("Assets/Action/Shared/Shared_Hit_Reaction.fbx");
             AnimationClip death  = LoadClip("Falling Back Death") ?? LoadClip("Dying") ?? LoadClip("Defeated");
+
+            // Injured (wounded) locomotion sub-tree — same source clips as BuildOrcHumanoidController.
+            AnimationClip injIdle = LoadClipAtPath("Assets/Action/Enemies/injured idle.fbx");
+            AnimationClip injWalk = LoadClipAtPath("Assets/Action/Enemies/injured walk.fbx");
+            AnimationClip injRun  = LoadClipAtPath("Assets/Action/Enemies/injured run.fbx");
 
             AssetDatabase.DeleteAsset(path);
             var ctrl = AnimatorController.CreateAnimatorControllerAtPath(path);
-            ctrl.AddParameter("Speed",  AnimatorControllerParameterType.Float);
-            ctrl.AddParameter("Attack", AnimatorControllerParameterType.Trigger);
-            ctrl.AddParameter("Hit",    AnimatorControllerParameterType.Trigger);
-            ctrl.AddParameter("Dead",   AnimatorControllerParameterType.Bool);
+            ctrl.AddParameter("Speed",   AnimatorControllerParameterType.Float);
+            ctrl.AddParameter("Attack",  AnimatorControllerParameterType.Trigger);
+            ctrl.AddParameter("Hit",     AnimatorControllerParameterType.Trigger);
+            ctrl.AddParameter("Dead",    AnimatorControllerParameterType.Bool);
+            ctrl.AddParameter("Injured", AnimatorControllerParameterType.Bool);
 
             var sm = ctrl.layers[0].stateMachine;
 
-            // Locomotion — 1-D blend on Speed (orc moveSpeed ~2.4–2.8 lands in walk).
+            // Locomotion — 1-D blend on Speed. ORC-SPEED-TUNED thresholds idle@0 / walk@1.5 /
+            // run@3.5 (mirrors BuildOrcHumanoidController): orcs move ~2.09–3.04 m/s, so walk@1.5
+            // covers the whole range and run@3.5 catches the fast end / chase rep. CRITICAL:
+            // useAutomaticThresholds=false so the explicit thresholds stick (Unity defaults true
+            // and overwrites them, skipping walk — the classic slide bug).
             var loco = sm.AddState("Locomotion");
             sm.defaultState = loco;
             var blend = new BlendTree
@@ -265,8 +285,36 @@ namespace DeNelle.Editor
             loco.motion = blend;
             int n = 0;
             if (idle != null) { blend.AddChild(idle, 0f);   n++; }
-            if (walk != null) { blend.AddChild(walk, 2.6f); n++; }
-            if (run  != null) { blend.AddChild(run,  5f);   n++; }
+            if (walk != null) { blend.AddChild(walk, 1.5f); n++; } // orc-speed-tuned walk threshold
+            if (run  != null) { blend.AddChild(run,  3.5f); n++; } // orc-speed-tuned run threshold
+
+            // Injured locomotion — a SECOND 1-D Speed blend entered on Injured==true. Falls back
+            // to the healthy loco clips if the injured clips are absent (state never empty).
+            var injuredState = sm.AddState("InjuredLocomotion");
+            var injBlend = new BlendTree
+            {
+                name = "InjuredLocomotion", blendType = BlendTreeType.Simple1D,
+                blendParameter = "Speed", useAutomaticThresholds = false
+            };
+            AssetDatabase.AddObjectToAsset(injBlend, ctrl);
+            injuredState.motion = injBlend;
+            int injN = 0;
+            if (injIdle != null) { injBlend.AddChild(injIdle, 0f);   injN++; }
+            if (injWalk != null) { injBlend.AddChild(injWalk, 1.5f); injN++; }
+            if (injRun  != null) { injBlend.AddChild(injRun,  3.5f); injN++; }
+            if (injN == 0)
+            {
+                if (idle != null) injBlend.AddChild(idle, 0f);
+                if (walk != null) injBlend.AddChild(walk, 1.5f);
+                if (run  != null) injBlend.AddChild(run,  3.5f);
+            }
+            // Loco <-> InjuredLocomotion on the Injured bool.
+            var toInjured = loco.AddTransition(injuredState);
+            toInjured.hasExitTime = false; toInjured.duration = 0.2f;
+            toInjured.AddCondition(AnimatorConditionMode.If, 0f, "Injured");
+            var fromInjured = injuredState.AddTransition(loco);
+            fromInjured.hasExitTime = false; fromInjured.duration = 0.2f;
+            fromInjured.AddCondition(AnimatorConditionMode.IfNot, 0f, "Injured");
 
             // Attack — Any → Attack on the trigger, snappy, back to Locomotion.
             if (attack != null)
@@ -275,10 +323,22 @@ namespace DeNelle.Editor
                 st.motion = attack;
                 st.speed  = 1.15f;
                 var t = sm.AddAnyStateTransition(st);
-                t.hasExitTime = false; t.duration = 0.05f; t.canTransitionToSelf = false;
+                t.hasExitTime = false; t.duration = 0.1f; t.canTransitionToSelf = false;
                 t.AddCondition(AnimatorConditionMode.If, 0f, "Attack");
                 var back = st.AddTransition(loco);
-                back.hasExitTime = true; back.exitTime = 0.8f; back.duration = 0.08f;
+                back.hasExitTime = true; back.exitTime = 0.8f; back.duration = 0.2f;
+            }
+
+            // Hit — Any → Hit on the trigger, back to Locomotion (the flinch the param drives).
+            if (hit != null)
+            {
+                var st = sm.AddState("Hit");
+                st.motion = hit;
+                var t = sm.AddAnyStateTransition(st);
+                t.hasExitTime = false; t.duration = 0.1f; t.canTransitionToSelf = false;
+                t.AddCondition(AnimatorConditionMode.If, 0f, "Hit");
+                var back = st.AddTransition(loco);
+                back.hasExitTime = true; back.exitTime = 0.8f; back.duration = 0.2f;
             }
 
             // Death — Any → Death while Dead==true, no exit (stays down until destroyed).
@@ -287,15 +347,17 @@ namespace DeNelle.Editor
                 var st = sm.AddState("Death");
                 st.motion = death;
                 var t = sm.AddAnyStateTransition(st);
-                t.hasExitTime = false; t.duration = 0.05f; t.canTransitionToSelf = false;
+                t.hasExitTime = false; t.duration = 0.15f; t.canTransitionToSelf = false;
                 t.AddCondition(AnimatorConditionMode.If, 0f, "Dead");
             }
 
             EditorUtility.SetDirty(ctrl);
-            report.Add($"  OrcWarband.controller built: Locomotion({n} clips)" +
+            report.Add($"  OrcWarband.controller built: Locomotion({n} clips idle/walk/run)" +
+                       $" + Injured({injN} clips)" +
                        $"{(attack != null ? " + Attack" : " + [no attack clip]")}" +
+                       $"{(hit != null ? " + Hit" : " + [no hit clip]")}" +
                        $"{(death != null ? " + Death" : " + [no death clip]")} " +
-                       "[Speed/Attack/Hit/Dead] ✓");
+                       "[Speed/Attack/Hit/Dead/Injured] ✓");
         }
 
         /// <summary>WO-445 — build the Humanoid LargeHumanoid.controller for the big brutes
@@ -374,6 +436,28 @@ namespace DeNelle.Editor
         {
             string path = ActionDir + fbxBaseName + ".fbx";
             var assets = AssetDatabase.LoadAllAssetsAtPath(path);
+            if (assets == null || assets.Length == 0) return null;
+            AnimationClip fallback = null;
+            foreach (var a in assets)
+            {
+                if (!(a is AnimationClip clip)) continue;
+                if (clip.name.StartsWith("__preview__")) continue;
+                string nm = clip.name.ToLowerInvariant();
+                if (nm.Contains("t-pose") || nm.Contains("tpose") || nm.Contains("bind"))
+                {
+                    fallback ??= clip;
+                    continue;
+                }
+                return clip;
+            }
+            return fallback;
+        }
+
+        // Like LoadClip but takes a FULL project path (LoadClip only reaches the
+        // Assets/Action/ root; the injured/hit clips live in Shared/ and Enemies/).
+        private static AnimationClip LoadClipAtPath(string fullPath)
+        {
+            var assets = AssetDatabase.LoadAllAssetsAtPath(fullPath);
             if (assets == null || assets.Length == 0) return null;
             AnimationClip fallback = null;
             foreach (var a in assets)

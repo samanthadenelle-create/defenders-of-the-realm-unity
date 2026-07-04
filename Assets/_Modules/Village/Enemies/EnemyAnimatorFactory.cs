@@ -144,6 +144,21 @@ namespace DeNelle.Village
                 anim.runtimeAnimatorController = ctrl;
                 FlowTrace.Once("Enemy", $"anim-{modelName}",
                     $"animator: model '{modelName}' -> rig {rig} -> controller '{ctrlName}' OK");
+                // WO route-through-AccuRIG (§12 self-report): a Humanoid controller's clips can
+                // ONLY pose the rig through a valid Humanoid avatar — with none, the Animator holds
+                // the bind/T-pose while the NavMeshAgent slides it (the "sliding statue" ship path).
+                // Mirror HeroBodySwapper.cs:475 (avatar != null && avatar.isValid). Do NOT hide the
+                // enemy — just self-report LOUDLY so a headless run pinpoints the un-mapped model
+                // (enemies must still spawn). Only meaningful for isHuman animators.
+                if (anim.isHuman && (anim.avatar == null || !anim.avatar.isValid))
+                {
+                    FlowTrace.Fail("Enemy",
+                        $"animator: model '{modelName}' -> rig {rig} -> controller '{ctrlName}' bound but " +
+                        "the Animator has NO valid Humanoid avatar (avatar=" +
+                        $"{(anim.avatar == null ? "<null>" : "invalid")}) — a humanoid clip will hold the " +
+                        "bind/T-pose while the agent slides it (the sliding-statue path). Re-import the " +
+                        "model as Humanoid with a valid avatar (PeopleCharacterImporter).");
+                }
             }
             else
             {
