@@ -260,6 +260,17 @@ namespace DeNelle.DevTools
                 // "POPUP_OPEN_FAILED :: ..." so break-log ranks them; per-panel verdicts go
                 // into autopilot-summary.json (popupClose[]).
                 yield return RunPhase("AssertPopupClose", AssertPopupClose());
+                // UI-fidelity capture for the DOCK overlays the PanelRouter sweep can't reach
+                // (ClanChat/Leaderboard/Jukebox/HelpMenu open via their own singleton Toggle()/
+                // Open(), not PanelRouter.Open) + a castle-facing moat-ring beauty angle. Both
+                // run BEFORE TriggerWave so no battle-lock rejects the dock opens. Guarded — a
+                // capture failure logs + continues; captures render only graphics-on.
+                yield return RunPhase("CaptureDockOverlays", CaptureDockOverlays());
+                // Moat completeness oracle — hub-only, runs in play-mode AFTER a settle wait so
+                // its reachability leg sees a live navmesh (mirrors CastleNavTopologyDiag). Emits
+                // its own MOAT_COMPLETE / MOAT_INCOMPLETE marker to break-log.
+                yield return RunPhase("VerifyMoatOracle", VerifyMoatOracle());
+                yield return RunPhase("CaptureMoatRing", CaptureMoatRing());
                 yield return RunPhase("TriggerWave", TriggerWave());
                 // WO-452 tranche C: combat invariants during the (just-triggered) wave — hero HP
                 // never goes negative while still alive, >=1 placed tower actually fired in the
@@ -787,6 +798,9 @@ namespace DeNelle.DevTools
                 case "AssertCombatInvariants": return 20f;    // WO-452 C — ~12s defense window + slack
                 case "OpenEachHUDPanel":  return HudPanelTimeout * 8f;
                 case "AssertPopupClose":  return 100f;  // WO-597: ~13 registered ids x (settle + bounded 3s close-wait worst case) + the dialogue-card row
+                case "CaptureDockOverlays": return 30f;  // 4 dock overlays x (open + 2-frame render + capture + settle close)
+                case "VerifyMoatOracle":  return 15f;    // 1.5s settle + side-effect-free oracle
+                case "CaptureMoatRing":   return 40f;    // 5 shots (overview + 4 cardinal seams) x (spawn cam + 2-frame render + capture + destroy)
                 case "TriggerWave":       return WaveTimeout;
                 case "AttemptExitCastle": return ExitTimeout;
                 case "HomeReturnRoundTrip": return HomeReturnTimeout;   // WO-602 — walk out 20m + walk back + warp
@@ -1753,11 +1767,21 @@ namespace DeNelle.DevTools
         // -nographics fleet writes a blank frame. Lands in persistentDataPath/ui-shots/.
         private static void CaptureUiPanel(string name)
         {
+            CaptureRawShot("panel_" + name + ".png");
+        }
+
+        // Shared best-effort screenshot writer — the ONE graphics-on guard every capture
+        // route uses (renders only with graphics ON; a -nographics fleet writes a blank
+        // frame, never an error). Lands in persistentDataPath/ui-shots/ next to the
+        // panel_/bridge_ shots. Any arbitrary file name (panel_<Screen>.png, moat_ring.png,
+        // <scene>.png) routes through here so there is exactly one capture path to maintain.
+        private static void CaptureRawShot(string fileName)
+        {
             try
             {
                 string dir = System.IO.Path.Combine(Application.persistentDataPath, "ui-shots");
                 System.IO.Directory.CreateDirectory(dir);
-                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, "panel_" + name + ".png"));
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, fileName));
             }
             catch { /* capture is best-effort; never break the drive loop */ }
         }
@@ -2641,6 +2665,265 @@ namespace DeNelle.DevTools
             }
             catch { /* capture is best-effort */ }
         }
+
+        // =====================================================================
+        //  PHASE: CaptureDockOverlays
+        //  UI-fidelity capture for the DOCK / non-PanelRouter overlays that
+        //  OpenEachHUDPanel misses. Those screens are opened by their own
+        //  singleton Toggle()/Open()/ToggleOverlay() (the HUD kit dock buttons),
+        //  NOT via PanelRouter.Open, so the registry-driven panel sweep never
+        //  shoots them. For each: resolve the MonoBehaviour singleton, open it,
+        //  wait a frame so the modal builds + renders, CaptureUiPanel("<Name>")
+        //  (writes panel_<Name>.png, graphics-on), then close via the shared
+        //  PanelManager arbiter (all four register a PanelHandle). Fully guarded —
+        //  a surface that fails to resolve/open logs FlowTrace.Warn and the pass
+        //  continues to the next; one missing dock never aborts the run.
+        // =====================================================================
+        private IEnumerator CaptureDockOverlays()
+        {
+            int shot = 0, tried = 0;
+
+            // ClanChat — DeNelle.HUD.ClanChatPanel, opened by the dock via Toggle().
+            tried++;
+            var clan = UnityEngine.Object.FindAnyObjectByType<DeNelle.HUD.ClanChatPanel>();
+            if (clan == null)
+                FlowTrace.Warn("Auto", "CaptureDockOverlays: no ClanChatPanel in scene — skipping ClanChat shot.");
+            else
+            {
+                bool opened = false;
+                try { clan.Toggle(); opened = true; }
+                catch (Exception ex) { FlowTrace.Warn("Auto", "CaptureDockOverlays: ClanChat Toggle threw " + ex.Message); }
+                if (opened)
+                {
+                    yield return null;                    // let the modal build + render this frame
+                    CaptureUiPanel("ClanChat");           // -> panel_ClanChat.png
+                    yield return null;                    // flush ScreenCapture with the panel still up
+                    shot++;
+                    FlowTrace.Step("Auto", "CaptureDockOverlays: captured panel_ClanChat.png.");
+                    try { PanelManager.CloseOpen(); } catch (Exception ex) { FlowTrace.Warn("Auto", "CaptureDockOverlays: ClanChat close threw " + ex.Message); }
+                    yield return Wait(SettleSeconds);
+                }
+            }
+
+            // Leaderboard — DeNelle.HUD.LeaderboardPanel, opened via Toggle().
+            tried++;
+            var lb = UnityEngine.Object.FindAnyObjectByType<DeNelle.HUD.LeaderboardPanel>();
+            if (lb == null)
+                FlowTrace.Warn("Auto", "CaptureDockOverlays: no LeaderboardPanel in scene — skipping Leaderboard shot.");
+            else
+            {
+                bool opened = false;
+                try { lb.Toggle(); opened = true; }
+                catch (Exception ex) { FlowTrace.Warn("Auto", "CaptureDockOverlays: Leaderboard Toggle threw " + ex.Message); }
+                if (opened)
+                {
+                    yield return null;
+                    CaptureUiPanel("Leaderboard");        // -> panel_Leaderboard.png
+                    yield return null;
+                    shot++;
+                    FlowTrace.Step("Auto", "CaptureDockOverlays: captured panel_Leaderboard.png.");
+                    try { PanelManager.CloseOpen(); } catch (Exception ex) { FlowTrace.Warn("Auto", "CaptureDockOverlays: Leaderboard close threw " + ex.Message); }
+                    yield return Wait(SettleSeconds);
+                }
+            }
+
+            // Jukebox — DeNelle.Audio.MusicSelectionPanel, opened via Open().
+            tried++;
+            var juke = UnityEngine.Object.FindAnyObjectByType<DeNelle.Audio.MusicSelectionPanel>();
+            if (juke == null)
+                FlowTrace.Warn("Auto", "CaptureDockOverlays: no MusicSelectionPanel in scene — skipping Jukebox shot.");
+            else
+            {
+                bool opened = false;
+                try { juke.Open(); opened = true; }
+                catch (Exception ex) { FlowTrace.Warn("Auto", "CaptureDockOverlays: Jukebox Open threw " + ex.Message); }
+                if (opened)
+                {
+                    yield return null;
+                    CaptureUiPanel("Jukebox");            // -> panel_Jukebox.png
+                    yield return null;
+                    shot++;
+                    FlowTrace.Step("Auto", "CaptureDockOverlays: captured panel_Jukebox.png.");
+                    try { PanelManager.CloseOpen(); } catch (Exception ex) { FlowTrace.Warn("Auto", "CaptureDockOverlays: Jukebox close threw " + ex.Message); }
+                    yield return Wait(SettleSeconds);
+                }
+            }
+
+            // HelpMenu — DeNelle.HUD.HelpMenu, exposes a static Instance + ToggleOverlay()/Close().
+            tried++;
+            var help = DeNelle.HUD.HelpMenu.Instance ?? UnityEngine.Object.FindAnyObjectByType<DeNelle.HUD.HelpMenu>();
+            if (help == null)
+                FlowTrace.Warn("Auto", "CaptureDockOverlays: no HelpMenu in scene — skipping HelpMenu shot.");
+            else
+            {
+                bool opened = false;
+                try { help.ToggleOverlay(); opened = true; }
+                catch (Exception ex) { FlowTrace.Warn("Auto", "CaptureDockOverlays: HelpMenu ToggleOverlay threw " + ex.Message); }
+                if (opened)
+                {
+                    yield return null;
+                    CaptureUiPanel("HelpMenu");           // -> panel_HelpMenu.png
+                    yield return null;
+                    shot++;
+                    FlowTrace.Step("Auto", "CaptureDockOverlays: captured panel_HelpMenu.png.");
+                    try { help.Close(); } catch (Exception ex) { FlowTrace.Warn("Auto", "CaptureDockOverlays: HelpMenu Close threw " + ex.Message); }
+                    yield return Wait(SettleSeconds);
+                }
+            }
+
+            _lastDetail = $"{shot}/{tried} dock overlays captured";
+            FlowTrace.Step("Auto", $"CaptureDockOverlays: {shot}/{tried} dock overlays captured (ClanChat/Leaderboard/Jukebox/HelpMenu).");
+        }
+
+        // =====================================================================
+        //  PHASE: CaptureMoatRing
+        //  A castle-facing MOAT-RING beauty angle (owner "you walk ON TOP of the
+        //  bridge" world, the same ui-shots review folder). The moat is a water
+        //  annulus of radius ~44..62 around origin (CastleMoatBuilder: MoatInner
+        //  44, MoatOuter 62); we frame the whole castle + moat from an ELEVATED
+        //  OBLIQUE angle. To avoid fighting the gameplay follow-camera (which
+        //  re-seats the main camera every LateUpdate), we spawn a SHORT-LIVED
+        //  capture camera at a HIGHER depth so it composites on top, shoot, then
+        //  destroy it. Renders only graphics-on (blank under -nographics); fully
+        //  guarded so a capture failure logs + continues. -> moat_ring.png
+        // =====================================================================
+        private IEnumerator CaptureMoatRing()
+        {
+            const float MoatOuterRadius  = 62f;   // = CastleMoatBuilder.MoatOuterRadius (band 44..62)
+            const float MoatCentreRadius = 53f;   // = CastleMoatBuilder.MoatCentreRadius (band centreline)
+
+            int shot = 0;
+
+            // ---- OVERVIEW: whole castle + moat from an elevated south-west oblique -------
+            // Distance chosen so the ~124m-wide ring sits inside a 55-deg FOV with headroom.
+            Vector3 overviewEye = new Vector3(MoatOuterRadius * 1.5f, MoatOuterRadius * 1.15f, -(MoatOuterRadius * 1.9f));
+            yield return CaptureFramedShot(overviewEye, new Vector3(0f, 3f, 0f), 55f, "moat_ring.png");
+            shot++;
+
+            // ---- PER-SEAM: one framed shot per cardinal bridge, from OUTSIDE looking down the
+            // crossing toward the castle (the "does the seam read as natural" review pairs). Each
+            // cardinal crossing is the south stone bridge yaw-rotated about origin (South 0 / West
+            // 90 / North 180 / East 270). Prefer the real RuntimeSeam_Bridge_<label> object's
+            // renderer-bounds centre; fall back to the cardinal radial at the moat centreline.
+            var cardinals = new (string label, float yaw, string suffix)[]
+            {
+                ("North", 180f, "N"), ("East", 270f, "E"), ("South", 0f, "S"), ("West", 90f, "W"),
+            };
+            foreach (var (label, yaw, suffix) in cardinals)
+            {
+                // Outward radial for this side = the south -Z direction rotated by the side's yaw.
+                Vector3 outward = (Quaternion.Euler(0f, yaw, 0f) * Vector3.back).normalized;
+
+                // Bridge centre: the real object if present (bounds centre), else the radial.
+                Vector3 centre = outward * MoatCentreRadius; centre.y = 1f;
+                var bridgeGo = GameObject.Find("RuntimeSeam_Bridge_" + label);
+                if (bridgeGo != null)
+                {
+                    Bounds bb = default; bool haveBounds = false;
+                    foreach (var r in bridgeGo.GetComponentsInChildren<Renderer>(true))
+                    {
+                        if (r == null) continue;
+                        if (!haveBounds) { bb = r.bounds; haveBounds = true; } else bb.Encapsulate(r.bounds);
+                    }
+                    if (haveBounds) centre = bb.center;
+                    FlowTrace.Step("Auto", $"CaptureMoatRing: framing seam '{label}' from RuntimeSeam_Bridge object @ {centre}.");
+                }
+                else
+                {
+                    FlowTrace.Warn("Auto", $"CaptureMoatRing: no RuntimeSeam_Bridge_{label} — using cardinal radial fallback @ {centre}.");
+                }
+
+                // Eye: outside the crossing + elevated, looking castle-ward (midway between the
+                // crossing and the plinth centre) so both the bridge deck and the wall read.
+                Vector3 eye = centre + outward * 34f + Vector3.up * 22f;
+                Vector3 lookTarget = new Vector3(centre.x * 0.45f, 3f, centre.z * 0.45f);
+                yield return CaptureFramedShot(eye, lookTarget, 52f, "moat_seam_" + suffix + ".png");
+                shot++;
+            }
+
+            _lastDetail = $"{shot} moat shots captured (moat_ring + 4 seams)";
+            FlowTrace.Step("Auto", $"CaptureMoatRing: {shot} shots captured (moat_ring.png + moat_seam_N/E/S/W.png).");
+        }
+
+        // Spawn a SHORT-LIVED capture camera at a HIGHER depth (so it composites over the
+        // gameplay follow-camera without disturbing its transform), point it eye->lookTarget,
+        // let it render two frames, write fileName, then destroy the camera. The ONE moat-shot
+        // camera path — reused by the overview + every per-seam shot. Renders only graphics-on
+        // (blank under -nographics); fully guarded so a miss logs via FlowTrace and continues.
+        private IEnumerator CaptureFramedShot(Vector3 eye, Vector3 lookTarget, float fov, string fileName)
+        {
+            GameObject camGo = null;
+            try
+            {
+                camGo = new GameObject("[AutoPilot_MoatShotCam]");
+                var cam = camGo.AddComponent<Camera>();
+                cam.depth = 100f;
+                cam.clearFlags = CameraClearFlags.Skybox;
+                cam.fieldOfView = fov;
+                camGo.transform.position = eye;
+                camGo.transform.rotation = Quaternion.LookRotation((lookTarget - eye).normalized, Vector3.up);
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("Auto", $"CaptureFramedShot({fileName}): capture-camera setup threw {ex.Message}");
+                if (camGo != null) UnityEngine.Object.Destroy(camGo);
+                yield break;
+            }
+
+            // Let the camera render a couple of frames before the capture flushes.
+            yield return null;
+            yield return null;
+            CaptureRawShot(fileName);
+            yield return null;   // flush ScreenCapture before we tear the camera down
+            if (camGo != null) UnityEngine.Object.Destroy(camGo);
+            FlowTrace.Step("Auto", $"CaptureFramedShot: captured {fileName} (eye={eye}).");
+        }
+
+        // =====================================================================
+        //  PHASE: VerifyMoatOracle
+        //  Runs the moat completeness oracle (CastleMoatBuilder.VerifyMoatComplete,
+        //  side-effect-free, logs its own MOAT_COMPLETE / MOAT_INCOMPLETE marker to
+        //  break-log). Its reachability leg needs a LIVE navmesh, so it must run in
+        //  PLAY-MODE AFTER the settle delay (mirrors CastleNavTopologyDiag's ~1.5s
+        //  wait for the RuntimeRegionGate rebake + additive OuterWorld load), NOT at
+        //  boot. Hub-only (the moat builds on MainCastle_Hall); skips cleanly on a
+        //  --scene override. Guarded — a throw logs + the run continues.
+        // =====================================================================
+        private IEnumerator VerifyMoatOracle()
+        {
+            if (ActiveScene() != GameplayScene)
+            {
+                _lastDetail = $"skipped (scene='{ActiveScene()}', not the castle hub)";
+                FlowTrace.Step("Auto", $"VerifyMoatOracle: not on '{GameplayScene}' (scene='{ActiveScene()}') — moat not built here, skipping.");
+                yield break;
+            }
+
+            // Settle: let the RuntimeRegionGate rebake + additive OuterWorld navmesh come live
+            // before the reachability leg probes it (else it self-reports INCONCLUSIVE).
+            yield return Wait(1.5f);
+
+            bool ok = false;
+            try { ok = DeNelle.Village.World.CastleMoatBuilder.VerifyMoatComplete(); }
+            catch (Exception ex) { FlowTrace.Warn("Auto", "VerifyMoatOracle: VerifyMoatComplete threw " + ex.Message); }
+
+            _lastDetail = ok ? "MOAT_COMPLETE" : "MOAT_INCOMPLETE (see break-log)";
+            FlowTrace.Step("Auto", $"VerifyMoatOracle: oracle returned {(ok ? "MOAT_COMPLETE" : "MOAT_INCOMPLETE")}.");
+        }
+
+        // TODO(front-end capture): Title + HeroSelect are NOT reachable from this driver's
+        // lifecycle. BootToGameplay deliberately SKIPS the Title->HeroSelect->MainCastle_Hall
+        // front-end (a headless bot can't drive those uGUI/UITK creation flows — see the
+        // BootToGameplay header) and jumps straight into the gameplay scene via
+        // SceneManager.LoadScene(GameplayScene). By the time this AutoPilotDriver's RunAll
+        // begins, the front-end scenes have already been bypassed, so there is no live Title/
+        // HeroSelect surface to CaptureUiPanel here without faking it. The clean hook would be
+        // a SEPARATE, EARLIER capture pass owned by the front-end scenes' own bootstraps (e.g.
+        // a one-frame ScreenCapture on TitleScreen/HeroSelect first-shown, gated by the same
+        // --autopilot / AUTOPILOT env flag AutoPilotInstaller reads), writing title.png /
+        // heroselect.png into the same persistentDataPath/ui-shots folder. That belongs in the
+        // Title/HeroSelect boot code, not this post-front-end driver — wiring it from here would
+        // require re-loading those scenes mid-run and driving their flows, which is exactly the
+        // headless-undriveable path BootToGameplay exists to avoid. Left unbuilt on purpose.
 
         private IEnumerator HomeReturnRoundTrip()
         {

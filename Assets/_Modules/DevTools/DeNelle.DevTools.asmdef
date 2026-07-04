@@ -6,6 +6,7 @@
         "DeNelle.Village",
         "DeNelle.Wallet",
         "DeNelle.HUD",
+        "DeNelle.Audio",
         "UniTask",
         "Unity.AI.Navigation"
     ],
