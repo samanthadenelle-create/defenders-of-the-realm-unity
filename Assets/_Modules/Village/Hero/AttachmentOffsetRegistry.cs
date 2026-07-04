@@ -137,9 +137,19 @@ namespace DeNelle.Village
             return n;
         }
 
-        // Read the raw JSON from the tool's data-path file first, then a Resources copy.
+        // RC3b FIX (2026-07-04): read the RESOURCES mirror FIRST — it is the ONE copy that actually
+        // SHIPS in a player build, so making it the canonical base means the runtime resolves the
+        // SAME offsets file in the Editor AND in a build (the 3-month editor≠build root cause was the
+        // reverse order: the Editor read the authoring dataPath file while the build silently fell to
+        // a stale Resources mirror, so the owner's dialed offsets never shipped). The authoring file
+        // (Assets/OffsetForge/offsets.json) is kept byte-synced into this mirror by the editor
+        // OffsetForgeMirrorSync postprocessor, so Resources-first loses nothing in the Editor. The
+        // dataPath file is retained ONLY as an Editor fallback for a not-yet-synced fresh edit.
         private static string ReadBaseJson()
         {
+            var ta = Resources.Load<TextAsset>(ResourcesPath);
+            if (ta != null && !string.IsNullOrEmpty(ta.text)) return ta.text;
+
             try
             {
                 string full = Path.Combine(Application.dataPath, DataPathRelative);
@@ -148,11 +158,9 @@ namespace DeNelle.Village
             }
             catch (Exception ex)
             {
-                FlowTrace.Warn("Offset", $"dataPath read failed: {ex.Message} -- trying Resources.");
+                FlowTrace.Warn("Offset", $"dataPath fallback read failed: {ex.Message}.");
             }
-
-            var ta = Resources.Load<TextAsset>(ResourcesPath);
-            return ta != null ? ta.text : null;
+            return null;
         }
 
         // Read the writable dev-override file (Application.persistentDataPath/offsets-dev.json).

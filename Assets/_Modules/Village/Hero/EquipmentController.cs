@@ -356,10 +356,23 @@ namespace DeNelle.Village
         // the path does NOT regress the existing look — only the sword keeps its proven -25°
         // nudge above. Inspector-exposed for tuning each family against the real rig with no
         // recompile. (Dagger reuses _swordGripEuler — same bladed archetype.)
-        [SerializeField] private Vector3 _staffGripEuler = new Vector3(0f, 0f, 0f);
-        [SerializeField] private Vector3 _wandGripEuler  = new Vector3(0f, 0f, 0f);
-        [SerializeField] private Vector3 _axeGripEuler   = new Vector3(0f, 0f, 0f);
-        [SerializeField] private Vector3 _maceGripEuler  = new Vector3(0f, 0f, 0f);
+        // RC5 FIX (2026-07-04): these were ZERO, so an un-corrected staff/wand/axe/mace inherited the
+        // bone's raw local axes and read SIDEWAYS across the torso (only sword/dagger had the proven
+        // nudge). The SHARED rig-hand-axis correction on this rig (KnightV3 CC_Base RightHand) is
+        // Y=+90 — it appears in EVERY felt-approved melee correction (sword_A via _swordGripEuler's
+        // +90, sword_G offset (0,90,0), the old axe_A offset (-25,90,0)). So the SANE DEFAULT that
+        // makes a NEW weapon inherit a working "points out of the fist" grip is +90 Y, plus the -25 X
+        // forward-lean only for BLADED heads (sword/dagger/axe). "Corrections teach the default"
+        // (WEAPON_ARMOR_ORIENT_LOGIC §4-step-5): axe now carries (-25,90,0) here and its redundant
+        // offsets.json entry is REMOVED — net rotation for axe_A is IDENTICAL (was default(0)∘offset
+        // (-25,90,0); now default(-25,90,0)∘no-offset), so no regression, but a new axe works.
+        // NEEDS-CAPTURE: staff/wand/mace exact forward-lean (0 vs -25) confirmed by the build capture;
+        // 0 tilt is the safe neutral for a symmetric shaft. These remain Inspector-tunable + CANON
+        // (never auto-overwritten). Any per-mesh delta still layers on top via offsets.json.
+        [SerializeField] private Vector3 _staffGripEuler = new Vector3(0f, 90f, 0f);
+        [SerializeField] private Vector3 _wandGripEuler  = new Vector3(0f, 90f, 0f);
+        [SerializeField] private Vector3 _axeGripEuler   = new Vector3(-25f, 90f, 0f);
+        [SerializeField] private Vector3 _maceGripEuler  = new Vector3(0f, 90f, 0f);
 
         // Cached base rotation for the current grip root (rig-derived + _swordGripEuler),
         // expressed in the hand bone's local space. ApplyHoldPose offsets from this.
@@ -776,11 +789,9 @@ namespace DeNelle.Village
             }
             else
             {
-                FlowTrace.Step("Equip", fullOverride
-                    ? "seat: GEOMETRY-VERTICAL — NormalizeInto (longest->+Y) + hilt-lower-half (owner vertical baseline + delta)"
-                    : (meleeSeat
-                        ? "seat: GEOMETRY — NormalizeInto (true wide-Y/narrow-XZ) + SeatByHandle (hilt-forward)"
-                        : "seat: GEOMETRY — NormalizeInto (bounds-true)"));
+                FlowTrace.Step("Equip", meleeSeat
+                    ? "seat: GEOMETRY — NormalizeInto (longest->+Y) + SeatHiltLowerHalf (hilt=lower half, blade +Y, deterministic, never flips)"
+                    : "seat: GEOMETRY — NormalizeInto (bounds-true)");
                 NormalizeInto(prop, gripRoot.transform, vis.heldLength);
                 // GRIP-POINT INFERENCE: NormalizeInto centres by BOUNDS (mid-shaft / mid-blade),
                 // not the grip. For the DEFAULT path SeatByHandle re-seats the inferred handle to
@@ -789,13 +800,18 @@ namespace DeNelle.Village
                 // on the lower-half hilt deterministically (width-spike only refines the grip Y).
                 if (meleeSeat)
                 {
-                    if (fullOverride)
-                        FlowTrace.Try("Equip", "SeatHiltLowerHalf", () => SeatHiltLowerHalf(prop, gripRoot.transform));
-                    else
-                        FlowTrace.Try("Equip", "SeatByHandle", () => SeatByHandle(prop, gripRoot.transform));
+                    // RC1/RC2 FIX (2026-07-04): ONE deterministic seat for ALL melee — SeatHiltLowerHalf.
+                    // The retired SeatByHandle branched on a crossguard width-spike vs a bottom-16%
+                    // fallback and could FLIP the weapon 180° based on which end read wider (per-mesh,
+                    // non-deterministic, and it broke in a player build where the FBX verts were
+                    // unreadable — the editor≠build core bug). The owner's canonical rule is FIXED:
+                    // hilt = LOWER HALF, blade points +Y, hand grips the hilt — never flips, and the
+                    // SAME result in editor and build. fullOverride still swaps the rotation model
+                    // (raw-euler override vs geometric grip) below; the SEAT is now single-path.
+                    FlowTrace.Try("Equip", "SeatHiltLowerHalf", () => SeatHiltLowerHalf(prop, gripRoot.transform));
                     // §12 instrumentation: prove the geometry path ran + report the seated grip
                     // shift (prop local Y = how far the grip moved to origin).
-                    FlowTrace.Step("Equip", $"trued+seated: grip-shift localY={prop.transform.localPosition.y:0.###} (geometry{(fullOverride ? "-vertical" : "")})");
+                    FlowTrace.Step("Equip", $"trued+seated: grip-shift localY={prop.transform.localPosition.y:0.###} (geometry hilt-lower-half{(fullOverride ? ", vertical-delta" : "")})");
                 }
             }
 
@@ -987,7 +1003,13 @@ namespace DeNelle.Village
             if (op.IsValid()) Addressables.Release(op);
         }
 
-        // ── SWORD GRIP-POINT INFERENCE ───────────────────────────────────────────────
+        // ── SWORD GRIP-POINT INFERENCE — ⚠ RETIRED 2026-07-04 (RC2) ──────────────────
+        // NO LONGER CALLED. Kept only as reference for why the single-path seat exists.
+        // This branched on a crossguard width-spike vs a bottom-16% fallback and could FLIP
+        // the weapon 180° based on which end read wider — non-deterministic per weapon, and it
+        // degraded to a blind fallback in a build (unreadable FBX verts) = the editor≠build bug.
+        // ALL melee now seat via the deterministic, never-flipping SeatHiltLowerHalf (below).
+        //
         // Owner's rule (asset-attachment-inference-engine, task #36):
         //   1. Longest axis -> Y (NormalizeInto already did this; we work in prop-local Y).
         //   2. Find the HILT = a WIDTH SPIKE: bin vertices along Y, measure the X/Z cross-
@@ -1824,8 +1846,9 @@ namespace DeNelle.Village
                 NormalizeInto(child, grt, held > 0f ? held : 1f);
                 if (melee)
                 {
-                    if (fullOverride) SeatHiltLowerHalf(child, grt);
-                    else              SeatByHandle(child, grt);
+                    // RC1/RC2: preview MUST match the unified runtime seat (single-path SeatHiltLowerHalf
+                    // for all melee) or the in-game Seating Editor preview diverges from what ships.
+                    SeatHiltLowerHalf(child, grt);
                 }
                 _seatEditMode = wantMode;
             }

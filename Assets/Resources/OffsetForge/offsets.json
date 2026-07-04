@@ -1,174 +1,189 @@
 {
-    "offsets": [
-        {
-            "id": "shield_A",
-            "rot": {
-                "x": -58.0,
-                "y": 16.0,
-                "z": -53.0
-            },
-            "pos": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-            },
-            "scale": 1.0,
-            "fullOverride": false
-        },
-        {
-            "id": "Knight",
-            "rot": {
-                "x": 0.0,
-                "y": -45.0,
-                "z": 0.0
-            },
-            "pos": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-            },
-            "scale": 1.0,
-            "fullOverride": false
-        },
-        {
-            "id": "crystals",
-            "rot": {
-                "x": 0.0,
-                "y": 37.0,
-                "z": -129.0
-            },
-            "pos": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-            },
-            "scale": 1.0,
-            "fullOverride": false
-        },
-        {
-            "id": "iron",
-            "rot": {
-                "x": 0.0,
-                "y": 37.0,
-                "z": -129.0
-            },
-            "pos": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-            },
-            "scale": 1.0,
-            "fullOverride": false
-        },
-        {
-            "id": "wood",
-            "rot": {
-                "x": 0.0,
-                "y": 37.0,
-                "z": -129.0
-            },
-            "pos": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-            },
-            "scale": 1.0,
-            "fullOverride": false
-        },
-        {
-            "id": "food",
-            "rot": {
-                "x": 0.0,
-                "y": 37.0,
-                "z": -129.0
-            },
-            "pos": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-            },
-            "scale": 1.0,
-            "fullOverride": false
-        },
-        {
-            "id": "sword_A",
-            "rot": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-            },
-            "pos": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-            },
-            "scale": 1.0,
-            "fullOverride": false
-        },
-        {
-            "id": "sword_D",
-            "rot": {
-                "x": 20.0,
-                "y": 16.0,
-                "z": 55.0
-            },
-            "pos": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-            },
-            "scale": 0.4699999988079071,
-            "fullOverride": true
-        },
-        {
-            "id": "sword_F",
-            "rot": {
-                "x": 0.0,
-                "y": -52.0,
-                "z": 48.0
-            },
-            "pos": {
-                "x": 0.0,
-                "y": 0.05999999865889549,
-                "z": 0.0
-            },
-            "scale": 1.0,
-            "fullOverride": false
-        },
-        {
-            "id": "sword_G",
-            "rot": {
-                "x": 0.0,
-                "y": 90.0,
-                "z": 0.0
-            },
-            "pos": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-            },
-            "scale": 1.0,
-            "fullOverride": false
-        },
-        {
-            "id": "bridge_south",
-            "rot": {
-                "x": 0.0,
-                "y": 90.0,
-                "z": 0.0
-            },
-            "pos": {
-                "x": -4.5,
-                "y": -0.5,
-                "z": -53.4
-            },
-            "scale": 1.0,
-            "scaleXyz": {
-                "x": 2.049,
-                "y": 1.0,
-                "z": 1.0
-            },
-            "fullOverride": false
-        }
-    ]
+  "offsets": [
+    {
+      "id": "shield_A",
+      "rot": {
+        "x": -58.0,
+        "y": 16.0,
+        "z": -53.0
+      },
+      "pos": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "fullOverride": false
+    },
+    {
+      "id": "Knight",
+      "rot": {
+        "x": 0.0,
+        "y": -45.0,
+        "z": 0.0
+      },
+      "pos": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "fullOverride": false
+    },
+    {
+      "id": "crystals",
+      "rot": {
+        "x": 0.0,
+        "y": 37.0,
+        "z": -129.0
+      },
+      "pos": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "fullOverride": false
+    },
+    {
+      "id": "iron",
+      "rot": {
+        "x": 0.0,
+        "y": 37.0,
+        "z": -129.0
+      },
+      "pos": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "fullOverride": false
+    },
+    {
+      "id": "wood",
+      "rot": {
+        "x": 0.0,
+        "y": 37.0,
+        "z": -129.0
+      },
+      "pos": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "fullOverride": false
+    },
+    {
+      "id": "food",
+      "rot": {
+        "x": 0.0,
+        "y": 37.0,
+        "z": -129.0
+      },
+      "pos": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "fullOverride": false
+    },
+    {
+      "id": "sword_A",
+      "rot": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "pos": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "fullOverride": false
+    },
+    {
+      "id": "sword_D",
+      "rot": {
+        "x": 20.0,
+        "y": 16.0,
+        "z": 55.0
+      },
+      "pos": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 0.4699999988079071,
+      "fullOverride": true
+    },
+    {
+      "id": "sword_F",
+      "rot": {
+        "x": 0.0,
+        "y": -52.0,
+        "z": 48.0
+      },
+      "pos": {
+        "x": 0.0,
+        "y": 0.059999998658895493,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "fullOverride": false
+    },
+    {
+      "id": "sword_G",
+      "rot": {
+        "x": 0.0,
+        "y": 90.0,
+        "z": 0.0
+      },
+      "pos": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "fullOverride": false
+    },
+    {
+      "id": "enemy_outpost",
+      "rot": {
+        "x": -90.0,
+        "y": 0.0,
+        "z": 104.0
+      },
+      "pos": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 8.0,
+      "fullOverride": false
+    },
+    {
+      "id": "bridge_south",
+      "rot": {
+        "x": 0.0,
+        "y": 90.0,
+        "z": 0.0
+      },
+      "pos": {
+        "x": -4.5,
+        "y": -0.5,
+        "z": -53.4
+      },
+      "scale": 1.0,
+      "scaleXyz": {
+        "x": 2.049,
+        "y": 1.0,
+        "z": 1.0
+      },
+      "fullOverride": false
+    }
+  ]
 }

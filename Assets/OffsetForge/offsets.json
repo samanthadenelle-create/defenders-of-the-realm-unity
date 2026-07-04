@@ -151,21 +151,6 @@
             "fullOverride": false
         },
         {
-            "id": "axe_A",
-            "rot": {
-                "x": -25.0,
-                "y": 90.0,
-                "z": 0.0
-            },
-            "pos": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-            },
-            "scale": 1.0,
-            "fullOverride": false
-        },
-        {
             "id": "enemy_outpost",
             "rot": {
                 "x": -90.0,
