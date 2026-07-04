@@ -296,8 +296,14 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.Scrim(_ui.transform, onTapClose: () => _vm?.Close());
 
             // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header + ONE Close.
+            // PORTRAIT-CONFORM (owner 2026-07-04, "use the template for UI"): the Merchant_Panel
+            // Blink art is PORTRAIT (1005x1507, aspect ~0.667). The panel rect must match that aspect
+            // or the frame stretches into a landscape slab (the delivered bug). A ~0.35w x 0.93h rect
+            // on 16:9 ≈ 672x1004px (aspect ~0.669) renders the frame TALL like template.png; the body
+            // content below is fraction-anchored inside layout.body, so the two columns re-flow into
+            // tall/narrow portrait columns automatically.
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Party Shop",
-                new Vector2(0.12f, 0.06f), new Vector2(0.88f, 0.94f), () => _vm?.Close(),
+                new Vector2(0.325f, 0.035f), new Vector2(0.675f, 0.965f), () => _vm?.Close(),
                 headerX0: 0.04f, headerX1: 0.96f, frameName: RpgUiCatalog.FrameMerchant,
                 medallionIcon: "sword");
             var panel = chrome.content.transform;
@@ -377,7 +383,7 @@ namespace DeNelle.Village.Hero
             _contentRoot = new GameObject("Content", typeof(RectTransform));
             _contentRoot.transform.SetParent(bodyHost, false);
             var cr = _contentRoot.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0.04f, 0.12f); cr.anchorMax = new Vector2(0.40f, 0.645f);
+            cr.anchorMin = new Vector2(0.04f, 0.12f); cr.anchorMax = new Vector2(0.52f, 0.645f);   // owner 07-04: widen list column (36%->48%) so item name + "Requires Lv" tag stop crowding in portrait
             cr.offsetMin = Vector2.zero; cr.offsetMax = Vector2.zero;
 
             // The 3D render preview pane (WO-501 owner point 3) beside the slim list.
@@ -799,7 +805,11 @@ namespace DeNelle.Village.Hero
         // and a LARGE price. Built once in BuildChrome; repainted per Render via RenderPreview.
         private void BuildPreviewPane(Transform panel)
         {
-            _previewRoot = ElarionUiKit.Well(panel, new Vector2(0.42f, 0.17f), new Vector2(0.96f, 0.70f));
+            // PORTRAIT-CONFORM (owner 2026-07-04): align the preview column to the SAME tall band as
+            // the item list (0.12→0.645) so the two columns read as side-by-side portrait columns
+            // under the filter stack, instead of a short-and-wide landscape pane. Its internal
+            // square/specs/price are pane-relative, so they scale with the taller/narrower column.
+            _previewRoot = ElarionUiKit.Well(panel, new Vector2(0.54f, 0.12f), new Vector2(0.96f, 0.645f));   // owner 07-04: narrowed to pair with the widened list column (no overlap; portrait breathing room)
             var wImg = _previewRoot.GetComponent<Image>();
             if (wImg != null)
             {
