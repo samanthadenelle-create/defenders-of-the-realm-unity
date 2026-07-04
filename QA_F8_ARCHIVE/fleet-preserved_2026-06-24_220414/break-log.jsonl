@@ -1,0 +1,128 @@
+﻿{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.106290340423584,"utc":"2026-06-24T14:17:24.4193692Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.3923871517181398,"utc":"2026-06-24T14:17:24.7048621Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":44.068267822265628,"utc":"2026-06-24T14:18:06.3799355Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":44.69952392578125,"utc":"2026-06-24T14:18:07.0112162Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] love the screen can we add some buffs and stats to weapons to make them more than cosmetic?","stack":"","scene":"MainCastle_Hall","t":121.1476058959961,"utc":"2026-06-24T14:19:23.4582985Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] this NPC is floatinf (think this is lumbermill","stack":"","scene":"MainCastle_Hall","t":181.14256286621095,"utc":"2026-06-24T14:20:23.4513526Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 75s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":237.26315307617188,"utc":"2026-06-24T14:21:19.5708907Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] might be logic error in the store or maybe gold inst passed in why it would explain why in store i cant afford, but in castle scene i have gold","stack":"","scene":"MainCastle_Hall","t":254.61587524414063,"utc":"2026-06-24T14:21:36.9238190Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 75s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":343.18280029296877,"utc":"2026-06-24T14:23:05.4889365Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] text overlap","stack":"","scene":"MainCastle_Hall","t":361.1828918457031,"utc":"2026-06-24T14:23:23.4886525Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] w","stack":"","scene":"MainCastle_Hall","t":371.4012756347656,"utc":"2026-06-24T14:23:33.7063552Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] no background and some shapes?","stack":"","scene":"MainCastle_Hall","t":387.9359436035156,"utc":"2026-06-24T14:23:50.2404765Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] music should be battle miusic in here but town music playing","stack":"","scene":"MainCastle_Hall","t":474.64453125,"utc":"2026-06-24T14:25:16.9477582Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] resources skill points and compass not needed. exiting playtest, lets fix the refine battle hud and scene","stack":"","scene":"MainCastle_Hall","t":544.9896240234375,"utc":"2026-06-24T14:26:27.2911832Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.1162540912628176,"utc":"2026-06-24T14:39:50.6792717Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.8845393657684328,"utc":"2026-06-24T14:39:51.4471986Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":10.795754432678223,"utc":"2026-06-24T14:39:59.3579257Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":11.457045555114746,"utc":"2026-06-24T14:40:00.0190389Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.104872941970825,"utc":"2026-06-24T15:02:49.2764790Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.404533624649048,"utc":"2026-06-24T15:02:49.5762849Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 75s in 'Title'","stack":"","scene":"Title","t":78.24522399902344,"utc":"2026-06-24T15:04:05.4104879Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":117.51744842529297,"utc":"2026-06-24T15:04:44.6788118Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":118.2337875366211,"utc":"2026-06-24T15:04:45.3957920Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] cannot enter store after setting resource flag","stack":"","scene":"MainCastle_Hall","t":153.16815185546876,"utc":"2026-06-24T15:05:20.3264825Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.1252264976501467,"utc":"2026-06-24T15:05:33.9019880Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.4091155529022219,"utc":"2026-06-24T15:05:34.1850990Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":9.372489929199219,"utc":"2026-06-24T15:05:41.1479515Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":10.113475799560547,"utc":"2026-06-24T15:05:41.8892768Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] they still slide","stack":"","scene":"MainCastle_Hall","t":125.98604583740235,"utc":"2026-06-24T15:07:37.7514830Z"}
+{"kind":"error","message":"FMOD failed to get driver capabilities ... : \"Error initializing output device. \" (60)","stack":"","scene":"MainCastle_Hall","t":228.20912170410157,"utc":"2026-06-24T15:09:19.9664455Z"}
+{"kind":"error","message":"FMOD failed to get driver capabilities ... : \"Error initializing output device. \" (60)","stack":"","scene":"MainCastle_Hall","t":228.22203063964845,"utc":"2026-06-24T15:09:19.9794587Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] what are these square shapes?","stack":"","scene":"MainCastle_Hall","t":248.2567901611328,"utc":"2026-06-24T15:09:40.0124888Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] if i load build and then get aggro i cant close screen. on aggro should auto close and load battle hud","stack":"","scene":"MainCastle_Hall","t":421.2796325683594,"utc":"2026-06-24T15:12:33.0203557Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"","t":4.93565559387207,"utc":"2026-06-24T16:32:16.9026832Z"}
+{"kind":"scene_loaded","message":"","stack":"","scene":"","t":5.558294773101807,"utc":"2026-06-24T16:32:17.5264752Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 75s in ''","stack":"","scene":"","t":89.60384368896485,"utc":"2026-06-24T16:33:41.5687165Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.118427038192749,"utc":"2026-06-24T17:44:30.3014481Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.9561116695404054,"utc":"2026-06-24T17:44:31.1372689Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":12.986848831176758,"utc":"2026-06-24T17:44:41.1688285Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":13.827798843383789,"utc":"2026-06-24T17:44:42.0102307Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] better but somethng seems wrong on the floor","stack":"","scene":"MainCastle_Hall","t":98.74476623535156,"utc":"2026-06-24T17:46:06.9241269Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.1095235347747804,"utc":"2026-06-24T17:49:54.2397334Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.401982069015503,"utc":"2026-06-24T17:49:54.5305838Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":7.0687432289123539,"utc":"2026-06-24T17:49:59.1984069Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":7.798099994659424,"utc":"2026-06-24T17:49:59.9276647Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.109827756881714,"utc":"2026-06-24T17:51:00.9864052Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.392930030822754,"utc":"2026-06-24T17:51:01.2690889Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":76.05790710449219,"utc":"2026-06-24T17:52:14.9331001Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":76.84590148925781,"utc":"2026-06-24T17:52:15.7201989Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.132967233657837,"utc":"2026-06-24T18:11:02.8207053Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.7610960006713869,"utc":"2026-06-24T18:11:03.4480516Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":9.995061874389649,"utc":"2026-06-24T18:11:10.6819116Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":10.658590316772461,"utc":"2026-06-24T18:11:11.3448997Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] feels chopy","stack":"","scene":"MainCastle_Hall","t":134.74972534179688,"utc":"2026-06-24T18:13:15.4341970Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] on reload on the arena music changed. Something needs done on lose conditions, as the hero respanws in town and is instantly reengaged with same battle","stack":"","scene":"MainCastle_Hall","t":268.5506286621094,"utc":"2026-06-24T18:15:29.2309769Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] there is force feedback but i think its from whats going on in castle, that should all save state and discard till done correct?","stack":"","scene":"MainCastle_Hall","t":412.79534912109377,"utc":"2026-06-24T18:17:53.4723738Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] asshould be able to target lock and me my point of view is from me to him as he is locked as focus understand?","stack":"","scene":"MainCastle_Hall","t":477.23944091796877,"utc":"2026-06-24T18:18:57.9151755Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.1298913955688478,"utc":"2026-06-24T18:37:20.3261242Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.9684228897094728,"utc":"2026-06-24T18:37:21.1653087Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":69.35608673095703,"utc":"2026-06-24T18:38:27.5518008Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":70.06673431396485,"utc":"2026-06-24T18:38:28.2624081Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] i dont know how to assign to anything other than first slot, and ddid nmot stick before","stack":"","scene":"MainCastle_Hall","t":138.1839599609375,"utc":"2026-06-24T18:39:36.3771572Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] weaponskills stacked?","stack":"","scene":"MainCastle_Hall","t":197.67684936523438,"utc":"2026-06-24T18:40:35.8691480Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 75s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":534.2745361328125,"utc":"2026-06-24T18:46:12.4591766Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.1330575942993166,"utc":"2026-06-24T18:49:39.5352242Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.9941961765289308,"utc":"2026-06-24T18:49:40.3965553Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":12.301279067993164,"utc":"2026-06-24T18:49:49.7034520Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":13.097419738769532,"utc":"2026-06-24T18:49:50.4996165Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] wawd","stack":"","scene":"MainCastle_Hall","t":34.749454498291019,"utc":"2026-06-24T18:50:12.1513555Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.113973617553711,"utc":"2026-06-24T19:20:59.8184786Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.9360451698303224,"utc":"2026-06-24T19:21:00.6399478Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":7.472413539886475,"utc":"2026-06-24T19:21:05.1764929Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":8.242090225219727,"utc":"2026-06-24T19:21:05.9461415Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.122354507446289,"utc":"2026-06-24T20:24:43.3208165Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.9271891117095949,"utc":"2026-06-24T20:24:44.1253398Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":9.073104858398438,"utc":"2026-06-24T20:24:50.2710831Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":9.797801971435547,"utc":"2026-06-24T20:24:50.9954288Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 75s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":137.2501220703125,"utc":"2026-06-24T20:26:58.4450987Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.1244523525238039,"utc":"2026-06-24T20:35:40.5499797Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.457080125808716,"utc":"2026-06-24T20:35:40.8827098Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":9.140368461608887,"utc":"2026-06-24T20:35:47.5654942Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":9.88180160522461,"utc":"2026-06-24T20:35:48.3077346Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] see how its wrong postioning of weapon","stack":"","scene":"MainCastle_Hall","t":50.18299102783203,"utc":"2026-06-24T20:36:28.6079183Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 75s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":427.2179870605469,"utc":"2026-06-24T20:42:45.6333213Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"MainCastle_Hall","t":5.134067058563232,"utc":"2026-06-24T20:44:03.6469288Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":5.868133068084717,"utc":"2026-06-24T20:44:04.3811235Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":8.168950080871582,"utc":"2026-06-24T20:44:06.6817444Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] a","stack":"","scene":"MainCastle_Hall","t":28.605981826782228,"utc":"2026-06-24T20:44:27.1184013Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] see angle","stack":"","scene":"MainCastle_Hall","t":43.31153869628906,"utc":"2026-06-24T20:44:41.8238531Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.1184914112091066,"utc":"2026-06-24T22:18:33.2786344Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.9269611835479738,"utc":"2026-06-24T22:18:34.0864032Z"}
+{"kind":"scene_loaded","message":"HeroSelect","stack":"","scene":"HeroSelect","t":73.99899291992188,"utc":"2026-06-24T22:19:45.1564597Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":74.0728988647461,"utc":"2026-06-24T22:19:45.2311118Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":74.48135375976563,"utc":"2026-06-24T22:19:45.6395681Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 75s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":151.52854919433595,"utc":"2026-06-24T22:21:02.6842778Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.111733913421631,"utc":"2026-06-24T22:22:57.7494952Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.4131128787994386,"utc":"2026-06-24T22:22:58.0518901Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":37.36103820800781,"utc":"2026-06-24T22:23:32.9986878Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":38.042327880859378,"utc":"2026-06-24T22:23:33.6794581Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 75s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":441.49853515625,"utc":"2026-06-24T22:30:17.1266976Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.11533522605896,"utc":"2026-06-24T23:51:10.6670518Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.9472053050994875,"utc":"2026-06-24T23:51:11.4985137Z"}
+{"kind":"error","message":"FMOD failed to get driver capabilities ... : \"Error initializing output device. \" (60)","stack":"","scene":"Title","t":27.506397247314454,"utc":"2026-06-24T23:51:36.0568052Z"}
+{"kind":"error","message":"FMOD failed to get driver capabilities ... : \"Error initializing output device. \" (60)","stack":"","scene":"Title","t":27.5189151763916,"utc":"2026-06-24T23:51:36.0698041Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 75s in 'Title'","stack":"","scene":"Title","t":83.31456756591797,"utc":"2026-06-24T23:52:31.8636416Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":84.55056762695313,"utc":"2026-06-24T23:52:33.0994803Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":85.34691619873047,"utc":"2026-06-24T23:52:33.8955184Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 75s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":257.9773864746094,"utc":"2026-06-24T23:55:26.5224739Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.117955446243286,"utc":"2026-06-25T01:49:23.0629731Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.9100522994995119,"utc":"2026-06-25T01:49:23.8538949Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":19.228628158569337,"utc":"2026-06-25T01:49:40.1726153Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":19.970430374145509,"utc":"2026-06-25T01:49:40.9150052Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] targetting doesn seem to work","stack":"","scene":"MainCastle_Hall","t":325.90155029296877,"utc":"2026-06-25T01:54:46.8378449Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.1339480876922609,"utc":"2026-06-25T02:19:20.7636195Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.9554200172424318,"utc":"2026-06-25T02:19:21.5852871Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 180s in 'Title'","stack":"","scene":"Title","t":184.34422302246095,"utc":"2026-06-25T02:22:22.9695566Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":209.9530029296875,"utc":"2026-06-25T02:22:48.5772676Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":210.70018005371095,"utc":"2026-06-25T02:22:49.3242962Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 180s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":414.0595397949219,"utc":"2026-06-25T02:26:12.6778647Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] what is the >> and + on right side?","stack":"","scene":"MainCastle_Hall","t":465.63763427734377,"utc":"2026-06-25T02:27:04.2554449Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] enemy floats on death, but still not targetting","stack":"","scene":"MainCastle_Hall","t":537.5490112304688,"utc":"2026-06-25T02:28:16.1650654Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] looks like we never added seams est west and north","stack":"","scene":"MainCastle_Hall","t":581.9827270507813,"utc":"2026-06-25T02:29:00.5970882Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] INVISIBLE ITEM BLOCKING ME HERE","stack":"","scene":"MainCastle_Hall","t":770.8377685546875,"utc":"2026-06-25T02:32:09.4479012Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] SNT ARENA FLAGGED OFF?","stack":"","scene":"MainCastle_Hall","t":812.0274658203125,"utc":"2026-06-25T02:32:50.6360632Z"}
+{"kind":"error","message":"[Flow:Raid] INVISIBLE ENEMY: outpost boss at (-4.48, 0.00, -16.20) spawned but does NOT render (renderers total=1 enabled=1 withGeom=0).","stack":"UnityEngine.Debug:LogError (object)\nDeNelle.Core.Diagnostics.UnityLogSink:Error (string) (at C:/EoA/Assets/_Modules/Core/Diagnostics/FlowTrace.cs:378)\nDeNelle.Core.Diagnostics.FlowTrace:Fail (string,string) (at C:/EoA/Assets/_Modules/Core/Diagnostics/FlowTrace.cs:127)\nDeNelle.Village.World.Camps.EnemyOutpost:VerifyEnemyRenders (DeNelle.Village.Enemy,string,UnityEngine.Vector3) (at C:/EoA/Assets/_Modules/Village/World/Camps/EnemyOutpost.cs:542)\nDeNelle.Village.World.Camps.EnemyOutpost:SpawnBoss () (at C:/EoA/Assets/_Modules/Village/World/Camps/EnemyOutpost.cs:485)\nDeNelle.Village.World.Camps.EnemyOutpost/<SpawnGarrisonStaggered>d__75:MoveNext () (at C:/EoA/Assets/_Modules/Village/World/Camps/EnemyOutpost.cs:412)\nUnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at C:/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)\n","scene":"MainCastle_Hall","t":823.5281372070313,"utc":"2026-06-25T02:33:02.1369963Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] IN THE ARENA","stack":"","scene":"MainCastle_Hall","t":839.9609375,"utc":"2026-06-25T02:33:18.5697564Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] FREE skr LOL","stack":"","scene":"MainCastle_Hall","t":859.0110473632813,"utc":"2026-06-25T02:33:37.6184609Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] WE NEVER TOUCHED POPULATIONAND WE NEVER ENFORCED OR COUNTED NUMBER OF TOWERS, I THINK CAPPING TOWERS IS SMAT FOR PERFORMANCE BUT i think we can kill, population unless we rebrand it to saved Echos/1/10 and every 3 echo saved releases one sp","stack":"","scene":"MainCastle_Hall","t":976.578369140625,"utc":"2026-06-25T02:35:35.1833953Z"}

@@ -110,8 +110,10 @@ namespace DeNelle.Village.World.Camps
             for (int i = 0; i < count; i++)
             {
                 var s = SceneManager.GetSceneAt(i);
-                if (s.isLoaded && !string.IsNullOrEmpty(s.name)
-                    && s.name.IndexOf(OuterWorldSceneName, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                // WO-608 merge: HubScenes.IsOverworld matches legacy "OuterWorld" AND the
+                // merged "Main_Castle_Overworld" (correctness; the IsHub gate above already
+                // covers the merged scene, so this is a belt-and-braces repoint).
+                if (s.isLoaded && HubScenes.IsOverworld(s.name))
                     return true;
             }
             return false;

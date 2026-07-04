@@ -73,9 +73,25 @@ namespace DeNelle.Village.World
         /// </summary>
         public static void BuildBoundary()
         {
-            // OuterWorld loads ADDITIVELY over MainCastle_Hall — it is NEVER the
-            // ACTIVE scene, so gate on whether it is LOADED, not GetActiveScene().
-            Scene ow = SceneManager.GetSceneByName(TargetScene);
+            // Legacy: OuterWorld loads ADDITIVELY over MainCastle_Hall — never the ACTIVE
+            // scene, so gate on LOADED. WO-608 merge: the merged "Main_Castle_Overworld" IS
+            // the active scene (no additive OuterWorld), so also accept an overworld ACTIVE
+            // scene. HubScenes.IsOverworld matches legacy "OuterWorld" AND the merged name.
+            Scene ow = default;
+            var active = SceneManager.GetActiveScene();
+            if (DeNelle.Core.HubScenes.IsOverworld(active.name) && active.isLoaded)
+            {
+                ow = active;
+            }
+            else
+            {
+                int count = SceneManager.sceneCount;
+                for (int i = 0; i < count; i++)
+                {
+                    var s = SceneManager.GetSceneAt(i);
+                    if (s.isLoaded && DeNelle.Core.HubScenes.IsOverworld(s.name)) { ow = s; break; }
+                }
+            }
             if (!ow.IsValid() || !ow.isLoaded) return;
 
             // IDEMPOTENT: a ring already in any loaded scene → done.

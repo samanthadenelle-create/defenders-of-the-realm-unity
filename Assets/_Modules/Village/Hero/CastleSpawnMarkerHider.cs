@@ -47,6 +47,10 @@ namespace DeNelle.Village
         public static CastleSpawnMarkerHider Instance { get; private set; }
 
         private const string TargetScene = "MainCastle_Hall";
+        // WO-608 merge: the pill-hider must run on the merged Main_Castle_Overworld too,
+        // while staying castle-only. Mirrors CastleBeamHider / CastleVendorNpcInjector.
+        private const string MergedTargetScene = "Main_Castle_Overworld";
+        private static bool IsCastleHubScene(string n) => n == TargetScene || n == MergedTargetScene;
 
         // Names CastleHubBuilder uses for the promoted spawn marker(s). The first is
         // the canonical castle spawn pill; the second is the personal-quarters anchor.
@@ -75,7 +79,7 @@ namespace DeNelle.Village
 
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneLoaded += OnSceneLoaded;
-            if (SceneManager.GetActiveScene().name == TargetScene) ScheduleHide();
+            if (IsCastleHubScene(SceneManager.GetActiveScene().name)) ScheduleHide();
         }
 
         private void OnDestroy()
@@ -86,7 +90,7 @@ namespace DeNelle.Village
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (scene.name == TargetScene) ScheduleHide();
+            if (IsCastleHubScene(scene.name)) ScheduleHide();
         }
 
         // The vendor / companion / emergency-hero injectors also bootstrap on scene load

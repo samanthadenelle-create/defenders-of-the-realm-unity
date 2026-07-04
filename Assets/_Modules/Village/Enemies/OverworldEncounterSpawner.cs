@@ -128,9 +128,9 @@ namespace DeNelle.Village
             for (int i = 0; i < count; i++)
             {
                 var s = SceneManager.GetSceneAt(i);
-                if (s.isLoaded &&
-                    !string.IsNullOrEmpty(s.name) &&
-                    s.name.IndexOf(OuterWorldScene, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                // WO-608 merge: HubScenes.IsOverworld matches legacy "OuterWorld" AND the
+                // merged "Main_Castle_Overworld" (the "OuterWorld" vs "Overworld" naming trap).
+                if (s.isLoaded && HubScenes.IsOverworld(s.name))
                     return true;
             }
             return false;

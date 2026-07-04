@@ -44,6 +44,11 @@ namespace DeNelle.Village
         public static CastleVendorNpcInjector Instance { get; private set; }
 
         private const string TargetScene = "MainCastle_Hall";
+        // WO-608 merge: MainCastle_Hall + OuterWorld collapse into Main_Castle_Overworld.
+        // Castle-hub chrome must fire on the merged scene too, while staying castle-only
+        // (never Village2/raids). Mirrors CastleBeamHider / CastleSpawnPointInjector.
+        private const string MergedTargetScene = "Main_Castle_Overworld";
+        private static bool IsCastleHubScene(string n) => n == TargetScene || n == MergedTargetScene;
 
         // The empty interact markers CastleHubBuilder bakes under each storefront are
         // named "NPC_<Role>_Interactable" (role = first token of the structure name).
@@ -153,7 +158,7 @@ namespace DeNelle.Village
 
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneLoaded += OnSceneLoaded;
-            if (SceneManager.GetActiveScene().name == TargetScene) Inject();
+            if (IsCastleHubScene(SceneManager.GetActiveScene().name)) Inject();
         }
 
         private void OnDestroy()
@@ -164,7 +169,7 @@ namespace DeNelle.Village
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (scene.name == TargetScene) Inject();
+            if (IsCastleHubScene(scene.name)) Inject();
         }
 
         // Holder so re-injection (idempotent) is trivial: clear the prior holder, respawn.
@@ -231,7 +236,7 @@ namespace DeNelle.Village
             float deadline = Time.unscaledTime + TimeoutSeconds;
             while (Time.unscaledTime < deadline)
             {
-                if (SceneManager.GetActiveScene().name != TargetScene) yield break; // scene moved on
+                if (!IsCastleHubScene(SceneManager.GetActiveScene().name)) yield break; // scene moved on
                 if (GameObject.Find("CastleVendor_Apothecary") != null ||
                     GameObject.Find("CastleVendor_Apothecary_Placeholder") != null)
                     yield break;                                                    // already placed
@@ -278,7 +283,7 @@ namespace DeNelle.Village
             float deadline = Time.unscaledTime + TimeoutSeconds;
             while (Time.unscaledTime < deadline)
             {
-                if (SceneManager.GetActiveScene().name != TargetScene) yield break; // scene moved on
+                if (!IsCastleHubScene(SceneManager.GetActiveScene().name)) yield break; // scene moved on
                 if (GameObject.Find("CastleVendor_JewelersBench") != null ||
                     GameObject.Find("CastleVendor_JewelersBench_Placeholder") != null)
                     yield break;                                                    // already placed

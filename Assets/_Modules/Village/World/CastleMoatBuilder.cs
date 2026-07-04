@@ -144,6 +144,11 @@ namespace DeNelle.Village.World
         // require the south recipe to resolve so the gate radials are real.)
         private const string TargetScene = "MainCastle_Hall";
 
+        // WO-608: the merged single scene also hosts the castle, so BuildMoat runs there too. On the
+        // merged scene the seam is gone → only the 4 DECORATIVE bridges are placed (no water/lip/hedge/
+        // berms/navcarve) — see BuildBridgesOnly / MergedBridgesOnly.
+        private const string MergedScene = "Main_Castle_Overworld";
+
         // --------------------------------------------------------------------
         //  SELF-BOOTSTRAP (mirrors OuterWorldBoundaryInjector).
         // --------------------------------------------------------------------
@@ -171,18 +176,55 @@ namespace DeNelle.Village.World
         /// Build the water moat ring + 4 stone-bridge crossings on the castle hub scene.
         /// No-op when the flag is OFF, off the hub scene, or when the moat already exists.
         /// </summary>
-        public static void BuildMoat()
+        public static void BuildMoat() => BuildInternal(MergedBridgesOnly());
+
+        /// <summary>WO-608 merged-world (owner 2026-07-04): place ONLY the 4 drawbridge structures — NO
+        /// water, NO outer lip, NO hedge ring, NO bank berms, NO moat nav-carve. The single merged scene
+        /// <see cref="MergedScene"/> has no seam to mask, so the moat WATER + LIP are dropped as decorative;
+        /// with the castle flush at y=0 the bridges are flat decorative gateways at the 4 exits. Public so
+        /// the editor <c>WorldMergeBuilder</c> can bake the bridges into the merged scene (invoked by
+        /// reflection — DeNelle.Editor does not reference DeNelle.Village). Builds under the SAME
+        /// <see cref="MoatRootName"/> root so the runtime self-boot's idempotent Find() suppresses any
+        /// re-build on the saved scene.</summary>
+        public static void BuildBridgesOnly() => BuildInternal(bridgesOnly: true);
+
+        // On the merged single scene we drop the water/lip and keep only the decorative bridges (owner
+        // 2026-07-04). True whenever ff.mergedworld is ON and the merged scene is active or loaded.
+        private static bool MergedBridgesOnly()
+        {
+            if (!FeatureFlags.MergedWorld) return false;
+            if (SceneManager.GetActiveScene().name == MergedScene) return true;
+            Scene merged = SceneManager.GetSceneByName(MergedScene);
+            return merged.IsValid() && merged.isLoaded;
+        }
+
+        private static void BuildInternal(bool bridgesOnly)
         {
             // Flag gate — default ON so the owner sees the BONES; PlayerPrefs "ff.castlemoat" = 0 to hide.
             if (!FeatureFlags.CastleMoat) return;
 
-            // Only on the castle hub. MainCastle_Hall is the ACTIVE home scene, but be tolerant of
-            // the loaded-additive case the same way the boundary injector is.
+            // OWNER 2026-07-04 (F8 x4 + editor-runtime screenshot): the MERGED world has NO moat and NO
+            // bridges. The whole moat/water/lip/bridge apparatus existed ONLY to mask + cross the
+            // castle<->OuterWorld SEAM; the merged single scene has no seam, so ALL of it is gone. This
+            // runtime self-boot is what rebuilds it every scene load (BuildDrawbridges below ran even in
+            // bridges-only mode — the bridge the owner kept seeing; BuildWaterRing is the water). Build
+            // NOTHING on the merged scene.
+            if (MergedBridgesOnly())
+            {
+                FlowTrace.Step("CastleMoat", "MERGED world — moat + bridges SKIPPED ENTIRELY (owner 2026-07-04: seam gone, nothing to build).");
+                return;
+            }
+
+            // Only on the castle hub. MainCastle_Hall is the ACTIVE home scene; the merged scene
+            // (Main_Castle_Overworld) also hosts the castle. Be tolerant of the loaded-additive case
+            // the same way the boundary injector is.
             Scene hub = SceneManager.GetSceneByName(TargetScene);
-            bool hubActive = SceneManager.GetActiveScene().name == TargetScene;
+            if (!hub.IsValid() || !hub.isLoaded) hub = SceneManager.GetSceneByName(MergedScene);
+            string activeName = SceneManager.GetActiveScene().name;
+            bool hubActive = activeName == TargetScene || activeName == MergedScene;
             if (!hubActive && (!hub.IsValid() || !hub.isLoaded)) return;
 
-            // IDEMPOTENT: a moat already present -> done (repeated loads never stack).
+            // IDEMPOTENT: a moat/bridge root already present -> done (repeated loads never stack).
             if (GameObject.Find(MoatRootName) != null) return;
 
             var root = new GameObject(MoatRootName);
@@ -196,24 +238,44 @@ namespace DeNelle.Village.World
             // plinth (inner) + a raised outer lip (built below as MESH, not TerrainData).
             float waterY = FixedWaterY;
 
-            int lipVerts   = BuildOuterLip(root.transform);              // raised outer basin rim (mesh)
-            int waterVerts = BuildWaterRing(root.transform, waterY);     // solid opaque fill of the channel
-            int bridges    = BuildDrawbridges(root.transform, gateLateral);
-            int berms      = BuildBridgeBankBerms(root.transform, gateLateral); // natural curved seal at each mouth
-            int hedges     = BuildHedgeRing(root.transform, gateLateral);
-            int navCarves  = BuildMoatNavCarve(root.transform, gateLateral);   // carve the water off the live navmesh
+            int waterVerts = 0, lipVerts = 0, berms = 0, hedges = 0, navCarves = 0;
 
-            // Bring the ring to life with the proven shimmer (reuse, DEF-195). It auto-resolves the
-            // first child renderer's sharedMaterial == the annulus' deep-band material (index 0).
-            AttachShimmer(root);
+            // Water fill FIRST (index-0 shimmer target) — skipped on the merged bridges-only path.
+            if (!bridgesOnly) waterVerts = BuildWaterRing(root.transform, waterY);
 
-            // WO-590: a small fish school over the water band (graceful/optional — skips if no model).
-            SpawnFishSchool(root.transform, waterY);
+            int bridges = BuildDrawbridges(root.transform, gateLateral);
+
+            if (!bridgesOnly)
+            {
+                // Lip AFTER the bridges so MeasureMouth reads the REAL deck colliders (same source the
+                // hedge + navcarve gaps use) — the rim is NOTCHED at each measured mouth so no deck ever
+                // crosses solid lip regardless of the bridge pose (WO-605 owner: "do the lip or it cuts").
+                lipVerts   = BuildOuterLip(root.transform, gateLateral); // raised outer basin rim (mesh), notched at the 4 mouths
+                berms      = BuildBridgeBankBerms(root.transform, gateLateral); // natural curved seal at each mouth
+                hedges     = BuildHedgeRing(root.transform, gateLateral);
+                navCarves  = BuildMoatNavCarve(root.transform, gateLateral);   // carve the water off the live navmesh
+
+                // Bring the ring to life with the proven shimmer (reuse, DEF-195). It auto-resolves the
+                // first child renderer's sharedMaterial == the annulus' deep-band material (index 0).
+                AttachShimmer(root);
+
+                // WO-590: a small fish school over the water band (graceful/optional — skips if no model).
+                SpawnFishSchool(root.transform, waterY);
+            }
 
             // A new GameObject lands in the active scene by default; if the hub is loaded but not
             // active, move the moat into it so it shares the hub's lifetime.
             if (!hubActive && hub.IsValid() && hub.isLoaded)
                 SceneManager.MoveGameObjectToScene(root, hub);
+
+            if (bridgesOnly)
+            {
+                FlowTrace.Step("CastleMoat",
+                    "BRIDGES-ONLY (WO-608 merged world): placed " + bridges + " decorative drawbridge structures at the 4 " +
+                    "gate exits (gateLateral=" + gateLateral.ToString("0.00") + ", x4 symmetry) — NO water/lip/hedge/berms/" +
+                    "navcarve (seam removed; the bridges are flat decoration on the flush y=0 ground).");
+                return;
+            }
 
             FlowTrace.Step("CastleMoat",
                 "built castle BASIN moat: outer lip rim " + lipVerts + " verts + SOLID water fill " + waterVerts +
@@ -391,18 +453,43 @@ namespace DeNelle.Village.World
         //  bridge deck where it passes over the rim, so the deck never clips through.
         //  Visual only (no collider) — it does not block the bridge outer landing or navmesh.
         // ====================================================================
-        private static int BuildOuterLip(Transform parent)
+        //  NOTCHED at the 4 bridge mouths (WO-605 owner: "you have to do the lip otherwise it cuts
+        //  through the bridge"): rather than eyeball a new LipTopY, the rim SKIPS the crest/wall
+        //  across each measured mouth (mirrors the 4-gap logic in BuildHedgeRing + BuildMoatNavCarve,
+        //  same MeasureMouth source), so the deck NEVER crosses solid lip regardless of the pose.
+        private static int BuildOuterLip(Transform parent, float gateLateral)
         {
-            float innerR = MoatOuterRadius;
-            float outerR = MoatOuterRadius + LipWidth;
+            float innerR = MoatOuterRadius;                // 62 — laps the water band outer edge
+            float outerR = MoatOuterRadius + LipWidth;     // 65 — world-side face
 
-            var verts = new List<Vector3>(48);
-            var uvs   = new List<Vector2>(48);
-            var tris  = new List<int>(72);
+            var verts = new List<Vector3>(96);
+            var uvs   = new List<Vector2>(96);
+            var tris  = new List<int>(144);
 
-            AddVerticalRing(verts, uvs, tris, innerR, LipFloorY, LipTopY);   // inner face (water side)
-            AddMitredBand(verts, uvs, tris, innerR, outerR, LipTopY);        // top crest cap
-            AddVerticalRing(verts, uvs, tris, outerR, LipFloorY, LipTopY);   // outer face (world side)
+            // The four square-annulus sides (mirror BuildHedgeRing / BuildMoatNavCarve): a straight
+            // lip cross-section (inner wall @innerR + crest cap innerR..outerR + outer wall @outerR)
+            // running along the side axis, SPLIT at the measured bridge mouth. Each side runs the full
+            // outer extent [-outerR..outerR] so the corners stay covered (adjacent sides overlap there
+            // — harmless for a visual mesh). sign = which side (+/-) the rim sits on.
+            var sides = new (string card, bool axisAlongZ, float sign)[]
+            {
+                ("South", false, -1f),
+                ("North", false,  1f),
+                ("East",  true,   1f),
+                ("West",  true,  -1f),
+            };
+
+            foreach (var (card, axisAlongZ, sign) in sides)
+            {
+                // Gap centre + half-width from the REAL bridge mouth (deck collider) — the SAME source
+                // the hedge + navcarve gaps use, so the lip notch == the hedge gap == the carve gap ==
+                // the open crossing lane. Fallback = gate-lateral symmetry (built AFTER the bridges).
+                MeasureMouth(parent, card, axisAlongZ, gateLateral, out float mouthLat, out float gapHalf);
+
+                // Two rim segments per side, flanking the bridge-mouth notch.
+                AddLipSegment(verts, uvs, tris, axisAlongZ, sign, innerR, outerR, -outerR, mouthLat - gapHalf);
+                AddLipSegment(verts, uvs, tris, axisAlongZ, sign, innerR, outerR, mouthLat + gapHalf, outerR);
+            }
 
             var mesh = new Mesh { name = "MoatBasinLipMesh" };
             mesh.SetVertices(verts);
@@ -418,31 +505,38 @@ namespace DeNelle.Village.World
             var lipMat = ResolveMaterial(StoneMaterialResource, "CastleMoat_BasinLip", LipColor, transparent: false);
             if (lipMat != null) mr.sharedMaterial = lipMat;
 
-            FlowTrace.Step("CastleMoat", "basin lip built: raised rim ring r=" + innerR + ".." + outerR + " floorY=" +
-                LipFloorY + " crestY=" + LipTopY + " (" + verts.Count + " verts, MESH not TerrainData) — the outer basin " +
-                "wall; water level " + FixedWaterY + " sits below the crest so the channel reads CONTAINED.");
+            FlowTrace.Step("CastleMoat", "basin lip built: NOTCHED rim r=" + innerR + ".." + outerR + " floorY=" +
+                LipFloorY + " crestY=" + LipTopY + " (" + verts.Count + " verts, MESH not TerrainData) with 4 cardinal " +
+                "NOTCHES at the measured bridge mouths — the deck NEVER crosses solid lip (pose-independent); water level " +
+                FixedWaterY + " sits below the crest so the channel reads CONTAINED.");
             return verts.Count;
         }
 
-        // A vertical square ring (4 double-sided quads) at square half-extent r, from yBot to yTop.
-        // Double-sided so it reads from inside the basin AND from the OuterWorld side (no cull gap).
-        private static void AddVerticalRing(List<Vector3> verts, List<Vector2> uvs, List<int> tris,
-            float r, float yBot, float yTop)
+        // One straight lip cross-section over the run interval [t0..t1] on ONE side: an inner vertical
+        // wall @innerR + a crest cap (innerR..outerR @LipTopY) + an outer vertical wall @outerR, all
+        // double-sided. axisAlongZ => the run travels along Z at fixed X (E/W sides); else it runs along
+        // X at fixed Z (S/N sides). sign = which side (+/-) the rim sits on. Skips a consumed (near-zero)
+        // interval so a mouth near a corner cannot emit an inverted segment.
+        private static void AddLipSegment(List<Vector3> verts, List<Vector2> uvs, List<int> tris,
+            bool axisAlongZ, float sign, float innerR, float outerR, float t0, float t1)
         {
-            Vector3[] bot =
-            {
-                new Vector3( r, yBot,  r), new Vector3( r, yBot, -r), new Vector3(-r, yBot, -r), new Vector3(-r, yBot,  r),
-            };
-            Vector3[] top =
-            {
-                new Vector3( r, yTop,  r), new Vector3( r, yTop, -r), new Vector3(-r, yTop, -r), new Vector3(-r, yTop,  r),
-            };
-            for (int k = 0; k < 4; k++)
-            {
-                int n = (k + 1) & 3;
-                AddQuadTop(verts, uvs, tris, bot[k], top[k], top[n], bot[n]);   // one face
-                AddQuadTop(verts, uvs, tris, bot[n], top[n], top[k], bot[k]);   // reverse face (double-sided)
-            }
+            if (t1 - t0 <= 0.25f) return;   // notch consumed this segment (mouth near the corner)
+            float innerP = sign * innerR;   // perpendicular coord of the inner wall
+            float outerP = sign * outerR;   // perpendicular coord of the outer wall
+
+            // Map a (run t, perpendicular p, height y) triple to world space for this side.
+            System.Func<float, float, float, Vector3> P = (t, p, y) =>
+                axisAlongZ ? new Vector3(p, y, t) : new Vector3(t, y, p);
+
+            // inner vertical wall (double-sided so it reads from the water side and the basin side)
+            AddQuadTop(verts, uvs, tris, P(t0, innerP, LipFloorY), P(t0, innerP, LipTopY), P(t1, innerP, LipTopY), P(t1, innerP, LipFloorY));
+            AddQuadTop(verts, uvs, tris, P(t1, innerP, LipFloorY), P(t1, innerP, LipTopY), P(t0, innerP, LipTopY), P(t0, innerP, LipFloorY));
+            // outer vertical wall (double-sided — reads from the OuterWorld side)
+            AddQuadTop(verts, uvs, tris, P(t0, outerP, LipFloorY), P(t0, outerP, LipTopY), P(t1, outerP, LipTopY), P(t1, outerP, LipFloorY));
+            AddQuadTop(verts, uvs, tris, P(t1, outerP, LipFloorY), P(t1, outerP, LipTopY), P(t0, outerP, LipTopY), P(t0, outerP, LipFloorY));
+            // crest cap at y=LipTopY, from innerR..outerR (double-sided)
+            AddQuadTop(verts, uvs, tris, P(t0, innerP, LipTopY), P(t0, outerP, LipTopY), P(t1, outerP, LipTopY), P(t1, innerP, LipTopY));
+            AddQuadTop(verts, uvs, tris, P(t1, innerP, LipTopY), P(t1, outerP, LipTopY), P(t0, outerP, LipTopY), P(t0, innerP, LipTopY));
         }
 
         // ====================================================================

@@ -35,6 +35,11 @@ namespace DeNelle.Village
         public static CastleBeamHider Instance { get; private set; }
 
         private const string TargetScene = "MainCastle_Hall";
+        // WO-608: the merged single scene (Main_Castle_Overworld, ff.MergedWorld) is the same
+        // castle hub geometry, so its archway "beam" lines need hiding too. Safe when OFF
+        // (that scene never loads on the legacy path).
+        private const string MergedTargetScene = "Main_Castle_Overworld";
+        private static bool IsCastleHubScene(string n) => n == TargetScene || n == MergedTargetScene;
         private const string NameToken   = "beam";   // case-insensitive substring match
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -52,7 +57,7 @@ namespace DeNelle.Village
 
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneLoaded += OnSceneLoaded;
-            if (SceneManager.GetActiveScene().name == TargetScene) ScheduleHide();
+            if (IsCastleHubScene(SceneManager.GetActiveScene().name)) ScheduleHide();
         }
 
         private void OnDestroy()
@@ -63,7 +68,7 @@ namespace DeNelle.Village
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (scene.name == TargetScene) ScheduleHide();
+            if (IsCastleHubScene(scene.name)) ScheduleHide();
         }
 
         // Hide on THIS frame (catches baked beams) AND again after end-of-frame (catches

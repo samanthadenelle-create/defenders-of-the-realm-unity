@@ -1,0 +1,147 @@
+﻿WO-51	[Ready]	WO-51 — Mobile performance pass
+WO-54	[Ready]	WO-54 — LOD setup
+WO-74	[Ready]	WO-74 — Solana crypto payments
+WO-75	[Ready]	WO-75 — Shop UI crypto tabs
+WO-76	[Ready]	WO-76 — Staked SKR bonus
+WO-77	[Ready]	WO-77 — Staking full integration
+WO-78	[Ready]	WO-78 — Tx verification + staking dashboard
+WO-80	[Ready]	WO-80 — Vercel + Neon backend
+WO-104	[Ready]	WO-104 — Castle fortification + moat
+WO-111	[Ready]	WO-111 — Audio depth + boss battles + enemy outposts
+WO-113	[Ready]	WO-113 — Arcane tower buildable
+WO-114	[Ready]	WO-114 — Wall upgrade tiers
+WO-116	[Ready]	WO-116 — NPC dialogue / bark system
+WO-117	[Ready]	WO-117 — Worker dispatch autocollect
+WO-118	[Ready]	WO-118 — Rewarded ads route
+WO-120	[Ready]	WO-120 — Backend spec reconciliation
+WO-121	[Ready]	WO-121 — Metrics / analytics dashboard
+WO-128	[Ready]	WO-128 — Pet anti-ranged ability
+WO-129	[Ready]	WO-129 — Leaderboard / profile / social
+WO-133	[Ready]	WO-133 — Onboarding FTUE wiring
+WO-137	[Ready]	WO-137 — Castle/rampart rebake
+WO-142	[Ready]	WO-142 — Outer world regions
+WO-143	[Ready]	WO-143 — Roaming raids
+WO-144	[Ready]	WO-144 — Regional crystal subtypes
+WO-145	[Ready]	WO-145 — Advanced enemy tactics
+WO-146	[Ready]	WO-146 — Formation movement
+WO-147	[Ready]	WO-147 — Situational awareness / perception
+WO-151	[Blocked]	WO-151 — Village progression + crafting
+WO-154	[Ready]	WO-154 — Rare timed crystal spawns
+WO-155	[Blocked]	WO-155 — Region enemy spawning + red-skull
+WO-156	[Blocked]	WO-156 — Camera over walls + store polish
+WO-159	[Ready]	WO-159 — Node settlements (claim/defend/deplete)
+WO-160	[Ready]	WO-160 — Wandering tribes (randomized raids)
+WO-165	[Ready]	WO-165 — Dungeon world portals
+WO-171	[Ready]	WO-171 — ATB battle theme
+WO-181	[Ready]	WO-181 — Rampart stairs + upper siege defenses
+WO-191	[Ready]	WO-191 — WebGL size optimization
+WO-211	[Ready]	WO-211 — WebGL optimize (remove unused assets)
+WO-213	[Ready]	WO-213 — Troop downscale → real character models
+WO-217	[Ready]	WO-217 — Animation polish (anticipation/impact/recovery)
+WO-218	[Ready]	WO-218 — Animation layering (attack while moving)
+WO-219	[Ready]	WO-219 — Visual feedback (hit-stop, particles, dmg #)
+WO-220	[Spec]	WO-220 — Audio feedback
+WO-222	[Blocked]	WO-222 — Tutorial redesign
+WO-227	[Blocked]	WO-227 — Opening cutscene + story companion
+WO-228	[Ready]	WO-228 — Resource nodes + pet harvesting
+WO-230	[Ready]	WO-230 — Hero Select: 4 character cards
+WO-235	[Ready]	WO-235 — Death & spire-destroyed screens
+WO-238	[Ready]	WO-238 — Sylas first-meeting narrative
+WO-239	[Ready]	WO-239 — Node claiming + outpost build
+WO-243	[Ready]	WO-243 — Audio full pass
+WO-246	[Ready]	WO-246 — Replace KayKit NPCs with character pack
+WO-254	[Ready]	WO-254 — Hero hover exploit fix
+WO-277	[Ready]	WO-277 — Tutorial companion onboarding
+WO-282	[Ready]	WO-282 — BuildPreviewModal premium rotation
+WO-287	[Spec]	WO-287 — Threat Assessment / Defensibility intel
+WO-288	[In progress]	WO-288 — Class signature combat moves
+WO-292	[Ready]	WO-292 — Keystone → Spire finale wiring
+WO-293	[Ready]	WO-293 — Crafting tiers + legendary recipe system
+WO-294	[Ready]	WO-294 — Forgemasters' Saga Yarn + reconciliation scenes
+WO-295	[Ready]	WO-295 — Legendary Aegis of Elarion set + ward
+WO-296	[Ready]	WO-296 — Reforge choice → finale/ending
+WO-297	[Ready]	WO-297 — Pet acquisition (tame/egg/rescue) + slots
+WO-298	[Ready]	WO-298 — Pet skill catalog content + balance
+WO-299	[Ready]	WO-299 — Pet bond questlines (Wild Hearts)
+WO-300	[Ready]	WO-300 — Weaponsmithing lore integration
+WO-301	[Ready]	WO-301 — Party persistence (wallet-keyed roster)
+WO-305	[Ready]	WO-305 — Relic-recovery quests (lost Elarion blades)
+WO-307	[Ready]	WO-307 — HUD visual overhaul (responsive web + mobile)
+WO-309	[Ready]	WO-309 — Resource bar icons + quantity (Gems→Crystals)
+WO-313	[Ready]	WO-313 — Windmill production crafter station
+WO-323	[Ready]	WO-323 — Trees render all white (missing material/shader)
+WO-324	[Ready]	WO-324 — Dungeon: pill lantern NPC + 2-circle exit (placeholders)
+WO-325	[Ready]	WO-325 — Nothing happens at resource node (mine upgrade/harvest dead)
+WO-326	[Ready]	WO-326 — Hero walks north but model/anim 90° to the right
+WO-331	[In progress]	WO-331 — P0: WebGL crash on Village load (suspected Yarn Spinner — triage)
+WO-353	[Ready]	WO-353 — Palette Filters & Category Tabs
+WO-354	[Ready]	WO-354 — Upgrade Tier Display & Synergy Bonuses
+WO-355	[Ready]	WO-355 — Portrait/Vertical Layout Responsiveness
+WO-356	[Ready]	WO-356 — Placement Validation Messages & Grid Toggle
+WO-357	[Ready]	WO-357 — Mobile Touch Gestures & Accessibility
+WO-366	[Ready]	WO-366: Idle Routines — Sitting, Playing Dead, Cute Animations
+WO-375	[Ready]	WO-375: Yarn Spinner Threading Safety & Debug Element Removal
+WO-379	[Held]	WO-379 — Echo Auto-Summoning on Yarn Spinner Dialogue
+WO-386	[Spec]	WO-386: Battle Visualization System (ATB sim → seen)
+WO-388	[In progress]	WO-388: Load player's real castle as Arena defender base
+WO-389	[In progress]	WO-389: Arena Defense System (CoC-style pre-placed troops)
+WO-390	[Spec]	WO-390: Battle Potion Loadout (3 unlockable slots)
+WO-392	[Ready]	WO-392 — Warcraft-style tiered building upgrade system (Lumbermill / Forge / Armorer)
+WO-395	[Ready]	WO-395 — Resource node / mine interaction visual replacement (full asset library audit first)
+WO-396	[Ready]	WO-396 — Yarn Spinner resource-node interaction + first-time pet cutscene
+WO-398	[Ready]	WO-398 — P1: Knight still dealing ranged damage (should be melee-only)
+WO-399	[Spec]	WO-399 — Knight melee weapon skill set
+WO-401	[Ready]	WO-401 — Blacksmith (NPC/vendor) presentation: signboard + symbol, Yarn Spinner-only interaction
+WO-402	[Held]	WO-402 — P2: Stray blue sphere in sky — remove
+WO-403	[Ready]	WO-403 — In-town HUD rework to mockup (parchment/rune frame)
+WO-405	[In progress]	WO-405 — P0: Complete UGUI design system for ALL game HUDs — DO FIRST, blocks all HUD work
+WO-407	[Blocked]	WO-407 — Warcraft-style tiered upgrade system: Arcane Tower (extends WO-392)
+WO-408	[Ready]	WO-408 — P1: WebGL texture optimization — 223 MB → <60 MB (scripted)
+WO-411	[Blocked]	WO-411 — P1: Town HUD does not match hud_mobile_town.png mockup (10 deviations)
+WO-412	[Ready]	WO-412 — P1: Vendor Wares catalog empty — BUY tab lists no items
+WO-413	[In progress]	WO-413 — P1: Upgradable buildings wrongly offer shop menu — split isUpgradable vs isShoppable dialogue options
+WO-415	[Blocked]	WO-415 — P1: Vendor storefront UI (armor first) skinned from Tech hud elements pack — replace placeholder Vendor Wares modal
+WO-416	[Ready]	WO-416 — P2: Hide floating "Talk: <target>" world prompt — TALK button glow is the interaction trigger
+WO-419	[In progress]	WO-419 — P1: Enemies do not attack after castle → OuterWorld transition
+WO-420	[Ready]	WO-420 — P2: Fire/spell VFX renders as giant pixelated quads — clean up effect textures
+WO-421	[Ready]	WO-421 — P1: Battle HUD broken — skill bar empty, no abilities showing
+WO-423	[Ready]	WO-423 — P1: Hero attacks without facing target — rotate-to-target on attack + turn animation blending
+WO-424	[In progress]	WO-424 — P1: Harvested resources not added to HUD resource count
+WO-425	[Ready]	WO-425 — P2: Hero spawns unarmed — grant default weapon at start
+WO-426	[Ready]	WO-426 — P2: Enable the node/outpost claim loop in OuterWorld
+WO-427	[Ready]	WO-427 — P3: PC input — Space bar confirms like Enter in dialogues/menus
+WO-429	[Ready]	WO-429 — Store stock served from the Neon DB (StoreService + offline-first fallback)
+WO-430	[Ready]	WO-430 — Handover Triage: detailed WO consolidation (363–437 + P0 gates)
+WO-432	[Spec]	WO-432 — P1: NPC companion breaks (owner playtest 2026-06-12)
+WO-433	[Ready]	WO-433 — P2: HeroTarget/SpawnPoint tags undefined in TagManager — canon AI lookups dead, dev-harness throw
+WO-434	[Ready]	WO-434 — P1: NUL-padded .cs files on Linux mount — commit-poisoning guard
+WO-435	[Held]	WO-435 — P3: Mirza Beig Terrain Rain shaders missing ASESampleShaders/SimpleTerrainBase dependency
+WO-436	[Spec]	WO-436 — P3: Deprecation sweep — CS0618 (WaveManager:536, GameOverScreen:88/94) + CS0414 unused field
+WO-437	[Ready]	WO-437 — Combat HUD restyle from Tech hud elements pack
+WO-438	[Blocked]	WO-438 — Global Tech hud elements styling rollout (all screens)
+WO-443	[In progress]	WO-443 — AutoPilot autonomous playtest bot
+WO-444	[Ready]	WO-444 — Vendor stock not limited by store type (armorer should sell armor, not weapons)
+WO-445	[Ready]	WO-445 — Enemy brute animation retarget (Generic-rig brutes on Humanoid controller)
+WO-446	[Ready]	WO-446 — Companion portrait missing in party HUD
+WO-447	[Ready]	WO-447 — Remove PetSelect screen — route pet acquisition through the Echo Hollow
+WO-448	[Ready]	WO-448 — Compass should show N/S/E/W heading
+WO-449	[Ready]	WO-449 — Hero can target/attack enemy from inside the wall
+WO-450	[Ready]	WO-450 — Declare Player + HeroTarget tags in TagManager + guard FindWithTag call sites (latent-bug class)
+WO-451	[Ready]	WO-451 — Shorten cold-open intro + soft bg scenes + remove shooting stars
+WO-452	[Ready]	WO-452 — AutoPilot hardening: oracle assertions + visual log-scans
+WO-453	[Ready]	WO-453 — P0: ResourceBuildingProgression static type-initializer throws (cascading NREs + structure upgrade broken)
+WO-454	[Ready]	WO-454 — P1: EnemyBrain creates NavMeshPath from ctor/field-initializer (RegionMob spawn throws)
+WO-455	[Ready]	WO-455 — P1: Icon_hud_talk missing CanvasGroup → VillageHudController HUD build partial (talk broken)
+WO-456	[Ready]	WO-456 — P0: MainCastle_Hall has no Tree of Life / no enemy win-target
+WO-458	[Ready]	WO-327 — Admin 'Trigger next wave' no-op (ForceBeginNextWave)
+WO-459	[Ready]	WO-328 — Recurring NullReferenceException spam (root-cause investigation)
+WO-460	[In progress]	WO-329 — Check-in regression test suite (static gate + Unity tests + manual QA)
+WO-461	[Spec]	TECH DEBT: Consolidate proximity-interaction behind one service the HUD reads
+WO-462	[Ready]	WO-430 — Notion MCP connected (Cowork session can read/write Work Orders DB)
+WO-463	[Spec]	WO-430 — P1: Tree of Life fail (owner playtest 2026-06-12)
+WO-464	[Ready]	WO-450 — P2: Elemental Zone Layer (Ice/Fire/Wind/Earth) on existing RegionZone system
+WO-465	[Ready]	WO-452 — P1: WebGL build-mode palette empty + bar across top (no placeable items)
+WO-466	[Spec]	WO-453 — Offensive Troop System (training, leveling, deploy)
+WO-467	[Ready]	WO-454 — Faction Base Scene Generator (player base = enemy outpost = a scene)
+WO-468	[Ready]	WO-455 — Dev Capture Toolkit (DevCaptureService spine + probes + processor)
+WO-470	[Held]	WO-282 — Heroes → Addressables

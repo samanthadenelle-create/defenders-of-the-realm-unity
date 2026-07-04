@@ -1,0 +1,14 @@
+﻿{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.1187665462493898,"utc":"2026-07-03T21:43:34.1368518Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":3.1174089908599855,"utc":"2026-07-03T21:43:35.1348854Z"}
+{"kind":"flagged","message":"[Title] can we make these small clean buttons in a row make the start new text white as well and put all three on same row with rounded button ui styling","stack":"","scene":"Title","t":95.00438690185547,"utc":"2026-07-03T21:45:07.0198200Z"}
+{"kind":"scene_loaded","message":"HeroSelect","stack":"","scene":"HeroSelect","t":136.2338104248047,"utc":"2026-07-03T21:45:48.2480513Z"}
+{"kind":"flagged","message":"[HeroSelect] Knight should use a white text so it pops can we move everytthing up a little so the dive into village button stays in the frame. and critical issue we have a pi integration, so should read Powered by Pi, and only powered by SKR if the SOL","stack":"","scene":"HeroSelect","t":290.6819763183594,"utc":"2026-07-03T21:48:22.6913638Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":302.79736328125,"utc":"2026-07-03T21:48:34.8060803Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":304.1243896484375,"utc":"2026-07-03T21:48:36.1329918Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] hero coloring seems wrong, holding two sords, shield is 180 degrees wrong","stack":"","scene":"MainCastle_Hall","t":402.86297607421877,"utc":"2026-07-03T21:50:14.8681326Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] no hud in battle","stack":"","scene":"MainCastle_Hall","t":547.146484375,"utc":"2026-07-03T21:52:39.1468324Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":653.1436767578125,"utc":"2026-07-03T21:54:25.1413281Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":653.2794189453125,"utc":"2026-07-03T21:54:25.2769492Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] can we add logic if we have 2 or more enemies tracking us that it increases the count in the battle arena, so all 6 show? makes a very good reason why we need to signel them out","stack":"","scene":"MainCastle_Hall","t":821.0169677734375,"utc":"2026-07-03T21:57:13.0098809Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":905.0684204101563,"utc":"2026-07-03T21:58:37.0584096Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":905.19189453125,"utc":"2026-07-03T21:58:37.1823856Z"}

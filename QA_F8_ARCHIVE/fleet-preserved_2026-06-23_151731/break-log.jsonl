@@ -1,0 +1,11 @@
+﻿{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.106412649154663,"utc":"2026-06-23T19:53:53.9385072Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.398325204849243,"utc":"2026-06-23T19:53:54.2306138Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":65.12155151367188,"utc":"2026-06-23T19:54:56.9542015Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":65.81584167480469,"utc":"2026-06-23T19:54:57.6482217Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] shield still","stack":"","scene":"MainCastle_Hall","t":77.99992370605469,"utc":"2026-06-23T19:55:09.8324017Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] scale barracks  1.5x (Y only)","stack":"","scene":"MainCastle_Hall","t":130.81561279296876,"utc":"2026-06-23T19:56:02.6474267Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 75s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":211.07302856445313,"utc":"2026-06-23T19:57:22.9049458Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] Shield rotate z+ 90 x+135","stack":"","scene":"MainCastle_Hall","t":320.08465576171877,"utc":"2026-06-23T19:59:11.9170481Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] walking north facing east while walking","stack":"","scene":"MainCastle_Hall","t":530.531494140625,"utc":"2026-06-23T20:02:42.3640148Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] (no note)","stack":"","scene":"MainCastle_Hall","t":545.9312133789063,"utc":"2026-06-23T20:02:57.7628390Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] world seam still broken","stack":"","scene":"MainCastle_Hall","t":564.180908203125,"utc":"2026-06-23T20:03:16.0127284Z"}

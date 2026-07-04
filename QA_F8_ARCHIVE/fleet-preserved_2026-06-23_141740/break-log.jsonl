@@ -1,0 +1,59 @@
+﻿{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"MainCastle_Hall","t":4.445631504058838,"utc":"2026-06-23T16:12:58.8294879Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":5.019697189331055,"utc":"2026-06-23T16:12:59.4039356Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":6.597464084625244,"utc":"2026-06-23T16:13:00.9819196Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] not tracking me but attacking me","stack":"","scene":"MainCastle_Hall","t":124.32831573486328,"utc":"2026-06-23T16:14:58.7125342Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"MainCastle_Hall","t":4.430529594421387,"utc":"2026-06-23T16:20:57.0869706Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":5.070407867431641,"utc":"2026-06-23T16:20:57.7270473Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":5.706119537353516,"utc":"2026-06-23T16:20:58.3625875Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] running past me. do i need to close editor?","stack":"","scene":"MainCastle_Hall","t":38.780704498291019,"utc":"2026-06-23T16:21:31.4373494Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"MainCastle_Hall","t":4.175055980682373,"utc":"2026-06-23T16:39:02.5532062Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":4.817747116088867,"utc":"2026-06-23T16:39:03.1962196Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":5.508995532989502,"utc":"2026-06-23T16:39:03.8879880Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] they just go by","stack":"","scene":"MainCastle_Hall","t":32.44668197631836,"utc":"2026-06-23T16:39:30.8244977Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] where are they going? Why am i thrain, when we are only testing the knight?","stack":"","scene":"MainCastle_Hall","t":64.51667785644531,"utc":"2026-06-23T16:40:02.8949381Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] werent we going to thin these out?","stack":"","scene":"MainCastle_Hall","t":95.38285827636719,"utc":"2026-06-23T16:40:33.7610151Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] no building buttons or exit/close","stack":"","scene":"MainCastle_Hall","t":173.6889190673828,"utc":"2026-06-23T16:41:52.0669777Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"MainCastle_Hall","t":4.371994972229004,"utc":"2026-06-23T16:42:35.2647928Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":5.054516315460205,"utc":"2026-06-23T16:42:35.9470654Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":5.555728912353516,"utc":"2026-06-23T16:42:36.4480719Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] w","stack":"","scene":"MainCastle_Hall","t":22.787784576416017,"utc":"2026-06-23T16:42:53.6808961Z"}
+{"kind":"scene_loaded","message":"Village2","stack":"","scene":"Village2","t":34.91534423828125,"utc":"2026-06-23T16:43:05.8079711Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"Village2","t":35.039398193359378,"utc":"2026-06-23T16:43:05.9310437Z"}
+{"kind":"flagged","message":"[Village2] village 2 is not what i designed","stack":"","scene":"Village2","t":60.963844299316409,"utc":"2026-06-23T16:43:31.8564208Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":102.6362533569336,"utc":"2026-06-23T16:44:13.5287402Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"MainCastle_Hall","t":4.1480207443237309,"utc":"2026-06-23T16:44:40.3045707Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":4.742469310760498,"utc":"2026-06-23T16:44:40.8994750Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":5.242737293243408,"utc":"2026-06-23T16:44:41.3999068Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] no no enemies","stack":"","scene":"MainCastle_Hall","t":62.01927947998047,"utc":"2026-06-23T16:45:38.1756589Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] wierd blocks","stack":"","scene":"MainCastle_Hall","t":74.79911804199219,"utc":"2026-06-23T16:45:50.9553353Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] towers have no coliders","stack":"","scene":"MainCastle_Hall","t":108.44071197509766,"utc":"2026-06-23T16:46:24.5978169Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] this is better","stack":"","scene":"MainCastle_Hall","t":182.08238220214845,"utc":"2026-06-23T16:47:38.2386315Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] not sure but did get here","stack":"","scene":"MainCastle_Hall","t":239.3487548828125,"utc":"2026-06-23T16:48:35.5051779Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"MainCastle_Hall","t":8.326315879821778,"utc":"2026-06-23T17:30:28.6094830Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":8.899746894836426,"utc":"2026-06-23T17:30:29.1829016Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":9.590496063232422,"utc":"2026-06-23T17:30:29.8730062Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] image missing and tree in wall","stack":"","scene":"MainCastle_Hall","t":256.79364013671877,"utc":"2026-06-23T17:34:37.0764640Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"MainCastle_Hall","t":5.446957588195801,"utc":"2026-06-23T17:56:10.3841394Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":5.976491451263428,"utc":"2026-06-23T17:56:10.9131158Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":6.509049415588379,"utc":"2026-06-23T17:56:11.4458058Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] still not a knight","stack":"","scene":"MainCastle_Hall","t":21.855154037475587,"utc":"2026-06-23T17:56:26.7925133Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] seam didnt work or didnt do yet","stack":"","scene":"MainCastle_Hall","t":67.14461517333985,"utc":"2026-06-23T17:57:12.0809744Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"MainCastle_Hall","t":5.629966735839844,"utc":"2026-06-23T19:06:32.5769432Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":6.17852783203125,"utc":"2026-06-23T19:06:33.1254639Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":6.872751712799072,"utc":"2026-06-23T19:06:33.8193835Z"}
+{"kind":"error","message":"[Flow:HeroBody]   ResolveHeroClass: HeroClass was UNSET at body-build — source (selection/start-flow) failed to persist it. Defaulting to Knight (V1). This is a SOURCE regression to fix.","stack":"UnityEngine.Debug:LogError (object)\nDeNelle.Core.Diagnostics.UnityLogSink:Error (string) (at Assets/_Modules/Core/Diagnostics/FlowTrace.cs:378)\nDeNelle.Core.Diagnostics.FlowTrace:Fail (string,string) (at Assets/_Modules/Core/Diagnostics/FlowTrace.cs:127)\nDeNelle.Village.HeroBodySwapper:ResolveHeroClass () (at Assets/_Modules/Village/Hero/HeroBodySwapper.cs:778)\nDeNelle.Village.HeroBodySwapper:Start () (at Assets/_Modules/Village/Hero/HeroBodySwapper.cs:54)\n","scene":"MainCastle_Hall","t":6.9272942543029789,"utc":"2026-06-23T19:06:33.8746131Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] shield needs adjusted but we have a knight","stack":"","scene":"MainCastle_Hall","t":30.762638092041017,"utc":"2026-06-23T19:06:57.7100243Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] enter arena should only be on arena (whcich should be flagged off","stack":"","scene":"MainCastle_Hall","t":75.47425842285156,"utc":"2026-06-23T19:07:42.4206445Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] world seam issue, can we apply same scripting logic from Grok to auto seam from script at runtime?","stack":"","scene":"MainCastle_Hall","t":131.5632781982422,"utc":"2026-06-23T19:08:38.5102983Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] find out what these are and remove, if we cannot for sopme reason at least hide or make non visible","stack":"","scene":"MainCastle_Hall","t":228.5939483642578,"utc":"2026-06-23T19:10:15.5404809Z"}
+{"kind":"scene_loaded","message":"Village2","stack":"","scene":"Village2","t":271.2799377441406,"utc":"2026-06-23T19:10:58.2271810Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"Village2","t":271.42413330078127,"utc":"2026-06-23T19:10:58.3709268Z"}
+{"kind":"flagged","message":"[Village2] a","stack":"","scene":"Village2","t":345.0581970214844,"utc":"2026-06-23T19:12:12.0049036Z"}
+{"kind":"scene_loaded","message":"Village2","stack":"","scene":"Village2","t":362.9271545410156,"utc":"2026-06-23T19:12:29.8743667Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"Village2","t":363.01904296875,"utc":"2026-06-23T19:12:29.9660224Z"}
+{"kind":"scene_loaded","message":"Village2","stack":"","scene":"Village2","t":370.4289245605469,"utc":"2026-06-23T19:12:37.3759829Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"Village2","t":370.5271911621094,"utc":"2026-06-23T19:12:37.4744149Z"}
+{"kind":"flagged","message":"[Village2] resawn at enemy outpost","stack":"","scene":"Village2","t":381.0794372558594,"utc":"2026-06-23T19:12:48.0261984Z"}
+{"kind":"scene_loaded","message":"Village2","stack":"","scene":"Village2","t":387.1221008300781,"utc":"2026-06-23T19:12:54.0695861Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"Village2","t":387.2108459472656,"utc":"2026-06-23T19:12:54.1578274Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":394.51190185546877,"utc":"2026-06-23T19:13:01.4593518Z"}

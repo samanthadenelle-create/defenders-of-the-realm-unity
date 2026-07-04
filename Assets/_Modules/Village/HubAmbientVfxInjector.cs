@@ -50,6 +50,10 @@ namespace DeNelle.Village
         public static HubAmbientVfxInjector Instance { get; private set; }
 
         private const string TargetScene = "MainCastle_Hall";
+        // WO-608 merge: ambient hub VFX must fire on the merged Main_Castle_Overworld too,
+        // while staying castle-only. Mirrors CastleBeamHider / CastleVendorNpcInjector.
+        private const string MergedTargetScene = "Main_Castle_Overworld";
+        private static bool IsCastleHubScene(string n) => n == TargetScene || n == MergedTargetScene;
         private const string HolderName  = "HubAmbientVFX (runtime)";
 
         // =====================================================================
@@ -129,7 +133,7 @@ namespace DeNelle.Village
 
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneLoaded += OnSceneLoaded;
-            if (SceneManager.GetActiveScene().name == TargetScene) Inject();
+            if (IsCastleHubScene(SceneManager.GetActiveScene().name)) Inject();
         }
 
         private void OnDestroy()
@@ -140,7 +144,7 @@ namespace DeNelle.Village
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (scene.name == TargetScene) Inject();
+            if (IsCastleHubScene(scene.name)) Inject();
         }
 
         private void Inject()

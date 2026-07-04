@@ -1,0 +1,25 @@
+﻿{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":9.712822914123536,"utc":"2026-06-20T22:16:57.4022387Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":10.294391632080079,"utc":"2026-06-20T22:16:57.9840345Z"}
+{"kind":"scene_loaded","message":"PetSelect","stack":"","scene":"PetSelect","t":15.048221588134766,"utc":"2026-06-20T22:17:02.7377748Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":16.465513229370118,"utc":"2026-06-20T22:17:04.1548631Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":17.348270416259767,"utc":"2026-06-20T22:17:05.0381564Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] image","stack":"","scene":"MainCastle_Hall","t":109.41822814941406,"utc":"2026-06-20T22:18:37.1062544Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.116234302520752,"utc":"2026-06-20T22:48:35.5893393Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.9504714012145998,"utc":"2026-06-20T22:48:36.4237508Z"}
+{"kind":"scene_loaded","message":"PetSelect","stack":"","scene":"PetSelect","t":11.383023262023926,"utc":"2026-06-20T22:48:44.8560369Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":12.437531471252442,"utc":"2026-06-20T22:48:45.9101017Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":13.19684886932373,"utc":"2026-06-20T22:48:46.6699111Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 75s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":134.32321166992188,"utc":"2026-06-20T22:50:47.7934689Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] see missing rms","stack":"","scene":"MainCastle_Hall","t":146.12225341796876,"utc":"2026-06-20T22:50:59.5928676Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.1125295162200929,"utc":"2026-06-20T23:18:33.0534300Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.9279160499572756,"utc":"2026-06-20T23:18:33.8682261Z"}
+{"kind":"scene_loaded","message":"PetSelect","stack":"","scene":"PetSelect","t":13.445760726928711,"utc":"2026-06-20T23:18:44.3851020Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":14.20129680633545,"utc":"2026-06-20T23:18:45.1399367Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":15.018075942993164,"utc":"2026-06-20T23:18:45.9570412Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] close\\","stack":"","scene":"MainCastle_Hall","t":120.50997924804688,"utc":"2026-06-20T23:20:31.4372325Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.1175429821014406,"utc":"2026-06-20T23:35:23.4760151Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.946197509765625,"utc":"2026-06-20T23:35:24.3045511Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 75s in 'Title'","stack":"","scene":"Title","t":78.9319076538086,"utc":"2026-06-20T23:36:40.2837884Z"}
+{"kind":"scene_loaded","message":"PetSelect","stack":"","scene":"PetSelect","t":178.3365478515625,"utc":"2026-06-20T23:38:19.6796909Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":180.22393798828126,"utc":"2026-06-20T23:38:21.5677446Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":180.96536254882813,"utc":"2026-06-20T23:38:22.3083565Z"}

@@ -150,8 +150,22 @@ namespace DeNelle.Village
             Debug.Log("[WorldSceneLoader] TERRAINDIAG no Terrain found in OuterWorld!");
         }
 
+        private const string MergedWorldSceneName = "Main_Castle_Overworld";
+
         private static void TryLoadOuterWorld(Scene scene, string via)
         {
+            // WO-608 (ff.mergedworld): the merged single scene ALREADY contains the OuterWorld content
+            // in-scene (welded into one continuous navmesh by WorldMergeBuilder). Streaming OuterWorld
+            // additively on top of it would DOUBLE-LOAD the terrain/regions — no-op here. This is the
+            // ONLY scene the additive path is disabled for; every other hub still streams normally.
+            if (DeNelle.Core.FeatureFlags.MergedWorld &&
+                string.Equals(scene.name, MergedWorldSceneName, System.StringComparison.Ordinal))
+            {
+                Debug.Log("[WorldSceneLoader] (" + via + ") skip — '" + scene.name +
+                    "' is the MERGED single scene (ff.mergedworld): OuterWorld content is already in-scene, not streaming additively.");
+                return;
+            }
+
             // Pull OuterWorld when the active scene is a hub (Village2 / Castle hubs) — shared source.
             bool isHubScene = DeNelle.Core.HubScenes.IsHub(scene.name);
             if (!isHubScene)

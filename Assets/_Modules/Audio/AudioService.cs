@@ -917,7 +917,11 @@ namespace DeNelle.Audio
             if (sceneName == SceneRouter.Village)  return MusicTrack.Village;
             // Castle hub scenes share the town/village ambient BGM (same explore
             // context as Village2 — respects the player's jukebox pick).
-            if (sceneName == "MainCastle_Hall" || sceneName == "CastleHub" || sceneName == "CastleHub_MainKeep")
+            // WO-608: the merged single scene (Main_Castle_Overworld, ff.MergedWorld) is
+            // the home hub too — same explore/town ambient. Adding the literal is safe when
+            // the flag's OFF (that scene never loads on the legacy path).
+            if (sceneName == "MainCastle_Hall" || sceneName == "CastleHub" || sceneName == "CastleHub_MainKeep"
+                || sceneName == "Main_Castle_Overworld")
                 return MusicTrack.Village;
             if (sceneName == SceneRouter.ATBBattle) return MusicTrack.Battle;
 

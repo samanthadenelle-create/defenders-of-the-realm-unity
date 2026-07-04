@@ -1,0 +1,6 @@
+﻿{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.282963275909424,"utc":"2026-06-30T17:30:55.4367120Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":3.089778184890747,"utc":"2026-06-30T17:30:56.2430536Z"}
+{"kind":"scene_loaded","message":"HeroSelect","stack":"","scene":"HeroSelect","t":14.558083534240723,"utc":"2026-06-30T17:31:07.7113814Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":19.267459869384767,"utc":"2026-06-30T17:31:12.4207332Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":21.298852920532228,"utc":"2026-06-30T17:31:14.4525012Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] here","stack":"","scene":"MainCastle_Hall","t":106.3489761352539,"utc":"2026-06-30T17:32:39.5020641Z"}

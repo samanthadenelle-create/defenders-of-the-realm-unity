@@ -262,8 +262,9 @@ namespace DeNelle.Village.World.Camps
             return false;
         }
 
+        // WO-608 merge: route through HubScenes.IsOverworld so raid outposts spawn on the
+        // merged "Main_Castle_Overworld" too (matches legacy "OuterWorld" AND the merged name).
         private static bool NameMatches(string sceneName) =>
-            !string.IsNullOrEmpty(sceneName) &&
-            sceneName.IndexOf(OuterWorldSceneName, System.StringComparison.OrdinalIgnoreCase) >= 0;
+            DeNelle.Core.HubScenes.IsOverworld(sceneName);
     }
 }

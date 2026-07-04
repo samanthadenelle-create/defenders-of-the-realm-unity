@@ -2235,13 +2235,28 @@ namespace DeNelle.Editor
             //    we drop the filler entirely rather than ship a magenta plane. (If a visible gap proves
             //    objectionable, re-add a filler using an EXISTING URP material asset, not Shader.Find.)
 
-            // 4. The real crossing: a direct NavMeshLink castle-floor-edge -> OuterWorld north
-            //    edge. Connects at RUNTIME when OuterWorld is additively loaded (the EnemyStronghold
-            //    pattern). Its far end is off-mesh at THIS solo castle bake — expected; it binds live.
-            BuildBridgeNavLink(seamRoot.transform, "NavLink_CastleToOuterWorld",
-                new Vector3(gateX, 0f, -63f),    // on castle navmesh (CourtyardFloor_Nav edge ~-65)
-                new Vector3(gateX, 0f, -76f),    // on OuterWorld navmesh (north edge -72)
-                10f);
+            // 4. The real crossing: a direct cross-moat NavMeshLink PER GATE (castle-floor-edge ->
+            //    OuterWorld edge). Each connects at RUNTIME when OuterWorld is additively loaded (the
+            //    EnemyStronghold pattern); its far end is off-mesh at THIS solo castle bake — expected,
+            //    it binds live. The SOUTH pair below is the proven-working crossing (AssertHeroCrossing
+            //    OK); the other three gates ARE the south gate rotated about the world Y origin (the
+            //    SAME {S:0,W:90,N:180,E:270} symmetry the bridges/gates use — CastleMoatBuilder.
+            //    BuildDrawbridges), so we rotate the two south endpoints per side and bake ONE link
+            //    each. This is the §12 fix for the captured `[Flow:MoatVerify] CHECK5 'West'/'North'/
+            //    'East': path PathPartial — crossing NOT traversable` / `MOAT_INCOMPLETE`: W/N/E had NO
+            //    baked cross-moat link (only South did) and the runtime BuildAiLink kept PathPartialing
+            //    (`RUNTIME_SEAM_NAV_FAIL`). One baked link per side makes all four crossings traversable.
+            Vector3 southInner = new Vector3(gateX, 0f, -63f);   // on castle navmesh (CourtyardFloor_Nav edge ~-65)
+            Vector3 southOuter = new Vector3(gateX, 0f, -76f);   // on OuterWorld navmesh (north edge -72)
+            var seamSides = new (string tag, float yaw)[] { ("S", 0f), ("W", 90f), ("N", 180f), ("E", 270f) };
+            foreach (var (tag, yaw) in seamSides)
+            {
+                Quaternion rot = Quaternion.Euler(0f, yaw, 0f);   // about world Y origin — mirrors the bridge yaw
+                BuildBridgeNavLink(seamRoot.transform, "NavLink_CastleToOuterWorld_" + tag,
+                    rot * southInner,   // castle-inner endpoint, rotated to this side's radial
+                    rot * southOuter,   // OuterWorld-outer endpoint, rotated to this side's radial
+                    10f);
+            }
 
             // 5. Rebake the castle nav (filler has no collider, so the castle surface is unchanged)
             //    + persist + save.

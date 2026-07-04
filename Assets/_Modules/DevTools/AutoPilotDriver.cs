@@ -90,7 +90,14 @@ namespace DeNelle.DevTools
 
         // The gameplay scene the bot must be in before it can drive. Loading it
         // single-mode triggers WorldSceneLoader's additive OuterWorld load.
-        private const string GameplayScene = "MainCastle_Hall";
+        // WO-608: flag-aware. Under ff.MergedWorld the home hub is the single merged
+        // Main_Castle_Overworld scene (content already in-scene → no additive load), so the
+        // headless fleet boots + drives THAT scene for the continuous-walk verification;
+        // OFF = legacy MainCastle_Hall (+ additive OuterWorld). TargetScene / the moat
+        // oracle / the popup-recover reload all derive from this, so they follow the flag.
+        private static string GameplayScene => DeNelle.Core.FeatureFlags.MergedWorld
+            ? "Main_Castle_Overworld"
+            : "MainCastle_Hall";
 
         // Default seed when no --seed arg is supplied — a fixed value keeps a lone
         // run fully deterministic. Fleet runs pass distinct seeds to diverge paths.
@@ -279,6 +286,11 @@ namespace DeNelle.DevTools
                 // its own MOAT_COMPLETE / MOAT_INCOMPLETE marker to break-log.
                 yield return RunPhase("VerifyMoatOracle", VerifyMoatOracle());
                 yield return RunPhase("CaptureMoatRing", CaptureMoatRing());
+                // Merged-world castle EXTERIOR evidence (owner 2026-07-04): the QA fleet never
+                // SHOWS the castle exterior, so a leftover bridge/seam structure out there is
+                // invisible to CLI + owner. One aerial top-down (whole castle + ~150m ring) plus
+                // one shot 25m OUTSIDE each of the 4 gates looking BACK at the castle.
+                yield return RunPhase("CaptureCastleExterior", CaptureCastleExterior());
                 yield return RunPhase("TriggerWave", TriggerWave());
                 // WO-452 tranche C: combat invariants during the (just-triggered) wave — hero HP
                 // never goes negative while still alive, >=1 placed tower actually fired in the
@@ -809,6 +821,7 @@ namespace DeNelle.DevTools
                 case "CaptureDockOverlays": return 30f;  // 4 dock overlays x (open + 2-frame render + capture + settle close)
                 case "VerifyMoatOracle":  return 15f;    // 1.5s settle + side-effect-free oracle
                 case "CaptureMoatRing":   return 40f;    // 5 shots (overview + 4 cardinal seams) x (spawn cam + 2-frame render + capture + destroy)
+                case "CaptureCastleExterior": return 40f; // 5 shots (1 aerial + 4 gate-exterior) x (spawn cam + 2-frame render + capture + destroy)
                 case "TriggerWave":       return WaveTimeout;
                 case "AttemptExitCastle": return ExitTimeout;
                 case "HomeReturnRoundTrip": return HomeReturnTimeout;   // WO-602 — walk out 20m + walk back + warp
@@ -3303,6 +3316,62 @@ namespace DeNelle.DevTools
             yield return null;   // flush ScreenCapture before we tear the camera down
             if (camGo != null) UnityEngine.Object.Destroy(camGo);
             FlowTrace.Step("Auto", $"CaptureFramedShot: captured {fileName} (eye={eye}).");
+        }
+
+        // =====================================================================
+        //  PHASE: CaptureCastleExterior  (owner directive 2026-07-04 — "required for bots")
+        //  The headless QA fleet never SHOWS the merged-world castle EXTERIOR, so a leftover
+        //  bridge/seam structure out past the walls is invisible to CLI + owner. This phase
+        //  self-serves that evidence with 5 short-lived capture-camera shots (reuses the
+        //  CaptureFramedShot moat-cam path — composites over the follow-cam, shoots 2 frames,
+        //  destroys the cam; blank under -nographics; each shot Guard-wrapped so one miss logs
+        //  + continues). The castle sits at world ORIGIN flush at y=0; moat outer band = 62,
+        //  gates at the cardinals ~r=58 (South -Z / North +Z / East +X / West -X).
+        //   1) AERIAL  -> castle_aerial.png
+        //   2) 25m OUTSIDE each gate, facing the castle -> castle_gate_S/W/N/E.png
+        // =====================================================================
+        private IEnumerator CaptureCastleExterior()
+        {
+            const float GateRadius   = 58f;   // gate ring (moat band 44..62; gates seat ~58)
+            const float OutsideDist  = 25f;   // owner: "go 25m OUTSIDE each gate"
+            const float EyeHeight     = 2.5f;  // eye height at the gate (owner ~2-3m)
+
+            int shot = 0;
+
+            // ---- 1) AERIAL / top-down --------------------------------------------------
+            // A slight bird's-eye TILT rather than dead-straight-down: a pure nadir view reads
+            // flat (roofs only, no wall/gate relief). Eye high on -Z, tilted down onto origin,
+            // wide 60-deg FOV frames the whole ~124m-wide castle + inner ring + all 4 gates +
+            // the surrounding ~150m so any stray exterior structure is caught in one shot.
+            Vector3 aerialEye = new Vector3(0f, 220f, -120f);
+            yield return CaptureFramedShot(aerialEye, new Vector3(0f, 0f, 0f), 60f, "castle_aerial.png");
+            shot++;
+            FlowTrace.Step("Auto", $"CaptureCastleExterior: aerial eye={aerialEye} -> (0,0,0) fov=60 -> castle_aerial.png.");
+
+            // ---- 2) 25m OUTSIDE each gate, looking BACK at the castle -------------------
+            // outwardDir points radially OUT from origin through the gate. eye = outward*(58+25)
+            // + up*2.5 (just past the gate at eye height); lookTarget = the castle body (0,4,0).
+            var gates = new (string label, Vector3 outward)[]
+            {
+                ("S", new Vector3(0f, 0f, -1f)),
+                ("W", new Vector3(-1f, 0f, 0f)),
+                ("N", new Vector3(0f, 0f, 1f)),
+                ("E", new Vector3(1f, 0f, 0f)),
+            };
+            foreach (var (label, outward) in gates)
+            {
+                Vector3 dir = outward.normalized;
+                Vector3 gatePos    = dir * GateRadius;
+                Vector3 eye        = dir * (GateRadius + OutsideDist) + Vector3.up * EyeHeight;
+                Vector3 lookTarget = new Vector3(0f, 4f, 0f);
+                string fileName    = "castle_gate_" + label + ".png";
+                FlowTrace.Step("Auto", $"CaptureCastleExterior: gate {label} gatePos={gatePos} eye={eye} -> {lookTarget} fov=55 -> {fileName}.");
+                yield return CaptureFramedShot(eye, lookTarget, 55f, fileName);
+                shot++;
+            }
+
+            _lastDetail = $"{shot} castle-exterior shots captured (aerial + 4 gates S/W/N/E)";
+            FlowTrace.Step("Auto", $"CaptureCastleExterior: {shot} shots captured (castle_aerial.png + castle_gate_S/W/N/E.png).");
         }
 
         // =====================================================================

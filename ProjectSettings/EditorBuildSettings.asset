@@ -68,6 +68,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Dungeon.unity
     guid: 4629e1fb6060c1a4e84b1ed676fe69e1
+  - enabled: 1
+    path: Assets/Scenes/Main_Castle_Overworld.unity
+    guid: df217027c7a60274e8e56fbc96dad8fc
   m_configObjects:
     com.unity.addressableassets: {fileID: 11400000, guid: 16d06bc18dab1cd408b1472b0382cf8a, type: 2}
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}

@@ -1,0 +1,5 @@
+﻿{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.120208978652954,"utc":"2026-06-29T10:18:23.7769045Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.468364953994751,"utc":"2026-06-29T10:18:24.1248762Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":10.656495094299317,"utc":"2026-06-29T10:18:32.3122859Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":11.504039764404297,"utc":"2026-06-29T10:18:33.1598393Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] towers cannot target dragon, cano see dragon as too high, tree has 0life no game over","stack":"","scene":"MainCastle_Hall","t":541.0850219726563,"utc":"2026-06-29T10:27:22.7275694Z"}

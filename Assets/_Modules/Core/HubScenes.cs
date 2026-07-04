@@ -22,7 +22,7 @@ namespace DeNelle.Core
     public static class HubScenes
     {
         /// <summary>Canonical home/hub scene names. Add a new hub here (and only here).</summary>
-        public static readonly string[] Names = { "Village2", "MainCastle_Hall", "CastleHub", "CastleHub_MainKeep" };
+        public static readonly string[] Names = { "Village2", "MainCastle_Hall", "CastleHub", "CastleHub_MainKeep", "Main_Castle_Overworld" };
 
         /// <summary>True if <paramref name="sceneName"/> is a home/hub scene (exact or prefix-contains,
         /// matching WorldSceneLoader's prior behaviour so CastleHub* variants still count).</summary>
@@ -32,6 +32,19 @@ namespace DeNelle.Core
             for (int i = 0; i < Names.Length; i++)
                 if (sceneName == Names[i] || sceneName.Contains(Names[i])) return true;
             return false;
+        }
+
+        /// <summary>True if <paramref name="sceneName"/> is an OVERWORLD scene — the legacy
+        /// standalone <c>OuterWorld</c> (exact or Contains, so additively-loaded variants count)
+        /// OR the merged <c>Main_Castle_Overworld</c> scene (WO-608 merge). The single source of
+        /// truth for overworld-behavior gates (encounter spawner, harvest workers, camps, raid
+        /// outposts, world boundary) so the "OuterWorld" vs "Overworld" naming trap can never
+        /// silently no-op the overworld half of the merged scene again.</summary>
+        public static bool IsOverworld(string sceneName)
+        {
+            if (string.IsNullOrEmpty(sceneName)) return false;
+            return sceneName.IndexOf("OuterWorld", StringComparison.OrdinalIgnoreCase) >= 0
+                || sceneName == "Main_Castle_Overworld";
         }
 
         /// <summary>True if <paramref name="sceneName"/> is an enemy RAID scene

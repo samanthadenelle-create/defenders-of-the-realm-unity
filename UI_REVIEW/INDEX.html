@@ -1,0 +1,469 @@
+﻿<!doctype html>
+<html lang='en'>
+<head>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>UI Review -- Defenders of the Realm</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: 'Segoe UI', system-ui, sans-serif; background:#14110c; color:#e8e0cf; }
+  header.top { position:sticky; top:0; z-index:5; padding:18px 24px; background:#1c1810;
+               border-bottom:2px solid #c9a24b; box-shadow:0 2px 12px rgba(0,0,0,.5); }
+  header.top h1 { margin:0 0 4px; font-size:20px; color:#e8c877; letter-spacing:.5px; }
+  header.top .sub { font-size:13px; color:#a99a78; }
+  .stats { display:flex; gap:18px; margin-top:8px; font-size:13px; }
+  .stats span { padding:3px 10px; border-radius:4px; background:#241f15; border:1px solid #3a3221; }
+  .stats .good { color:#8fd48f; } .stats .warn { color:#e6b45a; }
+  main { padding:24px; display:flex; flex-direction:column; gap:22px; max-width:1400px; margin:0 auto; }
+  .card { background:#1c1810; border:1px solid #3a3221; border-radius:10px; overflow:hidden; }
+  .card > header { display:flex; align-items:center; gap:12px; padding:12px 16px;
+                   background:#241f15; border-bottom:1px solid #3a3221; }
+  .card .num { font-variant-numeric:tabular-nums; color:#8a7c5c; font-size:13px; }
+  .card h2 { margin:0; font-size:16px; color:#e8c877; flex:0 1 auto; }
+  .card .meta { margin-left:auto; font-size:12px; color:#8a7c5c; }
+  .badge { font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; letter-spacing:.4px; }
+  .badge.ok { background:#1e3a1e; color:#8fd48f; border:1px solid #2f6b2f; }
+  .badge.pending { background:#3a2f14; color:#e6b45a; border:1px solid #6b551f; }
+  .pair { display:grid; grid-template-columns:1fr 1fr; gap:0; }
+  figure { margin:0; padding:14px; text-align:center; border-right:1px solid #2a251a; }
+  figure:last-child { border-right:none; }
+  figcaption { font-size:12px; color:#a99a78; margin-bottom:8px; text-transform:uppercase; letter-spacing:.6px; }
+  figure img { max-width:100%; height:auto; border:1px solid #3a3221; border-radius:6px; background:#0c0a07; }
+  .missing { padding:48px 12px; color:#8a7c5c; border:1px dashed #4a4130; border-radius:6px; font-size:14px; }
+  .fb { padding:10px 16px; border-top:1px solid #2a251a; font-size:13px; }
+  .fb a, header.top a { color:#c9a24b; text-decoration:none; }
+  .fb a:hover { text-decoration:underline; }
+  @media (max-width:760px){ .pair { grid-template-columns:1fr; } figure{border-right:none;border-bottom:1px solid #2a251a;} }
+</style>
+</head>
+<body>
+<header class='top'>
+  <h1>UI Review -- Defenders of the Realm</h1>
+  <div class='sub'>Template (Blink target) vs. Delivered (runtime capture). Generated 2026-07-04 02:52.</div>
+  <div class='stats'>
+    <span>32 screens</span>
+    <span class='good'>32 pairs complete</span>
+    <span class='warn'>0 awaiting shot</span>
+  </div>
+</header>
+<main>
+<section class='card'>
+  <header>
+    <span class='num'>01</span>
+    <h2>HeroTalents</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>HeroTalents &middot; FrameTalent</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='01_HeroTalents/template.png' target='_blank'><img src='01_HeroTalents/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='01_HeroTalents/delivered.png' target='_blank'><img src='01_HeroTalents/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='01_HeroTalents/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>02</span>
+    <h2>HeroSkillTree</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>HeroSkillTree &middot; FrameTalent</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='02_HeroSkillTree/template.png' target='_blank'><img src='02_HeroSkillTree/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='02_HeroSkillTree/delivered.png' target='_blank'><img src='02_HeroSkillTree/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='02_HeroSkillTree/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>03</span>
+    <h2>Crafting / Workshop</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>Crafting &middot; FrameCrafting</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='03_Crafting _ Workshop/template.png' target='_blank'><img src='03_Crafting _ Workshop/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='03_Crafting _ Workshop/delivered.png' target='_blank'><img src='03_Crafting _ Workshop/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='03_Crafting _ Workshop/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>04</span>
+    <h2>Building Upgrade</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>BuildingUpgrade &middot; FrameCore</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='04_Building Upgrade/template.png' target='_blank'><img src='04_Building Upgrade/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='04_Building Upgrade/delivered.png' target='_blank'><img src='04_Building Upgrade/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='04_Building Upgrade/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>05</span>
+    <h2>Cosmetic Shop</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>CosmeticShop &middot; FrameMerchant</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='05_Cosmetic Shop/template.png' target='_blank'><img src='05_Cosmetic Shop/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='05_Cosmetic Shop/delivered.png' target='_blank'><img src='05_Cosmetic Shop/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='05_Cosmetic Shop/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>06</span>
+    <h2>Pet Skill Tree</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>PetSkillTree &middot; FramePet</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='06_Pet Skill Tree/template.png' target='_blank'><img src='06_Pet Skill Tree/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='06_Pet Skill Tree/delivered.png' target='_blank'><img src='06_Pet Skill Tree/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='06_Pet Skill Tree/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>07</span>
+    <h2>Party Shop</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>PartyShop &middot; FrameMerchant</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='07_Party Shop/template.png' target='_blank'><img src='07_Party Shop/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='07_Party Shop/delivered.png' target='_blank'><img src='07_Party Shop/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='07_Party Shop/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>08</span>
+    <h2>Rumor Board</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>RumorBoard &middot; FrameQuest</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='08_Rumor Board/template.png' target='_blank'><img src='08_Rumor Board/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='08_Rumor Board/delivered.png' target='_blank'><img src='08_Rumor Board/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='08_Rumor Board/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>09</span>
+    <h2>Hero Loadout</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>HeroLoadout &middot; NONE</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><div class='missing'>no template</div></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='09_Hero Loadout/delivered.png' target='_blank'><img src='09_Hero Loadout/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='09_Hero Loadout/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>10</span>
+    <h2>Consumable Crafting (Alchemy)</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>ConsumableCrafting &middot; FrameCrafting</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='10_Consumable Crafting (Alchemy)/template.png' target='_blank'><img src='10_Consumable Crafting (Alchemy)/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='10_Consumable Crafting (Alchemy)/delivered.png' target='_blank'><img src='10_Consumable Crafting (Alchemy)/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='10_Consumable Crafting (Alchemy)/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>11</span>
+    <h2>Jeweler Crafting</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>JewelerCrafting &middot; FrameCrafting</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='11_Jeweler Crafting/template.png' target='_blank'><img src='11_Jeweler Crafting/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='11_Jeweler Crafting/delivered.png' target='_blank'><img src='11_Jeweler Crafting/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='11_Jeweler Crafting/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>12</span>
+    <h2>Equipment / Character paper-doll</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>EquipmentPanel &middot; FrameCharacter</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='12_Equipment _ Character paper-doll/template.png' target='_blank'><img src='12_Equipment _ Character paper-doll/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='12_Equipment _ Character paper-doll/delivered.png' target='_blank'><img src='12_Equipment _ Character paper-doll/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='12_Equipment _ Character paper-doll/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>13</span>
+    <h2>Game Guide</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>GameGuide &middot; NONE</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><div class='missing'>no template</div></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='13_Game Guide/delivered.png' target='_blank'><img src='13_Game Guide/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='13_Game Guide/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>14</span>
+    <h2>Hero Select</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>HeroSelect &middot; FrameCore</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='14_Hero Select/template.png' target='_blank'><img src='14_Hero Select/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='14_Hero Select/delivered.png' target='_blank'><img src='14_Hero Select/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='14_Hero Select/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>15</span>
+    <h2>Dialogue view</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>Dialogue &middot; FrameDialogue</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='15_Dialogue view/template.png' target='_blank'><img src='15_Dialogue view/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='15_Dialogue view/delivered.png' target='_blank'><img src='15_Dialogue view/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='15_Dialogue view/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>16</span>
+    <h2>Build Menu</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>BuildMenu &middot; FrameCore</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='16_Build Menu/template.png' target='_blank'><img src='16_Build Menu/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='16_Build Menu/delivered.png' target='_blank'><img src='16_Build Menu/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='16_Build Menu/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>17</span>
+    <h2>Help Menu</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>HelpMenu &middot; FrameCore</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='17_Help Menu/template.png' target='_blank'><img src='17_Help Menu/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='17_Help Menu/delivered.png' target='_blank'><img src='17_Help Menu/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='17_Help Menu/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>18</span>
+    <h2>Bug Report</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>BugReport &middot; FrameSettings</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='18_Bug Report/template.png' target='_blank'><img src='18_Bug Report/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='18_Bug Report/delivered.png' target='_blank'><img src='18_Bug Report/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='18_Bug Report/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>19</span>
+    <h2>Jukebox (Music Selection)</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>Jukebox &middot; FrameCore</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='19_Jukebox (Music Selection)/template.png' target='_blank'><img src='19_Jukebox (Music Selection)/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='19_Jukebox (Music Selection)/delivered.png' target='_blank'><img src='19_Jukebox (Music Selection)/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='19_Jukebox (Music Selection)/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>20</span>
+    <h2>Settings</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>Settings &middot; FrameSettings</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='20_Settings/template.png' target='_blank'><img src='20_Settings/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='20_Settings/delivered.png' target='_blank'><img src='20_Settings/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='20_Settings/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>21</span>
+    <h2>Pause</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>Pause &middot; FrameOptions</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='21_Pause/template.png' target='_blank'><img src='21_Pause/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='21_Pause/delivered.png' target='_blank'><img src='21_Pause/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='21_Pause/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>22</span>
+    <h2>Tower Manager</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>TowerManager &middot; FrameCore</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='22_Tower Manager/template.png' target='_blank'><img src='22_Tower Manager/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='22_Tower Manager/delivered.png' target='_blank'><img src='22_Tower Manager/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='22_Tower Manager/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>23</span>
+    <h2>End State (victory/defeat/death/results)</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>EndState &middot; FrameCore</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='23_End State (victory_defeat_death_results)/template.png' target='_blank'><img src='23_End State (victory_defeat_death_results)/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='23_End State (victory_defeat_death_results)/delivered.png' target='_blank'><img src='23_End State (victory_defeat_death_results)/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='23_End State (victory_defeat_death_results)/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>24</span>
+    <h2>Leaderboard</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>Leaderboard &middot; FrameCore</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='24_Leaderboard/template.png' target='_blank'><img src='24_Leaderboard/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='24_Leaderboard/delivered.png' target='_blank'><img src='24_Leaderboard/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='24_Leaderboard/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>25</span>
+    <h2>Clan Chat</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>ClanChat &middot; FrameCore</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='25_Clan Chat/template.png' target='_blank'><img src='25_Clan Chat/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='25_Clan Chat/delivered.png' target='_blank'><img src='25_Clan Chat/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='25_Clan Chat/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>26</span>
+    <h2>Echo Workforce (Harvest)</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>EchoWorkforce &middot; NONE</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><div class='missing'>no template</div></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='26_Echo Workforce (Harvest)/delivered.png' target='_blank'><img src='26_Echo Workforce (Harvest)/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='26_Echo Workforce (Harvest)/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>27</span>
+    <h2>Pack Store (IAP)</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>PackStore &middot; FrameMerchant</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='27_Pack Store (IAP)/template.png' target='_blank'><img src='27_Pack Store (IAP)/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='27_Pack Store (IAP)/delivered.png' target='_blank'><img src='27_Pack Store (IAP)/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='27_Pack Store (IAP)/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>28</span>
+    <h2>Raid Selection</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>RaidSelection &middot; NONE</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><div class='missing'>no template</div></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='28_Raid Selection/delivered.png' target='_blank'><img src='28_Raid Selection/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='28_Raid Selection/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>29</span>
+    <h2>Raid Deploy</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>RaidDeploy &middot; NONE</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><div class='missing'>no template</div></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='29_Raid Deploy/delivered.png' target='_blank'><img src='29_Raid Deploy/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='29_Raid Deploy/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>30</span>
+    <h2>Troop Training (Barracks)</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>TroopTraining &middot; NONE</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><div class='missing'>no template</div></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='30_Troop Training (Barracks)/delivered.png' target='_blank'><img src='30_Troop Training (Barracks)/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='30_Troop Training (Barracks)/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>31</span>
+    <h2>Merchant Shop</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>ShopPanel &middot; FrameMerchant</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='31_Merchant Shop/template.png' target='_blank'><img src='31_Merchant Shop/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='31_Merchant Shop/delivered.png' target='_blank'><img src='31_Merchant Shop/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='31_Merchant Shop/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+<section class='card'>
+  <header>
+    <span class='num'>32</span>
+    <h2>Inventory (bag)</h2>
+    <span class='badge ok'>PAIR COMPLETE</span>
+    <span class='meta'>Inventory &middot; FrameInventory</span>
+  </header>
+  <div class='pair'>
+    <figure><figcaption>Template (Blink)</figcaption><a href='32_Inventory (bag)/template.png' target='_blank'><img src='32_Inventory (bag)/template.png' alt='template'></a></figure>
+    <figure><figcaption>Delivered (runtime)</figcaption><a href='32_Inventory (bag)/delivered.png' target='_blank'><img src='32_Inventory (bag)/delivered.png' alt='delivered'></a></figure>
+  </div>
+  <div class='fb'><a href='32_Inventory (bag)/FEEDBACK.md' target='_blank'>open FEEDBACK.md &rarr;</a></div>
+</section>
+</main>
+</body>
+</html>

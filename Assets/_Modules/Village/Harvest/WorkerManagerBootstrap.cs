@@ -82,14 +82,21 @@ namespace DeNelle.Village
         // additively after the village via WorldSceneLoader).
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (scene.name == OuterWorldSceneName) InstallManager();
+            // WO-608 merge: HubScenes.IsOverworld matches legacy "OuterWorld" AND merged
+            // "Main_Castle_Overworld" so harvest workers install on the merged scene too.
+            if (DeNelle.Core.HubScenes.IsOverworld(scene.name)) InstallManager();
         }
 
         private static bool IsOuterWorldLoaded()
         {
-            if (SceneManager.GetActiveScene().name == OuterWorldSceneName) return true;
-            var s = SceneManager.GetSceneByName(OuterWorldSceneName);
-            return s.IsValid() && s.isLoaded;
+            if (DeNelle.Core.HubScenes.IsOverworld(SceneManager.GetActiveScene().name)) return true;
+            int count = SceneManager.sceneCount;
+            for (int i = 0; i < count; i++)
+            {
+                var s = SceneManager.GetSceneAt(i);
+                if (s.isLoaded && DeNelle.Core.HubScenes.IsOverworld(s.name)) return true;
+            }
+            return false;
         }
 
         // Drop the WorkerManager into the world the first time OuterWorld is present.

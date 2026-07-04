@@ -40,7 +40,9 @@ namespace DeNelle.Village
             if (!Enabled && PlayerPrefs.GetInt(EnableKey, 0) != 1) return;
             string scene = SceneManager.GetActiveScene().name;
             // Only the hub gameplay scenes (don't run in menus).
-            if (scene != "MainCastle_Hall" && scene != "Village2") return;
+            // WO-608: include the merged single-scene home hub (ff.MergedWorld). Safe when
+            // OFF — that scene never loads on the legacy path.
+            if (scene != "MainCastle_Hall" && scene != "Village2" && scene != "Main_Castle_Overworld") return;
             if (FindAnyObjectByType<PlayerBot>() != null) return;
             var go = new GameObject("[PlayerBot]");
             DontDestroyOnLoad(go);

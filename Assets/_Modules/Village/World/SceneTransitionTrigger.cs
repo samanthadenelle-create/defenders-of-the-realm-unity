@@ -408,6 +408,7 @@ namespace DeNelle.Village
                 case "Garrison_ruined_keep": return "Ruined Keep";
                 case "Garrison_frost_keep": return "Frost Keep";
                 case "MainCastle_Hall": return "the Castle";
+                case "Main_Castle_Overworld": return "the Castle";   // WO-608: merged single-scene home hub (ff.MergedWorld)
                 case "Village2": return "the Village";
             }
             // Generic cleanup: strip a leading "Garrison_" / "Outpost_" prefix and
@@ -446,6 +447,29 @@ namespace DeNelle.Village
             // Consume the latch so a re-entry (or a retry after a non-loadable abort) must be
             // re-armed by a fresh tap.
             _tapInitiated = false;
+
+            // WO-608 RETURN-TARGET REMAP (ff.mergedworld): the standalone "OuterWorld" and
+            // "MainCastle_Hall" scenes are RETIRED under the merge. A dungeon/outpost/arena/seam
+            // that still targets them must NOT load a retired scene:
+            //   • If we are ALREADY on the merged overworld scene, the castle<->outerworld
+            //     crossing is an in-scene WALK now — no-op the cross (both regions are here).
+            //   • Otherwise (returning from a dungeon/arena/Village2), REMAP the target to the
+            //     merged scene name so the return lands on Main_Castle_Overworld.
+            // OFF path is byte-identical to today (whole block gated by MergedWorld).
+            if (DeNelle.Core.FeatureFlags.MergedWorld &&
+                (targetSceneName == "OuterWorld" || targetSceneName == "MainCastle_Hall"))
+            {
+                string activeName = SceneManager.GetActiveScene().name;
+                if (DeNelle.Core.HubScenes.IsOverworld(activeName))
+                {
+                    FlowTrace.Step("Seam",
+                        $"'{name}' -> '{targetSceneName}' retired under ff.mergedworld; already on merged '{activeName}' — in-scene walk, no cross.");
+                    return;
+                }
+                FlowTrace.Step("Seam",
+                    $"'{name}' target '{targetSceneName}' retired under ff.mergedworld — remapped to '{DeNelle.Core.SceneRouter.Castle}'.");
+                targetSceneName = DeNelle.Core.SceneRouter.Castle;
+            }
 
             if (_fired || player == null)
             {

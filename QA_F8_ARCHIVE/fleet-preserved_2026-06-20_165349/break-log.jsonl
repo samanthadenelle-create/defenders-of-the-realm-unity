@@ -1,0 +1,35 @@
+﻿{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"MainCastle_Hall","t":5.305542945861816,"utc":"2026-06-20T19:24:11.1110528Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":6.015848159790039,"utc":"2026-06-20T19:24:11.8212065Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":7.947107791900635,"utc":"2026-06-20T19:24:13.7524286Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] is this supposed to come thins way?","stack":"","scene":"MainCastle_Hall","t":80.33470916748047,"utc":"2026-06-20T19:25:26.1390216Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] options are use the yarnspinner sysetm (broken old logic/ no button swap on close to upgradable building","stack":"","scene":"MainCastle_Hall","t":141.9344482421875,"utc":"2026-06-20T19:26:27.7381690Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 75s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":171.61167907714845,"utc":"2026-06-20T19:26:57.4149605Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] still overflows panel","stack":"","scene":"MainCastle_Hall","t":207.2358856201172,"utc":"2026-06-20T19:27:33.0387954Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 75s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":282.9410095214844,"utc":"2026-06-20T19:28:48.7422215Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] tpose companion still broken","stack":"","scene":"MainCastle_Hall","t":330.9947814941406,"utc":"2026-06-20T19:29:36.7956352Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 75s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":395.4227600097656,"utc":"2026-06-20T19:30:41.2227940Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] i can see quests and accept quests but cannot make one focus target","stack":"","scene":"MainCastle_Hall","t":402.6172180175781,"utc":"2026-06-20T19:30:48.4165974Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"MainCastle_Hall","t":9.718832969665528,"utc":"2026-06-20T19:35:02.0382918Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":10.288065910339356,"utc":"2026-06-20T19:35:02.6073108Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":10.969682693481446,"utc":"2026-06-20T19:35:03.2894601Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] build menu now has no items as well as no close button, not better worse","stack":"","scene":"MainCastle_Hall","t":46.324031829833987,"utc":"2026-06-20T19:35:38.6437853Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 75s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":87.88263702392578,"utc":"2026-06-20T19:36:20.2011026Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"MainCastle_Hall","t":8.495588302612305,"utc":"2026-06-20T20:22:10.2281885Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":9.097421646118164,"utc":"2026-06-20T20:22:10.8297360Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":9.843850135803223,"utc":"2026-06-20T20:22:11.5764732Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] the quest panel is unver ther  buttons. CAn we move the diamond buttons back down to the bottom 9 slice as they are mobile first and natrual location is there","stack":"","scene":"MainCastle_Hall","t":141.45401000976563,"utc":"2026-06-20T20:24:23.1837176Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] build has no conttrols showing. Please debug","stack":"","scene":"MainCastle_Hall","t":188.87484741210938,"utc":"2026-06-20T20:25:10.6050945Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"MainCastle_Hall","t":4.980780601501465,"utc":"2026-06-20T20:28:41.6802347Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":5.558391571044922,"utc":"2026-06-20T20:28:42.2577606Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":6.323552131652832,"utc":"2026-06-20T20:28:43.0230041Z"}
+{"kind":"flagged","message":"[MainCastle_Hall] still broken","stack":"","scene":"MainCastle_Hall","t":18.113849639892579,"utc":"2026-06-20T20:28:54.8130360Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":5.074939250946045,"utc":"2026-06-20T21:34:08.1097604Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":5.6633429527282719,"utc":"2026-06-20T21:34:08.6993269Z"}
+{"kind":"scene_loaded","message":"PetSelect","stack":"","scene":"PetSelect","t":60.768646240234378,"utc":"2026-06-20T21:35:03.8037236Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":61.4415397644043,"utc":"2026-06-20T21:35:04.4764173Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":63.343345642089847,"utc":"2026-06-20T21:35:06.3785304Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":4.841216087341309,"utc":"2026-06-20T21:36:25.6570115Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":5.444232940673828,"utc":"2026-06-20T21:36:26.2592944Z"}
+{"kind":"scene_loaded","message":"PetSelect","stack":"","scene":"PetSelect","t":24.458032608032228,"utc":"2026-06-20T21:36:45.2736794Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":32.142974853515628,"utc":"2026-06-20T21:36:52.9581477Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":32.8388671875,"utc":"2026-06-20T21:36:53.6539842Z"}

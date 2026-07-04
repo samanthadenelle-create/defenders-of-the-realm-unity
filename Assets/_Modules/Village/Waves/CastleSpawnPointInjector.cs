@@ -48,6 +48,12 @@ namespace DeNelle.Village
         public static CastleSpawnPointInjector Instance { get; private set; }
 
         private const string TargetScene = "MainCastle_Hall";
+        // WO-608: the merged single scene (Main_Castle_Overworld, ff.MergedWorld) is the
+        // castle home hub too, so its waves need these injected spawn points. Deliberately
+        // NOT HubScenes.IsHub — that also matches Village2, which HAS its own baked spawn
+        // points; injecting the castle cluster there would be wrong. Castle hub scenes only.
+        private const string MergedTargetScene = "Main_Castle_Overworld";
+        private static bool IsCastleHubScene(string n) => n == TargetScene || n == MergedTargetScene;
         private const string HolderName = "[CastleSpawnPoints] (runtime)";
 
         // The Heart / castle centre — the gate the waves march toward sits between
@@ -95,7 +101,7 @@ namespace DeNelle.Village
 
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneLoaded += OnSceneLoaded;
-            if (SceneManager.GetActiveScene().name == TargetScene) Inject();
+            if (IsCastleHubScene(SceneManager.GetActiveScene().name)) Inject();
         }
 
         private void OnDestroy()
@@ -106,7 +112,7 @@ namespace DeNelle.Village
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (scene.name == TargetScene) Inject();
+            if (IsCastleHubScene(scene.name)) Inject();
         }
 
         private void Inject()

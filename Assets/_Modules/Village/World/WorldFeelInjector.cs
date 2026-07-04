@@ -81,7 +81,10 @@ namespace DeNelle.Village.World
         // =====================================================================
 
         // ---- Scene allowlist (outdoor scenes only -- dungeons keep their mood) ----
-        private static readonly string[] OutdoorScenes = { "MainCastle_Hall", "Village2" };
+        // WO-608: the merged single scene (Main_Castle_Overworld, ff.MergedWorld) is the
+        // outdoor home hub too — it must get the same dusk world-feel pass. Safe when the
+        // flag's OFF (that scene never loads on the legacy path).
+        private static readonly string[] OutdoorScenes = { "MainCastle_Hall", "Village2", "Main_Castle_Overworld" };
         private const string OuterWorldPrefix = "OuterWorld";
 
         // ---- (2) SKYBOX -- dusk, "hold the last light" ------------------------

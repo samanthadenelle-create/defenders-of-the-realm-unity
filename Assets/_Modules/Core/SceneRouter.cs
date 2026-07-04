@@ -118,8 +118,18 @@ namespace DeNelle.Core
         /// <c>DeNelle.Editor.CastleHubBuilder.BuildCastleHub</c>. The player arrives
         /// here, then travels out to <see cref="Village"/> for the tower-defense loop.
         /// OuterWorld streams in additively (see WorldSceneLoader hub list).
+        /// <para>
+        /// WO-608: flag-aware. When <c>ff.MergedWorld</c> is ON the home hub is the
+        /// single merged <c>Main_Castle_Overworld</c> scene (castle + outer world in one
+        /// continuous navmesh, no additive stream / seam warp); when OFF this stays the
+        /// legacy two-scene <c>MainCastle_Hall</c> (+ additive OuterWorld). A property, not
+        /// a const, so it can flip at runtime — verified nothing uses it in a const/case/
+        /// attribute context (only GoCastle's fade-load + DevPanel JumpScene, both runtime).
+        /// </para>
         /// </summary>
-        public const string Castle = "MainCastle_Hall";
+        public static string Castle => DeNelle.Core.FeatureFlags.MergedWorld
+            ? "Main_Castle_Overworld"
+            : "MainCastle_Hall";
         /// <summary>The ATB Last-Stand battle scene (React global AtbBattleHost).</summary>
         public const string ATBBattle = "ATBBattle";
 
