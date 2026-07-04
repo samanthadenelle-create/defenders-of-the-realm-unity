@@ -1,20 +1,11 @@
 // =============================================================================
-// WorldSceneLoader — additively loads the OuterWorld scene over the Village so
-// the town + the surrounding regions form one continuous world at runtime
-// (the owner's "two scenes existing together" model).
-// -----------------------------------------------------------------------------
+// WorldSceneLoader — DEPRECATED: OuterWorld scene removed (WO-608 MergedWorld)
+// =============================================================================
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
-// WHY additive: Village.unity (castle/town, VillageSceneBuilder) and
-// OuterWorld.unity (regions + mine nodes, OuterWorldBuilder) are SEPARATE scene
-// files so the two builders never collide. At play, this loader brings OuterWorld
-// in on top of Village — both run in one shared space, one physics/render world,
-// player can't tell it's two scenes.
-//
-// Self-bootstrapping (AfterSceneLoad, like AudioBootstrap / WaveSystemBridge):
-// when Village is the active scene and OuterWorld isn't already loaded, load it
-// additively. No scene wiring, no manual call. Safe no-op in any other scene.
-// Domain-reload-off safe via the s_done reset.
+// With MergedWorld ON, the castle + overworld are merged into Main_Castle_Overworld.
+// OuterWorld no longer exists. This loader is kept for compatibility but does nothing.
+// All world loading is now handled by HubScenes.IsOverworld() and the merged scene.
 // =============================================================================
 using UnityEngine;
 using UnityEngine.SceneManagement;

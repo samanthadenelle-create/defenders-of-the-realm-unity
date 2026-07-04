@@ -34,17 +34,15 @@ namespace DeNelle.Core
             return false;
         }
 
-        /// <summary>True if <paramref name="sceneName"/> is an OVERWORLD scene — the legacy
-        /// standalone <c>OuterWorld</c> (exact or Contains, so additively-loaded variants count)
-        /// OR the merged <c>Main_Castle_Overworld</c> scene (WO-608 merge). The single source of
-        /// truth for overworld-behavior gates (encounter spawner, harvest workers, camps, raid
-        /// outposts, world boundary) so the "OuterWorld" vs "Overworld" naming trap can never
-        /// silently no-op the overworld half of the merged scene again.</summary>
+        /// <summary>True if <paramref name="sceneName"/> is an OVERWORLD scene — the merged
+        /// <c>Main_Castle_Overworld</c> scene (WO-608). The single source of truth for
+        /// overworld-behavior gates (encounter spawner, harvest workers, camps, raid
+        /// outposts, world boundary). OuterWorld was removed; all world content is now
+        /// in Main_Castle_Overworld (MergedWorld).</summary>
         public static bool IsOverworld(string sceneName)
         {
             if (string.IsNullOrEmpty(sceneName)) return false;
-            return sceneName.IndexOf("OuterWorld", StringComparison.OrdinalIgnoreCase) >= 0
-                || sceneName == "Main_Castle_Overworld";
+            return sceneName == "Main_Castle_Overworld";
         }
 
         /// <summary>True if <paramref name="sceneName"/> is an enemy RAID scene
