@@ -879,6 +879,31 @@ namespace DeNelle.Village
             // in TickContactAttack / OnDamage hooks if wired; see EnemyHitReaction).
             if (speed < 0.1f && _currentTarget != null)
                 _actor?.SetCombatStance(true);
+
+            // FOOT-SKATE MEASURE (owner 2026-07-04, gates the KnightMocap builder) — mirrors
+            // HeroLoco: emit each ACTIVE locomotion clip's name + blend weight + authored length
+            // beside the enemy's ACTUAL travel speed (agent velocity magnitude, `speed` above) and
+            // the smoothed anim feed. The AUTHORED stride m/s side comes from AnimClipSpeedDump; the
+            // gap = foot-skate. GetCurrentAnimatorClipInfo allocates, so the whole block is gated on
+            // FlowTrace.Enabled -> zero cost when tracing is off.
+            if (_animator != null && DeNelle.Core.Diagnostics.FlowTrace.Enabled)
+            {
+                var st = _animator.GetCurrentAnimatorStateInfo(0);
+                var clips = _animator.GetCurrentAnimatorClipInfo(0);
+                var sb = new System.Text.StringBuilder();
+                for (int i = 0; i < clips.Length; i++)
+                {
+                    var ci = clips[i];
+                    if (ci.clip == null) continue;
+                    if (sb.Length > 0) sb.Append(", ");
+                    sb.Append($"{ci.clip.name}(w={ci.weight:F2},len={ci.clip.length:F2}s)");
+                }
+                if (sb.Length == 0) sb.Append("<none>");
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyLoco", $"loco-{_enemyId}", 1f,
+                    $"vel={speed:F2} m/s | animSpeed={animSpeed:F2} | clips=[{sb}] | " +
+                    $"baseState hash={st.shortNameHash} nt={st.normalizedTime % 1f:F2} | " +
+                    $"controller={(_animator.runtimeAnimatorController != null ? _animator.runtimeAnimatorController.name : "<null>")}");
+            }
         }
 
         // ---------------------------------------------------------------------

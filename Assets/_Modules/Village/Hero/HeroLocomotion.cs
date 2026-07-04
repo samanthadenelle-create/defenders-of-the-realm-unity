@@ -863,12 +863,30 @@ namespace DeNelle.Village
             // avatar name, not a frozen T-pose). Captured to break-log.jsonl during a headless AutoPilot
             // walk so the KnightMocap swap can be verified without an owner playtest. Near-zero cost when
             // FlowTrace is disabled (Allowed() short-circuits before any string work in Throttle).
-            if (_animator != null)
+            // FOOT-SKATE MEASURE (owner 2026-07-04, gates the KnightMocap builder): alongside the
+            // existing state/avatar fields, emit each ACTIVE locomotion clip's name + blend weight +
+            // authored clip length, next to the hero's ACTUAL travel speed (Velocity.magnitude m/s
+            // from the NavMeshAgent.Move path, ~722-726). The AUTHORED stride m/s side comes from
+            // the AnimClipSpeedDump editor pass; the gap between authored-stride and this actual
+            // travel = foot-skate, so blend thresholds are set from data not guessed.
+            // GetCurrentAnimatorClipInfo allocates, so the WHOLE block is gated on FlowTrace.Enabled
+            // -> zero cost when tracing is off (Allowed() alone can't guard the alloc above the call).
+            if (_animator != null && DeNelle.Core.Diagnostics.FlowTrace.Enabled)
             {
                 var st = _animator.GetCurrentAnimatorStateInfo(0);
                 var av = _animator.avatar;
+                var clips = _animator.GetCurrentAnimatorClipInfo(0);
+                var sb = new System.Text.StringBuilder();
+                for (int i = 0; i < clips.Length; i++)
+                {
+                    var ci = clips[i];
+                    if (ci.clip == null) continue;
+                    if (sb.Length > 0) sb.Append(", ");
+                    sb.Append($"{ci.clip.name}(w={ci.weight:F2},len={ci.clip.length:F2}s)");
+                }
+                if (sb.Length == 0) sb.Append("<none>");
                 DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroLoco", "loco", 1f,
-                    $"vel={Velocity.magnitude:F2} m/s | baseState hash={st.shortNameHash} " +
+                    $"vel={Velocity.magnitude:F2} m/s | clips=[{sb}] | baseState hash={st.shortNameHash} " +
                     $"nt={st.normalizedTime % 1f:F2} | avatar={(av != null ? av.name : "<none>")} | " +
                     $"controller={(_animator.runtimeAnimatorController != null ? _animator.runtimeAnimatorController.name : "<null>")}");
             }
