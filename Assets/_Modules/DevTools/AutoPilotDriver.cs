@@ -2850,6 +2850,41 @@ namespace DeNelle.DevTools
             // ── 32 Inventory (bag) — DeNelle.Village.HeroInventoryController (singleton Open/Close) ──
             yield return CaptureComponentPanel<HeroInventoryController>("Inventory", m => m.Open(), m => m.Close());
 
+            // ── 12 Equipment (Gear Preview) — DeNelle.Village.Hero.EquipmentPanel (instance Open;
+            //    Close() is PRIVATE, OnDestroy owns teardown → drive on a THROWAWAY host we destroy).
+            //    NOT reached by OpenEachHUDPanel: no EquipmentPanel is instantiated in the gameplay
+            //    scene, so PanelRouter never has it registered and the PanelRouter sweep skips it —
+            //    the stale corrupt panel_EquipmentPanel.png persists. We force-open it here.
+            //    It hosts a LIVE 3D preview (disabled camera → RenderTexture → RawImage, rendered
+            //    manually on Open), so use the SETTLED capture path with extra settle frames + an
+            //    end-of-frame grab (a plain yield grabs mid-composite RGB static — the ~5MB garbage
+            //    PNG). Fully guarded so it can never abort the drive; graphics-gated inside
+            //    CaptureUiPanelSettled (headless writes a blank frame, never hangs). ──
+            {
+                GameObject eqHost = null;
+                bool eqOpened = Guard.Try("Auto", "CaptureExtraPanels open EquipmentPanel", () =>
+                {
+                    eqHost = new GameObject("Capture_EquipmentPanel");
+                    var ep = eqHost.AddComponent<EquipmentPanel>();   // Awake registers PanelRouter/PanelManager
+                    ep.Open();
+                });
+                if (eqOpened && eqHost != null)
+                {
+                    yield return Wait(SettleSeconds);                        // let Open build + render the preview RT
+                    yield return CaptureUiPanelSettled("EquipmentPanel", extraSettleFrames: 5);   // -> panel_EquipmentPanel.png
+                    _extraShotCount++;
+                    FlowTrace.Step("Auto", "CaptureExtraPanels: captured panel_EquipmentPanel.png.");
+                }
+                else
+                    FlowTrace.Warn("Auto", "CaptureExtraPanels: EquipmentPanel open threw — skipped panel_EquipmentPanel.png.");
+                // OnDestroy tears down the modal + unregisters (Close is private) — destroy the host.
+                Guard.Try("Auto", "CaptureExtraPanels destroy EquipmentPanel", () =>
+                {
+                    if (eqHost != null) UnityEngine.Object.Destroy(eqHost);
+                });
+                yield return Wait(SettleSeconds);
+            }
+
             // ── 31 Merchant Shop — DeNelle.Village.Hero.ShopPanel. Close() is private and OnDestroy
             //    tears down its own modal canvas, so drive it on a THROWAWAY host we destroy to close
             //    (never touches a real in-scene ShopPanel). Vendor context is a stub so it renders chrome. ──
@@ -2917,7 +2952,12 @@ namespace DeNelle.DevTools
                 });
                 if (shown && view != null)
                 {
-                    yield return null;
+                    // EndStateView reveals body content + the primary button via a STAGGERED
+                    // reveal tween (each element starts alpha=0, fades in only after its Delay;
+                    // the button lands last at ~0.53s delay + 0.20s fade). A single-frame grab
+                    // catches everything still at alpha 0 -> empty body + no button (the SME F8).
+                    // Wait out the reveal (unscaled — plays through timeScale=0) before the shot.
+                    yield return Wait(1.0f);
                     CaptureUiPanel("EndState");                // -> panel_EndState.png
                     yield return null;
                     _extraShotCount++;
@@ -3032,6 +3072,31 @@ namespace DeNelle.DevTools
             //    or a missing view logs + skips, never a faked shot. ──
             {
                 _pauseDialogueSuppression = true;   // hold off SuppressDialogue's 1s Stop() loop
+
+                // HUD-SUPPRESS FOR THE SHOT (PM review 2026-07-04): the dialogue strip is an
+                // INLINE bottom panel (withBackdrop:false), so a live-gameplay capture composites
+                // the whole gameplay HUD over/around it — the yellow nav-ring (moveCluster), the
+                // level bars, resource chips and quest banner bled into the portrait slot and
+                // occluded the option row. Fade the whole-HUD CanvasGroup (VillageHudController
+                // .SetHudVisible → HudAreasHost.Group) and hide the mobile joystick so the shot
+                // shows ONLY the dialogue strip on a clean background, then restore both.
+                var hudForShot = UnityEngine.Object.FindAnyObjectByType<DeNelle.HUD.VillageHudController>();
+                GameObject joyCanvasForShot = null;
+                Guard.Try("Auto", "CaptureExtraPanels suppress HUD for Dialogue", () =>
+                {
+                    if (hudForShot != null) hudForShot.SetHudVisible(false);
+                    var joy = DeNelle.Village.VirtualJoystick.Instance;
+                    if (joy != null)
+                    {
+                        var jc = joy.transform.Find("JoystickCanvas");
+                        if (jc != null && jc.gameObject.activeSelf)
+                        {
+                            joyCanvasForShot = jc.gameObject;
+                            joyCanvasForShot.SetActive(false);
+                        }
+                    }
+                });
+
                 bool played = Guard.Try("Auto", "CaptureExtraPanels play Dialogue",
                     () => DialogueService.Play("brom_intro"));
                 if (played && DialogueService.IsRunning)
@@ -3039,12 +3104,20 @@ namespace DeNelle.DevTools
                     yield return Wait(SettleSeconds);
                     yield return CaptureUiPanelSettled("Dialogue");   // -> panel_Dialogue.png
                     _extraShotCount++;
-                    FlowTrace.Step("Auto", "CaptureExtraPanels: captured panel_Dialogue.png.");
+                    FlowTrace.Step("Auto", "CaptureExtraPanels: captured panel_Dialogue.png (HUD suppressed).");
                     Guard.Try("Auto", "CaptureExtraPanels stop Dialogue", () => DialogueService.Stop());
                     yield return Wait(SettleSeconds);
                 }
                 else
                     FlowTrace.Warn("Auto", "CaptureExtraPanels: brom_intro not routable (unauthored or already running) — skipped panel_Dialogue.png.");
+
+                // Restore the gameplay HUD + joystick (never leave the felt-test HUD hidden).
+                Guard.Try("Auto", "CaptureExtraPanels restore HUD after Dialogue", () =>
+                {
+                    if (hudForShot != null) hudForShot.SetHudVisible(true);
+                    if (joyCanvasForShot != null) joyCanvasForShot.SetActive(true);
+                });
+
                 _pauseDialogueSuppression = false;  // resume dialogue suppression
             }
 
