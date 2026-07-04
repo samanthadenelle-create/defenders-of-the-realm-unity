@@ -37,7 +37,9 @@
 // Instrumented per CLAUDE.md S12: FlowTrace.Step("CastleMoat", ...).
 // =============================================================================
 
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
@@ -101,6 +103,22 @@ namespace DeNelle.Village.World
         // liftY (PlayerPrefs 'castle.liftY') raises the castle end to the plinth top.
         private const float BridgeY = 0.05f;   // raw first-pass seat height (offsets.json overrides)
 
+        // ---- HEDGE LIP RING (owner 2026-07-03: seal the water edge with a low hedge, not a wall) ----
+        // Option A (clone/web-safe): the polyperfect Fence_Shrub (_M, a hedge-railing hybrid) is
+        // GITIGNORED, so — exactly like Bridge_Medieval_Stone — a committed Resources prefab is baked
+        // by the editor menu 'Defenders > Seam > Generate Hedge Resources Prefab' (HedgePrefabGenerator)
+        // and loaded at runtime. A continuous ring of instances rings the moat INNER lip with FOUR GAPS
+        // aligned to the cardinal bridge mouths (so it never blocks a crossing). A thin invisible
+        // BoxCollider ring (same 4 gaps) is the actual seal — the water mesh has no collider today.
+        private const string HedgeResourcePath   = "Hedges/Fence_Shrub";
+        private const float  HedgeLipInset        = 0.5f;   // sit the ring just INSIDE r=44 (on the plinth top, off the water face)
+        private const float  HedgeSpacing         = 2.0f;   // ~= Fence_Shrub width (2.09m) so instances read continuous
+        private const float  HedgeGapMargin       = 2.5f;   // extra clearance each side of a bridge mouth (keeps the crossing open)
+        private const float  HedgeDefaultGapHalf  = 8f;     // half-gap fallback when a bridge mouth can't be measured
+        private const float  HedgeColliderHeight  = 1.5f;   // invisible seal-wall height (block, don't hide the water)
+        private const float  HedgeColliderThick   = 0.5f;   // thin seal-wall depth
+        private static readonly Color HedgeColor   = new Color(0.20f, 0.42f, 0.18f); // low-poly hedge green (URP/Lit; pack mat is gitignored)
+
         // The castle hub scene this builds for. (HubScenes covers variants; we additionally
         // require the south recipe to resolve so the gate radials are real.)
         private const string TargetScene = "MainCastle_Hall";
@@ -161,6 +179,7 @@ namespace DeNelle.Village.World
 
             int waterVerts = BuildWaterRing(root.transform, waterY);
             int bridges    = BuildDrawbridges(root.transform, gateLateral);
+            int hedges     = BuildHedgeRing(root.transform, gateLateral);
 
             // Bring the ring to life with the proven shimmer (reuse, DEF-195). It auto-resolves the
             // first child renderer's sharedMaterial == the annulus' deep-band material (index 0).
@@ -180,6 +199,10 @@ namespace DeNelle.Village.World
                 " = measured ground " + ringGroundY.ToString("0.00") + " + " + WaterAboveGround.ToString("0.00") +
                 ") + " + bridges + " stone-bridge crossings (all sides = south clone; gateLateral=" +
                 gateLateral.ToString("0.00") + ", source: castle-south-recipe x4 symmetry; WO-593 lift-aware).");
+
+            FlowTrace.Step("CastleMoat", "hedge lip ring: " + hedges + " Fence_Shrub instances around the inner lip (r=" +
+                (MoatInnerRadius - HedgeLipInset).ToString("0.0") + ") with 4 cardinal gaps at the bridge mouths + an invisible " +
+                "BoxCollider seal-ring (same gaps) — the water edge is sealed without blocking a crossing.");
         }
 
         // --------------------------------------------------------------------
@@ -541,6 +564,152 @@ namespace DeNelle.Village.World
             });
         }
 
+        // ====================================================================
+        //  HEDGE LIP RING (owner 2026-07-03) — seal the moat's inner water edge.
+        // --------------------------------------------------------------------
+        //  A continuous ring of polyperfect Fence_Shrub instances hugs the inner lip
+        //  (r = MoatInnerRadius - inset, on the plinth top) with FOUR GAPS aligned to
+        //  the actual RuntimeSeam_Bridge_<Cardinal> mouths, so the hedge never blocks a
+        //  crossing. Behind it, an invisible thin BoxCollider seal-ring (same 4 gaps) is
+        //  what ACTUALLY stops the player entering the water (the water mesh has no
+        //  collider). Low + web-safe: _M prefab from a committed Resources copy, shared
+        //  URP/Lit hedge material (pack material is gitignored), static-batched, own
+        //  per-instance colliders stripped (the seal-ring is the single authority).
+        //  Runs AFTER the bridges so mouths can be measured from the real deck colliders.
+        //  Sits at r~43.5 — clear of the oracle's water sampling band (r~57.5) and the
+        //  bridge gaps, so VerifyMoatComplete stays MOAT_COMPLETE.
+        // ====================================================================
+        private static int BuildHedgeRing(Transform parent, float gateLateral)
+        {
+            var prefab = Resources.Load<GameObject>(HedgeResourcePath);
+            if (prefab == null)
+            {
+                // Missing source (pack unimported on a fresh clone / not baked yet): warn + skip, never error (S4).
+                Debug.LogWarning("[CastleMoat] no Resources/" + HedgeResourcePath +
+                    " — run 'Defenders > Seam > Generate Hedge Resources Prefab'; hedge lip ring skipped.");
+                return 0;
+            }
+
+            int placed = 0;
+            Guard.Try("CastleMoat", "build hedge lip ring", () =>
+            {
+                float lipR  = MoatInnerRadius - HedgeLipInset;                 // ~43.5 — on the plinth top, off the water face
+                float seatY = UnityEngine.PlayerPrefs.GetFloat("castle.liftY", 3f); // plinth top (bridge castle-end height)
+
+                var container = new GameObject("MoatHedgeRing");
+                container.transform.SetParent(parent, false);
+
+                // Shared low-poly hedge material (URP/Lit) — repaints the gitignored pack material.
+                var hedgeMat = BuildLitMaterial("CastleMoat_Hedge", HedgeColor, transparent: false);
+
+                // Four sides of the square lip. axisAlongZ = the run travels along Z (fixed X);
+                // else it travels along X (fixed Z). yaw orients the fence width along the run.
+                var sides = new (string card, bool axisAlongZ, float fixedCoord, float yaw)[]
+                {
+                    ("South", false, -lipR, 0f),
+                    ("North", false,  lipR, 0f),
+                    ("East",  true,   lipR, 90f),
+                    ("West",  true,  -lipR, 90f),
+                };
+
+                foreach (var (card, axisAlongZ, fixedCoord, yaw) in sides)
+                {
+                    // Gap centre + half-width from the REAL bridge mouth on this side (deck collider),
+                    // so the gaps track any re-author of the bridges. Fallback = gateLateral-derived.
+                    MeasureMouth(parent, card, axisAlongZ, gateLateral, out float mouthLat, out float gapHalf);
+
+                    // -- visible hedge instances along the run, skipping the mouth gap --
+                    for (float t = -lipR + HedgeSpacing * 0.5f; t <= lipR; t += HedgeSpacing)
+                    {
+                        if (Mathf.Abs(t - mouthLat) < gapHalf) continue;   // leave the crossing open
+
+                        Vector3 pos = axisAlongZ
+                            ? new Vector3(fixedCoord, seatY, t)
+                            : new Vector3(t, seatY, fixedCoord);
+
+                        var inst = Object.Instantiate(prefab, container.transform);
+                        inst.name = "Hedge_" + card + "_" + placed;
+                        inst.transform.position = pos;
+                        inst.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+
+                        // Strip the source's own collider — the analytic seal-ring is the single authority.
+                        foreach (var col in inst.GetComponentsInChildren<Collider>(true))
+                            if (col != null) Object.Destroy(col);
+
+                        // Repaint every slot with the shared hedge material (pack material is gitignored -> magenta otherwise).
+                        foreach (var r in inst.GetComponentsInChildren<Renderer>(true))
+                        {
+                            if (r == null) continue;
+                            int slots = (r.sharedMaterials != null && r.sharedMaterials.Length > 0) ? r.sharedMaterials.Length : 1;
+                            var mats = new Material[slots];
+                            for (int i = 0; i < slots; i++) mats[i] = hedgeMat;
+                            r.sharedMaterials = mats;
+                        }
+                        placed++;
+                    }
+
+                    // -- invisible seal-ring: two thin box colliders per side, flanking the gap --
+                    BuildSealSegment(container.transform, card + "_A", axisAlongZ, fixedCoord, seatY, -lipR, mouthLat - gapHalf);
+                    BuildSealSegment(container.transform, card + "_B", axisAlongZ, fixedCoord, seatY, mouthLat + gapHalf, lipR);
+                }
+
+                // Fold the visible hedge into as few draw calls as possible (WebGL/Pi-friendly).
+                Guard.Try("CastleMoat", "static-batch hedge ring", () => StaticBatchingUtility.Combine(container));
+
+                FlowTrace.Step("CastleMoat", "hedge lip ring built: " + placed + " Fence_Shrub instances at r=" +
+                    lipR.ToString("0.0") + " (seat y=" + seatY.ToString("0.0") + "), 4 cardinal gaps at the bridge mouths, " +
+                    "invisible seal-ring behind (8 box segments), static-batched.");
+            });
+            return placed;
+        }
+
+        // Measure the bridge-mouth lateral centre + half-gap on one side from the real deck collider.
+        // mouthLat is the coordinate ALONG the run (Z for the E/W sides, X for the N/S sides).
+        private static void MeasureMouth(Transform parent, string card, bool axisAlongZ, float gateLateral,
+            out float mouthLat, out float gapHalf)
+        {
+            mouthLat = 0f;
+            gapHalf = HedgeDefaultGapHalf;
+            var bridgeTf = parent.Find("RuntimeSeam_Bridge_" + card);
+            if (bridgeTf != null)
+            {
+                Vector3 c = TryCombinedBounds(bridgeTf.gameObject, out var bb) ? bb.center : bridgeTf.position;
+                mouthLat = axisAlongZ ? c.z : c.x;
+
+                // Half-gap = half the deck width + a margin, so the crossing lane stays fully open.
+                var deckTf = FindDescendant(bridgeTf, "Bridge_DeckCollider");
+                var deck = deckTf != null ? deckTf.GetComponent<BoxCollider>() : null;
+                float deckWidth = deck != null ? deck.size.x * Mathf.Abs(deckTf.lossyScale.x) : 0f;
+                if (deckWidth < 1f && bb.size != Vector3.zero) deckWidth = axisAlongZ ? bb.size.z : bb.size.x;
+                gapHalf = Mathf.Max(HedgeDefaultGapHalf, deckWidth * 0.5f + HedgeGapMargin);
+            }
+            else
+            {
+                // No bridge object found — fall back to the gate-lateral symmetry (south x4).
+                mouthLat = (card == "North" || card == "East") ? -gateLateral : gateLateral;
+            }
+        }
+
+        // One invisible thin box collider covering [a..b] along the run axis on a side of the lip.
+        private static void BuildSealSegment(Transform parent, string tag, bool axisAlongZ, float fixedCoord,
+            float seatY, float a, float b)
+        {
+            float len = b - a;
+            if (len <= 0.25f) return;   // gap consumed this segment (mouth near the corner) — nothing to seal
+            float mid = (a + b) * 0.5f;
+
+            var go = new GameObject("MoatHedgeSeal_" + tag);
+            go.transform.SetParent(parent, false);
+            go.transform.position = axisAlongZ
+                ? new Vector3(fixedCoord, seatY + HedgeColliderHeight * 0.5f, mid)
+                : new Vector3(mid, seatY + HedgeColliderHeight * 0.5f, fixedCoord);
+
+            var box = go.AddComponent<BoxCollider>();
+            box.size = axisAlongZ
+                ? new Vector3(HedgeColliderThick, HedgeColliderHeight, len)
+                : new Vector3(len, HedgeColliderHeight, HedgeColliderThick);
+        }
+
         // --------------------------------------------------------------------
         //  SOUTH GATE recipe read (mirrors RuntimeRegionGate.ReadSouthGatePos) — the
         //  bridges/moat track any re-author of the gate without a code edit.
@@ -611,6 +780,402 @@ namespace DeNelle.Village.World
                 root.AddComponent<DeNelle.Village.MoatWaterShimmer>();
             });
         }
+
+        // ====================================================================
+        //  MOAT COMPLETENESS ORACLE (headless, deterministic — CLAUDE.md S12).
+        // --------------------------------------------------------------------
+        //  Public entry a headless play/regression harness calls to PROVE the moat
+        //  is COMPLETE + every seam crossing is TRAVERSABLE, so nobody eyeballs it.
+        //  Reads the ACTUAL built objects (water annulus mesh triangles, the four
+        //  bridge instances, their deck/rail colliders, the live navmesh) — never
+        //  re-derives the same geometry it is testing. Each check logs via FlowTrace
+        //  and appends a short reason to `failures`; the run ends with ONE grep-able
+        //  marker: MOAT_COMPLETE (all pass) or MOAT_INCOMPLETE: <failing checks>.
+        //
+        //  Geometry checks (1-4) are valid edit-time OR in play. The REACHABILITY
+        //  leg (5) needs a LIVE navmesh, so it self-detects an un-baked navmesh and
+        //  logs INCONCLUSIVE (not a false-fail) rather than red-flagging edit-time.
+        // ====================================================================
+        private const string VerifySys = "MoatVerify";
+        private static readonly string[] CardinalOrder = { "South", "West", "North", "East" };
+
+        /// <summary>
+        /// Headless deterministic confirmation that the castle moat is COMPLETE and every
+        /// seam crossing is traversable. Returns true iff all applicable checks pass; logs
+        /// each check via FlowTrace and emits a single MOAT_COMPLETE / MOAT_INCOMPLETE marker.
+        /// Safe to call any time (no side-effects); the reachability leg self-skips with an
+        /// INCONCLUSIVE warn when no navmesh is live (edit-time), so it never false-fails.
+        /// </summary>
+        public static bool VerifyMoatComplete()
+        {
+            var failures = new List<string>();
+            FlowTrace.Step(VerifySys, "=== MOAT COMPLETENESS ORACLE START (band r=" + MoatInnerRadius + ".." +
+                MoatOuterRadius + ", width=" + MoatWidth + "m) ===");
+
+            var root = GameObject.Find(MoatRootName);
+            if (root == null)
+            {
+                FlowTrace.Fail(VerifySys, "MOAT_ROOT_MISSING: no '" + MoatRootName + "' object — the moat build never ran.");
+                FlowTrace.Fail(VerifySys, "MOAT_INCOMPLETE: moat-root-missing");
+                return false;
+            }
+
+            var bridges = CollectBridges(root);
+
+            CheckWaterRingContinuous(root, failures);
+            CheckCrossingsCardinal(bridges, failures);
+            CheckDecksAndRails(bridges, failures);
+            CheckCloneParity(bridges, failures);
+            CheckReachability(bridges, failures);
+
+            bool ok = failures.Count == 0;
+            if (ok) FlowTrace.Step(VerifySys, "MOAT_COMPLETE");
+            else FlowTrace.Fail(VerifySys, "MOAT_INCOMPLETE: " + string.Join("; ", failures));
+            return ok;
+        }
+
+        // Collect the four bridge instances (direct children named RuntimeSeam_Bridge_<Cardinal>).
+        private static Dictionary<string, GameObject> CollectBridges(GameObject root)
+        {
+            var map = new Dictionary<string, GameObject>();
+            const string pfx = "RuntimeSeam_Bridge_";
+            foreach (Transform t in root.transform)
+            {
+                if (t == null) continue;
+                if (t.name.StartsWith(pfx))
+                    map[t.name.Substring(pfx.Length)] = t.gameObject;
+            }
+            return map;
+        }
+
+        // CHECK 1 — WATER RING CONTINUOUS: sample the annulus at every 10deg (36 samples). At
+        // each angle a point on the band mid-line (max-norm radius = MoatCentreRadius, so it is
+        // inside 44..62 for EVERY direction incl. the diagonals) must be covered by a triangle
+        // of the actual built water mesh. A real angular gap in the annulus fails, naming it.
+        private static void CheckWaterRingContinuous(GameObject root, List<string> failures)
+        {
+            if (!Guard.Try(VerifySys, "check1 water-ring-continuous", () =>
+            {
+                var waterTf = root.transform.Find("MoatWater");
+                var mf = waterTf != null ? waterTf.GetComponent<MeshFilter>() : null;
+                var mesh = mf != null ? mf.sharedMesh : null;
+                if (mesh == null)
+                {
+                    failures.Add("water-mesh-missing");
+                    FlowTrace.Fail(VerifySys, "CHECK1 water ring: MoatWater mesh missing — no water geometry at all.");
+                    return;
+                }
+                var verts = mesh.vertices;
+                var tris = mesh.triangles;
+                // Sample the DEEP band interior (max-norm between the centreline and outer edge) so
+                // the probe never lands exactly on an internal sub-band seam (44..45.5 shore /
+                // 45.5..53 shallow / 53..62 deep) — still inside 44..62 for EVERY direction.
+                float probeMaxNorm = (MoatCentreRadius + MoatOuterRadius) * 0.5f;   // 57.5
+                int gaps = 0;
+                string firstGap = null;
+                for (int a = 0; a < 360; a += 10)
+                {
+                    float rad = a * Mathf.Deg2Rad;
+                    Vector2 dir = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad));
+                    float maxc = Mathf.Max(Mathf.Abs(dir.x), Mathf.Abs(dir.y));
+                    if (maxc < 1e-4f) continue;
+                    Vector2 p = dir * (probeMaxNorm / maxc);   // max-norm 57.5 -> inside band 44..62 for all angles
+                    if (!PointInMeshXZ(verts, tris, p))
+                    {
+                        gaps++;
+                        if (firstGap == null) firstGap = a + "deg";
+                    }
+                }
+                if (gaps > 0)
+                {
+                    failures.Add("water-ring-gap@" + firstGap + "(" + gaps + "/36)");
+                    FlowTrace.Fail(VerifySys, "CHECK1 water ring: " + gaps + "/36 mid-band samples fell in a GAP (first " +
+                        firstGap + ") — the annulus has an angular hole.");
+                }
+                else
+                {
+                    FlowTrace.Step(VerifySys, "CHECK1 water ring CONTINUOUS: 36/36 mid-band samples covered by the annulus mesh " +
+                        "(max-norm r=" + MoatCentreRadius + ", inside band 44..62 all directions).");
+                }
+            })) failures.Add("check1-threw");
+        }
+
+        // CHECK 2 — CROSSINGS = 4, cardinally placed. One bridge per cardinal seam (N/E/S/W) and
+        // each sits in its named quadrant (guards a mis-yawed clone). Fail if count != 4 or a
+        // cardinal is missing / mis-placed.
+        private static void CheckCrossingsCardinal(Dictionary<string, GameObject> bridges, List<string> failures)
+        {
+            if (!Guard.Try(VerifySys, "check2 crossings-cardinal", () =>
+            {
+                if (bridges.Count != 4)
+                {
+                    failures.Add("crossings-count=" + bridges.Count + "(!=4)");
+                    FlowTrace.Fail(VerifySys, "CHECK2 crossings: found " + bridges.Count + " bridge(s), expected 4.");
+                }
+                foreach (var card in CardinalOrder)
+                {
+                    if (!bridges.TryGetValue(card, out var go) || go == null)
+                    {
+                        failures.Add("crossing-missing:" + card);
+                        FlowTrace.Fail(VerifySys, "CHECK2 crossings: cardinal '" + card + "' MISSING.");
+                        continue;
+                    }
+                    Vector3 c = TryCombinedBounds(go, out var bb) ? bb.center : go.transform.position;
+                    string actual = CardinalOf(c);
+                    if (actual != card)
+                    {
+                        failures.Add("crossing-miscardinal:" + card + "@" + actual);
+                        FlowTrace.Fail(VerifySys, "CHECK2 crossings: '" + card + "' sits in the " + actual +
+                            " quadrant (center=" + Fmt(c) + ") — not on its seam.");
+                    }
+                    else
+                    {
+                        FlowTrace.Step(VerifySys, "CHECK2 crossings: '" + card + "' present + in the " + card +
+                            " quadrant (center=" + Fmt(c) + ").");
+                    }
+                }
+            })) failures.Add("check2-threw");
+        }
+
+        // CHECK 3 — WALKABLE DECK, NO WALK-OFF. Each bridge carries a Bridge_DeckCollider BoxCollider
+        // whose along-span covers castle-bank->world-bank across the full MoatWidth (so the player
+        // can't reach the water / fall off the end), plus both side rails (L + R). Names the offender.
+        private static void CheckDecksAndRails(Dictionary<string, GameObject> bridges, List<string> failures)
+        {
+            if (!Guard.Try(VerifySys, "check3 decks-rails", () =>
+            {
+                foreach (var kv in bridges)
+                {
+                    string label = kv.Key;
+                    var go = kv.Value;
+                    if (go == null) continue;
+
+                    var deckTf = FindDescendant(go.transform, "Bridge_DeckCollider");
+                    var deck = deckTf != null ? deckTf.GetComponent<BoxCollider>() : null;
+                    if (deck == null)
+                    {
+                        failures.Add("deck-missing:" + label);
+                        FlowTrace.Fail(VerifySys, "CHECK3 '" + label + "': no Bridge_DeckCollider BoxCollider — deck not walkable.");
+                        continue;
+                    }
+                    float span = deck.size.z * Mathf.Abs(deckTf.lossyScale.z);
+                    bool spanOk = span >= MoatWidth - 0.5f;
+                    if (!spanOk)
+                    {
+                        failures.Add("deck-span:" + label + "=" + span.ToString("0.0"));
+                        FlowTrace.Fail(VerifySys, "CHECK3 '" + label + "': deck span " + span.ToString("0.0") +
+                            "m < MoatWidth " + MoatWidth + "m — does not cover bank->bank (walk-off risk).");
+                    }
+
+                    var railL = FindDescendant(go.transform, "Bridge_RailCollider_L");
+                    var railR = FindDescendant(go.transform, "Bridge_RailCollider_R");
+                    bool hasL = railL != null && railL.GetComponent<BoxCollider>() != null;
+                    bool hasR = railR != null && railR.GetComponent<BoxCollider>() != null;
+                    if (!hasL || !hasR)
+                    {
+                        failures.Add("rail-missing:" + label + (hasL ? "" : "L") + (hasR ? "" : "R"));
+                        FlowTrace.Fail(VerifySys, "CHECK3 '" + label + "': missing side rail(s) (L=" + hasL + " R=" + hasR +
+                            ") — no walk-off containment.");
+                    }
+
+                    if (spanOk && hasL && hasR)
+                        FlowTrace.Step(VerifySys, "CHECK3 '" + label + "': deck span " + span.ToString("0.0") +
+                            "m (>= " + MoatWidth + "m) covers bank->bank + 2 side rails (walk-off contained).");
+                }
+            })) failures.Add("check3-threw");
+        }
+
+        // CHECK 4 — CLONE PARITY. Every E/N/W bridge must match SOUTH in child transform / collider /
+        // renderer counts (they are origin-yaw clones of the verified south bridge). If south is
+        // correct and parity holds, all are. Names the divergent clone + the differing metric.
+        private static void CheckCloneParity(Dictionary<string, GameObject> bridges, List<string> failures)
+        {
+            if (!Guard.Try(VerifySys, "check4 clone-parity", () =>
+            {
+                if (!bridges.TryGetValue("South", out var south) || south == null)
+                {
+                    failures.Add("parity-no-south-baseline");
+                    FlowTrace.Fail(VerifySys, "CHECK4 parity: no South baseline present to compare the clones against.");
+                    return;
+                }
+                int sT = south.GetComponentsInChildren<Transform>(true).Length;
+                int sC = south.GetComponentsInChildren<Collider>(true).Length;
+                int sR = south.GetComponentsInChildren<Renderer>(true).Length;
+                FlowTrace.Step(VerifySys, "CHECK4 parity: South baseline transforms=" + sT + " colliders=" + sC + " renderers=" + sR + ".");
+                foreach (var card in new[] { "East", "North", "West" })
+                {
+                    if (!bridges.TryGetValue(card, out var go) || go == null) continue;  // absence handled by CHECK2
+                    int t = go.GetComponentsInChildren<Transform>(true).Length;
+                    int c = go.GetComponentsInChildren<Collider>(true).Length;
+                    int r = go.GetComponentsInChildren<Renderer>(true).Length;
+                    if (t != sT || c != sC || r != sR)
+                    {
+                        failures.Add("clone-diverges:" + card + "(T" + t + "/" + sT + " C" + c + "/" + sC + " R" + r + "/" + sR + ")");
+                        FlowTrace.Fail(VerifySys, "CHECK4 parity: '" + card + "' DIVERGES from South — transforms " + t + "/" + sT +
+                            ", colliders " + c + "/" + sC + ", renderers " + r + "/" + sR + ".");
+                    }
+                    else
+                    {
+                        FlowTrace.Step(VerifySys, "CHECK4 parity: '" + card + "' matches South (T" + t + " C" + c + " R" + r + ").");
+                    }
+                }
+            })) failures.Add("check4-threw");
+        }
+
+        // CHECK 5 — REACHABILITY. For each crossing, sample the castle-bank + world-bank onto the
+        // live navmesh and NavMesh.CalculatePath between them; PathComplete proves a route across the
+        // moat exists over the deck. Self-skips (INCONCLUSIVE warn, no fail) when no navmesh is live
+        // (edit-time / OuterWorld not additively baked) so it never false-reds a geometry-only run.
+        private static void CheckReachability(Dictionary<string, GameObject> bridges, List<string> failures)
+        {
+            if (!Guard.Try(VerifySys, "check5 reachability", () =>
+            {
+                bool navLiveAny = false;
+                foreach (var kv in bridges)
+                {
+                    string label = kv.Key;
+                    var go = kv.Value;
+                    if (go == null) continue;
+
+                    if (!TryBankPoints(go, label, out Vector3 castleBank, out Vector3 worldBank))
+                    {
+                        FlowTrace.Warn(VerifySys, "CHECK5 '" + label + "': could not derive bank endpoints — skipped.");
+                        continue;
+                    }
+                    bool cOn = NavMesh.SamplePosition(castleBank, out NavMeshHit cHit, 6f, NavMesh.AllAreas);
+                    bool wOn = NavMesh.SamplePosition(worldBank, out NavMeshHit wHit, 6f, NavMesh.AllAreas);
+                    if (!cOn && !wOn)
+                    {
+                        FlowTrace.Warn(VerifySys, "CHECK5 '" + label + "': neither bank on a live navmesh (edit-time / OuterWorld " +
+                            "not additively baked?) — reachability INCONCLUSIVE, not counted.");
+                        continue;
+                    }
+                    navLiveAny = true;
+                    if (!cOn || !wOn)
+                    {
+                        failures.Add("reach-bank-offmesh:" + label + (cOn ? "" : " castle") + (wOn ? "" : " world"));
+                        FlowTrace.Fail(VerifySys, "CHECK5 '" + label + "': a bank is off-mesh (castleOn=" + cOn + " worldOn=" + wOn +
+                            ") — cannot path across the moat.");
+                        continue;
+                    }
+                    var path = new NavMeshPath();
+                    NavMesh.CalculatePath(cHit.position, wHit.position, NavMesh.AllAreas, path);
+                    int corners = path.corners != null ? path.corners.Length : 0;
+                    if (path.status == NavMeshPathStatus.PathComplete)
+                    {
+                        FlowTrace.Step(VerifySys, "CHECK5 '" + label + "': castle-bank->world-bank PathComplete (" + corners +
+                            " corners) — crossing traversable.");
+                    }
+                    else
+                    {
+                        failures.Add("reach-" + path.status + ":" + label);
+                        FlowTrace.Fail(VerifySys, "CHECK5 '" + label + "': path " + path.status + " (" + corners +
+                            " corners) — crossing NOT traversable across the moat.");
+                    }
+                }
+                if (!navLiveAny)
+                    FlowTrace.Warn(VerifySys, "CHECK5 reachability: no live navmesh under ANY crossing — run in a PLAY/headless " +
+                        "session for the reachability leg (geometry checks 1-4 still valid).");
+            })) failures.Add("check5-threw");
+        }
+
+        // ---- verification helpers ------------------------------------------
+
+        // Derive castle-bank + world-bank probe points from the bridge's OWN deck collider endpoints
+        // (deck local +Z = the castle end, per the LookRotation(castleEnd-outerEnd) seat), nudged a
+        // couple of metres past each end. Falls back to the cardinal radial through the band.
+        private static bool TryBankPoints(GameObject bridge, string label, out Vector3 castleBank, out Vector3 worldBank)
+        {
+            castleBank = Vector3.zero;
+            worldBank = Vector3.zero;
+            var deckTf = FindDescendant(bridge.transform, "Bridge_DeckCollider");
+            var deck = deckTf != null ? deckTf.GetComponent<BoxCollider>() : null;
+            if (deck != null)
+            {
+                Vector3 fwd = deckTf.forward;                       // toward the castle end
+                Vector3 c = deckTf.TransformPoint(deck.center);
+                float half = deck.size.z * 0.5f * Mathf.Abs(deckTf.lossyScale.z);
+                Vector3 castleEnd = c + fwd * half;
+                Vector3 worldEnd = c - fwd * half;
+                Vector3 fwdFlat = new Vector3(fwd.x, 0f, fwd.z).normalized;
+                castleBank = castleEnd + fwdFlat * 2f; castleBank.y = castleEnd.y;
+                worldBank = worldEnd - fwdFlat * 2f; worldBank.y = worldEnd.y;
+                return true;
+            }
+            Vector2 d = CardinalDir(label);
+            if (d == Vector2.zero) return false;
+            castleBank = new Vector3(d.x * (MoatInnerRadius - 4f), 0f, d.y * (MoatInnerRadius - 4f));
+            worldBank = new Vector3(d.x * (MoatOuterRadius + 6f), 0f, d.y * (MoatOuterRadius + 6f));
+            return true;
+        }
+
+        private static Vector2 CardinalDir(string label)
+        {
+            switch (label)
+            {
+                case "South": return new Vector2(0f, -1f);
+                case "North": return new Vector2(0f, 1f);
+                case "East":  return new Vector2(1f, 0f);
+                case "West":  return new Vector2(-1f, 0f);
+            }
+            return Vector2.zero;
+        }
+
+        // Quadrant of a world point (dominant horizontal axis) — maps a bridge center to a cardinal.
+        private static string CardinalOf(Vector3 c)
+        {
+            if (Mathf.Abs(c.z) >= Mathf.Abs(c.x)) return c.z < 0f ? "South" : "North";
+            return c.x < 0f ? "West" : "East";
+        }
+
+        private static Transform FindDescendant(Transform root, string name)
+        {
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                if (t != null && t.name == name) return t;
+            return null;
+        }
+
+        private static bool TryCombinedBounds(GameObject go, out Bounds b)
+        {
+            b = default;
+            bool have = false;
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                if (!have) { b = r.bounds; have = true; }
+                else b.Encapsulate(r.bounds);
+            }
+            return have;
+        }
+
+        // 2D (world-XZ) point-in-mesh test over every triangle — reads the built annulus geometry.
+        private static bool PointInMeshXZ(Vector3[] verts, int[] tris, Vector2 p)
+        {
+            for (int i = 0; i + 2 < tris.Length; i += 3)
+            {
+                Vector2 a = new Vector2(verts[tris[i]].x, verts[tris[i]].z);
+                Vector2 b = new Vector2(verts[tris[i + 1]].x, verts[tris[i + 1]].z);
+                Vector2 c = new Vector2(verts[tris[i + 2]].x, verts[tris[i + 2]].z);
+                if (PointInTri(p, a, b, c)) return true;
+            }
+            return false;
+        }
+
+        private static bool PointInTri(Vector2 p, Vector2 a, Vector2 b, Vector2 c)
+        {
+            float d1 = EdgeSign(p, a, b);
+            float d2 = EdgeSign(p, b, c);
+            float d3 = EdgeSign(p, c, a);
+            bool neg = (d1 < 0f) || (d2 < 0f) || (d3 < 0f);
+            bool pos = (d1 > 0f) || (d2 > 0f) || (d3 > 0f);
+            return !(neg && pos);
+        }
+
+        private static float EdgeSign(Vector2 p1, Vector2 p2, Vector2 p3)
+            => (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+
+        private static string Fmt(Vector3 v)
+            => "(" + v.x.ToString("0.0") + "," + v.y.ToString("0.0") + "," + v.z.ToString("0.0") + ")";
 
         // --------------------------------------------------------------------
         //  RECIPE MODEL (JsonUtility-friendly; mirrors RuntimeRegionGate's shape).
