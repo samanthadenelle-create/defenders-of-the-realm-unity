@@ -176,7 +176,7 @@ namespace DeNelle.HUD
             // fallback let its 0.06..0.94 anchors inflate the gold button to fill the whole well).
             // The body's bottom edge sits ABOVE the shared Close, so they never collide.
             _sendBtn = ElarionUiKit.Button(body, "Send report", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.22f, 0.03f), new Vector2(0.78f, 0.14f), OnSendClicked);
+                new Vector2(0.08f, 0.03f), new Vector2(0.92f, 0.14f), OnSendClicked);
             _sendLabel = _sendBtn.GetComponentInChildren<TextMeshProUGUI>();
         }
 
