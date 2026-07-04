@@ -28,7 +28,6 @@
 using System.Collections.Generic;
 using DeNelle.Core;
 using UnityEngine;
-using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 
 namespace DeNelle.Village
@@ -90,6 +89,17 @@ namespace DeNelle.Village
         public static readonly List<GameObject> RuntimePlacedProps = new List<GameObject>();
 
         /// <summary>A NEW model dropped at a world position (no baked structure to swap).</summary>
+        // ── THE ONE BLANKET GROUND-Y (owner directive 2026-07-04, the One-Model way) ──
+        // Category-wide rule for building/structure type: EVERY hub structure this injector
+        // places has its bounds-base pinned to this single ground-Y, ONE time at placement —
+        // no terrain sample, no navmesh, no raycast (all proven-brittle; the raycast floated
+        // the Colosseum ~5m off overhead castle geometry). The merged Main_Castle_Overworld is
+        // a KNOWN flat plane at y=0 (WorldMergeBuilder.LowerCastleToGround lowers the castle
+        // floor coplanar with the terrain ring at y=0), which is ALSO the Tree of Life's proven
+        // seat value — so the whole building category grounds off this ONE variable. If a future
+        // scene isn't flat, change this in ONE place (or gate it per-scene here).
+        private const float GroundY = 0f;
+
         private struct Place
         {
             public string  name;       // unique object name (idempotency guard)
@@ -113,8 +123,8 @@ namespace DeNelle.Village
             // Owner 2026-07-03 ("coliseum and the jeweler are too large, scale both down 50%"):
             // halved the owner-hand-dialed scale (10.6/8.4/10.53 -> 5.3/4.2/5.265). The explicit
             // scale override in TryPlace runs AFTER VisualFactory's SeatOnGround, so a smaller scale
-            // lifts the bounds base off the floor — ReseatOnFloor (called in TryPlace) puts it back
-            // on the sampled floor y so the ring stays seated, not floating.
+            // lifts the bounds base off the floor — SetBottomToGround (called in TryPlace) then pins
+            // the bottom to the scripted GroundY (0) so the ring sits ON the ground, not floating.
             new Place { name = "Colosseum_ArenaEntrance", modelPath = "Structures/arena",
                         worldPos = new Vector3(-0.39f, 0f, 23.1f), sizeM = 16f,
                         yawDeg = 0f, pitchDeg = -90f, rollDeg = 90f,
@@ -146,30 +156,23 @@ namespace DeNelle.Village
         {
             if (FindByName(p.name) != null) return;   // already placed this scene
             var host = new GameObject(p.name);
-            // OWNER F8 2026-07-02 "in ground not on ground" (the half-buried colosseum ring):
-            // the Places table authors worldPos in the PRE-RAISE castle frame (y=0), but the
-            // WO-593 island raise lifted the courtyard floor to castle.liftY (3). VisualFactory
-            // SeatOnGround seats the model base at the HOST's y, so a y=0 host buried the prop
-            // 3m under the raised floor. Derive the host y from the FLOOR at this XZ instead of
-            // trusting the authored constant: sample the baked navmesh (the courtyard sheet rides
-            // the real floor height), falling back to a physics raycast, then the authored y.
-            Vector3 seated = p.worldPos;
-            string floorSource = "authored";
-            if (NavMesh.SamplePosition(new Vector3(p.worldPos.x, p.worldPos.y, p.worldPos.z),
-                    out NavMeshHit navHit, 10f, NavMesh.AllAreas))
-            {
-                seated.y = navHit.position.y;
-                floorSource = "navmesh";
-            }
-            else if (Physics.Raycast(new Vector3(p.worldPos.x, p.worldPos.y + 50f, p.worldPos.z),
-                         Vector3.down, out RaycastHit rayHit, 100f, ~0, QueryTriggerInteraction.Ignore))
-            {
-                seated.y = rayHit.point.y;
-                floorSource = "raycast";
-            }
+            // DETERMINISTIC BASE-ON-GROUND SEAT (owner directive 2026-07-04, the WHOLE fix): the
+            // recurring FLOATING-STRUCTURE class — Tree of Life before, the Colosseum now (floated
+            // ~5m). ROOT CAUSE (captured [Flow:Hub] proof): the old fallback raycast cast against
+            // ALL layers (~0) and took the FIRST hit, which in the merged Main_Castle_Overworld
+            // caught OVERHEAD castle geometry at y≈5.23 instead of the ground at y=0 — and
+            // non-deterministically (some sessions seated at 0, some floated).
+            //
+            // The world is SCRIPTED with a KNOWN flat ground: WorldMergeBuilder.LowerCastleToGround
+            // lowers the castle floor coplanar with the terrain inner ring at y=0. So we DO NOT
+            // sample terrain, DO NOT navmesh, DO NOT raycast (all proven-brittle) — the whole
+            // building/structure CATEGORY reads the ONE blanket GroundY variable and pins the
+            // bounds-base to it ONE TIME at placement. Same input -> same base on the ground, every
+            // session, editor==build.
+            Vector3 seated = new Vector3(p.worldPos.x, GroundY, p.worldPos.z);
             DeNelle.Core.Diagnostics.FlowTrace.Step("Hub",
-                $"place '{p.name}': authored y={p.worldPos.y:0.###} -> floor y={seated.y:0.###} " +
-                $"(source={floorSource}) — host seated on the real floor, not the pre-raise frame.");
+                $"place '{p.name}': authored y={p.worldPos.y:0.###} -> GroundY={GroundY:0.###} " +
+                $"(scripted category ground variable — no raycast/sample) — deterministic base-on-ground seat.");
             host.transform.position = seated;
             var opts = SkinOptions.Structure(p.sizeM);
             opts.LocalRotation = Quaternion.Euler(p.pitchDeg, p.yawDeg, p.rollDeg);
@@ -181,14 +184,13 @@ namespace DeNelle.Village
                 return;
             }
             if (p.scaleX > 0f)   // explicit owner-dialed (non-uniform) scale overrides the uniform sizeM fit
-            {
                 vis.transform.localScale = new Vector3(p.scaleX, p.scaleY, p.scaleZ);
-                // Owner 2026-07-03 scale-down: the explicit scale is applied AFTER VisualFactory's
-                // SeatOnGround (which seated the FITTED size), so shrinking it drifts the bounds base
-                // off the floor. Re-seat the visual base back onto the sampled floor y so a scaled
-                // prop is never left floating / half-buried ("keep them seated on the ground").
-                ReseatOnFloor(vis, seated.y);
-            }
+            // Owner 2026-07-04 exact rule: `if (object is a building) object.SetBottom = ground y=0`.
+            // Capability check → set the bottom. One code path over all building-type objects, once at
+            // placement, no raycast/sample. Runs AFTER any scale override (an explicit scale is applied
+            // after VisualFactory's SeatOnGround, so it drifts the bottom — this re-pins it to ground).
+            if (IsBuilding(p))
+                SetBottomToGround(vis, GroundY);
             // Ticket #10 (RCA 2026-06-21): a TryPlace structure (e.g. the colosseum) has NO baked
             // collider at all — the inject path is visual-only. Fit one to the final visible mesh so
             // it's solid. Done AFTER scale so the box matches what the player sees.
@@ -307,10 +309,21 @@ namespace DeNelle.Village
                 $"fitted BoxCollider on '{host.name}' size={b.size} center={b.center} (ticket #10 — now solid).");
         }
 
-        // Shift a placed visual vertically so its renderer-bounds BASE sits at floorY. Used after
-        // an explicit scale override (which runs after VisualFactory's SeatOnGround) so a scaled-down
-        // prop re-settles on the floor instead of floating / burying (owner 2026-07-03 scale-down).
-        private static void ReseatOnFloor(GameObject vis, float floorY)
+        // Capability check for the owner's rule `if (object is a building) SetBottom = ground`.
+        // Everything the injector PLACES via the Places table is a building/structure — it is skinned
+        // through SkinOptions.Structure(sizeM) and registered as a solid structure (EnsureStructure
+        // collider). So the whole placed category carries the building capability; this is the single
+        // predicate to narrow if a non-building prop is ever added to Places.
+        private static bool IsBuilding(Place p) => true;
+
+        // SetBottom: pin a placed visual's BOTTOM (combined renderer bounds.min.y — its lowest point)
+        // to groundY, deterministically, ONE time. Generalized for ANY building-type object (Colosseum
+        // and any future placed structure), not per-object. Runs after any explicit scale override
+        // (which is applied after VisualFactory's SeatOnGround, so it drifts the bottom off ground).
+        // No raycast, no sampling — the bottom is set to the scripted GroundY, so the base sits ON the
+        // ground every session (editor==build). The Tree of Life grounds off the SAME value via
+        // SeatOnGroundOnStart._groundY (default 0, SeatOnGroundOnStart.cs:40) — one ground for the category.
+        private static void SetBottomToGround(GameObject vis, float groundY)
         {
             if (vis == null) return;
             Bounds b = default; bool have = false;
@@ -321,10 +334,11 @@ namespace DeNelle.Village
             }
             if (!have) return;
             var pos = vis.transform.position;
-            pos.y += floorY - b.min.y;   // lift/lower so the bounds base lands on the floor
+            pos.y += groundY - b.min.y;   // lift/lower so the visible BOTTOM lands exactly on groundY
             vis.transform.position = pos;
             DeNelle.Core.Diagnostics.FlowTrace.Step("Hub",
-                $"re-seated '{vis.name}' base to floor y={floorY:0.###} after scale-down (was min.y={b.min.y:0.###}).");
+                $"SetBottom '{vis.name}' bottom -> ground y={groundY:0.###} (was min.y={b.min.y:0.###}, " +
+                $"delta={groundY - b.min.y:0.###}) — deterministic base-on-ground, no raycast.");
         }
 
         // Name match across the loaded scene(s). Runs once per hub load (not per frame).
