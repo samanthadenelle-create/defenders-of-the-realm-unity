@@ -59,10 +59,10 @@ namespace DeNelle.HUD.Kit
             new Dictionary<string, GameObject>(StringComparer.OrdinalIgnoreCase);
 
         // live handles
-        private ElarionUiKit.NameplateHandle _vitals;
+        private ElarionUiKit.PartyNameplateHandle _vitals;   // WO-432 shared HP/MP plate
         private ElarionUiKit.BarHandle _xpBar;
         private ElarionUiKit.CurrencyChipHandle _wisdomChip;
-        private ElarionUiKit.BarHandle _heartBar;
+        private ElarionUiKit.PartyNameplateHandle _heartPlate;   // WO-432: Heart of Elarion on the shared plate
         private ElarionUiKit.TargetFrameHandle _targetFrame;
         private ElarionUiKit.CastBarHandle _castBar;
         private ElarionUiKit.ActionSlotHandle[] _abilitySlots;
@@ -173,11 +173,10 @@ namespace DeNelle.HUD.Kit
             Transform pool = transform;   // widgets are reparented into areas on ApplyPosture
             Vector2 z = Vector2.zero, o = Vector2.one;
 
-            // ── vitals: BuildNameplate(Player) — THE 9/145 fix by contract ──
-            _vitals = ElarionUiKit.BuildNameplate(pool, ElarionUiKit.NameplateKind.Player,
+            // ── vitals: WO-432 shared BuildPartyNameplate (name + HP + MP) ──
+            _vitals = ElarionUiKit.BuildPartyNameplate(pool, "Hero",
                 new Vector2(0f, 0.35f), new Vector2(1f, 1f));
-            _vitals.SetName("Hero");
-            Register("playerNameplate", WrapAsWidget("playerNameplate", _vitals.root));
+            Register("playerNameplate", WrapAsWidget("playerNameplate", _vitals.Root.gameObject));
 
             // xp bar under the plate (thin, no frame).
             _xpBar = ElarionUiKit.BuildObsidianBar(pool, ElarionUiKit.ObsidianBarKind.Xp,
@@ -190,9 +189,10 @@ namespace DeNelle.HUD.Kit
 
             // ── status: wave block (calm(town), between waves only) + heart ──
             BuildWaveBlock(pool);
-            _heartBar = ElarionUiKit.BuildObsidianBar(pool, ElarionUiKit.ObsidianBarKind.Heart,
-                new Vector2(0.15f, 0.02f), new Vector2(0.85f, 0.30f), withValue: true, framed: true);
-            Register("heartStatus", WrapAsWidget("heartStatus", _heartBar.track.gameObject));
+            // WO-432: the Heart of Elarion status — a tree-of-life glyph + "Elarion" label
+            // ABOVE its own gold bar, occupying the HeartStatus area (left, below the hero
+            // nameplate). Reads as the world-tree/heart status, NOT a second hero HP bar.
+            BuildHeartStatus(pool);
 
             // targetCycle: up to 4 compact enemy rows -> HudCommands.CycleSelect.
             BuildTargetCycle(pool);
@@ -381,8 +381,14 @@ namespace DeNelle.HUD.Kit
 
         private void BuildWaveBlock(Transform pool)
         {
-            // Plate + labels + progress + Start Wave (all factory pieces).
-            _waveBlockRoot = ElarionUiKit.Panel(pool, Vector2.zero, Vector2.one);
+            // Labels + progress + Start Wave (all factory pieces).
+            // WO-432: NO olive Panel() slab — a bare transparent container so the wave
+            // labels/progress/button read cleanly against the scene (kill the block bg).
+            _waveBlockRoot = new GameObject("WaveBlock", typeof(RectTransform));
+            _waveBlockRoot.transform.SetParent(pool, false);
+            var wbrt = (RectTransform)_waveBlockRoot.transform;
+            wbrt.anchorMin = Vector2.zero; wbrt.anchorMax = Vector2.one;
+            wbrt.offsetMin = Vector2.zero; wbrt.offsetMax = Vector2.zero;
             _waveLabel = ElarionUiKit.Label(_waveBlockRoot.transform, "", 0.62f, 0.98f,
                 ElarionUi.Parchment, ElarionUi.FontHead, TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
             _waveCountdown = ElarionUiKit.Label(_waveBlockRoot.transform, "", 0.34f, 0.60f,
@@ -398,6 +404,46 @@ namespace DeNelle.HUD.Kit
             TutorialHighlightRegistry.Register("hud.wave_button", (RectTransform)_startWaveButton.transform);
             _startWaveButton.gameObject.SetActive(false);
             Register("waveBlock", WrapAsWidget("waveBlock", _waveBlockRoot));
+        }
+
+        // WO-432: Heart of Elarion status cluster — a tree-of-life glyph + "Elarion" caption
+        // sitting ABOVE its own gold Heart bar, so the whole widget reads as the world-tree /
+        // heart status (occupied into the HeartStatus area on the left, below the nameplate)
+        // and can never be mistaken for a second hero HP bar. Factory-only (§5).
+        private void BuildHeartStatus(Transform pool)
+        {
+            var root = new GameObject("HeartStatus", typeof(RectTransform));
+            root.transform.SetParent(pool, false);
+            var rt = (RectTransform)root.transform;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+
+            // Tree-of-life glyph (OUR icon via the concept resolver; hidden if the art is
+            // absent — the nameplate carries the "Elarion" caption) marking this as the
+            // world tree's status.
+            var mark = new GameObject("HeartMark", typeof(Image));
+            mark.transform.SetParent(root.transform, false);
+            var mrt = (RectTransform)mark.transform;
+            mrt.anchorMin = new Vector2(0.02f, 0.30f); mrt.anchorMax = new Vector2(0.15f, 0.95f);
+            mrt.offsetMin = Vector2.zero; mrt.offsetMax = Vector2.zero;
+            var markImg = mark.GetComponent<Image>();
+            markImg.preserveAspect = true; markImg.raycastTarget = false;
+            var markSprite = UiStyle.Icon("tree");
+            if (markSprite != null) markImg.sprite = markSprite; else mark.SetActive(false);
+
+            // WO-432: the Heart of Elarion now renders on the SHARED PartyNameplate builder
+            // (name = "♥ Elarion" + a single HP bar). Only HealthFill is used; the mana row is
+            // hidden so it reads as the world-tree/heart status, never a second hero MP bar.
+            _heartPlate = ElarionUiKit.BuildPartyNameplate(root.transform, "♥ Elarion",
+                new Vector2(0.16f, 0.02f), new Vector2(0.99f, 0.98f));
+            if (_heartPlate.ManaFill != null)
+            {
+                _heartPlate.ManaFill.fillAmount = 0f;
+                var manaBg = _heartPlate.ManaFill.transform.parent;   // ManaBackground row
+                if (manaBg != null) manaBg.gameObject.SetActive(false);
+            }
+
+            Register("heartStatus", WrapAsWidget("heartStatus", root));
         }
 
         private void BuildAbilityRow(Transform pool)
@@ -455,12 +501,44 @@ namespace DeNelle.HUD.Kit
 
         private void BuildResourceChips(Transform pool)
         {
-            // Expanded row: Gold (primary) + Wood/Iron/Food/Crystal — count-tween only, NO flash.
+            // WO-431: Gold (primary) + Wood/Iron/Food/Crystal chips live in an OBSIDIAN dark
+            // frame under a gold "Resources" header, and the frame HUGS its content via a
+            // VerticalLayoutGroup + ContentSizeFitter (dynamic width — no fixed olive slab).
+            // Each chip draws OUR resource icon through the CurrencyChip concept resolver
+            // (concept-icons.json gold/wood/iron/food/crystal -> Icons_Obsidian) — the icon
+            // choice is DATA, never hard-coded here. Count-tween only, NO flash.
             _resExpandedRow = new GameObject("ResourceChips", typeof(RectTransform));
             _resExpandedRow.transform.SetParent(pool, false);
             var rrt = (RectTransform)_resExpandedRow.transform;
-            rrt.anchorMin = new Vector2(0f, 0.78f); rrt.anchorMax = Vector2.one;
-            rrt.offsetMin = Vector2.zero; rrt.offsetMax = Vector2.zero;
+            // Top-left pivot so the fitter grows the frame down/right inside the rail.
+            rrt.anchorMin = new Vector2(0f, 1f); rrt.anchorMax = new Vector2(0f, 1f);
+            rrt.pivot = new Vector2(0f, 1f); rrt.anchoredPosition = Vector2.zero;
+
+            // Obsidian dark frame + gold inner rim (reused kit chrome, near-black ObsidianFill
+            // — NOT the olive Panel()). ignoreLayout so it stretches to the fitter-sized content.
+            var frame = ElarionUiKit.AddImage(_resExpandedRow.transform, "ResFrame",
+                Vector2.zero, Vector2.one, ElarionUiKit.ObsidianFill, rounded: true);
+            ElarionUiKit.AddInnerRim(frame, ElarionUiKit.ObsidianTrim);
+            var frameImg = frame.GetComponent<Image>();
+            if (frameImg != null) frameImg.raycastTarget = false;
+            frame.AddComponent<LayoutElement>().ignoreLayout = true;
+
+            // Vertical stack + ContentSizeFitter => dynamic width/height to the content.
+            var vlg = _resExpandedRow.AddComponent<VerticalLayoutGroup>();
+            vlg.padding = new RectOffset(12, 12, 8, 10);
+            vlg.spacing = 4f;
+            vlg.childAlignment = TextAnchor.UpperLeft;
+            vlg.childControlWidth = true;  vlg.childControlHeight = true;
+            vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
+            var fitter = _resExpandedRow.AddComponent<ContentSizeFitter>();
+            fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            fitter.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
+
+            // Gold "Resources" header (kit Label; no crest glyph — avoids build-font tofu).
+            var header = ElarionUiKit.Label(_resExpandedRow.transform, "Resources", 0f, 1f,
+                ElarionUi.Gilt, ElarionUi.FontLabel, TextAlignmentOptions.MidlineLeft, 0f, 1f, bold: true);
+            var headerLe = header.gameObject.AddComponent<LayoutElement>();
+            headerLe.minHeight = 26f; headerLe.preferredHeight = 26f; headerLe.minWidth = 168f;
 
             var kinds = new[]
             {
@@ -471,9 +549,10 @@ namespace DeNelle.HUD.Kit
             _resChips = new ElarionUiKit.CurrencyChipHandle[kinds.Length];
             for (int i = 0; i < kinds.Length; i++)
             {
-                float y1 = 1f - i * 0.19f, y0 = y1 - 0.18f;   // vertical stack down the rail
                 _resChips[i] = ElarionUiKit.CurrencyChip(_resExpandedRow.transform, kinds[i],
-                    new Vector2(0.05f, y0), new Vector2(1f, y1), primary: kinds[i] == ElarionUiKit.CurrencyKind.Gold);
+                    Vector2.zero, Vector2.one, primary: kinds[i] == ElarionUiKit.CurrencyKind.Gold);
+                var le = _resChips[i].root.AddComponent<LayoutElement>();
+                le.minHeight = 34f; le.preferredHeight = 34f; le.minWidth = 168f;
             }
             // Tap anywhere on the row toggles nothing in town (always expanded there).
             Register("resourceChips", WrapAsWidget("resourceChips", _resExpandedRow));
@@ -545,10 +624,15 @@ namespace DeNelle.HUD.Kit
         {
             var v = _models != null ? _models.HeroVitals : null;
             if (v == null) return;
-            // §1.1: fillAmount-only via BarHandle.SetValue — bar + "9/145" label atomic.
-            _vitals.hp.SetValue(v.Hp, v.MaxHp);
-            if (_vitals.mp != null) _vitals.mp.SetValue(v.Mana, v.MaxMana);   // MP LIVE (§0 fix)
-            _vitals.SetName((string.IsNullOrEmpty(v.ClassId) ? "Hero" : Cap(v.ClassId)) + "  Lv " + Mathf.Max(1, v.Level));
+            // WO-432: drive the shared PartyNameplate fills directly (fillAmount = hp/maxHp,
+            // mp/maxMp). The fill sprites are non-null by contract so uGUI honours fillAmount.
+            if (_vitals.HealthFill != null)
+                _vitals.HealthFill.fillAmount = v.MaxHp > 0 ? Mathf.Clamp01((float)v.Hp / v.MaxHp) : 0f;
+            if (_vitals.ManaFill != null)   // MP LIVE (§0 fix)
+                _vitals.ManaFill.fillAmount = v.MaxMana > 0 ? Mathf.Clamp01((float)v.Mana / v.MaxMana) : 0f;
+            if (_vitals.NameLabel != null)
+                _vitals.NameLabel.text = (string.IsNullOrEmpty(v.ClassId) ? "Hero" : Cap(v.ClassId)) +
+                                         "  Lv " + Mathf.Max(1, v.Level);
             _xpBar.SetValue(v.Xp, Mathf.Max(1, v.XpToNext));
             _wisdomChip.SetAmount(v.Wisdom);
         }
@@ -578,7 +662,11 @@ namespace DeNelle.HUD.Kit
             _waveBlockRoot.SetActive(betweenWaves);
             if (!betweenWaves) return;
 
-            _waveLabel.text = w.Number > 0 ? "Wave " + w.Number : "The village rests";
+            // WO-432: the wave label shows ONLY during an actual wave (Number > 0); the
+            // village-at-rest state hides the label entirely instead of a resting caption.
+            bool hasWave = w.Number > 0;
+            _waveLabel.gameObject.SetActive(hasWave);
+            if (hasWave) _waveLabel.text = "Wave " + w.Number;
             bool realCountdown = w.Phase == WavePhase.Countdown && w.CountdownRemaining > 0f;
             _waveCountdown.text = realCountdown
                 ? "Next wave in " + Mathf.CeilToInt(w.CountdownRemaining) + "s" : "";
@@ -592,7 +680,10 @@ namespace DeNelle.HUD.Kit
         {
             var wm = _models != null ? _models.World : null;
             if (wm == null) return;
-            _heartBar.SetValue(wm.HeartHp, Mathf.Max(1, wm.HeartMaxHp));
+            // WO-432: the Heart of Elarion drives the shared plate's HealthFill (mana row hidden).
+            if (_heartPlate.HealthFill != null)
+                _heartPlate.HealthFill.fillAmount = wm.HeartMaxHp > 0
+                    ? Mathf.Clamp01((float)wm.HeartHp / wm.HeartMaxHp) : 0f;
         }
 
         private void OnAbilities()

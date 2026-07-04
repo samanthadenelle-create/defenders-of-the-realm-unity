@@ -35,6 +35,12 @@
     "elixir":    { "role": "potion", "name": "potion_health" },
     "inventory": { "role": "icons", "name": "icon_inventory" },
     "bag":       { "role": "icons", "name": "icon_inventory" },
-    "quest":     { "role": "icons", "name": "icon_quest" }
+    "quest":     { "role": "icons", "name": "icon_quest" },
+
+    "gold":      { "role": "currency", "name": "currency_gold" },
+    "wood":      { "role": "currency", "name": "currency_wood" },
+    "iron":      { "role": "currency", "name": "currency_iron" },
+    "food":      { "role": "currency", "name": "currency_food" },
+    "crystal":   { "role": "currency", "name": "currency_crystal" }
   }
 }

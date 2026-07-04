@@ -6,7 +6,8 @@
       "posture": "calm(town)",
       "areas": [
         { "area": "vitals",      "widgets": ["playerNameplate", "xpBar", "wisdomChip"] },
-        { "area": "status",      "widgets": ["compass", "waveBlock", "heartStatus"] },
+        { "area": "heartStatus", "widgets": ["heartStatus"] },
+        { "area": "status",      "widgets": ["compass", "waveBlock"] },
         { "area": "system",      "widgets": ["settingsButton"] },
         { "area": "actionRail",  "widgets": ["resourceChips"] },
         { "area": "actionBar",   "widgets": ["buildButton", "talkButton", "bagButton", "questButton"] },

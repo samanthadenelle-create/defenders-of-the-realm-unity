@@ -44,6 +44,8 @@ namespace DeNelle.HUD.Kit
         Feedback,
         /// <summary>FRIENDLY — chat/social dock (left edge).</summary>
         Dock,
+        /// <summary>FRIENDLY — Heart of Elarion / tree-of-life status (left, just below vitals).</summary>
+        HeartStatus,
     }
 
     /// <summary>One canvas, nine mounts. Pure scaffolding (see header).</summary>
@@ -96,6 +98,8 @@ namespace DeNelle.HUD.Kit
             Add(HudArea.ActionBar,   new Vector2(0.280f, 0.015f), new Vector2(0.720f, 0.150f));
             Add(HudArea.MoveCluster, new Vector2(0.010f, 0.030f), new Vector2(0.270f, 0.330f));
             Add(HudArea.Dock,        new Vector2(0.000f, 0.330f), new Vector2(0.230f, 0.430f));
+            // Heart of Elarion status: left column, directly BELOW the Vitals cluster (WO-432).
+            Add(HudArea.HeartStatus, new Vector2(0.010f, 0.700f), new Vector2(0.330f, 0.792f));
             Add(HudArea.Feedback,    Vector2.zero,                Vector2.one);
 
             // Feedback overlay never eats taps (stamps/toasts are decorative).

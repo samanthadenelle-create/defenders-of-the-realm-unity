@@ -87,7 +87,7 @@ namespace DeNelle.Village.UI
                 // Full end-state modal, sized to the VM's content (no cavernous empty space).
                 float half = PanelHalfHeight(vm);
                 var modal = ElarionUiKit.BuildObsidianModal("EndState", vm.Title,
-                    new Vector2(0.08f, 0.53f - half), new Vector2(0.92f, 0.53f + half),
+                    new Vector2(0.22f, 0.53f - half), new Vector2(0.78f, 0.53f + half),   // WO-433: narrower victory panel (was 0.08/0.92)
                     onClose: null,   // scrim stays a pure raycast-blocker — no second way out
                     frameName: RpgUiCatalog.FrameCore,
                     medallionIcon: "crest");   // explicit: the socket seats the crest family, never blank
@@ -118,7 +118,7 @@ namespace DeNelle.Village.UI
             if (vm.Stars >= 0) units += 1.0f;
             if (vm.TimeSeconds >= 0f) units += 0.8f;
             units += vm.Spoils.Count * 1.0f;
-            return Mathf.Clamp(0.055f + units * 0.021f, 0.12f, 0.33f);
+            return Mathf.Clamp(0.055f + units * 0.021f, 0.12f, 0.36f);   // WO-433: raise height clamp (was 0.33)
         }
 
         // ── binding ───────────────────────────────────────────────────────────

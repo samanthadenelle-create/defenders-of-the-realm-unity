@@ -112,6 +112,7 @@ namespace DeNelle.HUD.Kit
                 case "movecluster": area = HudArea.MoveCluster; return true;
                 case "feedback":    area = HudArea.Feedback;    return true;
                 case "dock":        area = HudArea.Dock;        return true;
+                case "heartstatus": area = HudArea.HeartStatus; return true;
                 default:            area = HudArea.Vitals;      return false;
             }
         }

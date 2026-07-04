@@ -231,6 +231,16 @@ namespace DeNelle.Editor
                 new Entry { Root = BlinkRoot, Src = "Buttons_Obsidian/Close_Button_Normal.png", Role = "button", Name = "close_normal" },
                 new Entry { Root = BlinkRoot, Src = "Buttons_Obsidian/Close_Button_On.png",     Role = "button", Name = "close_on" },
                 new Entry { Root = BlinkRoot, Src = "Buttons_Obsidian/Arrow.png",               Role = "button", Name = "arrow" },
+
+                // currency/ — resource-chip icons (WO-431 HUD resource panel). Mirrored from
+                // Icons_Obsidian so the CurrencyChip concept resolver (concept-icons.json
+                // gold/wood/iron/food/crystal) serves a real icon per resource row, WebGL-safe.
+                // Food/wood have no literal grain/log art in the pack → nearest-fit obsidian icon.
+                new Entry { Root = BlinkRoot, Src = "Icons_Obsidian/Gold_Currency.png", Role = "currency", Name = "currency_gold" },
+                new Entry { Root = BlinkRoot, Src = "Icons_Obsidian/Fiber.png",         Role = "currency", Name = "currency_wood" },
+                new Entry { Root = BlinkRoot, Src = "Icons_Obsidian/Iron_Bar_1.png",    Role = "currency", Name = "currency_iron" },
+                new Entry { Root = BlinkRoot, Src = "Icons_Obsidian/Health_Potion.png", Role = "currency", Name = "currency_food" },
+                new Entry { Root = BlinkRoot, Src = "Icons_Obsidian/Rune_2.png",        Role = "currency", Name = "currency_crystal" },
             };
         }
 
