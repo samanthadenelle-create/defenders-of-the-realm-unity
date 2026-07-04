@@ -1,6 +1,8 @@
-# WORK ORDER 96 — Defend the Tower Scene: Placeholder Geometry, Pet UI, Cooldown HUD, World-Space Numbers
+# ⚠ WORK ORDER 96 — Defend the Tower Scene: Placeholder Geometry, Pet UI, Cooldown HUD, World-Space Numbers — **SUPERSEDED 2026-07-04**
 
-**Status:** BUG FIX — READY TO IMPLEMENT
+> **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09 (see `PIPELINE_STATE.md` §2). This bug report is historical.
+
+**Status:** CLOSED — **SUPERSEDED** (system removed 2026-06-09)
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Medium — four separate fixes in the Defend the Tower scene

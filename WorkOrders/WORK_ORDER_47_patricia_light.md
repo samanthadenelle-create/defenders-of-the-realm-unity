@@ -1,6 +1,8 @@
-# WORK ORDER 47 — "Patricia Light": Defend-the-Tower shooter (breach choice)
+# ⚠ WORK ORDER 47 — "Patricia Light": Defend-the-Tower shooter (breach choice) — **SUPERSEDED 2026-07-04**
 
-**Status:** READY TO IMPLEMENT (phased)
+> **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09 (see `PIPELINE_STATE.md` §2 and `CANON_GROUND_TRUTH_2026-07-03.md`). The breach now routes directly to the ATB "Last Stand" battle. This WO is historical.
+
+**Status:** CLOSED — **SUPERSEDED** (system removed 2026-06-09)
 **Date:** 2026-05-26
 **Author:** Owner design (Patricia Light) + Claude UI scaffold, adapted to the real codebase
 **Priority:** High — the second half of the breach moment; the action-mode alt to ATB.

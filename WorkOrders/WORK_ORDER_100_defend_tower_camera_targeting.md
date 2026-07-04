@@ -1,6 +1,8 @@
-# WORK ORDER 100 — Defend the Tower: Camera Drift, Broken Targeting, Geometry Clipping
+# ⚠ WORK ORDER 100 — Defend the Tower: Camera Drift, Broken Targeting, Geometry Clipping — **SUPERSEDED 2026-07-04**
 
-**Status:** BUG FIX — READY TO IMPLEMENT
+> **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09 (see `PIPELINE_STATE.md` §2). This bug report is historical.
+
+**Status:** CLOSED — **SUPERSEDED** (system removed 2026-06-09)
 **Date:** 2026-05-28
 **Priority:** Critical — scene is unplayable
 **Scope:** Medium — camera setup, targeting system, scene geometry scale

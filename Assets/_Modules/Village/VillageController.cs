@@ -9,8 +9,8 @@
 // Part 5 Week 3-4) -- this Week-3 skeleton holds the structure + serialized
 // references + the assemble pass that walks WallLayout.
 //
-// CANON: the town is "Avalon", the world-tree is "Elarion" / "the Heart". Those
-// strings are not typed inline in user-facing copy -- the port spec routes them
+// CANON: the village is "Elarion" (the world-tree / Heart of Elarion), not "Avalon" (retired).
+// Those strings are not typed inline in user-facing copy — the port spec routes them
 // through data/canon-strings.json. This file uses them only in comments.
 //
 // The Editor-side VillageSceneBuilder builds the scene and wires the serialized

@@ -1,6 +1,8 @@
-# WORK ORDER 48 — Tower Core Loop (GROUP 0) — SYNTHESIZED, review in AM
+# ⚠ WORK ORDER 48 — Tower Core Loop (GROUP 0) — **SUPERSEDED 2026-07-04**
 
-**Status:** In progress (autonomous overnight, agent pipeline)
+> **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09. This WO was part of that system's feature arc.
+
+**Status:** CLOSED — SUPERSEDED (system removed 2026-06-09)
 **Date:** 2026-05-26 (overnight)
 **Branch:** `feat/tower-core-loop` (off `feat/patricia-light` b356a23 — has everything)
 

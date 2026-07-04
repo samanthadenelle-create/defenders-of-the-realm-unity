@@ -5,14 +5,14 @@
 //   VillageHudController (the sleek code-built combat HUD) is CORRECT, but it is
 //   only ADDED as a scene component by the editor scene-builders for the VILLAGE
 //   scenes (VillageSceneBuilder / WallRepairSceneSetup). The real-time battle
-//   scenes — "Defend the Tower" (PatriciaLightMode), the ATB battle (ATBBattle),
-//   the Arena and the Dungeon scenes — are loaded via a FULL SceneManager.LoadScene
-//   (SceneRouter.GoPatriciaLight / GoBattle / GoDungeon), which UNLOADS the village
-//   scene and its authored HUD. Those battle scenes never author a HUD of their
-//   own (ATBBattle even uses a UXML HUD, which §8 says does NOT render in builds).
-//   Net result: in DTT / Arena / ATB / Dungeon there is NO VillageHudController in
-//   the loaded scenes → nothing builds the HUD → BattleHudVisibilityManager finds
-//   no HUD group to fade in → the battle HUD never appears.
+//   scenes — the ATB battle (ATBBattle), the Arena and the Dungeon scenes — are
+//   loaded via a FULL SceneManager.LoadScene (SceneRouter.GoBattle / GoDungeon),
+//   which UNLOADS the village scene and its authored HUD. Those battle scenes never
+//   author a HUD of their own (ATBBattle even uses a UXML HUD, which §8 says does
+//   NOT render in builds). Net result: in Arena / ATB / Dungeon there is NO
+//   VillageHudController in the loaded scenes → nothing builds the HUD →
+//   BattleHudVisibilityManager finds no HUD group to fade in → the battle HUD never
+//   appears. (Note: Defend-the-Tower / PatriciaLight was removed 2026-06-09.)
 //
 // THE FIX (build-safe, code-built, asmdef-clean):
 //   A RuntimeInitializeOnLoadMethod(AfterSceneLoad) bootstrap (mirroring

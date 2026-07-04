@@ -1,6 +1,8 @@
-# WORK ORDER 99 — Defend the Tower: Enemy Pill Placeholders + Gothic Tower Asset Import
+# ⚠ WORK ORDER 99 — Defend the Tower: Enemy Pill Placeholders + Gothic Tower Asset Import — **SUPERSEDED 2026-07-04**
 
-**Status:** BUG FIX + ASSET IMPORT — READY TO IMPLEMENT
+> **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09 (see `PIPELINE_STATE.md` §2). This WO is historical.
+
+**Status:** CLOSED — **SUPERSEDED** (system removed 2026-06-09)
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Medium — enemy prefab materials + import Blender tower asset

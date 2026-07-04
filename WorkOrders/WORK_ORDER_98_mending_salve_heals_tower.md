@@ -1,6 +1,8 @@
-# WORK ORDER 98 — Mending Salve: Heals Hero Instead of Tower (Defend the Tower Mode)
+# ⚠ WORK ORDER 98 — Mending Salve: Heals Hero Instead of Tower (Defend the Tower Mode) — **SUPERSEDED 2026-07-04**
 
-**Status:** BUG FIX — READY TO IMPLEMENT
+> **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09 (see `PIPELINE_STATE.md` §2). This WO is historical.
+
+**Status:** CLOSED — **SUPERSEDED** (system removed 2026-06-09)
 **Date:** 2026-05-28
 **Priority:** Critical — wrong game mechanic
 **Scope:** Small — mode-aware target routing in SalveAbility + button label update

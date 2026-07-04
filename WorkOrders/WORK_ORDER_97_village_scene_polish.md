@@ -1,6 +1,8 @@
-# WORK ORDER 97 — Village Scene Polish: World-Space "9", Purple Gate Material, Cooldown HUD, Debug Compass
+# ⚠ WORK ORDER 97 — Village Scene Polish: World-Space "9", Purple Gate Material, Cooldown HUD, Debug Compass — **SUPERSEDED 2026-07-04**
 
-**Status:** BUG FIX — READY TO IMPLEMENT
+> **SUPERSEDED:** Some issues reference the removed Defend-the-Tower system. Verify any remaining Village issues against current canon before re-implementing.
+
+**Status:** PARTIALLY OBSOLETE — review before implementation
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Small–Medium — four targeted fixes in the Village scene

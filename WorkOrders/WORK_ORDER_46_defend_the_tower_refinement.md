@@ -1,6 +1,8 @@
-# WORK ORDER 46 — "Defend the Tower" Scene Refinement + Playtest Bug Sweep
+# ⚠ WORK ORDER 46 — "Defend the Tower" Scene Refinement + Playtest Bug Sweep — **SUPERSEDED 2026-07-04**
 
-**Status:** ACTIVE — owner playtest 2026-05-28 (CLI session)
+> **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09 (see `PIPELINE_STATE.md` §2 and `CANON_GROUND_TRUTH_2026-07-03.md`). This WO is historical; the tower combat arc is no longer a pillar.
+
+**Status:** CLOSED — **SUPERSEDED** (system removed 2026-06-09)
 **Trigger:** Owner playtested the *Defend the Tower* scene; it reads as broken/placeholder
 ("5 random shapes piled together", oversized dark hex terrain, tiny hero, generic towers).
 **Goal:** Take the scene from placeholder scaffolding to a presentable, correct vertical slice.
