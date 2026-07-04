@@ -80,16 +80,26 @@ namespace DeNelle.Village.World
         //   deep band (deeper)     : MoatCentreRadius .. MoatOuterRadius (widest — the shimmer target)
         private const float MoatShoreStripWidth = 1.5f;
 
-        // Water level: DERIVED at build time from the MEASURED outer ground (raycast just outside
-        // the band, fallback = terrain-flush 0) + a small offset ABOVE it, so the sheet renders on
-        // top of the ground and laps the raised plinth (WO-593; the old -0.4 constant was buried).
-        private const float WaterAboveGround = 0.05f;
-        private const float OuterGroundFallbackY = 0f;
+        // WO-605 (owner pivot 2026-07-03): the moat is a CONTAINED BASIN filled with SOLID OPAQUE
+        // water at a FIXED level — NO raycast probe (the probe caught the plinth/gate colliders at
+        // liftY and floated the sheet, submerging the deck; that path is DELETED). The level is a
+        // DESIGN CONSTANT set BELOW the bridge deck outer-end (~y=2.15) so the water reads full but
+        // never submerges a deck.
+        private const float FixedWaterY = 1.5f;
 
-        // Translucent teal water tint (the proven de-glossed MoatWater look). The two-tone bands +
-        // wet-shore strip DERIVE their shades from this single base (depth-read, not a new palette —
-        // palette/mood is an owner-gated later slice).
-        private static readonly Color WaterColor = new Color(0.10f, 0.42f, 0.45f, 0.62f);
+        // Raised OUTER basin lip (mesh rim, NOT TerrainData — TerrainData edits risk the known
+        // binary-asset corruption + navmesh-rebake landmines). The trench between this rim and the
+        // raised castle plinth (liftY) is the basin the solid water fills.
+        private const float LipWidth  = 3f;     // rim thickness (r = MoatOuterRadius .. +LipWidth)
+        private const float LipFloorY = 0f;     // basin-floor / OuterWorld terrain-flush level
+        private const float LipTopY   = 2.0f;   // crest: ABOVE water (1.5), BELOW the deck where it passes over (~2.7)
+        private static readonly Color LipColor  = new Color(0.50f, 0.50f, 0.52f); // stone retaining rim
+        private static readonly Color BermColor = new Color(0.28f, 0.42f, 0.20f); // natural earthy-grass bank
+
+        // Solid OPAQUE blue water (owner pivot): a FILLED channel, always visible (no edge-on-invisible
+        // transparent plane). The 3 depth-read sub-bands DERIVE their shades from this single base;
+        // alpha stays 1 (opaque) so the fill always reads.
+        private static readonly Color WaterColor = new Color(0.10f, 0.30f, 0.62f, 1f);
 
         // Fish-school size over the water band (graceful/optional, WO-590). Capped low for the Pi.
         private const int FishSchoolCount = 10;
@@ -118,6 +128,17 @@ namespace DeNelle.Village.World
         private const float  HedgeColliderHeight  = 1.5f;   // invisible seal-wall height (block, don't hide the water)
         private const float  HedgeColliderThick   = 0.5f;   // thin seal-wall depth
         private static readonly Color HedgeColor   = new Color(0.20f, 0.42f, 0.18f); // low-poly hedge green (URP/Lit; pack mat is gitignored)
+
+        // ---- COMMITTED MATERIALS (WO-605, WebGL-safe) --------------------------------------
+        // Runtime Shader.Find("Universal Render Pipeline/Lit") is a WebGL build-time LIABILITY:
+        // if no committed ASSET references the URP/Lit shader, the build strips it and Shader.Find
+        // returns null at runtime -> water + bridge lose their material (invisible water / white
+        // bridge — the owner's WO-605 symptom). The permanent fix (mirrors the committed Bridge/Hedge
+        // Resources PREFABS) is to load COMMITTED .mat assets from Resources, which pull the shader
+        // INTO the build; runtime Shader.Find stays only as a last-resort fallback. Bake the assets
+        // with 'Defenders > Seam > Generate Moat Materials' (MoatMaterialGenerator).
+        private const string WaterMaterialResource  = "Materials/Moat/MoatWater";   // Assets/Resources/Materials/Moat/MoatWater.mat
+        private const string StoneMaterialResource  = "Materials/Moat/BridgeStone";  // Assets/Resources/Materials/Moat/BridgeStone.mat
 
         // The castle hub scene this builds for. (HubScenes covers variants; we additionally
         // require the south recipe to resolve so the gate radials are real.)
@@ -170,16 +191,17 @@ namespace DeNelle.Village.World
             Vector3 southGate = ReadSouthGatePos();
             float gateLateral = southGate.x;   // off-centre lateral the bridges/gates share (x4 symmetry)
 
-            // WO-593: MEASURE the outer ground so the water level DERIVES from reality (S12 — the
-            // -0.4 constant was proven buried by the trace + CastleDepressionDepth=0f). Probe just
-            // OUTSIDE the band, lateral +20 off the gate lane so the invisible GateExit_*_Nav strip
-            // colliders at y=liftY can't be mistaken for ground.
-            float ringGroundY = MeasureGroundY(new Vector3(20f, 0f, -(MoatOuterRadius + 1.5f)), OuterGroundFallbackY);
-            float waterY      = ringGroundY + WaterAboveGround;
+            // WO-605 owner pivot: FIXED water level — a design constant BELOW the bridge deck outer
+            // end (~2.15); NO raycast probe (deleted). The basin is CONTAINED by the raised castle
+            // plinth (inner) + a raised outer lip (built below as MESH, not TerrainData).
+            float waterY = FixedWaterY;
 
-            int waterVerts = BuildWaterRing(root.transform, waterY);
+            int lipVerts   = BuildOuterLip(root.transform);              // raised outer basin rim (mesh)
+            int waterVerts = BuildWaterRing(root.transform, waterY);     // solid opaque fill of the channel
             int bridges    = BuildDrawbridges(root.transform, gateLateral);
+            int berms      = BuildBridgeBankBerms(root.transform, gateLateral); // natural curved seal at each mouth
             int hedges     = BuildHedgeRing(root.transform, gateLateral);
+            int navCarves  = BuildMoatNavCarve(root.transform, gateLateral);   // carve the water off the live navmesh
 
             // Bring the ring to life with the proven shimmer (reuse, DEF-195). It auto-resolves the
             // first child renderer's sharedMaterial == the annulus' deep-band material (index 0).
@@ -194,11 +216,11 @@ namespace DeNelle.Village.World
                 SceneManager.MoveGameObjectToScene(root, hub);
 
             FlowTrace.Step("CastleMoat",
-                "built castle moat: water annulus " + waterVerts + " verts (band r=" + MoatInnerRadius +
-                ".." + MoatOuterRadius + ", width=" + MoatWidth + "m @ y=" + waterY.ToString("0.00") +
-                " = measured ground " + ringGroundY.ToString("0.00") + " + " + WaterAboveGround.ToString("0.00") +
-                ") + " + bridges + " stone-bridge crossings (all sides = south clone; gateLateral=" +
-                gateLateral.ToString("0.00") + ", source: castle-south-recipe x4 symmetry; WO-593 lift-aware).");
+                "built castle BASIN moat: outer lip rim " + lipVerts + " verts + SOLID water fill " + waterVerts +
+                " verts (channel r=" + MoatInnerRadius + ".." + MoatOuterRadius + " FILLED, width=" + MoatWidth +
+                "m @ FIXED y=" + waterY.ToString("0.00") + " below deck-outer ~2.15) + " + bridges +
+                " stone-bridge crossings + " + berms + " bank berms (natural mouth seal); gateLateral=" +
+                gateLateral.ToString("0.00") + ", source: castle-south-recipe x4 symmetry.");
 
             FlowTrace.Step("CastleMoat", "hedge lip ring: " + hedges + " Fence_Shrub instances around the inner lip (r=" +
                 (MoatInnerRadius - HedgeLipInset).ToString("0.0") + ") with 4 cardinal gaps at the bridge mouths + an invisible " +
@@ -218,18 +240,23 @@ namespace DeNelle.Village.World
         // --------------------------------------------------------------------
         private static int BuildWaterRing(Transform parent, float waterY)
         {
+            FlowTrace.Step("CastleMoat", "BuildWaterRing ENTER: mitred annulus r=" + MoatInnerRadius + ".." +
+                MoatOuterRadius + " @ y=" + waterY.ToString("0.00") + " (committed-material path, WebGL-safe).");
+
             // Sub-band radii (square half-extents), inner -> outer.
             float rStrip = MoatInnerRadius + MoatShoreStripWidth;   // plinth wet-shore strip outer edge
             float rMid   = MoatCentreRadius;                        // shallow|deep split
 
-            // Shades DERIVED from the one base teal (depth-read; palette is a later owner slice).
-            Color deepCol    = ScaleColor(WaterColor, 0.90f, 0.85f);   // deeper, more opaque mid band
-            Color shallowCol = ScaleColor(WaterColor, 1.40f, 0.50f);   // lighter, more translucent shallow band
-            Color shoreCol   = ScaleColor(WaterColor, 0.50f, 0.80f);   // dark wet-shore strip at the plinth
+            // OPAQUE depth-read shades DERIVED from the one base blue (alpha 1 = SOLID fill): deep darker,
+            // shallow lighter, shore darkest at the plinth.
+            Color deepCol    = ScaleColor(WaterColor, 0.85f, 1f);   // deeper mid band
+            Color shallowCol = ScaleColor(WaterColor, 1.25f, 1f);   // lighter shallow band
+            Color shoreCol   = ScaleColor(WaterColor, 0.60f, 1f);   // dark wet-shore strip at the plinth
 
-            Material deepMat    = BuildLitMaterial("CastleMoat_WaterDeep",    deepCol,    transparent: true);
-            Material shallowMat = BuildLitMaterial("CastleMoat_WaterShallow", shallowCol, transparent: true);
-            Material shoreMat   = BuildLitMaterial("CastleMoat_WaterShore",   shoreCol,   transparent: true);
+            // WO-605: committed Resources/.mat (WebGL-safe, OPAQUE blue) instanced per band; runtime Shader.Find fallback.
+            Material deepMat    = ResolveMaterial(WaterMaterialResource, "CastleMoat_WaterDeep",    deepCol,    transparent: false);
+            Material shallowMat = ResolveMaterial(WaterMaterialResource, "CastleMoat_WaterShallow", shallowCol, transparent: false);
+            Material shoreMat   = ResolveMaterial(WaterMaterialResource, "CastleMoat_WaterShore",   shoreCol,   transparent: false);
 
             var verts      = new System.Collections.Generic.List<Vector3>(48);
             var uvs        = new System.Collections.Generic.List<Vector2>(48);
@@ -354,24 +381,135 @@ namespace DeNelle.Village.World
             return count;
         }
 
-        // WO-593: measure the real outer-ground height by raycast (terrain/ground colliders),
-        // ignoring trigger volumes. Falls back to the supplied value (the ExteriorTerrainBuilder
-        // flush level) when nothing is hit — e.g. OuterWorld not additively loaded yet.
-        private static float MeasureGroundY(Vector3 probeXZ, float fallbackY)
-            => MeasureGroundY(probeXZ, fallbackY, out _);
-
-        // Overload reporting the SOURCE (measured vs fallback) so callers can prove where the
-        // landing y came from.
-        private static float MeasureGroundY(Vector3 probeXZ, float fallbackY, out bool measured)
+        // ====================================================================
+        //  OUTER BASIN LIP (WO-605 owner pivot) — a raised RIM ring of MESH geometry
+        //  (NOT TerrainData: editing TerrainData risks the known binary-asset corruption
+        //  + navmesh-rebake landmines). Encloses the moat's outer edge so the trench
+        //  between this rim and the raised castle plinth is a CONTAINED BASIN the solid
+        //  water fills. One mesh: inner vertical wall (faces the water) + top cap + outer
+        //  vertical wall. Crest (LipTopY) sits ABOVE the fixed water level and BELOW the
+        //  bridge deck where it passes over the rim, so the deck never clips through.
+        //  Visual only (no collider) — it does not block the bridge outer landing or navmesh.
+        // ====================================================================
+        private static int BuildOuterLip(Transform parent)
         {
-            Vector3 origin = new Vector3(probeXZ.x, 25f, probeXZ.z);
-            if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 60f, ~0, QueryTriggerInteraction.Ignore))
+            float innerR = MoatOuterRadius;
+            float outerR = MoatOuterRadius + LipWidth;
+
+            var verts = new List<Vector3>(48);
+            var uvs   = new List<Vector2>(48);
+            var tris  = new List<int>(72);
+
+            AddVerticalRing(verts, uvs, tris, innerR, LipFloorY, LipTopY);   // inner face (water side)
+            AddMitredBand(verts, uvs, tris, innerR, outerR, LipTopY);        // top crest cap
+            AddVerticalRing(verts, uvs, tris, outerR, LipFloorY, LipTopY);   // outer face (world side)
+
+            var mesh = new Mesh { name = "MoatBasinLipMesh" };
+            mesh.SetVertices(verts);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+
+            var go = new GameObject("MoatBasinLip");
+            go.transform.SetParent(parent, false);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var mr = go.AddComponent<MeshRenderer>();
+            var lipMat = ResolveMaterial(StoneMaterialResource, "CastleMoat_BasinLip", LipColor, transparent: false);
+            if (lipMat != null) mr.sharedMaterial = lipMat;
+
+            FlowTrace.Step("CastleMoat", "basin lip built: raised rim ring r=" + innerR + ".." + outerR + " floorY=" +
+                LipFloorY + " crestY=" + LipTopY + " (" + verts.Count + " verts, MESH not TerrainData) — the outer basin " +
+                "wall; water level " + FixedWaterY + " sits below the crest so the channel reads CONTAINED.");
+            return verts.Count;
+        }
+
+        // A vertical square ring (4 double-sided quads) at square half-extent r, from yBot to yTop.
+        // Double-sided so it reads from inside the basin AND from the OuterWorld side (no cull gap).
+        private static void AddVerticalRing(List<Vector3> verts, List<Vector2> uvs, List<int> tris,
+            float r, float yBot, float yTop)
+        {
+            Vector3[] bot =
             {
-                measured = true;
-                return hit.point.y;
+                new Vector3( r, yBot,  r), new Vector3( r, yBot, -r), new Vector3(-r, yBot, -r), new Vector3(-r, yBot,  r),
+            };
+            Vector3[] top =
+            {
+                new Vector3( r, yTop,  r), new Vector3( r, yTop, -r), new Vector3(-r, yTop, -r), new Vector3(-r, yTop,  r),
+            };
+            for (int k = 0; k < 4; k++)
+            {
+                int n = (k + 1) & 3;
+                AddQuadTop(verts, uvs, tris, bot[k], top[k], top[n], bot[n]);   // one face
+                AddQuadTop(verts, uvs, tris, bot[n], top[n], top[k], bot[k]);   // reverse face (double-sided)
             }
-            measured = false;
-            return fallbackY;
+        }
+
+        // ====================================================================
+        //  BRIDGE-MOUTH BANK BERMS (WO-605 owner refinement 2) — at each crossing where
+        //  the deck meets the bank, a small NATURAL CURVE: a low, rounded, gently sloped
+        //  raised bank on EACH side of the deck mouth. It funnels the player onto the bridge
+        //  and organically seals the side gaps (no slipping off the deck edge into the water),
+        //  reading as a natural berm, not a hard cut. A squashed sphere = smooth curved mound
+        //  (MESH geometry, not TerrainData) whose own collider is the physical seal. Built as
+        //  clones in the SOUTH frame then yaw-rotated about the origin per side (mirrors the
+        //  bridges), so the pair always straddles the real deck. Parented to a SEPARATE
+        //  container (NOT the bridges) so clone-parity CHECK4 is untouched.
+        // ====================================================================
+        private static int BuildBridgeBankBerms(Transform parent, float gateLateral)
+        {
+            var container = new GameObject("MoatBankBerms");
+            container.transform.SetParent(parent, false);
+
+            var bermMat = ResolveMaterial(StoneMaterialResource, "CastleMoat_Berm", BermColor, transparent: false);
+            float liftY = UnityEngine.PlayerPrefs.GetFloat("castle.liftY", 3f);
+
+            // Deck half-width (~2.15) + a hair, so a berm hugs each deck edge; the pair leaves the deck lane open.
+            const float deckHalf = 2.3f;
+            const float bermHalfW = 1.4f;      // berm radius across (x)
+            float sideOffset = deckHalf + bermHalfW;   // lateral centre of each flanking berm
+
+            var sides = new (string label, float yaw)[] { ("South", 0f), ("West", 90f), ("North", 180f), ("East", 270f) };
+            int count = 0;
+            foreach (var (label, yaw) in sides)
+            {
+                for (int s = -1; s <= 1; s += 2)   // left / right of the mouth
+                {
+                    Guard.Try("CastleMoat", "build bank berm (" + label + (s < 0 ? "_L" : "_R") + ")", () =>
+                    {
+                        // SOUTH frame: mouth on the castle bank at r=RampInnerRadius, lateral = gateLateral +- offset.
+                        var berm = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                        berm.name = "BankBerm_" + label + (s < 0 ? "_L" : "_R");
+                        berm.transform.SetParent(container.transform, true);
+                        berm.transform.position = new Vector3(gateLateral + s * sideOffset, liftY, -(RampInnerRadius - 1f));
+                        // Squash the sphere into a low, long, rounded bank: wide-ish across, low, long along the approach.
+                        berm.transform.localScale = new Vector3(bermHalfW * 2f, 2.6f, 7.5f);
+
+                        if (bermMat != null)
+                        {
+                            var r = berm.GetComponent<Renderer>();
+                            if (r != null) r.sharedMaterial = bermMat;
+                        }
+
+                        // SEAL: a SphereCollider mis-seals under non-uniform scale (it uses the LARGEST axis
+                        // -> a ~3.75m radius from the 7.5 length would bulge onto the deck lane). Swap it for a
+                        // BoxCollider matching the squashed footprint (inner edge == deck edge) so it funnels
+                        // onto the bridge without intruding on the crossing.
+                        var sphereCol = berm.GetComponent<Collider>();
+                        if (sphereCol != null) Object.Destroy(sphereCol);
+                        berm.AddComponent<BoxCollider>();   // auto-sizes to the unit-sphere bounds (1) * transform scale
+
+                        if (Mathf.Abs(yaw) > 0.01f)
+                            berm.transform.RotateAround(Vector3.zero, Vector3.up, yaw);   // carry the pair to this side
+                        count++;
+                    });
+                }
+            }
+
+            FlowTrace.Step("CastleMoat", "bank berms built: " + count + " natural curved banks (2 per crossing, squashed-sphere " +
+                "MESH + collider) flanking each deck mouth at r~" + RampInnerRadius + " lateral +-" + sideOffset.ToString("0.0") +
+                " — funnels onto the bridge + seals the side gaps organically; hedge lip continues along the rest of the rim.");
+            return count;
         }
 
         // --------------------------------------------------------------------
@@ -401,6 +539,8 @@ namespace DeNelle.Village.World
 
         private static bool TryPlaceBridgePrefab(Transform parent, string label, float yaw, float gateLateral)
         {
+            FlowTrace.Step("CastleMoat", "TryPlaceBridgePrefab ENTER '" + label + "' (yaw=" + yaw.ToString("0") +
+                ", committed-stone-material path, WebGL-safe).");
             var prefab = Resources.Load<GameObject>(BridgeResourcePath);
             if (prefab == null)
             {
@@ -540,15 +680,30 @@ namespace DeNelle.Village.World
                 }
 
                 // Color fix: polyperfect materials import as missing/white under URP (CLAUDE.md S4).
-                // Paint EVERY material slot on every renderer with a shared stone URP/Lit material.
-                var stone = BuildLitMaterial("CastleMoat_BridgeStone", new Color(0.55f, 0.55f, 0.57f), transparent: false);
-                foreach (var r in bridge.GetComponentsInChildren<Renderer>(true))
+                // WO-605 Bug B: paint EVERY slot with the COMMITTED stone material (WebGL-safe). If it is
+                // NULL (shader stripped + no committed asset), we MUST NOT assign a null array — that is what
+                // ships the Unity-default WHITE bridge. Guarded: a failed resolve logs a Fail and LEAVES the
+                // prefab's own materials intact rather than blanking them white.
+                var stone = ResolveMaterial(StoneMaterialResource, "CastleMoat_BridgeStone", new Color(0.55f, 0.55f, 0.57f), transparent: false);
+                if (stone == null)
                 {
-                    if (r == null) continue;
-                    int slots = (r.sharedMaterials != null && r.sharedMaterials.Length > 0) ? r.sharedMaterials.Length : 1;
-                    var mats = new Material[slots];
-                    for (int i = 0; i < slots; i++) mats[i] = stone;
-                    r.sharedMaterials = mats;
+                    FlowTrace.Fail("CastleMoat", "bridge '" + label + "' stone material is NULL (committed load + Shader.Find both " +
+                        "failed) — LEAVING the prefab's own materials so the bridge is never blanked Unity-default-white. " +
+                        "Bake 'Defenders > Seam > Generate Moat Materials'.");
+                }
+                else
+                {
+                    Guard.Try("CastleMoat", "repaint bridge stone (" + label + ")", () =>
+                    {
+                        foreach (var r in bridge.GetComponentsInChildren<Renderer>(true))
+                        {
+                            if (r == null) continue;
+                            int slots = (r.sharedMaterials != null && r.sharedMaterials.Length > 0) ? r.sharedMaterials.Length : 1;
+                            var mats = new Material[slots];
+                            for (int i = 0; i < slots; i++) mats[i] = stone;
+                            r.sharedMaterials = mats;
+                        }
+                    });
                 }
 
                 // Owner ruling 2026-07-03 — all four crossings are this same south bridge, rigidly
@@ -710,6 +865,119 @@ namespace DeNelle.Village.World
                 : new Vector3(len, HedgeColliderHeight, HedgeColliderThick);
         }
 
+        // ====================================================================
+        //  MOAT NAVMESH CARVE (architect 2026-07-03) — carve the WATER BAND off the
+        //  LIVE navmesh so NavMeshAgent enemies cannot SPAWN on / PATH ACROSS the water.
+        // --------------------------------------------------------------------
+        //  Enemies move only as NavMeshAgents (constrained to the navmesh, ignore physics
+        //  colliders — same fact WallNavObstacleInstaller documents). The moat water is
+        //  currently WALKABLE navmesh (nothing carves it), so agents stand on / cross the
+        //  water. This lays a ring of CARVING NavMeshObstacle boxes over the water band
+        //  (the SAME square annulus r=MoatInnerRadius..MoatOuterRadius the water mesh uses),
+        //  with the SAME FOUR cardinal GAPS as the hedge (reusing MeasureMouth on the real
+        //  bridge decks) so the bridges remain the only walkable crossings. Carving cuts the
+        //  LIVE navmesh at runtime (no rebake needed); carveOnlyStationary keeps it cheap/
+        //  stable (the moat never moves). Parented under a MoatNavCarve container, idempotent.
+        //  Every dimension DERIVES from the moat radii + gate radials (single source of truth):
+        //  each side is a strip at fixed perpendicular coord = +-MoatCentreRadius, MoatWidth
+        //  deep, running the full outer extent (corners covered by the overlapping perpendicular
+        //  strips), split at its measured bridge mouth. Runs AFTER the bridges so MeasureMouth
+        //  reads the real deck colliders. Mirrors WallNavObstacleInstaller.TryFitObstacle.
+        // ====================================================================
+        private const string MoatNavCarveName = "MoatNavCarve";
+        private const float  NavCarveEndMargin = 0.25f;   // shrink each carve segment a hair off its ends (bridge-lane clearance)
+
+        private static int BuildMoatNavCarve(Transform parent, float gateLateral)
+        {
+            // IDEMPOTENT: never stack carve rings on a re-entrant build (BuildMoat is already
+            // root-guarded, but keep the container self-guarding too).
+            if (parent.Find(MoatNavCarveName) != null) return 0;
+
+            int boxes = 0;
+            Guard.Try("CastleMoat", "build moat navmesh carve", () =>
+            {
+                var container = new GameObject(MoatNavCarveName);
+                container.transform.SetParent(parent, false);
+
+                // Vertical span: from below the basin floor (y=0) up past the bridge deck, so the
+                // carve covers the navmesh surface wherever the water sits (basin floor OR plinth
+                // top), regardless of terrain wobble. The carve is XZ-footprint driven; height just
+                // needs to straddle every plausible navmesh level under the band.
+                float liftY       = UnityEngine.PlayerPrefs.GetFloat("castle.liftY", 3f);
+                float carveBottom = LipFloorY - 1f;          // below the basin floor (y=0)
+                float carveTop    = liftY + 3f;              // above the bridge deck (castle end ~liftY+deck)
+                float carveHeight = carveTop - carveBottom;
+                float carveY      = (carveBottom + carveTop) * 0.5f;
+
+                // The four square-annulus sides (mirror BuildHedgeRing): a strip at fixed
+                // perpendicular coord = +-MoatCentreRadius, MoatWidth deep (= 44..62), running
+                // the full outer extent along its axis, split at the measured bridge mouth.
+                var sides = new (string card, bool axisAlongZ, float fixedCoord)[]
+                {
+                    ("South", false, -MoatCentreRadius),
+                    ("North", false,  MoatCentreRadius),
+                    ("East",  true,   MoatCentreRadius),
+                    ("West",  true,  -MoatCentreRadius),
+                };
+
+                foreach (var (card, axisAlongZ, fixedCoord) in sides)
+                {
+                    // Gap centre + half-width from the REAL bridge mouth on this side (deck collider),
+                    // the SAME source the hedge gaps use — so the carve gap == the hedge gap == the
+                    // open crossing lane. Fallback = gate-lateral symmetry when a bridge is absent.
+                    MeasureMouth(parent, card, axisAlongZ, gateLateral, out float mouthLat, out float gapHalf);
+
+                    // Two carve segments per side, flanking the bridge-mouth gap. Run the FULL outer
+                    // extent (-MoatOuterRadius..MoatOuterRadius) so the corners stay covered (the
+                    // perpendicular sides overlap there — harmless for carving).
+                    if (TryAddCarveSegment(container.transform, card + "_A", axisAlongZ, fixedCoord, carveY, carveHeight,
+                            -MoatOuterRadius, mouthLat - gapHalf)) boxes++;
+                    if (TryAddCarveSegment(container.transform, card + "_B", axisAlongZ, fixedCoord, carveY, carveHeight,
+                            mouthLat + gapHalf, MoatOuterRadius)) boxes++;
+                }
+            });
+
+            FlowTrace.Step("CastleMoat", "moat navmesh carve: " + boxes + " carving NavMeshObstacle box(es) over the water band r=" +
+                MoatInnerRadius + ".." + MoatOuterRadius + " (square annulus, " + MoatWidth + "m deep) with 4 cardinal bridge-mouth " +
+                "GAPS (MeasureMouth, == the hedge gaps) — NavMeshAgent enemies can no longer spawn on / path across the water; the " +
+                "bridges stay the only crossings (carving, carveOnlyStationary, LIVE navmesh, no rebake).");
+            return boxes;
+        }
+
+        // One CARVING NavMeshObstacle box covering [a..b] along the run axis on a side of the
+        // water band. Mirrors WallNavObstacleInstaller.TryFitObstacle (shape=Box, carving=true,
+        // carveOnlyStationary=true). Identity local scale, so obstacle.size IS the world size.
+        // Returns true when a box was added (skips a fully gap-consumed segment).
+        private static bool TryAddCarveSegment(Transform parent, string tag, bool axisAlongZ, float fixedCoord,
+            float carveY, float carveHeight, float a, float b)
+        {
+            float len = b - a;
+            if (len <= 0.5f) return false;   // gap consumed this segment (mouth near a corner) — nothing to carve
+            float mid = (a + b) * 0.5f;
+            // Shrink a hair off both ends: the overlapping perpendicular strip still covers the
+            // corner sliver, and the gap-side edge stays clear of the bridge lane.
+            len = Mathf.Max(0.5f, len - NavCarveEndMargin * 2f);
+            float bandDeep = MoatWidth;      // 44..62 = full water band depth
+
+            var go = new GameObject("MoatNavCarve_" + tag);
+            go.transform.SetParent(parent, false);
+            go.transform.position = axisAlongZ
+                ? new Vector3(fixedCoord, carveY, mid)
+                : new Vector3(mid, carveY, fixedCoord);
+
+            var obstacle = go.AddComponent<NavMeshObstacle>();
+            obstacle.shape  = NavMeshObstacleShape.Box;
+            obstacle.center = Vector3.zero;
+            obstacle.size   = axisAlongZ
+                ? new Vector3(bandDeep, carveHeight, len)
+                : new Vector3(len, carveHeight, bandDeep);
+            // Carve the LIVE navmesh so the water blocks agents without a rebake; the moat never
+            // moves, so carveOnlyStationary keeps the carve cheap + stable.
+            obstacle.carving = true;
+            obstacle.carveOnlyStationary = true;
+            return true;
+        }
+
         // --------------------------------------------------------------------
         //  SOUTH GATE recipe read (mirrors RuntimeRegionGate.ReadSouthGatePos) — the
         //  bridges/moat track any re-author of the gate without a code edit.
@@ -770,6 +1038,38 @@ namespace DeNelle.Village.World
             return mat;
         }
 
+        // WO-605 — WebGL-safe material resolve: load a COMMITTED .mat from Resources (which forces the
+        // shader into the build), INSTANCE it and stamp the per-band colour; fall back to the runtime
+        // BuildLitMaterial (Shader.Find) only when the committed asset is absent (fresh clone / not baked
+        // yet). Never returns silently: a fallback logs a Warn, a total miss logs a Fail so a headless run
+        // pinpoints the dead material step (invisible water / white bridge).
+        private static Material ResolveMaterial(string resourcePath, string name, Color color, bool transparent)
+        {
+            Material committed = null;
+            Guard.Try("CastleMoat", "load committed material '" + resourcePath + "'", () =>
+            {
+                committed = Resources.Load<Material>(resourcePath);
+            });
+            if (committed != null)
+            {
+                // Instance so the per-band colour stamp never mutates the shared committed asset.
+                var inst = new Material(committed) { name = name };
+                if (inst.HasProperty("_BaseColor")) inst.SetColor("_BaseColor", color);
+                if (inst.HasProperty("_Color")) inst.SetColor("_Color", color);
+                FlowTrace.Step("CastleMoat", "material '" + name + "' from COMMITTED Resources/" + resourcePath +
+                    " (WebGL-safe; shader baked into the build).");
+                return inst;
+            }
+
+            FlowTrace.Warn("CastleMoat", "committed material Resources/" + resourcePath + " MISSING — falling back to runtime " +
+                "Shader.Find for '" + name + "' (WebGL liability; run 'Defenders > Seam > Generate Moat Materials').");
+            var mat = BuildLitMaterial(name, color, transparent);
+            if (mat == null)
+                FlowTrace.Fail("CastleMoat", "material '" + name + "' is NULL after committed-load AND Shader.Find fallback — " +
+                    "URP/Lit shader stripped from the build; surface will render Unity-default. Bake the committed .mat.");
+            return mat;
+        }
+
         // Reuse the proven MoatWaterShimmer (DEF-195) so the ring reads as flowing water, not glass.
         // It auto-resolves the shared material from the first child renderer (the water annulus'
         // deep-band material == submesh/material index 0) and scrolls its ripple normal.
@@ -827,6 +1127,7 @@ namespace DeNelle.Village.World
             CheckDecksAndRails(bridges, failures);
             CheckCloneParity(bridges, failures);
             CheckReachability(bridges, failures);
+            CheckMoatCarve(root, failures);
 
             bool ok = failures.Count == 0;
             if (ok) FlowTrace.Step(VerifySys, "MOAT_COMPLETE");
@@ -1077,6 +1378,52 @@ namespace DeNelle.Village.World
                     FlowTrace.Warn(VerifySys, "CHECK5 reachability: no live navmesh under ANY crossing — run in a PLAY/headless " +
                         "session for the reachability leg (geometry checks 1-4 still valid).");
             })) failures.Add("check5-threw");
+        }
+
+        // CHECK 6 — WATER BAND CARVED. The moat water band must be carved OFF the live navmesh
+        // (so enemies can't spawn on / path across the water) EXCEPT at the bridge-mouth gaps.
+        // Sample two points on the band: a CARVED point (the SE corner of the square annulus,
+        // far from every mouth) must be OFF-mesh; the SOUTH bridge LANE (measured mouth centre)
+        // must be ON-mesh (the crossing stays walkable). Proves the carve structurally without an
+        // eyeball. Self-skips INCONCLUSIVE (no fail) when no navmesh is live under the moat
+        // (edit-time / OuterWorld not additively baked / carve not yet applied), like CHECK5.
+        private static void CheckMoatCarve(GameObject root, List<string> failures)
+        {
+            if (!Guard.Try(VerifySys, "check6 water-band-carved", () =>
+            {
+                float probeY = FixedWaterY;   // mid-band height; SamplePosition searches a sphere around it
+
+                // Bridge LANE probe — the south mouth gap, which must stay ON-mesh (walkable crossing).
+                MeasureMouth(root.transform, "South", false, ReadSouthGatePos().x, out float mouthLat, out float _gap);
+                Vector3 lane = new Vector3(mouthLat, probeY, -MoatCentreRadius);
+                bool laneOn = NavMesh.SamplePosition(lane, out NavMeshHit _lh, 6f, NavMesh.AllAreas);
+
+                // CARVED band probe — the SE corner of the square annulus (max-norm = MoatCentreRadius),
+                // far from all four mid-side bridge mouths, so it must be OFF-mesh once carved.
+                Vector3 carved = new Vector3(MoatCentreRadius, probeY, -MoatCentreRadius);
+                bool carvedOn = NavMesh.SamplePosition(carved, out NavMeshHit _ch, 6f, NavMesh.AllAreas);
+
+                if (!laneOn)
+                {
+                    FlowTrace.Warn(VerifySys, "CHECK6 carve: south bridge lane " + Fmt(lane) + " off-mesh — no live navmesh under " +
+                        "the moat (edit-time / OuterWorld not additively baked / carve not applied yet) — water-band carve " +
+                        "INCONCLUSIVE, not counted.");
+                    return;
+                }
+
+                if (carvedOn)
+                {
+                    failures.Add("moat-band-not-carved@corner");
+                    FlowTrace.Fail(VerifySys, "CHECK6 carve: the water band (SE corner " + Fmt(carved) + ") is STILL on the navmesh " +
+                        "while the crossing lane is walkable — enemies can path across the water; the carve did not take.");
+                }
+                else
+                {
+                    FlowTrace.Step(VerifySys, "CHECK6 carve: water band OFF-mesh at the SE corner " + Fmt(carved) +
+                        " + south bridge lane ON-mesh (mouthLat=" + mouthLat.ToString("0.0") + ") — the moat is carved and the " +
+                        "crossings stay walkable.");
+                }
+            })) failures.Add("check6-threw");
         }
 
         // ---- verification helpers ------------------------------------------
