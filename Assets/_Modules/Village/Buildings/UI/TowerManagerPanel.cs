@@ -185,8 +185,18 @@ namespace DeNelle.Village.UI
                 return;
             }
 
+            // Silo 3 UI: display tier + upgrade cost alongside level/stats.
+            // Tower.EffectiveTier (line 160): current tier (1..3 or 4 if empowered).
+            // Tower.NextUpgradeCost (line 809): cost to reach next level.
+            // Tower.CurrentLevel (line 150): placed level (1..3).
+            int tier = _selected.EffectiveTier;
+            int cost = _selected.NextUpgradeCost;
+            bool canUpgrade = _selected.CurrentLevel < Tower.MaxLevel;
+
             if (_detail != null)
-                _detail.text = $"Selected: Lv {_selected.CurrentLevel}/{Tower.MaxLevel}   |   rng {_selected.CurrentRange:0}   dmg {_selected.CurrentDamage:0}";
+                _detail.text = $"Selected: Lv {_selected.CurrentLevel}/{Tower.MaxLevel}  T{tier}   |   " +
+                    $"rng {_selected.CurrentRange:0}   dmg {_selected.CurrentDamage:0}   |   " +
+                    (canUpgrade ? $"Upgrade: {cost} cost" : "Max Level");
 
             // Action row along the base of the body well.
             // DEPRECATED (owner 2026-06-27, tower-upgrade CONSOLIDATION): this Upgrade
