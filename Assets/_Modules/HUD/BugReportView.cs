@@ -134,9 +134,6 @@ namespace DeNelle.HUD
             RectTransform body = (chrome.layout != null && chrome.layout.body != null)
                 ? chrome.layout.body
                 : chrome.content.GetComponent<RectTransform>();
-            RectTransform footer = (chrome.layout != null && chrome.layout.footer != null)
-                ? chrome.layout.footer
-                : body;
 
             // Screenshot thumbnail — top of the body well. RawImage under a CanvasGroup so
             // it can FADE IN when the capture binds (owner smoothness directive).
@@ -167,16 +164,19 @@ namespace DeNelle.HUD
 
             // Note field — "What went wrong?" (multi-line). The plate is a minimal
             // translucent well so the input is visible; content, not chrome.
-            BuildNoteInput(body, new Vector2(0.08f, 0.15f), new Vector2(0.92f, 0.49f));
+            BuildNoteInput(body, new Vector2(0.08f, 0.22f), new Vector2(0.92f, 0.49f));
 
             // The one quiet disclosure line — the honesty (logs always go; not a checkbox).
             ElarionUiKit.Label(body, "Includes recent game logs to help us fix it.",
-                0.055f, 0.125f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
+                0.155f, 0.205f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
                 TextAlignmentOptions.Center, 0.08f, 0.92f);
 
-            // Single CTA — the submit IS the consent.
-            _sendBtn = ElarionUiKit.Button(footer, "Send report", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.24f, 0.06f), new Vector2(0.76f, 0.94f), OnSendClicked);
+            // Single CTA — the submit IS the consent. FrameSettings carves NO footer zone, so the
+            // button lives in a THIN band at the bottom of the body (#18: the old footer→body
+            // fallback let its 0.06..0.94 anchors inflate the gold button to fill the whole well).
+            // The body's bottom edge sits ABOVE the shared Close, so they never collide.
+            _sendBtn = ElarionUiKit.Button(body, "Send report", ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.22f, 0.03f), new Vector2(0.78f, 0.14f), OnSendClicked);
             _sendLabel = _sendBtn.GetComponentInChildren<TextMeshProUGUI>();
         }
 

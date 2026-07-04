@@ -117,8 +117,10 @@ namespace DeNelle.Village.Hero
 
             // Difficulty badge + ★★★ target time, just under the header.
             Color tint = DifficultyColor(_def != null ? _def.difficulty : null);
+            // (#29) Shifted right so it clears the FrameCore top-left medallion socket
+            // (~x<=0.22) — it previously overlapped the emblem circle.
             var badge = ElarionUiKit.AddImage(panel, "DiffBadge",
-                new Vector2(0.05f, 0.885f), new Vector2(0.30f, 0.925f),
+                new Vector2(0.24f, 0.885f), new Vector2(0.44f, 0.925f),
                 new Color(tint.r, tint.g, tint.b, 0.85f));
             badge.GetComponent<Image>().raycastTarget = false;
             var badgeLbl = ElarionUiKit.Label(badge.transform, DifficultyLabel(_def != null ? _def.difficulty : null),
@@ -280,8 +282,10 @@ namespace DeNelle.Village.Hero
         // CENTER/RIGHT — battle-preview placeholder + estimated clear time + summary.
         private void BuildCenterColumn(Transform panel)
         {
-            // Battle preview placeholder niche (the RaidBaseGenerator thumbnail goes here later).
-            var preview = ElarionUiKit.Niche(panel, new Vector2(0.52f, 0.42f), new Vector2(0.95f, 0.83f));
+            // Battle preview placeholder (the RaidBaseGenerator thumbnail goes here later).
+            // (#29) A dark recessed Well, not a Niche — with BlinkChrome off the Niche painted an
+            // opaque warm-stone (olive) slab; a dark inset reads as an empty preview panel.
+            var preview = ElarionUiKit.Well(panel, new Vector2(0.52f, 0.42f), new Vector2(0.95f, 0.83f));
             preview.GetComponent<Image>().raycastTarget = false;
             var pvLbl = ElarionUiKit.Label(preview.transform, "Battle Preview\n(enemy base)", 0.40f, 0.60f,
                 ElarionUi.ParchmentDim, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);

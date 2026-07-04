@@ -230,8 +230,15 @@ namespace DeNelle.Village.UI
         private void BuildSpoilRow(RectTransform host, SpoilRowVM row, float revealDelay)
         {
             if (row == null) return;
-            var plate = ElarionUiKit.Slot(host, row.Rarity, new Vector2(0.06f, 0.04f),
-                                          new Vector2(0.94f, 0.96f));
+            // (#23) Obsidian row plate + gold accent. Was ElarionUiKit.Slot (an inventory rarity
+            // plate) which read as a flat saturated block; the end-state wants the black+gold row
+            // language. A near-black tile + a thin gold left bar reads obsidian on the dark body.
+            var plate = ElarionUiKit.AddImage(host, "SpoilRow",
+                new Vector2(0.06f, 0.04f), new Vector2(0.94f, 0.96f), ElarionUiKit.ObsidianFill);
+            plate.GetComponent<Image>().raycastTarget = false;
+            var accent = ElarionUiKit.AddImage(plate.transform, "GoldAccent",
+                new Vector2(0f, 0.12f), new Vector2(0.02f, 0.88f), ElarionUiKit.ObsidianTrim, rounded: false);
+            accent.GetComponent<Image>().raycastTarget = false;
             if (row.Icon != null)
             {
                 var go = new GameObject("Icon", typeof(Image));

@@ -238,9 +238,9 @@
     "panelId": "PackStore",
     "frame": "FrameMerchant",
     "templatePng": "Assets/Blink/Art/UI/Obsidian_UI/Panels_Obsidian/Merchant_Panel.png",
-    "deliveredShot": "panel_PackStore.png",
-    "shotExists": false,
-    "source": "PackStore.cs:127 passes frameName: RpgUiCatalog.FrameMerchant (coin medallion). RpgUiImporter.cs:190 maps frame_merchant -> Merchant_Panel.png. No delivered shot yet (real-money surface conversion in flight)."
+    "deliveredShot": "panel_RealmStore.png",
+    "shotExists": true,
+    "source": "PackStore.cs:127 passes frameName: RpgUiCatalog.FrameMerchant (coin medallion). RpgUiImporter.cs:190 maps frame_merchant -> Merchant_Panel.png. Captured via PanelRouter enum sweep as panel_RealmStore.png (PanelId=RealmStore)."
   },
   {
     "screen": "Raid Selection",

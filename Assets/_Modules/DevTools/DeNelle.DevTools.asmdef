@@ -8,6 +8,7 @@
         "DeNelle.HUD",
         "DeNelle.Audio",
         "DeNelle.Settings",
+        "DeNelle.Onboarding",
         "UniTask",
         "Unity.AI.Navigation"
     ],

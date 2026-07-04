@@ -522,6 +522,12 @@ namespace DeNelle.Core.UI
                 // well plate behind the whole body so ANY content reads on one tone; the parchment is
                 // re-established only under the detail (bodyRight) zone below. Art-seam-independent.
                 if (z.twoToneBody) ZoneBacking(layout.body, TwoToneWellFill);
+                // #21 (Pause) fix — border-only / hollow frames (FrameOptions etc.) bake NO dark
+                // body slab, so a screen dropped into the body zone showed the live scene through
+                // it. Paint a UNIFORM near-black obsidian plate behind the body for every NON-two-tone
+                // frame (two-tone keeps its dark/parchment plates above). Harmless on frames whose art
+                // is already a dark well; guarantees the scene never bleeds through any body.
+                else ZoneBacking(layout.body, ObsidianFill);
                 if (z.hasMedallion)
                 {
                     layout.medallion = Zone(chrome.content.transform, "Zone_Medallion", z.medallion);

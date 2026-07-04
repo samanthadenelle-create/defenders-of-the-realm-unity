@@ -352,6 +352,14 @@ namespace DeNelle.Settings
             fart.offsetMin = Vector2.zero; fart.offsetMax = Vector2.zero;
             var fillGo = new GameObject("Fill", typeof(RectTransform), typeof(Image));
             fillGo.transform.SetParent(fillAreaGo.transform, false);
+            // Pin the fill rect to its area. The Slider drives only the fill's ANCHORS on value
+            // change; it never resets offsets/sizeDelta, so an uninitialised RectTransform (default
+            // sizeDelta) inflated the gold fill into a giant block over the whole audio section
+            // (#20). Zeroing offsets + sizeDelta keeps the fill hugging its anchor rect.
+            var fillRt = fillGo.GetComponent<RectTransform>();
+            fillRt.anchorMin = Vector2.zero; fillRt.anchorMax = Vector2.one;
+            fillRt.offsetMin = Vector2.zero; fillRt.offsetMax = Vector2.zero;
+            fillRt.sizeDelta = Vector2.zero; fillRt.pivot = new Vector2(0.5f, 0.5f);
             var fillImg = fillGo.GetComponent<Image>();
             fillImg.color = ElarionUi.Gold;
 
@@ -364,6 +372,10 @@ namespace DeNelle.Settings
             var handleGo = new GameObject("Handle", typeof(RectTransform), typeof(Image));
             handleGo.transform.SetParent(handleAreaGo.transform, false);
             var hrt = handleGo.GetComponent<RectTransform>();
+            // Full-height thumb that the Slider slides horizontally (anchors x are value-driven);
+            // pin the y-anchors + width so it can't inflate like the fill did (#20).
+            hrt.anchorMin = new Vector2(0f, 0f); hrt.anchorMax = new Vector2(0f, 1f);
+            hrt.pivot = new Vector2(0.5f, 0.5f);
             hrt.sizeDelta = new Vector2(22f, 0f);
             var handleImg = handleGo.GetComponent<Image>();
             handleImg.color = ElarionUi.Gilt;

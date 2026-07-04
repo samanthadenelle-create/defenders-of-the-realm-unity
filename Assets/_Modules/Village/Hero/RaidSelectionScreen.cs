@@ -92,8 +92,10 @@ namespace DeNelle.Village.Hero
                 frameName: RpgUiCatalog.FrameCore);
             var panel = chrome.content.transform;
 
-            // The RAIDS banner image heads the panel (decorative, null-safe).
-            BuildBanner(panel);
+            // (#28) The decorative RAIDS banner Niche was REMOVED — with BlinkChrome off (the
+            // default look) the Niche paints an opaque warm-stone slab that covered the frame's
+            // own gold "RAIDS" header. The FrameCore header zone already carries the title; per
+            // canon the frame IS the chrome, so the screen adds none.
 
             // Content area (the card grid lives here).
             _contentRoot = new GameObject("Content", typeof(RectTransform));
@@ -107,33 +109,6 @@ namespace DeNelle.Village.Hero
             BuildCards();
 
             Debug.Log("[RaidSelectionScreen] Opened — raid card grid.");
-        }
-
-        // The RAIDS banner across the top of the panel. The asset lives at
-        // Assets/Art/UI/Raids/Raids_banner.jpg — NOT under Resources, so a runtime
-        // Resources.Load may miss it; this is decorative and fully null-safe (a soft
-        // dark-stone niche backs it so the header still reads if the art is absent).
-        private void BuildBanner(Transform panel)
-        {
-            var bannerHost = ElarionUiKit.Niche(panel, new Vector2(0.04f, 0.83f), new Vector2(0.96f, 0.965f));
-            var bImg = bannerHost.GetComponent<Image>();
-            if (bImg != null) bImg.raycastTarget = false;
-
-            Sprite banner = null;
-            try { banner = Resources.Load<Sprite>("Raids/Raids_banner"); }
-            catch { banner = null; }
-            if (banner == null)
-            {
-                try { banner = Resources.Load<Sprite>("UI/Raids/Raids_banner"); }
-                catch { banner = null; }
-            }
-            if (banner != null && bImg != null)
-            {
-                bImg.sprite = banner;
-                bImg.type = Image.Type.Simple;
-                bImg.preserveAspect = true;
-                bImg.color = Color.white;
-            }
         }
 
         private void BuildCards()
@@ -188,7 +163,11 @@ namespace DeNelle.Village.Hero
             le.preferredHeight = CardHeightPx;
             le.minHeight = CardHeightPx;
             var cardImg = card.GetComponent<Image>();
-            cardImg.color = ElarionUiKit.Cell;
+            // (#28) Obsidian row plate. Was ElarionUiKit.Cell (warm) + AddInnerRim(difficulty@0.7),
+            // and AddInnerRim paints a near-full-surface tint (not a thin border) — with BlinkChrome
+            // off that washed each whole card saturated green/yellow/red. A raised near-black tile +
+            // a thin difficulty accent bar reads obsidian; the badge chip still carries the tier.
+            cardImg.color = new Color(0.07f, 0.07f, 0.08f, 0.98f);
             ElarionUiKit.ApplyRounded(cardImg);
             var cardBtn = card.GetComponent<Button>();
             cardBtn.targetGraphic = cardImg;
@@ -196,8 +175,11 @@ namespace DeNelle.Village.Hero
             var defCopy = def;
             cardBtn.onClick.AddListener(() => OnCardTapped(defCopy));
 
-            // Difficulty-tinted inner rim = the framed plaque edge.
-            ElarionUiKit.AddInnerRim(card, new Color(tint.r, tint.g, tint.b, 0.7f));
+            // Difficulty accent — a thin left edge bar (the only colour on the obsidian tile).
+            var accent = ElarionUiKit.AddImage(card.transform, "DiffAccent",
+                new Vector2(0f, 0f), new Vector2(0.014f, 1f),
+                new Color(tint.r, tint.g, tint.b, 0.95f), rounded: false);
+            accent.GetComponent<Image>().raycastTarget = false;
 
             // Fortress name — gold serif title, top band.
             string name = string.IsNullOrEmpty(def.displayName) ? def.id : def.displayName;

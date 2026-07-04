@@ -1794,6 +1794,26 @@ namespace DeNelle.DevTools
             catch { /* capture is best-effort; never break the drive loop */ }
         }
 
+        // Settled screenshot writer — guarantees the backbuffer is POST-RENDER before the grab.
+        // WaitForEndOfFrame parks the coroutine until AFTER every camera has rendered and the frame
+        // is about to be presented — essential for a panel that hosts a LIVE 3D preview
+        // (EquipmentPanel: a manually-driven preview camera -> RenderTexture -> RawImage). A plain
+        // `yield return null` can grab the backbuffer MID-COMPOSITE and write RGB static (the
+        // reproducible ~5MB garbage EquipmentPanel PNG). extraSettleFrames gives a preview an extra
+        // beat to finish rendering before the end-of-frame grab.
+        // GRAPHICS GUARD: WaitForEndOfFrame only resumes when a graphics device is present; under a
+        // -nographics fleet it would NEVER fire and hang the drive, so it is gated on the device
+        // (headless still writes a blank frame via CaptureRawShot — never an error, never a hang).
+        private IEnumerator CaptureUiPanelSettled(string name, int extraSettleFrames = 0)
+        {
+            for (int i = 0; i < extraSettleFrames; i++) yield return null;
+            bool hasGfx = SystemInfo.graphicsDeviceType != UnityEngine.Rendering.GraphicsDeviceType.Null;
+            if (hasGfx) yield return new WaitForEndOfFrame();
+            CaptureUiPanel(name);
+            if (hasGfx) yield return new WaitForEndOfFrame();
+            else yield return null;
+        }
+
         private IEnumerator OpenEachHUDPanel()
         {
             // BATTLE-AWARE (run 10603: this phase opened 0/12 while the battle-aware popup
@@ -1838,8 +1858,13 @@ namespace DeNelle.DevTools
                     opened++;
                 }
 
-                CaptureUiPanel(id.ToString());   // UI-fidelity shot (renders graphics-on; blank under -nographics)
-                yield return null;               // let ScreenCapture flush with the panel still open
+                // UI-fidelity shot (renders graphics-on; blank under -nographics). EquipmentPanel
+                // hosts a LIVE 3D preview (preview camera -> RenderTexture -> RawImage); give it
+                // extra frames + an end-of-frame grab so the full composite lands in the backbuffer
+                // (a plain yield grabbed RGB static — the ~5MB garbage PNG). WaitForEndOfFrame helps
+                // every panel, so ALL panels route through the settled capture.
+                int extraFrames = (id == PanelId.EquipmentPanel) ? 4 : 0;
+                yield return CaptureUiPanelSettled(id.ToString(), extraFrames);
 
                 ClickableActuator.ActuateAll(null, _rng);
                 yield return Wait(SettleSeconds);
@@ -2794,8 +2819,11 @@ namespace DeNelle.DevTools
         //  = panel_<Screen>.png), then close. Every open is GUARDED so one failing
         //  panel can never abort the phase; captures render only graphics-on.
         //  Runs BEFORE TriggerWave so no battle-lock rejects a PanelManager open.
-        //  FRONT-END screens (HeroSelect, Dialogue) are NOT driven here — they live
-        //  in the front-end scenes the driver bypasses (see TODO at the end).
+        //  FRONT-END screens (14 HeroSelect, 15 Dialogue) are ALSO captured here: both
+        //  render without their front-end scene — HeroSelect builds its whole screen in
+        //  code on OnEnable (activated with the returning-player skip defeated so it
+        //  does not GoCastle), Dialogue plays a real authored conversational node through
+        //  the DialogueService runner (suppression paused across the shot).
         // =====================================================================
         private int _extraShotCount;
 
@@ -2949,15 +2977,80 @@ namespace DeNelle.DevTools
                     FlowTrace.Warn("Auto", "CaptureExtraPanels: BugReport open threw — skipped.");
             }
 
-            // TODO(front-end capture pass): 14 HeroSelect (DeNelle.Onboarding.HeroSelectController) and
-            // 15 Dialogue (DeNelle.HUD.DialogueView, data-driven inline strip) genuinely require the
-            // front-end scenes / a live DialogueRunner conversation that BootToGameplay bypasses — they
-            // are NOT force-driven here (no faked shot). The CLI should capture them via a dedicated
-            // front-end / dialogue-runner capture pass. (BugReport was capturable in-gameplay; done above.)
+            // ── 14 Hero Select — DeNelle.Onboarding.HeroSelectController. It builds its WHOLE
+            //    screen in code on OnEnable (kit uGUI, NO UXML / PanelSettings), so it renders in
+            //    the gameplay scene WITHOUT loading the front-end scene. Two hazards handled:
+            //    (a) OnEnable ROUTES to the Castle (GoCastle -> scene reload, FATAL to this run) when
+            //        a hero is already chosen — always true in gameplay. We create the host INACTIVE
+            //        (so OnEnable does not fire on AddComponent), flip its private
+            //        _skipWhenIntroComplete = false, THEN activate so OnEnable BUILDS, not routes. If
+            //        the field can't be flipped we DO NOT activate (never risk the fatal reload).
+            //    (b) OnDisable destroys the panel's own canvas, so Destroy(host) is the clean teardown.
+            {
+                GameObject host = null;
+                bool armed = Guard.Try("Auto", "CaptureExtraPanels arm HeroSelect", () =>
+                {
+                    host = new GameObject("Capture_HeroSelect");
+                    host.SetActive(false);   // hold OnEnable until the skip is defeated
+                    var hs = host.AddComponent<DeNelle.Onboarding.HeroSelectController>();
+                    var f = typeof(DeNelle.Onboarding.HeroSelectController).GetField(
+                        "_skipWhenIntroComplete",
+                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                    if (f == null)
+                        throw new Exception("_skipWhenIntroComplete not found — refusing to activate (would GoCastle -> reload).");
+                    f.SetValue(hs, false);
+                    host.SetActive(true);    // NOW OnEnable builds the screen (no route)
+                });
+                if (armed && host != null)
+                {
+                    yield return Wait(SettleSeconds);              // let BuildScreen paint
+                    yield return CaptureUiPanelSettled("HeroSelect");   // -> panel_HeroSelect.png
+                    _extraShotCount++;
+                    FlowTrace.Step("Auto", "CaptureExtraPanels: captured panel_HeroSelect.png.");
+                    Guard.Try("Auto", "CaptureExtraPanels destroy HeroSelect", () =>
+                    {
+                        if (host != null) UnityEngine.Object.Destroy(host);
+                    });
+                    yield return Wait(SettleSeconds);
+                }
+                else
+                {
+                    FlowTrace.Warn("Auto", "CaptureExtraPanels: HeroSelect not armed (create/reflection failed) — skipped panel_HeroSelect.png.");
+                    Guard.Try("Auto", "CaptureExtraPanels cleanup HeroSelect", () =>
+                    {
+                        if (host != null) UnityEngine.Object.Destroy(host);   // inactive host — safe teardown
+                    });
+                }
+            }
+
+            // ── 15 Dialogue — DeNelle.HUD.DialogueView renders from the custom (Yarn-free)
+            //    DialogueService runner + dialogues.json. Play a REAL authored CONVERSATIONAL node
+            //    ("brom_intro" — a greeting line + options, NOT a transaction that auto-routes to a
+            //    panel) so the bottom dialogue strip renders, capture it, then Stop(). The 1s
+            //    SuppressDialogue loop is PAUSED across the shot (else it would Stop() the card
+            //    mid-capture, exactly as AssertDialogueCardClose does). Guarded — an unauthored id
+            //    or a missing view logs + skips, never a faked shot. ──
+            {
+                _pauseDialogueSuppression = true;   // hold off SuppressDialogue's 1s Stop() loop
+                bool played = Guard.Try("Auto", "CaptureExtraPanels play Dialogue",
+                    () => DialogueService.Play("brom_intro"));
+                if (played && DialogueService.IsRunning)
+                {
+                    yield return Wait(SettleSeconds);
+                    yield return CaptureUiPanelSettled("Dialogue");   // -> panel_Dialogue.png
+                    _extraShotCount++;
+                    FlowTrace.Step("Auto", "CaptureExtraPanels: captured panel_Dialogue.png.");
+                    Guard.Try("Auto", "CaptureExtraPanels stop Dialogue", () => DialogueService.Stop());
+                    yield return Wait(SettleSeconds);
+                }
+                else
+                    FlowTrace.Warn("Auto", "CaptureExtraPanels: brom_intro not routable (unauthored or already running) — skipped panel_Dialogue.png.");
+                _pauseDialogueSuppression = false;  // resume dialogue suppression
+            }
 
             _lastDetail = $"{_extraShotCount} extra panels captured";
             FlowTrace.Step("Auto", $"CaptureExtraPanels: {_extraShotCount} gameplay-scene panels captured " +
-                "(BuildMenu/Settings/Pause/TowerManager/TroopTraining/Inventory/ShopPanel/RaidSelection/RaidDeploy/EndState/EchoWorkforce/BugReport).");
+                "(BuildMenu/Settings/Pause/TowerManager/TroopTraining/Inventory/ShopPanel/RaidSelection/RaidDeploy/EndState/EchoWorkforce/BugReport/HeroSelect/Dialogue).");
         }
 
         // Find-or-create a component of type T, GUARD-open it, screenshot panel_<shotName>.png,
