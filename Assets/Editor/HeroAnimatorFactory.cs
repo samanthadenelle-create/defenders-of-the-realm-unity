@@ -40,7 +40,7 @@ namespace DeNelle.Editor
         // presses (especially important for Ranger archer aim/fire cycles while the
         // OTS camera is surveying and targeting). The clip plays the cycle, then
         // quickly returns to ready/locomotion so the next press feels immediate.
-        private const float AttackSpeed  = 1.3f;   // cast-state speed multiplier (1.2–1.35)
+        private const float AttackSpeed  = 1f;     // authored 1.0x (owner "go with defaults" 2026-07-03; was 1.3f WO-217 snappy-swing — mocap plays at natural speed)
         private const float CastExitTime = 0.38f;  // quick return for fast re-trigger / cycle chaining
         private const float CastExitDur  = 0.03f;  // very tight blend back to ready pose
         // Upper-body attack layer (WO-218): lets the hero swing/cast while moving.
@@ -72,7 +72,11 @@ namespace DeNelle.Editor
         // BuildOrcHumanoidController's InjuredLocomotion swap. Null-guarded: a missing clip
         // falls back to the healthy locomotion so the state is never empty.
         private static readonly string[] InjuredRoots = { "Assets/Action/Enemies/" };
-        private const string InjuredIdleClip = "injured idle";
+        // Injured IDLE upgraded 2026-07-03: "injured hurting idle" (hurt-but-standing, clutching
+        // the wound, rooted) replaces the flat "injured idle" placeholder — cleaner wounded read.
+        // Same Humanoid mixamo rig (animationType:3) so it retargets onto the hero avatar exactly
+        // like the old clip; null-guarded fallback to healthy idle is unchanged.
+        private const string InjuredIdleClip = "injured hurting idle";
         private const string InjuredWalkClip = "injured walk";
         private const string InjuredRunClip  = "injured run";
 
@@ -442,19 +446,18 @@ namespace DeNelle.Editor
         }
 
         /// <summary>
-        /// WALK-FEEL FIX (2026-07-02): per-child timeScale on the locomotion blend children to
-        /// cancel HeroBodySwapper.HeroAnimSpeed's global 0.5× playback for LOCOMOTION only (the
-        /// tuned cast/attack playback keeps the 0.5×). Walk (threshold 2) ×2 → net 1.0× cadence;
-        /// Run (threshold 6) ×3 → net 1.5× cadence, approximating a 6 m/s stride. Idle stays ×1
-        /// (a half-speed idle reads calm, not broken). Keyed off the thresholds set above.
+        /// CLEANUP 2026-07-03: this used to set per-child timeScale (walk ×2 / run ×3) PURELY to
+        /// cancel HeroBodySwapper.HeroAnimSpeed's global 0.5× playback (see the old comments). Now
+        /// that the global is NATURAL 1.0× (proper AccuRIG/ActorCore mocap), those multipliers would
+        /// OVER-speed the locomotion (walk 2×, run 3×). Reset every child to its authored 1.0× so the
+        /// mocap plays at its authored cadence. (Was: run @6 → timeScale 3, walk @2 → timeScale 2.)
         /// </summary>
         private static void ApplyLocomotionCadence(BlendTree tree)
         {
             var kids = tree.children;                    // BlendTree.children returns a copy
             for (int i = 0; i < kids.Length; i++)
             {
-                if      (kids[i].threshold >= 5.9f) kids[i].timeScale = 3f; // run  @6 → net 1.5×
-                else if (kids[i].threshold >= 1.9f) kids[i].timeScale = 2f; // walk @2 → net 1.0×
+                kids[i].timeScale = 1f; // natural authored speed — no compensation for a global multiplier
             }
             tree.children = kids;                        // write the modified copy back
         }

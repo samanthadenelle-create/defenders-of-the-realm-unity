@@ -27,9 +27,12 @@ namespace DeNelle.Village
     public sealed class HeroBodySwapper : MonoBehaviour
     {
         private const float TargetHeightMeters = 1.75f;
-        // Global animator playback multiplier for the hero (Mixamo clips run fast).
-        // 0.5 = half speed. Tune here.
-        private const float HeroAnimSpeed = 0.5f;
+        // Global animator playback multiplier for the hero.
+        // CLEANUP 2026-07-03: was 0.5f — a band-aid that HALVED all animator playback to hide the
+        // OLD bad rig's fast Mixamo clips. With proper AccuRIG/ActorCore mocap (authored at correct
+        // speed) that global halving now FIGHTS the good animation. Restored to NATURAL 1.0× so
+        // clips play at their authored rate. (old value: 0.5f — restore for the legacy fast rig.)
+        private const float HeroAnimSpeed = 1f;
 
         // WO-376 / WO-557: the swapped hero's guarded animator. The hero re-asserts a clean
         // idle when a conversation starts/ends; we subscribe to OUR dialogue stack's
@@ -72,6 +75,17 @@ namespace DeNelle.Village
             // Blink base load entirely for the Knight and build the armored body directly.
             if (cls == HeroClass.Knight)
             {
+                // OWNER "try this" 2026-07-03: the NEW KnightV3.fbx body (CC/AccuRIG humanoid) supersedes
+                // the Paladin package for the Knight. Checked FIRST — when ff.knightv3 is ON (default) load
+                // Resources/Heroes/KnightV3.fbx, retarget the shared Knight anims via Knight.controller, and
+                // keep its OWN embedded texture. A failed V3 load degrades to the Paladin package / legacy
+                // Tripo Knight below (never bodyless; the whole pre-V3 path stays byte-for-byte reachable).
+                if (DeNelle.Core.FeatureFlags.KnightV3)
+                {
+                    FlowTrace.Step("HeroBody", $"class={cls} — ff.knightv3 ON: routing to NEW KnightV3.fbx body.");
+                    BuildKnightV3Body(cls, "KnightV3", controllerSnapshot);
+                    return;
+                }
                 // OWNER RULING 2026-07-03: the PALADIN hero package is the new Knight body. When
                 // ff.heropackage is ON (default) load the published KnightPackage prefab (Paladin
                 // variant that binds KnightPackage.controller + bakes sword/shield/helmet). OFF (or a
@@ -303,11 +317,84 @@ namespace DeNelle.Village
             WireHeroBody(body, cls, slug, controllerSnapshot, isBlink: false, usePackage: true);
         }
 
+        // ─────────────────────────────────────────────────────────────────────────────
+        // KNIGHTV3 PATH (owner "try this" 2026-07-03): build the Knight from the owner's NEW
+        // Resources/Heroes/KnightV3.fbx — a Character-Creator / AccuRIG export whose CC_Base_* skeleton
+        // Unity auto-maps to a STANDARD humanoid avatar, so it retargets the shared Knight animations via
+        // the proven Knight.controller (locomotion + injured + cast states). Unlike the Paladin package,
+        // KnightV3 is a RAW FBX (no bound controller), so we LOAD Knight.controller (via the slug we pass
+        // to WireHeroBody). It ships its OWN embedded 'Material_Pbr' diffuse (extracted to KnightV3.fbm on
+        // import); RetargetMaterialsToUrp (run in WireHeroBody's !isBlink block) converts that to URP and
+        // PRESERVES the texture, and ColorPackageBodyIfNullAlbedo only tints slots with NO albedo (texture
+        // WINS). On ANY load miss we fall back to the Paladin package / legacy Knight (never bodyless).
+        // ─────────────────────────────────────────────────────────────────────────────
+        private void BuildKnightV3Body(HeroClass cls, string bodySlug,
+                                       RuntimeAnimatorController controllerSnapshot)
+        {
+            using var _ = FlowTrace.Enter("HeroBody", $"BuildKnightV3Body bodySlug={bodySlug}");
+
+            GameObject prefab = null;
+            Guard.Try("HeroBody", $"HeroAssetLoader.LoadHeroPrefab {bodySlug}", () =>
+            {
+                prefab = DeNelle.Core.HeroAssetLoader.LoadHeroPrefab(bodySlug);
+            });
+            if (prefab == null)
+            {
+                FlowTrace.Fail("HeroBody",
+                    $"KNIGHTV3 MISS — Resources/Heroes/{bodySlug}.fbx failed to load (not imported / bad meta). " +
+                    "Falling back to the Paladin package / legacy Tripo Knight (no bodyless hero). Import KnightV3.fbx " +
+                    "(Humanoid) or set ff.knightv3=0.");
+                if (DeNelle.Core.FeatureFlags.HeroPackage)
+                    BuildPackageHeroBody(cls, "KnightPackage", controllerSnapshot);
+                else
+                    BuildLegacyResourcesBody(cls, "Knight", controllerSnapshot);
+                return;
+            }
+
+            // FACING/HEIGHT (owner felt-tune): KnightV3 is a CC/AccuRIG rig. The legacy Tripo Knight's
+            // proven forward yaw was +15 and height x1.0286 — start THERE (closest prior Knight feel) and
+            // FlowTrace LOUD so the owner corrects it after seeing the body. FitHeight normalizes scale
+            // regardless of the FBX's import units, so height is a pure feel knob.
+            const float KnightV3ForwardYaw = 15f;
+            float targetH = TargetHeightMeters * 1.0286f;
+            FlowTrace.Step("HeroBody",
+                $"KNIGHTV3 forward yaw={KnightV3ForwardYaw} + height={targetH:0.###}m (owner felt-tune — " +
+                "seeded from the legacy Knight; a CC/AccuRIG rig may need a different yaw).");
+
+            GameObject body = null;
+            Guard.Try("HeroBody", "VisualFactory.Skin (KnightV3)", () =>
+            {
+                body = VisualFactory.Skin(transform, prefab, new SkinOptions
+                {
+                    FitHeight = targetH,
+                    StripColliders = true,
+                    SeatOnGround = true,
+                    FixTripoMaterials = false,
+                    LocalRotation = Quaternion.Euler(0f, KnightV3ForwardYaw, 0f),
+                });
+            });
+            if (body == null)
+            {
+                FlowTrace.Fail("HeroBody",
+                    "VisualFactory.Skin returned null for KnightV3 — falling back to the legacy Tripo Knight (no bodyless hero).");
+                BuildLegacyResourcesBody(cls, "Knight", controllerSnapshot);
+                return;
+            }
+            body.name = "HeroBody";
+            FlowTrace.Step("HeroBody", "KnightV3 body skinned + named 'HeroBody'.");
+
+            // Pass the ability/controller slug "Knight" (NOT the body slug "KnightV3"): the controller +
+            // abilities.json loadout resolve under "Knight" (Knight.controller carries the injured/locomotion/
+            // cast states). useKnightV3:true keeps the embedded texture (color only fills null-albedo slots)
+            // and suppresses the Blink-armor overlay so KnightV3 stays the VISIBLE body.
+            WireHeroBody(body, cls, "Knight", controllerSnapshot, isBlink: false, usePackage: false, useKnightV3: true);
+        }
+
         // Shared post-load wiring for BOTH the Blink and legacy body. On the Blink path the
         // Tripo/CC5 material + embedded-strip + sole-nudge steps are skipped (clean assets).
         private void WireHeroBody(GameObject body, HeroClass cls, string slug,
                                   RuntimeAnimatorController controllerSnapshot, bool isBlink,
-                                  bool usePackage = false)
+                                  bool usePackage = false, bool useKnightV3 = false)
         {
             // DEF-232 spawn-time validation: the camera (SmartMobileCamera) follows the hero
             // ROOT by tag; HeroLocomotion drives that same root. The visible body must sit
@@ -437,22 +524,20 @@ namespace DeNelle.Village
             // to turn. Root motion off → HeroLocomotion owns movement/rotation; the
             // clip only drives the visible mesh.
             anim.applyRootMotion = false;
-            // Owner 2026-05-30: Mixamo clips play too fast on the hero. Scale global
-            // animator playback to half speed. Works regardless of which controller is
-            // loaded (it's a multiplier on all clip playback). Tune via HeroAnimSpeed.
-            // PACKAGE cadence: the Paladin package is a SINGLE cadence authority baked at 1.0 (dossier
-            // §5.1), so it plays at native speed. The legacy Tripo/Mixamo path stays at the 0.5x global
-            // multiplier (its clips run fast). Branch on usePackage; legacy behavior is unchanged.
-            float animSpeed = usePackage ? 1f : HeroAnimSpeed;
+            // CLEANUP 2026-07-03: proper AccuRIG/ActorCore mocap is authored at correct speed, so the
+            // hero plays at NATURAL 1.0× on EVERY body path (package/knightV3/legacy). HeroAnimSpeed is
+            // now 1f, so this resolves to 1f regardless of usePackage — no global multiplier fights the
+            // authored animation. (Was: usePackage ? 1f : HeroAnimSpeed, where HeroAnimSpeed=0.5 halved
+            // the legacy Mixamo path to hide the old fast rig.)
+            float animSpeed = HeroAnimSpeed;
             anim.speed = animSpeed;
-            // STRIDE-POLISH (2026-07-02): runtime cadence knob. The baked locomotion
-            // timeScales (HeroAnimatorFactory.ApplyLocomotionCadence: walk x2 / run x3
-            // against this 0.5x global) net walk 1.0x / run 1.5x. Those are BAKE-TIME;
-            // this enforcer lets the owner felt-tune cadence live via PlayerPrefs
-            // "anim.runCadence" (default 1.5 = baked = zero change), scaling anim.speed
-            // ONLY while the base layer is in Locomotion/InjuredLocomotion — cast/
-            // attack/hit pacing (WO-217 + ShapeAttackTempo hitstop) is untouched.
-            HeroLocomotionCadence.Attach(gameObject, anim, animSpeed);
+            // CLEANUP 2026-07-03: the HeroLocomotionCadence enforcer existed ONLY to felt-tune a knob
+            // layered on top of the 0.5× global (its BakedNetRunCadence=1.5 assumed the walk×2/run×3
+            // compensation that cancelled the halving). With natural 1.0× playback and the locomotion
+            // band timeScales reset to 1.0, there is nothing to compensate — so we do NOT attach it;
+            // nothing multiplies playback (anim.speed stays 1.0). Re-enable if a runtime cadence knob is
+            // wanted again on the new mocap.
+            // HeroLocomotionCadence.Attach(gameObject, anim, animSpeed);
             // Keep animating even when the follow camera frames just past the hero
             // edge, else Unity freezes the rig and it T-poses on re-entry to view.
             anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
@@ -487,12 +572,17 @@ namespace DeNelle.Village
             // + shield-mesh prop attach entirely (baked Paladin gear wins — no second sword, no wrong-oriented
             // attached shield). Stat/loadout/armor-tint on the controller are unaffected. Legacy Tripo Knight
             // (usePackage=false) is never marked → its attach path stays byte-for-byte intact.
-            if (usePackage && GetComponent<PackageBakedGearMarker>() == null)
+            // KNIGHTV3 (owner "try this"): KnightV3 has NO baked gear, but the owner is REFINING the gear
+            // approach — so for this first cut we suppress prop-attach too (same marker) to render a CLEAN
+            // KnightV3 body with the correct rig + texture, no risk of a mis-oriented/duplicate weapon.
+            // Gear mapping to its CC_Base grip joints (R_Hand/L_Hand) is the documented NEXT step
+            // (AttachmentOffsetRegistry). Set ff.knightv3=0 to restore the package/legacy gear behavior.
+            if ((usePackage || useKnightV3) && GetComponent<PackageBakedGearMarker>() == null)
             {
                 gameObject.AddComponent<PackageBakedGearMarker>();
                 FlowTrace.Step("HeroBody",
-                    "PACKAGE: tagged hero root with PackageBakedGearMarker BEFORE EquipmentController — " +
-                    "the controller will SKIP weapon/shield prop attach (baked gear wins; de-dupes the second sword).");
+                    (useKnightV3 ? "KNIGHTV3" : "PACKAGE") + ": tagged hero root with PackageBakedGearMarker BEFORE EquipmentController — " +
+                    "the controller will SKIP weapon/shield prop attach (baked/deferred gear; de-dupes the second sword).");
             }
             if (GetComponent<EquipmentController>() == null)
                 gameObject.AddComponent<EquipmentController>();
@@ -504,7 +594,7 @@ namespace DeNelle.Village
             // height tweak — Tripo donor carries no weapon/shield, so we attach them as gear.
             // PACKAGE: the Paladin package BAKES its own sword/shield/helmet into the mesh, so the
             // separate shield prop is NOT seeded (baked wins — item e). Legacy Tripo Knight still gets it.
-            if (cls == HeroClass.Knight && !usePackage && equipLoadout.EquippedOffHand == null)
+            if (cls == HeroClass.Knight && !usePackage && !useKnightV3 && equipLoadout.EquippedOffHand == null)
                 Guard.Try("HeroBody", "seed knight default shield",
                     () => equipLoadout.EquipOffHandById("knight_shield_starter"));
             // ARMOR RENDER (HeroArmorVisual): show EQUIPPED Blink armor on the BODY by swapping
@@ -631,7 +721,7 @@ namespace DeNelle.Village
             // renders garbage/wrong color. The Paladin ships its OWN materials; RetargetMaterialsToUrp
             // (run above in the !isBlink block) already converts those to URP AND preserves their own
             // textures. So the package must NOT run the Tripo texture/tint pass at all — skip it like Blink.
-            if (!isBlink && !usePackage)
+            if (!isBlink && !usePackage && !useKnightV3)
             {
                 bool textured = ApplyExtractedTexture(body, cls);
                 if (cls == HeroClass.Knight)
@@ -647,24 +737,38 @@ namespace DeNelle.Village
                     ApplyClassTint(body, cls);
                 }
             }
+            else if (useKnightV3)
+            {
+                // KNIGHTV3 (owner "try this"): KnightV3 ships its OWN embedded 'Material_Pbr' diffuse
+                // (extracted to KnightV3.fbm on import). RetargetMaterialsToUrp (run above in the !isBlink
+                // block) already converted it to URP AND preserved that texture — so the Tripo atlas pass
+                // (ApplyExtractedTexture, wrong UVs) is SKIPPED exactly like the package. TEXTURE WINS:
+                // ColorPackageBodyIfNullAlbedo only assigns a flat _BaseColor to slots whose albedo is NULL
+                // (import/texture load failed), so a correctly-textured KnightV3 is never over-painted.
+                FlowTrace.Step("HeroBody",
+                    "KNIGHTV3: skipped Tripo texture pipeline — KnightV3 keeps its OWN embedded diffuse " +
+                    "(RetargetMaterialsToUrp preserved it). Color fallback only fills null-albedo slots (texture wins).");
+                ColorPackageBodyIfNullAlbedo(body);
+                AuditPackageAlbedo(body);
+            }
             else if (usePackage)
             {
                 FlowTrace.Step("HeroBody",
                     "PACKAGE: skipped Tripo texture pipeline (ApplyExtractedTexture/FlatSteel/ClassTint) — " +
-                    "the Paladin keeps its OWN materials (RetargetMaterialsToUrp above converts them to URP, " +
-                    "preserving the Paladin's textures). Binding the Tripo KnightArmored atlas onto Paladin UVs " +
-                    "was the wrong-coloring root.");
-                // WO-604 §12 self-report (WHITE HERO): the package path deliberately keeps the FBX's OWN
-                // imported materials. Knight_Hero.fbx imports with materialImportMode=2 / materialLocation=1
-                // but ships NO extracted textures (no sibling .fbm/ folder, no external .mat) — so its
-                // imported URP materials can carry a NULL _BaseMap albedo (the "white hero"): RetargetMaterialsToUrp
-                // SKIPS them (already-URP → converted=0), and this branch skips the Tripo texture bind, so a
-                // textureless material renders solid white. Even when an embedded FBX texture resolves in-editor,
-                // embedded-in-FBX textures do NOT reliably ship in a WebGL/IL2CPP player build (the exact class
-                // the project already solved for Tripo via the plain, Resources-loadable Heroes/Textures/ copies).
-                // AUDIT the live body's albedo now so a capture PROVES the textureless-material cause instead of
-                // shipping a silent white hero — fix is asset-side (extract the Paladin albedo to a reliably-loadable
-                // folder + bind it, mirroring ApplyExtractedTexture), owned by the orchestrator's editor/build pass.
+                    "the Paladin keeps its OWN materials (RetargetMaterialsToUrp above converts them to URP). " +
+                    "Binding the Tripo KnightArmored atlas onto Paladin UVs was the wrong-coloring root.");
+                // WO-604 WHITE-HERO FIX (owner F8 2026-07-03): the package path keeps the FBX's OWN imported
+                // materials. Knight_Hero.fbx ships ONE material "Paladin_MAT" that references Paladin_diffuse/
+                // normal/specular.png — but those textures are NOT shipped (no sibling .fbm/, no external .mat),
+                // so the imported URP/Lit material carries a NULL _BaseMap albedo and renders solid WHITE. There
+                // is NO texture to load. Instead of texturing, give the material(s) SOLID BASE COLORS (flat
+                // low-poly shading — matches the KayKit/Quaternius art direction, reads as intentional). This is
+                // a reversible RUNTIME tint (instanced materials, never touches the on-disk asset, needs no bake)
+                // and is WebGL-safe (pure _BaseColor, zero texture load). Colors come from the owner-tunable
+                // PaladinPalette table below (matched by slot NAME, else per-index fallback).
+                ColorPackageBody(body);
+                // AUDIT (read-only diagnostic): still reports the _BaseMap albedo as absent BY DESIGN — the fix
+                // sets _BaseColor, not _BaseMap. A "NULL albedo" audit line is now EXPECTED (colored, not textured).
                 AuditPackageAlbedo(body);
             }
             // DEF: the Ranger/Archer fires arrows via the projectile system but held
@@ -702,7 +806,12 @@ namespace DeNelle.Village
             // (added above; logic in EquipmentController.cs, OUTSIDE this silo) still reacts to
             // GearLoadout default gear via OnGearChanged and would attach a KayKit weapon mesh — a
             // follow-up must make that component package-aware for full de-duplication.
-            if (!usePackage)
+            // KNIGHTV3 (owner "try this"): also SKIP the default Blink-armor seed + GearVisualApplier.
+            // SeedClassDefaultArmor equips blink_armor_centurion, which HeroArmorVisual would SWAP the
+            // KnightV3 body OUT for a Blink armored skinned-mesh — HIDING the very body we are trying to
+            // show. Skipping it keeps KnightV3 the VISIBLE hero. Gear (weapon/armor) mapping to KnightV3's
+            // CC_Base grip joints is the documented next step; the owner is refining that approach.
+            if (!usePackage && !useKnightV3)
             {
                 SeedClassDefaultArmor(loadout, cls);
                 GearVisualApplier.Apply(body.transform, loadout);
@@ -710,8 +819,9 @@ namespace DeNelle.Village
             else
             {
                 FlowTrace.Step("HeroBody",
-                    "PACKAGE: skipped SeedClassDefaultArmor + GearVisualApplier (baked sword/shield/helmet " +
-                    "win). FOLLOW-UP: EquipmentController (out of silo) may still attach a duplicate weapon mesh.");
+                    (useKnightV3 ? "KNIGHTV3" : "PACKAGE") + ": skipped SeedClassDefaultArmor + GearVisualApplier " +
+                    "(keeps the new body VISIBLE — no Blink-armor overlay swap, no duplicate weapon prop). " +
+                    "FOLLOW-UP: map gear to the body's grip joints via AttachmentOffsetRegistry.");
             }
 
             // Ensure the guarded ActorAnimator is on the hero root (finds the Animator on the
@@ -1085,6 +1195,167 @@ namespace DeNelle.Village
                     "renders solid white. FIX (asset-side): extract the Paladin albedo to a reliably Resources-" +
                     "loadable folder and bind it here (mirror ApplyExtractedTexture), or give KnightPackage.prefab " +
                     "materials that reference a shipped albedo texture.");
+        }
+
+        // ─────────────────────────────────────────────────────────────────────────────
+        // OWNER-TUNABLE PALADIN PALETTE (WO-604 white-hero fix). The Paladin package FBX
+        // (Knight_Hero.fbx) ships ONE material "Paladin_MAT" with a NULL albedo → solid WHITE.
+        // ColorPackageBody gives every body material a SOLID _BaseColor (flat low-poly shading,
+        // KayKit/Quaternius art direction) instead of a texture — WebGL-safe, reversible runtime
+        // tint, no bake. TUNE the RGB values here; nothing else to touch.
+        //
+        // Matching order per slot: material NAME keyword first (future-proof if the Paladin is
+        // ever split into skin/plate/leather/tabard slots), else the per-index fallback palette,
+        // else PaladinDefaultColor. The current single "Paladin_MAT" slot matches "paladin" →
+        // steel-plate, so the one-material Paladin reads as clean plate armor.
+        // ─────────────────────────────────────────────────────────────────────────────
+        private struct PaladinColorSlot { public string[] Keywords; public Color Color; public string Label; }
+
+        private static readonly PaladinColorSlot[] PaladinPalette =
+        {
+            new PaladinColorSlot { Label = "steel-plate", Color = (Color)new Color32(0x74, 0x7C, 0x88, 0xFF),
+                Keywords = new[] { "plate", "armor", "armour", "metal", "steel", "paladin", "body", "main" } },
+            new PaladinColorSlot { Label = "flesh-skin",  Color = (Color)new Color32(0xD8, 0xA0, 0x7C, 0xFF),
+                Keywords = new[] { "skin", "face", "head", "flesh", "hand" } },
+            new PaladinColorSlot { Label = "leather",     Color = (Color)new Color32(0x6B, 0x47, 0x2E, 0xFF),
+                Keywords = new[] { "leather", "belt", "strap", "boot", "glove" } },
+            new PaladinColorSlot { Label = "tabard",      Color = (Color)new Color32(0x8C, 0x2B, 0x2B, 0xFF),
+                Keywords = new[] { "tabard", "cloth", "cloak", "cape", "tunic", "fabric", "surcoat" } },
+            new PaladinColorSlot { Label = "dark-trim",   Color = (Color)new Color32(0x33, 0x37, 0x40, 0xFF),
+                Keywords = new[] { "trim", "iron", "dark", "accent" } },
+            new PaladinColorSlot { Label = "gold",        Color = (Color)new Color32(0xC9, 0x9B, 0x3E, 0xFF),
+                Keywords = new[] { "gold", "brass", "emblem", "crest" } },
+        };
+
+        // Per-index fallback when a slot NAME gives no hint (cycles). Steel-plate first so a
+        // single-slot Paladin reads as clean plate; accents follow for any extra split slots.
+        private static readonly Color[] PaladinIndexFallback =
+        {
+            (Color)new Color32(0x74, 0x7C, 0x88, 0xFF), // steel plate
+            (Color)new Color32(0x8C, 0x2B, 0x2B, 0xFF), // tabard crimson accent
+            (Color)new Color32(0x6B, 0x47, 0x2E, 0xFF), // leather brown
+            (Color)new Color32(0x33, 0x37, 0x40, 0xFF), // dark metal trim
+        };
+
+        private static readonly Color PaladinDefaultColor = (Color)new Color32(0x74, 0x7C, 0x88, 0xFF); // steel
+
+        /// <summary>
+        /// WO-604 WHITE-HERO FIX: color the textureless Paladin package body by assigning a SOLID
+        /// _BaseColor to each material slot (flat low-poly shading — the fix is COLOR, not texture).
+        /// Operates on INSTANCED material copies (new Material(src)) so the imported on-disk asset is
+        /// never mutated — the tint is a reversible RUNTIME change with no asset bake. WebGL-safe:
+        /// pure _BaseColor, no texture load. Colors resolve from <see cref="PaladinPalette"/> by slot
+        /// NAME, else the per-index fallback. Null-guarded on every renderer/material access (§10).
+        /// </summary>
+        private static void ColorPackageBody(GameObject body)
+        {
+            if (body == null) return;
+            int slotIndex = 0, colored = 0;
+            var log = new System.Text.StringBuilder();
+            foreach (var r in body.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                var mats = r.sharedMaterials;
+                if (mats == null) continue;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    var src = mats[i];
+                    if (src == null) continue;
+                    // Instance copy — tint the live material, never the imported asset on disk
+                    // (reversible, bake-free). Mirrors RetargetMaterialsToUrp's new-Material pattern.
+                    var inst = new Material(src);
+                    string slotName = src.name ?? "";
+                    Color c = ResolvePaladinColor(slotName, slotIndex, out string label);
+                    if (inst.HasProperty("_BaseColor")) inst.SetColor("_BaseColor", c);
+                    if (inst.HasProperty("_Color"))     inst.SetColor("_Color", c);
+                    // Flat matte low-poly read (no texture → pure color); non-metallic so it doesn't
+                    // blow out to white under the scene lights the way a default metallic slot would.
+                    if (inst.HasProperty("_Smoothness")) inst.SetFloat("_Smoothness", 0.1f);
+                    if (inst.HasProperty("_Metallic"))   inst.SetFloat("_Metallic", 0f);
+                    mats[i] = inst;
+                    colored++;
+                    if (log.Length < 300)
+                    { if (log.Length > 0) log.Append(", "); log.Append($"[{slotIndex}] '{slotName}'→{label}"); }
+                    slotIndex++;
+                }
+                r.sharedMaterials = mats;
+            }
+            FlowTrace.Step("HeroBody",
+                $"PACKAGE coloring: set solid _BaseColor on {colored} material slot(s) — {log}. " +
+                "The white Paladin now reads as a flat-colored hero (WebGL-safe, no texture load).");
+        }
+
+        /// <summary>
+        /// KNIGHTV3 (owner "try this") TEXTURE-WINS color fallback. Unlike <see cref="ColorPackageBody"/>
+        /// (which paints EVERY slot because the Paladin is textureless), this ONLY assigns a flat
+        /// _BaseColor to material slots whose albedo (_BaseMap / _MainTex) is NULL — i.e. slots where the
+        /// KnightV3 embedded diffuse failed to import/bind. A correctly-textured KnightV3 therefore keeps
+        /// its OWN texture untouched; only a broken slot degrades to a solid color instead of solid white.
+        /// Operates on INSTANCED material copies (reversible runtime tint, no on-disk mutation, no bake) and
+        /// is WebGL-safe (pure _BaseColor). Colors resolve via <see cref="ResolvePaladinColor"/>.
+        /// </summary>
+        private static void ColorPackageBodyIfNullAlbedo(GameObject body)
+        {
+            if (body == null) return;
+            int slotIndex = 0, colored = 0, keptTextured = 0;
+            var log = new System.Text.StringBuilder();
+            foreach (var r in body.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                var mats = r.sharedMaterials;
+                if (mats == null) continue;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    var src = mats[i];
+                    if (src == null) continue;
+                    Texture albedo = null;
+                    if (src.HasProperty("_BaseMap"))               albedo = src.GetTexture("_BaseMap");
+                    if (albedo == null && src.HasProperty("_MainTex")) albedo = src.GetTexture("_MainTex");
+                    if (albedo != null) { keptTextured++; slotIndex++; continue; } // TEXTURE WINS — leave it alone
+
+                    var inst = new Material(src);
+                    string slotName = src.name ?? "";
+                    Color c = ResolvePaladinColor(slotName, slotIndex, out string label);
+                    if (inst.HasProperty("_BaseColor")) inst.SetColor("_BaseColor", c);
+                    if (inst.HasProperty("_Color"))     inst.SetColor("_Color", c);
+                    if (inst.HasProperty("_Smoothness")) inst.SetFloat("_Smoothness", 0.1f);
+                    if (inst.HasProperty("_Metallic"))   inst.SetFloat("_Metallic", 0f);
+                    mats[i] = inst;
+                    colored++;
+                    if (log.Length < 300)
+                    { if (log.Length > 0) log.Append(", "); log.Append($"[{slotIndex}] '{slotName}'→{label}"); }
+                    slotIndex++;
+                }
+                r.sharedMaterials = mats;
+            }
+            FlowTrace.Step("HeroBody",
+                $"KNIGHTV3 color fallback: kept {keptTextured} textured slot(s) as-is (texture wins); " +
+                $"filled {colored} null-albedo slot(s) with a flat color{(colored > 0 ? " — " + log : "")}.");
+        }
+
+        /// <summary>Resolve a Paladin slot color: material NAME keyword first, then the per-index
+        /// fallback palette (cycles), then the steel default. <paramref name="label"/> names the pick
+        /// for the FlowTrace so a capture shows exactly which slot got which color.</summary>
+        private static Color ResolvePaladinColor(string slotName, int index, out string label)
+        {
+            string n = (slotName ?? "").ToLowerInvariant();
+            foreach (var e in PaladinPalette)
+            {
+                if (e.Keywords == null) continue;
+                foreach (var kw in e.Keywords)
+                {
+                    if (!string.IsNullOrEmpty(kw) && n.Contains(kw))
+                    { label = e.Label; return e.Color; }
+                }
+            }
+            if (PaladinIndexFallback.Length > 0)
+            {
+                int fi = index % PaladinIndexFallback.Length;
+                label = $"index#{fi}";
+                return PaladinIndexFallback[fi];
+            }
+            label = "default-steel";
+            return PaladinDefaultColor;
         }
 
         private static string SlugFor(HeroClass cls) => cls switch

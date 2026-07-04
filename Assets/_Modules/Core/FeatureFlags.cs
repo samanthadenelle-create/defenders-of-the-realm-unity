@@ -359,6 +359,17 @@ namespace DeNelle.Core
         /// PlayerPrefs "ff.heropackage" = 0 to force the legacy Tripo Knight.</summary>
         public static bool HeroPackage => Get("heropackage", defaultOn: true);
 
+        /// <summary>KnightV3 hero body (owner "try this" 2026-07-03) — when ON (default), the Knight loads
+        /// the owner's NEW <c>Resources/Heroes/KnightV3.fbx</c> body: a Character-Creator / AccuRIG export
+        /// (CC_Base_* skeleton auto-mapped to a STANDARD Unity humanoid, one embedded 'Material_Pbr'
+        /// diffuse, embedded WALK + custom DANCE clips). It retargets the shared Knight animations via the
+        /// proven <c>Knight.controller</c> (locomotion + injured + cast states), keeps its OWN embedded
+        /// texture (RetargetMaterialsToUrp), and falls back to a flat color only on null-albedo slots.
+        /// Checked BEFORE ff.heropackage, so V3 supersedes the Paladin package for the Knight. A failed V3
+        /// load degrades to the legacy Tripo Knight (never bodyless). PlayerPrefs "ff.knightv3" = 0 to
+        /// restore the Paladin package / legacy Knight.</summary>
+        public static bool KnightV3 => Get("knightv3", defaultOn: true);
+
         /// <summary>SEEKERTHON stake-rewards DEMO surface — when ON, <see cref="DeNelle.Core.Platform.StakeRewardsDemoBootstrap"/>
         /// seeds a real-looking active native SKR stake (~1M, a Genesis holder) into
         /// <see cref="DeNelle.Core.Platform.StakeRewardsResolver"/> and auto-opens the read-only

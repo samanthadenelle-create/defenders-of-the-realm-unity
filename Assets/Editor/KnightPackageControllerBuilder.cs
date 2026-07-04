@@ -133,7 +133,11 @@ namespace DeNelle.Editor
         // Package gaps — shared Humanoid clips that retarget onto the Paladin avatar.
         private const string SharedVictoryFbx = "Assets/Action/Shared/Shared_Victory_Pose.fbx";
         private const string SharedBlockFbx   = "Assets/Action/Shared/Shared_Block.fbx";
-        private const string InjuredIdleFbx   = "Assets/Action/Enemies/injured idle.fbx";
+        // Injured IDLE upgraded 2026-07-03: "injured hurting idle" reads as hurt-but-standing
+        // (clutching the wound, rooted) — a cleaner wounded read than the flat "injured idle"
+        // placeholder. Same Humanoid mixamo rig (animationType:3), retargets onto the Paladin
+        // avatar identically. Walk/run stay on the matching injured set.
+        private const string InjuredIdleFbx   = "Assets/Action/Enemies/injured hurting idle.fbx";
         private const string InjuredWalkFbx   = "Assets/Action/Enemies/injured walk.fbx";
         private const string InjuredRunFbx    = "Assets/Action/Enemies/injured run.fbx";
 
