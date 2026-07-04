@@ -46,7 +46,7 @@ namespace DeNelle.Village
 
         /// <summary>The net run cadence the BAKED tuning already delivers
         /// (blend-child timeScale x3 * HeroBodySwapper 0.5 global = 1.5).</summary>
-        public const float BakedNetRunCadence = 1.5f;
+        public const float BakedNetRunCadence = 1.0f;
 
         private const float MinCadence = 0.5f;
         private const float MaxCadence = 3.0f;
