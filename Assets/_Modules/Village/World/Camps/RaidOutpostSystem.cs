@@ -110,10 +110,6 @@ namespace DeNelle.Village.World.Camps
             return result;
         }
 
-        /// <summary>Scene the outpost lives in (outer world). Bootstrap only spawns
-        /// once we are in this additive world scene so it never appears in the
-        /// village. Matched case-insensitively.</summary>
-        private const string OuterWorldSceneName = "OuterWorld";
 
         // Per-anchor realize guard: index aligned to OutpostAnchors. _spawned is the
         // SCHEDULE claim (one delayed runner); _realized[i] is the per-cardinal realize
@@ -155,7 +151,7 @@ namespace DeNelle.Village.World.Camps
         // (that single-frame spike contributed to the OuterWorld-load freeze). The slot is
         // claimed immediately (so we never double-schedule); the actual realize fires
         // SpawnDelaySeconds later, once you've settled into the world.
-        // OWNER (2026-06-11): was 180s (3 min) — so long that the owner roamed OuterWorld and
+        // OWNER (2026-06-11): was 180s (3 min) — so long that the owner roamed the overworld and
         // NEVER found the outpost; it simply hadn't materialised yet. Cut to a short delay that
         // still lands OFF the city-emerge load-spike frame, but lets you actually reach the
         // outpost (walk east to the anchor ~70m out) and find it built + garrisoned.
@@ -249,10 +245,9 @@ namespace DeNelle.Village.World.Camps
 
         private static bool InOuterWorld()
         {
-            if (string.IsNullOrEmpty(OuterWorldSceneName)) return true;
             var active = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
             if (NameMatches(active.name)) return true;
-            // OuterWorld may load ADDITIVELY (WorldSceneLoader) - check every loaded scene.
+            // Overworld may load ADDITIVELY (WorldSceneLoader) - check every loaded scene.
             int count = UnityEngine.SceneManagement.SceneManager.sceneCount;
             for (int i = 0; i < count; i++)
             {

@@ -7,7 +7,7 @@
 //   pushes the wood/iron/food/crystal wallet onto the HUD resource bar + the Heart
 //   HP bar) is attached ONLY by VillageController.EnsureHeartHudBridge — and
 //   VillageController exists only in the VILLAGE scene. In the castle home hub
-//   (MainCastle_Hall) and OuterWorld there is no VillageController, so the bridge
+//   (MainCastle_Hall) and the overworld there is no VillageController, so the bridge
 //   is never attached. VillageHudBootstrap (DeNelle.HUD) spawns the HUD itself in
 //   those scenes, but it CANNOT attach HeartHudBridge — DeNelle.HUD may reference
 //   DeNelle.Core only, never DeNelle.Village. Net result: the HUD exists but no
@@ -39,7 +39,7 @@ namespace DeNelle.Village
     /// <summary>
     /// Ensures a <see cref="HeartHudBridge"/> (the economy/heart → HUD feed) exists
     /// in every gameplay scene, so the resource bar updates in the castle hub and
-    /// OuterWorld, not only in the Village where VillageController authors one.
+    /// the overworld, not only in the Village where VillageController authors one.
     /// </summary>
     public static class HeartHudBridgeBootstrap
     {

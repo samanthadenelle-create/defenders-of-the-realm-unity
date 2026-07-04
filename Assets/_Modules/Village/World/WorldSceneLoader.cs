@@ -15,7 +15,7 @@ namespace DeNelle.Village
     public static class WorldSceneLoader
     {
         private const string VillageSceneName    = "Village2";
-        private const string OuterWorldSceneName  = "OuterWorld";
+        // OuterWorld scene removed (WO-608 MergedWorld) — use HubScenes.IsOverworld() instead
 
         // Hub scenes (Village2 / MainCastle_Hall / CastleHub*) now come from the ONE shared
         // source DeNelle.Core.HubScenes — the same list VillageHudController reads, so the HUD's
@@ -24,10 +24,10 @@ namespace DeNelle.Village
         // BUILD FIX (WO-173/DEF-108): a one-shot AfterSceneLoad check FAILED in player
         // builds. AfterSceneLoad fires when the BOOT scene (Title) is active — not Village
         // — so the old `active.name != "Village"` early-return ran during Title, set its
-        // guard, and OuterWorld was NEVER loaded once the player reached the village
+        // guard, and the overworld was NEVER loaded once the player reached the village
         // (Title -> HeroSelect -> PetSelect -> Village). It only "worked" in the editor
         // because you press Play directly on Village. Fix: subscribe to sceneLoaded and
-        // bring OuterWorld in WHENEVER the Village scene loads, in any flow.
+        // bring the overworld in WHENEVER the Village scene loads, in any flow.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetGuard() => SceneManager.sceneLoaded -= OnSceneLoaded;
 
@@ -47,7 +47,7 @@ namespace DeNelle.Village
         {
             Debug.Log("[WorldSceneLoader] DEBUG sceneLoaded event: '" + scene.name +
                 "' (mode=" + mode + ").");
-            if (scene.name == OuterWorldSceneName) DiagTerrain(scene);
+            if (DeNelle.Core.HubScenes.IsOverworld(scene.name)) DiagTerrain(scene);
             TryLoadOuterWorld(scene, "sceneLoaded");
         }
 
@@ -145,58 +145,12 @@ namespace DeNelle.Village
 
         private static void TryLoadOuterWorld(Scene scene, string via)
         {
-            // WO-608 (ff.mergedworld): the merged single scene ALREADY contains the OuterWorld content
-            // in-scene (welded into one continuous navmesh by WorldMergeBuilder). Streaming OuterWorld
-            // additively on top of it would DOUBLE-LOAD the terrain/regions — no-op here. This is the
-            // ONLY scene the additive path is disabled for; every other hub still streams normally.
-            if (DeNelle.Core.FeatureFlags.MergedWorld &&
-                string.Equals(scene.name, MergedWorldSceneName, System.StringComparison.Ordinal))
-            {
-                Debug.Log("[WorldSceneLoader] (" + via + ") skip — '" + scene.name +
-                    "' is the MERGED single scene (ff.mergedworld): OuterWorld content is already in-scene, not streaming additively.");
-                return;
-            }
-
-            // Pull OuterWorld when the active scene is a hub (Village2 / Castle hubs) — shared source.
-            bool isHubScene = DeNelle.Core.HubScenes.IsHub(scene.name);
-            if (!isHubScene)
-            {
-                Debug.Log("[WorldSceneLoader] DEBUG (" + via + ") skip — '" + scene.name +
-                    "' not a recognized hub (Village2 or Castle*).");
-                return;
-            }
-
-            // Enemy-owned raid targets (e.g. Village2 stronghold) keep their hub status for
-            // RaidEntryBridge entry/return, but must NOT stream the OuterWorld overworld on top
-            // of the stronghold (terrain/boundary/WorkerManager/encounters). The home hub
-            // (MainCastle_Hall, ownership:"Home") is not enemy-owned and still streams normally.
-            if (DeNelle.Core.HubScenes.IsEnemyOwnedScene(scene.name))
-            {
-                Debug.Log("[WorldSceneLoader] DEBUG (" + via + ") skip — '" + scene.name +
-                    "' is an enemy-owned raid target; not streaming OuterWorld over the stronghold.");
-                return;
-            }
-
-            // Already loaded? (re-entry / editor play-twice) — don't double-load.
-            if (SceneManager.GetSceneByName(OuterWorldSceneName).isLoaded)
-            {
-                Debug.Log("[WorldSceneLoader] DEBUG (" + via + ") OuterWorld already loaded — skip.");
-                return;
-            }
-
-            // Guard: the scene must be in Build Settings to load by name.
-            if (!Application.CanStreamedLevelBeLoaded(OuterWorldSceneName))
-            {
-                Debug.LogWarning("[WorldSceneLoader] (" + via + ") '" + OuterWorldSceneName +
-                    "' is NOT in Build Settings — outer world not loaded. " +
-                    "Add it (EnsureBuildSettings) so the regions/mine nodes appear.");
-                return;
-            }
-
-            Debug.Log("[WorldSceneLoader] DEBUG (" + via + ") Village is active/loaded -> " +
-                "loading '" + OuterWorldSceneName + "' ADDITIVELY now.");
-            SceneManager.LoadScene(OuterWorldSceneName, LoadSceneMode.Additive);
-            Debug.Log("[WorldSceneLoader] OuterWorld load call issued (additive over Village).");
+            // WO-608: OuterWorld scene has been DELETED. All world content is now in Main_Castle_Overworld.
+            // This method is kept for compatibility but does nothing. The merged single scene ALREADY
+            // contains all overworld content in-scene (welded into one continuous navmesh by WorldMergeBuilder).
+            // No additive loading is needed or possible.
+            Debug.Log("[WorldSceneLoader] (" + via + ") DEPRECATED: OuterWorld scene removed (WO-608 MergedWorld). " +
+                "All world content is in Main_Castle_Overworld. No streaming loader needed.");
         }
     }
 }

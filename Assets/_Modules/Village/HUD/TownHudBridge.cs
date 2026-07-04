@@ -59,7 +59,7 @@ namespace DeNelle.Village
         private const float RefreshInterval = 0.5f;
         private const int TowersMaxConstant = 12;   // sensible cap (no catalog max exposed here)
         // WO-403 — the town readouts are only meaningful in the village; gate the feed to
-        // that scene so this DDOL bridge does ZERO work out in OuterWorld (the leak window).
+        // that scene so this DDOL bridge does ZERO work out in the overworld (the leak window).
         private const string VillageSceneName = "Village2";
 
         // WO-361 — passive-XP badge feed. There is NO real passive-XP accrual on towers

@@ -45,7 +45,7 @@ namespace DeNelle.Village
         // ── WO-403: live registry (no whole-scene FindObjectsByType) ──────────
         // The HUD's town-metrics feed needs a "towers built" count. Polling it via
         // FindObjectsByType<Tower> every HUD tick (TownHudBridge) was a per-frame
-        // whole-scene scan and a leading suspect in the OuterWorld CPU leak. Each
+        // whole-scene scan and a leading suspect in the overworld CPU leak. Each
         // tower self-registers on enable and de-registers on disable/destroy, so the
         // count is an O(1) read with zero scanning.
         private static readonly System.Collections.Generic.List<Tower> _registry

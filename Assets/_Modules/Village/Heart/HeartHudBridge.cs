@@ -232,7 +232,7 @@ namespace DeNelle.Village
         private void Update()
         {
             // WO-424: the RESOURCE bar / crystal feed must NOT be gated on a HeartController.
-            // The castle hub and OuterWorld have no Heart of Elarion (it's a Village structure),
+            // The castle hub and the overworld have no Heart of Elarion (it's a Village structure),
             // so requiring _heart here meant this bridge never subscribed to EconomyService nor
             // pushed the wallet in those scenes — the bar read 0/0/0/0 and harvested resources
             // (which DO fire EconomyService.OnChanged) were dropped on the floor. Gate only on

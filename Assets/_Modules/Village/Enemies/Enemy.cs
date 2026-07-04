@@ -112,8 +112,8 @@ namespace DeNelle.Village
         // (1.5 m) and self-applies the contact tick. So a hero-CHASING enemy that stops at
         // 2.5 m never enters the 1.5 m damage ring and deals ZERO damage. This is invisible
         // in the castle (enemies batter the gate/Heart/walls — real colliders) but in
-        // OuterWorld the hero is the ONLY target, so the seam reads as "enemies don't attack
-        // after I cross into OuterWorld" (WO-419). When actively chasing the hero we tighten
+        // the overworld the hero is the ONLY target, so the seam reads as "enemies don't attack
+        // after I cross into the overworld" (WO-419). When actively chasing the hero we tighten
         // stoppingDistance to this melee value so the enemy closes INSIDE the hero's engage
         // ring; it is restored to _heartArrivalRadius the moment the chase ends.
         private const float HeroChaseStoppingDistance = 1.1f;
@@ -1141,7 +1141,7 @@ namespace DeNelle.Village
             var loco = FindAnyObjectByType<HeroLocomotion>();   // WO-450: component lookup
             _heroTransform = loco != null ? loco.transform : SafeFindByTag("Player");
 
-            // WO-419: trace the acquire across the seam — confirms a brain-less OuterWorld
+            // WO-419: trace the acquire across the seam — confirms a brain-less overworld
             // guard finds the (additively-loaded) hero by component, not an empty tag scan.
             if (_heroTransform == null)
                 DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"acq-miss-{_enemyId}", 2f,

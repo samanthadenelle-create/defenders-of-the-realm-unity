@@ -10,7 +10,7 @@
 //               ATBCombatManager + ArenaMode register), OR the active scene is a
 //               RaidBase_* raid / an enemy-owned scene (HubScenes).
 //   • Town    : a non-combat HUB scene with the hero inside the town ring.
-//   • Overworld : non-combat, outside the town ring (OuterWorld) / a non-hub scene.
+//   • Overworld : non-combat, outside the town ring (the merged overworld) / a non-hub scene.
 //   • Modal   : a registered modal panel is open (PanelManager.AnyOpen) — overlays.
 //
 // PRECEDENCE (frozen rule, WO-541): Modal > Battle > Town > Overworld.

@@ -207,9 +207,9 @@ namespace DeNelle.Village
 
         private void Rescan()
         {
-            // PERF (OuterWorld 1fps fix): the old scan was FindObjectsByType<MonoBehaviour>,
+            // PERF (overworld 1fps fix): the old scan was FindObjectsByType<MonoBehaviour>,
             // which enumerates EVERY MonoBehaviour in ALL loaded scenes (the additive
-            // OuterWorld terrain/props/NPCs = tens of thousands) on every 0.4s tick, per
+            // overworld terrain/props/NPCs = tens of thousands) on every 0.4s tick, per
             // tower — hundreds of ms/frame regardless of enemy count. Scan only the two
             // CONCRETE hostile IDamageable implementors instead (engine-filtered, returns
             // just the live enemy bodies + the dragon). Identical target set, no full-scene

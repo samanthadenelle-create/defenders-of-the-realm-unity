@@ -37,7 +37,7 @@ namespace DeNelle.Village
     {
         public static OverworldEncounterSpawner Instance { get; private set; }
 
-        private const string OuterWorldScene = "OuterWorld";
+        private const string OuterWorldScene = "Main_Castle_Overworld";  // WO-608: OuterWorld merged into Main_Castle_Overworld
         // The full family staged in the BATTLE when a rep is engaged (the rep is just the leader's face).
         private static readonly string[] OrcFamily = { "orc-warrior", "orc-tank", "orc-mage" };
 
@@ -58,10 +58,10 @@ namespace DeNelle.Village
         private const float RespawnCheckInterval = 10f;  // owner 2026-06-24: re-top-up cadence (~8-15s feel)
 
         // BUFFER tuning (owner 2026-06-24 FELT values — dial these): give the hero room to cross
-        // out of the castle and walk a bit into OuterWorld before any rep is on top of her.
+        // out of the castle and walk a bit into the overworld before any rep is on top of her.
         // SpawnMinDistance/SpawnMaxDistance = the ring (around the hero) reps spawn into. Raising
         // the MIN pushes reps DEEPER so a freshly-crossed hero isn't aggro'd right at the seam.
-        private const float SpawnMinDistance = 28f;  // was 14f — push reps deeper into OuterWorld
+        private const float SpawnMinDistance = 28f;  // was 14f — push reps deeper into the overworld
         private const float SpawnMaxDistance = 55f;  // ring outer edge (unchanged)
 
         private readonly List<GameObject> _reps = new List<GameObject>();
@@ -82,11 +82,11 @@ namespace DeNelle.Village
             DontDestroyOnLoad(gameObject);
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneLoaded += OnSceneLoaded;
-            // OuterWorld may ALREADY be loaded additively (the active scene is MainCastle_Hall,
-            // OuterWorld streams in over it via WorldSceneLoader) by the time this DDOL singleton
+            // The overworld may ALREADY be loaded additively (the active scene is MainCastle_Hall,
+            // the overworld streams in over it via WorldSceneLoader) by the time this DDOL singleton
             // boots — the per-scene sceneLoaded callback won't re-fire for an already-loaded scene.
             // So evaluate the WHOLE loaded set now, not just the active scene (the old bug: this
-            // checked only GetActiveScene() == "OuterWorld", which is FALSE in MainCastle_Hall, so
+            // checked only GetActiveScene() == "Main_Castle_Overworld", which is FALSE in MainCastle_Hall, so
             // reps never spawned in the live additive setup).
             MaybePopulate();
         }
@@ -101,14 +101,14 @@ namespace DeNelle.Village
         {
             // CHAIN CLEANUP (owner 2026-06-30): reps are DontDestroyOnLoad and would otherwise be
             // carried into a single-loaded chain scene (Outpost1/Dungeon/Outpost2) where they don't
-            // belong. If OuterWorld is no longer loaded, despawn them so the outpost reads clean
+            // belong. If the overworld is no longer loaded, despawn them so the outpost reads clean
             // (owner: "if easier and cleaner they can go"). They re-populate via MaybePopulate when
-            // OuterWorld loads again.
+            // the overworld loads again.
             if (!OuterWorldLoaded()) DespawnAllReps();
             MaybePopulate();
         }
 
-        // Destroy + forget every live rep (used when leaving OuterWorld into a chain scene).
+        // Destroy + forget every live rep (used when leaving the overworld into a chain scene).
         private void DespawnAllReps()
         {
             int n = 0;
@@ -120,7 +120,7 @@ namespace DeNelle.Village
                     $"DespawnAllReps: cleared {n} carried rep(s) (OuterWorld not loaded — chain scene); re-populate on return.");
         }
 
-        // True when OuterWorld is loaded (active OR additive), case-insensitive — mirrors
+        // True when the overworld is loaded (active OR additive), case-insensitive — mirrors
         // RaidOutpostSystem.InOuterWorld so the rep gate matches the other world systems.
         internal static bool OuterWorldLoaded()
         {
@@ -140,9 +140,9 @@ namespace DeNelle.Village
         {
             if (!FeatureFlags.OverworldEncounter) { FlowTrace.Step("Encounter", "MaybePopulate: ff.overworldencounter OFF — dormant."); return; }
             if (BattleArena.Instance != null && BattleArena.Instance.BattleInProgress) return; // not while a battle is up
-            if (!OuterWorldLoaded())                                  // v1: OuterWorld only
+            if (!OuterWorldLoaded())                                  // v1: overworld only
             {
-                FlowTrace.Step("Encounter", "MaybePopulate: OuterWorld not loaded yet — waiting for its sceneLoaded.");
+                FlowTrace.Step("Encounter", "MaybePopulate: overworld not loaded yet — waiting for its sceneLoaded.");
                 return;
             }
             if (_populating) return;                                  // a populate is already scheduled

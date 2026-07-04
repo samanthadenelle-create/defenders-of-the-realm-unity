@@ -1,12 +1,12 @@
 // =============================================================================
-// CastleNavTopologyDiag — runtime navmesh-TOPOLOGY RCA for the castle→OuterWorld seam.
+// CastleNavTopologyDiag — runtime navmesh-TOPOLOGY RCA for the castle→overworld seam.
 //
-// THE BUG IT HUNTS: the AutoPilot bot reports the castle→OuterWorld exit as
+// THE BUG IT HUNTS: the AutoPilot bot reports the castle→overworld exit as
 // SEAM-UNREACHABLE in MainCastle_Hall, yet edit-time CastleGateNavVerify reports
 // GATE_NAV_OK / PathComplete and the owner felt-tested "all gates work". The
 // contradiction smells like a DISCONNECTED NAVMESH ISLAND: the hero's courtyard
 // navmesh may not be stitched to the gate-seam navmesh at RUNTIME (after the
-// RuntimeRegionGate rebake + WorldSceneLoader additive OuterWorld), even though
+// RuntimeRegionGate rebake + WorldSceneLoader additive overworld merge), even though
 // edit-time SamplePosition false-greens because the bake looks fine statically.
 //
 // §12 INSTRUMENT-DON'T-GUESS: this captures the DATA that proves connected vs

@@ -8,24 +8,24 @@ using DeNelle.Core.Diagnostics;
 namespace DeNelle.Village
 {
     /// <summary>
-    /// Gate/portal SEAM between a hub scene (e.g. MainCastle_Hall) and OuterWorld.
+    /// Gate/portal SEAM between a hub scene (e.g. MainCastle_Hall) and the overworld.
     ///
     /// PROXIMITY-based (not OnTriggerEnter): when the hero (tagged Player/HeroTarget) comes
     /// within <see cref="ProximityRadius"/> of this object, it ensures the target scene is
     /// loaded additively and <c>WarpTo</c>s the hero across to <see cref="targetPosition"/>.
     ///
-    /// WHY proximity: the castle and OuterWorld each have their OWN baked NavMesh (two scenes
+    /// WHY proximity: the castle and overworld each have their OWN baked NavMesh (two scenes
     /// overlaid at runtime). A NavMeshAgent hero stops at the castle navmesh EDGE and can't
     /// physically reach a trigger box just beyond it — the "invisible barrier" / two-scene
     /// seam. A distance check fires reliably AT that edge and carries the hero across. The
     /// OnTriggerEnter path is kept as a fallback for movers that DO trip physics triggers.
     ///
-    /// Used by CastleHubBuilder to wire the south gate connection to OuterWorld.
+    /// Used by CastleHubBuilder to wire the south gate connection to the overworld.
     /// </summary>
     public class SceneTransitionTrigger : MonoBehaviour
     {
         [Tooltip("Scene to load additively (must be in Build Settings).")]
-        public string targetSceneName = "OuterWorld";
+        public string targetSceneName = "Main_Castle_Overworld";
 
         [Tooltip("World position the player should appear at in the target scene (after load).")]
         public Vector3 targetPosition = Vector3.zero;
@@ -210,7 +210,7 @@ namespace DeNelle.Village
             // OUTPOST FAST-TRAVEL GATE (owner 2026-06-19): while ff.outposttravel is OFF, a seam
             // whose destination is a garrison / raid OUTPOST (Garrison_* / Outpost_* / RaidBase_*)
             // must NOT offer its "Travel to <outpost>" prompt — reaching an outpost is earned by
-            // walking (WO-453), not fast-travelled. The castle<->OuterWorld crossing is NOT an
+            // walking (WO-453), not fast-travelled. The castle<->overworld crossing is NOT an
             // outpost destination, so it is never gated and continues to work. We force this seam
             // to read as out-of-range so it neither shows a prompt nor wins the nearest-seam contest.
             if (inRange && IsTravelGated())
@@ -336,7 +336,7 @@ namespace DeNelle.Village
             // We are the nearest in-range seam: own the prompt + the confirmed cross.
             string dest = FriendlyDestinationName();
             // A story portal can override the label with its own narrative line
-            // (e.g. "Enter the enemy stronghold"); else use the default "Travel to <dest>".
+            // (e.g. "Enter the dungeon"); else use the default "Travel to <dest>".
             string label = string.IsNullOrEmpty(promptOverride) ? $"Travel to {dest}" : promptOverride;
             if (!_promptShown)
             {
@@ -451,7 +451,7 @@ namespace DeNelle.Village
             // WO-608 RETURN-TARGET REMAP (ff.mergedworld): the standalone "OuterWorld" and
             // "MainCastle_Hall" scenes are RETIRED under the merge. A dungeon/outpost/arena/seam
             // that still targets them must NOT load a retired scene:
-            //   • If we are ALREADY on the merged overworld scene, the castle<->outerworld
+            //   • If we are ALREADY on the merged overworld scene, the castle<->overworld
             //     crossing is an in-scene WALK now — no-op the cross (both regions are here).
             //   • Otherwise (returning from a dungeon/arena/Village2), REMAP the target to the
             //     merged scene name so the return lands on Main_Castle_Overworld.
@@ -534,7 +534,7 @@ namespace DeNelle.Village
 
             FlowTrace.Step("Seam", "starting RepositionPlayerAfterLoad coroutine (fade -> warp -> fade)");
             // PERSISTENT HOST (owner F8 2026-06-30): on a SINGLE load the SOURCE scene (this trigger's
-            // scene, e.g. OuterWorld) UNLOADS — destroying THIS component and KILLING the coroutine
+            // scene, e.g. overworld) UNLOADS — destroying THIS component and KILLING the coroutine
             // before it warps the hero (the trace died right after 'fade-to-black'; the hero kept its
             // carry position instead of seating at the entry). The hero root is already DDOL'd above,
             // so host the reposition on the hero's own (surviving) MonoBehaviour. Additive loads keep

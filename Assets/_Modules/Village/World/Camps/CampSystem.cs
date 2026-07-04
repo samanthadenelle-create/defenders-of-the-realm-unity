@@ -83,11 +83,6 @@ namespace DeNelle.Village.World.Camps
         /// <summary>Camp footprint radius (proximity gate for kills + claim prompt).</summary>
         public const float DefaultCampRadius = 9f;
 
-        /// <summary>Scene name the camps live in (outer world). The bootstrap only
-        /// spawns once we are in this additive world scene so camps never appear in
-        /// the village. Matched case-insensitively; empty = spawn in any scene.</summary>
-        private const string OuterWorldSceneName = "OuterWorld";
-
         // World anchors per outer region (mirrors ZoneManager's cardinal fan-out:
         // East Goldfields +X, West Stoneback -X, South Mirewood -Z, North Ashwood
         // +Z). Placed safely OUTSIDE the village wall footprint (~+/-42 X, +/-33 Z)
@@ -143,7 +138,7 @@ namespace DeNelle.Village.World.Camps
             {
                 // Not in the world scene yet - re-bootstrap will fire on the next
                 // scene load. (Subscribe-free wait; no per-frame polling.)
-                FlowTrace.Step("Camp", "SpawnNow: not in OuterWorld yet — deferring to next scene load.");
+                FlowTrace.Step("Camp", "SpawnNow: not in overworld yet — deferring to next scene load.");
                 return;
             }
 
@@ -183,10 +178,9 @@ namespace DeNelle.Village.World.Camps
 
         private static bool InOuterWorld()
         {
-            if (string.IsNullOrEmpty(OuterWorldSceneName)) return true;
             var sm = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
             if (NameMatches(sm.name)) return true;
-            // OuterWorld may load ADDITIVELY (WorldSceneLoader) - check every loaded scene.
+            // Overworld may load ADDITIVELY (WorldSceneLoader) - check every loaded scene.
             int count = UnityEngine.SceneManagement.SceneManager.sceneCount;
             for (int i = 0; i < count; i++)
             {

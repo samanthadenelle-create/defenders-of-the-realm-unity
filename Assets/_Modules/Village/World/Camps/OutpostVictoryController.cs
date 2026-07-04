@@ -1,7 +1,7 @@
 // =============================================================================
 // OutpostVictoryController — WO-449. The MISSING subscriber that closes the
-// CONTINUOUS-WALK raid loop in the OUTER WORLD (no teleport, no deploy screen):
-//   walk to an OuterWorld EnemyOutpost -> CLEAR it -> CLAIM the base ->
+// CONTINUOUS-WALK raid loop in the OVERWORLD (no teleport, no deploy screen):
+//   walk to an overworld EnemyOutpost -> CLEAR it -> CLAIM the base ->
 //   grant the NEXT COMPANION -> KEEP WALKING (the hero never leaves the world).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.World.Camps
@@ -54,9 +54,6 @@ namespace DeNelle.Village.World.Camps
     [DisallowMultipleComponent]
     public sealed class OutpostVictoryController : MonoBehaviour
     {
-        // The OuterWorld scene name (outposts live here); matched case-insensitively,
-        // mirroring RaidOutpostSystem.OuterWorldSceneName so the gate convention is shared.
-        private const string OuterWorldSceneName = "OuterWorld";
 
         // Poll window for the delayed outpost realize (RaidOutpostSystem delays ~10s); we
         // re-scan a touch longer so a late realize still gets subscribed.
@@ -90,9 +87,9 @@ namespace DeNelle.Village.World.Camps
                 if (!FeatureFlags.RaidContinuousWalk) return;
                 if (!scene.IsValid()) return;
 
-                // Gate: the active scene is a home HUB (OuterWorld streams in additively over it),
-                // OR the OuterWorld scene is loaded. Either way the walk-to outposts can exist.
-                if (!HubScenes.IsHub(SceneManager.GetActiveScene().name) && !IsOuterWorldLoaded())
+                // Gate: the active scene is a home HUB (overworld streams in additively over it),
+                // OR the overworld scene is loaded. Either way the walk-to outposts can exist.
+                if (!HubScenes.IsHub(SceneManager.GetActiveScene().name) && !IsOverworldLoaded())
                     return;
 
                 if (FindAnyObjectByType<OutpostVictoryController>() != null) return;
@@ -104,7 +101,7 @@ namespace DeNelle.Village.World.Camps
             });
         }
 
-        private static bool IsOuterWorldLoaded()
+        private static bool IsOverworldLoaded()
         {
             int count = SceneManager.sceneCount;
             for (int i = 0; i < count; i++)

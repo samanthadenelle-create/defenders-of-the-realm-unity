@@ -7,9 +7,9 @@
 // flag. So the bot finds + records bugs without a human at the keyboard.
 //
 // It is BLUEPRINT-AWARE: the route is built from the castle's key coordinates
-// (spawn -> gate -> exit-to-OuterWorld), the same spatial truth the rest of the
+// (spawn -> gate -> exit-to-overworld), the same spatial truth the rest of the
 // systems should consume. The exit objective is the one that catches the current
-// "reach gate, nothing happens" bug: it asserts the OuterWorld transition actually
+// "reach gate, nothing happens" bug: it asserts the overworld transition actually
 // fires within a timeout.
 //
 // ENABLE: set PlayerPrefs "dev.playerbot" = 1 (or PlayerBot.Enabled = true before
@@ -100,7 +100,7 @@ namespace DeNelle.Village
             // 2. Walk to just inside the south gate opening.
             yield return new Objective { Label = "approach-south-gate", Target = new Vector3(-4.37f, 0f, -38f), ReachDist = 4f, Timeout = 20f };
 
-            // 3. EXIT: push to the seam point; success = we actually leave to OuterWorld.
+            // 3. EXIT: push to the seam point; success = we actually leave to the overworld.
             //    This is the objective that catches the current exit bug.
             string startScene = SceneManager.GetActiveScene().name;
             yield return new Objective
@@ -111,7 +111,7 @@ namespace DeNelle.Village
                 Timeout = 20f,
                 Done = () =>
                     SceneManager.GetActiveScene().name != startScene ||           // active scene changed
-                    SceneManager.GetSceneByName("OuterWorld").isLoaded && _hero.transform.position.z < -60f // warped south
+                    DeNelle.Core.HubScenes.IsOverworld(SceneManager.GetSceneByName("Main_Castle_Overworld").name) && _hero.transform.position.z < -60f // warped south
             };
         }
 
@@ -138,7 +138,7 @@ namespace DeNelle.Village
             float dist = _hero != null ? Vector3.Distance(_hero.transform.position, o.Target) : -1f;
             Fail($"objective '{o.Label}' TIMED OUT after {o.Timeout}s (hero at {_hero?.transform.position}, {dist:F1}m from target). " +
                  (o.Label == "exit-to-outerworld"
-                     ? "Reached the gate but never transitioned to OuterWorld — the exit seam did not carry the hero across."
+                     ? "Reached the gate but never transitioned to the overworld — the exit seam did not carry the hero across."
                      : "Could not reach the waypoint — likely a navmesh gap or blocker."));
         }
 

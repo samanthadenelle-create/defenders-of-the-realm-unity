@@ -12,10 +12,11 @@
 // [RuntimeInitializeOnLoadMethod] bootstrap (OfflineHarvestBootstrap,
 // PetHarvestBootstrap, CampSystem) — WorkerManager was simply missing its.
 //
-// WHERE: the dispatchable MineNodes live in the OuterWorld scene (baked per-region
-// by OuterWorldBuilder), loaded ADDITIVELY by WorldSceneLoader. So we install the
-// manager when OuterWorld is the active/loaded scene — never in the village interior
-// (no nodes there) — mirroring CampSystem / RaidOutpostSystem's OuterWorld scoping.
+// WHERE: the dispatchable MineNodes live in the overworld scene (baked per-region,
+// now merged into Main_Castle_Overworld via WO-608), loaded ADDITIVELY by
+// WorldSceneLoader. So we install the manager when the overworld is the active/loaded
+// scene — never in the village interior (no nodes there) — mirroring CampSystem /
+// RaidOutpostSystem's overworld scoping.
 //
 // RECONCILIATION (no parallel system, no greenfield):
 //  • Reuses the existing WorkerManager — this only HOSTS it; all dispatch + collect
@@ -37,15 +38,15 @@ using UnityEngine.SceneManagement;
 
 namespace DeNelle.Village
 {
-    /// <summary>Installs a single <see cref="WorkerManager"/> into the OuterWorld scene
+    /// <summary>Installs a single <see cref="WorkerManager"/> into the overworld scene
     /// at runtime so the harvest dispatch + auto-collect loop is live in play.</summary>
     public sealed class WorkerManagerBootstrap : MonoBehaviour
     {
         public static WorkerManagerBootstrap Instance { get; private set; }
 
-        // The scene the dispatchable MineNodes live in (OuterWorldBuilder bakes them
-        // per region). WorldSceneLoader loads it additively. Matched by exact name.
-        private const string OuterWorldSceneName = "OuterWorld";
+        // The scene the dispatchable MineNodes live in (baked per-region, merged into
+        // Main_Castle_Overworld by WO-608). WorldSceneLoader loads it additively. Use
+        // HubScenes.IsOverworld() to identify it — never hardcode the scene name.
 
         // Phase-1 roster size. Tunable here (and on the spawned WorkerManager in the
         // inspector). Kept small so the demo is legible; WO-117 Phase 3 grows it.
@@ -67,8 +68,8 @@ namespace DeNelle.Village
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneLoaded += OnSceneLoaded;
 
-            // OuterWorld may already be the active (or additively-loaded) scene when
-            // this fires (AfterSceneLoad on a direct OuterWorld boot) — install now.
+            // The overworld may already be the active (or additively-loaded) scene when
+            // this fires (AfterSceneLoad on a direct overworld boot) — install now.
             if (IsOuterWorldLoaded()) InstallManager();
         }
 
@@ -78,7 +79,7 @@ namespace DeNelle.Village
             SceneManager.sceneLoaded -= OnSceneLoaded;
         }
 
-        // Install when OuterWorld finishes loading (the common path: it loads
+        // Install when the overworld finishes loading (the common path: it loads
         // additively after the village via WorldSceneLoader).
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
@@ -99,19 +100,19 @@ namespace DeNelle.Village
             return false;
         }
 
-        // Drop the WorkerManager into the world the first time OuterWorld is present.
+        // Drop the WorkerManager into the world the first time the overworld is present.
         // Idempotent: the manager is a singleton, so a second call no-ops.
         private void InstallManager()
         {
             if (WorkerManager.Instance != null) return;
 
             var go = new GameObject("WorkerManager");
-            // Live in the OuterWorld scene so the manager (and the workers it spawns)
+            // Live in the overworld scene so the manager (and the workers it spawns)
             // unload cleanly when the player returns to the village interior. If the
-            // OuterWorld scene isn't the active one, default placement (this DDOL
+            // overworld scene isn't the active one, default placement (this DDOL
             // bootstrap's scene) is fine — the manager only needs the baked NavMesh,
             // which is shared across the additive world.
-            var outer = SceneManager.GetSceneByName(OuterWorldSceneName);
+            var outer = SceneManager.GetSceneByName("Main_Castle_Overworld");
             if (outer.IsValid() && outer.isLoaded) SceneManager.MoveGameObjectToScene(go, outer);
 
             var mgr = go.AddComponent<WorkerManager>();
@@ -120,7 +121,7 @@ namespace DeNelle.Village
             // WorkerManager.Awake — no explicit drop-off node needed for Phase 1.
             // UseOfflineCatchUp stays at its default (OFF) so WO-115 owns offline.
 
-            Debug.Log("[WorkerManagerBootstrap] WorkerManager installed in OuterWorld — " +
+            Debug.Log("[WorkerManagerBootstrap] WorkerManager installed in the overworld — " +
                       "harvest dispatch + auto-collect is live (tap a MineNode to send a worker).");
         }
     }

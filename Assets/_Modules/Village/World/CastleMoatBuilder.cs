@@ -58,7 +58,7 @@ namespace DeNelle.Village.World
         // ---- TUNABLES ------------------------
 
         // WATER BAND geometry (owner ruling 2026-07-03): the moat+water is the DIEGETIC seam
-        // that covers the gap from the raised castle plinth to the OuterWorld terrain — that is
+        // that covers the gap from the raised castle plinth to the outer terrain — that is
         // why the castle was raised. The band is DERIVED from the island geometry, widened to
         // ~18m so the water runs UNDER the FULL playable span of every crossing (the water IS the
         // walk-off containment + seam enforcement, not an invisible rail):
@@ -144,7 +144,7 @@ namespace DeNelle.Village.World
         // require the south recipe to resolve so the gate radials are real.)
         private const string TargetScene = "MainCastle_Hall";
 
-        // WO-608: the merged single scene also hosts the castle, so BuildMoat runs there too. On the
+        // WO-608: the merged single-scene overworld also hosts the castle, so BuildMoat runs there too. On the
         // merged scene the seam is gone → only the 4 DECORATIVE bridges are placed (no water/lip/hedge/
         // berms/navcarve) — see BuildBridgesOnly / MergedBridgesOnly.
         private const string MergedScene = "Main_Castle_Overworld";
@@ -205,7 +205,7 @@ namespace DeNelle.Village.World
 
             // OWNER 2026-07-04 (F8 x4 + editor-runtime screenshot): the MERGED world has NO moat and NO
             // bridges. The whole moat/water/lip/bridge apparatus existed ONLY to mask + cross the
-            // castle<->OuterWorld SEAM; the merged single scene has no seam, so ALL of it is gone. This
+            // castle<->overworld SEAM; the merged single scene has no seam, so ALL of it is gone. This
             // runtime self-boot is what rebuilds it every scene load (BuildDrawbridges below ran even in
             // bridges-only mode — the bridge the owner kept seeing; BuildWaterRing is the water). Build
             // NOTHING on the merged scene.
