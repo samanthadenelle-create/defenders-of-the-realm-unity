@@ -248,8 +248,10 @@ namespace DeNelle.Core.UI
         /// hasMedallion/hasFooter/hasSplitBody flag optional regions. MEASURED FROM THE REAL ART
         /// PIXELS (owner ruling 2026-07-03) — the committed Resources/RpgUi/frame PNGs were column/
         /// row-sampled (dark-well vs parchment vs border classification) to place every zone;
-        /// see the P1 report for the sampling method. `close` is the per-frame Close anchor
-        /// (Stats_Panel designs it into the top-right square notch).</summary>
+        /// see the P1 report for the sampling method. `close` is UNIFIED (owner ruling 2026-07-03):
+        /// every frame's close resolves to the single bottom-center thumb-zone (DefaultCloseZone),
+        /// NOT the measured top-right art notch — reach/continuity was chosen over the notches, so
+        /// the gold corner notch simply goes unused (see the force at the end of ZonesFor).</summary>
         private struct FrameZones
         {
             public Vector4 header, body, medallion, footer, close;
@@ -257,8 +259,12 @@ namespace DeNelle.Core.UI
             public bool hasMedallion, hasFooter, hasSplitBody;
         }
 
-        /// <summary>The default Close anchor when a frame has no designed notch (the legacy corner chip rect).</summary>
-        private static readonly Vector4 DefaultCloseZone = new Vector4(0.865f, 0.928f, 0.978f, 0.984f);
+        /// <summary>The default Close anchor when a frame has no designed notch. MOBILE-FIRST (owner
+        /// rule 2026-07-03): the close is a labeled sleek button, so the default is a COMPACT,
+        /// horizontally-CENTERED thumb-zone button seated in the bottom close/footer band — not the
+        /// legacy top-right corner sliver (that rect was sized for an X glyph, now retired). Frames
+        /// that carve a designed close region still override this via <see cref="ZonesFor"/>.close.</summary>
+        private static readonly Vector4 DefaultCloseZone = new Vector4(0.360f, 0.035f, 0.640f, 0.110f);
 
         /// <summary>The drop-zone rects for a named frame (defaults are a sane full-well layout).</summary>
         private static FrameZones ZonesFor(string frameName)
@@ -292,7 +298,6 @@ namespace DeNelle.Core.UI
                     z.medallion   = new Vector4(0.045f, 0.900f, 0.165f, 0.985f);
                     z.hasMedallion = true;
                     z.header      = new Vector4(0.190f, 0.905f, 0.865f, 0.975f);
-                    z.close       = new Vector4(0.875f, 0.910f, 0.965f, 0.980f); // the top-right square notch
                     z.body        = new Vector4(0.060f, 0.110f, 0.940f, 0.605f); // below the portrait arch
                     z.footer      = new Vector4(0.090f, 0.050f, 0.910f, 0.105f);
                     break;
@@ -305,7 +310,6 @@ namespace DeNelle.Core.UI
                     z.medallion   = new Vector4(0.014f, 0.885f, 0.097f, 0.990f);
                     z.hasMedallion = true;
                     z.header      = new Vector4(0.115f, 0.900f, 0.860f, 0.975f);
-                    z.close       = new Vector4(0.900f, 0.915f, 0.975f, 0.985f);
                     z.body        = new Vector4(0.030f, 0.150f, 0.955f, 0.875f);
                     z.bodyLeft    = new Vector4(0.030f, 0.150f, 0.482f, 0.875f); // dark well: lists
                     z.bodyRight   = new Vector4(0.490f, 0.150f, 0.955f, 0.875f); // parchment: detail
@@ -319,7 +323,6 @@ namespace DeNelle.Core.UI
                     // rendering EMPTY — this case previously declared no medallion at all.
                     z.medallion   = new Vector4(0.040f, 0.845f, 0.260f, 0.990f);
                     z.hasMedallion = true;
-                    z.close  = new Vector4(0.905f, 0.935f, 0.960f, 0.970f);
                     z.header = new Vector4(0.28f, 0.88f, 0.85f, 0.965f);
                     z.body   = new Vector4(0.05f, 0.115f, 0.95f, 0.845f);
                     break;
@@ -330,7 +333,6 @@ namespace DeNelle.Core.UI
                     z.medallion   = new Vector4(0.014f, 0.870f, 0.100f, 0.992f);
                     z.hasMedallion = true;
                     z.header      = new Vector4(0.12f, 0.900f, 0.86f, 0.975f);
-                    z.close       = new Vector4(0.945f, 0.935f, 0.988f, 0.988f);
                     z.body        = new Vector4(0.035f, 0.115f, 0.965f, 0.855f);
                     break;
                 case RpgUiCatalog.FrameQuest:
@@ -341,7 +343,6 @@ namespace DeNelle.Core.UI
                     z.medallion   = new Vector4(0.028f, 0.850f, 0.125f, 0.992f);
                     z.hasMedallion = true;
                     z.header      = new Vector4(0.14f, 0.900f, 0.86f, 0.975f);
-                    z.close       = new Vector4(0.948f, 0.925f, 0.982f, 0.965f);
                     z.body        = new Vector4(0.035f, 0.115f, 0.968f, 0.858f);
                     z.bodyLeft    = new Vector4(0.035f, 0.115f, 0.495f, 0.858f);
                     z.bodyRight   = new Vector4(0.505f, 0.115f, 0.966f, 0.760f);
@@ -354,21 +355,18 @@ namespace DeNelle.Core.UI
                     z.medallion   = new Vector4(0.037f, 0.868f, 0.220f, 0.988f);
                     z.hasMedallion = true;
                     z.header      = new Vector4(0.24f, 0.900f, 0.88f, 0.972f);
-                    z.close       = new Vector4(0.930f, 0.935f, 0.978f, 0.972f);
                     z.body        = new Vector4(0.055f, 0.075f, 0.945f, 0.855f);
                     break;
                 case RpgUiCatalog.FrameSettings:
                     // 1936x1461, pixel-measured: full-bleed dark slab with a top-centre tab (the
                     // header); no footer strip designed in. Close rides just inside the top-right.
                     z.header    = new Vector4(0.290f, 0.905f, 0.710f, 0.995f);
-                    z.close     = new Vector4(0.895f, 0.790f, 0.970f, 0.865f);
                     z.body      = new Vector4(0.060f, 0.120f, 0.940f, 0.865f);
                     z.hasFooter = false;
                     break;
                 case RpgUiCatalog.FrameOptions:
                     // 824x1363, pixel-measured: narrow portrait frame, top tab header, bottom band.
                     z.header = new Vector4(0.230f, 0.900f, 0.770f, 0.975f);
-                    z.close  = new Vector4(0.870f, 0.815f, 0.950f, 0.875f);
                     z.body   = new Vector4(0.080f, 0.150f, 0.920f, 0.875f);
                     z.footer = new Vector4(0.240f, 0.065f, 0.760f, 0.125f);
                     break;
@@ -378,7 +376,6 @@ namespace DeNelle.Core.UI
                     z.medallion   = new Vector4(0.100f, 0.850f, 0.290f, 0.990f);
                     z.hasMedallion = true;
                     z.header      = new Vector4(0.330f, 0.870f, 0.900f, 0.960f);
-                    z.close       = new Vector4(0.860f, 0.885f, 0.945f, 0.955f);
                     z.body        = new Vector4(0.075f, 0.145f, 0.925f, 0.800f);
                     z.footer      = new Vector4(0.100f, 0.070f, 0.900f, 0.125f);
                     break;
@@ -388,7 +385,6 @@ namespace DeNelle.Core.UI
                     z.medallion   = new Vector4(0.045f, 0.895f, 0.175f, 0.985f);
                     z.hasMedallion = true;
                     z.header      = new Vector4(0.200f, 0.900f, 0.860f, 0.975f);
-                    z.close       = new Vector4(0.870f, 0.910f, 0.960f, 0.980f);
                     z.body        = new Vector4(0.060f, 0.115f, 0.940f, 0.510f); // below the pet arch
                     z.footer      = new Vector4(0.090f, 0.045f, 0.910f, 0.100f);
                     break;
@@ -404,6 +400,11 @@ namespace DeNelle.Core.UI
                     z.hasFooter   = false;
                     break;
             }
+            // OWNER RULING 2026-07-03 (unify closes): EVERY panel's close resolves to the ONE
+            // bottom-center thumb-zone (DefaultCloseZone) — reach/continuity was chosen over the
+            // measured top-right art notches. Forced AFTER the switch so no per-frame case can
+            // point the close back to a corner; the gold top-right notch simply goes unused.
+            z.close = DefaultCloseZone;
             return z;
         }
 
@@ -572,71 +573,63 @@ namespace DeNelle.Core.UI
         }
 
         /// <summary>
-        /// The ONE standard Close button used by every panel (built by <see cref="BuildObsidianPanel"/>;
-        /// exposed for surfaces that build their own chrome). SPRITE-FIRST 3-STATE Close (§1.3,
-        /// HUD_OBSIDIAN_ARCHITECTURE): the real Blink <c>Close_Button</c> art with SpriteSwap
-        /// (normal / highlighted=on / pressed+disabled=off) and NO text chip. When the art is absent
-        /// (fresh clone / ff.blinkchrome-OFF fallback state) it degrades to the legacy gold-trimmed
-        /// "Close" chip so the button can never blank. When <paramref name="zone"/> is supplied
-        /// (the frame's MEASURED close rect from <see cref="ZonesFor"/>) the button sits there;
-        /// otherwise the legacy top-right corner anchor. All ~19 panel Closes route through here —
-        /// the per-consumer <paramref name="onClose"/> wiring stays each package's responsibility.
+        /// The ONE standard Close used by every panel (built by <see cref="BuildObsidianPanel"/>;
+        /// exposed for surfaces that build their own chrome).
+        ///
+        /// OWNER CANON (2026-07-03 — SUPERSEDES the earlier "the gold X is Blink's native close =
+        /// conformant" ruling): NO panel, popup, or modal anywhere may use an X for close. The close
+        /// is a SLEEK OBSIDIAN BUTTON — a labeled <see cref="BuildObsidianButton"/> box ("Close"),
+        /// Obsidian-chrome styled (Style1 / Gray to sit quiet against the black+gold frame), seated
+        /// in the frame's MEASURED close zone (<see cref="ZonesFor"/>) or the legacy top-right anchor
+        /// when no <paramref name="zone"/> is given. This routes the pack's dual-state art AND the
+        /// null-art fallback through the button family — never the round <c>Close_Button</c> X notch,
+        /// never a text-X chip. Same public contract (returns the <see cref="Button"/>, wires
+        /// <paramref name="onClose"/>) so all ~19 panel Closes are unaffected.
         /// </summary>
         public static Button ObsidianCloseButton(Transform parent, Action onClose, Vector4? zone = null)
         {
-            var go = new GameObject("CloseButton", typeof(Image), typeof(UnityEngine.UI.Button));
-            go.transform.SetParent(parent, false);
-            var rt = go.GetComponent<RectTransform>();
             Vector4 zn = zone ?? DefaultCloseZone;
-            rt.anchorMin = new Vector2(zn.x, zn.y);
-            rt.anchorMax = new Vector2(zn.z, zn.w);
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-
-            var img = go.GetComponent<Image>();
-            var btn = go.GetComponent<UnityEngine.UI.Button>();
-            btn.targetGraphic = img;
-
-            var closeNormal = RpgUiCatalog.Get(RpgUiCatalog.RoleButton, RpgUiCatalog.ButtonCloseNormal);
-            if (closeNormal != null)
-            {
-                // 3-state art: SpriteSwap between the pack's Normal / On / Off states. Off doubles
-                // as pressed AND disabled (the pack's dimmed state). No label — the art carries the X.
-                img.sprite = closeNormal;
-                img.type = Image.Type.Simple;
-                img.preserveAspect = true;   // the round close art must never stretch oval
-                img.color = ChromeTint;      // A3 hook
-                var on  = RpgUiCatalog.Get(RpgUiCatalog.RoleButton, RpgUiCatalog.ButtonCloseOn);
-                var off = RpgUiCatalog.Get(RpgUiCatalog.RoleButton, RpgUiCatalog.ButtonCloseOff);
-                btn.transition = Selectable.Transition.SpriteSwap;
-                var ss = btn.spriteState;
-                ss.highlightedSprite = on  != null ? on  : closeNormal;
-                ss.selectedSprite    = ss.highlightedSprite;
-                ss.pressedSprite     = off != null ? off : closeNormal;
-                ss.disabledSprite    = off != null ? off : closeNormal;
-                btn.spriteState = ss;
-            }
-            else
-            {
-                // Null-art fallback: the legacy gold-trimmed "Close" chip (unchanged look).
-                img.color = ObsidianTrim;          // gold trim chip
-                ApplyRounded(img);
-
-                // Inner black so it reads as gold-bordered (matches the panel language).
-                var inner = AddImage(go.transform, "Inner", Vector2.zero, Vector2.one, ObsidianFill);
-                var innerRt = inner.GetComponent<RectTransform>();
-                innerRt.offsetMin = new Vector2(2f, 2f); innerRt.offsetMax = new Vector2(-2f, -2f);
-                var innerImg = inner.GetComponent<Image>();
-                if (innerImg != null) innerImg.raycastTarget = false;
-
-                StyleButtonColors(btn);
-
-                var lbl = Label(go.transform, "Close", 0f, 1f, ElarionUi.Gilt, ElarionUi.FontLabel,
-                                TextAlignmentOptions.Center, 0f, 1f, bold: true);
-                lbl.raycastTarget = false;
-            }
-
-            if (onClose != null) btn.onClick.AddListener(() => onClose());
+            // Sleek obsidian button box (Style1/Gray) — the kit's own labeled button, NOT an X glyph.
+            // The click routes through the ONE shared close entry (Common.Close) so the close
+            // BEHAVIOR is defined in exactly one place; the panel's own teardown is passed as the hook.
+            var btn = BuildObsidianButton(parent, "Close",
+                ObsidianButtonStyle.Style1, ObsidianButtonColor.Gray,
+                new Vector2(zn.x, zn.y), new Vector2(zn.z, zn.w),
+                () => Common.Close(onClose));
+            // Keep the diagnostics/lookup name every prior caller expected.
+            if (btn != null) btn.gameObject.name = "CloseButton";
             return btn;
+        }
+
+        // =====================================================================
+        // COMMON — the ONE shared close ENTRY (owner rule 2026-07-03).
+        // ---------------------------------------------------------------------
+        // "Almost every panel needs close, so close must be defined in exactly ONE
+        // place." The shared sleek CloseButton (ObsidianCloseButton) invokes
+        // Common.Close — NEVER bespoke per-panel close logic. A panel supplies its
+        // teardown (hide/destroy its OWN canvas + VM unbind — the lifecycle it
+        // legitimately owns, registered with PanelManager) as the onClose hook; this
+        // funnel just RUNS it, guarded so one throwing teardown can't wedge the modal
+        // system. PRESENTATION-ONLY: it shows the close + runs the caller's lifecycle
+        // hook; it never owns or defines panel state / data.
+        // =====================================================================
+
+        /// <summary>The ONE shared close behavior. Every shared CloseButton wires here; every panel
+        /// that closes routes through this single entry (no panel re-implements close). Guarded so a
+        /// throwing teardown logs (§12 no-silent-failure) instead of wedging the UI.</summary>
+        public static class Common
+        {
+            /// <summary>Run the panel-supplied close teardown through the single shared entry.
+            /// Null-safe; a throwing hook is logged, never swallowed silently.</summary>
+            public static void Close(Action onClose)
+            {
+                if (onClose == null) return;
+                try { onClose(); }
+                catch (Exception e)
+                {
+                    FlowTrace.Fail("UI", "Common.Close: panel teardown threw: " + e.Message);
+                }
+            }
         }
 
         // =====================================================================

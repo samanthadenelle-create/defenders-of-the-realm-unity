@@ -246,32 +246,40 @@ namespace DeNelle.Village.Talents
             if (canvas != null) canvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, onTapClose: () => { if (_vm != null) _vm.Close(); });
 
-            // WO-562: the ONE canonical obsidian chrome (black fill + gold trim + gold header + the
-            // shared Close) replaces the bespoke backdrop + PanelFramed + brown solidFill + custom Header.
+            // INHERIT the common Obsidian kit (owner: one common frame + one common close): the Talent
+            // master-frame + its measured drop-zones + the ONE shared kit Close (built by
+            // BuildObsidianPanel). No bespoke chrome/frame/close of our own — the old "Done" gold
+            // button (a per-panel close) is GONE; the shared top-right kit Close is the only close.
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Hot-Swap Skills",
-                new Vector2(0.10f, 0.10f), new Vector2(0.90f, 0.90f),
-                () => { if (_vm != null) _vm.Close(); });
-            var panel = chrome.content.transform;
+                new Vector2(0.10f, 0.08f), new Vector2(0.90f, 0.92f),
+                () => { if (_vm != null) _vm.Close(); },
+                frameName: RpgUiCatalog.FrameTalent, medallionIcon: "talent");
             _headerLabel = chrome.title;
+
+            // Lay out INSIDE the frame's BODY drop-zone (mobile-first: compact + centered, no
+            // full-bleed bars). Falls back to the transparent content overlay when no frame art.
+            var bodyHost = (chrome.layout != null && chrome.layout.body != null)
+                ? chrome.layout.body : (RectTransform)chrome.content.transform;
+            Transform panel = bodyHost;
 
             // Caption: the class kit is fixed; this bar is for extra talent skills.
             ElarionUiKit.Label(panel, "Your class kit is fixed — assign extra talent skills to your hot-swap bar.",
-                0.865f, 0.90f, ElarionUi.ParchmentDim, ElarionUi.FontMicro,
-                TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
+                0.94f, 0.99f, ElarionUi.ParchmentDim, ElarionUi.FontMicro,
+                TMPro.TextAlignmentOptions.Center, 0.08f, 0.92f);
 
-            // Hot-swap slot strip under the header.
+            // Hot-swap slot strip — centered + compact (mobile thumb-zone), not a full-width bar.
             _slotsRoot = new GameObject("SlotsRow", typeof(RectTransform));
             _slotsRoot.transform.SetParent(panel, false);
             var sr = _slotsRoot.GetComponent<RectTransform>();
-            sr.anchorMin = new Vector2(0.05f, 0.68f); sr.anchorMax = new Vector2(0.95f, 0.84f);
+            sr.anchorMin = new Vector2(0.16f, 0.76f); sr.anchorMax = new Vector2(0.84f, 0.90f);
             sr.offsetMin = Vector2.zero; sr.offsetMax = Vector2.zero;
 
             // Divider caption.
-            ElarionUiKit.Label(panel, "Unlocked Skills", 0.61f, 0.66f, ElarionUi.Gilt,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+            ElarionUiKit.Label(panel, "Unlocked Skills", 0.685f, 0.735f, ElarionUi.Gilt,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.08f, 0.92f, bold: true);
 
-            // Unlocked-skill grid.
-            _gridRoot = ElarionUiKit.Well(panel, new Vector2(0.05f, 0.16f), new Vector2(0.95f, 0.60f));
+            // Unlocked-skill grid — centered well inside the body zone.
+            _gridRoot = ElarionUiKit.Well(panel, new Vector2(0.10f, 0.11f), new Vector2(0.90f, 0.66f));
             var gImg = _gridRoot.GetComponent<Image>();
             if (gImg != null) gImg.raycastTarget = false;
 
@@ -279,7 +287,7 @@ namespace DeNelle.Village.Talents
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
             statusGo.transform.SetParent(panel, false);
             var stRect = statusGo.GetComponent<RectTransform>();
-            stRect.anchorMin = new Vector2(0.05f, 0.105f); stRect.anchorMax = new Vector2(0.95f, 0.15f);
+            stRect.anchorMin = new Vector2(0.08f, 0.03f); stRect.anchorMax = new Vector2(0.92f, 0.09f);
             stRect.offsetMin = Vector2.zero; stRect.offsetMax = Vector2.zero;
             _statusText = statusGo.GetComponent<TMPro.TextMeshProUGUI>();
             ElarionUiKit.EnsureFont(_statusText);
@@ -288,17 +296,8 @@ namespace DeNelle.Village.Talents
             _statusText.alignment = TMPro.TextAlignmentOptions.Center;
             _statusText.raycastTarget = false;
 
-            // Close (also routes back; PanelManager handles single-modal).
-            var closeBtn = ElarionUiKit.ButtonPack(panel, "Done", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.36f, 0.035f), new Vector2(0.64f, 0.095f), () => { if (_vm != null) _vm.Close(); },
-                packSpriteName: DeNelle.Core.FeatureFlags.BlinkChrome ? RpgUiCatalog.ButtonConfirm : RpgUiCatalog.ButtonGold);
-            var closeLbl = closeBtn != null ? closeBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
-            if (closeLbl != null)
-            {
-                closeLbl.color = ElarionUi.Parchment; closeLbl.fontStyle = TMPro.FontStyles.Bold;
-                closeLbl.outlineColor = new Color32(20, 12, 4, 235); closeLbl.outlineWidth = 0.22f;
-                closeLbl.transform.SetAsLastSibling();
-            }
+            // NO per-panel Close/Done button — the shared kit Close (top-right, built by
+            // BuildObsidianPanel above) is the ONE close game-wide (owner: one common close).
         }
 
         // ── Teardown ──────────────────────────────────────────────────────────────

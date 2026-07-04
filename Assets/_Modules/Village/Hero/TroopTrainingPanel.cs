@@ -1,26 +1,28 @@
 // =============================================================================
 // TroopTrainingPanel — the Barracks "train troops" UI (WO-453 troop-training flow).
-// Code-built uGUI (NO UXML), routed through the SHARED presentation kit
-// (DeNelle.Core.UI.ElarionUiKit) so it reads as the SAME designed game as the town
-// HUD + the ShopPanel store: dark-glass panels + gold-rune frames, scroll list.
+// A DUMB SKIN over the SHARED kit chrome: it INHERITS BuildObsidianPanel
+// (FrameCrafting master-detail + zones + the ONE shared Close) and only DISPLAYS +
+// routes commands. ALL logic (catalog, cost, cap, train) lives in the services it
+// CALLS (TroopCatalog / ArmyStorage / EconomyService / TroopDialogueCommands) — the
+// panel defines none of it.
 // -----------------------------------------------------------------------------
-// MIRRORS ShopPanel: BuildModalCanvas (sortingOrder 31000 + overrideSorting, above
-// the world-HUD band) + tap-outside Scrim + a framed dark-glass panel + a header,
-// then a VerticalLayoutGroup + ContentSizeFitter + per-row LayoutElement scroll list
-// (the proven anti-collapse rendering mechanism — do NOT revert it) with FinalizeScroll
-// forcing the layout pass on the build frame.
+// WO-F conversion (2026-07-03): the old frameless dark-glass scroll list -> the
+// owner-ratified FrameCrafting MASTER-DETAIL template (matches VillageCraftingPanel /
+// CraftingPanelMvvm / JewelerPanelMvvm):
+//   * bodyLeft  (dark well)      = troop rows (Obsidian buttons, selected=Yellow)
+//   * bodyRight (parchment well) = the selected troop's detail in dark INK (owned,
+//                                  army cap, cost, feedback) + the Train x1 / x5 CTAs
+//   * footer    (action strip)   = the live economy readout (wood/iron/food/crystals)
+// The ONE shared Close is the chrome's (no per-panel X / close_normal / bespoke close).
+// Mobile-first: compact rows in the narrow left well, centered detail + compact CTAs.
 //
-// One row per TroopCatalog.All troop: name + owned count (ArmyStorage) + cost +
-// "Train x1" / "Train x5" buttons. An army-cap indicator (SlotsUsed / MaxArmySize)
-// sits under the header. Train is disabled per-row when the cap is full OR the cost
-// is unaffordable. Training routes through TroopDialogueCommands.TrainOne (which wires
-// the ArmyStorage seam delegates to TroopCatalog + EconomyService), then re-builds.
-//
-// Open()/Close() API — opened by TroopDialogueCommands.ShowTrainingUI (the
-// <<ShowTrainingUI>> Yarn command), which self-heals a host if none exists.
+// Code-built uGUI (NO UXML — §8). Open()/Close() API — opened by
+// TroopDialogueCommands.ShowTrainingUI (the <<ShowTrainingUI>> command), which
+// self-heals a host if none exists.
 // =============================================================================
 
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
@@ -31,129 +33,62 @@ namespace DeNelle.Village.Hero
     public sealed class TroopTrainingPanel : MonoBehaviour
     {
         private GameObject _ui;
-        private GameObject _contentRoot;
-        private RectTransform _scrollContent;
-        private TMPro.TextMeshProUGUI _statusText;
-        private TMPro.TextMeshProUGUI _capText;
-        private TMPro.TextMeshProUGUI _ecoText;
+        private Transform _troopHost;    // bodyLeft — dark list well
+        private Transform _detailHost;   // bodyRight — parchment detail well
+        private TextMeshProUGUI _ecoText;    // footer strip — live economy readout
         private System.Action<ResourceSnapshot> _ecoHandler;
 
-        // Fixed PIXEL height per row (the ShopPanel rendering fix: rows are laid out by a
-        // VerticalLayoutGroup at a fixed LayoutElement height, content auto-grows to fit).
-        private const float RowHeightPx = 64f;
-        private const float RowGapPx    = 3f;
+        private string _selectedTroopId;
+        private string _status = "Train troops to defend Elarion and raid enemy camps.";
+
+        // Dark ink for text sitting ON the parchment detail well (family convention).
+        private static readonly Color Ink     = new Color(0.16f, 0.12f, 0.08f, 1f);
+        private static readonly Color InkDim  = new Color(0.34f, 0.28f, 0.20f, 1f);
+        private static readonly Color InkGood = new Color(0.10f, 0.42f, 0.16f, 1f);
+        private static readonly Color InkBad  = new Color(0.55f, 0.12f, 0.10f, 1f);
 
         public void Open()
         {
             Close();
 
             // Modal canvas + tap-outside scrim, both from the shared kit. Pin sortingOrder
-            // 31000 + overrideSorting (mirrors ShopPanel) so the panel + its scrim render
-            // ABOVE the world-HUD band but below the true top overlays.
+            // 31000 + overrideSorting so the panel + its scrim render ABOVE the world-HUD band.
             _ui = ElarionUiKit.BuildModalCanvas("TroopTrainingPanelUI", 31000);
             var canvas = _ui.GetComponent<Canvas>();
             if (canvas != null) canvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, onTapClose: Close);
 
-            // WO-562: the ONE canonical obsidian chrome (black fill + gold trim + gold header + the
-            // shared Close) replaces PanelFramed + a bespoke Header + a per-panel "X" Danger button.
+            // SHARED Obsidian chrome (FrameCrafting master-detail): black panel + gold trim +
+            // gold header + medallion + the ONE shared Close — all built by the kit. The panel
+            // adds NO chrome and NO close of its own.
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Barracks — Train",
-                new Vector2(0.22f, 0.08f), new Vector2(0.78f, 0.92f), Close, withBackdrop: false);
-            var panel = chrome.content.transform;
+                new Vector2(0.10f, 0.08f), new Vector2(0.90f, 0.92f), Close,
+                frameName: RpgUiCatalog.FrameCrafting, medallionIcon: "sword");
 
-            // Live economy readout (gold ink, mirrors the store).
-            CreateEconomyReadout(panel);
+            var layout = chrome.layout;
+            _troopHost = layout != null && layout.bodyLeft != null
+                ? (Transform)layout.bodyLeft
+                : (layout != null && layout.body != null ? (Transform)layout.body : chrome.content.transform);
+            _detailHost = layout != null && layout.bodyRight != null
+                ? (Transform)layout.bodyRight
+                : (layout != null && layout.body != null ? (Transform)layout.body : chrome.content.transform);
 
-            // Army-cap indicator (SlotsUsed / MaxArmySize).
-            CreateCapReadout(panel);
+            // Live economy readout in the footer action strip (gold ink on the dark strip).
+            var footHost = layout != null && layout.footer != null
+                ? (Transform)layout.footer : chrome.content.transform;
+            _ecoText = MakeText(footHost, "", 13, ElarionUi.Gilt, FontStyles.Bold,
+                TextAlignmentOptions.Center, new Vector2(0.01f, 0f), new Vector2(0.99f, 1f));
 
-            // Content area (the scroll list lives here).
-            _contentRoot = new GameObject("Content", typeof(RectTransform));
-            _contentRoot.transform.SetParent(panel, false);
-            var cr = _contentRoot.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0.02f, 0.08f);
-            cr.anchorMax = new Vector2(0.98f, 0.78f);
-            cr.offsetMin = Vector2.zero;
-            cr.offsetMax = Vector2.zero;
-
-            // Status line.
-            var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
-            statusGo.transform.SetParent(panel, false);
-            var sRect = statusGo.GetComponent<RectTransform>();
-            sRect.anchorMin = new Vector2(0.02f, 0.01f);
-            sRect.anchorMax = new Vector2(0.98f, 0.07f);
-            sRect.offsetMin = Vector2.zero;
-            sRect.offsetMax = Vector2.zero;
-            _statusText = statusGo.GetComponent<TMPro.TextMeshProUGUI>();
-            ElarionUiKit.EnsureFont(_statusText); // font-safe before first .text set (kit convention)
-            _statusText.fontSize = ElarionUi.FontLabel;
-            _statusText.color = ElarionUi.ParchmentDim;
-            _statusText.alignment = TMPro.TextAlignmentOptions.Center;
-            _statusText.raycastTarget = false;
-            SetStatus("Train troops to defend Elarion and raid enemy camps.");
+            // The economy readout tracks the wallet live (unchanged seam; presentation refresh).
+            if (EconomyService.Instance != null)
+            {
+                _ecoHandler = _ => Rebuild();
+                EconomyService.Instance.OnChanged += _ecoHandler;
+            }
 
             Rebuild();
 
             Debug.Log("[TroopTrainingPanel] Opened — barracks troop training.");
-        }
-
-        private void CreateEconomyReadout(Transform parent)
-        {
-            var go = new GameObject("EcoReadout", typeof(TMPro.TextMeshProUGUI));
-            go.transform.SetParent(parent, false);
-            var r = go.GetComponent<RectTransform>();
-            r.anchorMin = new Vector2(0.02f, 0.855f);
-            r.anchorMax = new Vector2(0.98f, 0.9f);
-            r.offsetMin = Vector2.zero;
-            r.offsetMax = Vector2.zero;
-            var t = go.GetComponent<TMPro.TextMeshProUGUI>();
-            ElarionUiKit.EnsureFont(t); // font-safe before first .text set (kit convention)
-            t.fontSize = ElarionUi.FontLabel;
-            t.color = ElarionUi.Gilt;
-            t.alignment = TMPro.TextAlignmentOptions.Center;
-            t.raycastTarget = false;
-            _ecoText = t;
-            UpdateEcoText();
-            if (EconomyService.Instance != null)
-            {
-                _ecoHandler = _ => UpdateEcoText();
-                EconomyService.Instance.OnChanged += _ecoHandler;
-            }
-        }
-
-        private void CreateCapReadout(Transform parent)
-        {
-            var go = new GameObject("CapReadout", typeof(TMPro.TextMeshProUGUI));
-            go.transform.SetParent(parent, false);
-            var r = go.GetComponent<RectTransform>();
-            r.anchorMin = new Vector2(0.02f, 0.805f);
-            r.anchorMax = new Vector2(0.98f, 0.85f);
-            r.offsetMin = Vector2.zero;
-            r.offsetMax = Vector2.zero;
-            var t = go.GetComponent<TMPro.TextMeshProUGUI>();
-            ElarionUiKit.EnsureFont(t); // font-safe before first .text set (kit convention)
-            t.fontSize = ElarionUi.FontLabel;
-            t.color = ElarionUi.Parchment;
-            t.alignment = TMPro.TextAlignmentOptions.Center;
-            t.raycastTarget = false;
-            _capText = t;
-            UpdateCapText();
-        }
-
-        private void UpdateEcoText()
-        {
-            if (_ecoText == null || EconomyService.Instance == null) return;
-            var e = EconomyService.Instance;
-            _ecoText.text = $"Wood: {e.Wood}   Iron: {e.Iron}   Food: {e.Food}   Crystals: {e.Crystals}";
-        }
-
-        private void UpdateCapText()
-        {
-            if (_capText == null) return;
-            var army = Army();
-            if (army == null) { _capText.text = "Army: —"; return; }
-            int used = army.SlotsUsed(TroopDialogueCommands.SlotOf);
-            _capText.text = $"Army: {used} / {army.MaxArmySize} slots used";
         }
 
         // The persisted army roster (GameState.Army), null when no save service is live.
@@ -165,70 +100,127 @@ namespace DeNelle.Village.Hero
 
         private void SetStatus(string s)
         {
-            if (_statusText != null) _statusText.text = s;
+            _status = s;
+            Rebuild();
         }
 
-        // Re-build the troop list + the cap/economy readouts after every train.
+        // Re-project the whole master-detail from the live services after every train.
         private void Rebuild()
         {
-            ClearContent();
+            if (_troopHost == null || _detailHost == null) return;
+
             UpdateEcoText();
-            UpdateCapText();
 
             var army = Army();
 
-            // One row per catalog troop (Footman, Archer). Count first so the scroll
-            // content sizes to fit them all (the ShopPanel mechanism).
             var troops = new List<TroopDef>();
             foreach (var d in TroopCatalog.All) if (d != null) troops.Add(d);
 
-            var listRoot = BuildScrollContent(troops.Count);
-            foreach (var d in troops)
-                CreateTroopRow(listRoot, d, army);
+            // Keep the selection valid (first troop by default).
+            if (troops.Count > 0)
+            {
+                bool found = false;
+                foreach (var d in troops) if (d.Id == _selectedTroopId) { found = true; break; }
+                if (!found) _selectedTroopId = troops[0].Id;
+            }
 
-            FinalizeScroll();
+            // Troop rows (dark well, left).
+            for (int i = _troopHost.childCount - 1; i >= 0; i--)
+                Destroy(_troopHost.GetChild(i).gameObject);
+
+            if (troops.Count == 0)
+            {
+                MakeText(_troopHost, "No troops available.", 13, ElarionUi.ParchmentDim,
+                    FontStyles.Italic, TextAlignmentOptions.Center,
+                    new Vector2(0.05f, 0.40f), new Vector2(0.95f, 0.60f));
+            }
+            else
+            {
+                const float rowH = 0.115f, gap = 0.02f;
+                float top = 0.98f;
+                foreach (var d in troops)
+                {
+                    string id = d.Id;
+                    bool selected = id == _selectedTroopId;
+                    string name = string.IsNullOrEmpty(d.DisplayName) ? d.Id : d.DisplayName;
+                    ElarionUiKit.BuildObsidianButton(_troopHost, name,
+                        ElarionUiKit.ObsidianButtonStyle.Style1,
+                        selected ? ElarionUiKit.ObsidianButtonColor.Yellow
+                                 : ElarionUiKit.ObsidianButtonColor.Gray,
+                        new Vector2(0.04f, top - rowH), new Vector2(0.96f, top),
+                        () => { _selectedTroopId = id; Rebuild(); });
+                    top -= rowH + gap;
+                    if (top - rowH < 0f) break;   // bounded: never overflow the well
+                }
+            }
+
+            // Detail (parchment well, right — dark ink).
+            for (int i = _detailHost.childCount - 1; i >= 0; i--)
+                Destroy(_detailHost.GetChild(i).gameObject);
+
+            var def = TroopCatalog.Find(_selectedTroopId);
+            if (def != null) BuildDetail(def, army);
+            else
+                MakeText(_detailHost, "Select a troop.", 15, InkDim, FontStyles.Italic,
+                    TextAlignmentOptions.Center, new Vector2(0.05f, 0.45f), new Vector2(0.95f, 0.55f));
         }
 
-        // A troop row: dark-glass Cell tile (LayoutElement-sized for the scroll layout),
-        // name + owned count, cost, and Train x1 / Train x5 buttons. Train buttons are
-        // disabled when the army cap is full or the player can't afford the troop.
-        private void CreateTroopRow(Transform parent, TroopDef def, ArmyStorage army)
+        private void BuildDetail(TroopDef def, ArmyStorage army)
         {
-            var row = new GameObject("TroopRow_" + def.Id, typeof(Image), typeof(LayoutElement));
-            row.transform.SetParent(parent, false);
-            var le = row.GetComponent<LayoutElement>();
-            le.preferredHeight = RowHeightPx;
-            le.minHeight = RowHeightPx;
-            var rowImg = row.GetComponent<Image>();
-            rowImg.color = ElarionUiKit.Cell;
-            ElarionUiKit.ApplyRounded(rowImg);
-
-            int owned = OwnedCount(army, def.Id);
             string name = string.IsNullOrEmpty(def.DisplayName) ? def.Id : def.DisplayName;
+            int owned = OwnedCount(army, def.Id);
 
-            ElarionUiKit.Label(row.transform, $"{name}  (owned {owned})", 0.15f, 0.85f, ElarionUi.Parchment,
-                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.04f, 0.55f);
+            // Title (ink, bold).
+            MakeText(_detailHost, name, 20, Ink, FontStyles.Bold,
+                TextAlignmentOptions.Center, new Vector2(0.06f, 0.90f), new Vector2(0.94f, 0.99f));
 
-            // Cost tinted by affordability (gold-green affordable, danger-red not).
+            // Owned count.
+            MakeText(_detailHost, "Owned:  " + owned, 14, InkDim, FontStyles.Normal,
+                TextAlignmentOptions.Center, new Vector2(0.08f, 0.80f), new Vector2(0.92f, 0.87f));
+
+            // Army-cap indicator (SlotsUsed / MaxArmySize).
+            string capLine;
+            if (army == null) capLine = "Army:  —";
+            else capLine = $"Army:  {army.SlotsUsed(TroopDialogueCommands.SlotOf)} / {army.MaxArmySize} slots used";
+            MakeText(_detailHost, capLine, 13, InkDim, FontStyles.Normal,
+                TextAlignmentOptions.Center, new Vector2(0.08f, 0.72f), new Vector2(0.92f, 0.79f));
+
+            // Cost, tinted by affordability.
             var cost = CostOf(def);
             bool affordable = EconomyService.Instance == null || EconomyService.Instance.CanAfford(cost);
             bool hasRoom = army == null || army.CanTrain(def.Id, TroopDialogueCommands.SlotOf);
             bool canTrain = affordable && hasRoom;
 
-            Color priceColor = EconomyService.Instance == null ? ElarionUi.Gilt
-                             : (affordable ? ElarionUi.Affordable : ElarionUi.Danger);
-            ElarionUiKit.Label(row.transform, CostString(def), 0.15f, 0.85f, priceColor,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.04f, 0.28f, bold: true);
+            Color costColor = EconomyService.Instance == null ? InkDim : (affordable ? InkGood : InkBad);
+            MakeText(_detailHost, "Cost:  " + CostString(def), 15, costColor, FontStyles.Bold,
+                TextAlignmentOptions.Center, new Vector2(0.08f, 0.62f), new Vector2(0.92f, 0.70f));
 
-            // Train x1 (primary CTA).
-            var b1 = ElarionUiKit.ButtonPack(row.transform, "Train", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.62f, 0.18f), new Vector2(0.79f, 0.82f), () => TrainAndRefresh(def.Id, 1));
+            // Feedback / status line.
+            MakeText(_detailHost, _status, 13, InkDim, FontStyles.Italic,
+                TextAlignmentOptions.Center, new Vector2(0.06f, 0.18f), new Vector2(0.94f, 0.28f));
+
+            // Train x1 + x5 — compact, centered CTAs (mobile-first), disabled when the cap is
+            // full or the cost is unaffordable.
+            var b1 = ElarionUiKit.BuildObsidianButton(_detailHost, "Train",
+                ElarionUiKit.ObsidianButtonStyle.Style1,
+                canTrain ? ElarionUiKit.ObsidianButtonColor.Green : ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.10f, 0.03f), new Vector2(0.52f, 0.14f),
+                () => TrainAndRefresh(def.Id, 1));
             if (b1 != null) b1.interactable = canTrain;
 
-            // Train x5 (batch).
-            var b5 = ElarionUiKit.ButtonPack(row.transform, "x5", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.81f, 0.18f), new Vector2(0.97f, 0.82f), () => TrainAndRefresh(def.Id, 5));
+            var b5 = ElarionUiKit.BuildObsidianButton(_detailHost, "Train x5",
+                ElarionUiKit.ObsidianButtonStyle.Style1,
+                canTrain ? ElarionUiKit.ObsidianButtonColor.Green : ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.56f, 0.03f), new Vector2(0.90f, 0.14f),
+                () => TrainAndRefresh(def.Id, 5));
             if (b5 != null) b5.interactable = canTrain;
+        }
+
+        private void UpdateEcoText()
+        {
+            if (_ecoText == null || EconomyService.Instance == null) return;
+            var e = EconomyService.Instance;
+            _ecoText.text = $"Wood: {e.Wood}   Iron: {e.Iron}   Food: {e.Food}   Crystals: {e.Crystals}";
         }
 
         private void TrainAndRefresh(string troopId, int qty)
@@ -249,7 +241,7 @@ namespace DeNelle.Village.Hero
             {
                 SetStatus($"Couldn't train {name} — army cap full or not enough resources.");
             }
-            Rebuild();
+            // SetStatus already re-projected; no double rebuild needed.
         }
 
         private static int OwnedCount(ArmyStorage army, string troopId)
@@ -277,74 +269,26 @@ namespace DeNelle.Village.Hero
             return parts.Count == 0 ? "Free" : string.Join(" ", parts);
         }
 
-        // --- Scroll list (the ShopPanel anti-collapse rendering mechanism) ---
+        // ── uGUI helper (mirrors VillageCraftingPanel.MakeText) ───────────────────
 
-        private Transform BuildScrollContent(int rowCount)
+        private static TextMeshProUGUI MakeText(Transform parent, string text, float size,
+            Color color, FontStyles style, TextAlignmentOptions align, Vector2 min, Vector2 max)
         {
-            var well = ElarionUiKit.Well(_contentRoot.transform, Vector2.zero, Vector2.one);
-            var wImg = well.GetComponent<Image>();
-            if (wImg != null) wImg.raycastTarget = false;
-
-            var viewport = new GameObject("Viewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
-            viewport.transform.SetParent(_contentRoot.transform, false);
-            var vr = viewport.GetComponent<RectTransform>();
-            vr.anchorMin = Vector2.zero; vr.anchorMax = Vector2.one;
-            vr.offsetMin = Vector2.zero; vr.offsetMax = Vector2.zero;
-            var vImg = viewport.GetComponent<Image>();
-            vImg.color = new Color(0f, 0f, 0f, 0.001f); // near-invisible; ScrollRect needs a raycast graphic
-
-            var content = new GameObject("ScrollContent", typeof(RectTransform));
-            content.transform.SetParent(viewport.transform, false);
-            var cr = content.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0f, 1f);
-            cr.anchorMax = new Vector2(1f, 1f);
-            cr.pivot = new Vector2(0.5f, 1f);
-            cr.anchoredPosition = Vector2.zero;
-            cr.sizeDelta = new Vector2(0f, 0f); // height driven by the ContentSizeFitter
-
-            var vlg = content.AddComponent<VerticalLayoutGroup>();
-            vlg.childAlignment = TextAnchor.UpperCenter;
-            vlg.spacing = RowGapPx;
-            vlg.padding = new RectOffset(3, 3, 3, 3);
-            vlg.childControlWidth = true;
-            vlg.childControlHeight = true;
-            vlg.childForceExpandWidth = true;
-            vlg.childForceExpandHeight = false;
-
-            var fitter = content.AddComponent<ContentSizeFitter>();
-            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-            var scroll = viewport.GetComponent<ScrollRect>();
-            scroll.viewport = vr;
-            scroll.content = cr;
-            scroll.horizontal = false;
-            scroll.vertical = true;
-            scroll.movementType = ScrollRect.MovementType.Clamped;
-            scroll.scrollSensitivity = 25f;
-
-            _scrollContent = cr;
-            return content.transform;
-        }
-
-        private void FinalizeScroll()
-        {
-            if (_scrollContent == null) return;
-            Canvas.ForceUpdateCanvases();
-            var contentArea = _contentRoot != null ? _contentRoot.transform as RectTransform : null;
-            if (contentArea != null) LayoutRebuilder.ForceRebuildLayoutImmediate(contentArea);
-            LayoutRebuilder.ForceRebuildLayoutImmediate(_scrollContent);
-        }
-
-        private void ClearContent()
-        {
-            _scrollContent = null;
-            if (_contentRoot == null) return;
-            for (int i = _contentRoot.transform.childCount - 1; i >= 0; i--)
-            {
-                var c = _contentRoot.transform.GetChild(i);
-                if (c != null) Destroy(c.gameObject);
-            }
+            var go = new GameObject("Text", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var t = go.AddComponent<TextMeshProUGUI>();
+            t.text = text;
+            t.fontSize = size;
+            t.color = color;
+            t.fontStyle = style;
+            t.alignment = align;
+            t.raycastTarget = false;
+            t.textWrappingMode = TextWrappingModes.Normal;
+            ElarionUiKit.EnsureFont(t);
+            return t;
         }
 
         public void Close()
@@ -353,15 +297,17 @@ namespace DeNelle.Village.Hero
                 EconomyService.Instance.OnChanged -= _ecoHandler;
             _ecoHandler = null;
             _ecoText = null;
-            _capText = null;
+            _troopHost = null;
+            _detailHost = null;
             if (_ui != null) Destroy(_ui);
             _ui = null;
-            _contentRoot = null;
-            _scrollContent = null;
         }
 
         private void OnDestroy()
         {
+            if (_ecoHandler != null && EconomyService.Instance != null)
+                EconomyService.Instance.OnChanged -= _ecoHandler;
+            _ecoHandler = null;
             if (_ui != null) Destroy(_ui);
         }
     }

@@ -94,8 +94,10 @@ namespace DeNelle.Village.Hero
             var viewportGo = new GameObject("Viewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
             viewportGo.transform.SetParent(bodyHost, false);
             var vpr = viewportGo.GetComponent<RectTransform>();
-            vpr.anchorMin = new Vector2(0.03f, 0.08f);
-            vpr.anchorMax = new Vector2(0.97f, 0.82f); // WO-454: leave room for the tab strip above
+            // MOBILE-FIRST (owner 2026-07-03): a centered, thumb-zone column — NOT a full-bleed
+            // stretched bar. Rows still force-expand, but to this narrower centered width.
+            vpr.anchorMin = new Vector2(0.14f, 0.08f);
+            vpr.anchorMax = new Vector2(0.86f, 0.82f); // WO-454: leave room for the tab strip above
             vpr.offsetMin = Vector2.zero;
             vpr.offsetMax = Vector2.zero;
             viewportGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f); // near-invisible catcher so drags scroll
@@ -130,8 +132,8 @@ namespace DeNelle.Village.Hero
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
             statusGo.transform.SetParent(bodyHost, false);
             var sRect = statusGo.GetComponent<RectTransform>();
-            sRect.anchorMin = new Vector2(0.02f, 0.01f);
-            sRect.anchorMax = new Vector2(0.98f, 0.07f);
+            sRect.anchorMin = new Vector2(0.14f, 0.01f);
+            sRect.anchorMax = new Vector2(0.86f, 0.07f);
             _statusText = statusGo.GetComponent<TMPro.TextMeshProUGUI>();
             ElarionUiKit.EnsureFont(_statusText); // font-safe: a code-built TMP with no font NREs on first GenerateTextMesh
             _statusText.fontSize = 14;
@@ -520,50 +522,9 @@ namespace DeNelle.Village.Hero
             Close();
         }
 
-        // ── Chrome helpers (mirrors ShopPanel) ────────────────────────────────────
-
-        private void CreateHeader(Transform parent, string txt)
-        {
-            var go = new GameObject("Header", typeof(TMPro.TextMeshProUGUI));
-            go.transform.SetParent(parent, false);
-            var r = go.GetComponent<RectTransform>();
-            r.anchorMin = new Vector2(0.02f, 0.89f);
-            r.anchorMax = new Vector2(0.98f, 0.99f);
-            r.offsetMin = Vector2.zero;
-            r.offsetMax = Vector2.zero;
-            var t = go.GetComponent<TMPro.TextMeshProUGUI>();
-            ElarionUiKit.EnsureFont(t);
-            t.fontSize = 24;
-            t.color = ElarionUi.Gilt;
-            t.alignment = TMPro.TextAlignmentOptions.Center;
-            t.text = txt;
-        }
-
-        private void CreateBigButton(Transform parent, string label, Vector2 anchor,
-            System.Action onClick, Color? bg = null)
-        {
-            var go = new GameObject("Btn_" + label, typeof(Button), typeof(Image));
-            go.transform.SetParent(parent, false);
-            var r = go.GetComponent<RectTransform>();
-            r.anchorMin = new Vector2(anchor.x - 0.08f, anchor.y - 0.03f);
-            r.anchorMax = new Vector2(anchor.x + 0.08f, anchor.y + 0.03f);
-            r.offsetMin = Vector2.zero;
-            r.offsetMax = Vector2.zero;
-            go.GetComponent<Image>().color = bg ?? ElarionUi.PanelStone;
-            go.GetComponent<Button>().onClick.AddListener(() => onClick());
-
-            var txt = new GameObject("L", typeof(TMPro.TextMeshProUGUI));
-            txt.transform.SetParent(go.transform, false);
-            var tr = txt.GetComponent<RectTransform>();
-            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
-            tr.offsetMin = Vector2.zero; tr.offsetMax = Vector2.zero;
-            var tt = txt.GetComponent<TMPro.TextMeshProUGUI>();
-            ElarionUiKit.EnsureFont(tt);
-            tt.text = label;
-            tt.fontSize = 15;
-            tt.color = ElarionUi.Parchment;
-            tt.alignment = TMPro.TextAlignmentOptions.Center;
-        }
+        // ── Status / content helpers ──────────────────────────────────────────────
+        // (The old CreateHeader / CreateBigButton bespoke-chrome helpers were removed —
+        //  the header + Close are now the shared Obsidian kit chrome, not hand-rolled.)
 
         private void SetStatus(string s)
         {

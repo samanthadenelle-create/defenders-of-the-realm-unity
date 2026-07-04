@@ -6,7 +6,6 @@
 
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UIElements;
 using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.HUD
@@ -51,14 +50,11 @@ namespace DeNelle.HUD
 
             if (FindHero() == null) return; // Title/HeroSelect skip.
 
-            var panel = FindPanelSettings();
-            if (panel == null) return;
-
+            // WO-F: DailyQuestHud is now code-built uGUI (its own overlay canvas) — no
+            // UIDocument/PanelSettings host needed (mirrors the Leaderboard/HelpMenu
+            // host-free bootstraps after their kit conversions).
             var go = new GameObject("DailyQuestHud");
             SceneManager.MoveGameObjectToScene(go, scene);
-            var ui = go.AddComponent<UIDocument>();
-            ui.panelSettings = panel;
-            ui.sortingOrder = 80; // above wave timer / below modals
             go.AddComponent<DailyQuestHud>();
             FlowTrace.Step("UI", "DailyQuestHud created (single instance)");
         }
@@ -69,17 +65,6 @@ namespace DeNelle.HUD
             if (t == null) return null;
             var obj = UnityEngine.Object.FindAnyObjectByType(t) as Component;
             return obj != null ? obj.transform : null;
-        }
-
-        private static PanelSettings FindPanelSettings()
-        {
-            // Pull from an existing UIDocument in the scene so we don't load
-            // a Resources asset by name. Mirrors HelpMenuBootstrap.
-            var docs = UnityEngine.Object.FindObjectsByType<UIDocument>(
-                FindObjectsInactive.Include);
-            foreach (var d in docs)
-                if (d != null && d.panelSettings != null) return d.panelSettings;
-            return null;
         }
     }
 }
