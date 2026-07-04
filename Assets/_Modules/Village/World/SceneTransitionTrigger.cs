@@ -403,7 +403,7 @@ namespace DeNelle.Village
             string s = targetSceneName ?? "";
             switch (s)
             {
-                case "OuterWorld": return "the Outer World";
+                case "OuterWorld": return "the Outer World";  // WO-608: legacy, remapped to Main_Castle_Overworld at runtime
                 case "Garrison_troll_outpost": return "Troll Outpost";
                 case "Garrison_ruined_keep": return "Ruined Keep";
                 case "Garrison_frost_keep": return "Frost Keep";

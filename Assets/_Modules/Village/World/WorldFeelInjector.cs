@@ -85,7 +85,6 @@ namespace DeNelle.Village.World
         // outdoor home hub too — it must get the same dusk world-feel pass. Safe when the
         // flag's OFF (that scene never loads on the legacy path).
         private static readonly string[] OutdoorScenes = { "MainCastle_Hall", "Village2", "Main_Castle_Overworld" };
-        private const string OuterWorldPrefix = "OuterWorld";
 
         // ---- (2) SKYBOX -- dusk, "hold the last light" ------------------------
         // Procedural skybox: warm glowing horizon (the last light), deep blue
@@ -176,7 +175,7 @@ namespace DeNelle.Village.World
         private static bool IsOutdoor(string sceneName)
         {
             if (string.IsNullOrEmpty(sceneName)) return false;
-            if (sceneName.StartsWith(OuterWorldPrefix)) return true;
+            if (DeNelle.Core.HubScenes.IsOverworld(sceneName)) return true;  // WO-608: merged overworld
             for (int i = 0; i < OutdoorScenes.Length; i++)
                 if (sceneName == OutdoorScenes[i]) return true;
             return false;
@@ -337,7 +336,7 @@ namespace DeNelle.Village.World
         private void ApplyMotes()
         {
             string active = SceneManager.GetActiveScene().name;
-            bool openWorld = active.StartsWith(OuterWorldPrefix);
+            bool openWorld = DeNelle.Core.HubScenes.IsOverworld(active);  // WO-608: merged overworld
             if (!openWorld) { ClearMotes(); return; }
             if (_motes != null) return;   // already live
 
