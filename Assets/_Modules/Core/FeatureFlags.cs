@@ -39,6 +39,15 @@ namespace DeNelle.Core
         /// Default ON. Flag-gated so the hero+pets party is reversible: PlayerPrefs "ff.singlehero" = 0.</summary>
         public static bool SingleHero => Get("singlehero", defaultOn: true);
 
+        /// <summary>OWNER 2026-07-04: the legacy "Hero Talents" panel (screen 01, PanelId.HeroTalents)
+        /// renders IDENTICAL content to the interactive Hero Skill Tree (screen 02, PanelId.HeroSkillTree)
+        /// — both route to the SAME HeroSkillTreePanelMvvm.Open / HeroSkillTreeVM. Owner call: consolidate
+        /// to ONE panel. When OFF (default), the redundant HeroTalents PanelId is NOT registered and its
+        /// entry points (ArcaneTower building, dialogue OpenTalents) route to HeroSkillTree instead, so
+        /// screen 01 drops out of the reachable set. Flip PlayerPrefs "ff.herotalents" = 1 to restore the
+        /// separate legacy Talents route.</summary>
+        public static bool HeroTalentsPanel => Get("herotalents", defaultOn: false);
+
         /// <summary>PIVOT (owner 2026-06-22): Blink armor is JUNKED. When OFF (default), HeroArmorVisual
         /// is inert — no addressable armored-body swap, no rig bone-mapping (which spammed
         /// "ShareBaseSkeleton FAILED" in the F8 logs), and the owner dislikes the look. The hero keeps

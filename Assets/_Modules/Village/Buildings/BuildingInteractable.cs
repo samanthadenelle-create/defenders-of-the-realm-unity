@@ -376,7 +376,11 @@ namespace DeNelle.Village
             switch (building.Type)
             {
                 case BuildingType.ArcaneTower:
-                    panelId = PanelId.HeroTalents;
+                    // OWNER 2026-07-04: legacy HeroTalents (screen 01) consolidated into HeroSkillTree
+                    // (screen 02) — identical content. Route to HeroTalents only when ff.herotalents is ON.
+                    panelId = DeNelle.Core.FeatureFlags.HeroTalentsPanel
+                        ? PanelId.HeroTalents
+                        : PanelId.HeroSkillTree;
                     return true;
                 case BuildingType.Workshop:
                     panelId = PanelId.Crafting;

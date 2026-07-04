@@ -73,15 +73,13 @@ namespace DeNelle.Village.Talents
         {
             _panelHandle = PanelManager.Register("Skills", Close, () => IsOpen);
             PanelRouter.Register(PanelId.HeroSkillTree, Open);
-            // Take over the legacy UIDocument route id too (the old panel renders empty
-            // in player builds — §8); its bootstrap is gated off.
-            PanelRouter.Register(PanelId.HeroTalents, Open);
-            // NOTE (screen-conformance worker, for CLI): PanelId.HeroSkillTree (screen 02)
-            // and the legacy PanelId.HeroTalents (screen 01) BOTH route to this same Open →
-            // same HeroSkillTreeVM → identical rendered content. If screens 01 and 02 are
-            // meant to be DISTINCT surfaces (e.g. a pure passive "Talents" view vs. the
-            // interactive skill-tree planner), that is a VM/content-model question — flagged
-            // here rather than redesigned in this dumb-skin View. Left as-is intentionally.
+            // OWNER 2026-07-04: screen 01 (PanelId.HeroTalents) and screen 02 (PanelId.HeroSkillTree)
+            // render IDENTICAL content — both route here. Owner call: consolidate to ONE panel. The
+            // legacy HeroTalents route is now gated behind ff.herotalents (default OFF); when off it is
+            // not registered and its entry points route to HeroSkillTree instead (see BuildingInteractable
+            // ArcaneTower + DialogueCommandSink OpenTalents). Flip ff.herotalents=1 to restore both routes.
+            if (DeNelle.Core.FeatureFlags.HeroTalentsPanel)
+                PanelRouter.Register(PanelId.HeroTalents, Open);
         }
 
         private void OnDestroy()
@@ -91,7 +89,8 @@ namespace DeNelle.Village.Talents
             if (_ui != null) Destroy(_ui);
             _ui = null;
             PanelRouter.Unregister(PanelId.HeroSkillTree, Open);
-            PanelRouter.Unregister(PanelId.HeroTalents, Open);
+            if (DeNelle.Core.FeatureFlags.HeroTalentsPanel)
+                PanelRouter.Unregister(PanelId.HeroTalents, Open);
         }
 
         // ── Open: build chrome, construct + bind the VM ───────────────────────────

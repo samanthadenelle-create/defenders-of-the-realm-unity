@@ -78,7 +78,7 @@ namespace DeNelle.Village
                 // dialogue ends by opening the jewelry-crafting bench — the SAME panel the station's own
                 // BuildingInteractable opens (BuildingType.JewelersBench route). Mirrors OpenAlchemy.
                 case "OpenJeweler":    PanelRouter.Open(PanelId.JewelerCrafting); break;
-                case "OpenTalents":    PanelRouter.Open(PanelId.HeroTalents); break;
+                case "OpenTalents":    PanelRouter.Open(DeNelle.Core.FeatureFlags.HeroTalentsPanel ? PanelId.HeroTalents : PanelId.HeroSkillTree); break;
                 case "OpenCosmetics":  PanelRouter.Open(PanelId.CosmeticShop); break;
                 // Realm Store (SKR/SOL/USDC packs) — the merchant's "Realm Store" option opens the
                 // monetization PackStore, ALONGSIDE the existing Glimmer/gear paths (PackStoreBootstrap
