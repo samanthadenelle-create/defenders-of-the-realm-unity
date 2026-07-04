@@ -102,8 +102,13 @@ namespace DeNelle.Village
             ConfigureUrpParticleTransparency(m, additive: false);
             if (mainTex != null)
             {
-                if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", mainTex); // URP samples _BaseMap
-                m.mainTexture = mainTex;                                          // legacy-alias fallback
+                // URP Particles/Unlit samples _BaseMap and does NOT declare _MainTex — writing the
+                // `.mainTexture` alias on it logs "doesn't have a texture property '_MainTex'" (owner
+                // F8 console spam). Only fall back to the alias when the shader has NO _BaseMap (a
+                // non-URP fallback like Sprites/Default that samples _MainTex). Kills the warning,
+                // keeps the legacy-fallback behaviour.
+                if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", mainTex);
+                else m.mainTexture = mainTex;
             }
             r.material = m;
             return true;
@@ -175,7 +180,10 @@ namespace DeNelle.Village
             if (m.HasProperty("_BaseMap") && m.GetTexture("_BaseMap") == null)
             {
                 Texture stranded = m.HasProperty("_MainTex") ? m.GetTexture("_MainTex") : null;
-                if (stranded == null) stranded = m.mainTexture;   // URP maps this to _BaseMap (null here) — safe
+                // NOTE: the old `stranded = m.mainTexture` fallback logged "doesn't have a texture
+                // property '_MainTex'" on URP Particles/Unlit (no _MainTex declared) for ZERO gain —
+                // the texture is unrecoverable at runtime for those mats (see the source-YAML fix
+                // above). Dropped to kill the console warning; source .mat migration is the real fix.
                 if (stranded != null)
                 {
                     m.SetTexture("_BaseMap", stranded);

@@ -271,7 +271,12 @@ namespace DeNelle.Village
                         // declare _MainTex, so reading it AFTER the swap errors and loses
                         // the texture. Capture the legacy texture + tint BEFORE swapping,
                         // then seat them in the URP slots.
-                        Texture legacyTex = m.HasProperty("_MainTex") ? m.GetTexture("_MainTex") : m.mainTexture;
+                        // Guarded: the builtinParticle set includes Hidden/InternalErrorShader, which
+                        // declares NO _MainTex — the old `: m.mainTexture` fallback logged "doesn't have
+                        // a texture property '_MainTex'" on it. Prefer _BaseMap, else null (nothing to carry).
+                        Texture legacyTex = m.HasProperty("_MainTex") ? m.GetTexture("_MainTex")
+                                          : m.HasProperty("_BaseMap") ? m.GetTexture("_BaseMap")
+                                          : null;
                         Color legacyTint =
                             m.HasProperty("_TintColor") ? m.GetColor("_TintColor") :
                             m.HasProperty("_Color")     ? m.GetColor("_Color")     : Color.white;

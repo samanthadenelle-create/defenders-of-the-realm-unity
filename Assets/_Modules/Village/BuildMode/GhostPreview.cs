@@ -238,9 +238,18 @@ namespace DeNelle.Village
             {
                 if (r == null) continue;
                 var src = r.sharedMaterial;
-                Shader shader = (src != null ? src.shader : null)
-                                ?? Shader.Find("Universal Render Pipeline/Lit")
-                                ?? Shader.Find("Sprites/Default");
+                // §12 (owner F8 build-mode top-down: solid PINK gate/wall ghost): a build strips the
+                // polyperfect Standard/built-in variant, so src.shader resolves to
+                // Hidden/InternalErrorShader (magenta) — NON-null, so the old `?? URP/Lit` fallback
+                // never fired and we copied the error shader. Worse, InternalErrorShader has no
+                // _Surface, so the transparency block below was skipped → an OPAQUE pink ghost.
+                // Treat a null/broken/Standard/Legacy/error source shader as "unusable" and build the
+                // ghost on URP/Lit so it renders translucent, never magenta.
+                Shader srcShader = src != null ? src.shader : null;
+                Shader shader = (srcShader != null && !IsBrokenGhostShader(srcShader))
+                                ? srcShader
+                                : (Shader.Find("Universal Render Pipeline/Lit")
+                                   ?? Shader.Find("Sprites/Default"));
                 var mat = new Material(shader);
                 _createdMaterials.Add(mat);   // Audit P2: tracked for Destroy() in Clear()
                 if (mat.HasProperty("_Surface"))
@@ -256,6 +265,20 @@ namespace DeNelle.Village
                 r.sharedMaterial = mat;
             }
             SetValid(true);
+        }
+
+        // A source shader that renders MAGENTA / wrong under URP (or was stripped from the build).
+        // Mirrors MagentaGuard.IsBrokenShader — a ghost must never inherit one of these, or it draws
+        // as an opaque pink block instead of a translucent placement preview.
+        private static bool IsBrokenGhostShader(Shader sh)
+        {
+            if (sh == null) return true;
+            string sn = sh.name;
+            if (string.IsNullOrEmpty(sn)) return true;
+            return sn == "Standard"
+                || sn == "Standard (Specular setup)"
+                || sn.StartsWith("Legacy Shaders/")
+                || sn.Contains("InternalError");
         }
     }
 }

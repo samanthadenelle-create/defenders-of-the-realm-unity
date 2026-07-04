@@ -198,6 +198,17 @@ namespace DeNelle.Village
             var hits = Physics.RaycastAll(origin, Vector3.down, distance, _groundMask, QueryTriggerInteraction.Ignore);
             float best = float.NegativeInfinity;
             bool found = false;
+            // F8 2026-07-03 "Tree of Life floats in the air" (§12 captured proof, Player.log
+            // "[SeatOnGround] 'TreeOfLife_Visual' seated: ... groundY=10.936 gap=-23.212 ->
+            // final pos (-5.77, 35.49, 7.19)"): the loop picked the HIGHEST hit, so OVERHEAD
+            // castle geometry (a wall top / arch / hall roof at ~10.9m) was mistaken for the
+            // "ground" — a 10.9m false floor hoisted the tree 23m into the sky (reads as a
+            // tiny green ball far above the plaza). The tree always stands ON the floor its
+            // ANCHOR was authored onto (the builder seats HeartOfElarion at y=castle.liftY),
+            // so any hit meaningfully ABOVE that floor is a ceiling, never ground. Cap the
+            // eligible hits at the anchor floor (+ small tolerance) so a stray overhead hit
+            // can never be chosen; legit floor/plinth hits at/below the anchor still win.
+            float floorCeilingY = (transform.parent != null ? transform.parent.position.y : _groundY) + 0.5f;
             foreach (var h in hits)
             {
                 // Skip our OWN subtree + our ANCHOR (direct parent) subtree so we don't seat onto
@@ -216,6 +227,7 @@ namespace DeNelle.Village
                 Transform ct = h.collider.transform;
                 if (ct.IsChildOf(transform)) continue;                                            // self subtree
                 if (transform.parent != null && ct.IsChildOf(transform.parent)) continue;         // anchor (blocker capsule) + siblings on it
+                if (h.point.y > floorCeilingY) continue;                                          // overhead geometry (wall top / arch / roof) — never the ground the tree stands on
                 if (h.point.y > best) { best = h.point.y; found = true; }
             }
             return found ? best : FallbackGroundY();

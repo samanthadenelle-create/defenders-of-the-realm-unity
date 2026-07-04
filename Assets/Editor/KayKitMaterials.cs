@@ -212,6 +212,17 @@ namespace DeNelle.Editor
                 mat.shader = urpLit;
             }
 
+            // PALETTE-ATLAS BLEED FIX (owner F8: KayKit trees render ORANGE/RED TRUNKS):
+            // the KayKit atlases are vertical COLOUR-BLOCK PALETTES (forest_texture.png is
+            // 8 columns × 3 rows of flat colours; the trunk UVs sample a brown column, the
+            // leaves a green one). With Bilinear filtering (Unity's import default) the
+            // sampler BLENDS across the column boundary, so the brown trunk column bleeds
+            // into the adjacent orange/red columns → an orange/red trunk (worsened by the
+            // WebGL 512 shrink shrinking each block). Point filtering is the CORRECT authored
+            // intent for a flat palette (each fragment = exactly ONE palette colour), removing
+            // the bleed with no build-size or mip/shimmer regression. Idempotent.
+            EnsurePalettePointFiltering(texturePath);
+
             ConfigureUrpLitMaterial(mat, texture);
             EditorUtility.SetDirty(mat);
             return mat;
@@ -240,6 +251,23 @@ namespace DeNelle.Editor
             if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 0f); // 0 = Opaque
 
             mat.mainTexture = texture;
+        }
+
+        /// <summary>
+        /// Force the KayKit palette atlas at <paramref name="texturePath"/> to POINT filtering
+        /// so the flat colour-block columns never bilinear-bleed into each other (the orange/red
+        /// trunk symptom). Mipmaps are LEFT ENABLED (no distant-tree shimmer regression). Idempotent:
+        /// reimports only when the filter mode actually changes.
+        /// </summary>
+        private static void EnsurePalettePointFiltering(string texturePath)
+        {
+            if (string.IsNullOrEmpty(texturePath)) return;
+            if (AssetImporter.GetAtPath(texturePath) is not TextureImporter ti) return;
+            if (ti.filterMode == FilterMode.Point) return;   // already correct — no churn
+            ti.filterMode = FilterMode.Point;
+            ti.SaveAndReimport();
+            Debug.Log($"[KayKitMaterials] palette atlas '{texturePath}' -> Point filtering " +
+                      "(kills colour-block bleed / orange-red trunks).");
         }
 
         // =====================================================================

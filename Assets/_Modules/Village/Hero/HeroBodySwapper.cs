@@ -654,6 +654,18 @@ namespace DeNelle.Village
                     "the Paladin keeps its OWN materials (RetargetMaterialsToUrp above converts them to URP, " +
                     "preserving the Paladin's textures). Binding the Tripo KnightArmored atlas onto Paladin UVs " +
                     "was the wrong-coloring root.");
+                // WO-604 §12 self-report (WHITE HERO): the package path deliberately keeps the FBX's OWN
+                // imported materials. Knight_Hero.fbx imports with materialImportMode=2 / materialLocation=1
+                // but ships NO extracted textures (no sibling .fbm/ folder, no external .mat) — so its
+                // imported URP materials can carry a NULL _BaseMap albedo (the "white hero"): RetargetMaterialsToUrp
+                // SKIPS them (already-URP → converted=0), and this branch skips the Tripo texture bind, so a
+                // textureless material renders solid white. Even when an embedded FBX texture resolves in-editor,
+                // embedded-in-FBX textures do NOT reliably ship in a WebGL/IL2CPP player build (the exact class
+                // the project already solved for Tripo via the plain, Resources-loadable Heroes/Textures/ copies).
+                // AUDIT the live body's albedo now so a capture PROVES the textureless-material cause instead of
+                // shipping a silent white hero — fix is asset-side (extract the Paladin albedo to a reliably-loadable
+                // folder + bind it, mirroring ApplyExtractedTexture), owned by the orchestrator's editor/build pass.
+                AuditPackageAlbedo(body);
             }
             // DEF: the Ranger/Archer fires arrows via the projectile system but held
             // NOTHING — give him a visible bow. Bow goes in the LEFT (off/bow) hand
@@ -1028,6 +1040,51 @@ namespace DeNelle.Village
             }
             Debug.Log("[HeroBodySwapper] RetargetMaterialsToUrp: converted=" +
                       converted + ", skipped (already URP)=" + skipped);
+        }
+
+        /// <summary>
+        /// WO-604 §12 white-hero audit for the PACKAGE (baked Paladin) path. Scans every renderer
+        /// material on the built body and counts how many carry a NON-NULL albedo (_BaseMap / _MainTex).
+        /// The package path keeps the FBX's OWN imported materials; if Knight_Hero.fbx ships textureless
+        /// materials (no extracted .fbm/, no external .mat) the albedo is NULL and the hero renders solid
+        /// WHITE. FlowTrace.Fail LOUDLY when zero materials have an albedo so a capture PROVES the
+        /// textureless-material cause (the fix is asset-side: extract the Paladin albedo to a reliably
+        /// Resources-loadable folder and bind it, mirroring ApplyExtractedTexture). Read-only — never
+        /// mutates a material, so it cannot regress a correctly-textured package body.
+        /// </summary>
+        private static void AuditPackageAlbedo(GameObject body)
+        {
+            if (body == null) return;
+            int mats = 0, withAlbedo = 0;
+            var missing = new System.Text.StringBuilder();
+            foreach (var r in body.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                foreach (var m in r.sharedMaterials)
+                {
+                    if (m == null) continue;
+                    mats++;
+                    Texture albedo = null;
+                    if (m.HasProperty("_BaseMap"))            albedo = m.GetTexture("_BaseMap");
+                    if (albedo == null && m.HasProperty("_MainTex")) albedo = m.GetTexture("_MainTex");
+                    if (albedo != null) withAlbedo++;
+                    else if (missing.Length < 200)
+                    { if (missing.Length > 0) missing.Append(", "); missing.Append(m.name); }
+                }
+            }
+
+            FlowTrace.Step("HeroBody",
+                $"PACKAGE albedo audit: {withAlbedo}/{mats} material(s) carry a _BaseMap/_MainTex texture" +
+                (missing.Length > 0 ? $" (textureless: [{missing}])" : "") + ".");
+
+            if (mats > 0 && withAlbedo == 0)
+                FlowTrace.Fail("HeroBody",
+                    $"WHITE HERO ROOT: all {mats} package-body material(s) have a NULL albedo (_BaseMap/_MainTex) — " +
+                    "Knight_Hero.fbx imports textureless materials (no extracted .fbm/, no external .mat), and the " +
+                    "package path keeps them as-is (RetargetMaterialsToUrp skips already-URP mats). The Paladin " +
+                    "renders solid white. FIX (asset-side): extract the Paladin albedo to a reliably Resources-" +
+                    "loadable folder and bind it here (mirror ApplyExtractedTexture), or give KnightPackage.prefab " +
+                    "materials that reference a shipped albedo texture.");
         }
 
         private static string SlugFor(HeroClass cls) => cls switch

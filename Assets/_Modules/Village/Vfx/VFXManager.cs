@@ -663,8 +663,12 @@ namespace DeNelle.Village
                     ConfigureUrpParticleBlend(nm, additive);
                     if (mainTex != null)
                     {
+                        // URP Particles/Unlit samples _BaseMap and declares NO _MainTex — the
+                        // `.mainTexture` alias write logged "doesn't have a texture property
+                        // '_MainTex'". Only use the alias when the shader lacks _BaseMap (a non-URP
+                        // fallback that samples _MainTex). Kills the warning; look preserved.
                         if (nm.HasProperty("_BaseMap")) nm.SetTexture("_BaseMap", mainTex);
-                        nm.mainTexture = mainTex;   // _MainTex alias for completeness
+                        else nm.mainTexture = mainTex;
                     }
                     if (nm.HasProperty("_BaseColor")) nm.SetColor("_BaseColor", tint);
                     if (nm.HasProperty("_Color"))     nm.SetColor("_Color", tint);
@@ -752,7 +756,10 @@ namespace DeNelle.Village
             if (src == null) return null;
             if (src.HasProperty("_MainTex")) return src.GetTexture("_MainTex");
             if (src.HasProperty("_BaseMap")) return src.GetTexture("_BaseMap");
-            return src.mainTexture;
+            // No _MainTex and no _BaseMap: reading `.mainTexture` here would log
+            // "doesn't have a texture property '_MainTex'" — return null instead (any real
+            // particle material declares one of the two above).
+            return null;
         }
 
         private static Color SafeGetTintColor(Material src)

@@ -162,14 +162,18 @@ namespace DeNelle.Village
                 // correction every other hub structure gets (pitch -90 stand up + yaw 90 face plaza).
                 // SeatOnGround (set by SkinOptions.Structure) lands the bounds-base on the holder y;
                 // bake the 0.7 size into the FIT (6 * 0.7 = 4.2) so the seat measures the final size.
-                var opts = SkinOptions.Structure(6f * 0.7f);
+                // Owner 2026-07-03 ("the jeweler is too large, scale ... down 50%"): halve the fit
+                // target (4.2m -> 2.1m). This is the UNIFORM sizeM fit, so VisualFactory.Skin's
+                // SeatOnGround runs AFTER the fit and re-seats the smaller bounds base onto the
+                // holder's y — the bench stays seated on the ground at the new size (no floating).
+                var opts = SkinOptions.Structure(6f * 0.35f);
                 opts.LocalRotation = Quaternion.Euler(-90f, 90f, 0f);
                 visual = Guard.Try("Crafting", $"skin jeweler's bench visual '{path}'",
                     () => VisualFactory.Skin(holder.transform, path, opts),
                     fallback: null);
                 if (visual != null)
                 {
-                    FlowTrace.Step("Crafting", $"jeweler's bench visual resolved from '{path}' (upright -90/+90, fit 4.2m, seated on ground).");
+                    FlowTrace.Step("Crafting", $"jeweler's bench visual resolved from '{path}' (upright -90/+90, fit 2.1m [50% scale-down], seated on ground).");
                     return;
                 }
             }

@@ -268,12 +268,17 @@ namespace DeNelle.HUD
             _glimmerLabel = MakeText(headHost, "0", 16, ElarionUi.Gold, FontStyles.Bold,
                 TextAlignmentOptions.Right, new Vector2(0.70f, 0.1f), new Vector2(0.99f, 0.9f));
 
+            // Mobile-first (owner rule): compact CENTERED column, not full-bleed edge-to-edge
+            // bars — the tabs + card list share one thumb-zone band (0.10–0.90) so cards read as
+            // centered plates with side margins on a phone.
+            const float BandMin = 0.10f, BandMax = 0.90f;
+
             // Category tabs across the top of the well.
-            _tabHost = ZoneRect(body, "TabRail", new Vector2(0.02f, 0.90f), new Vector2(0.98f, 0.99f));
+            _tabHost = ZoneRect(body, "TabRail", new Vector2(BandMin, 0.90f), new Vector2(BandMax, 0.99f));
             BuildTabs();
 
             // Scrollable card list.
-            var scrollHost = ZoneRect(body, "CardScroll", new Vector2(0.02f, 0.09f), new Vector2(0.98f, 0.89f));
+            var scrollHost = ZoneRect(body, "CardScroll", new Vector2(BandMin, 0.09f), new Vector2(BandMax, 0.89f));
             _listContent = BuildScrollColumn(scrollHost);
 
             // Anti-FOMO footer (spec Section 9).

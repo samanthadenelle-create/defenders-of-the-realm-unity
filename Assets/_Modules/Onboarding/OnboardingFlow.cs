@@ -6,9 +6,22 @@
 // and GameState.Onboarded is "never set to true in normal play" — so the cold
 // open re-plays on every launch (the explicit bug in §2.5 / P0-11).
 //
-// This component is the missing tutorial. It drives TutorialOverlay.uxml: a
-// short, SKIPPABLE six-beat coach-mark sequence taught the first time the
-// player reaches the village —
+// This component is the missing tutorial: a short, SKIPPABLE six-beat coach-mark
+// sequence taught the first time the player reaches the village —
+//
+// WO-C conversion (2026-07-03, coverage matrix row #20): the coach-mark overlay
+// was a UIDocument/UITK panel (TutorialOverlay.uxml) with a code-built UITK
+// fallback for the "UXML renders empty in player builds" landmine (CLAUDE.md §8).
+// This finishes the job the other front-end screens took (Title/StoryIntro/
+// HeroSelect): the overlay is now a code-built uGUI card on the Blink Obsidian
+// kit (ElarionUiKit) — its own ScreenSpaceOverlay canvas, kit panel chrome
+// (caption in the header, narrated copy in the body, Skip + Next as Obsidian
+// family buttons), CanvasGroup fades. No UIDocument, no UXML, no PanelSettings at
+// runtime, so nothing scene-hosted can blank the FTUE. The editor scene builder
+// still adds a legacy UIDocument to this GameObject; Awake disables it so it can
+// neither render nor keep a PanelRaycaster in the click stack.
+//
+// The beats —
 //
 //   1. Welcome      — you are the Keeper; the realm is yours to hold.
 //   2. The Heart    — Elarion, the Heart, is what you defend.
@@ -53,9 +66,11 @@ using System.Threading;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
+using DeNelle.Core.UI;
+using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.UIElements;
+using UnityEngine.UI;
 
 namespace DeNelle.Onboarding
 {
@@ -83,24 +98,13 @@ namespace DeNelle.Onboarding
     /// skip. A passive display: gameplay is reached through Core seams and
     /// UnityEvents, never a direct gameplay-module reference (port-spec Part 2).
     /// </summary>
-    [RequireComponent(typeof(UIDocument))]
     public sealed class OnboardingFlow : MonoBehaviour
     {
-        // ── UXML element names — the binding contract with TutorialOverlay.uxml ─
-        private const string RootName = "tutorial-root";
-        private const string CaptionName = "tutorial-caption";
-        private const string ProgressName = "tutorial-progress";
-        private const string BodyName = "tutorial-body";
-        private const string SkipButtonName = "tutorial-skip";
-        private const string NextButtonName = "tutorial-next";
-
-        // ── USS class names — styled by TutorialOverlay.uss ──────────────────
-        private const string RootHiddenClass = "tutorial-root--hidden";
-        private const string NextBeginClass = "tutorial-next--begin";
-
-        [Header("UI")]
-        [Tooltip("UIDocument hosting TutorialOverlay.uxml. Falls back to the component on this GameObject.")]
-        [SerializeField] private UIDocument _document;
+        [Header("UI (legacy — WO-C)")]
+        [Tooltip("The retired UIDocument (TutorialOverlay.uxml) the scene builder still adds to this " +
+                 "GameObject. WO-C: the coach-marks render via code-built uGUI now; Awake disables this " +
+                 "document so it cannot render or eat input. Kept only so the editor wiring still binds.")]
+        [SerializeField] private UnityEngine.UIElements.UIDocument _document;
 
         [Header("Behaviour")]
         [Tooltip("Auto-run the tutorial in Start() when the save says NOT onboarded. " +
@@ -126,17 +130,20 @@ namespace DeNelle.Onboarding
                  "any HUD / input it suppressed while the coach-marks were up.")]
         public UnityEvent TutorialClosed = new UnityEvent();
 
-        // ── Resolved overlay elements ────────────────────────────────────────
-        private VisualElement _root;
-        private Label _caption;
-        private Label _progress;
-        private Label _body;
+        // ── Code-built uGUI overlay (Blink Obsidian kit) ─────────────────────
+        private GameObject _canvas;                 // own overlay canvas (no shared panel)
+        private CanvasGroup _group;                 // whole-overlay fade
+        private ElarionUiKit.PanelChrome _chrome;   // kit panel chrome (caption in header)
+        private TextMeshProUGUI _caption;           // beat kicker (the chrome header title)
+        private TextMeshProUGUI _progress;          // "i / N" readout
+        private TextMeshProUGUI _body;              // narrated body copy
         private Button _skipButton;
         private Button _nextButton;
+        private TextMeshProUGUI _nextLabel;         // the Next button's kit label (retext per beat)
 
         private int _beatIndex = -1;
         private bool _running;
-        private bool _bound;
+        private bool _built;
         private CancellationTokenSource _cts;
 
         /// <summary>True while the coach-mark sequence is on screen.</summary>
@@ -206,23 +213,29 @@ namespace DeNelle.Onboarding
 
         private void Awake()
         {
-            if (_document == null) _document = GetComponent<UIDocument>();
-        }
-
-        private void OnEnable()
-        {
-            BindElements();
+            // WO-C: the scene builder still adds the legacy UIDocument (TutorialOverlay.uxml)
+            // to this GameObject. The coach-marks render via code-built uGUI now, so disable
+            // it — it renders nothing for us and must not keep a PanelRaycaster in the click
+            // stack (the duplicate-UIDocument input-eating landmine).
+            if (_document == null)
+                _document = GetComponent<UnityEngine.UIElements.UIDocument>();
+            if (_document != null && _document.enabled)
+            {
+                _document.enabled = false;
+                FlowTrace.Step("Onboarding", "WO-C: disabled OnboardingFlow's legacy UIDocument — coach-marks render via uGUI now.");
+            }
         }
 
         private void OnDisable()
         {
-            if (_skipButton != null) _skipButton.clicked -= OnSkipClicked;
-            if (_nextButton != null) _nextButton.clicked -= OnNextClicked;
-            _bound = false;
-
             _cts?.Cancel();
             _cts?.Dispose();
             _cts = null;
+        }
+
+        private void OnDestroy()
+        {
+            if (_canvas != null) Destroy(_canvas);
         }
 
         private void Start()
@@ -232,192 +245,92 @@ namespace DeNelle.Onboarding
         }
 
         // =====================================================================
-        //  UI Toolkit binding
+        //  Overlay construction (code-built uGUI on the Blink Obsidian kit)
         // =====================================================================
 
-        private void BindElements()
+        /// <summary>
+        /// Builds the coach-mark overlay once, in code, on its own kit canvas — a
+        /// dimming scrim plus a centred Obsidian panel (caption in the header zone,
+        /// a "i / N" progress readout, the narrated body copy, and Skip + Next as
+        /// Obsidian family buttons). No UIDocument / UXML / PanelSettings, so the
+        /// FTUE renders identically in the editor and in player builds (CLAUDE.md
+        /// §8). Starts hidden — <see cref="Run"/> reveals it. Idempotent.
+        /// </summary>
+        private void EnsureBuilt()
         {
-            using var _ = FlowTrace.Enter("Onboarding", "OnboardingFlow.BindElements");
-            _root = _document != null ? _document.rootVisualElement : null;
-            if (_root == null)
-            {
-                // No root means the coach-marks render nothing — the first-run teaching is
-                // invisible. Fail-loud so it surfaces in the break-log.
-                FlowTrace.Fail("Onboarding", "BindElements: NO UIDocument root — tutorial overlay will NOT display (invisible FTUE).");
-                return;
-            }
+            using var _ = FlowTrace.Enter("Onboarding", "OnboardingFlow.EnsureBuilt (uGUI coach-marks)");
+            if (_built && _canvas != null) return;
 
-            // DEF-153 (root cause): the tutorial is a MODAL coach-mark and must
-            // render ABOVE the in-game HUD. The HUD UIDocuments sort at 80-110;
-            // this panel never set a sortingOrder, so it defaulted to 0 and the HUD
-            // drew on top — making the steps invisible in BOTH orientations. Lift it
-            // above everything HUD-side so the overlay is always seen.
-            if (_document != null) _document.sortingOrder = 250f;
+            // DEF-153: the coach-mark is a MODAL that must render ABOVE the in-game
+            // HUD (HUD sorts ~80-110; BuildMenu adopts HUD+5). A high sort keeps it
+            // over the HUD and the build menu its "Raise a tower" beat opens, while
+            // staying below system Settings (32000) / the load overlay.
+            _canvas = ElarionUiKit.BuildModalCanvas("OnboardingTutorialUI", 31000);
+            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(_canvas, gameObject.scene);
+            _group = _canvas.AddComponent<CanvasGroup>();
 
-            _caption = _root.Q<Label>(CaptionName);
-            _progress = _root.Q<Label>(ProgressName);
-            _body = _root.Q<Label>(BodyName);
-            _skipButton = _root.Q<Button>(SkipButtonName);
-            _nextButton = _root.Q<Button>(NextButtonName);
+            // Dimming scrim — swallows world taps while a coach-mark is up.
+            var scrim = ElarionUiKit.AddImage(_canvas.transform, "Scrim",
+                Vector2.zero, Vector2.one, new Color(0f, 0f, 0f, 0.55f), rounded: false);
+            var scrimImg = scrim.GetComponent<Image>();
+            if (scrimImg != null) scrimImg.raycastTarget = true;
 
-            // PIPELINE_STATE §8: a UXML-sourced UIDocument comes up EMPTY in player
-            // builds (BuildMenu / BattleHUD hit this), so TutorialOverlay.uxml may
-            // load a root with none of the named coach-mark elements. When the
-            // named children are missing, build the overlay in code (inline styles,
-            // no USS) so the FTUE actually renders in the build. The UXML is kept
-            // only as an editor reference. This never touches the Finish() /
-            // FinishOnboarding() persistence path — it only supplies the visuals.
-            if (_caption == null || _body == null || _nextButton == null || _skipButton == null)
-            {
-                BuildOverlayInCode();
-                _caption = _root.Q<Label>(CaptionName);
-                _progress = _root.Q<Label>(ProgressName);
-                _body = _root.Q<Label>(BodyName);
-                _skipButton = _root.Q<Button>(SkipButtonName);
-                _nextButton = _root.Q<Button>(NextButtonName);
-            }
+            // Centred Obsidian panel — a compact speech-bubble card (owner DEF-153:
+            // centre it so the mobile HUD cluster can't cover it), capped so it stays
+            // a bubble on wide landscape. Caption lives in the chrome header; the
+            // shared Close is HIDDEN (Skip is the dismiss for this forced flow).
+            // withBackdrop:false — the coach-mark teaches on-screen things (the Heart, the
+            // walls, the build menu), so keep the village visible behind the card; our own
+            // light 0.55 scrim above dims it just enough for the copy to read (the panel's
+            // default 0.94 backdrop would hide the world the coach-marks point at).
+            _chrome = ElarionUiKit.BuildObsidianPanel(_canvas.transform, string.Empty,
+                new Vector2(0.10f, 0.31f), new Vector2(0.90f, 0.69f), onClose: null,
+                withBackdrop: false);
+            if (_chrome.close != null) _chrome.close.gameObject.SetActive(false);
+            _caption = _chrome.title;
 
-            // V — after the (UXML or code-built) overlay, the core coach-mark controls MUST
-            // resolve, or the tutorial is on-screen but un-advanceable. Fail-loud if not.
+            Transform body = _chrome.layout != null && _chrome.layout.body != null
+                ? _chrome.layout.body.transform
+                : _chrome.content.transform;
+
+            // Progress readout — top-right of the body well.
+            _progress = ElarionUiKit.Label(body, string.Empty,
+                0.86f, 1.00f, ElarionUi.Gilt, ElarionUi.FontMicro,
+                TextAlignmentOptions.Right, 0.55f, 0.98f, bold: true);
+            _progress.raycastTarget = false;
+
+            // Narrated body copy — centred band, wraps.
+            _body = ElarionUiKit.Label(body, string.Empty,
+                0.30f, 0.82f, ElarionUi.Parchment, ElarionUi.FontBody,
+                TextAlignmentOptions.Center, 0.06f, 0.94f);
+            _body.textWrappingMode = TextWrappingModes.Normal;
+            _body.raycastTarget = false;
+
+            // Controls — Skip (Gray, left) + Next / Begin (Green primary CTA, right).
+            _skipButton = ElarionUiKit.BuildObsidianButton(body, "Skip",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.04f, 0.04f), new Vector2(0.34f, 0.20f), OnSkipClicked);
+
+            _nextButton = ElarionUiKit.BuildObsidianButton(body, "Next",
+                ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
+                new Vector2(0.60f, 0.04f), new Vector2(0.96f, 0.20f), OnNextClicked);
+            _nextLabel = _nextButton != null
+                ? _nextButton.GetComponentInChildren<TextMeshProUGUI>(true)
+                : null;
+
+            // V — the core coach-mark controls MUST exist, or the tutorial is on
+            // screen but un-advanceable. Fail-loud (break-log) if any is missing.
             if (_caption == null || _body == null || _nextButton == null || _skipButton == null)
             {
                 FlowTrace.Fail("Onboarding",
-                    $"BindElements VERIFY FAILED — coach-mark elements unresolved after code-build " +
-                    $"(caption={( _caption != null)} body={(_body != null)} next={(_nextButton != null)} skip={(_skipButton != null)}). " +
+                    $"EnsureBuilt VERIFY FAILED — coach-mark controls unresolved " +
+                    $"(caption={(_caption != null)} body={(_body != null)} next={(_nextButton != null)} skip={(_skipButton != null)}). " +
                     "Tutorial may render but cannot be advanced.");
-            }
-
-            if (_skipButton != null)
-            {
-                _skipButton.clicked -= OnSkipClicked; // guard a double OnEnable
-                _skipButton.clicked += OnSkipClicked;
-            }
-            if (_nextButton != null)
-            {
-                _nextButton.clicked -= OnNextClicked;
-                _nextButton.clicked += OnNextClicked;
             }
 
             // Start hidden — Run() reveals it.
             SetOverlayVisible(false);
-            _bound = true;
-        }
-
-        /// <summary>
-        /// Code-built fallback for the coach-mark overlay (PIPELINE_STATE §8 —
-        /// UXML does not render in player builds). Builds the same element tree
-        /// TutorialOverlay.uxml describes — a dimming scrim plus a bottom-pinned
-        /// card with caption / progress / body / Skip + Next — using inline
-        /// styles (USS does not apply to a code-built tree in a build). The names
-        /// match the binding contract above so BindElements() resolves them
-        /// exactly as it would from the UXML. Mirrors how BuildMenu falls back to
-        /// a code-built UI. Only called when the UXML left the named elements
-        /// absent; it appends the new card UNDER the existing root so the root's
-        /// hidden/opacity controls (SetOverlayVisible / FadeOverlay) still work.
-        /// </summary>
-        private void BuildOverlayInCode()
-        {
-            if (_root == null) return;
-
-            // Re-tag the document root as the tutorial root so the existing
-            // RootHiddenClass / opacity controls drive it. The root fills the
-            // screen and lets pointer events through where there is no card.
-            _root.name = RootName;
-            _root.style.position = Position.Absolute;
-            _root.style.left = 0;
-            _root.style.right = 0;
-            _root.style.top = 0;
-            _root.style.bottom = 0;
-
-            // Dimming scrim — swallows world taps while a coach-mark is up.
-            var scrim = new VisualElement { name = "tutorial-scrim" };
-            scrim.style.position = Position.Absolute;
-            scrim.style.left = 0;
-            scrim.style.right = 0;
-            scrim.style.top = 0;
-            scrim.style.bottom = 0;
-            scrim.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);
-            _root.Add(scrim);
-
-            // DEF-153: centered "speech-bubble" coach-mark. The card used to be
-            // bottom-pinned (bottom=48), landing directly under the mobile HUD
-            // cluster (joystick / d-pad / action buttons) that covered it. Center it
-            // via the root's flexbox so it reads clearly in BOTH landscape and
-            // portrait, and cap the width so it stays a bubble — not a full-width
-            // banner — on wide landscape screens. (scrim stays Absolute/full-screen,
-            // so flex-centering only acts on the in-flow card.)
-            _root.style.justifyContent = Justify.Center;
-            _root.style.alignItems = Align.Center;
-
-            var card = new VisualElement { name = "tutorial-card" };
-            card.style.position = Position.Relative;
-            card.style.width = Length.Percent(86f);
-            card.style.maxWidth = 560;
-            card.style.paddingLeft = 28;
-            card.style.paddingRight = 28;
-            card.style.paddingTop = 24;
-            card.style.paddingBottom = 24;
-            card.style.backgroundColor = new Color(0.07f, 0.08f, 0.12f, 0.97f);
-            card.style.borderTopLeftRadius = 22;
-            card.style.borderTopRightRadius = 22;
-            card.style.borderBottomLeftRadius = 22;
-            card.style.borderBottomRightRadius = 22;
-            var border = new Color(0.85f, 0.72f, 0.36f, 0.9f);
-            card.style.borderTopColor = border;
-            card.style.borderBottomColor = border;
-            card.style.borderLeftColor = border;
-            card.style.borderRightColor = border;
-            card.style.borderTopWidth = 3;
-            card.style.borderBottomWidth = 3;
-            card.style.borderLeftWidth = 3;
-            card.style.borderRightWidth = 3;
-            _root.Add(card);
-
-            // Caption row — kicker + progress readout.
-            var head = new VisualElement { name = "tutorial-card-head" };
-            head.style.flexDirection = FlexDirection.Row;
-            head.style.justifyContent = Justify.SpaceBetween;
-            head.style.marginBottom = 8;
-            card.Add(head);
-
-            var caption = new Label { name = CaptionName };
-            caption.style.unityFontStyleAndWeight = FontStyle.Bold;
-            caption.style.fontSize = 22;
-            caption.style.color = new Color(0.95f, 0.84f, 0.5f);
-            head.Add(caption);
-
-            var progress = new Label { name = ProgressName };
-            progress.style.fontSize = 15;
-            progress.style.color = new Color(0.7f, 0.74f, 0.82f);
-            head.Add(progress);
-
-            // Narrated body copy.
-            var body = new Label { name = BodyName };
-            body.style.fontSize = 20;
-            body.style.color = new Color(0.92f, 0.94f, 0.98f);
-            body.style.whiteSpace = WhiteSpace.Normal;
-            body.style.marginBottom = 20;
-            card.Add(body);
-
-            // Controls — Skip (left), Next / Begin (right).
-            var foot = new VisualElement { name = "tutorial-card-foot" };
-            foot.style.flexDirection = FlexDirection.Row;
-            foot.style.justifyContent = Justify.SpaceBetween;
-            card.Add(foot);
-
-            var skip = new Button { name = SkipButtonName, text = "Skip tutorial" };
-            skip.style.fontSize = 15;
-            foot.Add(skip);
-
-            var next = new Button { name = NextButtonName, text = "Next" };
-            next.style.fontSize = 17;
-            next.style.unityFontStyleAndWeight = FontStyle.Bold;
-            next.style.minWidth = 160;
-            foot.Add(next);
-
-            FlowTrace.Warn("Onboarding",
-                "BuildOverlayInCode: TutorialOverlay.uxml had no coach-mark elements " +
-                "(UXML does not render in builds) — built the overlay in code (fallback path).");
+            _built = true;
         }
 
         // =====================================================================
@@ -482,7 +395,7 @@ namespace DeNelle.Onboarding
         {
             using var _ = FlowTrace.Enter("Onboarding", "OnboardingFlow.Run");
             if (_running) { FlowTrace.Step("Onboarding", "Run: already running — no-op."); return; }
-            if (!_bound) BindElements();
+            EnsureBuilt();
 
             _running = true;
             HasFinished = false;
@@ -512,12 +425,9 @@ namespace DeNelle.Onboarding
             // Body copy — canon string from en.json, never typed inline.
             if (_body != null) _body.text = CanonStrings.Locale(beat.CopyKey);
 
-            if (_nextButton != null)
-            {
-                _nextButton.text = beat.NextLabel;
-                // The final beat's advance button becomes the amber CTA.
-                _nextButton.EnableInClassList(NextBeginClass, index == Beats.Length - 1);
-            }
+            // Retext the Next button's kit label (the Obsidian button stays the Green
+            // primary CTA every beat; the final beat's label reads "Begin Wave 1").
+            if (_nextLabel != null) _nextLabel.text = beat.NextLabel;
         }
 
         /// <summary>
@@ -661,18 +571,14 @@ namespace DeNelle.Onboarding
 
         private void SetOverlayVisible(bool visible)
         {
-            if (_root == null) return;
-            // USS-class toggle for the UXML path …
-            _root.EnableInClassList(RootHiddenClass, !visible);
-            // … plus an inline display toggle so the code-built fallback overlay
-            // (PIPELINE_STATE §8 — USS does not apply in builds) hides/shows too.
-            _root.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_canvas != null) _canvas.SetActive(visible);
+            if (_group != null) _group.blocksRaycasts = visible;
         }
 
-        /// <summary>Fades the whole overlay opacity. Never <c>async void</c>.</summary>
+        /// <summary>Fades the whole overlay's CanvasGroup alpha. Never <c>async void</c>.</summary>
         private async UniTask FadeOverlay(float from, float to)
         {
-            if (_root == null) return;
+            if (_group == null) return;
 
             _cts?.Cancel();
             _cts?.Dispose();
@@ -681,7 +587,7 @@ namespace DeNelle.Onboarding
 
             if (_fadeSeconds <= 0f)
             {
-                _root.style.opacity = to;
+                _group.alpha = to;
                 return;
             }
 
@@ -691,17 +597,17 @@ namespace DeNelle.Onboarding
                 while (elapsed < _fadeSeconds)
                 {
                     token.ThrowIfCancellationRequested();
-                    _root.style.opacity = Mathf.Lerp(from, to, elapsed / _fadeSeconds);
+                    _group.alpha = Mathf.Lerp(from, to, elapsed / _fadeSeconds);
                     await UniTask.Yield(PlayerLoopTiming.Update, token);
                     elapsed += Time.deltaTime;
                 }
-                _root.style.opacity = to;
+                _group.alpha = to;
             }
             catch (OperationCanceledException)
             {
                 // Disabled / superseded mid-fade — snap to the target so the
-                // overlay is never left at a half-faded opacity.
-                if (_root != null) _root.style.opacity = to;
+                // overlay is never left at a half-faded alpha.
+                if (_group != null) _group.alpha = to;
             }
         }
     }
@@ -713,11 +619,12 @@ namespace DeNelle.Onboarding
 // DeNelle.Onboarding deliberately cannot see DeNelle.Village / DeNelle.HUD, so
 // the village scene builder / VillageController owns every connection below:
 //
-//   1. Add a UIDocument to a tutorial GameObject in the Village scene; assign
-//      TutorialOverlay.uxml as its Source Asset and the Onboarding panel
-//      settings as its Panel Settings. Add this OnboardingFlow component beside
-//      it. Put its UIDocument sort order ABOVE the VillageHud document so the
-//      coach-marks paint over the HUD.
+//   1. WO-C (2026-07-03): the coach-marks are code-built uGUI on the Blink
+//      Obsidian kit now — this component builds its OWN ScreenSpaceOverlay canvas
+//      (sort 31000, above the HUD) at runtime. The Village scene builder still
+//      adds a legacy UIDocument (TutorialOverlay.uxml) to the GameObject for
+//      backward compat; Awake() DISABLES it. No PanelSettings / UXML is needed at
+//      runtime, so nothing scene-hosted can blank the FTUE (CLAUDE.md §8).
 //
 //   2. Run gate: leave _runOnStart = true — OnboardingFlow.Start() checks
 //      GameState.Onboarded itself and shows the tutorial only on a first run.

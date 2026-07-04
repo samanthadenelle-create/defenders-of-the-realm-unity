@@ -110,10 +110,15 @@ namespace DeNelle.Village
         // visual here, interaction from the herald. No new entry code needed.
         private static readonly Place[] Places =
         {
+            // Owner 2026-07-03 ("coliseum and the jeweler are too large, scale both down 50%"):
+            // halved the owner-hand-dialed scale (10.6/8.4/10.53 -> 5.3/4.2/5.265). The explicit
+            // scale override in TryPlace runs AFTER VisualFactory's SeatOnGround, so a smaller scale
+            // lifts the bounds base off the floor — ReseatOnFloor (called in TryPlace) puts it back
+            // on the sampled floor y so the ring stays seated, not floating.
             new Place { name = "Colosseum_ArenaEntrance", modelPath = "Structures/arena",
                         worldPos = new Vector3(-0.39f, 0f, 23.1f), sizeM = 16f,
                         yawDeg = 0f, pitchDeg = -90f, rollDeg = 90f,
-                        scaleX = 10.6f, scaleY = 8.4f, scaleZ = 10.53f },   // owner hand-dialed 2026-06-21
+                        scaleX = 5.3f, scaleY = 4.2f, scaleZ = 5.265f },   // 50% of owner hand-dialed 2026-06-21
         };
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -176,7 +181,14 @@ namespace DeNelle.Village
                 return;
             }
             if (p.scaleX > 0f)   // explicit owner-dialed (non-uniform) scale overrides the uniform sizeM fit
+            {
                 vis.transform.localScale = new Vector3(p.scaleX, p.scaleY, p.scaleZ);
+                // Owner 2026-07-03 scale-down: the explicit scale is applied AFTER VisualFactory's
+                // SeatOnGround (which seated the FITTED size), so shrinking it drifts the bounds base
+                // off the floor. Re-seat the visual base back onto the sampled floor y so a scaled
+                // prop is never left floating / half-buried ("keep them seated on the ground").
+                ReseatOnFloor(vis, seated.y);
+            }
             // Ticket #10 (RCA 2026-06-21): a TryPlace structure (e.g. the colosseum) has NO baked
             // collider at all — the inject path is visual-only. Fit one to the final visible mesh so
             // it's solid. Done AFTER scale so the box matches what the player sees.
@@ -293,6 +305,26 @@ namespace DeNelle.Village
             // FlowTrace (not Debug.Log) so the headless break-log captures it — proof the structure is solid.
             DeNelle.Core.Diagnostics.FlowTrace.Step("Hub",
                 $"fitted BoxCollider on '{host.name}' size={b.size} center={b.center} (ticket #10 — now solid).");
+        }
+
+        // Shift a placed visual vertically so its renderer-bounds BASE sits at floorY. Used after
+        // an explicit scale override (which runs after VisualFactory's SeatOnGround) so a scaled-down
+        // prop re-settles on the floor instead of floating / burying (owner 2026-07-03 scale-down).
+        private static void ReseatOnFloor(GameObject vis, float floorY)
+        {
+            if (vis == null) return;
+            Bounds b = default; bool have = false;
+            foreach (var r in vis.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                if (!have) { b = r.bounds; have = true; } else b.Encapsulate(r.bounds);
+            }
+            if (!have) return;
+            var pos = vis.transform.position;
+            pos.y += floorY - b.min.y;   // lift/lower so the bounds base lands on the floor
+            vis.transform.position = pos;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Hub",
+                $"re-seated '{vis.name}' base to floor y={floorY:0.###} after scale-down (was min.y={b.min.y:0.###}).");
         }
 
         // Name match across the loaded scene(s). Runs once per hub load (not per frame).

@@ -122,6 +122,16 @@ namespace DeNelle.Village
                     // an authored conversation (dialogues.json) ending in OpenAlchemy — the same
                     // ConsumableCrafting panel the station's own interact opens.
                     return new Vendor { BodyRes = BodyPeasantA, StructureId = "apothecary",   Label = "Apothecary", Arch = TownsfolkDialogue.Archetype.Villager };
+                case "jewelersbench":
+                    // Owner 2026-07-03 ("every building in town needs an NPC as the speaker; jeweler
+                    // lacks that"): the Jeweler's Bench is a RUNTIME station (JewelerStationInjector,
+                    // BuildingType.JewelersBench, id "jewelers-bench") with no baked marker, so it's
+                    // spawned by the deferred pass below like the apothecary. structureId MUST match the
+                    // station's Building id ("jewelers-bench") so MarkNpcCovered defers the bench's own
+                    // prompt to this NPC, and so PlayStructure finds the authored "jewelers-bench"
+                    // conversation (Sable) that ends in OpenJeweler -> the SAME JewelerCrafting panel
+                    // the station's BuildingInteractable opens. Mirrors the Apothecary/Herbalist wiring.
+                    return new Vendor { BodyRes = BodyMerchant, StructureId = "jewelers-bench", Label = "Jeweler", Arch = TownsfolkDialogue.Archetype.Quartermaster };
             }
             // Unknown role -> generic merchant talking to the market. Never silently skip,
             // so a future storefront still gets a working NPC.
@@ -203,6 +213,13 @@ namespace DeNelle.Village
             // herbalist through the SAME SpawnVendor path as every storefront NPC.
             StopCoroutine(nameof(SpawnApothecaryWhenReady));
             StartCoroutine(nameof(SpawnApothecaryWhenReady));
+
+            // Owner 2026-07-03 ("jeweler lacks [an NPC speaker]"): the Jeweler's Bench is likewise a
+            // RUNTIME station (JewelerStationInjector) with no baked "NPC_*_Interactable" marker, so
+            // the loop above never gives it a vendor. Same deferred pattern as the apothecary: wait
+            // for its Building to exist, then spawn Sable through the SAME SpawnVendor path.
+            StopCoroutine(nameof(SpawnJewelerWhenReady));
+            StartCoroutine(nameof(SpawnJewelerWhenReady));
         }
 
         // Deferred apothecary NPC: polls (a few frames, ~6s cap) for the runtime-injected
@@ -247,6 +264,53 @@ namespace DeNelle.Village
             // Station never appeared — self-report (the bare-prompt symptom would persist).
             FlowTrace.Warn("Village",
                 "CastleVendorNpcInjector: apothecary station never appeared within 6s — no apothecary NPC placed.");
+        }
+
+        // Deferred jeweler NPC (owner 2026-07-03 "jeweler lacks [an NPC]"): the Jeweler's Bench is a
+        // runtime-injected station (JewelerStationInjector, BuildingType.JewelersBench), so it has no
+        // baked "NPC_*_Interactable" marker for the Inject loop to find. Poll (~6s cap) for its
+        // Building, then reuse SpawnVendor with a synthetic marker so placement/interaction/sign
+        // composition is identical to the baked storefronts + the apothecary. Role "JewelersBench"
+        // maps (VendorFor) to structureId "jewelers-bench" -> Sable dialogue -> JewelerCrafting panel.
+        private IEnumerator SpawnJewelerWhenReady()
+        {
+            const float TimeoutSeconds = 6f;
+            float deadline = Time.unscaledTime + TimeoutSeconds;
+            while (Time.unscaledTime < deadline)
+            {
+                if (SceneManager.GetActiveScene().name != TargetScene) yield break; // scene moved on
+                if (GameObject.Find("CastleVendor_JewelersBench") != null ||
+                    GameObject.Find("CastleVendor_JewelersBench_Placeholder") != null)
+                    yield break;                                                    // already placed
+
+                Building station = null;
+                foreach (var b in FindObjectsByType<Building>())
+                    if (b != null && b.Type == BuildingType.JewelersBench) { station = b; break; }
+
+                if (station != null)
+                {
+                    var holder = GameObject.Find(HolderName);
+                    if (holder == null) yield break;   // injector re-ran / tearing down
+
+                    // Synthetic marker AT the station (parent = station transform) — SpawnVendor
+                    // reads the marker-to-parent distance (<1m => default 5m front offset) and
+                    // faces the NPC toward the Heart, exactly like the baked markers.
+                    var marker = new GameObject("NPC_JewelersBench_Marker (runtime)");
+                    marker.transform.SetParent(station.transform, false);
+
+                    bool ok = SpawnVendor(marker.transform, "JewelersBench", ResolveHero(), holder.transform);
+                    Destroy(marker);
+                    if (ok) FlowTrace.Step("Village",
+                        "CastleVendorNpcInjector: jeweler NPC placed at the runtime bench station (deferred pass).");
+                    else FlowTrace.Fail("Village",
+                        "CastleVendorNpcInjector: jeweler NPC spawn FAILED at the runtime bench station.");
+                    yield break;
+                }
+                yield return null;
+            }
+            // Station never appeared — self-report (the missing-NPC symptom would persist).
+            FlowTrace.Warn("Village",
+                "CastleVendorNpcInjector: jeweler's bench station never appeared within 6s — no jeweler NPC placed.");
         }
 
         /// <summary>Spawns ONE static NPC at the marker and attaches the interaction.</summary>
