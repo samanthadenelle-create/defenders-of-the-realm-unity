@@ -572,17 +572,20 @@ namespace DeNelle.Village
             // + shield-mesh prop attach entirely (baked Paladin gear wins — no second sword, no wrong-oriented
             // attached shield). Stat/loadout/armor-tint on the controller are unaffected. Legacy Tripo Knight
             // (usePackage=false) is never marked → its attach path stays byte-for-byte intact.
-            // KNIGHTV3 (owner "try this"): KnightV3 has NO baked gear, but the owner is REFINING the gear
-            // approach — so for this first cut we suppress prop-attach too (same marker) to render a CLEAN
-            // KnightV3 body with the correct rig + texture, no risk of a mis-oriented/duplicate weapon.
-            // Gear mapping to its CC_Base grip joints (R_Hand/L_Hand) is the documented NEXT step
-            // (AttachmentOffsetRegistry). Set ff.knightv3=0 to restore the package/legacy gear behavior.
-            if ((usePackage || useKnightV3) && GetComponent<PackageBakedGearMarker>() == null)
+            // KNIGHTV3 (WEAPONS-IN-HANDS 2026-07-04): KnightV3 is a BARE AccuRIG body with NO baked
+            // gear — unlike the Paladin package, it WANTS the equipped props. So we do NOT tag it with
+            // PackageBakedGearMarker; EquipmentController (added below) attaches the equipped sword
+            // (sword_A) to CC_Base_R_Hand and the shield (shield_A) to CC_Base_L_Hand through the
+            // humanoid avatar (GetBoneTransform(RightHand/LeftHand) maps to the CC_Base_* grips),
+            // seated by the Offset Forge 'sword_A'/'shield_A' entries (AttachmentOffsetRegistry). Only
+            // the ARMOR OVERLAY + primitive GearVisualApplier stay suppressed below (they would hide or
+            // duplicate the body). Set ff.knightv3=0 to restore the package/legacy gear behavior.
+            if (usePackage && GetComponent<PackageBakedGearMarker>() == null)
             {
                 gameObject.AddComponent<PackageBakedGearMarker>();
                 FlowTrace.Step("HeroBody",
-                    (useKnightV3 ? "KNIGHTV3" : "PACKAGE") + ": tagged hero root with PackageBakedGearMarker BEFORE EquipmentController — " +
-                    "the controller will SKIP weapon/shield prop attach (baked/deferred gear; de-dupes the second sword).");
+                    "PACKAGE: tagged hero root with PackageBakedGearMarker BEFORE EquipmentController — " +
+                    "the controller will SKIP weapon/shield prop attach (baked Paladin gear; de-dupes the second sword).");
             }
             if (GetComponent<EquipmentController>() == null)
                 gameObject.AddComponent<EquipmentController>();
@@ -593,8 +596,10 @@ namespace DeNelle.Village
             // controller is already added above, so it's subscribed). Knight-specific, like the
             // height tweak — Tripo donor carries no weapon/shield, so we attach them as gear.
             // PACKAGE: the Paladin package BAKES its own sword/shield/helmet into the mesh, so the
-            // separate shield prop is NOT seeded (baked wins — item e). Legacy Tripo Knight still gets it.
-            if (cls == HeroClass.Knight && !usePackage && !useKnightV3 && equipLoadout.EquippedOffHand == null)
+            // separate shield prop is NOT seeded (baked wins — item e). Legacy Tripo Knight AND the
+            // bare KnightV3 body (WEAPONS-IN-HANDS 2026-07-04) both get it — KnightV3 carries no baked
+            // shield, so EquipmentController attaches shield_A to CC_Base_L_Hand from this seed.
+            if (cls == HeroClass.Knight && !usePackage && equipLoadout.EquippedOffHand == null)
                 Guard.Try("HeroBody", "seed knight default shield",
                     () => equipLoadout.EquipOffHandById("knight_shield_starter"));
             // ARMOR RENDER (HeroArmorVisual): show EQUIPPED Blink armor on the BODY by swapping

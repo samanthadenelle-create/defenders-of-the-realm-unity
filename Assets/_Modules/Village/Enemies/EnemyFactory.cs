@@ -156,6 +156,15 @@ namespace DeNelle.Village
                     $"VisualFactory.Skin OK for model '{model}' (id '{(def != null ? def.Id : "?")}') — real mesh, not capsule");
                 EnemyAnimatorFactory.Apply(vis, model);   // walk/attack/die controller
 
+                // WEAPONS-IN-HANDS (2026-07-04): arm the berserker so it no longer fights bare-handed.
+                // Any enemy rendered with the Orc_Berserker model (orc-berserker + the orc-raider/caveman/
+                // troll stand-ins that reuse it) gets a real axe in its right hand. Seats on CC_Base_R_Hand
+                // via the humanoid avatar; grip is DATA-DRIVEN (Offset Forge key "axe_A" in
+                // AttachmentOffsetRegistry) with an eyeball default so the owner can felt-tune it in the Forge.
+                if (model == "Orc_Berserker")
+                    AttachEnemyWeapon(vis, "axe_A", 1.0f,
+                        defaultEuler: new Vector3(-25f, 90f, 0f), defaultPos: Vector3.zero, defaultScale: 1f);
+
                 // WO-482: the new Tripo orc FAMILY (Orc_Warrior/Tank/Mage) ships EXTERNAL textures with an
                 // unbound _MainTex → renders solid WHITE under the URP fixer unless the per-orc basecolor is
                 // bound as the fixer's FALLBACK (the exact fix ATB slice 2c needed). The fixer was attached by
@@ -406,6 +415,133 @@ namespace DeNelle.Village
             float feetOffset = b.min.y - root.position.y;   // negative when feet are below the root
             if (feetOffset < 0f)
                 vis.transform.localPosition -= new Vector3(0f, feetOffset, 0f);
+        }
+
+        // ── ENEMY WEAPON ATTACH (WEAPONS-IN-HANDS 2026-07-04) ────────────────────────
+        // Give a skinned enemy a real held prop (e.g. the berserker's axe). Additive + reversible:
+        // loads a committed Resources prop, size-normalises it to heldLength (robust to the FBX's native
+        // import scale), seats the handle end in the palm, parents to the RIGHT-hand bone, then applies a
+        // DATA-DRIVEN grip offset from AttachmentOffsetRegistry (Offset Forge key = mesh name, e.g.
+        // "axe_A") — falling back to the passed eyeball default when the owner has not tuned it yet. The
+        // offset reproduces the Offset Forge preview convention (localRot=Euler(rot), localPos=pos,
+        // localScale=one*scale) so a single Forge calibration pass perfects the grip.
+        private static void AttachEnemyWeapon(GameObject visual, string meshName, float heldLength,
+            Vector3 defaultEuler, Vector3 defaultPos, float defaultScale)
+        {
+            if (visual == null || string.IsNullOrEmpty(meshName)) return;
+
+            var anim = visual.GetComponentInChildren<Animator>();
+            Transform hand = null;
+            if (anim != null && anim.isHuman)
+                hand = anim.GetBoneTransform(HumanBodyBones.RightHand);
+            if (hand == null)
+                hand = FindBoneByName(visual.transform, "CC_Base_R_Hand", "R_Hand", "RightHand", "Hand_R");
+            if (hand == null)
+            {
+                FlowTrace.Warn("Enemy",
+                    $"AttachEnemyWeapon: no right-hand bone on '{visual.name}' " +
+                    $"(isHuman={(anim != null && anim.isHuman)}) — '{meshName}' NOT attached.");
+                return;
+            }
+
+            var prefab = Resources.Load<GameObject>("Heroes/Props/Weapons/" + meshName);
+            if (prefab == null)
+            {
+                FlowTrace.Warn("Enemy",
+                    $"AttachEnemyWeapon: prop 'Heroes/Props/Weapons/{meshName}' missing — enemy stays unarmed.");
+                return;
+            }
+
+            var prop = Object.Instantiate(prefab);
+            prop.name = "EnemyWeapon_" + meshName;
+            foreach (var c in prop.GetComponentsInChildren<Collider>(true)) if (c != null) Object.Destroy(c);
+            foreach (var rb in prop.GetComponentsInChildren<Rigidbody>(true)) if (rb != null) Object.Destroy(rb);
+
+            var gripRoot = new GameObject("EnemyWeaponGrip_" + meshName);
+            NormalizeEnemyProp(prop, gripRoot.transform, heldLength);
+            gripRoot.transform.SetParent(hand, false);
+
+            Vector3 euler = defaultEuler;
+            Vector3 pos = defaultPos;
+            float scale = defaultScale <= 0f ? 1f : defaultScale;
+            if (AttachmentOffsetRegistry.TryGetOffset(meshName, out var fo))
+            {
+                euler = fo.eulerRot; pos = fo.pos; scale = fo.scale > 0f ? fo.scale : 1f;
+                FlowTrace.Step("Enemy",
+                    $"AttachEnemyWeapon '{meshName}' -> '{hand.name}': Offset Forge grip pos={pos} rot={euler} scale={scale:0.###}");
+            }
+            else
+            {
+                FlowTrace.Step("Enemy",
+                    $"AttachEnemyWeapon '{meshName}' -> '{hand.name}': no Forge offset — EYEBALL default " +
+                    $"pos={pos} rot={euler} scale={scale:0.###} (tune '{meshName}' in Offset Forge).");
+            }
+            gripRoot.transform.localRotation = Quaternion.Euler(euler);
+            gripRoot.transform.localPosition = pos;
+            gripRoot.transform.localScale = Vector3.one * scale;
+        }
+
+        // Size-normalise a freshly-instantiated held prop under a fresh grip root (identity at the world
+        // origin): orient its LONGEST axis to +Y, scale so that axis == heldLength (independent of the
+        // FBX's native import scale), and seat the bottom (handle) end + lateral centre at the origin so
+        // the palm holds the grip. Compact mirror of the hero NormalizeInto+SeatByHandle intent.
+        private static void NormalizeEnemyProp(GameObject prop, Transform gripRoot, float heldLength)
+        {
+            prop.transform.SetParent(gripRoot, false);
+            prop.transform.localPosition = Vector3.zero;
+            prop.transform.localRotation = Quaternion.identity;
+            prop.transform.localScale = Vector3.one;
+
+            if (!TryWorldBounds(prop, out Bounds b)) return;
+            Vector3 size = b.size;
+            // Rotate the longest axis onto local +Y.
+            if (size.x >= size.y && size.x >= size.z)
+                prop.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);   // X -> Y
+            else if (size.z >= size.y && size.z >= size.x)
+                prop.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);   // Z -> Y
+
+            if (!TryWorldBounds(prop, out b)) return;
+            float longest = Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z));
+            if (longest > 1e-4f && heldLength > 0f)
+            {
+                prop.transform.localScale *= heldLength / longest;
+                if (!TryWorldBounds(prop, out b)) return;
+            }
+
+            // Seat: shift so the handle end (bounds min Y) and lateral centre land at the grip origin.
+            Vector3 lp = prop.transform.localPosition;
+            lp.x -= b.center.x;
+            lp.y -= (b.center.y - b.extents.y);
+            lp.z -= b.center.z;
+            prop.transform.localPosition = lp;
+        }
+
+        // Combined world-space renderer AABB of a prop. The grip root is created at the world origin with
+        // an identity transform, so world == grip-local for the seating math above. False if no renderers.
+        private static bool TryWorldBounds(GameObject prop, out Bounds bounds)
+        {
+            bounds = default;
+            var rends = prop.GetComponentsInChildren<Renderer>();
+            if (rends == null || rends.Length == 0) return false;
+            bounds = rends[0].bounds;
+            for (int i = 1; i < rends.Length; i++) bounds.Encapsulate(rends[i].bounds);
+            return bounds.size.sqrMagnitude > 1e-8f;
+        }
+
+        // Depth-first search for a bone transform whose name contains any of the given tokens
+        // (case-insensitive). Fallback when the rig exposes no valid humanoid avatar for GetBoneTransform.
+        private static Transform FindBoneByName(Transform root, params string[] tokens)
+        {
+            if (root == null) return null;
+            foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (t == null) continue;
+                string n = t.name;
+                foreach (var tok in tokens)
+                    if (!string.IsNullOrEmpty(tok) && n.IndexOf(tok, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                        return t;
+            }
+            return null;
         }
 
         // RENDER-VERIFY (TGVRU, mirrors HeroArmorVisual.VerifyArmorRendersNow): a freshly-skinned
