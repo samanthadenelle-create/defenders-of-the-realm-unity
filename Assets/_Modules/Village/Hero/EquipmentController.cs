@@ -305,12 +305,42 @@ namespace DeNelle.Village
         private bool _combatExplicit;         // a caller drove SetCombatActive -> stop auto-mirroring
         private WaveManager _waveManager;     // auto-fallback combat signal (same as locomotion)
 
-        // Idle = sword LOWERED at the side: tilt the blade down/back from the ready pose.
-        // Combat = sword DRAWN/raised: the weapon's neutral (base) grip euler.
-        // These are additive offsets on the grip root's LOCAL rotation, applied on top of
-        // the per-weapon base grip. Tune on playtest; only melee blades visibly read it.
-        private static readonly Vector3 IdleHoldOffsetEuler   = new Vector3(55f, 0f, 0f);
-        private static readonly Vector3 CombatHoldOffsetEuler = new Vector3(0f, 0f, 0f);
+        // ── CARRY STATE: sheathed (town / out-of-combat) ↔ drawn (in-combat) ─────────
+        // OWNER DESIGN (2026-07-04): out of combat the weapon is SHEATHED on the BACK — NOT
+        // gripped in the hand — and is DRAWN to the hand only in combat.
+        //
+        // WHY THIS FIXES THE ~60° OVERWORLD FLOAT (context-delta RCA): the weapon is parented to
+        // the hand bone, so it FOLLOWS the animated hand identically in both contexts — the seat
+        // itself is not globally broken (battle proves it correct). The ONLY per-context rotation
+        // in the whole attach path was the retired IdleHoldOffsetEuler = (55,0,0), applied by the
+        // old ApplyHoldPose ONLY when out of combat and ZERO in combat. Composed onto _baseGripRot
+        // (which yaws the blade +90° via _swordGripEuler), that 55° local-X tilt reads as a ~55-60°
+        // world YAW — exactly the owner's "~-60° in Y, correct in battle, wrong in town." Rather
+        // than tuning that hack, we remove it: out of combat the hand grip is not shown AT ALL (the
+        // weapon is on the back), and in combat the grip uses the SAME seat battle uses (pure
+        // _baseGripRot). So the hand grip only ever renders in the context that seats it right.
+        //
+        // The in-combat signal is the CANONICAL one (HeroLocomotion.IsWaveInCombat, HeroLocomotion.cs
+        // :552-563 — a live wave Countdown/Active OR BattleArena.AnyBattleInProgress); the Update()
+        // auto-fallback below mirrors it so the draw matches the just-shipped calm/combat idle split.
+        //
+        // Sheathed pose is VISUAL (owner felt-tunes) — Inspector-exposed with deterministic defaults.
+        // The weapon rides a back socket (created under the Chest/Spine bone by ResolveBackSocket)
+        // laid diagonally across the back; the off-hand/shield rides the same socket, opposite side.
+        [SerializeField] private Vector3 _sheatheWeaponLocalPos   = new Vector3(-0.10f, 0.12f, -0.15f);
+        [SerializeField] private Vector3 _sheatheWeaponLocalEuler = new Vector3(8f, 0f, 158f);
+        [SerializeField] private Vector3 _sheatheOffHandLocalPos   = new Vector3(0.12f, 0.06f, -0.17f);
+        [SerializeField] private Vector3 _sheatheOffHandLocalEuler = new Vector3(0f, 90f, 12f);
+
+        // Resolved attach targets + the DRAWN local transform, so the carry-state can move each prop
+        // between its hand (drawn) and the back socket (sheathed) with no re-equip. _baseGripRot holds
+        // the drawn WEAPON rotation; the off-hand keeps its own drawn rotation (it has no rig-axis grip).
+        private Transform  _weaponHand;
+        private Vector3    _weaponDrawnLocalPos;
+        private Transform  _offHandHand;
+        private Vector3    _offHandDrawnLocalPos;
+        private Quaternion _offHandDrawnLocalRot = Quaternion.identity;
+        private Transform  _backSocket;   // lazily created under Chest/Spine — the shared sheathe anchor
 
         // ── SWORD GRIP ORIENTATION (rig-relative) ────────────────────────────────────
         // THE FIX (task #36 follow-up): the grip POINT (handle below the crossguard) is
@@ -467,6 +497,7 @@ namespace DeNelle.Village
             var anim = body.GetComponentInChildren<Animator>();
             if (anim == null || !anim.isHuman) return;   // need a humanoid rig to seat on bones
             _animator = anim;
+            _backSocket = null;   // new body → the old chest-anchored sheathe socket is stale; re-create under the new chest
             FlowTrace.Step("Equip", $"ReseatForBody: re-seating equipped props onto '{body.name}' bones (animator='{anim.name}').");
             EquipBestForHero();
         }
@@ -900,8 +931,6 @@ namespace DeNelle.Village
                 FlowTrace.Step("Offset", $"no offset stored for '{offsetKey}' — pure geometry grip kept.");
             }
 
-            ApplyHoldPose();
-
             // RENDER-VERIFY + ROLLBACK (TGVRU, owner directive 2026-06-19: "anything that renders
             // can be broken — check render==true and roll back the error"). The prop can load +
             // attach but be INVISIBLE (no enabled Renderer / no mesh) or SEATED WRONG (the grip
@@ -909,9 +938,22 @@ namespace DeNelle.Village
             // resolved hand BEFORE we leave it on the hero; on fail, destroy the half-attached prop
             // and clear the slot so no stray/invisible weapon is left behind (the never-left-broken
             // contract — the failure self-reports to the break-log instead of reaching the player).
+            // MUST run while the prop is still parented to the hand (verify asserts that seat) — only
+            // AFTER it passes do we record the draw target + apply the carry state (which may reparent
+            // the prop onto the back sheathe socket when out of combat).
             if (!VerifyWeaponRendersNow(gripRoot, hand, weaponId))
+            {
                 RollbackWeaponProp(gripRoot,
                     $"render-verify failed for weapon '{weaponId}' (no visible renderer or not parented to '{hand.name}')");
+                return;
+            }
+
+            // Record the DRAWN target (hand + final local pos); _baseGripRot already holds the drawn
+            // rotation. ApplyHoldPose now PLACES the prop by combat state: on the hand in combat, on
+            // the back socket (sheathed) out of combat — so the hand grip only shows where it seats right.
+            _weaponHand = hand;
+            _weaponDrawnLocalPos = gripRoot.transform.localPosition;
+            ApplyHoldPose();
         }
 
         // RENDER-VERIFY (synchronous, no camera/scene dependency): the attached weapon prop MUST
@@ -1516,6 +1558,14 @@ namespace DeNelle.Village
             FlowTrace.Step("Equip", $"AttachOffHandProp: off-hand '{id}' verified rendered + seated on '{hand.name}' " +
                 $"(native={vis.native}, localPos={gripRoot.transform.localPosition}, worldPos={gripRoot.transform.position}). " +
                 "§12: if the owner still sees it off the arm, this is the exact landed seat to tune the Blink grip against.");
+
+            // Record the DRAWN off-hand target, then place by carry state (drawn on the off-hand in
+            // combat, sheathed on the back socket out of combat) — same as the main weapon, so the
+            // shield is not shown floating on the arm in town (owner design 2026-07-04).
+            _offHandHand = hand;
+            _offHandDrawnLocalPos = gripRoot.transform.localPosition;
+            _offHandDrawnLocalRot = gripRoot.transform.localRotation;
+            ApplyHoldPose();
         }
 
         private void DestroyCurrentOffHand()
@@ -1525,6 +1575,7 @@ namespace DeNelle.Village
                 Destroy(_currentOffHandProp);
                 _currentOffHandProp = null;
             }
+            _offHandHand = null;   // drop the resolved draw target so a stale (old-body) hand is never reused
         }
 
         // ── Hold state: idle (lowered) ↔ combat (drawn/raised) ───────────────────────
@@ -1567,9 +1618,14 @@ namespace DeNelle.Village
             if (_seatingEditActive) return;
             if (_combatExplicit || _gripRoot == null) return;
             if (_waveManager == null) _waveManager = Object.FindAnyObjectByType<WaveManager>();
-            bool active = _waveManager != null &&
-                          (_waveManager.Phase == WavePhase.Countdown ||
-                           _waveManager.Phase == WavePhase.Active);
+            // CANONICAL in-combat signal — identical to HeroLocomotion.IsWaveInCombat (HeroLocomotion.cs
+            // :552-563) and the calm/combat idle split: a live wave (Countdown/Active) OR a BattleArena
+            // fight in progress. Without the BattleArena term an overworld/arena encounter with no active
+            // WaveManager would keep the weapon SHEATHED mid-fight (weapon never drawn in an arena battle).
+            bool active = DeNelle.Village.Arena.BattleArena.AnyBattleInProgress ||
+                          (_waveManager != null &&
+                           (_waveManager.Phase == WavePhase.Countdown ||
+                            _waveManager.Phase == WavePhase.Active));
             if (active != _combatActive)
             {
                 _combatActive = active;
@@ -1577,19 +1633,97 @@ namespace DeNelle.Village
             }
         }
 
-        // Apply the held-low vs held-ready local rotation to the grip root (attach-level —
-        // no animation clip). Additive on top of the per-weapon base grip euler.
-        // NOTE (animation hook): if a future pass wants a true arm pose (hand drops to the
-        // hip for idle, raises for combat), drive ActorAnimator.SetCombatStance from the
-        // same SetCombatActive call — the prop offset here and the body pose stay in sync.
+        // CARRY STATE (owner design 2026-07-04): place each prop by combat state — DRAWN to the
+        // hand in combat (the SAME seat battle uses, pure _baseGripRot), SHEATHED on the back socket
+        // out of combat. This is the fix for the ~60° overworld float: the in-hand grip only ever
+        // renders in combat (where it seats right); out of combat there is no hand grip to look wrong,
+        // and the retired IdleHoldOffsetEuler tilt (the single context-dependent rotation) is gone.
+        // Runs on every combat-state change (Update auto-mirror / SetCombatActive) and once per attach.
         private void ApplyHoldPose()
         {
-            if (_gripRoot == null) return;
-            Vector3 offset = _combatActive ? CombatHoldOffsetEuler : IdleHoldOffsetEuler;
-            // _baseGripRot is the corrected READY orientation (rig-derived for swords, the
-            // per-weapon preset otherwise). The idle/combat hold tilt composes on top of it
-            // so the hold offset is relative to the corrected ready pose (no double-apply).
-            _gripRoot.localRotation = _baseGripRot * Quaternion.Euler(offset);
+            bool drawn = _combatActive;
+            Transform back = drawn ? null : ResolveBackSocket();
+
+            // ── Main weapon ──
+            if (_gripRoot != null)
+            {
+                if (!drawn && back != null)
+                {
+                    _gripRoot.SetParent(back, false);
+                    _gripRoot.localPosition = _sheatheWeaponLocalPos;
+                    _gripRoot.localRotation = Quaternion.Euler(_sheatheWeaponLocalEuler);
+                }
+                else if (_weaponHand != null)
+                {
+                    // Drawn (or sheathed with no back bone on this rig — never leave it floating unparented).
+                    _gripRoot.SetParent(_weaponHand, false);
+                    _gripRoot.localPosition = _weaponDrawnLocalPos;
+                    _gripRoot.localRotation = _baseGripRot;
+                }
+            }
+
+            // ── Off-hand / shield ──
+            if (_currentOffHandProp != null)
+            {
+                var offT = _currentOffHandProp.transform;
+                if (!drawn && back != null)
+                {
+                    offT.SetParent(back, false);
+                    offT.localPosition = _sheatheOffHandLocalPos;
+                    offT.localRotation = Quaternion.Euler(_sheatheOffHandLocalEuler);
+                }
+                else if (_offHandHand != null)
+                {
+                    offT.SetParent(_offHandHand, false);
+                    offT.localPosition = _offHandDrawnLocalPos;
+                    offT.localRotation = _offHandDrawnLocalRot;
+                }
+            }
+        }
+
+        // Lazily create the shared BACK sheathe socket under the Chest bone (fallback Spine, then
+        // UpperChest) — the exact torso-anchor pattern GearVisualApplier uses for chest armor
+        // (GearVisualApplier.cs:217-218). Returns null on a non-Humanoid / torso-less rig, in which
+        // case ApplyHoldPose keeps the prop on the hand (no back socket = never unparented/floating).
+        // Cleared on a body swap (ReseatForBody) so it re-creates under the new visible body's chest.
+        private Transform ResolveBackSocket()
+        {
+            if (_backSocket != null) return _backSocket;   // a destroyed Unity object compares == null → re-created
+            if (_animator == null || !_animator.isHuman) return null;
+            Transform anchor = _animator.GetBoneTransform(HumanBodyBones.Chest);
+            if (anchor == null) anchor = _animator.GetBoneTransform(HumanBodyBones.Spine);
+            if (anchor == null) anchor = _animator.GetBoneTransform(HumanBodyBones.UpperChest);
+            if (anchor == null) return null;
+            var go = new GameObject("SheatheSocket_Back");
+            go.transform.SetParent(anchor, false);
+            go.transform.localPosition = Vector3.zero;
+            go.transform.localRotation = Quaternion.identity;
+            _backSocket = go.transform;
+            FlowTrace.Step("Equip", $"ResolveBackSocket on '{name}': sheathe anchor under bone '{anchor.name}'.");
+            return _backSocket;
+        }
+
+        // Force the given slot's prop to its DRAWN (in-hand) seat regardless of combat state — used by
+        // the in-game Seating Editor so a tune session always edits the in-hand grip, never the sheathed
+        // back pose. No-op if that slot has no prop / no resolved hand yet.
+        private void DrawForEditing(bool offHand)
+        {
+            if (offHand)
+            {
+                if (_currentOffHandProp != null && _offHandHand != null)
+                {
+                    var t = _currentOffHandProp.transform;
+                    t.SetParent(_offHandHand, false);
+                    t.localPosition = _offHandDrawnLocalPos;
+                    t.localRotation = _offHandDrawnLocalRot;
+                }
+            }
+            else if (_gripRoot != null && _weaponHand != null)
+            {
+                _gripRoot.SetParent(_weaponHand, false);
+                _gripRoot.localPosition = _weaponDrawnLocalPos;
+                _gripRoot.localRotation = _baseGripRot;
+            }
         }
 
         // Build the sword grip-root's LOCAL rotation (in the hand bone's space) so the blade
@@ -1810,6 +1944,9 @@ namespace DeNelle.Village
             _seatingEditActive = true;
             _seatEditOffHand   = offHand;
             _seatEditMode      = -1;   // force a re-seat on the first preview
+            // The seating editor tunes the IN-HAND (drawn) seat — make sure the edited prop is DRAWN
+            // to its hand (not sheathed on the back), so the preview math runs in the correct frame.
+            DrawForEditing(offHand);
             ApplySeatingPreview(info.pos, info.euler, info.scale, info.fullOverride);
             FlowTrace.Step("Offset", $"BeginSeatingEdit '{info.offsetKey}' offHand={offHand} seed pos={info.pos} euler={info.euler} scale={info.scale:0.###} full={info.fullOverride}");
             return true;
@@ -1919,13 +2056,13 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>End the edit session: restore the auto idle/combat hold on the main weapon.</summary>
+        /// <summary>End the edit session: restore the auto sheathe/draw carry state on both props.</summary>
         public void EndSeatingEdit()
         {
             if (!_seatingEditActive) return;
             _seatingEditActive = false;
             _seatEditMode = -1;
-            // Re-apply the hold pose so the main weapon resumes its idle/combat tilt cleanly.
+            // Re-apply the carry state so both props resume drawn (combat) / sheathed (town) cleanly.
             ApplyHoldPose();
             FlowTrace.Step("Offset", $"EndSeatingEdit on '{name}'.");
         }
@@ -1952,6 +2089,7 @@ namespace DeNelle.Village
                 Destroy(_currentWeaponProp);
                 _currentWeaponProp = null;
             }
+            _weaponHand = null;   // drop the resolved draw target so a stale (old-body) hand is never reused
         }
 
         // ── ARMED-HERO INVARIANT (regression surface) ────────────────────────────────
