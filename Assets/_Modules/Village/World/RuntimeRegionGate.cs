@@ -351,6 +351,39 @@ namespace DeNelle.Village
                     float lowY = 0f; bool measured = false;
                     if (Physics.Raycast(probeW, Vector3.down, out RaycastHit lh, 60f, ~0, QueryTriggerInteraction.Ignore))
                     { lowY = lh.point.y; measured = true; }
+
+                    // ── ROOT-1 fix (WO-607, owner 2026-07-04): South-only RUNTIME_SEAM_NAV_FAIL ──
+                    // §12 CAPTURED DATA (break-log 2026-07-04): South threshold probe measured low-end y=5.84 —
+                    // ABOVE the plinth edge deckY≈3.08, i.e. an ASCENDING ramp, physically impossible for a
+                    // descending seam; W/N/E measured 3.00 and welded (RUNTIME_SEAM_NAV_OK). Cause: on the
+                    // owner-tuned South side the bridge is "extended over the lip to the ground" (owner note
+                    // 07-04), so the all-layer downward raycast hits the RAISED bridge/lip, not the courtyard
+                    // floor. The weld TARGET is the source navmesh, so when the probe lands above the deck we
+                    // sample the real navmesh Y at the threshold and weld to THAT (what W/N/E effectively do).
+                    // Only the broken case (probe > deck) changes → W/N/E keep their raw measure; the lip, the
+                    // owner pose, and flag_14 (still a contained descending lane) are untouched. Instrumented so
+                    // the fleet oracle PROVES the flip to RUNTIME_SEAM_NAV_OK[South] — not shipped on faith.
+                    string probeHit = measured ? (lh.collider != null ? lh.collider.name : "<null-col>") : "<no-hit>";
+                    int   probeLayer = (measured && lh.collider != null) ? lh.collider.gameObject.layer : -1;
+                    float navThrY = float.NaN;
+                    bool  haveNav = NavMesh.SamplePosition(ToWorld(new Vector3(_gatePos.x, deckY, _thresholdZ)),
+                                                           out NavMeshHit thrNav, 8f, NavMesh.AllAreas);
+                    if (haveNav) navThrY = thrNav.position.y;
+                    bool badHit = measured && lowY > deckY + 0.25f;   // probe above the deck = ascending ramp = bad hit
+                    if (badHit)
+                    {
+                        // Prefer the REAL navmesh Y at the threshold (what W/N/E weld to); if the source
+                        // navmesh doesn't reach the threshold XZ, fall back to the deck Y so the ramp is at
+                        // worst flat — never ascending. Either way the low-end can no longer float above the deck.
+                        lowY = (haveNav && !float.IsNaN(navThrY)) ? navThrY : deckY;
+                    }
+                    string navStr  = haveNav ? navThrY.ToString("F2") : "NONE";
+                    string outcome = badHit
+                        ? " raw probe ABOVE deck (hit raised bridge/lip) -> welded to " + (haveNav ? "navmesh" : "deck") + " Y instead"
+                        : " (probe kept)";
+                    FlowTrace.Step("RuntimeSeam",
+                        $"deck[{SideName(_facingYaw)}] THRESHOLD-PROBE: hit '{probeHit}' (layer {probeLayer}) rawY={lh.point.y:F2} " +
+                        $"deckY(plinth)={deckY:F2} navmesh@threshold={navStr} -> lowY={lowY:F2}{outcome}.");
                     _thresholdY = lowY;
 
                     // Contain the lane to the VISIBLE crossing: on the south side clamp the sloped width

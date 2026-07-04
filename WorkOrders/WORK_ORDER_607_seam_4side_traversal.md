@@ -18,7 +18,29 @@ This WO holds the two root causes (one precise, one deep) proven from captured f
 - Baked scenes `MainCastle_Hall.unity` + `OuterWorld.unity` re-baked (castle nav + 4-link seam + OuterWorld nav).
 - Gate: COMPILE_GATE_OK. Fleet: CHECK5 still `PathPartial West/North/East` (the links did NOT green it — root below).
 
-## ROOT 1 — South-only `RUNTIME_SEAM_NAV_FAIL` = precise, side-specific bug (type A)
+## ⚠ ROOT 1 — SUPERSEDED 2026-07-04 by CAPTURED DATA (the width-clamp theory below was WRONG)
+**§12 finding (break-log 2026-07-04):** the South fail is a **VERTICAL weld gap, not a width problem.**
+The captured trace shows South threshold low-end `y=5.84` — ABOVE the plinth edge `deckY≈3.08` (an
+impossible ascending ramp) — while W/N/E measure `y=3.00` and weld (`RUNTIME_SEAM_NAV_OK`). Cause: on the
+owner-tuned South side the bridge is "extended over the lip to the ground" (owner note 07-04), so the
+all-layer downward threshold raycast (`RuntimeRegionGate.cs:352`) hits the RAISED bridge/lip instead of the
+courtyard floor; the plain W/N/E clones hit the floor at 3.00. The 3.1m clamp width is a walkable lane for a
+~0.5m agent — a red herring. **FIX APPLIED (RuntimeRegionGate.cs ~:350-372, uncommitted):** when the probe
+lands above the deck, weld the low-end to the sampled navmesh Y at the threshold (fallback = deckY so the ramp
+is at worst flat, never ascending). Only the broken (South) case changes; W/N/E keep their raw measure; the
+lip, owner pose, and flag_14 are untouched. Instrumented (`THRESHOLD-PROBE` FlowTrace) so the fleet oracle
+proves the flip to `RUNTIME_SEAM_NAV_OK[South]`. VERIFY: rebuild + bake MainCastle_Hall + fleet.
+
+**✅ VERIFIED 2026-07-04 (fleet seed 2000, single-instance clean Player.log):**
+`deck[South] THRESHOLD-PROBE: hit 'RuntimeSeam_BridgeDeck_Collider' rawY=5.84 deckY=3.08 navmesh@threshold=3.19 -> lowY=3.19 raw probe ABOVE deck (hit raised bridge/lip) -> welded to navmesh Y instead`
+→ `RUNTIME_SEAM_NAV_OK [South facingYaw=0]` (+ W/N/E all OK). W/N/E kept their raw probe
+(`CourtyardFloor_Nav` rawY=3.00 "probe kept") — no regression. The instrument NAMED the culprit
+(RuntimeSeam_BridgeDeck_Collider = the owner's over-the-lip bridge), the fix path demonstrably
+triggered, and the `RUNTIME_SEAM_NAV_FAIL` oracle went silent across a 4-seed fleet. ROOT 1 DONE.
+NOTE: this is the RUNTIME_SEAM_NAV (runtime weld) oracle; ROOT 2 (W/N/E CastleMoatBuilder CHECK5
+reachability) is a SEPARATE oracle, still deferred per owner.
+
+## ROOT 1 (ORIGINAL, SUPERSEDED) — South-only `RUNTIME_SEAM_NAV_FAIL` = precise, side-specific bug (type A)
 `RuntimeRegionGate.cs:360-368`: the nav-slope width clamp runs **only at yaw=0 (South)** —
 `GameObject.Find("RuntimeSeam_Bridge_South")` + `Mathf.Abs(DeltaAngle(_facingYaw,0f))<1f`. Only South
 narrows its slope to the stone-bridge deck width (`bb.size.x-1.2f`); after the runtime bake's 0.18 voxel +
