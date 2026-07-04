@@ -31,6 +31,7 @@ using TMPro;
 using UnityEngine;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
+using DeNelle.Core.Catalog;
 using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
@@ -387,20 +388,18 @@ namespace DeNelle.Village
             }
 
             // WO-131 — SINGLE AUTHORITATIVE CRYSTAL SPEND for tower placement.
-            // Deduct the DISPLAYED cost (v.CrystalCost) from the SAME store the menu
-            // and the village HUD read: GameState.Resources.Crystals (via
-            // GameStateService.AddCrystals, which clamps >= 0, persists, and raises
-            // ResourcesChanged). This is the one and only place a placement charges
-            // crystals — TowerPlacementSystem no longer touches the economy, so a
-            // placement can never double-charge or charge a divergent (Wood / Aether)
-            // pool. CanAfford(v) above re-checked the live balance one statement ago.
-            var gss = GameStateService.Instance;
-            if (gss == null)
+            // Deduct the DISPLAYED cost (v.CrystalCost) through BuildModeController.ChargeLedger,
+            // which routes through EconomyService for multi-resource costs or GameState.Crystals fallback.
+            // This ensures a placement charges through the canonical ledger, never double-charging.
+            // CanAfford(v) above re-checked the live balance one statement ago.
+            var cost = new DeNelle.Core.Catalog.ResourceCost
             {
-                SetStatus("Game state unavailable — cannot charge crystals.", isError: true);
-                return;
-            }
-            gss.AddCrystals(-v.CrystalCost);   // negative = spend; persisted + HUD-synced
+                crystals = v.CrystalCost,
+                wood = v.Wood,
+                iron = v.Stone,   // Note: UI calls it "Stone", catalog uses "Iron" for the third resource
+                food = 0
+            };
+            BuildModeController.ChargeLedger(cost);
 
             if (TowerPlacementSystem.Instance == null)
                 new GameObject("TowerPlacementSystem").AddComponent<TowerPlacementSystem>();

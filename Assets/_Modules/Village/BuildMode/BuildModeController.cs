@@ -1145,14 +1145,8 @@ namespace DeNelle.Village
             return Mathf.Clamp(repo.maxLevel, 1, 3);
         }
 
-        /// <summary>
-        /// Resolve the upgrade cost for the step <paramref name="fromLevel"/> → fromLevel+1.
-        /// Uses the authored per-step table (repo.upgradeCost[fromLevel-1]) when present;
-        /// otherwise falls back to a data scaler — the build cost scaled by the level being
-        /// left (so L1→L2 ≈ 1× the build cost, L2→L3 ≈ 2× — a rising CoC-style sink) — so a
-        /// row can opt into upgrades with just maxLevel and no explicit table. Null-safe.
-        /// </summary>
-        private static DeNelle.Core.Catalog.ResourceCost UpgradeCostFor(CatalogEntry entry, int fromLevel)
+        /// <summary>Resolve upgrade cost for the given level transition (L→L+1). Null-safe.</summary>
+        public static DeNelle.Core.Catalog.ResourceCost UpgradeCostFor(CatalogEntry entry, int fromLevel)
         {
             var repo = entry != null ? entry.repo : null;
             if (repo == null) return default;
@@ -1313,7 +1307,7 @@ namespace DeNelle.Village
         /// (repo.cost), use it verbatim; otherwise charge repo.buildCost Crystals so
         /// legacy / cost-less rows never regress. Null-safe (returns a free cost).
         /// </summary>
-        private static DeNelle.Core.Catalog.ResourceCost CostFor(CatalogEntry entry)
+        public static DeNelle.Core.Catalog.ResourceCost CostFor(CatalogEntry entry)
         {
             var repo = entry != null ? entry.repo : null;
             if (repo == null) return default;
@@ -1322,7 +1316,7 @@ namespace DeNelle.Village
         }
 
         /// <summary>Map the Core cost to EconomyService.ResourceCost (1:1 field copy).</summary>
-        private static ResourceCost ToEconomy(DeNelle.Core.Catalog.ResourceCost c)
+        public static ResourceCost ToEconomy(DeNelle.Core.Catalog.ResourceCost c)
             => new ResourceCost(c.wood, c.food, c.iron, c.crystals);
 
         /// <summary>
@@ -1345,7 +1339,7 @@ namespace DeNelle.Village
         /// "Not enough resources" if every pool is somehow covered (shouldn't happen on the
         /// CannotAfford path) or the service is absent.
         /// </summary>
-        private static string ShortfallMessage(DeNelle.Core.Catalog.ResourceCost cost)
+        public static string ShortfallMessage(DeNelle.Core.Catalog.ResourceCost cost)
         {
             var econ = EconomyService.Instance;
             if (econ != null)
@@ -1363,7 +1357,7 @@ namespace DeNelle.Village
         }
 
         /// <summary>Spend the cost through the ledger (atomic). No-op for a free cost.</summary>
-        private static void ChargeLedger(DeNelle.Core.Catalog.ResourceCost cost)
+        public static void ChargeLedger(DeNelle.Core.Catalog.ResourceCost cost)
         {
             if (cost.IsZero) return;
             var econ = EconomyService.Instance;
