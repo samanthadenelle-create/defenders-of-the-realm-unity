@@ -4,7 +4,7 @@
 // RuntimeInitializeOnLoadMethod pattern as HelpMenuBootstrap.
 // -----------------------------------------------------------------------------
 // Part of the "Dev tools dead after a Yarn dialogue" probe (2026-06-13): keeps the
-// pointer-hit dump alive across the additive OuterWorld load + scene swaps so the
+// pointer-hit dump alive across additive scene loads and transitions so the
 // failing click after a Yarn dialogue is always captured.
 // =============================================================================
 

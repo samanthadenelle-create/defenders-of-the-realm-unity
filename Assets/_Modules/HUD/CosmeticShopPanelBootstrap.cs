@@ -36,9 +36,9 @@ namespace DeNelle.HUD
                 return;
             }
 
-            // GLOBAL dedupe (across ALL loaded scenes) — not per-scene. The
-            // additive OuterWorld load fired sceneLoaded with a new scene and a
-            // per-scene check missed the live instance, spawning a duplicate.
+            // GLOBAL dedupe (across ALL loaded scenes) — not per-scene. Additive
+            // scene loads fire sceneLoaded with new scenes, and a per-scene check
+            // would miss the live instance, spawning a duplicate.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<CosmeticShopPanel>(
                          FindObjectsInactive.Include))
             {

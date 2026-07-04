@@ -196,7 +196,7 @@ namespace DeNelle.HUD
         // Cardinal math uses Unity's standard world axes: +Z = North, +X = East,
         // -Z = South, -X = West. yaw is the compass bearing of the heading vector
         // measured CLOCKWISE from +Z (North): yaw = atan2(x, z). So a heading of
-        // +Z → 0° (N), +X → 90° (E), -Z → 180° (S, the OuterWorld/south gate),
+        // +Z → 0° (N), +X → 90° (E), -Z → 180° (S),
         // -X → 270° (W).
         private void UpdateCompass()
         {
@@ -212,6 +212,7 @@ namespace DeNelle.HUD
             fwd.Normalize();
 
             // Clockwise bearing from +Z (North), in [0,360): atan2(East, North).
+            // World axes: +Z = North, +X = East, -Z = South, -X = West.
             float yaw = Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg;
             if (yaw < 0f) yaw += 360f;
 

@@ -28,10 +28,10 @@ namespace DeNelle.HUD
         private static void SpawnInScene(Scene scene)
         {
             if (!scene.IsValid()) return;
-            // GLOBAL dedupe (across ALL loaded scenes) — not per-scene. The
-            // additive OuterWorld load fires sceneLoaded with a new scene, and a
-            // per-scene check would miss the live MainCastle_Hall instance and
-            // spawn a second full-screen panel that steals pointer events.
+            // GLOBAL dedupe (across ALL loaded scenes) — not per-scene. Additive
+            // scene loads fire sceneLoaded with new scenes, and a per-scene check
+            // would miss the live instance and spawn a second full-screen panel
+            // that steals pointer events.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<HelpMenu>(
                          FindObjectsInactive.Include))
             {

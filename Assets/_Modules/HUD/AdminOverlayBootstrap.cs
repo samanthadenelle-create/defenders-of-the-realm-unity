@@ -27,8 +27,8 @@ namespace DeNelle.HUD
         {
             if (!scene.IsValid()) return;
             // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
-            // A per-scene check let the additive OuterWorld load spawn a second
-            // AdminOverlay that intercepted the Dev-tools button.
+            // A per-scene check would let additive scene loads spawn a second
+            // AdminOverlay that intercepts events.
             foreach (var existing in UnityEngine.Object.FindObjectsByType<AdminOverlay>(
                          FindObjectsInactive.Include))
             {
