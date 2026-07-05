@@ -376,7 +376,11 @@ namespace DeNelle.Village.Arena
             if (fader != null) yield return StartCoroutine(fader.FadeOutCo(StageFadeOutSeconds));
 
             // Warp the hero to the SOUTH stance, facing north toward the enemies (under black).
-            Vector3 heroStance = ArenaCentre + new Vector3(0f, 0f, -ArenaHalfDepth + 2f);
+            // BACKPEDAL ROOM (RCA 2026-07-04): was -ArenaHalfDepth + 2f (Z=-16), only 2m off the south
+            // wall (Z=-18) — backpedal hit the wall instantly and kiting was impossible even though the
+            // hero (6 m/s) outruns enemies (~3 m/s). Spawn 9m inward (Z=-9) for real backpedal room.
+            // Box size (ArenaHalfDepth/Width) is UNCHANGED — the -25% tighten is a deliberate design call.
+            Vector3 heroStance = ArenaCentre + new Vector3(0f, 0f, -ArenaHalfDepth + 9f);
             WarpHero(heroStance, Quaternion.LookRotation(Vector3.forward));
 
             // 4) Spawn the enemy FAMILY across the NORTH side (loose formation, 1..6).
@@ -390,37 +394,26 @@ namespace DeNelle.Village.Arena
                 yield break;
             }
 
-            // WO-512 slice 1: AUTO-LOCK the nearest enemy on engaging the battle (flag-gated).
-            // Behind FeatureFlags.LockOn so OFF == today's exact behavior (no lock acquired). The single
-            // lock owner is HeroTargetIndicator on the hero; EngageLock(null) picks the nearest hostile.
-            // No camera/facing change here (slices 2-3) — only the reticle reds + abilities aim follow.
-            if (FeatureFlags.LockOn)
-            {
-                Guard.Try("BattleArena", "auto-lock nearest on engage", () =>
-                {
-                    var hero = GameObject.FindWithTag("Player");
-                    var indicator = hero != null ? hero.GetComponent<HeroTargetIndicator>() : null;
-                    if (indicator != null)
-                    {
-                        indicator.EngageLock();   // auto-nearest
-                        var t = indicator.LockedEnemyTarget as MonoBehaviour;
-                        string nm = t != null ? t.gameObject.name.Replace("(Clone)", "").Trim() : "none";
-                        FlowTrace.Step("BattleArena", "LOCKON acquire target='" + nm + "' (auto-nearest on engage).");
-                        // WO-512 slice 2: bind the camera to keep the LOCKED enemy framed (reuses the
-                        // SMC auto-framing damp; no snap). No-op when the flag is off. WatchToResolution
-                        // re-binds each tick so a HUD switch / auto-drop-on-death re-frames smoothly.
-                        if (t != null) SmartMobileCamera.Instance?.SetLockTarget(t.transform);
-                    }
-                });
-            }
+            // The fight now STARTS UNLOCKED (owner deliberate-lock design). The prior WO-512 slice 1
+            // auto-lock (EngageLock(null) + camera SetLockTarget on the nearest hostile) is REMOVED so
+            // the Knight begins in free-kite: _lockFaceActive stays false → normal LookRotation(Velocity).
+            // Locking is now a purely DELIBERATE player action — desktop middle-click / mobile tap on an
+            // enemy engages the full lock-on (camera frame + face + strafe) via HeroTargetIndicator, and
+            // clicking/tapping the locked foe (or empty space) releases it. FeatureFlags.LockOn still
+            // gates that deliberate feature. No camera bind here: MaybeRebindLockCamera (ticked from
+            // WatchToResolution) reads the live locked target each tick and clears framing when nothing
+            // is locked, so starting unlocked needs no explicit camera clear.
+            FlowTrace.Step("BattleArena", "LOCKON fight starts UNLOCKED — lock is now a deliberate player action (middle-click / tap enemy).");
 
             // 5) Present: battle HUD + combat BGM. (Presentation layer; logic already staged.)
-            // HOME-HUD ISOLATION (owner F8 flag_25 2026-07-02, §12 captured): the home/village HUD
-            // (resource scroll, Chat/Ranks/Music stack, Settings, harvest glyphs, wave timer) BLED
-            // through the battle HUD — this call was SetVisible(true), i.e. it re-SHOWED the home
-            // HUD at stage time. Hide it for the fight; ReturnHomeWithFade restores it under black.
-            Guard.Try("BattleArena", "hide home HUD for battle", () => ArenaHudBridge.SetVisible(false));
-            FlowTrace.Step("BattleArena", "HOME HUD hidden for battle (restored on return).");
+            // HUD ISOLATION (was: hide the WHOLE kit via ArenaHudBridge.SetVisible(false), owner F8
+            // flag_25 2026-07-02). That force-hide set the single kit CanvasGroup alpha=0, which ALSO
+            // blanked the posture system's combat widgets (health/target/cast/ability/attack/flee) —
+            // the P1 "no HUD overlay in the arena". Removed: the kit stays VISIBLE and the BattleLock
+            // battle probe -> HudPosture.HostileActiveBattle occupancy (hud-areas.json) swaps town
+            // widgets OFF and combat widgets ON, so no town HUD bleeds through (verified: the
+            // hostile(activebattle) row carries no town-only widget — no build/resource/chat/heart/wave).
+            FlowTrace.Step("BattleArena", "BATTLE HUD: kit left visible; posture swaps to hostile(activebattle) combat widgets.");
             Guard.Try("BattleArena", "build battle overlay", () =>
             {
                 _hud = BattleArenaHud.Create();
@@ -1564,8 +1557,9 @@ namespace DeNelle.Village.Arena
                     // No params (defensive): tear down immediately, no warp/fade needed.
                     foreach (var e in capturedSurvivors) if (e != null) Guard.Try("BattleArena", "despawn enemy", () => Destroy(e.gameObject));
                     if (capturedStage != null) Destroy(capturedStage);
-                    // HOME-HUD ISOLATION: no masked return runs on this path, so restore here.
-                    Guard.Try("BattleArena", "restore home HUD (no-encounter path)", () => ArenaHudBridge.SetVisible(true));
+                    // HUD ISOLATION: kit is no longer force-hidden at stage time (posture handles the
+                    // town->combat widget swap), so there is nothing to restore here. Posture re-evaluates
+                    // to calm on return and re-populates the town widgets automatically.
                 }
             };
 
@@ -1710,9 +1704,9 @@ namespace DeNelle.Village.Arena
             ReacquireFollowCamera();
             ClearHeroTargetLock();
 
-            // HOME-HUD ISOLATION: restore the home/village HUD (hidden at stage time) under
-            // black, so it is back the moment the fade reveals home. Null-safe bridge.
-            Guard.Try("BattleArena", "restore home HUD", () => ArenaHudBridge.SetVisible(true));
+            // HUD ISOLATION: the kit is no longer force-hidden at stage time, so there is no
+            // whole-kit restore to do here. The posture system re-evaluates to calm on home arrival
+            // and re-populates the town widgets automatically as the fade reveals home.
 
             yield return null;   // let the camera snap settle one frame under black
 

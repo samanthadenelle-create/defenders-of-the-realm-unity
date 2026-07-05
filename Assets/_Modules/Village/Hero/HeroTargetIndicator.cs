@@ -322,6 +322,15 @@ namespace DeNelle.Village
                     var pick = PickEnemyAtScreenPoint(screenPos);
                     if (pick != null)
                     {
+                        // Mobile toggle parity with desktop middle-click: tapping the ALREADY-LOCKED
+                        // foe again releases the lock (toggle off), rather than re-engaging it.
+                        if (ReferenceEquals(pick, _locked) && LockEngaged)
+                        {
+                            DeNelle.Core.Diagnostics.FlowTrace.Step(
+                                "BattleArena", "LOCKON manual release -> tapped locked foe (tap toggle).");
+                            ReleaseLock();
+                            return;
+                        }
                         string nm = (pick as MonoBehaviour) != null
                             ? (pick as MonoBehaviour).gameObject.name.Replace("(Clone)", "").Trim() : "target";
                         DeNelle.Core.Diagnostics.FlowTrace.Step(
