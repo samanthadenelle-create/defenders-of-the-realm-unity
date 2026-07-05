@@ -194,6 +194,7 @@ namespace DeNelle.Onboarding
                 BuildTitleTextBlock(_canvas.transform);
 
             BuildButtonColumn(_canvas.transform);
+            BuildSkrBadge(_canvas.transform);
 
             FlowTrace.Step("Onboarding",
                 $"Title menu built (uGUI) — art={( _backdropArtLoaded ? "loaded" : "MISSING (text fallback)")} " +
@@ -297,6 +298,25 @@ namespace DeNelle.Onboarding
                     if (lbl != null) lbl.color = Color.white;
                 }
             }
+        }
+
+        /// <summary>"POWERED WITH SKR" grant badge (owner 2026-07-04, ff.skrpreview). Gated OFF by
+        /// default so normal players never see it; the grant-recording build flips ff.skrpreview ON
+        /// (menu / PlayerPrefs / ?skrpreview=1). One tap opens the read-only, clearly-labeled
+        /// <see cref="DeNelle.Core.UI.SkrShowcasePanel"/> — branding + honest value-prop, NO wallet call.
+        /// A small gold pill high-center over the art so it reads on camera without crowding the menu.</summary>
+        private static void BuildSkrBadge(Transform parent)
+        {
+            // ?skrpreview=1 (WebGL) is picked up here so the grant build needs no rebuild to flip on.
+            FeatureFlags.ApplyUrlActivationOnce();
+            if (!FeatureFlags.SkrPreview) return;
+
+            var btn = ElarionUiKit.BuildObsidianButton(parent, "Powered with SKR",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.34f, 0.905f), new Vector2(0.66f, 0.965f),
+                () => DeNelle.Core.UI.SkrShowcasePanel.Open());
+
+            FlowTrace.Step("Onboarding", "Title: 'Powered with SKR' grant badge shown (ff.skrpreview ON).");
         }
 
         /// <summary>True when persisted progress exists — a chosen hero or a completed
