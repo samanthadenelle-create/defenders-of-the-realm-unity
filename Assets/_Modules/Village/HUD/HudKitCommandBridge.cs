@@ -18,15 +18,18 @@
 //                  id matches the TargetRecord.Id (mirrors the retired
 //                  BattleHud9Zone.SelectCycleRow WO-512 routing).
 //   flee        -> registered by BattleArenaHud (battle-scoped, not here).
-//   potion      -> NOT registered (no Village consumable-use seam exists yet;
-//                  the kit hides the slot while HudCommands.HasPotion is false).
+//   potion      -> ConsumableUseService.TryUse(minor-heal-potion, inFight).
+//   manaPotion  -> ConsumableUseService.TryUse(cons_mana_draught, inFight).
+//   assignable  -> AssignableSkillBar slot -> HeroAbilities.TryCastExtra.
 // =============================================================================
 
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using DeNelle.Core;
 using DeNelle.Core.Combat;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.HUD;
+using DeNelle.Village.Items;
 
 namespace DeNelle.Village.Hud
 {
@@ -41,7 +44,12 @@ namespace DeNelle.Village.Hud
             RegisterAll();
         }
 
-        private static void OnSceneLoaded(Scene s, LoadSceneMode m) => RegisterAll();
+        private static void OnSceneLoaded(Scene s, LoadSceneMode m)
+        {
+            RegisterAll();
+            if (HubScenes.IsHub(s.name))
+                HudPostureReset.OnHubLoaded(s.name);
+        }
 
         private static void RegisterAll()
         {
@@ -78,7 +86,34 @@ namespace DeNelle.Village.Hud
                 FlowTrace.Warn("HudKit", "cycleSelect: enemy id " + id + " not found (died/despawned)");
             });
 
-            FlowTrace.Step("HudKit", "command bridge registered (attack, cycleSelect) for scene '" +
+            HudCommands.RegisterPotion(() =>
+            {
+                bool ok = ConsumableUseService.TryUse(HudCommands.HpPotionId, inFight: true);
+                FlowTrace.Step("HudKit", "potion command -> TryUse(" + HudCommands.HpPotionId + ") " + (ok ? "OK" : "no-op"));
+            });
+
+            HudCommands.RegisterManaPotion(() =>
+            {
+                bool ok = ConsumableUseService.TryUse(HudCommands.ManaPotionId, inFight: true);
+                FlowTrace.Step("HudKit", "manaPotion command -> TryUse(" + HudCommands.ManaPotionId + ") " + (ok ? "OK" : "no-op"));
+            });
+
+            HudCommands.RegisterAssignableCast(slot =>
+            {
+                var bar = AssignableSkillBarAccess.Current;
+                var abilities = Object.FindAnyObjectByType<HeroAbilities>();
+                if (bar == null || abilities == null)
+                {
+                    FlowTrace.Warn("HudKit", "assignableCast slot=" + slot + " but no bar/abilities");
+                    return;
+                }
+                string id = bar.AbilityIdForSlot(slot);
+                if (string.IsNullOrEmpty(id)) return;
+                bool fired = abilities.TryCastExtra(id);
+                FlowTrace.Step("HudKit", "assignableCast slot=" + slot + " id=" + id + " -> " + (fired ? "FIRED" : "gated"));
+            });
+
+            FlowTrace.Step("HudKit", "command bridge registered (attack, cycleSelect, potions, assignable) for scene '" +
                            SceneManager.GetActiveScene().name + "'");
         }
     }

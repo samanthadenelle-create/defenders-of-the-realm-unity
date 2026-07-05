@@ -57,6 +57,11 @@ namespace DeNelle.Village
         public static Sprite ForWeapon(WeaponDef w)
         {
             if (w == null) return null;
+            // Catalog-authored icon (ITEM_MODEL §3): the rendered mesh silhouette keyed by id.
+            // When present, this is authoritative — image + title both identify the same shape.
+            var authored = LoadAuthoredIcon(w.iconPath);
+            if (authored != null) return authored;
+
             EnsureLoaded();
             string key = ((w.id ?? "") + " " + (w.name ?? "")).ToLowerInvariant();
             int tier = RarityTier(w.rarity);
@@ -95,6 +100,9 @@ namespace DeNelle.Village
         public static Sprite ForArmor(ArmorDef a)
         {
             if (a == null) return null;
+            var authored = LoadAuthoredIcon(a.iconPath);
+            if (authored != null) return authored;
+
             EnsureLoaded();
             string key = ((a.id ?? "") + " " + (a.name ?? "")).ToLowerInvariant();
 
@@ -171,6 +179,13 @@ namespace DeNelle.Village
                 return First("potion_a", "potion_e", "potion_mana");
 
             return null; // -> glyph fallback
+        }
+
+        // Resources-relative path from catalog (e.g. "ItemIcons/tripo_sword_a") — no extension.
+        private static Sprite LoadAuthoredIcon(string iconPath)
+        {
+            if (string.IsNullOrEmpty(iconPath)) return null;
+            return Resources.Load<Sprite>(iconPath);
         }
 
         // ---------------------------------------------------------------------

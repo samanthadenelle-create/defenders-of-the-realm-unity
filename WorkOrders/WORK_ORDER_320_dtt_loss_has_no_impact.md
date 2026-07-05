@@ -1,6 +1,8 @@
-# WORK_ORDER_320 — Defend the Tower: losing has no impact (no defeat consequence)
+# ⚠ WORK_ORDER_320 — Defend the Tower: losing has no impact (no defeat consequence) — **SUPERSEDED 2026-07-04**
 
-**Status: READY TO IMPLEMENT**
+> **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09.
+
+**Status: CLOSED — SUPERSEDED (system removed 2026-06-09)**
 **Branch:** feat/tower-core-loop · **Lane:** 2 (Combat/AI) · **Origin:** owner playtest 2026-06-06
 **Reconcile with:** `PatriciaLightController` / WaveManager lose condition, WO-235 (death/spire-destroyed screens), WO-132 (hero health lose condition)
 

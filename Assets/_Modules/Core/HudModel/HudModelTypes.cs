@@ -128,6 +128,35 @@ namespace DeNelle.Core.HudModel
         }
     }
 
+    /// <summary>One buff/debuff icon for a status-effects row (immutable value).</summary>
+    public readonly struct StatusIconRecord
+    {
+        /// <summary>Stable status id (e.g. "slow", "mana-draught").</summary>
+        public readonly string Id;
+        /// <summary>Short player-facing label.</summary>
+        public readonly string Label;
+        /// <summary>Icon lookup key for UiStyle.Icon.</summary>
+        public readonly string IconKey;
+        /// <summary>True for buffs; false for debuffs.</summary>
+        public readonly bool IsBuff;
+        /// <summary>Seconds remaining on the effect.</summary>
+        public readonly float RemainingSeconds;
+        /// <summary>Original applied duration (HUD sweep denominator).</summary>
+        public readonly float TotalSeconds;
+
+        /// <summary>Constructs an immutable status-icon snapshot.</summary>
+        public StatusIconRecord(string id, string label, string iconKey, bool isBuff,
+            float remainingSeconds, float totalSeconds)
+        {
+            Id = id ?? "";
+            Label = label ?? "";
+            IconKey = iconKey ?? id ?? "";
+            IsBuff = isBuff;
+            RemainingSeconds = remainingSeconds;
+            TotalSeconds = totalSeconds > 0f ? totalSeconds : remainingSeconds;
+        }
+    }
+
     /// <summary>One minimap point-of-interest (immutable value, world XZ + kind tag).</summary>
     public readonly struct MinimapPoiRecord
     {

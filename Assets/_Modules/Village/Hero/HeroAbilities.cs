@@ -258,7 +258,12 @@ namespace DeNelle.Village
             if (Time.time < _manaOverTimeUntil && _manaOverTimeRate > 0f)
             {
                 _mana = Mathf.Min(_maxMana, _mana + _manaOverTimeRate * dt);
-                if (_mana >= _maxMana) { _manaOverTimeRate = 0f; _manaOverTimeUntil = 0f; }
+                if (_mana >= _maxMana)
+                {
+                    _manaOverTimeRate = 0f;
+                    _manaOverTimeUntil = 0f;
+                    HeroCombatStatus.GetOrAdd(gameObject)?.ClearNamed("mana-draught");
+                }
             }
             for (int i = 0; i < _cooldownRemaining.Length; i++)
                 _cooldownRemaining[i] = Mathf.Max(0f, _cooldownRemaining[i] - dt);
@@ -310,6 +315,7 @@ namespace DeNelle.Village
                 float target = _maxMana * (totalPct / 100f) + carry;
                 _manaOverTimeRate  = target / seconds;
                 _manaOverTimeUntil = Time.time + seconds;
+                HeroCombatStatus.GetOrAdd(gameObject)?.ApplyNamed("mana-draught", "Mana", seconds, isBuff: true);
 
                 FlowTrace.Step("HeroAbilities",
                     $"Mana Draught: +{totalPct}% ({target:0.0} mana) over {seconds}s -> {_manaOverTimeRate:0.00}/s (mana {_mana:0.0}/{_maxMana:0.0}).");
@@ -327,6 +333,7 @@ namespace DeNelle.Village
             _mana = _maxMana;
             _manaOverTimeRate  = 0f;   // a full restore ends any in-flight draught drip
             _manaOverTimeUntil = 0f;
+            HeroCombatStatus.GetOrAdd(gameObject)?.ClearNamed("mana-draught");
             FlowTrace.Step("HeroAbilities", $"SAFE-ZONE mana restore: mana -> FULL ({_maxMana:0.0}).");
         }
 

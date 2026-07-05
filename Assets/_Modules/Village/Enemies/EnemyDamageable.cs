@@ -68,10 +68,7 @@ namespace DeNelle.Village
             }
         }
 
-        // --- pending status timers (consumed when Enemy models them) ---
-        private float _slowUntil;
-        private float _freezeUntil;
-        private float _burnUntil;
+        private readonly CombatStatusTracker _status = new CombatStatusTracker();
 
         /// <summary>Enemies are always hostile to the village's defenders.</summary>
         public CombatFaction Faction => CombatFaction.Hostile;
@@ -95,13 +92,13 @@ namespace DeNelle.Village
         public bool IsAlive => E != null && !E.IsDead && E.Hp > 0f;
 
         /// <summary>True while a freeze status is still active (Frost Nova / Glacial Bond).</summary>
-        public bool IsFrozen => Time.time < _freezeUntil;
+        public bool IsFrozen => _status.IsFrozen;
 
         /// <summary>True while a slow status is still active (Frostbite / Ranger snare).</summary>
-        public bool IsSlowed => Time.time < _slowUntil;
+        public bool IsSlowed => _status.IsSlowed;
 
         /// <summary>True while a burn DoT is still active (Emberbite).</summary>
-        public bool IsBurning => Time.time < _burnUntil;
+        public bool IsBurning => _status.IsBurning;
 
         private void Awake()
         {
@@ -141,22 +138,11 @@ namespace DeNelle.Village
             if (E != null) E.SetNextDealtByHero(true);
         }
 
-        /// <summary>
-        /// Records a status effect. Enemy.cs does not yet model status timers,
-        /// so this stores the expiry locally and exposes <see cref="IsFrozen"/>
-        /// / <see cref="IsSlowed"/> / <see cref="IsBurning"/> for the integrator
-        /// to read into the enemy's nav speed once the fields land.
-        /// </summary>
-        public void ApplyStatus(StatusEffect effect, float seconds)
-        {
-            if (seconds <= 0f) return;
-            float until = Time.time + seconds;
-            switch (effect)
-            {
-                case StatusEffect.Slow:   _slowUntil   = Mathf.Max(_slowUntil, until);   break;
-                case StatusEffect.Freeze: _freezeUntil = Mathf.Max(_freezeUntil, until); break;
-                case StatusEffect.Burn:   _burnUntil   = Mathf.Max(_burnUntil, until);   break;
-            }
-        }
+        /// <summary>Records a CC status and exposes timers for nav + HUD producers.</summary>
+        public void ApplyStatus(StatusEffect effect, float seconds) => _status.Apply(effect, seconds);
+
+        /// <summary>Collect active statuses for the battle HUD enemy buff/debuff row.</summary>
+        public void CollectActive(System.Collections.Generic.List<ActiveStatusSnapshot> dst, int max = 6)
+            => _status.CollectActive(dst, max);
     }
 }

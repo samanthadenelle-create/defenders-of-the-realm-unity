@@ -1,0 +1,26 @@
+﻿{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.1319286823272707,"utc":"2026-07-04T17:22:11.0056371Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":3.252197504043579,"utc":"2026-07-04T17:22:12.1261164Z"}
+{"kind":"scene_loaded","message":"HeroSelect","stack":"","scene":"HeroSelect","t":9.284160614013672,"utc":"2026-07-04T17:22:18.1577917Z"}
+{"kind":"scene_loaded","message":"Main_Castle_Overworld","stack":"","scene":"Main_Castle_Overworld","t":10.773377418518067,"utc":"2026-07-04T17:22:19.6469191Z"}
+{"kind":"flagged","message":"[Main_Castle_Overworld] some barrier in fromnt of me, guessing invisible wall","stack":"","scene":"Main_Castle_Overworld","t":45.07197570800781,"utc":"2026-07-04T17:22:53.9444438Z"}
+{"kind":"flagged","message":"[Main_Castle_Overworld] no coliders on wall","stack":"","scene":"Main_Castle_Overworld","t":124.84214782714844,"utc":"2026-07-04T17:24:13.7123863Z"}
+{"kind":"flagged","message":"[Main_Castle_Overworld] this is a corner of something stopping me","stack":"","scene":"Main_Castle_Overworld","t":186.09039306640626,"utc":"2026-07-04T17:25:14.9590511Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"MainCastle_Hall","t":9.515915870666504,"utc":"2026-07-04T17:27:22.1005758Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":10.099054336547852,"utc":"2026-07-04T17:27:22.6838409Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":13.227693557739258,"utc":"2026-07-04T17:27:25.8126368Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"MainCastle_Hall","t":4.917646884918213,"utc":"2026-07-04T17:27:37.3643511Z"}
+{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":5.469576358795166,"utc":"2026-07-04T17:27:37.9149376Z"}
+{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":6.344405174255371,"utc":"2026-07-04T17:27:38.7910653Z"}
+{"kind":"possible_softlock","message":"No movement or progress for 180s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":919.2611083984375,"utc":"2026-07-04T17:42:51.6818425Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.1462953090667726,"utc":"2026-07-04T18:54:27.7736941Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":3.2545857429504396,"utc":"2026-07-04T18:54:28.8802236Z"}
+{"kind":"scene_loaded","message":"HeroSelect","stack":"","scene":"HeroSelect","t":9.83288860321045,"utc":"2026-07-04T18:54:35.4597067Z"}
+{"kind":"scene_loaded","message":"Main_Castle_Overworld","stack":"","scene":"Main_Castle_Overworld","t":11.759605407714844,"utc":"2026-07-04T18:54:37.3864508Z"}
+{"kind":"flagged","message":"[Main_Castle_Overworld] hero is floating and crouched. in town should be using idle","stack":"","scene":"Main_Castle_Overworld","t":48.65923309326172,"utc":"2026-07-04T18:55:14.2849639Z"}
+{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.122440814971924,"utc":"2026-07-04T20:04:17.7366984Z"}
+{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.478821039199829,"utc":"2026-07-04T20:04:18.0929237Z"}
+{"kind":"scene_loaded","message":"HeroSelect","stack":"","scene":"HeroSelect","t":7.848479270935059,"utc":"2026-07-04T20:04:23.4623422Z"}
+{"kind":"scene_loaded","message":"Main_Castle_Overworld","stack":"","scene":"Main_Castle_Overworld","t":10.344564437866211,"utc":"2026-07-04T20:04:25.9580826Z"}
+{"kind":"flagged","message":"[Main_Castle_Overworld] i cant move past this in any direction","stack":"","scene":"Main_Castle_Overworld","t":49.0884895324707,"utc":"2026-07-04T20:05:04.7014990Z"}
+{"kind":"flagged","message":"[Main_Castle_Overworld] no coliders on walls of castle","stack":"","scene":"Main_Castle_Overworld","t":71.68569946289063,"utc":"2026-07-04T20:05:27.2972692Z"}
+{"kind":"flagged","message":"[Main_Castle_Overworld] now that we use a accurig can we solve issue with holding weapon","stack":"","scene":"Main_Castle_Overworld","t":143.42169189453126,"utc":"2026-07-04T20:06:39.0318248Z"}

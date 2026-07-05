@@ -5,10 +5,11 @@
 //
 // Consolidates the SAME inputs the two existing evaluators read — derived ONCE —
 // and writes the Core HudContextModel:
-//   • Combat  : a wave is counting down / active (WaveManager.Phase), OR an ATB /
-//               Arena battle is live (BattleLock.IsInBattle — the Core-clean probe
-//               ATBCombatManager + ArenaMode register), OR the active scene is a
-//               RaidBase_* raid / an enemy-owned scene (HubScenes).
+//   • Combat  : a village wave is ACTIVE (WaveManager.Phase), OR a staged / in-place
+//               fight is live (BattleLock.IsInBattle — ATB, Arena, BattleArena,
+//               HeroCombatEngagement). Scene ground alone (raid / enemy-owned) does
+//               NOT flip Battle — the PostureEvaluator opens hostile(prebattle) on
+//               pursuit/target instead (owner 2026-07-05: peaceful default).
 //   • Town    : a non-combat HUB scene with the hero inside the town ring.
 //   • Overworld : non-combat, outside the town ring (the merged overworld) / a non-hub scene.
 //   • Modal   : a registered modal panel is open (PanelManager.AnyOpen) — overlays.
@@ -63,9 +64,7 @@ namespace DeNelle.Village.Hud
             string scene = SceneManager.GetActiveScene().name;
 
             bool combat = IsWaveActive()
-                          || BattleLock.IsInBattle()
-                          || HubScenes.IsRaid(scene)
-                          || HubScenes.IsEnemyOwnedScene(scene);
+                          || BattleLock.IsInBattle();
 
             bool inVillage = IsInTownRing(scene);
             bool modal = PanelManager.AnyOpen;
@@ -86,8 +85,10 @@ namespace DeNelle.Village.Hud
             // Observability (mirrors BattleHudVisibilityManager.EvaluateMode's input trace).
             FlowTrace.Throttle("HUD", "ctx-eval", 1f,
                 $"context inputs: wave={IsWaveActive()} battleLock={BattleLock.IsInBattle()} " +
-                $"raid={HubScenes.IsRaid(scene)} enemyScene={HubScenes.IsEnemyOwnedScene(scene)} " +
                 $"inVillage={inVillage} modal={modal} buildMode={buildMode} scene='{scene}' -> {ctx}");
+
+            if (_pushedOnce && _combat && !combat)
+                HudPostureReset.OnCombatEnded();
 
             if (_pushedOnce && ctx == _ctx && inVillage == _inVillage && combat == _combat &&
                 modal == _modal && buildMode == _buildMode)

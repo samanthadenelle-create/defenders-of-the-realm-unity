@@ -33,6 +33,8 @@ using DeNelle.Core.Combat;
 using DeNelle.Core.HudModel;
 using DeNelle.Village;
 using DeNelle.Village.Arena;   // BattleStarRating
+using DeNelle.Village.Crafting;
+using DeNelle.Core.HUD;
 using CoreWavePhase = DeNelle.Core.HudModel.WavePhase;
 
 namespace DeNelle.Village.Hud
@@ -616,6 +618,146 @@ namespace DeNelle.Village.Hud
         {
             Enemy.CastStarted -= OnCastStarted;
             Enemy.CastEnded -= OnCastEnded;
+        }
+    }
+
+    // ── AssignableLoadout (WO-609) ────────────────────────────────────────────
+
+    /// <summary>
+    /// Fills <see cref="AssignableLoadoutModel"/> from the hero's
+    /// <see cref="AssignableSkillBar"/> (4 hotswap slots) + extra cooldowns.
+    /// </summary>
+    internal sealed class AssignableLoadoutProducer : HudProducer
+    {
+        private HeroAbilities _abilities;
+        private string _sig;
+
+        public AssignableLoadoutProducer(IHudModel m) : base(m, 0.20f) { }
+
+        protected override void Poll()
+        {
+            if (_abilities == null || !_abilities) _abilities = Object.FindAnyObjectByType<HeroAbilities>();
+            var bar = AssignableSkillBarAccess.Current;
+
+            var slots = new List<AbilitySlotRecord>(AssignableSkillBar.SlotCount);
+            var sb = new System.Text.StringBuilder();
+
+            for (int i = 0; i < AssignableSkillBar.SlotCount; i++)
+            {
+                string id = bar != null ? bar.AbilityIdForSlot(i) : null;
+                bool equipped = !string.IsNullOrEmpty(id);
+                AbilityDef def = equipped ? AbilityCatalog.FindById(id) : null;
+                float total = def != null ? def.Cooldown : 0f;
+                float remaining = equipped && _abilities != null ? _abilities.ExtraCooldownRemaining(id) : 0f;
+                string name = def != null && !string.IsNullOrEmpty(def.Name) ? def.Name : (equipped ? id : "—");
+                string icon = def != null ? def.Icon : null;
+                string accent = def != null ? def.Color : null;
+                string key = "A" + i;
+
+                slots.Add(new AbilitySlotRecord(key, key, name, "", icon, accent, equipped, remaining, total));
+                sb.Append(key).Append('=').Append(equipped ? name : "-")
+                  .Append(':').Append(Mathf.CeilToInt(remaining)).Append('/').Append(Mathf.RoundToInt(total)).Append('|');
+            }
+
+            string sig = sb.ToString();
+            if (sig == _sig) return;
+            _sig = sig;
+            Model.Assignable.SetSlots(slots);
+        }
+    }
+
+    // ── ConsumableHotbar (WO-609) ─────────────────────────────────────────────
+
+    /// <summary>Pushes battle potion counts from the village larder.</summary>
+    internal sealed class ConsumableHotbarProducer : HudProducer
+    {
+        private int _hp = int.MinValue, _mana = int.MinValue;
+
+        public ConsumableHotbarProducer(IHudModel m) : base(m, 0.50f) { }
+
+        protected override void Poll()
+        {
+            var inv = VillageInventory.Instance;
+            int hp = inv != null ? inv.Get(HudCommands.HpPotionId) : 0;
+            int mana = inv != null ? inv.Get(HudCommands.ManaPotionId) : 0;
+            if (hp == _hp && mana == _mana) return;
+            _hp = hp;
+            _mana = mana;
+            Model.Consumables.Set(hp, mana);
+        }
+    }
+
+    // ── StatusEffects (WO-609 Phase 2) ────────────────────────────────────────
+
+    /// <summary>Fills player + locked-target status rows from combat status trackers.</summary>
+    internal sealed class StatusEffectsProducer : HudProducer
+    {
+        private const int MaxIcons = 6;
+        private static readonly List<ActiveStatusSnapshot> Scratch = new List<ActiveStatusSnapshot>(8);
+        private static readonly List<StatusIconRecord> Icons = new List<StatusIconRecord>(8);
+
+        private HeroTargetIndicator _indicator;
+        private string _playerSig;
+        private string _targetSig;
+
+        public StatusEffectsProducer(IHudModel m) : base(m, 0.20f) { }
+
+        protected override void Poll()
+        {
+            PollPlayer();
+            PollTarget();
+        }
+
+        private void PollPlayer()
+        {
+            Scratch.Clear();
+            Icons.Clear();
+            var status = HeroCombatStatus.Current;
+            status?.CollectActive(Scratch, MaxIcons);
+            for (int i = 0; i < Scratch.Count; i++)
+                Icons.Add(ToRecord(Scratch[i]));
+
+            string sig = BuildSig(Icons);
+            if (sig == _playerSig) return;
+            _playerSig = sig;
+            Model.PlayerStatus.SetIcons(Icons);
+        }
+
+        private void PollTarget()
+        {
+            if (_indicator == null || !_indicator) _indicator = Object.FindAnyObjectByType<HeroTargetIndicator>();
+
+            Scratch.Clear();
+            Icons.Clear();
+            IDamageable cur = _indicator != null ? _indicator.CurrentTarget : null;
+            var curMb = cur as MonoBehaviour;
+            var dmg = curMb != null ? curMb.GetComponentInParent<EnemyDamageable>() : null;
+
+            if (dmg != null && cur != null && cur.IsAlive)
+                dmg.CollectActive(Scratch, MaxIcons);
+
+            for (int i = 0; i < Scratch.Count; i++)
+                Icons.Add(ToRecord(Scratch[i]));
+
+            string sig = BuildSig(Icons);
+            if (sig == _targetSig) return;
+            _targetSig = sig;
+            Model.TargetStatus.SetIcons(Icons);
+        }
+
+        private static StatusIconRecord ToRecord(ActiveStatusSnapshot s)
+            => new StatusIconRecord(s.Id, s.Label, s.Id, s.IsBuff, s.RemainingSeconds, s.TotalSeconds);
+
+        private static string BuildSig(IReadOnlyList<StatusIconRecord> icons)
+        {
+            if (icons == null || icons.Count == 0) return "";
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < icons.Count; i++)
+            {
+                var ic = icons[i];
+                sb.Append(ic.Id).Append(':').Append(Mathf.CeilToInt(ic.RemainingSeconds)).Append('|');
+            }
+            return sb.ToString();
         }
     }
 }

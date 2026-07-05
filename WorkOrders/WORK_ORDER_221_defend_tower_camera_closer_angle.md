@@ -1,6 +1,8 @@
-# WO-221: Defend the Tower — Camera Closer to Tower for Better Sightlines
+# ⚠ WO-221: Defend the Tower — Camera Closer to Tower for Better Sightlines — **SUPERSEDED 2026-07-04**
 
-**Status: READY TO IMPLEMENT**
+> **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09.
+
+**Status: CLOSED — SUPERSEDED (system removed 2026-06-09)**
 
 **Date:** 2026-06-01  
 **Priority:** 🟠 MEDIUM (battle UX improvement)  

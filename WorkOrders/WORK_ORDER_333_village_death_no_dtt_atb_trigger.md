@@ -1,6 +1,8 @@
-# WORK ORDER 333 — Re-wire Tree of Life <30% HP → Defense Modal (Broken)
+# ⚠ WORK ORDER 333 — Re-wire Tree of Life <30% HP → Defense Modal (Broken) — **CHECK CANON 2026-07-04**
 
-**Status:** READY TO IMPLEMENT  
+> **NOTE:** This WO references "no DTT/ATB trigger" but the Defend-the-Tower system was removed 2026-06-09. Verify this WO is still valid against current combat flow (BattleArena vs ATB).
+
+**Status:** REVIEW — verify against current canon (no DTT)  
 **Lane:** 2 (Combat/AI) — code-only, parallel-safe  
 **Priority:** HIGH — core escalation loop broken; modal never fires  
 **Screenshot evidence:** docs/screenshots/village_death_screen.png  

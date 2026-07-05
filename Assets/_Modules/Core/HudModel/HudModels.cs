@@ -238,6 +238,72 @@ namespace DeNelle.Core.HudModel
         }
     }
 
+    // ── AssignableLoadout (WO-609) ────────────────────────────────────────────
+
+    /// <summary>
+    /// The bottom-middle hotswap bar: up to 4 player-assigned extras from the skill tree
+    /// (<see cref="AssignableSkillBar"/>). Separate from the static W/E/R rail.
+    /// </summary>
+    public sealed class AssignableLoadoutModel
+    {
+        /// <summary>The four assignable slots (never null).</summary>
+        public IReadOnlyList<AbilitySlotRecord> Slots { get; private set; } = Array.Empty<AbilitySlotRecord>();
+
+        /// <summary>Raised after slots or cooldowns change.</summary>
+        public event Action Changed;
+
+        /// <summary>Producer-only mutator.</summary>
+        public void SetSlots(IReadOnlyList<AbilitySlotRecord> slots)
+        {
+            Slots = slots ?? Array.Empty<AbilitySlotRecord>();
+            Changed?.Invoke();
+            FlowTrace.Step("HUD", $"assignable set: slots={Slots.Count}");
+        }
+    }
+
+    // ── StatusEffects (WO-609 Phase 2) ────────────────────────────────────────
+
+    /// <summary>Active buff/debuff icons for one combatant (player or locked target).</summary>
+    public sealed class StatusEffectsModel
+    {
+        /// <summary>Active status icons, debuffs first then buffs (never null).</summary>
+        public IReadOnlyList<StatusIconRecord> Icons { get; private set; } = Array.Empty<StatusIconRecord>();
+
+        /// <summary>Raised after the icon list changes.</summary>
+        public event Action Changed;
+
+        /// <summary>Producer-only mutator.</summary>
+        public void SetIcons(IReadOnlyList<StatusIconRecord> icons)
+        {
+            Icons = icons ?? Array.Empty<StatusIconRecord>();
+            Changed?.Invoke();
+            FlowTrace.Throttle("HUD", "statuseffects", 1f, $"status icons={Icons.Count}");
+        }
+    }
+
+    // ── ConsumableHotbar (WO-609) ─────────────────────────────────────────────
+
+    /// <summary>Battle potion slot counts (HP + mana draught).</summary>
+    public sealed class ConsumableHotbarModel
+    {
+        /// <summary>Minor heal potions in the village larder.</summary>
+        public int HpPotionCount { get; private set; }
+        /// <summary>Mana draughts in the village larder.</summary>
+        public int ManaPotionCount { get; private set; }
+
+        /// <summary>Raised when either count changes.</summary>
+        public event Action Changed;
+
+        /// <summary>Producer-only mutator.</summary>
+        public void Set(int hpCount, int manaCount)
+        {
+            HpPotionCount = hpCount;
+            ManaPotionCount = manaCount;
+            Changed?.Invoke();
+            FlowTrace.Throttle("HUD", "consumablehotbar", 1f, $"pots hp={HpPotionCount} mana={ManaPotionCount}");
+        }
+    }
+
     // ── AbilityLoadout ────────────────────────────────────────────────────────
 
     /// <summary>The hero's 4 ability slots + their cooldowns.</summary>
@@ -526,6 +592,14 @@ namespace DeNelle.Core.HudModel
         TargetCycleModel TargetCycle { get; }
         /// <summary>The ability loadout model.</summary>
         AbilityLoadoutModel Abilities { get; }
+        /// <summary>The assignable hotswap bar (WO-609).</summary>
+        AssignableLoadoutModel Assignable { get; }
+        /// <summary>Battle potion counts (WO-609).</summary>
+        ConsumableHotbarModel Consumables { get; }
+        /// <summary>Player buff/debuff row (WO-609 Phase 2).</summary>
+        StatusEffectsModel PlayerStatus { get; }
+        /// <summary>Locked-target buff/debuff row (WO-609 Phase 2).</summary>
+        StatusEffectsModel TargetStatus { get; }
         /// <summary>The world-metrics model.</summary>
         WorldMetricsModel World { get; }
         /// <summary>The combat-momentum model.</summary>
@@ -559,6 +633,14 @@ namespace DeNelle.Core.HudModel
         public TargetCycleModel TargetCycle { get; } = new TargetCycleModel();
         /// <inheritdoc/>
         public AbilityLoadoutModel Abilities { get; } = new AbilityLoadoutModel();
+        /// <inheritdoc/>
+        public AssignableLoadoutModel Assignable { get; } = new AssignableLoadoutModel();
+        /// <inheritdoc/>
+        public ConsumableHotbarModel Consumables { get; } = new ConsumableHotbarModel();
+        /// <inheritdoc/>
+        public StatusEffectsModel PlayerStatus { get; } = new StatusEffectsModel();
+        /// <inheritdoc/>
+        public StatusEffectsModel TargetStatus { get; } = new StatusEffectsModel();
         /// <inheritdoc/>
         public WorldMetricsModel World { get; } = new WorldMetricsModel();
         /// <inheritdoc/>

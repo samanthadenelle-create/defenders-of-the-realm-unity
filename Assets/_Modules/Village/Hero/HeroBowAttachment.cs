@@ -152,7 +152,7 @@ namespace DeNelle.Village
 
             bowRoot.transform.SetParent(leftHand, false);
             bowRoot.transform.localPosition = GripLocalPosition;
-            bowRoot.transform.localRotation = Quaternion.Euler(GripLocalEuler);
+            bowRoot.transform.localRotation = EquipmentController.ApplyGlobalWeaponYaw(Quaternion.Euler(GripLocalEuler));
 
             _bow = bowRoot;
             FlowTrace.Step("Equip", $"bow ATTACHED + auto-oriented to LeftHand '{leftHand.name}' " +

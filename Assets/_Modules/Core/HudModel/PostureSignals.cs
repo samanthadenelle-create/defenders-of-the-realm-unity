@@ -89,6 +89,14 @@ namespace DeNelle.Core.HudModel
             }
         }
 
+        /// <summary>Clears all pursuit pulses (hub return / combat end — peaceful HUD).</summary>
+        public static void ClearPursuits()
+        {
+            if (_pursuitCount == 0) return;
+            _pursuitCount = 0;
+            FlowTrace.Step("HudKit", "pursuit cleared (posture -> peaceful)");
+        }
+
         // ── Postbattle / end-state (A4.6 — the decision node owns the screen) ─
 
         /// <summary>True while the shared end-state template (Victory/Defeat) is on

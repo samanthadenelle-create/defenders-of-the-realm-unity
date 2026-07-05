@@ -1,6 +1,8 @@
-# WORK_ORDER_319 — Defend the Tower: town hero model + firing animations + faster fire rate
+# ⚠ WORK_ORDER_319 — Defend the Tower: town hero model + firing animations + faster fire rate — **SUPERSEDED 2026-07-04**
 
-**Status: READY TO IMPLEMENT**
+> **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09.
+
+**Status: CLOSED — SUPERSEDED (system removed 2026-06-09)**
 **Branch:** feat/tower-core-loop · **Lane:** 3 (Combat Feel) · **Origin:** owner playtest 2026-06-06
 **Reconcile with:** `PatriciaLightController`, `HeroBodySwapper`, `ActorAnimator` (WO-284/285), HeroAbilities fire path
 

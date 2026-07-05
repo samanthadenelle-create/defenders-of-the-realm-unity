@@ -1,6 +1,8 @@
-# WORK_ORDER_318 — Defend the Tower: aim stays north + head-only pivot (clamp)
+# ⚠ WORK_ORDER_318 — Defend the Tower: aim stays north + head-only pivot (clamp) — **SUPERSEDED 2026-07-04**
 
-**Status: READY TO IMPLEMENT**
+> **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09.
+
+**Status: CLOSED — SUPERSEDED (system removed 2026-06-09)**
 **Branch:** feat/tower-core-loop · **Lane:** 2 (Combat/AI) · **Origin:** owner playtest 2026-06-06
 **Reconcile with:** `PatriciaLightController` aim/targeting, camera rig, `HeroTargetIndicator`/aim override
 

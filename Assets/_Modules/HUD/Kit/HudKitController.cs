@@ -66,7 +66,12 @@ namespace DeNelle.HUD.Kit
         private ElarionUiKit.TargetFrameHandle _targetFrame;
         private ElarionUiKit.CastBarHandle _castBar;
         private ElarionUiKit.ActionSlotHandle[] _abilitySlots;
-        private ElarionUiKit.ActionSlotHandle _potionSlot;
+        private ElarionUiKit.ActionSlotHandle[] _assignableSlots;
+        private ElarionUiKit.ActionSlotHandle _hpPotionSlot;
+        private ElarionUiKit.ActionSlotHandle _manaPotionSlot;
+        private ElarionUiKit.ActionSlotHandle[] _playerStatusSlots;
+        private ElarionUiKit.ActionSlotHandle[] _enemyStatusSlots;
+        private const int StatusSlotCount = 6;
         private ElarionUiKit.ActionSlotHandle _attackSlot;
         private ElarionUiKit.CurrencyChipHandle[] _resChips;      // expanded row
         private ElarionUiKit.CurrencyChipHandle _resGoldOnly;     // collapsed variant
@@ -178,6 +183,7 @@ namespace DeNelle.HUD.Kit
             _vitals = ElarionUiKit.BuildPartyNameplate(pool, "Hero",
                 new Vector2(0f, 0.35f), new Vector2(1f, 1f));
             Register("playerNameplate", WrapAsWidget("playerNameplate", _vitals.Root.gameObject));
+            BuildStatusRow(pool, "playerBuffRow", out _playerStatusSlots);
 
             // xp bar under the plate (thin, no frame).
             _xpBar = ElarionUiKit.BuildObsidianBar(pool, ElarionUiKit.ObsidianBarKind.Xp,
@@ -226,17 +232,17 @@ namespace DeNelle.HUD.Kit
             // ── targetInfo: target frame + cast telegraph ──
             _targetFrame = ElarionUiKit.BuildTargetFrame(pool, new Vector2(0f, 0.35f), new Vector2(1f, 1f));
             Register("targetFrame", WrapAsWidget("targetFrame", _targetFrame.root));
+            BuildStatusRow(pool, "enemyBuffRow", out _enemyStatusSlots);
 
             _castBar = ElarionUiKit.BuildCastBar(pool, 1, new Vector2(0.08f, 0.02f), new Vector2(0.92f, 0.30f));
             Register("castBar", WrapAsWidget("castBar", _castBar.root));
 
-            // ── actionBar: 4 ability slots + potion ──
+            // ── actionRail: static W/E/R class kit (WO-609 — bottom-right) ──
             BuildAbilityRow(pool);
-            _potionSlot = ElarionUiKit.BuildActionSlot(pool,
-                new Vector2(0.84f, 0.10f), new Vector2(0.99f, 0.95f), HudCommands.Potion);
-            var potionIcon = UiStyle.Icon("potion", "consumable", "heal");
-            if (potionIcon != null) _potionSlot.SetIcon(potionIcon);
-            Register("potionSlot", WrapAsWidget("potionSlot", _potionSlot.root));
+
+            // ── actionBar: hotswap extras + dual potions (WO-609 — bottom-center) ──
+            BuildAssignableSkillRow(pool);
+            BuildPotionSlots(pool);
 
             // ── actionRail: the big basic-attack slot ──
             _attackSlot = ElarionUiKit.BuildActionSlot(pool,
@@ -451,7 +457,7 @@ namespace DeNelle.HUD.Kit
             var row = new GameObject("AbilityRow", typeof(RectTransform));
             row.transform.SetParent(pool, false);
             var rrt = (RectTransform)row.transform;
-            rrt.anchorMin = Vector2.zero; rrt.anchorMax = new Vector2(0.82f, 1f);
+            rrt.anchorMin = Vector2.zero; rrt.anchorMax = Vector2.one;
             rrt.offsetMin = Vector2.zero; rrt.offsetMax = Vector2.zero;
 
             _abilitySlots = new ElarionUiKit.ActionSlotHandle[4];
@@ -464,6 +470,67 @@ namespace DeNelle.HUD.Kit
                     () => { if (_owner != null) _owner.AbilityRequested?.Invoke(slot); });
             }
             Register("abilityRow", WrapAsWidget("abilityRow", row));
+        }
+
+        private void BuildAssignableSkillRow(Transform pool)
+        {
+            var row = new GameObject("AssignableSkillRow", typeof(RectTransform));
+            row.transform.SetParent(pool, false);
+            var rrt = (RectTransform)row.transform;
+            rrt.anchorMin = new Vector2(0f, 0.05f);
+            rrt.anchorMax = new Vector2(0.68f, 0.95f);
+            rrt.offsetMin = Vector2.zero; rrt.offsetMax = Vector2.zero;
+
+            _assignableSlots = new ElarionUiKit.ActionSlotHandle[4];
+            for (int i = 0; i < 4; i++)
+            {
+                int slot = i;
+                float x0 = i * 0.25f + 0.01f, x1 = (i + 1) * 0.25f - 0.01f;
+                _assignableSlots[i] = ElarionUiKit.BuildActionSlot(row.transform,
+                    new Vector2(x0, 0.05f), new Vector2(x1, 0.95f),
+                    () => HudCommands.AssignableCast(slot));
+            }
+            Register("assignableSkillRow", WrapAsWidget("assignableSkillRow", row));
+        }
+
+        private void BuildStatusRow(Transform pool, string widgetId, out ElarionUiKit.ActionSlotHandle[] slots)
+        {
+            var row = new GameObject(widgetId, typeof(RectTransform));
+            row.transform.SetParent(pool, false);
+            var rrt = (RectTransform)row.transform;
+            // Sit below the nameplate/target frame in the shared area mount (WO-609 layout).
+            rrt.anchorMin = new Vector2(0f, 0f);
+            rrt.anchorMax = new Vector2(1f, 0.38f);
+            rrt.offsetMin = Vector2.zero;
+            rrt.offsetMax = Vector2.zero;
+
+            slots = new ElarionUiKit.ActionSlotHandle[StatusSlotCount];
+            for (int i = 0; i < StatusSlotCount; i++)
+            {
+                float w = 1f / StatusSlotCount;
+                float x0 = i * w + 0.005f, x1 = (i + 1) * w - 0.005f;
+                slots[i] = ElarionUiKit.BuildActionSlot(row.transform,
+                    new Vector2(x0, 0.05f), new Vector2(x1, 0.95f));
+                if (slots[i].button != null) slots[i].button.interactable = false;
+                slots[i].root.SetActive(false);
+            }
+            Register(widgetId, WrapAsWidget(widgetId, row));
+        }
+
+        private void BuildPotionSlots(Transform pool)
+        {
+            _hpPotionSlot = ElarionUiKit.BuildActionSlot(pool,
+                new Vector2(0.70f, 0.10f), new Vector2(0.83f, 0.95f), HudCommands.Potion);
+            var healIcon = UiStyle.Icon("potion", "consumable", "heal");
+            if (healIcon != null) _hpPotionSlot.SetIcon(healIcon);
+            Register("hpPotionSlot", WrapAsWidget("hpPotionSlot", _hpPotionSlot.root));
+
+            _manaPotionSlot = ElarionUiKit.BuildActionSlot(pool,
+                new Vector2(0.85f, 0.10f), new Vector2(0.99f, 0.95f), HudCommands.ManaPotion);
+            var manaIcon = UiStyle.Icon("mana", "consumable", "crystal");
+            if (manaIcon == null) manaIcon = UiStyle.Icon("potion", "consumable", "mana");
+            if (manaIcon != null) _manaPotionSlot.SetIcon(manaIcon);
+            Register("manaPotionSlot", WrapAsWidget("manaPotionSlot", _manaPotionSlot.root));
         }
 
         private void BuildTargetCycle(Transform pool)
@@ -630,6 +697,10 @@ namespace DeNelle.HUD.Kit
             Sub(m.Wave, OnWave);                OnWave();
             Sub(m.World, OnWorld);              OnWorld();
             Sub(m.Abilities, OnAbilities);      OnAbilities();
+            Sub(m.Assignable, OnAssignable);    OnAssignable();
+            Sub(m.Consumables, OnConsumables);  OnConsumables();
+            Sub(m.PlayerStatus, OnPlayerStatus); OnPlayerStatus();
+            Sub(m.TargetStatus, OnTargetStatus); OnTargetStatus();
             Sub(m.TargetCycle, OnTargetCycle);  OnTargetCycle();
             _targetFrame.Bind(m.Target);
             _castBar.Bind(m.Cast);
@@ -643,6 +714,9 @@ namespace DeNelle.HUD.Kit
         private void Sub(WaveModel m, Action h)          { m.Changed += h; _unsubscribe.Add(() => m.Changed -= h); }
         private void Sub(WorldMetricsModel m, Action h)  { m.Changed += h; _unsubscribe.Add(() => m.Changed -= h); }
         private void Sub(AbilityLoadoutModel m, Action h){ m.Changed += h; _unsubscribe.Add(() => m.Changed -= h); }
+        private void Sub(AssignableLoadoutModel m, Action h){ m.Changed += h; _unsubscribe.Add(() => m.Changed -= h); }
+        private void Sub(ConsumableHotbarModel m, Action h){ m.Changed += h; _unsubscribe.Add(() => m.Changed -= h); }
+        private void Sub(StatusEffectsModel m, Action h) { m.Changed += h; _unsubscribe.Add(() => m.Changed -= h); }
         private void Sub(TargetCycleModel m, Action h)   { m.Changed += h; _unsubscribe.Add(() => m.Changed -= h); }
 
         private void OnVitals()
@@ -725,6 +799,77 @@ namespace DeNelle.HUD.Kit
                 h.SetIcon(string.IsNullOrEmpty(s.IconKey) ? null : UiStyle.Icon(s.IconKey));
                 h.SetCooldown(s.CooldownRemaining, s.CooldownTotal);
             }
+        }
+
+        private void OnAssignable()
+        {
+            var a = _models != null ? _models.Assignable : null;
+            if (a == null || _assignableSlots == null) return;
+            for (int i = 0; i < _assignableSlots.Length; i++)
+            {
+                var h = _assignableSlots[i];
+                if (i >= a.Slots.Count) { h.root.SetActive(true); continue; }
+                var s = a.Slots[i];
+                h.root.SetActive(true);
+                h.SetIcon(string.IsNullOrEmpty(s.IconKey) ? null : UiStyle.Icon(s.IconKey));
+                h.SetCooldown(s.CooldownRemaining, s.CooldownTotal);
+                if (h.button != null) h.button.interactable = s.Equipped;
+            }
+        }
+
+        private void OnConsumables()
+        {
+            var c = _models != null ? _models.Consumables : null;
+            if (c == null) return;
+            if (_hpPotionSlot != null)
+            {
+                _hpPotionSlot.SetCount(c.HpPotionCount);
+                if (_hpPotionSlot.button != null)
+                    _hpPotionSlot.button.interactable = c.HpPotionCount > 0 && HudCommands.HasPotion;
+            }
+            if (_manaPotionSlot != null)
+            {
+                _manaPotionSlot.SetCount(c.ManaPotionCount);
+                if (_manaPotionSlot.button != null)
+                    _manaPotionSlot.button.interactable = c.ManaPotionCount > 0 && HudCommands.HasManaPotion;
+            }
+        }
+
+        private void OnPlayerStatus() => RefreshStatusRow(_playerStatusSlots, _models?.PlayerStatus);
+        private void OnTargetStatus() => RefreshStatusRow(_enemyStatusSlots, _models?.TargetStatus);
+
+        private static void RefreshStatusRow(ElarionUiKit.ActionSlotHandle[] slots, StatusEffectsModel model)
+        {
+            if (slots == null) return;
+            var icons = model != null ? model.Icons : null;
+            for (int i = 0; i < slots.Length; i++)
+            {
+                var h = slots[i];
+                if (h == null) continue;
+                bool has = icons != null && i < icons.Count;
+                h.root.SetActive(has);
+                if (!has) continue;
+                var ic = icons[i];
+                h.SetIcon(StatusIcon(ic.IconKey, ic.IsBuff));
+                h.SetCount(0);
+                h.SetCooldown(ic.RemainingSeconds, Mathf.Max(0.01f, ic.TotalSeconds));
+                if (h.button != null) h.button.interactable = false;
+            }
+        }
+
+        private static Sprite StatusIcon(string id, bool isBuff)
+        {
+            var s = UiStyle.Icon(id, "status", id);
+            if (s != null) return s;
+            switch (id)
+            {
+                case "slow":   s = UiStyle.Icon("ice", "frost", "cold"); break;
+                case "freeze": s = UiStyle.Icon("ice", "frost", "cold"); break;
+                case "burn":   s = UiStyle.Icon("fire", "flame", "ember"); break;
+                case "mana-draught": s = UiStyle.Icon("mana", "potion", "consumable"); break;
+            }
+            if (s != null) return s;
+            return UiStyle.Icon(isBuff ? "buff" : "debuff", "status");
         }
 
         private void OnTargetCycle()
@@ -897,9 +1042,10 @@ namespace DeNelle.HUD.Kit
             // Dynamic gates on top of the rows (availability, never layout):
             if (_widgets.TryGetValue("fleeButton", out var flee) && flee.activeSelf)
                 flee.SetActive(HudCommands.HasFlee);
-            if (_widgets.TryGetValue("potionSlot", out var pot) && pot.activeSelf)
-                pot.SetActive(HudCommands.HasPotion);
             OnTalkChanged();
+            OnConsumables();
+            OnPlayerStatus();
+            OnTargetStatus();
             OnWave();   // wave block phase gate re-evaluates with the posture
 
             FlowTrace.Step("HudKit", "occupancy applied: posture " + HudPostureKeys.Key(posture) +
@@ -914,12 +1060,6 @@ namespace DeNelle.HUD.Kit
                 bool want = HudCommands.HasFlee &&
                             _config.Occupancy(_evaluator.Posture).ContainsKey("fleeButton");
                 if (flee.activeSelf != want) flee.SetActive(want);
-            }
-            if (_widgets.TryGetValue("potionSlot", out var pot))
-            {
-                bool want = HudCommands.HasPotion &&
-                            _config.Occupancy(_evaluator.Posture).ContainsKey("potionSlot");
-                if (pot.activeSelf != want) pot.SetActive(want);
             }
             // Collapsed chips: the tap-expand window temporarily shows the full row.
             if (_widgets.TryGetValue("resourceChipsCollapsed", out var col) && col.activeSelf &&

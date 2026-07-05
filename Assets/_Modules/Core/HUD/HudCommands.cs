@@ -27,7 +27,15 @@ namespace DeNelle.Core.HUD
         private static Action _flee;
         private static Action<string> _cycleSelect;
         private static Action _potion;
+        private static Action _manaPotion;
+        private static Action<int> _assignableCast;
         private static Action _talk;
+
+        /// <summary>Canonical larder id for the HP battle potion (WO-609).</summary>
+        public const string HpPotionId = "minor-heal-potion";
+
+        /// <summary>Canonical larder id for the mana battle potion (WO-609).</summary>
+        public const string ManaPotionId = "cons_mana_draught";
 
         // ── registration (Village side) ──────────────────────────────────────
 
@@ -50,6 +58,15 @@ namespace DeNelle.Core.HUD
         /// <summary>True while a potion handler is live (the potion slot earns its place).</summary>
         public static bool HasPotion => _potion != null;
 
+        /// <summary>Use the mana draught (Village consumable seam registers).</summary>
+        public static void RegisterManaPotion(Action handler) { _manaPotion = handler; }
+
+        /// <summary>True while a mana-potion handler is live.</summary>
+        public static bool HasManaPotion => _manaPotion != null;
+
+        /// <summary>Cast the assignable hotswap slot (0..3).</summary>
+        public static void RegisterAssignableCast(Action<int> handler) { _assignableCast = handler; }
+
         /// <summary>Talk to the in-range NPC (TalkHudBridge registers — replaces the stale
         /// reflection subscription onto the per-scene HUD's TalkRequested event).</summary>
         public static void RegisterTalk(Action handler) { _talk = handler; }
@@ -64,6 +81,20 @@ namespace DeNelle.Core.HUD
 
         /// <summary>Fire the potion handler.</summary>
         public static void Potion() => Fire(_potion, "potion");
+
+        /// <summary>Fire the mana-potion handler.</summary>
+        public static void ManaPotion() => Fire(_manaPotion, "manaPotion");
+
+        /// <summary>Fire the assignable-slot cast handler.</summary>
+        public static void AssignableCast(int slot)
+        {
+            if (_assignableCast == null)
+            {
+                FlowTrace.Warn("HudKit", "command 'assignableCast' fired with NO registered handler");
+                return;
+            }
+            Guard.Try("HudKit", "command assignableCast", () => { _assignableCast(slot); return true; }, false);
+        }
 
         /// <summary>Fire the talk handler.</summary>
         public static void Talk() => Fire(_talk, "talk");

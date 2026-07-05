@@ -1,6 +1,8 @@
-# WORK_ORDER_317 — Defend the Tower: player not standing on anything (grounding)
+# ⚠ WORK_ORDER_317 — Defend the Tower: player not standing on anything (grounding) — **SUPERSEDED 2026-07-04**
 
-**Status: READY TO IMPLEMENT**
+> **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09.
+
+**Status: CLOSED — SUPERSEDED (system removed 2026-06-09)**
 **Branch:** feat/tower-core-loop · **Lane:** 2 (Combat/AI) · **Origin:** owner playtest 2026-06-06 (screenshot)
 **Reconcile with:** `PatriciaLightController`, hero spawn/grounding, `HeroBodySwapper` foot-grounding
 

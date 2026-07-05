@@ -13,10 +13,10 @@
 // INPUT MAP (all Core):
 //   HudContextModel (CoreServices.HudModel.Context)  — Modal/BuildMode/Battle/
 //     Town/Overworld, single-writer (HudContextEvaluator, P4).
-//   PostureSignals.PursuitActive                     — the enemy half of the
-//     A4.5 engagement window (RegionMobSpawner aggro pulses).
-//   TargetModel.HasTarget                            — the player half (about
-//     to engage: a target is held while not yet in battle).
+//   PostureSignals.PursuitActive                     — an enemy is pursuing /
+//     has the hero in aggro (RegionMobSpawner + Enemy.ReportPursuit pulses).
+//   TargetModel.HasTarget                            — the player holds a lock
+//     (about to engage while not yet in Battle context).
 //   PostureSignals.EndStateVisible                   — hostile(postbattle):
 //     the EndState template owns the screen (A4.6 decision node).
 //
@@ -26,10 +26,10 @@
 //   HostileActive    <- Context == Battle (wave-live-in-town wakes hostile
 //                       areas via the SAME row — A4.2: the wave IS the threat)
 //   Build            <- Context == BuildMode (a calm(town) variant, A4.2)
-//   HostilePrebattle <- calm ground but the engagement window is open (A4.5)
+//   HostilePrebattle <- engagement window open (pursuit OR player target lock)
 //   CalmTown         <- Context == Town
-//   CalmExplore      <- otherwise (Overworld / enemy-owned ground pre-fight is
-//                       ALSO prebattle: enemy scene => window open by ground)
+//   CalmExplore      <- otherwise (peaceful default — even on enemy-owned ground
+//                       until something is actively threatening the hero)
 //
 // Every change emits the fleet-assertable line:
 //   "[Flow:HudKit] posture calm(town)->hostile(prebattle)"
@@ -37,7 +37,6 @@
 
 using System;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.HudModel;
@@ -95,12 +94,11 @@ namespace DeNelle.HUD.Kit
             // Build = a calm(town) variant (A4.2): near-empty HUD row.
             if (ctx != null && ctx.Context == HudContext.BuildMode) return HudPosture.Build;
 
-            // The engagement window (A4.5): an enemy is pursuing (pulse-decayed Village
-            // reports) OR the player holds a target while not yet in battle OR the ground
-            // itself is hostile (enemy-owned scene = you are on their land, weapons out).
-            bool targetHeld = hm != null && hm.Target != null && hm.Target.HasTarget;
-            bool enemyGround = HubScenes.IsEnemyOwnedScene(SceneManager.GetActiveScene().name);
-            if (PostureSignals.PursuitActive || targetHeld || enemyGround)
+            // The engagement window (A4.5): pursuit/aggro pulses OR a MANUAL player lock.
+            // Auto-nearest reticle tracking must NOT keep battle chrome up (HasTarget alone
+            // is always true near hostiles — owner 2026-07-05 peaceful-after-battle).
+            bool manualLock = hm != null && hm.Target != null && hm.Target.HasTarget && hm.Target.Locked;
+            if (PostureSignals.PursuitActive || manualLock)
                 return HudPosture.HostilePrebattle;
 
             // Calm forks by ground (A4.3).

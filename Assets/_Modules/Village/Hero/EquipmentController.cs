@@ -47,6 +47,7 @@ using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Geometry;
 
 namespace DeNelle.Village
 {
@@ -345,9 +346,10 @@ namespace DeNelle.Village
         [SerializeField] private float _sheatheBladeDiagonalDeg = 28f;
         [SerializeField] private Vector3 _sheatheOffHandLocalPos   = new Vector3(0.12f, 0.06f, -0.17f);
         // AUTHORED CORRECTION (§4 sanctioned manual nudge, owner live felt-tune 2026-07-04 — manual=true,
-        // never auto-overwritten): sheathed shield-on-back rotation. Base was (0,90,12); owner added
-        // Y+=180, Z+=180 → (0,270,192) so the shield face reads correctly against the back in town.
-        [SerializeField] private Vector3 _sheatheOffHandLocalEuler = new Vector3(0f, 270f, 192f);
+        // never auto-overwritten): sheathed shield-on-back rotation. Base (0,90,12); owner Z+=180 →
+        // (0,90,192) for the face-on-back read. Y+=180 is NOT baked here — ApplyGlobalWeaponYaw
+        // composes the same universal flip weapons use (owner 2026-07-05).
+        [SerializeField] private Vector3 _sheatheOffHandLocalEuler = new Vector3(0f, 90f, 192f);
 
         // Resolved attach targets + the DRAWN local transform, so the carry-state can move each prop
         // between its hand (drawn) and the back socket (sheathed) with no re-equip. _baseGripRot holds
@@ -420,6 +422,13 @@ namespace DeNelle.Village
         [SerializeField] private Vector3 _wandGripEuler  = new Vector3(0f, 90f, 0f);
         [SerializeField] private Vector3 _axeGripEuler   = new Vector3(-25f, 90f, 0f);
         [SerializeField] private Vector3 _maceGripEuler  = new Vector3(0f, 90f, 0f);
+
+        // Owner 2026-07-05: universal held-weapon Y flip (all families, hero + enemy).
+        private const float WeaponGlobalYawDeg = 180f;
+
+        /// <summary>Composes the global held-weapon Y correction onto a grip rotation.</summary>
+        internal static Quaternion ApplyGlobalWeaponYaw(Quaternion rot)
+            => rot * Quaternion.Euler(0f, WeaponGlobalYawDeg, 0f);
 
         // Cached base rotation for the current grip root (rig-derived + _swordGripEuler),
         // expressed in the hand bone's local space. ApplyHoldPose offsets from this.
@@ -844,7 +853,7 @@ namespace DeNelle.Village
                         ? "seat: DEPRECATED GEOMETRY (ff.weapongripinfer) — NormalizeInto + SeatHiltLowerHalf"
                         : "seat: GEOMETRY — NormalizeInto (longest->+Y) + SeatHiltLowerHalf (hilt=lower half, blade +Y)")
                     : "seat: GEOMETRY — NormalizeInto (bounds-true)");
-                NormalizeInto(prop, gripRoot.transform, vis.heldLength);
+                NormalizeInto(prop, gripRoot.transform, vis.heldLength, ResolveHiltFromKind(vis.kind));
                 if (meleeSeat)
                 {
                     FlowTrace.Try("Equip", "SeatHiltLowerHalf", () => SeatHiltLowerHalf(prop, gripRoot.transform));
@@ -939,6 +948,9 @@ namespace DeNelle.Village
                     ? $"no offset stored for '{offsetKey}' — native pivot kept (WO-478)."
                     : $"no offset stored for '{offsetKey}' — pure geometry grip kept.");
             }
+
+            _baseGripRot = ApplyGlobalWeaponYaw(_baseGripRot);
+            _baseGripEuler = _baseGripRot.eulerAngles;
 
             LogGripSeatDiagnostics(prop, gripRoot.transform, hand, weaponId,
                 trustNativePivot ? "WO-478-native" : "geometry-infer");
@@ -1233,9 +1245,9 @@ namespace DeNelle.Village
                 $"hand='{(hand != null ? hand.name : "<null>")}'");
         }
 
-        // Bin mesh vertices along prop-local Y; record the max cross-section half-extent
-        // (max(|x|,|z|)) per bin. Vertices are transformed mesh-local -> parent-local so the
-        // profile is measured in the same frame the grip math uses.
+        // Bin mesh vertices along prop-local Y; record max |z| per bin (Z = wide axis, thickest
+        // at hilt). Vertices are transformed mesh-local -> parent-local so the profile is
+        // measured in the same frame the grip math uses.
         private static void CollectWidthProfile(
             GameObject prop, Transform parent, float yMin, float length,
             int bins, float[] widthHi, bool[] hit)
@@ -1255,7 +1267,7 @@ namespace DeNelle.Village
                     Vector3 world = mt.TransformPoint(verts[v]);
                     Vector3 local = parent.InverseTransformPoint(world);
                     int bin = Mathf.Clamp((int)((local.y - yMin) * inv), 0, bins - 1);
-                    float w = Mathf.Max(Mathf.Abs(local.x), Mathf.Abs(local.z));
+                    float w = Mathf.Abs(local.z);
                     if (!hit[bin] || w > widthHi[bin]) widthHi[bin] = w;
                     hit[bin] = true;
                 }
@@ -1271,7 +1283,7 @@ namespace DeNelle.Village
                     Vector3 world = mt.TransformPoint(verts[v]);
                     Vector3 local = parent.InverseTransformPoint(world);
                     int bin = Mathf.Clamp((int)((local.y - yMin) * inv), 0, bins - 1);
-                    float w = Mathf.Max(Mathf.Abs(local.x), Mathf.Abs(local.z));
+                    float w = Mathf.Abs(local.z);
                     if (!hit[bin] || w > widthHi[bin]) widthHi[bin] = w;
                     hit[bin] = true;
                 }
@@ -1520,11 +1532,10 @@ namespace DeNelle.Village
             foreach (var c in prop.GetComponentsInChildren<Collider>(true)) if (c != null) Destroy(c);
             foreach (var rb in prop.GetComponentsInChildren<Rigidbody>(true)) if (rb != null) Destroy(rb);
 
-            // OFFSET RESOLUTION (WO-577): an off-hand can now carry an authored VERTICAL-baseline
+            // OFFSET RESOLUTION (WO-577): an off-hand can carry an authored VERTICAL-baseline
             // offset (fullOverride) from the in-game Seating Editor — keyed by mesh name then id.
-            // Only fullOverride is honoured here (the existing shield grip is a baked preset, so a
-            // plain nudge would double-rotate it). The current shield_A entry has no fullOverride,
-            // so this is inert until the owner re-authors the shield from vertical — no regression.
+            // fullOverride replaces the seat; a plain nudge composes on top of the preset grip
+            // (same as main-hand) before ApplyGlobalWeaponYaw.
             string offsetKey = !string.IsNullOrEmpty(vis.mesh) ? vis.mesh : id;
             bool hasOffset = AttachmentOffsetRegistry.TryGetOffset(offsetKey, out var fo) ||
                              (offsetKey != id && AttachmentOffsetRegistry.TryGetOffset(id, out fo));
@@ -1536,7 +1547,7 @@ namespace DeNelle.Village
                 // VERTICAL baseline (geometry, longest->+Y) + the saved delta. Shields are not
                 // melee, so no hilt-lower-half; the owner dials the full strap pose from vertical.
                 FlowTrace.Step("Equip", $"off-hand seat: GEOMETRY-VERTICAL + saved DELTA pos={fo.pos} rot={fo.eulerRot} scale={fo.scale:0.###}");
-                NormalizeInto(prop, gripRoot.transform, vis.heldLength);
+                NormalizeInto(prop, gripRoot.transform, vis.heldLength, resolveHilt: false);
                 gripRoot.transform.SetParent(hand, false);
                 gripRoot.transform.localPosition = vis.gripPos + fo.pos;
                 gripRoot.transform.localRotation = Quaternion.Euler(fo.eulerRot);
@@ -1558,11 +1569,28 @@ namespace DeNelle.Village
             else
             {
                 FlowTrace.Step("Equip", "off-hand seat: NormalizeInto + preset grip (Tripo/Resources shield)");
-                NormalizeInto(prop, gripRoot.transform, vis.heldLength);
+                NormalizeInto(prop, gripRoot.transform, vis.heldLength, resolveHilt: false);
                 gripRoot.transform.SetParent(hand, false);
                 gripRoot.transform.localPosition = vis.gripPos;
                 gripRoot.transform.localRotation = Quaternion.Euler(vis.gripEuler);
             }
+
+            // OFFSET FORGE NUDGE (mirror main-hand): compose onto the seated frame, then global Y.
+            if (!fullOverride && hasOffset)
+            {
+                bool nudged = fo.pos != Vector3.zero || fo.eulerRot != Vector3.zero ||
+                              (fo.scale > 0f && Mathf.Abs(fo.scale - 1f) > 1e-4f);
+                gripRoot.transform.localPosition += fo.pos;
+                gripRoot.transform.localRotation =
+                    gripRoot.transform.localRotation * Quaternion.Euler(fo.eulerRot);
+                if (fo.scale > 0f && Mathf.Abs(fo.scale - 1f) > 1e-4f)
+                    gripRoot.transform.localScale = gripRoot.transform.localScale * fo.scale;
+                FlowTrace.Step("Offset", nudged
+                    ? $"off-hand NUDGE '{offsetKey}' on geometry: +pos={fo.pos} *rot={fo.eulerRot} *scale={fo.scale:0.###}"
+                    : $"off-hand offset '{offsetKey}' is all-zero — pure geometry (no nudge).");
+            }
+
+            gripRoot.transform.localRotation = ApplyGlobalWeaponYaw(gripRoot.transform.localRotation);
 
             _currentOffHandProp = gripRoot;
             // Capture off-hand attach inputs for the in-game Seating Editor (WO-577).
@@ -1703,7 +1731,7 @@ namespace DeNelle.Village
                 {
                     offT.SetParent(back, false);
                     offT.localPosition = _sheatheOffHandLocalPos;
-                    offT.localRotation = Quaternion.Euler(_sheatheOffHandLocalEuler);
+                    offT.localRotation = ApplyGlobalWeaponYaw(Quaternion.Euler(_sheatheOffHandLocalEuler));
                 }
                 else if (_offHandHand != null)
                 {
@@ -2052,7 +2080,8 @@ namespace DeNelle.Village
                 }
                 else
                 {
-                    NormalizeInto(child, grt, held > 0f ? held : 1f);
+                    NormalizeInto(child, grt, held > 0f ? held : 1f,
+                        ResolveHiltFromKind(offHand ? WeaponClass.Shield : _currentWeaponKind));
                     if (melee)
                         SeatHiltLowerHalf(child, grt);
                 }
@@ -2074,7 +2103,7 @@ namespace DeNelle.Village
                 baseRot = Quaternion.Euler(offHand ? _currentOffHandGripEuler : _currentWeaponGripEuler);
 
             grt.localPosition = gripPos + pos;
-            grt.localRotation = baseRot * Quaternion.Euler(euler);
+            grt.localRotation = ApplyGlobalWeaponYaw(baseRot * Quaternion.Euler(euler));
             grt.localScale    = Vector3.one * scale;
 
             // Keep the editor's mirror of base state coherent so a later EndSeatingEdit / hold
@@ -2190,13 +2219,21 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Map a weapons.json id -> a WeaponVisual: exact-id table first, then keyword
-        /// classification on the id (so future ids still resolve to a sensible family).
+        /// Map a weapons.json id -> a WeaponVisual: exact-id table first, then the catalog
+        /// row's prefabPath + category (icon/title and held mesh stay in lockstep), then
+        /// keyword classification on the id (future ids still resolve to a sensible family).
         /// </summary>
         private static WeaponVisual Resolve(string weaponId)
         {
             if (string.IsNullOrEmpty(weaponId)) return null;
             if (IdMap.TryGetValue(weaponId, out var hit)) return hit;
+
+            var def = GearCatalog.FindWeapon(weaponId);
+            if (def != null)
+            {
+                var fromCatalog = VisualFromCatalog(def);
+                if (fromCatalog != null) return fromCatalog;
+            }
 
             string id = weaponId.ToLowerInvariant();
             // Order matters: more specific keywords first.
@@ -2213,6 +2250,45 @@ namespace DeNelle.Village
             if (id.StartsWith("ranger"))return Bow("bow_A");
             // Default: a sword (knight / generic melee).
             return Sword("sword_A");
+        }
+
+        // Derive the held mesh from the catalog row (ITEM_MODEL §3/§4): prefabPath names the
+        // Resources prop; category picks the grip family. Blink Addressables rows keep `native`.
+        private static WeaponVisual VisualFromCatalog(WeaponDef def)
+        {
+            if (def == null || string.IsNullOrEmpty(def.prefabPath)) return null;
+
+            string mesh;
+            if (LoadsViaAddressable(def))
+            {
+                // Address is e.g. "gear/weapon/Sword1h_01" — last segment is the load key.
+                int slash = def.prefabPath.LastIndexOf('/');
+                mesh = slash >= 0 ? def.prefabPath.Substring(slash + 1) : def.prefabPath;
+            }
+            else
+            {
+                mesh = System.IO.Path.GetFileName(def.prefabPath);
+            }
+            if (string.IsNullOrEmpty(mesh)) return null;
+
+            WeaponVisual vis = VisualForCategory(def.category, mesh);
+            return LoadsViaAddressable(def) ? CopyOf(Native(vis)) : vis;
+        }
+
+        private static WeaponVisual VisualForCategory(string category, string mesh)
+        {
+            switch ((category ?? "").ToLowerInvariant())
+            {
+                case "bow":    return Bow(mesh);
+                case "dagger": return Dagger(mesh);
+                case "axe":    return Axe(mesh);
+                case "hammer":
+                case "mace":   return Hammer(mesh);
+                case "staff":  return Staff(mesh);
+                case "wand":   return Wand(mesh);
+                case "shield": return Shield(mesh);
+                default:       return Sword(mesh);
+            }
         }
 
         /// <summary>
@@ -2260,39 +2336,16 @@ namespace DeNelle.Village
             return go;
         }
 
-        // ── Bounds-normalize (generalized from HeroBowAttachment.NormalizeInto) ──────
-        // Parents `prop` under `parent`, orienting its LONGEST axis -> parent +Y, its
-        // NARROWEST axis -> parent +X, bounds-centre at the origin, scaled so the longest
-        // axis is `targetLength` m. Deterministic from renderer bounds — any weapon FBX
-        // lands right without hand-guessed Euler. (Kept self-contained so this controller
-        // doesn't depend on HeroBowAttachment's private helper.)
-        private static void NormalizeInto(GameObject prop, Transform parent, float targetLength)
-        {
-            prop.transform.SetParent(parent, false);
-            prop.transform.localPosition = Vector3.zero;
-            prop.transform.localRotation = Quaternion.identity;
-            prop.transform.localScale = Vector3.one;
+        // Bladed melee: Z thickest at hilt → handle at the short Y end. Bow/shield/staff/wand skip.
+        private static bool ResolveHiltFromKind(WeaponClass kind) =>
+            kind == WeaponClass.Sword || kind == WeaponClass.Dagger ||
+            kind == WeaponClass.Axe || kind == WeaponClass.Hammer;
 
-            if (!TryLocalBounds(prop, parent, out Bounds b0)) return;
-            Vector3 sz = b0.size;
-            int lng = (sz.x >= sz.y && sz.x >= sz.z) ? 0 : (sz.y >= sz.z ? 1 : 2);
-            int sht = (sz.x <= sz.y && sz.x <= sz.z) ? 0 : (sz.y <= sz.z ? 1 : 2);
-            if (sht == lng) sht = (lng + 1) % 3;
-
-            Quaternion alignLong = Quaternion.FromToRotation(Axis(lng), Vector3.up);
-            prop.transform.localRotation = alignLong;
-
-            Vector3 shortAfter = alignLong * Axis(sht); shortAfter.y = 0f;
-            if (shortAfter.sqrMagnitude > 1e-5f)
-                prop.transform.localRotation =
-                    Quaternion.FromToRotation(shortAfter.normalized, Vector3.right) * alignLong;
-
-            if (TryLocalBounds(prop, parent, out Bounds b1) && b1.size.y > 1e-4f)
-                prop.transform.localScale = Vector3.one * (targetLength / b1.size.y);
-
-            if (TryLocalBounds(prop, parent, out Bounds b2))
-                prop.transform.localPosition -= b2.center;
-        }
+        // ── Bounds-normalize (WeaponBoundsOrient: Y-long, X-narrow, Z-wide — BINDING canon) ──
+        private static void NormalizeInto(GameObject prop, Transform parent, float targetLength,
+                                        bool resolveHilt = true)
+            => WeaponBoundsOrient.NormalizeInto(prop, parent, targetLength,
+                WeaponBoundsOrient.GripAnchor.Centre, resolveHilt);
 
         // Seat a NATIVE prop (authored grip-at-origin + correct orientation, e.g. Blink): trust the
         // prefab — parent at identity, scale to the target held length by the LONGEST bound, and do
@@ -2310,9 +2363,6 @@ namespace DeNelle.Village
                 if (longest > 1e-4f) prop.transform.localScale = Vector3.one * (targetLength / longest);
             }
         }
-
-        private static Vector3 Axis(int i) =>
-            i == 0 ? Vector3.right : i == 1 ? Vector3.up : Vector3.forward;
 
         private static bool TryLocalBounds(GameObject prop, Transform parent, out Bounds bounds)
         {

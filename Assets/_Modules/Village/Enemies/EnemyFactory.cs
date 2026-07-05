@@ -18,6 +18,7 @@ using DeNelle.Core;             // FeatureFlags (ff.enemyweapons gate on the hel
 using DeNelle.Core.Combat;      // ActorAnimator (attached so Enemy drives work)
 using DeNelle.Core.Validation;  // WO-315/WO-363: opt-in OrientationGuard on the enemy root
 using DeNelle.Core.Diagnostics; // root-cause FlowTrace on the single enemy-creation path
+using DeNelle.Core.Geometry;
 
 namespace DeNelle.Village
 {
@@ -526,7 +527,8 @@ namespace DeNelle.Village
             foreach (var rb in prop.GetComponentsInChildren<Rigidbody>(true)) if (rb != null) Object.Destroy(rb);
 
             var gripRoot = new GameObject("EnemyWeaponGrip_" + meshName);
-            NormalizeEnemyProp(prop, gripRoot.transform, heldLength);
+            WeaponBoundsOrient.NormalizeInto(prop, gripRoot.transform, heldLength,
+                WeaponBoundsOrient.GripAnchor.HiltEnd);
             gripRoot.transform.SetParent(hand, false);
 
             Vector3 euler = defaultEuler;
@@ -544,56 +546,9 @@ namespace DeNelle.Village
                     $"AttachEnemyWeapon '{meshName}' -> '{hand.name}': no Forge offset — EYEBALL default " +
                     $"pos={pos} rot={euler} scale={scale:0.###} (tune '{meshName}' in Offset Forge).");
             }
-            gripRoot.transform.localRotation = Quaternion.Euler(euler);
+            gripRoot.transform.localRotation = EquipmentController.ApplyGlobalWeaponYaw(Quaternion.Euler(euler));
             gripRoot.transform.localPosition = pos;
             gripRoot.transform.localScale = Vector3.one * scale;
-        }
-
-        // Size-normalise a freshly-instantiated held prop under a fresh grip root (identity at the world
-        // origin): orient its LONGEST axis to +Y, scale so that axis == heldLength (independent of the
-        // FBX's native import scale), and seat the bottom (handle) end + lateral centre at the origin so
-        // the palm holds the grip. Compact mirror of the hero NormalizeInto+SeatByHandle intent.
-        private static void NormalizeEnemyProp(GameObject prop, Transform gripRoot, float heldLength)
-        {
-            prop.transform.SetParent(gripRoot, false);
-            prop.transform.localPosition = Vector3.zero;
-            prop.transform.localRotation = Quaternion.identity;
-            prop.transform.localScale = Vector3.one;
-
-            if (!TryWorldBounds(prop, out Bounds b)) return;
-            Vector3 size = b.size;
-            // Rotate the longest axis onto local +Y.
-            if (size.x >= size.y && size.x >= size.z)
-                prop.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);   // X -> Y
-            else if (size.z >= size.y && size.z >= size.x)
-                prop.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);   // Z -> Y
-
-            if (!TryWorldBounds(prop, out b)) return;
-            float longest = Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z));
-            if (longest > 1e-4f && heldLength > 0f)
-            {
-                prop.transform.localScale *= heldLength / longest;
-                if (!TryWorldBounds(prop, out b)) return;
-            }
-
-            // Seat: shift so the handle end (bounds min Y) and lateral centre land at the grip origin.
-            Vector3 lp = prop.transform.localPosition;
-            lp.x -= b.center.x;
-            lp.y -= (b.center.y - b.extents.y);
-            lp.z -= b.center.z;
-            prop.transform.localPosition = lp;
-        }
-
-        // Combined world-space renderer AABB of a prop. The grip root is created at the world origin with
-        // an identity transform, so world == grip-local for the seating math above. False if no renderers.
-        private static bool TryWorldBounds(GameObject prop, out Bounds bounds)
-        {
-            bounds = default;
-            var rends = prop.GetComponentsInChildren<Renderer>();
-            if (rends == null || rends.Length == 0) return false;
-            bounds = rends[0].bounds;
-            for (int i = 1; i < rends.Length; i++) bounds.Encapsulate(rends[i].bounds);
-            return bounds.size.sqrMagnitude > 1e-8f;
         }
 
         // Depth-first search for a bone transform whose name contains any of the given tokens

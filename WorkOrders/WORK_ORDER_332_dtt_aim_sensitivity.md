@@ -1,6 +1,8 @@
-# WORK ORDER 332 — DTT Aim / Camera Rotation Sensitivity Reduction
+# ⚠ WORK ORDER 332 — DTT Aim / Camera Rotation Sensitivity Reduction — **SUPERSEDED 2026-07-04**
 
-**Status:** READY TO IMPLEMENT  
+> **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09.
+
+**Status:** CLOSED — SUPERSEDED (system removed 2026-06-09)  
 **Lane:** 2 (Combat/AI) — code-only, parallel-safe  
 **Scene:** PatriciaLight_TD  
 **Priority:** MEDIUM — camera feels uncontrollable at current sensitivity; combat precision lost

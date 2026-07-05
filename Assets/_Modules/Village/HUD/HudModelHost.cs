@@ -74,6 +74,9 @@ namespace DeNelle.Village.Hud
             _producers.Add(new TargetProducer(_model));
             _producers.Add(new TargetCycleProducer(_model));
             _producers.Add(new AbilityLoadoutProducer(_model));
+            _producers.Add(new AssignableLoadoutProducer(_model));
+            _producers.Add(new ConsumableHotbarProducer(_model));
+            _producers.Add(new StatusEffectsProducer(_model));
             _producers.Add(new WorldMetricsProducer(_model));
             _producers.Add(new MomentumProducer(_model));
             _producers.Add(new EchoProducer(_model));

@@ -44,6 +44,7 @@ using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Geometry;
 
 namespace DeNelle.Editor.Catalog
 {
@@ -154,8 +155,9 @@ namespace DeNelle.Editor.Catalog
                     continue;
                 }
 
-                // RENDER → PNG bytes.
-                byte[] png = RenderPreviewPng(prefab);
+                // RENDER → PNG bytes (Y-long / X-narrow first so icon silhouette == held shape).
+                float heldLen = TargetHeldLength(row);
+                byte[] png = RenderPreviewPngOriented(prefab, heldLen, row);
                 if (png == null)
                 {
                     failed++;
@@ -279,6 +281,48 @@ namespace DeNelle.Editor.Catalog
                 if (!map.ContainsKey(entry.address)) map[entry.address] = entry.guid;
             }
             return map;
+        }
+
+        // Canonical held lengths (mirror EquipmentController presets) for icon framing.
+        private static float TargetHeldLength(JObject row)
+        {
+            switch ((row.Value<string>("category") ?? "").ToLowerInvariant())
+            {
+                case "bow":    return 0.92f;
+                case "dagger": return 0.40f;
+                case "axe":    return 0.80f;
+                case "hammer":
+                case "mace":   return 0.85f;
+                case "staff":  return 1.30f;
+                case "wand":   return 0.45f;
+                case "shield": return 0.48f;
+                default:       return 0.95f; // sword / unknown melee
+            }
+        }
+
+        /// <summary>Instantiate, seat Y-long X-narrow, then capture the oriented instance so the
+        /// shop icon reads the same shape the hero holds.</summary>
+        private static byte[] RenderPreviewPngOriented(GameObject prefab, float heldLength, JObject row)
+        {
+            var root = new GameObject("GearIconOrientRoot") { hideFlags = HideFlags.HideAndDontSave };
+            GameObject inst = null;
+            try
+            {
+                inst = UnityEngine.Object.Instantiate(prefab);
+                inst.hideFlags = HideFlags.HideAndDontSave;
+                var grip = new GameObject("GearIconGrip") { hideFlags = HideFlags.HideAndDontSave };
+                grip.transform.SetParent(root.transform, false);
+                string cat = (row?.Value<string>("category") ?? "").ToLowerInvariant();
+                bool resolveHilt = cat != "bow" && cat != "shield" && cat != "staff" && cat != "wand";
+                WeaponBoundsOrient.NormalizeInto(inst, grip.transform, heldLength,
+                    WeaponBoundsOrient.GripAnchor.Centre, resolveHilt);
+                return RenderPreviewPng(inst);
+            }
+            finally
+            {
+                if (inst != null) UnityEngine.Object.DestroyImmediate(inst);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
         }
 
         // =====================================================================

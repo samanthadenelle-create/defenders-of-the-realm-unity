@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_comment": "HUD kit occupancy table (HUD_OBSIDIAN A4.3/A4.4, P23). Posture -> area -> widget rows. Postures: calm(town) [+build variant], calm(explore), hostile(prebattle), hostile(activebattle), hostile(postbattle), modal. Hostile tree territorially HIGH (status/targetInfo), friendly tree LOW at the thumbs (A4.1). hostile(postbattle) + modal have EMPTY rows by design: the EndState template / the modal own the screen and the kit stands down.",
+  "_comment": "HUD kit occupancy table (HUD_OBSIDIAN A4.3/A4.4, P23). Posture -> area -> widget rows. WO-609: battle HUD = player TL, enemy TC, hotswap BC, static skills BR, lean D-pad BL, dual potions.",
   "postures": [
     {
       "posture": "calm(town)",
@@ -38,10 +38,10 @@
     {
       "posture": "hostile(prebattle)",
       "areas": [
-        { "area": "vitals",      "widgets": ["playerNameplate"] },
-        { "area": "targetInfo",  "widgets": ["targetFrame"] },
-        { "area": "actionRail",  "widgets": ["attackButton"] },
-        { "area": "actionBar",   "widgets": ["abilityRow", "potionSlot"] },
+        { "area": "vitals",      "widgets": ["playerNameplate", "playerBuffRow"] },
+        { "area": "status",      "widgets": ["targetFrame", "enemyBuffRow"] },
+        { "area": "actionRail",  "widgets": ["abilityRow"] },
+        { "area": "actionBar",   "widgets": ["assignableSkillRow", "hpPotionSlot", "manaPotionSlot"] },
         { "area": "moveCluster", "widgets": ["moveCluster"] },
         { "area": "feedback",    "widgets": ["feedbackLayer"] }
       ]
@@ -49,12 +49,11 @@
     {
       "posture": "hostile(activebattle)",
       "areas": [
-        { "area": "vitals",      "widgets": ["playerNameplate"] },
-        { "area": "status",      "widgets": ["targetCycle"] },
+        { "area": "vitals",      "widgets": ["playerNameplate", "playerBuffRow"] },
+        { "area": "status",      "widgets": ["targetFrame", "enemyBuffRow", "castBar"] },
         { "area": "system",      "widgets": ["fleeButton", "settingsButton"] },
-        { "area": "targetInfo",  "widgets": ["targetFrame", "castBar"] },
-        { "area": "actionRail",  "widgets": ["attackButton"] },
-        { "area": "actionBar",   "widgets": ["abilityRow", "potionSlot"] },
+        { "area": "actionRail",  "widgets": ["abilityRow", "attackButton"] },
+        { "area": "actionBar",   "widgets": ["assignableSkillRow", "hpPotionSlot", "manaPotionSlot"] },
         { "area": "moveCluster", "widgets": ["moveCluster"] },
         { "area": "feedback",    "widgets": ["feedbackLayer"] }
       ]
