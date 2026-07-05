@@ -415,6 +415,14 @@ namespace DeNelle.Core
         /// Phase 2. PlayerPrefs "ff.mocaploco" = 1 to preview.</summary>
         public static bool MocapLocomotion => Get("mocaploco", defaultOn: true);   // 2026-07-04: owner felt-approved ("player feels ok") — ON. Studio-mocap idle/walk/run FORWARD; strafe/turn/shield-carry = Phase 2.
 
+        /// <summary>WO-478 — DEPRECATED geometry grip inference for NATIVE melee props (Blink
+        /// grip-at-origin prefabs such as sword_A). When ON, native melee weapons discard the
+        /// authored pivot and run NormalizeInto + SeatHiltLowerHalf + ComputeMeleeGripRotation
+        /// (the pre-WO-478 path superseding stale WO-435). Default OFF → native melee trusts
+        /// SeatNative (authored grip-at-origin + scale + per-archetype nudge only). PlayerPrefs
+        /// "ff.weapongripinfer" = 1 to restore the legacy inference path.</summary>
+        public static bool WeaponGripInfer => Get("weapongripinfer", defaultOn: false);
+
         /// <summary>SEEKERTHON stake-rewards DEMO surface — when ON, <see cref="DeNelle.Core.Platform.StakeRewardsDemoBootstrap"/>
         /// seeds a real-looking active native SKR stake (~1M, a Genesis holder) into
         /// <see cref="DeNelle.Core.Platform.StakeRewardsResolver"/> and auto-opens the read-only

@@ -45,6 +45,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
+using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
@@ -790,16 +791,12 @@ namespace DeNelle.Village
             foreach (var rb in prop.GetComponentsInChildren<Rigidbody>(true)) if (rb != null) Destroy(rb);
 
             // Seat via a grip root.
-            //  • BUG 2 FIX: a MELEE weapon NEVER trusts a "native" pivot. The Blink/Tripo sword
-            //    prefabs are tagged native (grip-at-origin), but their authored pivot is NOT actually
-            //    at the handle — so SeatNative left the hilt floating and the blade clipped the fist.
-            //    Per §4 (derive the grip from mesh bounds + name, do NOT trust a wrong pivot), every
-            //    melee weapon now runs the SAME proven KayKit path: NormalizeInto (bounds-orient,
-            //    longest->+Y) -> SeatByHandle (re-seat the HANDLE end at the origin) -> the rig-hand-
-            //    axis rotation (ComputeMeleeGripRotation, applied below). The hilt sits in the palm.
-            //  • NON-melee native props (none reach here today — bow/shield use their own paths) keep
-            //    SeatNative (trust the authored grip-at-origin). The `native` flag now only gates
-            //    NON-melee seating.
+            //  • WO-478 (default): NATIVE props (Blink grip-at-origin, e.g. knight_starter/sword_A)
+            //    trust SeatNative — scale to heldLength, preserve authored pivot/orientation.
+            //    Geometry inference is reserved for non-native Tripo/KayKit FBX (sword_D/F/G, staff_*).
+            //  • DEPRECATED (ff.weapongripinfer): when ON, native melee ALSO runs the legacy
+            //    NormalizeInto + SeatHiltLowerHalf + ComputeMeleeGripRotation path (superseded
+            //    WO-435 "BUG 2 FIX" — see WORK_ORDER_478_weapon_grip_trust_native_pivot.md).
             // ── OFFSET RESOLUTION (WO-551: geometry-first, offset = nudge-on-top) ─────
             // GEOMETRY IS THE DEFAULT for all conforming melee. We ALWAYS true the prop
             // (NormalizeInto: longest axis -> +Y, narrowest -> +X) and, for melee, seat the grip
@@ -828,37 +825,30 @@ namespace DeNelle.Village
             bool fullOverride = hasOffset && fo.fullOverride;
 
             var gripRoot = new GameObject(PropName);
-            bool useNativeSeat = (vis.native && !meleeSeat) && !fullOverride;
-            if (useNativeSeat)
+            // WO-478: native melee trusts authored pivot unless ff.weapongripinfer restores inference.
+            bool trustNativePivot = vis.native && !fullOverride &&
+                (!meleeSeat || !FeatureFlags.WeaponGripInfer);
+            if (trustNativePivot)
             {
-                FlowTrace.Step("Equip", "seat: NATIVE (trust authored grip-at-origin, scale-only)");
+                FlowTrace.Step("Equip", meleeSeat
+                    ? "seat: NATIVE melee (WO-478 trust grip-at-origin + scale)"
+                    : "seat: NATIVE (trust authored grip-at-origin, scale-only)");
                 SeatNative(prop, gripRoot.transform, vis.heldLength);
             }
             else
             {
+                // DEPRECATED geometry inference — ff.weapongripinfer for native melee, default for
+                // non-native Tripo/KayKit FBX. Ref: WORK_ORDER_478_weapon_grip_trust_native_pivot.md
                 FlowTrace.Step("Equip", meleeSeat
-                    ? "seat: GEOMETRY — NormalizeInto (longest->+Y) + SeatHiltLowerHalf (hilt=lower half, blade +Y, deterministic, never flips)"
+                    ? (vis.native
+                        ? "seat: DEPRECATED GEOMETRY (ff.weapongripinfer) — NormalizeInto + SeatHiltLowerHalf"
+                        : "seat: GEOMETRY — NormalizeInto (longest->+Y) + SeatHiltLowerHalf (hilt=lower half, blade +Y)")
                     : "seat: GEOMETRY — NormalizeInto (bounds-true)");
                 NormalizeInto(prop, gripRoot.transform, vis.heldLength);
-                // GRIP-POINT INFERENCE: NormalizeInto centres by BOUNDS (mid-shaft / mid-blade),
-                // not the grip. For the DEFAULT path SeatByHandle re-seats the inferred handle to
-                // origin (blade +Y). For the VERTICAL-baseline (fullOverride) path the owner rule
-                // is fixed: the hilt is the LOWER HALF, blade up — SeatHiltLowerHalf seats the hand
-                // on the lower-half hilt deterministically (width-spike only refines the grip Y).
                 if (meleeSeat)
                 {
-                    // RC1/RC2 FIX (2026-07-04): ONE deterministic seat for ALL melee — SeatHiltLowerHalf.
-                    // The retired SeatByHandle branched on a crossguard width-spike vs a bottom-16%
-                    // fallback and could FLIP the weapon 180° based on which end read wider (per-mesh,
-                    // non-deterministic, and it broke in a player build where the FBX verts were
-                    // unreadable — the editor≠build core bug). The owner's canonical rule is FIXED:
-                    // hilt = LOWER HALF, blade points +Y, hand grips the hilt — never flips, and the
-                    // SAME result in editor and build. fullOverride still swaps the rotation model
-                    // (raw-euler override vs geometric grip) below; the SEAT is now single-path.
                     FlowTrace.Try("Equip", "SeatHiltLowerHalf", () => SeatHiltLowerHalf(prop, gripRoot.transform));
-                    // §12 instrumentation: prove the geometry path ran + report the seated grip
-                    // shift (prop local Y = how far the grip moved to origin).
-                    FlowTrace.Step("Equip", $"trued+seated: grip-shift localY={prop.transform.localPosition.y:0.###} (geometry hilt-lower-half{(fullOverride ? ", vertical-delta" : "")})");
+                    FlowTrace.Step("Equip", $"trued+seated: grip-shift localY={prop.transform.localPosition.y:0.###} (geometry hilt-lower-half{(fullOverride ? ", vertical-delta" : "")} infer={FeatureFlags.WeaponGripInfer})");
                 }
             }
 
@@ -893,17 +883,17 @@ namespace DeNelle.Village
             //    inherited the bone's local axes and read sideways across the body — this is the fix.
             //  • Bow/shield: keep the proven per-weapon gripEuler (already seated correctly by
             //    their own NormalizeInto + preset euler).
-            // BUG 2 FIX: ALL melee (native Blink swords included) now use the rig-hand-axis rotation,
-            // because melee is seated via the derived NormalizeInto+SeatByHandle path above (its
-            // primary axis is prop-local +Y) — NOT the authored native frame. Only NON-melee native
-            // props use their preset gripEuler directly.
-            //  • fullOverride EXCEPTION (Offset Forge opt-out): reproduce the RAW pivot frame —
-            //    localRotation = Euler(rot), SKIP ComputeMeleeGripRotation (the geometry path).
-            //    DEFAULT melee keeps the rig-aware geometric grip; the nudge composes below.
+            // WO-478: native melee keeps the prefab frame + per-archetype calibration nudge only.
+            // DEPRECATED (ff.weapongripinfer): native melee uses ComputeMeleeGripRotation like Tripo FBX.
             if (fullOverride)
             {
                 _baseGripEuler = fo.eulerRot;
                 _baseGripRot = Quaternion.Euler(fo.eulerRot);
+            }
+            else if (trustNativePivot && meleeSeat)
+            {
+                _baseGripRot = Quaternion.Euler(vis.gripEuler) * Quaternion.Euler(MeleeGripNudge(vis.kind));
+                _baseGripEuler = _baseGripRot.eulerAngles;
             }
             else if (IsMelee(vis.kind))
                 _baseGripRot = ComputeMeleeGripRotation(vis.kind);
@@ -911,7 +901,8 @@ namespace DeNelle.Village
                 _baseGripRot = Quaternion.Euler(_baseGripEuler);
 
             FlowTrace.Step("Equip", $"attached '{weaponId}' on '{name}': gripPos={vis.gripPos} " +
-                $"baseEuler={_baseGripRot.eulerAngles} kind={vis.kind} native={vis.native}");
+                $"baseEuler={_baseGripRot.eulerAngles} kind={vis.kind} native={vis.native} " +
+                $"trustNative={trustNativePivot} infer={FeatureFlags.WeaponGripInfer}");
 
             // ── OFFSET FORGE NUDGE (WO-551: applied ON TOP of geometry) ──────────────
             // The authored offset is a CALIBRATION NUDGE relative to the trued+seated runtime
@@ -944,8 +935,13 @@ namespace DeNelle.Village
             }
             else
             {
-                FlowTrace.Step("Offset", $"no offset stored for '{offsetKey}' — pure geometry grip kept.");
+                FlowTrace.Step("Offset", trustNativePivot
+                    ? $"no offset stored for '{offsetKey}' — native pivot kept (WO-478)."
+                    : $"no offset stored for '{offsetKey}' — pure geometry grip kept.");
             }
+
+            LogGripSeatDiagnostics(prop, gripRoot.transform, hand, weaponId,
+                trustNativePivot ? "WO-478-native" : "geometry-infer");
 
             // RENDER-VERIFY + ROLLBACK (TGVRU, owner directive 2026-06-19: "anything that renders
             // can be broken — check render==true and roll back the error"). The prop can load +
@@ -1080,6 +1076,9 @@ namespace DeNelle.Village
         //      the length near the pommel.
         // Works on prop-LOCAL coordinates (relative to `parent`, the gripRoot) so it is
         // independent of the mesh's own pivot/scale.
+        // DEPRECATED (WO-478): superseded by SeatHiltLowerHalf for geometry inference; retained
+        // only for reference — not called on the default attach path. Enable ff.weapongripinfer
+        // to use the legacy inference stack (SeatHiltLowerHalf, not this method).
         private static void SeatByHandle(GameObject prop, Transform parent)
         {
             if (!TryLocalBounds(prop, parent, out Bounds b)) return;
@@ -1110,6 +1109,7 @@ namespace DeNelle.Village
             bool bladePointsPositiveY;
             float binH = length / Bins;
             bool clearSpike = spikeBin >= 0 && median > 1e-5f && spikeW >= median * 1.6f;
+            FlowTrace.Step("Equip", $"SeatByHandle DEPRECATED: clearSpike={clearSpike} spikeBin={spikeBin} median={median:0.###} spikeW={spikeW:0.###}");
 
             if (clearSpike)
             {
@@ -1218,6 +1218,19 @@ namespace DeNelle.Village
             Vector3 lp = prop.transform.localPosition;
             lp.y -= gripY;
             prop.transform.localPosition = lp;
+            FlowTrace.Step("Equip", $"SeatHiltLowerHalf: gripY={gripY:0.###} spikeBin={spikeBin} spikeW={spikeW:0.###} median={median:0.###} shiftedY={prop.transform.localPosition.y:0.###}");
+        }
+
+        // WO-478 §12: dump seated transforms so headless equip captures prove native vs infer path.
+        private static void LogGripSeatDiagnostics(GameObject prop, Transform gripRoot, Transform hand,
+            string weaponId, string path)
+        {
+            if (prop == null || gripRoot == null) return;
+            FlowTrace.Step("Equip",
+                $"WO-478 seat dump [{path}] '{weaponId}': prop.localPos={prop.transform.localPosition} " +
+                $"prop.localEuler={prop.transform.localRotation.eulerAngles} " +
+                $"gripRoot.localPos={gripRoot.localPosition} gripRoot.localEuler={gripRoot.localRotation.eulerAngles} " +
+                $"hand='{(hand != null ? hand.name : "<null>")}'");
         }
 
         // Bin mesh vertices along prop-local Y; record the max cross-section half-extent
@@ -2026,18 +2039,22 @@ namespace DeNelle.Village
             if (scale <= 0f) scale = 1f;
 
             int wantMode = fullOverride ? 1 : 0;
+            bool nativeMeleePreview = melee && _currentWeaponNative && !FeatureFlags.WeaponGripInfer;
             if (_seatEditMode != wantMode)
             {
                 // Reset the grip root so the child re-seat math (measured in parent-local) is clean.
                 grt.localRotation = Quaternion.identity;
                 grt.localScale    = Vector3.one;
                 grt.localPosition = Vector3.zero;
-                NormalizeInto(child, grt, held > 0f ? held : 1f);
-                if (melee)
+                if (nativeMeleePreview && wantMode == 0)
                 {
-                    // RC1/RC2: preview MUST match the unified runtime seat (single-path SeatHiltLowerHalf
-                    // for all melee) or the in-game Seating Editor preview diverges from what ships.
-                    SeatHiltLowerHalf(child, grt);
+                    SeatNative(child, grt, held > 0f ? held : 1f);
+                }
+                else
+                {
+                    NormalizeInto(child, grt, held > 0f ? held : 1f);
+                    if (melee)
+                        SeatHiltLowerHalf(child, grt);
                 }
                 _seatEditMode = wantMode;
             }
@@ -2046,6 +2063,11 @@ namespace DeNelle.Village
             Quaternion baseRot;
             if (fullOverride)
                 baseRot = Quaternion.identity;                                   // delta IS the pose
+            else if (nativeMeleePreview)
+            {
+                baseRot = Quaternion.Euler(_currentWeaponGripEuler) *
+                          Quaternion.Euler(MeleeGripNudge(_currentWeaponKind));
+            }
             else if (melee)
                 baseRot = ComputeMeleeGripRotation(_currentWeaponKind);          // rig-aware grip
             else
