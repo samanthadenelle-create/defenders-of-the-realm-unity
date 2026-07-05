@@ -227,6 +227,19 @@ namespace DeNelle.Village
                 // (the offset is ~0 for already-grounded rigs) so no spawner can ship a buried body.
                 ReGroundVisual(go.transform, vis);
 
+                // PROPORTION GUARD (F8 2026-07-04, "one is sized really huge, I can see a leg only"):
+                // the ONLY intended sizing is VisualFactory.Fit normalising the body to def.Height
+                // (heights are data-bounded ~1.2–2.6m; the old Demon 4x multiplier was removed, see the
+                // §WO-468 note above; EnemyAnimatorFactory applies NO scale). So a 3–5x giant can only be a
+                // Fit MIS-MEASUREMENT: Fit (VisualFactory.Fit) divides target/measure where `measure` is the
+                // skinned-mesh world bounds read on the SAME frame as Instantiate — before the rig poses. If
+                // one model's pre-pose bounds collapse (degenerate/tiny), target/measure overshoots and the
+                // body renders multiples of def.Height, and nothing re-checks the FINAL rendered size. This
+                // guard MEASURES the real rendered height post-Skin+animator+reground and, if it has drifted
+                // outside [0.5x, 2x] of the canonical family reference (def.Height), re-normalises it to that
+                // reference — the belt that guarantees no enemy ever ships >2x (or <0.5x) another.
+                EnforceProportion(go.transform, vis, def, model, height);
+
                 // §12 ticket #2 (troll y+90): prove orientation by DATA before any rotation edit. A worldUp
                 // far from (0,1,0) means the rig is tipped (the Troll Euler(-90,-90,0) pitch is the suspect).
                 // Captured headless; if worldUp ~= (0,1,0) the "mis-rotated" report is stale and NO edit is warranted.
@@ -415,6 +428,57 @@ namespace DeNelle.Village
             float feetOffset = b.min.y - root.position.y;   // negative when feet are below the root
             if (feetOffset < 0f)
                 vis.transform.localPosition -= new Vector3(0f, feetOffset, 0f);
+        }
+
+        // ── PROPORTION GUARD (F8 2026-07-04) ─────────────────────────────────────────
+        // MEASURE the enemy's actual world-space rendered height (combined renderer bounds — the
+        // real visible size, NOT the authored scale) once at spawn, then ENFORCE the owner's rule:
+        // no enemy may render more than 2x (or less than 0.5x) the canonical family reference. The
+        // reference is a STABLE per-family target — def.Height (the authored intended height, already
+        // clamped by the caller), NOT a runaway max — so a single mis-Fit outlier can never drag the
+        // band up. If the measured height has drifted outside [0.5x, 2x] of that reference, re-normalise
+        // the visual to the reference (uniform scale by reference/measured) and re-ground it. Every path
+        // logs so a headless / F8 capture PROVES proportions hold and names any correction it made.
+        // Deterministic + cheap: measures once, no per-frame work.
+        private static void EnforceProportion(Transform root, GameObject vis, EnemyDef def, string model, float reference)
+        {
+            if (root == null || vis == null) return;
+            if (reference <= 0.01f) return;
+
+            string id = def != null ? def.Id : "?";
+            if (!TryVisualBounds(vis, out Bounds b)) return;
+            float measured = b.size.y;
+            if (measured <= 0.01f) return;
+
+            float ratio = measured / reference;
+            FlowTrace.Step("EnemySize",
+                $"{id} model='{model}' renderedHeight={measured:0.00}m reference={reference:0.00}m ratio={ratio:0.00}x scale={vis.transform.localScale.x:0.000}");
+
+            // Belt: only correct GROSS outliers (>2x or <0.5x the family reference). Normal
+            // pose-driven variance (a walk cycle, arms raised) stays untouched.
+            if (ratio > 2f || ratio < 0.5f)
+            {
+                float correction = reference / measured;   // brings the rendered height to the reference
+                vis.transform.localScale *= correction;
+                ReGroundVisual(root, vis);                 // feet back to Y after the rescale
+                FlowTrace.Warn("EnemySize",
+                    $"clamped {id} (model='{model}') from {measured:0.00}m -> {reference:0.00}m " +
+                    $"({ratio:0.00}x out of the [0.5x,2x] proportion band; scaled by {correction:0.000}) — " +
+                    "Fit mis-measured this body; re-normalised to the family reference so it ships in proportion.");
+            }
+        }
+
+        // Combined world-space renderer AABB of a skinned visual (mirrors ReGroundVisual's measure).
+        // False if no renderers or degenerate bounds.
+        private static bool TryVisualBounds(GameObject vis, out Bounds bounds)
+        {
+            bounds = default;
+            if (vis == null) return false;
+            var renderers = vis.GetComponentsInChildren<Renderer>();
+            if (renderers == null || renderers.Length == 0) return false;
+            bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+            return bounds.size.y > 0.0001f;
         }
 
         // ── ENEMY WEAPON ATTACH (WEAPONS-IN-HANDS 2026-07-04) ────────────────────────
