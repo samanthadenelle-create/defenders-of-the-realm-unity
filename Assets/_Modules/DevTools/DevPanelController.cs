@@ -419,6 +419,12 @@ namespace DeNelle.DevTools
         /// <summary>Closes the panel.</summary>
         public void Close() => SetOpen(false);
 
+        /// <summary>True while the console window is open. Read by the corner-tap gesture driver.</summary>
+        public bool IsOpen => _isOpen;
+
+        /// <summary>Flips the console open/closed. Entry point for the 5-tap corner gesture (WebGL/touch).</summary>
+        public void Toggle() => SetOpen(!_isOpen);
+
         // =====================================================================
         //  Live metrics readout — built once, refreshed ~5x/sec while open
         // =====================================================================

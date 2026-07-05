@@ -110,8 +110,13 @@ namespace DeNelle.DevTools
             // the UIDocument is configured means the root is ready.
             go.AddComponent<DevPanelController>();
 
+            // Touch/mouse entry for keyboard-less builds (web / mobile): FIVE taps in
+            // the bottom-LEFT screen corner within ~3s toggle the console. Added to the
+            // same persistent GameObject so it is present in every scene, zero wiring.
+            go.AddComponent<DevCornerTapGesture>();
+
             Debug.Log("[DevBootstrap] QA dev console spawned (DEV build only). " +
-                      "Press F1 (or tap the 'DEV' corner chip) to toggle.");
+                      "Press F1, or tap 5× in the bottom-LEFT corner (web/mobile), to toggle.");
         }
 
         /// <summary>
