@@ -330,7 +330,10 @@ namespace DeNelle.Village
         [SerializeField] private Vector3 _sheatheWeaponLocalPos   = new Vector3(-0.10f, 0.12f, -0.15f);
         [SerializeField] private Vector3 _sheatheWeaponLocalEuler = new Vector3(8f, 0f, 158f);
         [SerializeField] private Vector3 _sheatheOffHandLocalPos   = new Vector3(0.12f, 0.06f, -0.17f);
-        [SerializeField] private Vector3 _sheatheOffHandLocalEuler = new Vector3(0f, 90f, 12f);
+        // AUTHORED CORRECTION (§4 sanctioned manual nudge, owner live felt-tune 2026-07-04 — manual=true,
+        // never auto-overwritten): sheathed shield-on-back rotation. Base was (0,90,12); owner added
+        // Y+=180, Z+=180 → (0,270,192) so the shield face reads correctly against the back in town.
+        [SerializeField] private Vector3 _sheatheOffHandLocalEuler = new Vector3(0f, 270f, 192f);
 
         // Resolved attach targets + the DRAWN local transform, so the carry-state can move each prop
         // between its hand (drawn) and the back socket (sheathed) with no re-equip. _baseGripRot holds
