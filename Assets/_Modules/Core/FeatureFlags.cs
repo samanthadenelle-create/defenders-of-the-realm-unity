@@ -427,6 +427,18 @@ namespace DeNelle.Core
         /// PlayerPrefs "ff.stakedemo" = 1 (or the Defenders/Debug editor menu).</summary>
         public static bool StakeDemo => Get("stakedemo", defaultOn: false);
 
+        /// <summary>"POWERED WITH SKR" GRANT PREVIEW (owner 2026-07-04) — when ON, the aspirational SKR
+        /// integration story is presentable for the grant recording: a "Powered with SKR" badge appears
+        /// on the Title screen and opens <see cref="DeNelle.Core.UI.SkrShowcasePanel"/> — the branding +
+        /// the honest value-prop (real token / non-custodial / server-verified / cosmetic-only), clearly
+        /// stamped "PREVIEW · TESTNET — NOT LIVE". Every action is a NO-OP or opens the read-only
+        /// StakeRewardsPanel; NOTHING calls a wallet, signs, or moves funds (the pay rail stays the devnet
+        /// StubWalletProvider). Default OFF so normal players never see the aspirational flow. The
+        /// grant-recording build flips it ON: the Defenders/Debug menu, PlayerPrefs "ff.skrpreview" = 1,
+        /// or the WebGL URL <c>?skrpreview=1</c> (allow-listed in <see cref="ApplyUrlActivationOnce"/> —
+        /// read-only presentation, so a crafted link can at most show an info panel).</summary>
+        public static bool SkrPreview => Get("skrpreview", defaultOn: false);
+
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
         {
@@ -453,6 +465,11 @@ namespace DeNelle.Core
                 // can at most show a cosmetic panel — it can never flip real state. Default OFF => prod
                 // is unaffected unless the demo link is used.
                 { "stakedemo", "ff.stakedemo" },
+                // "Powered with SKR" grant PREVIEW. Same rationale as stakedemo: READ-ONLY
+                // presentation (branding + a labeled testnet preview) — no wallet call, no state
+                // mutation — so a crafted ?skrpreview=1 link can at most show an info panel. Default
+                // OFF => prod is unaffected unless the grant-recording link is used.
+                { "skrpreview", "ff.skrpreview" },
             };
 
         /// <summary>
@@ -584,6 +601,26 @@ namespace DeNelle.Core
         private static bool ToggleStakeDemoValidate()
         {
             UnityEditor.Menu.SetChecked(StakeDemoMenu, StakeDemo);
+            return true;
+        }
+
+        // "Powered with SKR" grant PREVIEW — flip the aspirational SKR story on/off from the menu.
+        // ON => a "Powered with SKR" badge shows on the Title screen and opens the SkrShowcasePanel.
+        private const string SkrPreviewMenu = "Defenders/Debug/Powered with SKR (grant preview)";
+
+        [UnityEditor.MenuItem(SkrPreviewMenu, priority = 204)]
+        private static void ToggleSkrPreview()
+        {
+            bool on = !SkrPreview;
+            PlayerPrefs.SetInt("ff.skrpreview", on ? 1 : 0);
+            PlayerPrefs.Save();
+            Debug.Log("[FeatureFlags] ff.skrpreview = " + (on ? "ON (Title 'Powered with SKR' badge -> SkrShowcasePanel; no wallet call)" : "OFF"));
+        }
+
+        [UnityEditor.MenuItem(SkrPreviewMenu, validate = true)]
+        private static bool ToggleSkrPreviewValidate()
+        {
+            UnityEditor.Menu.SetChecked(SkrPreviewMenu, SkrPreview);
             return true;
         }
 #endif
