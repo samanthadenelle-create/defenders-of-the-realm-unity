@@ -128,6 +128,10 @@ namespace DeNelle.Editor
             //   combatActionExitTime — >0 lets MORE of the attack/cast swing play before returning
             //     (readability: wind-up→impact→recovery reads) vs the snappy 0.38 stock cut.
             public string combatIdleClipOverride;
+            // Optional combat-only gait — when set, CombatLocomotion uses these instead of the calm
+            // walk/run clips (KnightMocap: Shared walk in town, sword+shield gait in a fight).
+            public string combatWalkClipOverride;
+            public string combatRunClipOverride;
             public string blockClipOverride;
             public string hitClipOverride;
             public float  combatActionExitTime;
@@ -308,8 +312,10 @@ namespace DeNelle.Editor
             // Locomotion: CALM default idle + BRACED combat idle (the stance split), sword+shield gait.
             mocap.idleClipOverride       = MocapIdleClip;        // m-standby-idle (calm, default Locomotion)
             mocap.combatIdleClipOverride = MocapCombatIdleClip;  // idle_ready (braced, InCombat)
-            mocap.walkClipOverride       = MocapWalkClip;
-            mocap.runClipOverride        = MocapRunClip;
+            mocap.walkClipOverride       = WalkClip;             // Shared_Walk_Forward — upright town gait
+            mocap.runClipOverride        = RunClip;              // Shared_Run_Forward (rarely reached; town speed-capped)
+            mocap.combatWalkClipOverride = MocapWalkClip;        // sword+shield braced walk in combat
+            mocap.combatRunClipOverride  = MocapRunClip;
             // Combat onto the AccuRig sword+shield set (the FIGHT shows the purpose-built motion), with
             // readable swing timing. Melee combo + generic/per-spell casts + block + hit all swap; every
             // other state stays as the Knight build.
@@ -336,7 +342,8 @@ namespace DeNelle.Editor
             AssetDatabase.Refresh();
             string atkCombo = string.Join("/", MocapAttackClips);
             Debug.Log($"[HeroAnimatorFactory] KnightMocap.controller built — calm idle ({MocapIdleClip}) + braced " +
-                      $"combat idle ({MocapCombatIdleClip}) split on InCombat; sword+shield gait ({MocapWalkClip}/{MocapRunClip}); " +
+                      $"combat idle ({MocapCombatIdleClip}) split on InCombat; calm gait ({WalkClip}/{RunClip}) + " +
+                      $"combat gait ({MocapWalkClip}/{MocapRunClip}); " +
                       $"AccuRig combat (atk combo {atkCombo}, block {MocapBlockClip}, hit {MocapHitClip}); " +
                       $"turn-in-place (90 {MocapTurnLeftClip}/{MocapTurnRightClip} + 180 {MocapTurnLeft180Clip}/{MocapTurnRight180Clip}) on TurnDir " +
                       $"→ {KnightMocapControllerPath}. Bound for KnightV3 when ff.mocaploco=1.");
@@ -687,14 +694,19 @@ namespace DeNelle.Editor
                 return null;
             }
 
+            AnimationClip combatWalk = !string.IsNullOrEmpty(spec.combatWalkClipOverride)
+                ? LoadClip(spec.combatWalkClipOverride, spec.searchRoots) : walk;
+            AnimationClip combatRun = !string.IsNullOrEmpty(spec.combatRunClipOverride)
+                ? LoadClip(spec.combatRunClipOverride, spec.searchRoots) : run;
+
             var combatLocoState = sm.AddState("CombatLocomotion");
             var cblend = new BlendTree { name = "CombatLocomotion", blendType = BlendTreeType.Simple1D,
                                          blendParameter = "Speed", useAutomaticThresholds = false };
             AssetDatabase.AddObjectToAsset(cblend, ctrl);
             combatLocoState.motion = cblend;
             cblend.AddChild(combatIdle, 0f);          // braced/ready idle
-            if (walk != null) cblend.AddChild(walk, 2f);
-            if (run  != null) cblend.AddChild(run,  6f);
+            if (combatWalk != null) cblend.AddChild(combatWalk, 2f);
+            if (combatRun  != null) cblend.AddChild(combatRun,  6f);
             ApplyLocomotionCadence(cblend);
             return combatLocoState;
         }

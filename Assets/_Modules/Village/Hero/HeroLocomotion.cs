@@ -71,6 +71,9 @@ namespace DeNelle.Village
         private const float TurnInPlaceSpeedMax = 2.0f; // only "turning in place" while below the walk band (matches the animator gate)
         private const float TurnMinDeg          = 45f;  // must need to pivot at least this much before a turn clip plays
         private const float TurnAroundDeg       = 135f; // beyond this, use the 180° about-face clip
+        // Town calm gait: cap travel + animator feed below the run band (idle@0 / walk@2 / run@6) so the
+        // hero stays on upright Shared walk clips instead of sword+shield run at 6 m/s. Combat keeps _moveSpeed.
+        private const float TownMoveSpeedMax = 3.5f;
 
         // WO-512 slice 3: lock-face / strafe. While a soft lock-on is engaged (driven by
         // HeroTargetIndicator), the hero continuously slews its root yaw toward the LOCKED
@@ -703,11 +706,16 @@ namespace DeNelle.Village
             Vector3 move = cameraRotation * new Vector3(input.x, 0f, input.y);
             if (move.sqrMagnitude > 1f) move.Normalize();
 
+            // Combat vs town speed: waves/arena keep the snappy 6 m/s run; hub/town caps at a walk pace
+            // so KnightMocap stays in the upright calm gait (Shared walk) instead of braced run + slide.
+            bool engaged = IsWaveInCombat();
+            float moveSpeedCap = engaged ? _moveSpeed : TownMoveSpeedMax;
+
             // Smooth velocity toward target — instant max-speed felt rigid.
             // Higher accel when grabbing speed, higher decel when releasing,
             // so the hero responds promptly to a key press but glides slightly
             // when stopped (no instant-snap to zero).
-            Vector3 targetVelocity = move * (_moveSpeed * HeroHealth.MoveSpeedMultiplier);   // injured-stance slow (1.0 = healthy)
+            Vector3 targetVelocity = move * (moveSpeedCap * HeroHealth.MoveSpeedMultiplier);   // injured-stance slow (1.0 = healthy)
             float maxStep = (targetVelocity.sqrMagnitude > Velocity.sqrMagnitude
                 ? _accelMetresPerSec2
                 : _decelMetresPerSec2) * Time.deltaTime;
@@ -798,6 +806,14 @@ namespace DeNelle.Village
                         transform.rotation, target, _rotationSpeed * Time.deltaTime);
                 }
             }
+            else if (!seamConsumed && !engaged && !lockFacing && hasMoveInput && move.sqrMagnitude > 0.0004f)
+            {
+                // Town move-start: slew toward input heading before velocity spools. Replaces the
+                // low-pivot turn-in-place clips (turnleft180 reads as crouch) that only belong in combat.
+                Quaternion target = Quaternion.LookRotation(move.normalized, Vector3.up);
+                transform.rotation = Quaternion.Slerp(
+                    transform.rotation, target, _rotationSpeed * Time.deltaTime);
+            }
             else if (lockFacing && !seamConsumed)
             {
                 // WO-512 slice 3: standing still but locked — keep facing the orc (the normal
@@ -863,10 +879,14 @@ namespace DeNelle.Village
             // the locomotion cycle plays through the crossing instead of freezing.
             _actor?.SetLocomotion(_crossingSeam ? _moveSpeed : Velocity.magnitude);
 
-            // Turn-in-place / directional-turn feed (owner 2026-07-04, KnightMocap full-turning). Reports
-            // the pivot toward a new move heading so the mocap turn clip plays; cosmetic + guarded (see the
-            // TurnInPlaceSpeedMax comment). Skipped during a seam slide (the crossing owns movement/facing).
-            if (!_crossingSeam) DriveTurnSignal(move, hasMoveInput);
+            // Turn-in-place / directional-turn feed (owner 2026-07-04, KnightMocap full-turning). Combat
+            // only — town uses input-facing slew above (no turnleft180 low-pivot clips). Skipped during
+            // a seam slide (the crossing owns movement/facing).
+            if (!_crossingSeam)
+            {
+                if (engaged) DriveTurnSignal(move, hasMoveInput);
+                else _actor?.PlayTurn(TurnDirection.None);
+            }
 
             // Battle Ready (stance) vs casual Idle: combat stance ONLY when actually in
             // combat — a live wave (Countdown/Active phase). Merely having a WaveManager in
@@ -874,7 +894,6 @@ namespace DeNelle.Village
             // NOT raise the ready pose, or the hero stands weapon-ready in town. Movement is
             // intentionally NOT a combat trigger here: walking around town is relaxed, not
             // battle-ready. speed=0/moving + !combat = casual idle/walk; in-wave = ready.
-            bool engaged = IsWaveInCombat();
             _actor?.SetCombatStance(engaged);
 
             // Edge/floor clamp + ground-snap ONLY when off the NavMesh (the transform
