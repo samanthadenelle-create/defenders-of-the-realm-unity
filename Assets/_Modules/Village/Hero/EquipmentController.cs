@@ -328,7 +328,20 @@ namespace DeNelle.Village
         // The weapon rides a back socket (created under the Chest/Spine bone by ResolveBackSocket)
         // laid diagonally across the back; the off-hand/shield rides the same socket, opposite side.
         [SerializeField] private Vector3 _sheatheWeaponLocalPos   = new Vector3(-0.10f, 0.12f, -0.15f);
-        [SerializeField] private Vector3 _sheatheWeaponLocalEuler = new Vector3(8f, 0f, 158f);
+        // SHEATHED SWORD ROTATION — DERIVED, not guessed (owner F8 fix 2026-07-04): the on-back sword
+        // rotation is no longer a magic hand-typed euler (the old (8,0,158) had ZERO relationship to the
+        // weapon geometry OR the chest bone's rig-specific axes — the §4 smell, exactly why it sat wrong
+        // while the DRAWN seat was right). ApplyHoldPose now builds the base sheathe orientation from the
+        // BODY's own axes with the SAME Quaternion.LookRotation(flat, blade) construction the correct
+        // battle draw uses (ComputeMeleeGripRotation, the "secret") — see ComputeSheathRotation. This
+        // field is the persisted AUTHORED NUDGE composed ON TOP of that derived base (Inspector/owner
+        // felt-tune, never auto-overwritten), mirroring how _swordGripEuler nudges the drawn seat.
+        // Default ZERO = pure geometric sheathe (component is always runtime AddComponent, so this code
+        // default applies — no scene/prefab serializes an old value over it).
+        [SerializeField] private Vector3 _sheatheWeaponLocalEuler = Vector3.zero;
+        // Diagonal the sheathed blade leans across the back, degrees off straight-up toward the OFF
+        // (main-hand-opposite) shoulder — a natural baldric carry. Authored/persisted; owner felt-tunes.
+        [SerializeField] private float _sheatheBladeDiagonalDeg = 28f;
         [SerializeField] private Vector3 _sheatheOffHandLocalPos   = new Vector3(0.12f, 0.06f, -0.17f);
         // AUTHORED CORRECTION (§4 sanctioned manual nudge, owner live felt-tune 2026-07-04 — manual=true,
         // never auto-overwritten): sheathed shield-on-back rotation. Base was (0,90,12); owner added
@@ -1654,7 +1667,11 @@ namespace DeNelle.Village
                 {
                     _gripRoot.SetParent(back, false);
                     _gripRoot.localPosition = _sheatheWeaponLocalPos;
-                    _gripRoot.localRotation = Quaternion.Euler(_sheatheWeaponLocalEuler);
+                    // DERIVED sheathe rotation (the fix): build the base orientation from the body's
+                    // own axes via the SAME LookRotation(flat, blade) construction the correct battle
+                    // draw uses (ComputeMeleeGripRotation), then compose the persisted authored nudge —
+                    // instead of the old hand-guessed magic euler that ignored the chest-bone axes.
+                    _gripRoot.localRotation = ComputeSheathRotation(back);
                 }
                 else if (_weaponHand != null)
                 {
@@ -1704,6 +1721,38 @@ namespace DeNelle.Village
             _backSocket = go.transform;
             FlowTrace.Step("Equip", $"ResolveBackSocket on '{name}': sheathe anchor under bone '{anchor.name}'.");
             return _backSocket;
+        }
+
+        // ── DERIVED SHEATHE ROTATION (owner F8 fix 2026-07-04 — "the secret is on battle") ──────────
+        // The DRAWN (battle) seat is correct because it is DERIVED from the rig, never guessed:
+        // ComputeMeleeGripRotation builds Quaternion.LookRotation(up, blade) from the HAND bone's own
+        // axes so the prop's blade line (prop-local +Y, put there by NormalizeInto + SeatHiltLowerHalf)
+        // and its flat-plane normal (prop-local +Z) land forward-out-of-the-fist. The OLD sheathe used a
+        // hand-typed magic euler (8,0,158) with no relationship to geometry OR the chest-bone axes, so it
+        // sat wrong. This DERIVES the on-back orientation the SAME way — from the BODY's own axes — with
+        // the identical LookRotation(flat, blade) construction, so the sheathed sword sits right the way
+        // the drawn one does. On the back we want the blade laid diagonally (up the spine, leaning toward
+        // the off shoulder — a baldric carry) with the flat of the blade against the back (facing out).
+        //   • prop +Y (blade)  -> worldBlade  (up, tilted _sheatheBladeDiagonalDeg toward the off shoulder)
+        //   • prop +Z (flat)   -> worldFlat = body backward (blade lies flat on the back, edge out)
+        // Built in WORLD from the body's axes, then expressed in the socket's LOCAL frame so it follows
+        // the chest bone through animation/turning exactly like the drawn seat follows the hand. Finally
+        // the persisted authored nudge (_sheatheWeaponLocalEuler, owner felt-tune) composes on top —
+        // the sheathe equivalent of _swordGripEuler nudging the drawn seat.
+        private Quaternion ComputeSheathRotation(Transform socket)
+        {
+            Transform body = _animator != null ? _animator.transform : transform;
+            // Off shoulder = opposite the main (right) hand → toward body-left. Blade leans that way.
+            Vector3 offShoulder = -body.right;
+            float rad = _sheatheBladeDiagonalDeg * Mathf.Deg2Rad;
+            Vector3 worldBlade = (body.up * Mathf.Cos(rad) + offShoulder * Mathf.Sin(rad)).normalized;
+            Vector3 worldFlat  = -body.forward;   // flat of the blade rests against the back, edge out
+            // LookRotation(forward, upwards): +Z -> forward, +Y -> upwards. We want prop +Z -> flat and
+            // prop +Y -> blade — the SAME axis mapping ComputeMeleeGripRotation uses (LookRotation(up, blade)).
+            Quaternion worldTarget = Quaternion.LookRotation(worldFlat, worldBlade);
+            // Express in the socket's local frame (the socket follows the chest bone), then the nudge.
+            Quaternion localBase = Quaternion.Inverse(socket.rotation) * worldTarget;
+            return localBase * Quaternion.Euler(_sheatheWeaponLocalEuler);
         }
 
         // Force the given slot's prop to its DRAWN (in-hand) seat regardless of combat state — used by
