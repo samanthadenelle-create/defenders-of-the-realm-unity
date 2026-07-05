@@ -1354,9 +1354,17 @@ namespace DeNelle.Village
             if (targetMb != null)
                 RequestFacing(targetMb.transform.position - transform.position);
 
+            NoteHeroDamageSource(_currentTarget);
             _currentTarget.ApplyContactDamage(_contactDamage);
             if (_animator != null && _hasAttackParam) _animator.SetTrigger(AnimAttack);
             PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
+        }
+
+        /// <summary>Feeds directional-death source position when the target is the hero.</summary>
+        private void NoteHeroDamageSource(IDamageableStructure target)
+        {
+            if (target is HeroHealth hh)
+                hh.NoteDamageSource(transform.position);
         }
 
         /// <summary>
@@ -1396,6 +1404,7 @@ namespace DeNelle.Village
             }
 
             // ── Legacy instant ranged hit (flag OFF) ─────────────────────────
+            NoteHeroDamageSource(structure);
             structure.ApplyContactDamage(damage);
             if (_animator != null && _hasAttackParam) _animator.SetTrigger(AnimAttack);
             PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
@@ -1497,6 +1506,7 @@ namespace DeNelle.Village
                     var s = target.GetComponentInParent<IDamageableStructure>();
                     if (s != null && s.IsAlive)
                     {
+                        NoteHeroDamageSource(s);
                         s.ApplyContactDamage(damage);
                         PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
                     }

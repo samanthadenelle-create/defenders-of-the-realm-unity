@@ -135,6 +135,7 @@ namespace DeNelle.Editor
             if (s_run  != null) { loco.AddChild(s_run,  3.5f); locoChildren++; } // orc-speed-tuned run threshold
             if (locoChildren == 0)
                 Debug.LogWarning("[OrcCtrl] no locomotion clips - Locomotion state is empty.");
+            ApplyOrcLocomotionCadence(loco);
 
             // ── Injured locomotion: a SECOND 1-D blend tree on Speed, entered
             //    when Injured==true and returned when Injured==false. The wounded
@@ -159,6 +160,7 @@ namespace DeNelle.Editor
                 if (s_run  != null) injTree.AddChild(s_run,  3.5f); // orc-speed-tuned
                 Debug.LogWarning("[OrcCtrl] no injured clips - InjuredLocomotion falls back to healthy loco.");
             }
+            ApplyOrcLocomotionCadence(injTree);
             // Loco <-> InjuredLocomotion on the Injured bool.
             var toInjured = locoState.AddTransition(injuredState);
             toInjured.hasExitTime = false; toInjured.duration = 0.2f;
@@ -225,6 +227,22 @@ namespace DeNelle.Editor
 
             Debug.Log($"[OrcCtrl] ORC_CTRL_OK base='{BasePath}' loco={locoChildren} (idle={Name(s_idle)},walk={Name(s_walk)},run={Name(s_run)}) " +
                       $"injured={injChildren} cast={Name(s_baseCast)} windup={Name(s_windup)} | overrides mage={mage} warrior={warr} tank={tank}");
+        }
+
+        /// <summary>
+        /// Per-child timeScale on orc locomotion blend trees — matches agent travel speed
+        /// (~1.5–3.5 m/s) so feet don't skate at run threshold. Mirrors hero cadence bake.
+        /// </summary>
+        private static void ApplyOrcLocomotionCadence(BlendTree tree)
+        {
+            if (tree == null) return;
+            var kids = tree.children;
+            for (int i = 0; i < kids.Length; i++)
+            {
+                float th = kids[i].threshold;
+                kids[i].timeScale = th >= 3f ? 1.75f : th >= 1.2f ? 1.35f : 1f;
+            }
+            tree.children = kids;
         }
 
         /// <summary>

@@ -601,6 +601,9 @@ namespace DeNelle.Village
             // BattleArena battle is in progress too (same signal footsteps already use, line ~585).
             // Either signal → InCombat=true → CombatLocomotion (braced idle) instead of the calm idle.
             if (DeNelle.Village.Arena.BattleArena.AnyBattleInProgress) return true;
+            // In-place dungeon/outpost fights (HeroCombatEngagement) register on BattleLock
+            // without staging BattleArena — same braced stance as arena/wave combat.
+            if (DeNelle.Core.Combat.BattleLock.IsInBattle()) return true;
             if (_waveManager == null) return false;
             var phase = _waveManager.Phase;
             return phase == WavePhase.Countdown || phase == WavePhase.Active;

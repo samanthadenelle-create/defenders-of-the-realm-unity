@@ -20,6 +20,7 @@
 // missing FBX logs a warning and skips that state; the build still completes.
 // =============================================================================
 using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -142,7 +143,19 @@ namespace DeNelle.Editor
             public string turnRightClip;     // TurnDir  1 (90° right)
             public string turnLeft180Clip;   // TurnDir −2 (180° left / about-face)
             public string turnRight180Clip;  // TurnDir  2 (180° right / about-face)
+
+            // PREBATTLE unsheathe (KnightMocap): draw-weapon clip basename played standing
+            // when InCombat flips true before entering CombatLocomotion. Null = direct flip.
+            public string unsheatheClipOverride;
+
+            // Extended directional deaths (KnightMocap): .anim asset paths under the package
+            // extract folder — Humanoid retarget onto CC_Base. Null = skip that bucket.
+            public string deathFrontAnimPath;
+            public string deathBackAnimPath;
         }
+
+        private const string PackageExtractDir =
+            "Assets/HeroPackages/Knight/Animations/Extracted/";
 
         // WO-283 §1 type->folder mapping. Casters (Mage + Cleric) share the Wizard set.
         private static readonly string[] KnightRoots = { "Assets/Action/Knight/",  SharedDir };
@@ -313,6 +326,10 @@ namespace DeNelle.Editor
             mocap.turnRightClip    = MocapTurnRightClip;
             mocap.turnLeft180Clip  = MocapTurnLeft180Clip;
             mocap.turnRight180Clip = MocapTurnRight180Clip;
+            // Prebattle draw (Mixamo Humanoid on CC_Base) + package directional deaths.
+            mocap.unsheatheClipOverride = "draw sword 1";
+            mocap.deathFrontAnimPath = PackageExtractDir + "Signature_Death_Forward.anim";
+            mocap.deathBackAnimPath  = PackageExtractDir + "Signature_Standing_Death_Backward_01.anim";
 
             Build(mocap);
             AssetDatabase.SaveAssets();
@@ -419,6 +436,7 @@ namespace DeNelle.Editor
             // keeps the CALM idle, so the hero is relaxed in town and braced in a fight. Stock
             // heroes (combatIdleClipOverride == null) get null here → single-tree build unchanged.
             AnimatorState combatLocoState = BuildCombatLocomotion(ctrl, sm, locoState, walk, run, spec);
+            WireCombatStanceTransitions(sm, locoState, combatLocoState, spec);
             // Readability: let more of the AccuRig swing play before returning (mocap), else the
             // stock snappy cut. Shared by Cast / per-spell / Attack returns.
             float actionExit = spec.combatActionExitTime > 0f ? spec.combatActionExitTime : CastExitTime;
@@ -525,13 +543,18 @@ namespace DeNelle.Editor
                 toDeath.hasExitTime = false; toDeath.duration = 0.06f;
                 toDeath.canTransitionToSelf = false;
                 toDeath.AddCondition(AnimatorConditionMode.If, 0f, "Dead");
-                var deathBack = deathState.AddTransition(locoState);
-                deathBack.hasExitTime = false; deathBack.duration = 0.12f;
-                deathBack.AddCondition(AnimatorConditionMode.IfNot, 0f, "Dead");
+                var deathRevive = deathState.AddTransition(locoState);
+                deathRevive.hasExitTime = false; deathRevive.duration = 0.12f;
+                deathRevive.AddCondition(AnimatorConditionMode.IfNot, 0f, "Dead");
 
                 // Directional deaths (DeathDirection.Left=1 / Right=2) — topple the right way.
                 BuildDirectionalDeath(sm, locoState, "DeathLeft",  deathL, 1);
                 BuildDirectionalDeath(sm, locoState, "DeathRight", deathR, 2);
+                // Extended buckets (AnimParams.DeathDirection Front=3 / Back=4) — KnightMocap package clips.
+                var deathFront = LoadAnimAsset(spec.deathFrontAnimPath);
+                var deathBack  = LoadAnimAsset(spec.deathBackAnimPath);
+                BuildDirectionalDeath(sm, locoState, "DeathFront", deathFront, 3);
+                BuildDirectionalDeath(sm, locoState, "DeathBack",  deathBack,  4);
             }
 
             // ── WO-285: Block — Locomotion ⇄ Block on the Block bool ───────────────
@@ -673,15 +696,59 @@ namespace DeNelle.Editor
             if (walk != null) cblend.AddChild(walk, 2f);
             if (run  != null) cblend.AddChild(run,  6f);
             ApplyLocomotionCadence(cblend);
+            return combatLocoState;
+        }
 
-            // Calm Locomotion → braced CombatLocomotion on InCombat, and back when it clears.
-            var toCombat = locoState.AddTransition(combatLocoState);
-            toCombat.hasExitTime = false; toCombat.duration = 0.25f;
-            toCombat.AddCondition(AnimatorConditionMode.If, 0f, "InCombat");
+        /// <summary>
+        /// Wires calm ⇄ combat stance transitions. When <see cref="HeroSpec.unsheatheClipOverride"/>
+        /// is set, a standing engage plays the draw clip before CombatLocomotion; moving engages
+        /// skip straight to the braced gait (KnightPackage pattern, owner 2026-07-03).
+        /// </summary>
+        private static void WireCombatStanceTransitions(AnimatorStateMachine sm,
+                                                      AnimatorState locoState,
+                                                      AnimatorState combatLocoState,
+                                                      HeroSpec spec)
+        {
+            if (combatLocoState == null) return;
+
+            const float EngageSpeedMax = 0.5f;
+            AnimationClip unsheathe = null;
+            if (!string.IsNullOrEmpty(spec.unsheatheClipOverride))
+                unsheathe = LoadClip(spec.unsheatheClipOverride, spec.searchRoots);
+
+            if (unsheathe != null)
+            {
+                var unsheatheState = sm.AddState("Unsheathe");
+                unsheatheState.motion = unsheathe;
+                unsheatheState.speed  = 1f;
+
+                var toDraw = locoState.AddTransition(unsheatheState);
+                toDraw.hasExitTime = false; toDraw.duration = 0.1f;
+                toDraw.AddCondition(AnimatorConditionMode.If, 0f, "InCombat");
+                toDraw.AddCondition(AnimatorConditionMode.Less, EngageSpeedMax, "Speed");
+
+                var toCombatMoving = locoState.AddTransition(combatLocoState);
+                toCombatMoving.hasExitTime = false; toCombatMoving.duration = 0.2f;
+                toCombatMoving.AddCondition(AnimatorConditionMode.If, 0f, "InCombat");
+                toCombatMoving.AddCondition(AnimatorConditionMode.Greater, EngageSpeedMax - 0.01f, "Speed");
+
+                var done = unsheatheState.AddTransition(combatLocoState);
+                done.hasExitTime = true; done.exitTime = 0.92f; done.duration = 0.15f;
+
+                var abort = unsheatheState.AddTransition(locoState);
+                abort.hasExitTime = false; abort.duration = 0.15f;
+                abort.AddCondition(AnimatorConditionMode.IfNot, 0f, "InCombat");
+            }
+            else
+            {
+                var toCombat = locoState.AddTransition(combatLocoState);
+                toCombat.hasExitTime = false; toCombat.duration = 0.25f;
+                toCombat.AddCondition(AnimatorConditionMode.If, 0f, "InCombat");
+            }
+
             var toCalm = combatLocoState.AddTransition(locoState);
             toCalm.hasExitTime = false; toCalm.duration = 0.25f;
             toCalm.AddCondition(AnimatorConditionMode.IfNot, 0f, "InCombat");
-            return combatLocoState;
         }
 
         /// <summary>
@@ -979,9 +1046,23 @@ namespace DeNelle.Editor
             mask.SetHumanoidBodyPartActive(AvatarMaskBodyPart.LeftFootIK,  false);
             mask.SetHumanoidBodyPartActive(AvatarMaskBodyPart.RightFootIK, false);
 
+            var maskDir = Path.GetDirectoryName(UpperMaskPath);
+            if (!string.IsNullOrEmpty(maskDir) && !Directory.Exists(maskDir))
+                Directory.CreateDirectory(maskDir);
+
             AssetDatabase.DeleteAsset(UpperMaskPath);
             AssetDatabase.CreateAsset(mask, UpperMaskPath);
             return mask;
+        }
+
+        /// <summary>Load a standalone .anim asset (package extract folder).</summary>
+        private static AnimationClip LoadAnimAsset(string assetPath)
+        {
+            if (string.IsNullOrEmpty(assetPath)) return null;
+            var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(assetPath);
+            if (clip == null)
+                Debug.LogWarning($"[HeroAnimatorFactory] .anim not found: {assetPath}");
+            return clip;
         }
 
         /// <summary>Load the motion AnimationClip from an Assets/Action FBX by basename.

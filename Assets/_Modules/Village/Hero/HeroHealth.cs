@@ -48,6 +48,9 @@ namespace DeNelle.Village
         private const int   MaxEnemiesPerTick = 4;  // cap so a swarm can't one-shot
 
         private float _hp;
+
+        // Last world position that dealt damage — drives directional death clips (owner 2026-07-03).
+        private Vector3? _lastDamageSourceWorld;
         private float _cooldown;
         private int   _enemyMask;
         private bool  _isDead;
@@ -301,6 +304,9 @@ namespace DeNelle.Village
                     float dmg = atk != null ? atk.ContactDamage : 0f;
                     tickDamage += dmg > 0f ? dmg : DamagePerEnemy; // fallback if a def authored 0
                 }
+                // Primary attacker sets the death-direction bucket if this tick is lethal.
+                if (_attackerBuf[0] != null)
+                    _lastDamageSourceWorld = _attackerBuf[0].transform.position;
                 TakeDamage(tickDamage);
                 // WO-566: v2 talent reflect (Retaliation Surge) + the Last Stand reflect portion
                 // bounce a fraction of the damage ACTUALLY taken (post block/DR) back onto the
@@ -343,6 +349,13 @@ namespace DeNelle.Village
         }
 
         /// <summary>Applies <paramref name="amount"/> damage; fires events; handles death.</summary>
+        /// <summary>
+        /// Records the world position of the attacker about to deal damage so a lethal
+        /// hit can pick a directional death clip. Called by <see cref="Enemy"/> contact/ranged
+        /// paths before <see cref="IDamageableStructure.ApplyContactDamage"/>.
+        /// </summary>
+        public void NoteDamageSource(Vector3 worldPosition) => _lastDamageSourceWorld = worldPosition;
+
         public void TakeDamage(float amount)
         {
             // WO-triage 2026-06-27 (HP-desync): owner saw stagger/limp + DEFEAT while the HUD read
@@ -604,9 +617,21 @@ namespace DeNelle.Village
         // (ActorAnimator). The death clip holds its last frame and never flickers
         // back to idle; Revive() clears it on respawn. Safe no-op on a controller
         // with no Death state.
-        private void PlayDeathAnim() => _actor?.Die(DeathDirection.Fall);
+        private void PlayDeathAnim()
+        {
+            if (_actor == null) return;
+            var dir = CombatDeathDirection.Resolve(
+                transform.position, transform.forward, _lastDamageSourceWorld);
+            _actor.Die(dir);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HeroHealth",
+                $"death anim DeathDir={(int)dir} source={(_lastDamageSourceWorld.HasValue ? _lastDamageSourceWorld.Value.ToString() : "none")}");
+        }
 
-        private void ClearDeathAnim() => _actor?.Revive();
+        private void ClearDeathAnim()
+        {
+            _lastDamageSourceWorld = null;
+            _actor?.Revive();
+        }
 
         /// <summary>Heals up to max (for repair pads / potions / wave-clear).</summary>
         public void Heal(float amount)
