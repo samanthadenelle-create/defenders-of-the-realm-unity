@@ -274,6 +274,20 @@ namespace DeNelle.Core.UI
         /// that carve a designed close region still override this via <see cref="ZonesFor"/>.close.</summary>
         private static readonly Vector4 DefaultCloseZone = new Vector4(0.360f, 0.035f, 0.640f, 0.110f);
 
+        // =====================================================================
+        // CANONICAL CTA SIZE (owner F8 x3, 2026-07-04): "Continue button should be
+        // the same size in ALL screens" / "Continue bar or Close button same size
+        // everywhere." Buttons are anchored by FRACTION-OF-PARENT, so their pixel
+        // size drifted with each parent's rect (a Close on a small popup was tiny,
+        // on a big modal it was huge). The primary Continue and the ONE shared Close
+        // now pin to this fixed pixel size (at the 1080x1920 modal reference res via
+        // PinCanonicalCtaSize), so they render identically on every screen.
+        // =====================================================================
+        /// <summary>Canonical Continue/Close CTA width in reference pixels (1080x1920 modal canvas).</summary>
+        public const float CanonCtaWidth = 360f;
+        /// <summary>Canonical Continue/Close CTA height in reference pixels (1080x1920 modal canvas).</summary>
+        public const float CanonCtaHeight = 120f;
+
         /// <summary>The drop-zone rects for a named frame (defaults are a sane full-well layout).</summary>
         private static FrameZones ZonesFor(string frameName)
         {
@@ -653,7 +667,32 @@ namespace DeNelle.Core.UI
                 () => Common.Close(onClose));
             // Keep the diagnostics/lookup name every prior caller expected.
             if (btn != null) btn.gameObject.name = "CloseButton";
+            // OWNER F8 x3: every Close is the SAME pixel size on every screen — the zone
+            // fraction only *positions* it; PinCanonicalCtaSize stamps the fixed size.
+            PinCanonicalCtaSize(btn);
             return btn;
+        }
+
+        /// <summary>
+        /// Pin a just-built primary Continue / shared Close button to the ONE canonical
+        /// pixel size (owner F8 x3, 2026-07-04). Callers still pass fraction-of-parent
+        /// anchors to POSITION the button; this collapses those stretch anchors to the
+        /// CENTRE of that anchor rect and stamps <see cref="CanonCtaWidth"/> x
+        /// <see cref="CanonCtaHeight"/> — so the button renders identically regardless of
+        /// how big its parent (panel / footer / popup) is. Presentation-only, size-only:
+        /// it does not restyle, re-colour, or re-wire the button.
+        /// </summary>
+        public static void PinCanonicalCtaSize(Button button)
+        {
+            if (button == null) return;
+            var rt = button.transform as RectTransform;
+            if (rt == null) return;
+            Vector2 centre = (rt.anchorMin + rt.anchorMax) * 0.5f;
+            rt.anchorMin = centre;
+            rt.anchorMax = centre;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = new Vector2(CanonCtaWidth, CanonCtaHeight);
         }
 
         // =====================================================================

@@ -150,6 +150,10 @@ namespace DeNelle.Village.UI
             // ONE primary action (Continue / Rise again / ...) — lands LAST in the reveal.
             var btn = ElarionUiKit.Button(footer, vm.PrimaryLabel, ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.24f, 0.06f), new Vector2(0.76f, 0.94f), FirePrimary);
+            // OWNER F8 x3: the Continue/primary action is the SAME pixel size on every
+            // screen (matches the shared Close). The anchors above only centre it in the
+            // footer band; the canonical size is stamped here.
+            ElarionUiKit.PinCanonicalCtaSize(btn);
             Track(btn.gameObject, 0.25f + vm.Spoils.Count * 0.05f + 0.08f, 0.92f);
 
             // Smooth in: whole panel fades+scales, then the staggered content.
