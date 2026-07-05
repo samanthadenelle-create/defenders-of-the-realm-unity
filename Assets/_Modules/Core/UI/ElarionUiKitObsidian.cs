@@ -1622,7 +1622,7 @@ namespace DeNelle.Core.UI
 
                 h.name = Label(go.transform, "", 0.52f, 0.95f, new Color(0.95f, 0.88f, 0.62f),
                                ElarionUi.FontHead, TextAlignmentOptions.MidlineLeft, 0.31f, 0.97f, bold: true);
-                h.name.enableAutoSizing = true; h.name.fontSizeMin = 9f; h.name.fontSizeMax = 15f;
+                h.name.enableAutoSizing = true; h.name.fontSizeMin = 30f; h.name.fontSizeMax = 64f;  // mobile floor (was 9–15, sub-legible)
                 h.name.raycastTarget = false;
 
                 h.hp = BuildObsidianBar(go.transform, ObsidianBarKind.Health,

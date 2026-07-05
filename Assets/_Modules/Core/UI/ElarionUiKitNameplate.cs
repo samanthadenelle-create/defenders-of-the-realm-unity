@@ -107,8 +107,8 @@ namespace DeNelle.Core.UI
                                 Color.white, ElarionUi.FontHead, TextAlignmentOptions.MidlineLeft,
                                 0.04f, 0.97f, bold: true);
             h.NameLabel.enableAutoSizing = true;
-            h.NameLabel.fontSizeMin = 12f;
-            h.NameLabel.fontSizeMax = 30f;   // prefab 18–72 scaled to the kit's reference res
+            h.NameLabel.fontSizeMin = 32f;   // mobile floor (was 12, sub-legible on a phone)
+            h.NameLabel.fontSizeMax = 72f;   // prefab 18–72 scaled to the kit's reference res
             h.NameLabel.raycastTarget = false;
 
             // ── StatBars (two stacked horizontal bars) ───────────────────────

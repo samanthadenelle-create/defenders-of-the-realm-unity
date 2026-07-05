@@ -89,11 +89,21 @@ namespace DeNelle.Core.UI
 
         // ── Typography scale ──────────────────────────────────────────────────
         // One ladder used by both toolkits so sizes feel deliberate, not ad-hoc.
-        public const int FontTitle = 24; // modal / banner title
-        public const int FontHead  = 18; // section header, hero name
-        public const int FontBody  = 15; // standard label / card name
-        public const int FontLabel = 13; // small label / cost / hint
-        public const int FontMicro = 11; // hotkey badge, rune strip
+        // MOBILE LEGIBILITY (universal-tester feedback 2026-07-04, BINDING): these are
+        // REFERENCE-px against the 1080x1920 portrait canvas. The old ladder (24/18/15/13/11)
+        // was desktop-px on a phone canvas — 15px body ≈ 0.8% of height, ~3x too small,
+        // illegible on a ~6" screen. Re-sized to established mobile standards (iOS HIG 17pt
+        // body / Android Material 14–16sp, expressed as % of the 1920 reference height):
+        //   Title 88px = 4.6% (header band 4–6%),  Head 64px = 3.3% (sub-header),
+        //   Body 50px = 2.6% (body band 2.5–3.5%),  Label 40px = 2.1%,  Micro 32px = 1.7%.
+        // Every screen inherits this via ElarionUiKit.Label/Header/Button + ShopTheme. Size
+        // only, no restyle. If a zone now overflows with the larger text, that's a per-screen
+        // layout follow-up (note it) — do NOT shrink the ladder back to hide overflow.
+        public const int FontTitle = 88; // modal / banner title       4.6% of H  (was 24)
+        public const int FontHead  = 64; // section header, hero name   3.3% of H  (was 18)
+        public const int FontBody  = 50; // standard label / card name  2.6% of H  (was 15)
+        public const int FontLabel = 40; // small label / cost / hint   2.1% of H  (was 13)
+        public const int FontMicro = 32; // hotkey badge, rune strip    1.7% of H  (was 11)
 
         // ── Spacing / shape scale ─────────────────────────────────────────────
         public const float PadCard   = 12f;
@@ -101,7 +111,7 @@ namespace DeNelle.Core.UI
         public const float RadiusSm  = 6f;
         public const float RadiusMd  = 10f;
         public const float RadiusLg  = 16f;
-        public const float TapTarget = 44f;  // mobile minimum
+        public const float TapTarget = 88f;  // mobile minimum: 44pt (iOS) / 48dp (Material) ≈ 88px in the 1080-wide reference (was 44 = ~half a touch target)
 
         // Decorative glyphs (default UI font renders these — no font dependency).
         public const string CrestGlyph = "*";

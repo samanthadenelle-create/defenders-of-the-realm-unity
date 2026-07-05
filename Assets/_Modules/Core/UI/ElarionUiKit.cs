@@ -1743,7 +1743,7 @@ namespace DeNelle.Core.UI
             var nameLabel = Label(rootGo.transform, initialName, 0.52f, 0.95f,
                                   new Color(0.95f, 0.88f, 0.62f), ElarionUi.FontHead,
                                   TextAlignmentOptions.Left, 0.31f, 0.97f, bold: true);
-            nameLabel.enableAutoSizing = true; nameLabel.fontSizeMin = 9f; nameLabel.fontSizeMax = 15f;
+            nameLabel.enableAutoSizing = true; nameLabel.fontSizeMin = 30f; nameLabel.fontSizeMax = 64f;  // mobile floor (was 9–15, sub-legible)
 
             // HP bar (red, mid-right).
             var hp = Bar(rootGo.transform, BarKind.Hp,
