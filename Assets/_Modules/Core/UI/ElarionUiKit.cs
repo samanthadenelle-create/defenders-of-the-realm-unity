@@ -272,7 +272,11 @@ namespace DeNelle.Core.UI
         /// horizontally-CENTERED thumb-zone button seated in the bottom close/footer band — not the
         /// legacy top-right corner sliver (that rect was sized for an X glyph, now retired). Frames
         /// that carve a designed close region still override this via <see cref="ZonesFor"/>.close.</summary>
-        private static readonly Vector4 DefaultCloseZone = new Vector4(0.360f, 0.035f, 0.640f, 0.110f);
+        // NOTE: with the SeatSharedCloseInside bottom-pivot seat, `y` is the band's lower
+        // edge and the fixed-size box grows UPWARD from it; y is nudged to 0.050 (from
+        // 0.035) so the box seats a hair above the interior floor, clear of the frame's
+        // ornate bottom border. x/z centre it; w is unused once the fixed size is stamped.
+        private static readonly Vector4 DefaultCloseZone = new Vector4(0.360f, 0.050f, 0.640f, 0.125f);
 
         // =====================================================================
         // CANONICAL CTA SIZE (owner F8 x3, 2026-07-04): "Continue button should be
@@ -667,9 +671,14 @@ namespace DeNelle.Core.UI
                 () => Common.Close(onClose));
             // Keep the diagnostics/lookup name every prior caller expected.
             if (btn != null) btn.gameObject.name = "CloseButton";
-            // OWNER F8 x3: every Close is the SAME pixel size on every screen — the zone
-            // fraction only *positions* it; PinCanonicalCtaSize stamps the fixed size.
-            PinCanonicalCtaSize(btn);
+            // OWNER F8 x3: every Close is the SAME pixel size on every screen. OWNER F8
+            // 2026-07-04: it must also sit INSIDE the panel, never on top of the frame.
+            // PinCanonicalCtaSize centred the fixed 360x120 box on the thin bottom close
+            // band, so its lower half sank BELOW the band — over/through the ornate bottom
+            // border ("close is on top of the panel"). SeatSharedCloseInside keeps the same
+            // fixed size + bottom-centre placement but seats the box's BOTTOM at the band
+            // and grows it UPWARD into the interior, so it can never dip into the border.
+            SeatSharedCloseInside(btn, zn);
             return btn;
         }
 
@@ -691,6 +700,31 @@ namespace DeNelle.Core.UI
             rt.anchorMin = centre;
             rt.anchorMax = centre;
             rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = new Vector2(CanonCtaWidth, CanonCtaHeight);
+        }
+
+        /// <summary>
+        /// Seat the ONE shared Close at the canonical size (<see cref="CanonCtaWidth"/> x
+        /// <see cref="CanonCtaHeight"/>) INSIDE the panel interior (owner F8 2026-07-04:
+        /// "everything must be inside the panel — the close was on top of the panel").
+        /// Same fixed pixel size + bottom-centre placement as the F8-x3 canonical CTA, but
+        /// where <see cref="PinCanonicalCtaSize"/> centres the box on the thin close band —
+        /// sinking its lower half BELOW the band, over the ornate bottom border — this
+        /// anchors the box's BOTTOM at the band's lower edge (pivot y=0) and grows it
+        /// UPWARD into the interior. The fixed-size box therefore stays clear of the frame
+        /// border on panels of any size (the overflow the centre-pin could not prevent).
+        /// Position-only; does not restyle/re-wire the button.
+        /// </summary>
+        public static void SeatSharedCloseInside(Button button, Vector4 closeZone)
+        {
+            if (button == null) return;
+            var rt = button.transform as RectTransform;
+            if (rt == null) return;
+            float centreX = (closeZone.x + closeZone.z) * 0.5f;
+            rt.anchorMin = new Vector2(centreX, closeZone.y);
+            rt.anchorMax = new Vector2(centreX, closeZone.y);
+            rt.pivot = new Vector2(0.5f, 0f);   // seat by the button's BOTTOM edge → grows up
             rt.anchoredPosition = Vector2.zero;
             rt.sizeDelta = new Vector2(CanonCtaWidth, CanonCtaHeight);
         }
