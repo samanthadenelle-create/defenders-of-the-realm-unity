@@ -14,6 +14,7 @@
 
 using UnityEngine;
 using UnityEngine.AI;
+using DeNelle.Core;             // FeatureFlags (ff.enemyweapons gate on the held-weapon attach)
 using DeNelle.Core.Combat;      // ActorAnimator (attached so Enemy drives work)
 using DeNelle.Core.Validation;  // WO-315/WO-363: opt-in OrientationGuard on the enemy root
 using DeNelle.Core.Diagnostics; // root-cause FlowTrace on the single enemy-creation path
@@ -161,7 +162,10 @@ namespace DeNelle.Village
                 // troll stand-ins that reuse it) gets a real axe in its right hand. Seats on CC_Base_R_Hand
                 // via the humanoid avatar; grip is DATA-DRIVEN (Offset Forge key "axe_A" in
                 // AttachmentOffsetRegistry) with an eyeball default so the owner can felt-tune it in the Forge.
-                if (model == "Orc_Berserker")
+                // GATED OFF (owner F8 2026-07-04): "enemies spamming weapons in all sorts of odd ways —
+                // maybe we not add a weapon unless we perfect one." No held weapon is attached until the
+                // Offset Forge grip is perfected on ONE weapon. Flip ff.enemyweapons = 1 to re-enable.
+                if (FeatureFlags.EnemyWeapons && model == "Orc_Berserker")
                     AttachEnemyWeapon(vis, "axe_A", 1.0f,
                         defaultEuler: new Vector3(-25f, 90f, 0f), defaultPos: Vector3.zero, defaultScale: 1f);
 

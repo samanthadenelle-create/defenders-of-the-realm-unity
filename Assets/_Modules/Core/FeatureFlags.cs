@@ -194,6 +194,15 @@ namespace DeNelle.Core
         /// "ff.enemystructureaware".</summary>
         public static bool EnemyStructureAwareness => Get("enemystructureaware", defaultOn: true);
 
+        /// <summary>ENEMY WEAPONS-IN-HANDS (owner F8 2026-07-04: "enemies spamming weapons in all sorts of
+        /// odd ways — maybe we not add a weapon unless we perfect one"). Gates <c>EnemyFactory.AttachEnemyWeapon</c>
+        /// (the berserker's held axe seat on CC_Base_R_Hand). When OFF (default), enemies spawn WEAPONLESS —
+        /// the grip/prop attach is SKIPPED until the Offset Forge grip is perfected on a single weapon. The
+        /// attach code path + NormalizeEnemyProp + AttachmentOffsetRegistry grip are INTACT and reversible:
+        /// disabling, not deleting. Flip ON to re-enable held weapons once the grip is dialed in:
+        /// PlayerPrefs "ff.enemyweapons" = 1.</summary>
+        public static bool EnemyWeapons => Get("enemyweapons", defaultOn: false);
+
         /// <summary>WO-498 — when ON, the new 9-zone mobile battle HUD (<see cref="DeNelle.Village.Arena.BattleHud9Zone"/>)
         /// spawns alongside <see cref="DeNelle.Village.Arena.BattleArenaHud"/> when a battle stages: a 3x3
         /// tic-tac-toe layout (TL Knight HP+resources, TC enemy family role overview, TR timer+pause,
