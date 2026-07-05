@@ -32,7 +32,6 @@
 
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
-using OffsetForge;
 
 namespace DeNelle.Village
 {
@@ -52,28 +51,11 @@ namespace DeNelle.Village
 
         private GameObject _visual;
 
-        // OffsetForge-authored placement, loaded ONCE from Resources/OffsetForge/offsets.json
-        // (the JSON the owner authors in the Offset Forge editor window). The harvest props are
-        // Tripo exports whose import pivot leaves them at a wrong identity rotation; the authored
-        // rot fixes that. Data-driven (CLAUDE.md §12 / owner data-structures style) — no magic
-        // euler hardcoded in the call site; the fallback below is only for a missing entry.
-        private static OffsetTable _offsets;
-        private static bool _offsetsLoaded;
-
-        // Documented fallback if offsets.json has no entry for this prop id (matches the value
-        // the owner authored for every harvest prop as of 2026-06-28: x:0, y:37, z:-129).
-        private static readonly Vector3 DefaultHarvestEuler = new Vector3(0f, 37f, -129f);
-
-        private static OffsetTable Offsets()
-        {
-            if (!_offsetsLoaded)
-            {
-                _offsetsLoaded = true;
-                var ta = Resources.Load<TextAsset>("OffsetForge/offsets");
-                _offsets = OffsetTableIO.Load(ta != null ? ta.text : null);
-            }
-            return _offsets;
-        }
+        // NOTE (owner F8 2026-07-04): the harvest props are Tripo exports whose import pivot leaves
+        // them at a wrong identity pose. This used to be corrected with a hand-authored OffsetForge
+        // euler (offsets.json), but that guessed rotation laid the model on its side. Orientation is
+        // now derived from the model's own bounds at placement (SkinOptions.SeatFlat in Build) — the
+        // flattest face rests down for every prop, no per-prop magic euler. See VisualFactory.SeatFlat.
 
         // Per-resource Resources prop path tried FIRST (drop a model here to upgrade the look).
         // Owner 2026-06-16 art drop: lightweight per-type models at Resources/Harvest/<type>
@@ -149,31 +131,25 @@ namespace DeNelle.Village
                 string path = PropPath(Resource);
                 if (!string.IsNullOrEmpty(path) && Resources.Load<GameObject>(path) != null)
                 {
-                    // OffsetForge rotation, keyed by the prop id = the segment after "Harvest/"
-                    // (e.g. "crystals"/"iron"/"wood"/"food") — which matches the offsets.json ids
-                    // 1:1, so the lookup is data-driven off the same path the prop loads from.
-                    int slash = path.LastIndexOf('/');
-                    string offsetId = slash >= 0 ? path.Substring(slash + 1) : path;
-                    var entry = Offsets()?.Find(offsetId);
-                    Vector3 euler = entry != null ? entry.rot.ToVector3() : DefaultHarvestEuler;
-                    if (entry == null)
-                        FlowTrace.Warn("Harvest",
-                            "MineNodeVisual(" + Resource + "): no offsets.json entry for prop '" +
-                            offsetId + "' — using documented default euler " + euler + ".");
+                    // Owner F8 2026-07-04 ("iron mine not sitting with flat side down"): the harvest
+                    // props are Tripo exports whose import pivot leaves them at a wrong identity pose.
+                    // The old offsets.json euler (id "iron"/"wood"/… = 0,37,-129) was a hand-authored
+                    // GUESS that laid the model on its side. Replace it with SeatFlat — VisualFactory
+                    // derives the upright pose from the model's own bounds (narrowest axis → +Y, §4)
+                    // so the flat face rests down for every harvest prop, no per-prop magic euler.
                     FlowTrace.Step("Harvest",
-                        "MineNodeVisual(" + Resource + "): prop '" + offsetId + "' rotation " +
-                        (entry != null ? "from offsets.json" : "DEFAULT") + " = euler " + euler + ".");
+                        "MineNodeVisual(" + Resource + "): seating prop '" + path +
+                        "' FLAT via bounds-derived orientation (SeatFlat) — no hand-authored euler.");
 
-                    // FixTripoMaterials so a Tripo/AccuRIG export renders in URP (no magenta),
-                    // matching the HarvestSite path. LocalRotation applies the authored fix BEFORE
-                    // fit/seat (see VisualFactory.Skin). Prop fit + seated on the node.
+                    // FixTripoMaterials so a Tripo/AccuRIG export renders in URP (no magenta).
+                    // SeatFlat + Fit + Seat run inside Skin — prop stood up, sized, seated on the node.
                     var skinned = VisualFactory.Skin(_visual.transform, path,
                         new SkinOptions
                         {
                             FitLargest = 2.0f,
                             SeatOnGround = true,
                             FixTripoMaterials = true,
-                            LocalRotation = Quaternion.Euler(euler),
+                            SeatFlat = true,
                         });
                     if (skinned != null) return;
                 }

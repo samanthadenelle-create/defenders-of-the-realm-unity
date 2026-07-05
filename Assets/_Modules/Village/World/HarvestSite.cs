@@ -235,9 +235,12 @@ namespace DeNelle.Village.World
             // VisualFactory; Tripo materials URP-fixed. When the model is absent we fall
             // through to the primitive post + per-resource top below (never breaks the demo).
             string modelPath = ResourceModelPath(ResourceType);
+            // Owner F8 2026-07-04 ("flat side down"): the old hand-authored euler (0,180,-90) laid the
+            // Tripo resource model on its side. SeatFlat derives the upright pose from the model's own
+            // bounds (narrowest axis → +Y, §4) so the flat face rests down — same fix as MineNodeVisual.
             var model = string.IsNullOrEmpty(modelPath) ? null : VisualFactory.Skin(transform, modelPath,
                 new SkinOptions { FitLargest = 2.4f, SeatOnGround = true, FixTripoMaterials = true,
-                    LocalRotation = Quaternion.Euler(0f, 180f, -90f) });   // Offset Forge 2026-06-23: Tripo resource-model orientation fix (all harvest nodes).
+                    SeatFlat = true });
             if (model != null)
             {
                 model.name = "HarvestVisual_Model";

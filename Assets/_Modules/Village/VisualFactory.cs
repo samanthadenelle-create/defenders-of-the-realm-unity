@@ -48,6 +48,15 @@ namespace DeNelle.Village
         // the visible mesh sits dead-centre over the hero root regardless of import pivot.
         public Quaternion? LocalRotation;
 
+        // FLAT-SEAT (owner F8 2026-07-04 "iron mine not sitting with flat side down"): derive a
+        // natural resting orientation from the model's own geometry — rotate so its NARROWEST
+        // world-bounds axis points to world +Y (CLAUDE.md §4: narrowest axis → up/down, so the
+        // largest/flattest face rests on the ground). Applied AFTER LocalRotation and BEFORE
+        // Fit/SeatOnGround, so the model is measured + seated in its final upright pose. Replaces
+        // the guessed magic-euler tips (e.g. z:-129 / z:-90) that laid the harvest props on their
+        // side. Robust to import pivot — measured live per instance, no per-prop hand-tuning.
+        public bool SeatFlat;
+
         /// <summary>An enemy/creature: fit to height, strip its colliders (the root carries the trigger capsule).</summary>
         public static SkinOptions Enemy(float height) =>
             new SkinOptions { FitHeight = height, StripColliders = true };
@@ -116,6 +125,12 @@ namespace DeNelle.Village
             // swung the off-pivot bounds sideways. Default is identity (unchanged for callers
             // that don't pass LocalRotation, e.g. enemies/structures).
             go.transform.localRotation = opts.LocalRotation ?? Quaternion.identity;
+
+            // FLAT-SEAT: derive the natural resting orientation from geometry (narrowest world-bounds
+            // axis → +Y, §4) so the model sits flat side down. Runs BEFORE Fit/SeatOnGround so the
+            // upright bounds are what gets fit + seated. Replaces guessed magic-euler tips.
+            if (opts.SeatFlat)
+                FlowTrace.Try("VisualFactory", "seat flat (bounds-derived)", () => SeatFlat(go));
 
             if (opts.StripColliders)
                 FlowTrace.Try("VisualFactory", "strip colliders",
@@ -251,6 +266,37 @@ namespace DeNelle.Village
             bounds = rends[0].bounds;
             for (int i = 1; i < rends.Length; i++) bounds.Encapsulate(rends[i].bounds);
             return true;
+        }
+
+        /// <summary>Levels a prop to rest on its flattest face: rotates (world space) so the
+        /// NARROWEST world-bounds axis points to world +Y (CLAUDE.md §4). This is the runtime
+        /// twin of CatalogOrientationBaker's bake-time keep-vertical heuristic — a geometry
+        /// derivation, not a hand-authored euler. A model already flat (Y narrowest) is left
+        /// untouched. Measured from live world bounds so it is robust to any import pivot.</summary>
+        private static void SeatFlat(GameObject go)
+        {
+            if (go == null || !TryBounds(go, out Bounds b)) return;
+            Vector3 sz = b.size;
+
+            // Index of the SHORTEST world-bounds axis (0=X, 1=Y, 2=Z). That axis should be vertical
+            // so the two longer axes span the ground-resting face.
+            int shortest = (sz.x <= sz.y && sz.x <= sz.z) ? 0 : (sz.y <= sz.z ? 1 : 2);
+            if (shortest == 1)
+            {
+                FlowTrace.Step("VisualFactory",
+                    $"SeatFlat('{go.name}'): already flat (Y narrowest, size {sz:F2}) — no rotation.");
+                return;
+            }
+
+            // Bring the current shortest WORLD axis onto world +Y with the shortest-arc rotation,
+            // pre-multiplied so it applies in world space (parent may be rotated).
+            Vector3 shortAxis = shortest == 0 ? Vector3.right : Vector3.forward;
+            Quaternion delta = Quaternion.FromToRotation(shortAxis, Vector3.up);
+            go.transform.rotation = delta * go.transform.rotation;
+
+            FlowTrace.Step("VisualFactory",
+                $"SeatFlat('{go.name}'): narrowest axis was {(shortest == 0 ? "X" : "Z")} " +
+                $"(size {sz:F2}) → stood it to +Y so the flat face rests down.");
         }
 
         // ── Tripo material fix (reflection — type lives in DeNelle.Core) ─────
