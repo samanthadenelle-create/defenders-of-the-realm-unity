@@ -130,6 +130,18 @@ namespace DeNelle.Editor
             public string blockClipOverride;
             public string hitClipOverride;
             public float  combatActionExitTime;
+
+            // TURN-IN-PLACE TIER (owner 2026-07-04, KnightMocap full-turning). All optional; null on
+            // every stock hero → no TurnDir param and no turn states are built, so those controllers stay
+            // BYTE-IDENTICAL. When supplied, Build() declares the TurnDir int and BuildTurnInPlace wires
+            // one in-place turn state per clip, entered from the (calm/combat) locomotion tree when the
+            // hero is ~stationary (Speed < StandingSpeedMax) and HeroLocomotion has set TurnDir to that
+            // value (−1 Left90 / 1 Right90 / −2 Left180 / 2 Right180). Cosmetic: HeroLocomotion still owns
+            // the actual yaw (LookRotation slerp) — these clips just show the pivot instead of a foot-slide.
+            public string turnLeftClip;      // TurnDir −1 (90° left)
+            public string turnRightClip;     // TurnDir  1 (90° right)
+            public string turnLeft180Clip;   // TurnDir −2 (180° left / about-face)
+            public string turnRight180Clip;  // TurnDir  2 (180° right / about-face)
         }
 
         // WO-283 §1 type->folder mapping. Casters (Mage + Cleric) share the Wizard set.
@@ -224,6 +236,13 @@ namespace DeNelle.Editor
         private const string MocapCombatIdleClip = "idle_ready";       // braced/ready (sword+shield)
         private const string MocapWalkClip = "walkforward01";
         private const string MocapRunClip  = "runforward_218667";
+        // TURN-IN-PLACE (owner 2026-07-04): the studio-mocap sword+shield in-place pivots. Same AccuRig
+        // (animationType:3, verified) as the gait, one motion take each ("turnleft90"/etc, the "0_T-Pose"
+        // take is skipped by LoadClip). 90s are the everyday quarter-turn; 180s cover the about-face.
+        private const string MocapTurnLeftClip     = "turnleft90";
+        private const string MocapTurnRightClip    = "turnright90";
+        private const string MocapTurnLeft180Clip  = "turnleft180";
+        private const string MocapTurnRight180Clip = "turnright180";
         // MOCAP COMBAT (owner 2026-07-04): the purpose-built AccuRig sword+shield swings/block/stagger.
         // A 3-swing combo that ESCALATES for readability (right slash → left slash → spin finisher);
         // block = raise shield (clear telegraph); hit = sword+shield stagger. All verified Humanoid
@@ -288,6 +307,12 @@ namespace DeNelle.Editor
             mocap.blockClipOverride    = MocapBlockClip;
             mocap.hitClipOverride      = MocapHitClip;
             mocap.combatActionExitTime = MocapActionExitTime;
+            // TURN-IN-PLACE tier: full directional turning (90 + about-face 180). Only KnightMocap sets
+            // these, so only KnightMocap.controller gains the TurnDir param + turn states.
+            mocap.turnLeftClip     = MocapTurnLeftClip;
+            mocap.turnRightClip    = MocapTurnRightClip;
+            mocap.turnLeft180Clip  = MocapTurnLeft180Clip;
+            mocap.turnRight180Clip = MocapTurnRight180Clip;
 
             Build(mocap);
             AssetDatabase.SaveAssets();
@@ -295,7 +320,8 @@ namespace DeNelle.Editor
             string atkCombo = string.Join("/", MocapAttackClips);
             Debug.Log($"[HeroAnimatorFactory] KnightMocap.controller built — calm idle ({MocapIdleClip}) + braced " +
                       $"combat idle ({MocapCombatIdleClip}) split on InCombat; sword+shield gait ({MocapWalkClip}/{MocapRunClip}); " +
-                      $"AccuRig combat (atk combo {atkCombo}, block {MocapBlockClip}, hit {MocapHitClip}) " +
+                      $"AccuRig combat (atk combo {atkCombo}, block {MocapBlockClip}, hit {MocapHitClip}); " +
+                      $"turn-in-place (90 {MocapTurnLeftClip}/{MocapTurnRightClip} + 180 {MocapTurnLeft180Clip}/{MocapTurnRight180Clip}) on TurnDir " +
                       $"→ {KnightMocapControllerPath}. Bound for KnightV3 when ff.mocaploco=1.");
         }
 
@@ -341,6 +367,10 @@ namespace DeNelle.Editor
             ctrl.AddParameter("DeathDir", AnimatorControllerParameterType.Int);
             ctrl.AddParameter("Victory",  AnimatorControllerParameterType.Trigger);
             ctrl.AddParameter("Injured",  AnimatorControllerParameterType.Bool); // WO-493 #5 / WO-497: wounded-stance swap
+            // TurnDir declared ONLY when this spec builds turn-in-place states (KnightMocap) — keeps every
+            // stock hero controller byte-identical. Int selector: 0 None / ±1 90° / ±2 180° (AnimParams.TurnDirection).
+            if (HasTurnClips(spec))
+                ctrl.AddParameter("TurnDir", AnimatorControllerParameterType.Int);
 
             var sm = ctrl.layers[0].stateMachine;
 
@@ -401,6 +431,13 @@ namespace DeNelle.Editor
             // Reuses the retargetable Humanoid injured clips from Action/Enemies/;
             // falls back to the healthy locomotion clips so the state is never empty.
             BuildInjuredLocomotion(ctrl, sm, locoState, idle, walk, run, spec);
+
+            // ── TURN-IN-PLACE (KnightMocap full-turning, owner 2026-07-04) ─────
+            // Optional: only when the spec supplies turn clips (KnightMocap). Wires one in-place turn
+            // state per clip, entered from the calm/combat locomotion tree when the hero pivots to face
+            // a new direction while ~stationary (HeroLocomotion drives TurnDir). Stock heroes (no turn
+            // clips) skip this entirely → no TurnDir param, no turn states → byte-identical build.
+            int turnStates = BuildTurnInPlace(ctrl, sm, locoState, combatLocoState, spec);
 
             // ── Cast — Any → Cast on the trigger, returns to Locomotion ────────
             // WO-217: snappier — state.speed bumped + tighter exit so recovery is
@@ -538,6 +575,7 @@ namespace DeNelle.Editor
 
             EditorUtility.SetDirty(ctrl);
             Debug.Log($"[HeroAnimatorFactory] {spec.slug} built — Locomotion({added.Count} clips)" +
+                      $"{(turnStates > 0 ? $" + Turn({turnStates})" : "")}" +
                       $"{(cast != null ? " + Cast(+UpperBody)" : "")}{(spellStates > 0 ? $" + Spells({spellStates})" : "")}" +
                       $"{(attackStates > 0 ? $" + Attack({attackStates})" : "")}" +
                       $"{(hit != null ? " + Hit" : "")}{(death != null ? " + Death" : "")}{(block != null ? " + Block" : "")}" +
@@ -664,6 +702,79 @@ namespace DeNelle.Editor
             }
             var toCalm = state.AddTransition(locoState);
             toCalm.hasExitTime = true; toCalm.exitTime = exitTime; toCalm.duration = duration;
+        }
+
+        /// <summary>True when this spec supplies any in-place turn clip (KnightMocap only). Gates both
+        /// the TurnDir param declaration and the turn-state build so every stock hero stays byte-identical.</summary>
+        private static bool HasTurnClips(HeroSpec spec) =>
+            !string.IsNullOrEmpty(spec.turnLeftClip)    || !string.IsNullOrEmpty(spec.turnRightClip) ||
+            !string.IsNullOrEmpty(spec.turnLeft180Clip) || !string.IsNullOrEmpty(spec.turnRight180Clip);
+
+        /// <summary>
+        /// TURN-IN-PLACE tier (owner 2026-07-04, KnightMocap full-turning): builds one in-place turn
+        /// state per supplied clip (TurnLeft/TurnRight = 90°, TurnLeft180/TurnRight180 = about-face).
+        /// Each is entered from the calm AND braced-combat locomotion trees when the hero is ~stationary
+        /// (Speed &lt; <see cref="StandingSpeedMax"/>) and HeroLocomotion has driven TurnDir to that value
+        /// (−1/1/−2/2). The pivot plays out, then returns combat-aware; it also early-outs the instant the
+        /// hero starts translating (Speed climbs past standing) so the walk/run gait takes over and we
+        /// never foot-slide on the pivot. Purely cosmetic — HeroLocomotion still owns the actual yaw
+        /// (its LookRotation slerp is the sole rotation writer). Returns the number of turn states built;
+        /// 0 (and no TurnDir param) for every stock hero (<see cref="HasTurnClips"/> false).
+        /// </summary>
+        private static int BuildTurnInPlace(AnimatorController ctrl, AnimatorStateMachine sm,
+                                            AnimatorState locoState, AnimatorState combatLocoState, HeroSpec spec)
+        {
+            if (!HasTurnClips(spec)) return 0;
+
+            var defs = new (string clip, int dir, string name)[]
+            {
+                (spec.turnLeftClip,     -1, "TurnLeft"),
+                (spec.turnRightClip,     1, "TurnRight"),
+                (spec.turnLeft180Clip,  -2, "TurnLeft180"),
+                (spec.turnRight180Clip,  2, "TurnRight180"),
+            };
+            var fromStates = combatLocoState != null
+                ? new[] { locoState, combatLocoState }
+                : new[] { locoState };
+
+            int built = 0;
+            foreach (var d in defs)
+            {
+                if (string.IsNullOrEmpty(d.clip)) continue;
+                var clip = LoadClip(d.clip, spec.searchRoots);
+                if (clip == null) continue;
+
+                var state = sm.AddState(d.name);
+                state.motion = clip;
+
+                // Enter from either loco tree ONLY while ~stationary and TurnDir == this value. Added
+                // AFTER the combat/injured swaps so those keep priority; a pivot sets TurnDir only briefly.
+                foreach (var from in fromStates)
+                {
+                    var to = from.AddTransition(state);
+                    to.hasExitTime = false; to.duration = 0.08f;
+                    to.AddCondition(AnimatorConditionMode.Less, StandingSpeedMax, "Speed");
+                    to.AddCondition(AnimatorConditionMode.Equals, d.dir, "TurnDir");
+                }
+
+                // Early-out the moment the hero actually starts translating — walk/run takes over
+                // (no foot-slide on the in-place pivot). Combat return added first so it wins.
+                if (combatLocoState != null)
+                {
+                    var mv = state.AddTransition(combatLocoState);
+                    mv.hasExitTime = false; mv.duration = 0.1f;
+                    mv.AddCondition(AnimatorConditionMode.Greater, StandingSpeedMax, "Speed");
+                    mv.AddCondition(AnimatorConditionMode.If, 0f, "InCombat");
+                }
+                var mvCalm = state.AddTransition(locoState);
+                mvCalm.hasExitTime = false; mvCalm.duration = 0.1f;
+                mvCalm.AddCondition(AnimatorConditionMode.Greater, StandingSpeedMax, "Speed");
+
+                // Otherwise play the pivot out, then return combat-aware (braced loco if still InCombat).
+                AddActionReturn(state, locoState, combatLocoState, 0.85f, 0.12f);
+                built++;
+            }
+            return built;
         }
 
         /// <summary>

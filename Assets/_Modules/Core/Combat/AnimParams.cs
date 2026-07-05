@@ -30,8 +30,12 @@ namespace DeNelle.Core.Combat
     /// (undriven, DeathDir stays 0 = Fall, the default death, which is safe).</summary>
     public enum DeathDirection { Fall = 0, Left = 1, Right = 2, Front = 3, Back = 4, Assassinate = 5 }
 
-    /// <summary>Sharp facing-change turn direction (optional locomotion polish).</summary>
-    public enum TurnDirection { None = 0, Left = -1, Right = 1 }
+    /// <summary>Sharp facing-change turn direction (locomotion polish). ±2 added 2026-07-04
+    /// for the KnightMocap turn-in-place tier (owner): the TurnDir int selector maps
+    /// 0 None / -1 Left90 / 1 Right90 / -2 LeftAround(180) / 2 RightAround(180) onto the
+    /// studio-mocap turn clips. Additive — old values unchanged; a controller without the
+    /// TurnDir param / turn states (every stock hero) simply no-ops the drive.</summary>
+    public enum TurnDirection { None = 0, Left = -1, Right = 1, LeftAround = -2, RightAround = 2 }
 
     /// <summary>Pet emote ids.</summary>
     public enum EmoteType { None = 0, Happy = 1, Celebrate = 2, Alert = 3 }

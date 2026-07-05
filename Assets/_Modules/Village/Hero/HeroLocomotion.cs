@@ -61,6 +61,17 @@ namespace DeNelle.Village
         private float _faceHoldRemaining;   // seconds the face-request stays valid
         private const float FaceYawDegPerSec = 540f; // yaw slew rate while facing a target
 
+        // TURN-IN-PLACE feed (owner 2026-07-04, KnightMocap full-turning). When the hero pivots to face a
+        // NEW move heading while still ~stationary (start-up / sharp reversal), feed the animator a TurnDir
+        // so the studio-mocap turn clip plays instead of an idle foot-slide. COSMETIC only: the existing
+        // LookRotation(Velocity) slerp (the sole rotation writer) still owns the actual yaw; this just
+        // reports the pivot. Guarded downstream — ActorAnimator.PlayTurn no-ops on controllers without the
+        // TurnDir param (every stock hero), so only KnightMocap reacts. Deterministic: pure math on the
+        // (camera-relative) input heading vs. current facing; no per-frame allocation, no state machine.
+        private const float TurnInPlaceSpeedMax = 2.0f; // only "turning in place" while below the walk band (matches the animator gate)
+        private const float TurnMinDeg          = 45f;  // must need to pivot at least this much before a turn clip plays
+        private const float TurnAroundDeg       = 135f; // beyond this, use the 180° about-face clip
+
         // WO-512 slice 3: lock-face / strafe. While a soft lock-on is engaged (driven by
         // HeroTargetIndicator), the hero continuously slews its root yaw toward the LOCKED
         // enemy INSTEAD of the move-direction LookRotation(Velocity) writer — even while
@@ -147,6 +158,39 @@ namespace DeNelle.Village
             float delta = Mathf.DeltaAngle(currentYaw, targetYaw); // shortest signed arc, [-180,180]
             if (Mathf.Abs(delta) <= maxDelta) return targetYaw;
             return currentYaw + Mathf.Sign(delta) * maxDelta;
+        }
+
+        /// <summary>
+        /// TURN-IN-PLACE / directional-turn feed (owner 2026-07-04, KnightMocap full-turning). Compares
+        /// the (camera-relative) input heading to the hero's CURRENT facing and, while ~stationary
+        /// (Velocity below <see cref="TurnInPlaceSpeedMax"/>) with a large enough pivot, drives
+        /// <see cref="ActorAnimator.PlayTurn"/> with the matching <see cref="TurnDirection"/> (±90° /
+        /// ±180°). Otherwise clears it to None. Purely a signal — the LookRotation(Velocity) slerp still
+        /// performs the actual rotation; the animator just shows the pivot instead of a foot-slide.
+        /// Guarded downstream (PlayTurn no-ops when the controller lacks TurnDir), so stock heroes and any
+        /// non-mocap controller are unaffected. Pure arithmetic — no allocation, no persistent state.
+        /// </summary>
+        private void DriveTurnSignal(Vector3 move, bool hasMoveInput)
+        {
+            TurnDirection turn = TurnDirection.None;
+            if (hasMoveInput && Velocity.magnitude < TurnInPlaceSpeedMax)
+            {
+                Vector3 dir = move; dir.y = 0f;
+                if (dir.sqrMagnitude > 0.0004f)
+                {
+                    float desiredYaw = Quaternion.LookRotation(dir.normalized, Vector3.up).eulerAngles.y;
+                    float delta = Mathf.DeltaAngle(transform.eulerAngles.y, desiredYaw); // signed shortest arc
+                    float mag   = Mathf.Abs(delta);
+                    if (mag >= TurnMinDeg)
+                    {
+                        bool around = mag >= TurnAroundDeg;
+                        turn = delta < 0f
+                            ? (around ? TurnDirection.LeftAround  : TurnDirection.Left)
+                            : (around ? TurnDirection.RightAround : TurnDirection.Right);
+                    }
+                }
+            }
+            _actor?.PlayTurn(turn);
         }
 
         // WO-377: global player-input suppression. Set true while a Yarn dialogue is on
@@ -759,6 +803,53 @@ namespace DeNelle.Village
                 ApplyLockFaceYaw();
             }
 
+            // [Flow:HeroDrift] — periodic-WIGGLE RCA (owner refocus 2026-07-04). The camera-relative
+            // sideways SLIDE (move basis at line ~656) is EXPECTED and NOT the defect. The defect is a
+            // repeating left/right WIGGLE on a pure-forward hold. Two candidate mechanisms; this ONE
+            // time-aligned 10 Hz trace captures BOTH so a forward-hold capture DISTINGUISHES them:
+            //   #1 CONTROL/FACING oscillation — the LookRotation(Velocity) facing writer (:749-751)
+            //      yaws the ROOT back and forth if Velocity carries a periodic X. TELL: 'heroYaw'
+            //      (transform.eulerAngles.y) oscillates with a fixed period AND tracks velX.
+            //   #2 ANIMATION sway — in-place mocap pelvic/torso weight-shift, or the out-of-phase
+            //      walk/run blend (walkforward01 ~8.75s vs runforward_218667 ~4.0s, cycleOffset 0).
+            //      TELL: root/heroYaw is STEADY but hipsLocalX (pelvis) sways periodically, and/or the
+            //      per-clip nt (normalizedTime) of the two blended clips drift out of phase.
+            // Grep marker: [Flow:HeroDrift]. Whole block gated on FlowTrace.Enabled (the clip-info +
+            // StringBuilder alloc must not run on the hot path when tracing is off).
+            if (input.y > 0.5f && DeNelle.Core.Diagnostics.FlowTrace.Enabled)
+            {
+                // #2 anim-side: active clip name + blend weight + per-clip normalizedTime (phase).
+                var animSb = new System.Text.StringBuilder();
+                float hipsLocalX = float.NaN;
+                float baseNt = float.NaN;
+                if (_animator != null)
+                {
+                    // Base-state normalizedTime — the shared phase clock of the blend. Blended clips
+                    // advance on THIS same nt but at different real-cycle rates (unequal lengths), so
+                    // nt%1 + each clip length lets the offline read see the out-of-phase churn (#2).
+                    baseNt = _animator.GetCurrentAnimatorStateInfo(0).normalizedTime % 1f;
+                    var clips = _animator.GetCurrentAnimatorClipInfo(0);
+                    for (int i = 0; i < clips.Length; i++)
+                    {
+                        if (clips[i].clip == null) continue;
+                        if (animSb.Length > 0) animSb.Append(", ");
+                        animSb.Append($"{clips[i].clip.name}(w={clips[i].weight:F2},len={clips[i].clip.length:F2})");
+                    }
+                    // pelvis/Hips local X — the direct sway signal (humanoid only; null on generic rig).
+                    var hips = _animator.isHuman ? _animator.GetBoneTransform(HumanBodyBones.Hips) : null;
+                    if (hips != null) hipsLocalX = hips.localPosition.x;
+                }
+                if (animSb.Length == 0) animSb.Append("<none>");
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroDrift", "fwd", 0.1f,
+                    // #1 control side:
+                    $"input=({input.x:F2},{input.y:F2}) move=({move.x:F3},{move.z:F3}) " +
+                    $"vel=({Velocity.x:F3},{Velocity.z:F3}) |velX|={Mathf.Abs(Velocity.x):F3} " +
+                    $"camYaw={yaw:F1} heroYaw={transform.eulerAngles.y:F1} " +
+                    $"dYaw={Mathf.DeltaAngle(yaw, transform.eulerAngles.y):F1} " +
+                    // #2 anim side:
+                    $"| baseNt={baseNt:F2} hipsLocalX={hipsLocalX:F3} clips=[{animSb}]");
+            }
+
             // Core animation fix: drive the guarded ActorAnimator (used by DTT + village
             // heroes). This feeds the Speed float into the HeroAnimatorFactory blendtree
             // (Idle 0 / Walk 6 / Run 9) so basic locomotion plays. The old direct
@@ -768,6 +859,11 @@ namespace DeNelle.Village
             // so Velocity may be ~0 even though the hero is moving — feed the animator a WALK speed so
             // the locomotion cycle plays through the crossing instead of freezing.
             _actor?.SetLocomotion(_crossingSeam ? _moveSpeed : Velocity.magnitude);
+
+            // Turn-in-place / directional-turn feed (owner 2026-07-04, KnightMocap full-turning). Reports
+            // the pivot toward a new move heading so the mocap turn clip plays; cosmetic + guarded (see the
+            // TurnInPlaceSpeedMax comment). Skipped during a seam slide (the crossing owns movement/facing).
+            if (!_crossingSeam) DriveTurnSignal(move, hasMoveInput);
 
             // Battle Ready (stance) vs casual Idle: combat stance ONLY when actually in
             // combat — a live wave (Countdown/Active phase). Merely having a WaveManager in
