@@ -1082,6 +1082,18 @@ namespace DeNelle.Village
                     $"inRange={(planar <= 1.5f)})");
             }
 
+            // Owner F8 (2026-07-04): surface THIS enemy's hero-pursuit to the HUD posture arc
+            // so the combat bar (potion + heal/ability row + health) shows while the hero is
+            // being chased in the OVERWORLD — not only for RegionMobSpawner roamers (previously
+            // the sole ReportPursuit producer) or inside a staged arena battle. `chasingHero`
+            // covers BOTH the brain-driven (override-on-hero) and brain-less (hero-aggro
+            // destination) chase paths, so a stronghold/garrison/seam pursuer now drives the
+            // A4.5 engagement window too. The report self-expires after PostureSignals.PursuitTtl
+            // (1.5 s) once the chase ends by ANY path (leash / death / despawn / out-of-range),
+            // giving a built-in linger so the prebattle posture never flickers or sticks on.
+            if (chasingHero)
+                DeNelle.Core.HudModel.PostureSignals.ReportPursuit(GetInstanceID());
+
             // DEF-56: throttle SetDestination — only re-path when the timer expires
             // OR the destination has moved significantly. This cuts NavMesh CPU by
             // ~80% on a 20-enemy wave without visible path quality regression.
