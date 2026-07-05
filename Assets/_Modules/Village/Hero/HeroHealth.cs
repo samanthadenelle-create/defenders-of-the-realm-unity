@@ -665,11 +665,17 @@ namespace DeNelle.Village
             if (injured != _injured)
             {
                 _injured = injured;
-                _actor?.SetInjured(injured);
+                // OWNER DIRECTIVE 2026-07-04: the injured LOCOMOTION/stance animation looked wrong and
+                // is RETIRED for the hero — the wounded state is signalled by the red screen-edge
+                // vignette instead (HeroInjuredVignette). We explicitly force the hero animator OUT of
+                // the Injured swap (SetInjured(false)) rather than driving it in, so the hero always
+                // keeps its normal locomotion. The Injured param/state stays intact in the controller
+                // for enemies (Enemy.DriveAnimator) / future use — we simply never drive the HERO into it.
+                _actor?.SetInjured(false);
                 _vignette?.SetInjured(injured);
                 MoveSpeedMultiplier = injured ? InjuredMoveScale : 1f;
                 _heartbeatCooldown = 0f;   // let the first beat land promptly on entry
-                Debug.Log($"[HeroHealth] Injured stance {(injured ? "ON" : "OFF")} " +
+                Debug.Log($"[HeroHealth] Injured feedback (red edge vignette) {(injured ? "ON" : "OFF")} " +
                           $"(hp={Mathf.CeilToInt(_hp)}/{Mathf.CeilToInt(MaxHp)}, frac={Fraction:F2}).");
             }
 
@@ -677,6 +683,9 @@ namespace DeNelle.Village
             // audio service (null-safe). Generated once so it works with no audio asset.
             if (_injured)
             {
+                // Attention-needed: deepen the red edge vignette as HP falls from the injured cutoff
+                // toward zero (0 at the threshold, 1 at empty). Presentation-only — reads HP, never mutates.
+                _vignette?.SetSeverity(Mathf.InverseLerp(InjuredFraction, 0f, Fraction));
                 _heartbeatCooldown -= Time.deltaTime;
                 if (_heartbeatCooldown <= 0f)
                 {

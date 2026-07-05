@@ -52,9 +52,17 @@ namespace DeNelle.Village
         private bool  _injured;       // target state set by HeroHealth
         private float _envelope;      // 0..1 fade envelope (eases toward _injured)
         private float _phase;         // breath phase accumulator
+        private float _severity;      // 0..1 how deep below the injured cutoff (0 at cutoff, 1 at empty)
 
         /// <summary>Drives the vignette on/off. Called by HeroHealth on the HP threshold cross.</summary>
         public void SetInjured(bool injured) => _injured = injured;
+
+        /// <summary>
+        /// Sets how DEEP the wound is (0 at the injured cutoff, 1 at empty HP) so the red edge
+        /// frame intensifies as the hero nears death — the "attention needed" escalation. Read-only
+        /// health signal from HeroHealth; the vignette holds no game logic. Clamped for safety.
+        /// </summary>
+        public void SetSeverity(float severity01) => _severity = Mathf.Clamp01(severity01);
 
         private void OnDisable()
         {
@@ -91,7 +99,10 @@ namespace DeNelle.Village
             // Breath: a sine that rides between the floor and the peak, scaled by the
             // fade envelope so it eases in/out cleanly at the edges of the injured state.
             float breath01 = 0.5f + 0.5f * Mathf.Sin(_phase);
-            float alpha = Mathf.Lerp(_floorAlpha, _peakAlpha, breath01) * _envelope;
+            // Severity boost: deepen the frame as HP falls toward zero (0.8x at the cutoff,
+            // ~1.25x near-death) so the danger reads louder the closer the hero is to dying.
+            float sevBoost = Mathf.Lerp(0.8f, 1.25f, _severity);
+            float alpha = Mathf.Clamp01(Mathf.Lerp(_floorAlpha, _peakAlpha, breath01) * _envelope * sevBoost);
             if (alpha <= 0.001f) return;
 
             var prev = GUI.color;
