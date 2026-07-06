@@ -69,6 +69,18 @@ namespace DeNelle.Editor
             new ModelMap { Src = EnemyDir + "OgreMage.fbx", Dst = EnemyDir + "OgreMage.fbx", Label = "OgreMage" },
         };
 
+        // AccuRig skeleton family (2026-07-05) — four CC_Base humanoid silhouettes that
+        // share one biped. Ranger ships as Skeleton_Rogue.fbx (code slug) for back-compat.
+        // KayKit Generic HumanoidEnemy clips cannot retarget these rigs — they need the
+        // Mixamo SkeletonHumanoid controller built here (same pattern as OrcWarband).
+        private static readonly ModelMap[] SkeletonFamily =
+        {
+            new ModelMap { Src = EnemyDir + "Skeleton_Mage.fbx",    Dst = EnemyDir + "Skeleton_Mage.fbx",    Label = "Skeleton_Mage" },
+            new ModelMap { Src = EnemyDir + "Skeleton_Warrior.fbx", Dst = EnemyDir + "Skeleton_Warrior.fbx", Label = "Skeleton_Warrior" },
+            new ModelMap { Src = EnemyDir + "Skeleton_Rogue.fbx",   Dst = EnemyDir + "Skeleton_Rogue.fbx",   Label = "Skeleton_Ranger (Rogue slug)" },
+            new ModelMap { Src = EnemyDir + "Skeleton_Healer.fbx",  Dst = EnemyDir + "Skeleton_Healer.fbx",  Label = "Skeleton_Healer" },
+        };
+
         [MenuItem("Defenders/Animation/Import People Character Set (DEF-221)")]
         public static void Run()
         {
@@ -92,6 +104,224 @@ namespace DeNelle.Editor
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             Debug.Log("[PeopleCharacterImporter] DONE\n" + string.Join("\n", report));
+        }
+
+        [MenuItem("Defenders/Animation/Import Skeleton Family (AccuRig)")]
+        public static void ImportSkeletonFamily()
+        {
+            var report = new List<string>();
+            report.Add("=== ImportSkeletonFamily (AccuRig CC_Base) ===");
+
+            report.Add("-- Skeleton family → Resources/Enemies (in-place Humanoid) --");
+            Avatar sharedAv = null;
+            foreach (var m in SkeletonFamily)
+            {
+                EnsureHumanoidInPlace(m, report);
+                if (sharedAv == null)
+                {
+                    var go   = AssetDatabase.LoadAssetAtPath<GameObject>(m.Dst);
+                    var anim = go != null ? go.GetComponentInChildren<Animator>() : null;
+                    var av   = anim != null ? anim.avatar : null;
+                    if (av != null && av.isValid && av.isHuman) sharedAv = av;
+                }
+            }
+
+            if (sharedAv != null)
+                RepairSkeletonAvatars(sharedAv, report);
+
+            report.Add("-- Controllers --");
+            BuildSkeletonHumanoidController(report);
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log("[PeopleCharacterImporter] ImportSkeletonFamily DONE\n" + string.Join("\n", report));
+        }
+
+        /// <summary>Copy a proven Humanoid avatar across the skeleton family when a
+        /// silhouette's CC_Base rig did not auto-map (same biped, like DEF-221 heroes).</summary>
+        private static void RepairSkeletonAvatars(Avatar sourceAv, List<string> report)
+        {
+            foreach (var m in SkeletonFamily)
+            {
+                if (SkeletonAvatarVerdict(m.Dst, out _)) continue;
+
+                var imp = AssetImporter.GetAtPath(m.Dst) as ModelImporter;
+                if (imp == null) { report.Add($"  {m.Label}: NO IMPORTER — skipped avatar repair"); continue; }
+
+                // Pass 1 — clear any stale copy-from-other state and retry auto-map.
+                imp.animationType   = ModelImporterAnimationType.Human;
+                imp.importAnimation = false;
+                imp.sourceAvatar    = null;
+                imp.avatarSetup     = ModelImporterAvatarSetup.CreateFromThisModel;
+                imp.SaveAndReimport();
+                if (SkeletonAvatarVerdict(m.Dst, out string pass1))
+                {
+                    report.Add($"  {m.Label}: REPAIRED via CreateFromThisModel ({pass1})");
+                    continue;
+                }
+
+                // Pass 2 — shared CC_Base biped: copy a proven Humanoid avatar (Mage).
+                if (sourceAv != null)
+                {
+                    imp.animationType   = ModelImporterAnimationType.Human;
+                    imp.importAnimation = false;
+                    imp.sourceAvatar    = sourceAv;
+                    imp.SaveAndReimport();
+                }
+                if (SkeletonAvatarVerdict(m.Dst, out string pass2))
+                {
+                    report.Add($"  {m.Label}: REPAIRED via shared skeleton avatar ({pass2})");
+                    continue;
+                }
+
+                // Pass 3 — copy the proven Mage humanoid bone map (same CC_Base naming).
+                var mageImp = AssetImporter.GetAtPath(EnemyDir + "Skeleton_Mage.fbx") as ModelImporter;
+                if (mageImp != null)
+                {
+                    imp.animationType     = ModelImporterAnimationType.Human;
+                    imp.importAnimation   = false;
+                    imp.sourceAvatar      = null;
+                    imp.avatarSetup       = ModelImporterAvatarSetup.CreateFromThisModel;
+                    imp.humanDescription  = mageImp.humanDescription;
+                    imp.SaveAndReimport();
+                }
+
+                string verdict = SkeletonAvatarVerdict(m.Dst, out string final)
+                    ? $"REPAIRED via copied Mage humanoid map ({final})"
+                    : "FAIL avatar repair — hand-map in Unity if this silhouette T-poses";
+                report.Add($"  {m.Label}: {verdict}");
+            }
+        }
+
+        private static bool SkeletonAvatarVerdict(string dst, out string detail)
+        {
+            var go   = AssetDatabase.LoadAssetAtPath<GameObject>(dst);
+            var anim = go != null ? go.GetComponentInChildren<Animator>() : null;
+            var av   = anim != null ? anim.avatar : null;
+            if (av != null && av.isValid && av.isHuman) { detail = "OK Humanoid"; return true; }
+            if (av != null && av.isValid)               { detail = "WARN Generic"; return false; }
+            detail = "FAIL no avatar";
+            return false;
+        }
+
+        /// <summary>Build the Humanoid SkeletonHumanoid.controller for the AccuRig
+        /// skeleton family. Mixamo Assets/Action clips retarget through each model's
+        /// Humanoid avatar; wired with Enemy.cs params (Speed/Attack/Hit/Dead/Injured).</summary>
+        private static void BuildSkeletonHumanoidController(List<string> report)
+        {
+            string path = EnemyDir + "SkeletonHumanoid.controller";
+
+            AnimationClip idle   = LoadClip("Orc Idle") ?? LoadClip("standing idle 01");
+            AnimationClip walk   = LoadClip("standing walk forward");
+            AnimationClip run    = LoadClip("standing run forward");
+            AnimationClip attack = LoadClip("Sword And Shield Attack");
+            AnimationClip hit    = LoadClipAtPath("Assets/Action/Shared/Shared_Hit_Reaction.fbx");
+            AnimationClip death  = LoadClip("Falling Back Death") ?? LoadClip("Dying") ?? LoadClip("Defeated");
+            AnimationClip cast   = LoadClip("Standing 2H Magic Attack 05") ?? LoadClip("Standing 2H Magic Area Attack 01");
+
+            AnimationClip injIdle = LoadClipAtPath("Assets/Action/Enemies/injured idle.fbx");
+            AnimationClip injWalk = LoadClipAtPath("Assets/Action/Enemies/injured walk.fbx");
+            AnimationClip injRun  = LoadClipAtPath("Assets/Action/Enemies/injured run.fbx");
+
+            AssetDatabase.DeleteAsset(path);
+            var ctrl = AnimatorController.CreateAnimatorControllerAtPath(path);
+            ctrl.AddParameter("Speed",   AnimatorControllerParameterType.Float);
+            ctrl.AddParameter("Attack",  AnimatorControllerParameterType.Trigger);
+            ctrl.AddParameter("Hit",     AnimatorControllerParameterType.Trigger);
+            ctrl.AddParameter("Dead",    AnimatorControllerParameterType.Bool);
+            ctrl.AddParameter("Injured", AnimatorControllerParameterType.Bool);
+            ctrl.AddParameter("Cast",    AnimatorControllerParameterType.Trigger);
+
+            var sm = ctrl.layers[0].stateMachine;
+
+            var loco = sm.AddState("Locomotion");
+            sm.defaultState = loco;
+            var blend = new BlendTree
+            {
+                name = "Locomotion", blendType = BlendTreeType.Simple1D,
+                blendParameter = "Speed", useAutomaticThresholds = false
+            };
+            AssetDatabase.AddObjectToAsset(blend, ctrl);
+            loco.motion = blend;
+            int n = 0;
+            if (idle != null) { blend.AddChild(idle, 0f);   n++; }
+            if (walk != null) { blend.AddChild(walk, 1.5f); n++; }
+            if (run  != null) { blend.AddChild(run,  3.5f); n++; }
+
+            var injuredState = sm.AddState("InjuredLocomotion");
+            var injBlend = new BlendTree
+            {
+                name = "InjuredLocomotion", blendType = BlendTreeType.Simple1D,
+                blendParameter = "Speed", useAutomaticThresholds = false
+            };
+            AssetDatabase.AddObjectToAsset(injBlend, ctrl);
+            injuredState.motion = injBlend;
+            int injN = 0;
+            if (injIdle != null) { injBlend.AddChild(injIdle, 0f);   injN++; }
+            if (injWalk != null) { injBlend.AddChild(injWalk, 1.5f); injN++; }
+            if (injRun  != null) { injBlend.AddChild(injRun,  3.5f); injN++; }
+            if (injN == 0)
+            {
+                if (idle != null) injBlend.AddChild(idle, 0f);
+                if (walk != null) injBlend.AddChild(walk, 1.5f);
+                if (run  != null) injBlend.AddChild(run,  3.5f);
+            }
+            var toInjured = loco.AddTransition(injuredState);
+            toInjured.hasExitTime = false; toInjured.duration = 0.2f;
+            toInjured.AddCondition(AnimatorConditionMode.If, 0f, "Injured");
+            var fromInjured = injuredState.AddTransition(loco);
+            fromInjured.hasExitTime = false; fromInjured.duration = 0.2f;
+            fromInjured.AddCondition(AnimatorConditionMode.IfNot, 0f, "Injured");
+
+            if (attack != null)
+            {
+                var st = sm.AddState("Attack");
+                st.motion = attack;
+                st.speed  = 1.15f;
+                var t = sm.AddAnyStateTransition(st);
+                t.hasExitTime = false; t.duration = 0.1f; t.canTransitionToSelf = false;
+                t.AddCondition(AnimatorConditionMode.If, 0f, "Attack");
+                var back = st.AddTransition(loco);
+                back.hasExitTime = true; back.exitTime = 0.8f; back.duration = 0.2f;
+            }
+
+            if (cast != null)
+            {
+                var st = sm.AddState("Cast");
+                st.motion = cast;
+                var t = sm.AddAnyStateTransition(st);
+                t.hasExitTime = false; t.duration = 0.1f; t.canTransitionToSelf = false;
+                t.AddCondition(AnimatorConditionMode.If, 0f, "Cast");
+                var back = st.AddTransition(loco);
+                back.hasExitTime = true; back.exitTime = 0.85f; back.duration = 0.2f;
+            }
+
+            if (hit != null)
+            {
+                var st = sm.AddState("Hit");
+                st.motion = hit;
+                var t = sm.AddAnyStateTransition(st);
+                t.hasExitTime = false; t.duration = 0.1f; t.canTransitionToSelf = false;
+                t.AddCondition(AnimatorConditionMode.If, 0f, "Hit");
+                var back = st.AddTransition(loco);
+                back.hasExitTime = true; back.exitTime = 0.8f; back.duration = 0.2f;
+            }
+
+            if (death != null)
+            {
+                var st = sm.AddState("Death");
+                st.motion = death;
+                var t = sm.AddAnyStateTransition(st);
+                t.hasExitTime = false; t.duration = 0.15f; t.canTransitionToSelf = false;
+                t.AddCondition(AnimatorConditionMode.If, 0f, "Dead");
+            }
+
+            EditorUtility.SetDirty(ctrl);
+            report.Add($"  SkeletonHumanoid.controller built: Locomotion({n} clips)" +
+                       $"{(attack != null ? " + Attack" : "")}" +
+                       $"{(cast != null ? " + Cast" : "")}" +
+                       $"{(hit != null ? " + Hit" : "")}" +
+                       $"{(death != null ? " + Death" : "")} [Speed/Attack/Hit/Dead/Injured/Cast] ✓");
         }
 
         /// <summary>Copy the source FBX over the Resources slug name and flip the copy
@@ -143,6 +373,11 @@ namespace DeNelle.Editor
 
             bool changed = imp.animationType != ModelImporterAnimationType.Human;
             imp.animationType = ModelImporterAnimationType.Human;
+            if (imp.importAnimation)
+            {
+                imp.importAnimation = false;
+                changed = true;
+            }
             // Only (re)generate the avatar from the model if it isn't already set to do so —
             // re-running CreateFromThisModel on a hand-mapped rig would discard the mapping.
             if (imp.avatarSetup != ModelImporterAvatarSetup.CreateFromThisModel &&

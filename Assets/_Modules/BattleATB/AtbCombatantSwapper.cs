@@ -505,7 +505,15 @@ namespace DeNelle.BattleATB
             {
                 string first = handoff.BreachedIds[0];
                 if (!string.IsNullOrEmpty(first))
+                {
+                    // Village id → model slug (visual); engine def may differ (e.g. bruiser stats).
+                    string lower = first.ToLowerInvariant();
+                    if (lower == "hollow-warrior") return "Skeleton_Warrior";
+                    if (lower == "hollow-walker")  return "Skeleton_Minion";
+                    if (lower == "hollow-rogue")   return "Skeleton_Rogue";
+                    if (lower == "hollow-acolyte") return "Skeleton_Healer";
                     return ModelSlugForEngineDef(EngineDefFor(first));
+                }
             }
 
             // No handoff → deterministic by wave (cycles the roster, never a constant).
@@ -523,7 +531,7 @@ namespace DeNelle.BattleATB
             if (Defs.ENEMY_DEFS.ContainsKey(id)) return id;     // already a valid engine key
 
             string lower = id.ToLowerInvariant();
-            if (lower == "hollow-warrior") return "bruiser";
+            if (lower == "hollow-warrior") return "hollow-warrior";
             if (lower == "hollow-walker")  return "skeleton";
             if (lower == "hollow-rogue")   return "skeleton";
             if (lower.Contains("necro"))   return "necromancer";
@@ -550,6 +558,7 @@ namespace DeNelle.BattleATB
                 case "hollow-captain":    return "Orc_Berserker";     // elite captain
                 case "hollow-king":       return "Dragon";            // boss
                 case "hollow-apprentice": return "Skeleton_Mage";     // caster minion
+                case "hollow-warrior":    return "Skeleton_Warrior"; // AccuRig melee
                 case "skeleton":
                 default:                  return "Skeleton_Warrior";  // standard grunt
             }
@@ -634,7 +643,11 @@ namespace DeNelle.BattleATB
                 case "Orc_Berserker":
                 case "Orc_Shaman":
                 case "Orc_Necromancer": return "OrcWarband";
-                default:                return "HumanoidEnemy"; // Warrior/Minion/Rogue/Mage
+                case "Skeleton_Mage":
+                case "Skeleton_Warrior":
+                case "Skeleton_Rogue":
+                case "Skeleton_Healer": return "SkeletonHumanoid";
+                default:                return "HumanoidEnemy"; // Minion + legacy Generic
             }
         }
 

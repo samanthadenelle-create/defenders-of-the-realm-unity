@@ -22,7 +22,7 @@
 // siege faction; falls back to literal ids if the catalog is unavailable):
 //   weak   → role "grunt"      → hollow-walker        (DPS-positioned)
 //            role "skirmisher" → hollow-rogue         (Ranged-positioned)
-//   medium → role "brute"      → hollow-warrior       (Tank-positioned)
+//   medium → brute slot        → hollow-warrior       (front melee; warrior stats, not golem tank)
 //            role "caster"     → hollow-acolyte       (Ranged/back-positioned)
 //   strong → role "brute"      → hollow-warrior (more of them, front)
 //   elite  → role "elite"      → necromancer          (Elite — single, centred)

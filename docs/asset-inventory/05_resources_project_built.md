@@ -71,7 +71,7 @@ pulls at play time (the REAL shipped art).
   `Orc_Mage.fbx`, plus `Orc_Berserker/Necromancer/Shaman.fbx`.
   Controllers: `OrcHumanoid.controller` + `_Mage/_Tank/_Warrior` variants + `OrcWarband`.
   Textures in `OrcTex/`: `Orc_{Mage,Tank,Warrior}_{basecolor,metallic,normal,roughness}.jpg`.
-- Skeletons: `Skeleton_{Warrior,Mage,Rogue,Minion,Golem}.fbx` + `skeleton_texture_A` + URP mat.
+- Skeletons: AccuRig `Skeleton_{Mage,Warrior,Rogue,Healer}.fbx` (Humanoid → `SkeletonHumanoid.controller`) + KayKit legacy `Skeleton_{Minion,Golem}.fbx` + `Necromancer.fbx` + `skeleton_texture_A` + URP mat.
 - Trolls/large: `Troll.fbx`, `OgreMage.fbx`, `Demon.fbx`, `Necromancer.fbx`.
 - Boss: `Dragon.fbx`, `Boss_Dragon.prefab`, `Boss.controller`, `Dragon.controller`,
   loaded by `WaveManager.cs:1256` as `Enemies/Boss_Dragon`.

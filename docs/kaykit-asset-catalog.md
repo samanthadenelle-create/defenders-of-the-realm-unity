@@ -121,19 +121,23 @@ The combat roster. **The Skeletons pack is the village's core "Hollow Ones" wave
 
 > Paths point at the Unity-ready model. Mystery Monthly characters are FBX; the Skeletons live-set is also exposed as `.glb` in `Assets/Models/KayKit/enemies/`.
 
-### Core wave enemies — the Hollow Ones (Skeletons 1.1)
-Path prefix: `KayKit Skeletons 1.1/characters/fbx(unity)/`
+### Core wave enemies — the Hollow Ones
 
-| Model | File | Visual | Suggested role |
-| --- | --- | --- | --- |
-| Skeleton Minion | `Skeleton_Minion.fbx` | Small, bare, fragile skeleton | Wave 1 fodder — the basic Hollow One; spawn in swarms |
-| Skeleton Warrior | `Skeleton_Warrior.fbx` | Armed, armored standard skeleton | Standard mid-wave melee enemy |
-| Skeleton Rogue | `Skeleton_Rogue.fbx` | Hooded, lean, fast | Fast flanker — rushes the Heart, low HP |
-| Skeleton Mage | `Skeleton_Mage.fbx` | Robed staff-wielding skeleton | Ranged caster — hangs back, hits towers/Heart at distance |
-| Skeleton Golem | `Skeleton_Golem.fbx` | Large bone-construct, oversized axe | Heavy/"brute" — slow, bulky, high HP; mini-boss material |
-| Necromancer | `Necromancer.fbx` | Hooded non-skeleton leader, staff | **Wave boss** — see §6; can summon the minions above |
+**LIVE silhouettes (2026-07-05):** AccuRig CC_Base family in `Assets/Resources/Enemies/` — `Skeleton_{Mage,Warrior,Rogue,Healer}.fbx`. Ranger ships as `Skeleton_Rogue.fbx` (slug back-compat). Humanoid rig → `SkeletonHumanoid.controller` (Mixamo). See `docs/enemy-codex.md` §2 AccuRig table. Import: `Defenders → Animation → Import Skeleton Family (AccuRig)`.
 
-Curated `.glb` copies already wired: `enemies/Skeleton_Minion.glb`, `Skeleton_Warrior.glb`, `Skeleton_Rogue.glb`, `Skeleton_Mage.glb`, `Necromancer.glb`. (The Golem `.glb` is in the full pack only — promote it if you want a brute.)
+**KayKit legacy (still live):** `Skeleton_Minion`, `Skeleton_Golem`, `Necromancer` — Generic `Rig_Medium`/`Rig_Large` → `HumanoidEnemy`/`LargeEnemy`/`Boss`. Path prefix: `KayKit Skeletons 1.1/characters/fbx(unity)/`.
+
+| Model | File | Visual | Suggested role | Status |
+| --- | --- | --- | --- | --- |
+| Skeleton Minion | `Skeleton_Minion.fbx` | Small, bare, fragile skeleton | Wave 1 fodder | **KayKit — live** |
+| Skeleton Warrior | `Skeleton_Warrior.fbx` | Armed melee skeleton | Standard mid-wave melee | **AccuRig — supersedes KayKit** |
+| Skeleton Rogue | `Skeleton_Rogue.fbx` | Lean ranger skeleton (Ranger mesh) | Fast flanker | **AccuRig — supersedes KayKit** |
+| Skeleton Healer | `Skeleton_Healer.fbx` | Robed healer skeleton | Wave healer — cut first | **AccuRig — new** |
+| Skeleton Mage | `Skeleton_Mage.fbx` | Robed staff caster | Ranged caster / apprentice boss body | **AccuRig — supersedes KayKit** |
+| Skeleton Golem | `Skeleton_Golem.fbx` | Large bone-construct | Heavy brute / tank | **KayKit — live** |
+| Necromancer | `Necromancer.fbx` | Hooded leader, staff | **Wave boss** — see §6 | **KayKit — live** |
+
+KayKit warehouse `.glb` copies (`enemies/Skeleton_*.glb`) are **stale** for Warrior/Rogue/Mage — the committed `Resources/Enemies/*.fbx` AccuRig exports are authoritative.
 
 ### Monster & creature roster (Mystery Monthly Series 4 & 5)
 These are the expansion bestiary — dungeon encounter enemies and bosses.

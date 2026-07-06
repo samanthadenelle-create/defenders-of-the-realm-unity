@@ -125,7 +125,7 @@ namespace DeNelle.Village
         {
             switch (id)
             {
-                case "hollow-warrior": return EnemyRole.Tank;
+                case "hollow-warrior": return EnemyRole.DPS;
                 case "hollow-acolyte": return EnemyRole.Healer;
                 default:               return EnemyRole.DPS;   // walker / rogue
             }
@@ -147,8 +147,8 @@ namespace DeNelle.Village
                     return new EnemyDef
                     {
                         Id = "hollow-warrior", Name = "Hollow Warrior", DisplayName = "Hollow Warrior", Ai = "walker",
-                        Hp = 180f, MoveSpeed = 1.8f, ContactDamage = 13f, AttackInterval = 1.5f, Height = 2.4f,
-                        AggroRadius = 12f, XpReward = 36, GlimmerReward = 7,
+                        Hp = 156f, MoveSpeed = 2.2f, ContactDamage = 10f, AttackInterval = 1.3f, Height = 1.88f,
+                        AggroRadius = 10f, XpReward = 28, GlimmerReward = 5,
                     };
                 case "hollow-acolyte":
                     return new EnemyDef

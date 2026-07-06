@@ -330,13 +330,15 @@ namespace DeNelle.Village
                 // DEF-250: the HOLLOW wave archetypes get DISTINCT silhouettes so a
                 // mixed wave reads as a varied fight, not clones.
                 //   grunt      → Skeleton_Minion  (lean, basic — the numerous rusher)
-                //   brute/tank → Skeleton_Golem   (big, LargeEnemy rig — slow heavy wall)
-                //   skirmisher → Skeleton_Rogue   (low, quick — the flanker)
-                //   caster     → Skeleton_Mage    (robed support / healer)
+                //   warrior    → Skeleton_Warrior (AccuRig melee — mid-wave backbone)
+                //   skirmisher → Skeleton_Rogue   (AccuRig Ranger mesh — the flanker)
+                //   healer     → Skeleton_Healer  (AccuRig healer silhouette)
+                //   caster     → Skeleton_Mage    (AccuRig mage silhouette)
+                //   brute/tank → Skeleton_Golem   (KayKit large rig — separate id when added)
                 case "hollow-walker":    return "Skeleton_Minion";   // grunt
-                case "hollow-warrior":   return "Skeleton_Golem";    // brute / tank
-                case "hollow-rogue":     return "Skeleton_Rogue";    // fast skirmisher
-                case "hollow-acolyte":   return "Skeleton_Mage";     // caster / healer (WO-316 family healer)
+                case "hollow-warrior":   return "Skeleton_Warrior"; // melee warrior (AccuRig)
+                case "hollow-rogue":     return "Skeleton_Rogue";    // fast skirmisher (Ranger mesh)
+                case "hollow-acolyte":   return "Skeleton_Healer";   // healer (AccuRig family)
                 case "necromancer":      return "Necromancer";       // dedicated elite (Boss rig)
 
                 // ── WILDLANDS ROSTER (MainCastle_Hall overworld roamers) ─────────

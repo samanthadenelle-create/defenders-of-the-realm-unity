@@ -33,7 +33,7 @@ The bestiary splits into **two enemy factions** plus a **set-piece boss tier**.
 
 ### 1.1 The Hollow Ones — the undead wave faction (primary)
 
-Risen Folk of the realm, animated by the Withering. They march on Elarion's four gates. Skeleton-based; the catalog's Skeletons 1.1 pack is their entire body of models. They appear in **the village wave loop** and as **dungeon enemies** (the Hollow Ones lurk in every dungeon's dark).
+Risen Folk of the realm, animated by the Withering. They march on Elarion's four gates. Skeleton-based — the **AccuRig CC_Base family** (Mage / Warrior / Ranger→`Skeleton_Rogue` slug / Healer) is the live wave silhouette set in `Resources/Enemies/`; **KayKit Skeletons 1.1** remains for fodder (`Skeleton_Minion`), brute (`Skeleton_Golem`), and the wave-boss (`Necromancer`). They appear in **the village wave loop** and as **dungeon enemies** (the Hollow Ones lurk in every dungeon's dark).
 
 ### 1.2 The Wildlands — the living (non-undead) enemy faction (secondary)
 
@@ -48,9 +48,10 @@ Eight named bosses (§4) — two canon-locked, six agent-authored — built from
 | # | Enemy | Faction | Tier / Role | Appears in |
 | --- | --- | --- | --- | --- |
 | 1 | Hollow Walker | Hollow Ones | Fodder / Walker | Village waves 1+; dungeons |
-| 2 | Hollow Warrior | Hollow Ones | Standard melee / Walker | Village waves 3+; dungeons |
-| 3 | Hollow Rogue | Hollow Ones | Fast flanker / Skirmisher | Village waves 4+; dungeons |
-| 4 | Hollow Caster | Hollow Ones | Ranged caster | Village waves 6+; dungeons |
+| 2 | Hollow Warrior | Hollow Ones | Standard melee / Walker | Village waves 3+; dungeons (AccuRig `Skeleton_Warrior`) |
+| 3 | Hollow Skirmisher | Hollow Ones | Fast flanker / Skirmisher | Village waves 4+; dungeons (AccuRig Ranger → `Skeleton_Rogue`) |
+| 4 | Hollow Acolyte (Healer) | Hollow Ones | Healer / support | Village waves 6+; dungeons (AccuRig `Skeleton_Healer`) |
+| 4b | Hollow Mage (Caster) | Hollow Ones | Ranged caster | Dungeons; apprentice boss body (AccuRig `Skeleton_Mage`) |
 | 5 | Hollow Reaper | Hollow Ones | Elite / scythe-wielder | Village waves 9+; dungeon elites |
 | 6 | Hollow Brute (the Bone-Golem) | Hollow Ones | Heavy / Charger | Village mini-boss waves; dungeons |
 | 7 | Cellar Hollow | Hollow Ones | Sorrow variant (slow, sad) | Dungeons only (Healer's Cottage cellar etc.) |
@@ -75,7 +76,16 @@ A note on scope: the village wave loop today (`enemies.json`) ships **4 entries*
 
 ## 2. Per-enemy entries
 
-Every entry below maps to a **real KayKit model named in the asset catalog**. Stats are an *anchor* — a starting point for the data-layer; the ATB engine (`Defs.cs ENEMY_DEFS`) and the village wave loop (`enemies.json`) tune the final numbers. Where a number already exists in canon data it is quoted verbatim and marked **(canon data)**.
+Every entry below maps to a **real model file in `Assets/Resources/Enemies/`** (AccuRig exports or KayKit legacy). Stats are an *anchor* — a starting point for the data-layer; the ATB engine (`Defs.cs ENEMY_DEFS`) and the village wave loop (`enemies.json`) tune the final numbers. Where a number already exists in canon data it is quoted verbatim and marked **(canon data)**.
+
+**AccuRig skeleton family (2026-07-05, LIVE):** four Character-Creator / AccuRig humanoid silhouettes sharing one `CC_Base_*` biped. Imported as **Humanoid**; animated via `SkeletonHumanoid.controller` (Mixamo `Assets/Action` retarget). Import menu: `Defenders → Animation → Import Skeleton Family (AccuRig)`.
+
+| Silhouette | Resources slug | Wave / role id | Replaces (KayKit) |
+| --- | --- | --- | --- |
+| Mage | `Skeleton_Mage.fbx` | `hollow-apprentice` (ATB), caster stand-in | KayKit `Skeleton_Mage` |
+| Warrior | `Skeleton_Warrior.fbx` | ATB default grunt (`skeleton` def) | KayKit `Skeleton_Warrior` |
+| Ranger | `Skeleton_Rogue.fbx` | `hollow-rogue`, `feral-wolf` stand-in | KayKit `Skeleton_Rogue` |
+| Healer | `Skeleton_Healer.fbx` | `hollow-acolyte` | *(new — no KayKit equivalent)* |
 
 Two stat contexts exist and must not be confused:
 - **Village stats** — `hp / moveSpeed / contactDamage / attackInterval` — the NavMeshAgent wave enemy (`enemies.json`, `Enemy.cs`).
@@ -92,7 +102,12 @@ Every rigged enemy needs the same baseline. The legend is used in every entry so
 - **Death** — collapse / dissolve.
 - **Special** — archetype- or boss-unique clip (cast, summon, transform, etc.).
 
-KayKit's **Character Animations 1.1** pack ships shared clip sets on the `Rig_Medium` / `Rig_Large` skeleton — `General`, `MovementBasic`, `MovementAdvanced`, `CombatMelee`, `CombatRanged`, `Special`, `Simulation`, `Tools`. Every KayKit humanoid (Skeletons, Adventurers, Mystery Monthly characters) shares that rig, so **idle / move / melee / ranged / hit-react / death are covered for the whole roster for free**. The gaps are in *bespoke special clips* — §5 collects them.
+Two animation paths exist for Hollow Ones:
+
+1. **AccuRig family** (Mage / Warrior / Rogue / Healer) — Humanoid `CC_Base_*` rigs → `SkeletonHumanoid.controller` (Mixamo `Assets/Action`: idle / walk / run / attack / cast / hit / death). Built by `PeopleCharacterImporter.ImportSkeletonFamily`.
+2. **KayKit legacy** (Minion / Golem / Necromancer) — Generic `Rig_Medium` / `Rig_Large` → `HumanoidEnemy` / `LargeEnemy` / `Boss` controllers from Character Animations 1.1.
+
+Mystery Monthly and Adventurers humanoids still share the KayKit `Rig_Medium` path. The gaps are in *bespoke special clips* — §5 collects them.
 
 ---
 
@@ -105,43 +120,51 @@ KayKit's **Character Animations 1.1** pack ships shared clip sets on the `Rig_Me
 - **Stats anchor — ATB:** maps to `ENEMY_DEFS["skeleton"]` (`BaseHp 70`, `BaseAttack 16`, `Speed 0.95`, `Defense 0.1`, Physical; Special "Bone Shard", 18 dmg + Bleed). **(canon data)**
 - **Animation set:** Idle (slow, listless), Move (shamble walk), Attack ×1 (clumsy swing), Hit-react, Death (clatter-collapse). **Covered by the shared rig** — `General` + `MovementBasic` + `CombatMelee`. **No missing clip.**
 
-### 2.2 Hollow Warrior — `Skeleton_Warrior`
+### 2.2 Hollow Warrior — `Skeleton_Warrior` *(AccuRig)*
 
-- **KayKit model:** `Skeleton_Warrior.fbx` — `KayKit Skeletons 1.1/characters/fbx(unity)/`. Live `.glb`: `enemies/Skeleton_Warrior.glb`.
-- **Visual concept:** Armored standard skeleton, helmet, shield optional. Heavier bone, slower stride. A wall of the dead. Assign `Skeleton_Blade` or `Skeleton_Axe` + `Skeleton_Shield_Small_A`.
-- **Combat role:** Standard mid-wave melee. The reliable backbone enemy.
-- **Stats anchor — village (canon data):** `hp 156`, `moveSpeed 2.2`, `contactDamage 6`, `attackInterval 1.3`, `height 1.88`, `ai walker`.
-- **Stats anchor — ATB:** maps to `ENEMY_DEFS["skeleton"]` (shares the skeleton def). A future dedicated `"hollow-warrior"` def could read `BaseHp 110, BaseAttack 22, Defense 0.18`.
-- **Animation set:** Idle, Move (weighted march), Attack ×2 (overhead + shield-bash if shielded), Hit-react, Death. **Covered by the shared rig** — `CombatMelee` has a shield set. **No missing clip.**
+- **Live model:** `Skeleton_Warrior.fbx` — `Assets/Resources/Enemies/Skeleton_Warrior.fbx` (AccuRig / CC_Base humanoid, 2026-07-05). **Supersedes** KayKit `KayKit Skeletons 1.1/characters/fbx(unity)/Skeleton_Warrior.fbx`.
+- **Visual concept:** Armored melee skeleton — the Hollow Ones' standard sword-and-board fighter. Distinct from the bone-golem brute (`Skeleton_Golem`, still KayKit).
+- **Combat role:** Standard mid-wave melee backbone. ATB default grunt visual (`ModelSlugForEngineDef("skeleton")` → `Skeleton_Warrior`).
+- **Stats anchor — village (canon data):** `hollow-warrior` — `modelKey: Skeleton_Warrior`, `hp 156`, `moveSpeed 2.2`, `contactDamage 10`, `attackInterval 1.3`, `height 1.88`, `ai walker`.
+- **Stats anchor — ATB (canon data):** `ENEMY_DEFS["hollow-warrior"]` — `BaseHp 110`, `BaseAttack 22`, `Speed 1.0`, `Defense 0.18`, Special "Shield Bash" (22 dmg + Bleed).
+- **Animation set:** Idle, Move, Attack, Hit-react, Death via **`SkeletonHumanoid.controller`** (Mixamo retarget). Cast state available for future specials. **No missing baseline clip.**
 
-### 2.3 Hollow Rogue — `Skeleton_Rogue`
+### 2.3 Hollow Skirmisher — `Skeleton_Rogue` *(AccuRig Ranger)*
 
-- **KayKit model:** `Skeleton_Rogue.fbx` — `KayKit Skeletons 1.1/characters/fbx(unity)/`. Live `.glb`: `enemies/Skeleton_Rogue.glb`.
-- **Visual concept:** Hooded, lean, fast — low to the ground. Assign `Skeleton_Dagger` ×2 or `Skeleton_Crossbow`. The catalog notes the hooded silhouette is also the closest stand-in for an "aether bat" — keep it spry.
-- **Combat role:** Fast flanker / skirmisher. Slips the line, picks the weakest ward (`ai skirmisher` — `Enemy.cs ProbeForStructure` already widens the skirmisher probe radius to peel toward walls).
-- **Stats anchor — village (canon data):** `hp 88`, `moveSpeed 3.1`, `contactDamage 6`, `attackInterval 1.3`, `height 1.78`, `ai skirmisher`.
-- **Stats anchor — ATB:** maps to `ENEMY_DEFS["skeleton"]`. A dedicated def would emphasize Speed (`Speed 1.2`) and low HP (`BaseHp 55`).
-- **Animation set:** Idle (twitchy crouch), Move (fast run — `MovementAdvanced` run clip), Attack ×2 (twin quick slashes; or a crossbow ranged clip if armed), Hit-react, Death. **Covered by the shared rig** (`CombatRanged` covers the crossbow variant). **No missing clip.**
+- **Live model:** `Skeleton_Rogue.fbx` — `Assets/Resources/Enemies/Skeleton_Rogue.fbx` (AccuRig **Ranger** mesh; slug kept `Rogue` for code back-compat). **Supersedes** KayKit `Skeleton_Rogue.fbx`.
+- **Visual concept:** Lean, hooded ranger skeleton — bow or dual-dagger read. Low, fast silhouette.
+- **Combat role:** Fast flanker / skirmisher (`hollow-rogue`, `ai skirmisher`). Also the `feral-wolf` stand-in until a beast rig lands.
+- **Stats anchor — village (canon data):** `hollow-rogue` — `hp 70`, `moveSpeed 3.8`, `contactDamage 5`, `attackInterval 1.0`, `height 1.78`, `ai skirmisher`.
+- **Stats anchor — ATB:** maps to `ENEMY_DEFS["skeleton"]`. Dedicated def would emphasize Speed (`Speed 1.2`) and low HP (`BaseHp 55`).
+- **Animation set:** Idle, Move (fast run blend), Attack, Hit-react, Death via **`SkeletonHumanoid.controller`**. **No missing baseline clip.**
 
-### 2.4 Hollow Caster — `Skeleton_Mage`
+### 2.4 Hollow Acolyte (Healer) — `Skeleton_Healer` *(AccuRig)*
 
-- **KayKit model:** `Skeleton_Mage.fbx` — `KayKit Skeletons 1.1/characters/fbx(unity)/`. Live `.glb`: `enemies/Skeleton_Mage.glb`.
-- **Visual concept:** Robed, staff-wielding skeleton (`Skeleton_Staff`). A withered echo of a hedge-witch. Tint the staff-tip emissive a sick violet to read "Withering magic."
-- **Combat role:** Ranged caster. Hangs back, hits towers / the Heart at distance. In the village this is a *ranged walker* — it stops out of melee range and casts; in ATB it is a caster archetype.
-- **Stats anchor — village:** `hp 70`, `moveSpeed 2.0`, `contactDamage 9` (ranged bolt), `attackInterval 1.8`, `height 1.82`, `ai walker` (ranged stop variant — flag a new `caster` AI mode for `enemy-roles.json`). **(agent-authored stats — not yet in `enemies.json`)**
-- **Stats anchor — ATB:** new def `"hollow-caster"` — `Archetype Caster`, `BaseHp 75`, `BaseAttack 18`, `Speed 1.05`, `Defense 0.08`, `Aether`; Special "Withering Hex" — 14 dmg AoE + Poison (mirrors the existing `necromancer` ATB def's Hex). **(agent-authored — owner to ratify the def)**
-- **Animation set:** Idle, Move, **Attack — ranged cast** (point-staff projectile), Hit-react, Death, **Special — channel cast** (held two-handed staff channel for the Hex). The `Special` clip set in Character Animations 1.1 includes cast/channel-style clips — **covered**. **Note:** if the cast clip doesn't read clearly as "throwing a bolt," it is a *minor* gap — see §5.
+- **Live model:** `Skeleton_Healer.fbx` — `Assets/Resources/Enemies/Skeleton_Healer.fbx` (AccuRig / CC_Base humanoid, 2026-07-05). **New silhouette** — no KayKit equivalent.
+- **Visual concept:** Robed healer skeleton — staff or vial props, sick-violet Withering tint on cast FX. *"Mends the bone of its kin faster than you can break it."*
+- **Combat role:** Wave healer / support (`hollow-acolyte`, `role: caster` in `enemies.json`). Cut it down first.
+- **Stats anchor — village (canon data):** `hollow-acolyte` — `hp 90`, `moveSpeed 2.2`, `contactDamage 4`, `attackInterval 1.4`, `height 1.8`, `modelKey: Skeleton_Healer`.
+- **Stats anchor — ATB:** future `"hollow-healer"` def or reuse caster/healer archetype with a mend special.
+- **Animation set:** Idle, Move, Attack, **Cast** (Mixamo magic cast on `SkeletonHumanoid`), Hit-react, Death. **No missing baseline clip.**
 
-### 2.5 Hollow Reaper — `Skeleton_Warrior` (scythe variant)
+### 2.5 Hollow Caster (Mage) — `Skeleton_Mage` *(AccuRig)*
 
-- **KayKit model:** `Skeleton_Warrior.fbx` re-skinned dark, wielding `Skeleton_Scythe` — `KayKit Skeletons 1.1/assets/fbx(unity)/Skeleton_Scythe.fbx`. The catalog explicitly flags the scythe as reading "elite / reaper."
+- **Live model:** `Skeleton_Mage.fbx` — `Assets/Resources/Enemies/Skeleton_Mage.fbx` (AccuRig / CC_Base humanoid, 2026-07-05). **Supersedes** KayKit `Skeleton_Mage.fbx`.
+- **Visual concept:** Robed staff-wielding skeleton — ranged bolt caster. Staff-tip emissive violet for Withering magic.
+- **Combat role:** Ranged caster silhouette. Used for `hollow-apprentice` (Healer's Cottage mini-boss body) and future ranged wave entries.
+- **Stats anchor — ATB (canon data):** `ENEMY_DEFS["hollow-apprentice"]` — `BaseHp 175`, `BaseAttack 24`, Special "Tincture".
+- **Animation set:** Idle, Move, Attack, **Cast**, Hit-react, Death via **`SkeletonHumanoid.controller`**. **No missing baseline clip.**
+
+### 2.6 Hollow Reaper — `Skeleton_Warrior` (scythe variant)
+
+- **Live model:** AccuRig `Skeleton_Warrior.fbx` re-tinted dark; optional KayKit `Skeleton_Scythe` prop from `KayKit Skeletons 1.1/assets/fbx(unity)/` if the scythe read is needed.
 - **Visual concept:** A taller, dark-tinted Warrior with the scythe — the Hollow Ones' executioner. The catalog suggests a per-spawn weapon-randomizer; the Reaper is the *deliberate* scythe assignment that signals "this one is dangerous."
 - **Combat role:** Elite. Appears mid-to-late waves and as a dungeon elite. Higher HP, wide melee arc, a small fear/slow aura.
 - **Stats anchor — village:** `hp 240`, `moveSpeed 2.3`, `contactDamage 14`, `attackInterval 1.5`, `height 2.0`, `ai walker`. **(agent-authored stats)**
 - **Stats anchor — ATB:** new def `"hollow-reaper"` — `Archetype Tank`, `BaseHp 200`, `BaseAttack 28`, `Speed 0.9`, `Defense 0.2`, `Physical`; Special "Reaping Arc" — 30 dmg to all allies + Bleed. **(agent-authored — owner to ratify)**
 - **Animation set:** Idle, Move, Attack ×2 (wide scythe sweep — needs a clip that arcs the scythe; `CombatMelee` two-handed set covers a generic sweep), Hit-react, Death, **Special — sweeping reap** (the AoE telegraph). The sweep is close enough to a generic 2H attack that the shared rig **covers it** — no bespoke clip *required*, but a dedicated wide-arc clip would polish it (minor gap, §5).
 
-### 2.6 Hollow Brute (the Bone-Golem) — `Skeleton_Golem`
+### 2.7 Hollow Brute (the Bone-Golem) — `Skeleton_Golem` *(KayKit legacy)*
 
 - **KayKit model:** `Skeleton_Golem.fbx` — `KayKit Skeletons 1.1/characters/fbx(unity)/Skeleton_Golem.fbx` (full pack — promote from the warehouse; the catalog notes the `.glb` is not in the live set). Weapon: `Skeleton_Golem_Axe_Large`.
 - **Visual concept:** A large bone-construct — many skeletons fused, an oversized axe. The catalog's "brute" pick. Scale ~2.0–2.2×. Red-violet emissive in the joint-gaps to read "wrong."
@@ -150,7 +173,7 @@ KayKit's **Character Animations 1.1** pack ships shared clip sets on the `Rig_Me
 - **Stats anchor — ATB:** maps to `ENEMY_DEFS["bruiser"]` (`BaseHp 140`, `BaseAttack 20`, `Speed 0.75`, `Defense 0.3`, Special "Patch Up" self-heal 40) **(canon data)** — or a dedicated `"hollow-brute"` def at `BaseHp 320, BaseAttack 30`.
 - **Animation set:** Idle (heavy sway), Move (lumbering walk), Attack ×2 (overhead axe slam, ground-pound), Hit-react (barely flinches — a short stagger), Death (topple + bone-scatter), **Special — ground slam** (AoE shock). Uses the **`Rig_Large` skeleton** — the catalog confirms KayKit ships a `Rig_Large` clip set, so the Golem animates from the *large* shared controller. **Covered**, with the ground-slam landing close to a generic large-rig heavy attack. Minor polish gap (§5).
 
-### 2.7 Cellar Hollow — `Skeleton_Minion` (sorrow variant)
+### 2.8 Cellar Hollow — `Skeleton_Minion` (sorrow variant) *(KayKit legacy)*
 
 - **KayKit model:** `Skeleton_Minion.fbx` — same model as the Walker, **different animator state**.
 - **Visual concept:** Identical body to the Walker, but staged differently — it *kneels and rocks* rather than wanders (per `dungeon-3d-healers-cottage-design.md` §Beat 4: "kneels and rocks rather than wanders. Sad."). A villager who fled to the cellar long ago and was taken by the Withering where it hid.
@@ -158,7 +181,7 @@ KayKit's **Character Animations 1.1** pack ships shared clip sets on the `Rig_Me
 - **Stats anchor — ATB:** maps to `ENEMY_DEFS["skeleton"]` with a downward tune — `BaseHp 45`, `BaseAttack 10`, `Speed 0.8`. **(agent-authored tune)**
 - **Animation set:** **Special — kneeling sorrow idle** (the kneel-and-rock loop), then Idle / Move / Attack / Hit-react / Death from the shared rig. **The kneel-and-rock idle is a real gap** — KayKit's `General` set has sit/idle variants but not a grief-rock. **This is the single most emotionally important missing clip** and the cheapest to commission. See §5 GAP-1.
 
-### 2.8 Orc Raider — `OrcRaider`
+### 2.9 Orc Raider — `OrcRaider`
 
 - **KayKit model:** `OrcRaider.fbx` — `KayKit Mystery Monthly Series 4/1 - July 2023 - Orc Raider/character/OrcRaider.fbx`.
 - **Visual concept:** Hulking green orc, axe or club, a war-drum prop. The catalog's anchor for the *living, non-undead* faction — a raider warband drawn toward the realm by the Withering's spread.
@@ -167,7 +190,7 @@ KayKit's **Character Animations 1.1** pack ships shared clip sets on the `Rig_Me
 - **Stats anchor — ATB:** new def `"orc-raider"` — `Archetype Tank`, `BaseHp 160`, `BaseAttack 24`, `Speed 0.85`, `Defense 0.2`, `Physical`; Special "War-Drum" — buffs all allied Hastes (mirror `Haste` blueprint) — a *support* twist on a brute. **(agent-authored — owner to ratify)**
 - **Animation set:** Idle, Move, Attack ×2, Hit-react, Death, **Special — war-drum beat** (a chest-thump / drum-strike rally). The drum is a flavor prop; the rally pose maps onto a `General` taunt/cheer clip. **Covered** by the shared rig (uses `Rig_Medium` or `Rig_Large` per the orc's bulk). Minor polish gap for the drum-specific clip (§5).
 
-### 2.9 Wildlands Caveman — `Caveman`
+### 2.10 Wildlands Caveman — `Caveman`
 
 - **KayKit model:** `Caveman.fbx` — `KayKit Mystery Monthly Series 5/8 - February 2025 - Caveman/characters/Caveman.fbx`. Ships with club / spear / axe.
 - **Visual concept:** Primitive brute, fur, stone weapon. A non-undead wildlands creature — the deep-cave inhabitant who never left when the Withering rose.
@@ -176,7 +199,7 @@ KayKit's **Character Animations 1.1** pack ships shared clip sets on the `Rig_Me
 - **Stats anchor — ATB:** new def `"caveman"` — `Archetype Grunt`, `BaseHp 95`, `BaseAttack 19`, `Speed 1.0`, `Defense 0.1`, `Physical`; Special "Reckless Swing" (reuse the `goblin` def's special verbatim — 22 dmg). **(agent-authored — owner to ratify)**
 - **Animation set:** Idle, Move, Attack ×2, Hit-react, Death. **Covered by the shared rig.** **No missing clip.**
 
-### 2.10 Feral Wolf — `Werewolf_Wolf`
+### 2.11 Feral Wolf — `Werewolf_Wolf`
 
 - **KayKit model:** `Werewolf_Wolf.fbx` — `KayKit Mystery Monthly Series 4/4 - October 2023 - Werewolf/characters/fbx/Werewolf_Wolf.fbx`. The catalog confirms this is the collection's **only true quadruped beast**.
 - **Visual concept:** A full feral wolf-beast. Used as a *cold-spirit gone savage* — a pack-hunter haunting the Wintermere dungeons (Cold-Wandered's Pack, Wolfwarden's Vigil). Lighter, frost-blue tint distinguishes it from the Mournful Alpha boss.
@@ -186,7 +209,7 @@ KayKit's **Character Animations 1.1** pack ships shared clip sets on the `Rig_Me
 - **Animation set:** Idle, Move (run + prowl), **Attack — lunge bite** (quadruped pounce), Hit-react, Death, **Special — howl** (pack-rally; doubles as a telegraph).
   **⚠ MAJOR GAP.** `Werewolf_Wolf` is a **quadruped** — it does **NOT** share the `Rig_Medium` / `Rig_Large` humanoid skeleton. None of the Character Animations 1.1 clips retarget to it. The Werewolf pack ships its *own* clips; they must be audited and, where short, the bite / lunge / howl commissioned on the wolf's own rig. **This is the largest structural animation gap in the roster — see §5 GAP-PRIMARY.**
 
-### 2.11 Tiefling Cultist — `Tiefling`
+### 2.12 Tiefling Cultist — `Tiefling`
 
 - **KayKit model:** `Tiefling.fbx` — `KayKit Mystery Monthly Series 5/12 - June 2025 - Tiefling/characters/Tiefling.fbx`. Ships with `Tiefling_Sword` + back-scabbard.
 - **Visual concept:** Horned demon-kin, twin swords. The catalog calls it "strongly magical." Used as a *cultist of the Wound* — a living thing that walked toward the Wound and chose it, the inverse of the Hollow Ones who were taken without choosing.
@@ -248,7 +271,7 @@ Every boss is built from a KayKit model named in the catalog — the catalog's �
 ### 4.2 BOSS — The Apprentice of the Apothecary (CANON)
 
 - **Identity:** The **canon-locked Healer's Cottage mini-boss.** Already in code: `Defs.cs ENEMY_DEFS["hollow-apprentice"]`, Name **"The Apprentice of the Apothecary"**. Lore (`dungeon-3d-healers-cottage-design.md` §Beat 6): *"a stronger Hollow One, an apprentice Alduin took in years ago and never spoke of."* **Name canon-locked — do not rename.**
-- **KayKit model:** A **Hollow One body** — use `Skeleton_Mage.fbx` (robed, fits "apothecary's apprentice") or `Skeleton_Warrior` re-skinned, scaled ~1.2×. *Not* a Mystery Monthly model — this boss is one of the Hollow Ones, canonically. Give it an apron-tint and a `bottle`/`vial` held prop from `Dungeon Remastered` or the Witch's `Mortar`.
+- **Live model:** AccuRig **`Skeleton_Mage.fbx`** (robed caster body — fits "apothecary's apprentice"), scaled ~1.2×. *Not* a Mystery Monthly model — this boss is one of the Hollow Ones, canonically. Give it an apron-tint and a `bottle`/`vial` held prop from `Dungeon Remastered` or the Witch's `Mortar`.
 - **Visual concept:** A skeleton in a stained healer's apron, a glass vial clutched in one hand. The tragedy: it still performs the *motions* of healing — it doesn't know it's dead. It fights in Alduin's old apothecary among the bubbling glass.
 - **Where it appears:** Healer's Cottage (D1), the Apothecary boss room (Beat 6 / Workshop in the expanded layout). The first boss a player ever fights.
 - **Stats anchor (canon data):** `ENEMY_DEFS["hollow-apprentice"]` — `Archetype Boss`, `BaseHp 175`, `BaseAttack 24`, `Speed 1.0`, `Defense 0.12`, `Aether`; Special **"Tincture"** — 0 dmg, `SingleAlly`, applies `Slow` at 100% chance. The Healer's Cottage design doc specifies the encounter target: *"2.5× normal Hollow HP, +50% damage,"* and the Tincture *"briefly blinds the Keeper — shrinks light radius by 50% for 6 seconds."*
@@ -289,7 +312,7 @@ Every boss is built from a KayKit model named in the catalog — the catalog's �
 ### 4.5 BOSS — The Inn-Keeper *(name from `dungeons-3d-unity-layout-spec.md §10.3` — owner to ratify)*
 
 - **Identity:** Mini-boss of the **Folk Who Forgot (D4)**. The layout spec names "The Inn-Keeper" and flags the register: *"tragic register."* Lore: the keeper of the inn in the drowned village of Old Elarion, still setting tables for guests who will never arrive (`dungeons-storyline.md` Act II — the Bell-Tower Hollow Ones are "the villagers of Old Elarion"). **Name treated as canon-adjacent — flag for owner ratification.** This is the codex's most *gentle* boss — barely a monster at all.
-- **KayKit model:** A **Hollow One** body — `Skeleton_Warrior` re-skinned in an innkeeper's apron, or the `Skeleton_Mage` robe. Held prop: a `mug` / `tankard` (`Adventurers` mugs, or `Dungeon Remastered` bar set). *Not* a Mystery Monthly model — the villagers of Old Elarion are Hollow Ones.
+- **Live model:** AccuRig **`Skeleton_Warrior`** or **`Skeleton_Mage`** re-skinned in an innkeeper's apron. Held prop: a `mug` / `tankard` (`Adventurers` mugs, or `Dungeon Remastered` bar set). *Not* a Mystery Monthly model — the villagers of Old Elarion are Hollow Ones.
 - **Visual concept:** A skeleton in an apron carrying a tray. It fights almost *apologetically*. The whole encounter is staged in the ruined inn, the bar set dressed with cobwebbed mugs.
 - **Where it appears:** Folk Who Forgot (D4), the inn boss room — near the village well that is the corruption's source.
 - **Stats anchor (ATB):** new def `"inn-keeper"` — `Archetype Boss`, `BaseHp 280`, `BaseAttack 20` (deliberately low — tragic, not threatening), `Speed 1.0`, `Defense 0.12`, `Aether`; Special "Last Call" — summons 2 Cellar Hollows (the inn's lost patrons) + a small all-ally Regen on itself. **(agent-authored — owner to ratify)**
@@ -334,7 +357,7 @@ Every boss is built from a KayKit model named in the catalog — the catalog's �
 - **KayKit model:** Alduin, *when seen at the Edge*, takes **one face** (the storyline: "one of his faces"). Recommended: a **hooded robed figure** — reuse the `Necromancer.fbx` body (it is already canonically "a hand of Alduin"; the antagonist showing one of his many faces *as* a Necromancer-shape is canon-coherent), OR the **Druid** model (`Adventurers 2.0` — robed, "wise, healer-coded"; Alduin was a healer first). The codex recommends the **Druid** body re-tinted with the Withering palette: it visually *says* "he was a healer," which is the whole tragedy. **Flag the model choice for owner ratification** — the canon locks the name and the no-fight rule, not the model.
 - **Visual concept:** A robed figure at the edge of the Wound, lit from below by the Wound's violet glow. Read: weary, not wicked. He turns to the Keeper. He does not raise a hand.
 - **Where it appears:** At the Edge (D7), the Wound's Threshold — the endgame.
-- **Stats anchor:** **None — Alduin has no stat block.** He is a dialogue NPC. If the owner ever wants the D7 "survive 3 breach-encounters" beat (`dungeons-storyline.md` §4.6) to feel Alduin-adjacent, those encounters use **Hollow Reapers and Tiefling Cultists** (§2.5, §2.11) — *not* Alduin himself.
+- **Stats anchor:** **None — Alduin has no stat block.** He is a dialogue NPC. If the owner ever wants the D7 "survive 3 breach-encounters" beat (`dungeons-storyline.md` §4.6) to feel Alduin-adjacent, those encounters use **Hollow Reapers and Tiefling Cultists** (§2.6, §2.12) — *not* Alduin himself.
 - **Encounter design:** The encounter is `dungeons-storyline.md`'s four-response dialogue tree. The codex's only contribution: ensure the D7 approach (the breach-encounters) is staffed from the existing roster, and that Alduin's *staging* (lighting, the turn-to-face, the walk-into-the-dark exit) is treated as a **cutscene/Timeline beat**, not an ATB scene.
 - **Animation needs:** Idle (a weary stand), a **turn-to-face** the Keeper, a **gesture or two** during dialogue (a slow hand-lift, a head-bow), and a **walk-away into the dark** (`dungeons-storyline.md`: "he turns, after, and walks into the dark"). All of these are **covered by the shared rig** — `General` idle/gesture + `MovementBasic` walk. **No combat clips, no specials, no bespoke clip.** The hardest part of Alduin is *writing* and *lighting*, both already canon-locked elsewhere — not animation.
 
@@ -342,11 +365,13 @@ Every boss is built from a KayKit model named in the catalog — the catalog's �
 
 ## 5. Animation strategy & gap list
 
-### 5.1 The shared-rig advantage
+### 5.1 Animation paths (AccuRig family + KayKit legacy)
 
-The single most important fact for the whole roster: **every KayKit humanoid shares the `Rig_Medium` / `Rig_Large` skeleton** (catalog §Character Animations 1.1). The Skeletons pack, the Adventurers pack, and *all* the Mystery Monthly characters (Necromancer, Black Knight, Frost Golem, Werewolf-Man, Paladin, Orc Raider, Caveman, Tiefling, Witch, Vampire) animate from **one shared Animator Controller** built once.
+**AccuRig Hollow silhouettes (LIVE, 2026-07-05):** Mage / Warrior / Rogue / Healer share one `CC_Base_*` Humanoid biped. They animate through **`SkeletonHumanoid.controller`** — Mixamo clips from `Assets/Action`, built by `PeopleCharacterImporter.ImportSkeletonFamily`, routed by `EnemyAnimatorFactory.RigFor` → `EnemyRig.SkeletonHumanoid`. Re-import after swapping FBX: `Defenders → Animation → Import Skeleton Family (AccuRig)`.
 
-**Build plan:** one `HumanoidEnemy.controller` keyed off the `Rig_Medium` clip sets, one `LargeEnemy.controller` for `Rig_Large` bodies (Skeleton Golem, Frost Golem, the bulkier orcs). The Character Animations 1.1 pack's `General` / `MovementBasic` / `MovementAdvanced` / `CombatMelee` / `CombatRanged` / `Special` / `Simulation` / `Tools` sets fill every baseline state. The two `Mannequin` characters in the pack are the preview rigs — validate retargeting on them first.
+**KayKit legacy Hollow bodies:** `Skeleton_Minion`, `Skeleton_Golem`, and wave-boss `Necromancer` still use the **Generic** `Rig_Medium` / `Rig_Large` clip library → `HumanoidEnemy` / `LargeEnemy` / `Boss` controllers (`EnemyAnimatorSetup`).
+
+**Other KayKit humanoids** (Adventurers, Mystery Monthly — Black Knight, Frost Golem, Orc Raider, Caveman, Tiefling, etc.) still share `Rig_Medium` / `Rig_Large` where applicable. Tripo orcs use `OrcWarband` / `OrcHumanoid` (separate Humanoid Mixamo path, same pattern as AccuRig skeletons).
 
 ### 5.2 Per-archetype animation sets
 
@@ -355,7 +380,8 @@ The single most important fact for the whole roster: **every KayKit humanoid sha
 | **Fodder** (Walker, Caveman) | listless idle | shamble walk | 1× clumsy melee | flinch | clatter/topple | — | `Rig_Medium` shared |
 | **Standard melee** (Warrior, Orc Raider) | idle | weighted march | 2× (overhead, bash) | flinch | collapse | taunt/drum (substitute) | `Rig_Medium`/`Large` shared |
 | **Skirmisher** (Rogue, Tiefling) | crouch idle | fast run | 2× quick combo | flinch | collapse | brand-cast (Tiefling) | `Rig_Medium` shared |
-| **Caster** (Hollow Caster) | idle | walk | ranged cast | flinch | collapse | channel-cast (Hex) | `Special` set |
+| **Healer** (Hollow Acolyte) | idle | walk | cast / mend | flinch | collapse | channel-heal | `SkeletonHumanoid` Cast |
+| **Caster** (Hollow Mage) | idle | walk | ranged cast | flinch | collapse | channel-cast (Hex) | `SkeletonHumanoid` Cast |
 | **Elite** (Hollow Reaper) | idle | march | 2× 2H sweep | flinch | collapse | wide reap-arc | `CombatMelee` 2H (substitute) |
 | **Heavy** (Hollow Brute, Frost Golem) | heavy sway | lumber | 2× slam | stagger | shatter/topple | ground-slam | `Rig_Large` shared |
 | **Quadruped** (Feral Wolf, Wolf-phase boss) | beast idle | prowl/run | lunge-bite | flinch | collapse | howl | **Werewolf pack's OWN rig — see GAP-PRIMARY** |
@@ -366,10 +392,10 @@ The single most important fact for the whole roster: **every KayKit humanoid sha
 The catalog flagged the two structural truths up front: **(a) the collection has no dedicated monster or pet creatures**, and **(b) the bestiary skews skeleton-heavy.** The codex's design *embraces* (b) — the Hollow Ones being all-skeleton is a feature, not a bug (they are risen Folk; uniformity is thematic). Gap (a) is the real problem, and it concentrates in one place.
 
 **GAP-PRIMARY — the quadruped wolf rig (biggest gap).**
-`Werewolf_Wolf` is the collection's **only true quadruped** and it does **NOT** share the humanoid `Rig_Medium`/`Rig_Large` skeleton. Nothing in Character Animations 1.1 retargets to it. It is needed for: **Feral Wolf** (§2.10, a whole enemy type), **The First Wolfwarden Phase 2** (§4.4, a boss phase), and — outside this codex — the **Ice Wolf companion pet** (catalog §4 names `Werewolf_Wolf` as the only quadruped pet candidate). **Action required:** audit the Werewolf Mystery Monthly pack's own bundled clips; whatever it ships (likely idle/walk/run/attack) is the baseline, and any missing **lunge-bite, howl, and hit-react/death** must be commissioned **on the wolf's own rig**. This is the single biggest animation gap in the project and it blocks three things at once. **Recommended priority: HIGH** — it gates the cold-biome dungeons (D3, D5) and the Ice Wolf pet.
+`Werewolf_Wolf` is the collection's **only true quadruped** and it does **NOT** share the humanoid `Rig_Medium`/`Rig_Large` skeleton. Nothing in Character Animations 1.1 retargets to it. It is needed for: **Feral Wolf** (§2.11, a whole enemy type), **The First Wolfwarden Phase 2** (§4.4, a boss phase), and — outside this codex — the **Ice Wolf companion pet** (catalog §4 names `Werewolf_Wolf` as the only quadruped pet candidate). **Action required:** audit the Werewolf Mystery Monthly pack's own bundled clips; whatever it ships (likely idle/walk/run/attack) is the baseline, and any missing **lunge-bite, howl, and hit-react/death** must be commissioned **on the wolf's own rig**. This is the single biggest animation gap in the project and it blocks three things at once. **Recommended priority: HIGH** — it gates the cold-biome dungeons (D3, D5) and the Ice Wolf pet.
 
 **GAP-1 — the kneeling-sorrow idle (Cellar Hollow).**
-The Cellar Hollow (§2.7) "kneels and rocks rather than wanders" — a canon emotional beat in the Healer's Cottage design doc. KayKit's `General`/`Simulation` sets have sit/idle variants but **no grief-rock**. This is one short looping clip on the *shared humanoid rig* — cheap to commission, and it carries real emotional weight (the bible's "they are grief, not menace" thesis made visible). **Recommended priority: MEDIUM** — small cost, high payoff; the dungeon ships D1 first and this is a D1 asset.
+The Cellar Hollow (§2.8) "kneels and rocks rather than wanders" — a canon emotional beat in the Healer's Cottage design doc. KayKit's `General`/`Simulation` sets have sit/idle variants but **no grief-rock**. This is one short looping clip on the *shared humanoid rig* — cheap to commission, and it carries real emotional weight (the bible's "they are grief, not menace" thesis made visible). **Recommended priority: MEDIUM** — small cost, high payoff; the dungeon ships D1 first and this is a D1 asset.
 
 **GAP-2 — boss "special" gesture clips (polish, not blockers).**
 Several boss specials currently ride on *substitute* clips from `Special`/`General`/`Tools` and work fine: the Necromancer's Summon (staff-raise), the Apprentice's Tincture (drink/throw-vial), the Inn-Keeper's Last Call (call-out), the Reaper's reap-arc (2H sweep), the Orc's war-drum. None *block* a build. A bespoke clip per boss would sharpen the read. **Recommended priority: LOW** — schedule as a polish pass after the encounters are tuned.
@@ -391,7 +417,7 @@ There is no morph animation between humanoid and quadruped rigs in the collectio
 | Per-boss bespoke special gestures (×5–6) | clips | shared humanoid rig | LOW | nothing — polish only |
 | Withering dissolve material | shader (not animation) | n/a | MEDIUM | Watcher death, enemy death VFX |
 
-Everything else in the 19-entity roster animates **for free** from the shared KayKit rig + Character Animations 1.1.
+AccuRig Hollow silhouettes animate via **`SkeletonHumanoid`**; KayKit legacy Hollow bodies + most Mystery Monthly humanoids animate from the shared KayKit rig + Character Animations 1.1.
 
 ---
 

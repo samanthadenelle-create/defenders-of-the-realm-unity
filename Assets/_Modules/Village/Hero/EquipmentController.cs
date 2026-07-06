@@ -63,6 +63,8 @@ namespace DeNelle.Village
         // Resources sub-path the build-safe KayKit weapon props are copied into
         // (mirrors HeroBowAttachment's "Heroes/Props/Bow"). See file header / gap note.
         private const string WeaponPropResourceDir = "Heroes/Props/Weapons/";
+        // Reference standing height for heldLength presets (GearVisualApplier / NavMeshAgent canon).
+        private const float RefHeroHeightM = 1.8f;
 
         private const string PropName = "EquipmentProp_Weapon";
 
@@ -109,7 +111,7 @@ namespace DeNelle.Village
         {
             mesh = mesh, leftHand = false, kind = WeaponClass.Sword,
             gripPos = Vector3.zero, gripEuler = new Vector3(0f, 0f, 0f),
-            heldLength = 0.95f, tint = new Color(0.74f, 0.75f, 0.78f)
+            heldLength = 0.65f, tint = new Color(0.74f, 0.75f, 0.78f)   // ~36% of RefHeroHeightM (GearVisualApplier canon)
         };
         private static WeaponVisual Dagger(string mesh) => new WeaponVisual
         {
@@ -160,7 +162,7 @@ namespace DeNelle.Village
         {
             mesh = mesh, leftHand = true, kind = WeaponClass.Shield,   // shields -> LeftHand per spec
             gripPos = new Vector3(-0.05f, 0f, 0f), gripEuler = new Vector3(-58f, 16f, -90f),  // Offset Forge + hand-bone nudge 2026-06-23: shield_A rot (-58,16,-90).
-            heldLength = 0.48f, tint = new Color(0.58f, 0.60f, 0.64f)   // owner felt-test 2026-06-23: shield renders a little smaller (was 0.55)
+            heldLength = 0.45f, tint = new Color(0.58f, 0.60f, 0.64f)   // ~25% of RefHeroHeightM — torso-scale buckler
         };
 
         // Shallow copy of a preset so the Addressable/fallback paths can flip `native` WITHOUT
@@ -213,6 +215,7 @@ namespace DeNelle.Village
 
         // ── Runtime state ────────────────────────────────────────────────────────
         private Animator _animator;
+        private float _cachedHeroHeightM;   // measured once per body; 0 = not yet measured
         private GearLoadout _loadout;
 
         // PACKAGE de-dupe (owner F8 2026-07-03 "holding two swords, shield 180°"): when the hero body
@@ -523,6 +526,7 @@ namespace DeNelle.Village
             var anim = body.GetComponentInChildren<Animator>();
             if (anim == null || !anim.isHuman) return;   // need a humanoid rig to seat on bones
             _animator = anim;
+            _cachedHeroHeightM = 0f;   // new rig proportions → re-measure for heldLength scale
             _backSocket = null;   // new body → the old chest-anchored sheathe socket is stale; re-create under the new chest
             FlowTrace.Step("Equip", $"ReseatForBody: re-seating equipped props onto '{body.name}' bones (animator='{anim.name}').");
             EquipBestForHero();
@@ -837,12 +841,16 @@ namespace DeNelle.Village
             // WO-478: native melee trusts authored pivot unless ff.weapongripinfer restores inference.
             bool trustNativePivot = vis.native && !fullOverride &&
                 (!meleeSeat || !FeatureFlags.WeaponGripInfer);
+            float heldLen = ProportionalHeldLength(vis.heldLength);
+            FlowTrace.Step("Equip",
+                $"heldLength '{weaponId}' kind={vis.kind}: archetype={vis.heldLength:0.###}m " +
+                $"proportional={heldLen:0.###}m hero={ResolveHeroHeightM():0.###}m");
             if (trustNativePivot)
             {
                 FlowTrace.Step("Equip", meleeSeat
                     ? "seat: NATIVE melee (WO-478 trust grip-at-origin + scale)"
                     : "seat: NATIVE (trust authored grip-at-origin, scale-only)");
-                SeatNative(prop, gripRoot.transform, vis.heldLength);
+                SeatNative(prop, gripRoot.transform, heldLen);
             }
             else
             {
@@ -853,7 +861,7 @@ namespace DeNelle.Village
                         ? "seat: DEPRECATED GEOMETRY (ff.weapongripinfer) — NormalizeInto + SeatHiltLowerHalf"
                         : "seat: GEOMETRY — NormalizeInto (longest->+Y) + SeatHiltLowerHalf (hilt=lower half, blade +Y)")
                     : "seat: GEOMETRY — NormalizeInto (bounds-true)");
-                NormalizeInto(prop, gripRoot.transform, vis.heldLength, ResolveHiltFromKind(vis.kind));
+                NormalizeInto(prop, gripRoot.transform, heldLen, ResolveHiltFromKind(vis.kind));
                 if (meleeSeat)
                 {
                     FlowTrace.Try("Equip", "SeatHiltLowerHalf", () => SeatHiltLowerHalf(prop, gripRoot.transform));
@@ -875,7 +883,7 @@ namespace DeNelle.Village
             _currentWeaponMeshKey    = offsetKey;
             _currentWeaponKind       = vis.kind;
             _currentWeaponMelee      = meleeSeat;
-            _currentWeaponHeldLength = vis.heldLength;
+            _currentWeaponHeldLength = heldLen;
             _currentWeaponGripPos    = vis.gripPos;
             _currentWeaponGripEuler  = vis.gripEuler;
             _currentWeaponNative     = vis.native;
@@ -1542,12 +1550,16 @@ namespace DeNelle.Village
             bool fullOverride = hasOffset && fo.fullOverride;
 
             var gripRoot = new GameObject(OffHandPropName);
+            float heldLen = ProportionalHeldLength(vis.heldLength);
+            FlowTrace.Step("Equip",
+                $"off-hand heldLength '{id}' kind={vis.kind}: archetype={vis.heldLength:0.###}m " +
+                $"proportional={heldLen:0.###}m hero={ResolveHeroHeightM():0.###}m");
             if (fullOverride)
             {
                 // VERTICAL baseline (geometry, longest->+Y) + the saved delta. Shields are not
                 // melee, so no hilt-lower-half; the owner dials the full strap pose from vertical.
                 FlowTrace.Step("Equip", $"off-hand seat: GEOMETRY-VERTICAL + saved DELTA pos={fo.pos} rot={fo.eulerRot} scale={fo.scale:0.###}");
-                NormalizeInto(prop, gripRoot.transform, vis.heldLength, resolveHilt: false);
+                NormalizeInto(prop, gripRoot.transform, heldLen, resolveHilt: false);
                 gripRoot.transform.SetParent(hand, false);
                 gripRoot.transform.localPosition = vis.gripPos + fo.pos;
                 gripRoot.transform.localRotation = Quaternion.Euler(fo.eulerRot);
@@ -1561,7 +1573,7 @@ namespace DeNelle.Village
             else if (vis.native)
             {
                 FlowTrace.Step("Equip", "off-hand seat: NATIVE (trust authored grip-at-origin, scale-only)");
-                SeatNative(prop, gripRoot.transform, vis.heldLength);
+                SeatNative(prop, gripRoot.transform, heldLen);
                 gripRoot.transform.SetParent(hand, false);
                 gripRoot.transform.localPosition = Vector3.zero;
                 gripRoot.transform.localRotation = Quaternion.identity;
@@ -1569,7 +1581,7 @@ namespace DeNelle.Village
             else
             {
                 FlowTrace.Step("Equip", "off-hand seat: NormalizeInto + preset grip (Tripo/Resources shield)");
-                NormalizeInto(prop, gripRoot.transform, vis.heldLength, resolveHilt: false);
+                NormalizeInto(prop, gripRoot.transform, heldLen, resolveHilt: false);
                 gripRoot.transform.SetParent(hand, false);
                 gripRoot.transform.localPosition = vis.gripPos;
                 gripRoot.transform.localRotation = Quaternion.Euler(vis.gripEuler);
@@ -1595,7 +1607,7 @@ namespace DeNelle.Village
             _currentOffHandProp = gripRoot;
             // Capture off-hand attach inputs for the in-game Seating Editor (WO-577).
             _currentOffHandMeshKey    = offsetKey;
-            _currentOffHandHeldLength = vis.heldLength;
+            _currentOffHandHeldLength = heldLen;
             _currentOffHandGripPos    = vis.gripPos;
             _currentOffHandGripEuler  = vis.gripEuler;
             _currentOffHandNative     = vis.native;
@@ -2171,9 +2183,45 @@ namespace DeNelle.Village
         }
 
         // ── Internals ──────────────────────────────────────────────────────────────
+        // Scale archetype heldLength (authored for RefHeroHeightM) to this hero's measured height.
+        private float ProportionalHeldLength(float archetypeMetersAtRefHero)
+        {
+            if (archetypeMetersAtRefHero <= 0f) return archetypeMetersAtRefHero;
+            return archetypeMetersAtRefHero * (ResolveHeroHeightM() / RefHeroHeightM);
+        }
+
+        private float ResolveHeroHeightM()
+        {
+            if (_cachedHeroHeightM > 0.01f) return _cachedHeroHeightM;
+            float measured = MeasureHeroBodyHeightM();
+            _cachedHeroHeightM = measured > 0.5f ? measured : RefHeroHeightM;
+            FlowTrace.Step("Equip",
+                $"hero standing height={_cachedHeroHeightM:0.###}m (ref={RefHeroHeightM:0.###}m)");
+            return _cachedHeroHeightM;
+        }
+
+        // Renderer bounds on HeroBody (skips equipped props) — same frame GearVisualApplier targets.
+        private float MeasureHeroBodyHeightM()
+        {
+            var body = transform.Find("HeroBody");
+            if (body == null) return 0f;
+            bool any = false;
+            Bounds b = default;
+            foreach (var r in body.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                var n = r.gameObject.name;
+                if (n.StartsWith("EquipmentProp") || n.StartsWith("GearVisual")) continue;
+                if (!any) { b = r.bounds; any = true; }
+                else b.Encapsulate(r.bounds);
+            }
+            return any ? b.size.y : 0f;
+        }
+
         private void CacheRig()
         {
             if (_animator != null && _animator.isHuman) return;
+            _cachedHeroHeightM = 0f;
             using var _ = FlowTrace.Enter("Equip", $"CacheRig on '{name}'");
             // Body lives under "HeroBody" on the hero root (same convention as GearLoadout
             // / GearVisualApplier). Fall back to any child Animator.

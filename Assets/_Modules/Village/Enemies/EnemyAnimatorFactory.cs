@@ -21,7 +21,7 @@ using DeNelle.Core.Diagnostics;
 namespace DeNelle.Village
 {
     /// <summary>Rig family of an enemy mesh — selects which shared controller to apply.</summary>
-    public enum EnemyRig { HumanoidMedium, HumanoidLarge, Boss, Dragon, OrcWarband, LargeHumanoid, OrcHumanoid }
+    public enum EnemyRig { HumanoidMedium, HumanoidLarge, Boss, Dragon, OrcWarband, LargeHumanoid, OrcHumanoid, SkeletonHumanoid }
 
     public static class EnemyAnimatorFactory
     {
@@ -57,7 +57,13 @@ namespace DeNelle.Village
                 case "Orc_Warrior":
                 case "Orc_Tank":
                 case "Orc_Mage":        return EnemyRig.OrcHumanoid;
-                default:               return EnemyRig.HumanoidMedium; // Warrior/Minion/Rogue/Mage
+                // AccuRig skeleton family (2026-07-05) — CC_Base Humanoid rigs retarget
+                // through SkeletonHumanoid (Mixamo), not KayKit Generic HumanoidEnemy.
+                case "Skeleton_Mage":
+                case "Skeleton_Warrior":
+                case "Skeleton_Rogue":
+                case "Skeleton_Healer": return EnemyRig.SkeletonHumanoid;
+                default:               return EnemyRig.HumanoidMedium; // Minion + legacy Generic
             }
         }
 
@@ -71,6 +77,7 @@ namespace DeNelle.Village
                 case EnemyRig.OrcWarband:     return "OrcWarband";    // DEF-221 Humanoid orc controller
                 case EnemyRig.OrcHumanoid:    return "OrcHumanoid";   // WO-482/491 new Tripo orc family base (Orc_Warrior/Tank/Mage)
                 case EnemyRig.LargeHumanoid:  return "LargeHumanoid"; // WO-445 Humanoid brute controller (Troll/Demon/OgreMage)
+                case EnemyRig.SkeletonHumanoid: return "SkeletonHumanoid";
                 default:                      return "HumanoidEnemy";
             }
         }

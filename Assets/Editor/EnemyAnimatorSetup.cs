@@ -39,10 +39,11 @@ namespace DeNelle.Editor
         private const string Res = "Assets/Resources/Enemies/";
         private const string Gen = "Assets/Generated/Animators/";
 
-        // Skeleton meshes that need a Generic Avatar generated from the model.
-        private static readonly string[] SkeletonMeshes =
-            { "Skeleton_Warrior", "Skeleton_Minion", "Skeleton_Rogue",
-              "Skeleton_Mage", "Skeleton_Golem", "Necromancer" };
+        // KayKit skeleton meshes still on the Generic Rig_Medium clip library.
+        // AccuRig family (Mage/Warrior/Rogue/Healer) is Humanoid — run
+        // PeopleCharacterImporter.ImportSkeletonFamily instead.
+        private static readonly string[] KayKitSkeletonMeshes =
+            { "Skeleton_Minion", "Skeleton_Golem", "Necromancer" };
 
         // Shared controllers the runtime DTT arena loads (copied into Resources).
         private static readonly string[] RuntimeControllers =
@@ -52,7 +53,7 @@ namespace DeNelle.Editor
         public static void Setup()
         {
             // 1) Avatars for Generic playback.
-            foreach (var s in SkeletonMeshes) EnsureAvatar(Res + s + ".fbx");
+            foreach (var s in KayKitSkeletonMeshes) EnsureAvatar(Res + s + ".fbx");
 
             // 2) Build the canonical shared controllers (Generated/Animators).
             AnimatorSetup.BuildAnimators();

@@ -15,7 +15,24 @@
 
 ---
 
-## ★★ SESSION HANDOVER — 2026-07-03 (READ FIRST — anchored to `CANON_GROUND_TRUTH_2026-07-03.md`) ★★
+## ★★ SESSION HANDOVER — 2026-07-05 (READ FIRST) ★★
+
+**WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`. This session landed the **AccuRig skeleton
+family** (Mage / Warrior / Ranger→`Skeleton_Rogue` / Healer), `SkeletonHumanoid.controller`, codex
+catalog updates, **hollow-warrior → Skeleton_Warrior** with stats tuned off bruiser, and **proportional
+sword/shield** on the hub knight (`EquipmentController`). KayKit legacy kept for Minion / Golem /
+Necromancer. **Committed locally; push held for owner felt-pass.**
+
+**VERIFY NEXT:** mixed hollow wave in Windows build — four silhouettes animate, warrior feels mid-tier
+(not golem), knight gear scale. F8 queue still open (HUD left panel, Forge mobile, battle posture flip).
+Full notes: `RESUME_2026-07-05_skeleton-family-handoff.md`.
+
+**IMPORT (if re-exporting skeleton FBX):** `Defenders → Animation → Import Skeleton Family (AccuRig)`
+or batchmode `PeopleCharacterImporter.ImportSkeletonFamily`.
+
+---
+
+## ★★ SESSION HANDOVER — 2026-07-03 (⚠ SUPERSEDED by 2026-07-05 block above) ★★
 
 **WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`; the 07-02→03 **convergence session** (~25
 specialist agents, two felt-tests, 46 F8 flags all triaged) is in the tree, uncommitted — commit lanes

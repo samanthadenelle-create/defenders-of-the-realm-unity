@@ -497,7 +497,7 @@ namespace DeNelle.BattleATB
             string lower = id.ToLowerInvariant();
 
             // WO-94: village enemies.json ids — map to ATB engine archetypes.
-            if (lower == "hollow-warrior") return "bruiser";     // heavy tank archetype
+            if (lower == "hollow-warrior") return "hollow-warrior"; // standard melee (not bruiser tank)
             if (lower == "hollow-walker")  return "skeleton";    // standard grunt
             if (lower == "hollow-rogue")   return "skeleton";    // fast skirmisher → grunt fallback
 

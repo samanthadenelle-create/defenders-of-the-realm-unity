@@ -34,11 +34,12 @@ Rig is resolved by `EnemyAnimatorFactory.RigFor(model)`.
 
 | Model file | Path | Rig family (approx) | Used by (EnemyFactory id → model) |
 |---|---|---|---|
-| `Skeleton_Minion.fbx`    | `Enemies/Skeleton_Minion`    | KayKit skeleton | `hollow-walker` grunt; size-default (Height < 2.3) |
-| `Skeleton_Warrior.fbx`   | `Enemies/Skeleton_Warrior`   | KayKit skeleton | **UNREFERENCED** — old `orc-raider`/fallback target, no live case |
-| `Skeleton_Rogue.fbx`     | `Enemies/Skeleton_Rogue`     | KayKit skeleton | `hollow-rogue`, `feral-wolf` (no beast model — reuse) |
-| `Skeleton_Golem.fbx`     | `Enemies/Skeleton_Golem`     | KayKit LargeEnemy | `hollow-warrior` brute; size-default (Height ≥ 2.3) |
-| `Skeleton_Mage.fbx`      | `Enemies/Skeleton_Mage`      | KayKit skeleton | `hollow-acolyte` caster/healer |
+| `Skeleton_Minion.fbx`    | `Enemies/Skeleton_Minion`    | KayKit Generic → HumanoidEnemy | `hollow-walker` grunt |
+| `Skeleton_Warrior.fbx`   | `Enemies/Skeleton_Warrior`   | **AccuRig** Humanoid → SkeletonHumanoid | `hollow-warrior`, ATB default grunt (`skeleton` def) |
+| `Skeleton_Rogue.fbx`     | `Enemies/Skeleton_Rogue`     | **AccuRig Ranger** Humanoid → SkeletonHumanoid | `hollow-rogue`, `feral-wolf` stand-in |
+| `Skeleton_Healer.fbx`    | `Enemies/Skeleton_Healer`    | **AccuRig** Humanoid → SkeletonHumanoid | `hollow-acolyte` healer |
+| `Skeleton_Mage.fbx`      | `Enemies/Skeleton_Mage`      | **AccuRig** Humanoid → SkeletonHumanoid | `hollow-apprentice` (ATB), caster silhouette |
+| `Skeleton_Golem.fbx`     | `Enemies/Skeleton_Golem`     | KayKit Generic → LargeEnemy | size-default brute (Height ≥ 2.3); `caveman` stand-in |
 | `Necromancer.fbx`        | `Enemies/Necromancer`        | Boss rig | `necromancer` elite |
 | `Orc_Berserker.fbx`      | `Enemies/Orc_Berserker`      | OrcWarband (Tripo, +X-fwd → -90 yaw) | `orc-raider`, `orc-berserker`, family `orc` (non-caster) |
 | `Orc_Shaman.fbx`         | `Enemies/Orc_Shaman`         | OrcWarband | `orc-shaman`, family `orc` caster |

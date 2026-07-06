@@ -451,7 +451,7 @@ namespace DeNelle.Village
         /// the ATB scene a battle. Maps village enemies.json ids to the ATB engine's
         /// <see cref="DeNelle.BattleATB.Engine.Defs.ENEMY_DEFS"/> keys (WO-94).
         /// <list type="bullet">
-        ///   <item>hollow-warrior  → "bruiser"     (high-HP tank archetype)</item>
+        ///   <item>hollow-warrior  → "hollow-warrior" (standard melee — AccuRig warrior)</item>
         ///   <item>hollow-rogue    → "skeleton"     (fast skirmisher — closest grunt)</item>
         ///   <item>hollow-walker   → "skeleton"     (basic grunt)</item>
         ///   <item>necromancer     → "necromancer"  (exact match)</item>
@@ -465,7 +465,7 @@ namespace DeNelle.Village
                 switch (_enemyDefId)
                 {
                     case "necromancer":   return "necromancer";
-                    case "hollow-warrior": return "bruiser";
+                    case "hollow-warrior": return "hollow-warrior";
                     // hollow-walker and hollow-rogue both map to the standard grunt.
                     default:              return "skeleton";
                 }

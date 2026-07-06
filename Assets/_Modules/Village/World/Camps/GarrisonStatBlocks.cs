@@ -120,7 +120,7 @@ namespace DeNelle.Village.World.Camps
                 case "orc-necromancer": return BuildGenericDef(id, "Orc Necromancer","orc","elite",      "skirmisher", 220f, 2.0f, 11f, 1.6f, 2.1f, 40);
                 case "orc-raider":      return BuildGenericDef(id, "Orc Raider",    "orc", "skirmisher", "skirmisher", 170f, 2.8f, 10f, 1.3f, 1.9f, 24);
                 case "hollow-walker":   return BuildGenericDef(id, "Hollow Walker", "hollow","grunt",    "walker",     120f, 2.4f,  8f, 1.4f, 1.8f, 18);
-                case "hollow-warrior":  return BuildGenericDef(id, "Hollow Warrior","hollow","brute",    "charger",    240f, 1.9f, 12f, 1.7f, 2.4f, 28);
+                case "hollow-warrior":  return BuildGenericDef(id, "Hollow Warrior","hollow","grunt",    "walker",     156f, 2.2f, 10f, 1.3f, 1.88f, 24);
                 case "hollow-rogue":    return BuildGenericDef(id, "Hollow Rogue",  "hollow","skirmisher","skirmisher",110f, 3.0f,  9f, 1.1f, 1.7f, 22);
                 case "hollow-acolyte":  return BuildGenericDef(id, "Hollow Acolyte","hollow","caster",   "skirmisher", 140f, 2.3f,  8f, 1.4f, 1.8f, 26);
                 case "necromancer":     return BuildGenericDef(id, "Necromancer",   "hollow","elite",    "skirmisher", 300f, 2.0f, 12f, 1.6f, 2.1f, 50);
