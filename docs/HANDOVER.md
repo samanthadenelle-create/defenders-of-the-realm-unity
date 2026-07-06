@@ -20,8 +20,17 @@
 **WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`. This session landed the **AccuRig skeleton
 family** (Mage / Warrior / Ranger→`Skeleton_Rogue` / Healer), `SkeletonHumanoid.controller`, codex
 catalog updates, **hollow-warrior → Skeleton_Warrior** with stats tuned off bruiser, and **proportional
-sword/shield** on the hub knight (`EquipmentController`). KayKit legacy kept for Minion / Golem /
-Necromancer. **Committed locally; push held for owner felt-pass.**
+sword/shield** on the hub knight (`EquipmentController`). The **rig importer** now self-verifies —
+`PeopleCharacterImporter.ImportSkeletonFamily` runs a per-model avatar verdict (OK Humanoid / WARN
+Generic / FAIL) + 3-pass bone-map repair, so a missing/mismapped bone surfaces at import, not as an
+in-game T-pose. KayKit legacy kept for Minion / Golem / Necromancer. Earlier the same day, two
+**hero-feel fixes** landed: (1) **walking animation / turn-clip conflict** — the `turnleft180`
+turn-in-place clip (low-pivot, reads as a crouch) was fighting the walk-forward clip when the hero
+turned while walking; fixed by making turn-in-place clips combat-only + slewing town facing by input
++ a town walk-speed cap so KnightMocap stays on the upright `Shared_Walk_Forward` gait (`86847b7f`);
+and (2) **native sword grip** (SeatNative, `ff.weapongripinfer` rolled back — `d48bfd41` WO-478).
+(Separate same-session combat-anim work: posture flip + directional death — `315d60e3` WO-609 /
+`38c7fd4b` WO-586.) **Committed locally; push held for owner felt-pass.**
 
 **VERIFY NEXT:** mixed hollow wave in Windows build — four silhouettes animate, warrior feels mid-tier
 (not golem), knight gear scale. F8 queue still open (HUD left panel, Forge mobile, battle posture flip).

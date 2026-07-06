@@ -288,3 +288,9 @@ yarn.lock
 
 # Raw audio drop (rip source files, not committed)
 Tools/AudioGen/drop/
+
+# F8 felt-test capture archives — large PNG/break-log dumps, preservation-only, never in git
+QA_F8_ARCHIVE/
+
+# Temp CLI terminal output dumps (disposable scratch)
+terminals/
