@@ -1,9 +1,0 @@
-﻿{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.109692096710205,"utc":"2026-06-21T00:34:29.9151848Z"}
-{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.4103190898895265,"utc":"2026-06-21T00:34:30.2147282Z"}
-{"kind":"scene_loaded","message":"PetSelect","stack":"","scene":"PetSelect","t":20.02682876586914,"utc":"2026-06-21T00:34:47.8314160Z"}
-{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":21.1464900970459,"utc":"2026-06-21T00:34:48.9506234Z"}
-{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":21.880905151367189,"utc":"2026-06-21T00:34:49.6845655Z"}
-{"kind":"possible_softlock","message":"No movement or progress for 75s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":118.39727020263672,"utc":"2026-06-21T00:36:26.1971303Z"}
-{"kind":"flagged","message":"[MainCastle_Hall] buy weapons ended at building upgrade screen","stack":"","scene":"MainCastle_Hall","t":158.27645874023438,"utc":"2026-06-21T00:37:06.0738058Z"}
-{"kind":"possible_softlock","message":"No movement or progress for 75s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":1877.38232421875,"utc":"2026-06-21T01:05:45.1164083Z"}
-{"kind":"flagged","message":"[MainCastle_Hall] see","stack":"","scene":"MainCastle_Hall","t":1913.63427734375,"utc":"2026-06-21T01:06:21.3669686Z"}

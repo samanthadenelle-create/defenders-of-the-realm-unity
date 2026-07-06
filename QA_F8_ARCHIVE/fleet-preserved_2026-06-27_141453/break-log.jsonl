@@ -1,8 +1,0 @@
-﻿{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.2419850826263429,"utc":"2026-06-27T18:45:26.0222570Z"}
-{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":4.150888442993164,"utc":"2026-06-27T18:45:27.9304274Z"}
-{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":11.371258735656739,"utc":"2026-06-27T18:45:35.1502479Z"}
-{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":12.787166595458985,"utc":"2026-06-27T18:45:36.5658787Z"}
-{"kind":"flagged","message":"[MainCastle_Hall] when pulled into a battle the build menu should auto close","stack":"","scene":"MainCastle_Hall","t":199.2621612548828,"utc":"2026-06-27T18:48:43.0150866Z"}
-{"kind":"flagged","message":"[MainCastle_Hall] looks like i take damage but not reflected in health bar ui","stack":"","scene":"MainCastle_Hall","t":265.43414306640627,"utc":"2026-06-27T18:49:49.1782472Z"}
-{"kind":"flagged","message":"[MainCastle_Hall] health doesnt move but you can see im staggered ans limp walk so health is impacted","stack":"","scene":"MainCastle_Hall","t":456.08770751953127,"utc":"2026-06-27T18:52:59.8060871Z"}
-{"kind":"flagged","message":"[MainCastle_Hall] what was the range when he agrooed me and pulled inbo battle?","stack":"","scene":"MainCastle_Hall","t":578.3956298828125,"utc":"2026-06-27T18:55:02.0965542Z"}

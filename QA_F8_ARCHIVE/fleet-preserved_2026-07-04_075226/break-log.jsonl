@@ -1,7 +1,0 @@
-﻿{"kind":"session_start","message":"BreakCaptureHarness online","stack":"","scene":"Title","t":2.121093511581421,"utc":"2026-07-04T12:46:54.6713431Z"}
-{"kind":"scene_loaded","message":"Title","stack":"","scene":"Title","t":2.469247341156006,"utc":"2026-07-04T12:46:55.0201455Z"}
-{"kind":"scene_loaded","message":"HeroSelect","stack":"","scene":"HeroSelect","t":9.842723846435547,"utc":"2026-07-04T12:47:02.3925955Z"}
-{"kind":"scene_loaded","message":"MainCastle_Hall","stack":"","scene":"MainCastle_Hall","t":27.680912017822267,"utc":"2026-07-04T12:47:20.2299057Z"}
-{"kind":"scene_loaded","message":"OuterWorld","stack":"","scene":"MainCastle_Hall","t":28.824928283691408,"utc":"2026-07-04T12:47:21.3744974Z"}
-{"kind":"possible_softlock","message":"No movement or progress for 180s in 'MainCastle_Hall'","stack":"","scene":"MainCastle_Hall","t":209.1002655029297,"utc":"2026-07-04T12:50:21.6449414Z"}
-{"kind":"flagged","message":"[MainCastle_Hall] dialogue needs to stay on panel, is hidden by keys","stack":"","scene":"MainCastle_Hall","t":330.6162109375,"utc":"2026-07-04T12:52:23.1578571Z"}
