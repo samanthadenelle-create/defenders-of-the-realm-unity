@@ -283,10 +283,14 @@ namespace DeNelle.Village
                 if (at != null) at.ElevationRangeMult = kWallWalkRangeMult;
             }
 
-            // DEF-208 — 3-tier visual progression: a taller, tier-tinted read per level
-            // (1 bronze · 2 silver · 3 gold). Visual-only; the gameplay upgrade owns stats.
+            // DEF-208 — 3-tier visual progression. When the catalog authors a per-tier MODEL
+            // (upgradeVisualPath — owner F8 2026-07-06), the reload swaps to it and the legacy
+            // scale/tint step is skipped (the model IS the progression); otherwise the classic
+            // taller/tinted read applies (1 bronze · 2 silver · 3 gold). Reskin BEFORE Apply
+            // so Apply collects the new model's renderers.
+            bool tierModel = ps.level >= 2 && StructureFactory.ReskinForLevel(go, entry, ps.level);
             var tier = go.AddComponent<StructureTierVisual>();
-            tier.Apply(ps.level);
+            tier.Apply(tierModel ? 1 : ps.level);
             ps.TierVisual = tier;
 
             // S5 — re-assert the per-tier GAMEPLAY stats so a structure saved above level 1
@@ -297,6 +301,16 @@ namespace DeNelle.Village
 
             grid.Occupy(cell, footprint, data.itemId);
             _loaded.Add(ps);
+
+            // WO-612: a structure saved mid-construction re-arms its scaffold on load.
+            // The service's offline-fair sweep runs before this (it completes overdue
+            // jobs on state load), so IsBuilding == true only for genuinely unfinished
+            // jobs. Fresh placements are keyed AFTER Spawn (Place calls StartBuild
+            // post-charge), so this is load-path only — no double-attach.
+            if (DeNelle.Core.FeatureFlags.BuildTimers && BuildTimerService.Instance != null
+                && BuildTimerService.Instance.IsBuilding(UnderConstructionVisual.KeyFor(data)))
+                UnderConstructionVisual.Attach(ps, UnderConstructionVisual.KeyFor(data));
+
             return ps;
         }
 

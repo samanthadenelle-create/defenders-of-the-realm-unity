@@ -39,14 +39,10 @@ namespace DeNelle.Core
         /// Default ON. Flag-gated so the hero+pets party is reversible: PlayerPrefs "ff.singlehero" = 0.</summary>
         public static bool SingleHero => Get("singlehero", defaultOn: true);
 
-        /// <summary>OWNER 2026-07-04: the legacy "Hero Talents" panel (screen 01, PanelId.HeroTalents)
-        /// renders IDENTICAL content to the interactive Hero Skill Tree (screen 02, PanelId.HeroSkillTree)
-        /// — both route to the SAME HeroSkillTreePanelMvvm.Open / HeroSkillTreeVM. Owner call: consolidate
-        /// to ONE panel. When OFF (default), the redundant HeroTalents PanelId is NOT registered and its
-        /// entry points (ArcaneTower building, dialogue OpenTalents) route to HeroSkillTree instead, so
-        /// screen 01 drops out of the reachable set. Flip PlayerPrefs "ff.herotalents" = 1 to restore the
-        /// separate legacy Talents route.</summary>
-        public static bool HeroTalentsPanel => Get("herotalents", defaultOn: false);
+        // EYES-SWEEP 2026-07-06: ff.herotalents REMOVED (was the OWNER 2026-07-04 consolidation
+        // shim). A stale PlayerPrefs "ff.herotalents"=1 re-armed the dead legacy HeroTalents route
+        // and the capture fleet rendered panel_HeroTalents fully black. The consolidation is now
+        // unconditional: every talents entry point routes to PanelId.HeroSkillTree.
 
         /// <summary>PIVOT (owner 2026-06-22): Blink armor is JUNKED. When OFF (default), HeroArmorVisual
         /// is inert — no addressable armored-body swap, no rig bone-mapping (which spammed
@@ -69,6 +65,14 @@ namespace DeNelle.Core
         /// WaveManager / towers / GarrisonController stay dormant behind this. Flip ON when V2 is greenlit:
         /// PlayerPrefs "ff.basebuilding" = 1. See docs/COMBAT_PIVOT_NORTHSTAR.md.</summary>
         public static bool BaseBuilding => Get("basebuilding", defaultOn: false);
+
+        /// <summary>WO-612 (owner 2026-07-06): CoC-style construction timers on structure placement —
+        /// wires the existing WO-172 BuildTimerService into BuildModeController.Place (15 s base,
+        /// 2 free slots, offline-fair). Timer is pacing, never a wall: no free slot = instant build.
+        /// Growth path = option-3 "free income" (rewarded-ad skip, no real player cost) — those hooks
+        /// exist in the service but stay unsurfaced. Default ON; PlayerPrefs "ff.buildtimers" = 0 to
+        /// restore instant builds.</summary>
+        public static bool BuildTimers => Get("buildtimers", defaultOn: true);
 
         /// <summary>WO-449 — when ON, the raid loop IS the continuous distance-gated WALK: the raid
         /// target is a live EnemyOutpost spawned in the merged world (~70m out a gate), the hero walks
@@ -445,7 +449,22 @@ namespace DeNelle.Core
         /// grant-recording build flips it ON: the Defenders/Debug menu, PlayerPrefs "ff.skrpreview" = 1,
         /// or the WebGL URL <c>?skrpreview=1</c> (allow-listed in <see cref="ApplyUrlActivationOnce"/> —
         /// read-only presentation, so a crafted link can at most show an info panel).</summary>
-        public static bool SkrPreview => Get("skrpreview", defaultOn: false);
+        // Owner 2026-07-06: demo/grant recording — badge + showcase ON by default (the panel is
+        // self-labeling: PREVIEW · TESTNET stamp, no wallet call). "ff.skrpreview" = 0 to hide.
+        public static bool SkrPreview => Get("skrpreview", defaultOn: true);
+
+        /// <summary>WO-611 — when ON, the owner-designed COMBAT HUD renders inside the HudKit: a
+        /// VIRTUAL D-PAD (cross/plus, steel body + gold chevrons + centre hub) for movement instead of
+        /// the 4-round-button cluster; an oblong stadium ATTACK PILL (gold-trimmed, energy-sword) at the
+        /// bottom-right thumb anchor; the Q/W/E/R abilities as round gold MEDALLIONS arcing up-left around
+        /// the pill with a SOFT under-glow cooldown (not a hard clock sweep); the hot-swap action bar HOUSED
+        /// in an obsidian panel with a gold-trim inner ring; the HP/MP bars recessed in an inset WELL inside
+        /// the vitals plate; and an animated LOCK CROSSHAIR badge on the target frame (hud/crosshair_1|2|3:
+        /// unlocked -> acquiring -> locked, bound to TargetModel.HasTarget/Locked). On the posture flip to
+        /// hostile(prebattle|activebattle) it also calls PanelManager.CloseAll() so every other screen closes
+        /// and ONLY the combat HUD renders. Default OFF — the shipping HUD is BYTE-IDENTICAL when OFF (every
+        /// combat-HUD widget is flag-gated at its build site). PlayerPrefs "ff.combathud611" = 1 to preview.</summary>
+        public static bool CombatHud611 => Get("combathud611", defaultOn: false);
 
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
@@ -629,6 +648,29 @@ namespace DeNelle.Core
         private static bool ToggleSkrPreviewValidate()
         {
             UnityEditor.Menu.SetChecked(SkrPreviewMenu, SkrPreview);
+            return true;
+        }
+
+        // WO-611 — flip the owner-designed combat HUD on/off from the menu (no PlayerPrefs fiddling).
+        // ON => virtual d-pad + attack pill + Q/W/E/R medallion arc + housed action bar + HP/MP inset
+        // + lock crosshair badge; hostile posture closes all other screens (PanelManager.CloseAll).
+        private const string CombatHud611Menu = "Defenders/Debug/Combat HUD (WO-611 owner-designed)";
+
+        [UnityEditor.MenuItem(CombatHud611Menu, priority = 205)]
+        private static void ToggleCombatHud611()
+        {
+            bool on = !CombatHud611;
+            PlayerPrefs.SetInt("ff.combathud611", on ? 1 : 0);
+            PlayerPrefs.Save();
+            Debug.Log("[FeatureFlags] ff.combathud611 = " + (on
+                ? "ON (owner-designed combat HUD: d-pad/pill/medallion-arc/housed-bar/HP-MP-inset/lock-crosshair; hostile -> CloseAll)"
+                : "OFF (shipping HUD unchanged)"));
+        }
+
+        [UnityEditor.MenuItem(CombatHud611Menu, validate = true)]
+        private static bool ToggleCombatHud611Validate()
+        {
+            UnityEditor.Menu.SetChecked(CombatHud611Menu, CombatHud611);
             return true;
         }
 #endif

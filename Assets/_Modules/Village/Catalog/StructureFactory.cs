@@ -22,6 +22,7 @@
 // boundary (no reflection, per CLAUDE.md §10).
 // =============================================================================
 
+using System.Collections.Generic;   // ReskinForLevel old-visual collection
 using UnityEngine;
 using UnityEngine.AI;          // NavMeshObstacle footprint self-report (invisible-blocker class)
 using DeNelle.Core.Catalog;
@@ -154,6 +155,96 @@ namespace DeNelle.Village
 
             FlowTrace.Step("Structure", $"'{entry.id}' created OK -> '{root.name}'.");
             return root;
+        }
+
+        /// <summary>The Resources visual path a structure shows at <paramref name="level"/>:
+        /// repo.upgradeVisualPath[level-2] when authored (L2 = [0], L3 = [1] — the RepoProps
+        /// contract), else the base visualPrefabPath. Data was write-only until the owner F8
+        /// 2026-07-06 "on tower upgrade it's just making bigger, need to replace with new
+        /// structure" — this + ReskinForLevel make the ladder real.</summary>
+        public static string VisualPathForLevel(CatalogEntry entry, int level)
+        {
+            if (entry == null) return null;
+            var ladder = entry.repo != null ? entry.repo.upgradeVisualPath : null;
+            if (level >= 2 && ladder != null && ladder.Length >= level - 1
+                && !string.IsNullOrEmpty(ladder[level - 2]))
+                return ladder[level - 2];
+            return entry.visualPrefabPath;
+        }
+
+        /// <summary>
+        /// Swap the skinned visual to the per-tier model for <paramref name="level"/>.
+        /// Returns TRUE only when a real per-tier model (different from the base path) is
+        /// now worn — the caller then SKIPS the legacy StructureTierVisual scale-step (the
+        /// model IS the progression). New visual is skinned BEFORE the old is destroyed, so
+        /// a bad path keeps the old look (never a blank structure). No-op-true when the
+        /// tier model is already worn (idempotent across re-loads).
+        /// </summary>
+        public static bool ReskinForLevel(GameObject root, CatalogEntry entry, int level)
+        {
+            if (root == null || entry == null) return false;
+            string path = VisualPathForLevel(entry, level);
+            if (string.IsNullOrEmpty(path) || path == entry.visualPrefabPath)
+                return false;   // no authored tier model — legacy scale/tint applies
+
+            // Already wearing it? (Skin instantiates '<prefab>(Clone)' under the root.)
+            string stem = path.Substring(path.LastIndexOf('/') + 1);
+            for (int i = 0; i < root.transform.childCount; i++)
+                if (root.transform.GetChild(i).name.StartsWith(stem)) return true;
+
+            // Collect the current visual children BEFORE adding the new one (renderer-bearing
+            // direct children; leaves non-visual children like the WO-612 BuildCountdown alone).
+            var old = new List<GameObject>();
+            for (int i = 0; i < root.transform.childCount; i++)
+            {
+                var c = root.transform.GetChild(i);
+                if (c.GetComponentInChildren<Renderer>(true) != null) old.Add(c.gameObject);
+            }
+
+            GameObject visual = Guard.Try("Structure",
+                $"reskin '{entry.id}' L{level} visual '{path}'",
+                () => VisualFactory.Skin(root.transform, path, OptsFor(entry)),
+                fallback: null);
+            if (visual == null)
+            {
+                FlowTrace.Fail("Structure", $"'{entry.id}': tier-{level} visual '{path}' failed to " +
+                    "skin — keeping the previous visual (structure never blanks).");
+                return false;
+            }
+
+            if (entry.orientation != null && entry.orientation.manual)
+            {
+                Guard.Try("Structure", $"apply orientation '{entry.id}' (reskin)", () =>
+                {
+                    visual.transform.localRotation = Quaternion.Euler(entry.orientation.Euler) * visual.transform.localRotation;
+                    visual.transform.localPosition += entry.orientation.Offset;
+                    if (entry.orientation.HasScale)
+                        visual.transform.localScale = Vector3.Scale(visual.transform.localScale, entry.orientation.EffectiveScale);
+                    ReseatCorrectedBottom(visual, root.transform.position.y);
+                });
+            }
+
+            foreach (var g in old) Object.Destroy(g);
+            FlowTrace.Step("Structure", $"'{entry.id}' reskinned to tier-{level} model '{stem}' " +
+                $"(replaced {old.Count} old visual(s)).");
+            return true;
+        }
+
+        /// <summary>DEF-208 skin options for an entry — fit-to-height when repo.visualHeight
+        /// is authored, else legacy fit-to-footprint. Shared by Create + ReskinForLevel.</summary>
+        private static SkinOptions OptsFor(CatalogEntry entry)
+        {
+            float visualHeight = entry.repo != null ? entry.repo.visualHeight : 0f;
+            if (visualHeight > 0f)
+            {
+                var o = SkinOptions.Structure(0f);
+                o.FitHeight = visualHeight;
+                return o;
+            }
+            float fit = entry.repo != null && entry.repo.placement != null
+                ? Mathf.Max(1f, entry.repo.placement.footprint)
+                : 3f;
+            return SkinOptions.Structure(fit);
         }
 
         // V (render-verify) + footprint self-report. Mirrors HeroArmorVisual.VerifyArmorRendersNow:

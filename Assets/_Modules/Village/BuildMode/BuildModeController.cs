@@ -916,6 +916,20 @@ namespace DeNelle.Village
                 state.BaseLayout.Add(data);
             }
 
+            // WO-612 (owner 2026-07-06): construction takes TIME — start a WO-172 timer job
+            // AFTER the charge (the WO-131 seam the service documents). A null job (both
+            // free slots busy / service absent) degrades to instant completion: placement
+            // is NEVER blocked, the timer is pacing, not a wall.
+            if (DeNelle.Core.FeatureFlags.BuildTimers)
+            {
+                string jobKey = UnderConstructionVisual.KeyFor(data);
+                var job = BuildTimerService.Instance != null
+                    ? BuildTimerService.Instance.StartBuild(jobKey, 0) : null;
+                if (job != null) UnderConstructionVisual.Attach(ps, jobKey);
+                else FlowTrace.Step("Build",
+                    $"no free build slot for '{jobKey}' — completed instantly (never block)");
+            }
+
             Debug.Log($"[BuildMode] Placed '{_armed.id}' at cell ({cell.x},{cell.y}) yaw {_armedYawSteps * 90}°, charged {Describe(cost)}.");
         }
 
@@ -1082,8 +1096,12 @@ namespace DeNelle.Village
             int newLevel = level + 1;
             ps.level = newLevel;
 
-            // Step the visual tier (scale + accent). Apply is idempotent + re-collects renderers.
-            if (ps.TierVisual != null) { ps.TierVisual.Apply(newLevel); ps.TierVisual.Refresh(); }
+            // Owner F8 2026-07-06 ("upgrade just makes it bigger — replace with new structure"):
+            // when the catalog authors a per-tier model (upgradeVisualPath), SWAP the visual and
+            // skip the legacy scale-step (the model IS the progression). No tier model = legacy
+            // scale + accent, unchanged. Reskin BEFORE Apply so Apply re-collects new renderers.
+            bool swapped = StructureFactory.ReskinForLevel(ps.gameObject, entry, newLevel);
+            if (ps.TierVisual != null) { ps.TierVisual.Apply(swapped ? 1 : newLevel); ps.TierVisual.Refresh(); }
 
             // Step the gameplay stats per tier (range/damage for towers, toughness for walls).
             ApplyTierStats(ps, newLevel);

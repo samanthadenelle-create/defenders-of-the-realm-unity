@@ -89,7 +89,76 @@ namespace DeNelle.Village
             // (PlayerPrefs ff.devhotkeys=1).
             if (!DeNelle.Core.FeatureFlags.DevHotkeys) return;
             if (Input.GetKeyDown(SpawnKey)) SpawnTestPack();
+            // Owner 2026-07-06: 'K' scatters HIGH-LEVEL enemies far from town to felt-test
+            // the ThreatSkullPlate warning + the hero-vs-high-level damage feel.
+            if (Input.GetKeyDown(KeyCode.K)) SpawnHighLevelScatter();
         }
+
+        /// <summary>
+        /// Scatter 5 high-level enemies 120–200 m out from the hero at random bearings
+        /// (owner test rig, 2026-07-06). Levels 15/18/21/24/27 — Enemy.Level reads the
+        /// authored-HP band (HP = level × 25, WO-611 F3), so the target frame shows the
+        /// real number and ThreatSkullPlate skulls anything above the hero's level. Each
+        /// enemy IDLES at its spawn anchor (its march target = its own anchor, not the
+        /// Heart) so the test never pulls a Lv-27 pack into town — the hero must walk out.
+        /// </summary>
+        private void SpawnHighLevelScatter()
+        {
+            var hero = GameObject.FindWithTag("Player");
+            if (hero == null)
+            {
+                Debug.LogWarning("[EnemyFamilyTestSpawner] No 'Player' hero found — cannot scatter.");
+                return;
+            }
+            if (_root == null) _root = new GameObject("[EnemyFamilyTestPack]").transform;
+
+            int spawned = 0;
+            for (int i = 0; i < 5; i++)
+            {
+                int level = 15 + i * 3;
+                float bearing = UnityEngine.Random.Range(0f, 360f) * Mathf.Deg2Rad;
+                float dist = UnityEngine.Random.Range(120f, 200f);
+                Vector3 pos = hero.transform.position
+                            + new Vector3(Mathf.Sin(bearing), 0f, Mathf.Cos(bearing)) * dist;
+                if (!NavMesh.SamplePosition(pos, out NavMeshHit hit, 25f, NavMesh.AllAreas))
+                {
+                    Debug.Log($"[EnemyFamilyTestSpawner] scatter #{i} (Lv{level}): no navmesh within 25m of {pos} — skipped.");
+                    continue;
+                }
+                pos = hit.position;
+
+                var def = HighLevelDef(i, level);
+                // Anchor = its own spawn point, so the enemy holds ground instead of
+                // marching the Heart; AggroRadius engages when the hero closes in.
+                var anchor = new GameObject($"ScatterAnchor-Lv{level}").transform;
+                anchor.SetParent(_root, false);
+                anchor.position = pos;
+
+                var enemy = EnemyFactory.Build(def, pos, Quaternion.identity, _root);
+                enemy.gameObject.name = $"ScatterEnemy (Lv{level} {def.DisplayName})";
+                enemy.Configure($"scatter-lv{level}-{_counter++}", def, anchor);
+                var brain = enemy.gameObject.AddComponent<EnemyBrain>();
+                brain.Role = EnemyRole.DPS;
+                int threat = level;   // capture for the plate
+                ThreatSkullPlate.Attach(enemy.gameObject, () => threat);
+                spawned++;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Scatter",
+                    $"Lv{level} '{def.DisplayName}' at {pos} ({dist:0}m out, hp={def.Hp}, dmg={def.ContactDamage})");
+            }
+            Debug.Log($"[EnemyFamilyTestSpawner] High-level scatter: {spawned}/5 placed 120–200m out. " +
+                      "Walk out to test the skull warning + damage feel (they hold ground; they won't march on town).");
+        }
+
+        /// <summary>Synthesized high-level def: HP = level × 25 (the Enemy.Level band, so the
+        /// shown level is exactly what we authored) + damage on the RegionMobSpawner 10%/threat
+        /// curve. Skeleton-warrior visual family (AccuRig, always imported).</summary>
+        private static EnemyDef HighLevelDef(int i, int level) => new EnemyDef
+        {
+            Id = $"scatter-elite-{i}", Name = "Hollow Reaver", DisplayName = "Hollow Reaver", Ai = "walker",
+            Hp = level * 25f, MoveSpeed = 2.4f,
+            ContactDamage = 8f * (1f + 0.10f * level), AttackInterval = 1.2f, Height = 2.0f,
+            AggroRadius = 18f, XpReward = level * 10, GlimmerReward = level,
+        };
 
         private void SpawnTestPack()
         {
