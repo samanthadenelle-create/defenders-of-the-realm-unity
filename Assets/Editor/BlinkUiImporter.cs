@@ -43,7 +43,9 @@ namespace DeNelle.Editor
             int copied = 0, missing = 0;
             foreach (var e in entries)
             {
-                string src = PackRoot + "/" + e.Src;
+                // An "Assets/..." Src is used verbatim (owner-directed art that already lives in the
+                // project, e.g. HudIcons); anything else is relative to the gitignored Blink pack.
+                string src = e.Src.StartsWith("Assets/") ? e.Src : PackRoot + "/" + e.Src;
                 if (!File.Exists(src)) { Debug.LogWarning("[BlinkUiImporter] missing pack sprite (skipped): " + src); missing++; continue; }
 
                 string dstDir = ResRoot + "/" + e.Role;
@@ -164,6 +166,23 @@ namespace DeNelle.Editor
             new Entry { Src = "Icons_Obsidian/settings-icon.png",  Role = "icons", Name = "icon_settings",  Border = 0 },
             new Entry { Src = "Icons_Obsidian/inventory-icon.png", Role = "icons", Name = "icon_inventory", Border = 0 },
             new Entry { Src = "Icons_Obsidian/quest-icon.png",     Role = "icons", Name = "icon_quest",     Border = 0 },
+            // WO-611 attack pill (F8-3 2026-07-07): owner AttackIcon — the importer owns the Sprite
+            // import settings; the hand-copied icon_energy_sword.png shipped textureType:0 (not a
+            // Sprite) so LoadAll<Sprite> never returned it and the pill fell back to icon_sword.
+            new Entry { Src = "Icons_Obsidian/AttackIcon.png",     Role = "icons", Name = "icon_energy_sword", Border = 0 },
+
+            // ── CURRENCY (RoleCurrency) — owner directive 2026-07-07: Gold_Currency beside gold.
+            // concept-icons.json already maps gold -> currency/currency_gold; the folder was never
+            // mirrored, so every resource row fell back to its glyph (the "resource rows without
+            // identifiers" F8 board ticket). Wood/food/crystal picks await the owner's art call.
+            new Entry { Src = "Icons_Obsidian/Gold_Currency.png",  Role = "currency", Name = "currency_gold", Border = 0 },
+            // Owner 2026-07-07: the Wood icon = the HudIcons log-pile art (already committed).
+            new Entry { Src = "Assets/Resources/HudIcons/hud_wood.png", Role = "currency", Name = "currency_wood", Border = 0 },
+            // Owner 2026-07-07: food = HudIcons/food.png (her pick — NOT hud_food.png), crystal =
+            // HudIcons/hud_crystal.png, iron = HudIcons/hud_iron.png.
+            new Entry { Src = "Assets/Resources/HudIcons/food.png",        Role = "currency", Name = "currency_food",    Border = 0 },
+            new Entry { Src = "Assets/Resources/HudIcons/hud_crystal.png", Role = "currency", Name = "currency_crystal", Border = 0 },
+            new Entry { Src = "Assets/Resources/HudIcons/hud_iron.png",    Role = "currency", Name = "currency_iron",    Border = 0 },
             // (icon_shield / icon_talk / icon_heart kept on the Tech-hud fallback — no clean Obsidian
             //  match in the sampled set.)
 
