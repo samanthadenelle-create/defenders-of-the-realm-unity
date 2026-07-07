@@ -4,35 +4,15 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
-// WHAT THIS IS:
-//   The Offset Forge editor window (Tools > Offset Forge, Assets/OffsetForge/)
-//   lets the owner dial in a model's attachment offset by eye and SAVE it to
-//   Assets/OffsetForge/offsets.json. That file is an OffsetTable: a flat list of
-//   { id, rot (euler degrees), pos (local position), scale } records, keyed by a
-//   stable string id (defaulted to the model/prefab name, e.g. "sword_A").
+// LOAD ORDER (later wins per id):
+//   1) Resources/OffsetForge/offsets.json — shipped defaults (build/editor parity).
+//   2) Application.persistentDataPath/attachment-offsets.json — LOCAL USER SETTINGS;
+//      every in-game Save writes here first. Survives reboots; always wins over shipped.
+//   Legacy offsets-dev.json is migrated into attachment-offsets.json on first read.
+//   A PlayerPrefs mirror (dotr.attachment-offsets) backs up the user file.
 //
-//   This registry LOADS that same JSON at runtime and exposes TryGetOffset(key)
-//   so the equip/attach path can apply the authored offset to a weapon prop the
-//   instant it parents to the hand bone -- instead of euler-guessing. It reads the
-//   EXACT file the tool writes (no forked format): a tiny self-contained mirror of
-//   the OffsetForge.OffsetTable schema (id/rot/pos/scale) so DeNelle.Village does
-//   not need a cross-assembly reference on OffsetForge.Runtime.
-//
-// CONVENTION (must match the tool's preview, OffsetForgeWindow.ApplyOffsetToInstance):
-//   localRotation = Quaternion.Euler(rot);  localPosition = pos;  localScale = one*scale.
-//   The apply site (EquipmentController) composes these onto the grip root.
-//
-// SOURCE OF THE JSON (in priority order):
-//   1) Application.dataPath/OffsetForge/offsets.json  -- where the tool writes it.
-//      Present in the Editor (where the owner validates) and in any build that
-//      ships the Assets-relative file alongside the player. This is the primary.
-//   2) Resources/OffsetForge/offsets.json (TextAsset) -- optional build-safe copy
-//      if/when the file is mirrored under a Resources folder. Tried as a fallback.
-//   Loaded ONCE and cached; Reload() is exposed for tooling/tests.
-//
-// SAFE BY DEFAULT: a missing/empty/invalid file yields an empty table, so a weapon
-// with NO authored offset returns false from TryGetOffset and the caller keeps its
-// existing behaviour (no regression).
+// Reload() is called before every equip and immediately after every Save so the live
+// hero always reads the persisted config — never a stale cache.
 // =============================================================================
 
 using System;
@@ -49,33 +29,29 @@ namespace DeNelle.Village
         public Vector3 pos;        // local position
         public Vector3 eulerRot;   // local rotation, euler degrees
         public float scale;        // uniform scale (1 = unchanged)
-        // WO-551: when true (native-only, opt-in per entry), the equip path SKIPS the geometric
-        // true+seat and reproduces the Forge raw-pivot frame exactly (legacy replacement). Default
-        // false => the offset is a NUDGE applied ON TOP of geometry. A missing JSON key reads false.
         public bool fullOverride;
     }
 
     /// <summary>
-    /// Static, cache-once loader for the Offset Forge's offsets.json. Keyed by the
-    /// id the tool saved (model/prefab name). Returns false for any unknown key so
-    /// callers fall back to their existing behaviour.
+    /// Loads attachment offsets: shipped defaults + local user settings overlay.
+    /// User settings in persistentDataPath always win per id.
     /// </summary>
     public static class AttachmentOffsetRegistry
     {
-        // Where the Offset Forge editor window writes (OffsetForgeWindow._savePath default).
         private const string DataPathRelative = "OffsetForge/offsets.json";
-        // Optional Resources fallback path (no extension for Resources.Load).
         private const string ResourcesPath = "OffsetForge/offsets";
-        // WRITABLE dev-override file (WO-577). In a built player Application.dataPath is read-only,
-        // so the in-game Seating Editor persists here; this file is loaded AS AN OVERLAY on top of
-        // the repo offsets.json (dev entries WIN per id), so a saved offset survives a reload + the
-        // next launch of the same build. The owner also gets a JSON snippet to bake into the repo.
-        private static string DevFilePath => Path.Combine(Application.persistentDataPath, "offsets-dev.json");
+        private const string UserFileName = "attachment-offsets.json";
+        private const string LegacyDevFileName = "offsets-dev.json";
+        private const string PlayerPrefsKey = "dotr.attachment-offsets";
 
-        /// <summary>The writable dev-override file path (Application.persistentDataPath/offsets-dev.json).</summary>
-        public static string DevPath => DevFilePath;
+        private static string UserFilePath =>
+            Path.Combine(Application.persistentDataPath, UserFileName);
+        private static string LegacyDevFilePath =>
+            Path.Combine(Application.persistentDataPath, LegacyDevFileName);
 
-        // ---- JSON mirror of OffsetForge.OffsetTable (JsonUtility-compatible) -------
+        /// <summary>Writable local settings path (persistentDataPath/attachment-offsets.json).</summary>
+        public static string DevPath => UserFilePath;
+
         [Serializable] private struct JsonVec3 { public float x; public float y; public float z; }
 
         [Serializable]
@@ -85,7 +61,7 @@ namespace DeNelle.Village
             public JsonVec3 rot;
             public JsonVec3 pos;
             public float scale;
-            public bool fullOverride;   // WO-551: opt-in geometry bypass (default false / missing key).
+            public bool fullOverride;
         }
 
         [Serializable]
@@ -100,16 +76,29 @@ namespace DeNelle.Village
         private static void EnsureLoaded()
         {
             if (s_loaded) return;
+            LoadFromDisk();
+        }
+
+        /// <summary>Re-read shipped defaults + local user settings from disk.</summary>
+        public static void Reload()
+        {
+            s_loaded = false;
+            s_map = null;
+            LoadFromDisk();
+        }
+
+        private static void LoadFromDisk()
+        {
             s_loaded = true;
             s_map = new Dictionary<string, AttachmentOffset>(StringComparer.OrdinalIgnoreCase);
 
             int baseN = ApplyTable(ReadBaseJson(), "base");
-            int devN  = ApplyTable(ReadDevJson(),  "dev");   // dev overlay WINS per id
-            FlowTrace.Step("Offset", $"loaded attachment offsets: {baseN} base + {devN} dev-override -> {s_map.Count} effective.");
+            int userN = ApplyTable(ReadUserJson(), "user");
+            FlowTrace.Step("Offset",
+                $"loaded attachment offsets: {baseN} shipped + {userN} local -> {s_map.Count} effective " +
+                $"(user file='{UserFilePath}').");
         }
 
-        // Parse a JSON table and upsert each entry into the map (later calls overwrite earlier =
-        // the dev overlay winning). Returns the count applied. Null/empty/invalid -> 0 (safe).
         private static int ApplyTable(string json, string label)
         {
             if (string.IsNullOrEmpty(json)) return 0;
@@ -137,14 +126,6 @@ namespace DeNelle.Village
             return n;
         }
 
-        // RC3b FIX (2026-07-04): read the RESOURCES mirror FIRST — it is the ONE copy that actually
-        // SHIPS in a player build, so making it the canonical base means the runtime resolves the
-        // SAME offsets file in the Editor AND in a build (the 3-month editor≠build root cause was the
-        // reverse order: the Editor read the authoring dataPath file while the build silently fell to
-        // a stale Resources mirror, so the owner's dialed offsets never shipped). The authoring file
-        // (Assets/OffsetForge/offsets.json) is kept byte-synced into this mirror by the editor
-        // OffsetForgeMirrorSync postprocessor, so Resources-first loses nothing in the Editor. The
-        // dataPath file is retained ONLY as an Editor fallback for a not-yet-synced fresh edit.
         private static string ReadBaseJson()
         {
             var ta = Resources.Load<TextAsset>(ResourcesPath);
@@ -163,26 +144,60 @@ namespace DeNelle.Village
             return null;
         }
 
-        // Read the writable dev-override file (Application.persistentDataPath/offsets-dev.json).
-        // Absent in a fresh build until the Seating Editor saves -> returns null (no overlay).
-        private static string ReadDevJson()
+        // Local user settings — primary runtime authority. Migrates legacy offsets-dev.json once.
+        private static string ReadUserJson()
         {
             try
             {
-                if (File.Exists(DevFilePath)) return File.ReadAllText(DevFilePath);
+                if (File.Exists(UserFilePath))
+                    return File.ReadAllText(UserFilePath);
+
+                // Migrate legacy dev file into the canonical user settings path.
+                if (File.Exists(LegacyDevFilePath))
+                {
+                    string legacy = File.ReadAllText(LegacyDevFilePath);
+                    try
+                    {
+                        Directory.CreateDirectory(Application.persistentDataPath);
+                        File.WriteAllText(UserFilePath, legacy);
+                        MirrorToPlayerPrefs(legacy);
+                        FlowTrace.Step("Offset",
+                            $"migrated legacy '{LegacyDevFilePath}' -> '{UserFilePath}'.");
+                    }
+                    catch (Exception ex)
+                    {
+                        FlowTrace.Warn("Offset", $"legacy migration write failed: {ex.Message} — reading legacy in-memory.");
+                    }
+                    return legacy;
+                }
+
+                // Last resort: restore from PlayerPrefs backup if the file was lost.
+                if (PlayerPrefs.HasKey(PlayerPrefsKey))
+                {
+                    string backup = PlayerPrefs.GetString(PlayerPrefsKey);
+                    if (!string.IsNullOrEmpty(backup))
+                    {
+                        try
+                        {
+                            Directory.CreateDirectory(Application.persistentDataPath);
+                            File.WriteAllText(UserFilePath, backup);
+                            FlowTrace.Step("Offset", $"restored user offsets from PlayerPrefs backup -> '{UserFilePath}'.");
+                        }
+                        catch (Exception ex)
+                        {
+                            FlowTrace.Warn("Offset", $"PlayerPrefs restore write failed: {ex.Message} — using backup in-memory.");
+                        }
+                        return backup;
+                    }
+                }
             }
             catch (Exception ex)
             {
-                FlowTrace.Warn("Offset", $"dev offsets read failed: {ex.Message} -- ignoring overlay.");
+                FlowTrace.Warn("Offset", $"user offsets read failed: {ex.Message} -- ignored.");
             }
             return null;
         }
 
-        /// <summary>
-        /// True + fills <paramref name="offset"/> when the Offset Forge has an authored
-        /// offset for <paramref name="key"/> (the saved id, e.g. a weapon mesh/prefab name).
-        /// False (and a default offset) when none is stored -- caller keeps its current behaviour.
-        /// </summary>
         public static bool TryGetOffset(string key, out AttachmentOffset offset)
         {
             offset = default;
@@ -191,27 +206,13 @@ namespace DeNelle.Village
             return s_map.TryGetValue(key, out offset);
         }
 
-        /// <summary>Force a re-read on next access (tooling/tests after the Forge re-saves).</summary>
-        public static void Reload()
-        {
-            s_loaded = false;
-            s_map = null;
-        }
-
-        // ── WRITER (WO-577 — in-game Seating Editor persistence) ─────────────────────
-
         /// <summary>
-        /// Upsert one authored offset and persist it. ALWAYS writes the writable dev-override file
-        /// (Application.persistentDataPath/offsets-dev.json) so the change survives in a built player;
-        /// in the Editor it ALSO writes the repo file (Assets/OffsetForge/offsets.json) so the source
-        /// of truth is updated directly. Reloads the cache so the next equip applies it immediately.
-        /// Returns the dev path + a copy-pasteable single-entry JSON snippet (for baking into the
-        /// repo offsets.json from a build, where the repo file is not writable).
+        /// Persist one offset to local user settings (always) + repo in Editor. Reloads immediately.
         /// </summary>
         public static bool SaveOffset(string id, Vector3 pos, Vector3 euler, float scale,
                                       bool fullOverride, out string devPath, out string snippet)
         {
-            devPath = DevFilePath;
+            devPath = UserFilePath;
             snippet = BuildSnippet(id, pos, euler, scale, fullOverride);
             if (string.IsNullOrEmpty(id))
             {
@@ -219,9 +220,8 @@ namespace DeNelle.Village
                 return false;
             }
 
-            bool devOk = UpsertFile(DevFilePath, id, pos, euler, scale, fullOverride, false);
+            bool userOk = UpsertFile(UserFilePath, id, pos, euler, scale, fullOverride, false);
 #if UNITY_EDITOR
-            // In the Editor, write straight into the committed repo file too.
             try
             {
                 string repo = Path.Combine(Application.dataPath, DataPathRelative);
@@ -229,45 +229,64 @@ namespace DeNelle.Village
             }
             catch (Exception ex)
             {
-                FlowTrace.Warn("Offset", $"repo offsets.json write failed: {ex.Message} (dev file written).");
+                FlowTrace.Warn("Offset", $"repo offsets.json write failed: {ex.Message} (user file written).");
             }
 #endif
+            if (userOk)
+                MirrorUserFileToPlayerPrefs();
             Reload();
-            FlowTrace.Step("Offset", $"SaveOffset '{id}' -> dev='{DevFilePath}' (ok={devOk}); snippet logged for repo bake.");
-            return devOk;
+            FlowTrace.Step("Offset", $"SaveOffset '{id}' -> user='{UserFilePath}' (ok={userOk}); snippet logged for repo bake.");
+            return userOk;
         }
 
-        /// <summary>Remove an authored offset from the dev file (and the repo file in the Editor), then reload.</summary>
         public static bool RemoveOffset(string id)
         {
             if (string.IsNullOrEmpty(id)) return false;
-            bool any = RemoveFromFile(DevFilePath, id);
+            bool any = RemoveFromFile(UserFilePath, id);
 #if UNITY_EDITOR
             try { any |= RemoveFromFile(Path.Combine(Application.dataPath, DataPathRelative), id); }
             catch (Exception ex) { FlowTrace.Warn("Offset", $"repo offsets.json remove failed: {ex.Message}."); }
 #endif
+            if (any)
+                MirrorUserFileToPlayerPrefs();
             Reload();
             FlowTrace.Step("Offset", $"RemoveOffset '{id}' (removed={any}).");
             return any;
         }
 
-        // Read (or create) a JsonTable at path, upsert the entry, write it back (pretty). When
-        // makeDir is true the parent directory is created first (repo path under Assets/).
+        private static void MirrorToPlayerPrefs(string json)
+        {
+            try
+            {
+                PlayerPrefs.SetString(PlayerPrefsKey, json);
+                PlayerPrefs.Save();
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("Offset", $"PlayerPrefs mirror failed: {ex.Message}.");
+            }
+        }
+
+        private static void MirrorUserFileToPlayerPrefs()
+        {
+            try
+            {
+                if (File.Exists(UserFilePath))
+                    MirrorToPlayerPrefs(File.ReadAllText(UserFilePath));
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("Offset", $"PlayerPrefs mirror read failed: {ex.Message}.");
+            }
+        }
+
         private static bool UpsertFile(string path, string id, Vector3 pos, Vector3 euler,
                                        float scale, bool fullOverride, bool makeDir)
         {
             try
             {
-                if (makeDir)
-                {
-                    string dir = Path.GetDirectoryName(path);
-                    if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-                }
-                else
-                {
-                    string dir = Path.GetDirectoryName(path);
-                    if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-                }
+                string dir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
                 JsonTable table = null;
                 if (File.Exists(path))
@@ -318,8 +337,6 @@ namespace DeNelle.Village
             }
         }
 
-        // A copy-pasteable single-entry snippet matching offsets.json's schema (for baking back
-        // into the repo file from a built player, where Assets/ is not writable).
         private static string BuildSnippet(string id, Vector3 pos, Vector3 euler, float scale, bool fullOverride)
         {
             var ci = System.Globalization.CultureInfo.InvariantCulture;

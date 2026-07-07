@@ -471,7 +471,9 @@ namespace DeNelle.Village
             // EnsureLoadoutSubscribed re-resolves + (re)subscribes idempotently, and Update()
             // below keeps retrying until the loadout (and the Humanoid rig) come online.
             EnsureLoadoutSubscribed();
-            // Auto-read the equipped weapon on enable (the same data the cube path uses).
+            // Always pull the latest local user settings before seating props (persistentDataPath
+            // attachment-offsets.json wins over shipped defaults per id).
+            AttachmentOffsetRegistry.Reload();
             EquipBestForHero();
         }
 
@@ -555,6 +557,7 @@ namespace DeNelle.Village
         /// </summary>
         public void EquipBestForHero()
         {
+            AttachmentOffsetRegistry.Reload();
             if (_loadout == null) _loadout = GetComponent<GearLoadout>();
             // Pass the WeaponDef (not just the id) so the attach path can read prefabPath /
             // loadVia and resolve a Blink Addressable weapon — the data-driven equip.
@@ -1764,16 +1767,17 @@ namespace DeNelle.Village
                 if (!drawn && back != null)
                 {
                     _gripRoot.SetParent(back, false);
-                    if (_weaponParentCompensate) CompensateParentScale(_gripRoot, _weaponAuthoredScale);
+                    // Back-socket bones carry a different lossyScale than the hand — always compensate
+                    // so the attach-authored multiplier (fo.scale) survives the carry-state re-parent.
+                    CompensateParentScale(_gripRoot, _weaponAuthoredScale);
                     _gripRoot.localPosition = _sheatheWeaponLocalPos;
                     // DERIVED sheathe rotation (the fix): build the base orientation from the body's
                     // own axes via the SAME LookRotation(flat, blade) construction the correct battle
                     // draw uses (ComputeMeleeGripRotation), then compose the persisted authored nudge —
                     // instead of the old hand-guessed magic euler that ignored the chest-bone axes.
                     _gripRoot.localRotation = ComputeSheathRotation(back);
-                    // OWNER-AUTHORABLE SHEATHED POSE (root fix 2026-07-07): a registry entry keyed
-                    // "<meshKey>@sheathed" (dialed live in the Seating Editor's Sheathed mode)
-                    // refines/replaces the built-in pose. No entry = today's behavior exactly.
+                    // Sheathed pose: explicit "<meshKey>@sheathed" wins; else fall back to the drawn
+                    // offset ("<meshKey>") as a nudge on this built-in back pose (town carry fix).
                     ApplySheathedOffset(_gripRoot, _currentWeaponMeshKey);
                 }
                 else if (_weaponHand != null)
@@ -1793,7 +1797,7 @@ namespace DeNelle.Village
                 if (!drawn && back != null)
                 {
                     offT.SetParent(back, false);
-                    if (_offHandParentCompensate) CompensateParentScale(offT, _offHandAuthoredScale);
+                    CompensateParentScale(offT, _offHandAuthoredScale);
                     offT.localPosition = _sheatheOffHandLocalPos;
                     // DE-BAND-AID NOTE (2026-07-07): _sheatheOffHandLocalEuler (the hand-tuned magic
                     // euler, owner Z+=180 correction 2026-07-04) is now only the DEFAULT under the
@@ -1813,19 +1817,44 @@ namespace DeNelle.Village
             }
         }
 
+        // How a sheathed registry entry was resolved (explicit @sheathed vs drawn-key fallback).
+        private enum SheathedOffsetSource { None, Explicit, DrawnFallback }
+
+        // Resolve the offset that should refine a sheathed (back-socket) pose:
+        //   1) "<meshKey>@sheathed" — owner-authored back pose (Seating Editor, Sheathed mode).
+        //   2) "<meshKey>" — FALLBACK: reuse the drawn offset as a nudge on the built-in back pose
+        //      so offsets dialed/saved without the @sheathed suffix still affect town carry.
+        // Drawn fullOverride entries are NEVER applied as absolute on the back (hand frame ≠ socket).
+        private static bool TryResolveSheathedOffset(string meshKey, out AttachmentOffset fo,
+                                                     out SheathedOffsetSource source)
+        {
+            fo = default;
+            source = SheathedOffsetSource.None;
+            if (string.IsNullOrEmpty(meshKey)) return false;
+            if (AttachmentOffsetRegistry.TryGetOffset(meshKey + SheathedKeySuffix, out fo))
+            {
+                source = SheathedOffsetSource.Explicit;
+                return true;
+            }
+            if (AttachmentOffsetRegistry.TryGetOffset(meshKey, out fo))
+            {
+                source = SheathedOffsetSource.DrawnFallback;
+                return true;
+            }
+            return false;
+        }
+
         // OWNER-AUTHORABLE SHEATHED POSE consumption (root fix 2026-07-07): after the built-in
-        // sheathe pose is applied, an AttachmentOffsetRegistry entry keyed "<meshKey>@sheathed"
-        // (authored live via the Seating Editor's Sheathed mode) adjusts it in the BACK-SOCKET frame:
-        //   • fullOverride=true  → localPosition = fo.pos, localRotation = Euler(fo.eulerRot) —
-        //     the authored value IS the pose, absolute in the socket frame, NO global yaw.
-        //   • fullOverride=false → nudge: +pos, built-in rot ∘ Euler(fo.eulerRot).
+        // sheathe pose is applied, refine it from the registry in the BACK-SOCKET frame:
+        //   • explicit @sheathed + fullOverride → absolute pos/rot in the socket frame.
+        //   • explicit @sheathed + nudge, OR drawn-key fallback → +pos, built-in rot ∘ Euler(rot).
         // Scale is deliberately untouched — scale is owned by the attach path (comp * authored).
-        // No entry = built-in behavior byte-for-byte (zero regression risk).
         private static void ApplySheathedOffset(Transform t, string meshKey)
         {
             if (t == null || string.IsNullOrEmpty(meshKey)) return;
-            if (!AttachmentOffsetRegistry.TryGetOffset(meshKey + SheathedKeySuffix, out var fo)) return;
-            if (fo.fullOverride)
+            if (!TryResolveSheathedOffset(meshKey, out var fo, out var source)) return;
+            bool absolute = source == SheathedOffsetSource.Explicit && fo.fullOverride;
+            if (absolute)
             {
                 t.localPosition = fo.pos;
                 t.localRotation = Quaternion.Euler(fo.eulerRot);
@@ -1835,8 +1864,12 @@ namespace DeNelle.Village
                 t.localPosition += fo.pos;
                 t.localRotation = t.localRotation * Quaternion.Euler(fo.eulerRot);
             }
-            FlowTrace.Step("Offset", $"sheathed offset '{meshKey}{SheathedKeySuffix}' applied: " +
-                $"pos={fo.pos} rot={fo.eulerRot} full={fo.fullOverride}");
+            if (source == SheathedOffsetSource.Explicit)
+                FlowTrace.Step("Offset", $"sheathed offset '{meshKey}{SheathedKeySuffix}' applied: " +
+                    $"pos={fo.pos} rot={fo.eulerRot} full={fo.fullOverride}");
+            else
+                FlowTrace.Step("Offset", $"sheathed FALLBACK (drawn '{meshKey}' nudge on back pose): " +
+                    $"pos={fo.pos} rot={fo.eulerRot}");
         }
 
         // Lazily create the shared BACK sheathe socket under the Chest bone (fallback Spine, then
@@ -2175,10 +2208,20 @@ namespace DeNelle.Village
 
             string key = offHand ? _currentOffHandMeshKey : _currentWeaponMeshKey;
             string id  = offHand ? _currentOffHandId      : _currentWeaponId;
-            string offsetKey = !string.IsNullOrEmpty(key) ? key : id;
-            if (sheathed && !string.IsNullOrEmpty(offsetKey)) offsetKey += SheathedKeySuffix;
+            string baseKey = !string.IsNullOrEmpty(key) ? key : id;
             AttachmentOffset fo = default;
-            bool has = !string.IsNullOrEmpty(offsetKey) && AttachmentOffsetRegistry.TryGetOffset(offsetKey, out fo);
+            SheathedOffsetSource src = SheathedOffsetSource.None;
+            bool has = false;
+            if (!string.IsNullOrEmpty(baseKey))
+            {
+                if (sheathed)
+                    has = TryResolveSheathedOffset(baseKey, out fo, out src);
+                else
+                    has = AttachmentOffsetRegistry.TryGetOffset(baseKey, out fo);
+            }
+            string offsetKey = sheathed && !string.IsNullOrEmpty(baseKey)
+                ? baseKey + SheathedKeySuffix
+                : baseKey;
 
             info.valid        = true;
             info.offHand      = offHand;
@@ -2189,10 +2232,10 @@ namespace DeNelle.Village
             info.pos          = has ? fo.pos      : Vector3.zero;
             info.euler        = has ? fo.eulerRot : Vector3.zero;
             info.scale        = has && fo.scale > 0f ? fo.scale : 1f;
-            // Drawn default = the owner's vertical-authoring workflow; SHEATHED default = NUDGE on
-            // the built-in back pose (an all-zero nudge == today's derived sheathe exactly) —
-            // unless an existing entry says otherwise.
-            info.fullOverride = has ? fo.fullOverride : !sheathed;
+            if (sheathed)
+                info.fullOverride = has && src == SheathedOffsetSource.Explicit && fo.fullOverride;
+            else
+                info.fullOverride = has ? fo.fullOverride : true;
 
             _seatingEditActive = true;
             _seatEditOffHand   = offHand;
@@ -2375,19 +2418,27 @@ namespace DeNelle.Village
             if (scale <= 0f) scale = 1f;
 
             bool ok = AttachmentOffsetRegistry.SaveOffset(key, pos, euler, scale, fullOverride, out devPath, out snippet);
-            // Scale-parity (2026-07-07): a saved DRAWN scale is now the authored multiplier — mirror it
-            // so the very next ApplyHoldPose re-parent composes comp * saved (no wait for a re-equip).
-            if (ok && !_seatEditSheathed)
+            if (!ok)
             {
-                if (_seatEditOffHand) _offHandAuthoredScale = scale;
-                else                  _weaponAuthoredScale  = scale;
+                FlowTrace.Step("Offset", $"SaveSeating '{key}': WRITE FAILED (see warnings).");
+                return false;
             }
-            FlowTrace.Step("Offset", ok
-                ? $"SaveSeating '{key}': pos={pos} euler={euler} scale={scale:0.###} full={fullOverride} -> {devPath}"
-                : $"SaveSeating '{key}': WRITE FAILED (see warnings).");
-            // Keep showing the just-saved pose (registry reload doesn't re-seat the live prop).
+
+            FlowTrace.Step("Offset",
+                $"SaveSeating '{key}': pos={pos} euler={euler} scale={scale:0.###} full={fullOverride} -> {devPath}");
+
+            // Re-seat from the persisted local config immediately — preview-only was the WYSIWYG gap.
+            bool offHand    = _seatEditOffHand;
+            bool sheathed   = _seatEditSheathed;
+            _seatingEditActive = false;
+            _seatEditSheathed  = false;
+            _seatEditMode      = -1;
+            EquipBestForHero();
+            ApplyHoldPose();
+
+            BeginSeatingEdit(offHand, sheathed, out _);
             ApplySeatingPreview(pos, euler, scale, fullOverride);
-            return ok;
+            return true;
         }
 
         /// <summary>Re-equip from the (reloaded) registry to PROVE the saved file reproduces the pose.</summary>

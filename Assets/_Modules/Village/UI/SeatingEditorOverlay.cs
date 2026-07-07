@@ -137,7 +137,8 @@ namespace DeNelle.Village.UI
 
             // Prefer the main-hand weapon; fall back to the off-hand if only a shield is equipped.
             _offHand = false;
-            _sheathed = false;   // always open in Drawn mode (the established workflow)
+            // Town/hub = sheathed on back (what the owner sees); combat = drawn in-hand.
+            _sheathed = !_eq.CombatActive;
             if (!_eq.HasSeatingTarget(false) && _eq.HasSeatingTarget(true)) _offHand = true;
 
             if (!BeginEdit(_offHand))
@@ -546,8 +547,9 @@ namespace DeNelle.Village.UI
             bool ok = _eq.SaveSeating(_pos, _euler, _scale, _fullOverride, out string devPath, out string snippet);
             Debug.Log($"[Seating] SAVE {_offsetKey}: {snippet}");
             Debug.Log($"[Seating] dev file: {devPath}");
+            if (ok) BeginEdit(_offHand);
             SetStatus(ok
-                ? $"Saved '{_offsetKey}'. Dev file written; JSON snippet logged (paste into Assets/OffsetForge/offsets.json)."
+                ? $"Saved '{_offsetKey}' to local settings ({AttachmentOffsetRegistry.DevPath}). Re-equipped from file."
                 : $"Save FAILED for '{_offsetKey}' (see Console).");
         }
 
