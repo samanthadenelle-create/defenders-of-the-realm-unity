@@ -15,7 +15,39 @@
 
 ---
 
-## ★★ SESSION HANDOVER — 2026-07-06/07 (READ FIRST) ★★
+## ★★ SESSION HANDOVER — 2026-07-07 offset persistence (READ FIRST) ★★
+
+**WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`, **PUSHED** (owner logout handoff). Latest:
+`0492d7dc` **fix(gear): local offset settings persist + immediate re-equip on save** — stacks on
+overnight `88d6fbc9` (WYSIWYG scale parity + `@sheathed` registry + Seating Editor Drawn/Sheathed
+toggle).
+
+**WHAT CHANGED (gear offsets — owner ask: "save should stick in town immediately"):**
+- **Local settings file (primary authority):** `Application.persistentDataPath/attachment-offsets.json`
+  — every in-game Save writes here; entries **win over** shipped `Resources/OffsetForge/offsets.json`.
+  Legacy `offsets-dev.json` auto-migrates on first boot. **PlayerPrefs** mirror: `dotr.attachment-offsets`
+  (restores file if deleted).
+- **Always fresh on apply:** `AttachmentOffsetRegistry.Reload()` runs before every `EquipBestForHero()`
+  (scene load, gear swap, post-save re-seat).
+- **Save = immediate re-equip:** Seating Editor Save persists → reload → full re-attach from file
+  (not preview-only). Status shows the local path.
+- **Town carry fallback:** when no `<mesh>@sheathed` entry exists, drawn keys (`sword_A`, `shield_A`)
+  nudge the built-in back pose so hub/town isn't a second ignored orientation system.
+- **Seating Editor default:** opens in **Sheathed** mode when hero is out of combat (town view).
+
+**KEY FILES:** `AttachmentOffsetRegistry.cs`, `EquipmentController.cs` (`ApplySheathedOffset`,
+`SaveSeating`, `TryResolveSheathedOffset`), `SeatingEditorOverlay.cs`. RCA:
+`docs/RCA_WEAPON_OFFSETS_2026-07-07.md`.
+
+**VERIFY NEXT (owner):** launch build → town → Seating Editor → dial → Save → walk hub without restart;
+pose should match saved file. Optional fine-tune: explicit `sword_A@sheathed` / `shield_A@sheathed`
+entries for perfect back pose (Drawn/Sheathed toggle).
+
+**COMMITS PUSHED THIS HANDOFF:** `75bffabd` → `88d6fbc9` → `3b4cfeac` → `b5547351` → `0492d7dc`.
+
+---
+
+## ★★ SESSION HANDOVER — 2026-07-06/07 (⚠ SUPERSEDED by offset block above for gear; UI/HUD lanes still valid) ★★
 
 **WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`, 4 lanes committed + PUSHED (owner-authorized
 for the demo recording): **WO-611 combat HUD** (owner v8 design: inset vitals well, d-pad cross, attack
