@@ -61,7 +61,6 @@ namespace DeNelle.HUD.Kit
         // live handles
         private ElarionUiKit.PartyNameplateHandle _vitals;   // WO-432 shared HP/MP plate (+07-06 XP strip)
         private bool _xpStripBound;                          // one-shot FlowTrace on first XP bind
-        private ElarionUiKit.BarHandle _xpBar;
         private ElarionUiKit.CurrencyChipHandle _wisdomChip;
         private ElarionUiKit.PartyNameplateHandle _heartPlate;   // WO-432: Heart of Elarion on the shared plate
         private ElarionUiKit.TargetFrameHandle _targetFrame;
@@ -219,13 +218,17 @@ namespace DeNelle.HUD.Kit
             Register("playerNameplate", WrapAsWidget("playerNameplate", _vitals.Root.gameObject));
             BuildStatusRow(pool, "playerBuffRow", out _playerStatusSlots);
 
-            // xp bar under the plate (thin, no frame).
-            _xpBar = ElarionUiKit.BuildObsidianBar(pool, ElarionUiKit.ObsidianBarKind.Xp,
-                new Vector2(0.02f, 0.18f), new Vector2(0.86f, 0.30f), withValue: false, framed: true);
-            Register("xpBar", WrapAsWidget("xpBar", _xpBar.track.gameObject));
+            // Owner F8 07-06: the standalone under-plate XP bar is GONE — it rendered frameless
+            // (its HudBarXp frame sprite never drew) and duplicated the in-plate XP strip inside
+            // the Knight nameplate (ElarionUiKitNameplate), which is THE one XP display. The
+            // hud-areas.json "xpBar" occupancy row is now inert (ApplyPosture iterates only
+            // registered widgets), so no data change is required.
 
+            // Owner F8 07-06: Wisdom = skill points; the chip's icon art is a known gap, so
+            // "434" read as an unlabeled naked number. "SKILL" text tag is ALWAYS visible
+            // (colorblind law: icon + TEXT, never icon-or-nothing).
             _wisdomChip = ElarionUiKit.CurrencyChip(pool, ElarionUiKit.CurrencyKind.Wisdom,
-                new Vector2(0.02f, 0.00f), new Vector2(0.34f, 0.16f));
+                new Vector2(0.02f, 0.00f), new Vector2(0.34f, 0.16f), tag: "SKILL");
             Register("wisdomChip", WrapAsWidget("wisdomChip", _wisdomChip.root));
 
             // ── status: wave block (calm(town), between waves only) + heart ──
@@ -775,11 +778,17 @@ namespace DeNelle.HUD.Kit
                 ElarionUiKit.CurrencyKind.Iron, ElarionUiKit.CurrencyKind.Food,
                 ElarionUiKit.CurrencyKind.Crystal,
             };
+            // Owner F8 07-06 (flag_03): the rows showed 5 raw numbers with ZERO identifiers —
+            // the icon art (RpgUi/currency/*) doesn't exist, so every icon well hid. Each row
+            // now carries an ALWAYS-VISIBLE text tag (icon stays a bonus when art lands);
+            // names mirror the CurrencyKind/EconomyModel fields — label truthfully.
+            var tags = new[] { "Gold", "Wood", "Iron", "Food", "Crystal" };
             _resChips = new ElarionUiKit.CurrencyChipHandle[kinds.Length];
             for (int i = 0; i < kinds.Length; i++)
             {
                 _resChips[i] = ElarionUiKit.CurrencyChip(_resExpandedRow.transform, kinds[i],
-                    Vector2.zero, Vector2.one, primary: kinds[i] == ElarionUiKit.CurrencyKind.Gold);
+                    Vector2.zero, Vector2.one, primary: kinds[i] == ElarionUiKit.CurrencyKind.Gold,
+                    tag: tags[i]);
                 var le = _resChips[i].root.AddComponent<LayoutElement>();
                 le.minHeight = 34f; le.preferredHeight = 34f; le.minWidth = 168f;
             }
@@ -787,23 +796,36 @@ namespace DeNelle.HUD.Kit
             var resTab = ElarionUiKit.BuildObsidianButton(_resDock.transform, "$",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 new Vector2(0.95f, 0.86f), new Vector2(1.0f, 0.99f), ToggleResourcePanel);
+            // Owner F8 07-06 (flag_03): the collapsed dock read as an anonymous box — the "$"
+            // glyph was swapped for a coin icon with NO text. The tab now ALWAYS says
+            // "Resources" (icon rides above the word when it resolves; text never hides).
+            var resTabLbl = resTab.GetComponentInChildren<TMP_Text>();
+            if (resTabLbl != null)
+            {
+                resTabLbl.text = "Resources";
+                resTabLbl.fontSize = ElarionUi.FontMicro;
+                ElarionUiKit.FitSingleLine(resTabLbl);   // narrow tab — never clip the word
+            }
             var resTabIcon = UiStyle.Icon("gold", "coin", "resources");
-            if (resTabIcon != null)
+            if (resTabIcon != null && resTabLbl != null)
             {
                 var ico = ElarionUiKit.AddImage(resTab.transform, "TabIcon",
-                    new Vector2(0.15f, 0.15f), new Vector2(0.85f, 0.85f), Color.white, rounded: false);
+                    new Vector2(0.25f, 0.42f), new Vector2(0.75f, 0.92f), Color.white, rounded: false);
                 var icoImg = ico.GetComponent<Image>();
                 icoImg.sprite = resTabIcon; icoImg.preserveAspect = true; icoImg.raycastTarget = false;
-                var lbl = resTab.GetComponentInChildren<TMP_Text>();
-                if (lbl != null) lbl.gameObject.SetActive(false);   // icon replaces the "$" glyph
+                var lblRt = (RectTransform)resTabLbl.transform;   // word drops to the lower half
+                lblRt.anchorMin = new Vector2(0.02f, 0.04f);
+                lblRt.anchorMax = new Vector2(0.98f, 0.40f);
+                lblRt.offsetMin = Vector2.zero; lblRt.offsetMax = Vector2.zero;
             }
             _resPanelOpen = false;
             _resExpandedRow.SetActive(false);   // collapsed by default
             Register("resourceChips", WrapAsWidget("resourceChips", _resDock));
 
             // Collapsed variant (calm(explore)): gold chip only; TAP expands the row for 6s.
+            // "Gold" tag so the lone number is never anonymous (flag_03 / colorblind law).
             _resGoldOnly = ElarionUiKit.CurrencyChip(pool, ElarionUiKit.CurrencyKind.Gold,
-                new Vector2(0.05f, 0.82f), new Vector2(1f, 1f), primary: true);
+                new Vector2(0.05f, 0.82f), new Vector2(1f, 1f), primary: true, tag: "Gold");
             var tapGo = _resGoldOnly.root;
             var tapBtn = tapGo.AddComponent<Button>();
             tapBtn.transition = Selectable.Transition.None;
@@ -884,7 +906,6 @@ namespace DeNelle.HUD.Kit
             if (_vitals.NameLabel != null)
                 _vitals.NameLabel.text = (string.IsNullOrEmpty(v.ClassId) ? "Hero" : Cap(v.ClassId)) +
                                          "  Lv " + Mathf.Max(1, v.Level);
-            _xpBar.SetValue(v.Xp, Mathf.Max(1, v.XpToNext));
             // Owner 07-06: in-plate XP strip — fillAmount = xp/xpToNext, mirroring the HP/MP
             // fill-binding contract (§1.1). XpToNext<=0 = no HeroProgression data yet (the model
             // default; the producer never pushed) -> strip stays hidden, never blank/stuck-full.

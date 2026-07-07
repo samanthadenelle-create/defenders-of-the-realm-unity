@@ -662,6 +662,9 @@ namespace DeNelle.Core.UI
             public Image icon;
             /// <summary>The amount label.</summary>
             public TMP_Text amount;
+            /// <summary>Optional ALWAYS-VISIBLE text identifier ("SKILL", "Wood"…) — null when the
+            /// chip was built without one. Colorblind law: a chip must never be a naked number.</summary>
+            public TMP_Text tag;
             /// <summary>The plate Image (chrome).</summary>
             public Image plate;
 
@@ -696,9 +699,13 @@ namespace DeNelle.Core.UI
         /// currency icons, and a count-tweened amount. <paramref name="primary"/> (Gold) renders a
         /// size class larger with the gold-tinted amount — gold primacy is a property of the
         /// component, never per-screen styling. Every wallet strip/footer consumes this.
+        /// <paramref name="tag"/> (optional) renders a small ALWAYS-VISIBLE text identifier
+        /// ("SKILL", "Wood"…) left of the amount — shown even when the icon resolves. Owner is
+        /// red/green colorblind and the currency icon set is a known art gap (RpgUi/currency/*
+        /// missing → icon well hides): a chip must NEVER read as a naked number.
         /// </summary>
         public static CurrencyChipHandle CurrencyChip(Transform parent, CurrencyKind kind,
-            Vector2 anchorMin, Vector2 anchorMax, bool primary = false)
+            Vector2 anchorMin, Vector2 anchorMax, bool primary = false, string tag = null)
         {
             var go = new GameObject("CurrencyChip_" + kind, typeof(Image));
             go.transform.SetParent(parent, false);
@@ -736,16 +743,32 @@ namespace DeNelle.Core.UI
             if (iconSprite != null) icon.sprite = iconSprite;
             else iconGo.SetActive(false);
 
+            // Text tag (optional) — the guaranteed identifier, LEFT of the amount, visible
+            // whether or not the icon resolved (icon is a bonus; text is the contract).
+            TMP_Text tagLabel = null;
+            bool hasTag = !string.IsNullOrEmpty(tag);
+            if (hasTag)
+            {
+                tagLabel = Label(go.transform, tag, 0f, 1f,
+                    ElarionUi.Parchment, ElarionUi.FontMicro,
+                    TextAlignmentOptions.MidlineLeft, 0.33f, 0.58f);
+                tagLabel.raycastTarget = false;
+                EnsureFont(tagLabel, FontRole.Body);
+                FitSingleLine(tagLabel);                                   // §1.14 — tag never spills its slot
+            }
+
             // Amount — gold primacy: primary chip = one size class up + gilt digits.
+            // With a tag present the amount cedes the tag's slot (right-aligned, so short
+            // wallets never collide; FitSingleLine shrinks the long ones).
             var amount = Label(go.transform, "0", 0f, 1f,
                 primary ? ElarionUi.Gilt : ElarionUi.Parchment,
                 primary ? ElarionUi.FontHead : ElarionUi.FontLabel,
-                TextAlignmentOptions.MidlineRight, 0.32f, 0.94f, bold: primary);
+                TextAlignmentOptions.MidlineRight, hasTag ? 0.60f : 0.32f, 0.94f, bold: primary);
             amount.raycastTarget = false;
             EnsureFont(amount, FontRole.Body);
             FitSingleLine(amount);                                         // §1.14 — big wallets never spill the chip
 
-            var handle = new CurrencyChipHandle { root = go, icon = icon, amount = amount, plate = plate };
+            var handle = new CurrencyChipHandle { root = go, icon = icon, amount = amount, tag = tagLabel, plate = plate };
             handle.SetAmount(0, animate: false);
             return handle;
         }

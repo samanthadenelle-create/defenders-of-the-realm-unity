@@ -151,23 +151,24 @@ namespace DeNelle.Village
 
             _canvas = ElarionUiKit.BuildModalCanvas("BuildPaletteCanvas", SortingOrder);
 
-            // Bottom-anchored dock: top bar (balance + Orient + Done) over the card tray.
-            // Only the dock's own graphics raycast — everything above it stays click-through
+            // Bottom-CENTERED dock sized to content (owner F8 2026-07-06, board #4):
+            // the palette lists 3 cards, so it no longer spans a full-width black wall.
+            // 540 wide = padding 24 + 3×160 cards + 2×10 spacing; 224 tall = 44px
+            // header row (balance | Orient | Done) over a 180px card tray. Only the
+            // dock's own graphics raycast — the rest of the screen stays click-through
             // so world taps still land placements.
             var dock = new GameObject("PaletteDock", typeof(RectTransform));
             dock.transform.SetParent(_canvas.transform, false);
             var drt = (RectTransform)dock.transform;
-            drt.anchorMin = new Vector2(0f, 0f);
-            drt.anchorMax = new Vector2(1f, 0f);
+            drt.anchorMin = new Vector2(0.5f, 0f);
+            drt.anchorMax = new Vector2(0.5f, 0f);
             drt.pivot = new Vector2(0.5f, 0f);
             drt.anchoredPosition = Vector2.zero;
-            // 300 -> 340 (owner 2026-07-06): cards now carry an art band under the
-            // name, so the cell GROWS rather than squeezing the name/cost labels.
-            drt.sizeDelta = new Vector2(0f, 340f);
+            drt.sizeDelta = new Vector2(540f, 224f);
 
-            // Top row: obsidian fill + gold under-rule (the kit panel language).
+            // Slim header row: obsidian fill + gold under-rule (the kit panel language).
             var topBar = ElarionUiKit.AddImage(dock.transform, "TopBar",
-                new Vector2(0f, 0.72f), new Vector2(1f, 1f), ElarionUiKit.ObsidianFill, rounded: false);
+                new Vector2(0f, 0.80f), new Vector2(1f, 1f), ElarionUiKit.ObsidianFill, rounded: false);
             var rule = ElarionUiKit.AddImage(topBar.transform, "GoldRule",
                 new Vector2(0f, 0f), new Vector2(1f, 0f), ElarionUiKit.ObsidianTrim, rounded: false);
             var rrt = rule.GetComponent<RectTransform>();
@@ -176,28 +177,33 @@ namespace DeNelle.Village
             var ruleImg = rule.GetComponent<Image>();
             if (ruleImg != null) ruleImg.raycastTarget = false;
 
-            _balanceLabel = MakeText(topBar.transform, "Crystals: 0", 18, ElarionUi.Gilt,
+            // Balance sits IN the dock header, left-aligned beside the buttons —
+            // no more floating alone on an empty band (owner F8 2026-07-06).
+            _balanceLabel = MakeText(topBar.transform, "Crystals: 0", 16, ElarionUi.Gilt,
                 FontStyles.Bold, TextAlignmentOptions.Left,
-                new Vector2(0.02f, 0.10f), new Vector2(0.50f, 0.90f));
+                new Vector2(0.04f, 0.10f), new Vector2(0.36f, 0.90f));
 
             // Orient — opens the 3-axis orient editor on the ARMED entry (no id typing).
             _orientBtn = ElarionUiKit.BuildObsidianButton(topBar.transform, "Orient",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.56f, 0.10f), new Vector2(0.76f, 0.90f),
+                new Vector2(0.38f, 0.12f), new Vector2(0.66f, 0.88f),
                 () => { if (!string.IsNullOrEmpty(_armedId)) OnOrientRequested?.Invoke(_armedId); });
             _orientBtn.gameObject.SetActive(false);   // shown only while armed
 
             // Done exits Build Mode — the strip's close affordance, so it carries the
-            // canonical close name while keeping its "Done" label.
+            // canonical close name while keeping its "Done" label. Sized to the kit
+            // scale family (~156x33 in the 540-wide dock — narrower than a card),
+            // not the old fifth-of-the-screen gold slab.
             var exitBtn = ElarionUiKit.BuildObsidianButton(topBar.transform, "Done",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.78f, 0.10f), new Vector2(0.98f, 0.90f),
+                new Vector2(0.68f, 0.12f), new Vector2(0.97f, 0.88f),
                 () => OnExitRequested?.Invoke());
             exitBtn.gameObject.name = "CloseButton";
 
-            // Bottom: horizontal-scrolling slot-plate card tray in a recessed dark well.
+            // Bottom: horizontal-scrolling slot-plate card tray in a recessed dark well
+            // (content-width now, so it reads as a dock — not a screen-wide wall).
             var tray = ElarionUiKit.AddImage(dock.transform, "CardTray",
-                new Vector2(0f, 0f), new Vector2(1f, 0.72f),
+                new Vector2(0f, 0f), new Vector2(1f, 0.80f),
                 new Color(0f, 0f, 0f, 0.55f), rounded: false);
 
             var scrollGo = new GameObject("Scroll", typeof(RectTransform), typeof(ScrollRect), typeof(RectMask2D), typeof(Image));

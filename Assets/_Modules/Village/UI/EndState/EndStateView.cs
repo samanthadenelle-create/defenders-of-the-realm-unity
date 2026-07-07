@@ -114,11 +114,29 @@ namespace DeNelle.Village.UI
         {
             float units = 0.6f;                            // header/footer breathing room
             if (vm.Emblem != null) units += 2.4f;
-            if (!string.IsNullOrEmpty(vm.Subtitle)) units += 1.1f;
+            // Owner F8 flag_04 ("death panel elements overlap"): the subtitle was budgeted
+            // ONE line's worth (1.1) regardless of length, so the 3-line death message
+            // overflowed its band — shield icon over line 1, Try Again over lines 2-3.
+            // Budget the band per WRAPPED LINE so the panel grows to fit the message.
+            if (!string.IsNullOrEmpty(vm.Subtitle)) units += 1.1f * SubtitleLines(vm.Subtitle);
             if (vm.Stars >= 0) units += 1.0f;
             if (vm.TimeSeconds >= 0f) units += 0.8f;
             units += vm.Spoils.Count * 1.0f;
             return Mathf.Clamp(0.055f + units * 0.021f, 0.12f, 0.36f);   // WO-433: raise height clamp (was 0.33)
+        }
+
+        /// <summary>Estimated WRAPPED line count for the subtitle at FontBody inside the
+        /// body well (~36 chars/line at the modal's width). Explicit '\n' segments each
+        /// wrap independently. Drives the band weight so a multi-line death message gets
+        /// a band tall enough to hold it (F8 flag_04: one-line band = text spilled over
+        /// the emblem above and the CTA below). Clamped 1..4.</summary>
+        private static int SubtitleLines(string subtitle)
+        {
+            if (string.IsNullOrEmpty(subtitle)) return 0;
+            int lines = 0;
+            foreach (var seg in subtitle.Split('\n'))
+                lines += Mathf.Max(1, Mathf.CeilToInt(seg.Length / 36f));
+            return Mathf.Clamp(lines, 1, 4);
         }
 
         // ── binding ───────────────────────────────────────────────────────────
@@ -217,11 +235,22 @@ namespace DeNelle.Village.UI
                     Track(go, 0.10f, 0.7f);   // emblem pops from smaller — the hero beat
                 }));
 
+            // F8 flag_04 ("death panel elements overlap"): this band was a FIXED 1.1 weight
+            // (one line) while the death message wraps to ~3 lines — TMP renders overflow
+            // OUTSIDE its rect, so the text climbed under the emblem band above (shield on
+            // top of line 1) and sank into the carved footer band below ("Try Again" over
+            // lines 2-3). Weight the band per wrapped line (matches PanelHalfHeight, which
+            // grows the panel by the same estimate) and auto-shrink as the last-resort
+            // guard so the copy can NEVER escape its rect (§1.14: text never overlaps
+            // siblings) if the estimate is ever short.
             if (!string.IsNullOrEmpty(vm.Subtitle))
-                bands.Add((1.1f, host =>
+                bands.Add((1.1f * SubtitleLines(vm.Subtitle), host =>
                 {
                     var l = ElarionUiKit.Label(host, vm.Subtitle, 0f, 1f, ElarionUi.Parchment,
                         ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
+                    l.enableAutoSizing = true;                       // shrink-to-fit guard only —
+                    l.fontSizeMax = ElarionUi.FontBody;              // never grows past the kit size
+                    l.fontSizeMin = ElarionUi.FontBody * 0.66f;
                     l.raycastTarget = false;
                     Track(l.gameObject, 0.14f, 1f);
                 }));

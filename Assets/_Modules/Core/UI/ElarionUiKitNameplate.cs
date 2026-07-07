@@ -125,12 +125,14 @@ namespace DeNelle.Core.UI
             // anchored instead (identical visual: two stacked horizontal bars). Health = top
             // row, Mana = bottom row.
             // Owner 07-06 ("can the hp/mp of hero as well as tree stay inside their containers?"):
-            // the old 0.04..0.97 x / 0.05..0.56 y span let the bar rows ride the ornate plate
-            // sprite's decorative border (the sprite's visible frame is inset from its rect), so
-            // fills READ as bleeding outside the plate. Real margin all around — the rows now sit
-            // well inside the visible plate art at any resolution (fraction-of-plate anchors).
+            // the nameplate_party plate draws Image.Type.Simple and its VISIBLE ornate frame is
+            // INSET from the sprite rect — so anchors near the sprite edge still bleed past the
+            // frame the player sees. 0.06..0.94 x / 0.08..0.55 y was felt-verified INSUFFICIENT
+            // in the built player (owner F8 2026-07-06/07: bars still rendered outside their
+            // plates). Margin below is derived from that visible-frame inset — generous, err
+            // inward: bars must read as visibly contained INSIDE the box at any resolution.
             var statBars = AddImage(rootGo.transform, "StatBars",
-                new Vector2(0.06f, 0.08f), new Vector2(0.94f, 0.55f),
+                new Vector2(0.10f, 0.12f), new Vector2(0.88f, 0.54f),
                 new Color(0f, 0f, 0f, 0f), rounded: false);
             statBars.GetComponent<Image>().raycastTarget = false;
             // WO-437: clip the bars to the StatBars container so no HP/MP fill can bleed past the
@@ -168,7 +170,9 @@ namespace DeNelle.Core.UI
                 var xpBg = new GameObject("XpTrack", typeof(Image));
                 xpBg.transform.SetParent(statBars.transform, false);
                 var xrt = (RectTransform)xpBg.transform;
-                xrt.anchorMin = new Vector2(0f, 0f); xrt.anchorMax = new Vector2(1f, 0.14f);
+                // Match the bar rows' 6% right inset (end-cap fix) so the strip shares the
+                // rows' horizontal extents and stays inside the visible plate frame.
+                xrt.anchorMin = new Vector2(0f, 0f); xrt.anchorMax = new Vector2(0.94f, 0.14f);
                 xrt.offsetMin = Vector2.zero; xrt.offsetMax = Vector2.zero;
                 var xpBgImg = xpBg.GetComponent<Image>();
                 xpBgImg.raycastTarget = false;
@@ -210,10 +214,16 @@ namespace DeNelle.Core.UI
             var bgGo = new GameObject(name + "Background", typeof(Image));
             bgGo.transform.SetParent(parent, false);
             var brt = (RectTransform)bgGo.transform;
-            brt.anchorMin = anchorMin; brt.anchorMax = anchorMax;
+            // Owner F8 2026-07-06/07: nameplate_bar's pointed end-cap (drawn Simple; the sprite
+            // has NO 9-slice border — spriteBorder 0,0,0,0 — so Sliced can't tuck it) landed at
+            // the row's right edge and poked past the plate frame. Inset xMax ~6% so the cap
+            // stays inside the visible plate.
+            brt.anchorMin = anchorMin;
+            brt.anchorMax = new Vector2(anchorMax.x - 0.06f, anchorMax.y);
             brt.offsetMin = Vector2.zero; brt.offsetMax = Vector2.zero;
             var bgImg = bgGo.GetComponent<Image>();
             bgImg.raycastTarget = false;
+            bgImg.preserveAspect = false;   // stretch to the row rect — never overhang it
             // WO-437: also clip each bar's fill to its OWN background container, so a >100% or
             // animating Filled fill can never spill past the bar edge (belt-and-braces with the
             // StatBars mask). The background Image is the mask graphic; the fill child is clipped.
