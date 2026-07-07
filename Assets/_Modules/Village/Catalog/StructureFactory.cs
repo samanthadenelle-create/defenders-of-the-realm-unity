@@ -212,17 +212,13 @@ namespace DeNelle.Village
                 return false;
             }
 
-            if (entry.orientation != null && entry.orientation.manual)
-            {
-                Guard.Try("Structure", $"apply orientation '{entry.id}' (reskin)", () =>
-                {
-                    visual.transform.localRotation = Quaternion.Euler(entry.orientation.Euler) * visual.transform.localRotation;
-                    visual.transform.localPosition += entry.orientation.Offset;
-                    if (entry.orientation.HasScale)
-                        visual.transform.localScale = Vector3.Scale(visual.transform.localScale, entry.orientation.EffectiveScale);
-                    ReseatCorrectedBottom(visual, root.transform.position.y);
-                });
-            }
+            // Orientation entries are authored against the BASE visualPrefabPath model (the
+            // CatalogOrientationBaker / owner-manual contract). ReskinForLevel only ever runs when a
+            // DIFFERENT tier model is worn (the early-return above), so applying the base euler here
+            // tips tier models that are already upright — F8-2 2026-07-07: tower_wall_wizard's Tripo
+            // base needs Z-90 while its L2 Tower_Medieval_Big (polyperfect) is upright. Tier models
+            // rely on their prefab-native orientation; a tier needing its own correction gets its own
+            // authoring seam when that real need exists.
 
             foreach (var g in old) Object.Destroy(g);
             FlowTrace.Step("Structure", $"'{entry.id}' reskinned to tier-{level} model '{stem}' " +
