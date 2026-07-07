@@ -143,6 +143,10 @@ namespace DeNelle.Village
 
                     // FixTripoMaterials so a Tripo/AccuRIG export renders in URP (no magenta).
                     // SeatFlat + Fit + Seat run inside Skin — prop stood up, sized, seated on the node.
+                    // Owner F8 2026-07-07 "tree node y+90": the wood log-pile gets a +90 Y yaw. Skin
+                    // applies LocalRotation BEFORE SeatFlat, and SeatFlat only corrects the narrowest
+                    // axis to +Y, so a pure yaw survives the auto pass (the manual-over-auto seam for
+                    // this path). Keyed per resource — the other props keep identity.
                     var skinned = VisualFactory.Skin(_visual.transform, path,
                         new SkinOptions
                         {
@@ -150,6 +154,8 @@ namespace DeNelle.Village
                             SeatOnGround = true,
                             FixTripoMaterials = true,
                             SeatFlat = true,
+                            LocalRotation = Resource == MineResource.Wood
+                                ? Quaternion.Euler(0f, 90f, 0f) : (Quaternion?)null,
                         });
                     if (skinned != null) return;
                 }

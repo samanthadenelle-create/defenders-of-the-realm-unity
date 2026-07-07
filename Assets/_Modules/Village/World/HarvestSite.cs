@@ -238,9 +238,14 @@ namespace DeNelle.Village.World
             // Owner F8 2026-07-04 ("flat side down"): the old hand-authored euler (0,180,-90) laid the
             // Tripo resource model on its side. SeatFlat derives the upright pose from the model's own
             // bounds (narrowest axis → +Y, §4) so the flat face rests down — same fix as MineNodeVisual.
+            // Owner F8 2026-07-07 "tree node y+90": the wood log-pile gets a +90 Y yaw, same as
+            // MineNodeVisual (both consumers of Harvest/wood stay consistent). Applied before
+            // SeatFlat inside Skin, so the yaw survives the bounds-derived auto pass.
             var model = string.IsNullOrEmpty(modelPath) ? null : VisualFactory.Skin(transform, modelPath,
                 new SkinOptions { FitLargest = 2.4f, SeatOnGround = true, FixTripoMaterials = true,
-                    SeatFlat = true });
+                    SeatFlat = true,
+                    LocalRotation = ResourceType == MineResource.Wood
+                        ? Quaternion.Euler(0f, 90f, 0f) : (Quaternion?)null });
             if (model != null)
             {
                 model.name = "HarvestVisual_Model";
