@@ -126,6 +126,14 @@ namespace DeNelle.Village
             return n;
         }
 
+        // RC3b FIX (2026-07-04, banner restored 2026-07-07 — do NOT re-invert this order): read the
+        // RESOURCES mirror FIRST — it is the ONE copy that actually SHIPS in a player build, so
+        // Resources-first means the runtime resolves the SAME offsets file in the Editor AND in a
+        // build. The 3-month editor≠build root cause was the reverse order: the Editor read the
+        // authoring dataPath file while the build silently fell to a stale Resources mirror, so the
+        // owner's dialed offsets never shipped. The authoring file (Assets/OffsetForge/offsets.json)
+        // is kept byte-synced into the mirror by the editor OffsetForgeMirrorSync postprocessor;
+        // the dataPath read below is ONLY an Editor fallback for a not-yet-synced fresh edit.
         private static string ReadBaseJson()
         {
             var ta = Resources.Load<TextAsset>(ResourcesPath);
@@ -152,7 +160,9 @@ namespace DeNelle.Village
                 if (File.Exists(UserFilePath))
                     return File.ReadAllText(UserFilePath);
 
-                // Migrate legacy dev file into the canonical user settings path.
+                // Migrate legacy dev file into the canonical user settings path. Delete the legacy
+                // file after a successful copy — otherwise a stale offsets-dev.json would win over
+                // the FRESHER PlayerPrefs backup if the user file is ever lost (restore order below).
                 if (File.Exists(LegacyDevFilePath))
                 {
                     string legacy = File.ReadAllText(LegacyDevFilePath);
@@ -161,8 +171,9 @@ namespace DeNelle.Village
                         Directory.CreateDirectory(Application.persistentDataPath);
                         File.WriteAllText(UserFilePath, legacy);
                         MirrorToPlayerPrefs(legacy);
+                        File.Delete(LegacyDevFilePath);
                         FlowTrace.Step("Offset",
-                            $"migrated legacy '{LegacyDevFilePath}' -> '{UserFilePath}'.");
+                            $"migrated legacy '{LegacyDevFilePath}' -> '{UserFilePath}' (legacy removed).");
                     }
                     catch (Exception ex)
                     {

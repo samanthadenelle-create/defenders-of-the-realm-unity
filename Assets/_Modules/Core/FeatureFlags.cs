@@ -466,6 +466,16 @@ namespace DeNelle.Core
         /// combat-HUD widget is flag-gated at its build site). PlayerPrefs "ff.combathud611" = 1 to preview.</summary>
         public static bool CombatHud611 => Get("combathud611", defaultOn: false);
 
+        /// <summary>2026-07-07 sheathed-pose fallback (owner A/B): when a weapon has NO explicit
+        /// "&lt;mesh&gt;@sheathed" registry entry, its DRAWN offset falls back onto the built-in back
+        /// pose. OFF (default) = the fallback nudges POSITION ONLY — frame-safe, since the drawn
+        /// rotation was authored in the HAND frame and composing it onto the chest-socket sheathe
+        /// rotation is a frame mismatch (e.g. sword_A's drawn euler (117,-61,-111) swings the back
+        /// carry arbitrarily). ON = the 0492d7dc behavior (position + rotation compose) as the
+        /// BACKUP if position-only doesn't carry the town fix. Explicit @sheathed entries are
+        /// identical under both. PlayerPrefs "ff.sheathdrawnrot" = 1 to flip.</summary>
+        public static bool SheathedDrawnRotFallback => Get("sheathdrawnrot", defaultOn: false);
+
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
         {

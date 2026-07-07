@@ -1847,7 +1847,11 @@ namespace DeNelle.Village
         // OWNER-AUTHORABLE SHEATHED POSE consumption (root fix 2026-07-07): after the built-in
         // sheathe pose is applied, refine it from the registry in the BACK-SOCKET frame:
         //   • explicit @sheathed + fullOverride → absolute pos/rot in the socket frame.
-        //   • explicit @sheathed + nudge, OR drawn-key fallback → +pos, built-in rot ∘ Euler(rot).
+        //   • explicit @sheathed + nudge → +pos, built-in rot ∘ Euler(rot).
+        //   • drawn-key fallback → +pos ONLY by default: the drawn euler was authored in the HAND
+        //     frame (e.g. sword_A (117,-61,-111)); composing it onto the chest-socket sheathe
+        //     rotation is a frame mismatch. ff.sheathdrawnrot=1 restores the full pos+rot compose
+        //     (the 0492d7dc behavior) as the owner's A/B backup.
         // Scale is deliberately untouched — scale is owned by the attach path (comp * authored).
         private static void ApplySheathedOffset(Transform t, string meshKey)
         {
@@ -1862,14 +1866,17 @@ namespace DeNelle.Village
             else
             {
                 t.localPosition += fo.pos;
-                t.localRotation = t.localRotation * Quaternion.Euler(fo.eulerRot);
+                bool composeRot = source == SheathedOffsetSource.Explicit
+                                  || DeNelle.Core.FeatureFlags.SheathedDrawnRotFallback;
+                if (composeRot)
+                    t.localRotation = t.localRotation * Quaternion.Euler(fo.eulerRot);
             }
             if (source == SheathedOffsetSource.Explicit)
                 FlowTrace.Step("Offset", $"sheathed offset '{meshKey}{SheathedKeySuffix}' applied: " +
                     $"pos={fo.pos} rot={fo.eulerRot} full={fo.fullOverride}");
             else
-                FlowTrace.Step("Offset", $"sheathed FALLBACK (drawn '{meshKey}' nudge on back pose): " +
-                    $"pos={fo.pos} rot={fo.eulerRot}");
+                FlowTrace.Step("Offset", $"sheathed FALLBACK (drawn '{meshKey}' on back pose): " +
+                    $"pos={fo.pos} rot={(DeNelle.Core.FeatureFlags.SheathedDrawnRotFallback ? fo.eulerRot.ToString() : "SKIPPED (pos-only, ff.sheathdrawnrot=0)")}");
         }
 
         // Lazily create the shared BACK sheathe socket under the Chest bone (fallback Spine, then

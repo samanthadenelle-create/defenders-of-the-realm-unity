@@ -43,6 +43,14 @@ toggle).
 pose should match saved file. Optional fine-tune: explicit `sword_A@sheathed` / `shield_A@sheathed`
 entries for perfect back pose (Drawn/Sheathed toggle).
 
+**A/B ADDENDUM (2026-07-07, pre-felt-test review):** the `0492d7dc` drawn→sheathed fallback composed
+the HAND-frame drawn euler (e.g. `sword_A` (117,-61,-111)) onto the chest-socket back pose — a frame
+mismatch flagged in review. Now flag-gated: **default = position-only nudge** (frame-safe);
+**`ff.sheathdrawnrot`=1 = the full pos+rot compose** as the backup if position-only doesn't carry the
+town fix. Explicit `@sheathed` entries identical under both. Also: legacy `offsets-dev.json` is deleted
+after migration (stale-shadow guard) + the RC3b Resources-first banner restored in
+`AttachmentOffsetRegistry.cs`.
+
 **COMMITS PUSHED THIS HANDOFF:** `75bffabd` → `88d6fbc9` → `3b4cfeac` → `b5547351` → `0492d7dc`.
 
 ---
