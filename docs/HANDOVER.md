@@ -15,7 +15,40 @@
 
 ---
 
-## ★★ SESSION HANDOVER — 2026-07-07 offset persistence (READ FIRST) ★★
+## ★★ SESSION HANDOVER — 2026-07-07 evening F8 batch (READ FIRST) ★★
+
+**WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`, 5 lanes committed LOCAL (`26cc6d47` →
+`90541989`), **push held for owner felt-pass**. The owner's evening felt-test produced 7 F8 flags +
+3 chat directives — all triaged live via the F8 watcher (QA read-only RCA agents, every fix
+§12-data-proven), implemented, and verified: COMPILE_GATE_OK + REGRESSION_OK + fresh build + 4-bot
+fleet (13/13 panels, popup-close clean, vendor talk-route 0 violations, combat invariants PASS).
+
+**LANDED (ticket → commit):** F8-2 wizard tower z-90 (`26cc6d47` — orientation was authored but
+inert, manual=false; now euler Z-90 + manual=true, and ReskinForLevel no longer applies base-authored
+euler to tier models) · F8-6 wood node y+90 (`25da4062` — per-Wood LocalRotation pre-SeatFlat at
+MineNodeVisual + HarvestSite) · F8-4 black interact removed for buildings (`3b795bf0` — NPC Talk is
+the one path; uncovered buildings self-report via Warn; the old cover gate leaked on null hook ids
+Apothecary/JewelersBench) · F8-7 target frame hides without a target + moved to its designed
+TargetInfo zone, compass keeps Status in combat postures (`e01553aa`) · F8-3+F8-9 attack pill art
+(root cause: icon_energy_sword shipped textureType:0, never a Sprite → fallback to old icon_sword;
+proof Player.log:15629) + first-ever currency icon mirror, all five owner picks (gold=Blink
+Gold_Currency, wood/food/crystal/iron=HudIcons) (`90541989`).
+
+**HELD OPEN:** F8-1/F8-5 dialogue Close seat (RCA proves box-in-a-box in DialogueView.BuildUi —
+inner DialogueInterior plate + frame + Close seated at the plate floor — but the current tree's
+seat math may already differ from her build; adjudicate from a fresh capture before editing) ·
+F8-8 roaming enemy families + danger gradient (owner directive, canon-grounded — needs a spec WO;
+consolidate the divergent RegionMobSpawner/EnemyOutpost/GarrisonController stat blocks into
+enemies.json as part of it) · F8-10 PartyBar 'Grom' label 0-glyphs (fleet 4/4, pre-existing class).
+
+**VERIFY NEXT (owner):** fresh build at Builds/Windows — wizard tower roll, log-pile yaw, attack
+pill = pixel energy-sword, no black interact at storefronts, compass visible in combat + target
+frame only with a real target, resource chips show the five icons. Board = Task list tickets
+F8-1..F8-10 with full hand-off logs.
+
+---
+
+## ★★ SESSION HANDOVER — 2026-07-07 offset persistence (⚠ superseded as newest by the evening F8 batch above) ★★
 
 **WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`, **PUSHED** (owner logout handoff). Latest:
 `0492d7dc` **fix(gear): local offset settings persist + immediate re-equip on save** — stacks on
