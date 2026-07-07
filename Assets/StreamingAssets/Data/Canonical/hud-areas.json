@@ -39,7 +39,8 @@
       "posture": "hostile(prebattle)",
       "areas": [
         { "area": "vitals",      "widgets": ["playerNameplate", "playerBuffRow"] },
-        { "area": "status",      "widgets": ["targetFrame", "enemyBuffRow"] },
+        { "area": "status",      "widgets": ["compass"] },
+        { "area": "targetinfo",  "widgets": ["targetFrame", "enemyBuffRow"] },
         { "area": "actionRail",  "widgets": ["abilityRow"] },
         { "area": "actionBar",   "widgets": ["assignableSkillRow", "hpPotionSlot", "manaPotionSlot"] },
         { "area": "moveCluster", "widgets": ["moveCluster"] },
@@ -50,7 +51,8 @@
       "posture": "hostile(activebattle)",
       "areas": [
         { "area": "vitals",      "widgets": ["playerNameplate", "playerBuffRow"] },
-        { "area": "status",      "widgets": ["targetFrame", "enemyBuffRow", "castBar"] },
+        { "area": "status",      "widgets": ["compass"] },
+        { "area": "targetinfo",  "widgets": ["targetFrame", "enemyBuffRow", "castBar"] },
         { "area": "system",      "widgets": ["fleeButton", "settingsButton"] },
         { "area": "actionRail",  "widgets": ["abilityRow", "attackButton"] },
         { "area": "actionBar",   "widgets": ["assignableSkillRow", "hpPotionSlot", "manaPotionSlot"] },

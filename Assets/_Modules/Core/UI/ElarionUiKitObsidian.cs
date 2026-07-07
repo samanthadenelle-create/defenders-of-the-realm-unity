@@ -1452,7 +1452,11 @@ namespace DeNelle.Core.UI
                 }
             }
 
-            /// <summary>Bind the Core TargetModel: Set on HasTarget, TOTAL Clear otherwise (event-driven).</summary>
+            /// <summary>Bind the Core TargetModel: Set + show on HasTarget; Clear + HIDE otherwise.
+            /// Owner F8 2026-07-07 ("the target should not appear if not a target") supersedes the
+            /// visible-"No Target" law for model-bound frames: with no target the whole block (frame,
+            /// lock badge child, buff row siblings it hosts) deactivates — the HUD shows nothing where
+            /// there is nothing. Direct Set/Clear callers (9-zone HUD) keep their own visibility.</summary>
             public void Bind(TargetModel model)
             {
                 Unbind();
@@ -1460,9 +1464,17 @@ namespace DeNelle.Core.UI
                 _bound = model;
                 _onChanged = () =>
                 {
-                    if (_bound.HasTarget) Set(_bound.Name, _bound.Level, _bound.Hp, _bound.MaxHp,
-                                              _bound.Locked ? "LOCKED" : "");
-                    else Clear();
+                    if (_bound.HasTarget)
+                    {
+                        if (root != null && !root.activeSelf) root.SetActive(true);
+                        Set(_bound.Name, _bound.Level, _bound.Hp, _bound.MaxHp,
+                            _bound.Locked ? "LOCKED" : "");
+                    }
+                    else
+                    {
+                        Clear();   // stale content never flashes on the next show
+                        if (root != null && root.activeSelf) root.SetActive(false);
+                    }
                 };
                 _bound.Changed += _onChanged;
                 _onChanged();
