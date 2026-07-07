@@ -170,9 +170,9 @@ namespace DeNelle.Core.UI
                 var xpBg = new GameObject("XpTrack", typeof(Image));
                 xpBg.transform.SetParent(statBars.transform, false);
                 var xrt = (RectTransform)xpBg.transform;
-                // Match the bar rows' 6% right inset (end-cap fix) so the strip shares the
-                // rows' horizontal extents and stays inside the visible plate frame.
-                xrt.anchorMin = new Vector2(0f, 0f); xrt.anchorMax = new Vector2(0.94f, 0.14f);
+                // Match the bar rows' 8% right inset (end-cap fix, capture 2026-07-06) so the
+                // strip shares the rows' horizontal extents and stays inside the plate frame.
+                xrt.anchorMin = new Vector2(0f, 0f); xrt.anchorMax = new Vector2(0.92f, 0.14f);
                 xrt.offsetMin = Vector2.zero; xrt.offsetMax = Vector2.zero;
                 var xpBgImg = xpBg.GetComponent<Image>();
                 xpBgImg.raycastTarget = false;
@@ -216,10 +216,13 @@ namespace DeNelle.Core.UI
             var brt = (RectTransform)bgGo.transform;
             // Owner F8 2026-07-06/07: nameplate_bar's pointed end-cap (drawn Simple; the sprite
             // has NO 9-slice border — spriteBorder 0,0,0,0 — so Sliced can't tuck it) landed at
-            // the row's right edge and poked past the plate frame. Inset xMax ~6% so the cap
-            // stays inside the visible plate.
+            // the row's right edge and poked past the plate frame. The first fix inset xMax 6%,
+            // but the fresh capture 2026-07-06 (battle_hud.png) STILL showed a dark cap sliver
+            // past the plate's right edge — the cap art is ~8% of the row width, so 6% left the
+            // tip exposed. Inset is now 8%; the fill is a 2px-inset CHILD of this background
+            // (RectMask2D-clipped), so bg + fill end together at the same inset by construction.
             brt.anchorMin = anchorMin;
-            brt.anchorMax = new Vector2(anchorMax.x - 0.06f, anchorMax.y);
+            brt.anchorMax = new Vector2(anchorMax.x - 0.08f, anchorMax.y);
             brt.offsetMin = Vector2.zero; brt.offsetMax = Vector2.zero;
             var bgImg = bgGo.GetComponent<Image>();
             bgImg.raycastTarget = false;

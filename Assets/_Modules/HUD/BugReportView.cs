@@ -137,10 +137,15 @@ namespace DeNelle.HUD
 
             // Screenshot thumbnail — top of the body well. RawImage under a CanvasGroup so
             // it can FADE IN when the capture binds (owner smoothness directive).
+            // FRESH-CAPTURE RESTACK (2026-07-06): the shared Close's REAL top on a landscape
+            // screen is ≈0.204 of the panel (fixed 120 units / 777-unit panel + the 0.05 seat)
+            // while the kit's body-floor reservation assumed the portrait reference (0.157) —
+            // so the Send band at body y 0.03–0.14 was half-covered by Close. The whole body
+            // stack shifts UP: Send bottom now sits at panel ≈0.242, a clear gap above Close.
             var thumbHost = new GameObject("Thumbnail", typeof(RectTransform), typeof(CanvasGroup));
             thumbHost.transform.SetParent(body, false);
             var thr = (RectTransform)thumbHost.transform;
-            thr.anchorMin = new Vector2(0.08f, 0.60f); thr.anchorMax = new Vector2(0.92f, 0.98f);
+            thr.anchorMin = new Vector2(0.08f, 0.66f); thr.anchorMax = new Vector2(0.92f, 0.98f);
             thr.offsetMin = Vector2.zero; thr.offsetMax = Vector2.zero;
             _thumbGroup = thumbHost.GetComponent<CanvasGroup>();
             _thumbGroup.alpha = 0f;                       // fades in once the capture binds
@@ -159,24 +164,25 @@ namespace DeNelle.HUD
 
             // "Include screenshot" untickable toggle (default ON) — kit Quiet button.
             _toggleBtn = ElarionUiKit.Button(body, "", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.08f, 0.51f), new Vector2(0.92f, 0.585f), () => _vm.ToggleScreenshot());
+                new Vector2(0.08f, 0.575f), new Vector2(0.92f, 0.645f), () => _vm.ToggleScreenshot());
             _toggleLabel = EnsureButtonLabel(_toggleBtn, "[x] Include screenshot", ElarionUi.Parchment);
 
             // Note field — "What went wrong?" (multi-line). The plate is a minimal
             // translucent well so the input is visible; content, not chrome.
-            BuildNoteInput(body, new Vector2(0.08f, 0.22f), new Vector2(0.92f, 0.49f));
+            BuildNoteInput(body, new Vector2(0.08f, 0.30f), new Vector2(0.92f, 0.55f));
 
             // The one quiet disclosure line — the honesty (logs always go; not a checkbox).
             ElarionUiKit.Label(body, "Includes recent game logs to help us fix it.",
-                0.155f, 0.205f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
+                0.235f, 0.285f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
                 TextAlignmentOptions.Center, 0.08f, 0.92f);
 
-            // Single CTA — the submit IS the consent. FrameSettings carves NO footer zone, so the
-            // button lives in a THIN band at the bottom of the body (#18: the old footer→body
-            // fallback let its 0.06..0.94 anchors inflate the gold button to fill the whole well).
-            // The body's bottom edge sits ABOVE the shared Close, so they never collide.
+            // Single CTA — the submit IS the consent. FrameSettings carves NO footer zone, so
+            // the button lives in its own band near the bottom of the body — Send report
+            // ABOVE, the shared Close BELOW, with a clear gap (fresh capture: the old
+            // y 0.03–0.14 band was half-covered by the Close's real landscape-screen top,
+            // ≈0.204 of the panel vs the kit's portrait-reference body floor of 0.157).
             _sendBtn = ElarionUiKit.Button(body, "Send report", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.08f, 0.03f), new Vector2(0.92f, 0.14f), OnSendClicked);
+                new Vector2(0.08f, 0.12f), new Vector2(0.92f, 0.23f), OnSendClicked);
             // EYES-SWEEP 2026-07-06 (#5): the sweep captured the submit as a BLANK gold bar. In
             // prefab-button mode the label can live on the prefab ROOT beside a nested Button child,
             // so GetComponentInChildren(_sendBtn) missed it and Repaint's _sendLabel writes went

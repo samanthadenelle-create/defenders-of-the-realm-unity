@@ -75,6 +75,12 @@ namespace DeNelle.HUD.Kit
         private ElarionUiKit.ActionSlotHandle[] _enemyStatusSlots;
         private const int StatusSlotCount = 6;
         private ElarionUiKit.ActionSlotHandle _attackSlot;
+        // WO-611 ATTACK PILL rect, in fractions of the actionRail zone. Shared with
+        // CombatArcLayout611 (below): the Q/W/E/R medallion arc is computed FROM this
+        // pill rect at layout time, so pill and arc can never drift apart again
+        // (capture 2026-07-06 battle_hud.png — see BuildAbilityRow).
+        internal const float Pill611X0 = 0.30f, Pill611Y0 = 0.02f;
+        internal const float Pill611X1 = 0.99f, Pill611Y1 = 0.30f;
         private ElarionUiKit.CurrencyChipHandle[] _resChips;      // expanded row
         private ElarionUiKit.CurrencyChipHandle _resGoldOnly;     // collapsed variant
         private GameObject _resExpandedRow;
@@ -275,20 +281,76 @@ namespace DeNelle.HUD.Kit
                 // Set()'s level write had nowhere to land — the 07-05 capture showed no Lv. Give the
                 // handle a label; MODE 2 already has one, which is re-tinted to the ratified gold.
                 var gold611 = new Color(0.831f, 0.686f, 0.353f, 1f);   // #d4af5a
-                if (_targetFrame.level == null)
+
+                // Capture 2026-07-06 (battle_hud.png): the enemy PORTRAIT circle overhung the
+                // plate's LEFT edge. Proven in the prefab bytes: TargetNameplate.prefab's
+                // TargetIcon is CENTRE-anchored at a FIXED (-191.1, -0.8) offset, 90x90 px,
+                // authored on a 480px-wide root — but InstantiateBlinkPrefab STRETCHES the root
+                // to the status-zone rect (~410 px at 720p), so the fixed offset lands the
+                // circle past the plate (icon left edge -236 < -205 half-width). Re-anchor it
+                // FRACTIONALLY inside the plate (inset left column, aspect-true) so it can
+                // never leave the plate at any width. No-op when absent (MODE 2 has none).
+                var portrait611 = FindTargetPortrait611(_targetFrame.root.transform);
+                if (portrait611 != null)
                 {
-                    // Eyes-sweep 2026-07-06 (battle_hud_wave.png): the old fixed fractions
-                    // (x 0.66–0.86, y 0.58–0.95 of the plate) landed the gold Lv ON the Blink
-                    // prefab's HP bar. WO-611 wants "Lv beside the name" — so seat the label
-                    // INSIDE the NAME row itself: full overlay of the name label's rect,
-                    // right-aligned (name text is centered), which by construction can never
-                    // touch the bar rects. Falls back to the old plate anchor only if the
-                    // handle somehow has no name label (both build modes guarantee one).
-                    var nameHost = _targetFrame.name != null
-                        ? _targetFrame.name.transform : _targetFrame.root.transform;
-                    _targetFrame.level = ElarionUiKit.Label(nameHost, "",
-                        0f, 1f, gold611, ElarionUi.FontLabel,
-                        TextAlignmentOptions.MidlineRight, 0f, 1f, bold: true);
+                    var prt = (RectTransform)portrait611.transform;
+                    prt.anchorMin = new Vector2(0.03f, 0.14f);
+                    prt.anchorMax = new Vector2(0.21f, 0.86f);
+                    prt.offsetMin = Vector2.zero; prt.offsetMax = Vector2.zero;
+                    portrait611.preserveAspect = true;
+                }
+
+                // TITLE ROW (capture 2026-07-06: "! Orcish Raid" clipped MID-WORD and the gold
+                // "Lv 4" overlapped the name/plate edge). Proven causes: the prefab's TargetName
+                // is a FIXED 259px centre-anchored box that never reflows with the stretched
+                // plate and had no kit fit (MODE 1 skipped FitSingleLine), and the previous Lv
+                // label was a FULL OVERLAY of that same box. Fix: one measured row — a container
+                // on fractional plate anchors (right of the portrait column); the name takes the
+                // LEFT ~72% with the §1.14 bounded auto-size/ellipsize (ElarionUiKit.FitSingleLine,
+                // the Forge-title law) and the gold Lv takes the RIGHT slice. The name therefore
+                // ellipsizes BEFORE it can touch the Lv text, and neither can reach the plate edge.
+                if (_targetFrame.name != null)
+                {
+                    var nameRt = (RectTransform)_targetFrame.name.transform;
+                    var titleRow = new GameObject("TitleRow611", typeof(RectTransform));
+                    var rowRt = (RectTransform)titleRow.transform;
+                    rowRt.SetParent(nameRt.parent, false);
+                    rowRt.SetSiblingIndex(nameRt.GetSiblingIndex());   // keep the name's draw order
+                    rowRt.anchorMin = new Vector2(0.24f, 0.72f);
+                    rowRt.anchorMax = new Vector2(0.88f, 0.97f);
+                    rowRt.offsetMin = Vector2.zero; rowRt.offsetMax = Vector2.zero;
+
+                    nameRt.SetParent(rowRt, false);
+                    nameRt.anchorMin = Vector2.zero;
+                    nameRt.anchorMax = new Vector2(0.72f, 1f);
+                    nameRt.offsetMin = Vector2.zero; nameRt.offsetMax = Vector2.zero;
+                    _targetFrame.name.alignment = TextAlignmentOptions.MidlineLeft;
+                    ElarionUiKit.FitSingleLine(_targetFrame.name);
+
+                    if (_targetFrame.level == null)
+                    {
+                        _targetFrame.level = ElarionUiKit.Label(rowRt, "", 0f, 1f, gold611,
+                            ElarionUi.FontLabel, TextAlignmentOptions.MidlineRight, 0.74f, 1f, bold: true);
+                    }
+                    else
+                    {
+                        // MODE 2 built its own Lv at the plate's far left — move it into the row.
+                        var lvRt = (RectTransform)_targetFrame.level.transform;
+                        lvRt.SetParent(rowRt, false);
+                        lvRt.anchorMin = new Vector2(0.74f, 0f);
+                        lvRt.anchorMax = Vector2.one;
+                        lvRt.offsetMin = Vector2.zero; lvRt.offsetMax = Vector2.zero;
+                        _targetFrame.level.alignment = TextAlignmentOptions.MidlineRight;
+                    }
+                    ElarionUiKit.FitSingleLine(_targetFrame.level);   // §1.14 — Lv never spills either
+                }
+                else if (_targetFrame.level == null)
+                {
+                    // Neither build mode should reach here (both guarantee a name label) —
+                    // fall back to a plate-anchored Lv clear of the bar rects.
+                    _targetFrame.level = ElarionUiKit.Label(_targetFrame.root.transform, "",
+                        0.72f, 0.97f, gold611, ElarionUi.FontLabel,
+                        TextAlignmentOptions.MidlineRight, 0.60f, 0.88f, bold: true);
                 }
                 _targetFrame.level.color = gold611;
                 _targetFrame.level.raycastTarget = false;
@@ -315,8 +377,9 @@ namespace DeNelle.HUD.Kit
             if (FeatureFlags.CombatHud611)
             {
                 // WO-611: oblong stadium ATTACK PILL, gold-trimmed, bottom-right thumb anchor.
+                // Rect = the shared Pill611* constants — the Q/W/E/R arc derives from them.
                 _attackSlot = ElarionUiKit.BuildAttackPill(pool,
-                    new Vector2(0.30f, 0.02f), new Vector2(0.99f, 0.30f), HudCommands.Attack);
+                    new Vector2(Pill611X0, Pill611Y0), new Vector2(Pill611X1, Pill611Y1), HudCommands.Attack);
                 var atkIcon = UiStyle.Icon("energy-sword", "attack", "sword", "melee");
                 if (atkIcon != null) _attackSlot.SetIcon(atkIcon);
             }
@@ -563,20 +626,21 @@ namespace DeNelle.HUD.Kit
             bool combat = FeatureFlags.CombatHud611;
             if (combat) _abilityGlows = new ElarionUiKit.SoftGlowCooldown[4];
 
-            // WO-611 (mockup v8 EXACT offsets): Q/W/E/R medallion CENTRES in actionRail fractions.
-            // Mockup: medallion 2.7em, CSS right/bottom offsets Q(8.9,2.5) W(7.7,5.0) E(5.3,6.7)
-            // R(2.5,7.1) em from the bottom-right corner; the rail is ~10.75em square at reference
-            // (413x410 px, 1em ~ 38.4 px => 1em ~ 0.093 rail fraction); centre = offset + 1.35em.
+            // WO-611 arc611 REDESIGN (capture 2026-07-06 battle_hud.png, 1280x720): the previous
+            // arc placed medallion centres as em-FRACTIONS of the actionRail ZONE rect
+            // (Em611 = 0.093, mockup offsets Q(8.9,2.5)..R(2.5,7.1) em from the zone's
+            // bottom-right). The zone is 0.780-0.995 x 0.040-0.420 of the screen (~275x274 px
+            // at 720p), so the medallions scattered across the whole zone — captured at
+            // Q~(985,570) W~(1015,505) E~(1077,460) R~(1150,450) — instead of hugging the
+            // ~160x50 attack pill at ~(1100,648). Zone fractions scale with the ZONE, never
+            // with the PILL. FIX: CombatArcLayout611 (below the controller) recomputes the
+            // medallion rects at layout time FROM THE PILL RECT in pill-height units
+            // (mockup em ~ pillHeight/3.5): diameter ~0.9x pill height, arcing from
+            // just-left-of-pill-top sweeping up over the pill, adjacent medallions nearly
+            // touching (gap ~15% of diameter). The pill rect derives from this row's own
+            // rect via the shared Pill611* fractions — both widgets stretch the SAME
+            // actionRail mount, so no cross-widget reference (and no drift) is possible.
             // Q sits nearest the pill's left, the arc sweeps up over the pill (owner design).
-            const float Em611 = 0.093f;
-            Vector2[] arc611 = combat ? new[]
-            {
-                new Vector2(1f - 10.25f * Em611, 3.85f * Em611),   // Q
-                new Vector2(1f -  9.05f * Em611, 6.35f * Em611),   // W
-                new Vector2(1f -  6.65f * Em611, 8.05f * Em611),   // E
-                new Vector2(1f -  3.85f * Em611, 8.45f * Em611),   // R
-            } : null;
-            const float MedHalf611 = 0.126f;                       // 2.7em medallion => 1.35em half
             string[] keys611 = { "Q", "W", "E", "R" };
 
             for (int i = 0; i < 4; i++)
@@ -585,8 +649,10 @@ namespace DeNelle.HUD.Kit
                 Vector2 min, max;
                 if (combat)
                 {
-                    min = arc611[i] - new Vector2(MedHalf611, MedHalf611);
-                    max = arc611[i] + new Vector2(MedHalf611, MedHalf611);
+                    // Placeholder rect — CombatArcLayout611 assigns the real pill-relative
+                    // rect once the row's layout resolves (rect is 0x0 at build time).
+                    min = Vector2.zero;
+                    max = new Vector2(0.01f, 0.01f);
                 }
                 else
                 {
@@ -600,6 +666,13 @@ namespace DeNelle.HUD.Kit
                     ElarionUiKit.StyleAsRoundMedallion(_abilitySlots[i], keys611[i]);
                     _abilityGlows[i] = ElarionUiKit.AddSoftCooldownGlow(_abilitySlots[i]);
                 }
+            }
+            if (combat)
+            {
+                var arc = row.AddComponent<CombatArcLayout611>();
+                var meds = new RectTransform[4];
+                for (int i = 0; i < 4; i++) meds[i] = (RectTransform)_abilitySlots[i].root.transform;
+                arc.Medallions = meds;
             }
             Register("abilityRow", WrapAsWidget("abilityRow", row));
         }
@@ -1360,6 +1433,22 @@ namespace DeNelle.HUD.Kit
         private static string Cap(string s) =>
             string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s.Substring(1);
 
+        // WO-611: locate the Blink target frame's portrait circle (prefab child "TargetIcon";
+        // future re-skins may say "Portrait"). Null when the constructed MODE-2 frame is live.
+        private static Image FindTargetPortrait611(Transform root)
+        {
+            if (root == null) return null;
+            var images = root.GetComponentsInChildren<Image>(true);
+            for (int i = 0; i < images.Length; i++)
+            {
+                string n = images[i].name.Replace(" ", "").Replace("_", "");
+                if (n.IndexOf("targeticon", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    n.IndexOf("portrait", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return images[i];
+            }
+            return null;
+        }
+
         private void OnDestroy()
         {
             foreach (var u in _unsubscribe) { try { u(); } catch { /* teardown */ } }
@@ -1368,6 +1457,69 @@ namespace DeNelle.HUD.Kit
             if (_castBar != null) _castBar.Unbind();
             if (_evaluator != null) _evaluator.PostureChanged -= ApplyPosture;
             HudMoveInput.Set(Vector2.zero);
+        }
+    }
+
+    /// <summary>
+    /// WO-611: positions the Q/W/E/R medallions AROUND THE ATTACK PILL, in pill-height units,
+    /// at layout time (capture 2026-07-06 battle_hud.png — the previous zone-fraction arc
+    /// scattered the medallions across the whole actionRail; see BuildAbilityRow).
+    ///
+    /// Geometry (mockup em = pillHeight / 3.5):
+    ///   pill rect  = the row's own rect x the shared HudKitController.Pill611* fractions
+    ///                (the AbilityRow widget wrap and the attackButton wrap both stretch the
+    ///                same actionRail mount, so the rects agree by construction — works even
+    ///                in hostile(prebattle) where the pill widget itself is unoccupied);
+    ///   pivot      = pill top-right corner, inset 1.8em left (keeps the last medallion's
+    ///                right edge inside the pill/screen);
+    ///   centres    = pivot + 8em * (cos, sin) at 171deg -> 92.7deg (Q lowest-left just above
+    ///                the pill's top, sweeping up over the pill to R above its right end);
+    ///   diameter   = 0.9x pill height; adjacent centre spacing = 2*8em*sin(13.05deg)
+    ///                ~ 3.62em = 1.15x diameter => gap ~15% of a diameter (nearly touching).
+    ///
+    /// Presentation-only re-layout: taps, icons, key badges, dimmed-empty faces and the soft
+    /// cooldown glow all live on the slots themselves and are untouched. Recomputes only on
+    /// enable/resize (dirty flag), never per-frame.
+    /// </summary>
+    internal sealed class CombatArcLayout611 : MonoBehaviour
+    {
+        internal RectTransform[] Medallions;
+
+        private static readonly float[] ArcAngleDeg = { 171.0f, 144.9f, 118.8f, 92.7f };
+        private const float ArcRadiusEm = 8.0f;     // arc radius around the pivot, in em
+        private const float PivotInsetEm = 1.8f;    // pivot inset left of the pill's top-right
+        private const float MedallionPerPillH = 0.9f;
+        private bool _dirty = true;
+
+        private void OnEnable() { _dirty = true; }
+        private void OnRectTransformDimensionsChange() { _dirty = true; }
+
+        private void LateUpdate()
+        {
+            if (!_dirty || Medallions == null) return;
+            var row = (RectTransform)transform;
+            var r = row.rect;
+            if (r.width < 1f || r.height < 1f) return;   // layout not resolved yet — retry
+            _dirty = false;
+
+            float pillH = (HudKitController.Pill611Y1 - HudKitController.Pill611Y0) * r.height;
+            float em = pillH / 3.5f;
+            float d = MedallionPerPillH * pillH;
+            var pivotPt = new Vector2(
+                r.xMin + HudKitController.Pill611X1 * r.width - PivotInsetEm * em,
+                r.yMin + HudKitController.Pill611Y1 * r.height);
+
+            for (int i = 0; i < Medallions.Length && i < ArcAngleDeg.Length; i++)
+            {
+                var m = Medallions[i];
+                if (m == null) continue;
+                float a = ArcAngleDeg[i] * Mathf.Deg2Rad;
+                Vector2 centre = pivotPt + ArcRadiusEm * em * new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+                m.anchorMin = m.anchorMax = new Vector2(0.5f, 0.5f);
+                m.pivot = new Vector2(0.5f, 0.5f);
+                m.sizeDelta = new Vector2(d, d);
+                m.anchoredPosition = centre - r.center;
+            }
         }
     }
 }

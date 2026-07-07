@@ -535,6 +535,14 @@ namespace DeNelle.Core.UI
             return "button" + (int)style + "_" + c;
         }
 
+        /// <summary>THE contrast law for button label ink (owner is colorblind — luminance, never
+        /// hue, carries meaning): a gold/yellow plate gets DARK near-black Ink; every dark plate
+        /// (gray/green/red) gets Parchment. Lives HERE, in the one builder — never per-caller.</summary>
+        public static Color ObsidianButtonLabelColor(ObsidianButtonColor color)
+        {
+            return color == ObsidianButtonColor.Yellow ? ElarionUi.Ink : ElarionUi.Parchment;
+        }
+
         /// <summary>The §1.2 back-compat shim map: legacy ButtonKind → Obsidian (style, color).
         /// Gold→(1,Yellow), Confirm→(2,Green), Danger→(1,Red), Quiet→(1,Gray).</summary>
         internal static void MapButtonKind(ButtonKind kind, out ObsidianButtonStyle style, out ObsidianButtonColor color)
@@ -582,13 +590,17 @@ namespace DeNelle.Core.UI
                     if (pfLabel != null)
                     {
                         pfLabel.text = label ?? "";
+                        // CONTRAST LAW: the prefab's BAKED label colour (gold) is unreadable on the
+                        // yellow/gold face — override it here so every caller inherits the one rule.
+                        pfLabel.color = ObsidianButtonLabelColor(color);
+                        pfLabel.fontStyle |= FontStyles.Bold;
                         EnsureFont(pfLabel, FontRole.Body);
                         FitSingleLine(pfLabel);                            // §1.14 — button text never clips ("BU SEL")
                     }
                     else
                     {
                         var overlay = Label(pf.transform, label ?? "", 0f, 1f,
-                            color == ObsidianButtonColor.Yellow ? ElarionUi.Ink : ElarionUi.Parchment,
+                            ObsidianButtonLabelColor(color),
                             ElarionUi.FontBody, TextAlignmentOptions.Center, 0f, 1f, bold: true);
                         overlay.raycastTarget = false;
                         EnsureFont(overlay, FontRole.Body);
@@ -624,7 +636,7 @@ namespace DeNelle.Core.UI
             if (onClick != null) btn.onClick.AddListener(() => onClick());
 
             var tt = Label(go.transform, label ?? "", 0f, 1f,
-                           color == ObsidianButtonColor.Yellow ? ElarionUi.Ink : ElarionUi.Parchment,
+                           ObsidianButtonLabelColor(color),
                            ElarionUi.FontBody, TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
             tt.raycastTarget = false;
             EnsureFont(tt, FontRole.Body);
@@ -1099,10 +1111,18 @@ namespace DeNelle.Core.UI
             public Button button;
             public TMP_Text label;
             internal GameObject selection;
+            /// <summary>True when the selection highlight is the FULL gold arrow_box_on plate
+            /// (label must go dark Ink for contrast); false = the gilt-underline fallback on the
+            /// dark tab plate (label stays gold). CONTRAST LAW: gold plate ⇒ dark text, dark
+            /// plate ⇒ gold/parchment text — luminance, never hue (owner is colorblind).</summary>
+            internal bool selectionIsPlate;
             public void SetSelected(bool on)
             {
                 if (selection != null) selection.SetActive(on);
-                if (label != null) label.color = on ? ElarionUi.Gilt : ElarionUi.Parchment;
+                if (label != null)
+                    label.color = on
+                        ? (selectionIsPlate ? ElarionUi.Ink : ElarionUi.Gilt)
+                        : ElarionUi.Parchment;
             }
         }
 
@@ -1163,7 +1183,8 @@ namespace DeNelle.Core.UI
             EnsureFont(lbl, FontRole.Body);
             FitSingleLine(lbl);                                            // §1.14 — tab text never truncates mid-word
 
-            return new TabHandle { button = btn, label = lbl, selection = sel };
+            return new TabHandle { button = btn, label = lbl, selection = sel,
+                                   selectionIsPlate = selSprite != null };
         }
 
         /// <summary>Live handle of a toggle (§1.9).</summary>

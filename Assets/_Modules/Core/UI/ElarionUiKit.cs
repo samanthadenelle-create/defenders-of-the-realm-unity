@@ -560,7 +560,18 @@ namespace DeNelle.Core.UI
                     float panelFracH   = Mathf.Max(0.05f, anchorMax.y - anchorMin.y);
                     // Top of the fixed 360x120px Close box (SeatSharedCloseInside grows it UP
                     // from z.close.y) expressed as a fraction of THIS panel's height.
-                    float closeBandTop = z.close.y + CanonCtaHeight / (panelFracH * 1920f);
+                    // LANDSCAPE FIX (overnight sweep 2026-07-07, proven by the panel-batch RCA):
+                    // dividing by the PORTRAIT reference height (1920) under-reserves ~78% on a
+                    // landscape canvas (~1080 units tall) — the Close painted over Send report /
+                    // DEPLOY / dialogue Close across panels. Measure the REAL canvas height.
+                    float canvasH = 1920f;
+                    var canvasRt = frameGo.GetComponentInParent<Canvas>();
+                    if (canvasRt != null)
+                    {
+                        float h = ((RectTransform)canvasRt.transform).rect.height;
+                        if (h > 100f) canvasH = h;
+                    }
+                    float closeBandTop = z.close.y + CanonCtaHeight / (panelFracH * canvasH);
                     // ── FOOTER RELOCATION (sweep 9413) ──────────────────────────────────
                     // The footer zone's designed bands (default 0.030–0.095; FrameCrafting
                     // action strip 0.085–0.145; etc.) sit INSIDE the Close band — the Close

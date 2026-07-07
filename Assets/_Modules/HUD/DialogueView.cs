@@ -139,8 +139,12 @@ namespace DeNelle.HUD
             var interior = new GameObject("DialogueInterior", typeof(Image));
             interior.transform.SetParent(contentRoot, false);
             var irt = interior.GetComponent<RectTransform>();
-            irt.anchorMin = new Vector2(0.045f, 0.055f);
-            irt.anchorMax = new Vector2(0.955f, 0.945f);
+            // SWEEP 2026-07-06 (fresh 1280x720 capture): the plate at 0.045/0.055 covered the
+            // frame's painted interior ornament so the whole panel read as a raw black rectangle
+            // with frame edges sticking out. Inset the plate INSIDE the frame border (the
+            // landscape-strip art's stretched top/bottom borders are thick on this tall panel).
+            irt.anchorMin = new Vector2(0.06f, 0.10f);
+            irt.anchorMax = new Vector2(0.94f, 0.935f);
             irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
             var iimg = interior.GetComponent<Image>();
             iimg.color = ElarionUiKit.ObsidianFill;   // the kit's near-black panel fill (opaque)
@@ -150,9 +154,14 @@ namespace DeNelle.HUD
             // Own zones (fractions of the panel interior): portrait top-left, speaker header
             // beside it, reading body below, hint sliver at the body's foot — all INSIDE the
             // one frame, all over the opaque plate.
-            var portraitHost = MakeZone(contentRoot, "PortraitHost", new Vector2(0.07f, 0.72f), new Vector2(0.24f, 0.92f));
-            var headerZone   = MakeZone(contentRoot, "SpeakerZone",  new Vector2(0.26f, 0.72f), new Vector2(0.93f, 0.92f));
-            var bodyZone     = MakeZone(contentRoot, "BodyZone",     new Vector2(0.07f, 0.24f), new Vector2(0.93f, 0.70f));
+            // SWEEP 2026-07-06 re-stack (top → bottom): portrait+speaker band, reading body,
+            // Continue chip band, then the canonical Close — every band inside the interior
+            // plate, none overlapping. The old body (0.24–0.70) left a giant dead band above
+            // a Close whose fixed 120-unit box actually spans y 0.12–0.385 of this 453-unit
+            // panel on a landscape screen (the kit reserves against the PORTRAIT reference).
+            var portraitHost = MakeZone(contentRoot, "PortraitHost", new Vector2(0.075f, 0.71f), new Vector2(0.22f, 0.91f));
+            var headerZone   = MakeZone(contentRoot, "SpeakerZone",  new Vector2(0.24f, 0.71f), new Vector2(0.93f, 0.91f));
+            var bodyZone     = MakeZone(contentRoot, "BodyZone",     new Vector2(0.075f, 0.515f), new Vector2(0.925f, 0.69f));
 
             // Tap-to-advance: a transparent button filling the BODY ZONE ONLY (advances lines,
             // not choices). Deliberately contained to the panel — never a full-screen catcher.
@@ -173,18 +182,18 @@ namespace DeNelle.HUD
             // panel subtree so it stays clickable above the catcher.
             //
             // 2026-07-06 owner ruling (supersedes the interim compact-Close override): the
-            // CANONICAL Close size/seat stands on the reading panel. SWEEP 9413 item 3: the
-            // kit seat pins the box's bottom at y=0.050 of the panel, which dips into THIS
-            // frame's thicker painted bottom border — raise the SEAT only (canonical 360x120
-            // size + bottom-centre law preserved; body zone above starts at y=0.24, clear of
-            // the raised box top).
+            // CANONICAL Close size/seat stands on the reading panel. Fresh-capture sweep: at
+            // y=0.075 the fixed box's bottom still sat inside the stretched painted bottom
+            // border (~0.10 of this panel) — seat it at y=0.12, just above the interior
+            // plate's floor (canonical 360x120 size + bottom-centre law preserved; the box
+            // then spans y 0.12–0.385, and the Continue chip band starts at 0.40 above it).
             if (chrome.close != null)
             {
                 var closeRt = chrome.close.transform as RectTransform;
                 if (closeRt != null)
                 {
-                    closeRt.anchorMin = new Vector2(0.5f, 0.075f);
-                    closeRt.anchorMax = new Vector2(0.5f, 0.075f);
+                    closeRt.anchorMin = new Vector2(0.5f, 0.12f);
+                    closeRt.anchorMax = new Vector2(0.5f, 0.12f);
                 }
                 chrome.close.transform.SetAsLastSibling();
             }
@@ -193,9 +202,9 @@ namespace DeNelle.HUD
             // dim sub-line beneath it (owner-ratified card standard: name + affiliation +
             // portrait on every NPC card). Body text → body zone. (Drop, no re-style.)
             _speaker = MakeLabel(headerZone, "Speaker", new Vector2(0f, 0.42f), Vector2.one,
-                22, ElarionUi.Gilt, TMPro.FontStyles.Bold, TMPro.TextAlignmentOptions.BottomLeft);
+                24, ElarionUi.Gilt, TMPro.FontStyles.Bold, TMPro.TextAlignmentOptions.BottomLeft);
             _affiliation = MakeLabel(headerZone, "Affiliation", Vector2.zero, new Vector2(1f, 0.42f),
-                12, ElarionUi.ParchmentDim, TMPro.FontStyles.Italic, TMPro.TextAlignmentOptions.TopLeft);
+                13, ElarionUi.ParchmentDim, TMPro.FontStyles.Italic, TMPro.TextAlignmentOptions.TopLeft);
             // SCROLLABLE BODY (owner 2026-07-06: "in case there is more text, scrollable"):
             // the upper region of the body zone hosts the §1.14 kit scroll zone (vertical,
             // clamped, auto-hide scrollbar); the bottom sliver keeps the tap hint clear of
@@ -203,12 +212,14 @@ namespace DeNelle.HUD
             var wellGo = new GameObject("BodyWell", typeof(RectTransform));
             wellGo.transform.SetParent(bodyZone, false);
             var wellRt = wellGo.GetComponent<RectTransform>();
-            wellRt.anchorMin = new Vector2(0f, 0.18f); wellRt.anchorMax = Vector2.one;
+            // Full body zone — the old 0.18 hint sliver is retired (the Continue chip below
+            // has its own band between the body and the Close).
+            wellRt.anchorMin = Vector2.zero; wellRt.anchorMax = Vector2.one;
             wellRt.offsetMin = Vector2.zero; wellRt.offsetMax = Vector2.zero;
             var scrollZone = ElarionUiKit.MakeScrollZone(wellGo.transform, spacing: 0f, padding: 8);
 
             _body = MakeLabel(scrollZone.content, "Body", Vector2.zero, Vector2.one,
-                16, ElarionUi.Parchment, TMPro.FontStyles.Normal, TMPro.TextAlignmentOptions.TopLeft);
+                17, ElarionUi.Parchment, TMPro.FontStyles.Normal, TMPro.TextAlignmentOptions.TopLeft);
             // The scroll column deliberately does NOT control child height (§1.14 kit note —
             // the captured PartyShop collapse, runs 9400/9401), so the label carries its own:
             // a vertical ContentSizeFitter grows it with its text, and the column's own
@@ -219,7 +230,7 @@ namespace DeNelle.HUD
             // §1.14 belt-and-braces: wrap + truncate protection on the block. min=max keeps
             // the reading size deterministic (the scroll well, not shrinking text, absorbs
             // long passages).
-            ElarionUiKit.FitBlock(_body, minSize: 16f, maxSize: 16f);
+            ElarionUiKit.FitBlock(_body, minSize: 17f, maxSize: 17f);
 
             // Tap-to-advance INSIDE the scrolling well: the viewport's raycast surface
             // doubles as the click target (Button = click, ScrollRect = drag; uGUI splits
@@ -228,12 +239,22 @@ namespace DeNelle.HUD
             vpBtn.transition = Selectable.Transition.None;
             vpBtn.onClick.AddListener(OnBoxTapped);
 
-            // OWNER F8 t=322: "Tap to continue needs to be as large as the other text,
-            // centered at bottom" — body-size (16), bottom-CENTER of the body zone's
-            // reserved sliver (under the scrolling well, inside the one frame).
-            _tapHint = MakeLabel(bodyZone, "TapHint", new Vector2(0.0f, 0.0f), new Vector2(1.0f, 0.16f),
-                16, ElarionUi.ParchmentDim, TMPro.FontStyles.Italic, TMPro.TextAlignmentOptions.Bottom).gameObject;
-            _tapHint.GetComponent<TMPro.TextMeshProUGUI>().text = "tap to continue";
+            // SWEEP 2026-07-06 (supersedes the bare "tap to continue" italic hint): the fresh
+            // capture showed NO visible advance affordance at all — a tap-anywhere contract
+            // with no control fails the no-dead-interaction law. The affordance is now a REAL
+            // labeled kit button (Continue chip) in its own band between the body and the
+            // Close; tapping the body text still advances too (catcher above). Repaint keeps
+            // driving its visibility through _tapHint (hidden while options show).
+            var contBtn = ElarionUiKit.Button(contentRoot, "Continue", ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.30f, 0.40f), new Vector2(0.70f, 0.495f), OnBoxTapped);
+            if (contBtn != null)
+            {
+                var contLbl = contBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);
+                if (contLbl == null && contBtn.transform.parent != null)
+                    contLbl = contBtn.transform.parent.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);
+                if (contLbl != null) { contLbl.text = "Continue"; ElarionUiKit.FitSingleLine(contLbl); }
+            }
+            _tapHint = contBtn != null ? contBtn.gameObject : null;
 
             // Speaker portrait → the frame's medallion socket (if present). The actual sprite is
             // resolved + REFRESHED every Repaint (RefreshPortrait), because a per-node `portrait`
@@ -248,13 +269,15 @@ namespace DeNelle.HUD
             // HUD/battle portraits keep theirs). The portrait reads plain on the plate.
             if (_portrait != null && _portrait.ring != null) _portrait.ring.gameObject.SetActive(false);
 
-            // Options column — overlays the panel's lower body (built on demand; the tap
-            // hint hides while options show, and choices render as opaque plates on top).
+            // Options column — INSIDE the panel (fresh-capture sweep: the old screen-anchored
+            // column at screen y 0.30–0.52 laid its plates over the panel's Close band). It
+            // now parents to the panel content, spanning the body + Continue bands (built on
+            // demand; the Continue chip hides while options show, so nothing collides).
             var col = new GameObject("Options");
-            col.transform.SetParent(_ui.transform, false);
+            col.transform.SetParent(contentRoot, false);
             _optionsCol = col.AddComponent<RectTransform>();
-            _optionsCol.anchorMin = new Vector2(0.31f, 0.30f);
-            _optionsCol.anchorMax = new Vector2(0.69f, 0.52f);
+            _optionsCol.anchorMin = new Vector2(0.10f, 0.40f);
+            _optionsCol.anchorMax = new Vector2(0.90f, 0.70f);
             _optionsCol.offsetMin = Vector2.zero; _optionsCol.offsetMax = Vector2.zero;
             var vlg = col.AddComponent<VerticalLayoutGroup>();
             vlg.spacing = 8; vlg.childControlHeight = true; vlg.childControlWidth = true;
@@ -317,7 +340,7 @@ namespace DeNelle.HUD
                 int idx = i;
                 var go = new GameObject("Opt" + i, typeof(Image), typeof(Button), typeof(LayoutElement));
                 go.transform.SetParent(_optionsCol, false);
-                go.GetComponent<LayoutElement>().minHeight = 64;
+                go.GetComponent<LayoutElement>().minHeight = 48;
                 var b = ElarionUi.PanelStone;
                 go.GetComponent<Image>().color = new Color(b.r, b.g, b.b, 0.96f);
                 go.GetComponent<Button>().onClick.AddListener(() => _vm?.Choose(idx));

@@ -121,6 +121,27 @@ namespace DeNelle.Settings
                 frameName: RpgUiCatalog.FrameSettings, medallionIcon: "settings");
 
             var layout = _modal.chrome.layout;
+
+            // FRESH-CAPTURE FIX (2026-07-06): the FrameSettings header band (y 0.905–0.995,
+            // the art's top-centre TAB) renders ABOVE the visible slab at this panel stretch —
+            // the "Settings" title read as a plate floating outside the panel. Re-seat the
+            // chrome's header zone INSIDE the panel top and back it with an obsidian plate so
+            // the title always reads on chrome (the title label is a child of the zone).
+            if (layout != null && layout.header != null)
+            {
+                layout.header.anchorMin = new Vector2(0.28f, 0.885f);
+                layout.header.anchorMax = new Vector2(0.72f, 0.945f);
+                var backing = new GameObject("TitleBacking", typeof(Image));
+                backing.transform.SetParent(layout.header, false);
+                var bkRt = (RectTransform)backing.transform;
+                bkRt.anchorMin = Vector2.zero; bkRt.anchorMax = Vector2.one;
+                bkRt.offsetMin = Vector2.zero; bkRt.offsetMax = Vector2.zero;
+                var bkImg = backing.GetComponent<Image>();
+                bkImg.color = ElarionUiKit.ObsidianFill;
+                bkImg.raycastTarget = false;
+                backing.transform.SetAsFirstSibling();
+            }
+
             var body = layout != null && layout.body != null
                 ? (Transform)layout.body
                 : _modal.chrome.content.transform;
@@ -180,12 +201,18 @@ namespace DeNelle.Settings
                 QualityTier captured = Tiers[i];
                 bool selected = SettingsModel.Quality == captured;
                 float x0 = 0.005f + i / 3f, x1 = x0 + 1f / 3f - 0.01f;
-                var b = ElarionUiKit.BuildObsidianButton(_qualityRow, SettingsModel.TierLabel(captured),
+                // FRESH-CAPTURE FIX (2026-07-06): "Desktop (60 FPS)" truncated to
+                // "(Desktop (60 FP…" on the chip — shorten the copy (drop the parens:
+                // "Desktop 60 FPS") and fit the label to one line so it can never clip.
+                string tierText = SettingsModel.TierLabel(captured)
+                    .Replace("(", "").Replace(")", "").Replace("  ", " ").Trim();
+                var b = ElarionUiKit.BuildObsidianButton(_qualityRow, tierText,
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     selected ? ElarionUiKit.ObsidianButtonColor.Yellow
                              : ElarionUiKit.ObsidianButtonColor.Gray,
                     new Vector2(x0, 0.05f), new Vector2(x1, 0.95f),
                     () => OnQualityTierClicked(captured));
+                FitChipLabel(b, tierText);
                 if (selected) InkButtonLabel(b);
             }
             for (int i = 0; i < Difficulties.Length; i++)
@@ -199,6 +226,7 @@ namespace DeNelle.Settings
                              : ElarionUiKit.ObsidianButtonColor.Gray,
                     new Vector2(x0, 0.05f), new Vector2(x1, 0.95f),
                     () => OnDifficultyClicked(captured));
+                FitChipLabel(b, null);
                 if (selected) InkButtonLabel(b);
             }
         }
@@ -207,6 +235,21 @@ namespace DeNelle.Settings
         // near invisible (luminance law). The kit's constructed mode inks Yellow labels, but the
         // PREFAB mode keeps the prefab's gold label color, so force dark Ink on the selected
         // chip's label wherever the build mode put it (children, else the prefab root).
+        // FRESH-CAPTURE FIX (2026-07-06): selector-chip labels clipped ("(Desktop (60 FP…").
+        // Resolve the chip's label wherever the build mode put it (constructed child / prefab
+        // root), optionally stamp the shortened copy over the prefab's own, then bound it to
+        // one auto-sized line (kit FitSingleLine) so chip text can never clip again.
+        private static void FitChipLabel(Button b, string text)
+        {
+            if (b == null) return;
+            var lbl = b.GetComponentInChildren<TextMeshProUGUI>(true);
+            if (lbl == null && b.transform.parent != null)
+                lbl = b.transform.parent.GetComponentInChildren<TextMeshProUGUI>(true);
+            if (lbl == null) return;
+            if (!string.IsNullOrEmpty(text)) lbl.text = text;
+            ElarionUiKit.FitSingleLine(lbl);
+        }
+
         private static void InkButtonLabel(Button b)
         {
             if (b == null) return;
@@ -423,6 +466,13 @@ namespace DeNelle.Settings
             MakeText(body, label, 13, ElarionUi.Parchment, FontStyles.Normal,
                 TextAlignmentOptions.Left, new Vector2(0.06f, bottom), new Vector2(0.70f, top));
 
+            // FRESH-CAPTURE FIX (2026-07-06, colorblind law): the toggle's state was carried
+            // by the gold check ALONE (color/shape only) and the box read as an anonymous
+            // square far from its label. An explicit "On"/"Off" state TEXT sits beside the
+            // box — never color-alone — and updates with every value change.
+            var stateLbl = MakeText(body, "Off", 12, ElarionUi.Parchment, FontStyles.Bold,
+                TextAlignmentOptions.Right, new Vector2(0.71f, bottom), new Vector2(0.84f, top));
+
             var host = ZoneRect(body, "Toggle_" + label, new Vector2(0.86f, bottom + 0.004f), new Vector2(0.94f, top - 0.004f));
             var toggleGo = new GameObject("Toggle", typeof(RectTransform), typeof(Toggle));
             toggleGo.transform.SetParent(host, false);
@@ -461,7 +511,13 @@ namespace DeNelle.Settings
             var toggle = toggleGo.GetComponent<Toggle>();
             toggle.targetGraphic = boxImg;
             toggle.graphic = checkImg;
-            toggle.onValueChanged.AddListener(v => onChanged(v));
+            // State text updates OUTSIDE the suppress guard (RefreshFromModel's isOn writes
+            // must still repaint "On"/"Off" even while callbacks are suppressed).
+            toggle.onValueChanged.AddListener(v =>
+            {
+                if (stateLbl != null) stateLbl.text = v ? "On" : "Off";
+                onChanged(v);
+            });
 
             y = bottom - 0.012f;
             return toggle;

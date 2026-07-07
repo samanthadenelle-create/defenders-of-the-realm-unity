@@ -148,8 +148,10 @@ namespace DeNelle.Village.Hero
             // Section label. Sweep 9413: dropped below the relocated badge/target sub-row
             // (now y 0.840–0.880) and inset from x 0.05 -> 0.07 so it no longer rides the
             // FrameCore corner filigree (body well starts at x 0.055).
+            // Fresh-capture sweep 2026-07-06: at x 0.07 the heading still clipped the inner
+            // frame filigree — inset to 0.09, safely inside the FrameCore body well.
             var lbl = ElarionUiKit.Label(panel, "YOUR FORCES", 0.790f, 0.825f, ElarionUi.Gilt,
-                ElarionUi.FontHead, TMPro.TextAlignmentOptions.Left, 0.07f, 0.50f, bold: true);
+                ElarionUi.FontHead, TMPro.TextAlignmentOptions.Left, 0.09f, 0.50f, bold: true);
             lbl.raycastTarget = false;
 
             // Hero + Companions portrait row.
@@ -170,11 +172,13 @@ namespace DeNelle.Village.Hero
             capLbl.raycastTarget = false;
 
             // Troop list content area (left half, below the party row). Bottom raised to
-            // 0.155 so the list also clears the shared Close box (top ≈0.119 on this panel).
+            // 0.19: the Close box's REAL top on a landscape screen is ≈0.173 of this panel
+            // (fixed 120 units / 972-unit panel + the 0.05 seat — the old 0.119 figure used
+            // the portrait reference height), so 0.155 still dipped under the Close corner.
             _troopListRoot = new GameObject("TroopListArea", typeof(RectTransform));
             _troopListRoot.transform.SetParent(panel, false);
             var cr = _troopListRoot.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0.05f, 0.155f);
+            cr.anchorMin = new Vector2(0.05f, 0.19f);
             cr.anchorMax = new Vector2(0.49f, 0.645f);
             cr.offsetMin = Vector2.zero;
             cr.offsetMax = Vector2.zero;
@@ -317,26 +321,28 @@ namespace DeNelle.Village.Hero
         // BOTTOM — Auto Recommend (stub) + the big glowing DEPLOY CTA.
         private void BuildDeployBar(Transform panel)
         {
-            // CLOSE-BAND CLEARANCE (eyes-sweep 2026-07-06): the shared kit Close is a fixed
-            // 360x120px box seated bottom-center (x ≈ 0.29–0.71, y 0.05 → top ≈ 0.119 on this
-            // 0.90-tall panel). The old DEPLOY rect (x 0.49–0.90, y 0.05–0.12) painted OVER it,
-            // making Close unreachable. DEPLOY stays the ONE primary action but moves UP into
-            // the free right-column band above the Close; Auto Recommend takes the bottom-LEFT
-            // lane (x ends 0.28, left of the Close box's ≈0.29 edge).
+            // ONE IN-FRAME ACTION ROW (fresh 1280x720 capture, 2026-07-06): the old numbers
+            // used the Close top ≈0.119, computed against the PORTRAIT reference height; on a
+            // landscape screen the fixed 360x120-unit Close on this 972-unit panel really
+            // spans x 0.383–0.617, y 0.05–0.173 — so DEPLOY (x 0.52–0.95, y 0.155–0.275)
+            // painted over the Close corner, and Auto Recommend (y 0.05–0.12) sat on the
+            // painted bottom border ("hangs half outside"). The row is now
+            //   Auto Recommend (x 0.06–0.35) | Close (kit seat, 0.383–0.617) | DEPLOY (0.65–0.94)
+            // all aligned at y 0.075–0.165, inside the frame, zero overlaps.
 
             // Auto Recommend — FIRST PASS stub: selects all deployable (no comp logic yet).
             ElarionUiKit.Button(panel, "Auto Recommend", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.05f, 0.05f), new Vector2(0.28f, 0.12f), OnAutoRecommend);
+                new Vector2(0.06f, 0.075f), new Vector2(0.35f, 0.165f), OnAutoRecommend);
 
             // DEPLOY — the big glowing primary CTA. Confirm-green with a gilt ember glow
             // ring behind it so it reads as the dominant action.
             var glow = ElarionUiKit.AddImage(panel, "DeployGlow",
-                new Vector2(0.505f, 0.14f), new Vector2(0.965f, 0.29f),
+                new Vector2(0.635f, 0.055f), new Vector2(0.955f, 0.185f),
                 new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.35f));
             glow.GetComponent<Image>().raycastTarget = false;
 
             var deployBtn = ElarionUiKit.Button(panel, "DEPLOY", ElarionUiKit.ButtonKind.Confirm,
-                new Vector2(0.52f, 0.155f), new Vector2(0.95f, 0.275f), OnDeploy);
+                new Vector2(0.65f, 0.075f), new Vector2(0.94f, 0.165f), OnDeploy);
             // Gold-ink-on-green reads as the ember CTA; keep it enabled (the raid can be
             // entered to scout even with no troops — the in-raid tray handles placement).
             if (deployBtn != null) deployBtn.interactable = _def != null && !string.IsNullOrEmpty(_def.sceneName);

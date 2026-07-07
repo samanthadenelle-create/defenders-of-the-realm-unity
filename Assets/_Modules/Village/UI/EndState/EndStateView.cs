@@ -160,29 +160,39 @@ namespace DeNelle.Village.UI
             bool hasFooterZone = chrome.layout != null && chrome.layout.footer != null;
             RectTransform footer     = hasFooterZone ? chrome.layout.footer
                                      : MakeZone(well, "Zone_Footer",     0.10f, 0f,    0.90f, 0.16f);
-            RectTransform rewardWell = hasFooterZone ? well
-                                     : MakeZone(well, "Zone_RewardWell", 0f,    0.22f, 1f,    1f);
+            // VICTORY SWEEP (fresh 1280x720 capture, 2026-07-06: "Wood +15" / "Iron +8" ran
+            // BEHIND Continue): on the REAL-footer path (FrameCore relocates its default
+            // footer band above the Close) the reward well was the WHOLE body well while the
+            // law-pinned canonical CTA — 120 units tall vs the ~50-unit footer band it is
+            // centred in — spills UP into the body over the last reward rows. Same zone-flow
+            // discipline as the death-panel fix (#22 below): the reward well is ALWAYS its
+            // own zone, and on the real-footer path its floor is raised above the pinned
+            // CTA's measured top edge so rewards and Continue can never share pixels.
+            RectTransform rewardWell = MakeZone(well, "Zone_RewardWell",
+                0f, hasFooterZone ? 0f : 0.22f, 1f, 1f);
 
-            BuildBody(vm, rewardWell);
-
-            // ONE primary action (Continue / Rise again / ...) — lands LAST in the reveal.
+            // ONE primary action (Continue / Rise again / ...) — built FIRST so the reward
+            // well can be sized around the law-pinned CTA; it still lands LAST in the reveal.
             var btn = ElarionUiKit.Button(footer, vm.PrimaryLabel, ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.24f, 0.06f), new Vector2(0.76f, 0.94f), FirePrimary);
             // OWNER F8 x3: the Continue/primary action is the SAME pixel size on every
             // screen (matches the shared Close). The anchors above only centre it in the
             // footer band; the canonical size is stamped here.
             ElarionUiKit.PinCanonicalCtaSize(btn);
+            Canvas.ForceUpdateCanvases();
+            var bRt = (RectTransform)btn.transform;
+            // Robust CTA height: measured rect, else the pinned sizeDelta, floored at the
+            // canonical constant — a 0 here silently disabled the band growth entirely.
+            float need = Mathf.Max(bRt.rect.height,
+                Mathf.Max(bRt.sizeDelta.y, ElarionUiKit.CanonCtaHeight));
             // #22 (capture 9403, "YOU HAVE FALLEN" strip): on SHORT panels the law-pinned
             // canonical CTA is TALLER than the carved footer band, so the centred button
             // spilled UP over the body copy ("Try Again" on top of the death message). The
             // CTA size is law — so the BAND must grow to contain it: when the pinned button
             // exceeds the footer band, raise the band's top and lift the reward well above
-            // it (gap preserved). No-op on tall panels and real footer drop-zones.
+            // it (gap preserved).
             if (!hasFooterZone)
             {
-                Canvas.ForceUpdateCanvases();
-                var bRt = (RectTransform)btn.transform;
-                float need = bRt.rect.height > 1f ? bRt.rect.height : bRt.sizeDelta.y;
                 float wellH = well.rect.height;
                 if (wellH > 1f && need > footer.rect.height - 4f)
                 {
@@ -193,6 +203,28 @@ namespace DeNelle.Village.UI
                         $"footer band grown to contain the canonical CTA (need={need:0}px, well={wellH:0}px, band->{frac:0.###})");
                 }
             }
+            else
+            {
+                // Real footer drop-zone (FrameCore): the footer band cannot grow (it is the
+                // frame's zone), so instead lift the reward well's FLOOR above the CTA's top
+                // edge. footer/well anchors are both fractions of the panel content.
+                var contentRt = chrome.content != null ? chrome.content.GetComponent<RectTransform>() : null;
+                float panelH = contentRt != null ? contentRt.rect.height : 0f;
+                float footerCentre = (footer.anchorMin.y + footer.anchorMax.y) * 0.5f;
+                float ctaTop = panelH > 1f ? footerCentre + (need * 0.5f) / panelH
+                                           : footerCentre + 0.12f;   // conservative unmeasured fallback
+                float wellMin = well.anchorMin.y, wellMax = well.anchorMax.y;
+                float floor = Mathf.Clamp01((ctaTop + 0.02f - wellMin)
+                                            / Mathf.Max(0.05f, wellMax - wellMin));
+                if (floor > 0f)
+                {
+                    rewardWell.anchorMin = new Vector2(rewardWell.anchorMin.x, Mathf.Min(0.5f, floor));
+                    FlowTrace.Step("EndState",
+                        $"reward well floor raised above the canonical CTA (ctaTop={ctaTop:0.###}, well {wellMin:0.###}-{wellMax:0.###}, floor->{Mathf.Min(0.5f, floor):0.###})");
+                }
+            }
+
+            BuildBody(vm, rewardWell);
             Track(btn.gameObject, 0.25f + vm.Spoils.Count * 0.05f + 0.08f, 0.92f);
 
             // Smooth in: whole panel fades+scales, then the staggered content.
@@ -326,9 +358,15 @@ namespace DeNelle.Village.UI
                 img.preserveAspect = true;
                 img.raycastTarget = false;
                 var rt = img.rectTransform;
-                rt.anchorMin = new Vector2(0.025f, 0.12f);
-                rt.anchorMax = new Vector2(0.135f, 0.88f);
-                rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                // Fresh-capture sweep 2026-07-06: fraction-sized icons collapsed to ~12px
+                // when the band stack squeezed the rows. Fixed 40x40 reference-unit square
+                // (>= 24 screen px at the 720p landscape scale), anchored middle-left —
+                // the icon never shrinks with its band.
+                rt.anchorMin = new Vector2(0.035f, 0.5f);
+                rt.anchorMax = new Vector2(0.035f, 0.5f);
+                rt.pivot = new Vector2(0f, 0.5f);
+                rt.anchoredPosition = Vector2.zero;
+                rt.sizeDelta = new Vector2(40f, 40f);
             }
             var label = ElarionUiKit.Label(plate.transform, row.Label ?? "", 0f, 1f,
                 ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.MidlineLeft,
