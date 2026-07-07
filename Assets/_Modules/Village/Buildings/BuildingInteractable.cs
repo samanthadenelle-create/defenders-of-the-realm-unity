@@ -55,6 +55,7 @@ namespace DeNelle.Village
         private bool _openedStructure;   // this building opened the shared structure dialogue
         private string _myHookId;        // cached structure-dialogue id for this building
         private bool _focusHeld;         // true while THIS building holds the HUD upgrade focus (transition-logged)
+        private bool _npcGapWarned;      // F8 2026-07-07: once-only Warn when no NPC covers this building
 
         // WO-415: structure ids whose FRONT NPC owns the talk → the matching building defers its
         // own interact prompt (the NPC opens the same shared dialogue — one trigger, not two).
@@ -147,11 +148,25 @@ namespace DeNelle.Village
                 return;
             }
 
-            // DEF-203: register the shared on-screen Interact button while in range so
-            // touch/mobile (no keyboard) can fire the same action. Desktop F unchanged.
+            // Owner F8 2026-07-07 "interact only through npc — remove the black interact"
+            // (supersedes DEF-203 for BUILDINGS): a building never raises the shared black
+            // Interact button — its front NPC's Talk (TalkPromptRegistry -> HUD Talk) is the
+            // ONE interaction path. The old NPC-cover gate leaked (StructureHookIdFor returns
+            // null for Apothecary/JewelersBench, so the :103 early-return never fired for them
+            // — the "second black affordance" she flagged). A building with NO covering NPC now
+            // self-reports (Warn, once) instead of silently losing reach: that's a content gap
+            // (spawn its NPC), not a reason to keep the banned affordance. Mines/portals/seams
+            // (non-building requesters) keep the shared button — out of this directive's scope.
             if (inRange)
             {
-                MobileInteractButton.Request(this, "Interact: " + LabelFor(_building.Type), Interact);
+                if (!_npcGapWarned && (_myHookId == null || !_npcCovered.Contains(_myHookId)))
+                {
+                    _npcGapWarned = true;
+                    FlowTrace.Warn("Interact", "building '" + _building.Type + "' (hook='" +
+                        (_myHookId ?? "<null>") + "') has NO covering NPC — its Interact() is now " +
+                        "unreachable by design (owner F8 2026-07-07: interact only through NPC). " +
+                        "Spawn/point its front NPC to restore reach.");
+                }
                 // Owner 2026-06-20: tell the HUD an upgradable, not-maxed building is in reach
                 // so its bottom button swaps Quest -> Upgrade, focused on THIS building's id.
                 bool want = IsUpgradableNotMaxed(_myHookId);
@@ -176,15 +191,11 @@ namespace DeNelle.Village
                 }
             }
 
-            // DEF-217: the shared MobileInteractButton is now the SINGLE canonical
-            // interaction prompt. Suppress the world-space bubble whenever the button is
-            // showing ANY interact prompt (this building or a higher-priority upgrade /
-            // crafting watcher on the same building). The bubble only survives as a
-            // fallback if the button host failed to spawn. Kills the "bubble + button"
-            // (and "bubble + button + 2nd watcher") triple prompt.
-            bool buttonActive = MobileInteractButton.IsActive;
-            if (inRange && !buttonActive && _promptGo == null) ShowPrompt();
-            else if ((!inRange || buttonActive) && _promptGo != null) HidePrompt();
+            // F8 2026-07-07 (supersedes DEF-217 for buildings): with the building no longer
+            // requesting the shared button, the old "bubble when button inactive" fallback
+            // would RESURFACE the world bubble as a new second affordance. Buildings show no
+            // proximity interact prompt at all — the front NPC's Talk is the one path.
+            if (_promptGo != null) HidePrompt();
 
             // Mobile-first: interaction fires through the shared on-screen Interact
             // button (requested above while in range). The desktop F-key trigger was
