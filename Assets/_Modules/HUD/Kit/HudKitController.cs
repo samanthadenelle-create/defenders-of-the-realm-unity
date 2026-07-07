@@ -1263,6 +1263,26 @@ namespace DeNelle.HUD.Kit
                 tabYCenter: 0.5f, panelWidthFrac: 0.22f, panelHeightFrac: 0.52f,
                 tabIconConcept: "settings");   // GEAR tab (owner: replaces the down "v/>" trigger)
 
+            // F8-12 (owner 2026-07-07 "very small font and cells"): this widget re-parents into
+            // the Dock AREA mount — only 23% x 10% of the screen (HudAreasHost Dock rect) — and
+            // BuildSlideTab sizes by fraction-of-parent, so the tab + slide-out panel rendered at
+            // ~5% of screen. Pin both to FIXED reference pixels (1080x1920 canvas units, the same
+            // canonical-CTA discipline) so the tiny mount can't scale them: thumb-size tab on the
+            // left edge, real-size panel overlaying when open. Cells/fonts inside are fractions of
+            // the PANEL, so they inherit the fix.
+            var dockPanelRt = _slideDock.panel;
+            dockPanelRt.anchorMin = new Vector2(0f, 0.5f);
+            dockPanelRt.anchorMax = new Vector2(0f, 0.5f);
+            dockPanelRt.pivot = new Vector2(0f, 0.5f);
+            dockPanelRt.anchoredPosition = Vector2.zero;
+            dockPanelRt.sizeDelta = new Vector2(400f, 560f);
+            var dockTabRt = (RectTransform)_slideDock.tab.transform;
+            dockTabRt.anchorMin = new Vector2(0f, 0.5f);
+            dockTabRt.anchorMax = new Vector2(0f, 0.5f);
+            dockTabRt.pivot = new Vector2(0f, 0.5f);
+            dockTabRt.anchoredPosition = Vector2.zero;
+            dockTabRt.sizeDelta = new Vector2(84f, 84f);
+
             AddDockTab(_slideDock.panel, 0, "Chat",        "chat",        OpenClanChat);
             AddDockTab(_slideDock.panel, 1, "Leaderboard", "leaderboard", OpenLeaderboard);
             AddDockTab(_slideDock.panel, 2, "Music",       "music",       OpenJukebox);
