@@ -251,6 +251,22 @@ namespace DeNelle.Village
         private bool _seatingEditActive;
         private bool _seatEditOffHand;
         private int  _seatEditMode = -1;   // -1 unseated, 0 nudge(geometry), 1 vertical(fullOverride)
+        // SHEATHED seating edit (2026-07-07): the owner dials the BACK (sheathed) pose live; the
+        // edit runs in the back-socket frame and saves under "<meshKey>@sheathed" (see ApplyHoldPose).
+        private bool _seatEditSheathed;
+
+        // Registry key suffix for owner-authored SHEATHED poses. Registry keys are arbitrary
+        // strings (verified: plain Dictionary + JsonUtility string field, no sanitization), so
+        // '@' passes through save/load/remove untouched.
+        private const string SheathedKeySuffix = "@sheathed";
+
+        // AUTHORED SCALE per slot (2026-07-07 WYSIWYG scale-parity fix): the owner-dialed uniform
+        // scale (offsets.json fo.scale, default 1). The rendered local scale for a compensated slot
+        // is ALWAYS ParentScaleCompensation(parent) * authoredScale — one composition shared by the
+        // attach path, ApplyHoldPose re-parents, and the Seating Editor preview, so what the owner
+        // approves in the editor is byte-identical to every subsequent boot.
+        private float _weaponAuthoredScale  = 1f;
+        private float _offHandAuthoredScale = 1f;
 
         // ── ARMOR TINT (WO-567) ──────────────────────────────────────────────────────
         // The combat-pivot north star keeps ONE static hero model — armor is NOT a mesh swap
@@ -871,6 +887,7 @@ namespace DeNelle.Village
 
             gripRoot.transform.SetParent(hand, false);
             _weaponParentCompensate = true;
+            _weaponAuthoredScale = 1f;   // no offset yet — reset; the offset branches below record fo.scale
             CompensateParentScale(gripRoot.transform);
             gripRoot.transform.localPosition = vis.gripPos;
 
@@ -933,9 +950,14 @@ namespace DeNelle.Village
             // (e.g. "sword_A", what the Forge defaults its save-id to) with a fallback to the id.
             if (fullOverride)
             {
-                // OVERRIDE: reproduce the Forge preview EXACTLY (raw pivot + localScale = one*scale).
+                // OVERRIDE: reproduce the Seating-Editor preview EXACTLY (raw pivot pose). Scale
+                // composes through the ONE shared seam (CompensateParentScale = comp * authored):
+                // WYSIWYG break proven 2026-07-07: preview lacked compensate (hand lossy 1.666) —
+                // owner-dialed 0.46 rendered 0.276 at boot. Preview + attach + hold-pose now all
+                // render ParentScaleCompensation(parent) * fo.scale, so the approved size persists.
                 gripRoot.transform.localPosition = vis.gripPos + fo.pos;
-                gripRoot.transform.localScale = Vector3.one * (fo.scale > 0f ? fo.scale : 1f);
+                _weaponAuthoredScale = fo.scale > 0f ? fo.scale : 1f;
+                CompensateParentScale(gripRoot.transform, _weaponAuthoredScale);
                 FlowTrace.Step("Offset", $"OVERRIDE '{offsetKey}': raw-pivot pos={fo.pos} rot={fo.eulerRot} scale={fo.scale:0.###}");
             }
             else if (hasOffset)
@@ -947,7 +969,12 @@ namespace DeNelle.Village
                 _baseGripRot = _baseGripRot * Quaternion.Euler(fo.eulerRot);
                 _baseGripEuler = _baseGripRot.eulerAngles;
                 if (fo.scale > 0f && Mathf.Abs(fo.scale - 1f) > 1e-4f)
+                {
+                    // Record the authored multiplier so ApplyHoldPose's re-parent compensate
+                    // (CompensateParentScale) re-composes comp * authored instead of wiping it.
+                    _weaponAuthoredScale = fo.scale;
                     gripRoot.transform.localScale = gripRoot.transform.localScale * fo.scale;
+                }
                 FlowTrace.Step("Offset", nudged
                     ? $"NUDGE '{offsetKey}' on geometry: +pos={fo.pos} *rot={fo.eulerRot} *scale={fo.scale:0.###}"
                     : $"offset '{offsetKey}' is all-zero — pure geometry (no nudge).");
@@ -1566,6 +1593,7 @@ namespace DeNelle.Village
                 gripRoot.transform.localPosition = vis.gripPos + fo.pos;
                 gripRoot.transform.localRotation = Quaternion.Euler(fo.eulerRot);
                 gripRoot.transform.localScale    = Vector3.one * (fo.scale > 0f ? fo.scale : 1f);
+                _offHandAuthoredScale = fo.scale > 0f ? fo.scale : 1f;
                 _offHandParentCompensate = false;   // owner dialed fo.scale by eye under this bone — don't re-solve it
             }
             // NATIVE Blink shield: trust the authored grip-at-origin + orientation (scale-only), and
@@ -1579,6 +1607,7 @@ namespace DeNelle.Village
                 SeatNative(prop, gripRoot.transform, heldLen);
                 gripRoot.transform.SetParent(hand, false);
                 _offHandParentCompensate = true;
+                _offHandAuthoredScale = 1f;   // the nudge block below records fo.scale if present
                 CompensateParentScale(gripRoot.transform);
                 gripRoot.transform.localPosition = Vector3.zero;
                 gripRoot.transform.localRotation = Quaternion.identity;
@@ -1589,6 +1618,7 @@ namespace DeNelle.Village
                 NormalizeInto(prop, gripRoot.transform, heldLen, resolveHilt: false);
                 gripRoot.transform.SetParent(hand, false);
                 _offHandParentCompensate = true;
+                _offHandAuthoredScale = 1f;   // the nudge block below records fo.scale if present
                 CompensateParentScale(gripRoot.transform);
                 gripRoot.transform.localPosition = vis.gripPos;
                 gripRoot.transform.localRotation = Quaternion.Euler(vis.gripEuler);
@@ -1603,7 +1633,12 @@ namespace DeNelle.Village
                 gripRoot.transform.localRotation =
                     gripRoot.transform.localRotation * Quaternion.Euler(fo.eulerRot);
                 if (fo.scale > 0f && Mathf.Abs(fo.scale - 1f) > 1e-4f)
+                {
+                    // Record the authored multiplier so ApplyHoldPose's re-parent compensate
+                    // re-composes comp * authored instead of wiping it (scale-parity 2026-07-07).
+                    _offHandAuthoredScale = fo.scale;
                     gripRoot.transform.localScale = gripRoot.transform.localScale * fo.scale;
+                }
                 FlowTrace.Step("Offset", nudged
                     ? $"off-hand NUDGE '{offsetKey}' on geometry: +pos={fo.pos} *rot={fo.eulerRot} *scale={fo.scale:0.###}"
                     : $"off-hand offset '{offsetKey}' is all-zero — pure geometry (no nudge).");
@@ -1717,7 +1752,10 @@ namespace DeNelle.Village
         // Runs on every combat-state change (Update auto-mirror / SetCombatActive) and once per attach.
         private void ApplyHoldPose()
         {
-            bool drawn = _combatActive;
+            // A live SHEATHED seating edit pins the props to the back socket even if combat starts —
+            // the owner is dialing the back pose (Update's auto-mirror is already suspended while
+            // _seatingEditActive; this covers an explicit SetCombatActive caller mid-edit).
+            bool drawn = _combatActive && !(_seatingEditActive && _seatEditSheathed);
             Transform back = drawn ? null : ResolveBackSocket();
 
             // ── Main weapon ──
@@ -1726,19 +1764,23 @@ namespace DeNelle.Village
                 if (!drawn && back != null)
                 {
                     _gripRoot.SetParent(back, false);
-                    if (_weaponParentCompensate) CompensateParentScale(_gripRoot);
+                    if (_weaponParentCompensate) CompensateParentScale(_gripRoot, _weaponAuthoredScale);
                     _gripRoot.localPosition = _sheatheWeaponLocalPos;
                     // DERIVED sheathe rotation (the fix): build the base orientation from the body's
                     // own axes via the SAME LookRotation(flat, blade) construction the correct battle
                     // draw uses (ComputeMeleeGripRotation), then compose the persisted authored nudge —
                     // instead of the old hand-guessed magic euler that ignored the chest-bone axes.
                     _gripRoot.localRotation = ComputeSheathRotation(back);
+                    // OWNER-AUTHORABLE SHEATHED POSE (root fix 2026-07-07): a registry entry keyed
+                    // "<meshKey>@sheathed" (dialed live in the Seating Editor's Sheathed mode)
+                    // refines/replaces the built-in pose. No entry = today's behavior exactly.
+                    ApplySheathedOffset(_gripRoot, _currentWeaponMeshKey);
                 }
                 else if (_weaponHand != null)
                 {
                     // Drawn (or sheathed with no back bone on this rig — never leave it floating unparented).
                     _gripRoot.SetParent(_weaponHand, false);
-                    if (_weaponParentCompensate) CompensateParentScale(_gripRoot);
+                    if (_weaponParentCompensate) CompensateParentScale(_gripRoot, _weaponAuthoredScale);
                     _gripRoot.localPosition = _weaponDrawnLocalPos;
                     _gripRoot.localRotation = _baseGripRot;
                 }
@@ -1751,18 +1793,50 @@ namespace DeNelle.Village
                 if (!drawn && back != null)
                 {
                     offT.SetParent(back, false);
-                    if (_offHandParentCompensate) CompensateParentScale(offT);
+                    if (_offHandParentCompensate) CompensateParentScale(offT, _offHandAuthoredScale);
                     offT.localPosition = _sheatheOffHandLocalPos;
+                    // DE-BAND-AID NOTE (2026-07-07): _sheatheOffHandLocalEuler (the hand-tuned magic
+                    // euler, owner Z+=180 correction 2026-07-04) is now only the DEFAULT under the
+                    // @sheathed offset seam — an owner-authored "<meshKey>@sheathed" registry entry
+                    // (Seating Editor, Sheathed mode) supersedes it below. Kept, not removed: with no
+                    // entry this line is the exact shipped pose (zero regression).
                     offT.localRotation = ApplyGlobalWeaponYaw(Quaternion.Euler(_sheatheOffHandLocalEuler));
+                    ApplySheathedOffset(offT, _currentOffHandMeshKey);
                 }
                 else if (_offHandHand != null)
                 {
                     offT.SetParent(_offHandHand, false);
-                    if (_offHandParentCompensate) CompensateParentScale(offT);
+                    if (_offHandParentCompensate) CompensateParentScale(offT, _offHandAuthoredScale);
                     offT.localPosition = _offHandDrawnLocalPos;
                     offT.localRotation = _offHandDrawnLocalRot;
                 }
             }
+        }
+
+        // OWNER-AUTHORABLE SHEATHED POSE consumption (root fix 2026-07-07): after the built-in
+        // sheathe pose is applied, an AttachmentOffsetRegistry entry keyed "<meshKey>@sheathed"
+        // (authored live via the Seating Editor's Sheathed mode) adjusts it in the BACK-SOCKET frame:
+        //   • fullOverride=true  → localPosition = fo.pos, localRotation = Euler(fo.eulerRot) —
+        //     the authored value IS the pose, absolute in the socket frame, NO global yaw.
+        //   • fullOverride=false → nudge: +pos, built-in rot ∘ Euler(fo.eulerRot).
+        // Scale is deliberately untouched — scale is owned by the attach path (comp * authored).
+        // No entry = built-in behavior byte-for-byte (zero regression risk).
+        private static void ApplySheathedOffset(Transform t, string meshKey)
+        {
+            if (t == null || string.IsNullOrEmpty(meshKey)) return;
+            if (!AttachmentOffsetRegistry.TryGetOffset(meshKey + SheathedKeySuffix, out var fo)) return;
+            if (fo.fullOverride)
+            {
+                t.localPosition = fo.pos;
+                t.localRotation = Quaternion.Euler(fo.eulerRot);
+            }
+            else
+            {
+                t.localPosition += fo.pos;
+                t.localRotation = t.localRotation * Quaternion.Euler(fo.eulerRot);
+            }
+            FlowTrace.Step("Offset", $"sheathed offset '{meshKey}{SheathedKeySuffix}' applied: " +
+                $"pos={fo.pos} rot={fo.eulerRot} full={fo.fullOverride}");
         }
 
         // Lazily create the shared BACK sheathe socket under the Chest bone (fallback Spine, then
@@ -1779,13 +1853,29 @@ namespace DeNelle.Village
         // Skipped for owner-dialed fullOverride scales (those were tuned by eye under the bone).
         private bool _weaponParentCompensate, _offHandParentCompensate;
 
-        private static void CompensateParentScale(Transform gripRoot)
+        // ONE SOURCE OF TRUTH for the parent-scale factor (2026-07-07): used by both the runtime
+        // CompensateParentScale below AND ApplySeatingPreview, so the Seating Editor renders the
+        // exact scale composition every subsequent boot renders.
+        // WYSIWYG break proven 2026-07-07: preview lacked compensate (hand lossy 1.666) —
+        // owner-dialed 0.46 rendered 0.276 at boot.
+        private static Vector3 ParentScaleCompensation(Transform parent)
+        {
+            if (parent == null) return Vector3.one;
+            Vector3 ls = parent.lossyScale;
+            if (ls.x <= 1e-4f || ls.y <= 1e-4f || ls.z <= 1e-4f) return Vector3.one;
+            return new Vector3(1f / ls.x, 1f / ls.y, 1f / ls.z);
+        }
+
+        private static void CompensateParentScale(Transform gripRoot, float authoredScale = 1f)
         {
             var p = gripRoot != null ? gripRoot.parent : null;
             if (p == null) return;
             Vector3 ls = p.lossyScale;
             if (ls.x <= 1e-4f || ls.y <= 1e-4f || ls.z <= 1e-4f) return;
-            gripRoot.localScale = new Vector3(1f / ls.x, 1f / ls.y, 1f / ls.z);
+            if (authoredScale <= 0f) authoredScale = 1f;
+            // comp * authored — the owner-dialed offsets.json scale (fo.scale) survives every
+            // re-parent instead of being wiped back to pure 1/lossy (scale-parity fix 2026-07-07).
+            gripRoot.localScale = ParentScaleCompensation(p) * authoredScale;
             // §12: log the RESULTING world size, not just the math — capture 9403 showed the
             // sheathed shield still rendering oversized while these compensate lines fired,
             // so the proof must be the rendered bounds, not the applied scale.
@@ -1797,8 +1887,9 @@ namespace DeNelle.Village
             }
             FlowTrace.Step("Equip",
                 $"parent-scale compensate: parent='{p.name}' lossy=({ls.x:0.###},{ls.y:0.###},{ls.z:0.###}) " +
+                $"authored={authoredScale:0.###} " +
                 $"-> worldBounds={(hasB ? wb.size.ToString("0.###") : "<no renderer>")} " +
-                "(the proportional solve should read here as the heldLength on the longest axis)");
+                "(the proportional solve should read here as heldLength * authored on the longest axis)");
         }
 
         private Transform ResolveBackSocket()
@@ -2039,7 +2130,8 @@ namespace DeNelle.Village
         {
             public bool    valid;
             public bool    offHand;
-            public string  offsetKey;     // what the offset is saved under (mesh name)
+            public bool    sheathed;      // true = editing the BACK (sheathed) pose (key gets "@sheathed")
+            public string  offsetKey;     // what the offset is saved under (mesh name [+ "@sheathed"])
             public string  label;         // human label (weapon/off-hand id)
             public bool    melee;
             public Vector3 pos;           // seeded from any existing saved offset
@@ -2062,6 +2154,16 @@ namespace DeNelle.Village
         /// Returns false (info.valid=false) when that slot has no prop equipped.
         /// </summary>
         public bool BeginSeatingEdit(bool offHand, out SeatingEditInfo info)
+            => BeginSeatingEdit(offHand, false, out info);
+
+        /// <summary>
+        /// Overload (2026-07-07): <paramref name="sheathed"/>=true edits the BACK (sheathed) pose —
+        /// the prop is forced to the back socket (not drawn to the hand), the offset is keyed
+        /// "&lt;meshKey&gt;@sheathed", and the preview runs in the back-socket frame per the
+        /// ApplyHoldPose consumption contract. This makes the town carry pose owner-authorable via
+        /// the SAME registry the drawn seat uses (the root fix for "my offsets are invisible in town").
+        /// </summary>
+        public bool BeginSeatingEdit(bool offHand, bool sheathed, out SeatingEditInfo info)
         {
             info = default;
             var grip = offHand ? _currentOffHandProp : _currentWeaponProp;
@@ -2073,29 +2175,47 @@ namespace DeNelle.Village
 
             string key = offHand ? _currentOffHandMeshKey : _currentWeaponMeshKey;
             string id  = offHand ? _currentOffHandId      : _currentWeaponId;
+            string offsetKey = !string.IsNullOrEmpty(key) ? key : id;
+            if (sheathed && !string.IsNullOrEmpty(offsetKey)) offsetKey += SheathedKeySuffix;
             AttachmentOffset fo = default;
-            bool has = !string.IsNullOrEmpty(key) && AttachmentOffsetRegistry.TryGetOffset(key, out fo);
+            bool has = !string.IsNullOrEmpty(offsetKey) && AttachmentOffsetRegistry.TryGetOffset(offsetKey, out fo);
 
             info.valid        = true;
             info.offHand      = offHand;
-            info.offsetKey    = !string.IsNullOrEmpty(key) ? key : id;
-            info.label        = !string.IsNullOrEmpty(id) ? id : info.offsetKey;
+            info.sheathed     = sheathed;
+            info.offsetKey    = offsetKey;
+            info.label        = !string.IsNullOrEmpty(id) ? id : offsetKey;
             info.melee        = !offHand && _currentWeaponMelee;
             info.pos          = has ? fo.pos      : Vector3.zero;
             info.euler        = has ? fo.eulerRot : Vector3.zero;
             info.scale        = has && fo.scale > 0f ? fo.scale : 1f;
-            // Default the editor to the owner's vertical-authoring workflow unless an existing
-            // entry was a plain nudge.
-            info.fullOverride = has ? fo.fullOverride : true;
+            // Drawn default = the owner's vertical-authoring workflow; SHEATHED default = NUDGE on
+            // the built-in back pose (an all-zero nudge == today's derived sheathe exactly) —
+            // unless an existing entry says otherwise.
+            info.fullOverride = has ? fo.fullOverride : !sheathed;
 
             _seatingEditActive = true;
             _seatEditOffHand   = offHand;
-            _seatEditMode      = -1;   // force a re-seat on the first preview
-            // The seating editor tunes the IN-HAND (drawn) seat — make sure the edited prop is DRAWN
-            // to its hand (not sheathed on the back), so the preview math runs in the correct frame.
-            DrawForEditing(offHand);
+            _seatEditSheathed  = sheathed;
+            _seatEditMode      = -1;   // force a re-seat on the first preview (drawn mode)
+            if (sheathed)
+            {
+                // Sheathed edit tunes the BACK pose — force the sheathed placement (ApplyHoldPose
+                // treats combat as inactive while _seatEditSheathed) so the preview math runs in
+                // the back-socket frame the runtime consumption uses.
+                ApplyHoldPose();
+                if (ResolveBackSocket() == null)
+                    FlowTrace.Warn("Offset", $"BeginSeatingEdit(sheathed): no back socket on '{name}' — " +
+                        "sheathed preview would run in the hand frame; pose may not reproduce.");
+            }
+            else
+            {
+                // The drawn edit tunes the IN-HAND seat — make sure the edited prop is DRAWN to its
+                // hand (not sheathed on the back), so the preview math runs in the correct frame.
+                DrawForEditing(offHand);
+            }
             ApplySeatingPreview(info.pos, info.euler, info.scale, info.fullOverride);
-            FlowTrace.Step("Offset", $"BeginSeatingEdit '{info.offsetKey}' offHand={offHand} seed pos={info.pos} euler={info.euler} scale={info.scale:0.###} full={info.fullOverride}");
+            FlowTrace.Step("Offset", $"BeginSeatingEdit '{info.offsetKey}' offHand={offHand} sheathed={sheathed} seed pos={info.pos} euler={info.euler} scale={info.scale:0.###} full={info.fullOverride}");
             return true;
         }
 
@@ -2113,6 +2233,15 @@ namespace DeNelle.Village
             if (grip == null) return;
             var grt = grip.transform;
             if (grt.childCount == 0) return;
+
+            // SHEATHED edit (2026-07-07): pos/euler live in the BACK-SOCKET frame per the
+            // ApplyHoldPose consumption contract — no hand-grip composition, no global yaw.
+            if (_seatEditSheathed)
+            {
+                ApplySheathedSeatingPreview(grt, offHand, pos, euler, fullOverride);
+                return;
+            }
+
             var child = grt.GetChild(0).gameObject;
 
             bool    melee   = !offHand && _currentWeaponMelee;
@@ -2158,7 +2287,12 @@ namespace DeNelle.Village
 
             grt.localPosition = gripPos + pos;
             grt.localRotation = ApplyGlobalWeaponYaw(baseRot * Quaternion.Euler(euler));
-            grt.localScale    = Vector3.one * scale;
+            // WYSIWYG break proven 2026-07-07: preview lacked compensate (hand lossy 1.666) —
+            // owner-dialed 0.46 rendered 0.276 at boot. Mirror the runtime scale composition
+            // EXACTLY: a compensated slot renders ParentScaleCompensation(parent) * scale —
+            // the SAME helper CompensateParentScale (attach + hold-pose) composes from.
+            bool compensate = offHand ? _offHandParentCompensate : _weaponParentCompensate;
+            grt.localScale = (compensate ? ParentScaleCompensation(grt.parent) : Vector3.one) * scale;
 
             // Keep the editor's mirror of base state coherent so a later EndSeatingEdit / hold
             // re-apply uses the previewed orientation as the base (no snap-back).
@@ -2166,6 +2300,55 @@ namespace DeNelle.Village
             {
                 _baseGripRot   = grt.localRotation;
                 _baseGripEuler = _baseGripRot.eulerAngles;
+            }
+        }
+
+        // SHEATHED-pose preview (2026-07-07): applies pos/euler in the BACK-SOCKET frame exactly
+        // per ApplySheathedOffset's consumption contract, so what the owner dials on the back is
+        // byte-identical to what ApplyHoldPose reproduces in town on every boot:
+        //   • fullOverride=true  → localPosition = pos, localRotation = Euler(euler) — absolute in
+        //     the socket frame, NO global yaw (the authored value IS the pose).
+        //   • fullOverride=false → nudge composed on the built-in sheathe pose (derived
+        //     ComputeSheathRotation for the weapon; _sheatheOffHandLocal* default for the shield).
+        // Scale is deliberately untouched — the sheathe never owns scale (the attach path does).
+        private void ApplySheathedSeatingPreview(Transform grt, bool offHand,
+            Vector3 pos, Vector3 euler, bool fullOverride)
+        {
+            Transform back = ResolveBackSocket();
+            if (back == null)
+            {
+                FlowTrace.Warn("Offset", $"ApplySheathedSeatingPreview: no back socket on '{name}' — cannot preview the sheathed pose.");
+                return;
+            }
+            if (grt.parent != back)
+            {
+                grt.SetParent(back, false);
+                bool comp = offHand ? _offHandParentCompensate : _weaponParentCompensate;
+                if (comp) CompensateParentScale(grt, offHand ? _offHandAuthoredScale : _weaponAuthoredScale);
+            }
+
+            Vector3    basePos;
+            Quaternion baseRot;
+            if (offHand)
+            {
+                basePos = _sheatheOffHandLocalPos;
+                baseRot = ApplyGlobalWeaponYaw(Quaternion.Euler(_sheatheOffHandLocalEuler));
+            }
+            else
+            {
+                basePos = _sheatheWeaponLocalPos;
+                baseRot = ComputeSheathRotation(back);
+            }
+
+            if (fullOverride)
+            {
+                grt.localPosition = pos;
+                grt.localRotation = Quaternion.Euler(euler);
+            }
+            else
+            {
+                grt.localPosition = basePos + pos;
+                grt.localRotation = baseRot * Quaternion.Euler(euler);
             }
         }
 
@@ -2186,9 +2369,19 @@ namespace DeNelle.Village
                 FlowTrace.Fail("Offset", "SaveSeating: no offset key for the edited slot — nothing saved.");
                 return false;
             }
+            // Sheathed edits persist under "<key>@sheathed" — verified the registry does NO key
+            // sanitization ('@' passes save/load/remove untouched), so the drawn entry is never clobbered.
+            if (_seatEditSheathed) key += SheathedKeySuffix;
             if (scale <= 0f) scale = 1f;
 
             bool ok = AttachmentOffsetRegistry.SaveOffset(key, pos, euler, scale, fullOverride, out devPath, out snippet);
+            // Scale-parity (2026-07-07): a saved DRAWN scale is now the authored multiplier — mirror it
+            // so the very next ApplyHoldPose re-parent composes comp * saved (no wait for a re-equip).
+            if (ok && !_seatEditSheathed)
+            {
+                if (_seatEditOffHand) _offHandAuthoredScale = scale;
+                else                  _weaponAuthoredScale  = scale;
+            }
             FlowTrace.Step("Offset", ok
                 ? $"SaveSeating '{key}': pos={pos} euler={euler} scale={scale:0.###} full={fullOverride} -> {devPath}"
                 : $"SaveSeating '{key}': WRITE FAILED (see warnings).");
@@ -2203,13 +2396,15 @@ namespace DeNelle.Village
             AttachmentOffsetRegistry.Reload();
             bool wasEditing = _seatingEditActive;
             bool offHand    = _seatEditOffHand;
+            bool sheathed   = _seatEditSheathed;
             _seatingEditActive = false;     // allow the re-attach to seat normally
+            _seatEditSheathed  = false;
             _seatEditMode = -1;
             EquipBestForHero();
             if (wasEditing)
             {
-                // Re-enter edit on the freshly attached prop so the panel stays live.
-                BeginSeatingEdit(offHand, out _);
+                // Re-enter edit on the freshly attached prop so the panel stays live (same carry mode).
+                BeginSeatingEdit(offHand, sheathed, out _);
             }
         }
 
@@ -2218,6 +2413,7 @@ namespace DeNelle.Village
         {
             if (!_seatingEditActive) return;
             _seatingEditActive = false;
+            _seatEditSheathed  = false;
             _seatEditMode = -1;
             // Re-apply the carry state so both props resume drawn (combat) / sheathed (town) cleanly.
             ApplyHoldPose();

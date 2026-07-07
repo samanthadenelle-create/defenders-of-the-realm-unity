@@ -70,6 +70,7 @@ namespace DeNelle.Village.UI
         private EquipmentController _eq;
         private EquipmentController _injected;   // when set, edit THIS controller (e.g. the Gear preview) instead of the world hero
         private bool    _offHand;
+        private bool    _sheathed;   // 2026-07-07: carry mode — false = Drawn (in-hand), true = Sheathed (back pose, "@sheathed" key)
         private Vector3 _pos;
         private Vector3 _euler;
         private float   _scale = 1f;
@@ -79,6 +80,7 @@ namespace DeNelle.Village.UI
         private Label  _status;
         private Label  _targetLabel;
         private Button _mainBtn, _offBtn, _fullBtn;
+        private Button _drawnBtn, _sheathedBtn;
         private VisualElement _body;
 
         // ── Launch (reflection-friendly entry for AdminOverlay dev tools) ─────────────
@@ -135,6 +137,7 @@ namespace DeNelle.Village.UI
 
             // Prefer the main-hand weapon; fall back to the off-hand if only a shield is equipped.
             _offHand = false;
+            _sheathed = false;   // always open in Drawn mode (the established workflow)
             if (!_eq.HasSeatingTarget(false) && _eq.HasSeatingTarget(true)) _offHand = true;
 
             if (!BeginEdit(_offHand))
@@ -162,7 +165,7 @@ namespace DeNelle.Village.UI
         private bool BeginEdit(bool offHand)
         {
             if (_eq == null) return false;
-            if (!_eq.BeginSeatingEdit(offHand, out var info) || !info.valid) return false;
+            if (!_eq.BeginSeatingEdit(offHand, _sheathed, out var info) || !info.valid) return false;
             _offHand      = info.offHand;
             _offsetKey    = info.offsetKey;
             _pos          = info.pos;
@@ -258,6 +261,19 @@ namespace DeNelle.Village.UI
             row.Add(_offBtn);
             col.Add(row);
 
+            // Carry-mode toggle (2026-07-07): Drawn edits the in-hand seat; Sheathed edits the
+            // BACK pose (saved under "<key>@sheathed") — the town carry the owner actually sees.
+            var carry = new VisualElement();
+            carry.style.flexDirection = FlexDirection.Row;
+            carry.style.alignItems = Align.Center;
+            carry.style.marginBottom = 4;
+            _drawnBtn    = MakeToggle("Drawn (hand)",    !_sheathed, () => SwitchCarry(false));
+            _sheathedBtn = MakeToggle("Sheathed (back)",  _sheathed, () => SwitchCarry(true));
+            _drawnBtn.style.marginRight = 6;
+            carry.Add(_drawnBtn);
+            carry.Add(_sheathedBtn);
+            col.Add(carry);
+
             _targetLabel = new Label(TargetText());
             _targetLabel.style.fontSize = 10;
             _targetLabel.style.color = TitleGold;
@@ -266,8 +282,9 @@ namespace DeNelle.Village.UI
             return col;
         }
 
-        private string TargetText() =>
-            $"id: {_offsetKey ?? "<none>"}   ·   mode: {(_fullOverride ? "VERTICAL+delta" : "NUDGE on geometry")}";
+        private string TargetText() => _sheathed
+            ? $"id: {_offsetKey ?? "<none>"}   ·   mode: {(_fullOverride ? "ABSOLUTE back pose" : "NUDGE on built-in sheathe")}"
+            : $"id: {_offsetKey ?? "<none>"}   ·   mode: {(_fullOverride ? "VERTICAL+delta" : "NUDGE on geometry")}";
 
         private void RebuildBody()
         {
@@ -292,10 +309,19 @@ namespace DeNelle.Village.UI
             _body.Add(BuildRow("Pos Z", AxisZ, -0.5f, 0.5f, 0.005f, 0.02f, "0.000",
                 () => _pos.z, v => _pos.z = v));
 
-            // Scale — uniform multiplier.
-            _body.Add(SectionLabel("SCALE  (× uniform)"));
-            _body.Add(BuildRow("Scale", AxisS, 0.1f, 5f, 0.05f, 0.25f, "0.###",
-                () => _scale, v => _scale = Mathf.Max(0.01f, v)));
+            // Scale — uniform multiplier. DRAWN mode only: the sheathe never owns scale (scale
+            // is composed by the attach path — comp * authored — and reused on the back).
+            if (!_sheathed)
+            {
+                _body.Add(SectionLabel("SCALE  (× uniform)"));
+                _body.Add(BuildRow("Scale", AxisS, 0.1f, 5f, 0.05f, 0.25f, "0.###",
+                    () => _scale, v => _scale = Mathf.Max(0.01f, v)));
+            }
+            else
+            {
+                var note = SectionLabel("SCALE — attach-owned (dial it in Drawn mode)");
+                _body.Add(note);
+            }
 
             _body.Add(BuildModeRow());
             _body.Add(BuildButtons());
@@ -315,8 +341,10 @@ namespace DeNelle.Village.UI
             row.style.alignItems = Align.Center;
             row.style.marginTop = 8; row.style.marginBottom = 2;
 
-            _fullBtn = MakeToggle(_fullOverride ? "Mode: VERTICAL + delta" : "Mode: NUDGE on geometry",
-                                  true, ToggleMode);
+            string modeText = _sheathed
+                ? (_fullOverride ? "Mode: ABSOLUTE back pose" : "Mode: NUDGE on built-in")
+                : (_fullOverride ? "Mode: VERTICAL + delta" : "Mode: NUDGE on geometry");
+            _fullBtn = MakeToggle(modeText, true, ToggleMode);
             _fullBtn.style.flexGrow = 1;
             row.Add(_fullBtn);
             return row;
@@ -425,8 +453,9 @@ namespace DeNelle.Village.UI
             if (offHand && !_eq.HasSeatingTarget(true)) { SetStatus("No off-hand equipped."); return; }
             if (!offHand && !_eq.HasSeatingTarget(false)) { SetStatus("No main weapon equipped."); return; }
             if (!BeginEdit(offHand)) { SetStatus("Could not switch target."); return; }
-            // Off-hand is vertical-only (see ToggleMode) — coerce so the saved mode is honoured.
-            if (_offHand) _fullOverride = true;
+            // Off-hand DRAWN is vertical-only (see ToggleMode) — coerce so the saved mode is
+            // honoured. SHEATHED honours both modes (nudge composes on the built-in back pose).
+            if (_offHand && !_sheathed) _fullOverride = true;
             if (_mainBtn != null) StyleToggle(_mainBtn, !_offHand);
             if (_offBtn  != null) StyleToggle(_offBtn,   _offHand);
             if (_targetLabel != null) _targetLabel.text = TargetText();
@@ -434,11 +463,45 @@ namespace DeNelle.Village.UI
             Apply();
         }
 
+        // Carry-mode switch (2026-07-07): re-begins the edit session in the requested carry state —
+        // Drawn tunes the in-hand seat (existing flow), Sheathed tunes the BACK pose (offset saved
+        // under "<key>@sheathed"). Mirrors SwitchTarget's re-begin + rebuild pattern.
+        private void SwitchCarry(bool sheathed)
+        {
+            if (_eq == null || sheathed == _sheathed) return;
+            bool prev = _sheathed;
+            _sheathed = sheathed;
+            if (!BeginEdit(_offHand)) { _sheathed = prev; SetStatus("Could not switch carry mode."); return; }
+            if (_drawnBtn != null)    StyleToggle(_drawnBtn,    !_sheathed);
+            if (_sheathedBtn != null) StyleToggle(_sheathedBtn,  _sheathed);
+            if (_targetLabel != null) _targetLabel.text = TargetText();
+            RebuildBody();
+            Apply();
+            SetStatus(_sheathed
+                ? "SHEATHED: dialing the on-back (town) pose — saved under the @sheathed key."
+                : "DRAWN: dialing the in-hand seat.");
+        }
+
         private void ToggleMode()
         {
-            // The off-hand runtime seat only honours the VERTICAL (fullOverride) offset — a plain
-            // nudge wouldn't reproduce (its grip is a baked preset). Lock the off-hand to vertical
-            // so what-you-save is always what runtime produces.
+            // SHEATHED honours both modes: nudge composes on the built-in back pose; fullOverride
+            // is the absolute pose in the back-socket frame (see EquipmentController.ApplySheathedOffset).
+            if (_sheathed)
+            {
+                _fullOverride = !_fullOverride;
+                if (_fullBtn != null)
+                    _fullBtn.text = _fullOverride ? "Mode: ABSOLUTE back pose" : "Mode: NUDGE on built-in";
+                if (_targetLabel != null) _targetLabel.text = TargetText();
+                Apply();
+                Touch();
+                SetStatus(_fullOverride
+                    ? "ABSOLUTE: pos/rot ARE the back pose (socket frame, no global yaw)."
+                    : "NUDGE: pos/rot add on top of the built-in sheathe pose (zero = today's pose).");
+                return;
+            }
+            // The off-hand DRAWN runtime seat only honours the VERTICAL (fullOverride) offset — a
+            // plain nudge wouldn't reproduce (its grip is a baked preset). Lock the off-hand to
+            // vertical so what-you-save is always what runtime produces.
             if (_offHand)
             {
                 _fullOverride = true;
@@ -459,6 +522,17 @@ namespace DeNelle.Village.UI
 
         private void OnResetVertical()
         {
+            // Sheathed reset = back to the BUILT-IN sheathe pose (zero nudge), not "vertical" —
+            // an all-zero NUDGE entry is exactly today's derived back pose.
+            if (_sheathed)
+            {
+                _pos = Vector3.zero; _euler = Vector3.zero; _fullOverride = false;
+                if (_fullBtn != null) _fullBtn.text = "Mode: NUDGE on built-in";
+                RebuildBody();
+                Apply();
+                SetStatus("Reset to the built-in sheathe pose (zero nudge).");
+                return;
+            }
             _pos = Vector3.zero; _euler = Vector3.zero; _scale = 1f; _fullOverride = true;
             if (_fullBtn != null) _fullBtn.text = "Mode: VERTICAL + delta";
             RebuildBody();
