@@ -15,7 +15,36 @@
 
 ---
 
-## ★★ SESSION HANDOVER — 2026-07-05 (READ FIRST) ★★
+## ★★ SESSION HANDOVER — 2026-07-06/07 (READ FIRST) ★★
+
+**WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`, 4 lanes committed + PUSHED (owner-authorized
+for the demo recording): **WO-611 combat HUD** (owner v8 design: inset vitals well, d-pad cross, attack
+pill with owner pixel energy-sword art fit-to-frame, medallion arc, lock crosshair, hostile→CloseAll
+incl. wave countdown; F1 blank-icon guarantee; F3 truthful enemy Level), **WO-612 build timers**
+(WO-172 service finally wired at its documented seam — 15 s base, 2 slots, offline-fair scaffold+
+countdown; `ff.buildtimers` ON; owner direction = grow to option-3 "free income": rewarded-ad skips,
+never a wall, no real player cost), **tier-model reskin** (`StructureFactory.ReskinForLevel` — the
+write-only `upgradeVisualPath` is now consumed on upgrade + reload; owner F8 "upgrade just makes it
+bigger" fixed), **3-type palette** (Archer/Wizard/Arcane; catapult/siege/walls/gates filtered,
+reversible), owner card art + Tripo tower models (Wizard base + ArcaneSpire 1→2→3; force-added — the
+Structures folder is gitignored for polyperfect mirrors, Tripo assets are owner-sourced), **archer
+Tribal ladder** (`_bug22` RESOLVED via CatalogPrefabImporter `_T`-root support), owner Seating-Editor
+offsets harvested, **'K' high-level scatter rig** (Lv15–27, 120–200 m out, hold-ground, skull plates),
+`ff.skrpreview` ON for the demo (panel self-labels PREVIEW·TESTNET).
+
+**VERIFIED:** COMPILE_GATE_OK ×4, REGRESSION_OK, 4-bot fleet — 13/13 panels, popup-close clean,
+economy/equip/save green; only pre-existing errors (white Paladin albedo, WO-602 home-return,
+WO-453 encounter strand). **HONEST FINDING (owner asked):** there is NO hero-vs-enemy level-delta
+damage rule — level = authored-HP band only; damage is stat-driven. A real level-gap curve = open
+owner design decision. **OPEN F8 TICKETS (board #1–5):** town vitals bars outside plates (RCA done:
+shared BuildPartyNameplate StatBars inset insufficient — ElarionUiKitNameplate.cs:133), XP bar +
+Wisdom "434" chip unlabeled (+ TWO XP bars redundancy), resource rows without identifiers (WO-611 F4
+currency art), build-palette proportions, death-panel overlap. **NEXT:** owner demo recording →
+ticket batch #1–5 → WO-613 VFX moments (overnight spec READY) → WO-545 Addressables.
+
+---
+
+## ★★ SESSION HANDOVER — 2026-07-05 (⚠ SUPERSEDED by the 2026-07-06/07 block above) ★★
 
 **WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`. This session landed the **AccuRig skeleton
 family** (Mage / Warrior / Ranger→`Skeleton_Rogue` / Healer), `SkeletonHumanoid.controller`, codex
