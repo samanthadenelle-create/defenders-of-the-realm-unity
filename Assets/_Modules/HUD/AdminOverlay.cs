@@ -178,6 +178,9 @@ namespace DeNelle.HUD
 
             var card = new VisualElement();
             card.style.minWidth = 420; card.style.maxWidth = 560;
+            // F8-11 (owner 2026-07-07 "menu needs a scroll bar"): the tool list outgrew the
+            // screen — cap the card and let the button column scroll (see ScrollView below).
+            card.style.maxHeight = Length.Percent(86);
             card.style.paddingTop = 22;  card.style.paddingBottom = 22;
             card.style.paddingLeft = 26; card.style.paddingRight = 26;
             // Stone panel from the shared theme, but with a DANGER-red rim so the
@@ -197,6 +200,12 @@ namespace DeNelle.HUD
             card.Add(title);
             card.Add(ElarionUi.MakeRule());
 
+            // F8-11: the tool buttons live in a vertical ScrollView so the menu scrolls when it
+            // outgrows the capped card; Close + status stay pinned below, always reachable.
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.style.flexShrink = 1;
+            card.Add(scroll);
+
             // Owner-trimmed (2026-06-11): only the two controls used live remain — a WORKING
             // full-resource grant (through the same EconomyService wallet the shop spends from,
             // so you can actually buy) + the Yarn/tutorial reset. The rest (wave trigger,
@@ -209,30 +218,31 @@ namespace DeNelle.HUD
             // The Close button below stays so the (release-gated, can't-open) overlay
             // is still dismissable if it ever renders.
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
-            card.Add(Button("Load resources (full base)",   OnLoadResources));
+            scroll.Add(Button("Load resources (full base)",   OnLoadResources));
             // Level shortcuts — same REAL leveling path the F10 DevPanel uses
             // (HeroProgression.AddXp -> ApplyLevelRewards grants Wisdom + skill points),
             // reached by reflection here since the HUD asmdef can't reference DeNelle.Village.
-            card.Add(Button("Set Level 5 (+skill pts)",     () => OnSetHeroLevel(5)));
-            card.Add(Button("Set Level 10 (+skill pts)",    () => OnSetHeroLevel(10)));
+            scroll.Add(Button("Set Level 5 (+skill pts)",     () => OnSetHeroLevel(5)));
+            scroll.Add(Button("Set Level 10 (+skill pts)",    () => OnSetHeroLevel(10)));
             // Direct Wisdom grants (owner F8 2026-06-28: "Set Level 10 isn't doing it" —
             // SetHeroLevel is a NO-OP once already >= the target level, so it grants no new
             // Wisdom). These add Wisdom unconditionally regardless of level. The only "+Wisdom"
             // buttons used to live on the DEPRECATED F10 DevPanelController (which the owner never
             // sees) — this is the live Settings -> DevTools panel, so they belong HERE.
-            card.Add(Button("+25 Wisdom (talents)",         () => OnGiveWisdom(25)));
-            card.Add(Button("+100 Wisdom (talents)",        () => OnGiveWisdom(100)));
-            card.Add(Button("Trigger next wave",            OnTriggerWave));
-            card.Add(Button("VFX Parade",                   OnVfxParade));
+            scroll.Add(Button("+25 Wisdom (talents)",         () => OnGiveWisdom(25)));
+            scroll.Add(Button("+100 Wisdom (talents)",        () => OnGiveWisdom(100)));
+            scroll.Add(Button("Trigger next wave",            OnTriggerWave));
+            scroll.Add(Button("VFX Parade",                   OnVfxParade));
             // WO-577: in-game Seating Editor (Offset Forge slice 2) — dial weapon/shield
             // attachment offsets live on the equipped hero, save to offsets.json.
-            card.Add(Button("Seating Editor (gear)",        OnSeatingEditor));
+            scroll.Add(Button("Seating Editor (gear)",        OnSeatingEditor));
             // Lock-On A/B toggle (WO-512): flip ff.lockon live so the owner can compare
             // locked vs free camera mid-fight in the built exe. FeatureFlags.Get reads
             // PlayerPrefs live each call (no cache), so the write below takes effect next frame.
             _lockOnButton = Button(LockOnLabel(), OnToggleLockOn);
-            card.Add(_lockOnButton);
-            card.Add(Button("Reset Yarn (replay tutorial)", OnReplayTutorial));
+            scroll.Add(_lockOnButton);
+            // F8-11 (owner 2026-07-07): "Reset Yarn" row REMOVED — Yarn was dropped (WO-455/557);
+            // OnReplayTutorial stays in the file per the owner-trim convention above.
 #endif
             card.Add(Button("Close",                        Toggle));
             FlowTrace.Step("UI", "DevPanel (AdminOverlay) UI built");
