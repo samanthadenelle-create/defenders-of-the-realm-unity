@@ -9,6 +9,7 @@
 // Self-bootstraps DDOL behind FeatureFlags.CustomDialogue.
 // =============================================================================
 
+using System.Collections;
 using System.Collections.Generic;
 using DeNelle.Core.Dialogue;
 using DeNelle.Core.UI;
@@ -196,6 +197,15 @@ namespace DeNelle.HUD
                     closeRt.anchorMax = new Vector2(0.5f, 0.12f);
                 }
                 chrome.close.transform.SetAsLastSibling();
+
+                // F8-1/F8-5 RCA instrumentation (owner 2026-07-07 "still here RCA first"): the
+                // capture shows the Close hanging BELOW the frame + colliding with Continue,
+                // contradicting the bottom-pivot seat math — something re-stamps pivot/size after
+                // this override, or the fractions land in a different parent space. Log the REAL
+                // post-layout geometry once per build. SYNCHRONOUS (ForceUpdateCanvases runs the
+                // layout pass on demand) — WaitForEndOfFrame never fires under -nographics, so a
+                // coroutine trace is blind to the headless fleet.
+                TraceDialogueLayout(chrome, interior);
             }
 
             // Speaker name → header zone (left, gilt) with the guild/shop AFFILIATION as a
@@ -283,6 +293,44 @@ namespace DeNelle.HUD
             vlg.spacing = 8; vlg.childControlHeight = true; vlg.childControlWidth = true;
             vlg.childForceExpandHeight = false; vlg.childForceExpandWidth = true;
             vlg.childAlignment = TextAnchor.LowerCenter;
+        }
+
+        // F8-1/F8-5 RCA (owner "still here RCA first", 2026-07-07 23:28): dump the REAL post-layout
+        // geometry of the panel / interior plate / Close / Continue, in fractions of the PANEL rect.
+        // The capture shows the Close hanging below the frame + colliding with Continue; this names
+        // which transform actually breaks the seat math. ForceUpdateCanvases makes the world corners
+        // valid synchronously (headless-safe — no reliance on a render frame).
+        private void TraceDialogueLayout(ElarionUiKit.PanelChrome chrome, GameObject interior)
+        {
+            if (chrome == null || chrome.root == null) return;
+            Canvas.ForceUpdateCanvases();
+            var panelRt = chrome.root.GetComponent<RectTransform>();
+            var corners = new Vector3[4];
+            panelRt.GetWorldCorners(corners);
+            Vector3 pMin = corners[0], pMax = corners[2];
+            float pw = Mathf.Max(0.001f, pMax.x - pMin.x), ph = Mathf.Max(0.001f, pMax.y - pMin.y);
+
+            string Frac(RectTransform rt)
+            {
+                if (rt == null) return "<null>";
+                rt.GetWorldCorners(corners);
+                return string.Format("x {0:F3}-{1:F3} y {2:F3}-{3:F3}",
+                    (corners[0].x - pMin.x) / pw, (corners[2].x - pMin.x) / pw,
+                    (corners[0].y - pMin.y) / ph, (corners[2].y - pMin.y) / ph);
+            }
+
+            var closeRt = chrome.close != null ? chrome.close.transform as RectTransform : null;
+            var contRt = _tapHint != null ? _tapHint.transform as RectTransform : null;
+            var intRt = interior != null ? interior.GetComponent<RectTransform>() : null;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("DlgLayout",
+                "panel worldY " + pMin.y.ToString("F1") + ".." + pMax.y.ToString("F1") +
+                " | interior " + Frac(intRt) +
+                " | close " + Frac(closeRt) +
+                (closeRt != null
+                    ? " (pivot=" + closeRt.pivot.ToString("F2") + " anchors=" + closeRt.anchorMin.ToString("F3") +
+                      " sizeDelta=" + closeRt.sizeDelta.ToString("F0") + " parent='" + closeRt.parent.name + "')"
+                    : "") +
+                " | continue " + Frac(contRt));
         }
 
         private void OnBoxTapped()
