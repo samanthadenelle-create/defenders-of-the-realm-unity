@@ -33,13 +33,20 @@ namespace DeNelle.Editor
         // Destination Resources folder (so visualPrefabPath = "Structures/<Name>" loads).
         private const string DstDir = "Assets/Resources/Structures/";
 
-        // One kit prefab: file stem (no .prefab) + the _M category folder it lives in.
+        // One kit prefab: file stem (no .prefab) + the category folder it lives in.
+        // Root defaults to the _M tier (CLAUDE.md §4); a per-entry root override exists
+        // because the archer Tribal ladder is owner-ruled to the _T tier (catalog _bug22).
         private readonly struct KitPrefab
         {
             public readonly string Name;
-            public readonly string Category; // folder under Prefabs_M (no trailing slash)
-            public KitPrefab(string name, string category) { Name = name; Category = category; }
+            public readonly string Category; // folder under the tier root (no trailing slash)
+            public readonly string Root;     // tier root ("..._M/Prefabs_M/" unless overridden)
+            public KitPrefab(string name, string category, string root = SrcRoot)
+            { Name = name; Category = category; Root = root; }
         }
+
+        private const string SrcRootT =
+            "Assets/polyperfect/Low Poly Ultimate Pack/_T/Prefabs_T/";
 
         // The defensive-kit prefabs the catalog references (owner's prefab map, WO).
         // Most live in Medieval_M; a few primitives live in other category folders.
@@ -68,6 +75,12 @@ namespace DeNelle.Editor
             new KitPrefab("Anvil",                     "Tools_M"),     // composite forge
             new KitPrefab("Altar",                     "Fantasy_M"),   // composite Heart of Elarion
             new KitPrefab("Pillar_Ionic",              "Roman_M"),     // composite Heart of Elarion
+
+            // --- archer Tribal ladder (catalog _bug22, owner-correct art; owner F8 2026-07-06
+            //     "archer towers are still these") — _T tier per the ruling, Tier4 unused (maxLevel 3).
+            new KitPrefab("Tower_Tribal_Tier1",        "Tribal_T", SrcRootT),  // tower_ground_archer L1
+            new KitPrefab("Tower_Tribal_Tier2",        "Tribal_T", SrcRootT),  // tower_ground_archer L2
+            new KitPrefab("Tower_Tribal_Tier3",        "Tribal_T", SrcRootT),  // tower_ground_archer L3
         };
 
         [MenuItem("Defenders/Catalog/Copy Kit Prefabs To Resources")]
@@ -80,7 +93,7 @@ namespace DeNelle.Editor
             foreach (var kit in KitPrefabs)
             {
                 string name = kit.Name;
-                string src = SrcRoot + kit.Category + "/" + name + ".prefab";
+                string src = kit.Root + kit.Category + "/" + name + ".prefab";
                 string dst = DstDir + name + ".prefab";
 
                 // Idempotent — already in Resources, leave it.

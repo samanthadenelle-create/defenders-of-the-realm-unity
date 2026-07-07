@@ -70,6 +70,15 @@ namespace DeNelle.Village
         private static readonly HashSet<string> NotYetUnlockable = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "jeweler",
+            // Owner ruling 2026-07-06 (felt-test): the palette is THREE tower types —
+            // Archer, Wizard, Arcane. Everything else pulled. Entries stay in the
+            // catalog — enemy outposts / garrison recipes still reference them
+            // (GarrisonRecipe, EnemyOutpost, OutpostFoundationGenerator).
+            "tower_siege_tower",
+            "tower_catapult",
+            "wall_wood",
+            "wall_stone",
+            "gate_stone",
         };
 
         // Strips sit ABOVE the HUD but BELOW kit modals (BuildObsidianModal defaults 31000).
@@ -152,7 +161,9 @@ namespace DeNelle.Village
             drt.anchorMax = new Vector2(1f, 0f);
             drt.pivot = new Vector2(0.5f, 0f);
             drt.anchoredPosition = Vector2.zero;
-            drt.sizeDelta = new Vector2(0f, 300f);
+            // 300 -> 340 (owner 2026-07-06): cards now carry an art band under the
+            // name, so the cell GROWS rather than squeezing the name/cost labels.
+            drt.sizeDelta = new Vector2(0f, 340f);
 
             // Top row: obsidian fill + gold under-rule (the kit panel language).
             var topBar = ElarionUiKit.AddImage(dock.transform, "TopBar",
@@ -332,13 +343,97 @@ namespace DeNelle.Village
             var nameLabel = MakeText(cardGo.transform,
                 string.IsNullOrEmpty(e.displayName) ? e.id : e.displayName,
                 14, armed ? ElarionUi.Ink : ElarionUi.Parchment, FontStyles.Bold,
-                TextAlignmentOptions.Center, new Vector2(0.06f, 0.42f), new Vector2(0.94f, 0.92f));
+                TextAlignmentOptions.Center, new Vector2(0.06f, 0.70f), new Vector2(0.94f, 0.96f));
             nameLabel.raycastTarget = false;
+
+            // ── Art band UNDER the name (owner 2026-07-06) ────────────────────
+            // Priority: (a) Resources/Portraits/<key> building portraits (catalog id,
+            // then displayName slug — the key comes from the entry's own data, no
+            // per-tower switch), (b) the concept-icons.json table via
+            // ConceptIconResolver (data decides), (c) a procedural obsidian plate
+            // carrying the entry's initial — NEVER a blank band (null-art law).
+            var art = ResolveEntryArt(e);
+            var bandGo = new GameObject("Art", typeof(RectTransform), typeof(Image));
+            bandGo.transform.SetParent(cardGo.transform, false);
+            var brt = (RectTransform)bandGo.transform;
+            brt.anchorMin = new Vector2(0.10f, 0.26f);
+            brt.anchorMax = new Vector2(0.90f, 0.68f);
+            brt.offsetMin = Vector2.zero; brt.offsetMax = Vector2.zero;
+            var bandImg = bandGo.GetComponent<Image>();
+            bandImg.raycastTarget = false;
+            if (art != null)
+            {
+                bandImg.sprite = art;
+                bandImg.preserveAspect = true;
+                bandImg.color = Color.white;
+            }
+            else
+            {
+                // (c) fallback plate: recessed dark well + the entry's gilt initial.
+                bandImg.color = new Color(0f, 0f, 0f, 0.45f);
+                string glyphSource = string.IsNullOrEmpty(e.displayName) ? e.id : e.displayName;
+                string glyph = string.IsNullOrEmpty(glyphSource)
+                    ? "?" : glyphSource.Substring(0, 1).ToUpperInvariant();
+                MakeText(bandGo.transform, glyph, 30, ElarionUi.Gilt, FontStyles.Bold,
+                    TextAlignmentOptions.Center, Vector2.zero, Vector2.one);
+            }
 
             var costLabel = MakeText(cardGo.transform, CostLabel(cost), 13,
                 affordable ? ElarionUi.Affordable : ElarionUi.Danger, FontStyles.Bold,
-                TextAlignmentOptions.Center, new Vector2(0.06f, 0.08f), new Vector2(0.94f, 0.40f));
+                TextAlignmentOptions.Center, new Vector2(0.06f, 0.03f), new Vector2(0.94f, 0.24f));
             costLabel.raycastTarget = false;
+        }
+
+        // ── Entry art resolution (owner 2026-07-06 image band) ────────────────
+
+        // Session-lifetime cache keyed on the Resources path; nulls are cached too,
+        // so a portrait-less entry costs ONE failed lookup, not one per Render
+        // (the PortraitCache pattern — DialogueUI/PortraitCache.cs; that class lives
+        // in DeNelle.DialogueUI which DeNelle.Village does not reference, so the
+        // small load-or-wrap recipe is mirrored here instead of adding a dependency).
+        private static readonly Dictionary<string, Sprite> EntryArtCache =
+            new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Resolve a catalog entry's card art, data-driven off the entry itself:
+        /// (a) Resources/Portraits/&lt;id&gt; then Portraits/&lt;displayName-slug&gt;
+        /// (the existing building-portrait set), (b) the concept-icons.json table
+        /// (id / slug / catalog type token) via ConceptIconResolver. Null when no
+        /// art exists — the caller renders the glyph fallback plate, never blank.
+        /// </summary>
+        private static Sprite ResolveEntryArt(CatalogEntry e)
+        {
+            if (e == null) return null;
+            string slug = SlugOf(e.displayName);
+            var s = LoadPortrait(e.id);
+            if (s == null) s = LoadPortrait(slug);
+            if (s != null) return s;
+            return ConceptIconResolver.ResolveAny(e.id, slug, e.type.ToString());
+        }
+
+        /// <summary>"Archer Tower" -> "archer-tower" (the Portraits/ file convention).</summary>
+        private static string SlugOf(string name)
+            => string.IsNullOrEmpty(name) ? null : name.Trim().ToLowerInvariant().Replace(' ', '-');
+
+        // Load a Portraits/ sprite directly when possible; fall back to wrapping a
+        // Default-imported Texture2D in a runtime Sprite (the portraits import as
+        // plain textures, so a bare Resources.Load-as-Sprite returns null for them).
+        private static Sprite LoadPortrait(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return null;
+            string path = "Portraits/" + key;
+            if (EntryArtCache.TryGetValue(path, out var cached)) return cached;
+
+            Sprite sprite = Resources.Load<Sprite>(path);
+            if (sprite == null)
+            {
+                var tex = Resources.Load<Texture2D>(path);
+                if (tex != null)
+                    sprite = Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height),
+                                           new Vector2(0.5f, 0.5f));
+            }
+            EntryArtCache[path] = sprite;   // cache nulls too — one lookup per miss
+            return sprite;
         }
 
         // ── Cost resolution (mirrors BuildModeController — crystals-only fallback) ──
