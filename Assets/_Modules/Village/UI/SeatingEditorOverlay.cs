@@ -63,6 +63,12 @@ namespace DeNelle.Village.UI
         // ── State ───────────────────────────────────────────────────────────────────
         public bool IsOpen { get; private set; }
 
+        // Ticket #1 (2026-07-07): register with the PanelManager modal arbiter so (a) the
+        // softlock watchdog knows a modal owns the screen (owner parked mid-dial fired
+        // "possible_softlock" twice in one session) and (b) the editor obeys one-modal-at-a-time.
+        // BattleAllowed: it is an owner tool that must stay openable during a battle (drawn dial).
+        private PanelHandle _panelHandle;
+
         private UIDocument    _document;
         private VisualElement _root;
         private VisualElement _panel;
@@ -159,6 +165,7 @@ namespace DeNelle.Village.UI
             IsOpen = false;
             if (_root != null) _root.style.display = DisplayStyle.None;
             if (_document != null) _document.enabled = false;
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
         }
 
         // Begin/refresh the edit session on the requested slot; seed the local state from the
@@ -670,6 +677,9 @@ namespace DeNelle.Village.UI
             _document.enabled = true;
             if (_root != null) _root.style.display = DisplayStyle.Flex;
             IsOpen = true;
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.RegisterBattleAllowed("SeatingEditor", Close, () => IsOpen);
+            PanelManager.NotifyOpened(_panelHandle);
         }
 
         private void AdoptPanelSettings()

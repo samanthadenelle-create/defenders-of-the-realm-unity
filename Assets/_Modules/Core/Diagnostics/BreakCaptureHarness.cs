@@ -263,6 +263,16 @@ namespace DeNelle.Core.Diagnostics
                     MarkProgress();
                     return;
                 }
+                // Ticket #1 (2026-07-07): a modal owning the screen (Seating Editor, shop, help…)
+                // is the PLAYER choosing to stand still — not a softlock. Two false captures in one
+                // owner dial session (break-log 15:49:58 + 16:02:15, screenshots show the editor
+                // open). PanelManager is the single-modal arbiter; treat any open modal as progress.
+                if (UI.PanelManager.AnyOpen)
+                {
+                    if (_hero != null) _lastHeroPos = _hero.position;
+                    MarkProgress();
+                    return;
+                }
                 if (!_softlockReported && now - _lastProgressTime > SoftlockSeconds)
                 {
                     _softlockReported = true;
