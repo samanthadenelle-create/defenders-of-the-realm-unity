@@ -256,7 +256,9 @@ namespace DeNelle.Village.Hero
         {
             var parts = new List<string>();
             float mult = def.rewardMultiplier <= 0f ? 1f : def.rewardMultiplier;
-            parts.Add("◆ x" + mult.ToString("0.#") + " Loot");
+            // SWEEP 9413 R2 (#3): "◆" is not in the build TMP font — rendered as tofu "□"
+            // before every loot line. ASCII marker only (same rule as the jukebox "»" fix).
+            parts.Add("- x" + mult.ToString("0.#") + " Loot");
             if (def.shardDropChance > 0f)
             {
                 int pct = Mathf.RoundToInt(Mathf.Clamp01(def.shardDropChance) * 100f);

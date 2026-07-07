@@ -66,6 +66,10 @@ namespace DeNelle.Village
         [Tooltip("Max hit points.")]
         [SerializeField] private float _maxHp = 52f;
 
+        [Tooltip("Display level shown on the target frame ('Lv N'). Set from the def in Configure; " +
+                 "1 for a hand-placed enemy with no def. See the Level property (WO-611 F3).")]
+        [SerializeField] private int _level = 1;
+
         [Tooltip("NavMeshAgent speed — world units/sec.")]
         [SerializeField] private float _moveSpeed = 2.5f;
 
@@ -394,6 +398,14 @@ namespace DeNelle.Village
         /// <summary>HP as a 0..1 fraction — drives the floating HP bar.</summary>
         public float HpFraction => _maxHp > 0f ? Mathf.Clamp01(_hp / _maxHp) : 0f;
 
+        /// <summary>
+        /// WO-611 F3: the truthful display level for the target frame ("Lv N"). Set in
+        /// <see cref="Configure"/> from the authored def (a STABLE per-archetype band), replacing the
+        /// old HUD-side EnemyLevelStub HP/25 heuristic that read the runtime maxHp and crept upward as
+        /// wave-scaling inflated it. 1 for a hand-placed enemy with no def.
+        /// </summary>
+        public int Level => Mathf.Max(1, _level);
+
         /// <summary>True once the enemy has died (HP hit zero).</summary>
         public bool IsDead => _dead;
 
@@ -494,6 +506,11 @@ namespace DeNelle.Village
                 _enemyDefId = def.Id;
                 _maxHp = Mathf.Max(1f, def.Hp);
                 _hp = _maxHp;
+                // WO-611 F3: truthful, STABLE display level from the AUTHORED HP band (def.Hp, pre
+                // wave-scaling) — read by the HUD target frame via Enemy.Level. Stable per archetype
+                // so "Lv N" doesn't creep as ApplyWaveScaling inflates maxHp. (EnemyDef carries no
+                // explicit level field yet; when one is added, source it here instead of the HP band.)
+                _level = Mathf.Max(1, Mathf.RoundToInt(Mathf.Max(1f, def.Hp) / 25f));
                 // Owner 2026-06-02: global -5% enemy speed — early-game generosity so new
                 // players get the "winning while I learn" feel as they scale up + learn the
                 // movement. One central dial; every enemy (roamer/wave/tribe) routes through
@@ -1502,7 +1519,10 @@ namespace DeNelle.Village
                 var vfx = EnsureCastVfx();
                 System.Action land = () =>
                 {
-                    if (_dead || target == null) return;
+                    // The orb (ProjectileMover) can outlive this Enemy — despawn/teardown destroys
+                    // the caster without setting _dead, and a destroyed component's transform throws
+                    // (fleet 9200 NRE via NoteHeroDamageSource). Unity fake-null check catches it.
+                    if (this == null || _dead || target == null) return;
                     var s = target.GetComponentInParent<IDamageableStructure>();
                     if (s != null && s.IsAlive)
                     {

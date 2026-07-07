@@ -40,8 +40,24 @@ namespace DeNelle.Core.Geometry
             if (!TryLocalBounds(prop, parent, out Bounds b0)) return;
             AlignAxesYLongXNarrowZWide(prop, b0.size);
 
-            if (TryLocalBounds(prop, parent, out Bounds b1) && b1.size.y > 1e-4f)
-                prop.transform.localScale = Vector3.one * (targetLength / b1.size.y);
+            // SCALE BY THE LONGEST MEASURED AXIS — not blindly by Y. Captured proof (2026-07-06,
+            // shield-size RCA): shield_A measured b0=(0.008,0.002,0.01) and AFTER AlignAxes the
+            // longest axis sat on X, not Y (b1=(0.01,0.002,0.008)) — the align composition fails
+            // for the longest=Z/shortest=Y permutation. Dividing by b1.size.y then scaled by the
+            // 2mm THICKNESS (0.45/0.002 = 193x) and the 1cm face rendered 1.93m — the owner's
+            // "shield larger than hero". The longest axis is the held length by definition, so
+            // this is correct whether or not the align landed it on Y; the align's ROTATION is
+            // left as-is (owner-dialed Offset Forge nudges compose on today's orientation).
+            if (TryLocalBounds(prop, parent, out Bounds b1))
+            {
+                float longest = Mathf.Max(b1.size.x, Mathf.Max(b1.size.y, b1.size.z));
+                if (longest > 1e-4f)
+                    prop.transform.localScale = Vector3.one * (targetLength / longest);
+            }
+            // §12 solve trace: one line names this solve's inputs per prop.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Equip",
+                $"NormalizeInto '{prop.name}': raw b0={b0.size:0.###} aligned b1={b1.size:0.###} " +
+                $"target={targetLength:0.###} -> propScale={prop.transform.localScale.x:0.###}");
 
             if (resolveBladeUpFromHilt)
                 EnsureHandleAtShortYEnd(prop, parent);

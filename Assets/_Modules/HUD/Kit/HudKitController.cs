@@ -59,13 +59,16 @@ namespace DeNelle.HUD.Kit
             new Dictionary<string, GameObject>(StringComparer.OrdinalIgnoreCase);
 
         // live handles
-        private ElarionUiKit.PartyNameplateHandle _vitals;   // WO-432 shared HP/MP plate
+        private ElarionUiKit.PartyNameplateHandle _vitals;   // WO-432 shared HP/MP plate (+07-06 XP strip)
+        private bool _xpStripBound;                          // one-shot FlowTrace on first XP bind
         private ElarionUiKit.BarHandle _xpBar;
         private ElarionUiKit.CurrencyChipHandle _wisdomChip;
         private ElarionUiKit.PartyNameplateHandle _heartPlate;   // WO-432: Heart of Elarion on the shared plate
         private ElarionUiKit.TargetFrameHandle _targetFrame;
         private ElarionUiKit.CastBarHandle _castBar;
         private ElarionUiKit.ActionSlotHandle[] _abilitySlots;
+        private ElarionUiKit.SoftGlowCooldown[] _abilityGlows;   // WO-611: soft under-glow cooldown (combat HUD only)
+        private ElarionUiKit.LockCrosshairHandle _lockBadge;     // WO-611: animated target lock crosshair (combat HUD only)
         private ElarionUiKit.ActionSlotHandle[] _assignableSlots;
         private ElarionUiKit.ActionSlotHandle _hpPotionSlot;
         private ElarionUiKit.ActionSlotHandle _manaPotionSlot;
@@ -79,6 +82,13 @@ namespace DeNelle.HUD.Kit
         private GameObject _resDock;        // WO-440: right-edge tab + collapsible chips container
         private bool _resPanelOpen;         // WO-440: town collapse state (collapsed by default)
         private Button _talkButton, _fleeButton, _startWaveButton;
+        // Owner report 2026-07-06 ("I do not see Quest changing to upgrade walking to upgradable
+        // buildings") — the HudBuildingFocus reroute was ported from the retired HUD but its
+        // VISIBLE face swap wasn't (classified 07-06: write-side fires from 3 pollers; this was
+        // the only missing reader). The context button now relabels Quests <-> Upgrade on focus.
+        private Button _questContextButton;
+        private TMP_Text _questContextLabel;
+        private bool _questContextUpgradeFace;
         private TMP_Text _fleeLabel;
         private TMP_Text _waveLabel, _waveCountdown;
         private ElarionUiKit.BarHandle _waveProgress;
@@ -180,8 +190,32 @@ namespace DeNelle.HUD.Kit
             Transform pool = transform;   // widgets are reparented into areas on ApplyPosture
 
             // ── vitals: WO-432 shared BuildPartyNameplate (name + HP + MP) ──
+            // withXpStrip (owner 07-06): thin gold XP-to-next-level strip under HP/MP, built on
+            // the SHARED plate path so it renders in BOTH CombatHud611 flag states (a vitals
+            // fact, not combat chrome). Bound from HeroVitalsModel in OnVitals.
             _vitals = ElarionUiKit.BuildPartyNameplate(pool, "Hero",
-                new Vector2(0f, 0.35f), new Vector2(1f, 1f));
+                new Vector2(0f, 0.35f), new Vector2(1f, 1f), withXpStrip: true);
+            if (FeatureFlags.CombatHud611)
+            {
+                // WO-611 (mockup v8): HP/MP bars RECESSED in an inset WELL inside the plate — a darker
+                // sub-panel (#06080b @ 50%) with a 1px darker TOP edge (the inset-shadow read), wrapping
+                // both bar rows (StatBars spans 0.06..0.94 x, 0.08..0.55 y in BuildPartyNameplate) so
+                // the bars never touch the plate edge. Explicit colours — the kit Well() (Track black
+                // @45% + BlinkChrome-gated rim) washed out against the ornate plate in the 07-05 capture.
+                // First sibling = above the plate face (the root's own Image) but below name + StatBars.
+                var vitalsWell = ElarionUiKit.AddImage(_vitals.Root.transform, "VitalsWell",
+                    new Vector2(0.02f, 0.02f), new Vector2(0.99f, 0.60f),
+                    new Color(0.024f, 0.031f, 0.043f, 0.50f), rounded: true);
+                vitalsWell.GetComponent<Image>().raycastTarget = false;
+                var wellTop = ElarionUiKit.AddImage(vitalsWell.transform, "TopEdge",
+                    new Vector2(0f, 1f), new Vector2(1f, 1f), new Color(0f, 0f, 0f, 0.55f), rounded: false);
+                var wtRt = (RectTransform)wellTop.transform;
+                wtRt.pivot = new Vector2(0.5f, 1f);
+                wtRt.sizeDelta = new Vector2(-4f, 1.5f);   // 1px-ish darker top edge, inset from the corners
+                wtRt.anchoredPosition = Vector2.zero;
+                wellTop.GetComponent<Image>().raycastTarget = false;
+                vitalsWell.transform.SetAsFirstSibling();
+            }
             Register("playerNameplate", WrapAsWidget("playerNameplate", _vitals.Root.gameObject));
             BuildStatusRow(pool, "playerBuffRow", out _playerStatusSlots);
 
@@ -231,6 +265,36 @@ namespace DeNelle.HUD.Kit
 
             // ── targetInfo: target frame + cast telegraph ──
             _targetFrame = ElarionUiKit.BuildTargetFrame(pool, new Vector2(0f, 0.35f), new Vector2(1f, 1f));
+            if (FeatureFlags.CombatHud611)
+            {
+                // WO-611 (mockup v8): gold "Lv N" right beside the enemy name. The Blink prefab path
+                // (MODE 1) has NO *level* text child (FindDeep "level" -> null), so TargetFrameHandle.
+                // Set()'s level write had nowhere to land — the 07-05 capture showed no Lv. Give the
+                // handle a label; MODE 2 already has one, which is re-tinted to the ratified gold.
+                var gold611 = new Color(0.831f, 0.686f, 0.353f, 1f);   // #d4af5a
+                if (_targetFrame.level == null)
+                {
+                    // Eyes-sweep 2026-07-06 (battle_hud_wave.png): the old fixed fractions
+                    // (x 0.66–0.86, y 0.58–0.95 of the plate) landed the gold Lv ON the Blink
+                    // prefab's HP bar. WO-611 wants "Lv beside the name" — so seat the label
+                    // INSIDE the NAME row itself: full overlay of the name label's rect,
+                    // right-aligned (name text is centered), which by construction can never
+                    // touch the bar rects. Falls back to the old plate anchor only if the
+                    // handle somehow has no name label (both build modes guarantee one).
+                    var nameHost = _targetFrame.name != null
+                        ? _targetFrame.name.transform : _targetFrame.root.transform;
+                    _targetFrame.level = ElarionUiKit.Label(nameHost, "",
+                        0f, 1f, gold611, ElarionUi.FontLabel,
+                        TextAlignmentOptions.MidlineRight, 0f, 1f, bold: true);
+                }
+                _targetFrame.level.color = gold611;
+                _targetFrame.level.raycastTarget = false;
+
+                // 3-state LOCK BADGE chip (crosshair art + uppercase UNLOCKED/LOCKING/LOCKED word),
+                // top-right of the plate beside the Lv text; driven from TargetModel in Update().
+                _lockBadge = ElarionUiKit.BuildLockCrosshairBadge(_targetFrame.root.transform,
+                    new Vector2(0.72f, 0.02f), new Vector2(0.99f, 0.34f));
+            }
             Register("targetFrame", WrapAsWidget("targetFrame", _targetFrame.root));
             BuildStatusRow(pool, "enemyBuffRow", out _enemyStatusSlots);
 
@@ -245,10 +309,21 @@ namespace DeNelle.HUD.Kit
             BuildPotionSlots(pool);
 
             // ── actionRail: the big basic-attack slot ──
-            _attackSlot = ElarionUiKit.BuildActionSlot(pool,
-                new Vector2(0.22f, 0.02f), new Vector2(0.98f, 0.44f), HudCommands.Attack);
-            var atkIcon = UiStyle.Icon("attack", "sword", "melee");
-            if (atkIcon != null) _attackSlot.SetIcon(atkIcon);
+            if (FeatureFlags.CombatHud611)
+            {
+                // WO-611: oblong stadium ATTACK PILL, gold-trimmed, bottom-right thumb anchor.
+                _attackSlot = ElarionUiKit.BuildAttackPill(pool,
+                    new Vector2(0.30f, 0.02f), new Vector2(0.99f, 0.30f), HudCommands.Attack);
+                var atkIcon = UiStyle.Icon("energy-sword", "attack", "sword", "melee");
+                if (atkIcon != null) _attackSlot.SetIcon(atkIcon);
+            }
+            else
+            {
+                _attackSlot = ElarionUiKit.BuildActionSlot(pool,
+                    new Vector2(0.22f, 0.02f), new Vector2(0.98f, 0.44f), HudCommands.Attack);
+                var atkIcon = UiStyle.Icon("attack", "sword", "melee");
+                if (atkIcon != null) _attackSlot.SetIcon(atkIcon);
+            }
             Register("attackButton", WrapAsWidget("attackButton", _attackSlot.root));
 
             // resource chips (expanded row) + collapsed gold-only variant (tap-expand).
@@ -277,19 +352,40 @@ namespace DeNelle.HUD.Kit
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.52f, 0.10f), new Vector2(0.74f, 0.95f), () =>
                 {
+                    // Owner 07-06 "Clicking bag doesnt do anything" (RCA log-proven): the two
+                    // events below had ZERO live listeners in Main_Castle_Overworld (HeroEquipHud
+                    // is scene-whitelisted and never spawned). Route through PanelRouter — the
+                    // scene-independent Core opener HeroInventoryController registers at boot.
+                    // The legacy events still fire for any listener that DOES exist (hub scenes).
+                    FlowTrace.Step("HudKit", "Bag tapped -> PanelRouter.Open(Inventory)");
+                    PanelRouter.Open(PanelId.Inventory);
                     if (_owner != null) _owner.InventoryRequested?.Invoke();
                     VillageHudController.RaiseInventoryRequested();
                 });
             Register("bagButton", WrapAsWidget("bagButton", bag.gameObject));
 
+            // Context button — relabels Quests <-> Upgrade via the Update() focus poll (07-06).
             var quest = ElarionUiKit.BuildObsidianButton(pool, "Quests",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.76f, 0.10f), new Vector2(1.00f, 0.95f), OnContextAction);
             Register("questButton", WrapAsWidget("questButton", quest.gameObject));
+            _questContextButton = quest;
+            _questContextLabel = quest.GetComponentInChildren<TMP_Text>(true);
+            _questContextUpgradeFace = false;
 
-            // ── moveCluster: THE FOUR ROUND BUTTONS (§1.11) -> HudMoveInput ──
-            var cluster = ElarionUiKit.BuildControllerCluster(pool, new Vector2(0.5f, 0.5f), HudMoveInput.Set);
-            Register("moveCluster", WrapAsWidget("moveCluster", cluster.root));
+            // ── moveCluster -> HudMoveInput ──
+            if (FeatureFlags.CombatHud611)
+            {
+                // WO-611: a VIRTUAL D-PAD (cross/plus) replaces the 4-round-button cluster.
+                var dpad = ElarionUiKit.BuildVirtualDPad(pool, new Vector2(0.5f, 0.5f), HudMoveInput.Set);
+                Register("moveCluster", WrapAsWidget("moveCluster", dpad.root));
+            }
+            else
+            {
+                // THE FOUR ROUND BUTTONS (§1.11).
+                var cluster = ElarionUiKit.BuildControllerCluster(pool, new Vector2(0.5f, 0.5f), HudMoveInput.Set);
+                Register("moveCluster", WrapAsWidget("moveCluster", cluster.root));
+            }
 
             // ── dock: WO-439 LEFT slide-out (Chat/Leaderboard/Music/Settings), gear tab ──
             // (hidden entirely in build mode via the occupancy rows, same "chatDock" widget id).
@@ -461,13 +557,46 @@ namespace DeNelle.HUD.Kit
             rrt.offsetMin = Vector2.zero; rrt.offsetMax = Vector2.zero;
 
             _abilitySlots = new ElarionUiKit.ActionSlotHandle[4];
+            bool combat = FeatureFlags.CombatHud611;
+            if (combat) _abilityGlows = new ElarionUiKit.SoftGlowCooldown[4];
+
+            // WO-611 (mockup v8 EXACT offsets): Q/W/E/R medallion CENTRES in actionRail fractions.
+            // Mockup: medallion 2.7em, CSS right/bottom offsets Q(8.9,2.5) W(7.7,5.0) E(5.3,6.7)
+            // R(2.5,7.1) em from the bottom-right corner; the rail is ~10.75em square at reference
+            // (413x410 px, 1em ~ 38.4 px => 1em ~ 0.093 rail fraction); centre = offset + 1.35em.
+            // Q sits nearest the pill's left, the arc sweeps up over the pill (owner design).
+            const float Em611 = 0.093f;
+            Vector2[] arc611 = combat ? new[]
+            {
+                new Vector2(1f - 10.25f * Em611, 3.85f * Em611),   // Q
+                new Vector2(1f -  9.05f * Em611, 6.35f * Em611),   // W
+                new Vector2(1f -  6.65f * Em611, 8.05f * Em611),   // E
+                new Vector2(1f -  3.85f * Em611, 8.45f * Em611),   // R
+            } : null;
+            const float MedHalf611 = 0.126f;                       // 2.7em medallion => 1.35em half
+            string[] keys611 = { "Q", "W", "E", "R" };
+
             for (int i = 0; i < 4; i++)
             {
                 int slot = i;
-                float x0 = i * 0.25f + 0.01f, x1 = (i + 1) * 0.25f - 0.01f;
-                _abilitySlots[i] = ElarionUiKit.BuildActionSlot(row.transform,
-                    new Vector2(x0, 0.05f), new Vector2(x1, 0.95f),
+                Vector2 min, max;
+                if (combat)
+                {
+                    min = arc611[i] - new Vector2(MedHalf611, MedHalf611);
+                    max = arc611[i] + new Vector2(MedHalf611, MedHalf611);
+                }
+                else
+                {
+                    min = new Vector2(i * 0.25f + 0.01f, 0.05f);
+                    max = new Vector2((i + 1) * 0.25f - 0.01f, 0.95f);
+                }
+                _abilitySlots[i] = ElarionUiKit.BuildActionSlot(row.transform, min, max,
                     () => { if (_owner != null) _owner.AbilityRequested?.Invoke(slot); });
+                if (combat)
+                {
+                    ElarionUiKit.StyleAsRoundMedallion(_abilitySlots[i], keys611[i]);
+                    _abilityGlows[i] = ElarionUiKit.AddSoftCooldownGlow(_abilitySlots[i]);
+                }
             }
             Register("abilityRow", WrapAsWidget("abilityRow", row));
         }
@@ -477,18 +606,32 @@ namespace DeNelle.HUD.Kit
             var row = new GameObject("AssignableSkillRow", typeof(RectTransform));
             row.transform.SetParent(pool, false);
             var rrt = (RectTransform)row.transform;
+            bool combat = FeatureFlags.CombatHud611;
+            // WO-611: the hot-swap bar (+ the potions region to its right) HOUSED full-width; the
+            // potion slots (separate, later-registered widgets in the same ActionBar mount) render
+            // over the housing. Non-combat keeps the WO-609 left-2/3 row.
             rrt.anchorMin = new Vector2(0f, 0.05f);
-            rrt.anchorMax = new Vector2(0.68f, 0.95f);
+            rrt.anchorMax = new Vector2(combat ? 1f : 0.68f, 0.95f);
             rrt.offsetMin = Vector2.zero; rrt.offsetMax = Vector2.zero;
+
+            if (combat)
+                ElarionUiKit.BuildActionBarHousing(row.transform, Vector2.zero, Vector2.one);
 
             _assignableSlots = new ElarionUiKit.ActionSlotHandle[4];
             for (int i = 0; i < 4; i++)
             {
                 int slot = i;
-                float x0 = i * 0.25f + 0.01f, x1 = (i + 1) * 0.25f - 0.01f;
+                // Combat: pack the 4 hot-swap slots into the left ~62% so the potions sit to the right,
+                // both housed. Non-combat: the original quarter-width row.
+                float x0 = combat ? i * 0.15f + 0.02f : i * 0.25f + 0.01f;
+                float x1 = combat ? (i + 1) * 0.15f - 0.005f : (i + 1) * 0.25f - 0.01f;
+                float y0 = combat ? 0.12f : 0.05f, y1 = combat ? 0.88f : 0.95f;
                 _assignableSlots[i] = ElarionUiKit.BuildActionSlot(row.transform,
-                    new Vector2(x0, 0.05f), new Vector2(x1, 0.95f),
+                    new Vector2(x0, y0), new Vector2(x1, y1),
                     () => HudCommands.AssignableCast(slot));
+                // WO-611 (capture 07-05): the tan/khaki Blink Action_Bar_Slot faces dominated the
+                // housed bar — restyle each housed slot as the mockup's obsidian steel cell.
+                if (combat) ElarionUiKit.StyleAsObsidianCell(_assignableSlots[i]);
             }
             Register("assignableSkillRow", WrapAsWidget("assignableSkillRow", row));
         }
@@ -531,6 +674,15 @@ namespace DeNelle.HUD.Kit
             if (manaIcon == null) manaIcon = UiStyle.Icon("potion", "consumable", "mana");
             if (manaIcon != null) _manaPotionSlot.SetIcon(manaIcon);
             Register("manaPotionSlot", WrapAsWidget("manaPotionSlot", _manaPotionSlot.root));
+
+            if (FeatureFlags.CombatHud611)
+            {
+                // WO-611 (mockup v8): the two potions are ROUND in the housed action bar — the
+                // medallion face without a key badge (they overlay the obsidian housing, killing
+                // the tan Blink slot faces the 07-05 capture showed).
+                ElarionUiKit.StyleAsRoundMedallion(_hpPotionSlot);
+                ElarionUiKit.StyleAsRoundMedallion(_manaPotionSlot);
+            }
         }
 
         private void BuildTargetCycle(Transform pool)
@@ -733,6 +885,23 @@ namespace DeNelle.HUD.Kit
                 _vitals.NameLabel.text = (string.IsNullOrEmpty(v.ClassId) ? "Hero" : Cap(v.ClassId)) +
                                          "  Lv " + Mathf.Max(1, v.Level);
             _xpBar.SetValue(v.Xp, Mathf.Max(1, v.XpToNext));
+            // Owner 07-06: in-plate XP strip — fillAmount = xp/xpToNext, mirroring the HP/MP
+            // fill-binding contract (§1.1). XpToNext<=0 = no HeroProgression data yet (the model
+            // default; the producer never pushed) -> strip stays hidden, never blank/stuck-full.
+            if (_vitals.XpRow != null)
+            {
+                bool hasXp = v.XpToNext > 0;
+                if (_vitals.XpRow.activeSelf != hasXp) _vitals.XpRow.SetActive(hasXp);
+                if (hasXp && _vitals.XpFill != null)
+                {
+                    _vitals.XpFill.fillAmount = Mathf.Clamp01((float)v.Xp / v.XpToNext);
+                    if (!_xpStripBound)
+                    {
+                        _xpStripBound = true;
+                        FlowTrace.Step("HudKit", "xp bar bound " + v.Xp + "/" + v.XpToNext);
+                    }
+                }
+            }
             _wisdomChip.SetAmount(v.Wisdom);
         }
 
@@ -771,8 +940,19 @@ namespace DeNelle.HUD.Kit
                 ? "Next wave in " + Mathf.CeilToInt(w.CountdownRemaining) + "s" : "";
             _waveProgress.SetValue(w.EnemiesTotal - w.EnemiesLive, Mathf.Max(1, w.EnemiesTotal));
             _waveProgress.track.gameObject.SetActive(w.EnemiesTotal > 0);
+            // Owner 07-06 ("missing option to start wave now... they might be fully ready"):
+            // the button used to HIDE during Countdown; with countdown now = active battle it
+            // must stay available as the skip. Relabel contextually so one control = one action.
             if (_startWaveButton != null)
-                _startWaveButton.gameObject.SetActive(_startWaveAvailable && w.Phase != WavePhase.Countdown);
+            {
+                _startWaveButton.gameObject.SetActive(_startWaveAvailable);
+                var swLabel = _startWaveButton.GetComponentInChildren<TMP_Text>(true);
+                if (swLabel != null)
+                {
+                    string want = realCountdown ? "Start Now" : "Start Wave";
+                    if (swLabel.text != want) swLabel.text = want;
+                }
+            }
         }
 
         private void OnWorld()
@@ -792,13 +972,54 @@ namespace DeNelle.HUD.Kit
             for (int i = 0; i < _abilitySlots.Length; i++)
             {
                 var h = _abilitySlots[i];
-                if (i >= a.Slots.Count) { h.root.SetActive(false); continue; }
+                // WO-611: a combat-HUD MEDALLION (glow driver present <=> flag was ON at build) always
+                // RENDERS — the 07-05 capture showed NO arc in battle because every slot with no
+                // resolved def (AbilityLoadoutProducer: equipped = def != null) was SetActive(false)
+                // here, hiding the whole arc on an unassigned loadout. Empty = dimmed medallion + key
+                // badge, non-interactable (mockup). Flag OFF (glows null) keeps the shipping behavior
+                // byte-identical.
+                bool medallion = _abilityGlows != null && i < _abilityGlows.Length && _abilityGlows[i] != null;
+                if (i >= a.Slots.Count)
+                {
+                    h.root.SetActive(medallion);
+                    if (medallion) SetEmptyMedallion(h);
+                    continue;
+                }
                 var s = a.Slots[i];
-                h.root.SetActive(s.Equipped);
-                if (!s.Equipped) continue;
+                h.root.SetActive(medallion || s.Equipped);
+                if (!s.Equipped)
+                {
+                    if (medallion) SetEmptyMedallion(h);
+                    continue;
+                }
+                if (medallion)
+                {
+                    if (h.frame != null) h.frame.color = Color.white;   // un-dim (colours baked in the face)
+                    if (h.icon != null) h.icon.enabled = true;
+                }
                 h.SetIcon(string.IsNullOrEmpty(s.IconKey) ? null : UiStyle.Icon(s.IconKey));
-                h.SetCooldown(s.CooldownRemaining, s.CooldownTotal);
+                // WO-611: combat HUD medallions use the SOFT under-glow; else the hard radial sweep.
+                if (medallion)
+                {
+                    _abilityGlows[i].Set(s.CooldownRemaining, s.CooldownTotal);
+                    // The glow path skips SetCooldown, so keep the tap-gate contract here.
+                    if (h.button != null) h.button.interactable = !(s.CooldownRemaining > 0f && s.CooldownTotal > 0f);
+                }
+                else
+                    h.SetCooldown(s.CooldownRemaining, s.CooldownTotal);
             }
+        }
+
+        // WO-611: present an UNASSIGNED combat medallion — dimmed face, no icon, no tap, no stale
+        // cooldown text — so the Q/W/E/R arc always renders in hostile postures (combat-HUD only;
+        // callers gate on the glow driver's presence, which exists only when the flag was ON at build).
+        private static void SetEmptyMedallion(ElarionUiKit.ActionSlotHandle h)
+        {
+            if (h == null) return;
+            if (h.icon != null) h.icon.enabled = false;
+            if (h.frame != null) h.frame.color = new Color(1f, 1f, 1f, 0.45f);
+            if (h.button != null) h.button.interactable = false;
+            if (h.cdText != null) h.cdText.text = "";
         }
 
         private void OnAssignable()
@@ -1022,6 +1243,16 @@ namespace DeNelle.HUD.Kit
 
         private void ApplyPosture(HudPosture posture)
         {
+            // WO-611 behavior rules (combat HUD only): on the flip to hostile(prebattle|activebattle)
+            // every other screen CLOSES + HIDES so ONLY the combat HUD renders (owner rule 1+2).
+            if (FeatureFlags.CombatHud611 &&
+                (posture == HudPosture.HostilePrebattle || posture == HudPosture.HostileActiveBattle))
+            {
+                PanelManager.CloseAll();
+                FlowTrace.Step("HudKit", "combat HUD is the active screen: CloseAll (posture " +
+                               HudPostureKeys.Key(posture) + ")");
+            }
+
             var occupancy = _config.Occupancy(posture);
             int shown = 0;
             foreach (var kv in _widgets)
@@ -1054,6 +1285,31 @@ namespace DeNelle.HUD.Kit
 
         private void Update()
         {
+            // WO-611: drive the animated lock crosshair badge from the target model (combat HUD only).
+            // 0 = no target (unlocked/faint), 1 = target held but not locked (acquiring pulse),
+            // 2 = manual lock (locked/gold). Bound to TargetModel.HasTarget/Locked.
+            if (_lockBadge != null && _models != null && _models.Target != null)
+            {
+                var t = _models.Target;
+                _lockBadge.SetState(!t.HasTarget ? 0 : (t.Locked ? 2 : 1));
+            }
+
+            // Context-button face swap (owner 07-06): HudBuildingFocus is written by the three
+            // proximity pollers; the tap already rerouted (OnContextAction) but nothing VISIBLE
+            // changed — the face-swap reader was never ported from the retired HUD. Poll the
+            // Core static (no event exists) and relabel Quests <-> Upgrade on transitions.
+            if (_questContextLabel != null)
+            {
+                bool upgradeFace = !string.IsNullOrEmpty(HudBuildingFocus.CurrentBuildingId);
+                if (upgradeFace != _questContextUpgradeFace)
+                {
+                    _questContextUpgradeFace = upgradeFace;
+                    _questContextLabel.text = upgradeFace ? "Upgrade" : "Quests";
+                    FlowTrace.Step("HudKit", "context button face -> " + (upgradeFace ? "Upgrade" : "Quests") +
+                        " (focus='" + (HudBuildingFocus.CurrentBuildingId ?? "<none>") + "')");
+                }
+            }
+
             // Cheap availability polls (no model event exists for these Core statics).
             if (_widgets.TryGetValue("fleeButton", out var flee))
             {

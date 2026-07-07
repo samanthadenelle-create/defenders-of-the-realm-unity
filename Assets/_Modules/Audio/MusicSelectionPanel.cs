@@ -87,10 +87,18 @@ namespace DeNelle.Audio
                 ? _modal.chrome.layout.body.transform
                 : _modal.chrome.content.transform;
 
-            ElarionUiKit.Label(body,
+            // EYES-SWEEP 2026-07-06 (#3): the subtitle band was 0.90–1.00 — its first line tucked
+            // under the header trim and its wrapped 3rd line spilled into the first track row
+            // (rows started at 0.88). Give it a proper band BELOW the header trim, FitBlock so the
+            // whole message always fits its band, and start the track list underneath it.
+            var subtitle = ElarionUiKit.Label(body,
                 "Pick the music for where you are. Battle music still takes over during fights.",
-                0.90f, 1.00f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
+                0.84f, 0.965f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
                 TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
+            // SWEEP 9413 R2 (#4): default FitBlock clamps min to FontFloor(30) — at FontLabel(40)
+            // the band couldn't fit the wrap and Truncate hard-cut "…Battle music s". Taller band
+            // (0.84–0.965) + an explicit smaller min so the hint SHRINKS to fit instead of cutting.
+            ElarionUiKit.FitBlock(subtitle, 24f, ElarionUi.FontLabel);
 
             // Rows live in a dedicated host under the body so RebuildRows can clear
             // them without touching the subtitle.
@@ -98,7 +106,7 @@ namespace DeNelle.Audio
             hostGo.transform.SetParent(body, false);
             var hrt = hostGo.GetComponent<RectTransform>();
             hrt.anchorMin = new Vector2(0f, 0f);
-            hrt.anchorMax = new Vector2(1f, 0.88f);
+            hrt.anchorMax = new Vector2(1f, 0.82f);
             hrt.offsetMin = Vector2.zero; hrt.offsetMax = Vector2.zero;
             _rowHost = hostGo.transform;
 

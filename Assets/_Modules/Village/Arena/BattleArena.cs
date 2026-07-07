@@ -1356,10 +1356,15 @@ namespace DeNelle.Village.Arena
                 // never a snap). Flag-gated + Guard-wrapped so flag-off is today's exact path.
                 if (FeatureFlags.LockOn) MaybeRebindLockCamera();
 
-                // WIN: every staged enemy is dead.
+                // Outcome arbitration — DEATH PREEMPTS VICTORY. When the hero and the last
+                // enemy die inside the same 0.25s tick (trade fatal blows / DoT / Last Stand
+                // reflect), the old WIN-first order fired Resolve(true) on a dead hero — the
+                // owner's F8 "on death the victory screen still loaded" (2026-07-06 t=278).
                 _liveEnemies.RemoveAll(e => e == null || e.IsDead);
                 // WO-563: SetPrimary removed — the 9-zone HUD reads enemy HP/target directly.
-                if (_liveEnemies.Count == 0)
+                var hh = HeroHealth.Instance;
+                bool heroAlive = hh == null || hh.IsAlive;   // null = no HeroHealth (test scenes) — treat as alive
+                if (_liveEnemies.Count == 0 && heroAlive)
                 {
                     // WO-493 #4: linger on the climactic kill (slow-mo) BEFORE teardown/return.
                     yield return StartCoroutine(PlayDeathCam(_climaxBody, slowMo: true));
@@ -1367,9 +1372,8 @@ namespace DeNelle.Village.Arena
                     yield break;
                 }
 
-                // LOSE: hero down.
-                var hh = HeroHealth.Instance;
-                if (hh != null && !hh.IsAlive)
+                // LOSE: hero down (checked AFTER the win gate so a heroAlive=false always lands here).
+                if (!heroAlive)
                 {
                     FlowTrace.Step("BattleArena", "hero down - loss.");
                     // Linger on the hero's defeat (no slow-mo -- the defeat beat plays at speed).
@@ -1576,7 +1580,14 @@ namespace DeNelle.Village.Arena
                 doMaskedReturn();   // no HUD to host the summary -> return now (no softlock)
             else
             {
-                Guard.Try("BattleArena", "battle result banner",
+                // DCA fix (owner F8 2026-07-06 t=397 "two death screens"): the loss banner used
+                // to show HERE (in-arena, pre-warp) and its only self-teardown listens for a
+                // scene LOAD — but the masked return is an in-scene WarpHero teleport, so the
+                // panel straddled fade-out -> warp -> fade-in and read as a SECOND death screen
+                // in town (Player.log 224787 Show -> 225233 FADE IN -> 225458 user Close).
+                // Present the banner ON ARRIVAL instead (mirrors the WIN summary semantics);
+                // the return itself still fires immediately, so recovery timing is unchanged.
+                _pendingLossBanner = () => Guard.Try("BattleArena", "battle result banner (on arrival)",
                     () => hud?.ShowResult(false, 0, durationSeconds, default, null));
                 doMaskedReturn();   // loss returns immediately (recovery timing preserved)
             }
@@ -1712,7 +1723,20 @@ namespace DeNelle.Village.Arena
 
             FlowTrace.Step("BattleArena", "FADE IN: home arrival (masked return complete).");
             if (fader != null) yield return StartCoroutine(fader.FadeInCo(HomeFadeInSeconds));
+
+            // Deferred loss banner (t=397 double-death fix): present the ONE defeat panel now,
+            // at home, after the reveal — never straddling the warp. No-op on a win/no-banner.
+            if (_pendingLossBanner != null)
+            {
+                var show = _pendingLossBanner;
+                _pendingLossBanner = null;
+                show();
+            }
         }
+
+        // Loss-banner presentation deferred to home arrival (set in Resolve's loss branch,
+        // consumed at the end of ReturnHomeWithFade; cleared on consume so it fires once).
+        private Action _pendingLossBanner;
 
         // Win reward (C2 — close the FELT reward loop): a staged-family/threat-scaled
         // payout the player FEELS, every drop routed to an EXISTING system (no parallel

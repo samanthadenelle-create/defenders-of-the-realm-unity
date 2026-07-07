@@ -1214,6 +1214,17 @@ namespace DeNelle.Village.World
         /// </summary>
         public static bool VerifyMoatComplete()
         {
+            // WO-608: the merged single-scene overworld intentionally builds NO moat at all
+            // (BuildInternal skips entirely — seam gone, P0 hero-confinement guard). The oracle
+            // is N/A there: MOAT_ROOT_MISSING on the merged scene is by-design, not incomplete
+            // (fleet 9000/9200 false-flagged this 12/12 + 4/4, 2026-07-06).
+            if (OnMergedScene())
+            {
+                FlowTrace.Step(VerifySys, "MOAT_NOT_APPLICABLE: merged overworld (" + MergedScene +
+                    ") builds no moat by design (WO-608) — oracle skipped, reporting complete.");
+                return true;
+            }
+
             var failures = new List<string>();
             FlowTrace.Step(VerifySys, "=== MOAT COMPLETENESS ORACLE START (band r=" + MoatInnerRadius + ".." +
                 MoatOuterRadius + ", width=" + MoatWidth + "m) ===");

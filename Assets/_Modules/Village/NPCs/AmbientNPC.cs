@@ -32,6 +32,7 @@
 
 using UnityEngine;
 using UnityEngine.AI;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -100,6 +101,57 @@ namespace DeNelle.Village
 
         /// <summary>True while the Keeper is close enough that this villager is speaking.</summary>
         public bool Speaking { get; private set; }
+
+        // ── Combat shelter (owner feature 2026-07-06: villagers hide during battle) ──
+        // Only WANDERING villagers flee — vendor / introducer / static bodies are
+        // configured wander=false by their injectors and must never leave their post.
+        private enum ShelterState
+        {
+            /// <summary>Normal ambient behaviour (wander / idle / speak).</summary>
+            None = 0,
+            /// <summary>Combat went active; waiting a short random stagger before running.</summary>
+            FleeStagger,
+            /// <summary>Hurrying to the nearest building "door" on the NavMesh.</summary>
+            Fleeing,
+            /// <summary>Out of sight inside the shelter (renderers off).</summary>
+            Hidden,
+            /// <summary>Combat cleared; waiting the calm delay before stepping back out.</summary>
+            ReturnDelay,
+            /// <summary>Walking back to the home anchor to resume ambient life.</summary>
+            Returning,
+        }
+
+        private ShelterState _shelter = ShelterState.None;
+        private float _shelterTimer;
+        private Vector3 _shelterPoint;
+        private string _shelterName;
+        private Renderer[] _bodyRenderers;   // cached once; toggled for hide/unhide
+
+        /// <summary>Hurry multiplier applied to the walk speed while fleeing — reads as urgency.</summary>
+        private const float FleeSpeedMultiplier = 2.1f;
+
+        // Combat-active authority — the SAME inputs the HUD context uses (owner ruling
+        // 2026-07-06): wave Phase Countdown||Active OR BattleLock.IsInBattle().
+        // Polled once per interval and shared across every villager (cheap).
+        private static float s_combatNextPoll;
+        private static bool s_combatActive;
+
+        // Shared shelter-anchor cache (the scene's Building collection, refreshed lazily).
+        private static Building[] s_shelterBuildings;
+        private static float s_sheltersNextRefresh;
+
+        // Observability counters for the [Flow:Townsfolk] transition lines.
+        private static int s_fleeingCount;
+        private static int s_hiddenCount;
+
+        // Presence census (fleet run 9413: zero [Flow:Townsfolk] lines was ambiguous
+        // between "no NPCs in the scene" and "poll early-outs"). Every live AmbientNPC
+        // counts itself; wander-eligible = _wander && live on-mesh agent (the flee gate).
+        // One Step fires on each combat-activation naming both counts.
+        private static int s_instanceCount;
+        private static int s_wanderEligibleCount;
+        private bool _shelterEligible;      // whether THIS npc is in the eligible tally
+        private static bool s_lastCombatActive;
 
         // ── Animator (DEF-91: purchased NPC model pack — walk / idle / talk clips) ─
         private Animator _animator;
@@ -193,6 +245,15 @@ namespace DeNelle.Village
 
             _bubble?.Hide();
 
+            // Cache the body renderers once for the combat-shelter hide/unhide.
+            _bodyRenderers = GetComponentsInChildren<Renderer>(true);
+
+            // Presence census: count this NPC (and whether it can flee) so the
+            // combat-active Step can name "N ambient NPCs (M wander-eligible)".
+            s_instanceCount++;
+            _shelterEligible = _wander && _hasNavMesh && _agent != null && _agent.enabled;
+            if (_shelterEligible) s_wanderEligibleCount++;
+
             // Grab the Animator from the mesh child (if the NPC model pack prefab is present).
             // Null-safe: locomotion and speech still work without it.
             _animator = GetComponentInChildren<Animator>();
@@ -212,10 +273,284 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            UpdateShelter();
+            if (_shelter != ShelterState.None)
+            {
+                // Sheltering owns the villager: no proximity speech, no roaming,
+                // no idle sway — just keep the walk animation honest.
+                UpdateAnimator();
+                return;
+            }
+
             UpdateProximity();
             UpdateRoaming();
             UpdateIdleMotion();
             UpdateAnimator();
+        }
+
+        // ── Combat shelter (flee into a house during battle, return after) ───
+
+        /// <summary>
+        /// Shared combat-active check — the same authority the HUD context uses
+        /// (owner ruling 2026-07-06): wave <see cref="WavePhase.Countdown"/> or
+        /// <see cref="WavePhase.Active"/>, OR any staged battle via
+        /// <c>BattleLock.IsInBattle()</c>. Polled at most every 0.25s, shared by
+        /// every villager in the scene.
+        /// </summary>
+        private static bool CombatActive()
+        {
+            if (Time.unscaledTime >= s_combatNextPoll)
+            {
+                s_combatNextPoll = Time.unscaledTime + 0.25f;
+                s_combatActive = Guard.Try("Townsfolk", "combat-poll", () =>
+                {
+                    var wm = WaveManager.Instance;
+                    bool wave = wm != null &&
+                                (wm.Phase == WavePhase.Active ||
+                                 wm.Phase == WavePhase.Countdown);
+                    return wave || DeNelle.Core.Combat.BattleLock.IsInBattle();
+                }, false);
+
+                // Presence census on each combat activation (fleet run 9413: a silent
+                // run could not distinguish "no NPCs" from "poll early-out" — this line
+                // names it: eligible=0 means nothing in this scene CAN flee).
+                if (s_combatActive && !s_lastCombatActive)
+                    FlowTrace.Step("Townsfolk",
+                        $"combat-active: {s_instanceCount} ambient NPCs " +
+                        $"({s_wanderEligibleCount} wander-eligible)");
+                s_lastCombatActive = s_combatActive;
+            }
+            return s_combatActive;
+        }
+
+        /// <summary>
+        /// Steps the flee/hide/return state machine. Only WANDERING villagers with a
+        /// live NavMeshAgent participate — static bodies (vendors, the companion
+        /// introducer, idlers) are configured wander=false and never leave their post.
+        /// </summary>
+        private void UpdateShelter()
+        {
+            bool combat = CombatActive();
+
+            switch (_shelter)
+            {
+                case ShelterState.None:
+                    if (combat && _wander && _hasNavMesh && _agent != null && _agent.enabled)
+                    {
+                        // Stop talking mid-panic; stagger the run so a crowd
+                        // scatters organically instead of bolting in sync.
+                        if (Speaking) { Speaking = false; _bubble?.Hide(); }
+                        _shelterTimer = Random.Range(0f, 1.5f);
+                        _shelter = ShelterState.FleeStagger;
+                    }
+                    break;
+
+                case ShelterState.FleeStagger:
+                    if (!combat) { _shelter = ShelterState.None; break; }
+                    _shelterTimer -= Time.deltaTime;
+                    if (_shelterTimer <= 0f) BeginFlee();
+                    break;
+
+                case ShelterState.Fleeing:
+                    if (_agent == null || !_agent.enabled || !_agent.isOnNavMesh)
+                    {
+                        HideBody();   // agent died mid-run — just duck out of sight
+                        break;
+                    }
+                    if (!_agent.pathPending &&
+                        _agent.remainingDistance <= _agent.stoppingDistance + 0.35f)
+                        HideBody();   // reached the door — slip inside
+                    break;
+
+                case ShelterState.Hidden:
+                    if (!combat)
+                    {
+                        _shelterTimer = Random.Range(3f, 5f);   // calm delay
+                        _shelter = ShelterState.ReturnDelay;
+                    }
+                    break;
+
+                case ShelterState.ReturnDelay:
+                    if (combat) { _shelter = ShelterState.Hidden; break; }
+                    _shelterTimer -= Time.deltaTime;
+                    if (_shelterTimer <= 0f) BeginReturn();
+                    break;
+
+                case ShelterState.Returning:
+                    if (combat)
+                    {
+                        // Battle re-ignited mid-walk — drop to None so the next
+                        // frame re-triggers a fresh (staggered) flee from here.
+                        _shelter = ShelterState.None;
+                        break;
+                    }
+                    if (_agent == null || !_agent.enabled || !_agent.isOnNavMesh ||
+                        (!_agent.pathPending &&
+                         _agent.remainingDistance <= _agent.stoppingDistance + 0.35f))
+                        ResumeAmbient();
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Picks the nearest building anchor and hurries there. Falls back to the
+        /// home anchor when the scene has no buildings (they still duck home).
+        /// </summary>
+        private void BeginFlee()
+        {
+            if (_agent == null || !_agent.enabled || !_agent.isOnNavMesh)
+            {
+                // Can't run anywhere — just hide in place once combat is on.
+                HideBody();
+                return;
+            }
+
+            if (!TryPickShelter(out _shelterPoint, out _shelterName))
+            {
+                _shelterPoint = _homeAnchor;
+                _shelterName = "home anchor";
+                FlowTrace.Once("Townsfolk", "no-shelter-buildings",
+                    "no Building anchors found — villagers shelter at their home anchors");
+            }
+
+            _agent.speed = _walkSpeed * FleeSpeedMultiplier;
+            _agent.isStopped = false;
+            _agent.SetDestination(_shelterPoint);
+            _shelter = ShelterState.Fleeing;
+            s_fleeingCount++;
+            FlowTrace.Step("Townsfolk",
+                $"flee: {_archetype} runs to '{_shelterName}' " +
+                $"({_shelterPoint.x:F1},{_shelterPoint.z:F1}) — fleeing={s_fleeingCount} hidden={s_hiddenCount}");
+        }
+
+        /// <summary>
+        /// Finds the nearest scene <see cref="Building"/> to this villager and
+        /// NavMesh-samples a reachable point beside it (its "door" — building
+        /// blockers carve the mesh, so the sample lands at the wall's edge).
+        /// The Building collection is cached statically and refreshed every 10s
+        /// (player-placed buildings appear between refreshes at worst).
+        /// </summary>
+        private bool TryPickShelter(out Vector3 point, out string name)
+        {
+            point = default;
+            name = null;
+
+            if (s_shelterBuildings == null || Time.unscaledTime >= s_sheltersNextRefresh)
+            {
+                s_sheltersNextRefresh = Time.unscaledTime + 10f;
+                s_shelterBuildings = Guard.Try("Townsfolk", "shelter-scan",
+                    () => FindObjectsByType<Building>(FindObjectsSortMode.None),
+                    fallback: null) ?? new Building[0];
+            }
+
+            Building best = null;
+            float bestSqr = float.MaxValue;
+            Vector3 here = transform.position;
+            foreach (var b in s_shelterBuildings)
+            {
+                if (b == null) continue;
+                Vector3 d = b.transform.position - here;
+                d.y = 0f;
+                float sqr = d.sqrMagnitude;
+                if (sqr < bestSqr) { bestSqr = sqr; best = b; }
+            }
+            if (best == null) return false;
+
+            if (!NavMesh.SamplePosition(best.transform.position, out NavMeshHit hit, 6f,
+                                        NavMesh.AllAreas))
+                return false;
+
+            point = hit.position;
+            name = string.IsNullOrEmpty(best.BuildingId) ? best.Type.ToString() : best.BuildingId;
+            return true;
+        }
+
+        /// <summary>Slips the villager out of sight at the shelter (renderers off, agent halted).
+        /// The GameObject stays active so this component keeps watching for the all-clear.</summary>
+        private void HideBody()
+        {
+            SetBodyVisible(false);
+            if (Speaking) { Speaking = false; }
+            _bubble?.Hide();
+            if (_agent != null && _agent.enabled && _agent.isOnNavMesh)
+                _agent.isStopped = true;
+            if (_shelter == ShelterState.Fleeing && s_fleeingCount > 0) s_fleeingCount--;
+            _shelter = ShelterState.Hidden;
+            s_hiddenCount++;
+            FlowTrace.Step("Townsfolk",
+                $"hidden: {_archetype} inside '{_shelterName ?? "shelter"}' — " +
+                $"fleeing={s_fleeingCount} hidden={s_hiddenCount}");
+        }
+
+        /// <summary>Steps back out of the shelter and walks home at normal pace.</summary>
+        private void BeginReturn()
+        {
+            SetBodyVisible(true);
+            if (s_hiddenCount > 0) s_hiddenCount--;
+
+            if (_agent != null && _agent.enabled && _agent.isOnNavMesh)
+            {
+                _agent.speed = _walkSpeed;
+                _agent.isStopped = false;
+                Vector3 target = _homeAnchor;
+                if (NavMesh.SamplePosition(_homeAnchor, out NavMeshHit hit, 3f, NavMesh.AllAreas))
+                    target = hit.position;
+                _agent.SetDestination(target);
+                _shelter = ShelterState.Returning;
+            }
+            else
+            {
+                ResumeAmbient();   // no agent — just reappear and stand
+                return;
+            }
+
+            FlowTrace.Step("Townsfolk",
+                $"return: {_archetype} walks home from '{_shelterName ?? "shelter"}' — hidden={s_hiddenCount}");
+        }
+
+        /// <summary>Hands control back to the normal ambient loop (wander/idle/speak).</summary>
+        private void ResumeAmbient()
+        {
+            SetBodyVisible(true);
+            _shelter = ShelterState.None;
+            if (_agent != null && _agent.enabled)
+            {
+                _agent.speed = _walkSpeed;
+                if (_agent.isOnNavMesh) PickNewDestination();
+            }
+            FlowTrace.Step("Townsfolk", $"resumed: {_archetype} back to ambient life");
+        }
+
+        /// <summary>Toggles the cached body renderers (hide/unhide without deactivating —
+        /// Update must keep running to notice the battle ending).</summary>
+        private void SetBodyVisible(bool visible)
+        {
+            if (_bodyRenderers == null) return;
+            foreach (var r in _bodyRenderers)
+                if (r != null) r.enabled = visible;
+        }
+
+        /// <summary>Keeps the shared flee/hidden counters honest when a villager is
+        /// disabled or destroyed mid-shelter (scene unload, injector rebuild).</summary>
+        private void OnDisable()
+        {
+            if (_shelter == ShelterState.Fleeing && s_fleeingCount > 0) s_fleeingCount--;
+            if ((_shelter == ShelterState.Hidden || _shelter == ShelterState.ReturnDelay) &&
+                s_hiddenCount > 0) s_hiddenCount--;
+            _shelter = ShelterState.None;
+        }
+
+        /// <summary>Un-counts this NPC from the presence census. In OnDestroy (not
+        /// OnDisable) so enable/disable cycles never double-count — Start() counts once,
+        /// this decrements once.</summary>
+        private void OnDestroy()
+        {
+            if (_bodyRenderers != null)   // proxy for "Start ran and counted us"
+            {
+                if (s_instanceCount > 0) s_instanceCount--;
+                if (_shelterEligible && s_wanderEligibleCount > 0) s_wanderEligibleCount--;
+                _shelterEligible = false;
+            }
         }
 
         // ── Proximity speech ─────────────────────────────────────────────────

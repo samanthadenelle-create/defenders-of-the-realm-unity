@@ -73,7 +73,9 @@ namespace DeNelle.Village
         private const float TurnAroundDeg       = 135f; // beyond this, use the 180° about-face clip
         // Town calm gait: cap travel + animator feed below the run band (idle@0 / walk@2 / run@6) so the
         // hero stays on upright Shared walk clips instead of sword+shield run at 6 m/s. Combat keeps _moveSpeed.
-        private const float TownMoveSpeedMax = 3.5f;
+        // Owner 2026-07-06 "feels very slow": town cap raised x1.25 (3.5 -> 4.4). Still under the
+        // 6 m/s braced-run tier, so the calm upright gait holds; cadence scales with speed.
+        private const float TownMoveSpeedMax = 4.4f;
 
         // WO-512 slice 3: lock-face / strafe. While a soft lock-on is engaged (driven by
         // HeroTargetIndicator), the hero continuously slews its root yaw toward the LOCKED

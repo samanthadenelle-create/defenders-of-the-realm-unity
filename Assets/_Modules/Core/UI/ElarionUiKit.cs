@@ -242,6 +242,11 @@ namespace DeNelle.Core.UI
             /// <summary>RIGHT half of a PRE-SPLIT body well (parchment — DETAIL/prose lives here),
             /// or null for single-well frames.</summary>
             public RectTransform bodyRight;
+            /// <summary>§1.14 fit-or-scroll handle installed on the BODY zone at the factory
+            /// (owner flag_06 "scrollable area on all menus"). <see cref="body"/> already points at
+            /// its scrolling content column; this exposes the ScrollRect/viewport/scrollbar for
+            /// screens that need them. Null only when the zone pre-carried its own ScrollRect.</summary>
+            public ScrollZoneHandle bodyScroll;
         }
 
         /// <summary>Per-frame zone rects (fractions: xMin,yMin,xMax,yMax of the panel).
@@ -529,6 +534,77 @@ namespace DeNelle.Core.UI
                 // Build the frame's pre-styled DROP-ZONES (the templated areas the owner described):
                 // screens parent chrome-less content into chrome.layout.{header,body,medallion,footer}.
                 var z = ZonesFor(frameName);
+                // ── CLOSE-BAND RESERVATION (eyes-sweep 2026-07-06) ─────────────────────
+                // The shared Close is seated in the DEFAULT bottom-center band (ZonesFor
+                // forces z.close = DefaultCloseZone) as a FIXED 360x120px box growing UP
+                // from the band's lower edge y=0.050 (SeatSharedCloseInside). The zone
+                // fractions never accounted for that pixel box, so body content freely
+                // extended under it and z-order painted the Close OVER the content
+                // (GameGuide / Crafting / HeroLoadout / RealmStore / Leaderboard / ...).
+                // Reserve the band AT THE FACTORY: raise the body zones' bottom edge to
+                //   reservedYMin = z.close.y (0.050)
+                //                + CanonCtaHeight / (panelHeightFrac * 1920 ref px)
+                //                + 0.020 gap
+                // so content geometrically ENDS ABOVE the Close on every framed panel.
+                // Applies only when the Close sits in the default band (a future frame-
+                // measured close notch keeps its own geometry). Geometry only — no
+                // scroll-wrapping, no restyle; the sanity clamp keeps a very short panel
+                // from losing more than 45% of its height to the band.
+                float bodyYBefore   = z.body.y;
+                float footerYBefore = z.footer.y;
+                bool closeIsDefault = z.close == DefaultCloseZone;
+                bool reservationFired = false;
+                float reservedYMinDbg = 0f;
+                if (closeIsDefault)
+                {
+                    float panelFracH   = Mathf.Max(0.05f, anchorMax.y - anchorMin.y);
+                    // Top of the fixed 360x120px Close box (SeatSharedCloseInside grows it UP
+                    // from z.close.y) expressed as a fraction of THIS panel's height.
+                    float closeBandTop = z.close.y + CanonCtaHeight / (panelFracH * 1920f);
+                    // ── FOOTER RELOCATION (sweep 9413) ──────────────────────────────────
+                    // The footer zone's designed bands (default 0.030–0.095; FrameCrafting
+                    // action strip 0.085–0.145; etc.) sit INSIDE the Close band — the Close
+                    // painted over every layout.footer hint/caption/action strip (RealmStore
+                    // disclaimer, Crafting larder, ConsumableCrafting caption, BuildingUpgrade
+                    // wallet...). Keep each frame's designed footer HEIGHT but re-seat the band
+                    // to start just ABOVE the Close box; the body then stacks above the footer.
+                    if (z.hasFooter && z.footer.y < closeBandTop + 0.015f)
+                    {
+                        float footerH = Mathf.Max(0.02f, z.footer.w - z.footer.y);
+                        z.footer.y = Mathf.Min(closeBandTop + 0.015f, 0.40f);
+                        z.footer.w = z.footer.y + footerH;
+                        reservationFired = true;
+                    }
+                    // Body ends above the footer (when present) or above the Close band + gap.
+                    float bodyFloor = z.hasFooter ? z.footer.w + 0.015f : closeBandTop + 0.020f;
+                    float reservedYMin = Mathf.Min(bodyFloor, 0.45f);
+                    reservedYMinDbg = reservedYMin;
+                    if (z.body.y < reservedYMin) { z.body.y = reservedYMin; reservationFired = true; }
+                    if (z.hasSplitBody)
+                    {
+                        if (z.bodyLeft.y  < reservedYMin) { z.bodyLeft.y  = reservedYMin; reservationFired = true; }
+                        if (z.bodyRight.y < reservedYMin) { z.bodyRight.y = reservedYMin; reservationFired = true; }
+                    }
+                }
+                // §12 instrumentation (sweep 9413: Close still over content on 9+ panels despite
+                // the body reservation). One line per FRAME-path panel build: did the branch fire,
+                // close values vs the default band, body/footer yMin before/after. Read it so:
+                //  - closeIsDefault=False        -> the zone equality is the bug.
+                //  - fired=True but still collides in capture -> that panel's content is NOT in
+                //    layout.body/footer — it lays custom fractions on chrome.content (the
+                //    unprotected class; known members: GameGuidePanel, PetSkillTreePanel).
+                //  - this line ABSENT for a colliding panel -> it built on the PROCEDURAL path
+                //    (frame sprite missing; see the PROCEDURAL Step below) — no zones exist.
+                FlowTrace.Step("UI", string.Format(
+                    "BuildObsidianPanel '{0}' frame={1} closeIsDefault={2} fired={3} " +
+                    "close=({4:F3},{5:F3},{6:F3},{7:F3}) default=({8:F3},{9:F3},{10:F3},{11:F3}) " +
+                    "bodyYMin {12:F3}->{13:F3} footerY {14:F3}->{15:F3} reservedYMin={16:F3} " +
+                    "panelAnchors=({17:F2},{18:F2})-({19:F2},{20:F2})",
+                    title, frameName, closeIsDefault, reservationFired,
+                    z.close.x, z.close.y, z.close.z, z.close.w,
+                    DefaultCloseZone.x, DefaultCloseZone.y, DefaultCloseZone.z, DefaultCloseZone.w,
+                    bodyYBefore, z.body.y, footerYBefore, z.footer.y, reservedYMinDbg,
+                    anchorMin.x, anchorMin.y, anchorMax.x, anchorMax.y));
                 var layout = new FrameLayout
                 {
                     header = Zone(chrome.content.transform, "Zone_Header", z.header),
@@ -582,6 +658,16 @@ namespace DeNelle.Core.UI
                     // aligned to OUR zones (never the baked art seam). Detail prose reads dark-on-tan.
                     if (z.twoToneBody) ZoneBacking(layout.bodyRight, TwoToneParchmentFill);
                 }
+
+                // §1.14 FIT-OR-SCROLL is OPT-IN per screen (MakeScrollZone on a list container),
+                // NOT a factory auto-wrap. The auto-wrap shipped here briefly and was REVERTED on
+                // captured proof (windowed runs 9400/9401, panel_PartyShop.png): the wrap re-points
+                // layout.body at a VerticalLayoutGroup content column, but panel sections are
+                // ANCHOR-STRETCHED RectTransforms (sizeDelta.y = 0) — under a layout column they
+                // report height 0 no matter the childControl flags, and the whole body collapsed
+                // ([Flow:Vendor] resolved 39 items, ZERO rendered — built-but-invisible, twice).
+                // Screens with row-lists opt in (PartyShop RebuildList already does); anchor-layout
+                // panels keep their own geometry.
                 chrome.layout = layout;
 
                 // Gold title sits in the header zone (no procedural shadow/rule — the frame has
@@ -592,11 +678,27 @@ namespace DeNelle.Core.UI
                     0f, 1f, ElarionUi.Gilt, ElarionUi.FontTitle,
                     TextAlignmentOptions.Center, 0f, 1f, spacing: 4f, bold: true);
                 chrome.title.raycastTarget = false;
+                // §1.14 (owner F8 flag_06: "The Forge" title clipped mid-glyph): bounded auto-size
+                // + ellipsis — a panel title can never clip again.
+                FitSingleLine(chrome.title);
 
                 // Close sits in the frame's MEASURED close zone (Stats_Panel's top-right notch etc.).
                 chrome.close = ObsidianCloseButton(chrome.content.transform, onClose, z.close);
                 return chrome;
             }
+
+            // §12 instrumentation (sweep 9413): a panel that logs THIS line built on the
+            // PROCEDURAL path — the frame sprite did not resolve (frameName null OR the
+            // Resources/RpgUi art absent in this build). There are NO drop-zones here, so the
+            // close-band reservation cannot apply: consumers' `layout.body ?? chrome.content`
+            // fallbacks all land on chrome.content (full rect) and content CAN extend under
+            // the default bottom-center Close. If the sweep's colliding panels log this line,
+            // the root cause is the missing frame art, not the zone math.
+            FlowTrace.Step("UI", string.Format(
+                "BuildObsidianPanel '{0}' frame={1} PROCEDURAL path (frame sprite missing) — " +
+                "no zones, no close-band reservation; Close seats at default band ({2:F3},{3:F3},{4:F3},{5:F3})",
+                title, string.IsNullOrEmpty(frameName) ? "<none>" : frameName,
+                DefaultCloseZone.x, DefaultCloseZone.y, DefaultCloseZone.z, DefaultCloseZone.w));
 
             // Gold trim border layer (spans the whole rect; the black fill insets over it).
             // Its Image keeps raycastTarget = true so taps can't fall through the panel.
@@ -612,6 +714,8 @@ namespace DeNelle.Core.UI
 
             // Gold header title across the top.
             chrome.title = Header(chrome.content.transform, title ?? "", x0: headerX0, x1: headerX1, y0: 0.92f, y1: 0.98f);
+            // §1.14 (owner F8 flag_06): bounded auto-size + ellipsis — the title can never clip.
+            FitSingleLine(chrome.title);
 
             // The single standard Close button (top-right corner).
             chrome.close = ObsidianCloseButton(chrome.content.transform, onClose);
@@ -2274,6 +2378,587 @@ namespace DeNelle.Core.UI
             }
             tex.Apply();
             return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+        }
+
+        // =====================================================================
+        // WO-611 COMBAT HUD — owner-designed combat widgets.
+        // ---------------------------------------------------------------------
+        // ADDITIVE builders used ONLY when FeatureFlags.CombatHud611 is ON (the
+        // HudKit branches at each build site). The shipping HUD path (cluster /
+        // flat rows / hard-sweep cooldown) is byte-identical when the flag is OFF.
+        // Sprite-first with a procedural fallback — null art never blanks a widget.
+        // =====================================================================
+
+        /// <summary>WO-611 moveCluster: a VIRTUAL D-PAD (cross/plus) — a steel cross BODY, a dark
+        /// centre HUB with a gold rim, and GOLD directional chevron press-zones on each arm. Same input
+        /// contract as <see cref="BuildControllerCluster"/> (onMove receives the held direction vector on
+        /// every press-state change, zero on release) so it drops straight into HudMoveInput.Set. Revives
+        /// the VirtualDPadLean seam as ONE cross image rather than four discrete round buttons.</summary>
+        public static ControllerHandle BuildVirtualDPad(Transform parent, Vector2 anchor, Action<Vector2> onMove)
+        {
+            const float Arm = 82f;      // half-length of one arm (reference px)
+            const float Th  = 78f;      // arm thickness / hub band
+            float span = Arm * 2f + Th;
+
+            var go = new GameObject("VirtualDPad", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = anchor; rt.anchorMax = anchor;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(span, span);
+            rt.anchoredPosition = Vector2.zero;
+
+            var h = new ControllerHandle { root = go };
+
+            // STEEL CROSS BODY — a vertical + a horizontal bar forming the plus (raycast-off; the
+            // chevron zones own the input).
+            Color steel = new Color(0.28f, 0.30f, 0.35f, 0.96f);
+            Color steelEdge = new Color(0.16f, 0.17f, 0.21f, 1f);
+            void Bar(string name, Vector2 size)
+            {
+                var b = new GameObject(name, typeof(Image));
+                b.transform.SetParent(go.transform, false);
+                var brt = (RectTransform)b.transform;
+                brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 0.5f);
+                brt.sizeDelta = size; brt.anchoredPosition = Vector2.zero;
+                var img = b.GetComponent<Image>();
+                img.color = steel; ApplyRounded(img); img.raycastTarget = false;
+                AddInnerRim(b, steelEdge);
+            }
+            Bar("BarV", new Vector2(Th, span));
+            Bar("BarH", new Vector2(span, Th));
+
+            // CENTRE HUB — a dark disc with a gold rim.
+            var hub = new GameObject("Hub", typeof(Image));
+            hub.transform.SetParent(go.transform, false);
+            var hrt = (RectTransform)hub.transform;
+            hrt.anchorMin = hrt.anchorMax = new Vector2(0.5f, 0.5f);
+            hrt.sizeDelta = new Vector2(Th * 0.72f, Th * 0.72f);
+            hrt.anchoredPosition = Vector2.zero;
+            var hubImg = hub.GetComponent<Image>();
+            hubImg.sprite = CircleSprite; hubImg.type = Image.Type.Simple;
+            hubImg.color = new Color(0.10f, 0.10f, 0.12f, 1f); hubImg.raycastTarget = false;
+            var hubRim = new GameObject("HubRim", typeof(Image));
+            hubRim.transform.SetParent(hub.transform, false);
+            var hubRimRt = (RectTransform)hubRim.transform;
+            hubRimRt.anchorMin = Vector2.zero; hubRimRt.anchorMax = Vector2.one;
+            hubRimRt.offsetMin = new Vector2(-3f, -3f); hubRimRt.offsetMax = new Vector2(3f, 3f);
+            var hubRimImg = hubRim.GetComponent<Image>();
+            hubRimImg.sprite = CircleSprite; hubRimImg.type = Image.Type.Simple;
+            hubRimImg.color = ObsidianTrim; hubRimImg.raycastTarget = false;
+            hubRim.transform.SetAsFirstSibling();   // rim behind the hub face
+
+            void Chevron(string name, Vector2 pos, Vector2 dir)
+            {
+                bool horizontal = Mathf.Abs(dir.x) > 0.5f;
+                var zone = new GameObject(name, typeof(Image), typeof(Button), typeof(UiKitHoldButton));
+                zone.transform.SetParent(go.transform, false);
+                var zrt = (RectTransform)zone.transform;
+                zrt.anchorMin = zrt.anchorMax = new Vector2(0.5f, 0.5f);
+                zrt.sizeDelta = horizontal ? new Vector2(Arm, Th) : new Vector2(Th, Arm);
+                zrt.anchoredPosition = pos;
+                var zimg = zone.GetComponent<Image>();
+                zimg.color = new Color(0f, 0f, 0f, 0f);   // transparent hit area
+                var btn = zone.GetComponent<Button>();
+                btn.transition = Selectable.Transition.None;
+                btn.targetGraphic = zimg;
+                var chev = Label(zone.transform, ChevronGlyph(dir), 0f, 1f, ObsidianTrim,
+                                 ElarionUi.FontHead, TextAlignmentOptions.Center, 0f, 1f, bold: true);
+                chev.raycastTarget = false;
+                var hold = zone.GetComponent<UiKitHoldButton>();
+                hold.onDown = () => { h.Current = dir; onMove?.Invoke(dir); };
+                hold.onUp   = () => { if (h.Current == dir) { h.Current = Vector2.zero; onMove?.Invoke(Vector2.zero); } };
+            }
+            float off = (Arm + Th) * 0.5f;
+            Chevron("Up",    new Vector2(0f,  off), Vector2.up);
+            Chevron("Down",  new Vector2(0f, -off), Vector2.down);
+            Chevron("Left",  new Vector2(-off, 0f), Vector2.left);
+            Chevron("Right", new Vector2( off, 0f), Vector2.right);
+            return h;
+        }
+
+        private static string ChevronGlyph(Vector2 dir)
+        {
+            // ASCII ONLY — the TMP build fonts lack the ▲▼◄► triangle glyphs (WO-611 landmine:
+            // non-ASCII in TMP renders tofu boxes in the player).
+            if (dir == Vector2.up)   return "^";
+            if (dir == Vector2.down) return "v";
+            if (dir == Vector2.left) return "<";
+            return ">";
+        }
+
+        // ── WO-611 ratified palette (frozen mockup v8-spec-freeze) ──────────
+        private static readonly Color C611Edge     = new Color(0.239f, 0.271f, 0.322f, 1f); // #3d4552
+        private static readonly Color C611Gold     = new Color(0.831f, 0.686f, 0.353f, 1f); // #d4af5a
+        private static readonly Color C611GoldDim  = new Color(0.604f, 0.498f, 0.243f, 1f); // #9a7f3e
+        private static readonly Color C611Obsidian = new Color(0.055f, 0.063f, 0.075f, 1f); // #0e1013
+        private static readonly Color C611Gray     = new Color(0.545f, 0.573f, 0.608f, 1f); // #8b929b
+        private static readonly Color C611Amber    = new Color(0.878f, 0.725f, 0.361f, 1f); // #e0b95c
+
+        // ── WO-611 procedural sprites (lazily built once; WebGL failure-safe) ──
+
+        private static Sprite _c611Pill; private static bool _c611PillTried;
+        /// <summary>The attack-pill face: a stadium (radius = half height) with the mockup's radial
+        /// dark-teal fill, 2px gold-dim border, inner 1px gold inset ring and a soft teal outer glow —
+        /// all baked so the pill can never fall back to a white quad.</summary>
+        public static Sprite CombatPillSprite
+        {
+            get
+            {
+                if (!_c611PillTried)
+                {
+                    _c611PillTried = true;
+                    try { _c611Pill = BuildCombatPillSprite(); }
+                    catch (Exception e) { Debug.LogWarning("[ElarionUiKit] WO-611 pill sprite build failed: " + e.Message); _c611Pill = null; }
+                }
+                return _c611Pill;
+            }
+        }
+
+        private static Sprite BuildCombatPillSprite()
+        {
+            const int w = 232, h = 104, glowPx = 8;
+            var tealC = new Color(0.106f, 0.239f, 0.235f, 1f);   // #1b3d3c centre
+            var tealM = new Color(0.063f, 0.133f, 0.153f, 1f);   // #102227 mid
+            var tealE = new Color(0.039f, 0.071f, 0.086f, 1f);   // #0a1216 edge
+            float cx = (w - 1) * 0.5f, cy = (h - 1) * 0.5f;
+            float halfH = (h - 2f * glowPx) * 0.5f;              // stadium radius (= half height)
+            float halfW = (w - 2f * glowPx) * 0.5f;
+            float r = halfH;
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false)
+            { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    float ddx = Mathf.Max(Mathf.Abs(x - cx) - (halfW - r), 0f);
+                    float ddy = y - cy;
+                    float sd = Mathf.Sqrt(ddx * ddx + ddy * ddy) - r;   // signed dist: +outside
+                    Color c;
+                    if (sd <= 0f)
+                    {
+                        float nx = (x - cx) / halfW, ny = (y - cy) / halfH;
+                        float rr = Mathf.Clamp01(Mathf.Sqrt(nx * nx + ny * ny));
+                        c = rr < 0.5f ? Color.Lerp(tealC, tealM, rr * 2f)
+                                      : Color.Lerp(tealM, tealE, (rr - 0.5f) * 2f);
+                        if (sd > -2.5f) c = C611GoldDim;                                   // 2px gold-dim border
+                        else if (sd > -6.5f && sd <= -5.5f) c = Color.Lerp(c, C611Gold, 0.6f); // inner 1px gold ring
+                        c.a = Mathf.Clamp01(-sd + 0.5f);                                   // AA edge
+                    }
+                    else
+                    {
+                        c = tealC;
+                        c.a = 0.30f * Mathf.Clamp01(1f - sd / glowPx);                     // soft teal glow
+                    }
+                    tex.SetPixel(x, y, c);
+                }
+            }
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f));
+        }
+
+        private static Sprite _c611Medallion; private static bool _c611MedallionTried;
+        /// <summary>The Q/W/E/R medallion face: circle with the mockup's radial steel fill
+        /// (#2b323d centre -> #12161c edge) + a baked 2px gold-dim border.</summary>
+        public static Sprite CombatMedallionSprite
+        {
+            get
+            {
+                if (!_c611MedallionTried)
+                {
+                    _c611MedallionTried = true;
+                    try { _c611Medallion = BuildCombatMedallionSprite(); }
+                    catch (Exception e) { Debug.LogWarning("[ElarionUiKit] WO-611 medallion sprite build failed: " + e.Message); _c611Medallion = null; }
+                }
+                return _c611Medallion;
+            }
+        }
+
+        private static Sprite BuildCombatMedallionSprite()
+        {
+            const int size = 96;
+            var inC  = new Color(0.169f, 0.196f, 0.239f, 1f);   // #2b323d
+            var outC = new Color(0.071f, 0.086f, 0.110f, 1f);   // #12161c
+            float r = size * 0.5f - 1f;
+            float cx = (size - 1) * 0.5f, cy = cx;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float d = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+                    float sd = d - r;
+                    Color c;
+                    if (sd <= 0f)
+                    {
+                        c = Color.Lerp(inC, outC, Mathf.Clamp01(d / r));
+                        if (sd > -2.5f) c = C611GoldDim;                 // 2px gold-dim rim
+                        c.a = Mathf.Clamp01(-sd + 0.5f);
+                    }
+                    else c = new Color(0f, 0f, 0f, 0f);
+                    tex.SetPixel(x, y, c);
+                }
+            }
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+        }
+
+        private static Sprite _c611Housing; private static bool _c611HousingTried;
+        /// <summary>The action-bar housing face: rounded (~11px radius) 9-sliced VERTICAL gradient
+        /// #20252d (top) -> #13161c (bottom) — slicing keeps the gradient smooth at any size.</summary>
+        public static Sprite CombatHousingSprite
+        {
+            get
+            {
+                if (!_c611HousingTried)
+                {
+                    _c611HousingTried = true;
+                    try { _c611Housing = BuildCombatHousingSprite(); }
+                    catch (Exception e) { Debug.LogWarning("[ElarionUiKit] WO-611 housing sprite build failed: " + e.Message); _c611Housing = null; }
+                }
+                return _c611Housing;
+            }
+        }
+
+        private static Sprite BuildCombatHousingSprite()
+        {
+            const int size = 48, radius = 11;
+            var top = new Color(0.125f, 0.145f, 0.176f, 1f);    // #20252d
+            var bot = new Color(0.075f, 0.086f, 0.110f, 1f);    // #13161c
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    var c = Color.Lerp(bot, top, y / (float)(size - 1));
+                    c.a = 1f - RoundedRectDistance(x, y, size, size, radius);
+                    tex.SetPixel(x, y, c);
+                }
+            }
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f,
+                                 0, SpriteMeshType.FullRect, new Vector4(radius + 1, radius + 1, radius + 1, radius + 1));
+        }
+
+        /// <summary>WO-611: a HOLLOW rounded-rect ring (border only) — the kit's 9-sliced rounded
+        /// sprite with fillCenter OFF; pixelsPerUnitMultiplier scales the 6px sprite border down to
+        /// <paramref name="thicknessPx"/>. Unlike AddInnerRim (BlinkChrome-gated translucent FILL)
+        /// this is a true ring and never tints the interior. Disabled (never a white quad) if the
+        /// rounded sprite failed to build.</summary>
+        private static Image AddRoundedRing(Transform parent, string name, float inset, Color color, float thicknessPx)
+        {
+            var go = new GameObject(name, typeof(Image));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = new Vector2(inset, inset); rt.offsetMax = new Vector2(-inset, -inset);
+            var img = go.GetComponent<Image>();
+            var rs = RoundedSprite;
+            if (rs != null)
+            {
+                img.sprite = rs;
+                img.type = Image.Type.Sliced;
+                img.fillCenter = false;
+                img.pixelsPerUnitMultiplier = thicknessPx > 0f ? 6f / thicknessPx : 1f;   // sprite border = 6px
+                img.color = color;
+            }
+            else img.enabled = false;   // no sprite -> no ring (cosmetic), never a filled white quad
+            img.raycastTarget = false;
+            return img;
+        }
+
+        /// <summary>WO-611 attack: the oblong stadium ATTACK PILL. Built on the proven
+        /// <see cref="BuildActionSlot"/> (keeps the tap + cooldown contract), then the frame is REPLACED
+        /// by the baked stadium face (radial dark-teal + 2px gold-dim border + inner gold ring + teal
+        /// glow) — never ApplyRounded on the prefab frame (that produced the 07-05 white-quad capture:
+        /// a white-tinted prefab root Image handed the plain white rounded sprite). The energy-sword
+        /// icon tilts ~-16 deg per the mockup. Same <see cref="ActionSlotHandle"/> contract.</summary>
+        public static ActionSlotHandle BuildAttackPill(Transform parent, Vector2 anchorMin, Vector2 anchorMax, Action onTap)
+        {
+            var h = BuildActionSlot(parent, anchorMin, anchorMax, onTap);
+            if (h == null || h.root == null) return h;
+            if (h.frame != null)
+            {
+                var pill = CombatPillSprite;
+                if (pill != null)
+                {
+                    h.frame.sprite = pill;
+                    h.frame.type = Image.Type.Simple;
+                    h.frame.preserveAspect = false;   // the caller's rect IS the stadium proportion
+                    h.frame.color = Color.white;      // colours are baked in the sprite
+                }
+                else
+                {
+                    // Procedural fallback: flat dark-teal rounded quad + gold-dim ring (never white/blank).
+                    h.frame.sprite = null;
+                    h.frame.color = new Color(0.063f, 0.133f, 0.153f, 0.96f);   // #102227
+                    ApplyRounded(h.frame);
+                    AddRoundedRing(h.root.transform, "GoldTrim", 1f, C611GoldDim, 2f);
+                }
+            }
+            if (h.icon != null)
+            {
+                // Owner 2026-07-06 ("fit to frame"): the energy-sword art is horizontal and content-
+                // cropped — seat it flat, aspect-true, slightly inset. The old -16° mockup tilt was
+                // for the square icon_sword fallback and made it overflow the pill (owner capture).
+                h.icon.transform.localRotation = Quaternion.identity;
+                h.icon.transform.localScale = Vector3.one * 0.86f;   // breathing room inside the ring
+                h.icon.preserveAspect = true;
+                h.icon.color = Color.white;
+            }
+            return h;
+        }
+
+        /// <summary>WO-611 ability arc: restyle an action slot as a ROUND GOLD MEDALLION — the baked
+        /// radial-steel circle face (2px gold-dim rim) + an optional small KEY BADGE chip top-left
+        /// ("Q"/"W"/"E"/"R", ASCII). Presentation-only; the slot keeps its tap + icon + count contract.</summary>
+        public static void StyleAsRoundMedallion(ActionSlotHandle slot, string keyBadge = null)
+        {
+            if (slot == null || slot.root == null) return;
+            if (slot.frame != null)
+            {
+                var med = CombatMedallionSprite;
+                if (med != null)
+                {
+                    slot.frame.sprite = med;
+                    slot.frame.type = Image.Type.Simple;
+                    slot.frame.preserveAspect = true;
+                    slot.frame.color = Color.white;   // colours baked in the sprite
+                }
+                else
+                {
+                    // Fallback: plain kit disc tinted steel + gold-dim ring child (never blank).
+                    slot.frame.sprite = CircleSprite;
+                    slot.frame.type = Image.Type.Simple;
+                    slot.frame.color = new Color(0.169f, 0.196f, 0.239f, 0.96f);   // #2b323d
+                    if (slot.frame.sprite == null) ApplyRounded(slot.frame);
+                    var rim = new GameObject("GoldRim", typeof(Image));
+                    rim.transform.SetParent(slot.root.transform, false);
+                    var rimRt = (RectTransform)rim.transform;
+                    rimRt.anchorMin = Vector2.zero; rimRt.anchorMax = Vector2.one;
+                    rimRt.offsetMin = Vector2.zero; rimRt.offsetMax = Vector2.zero;
+                    var rimImg = rim.GetComponent<Image>();
+                    if (RingSprite != null) { rimImg.sprite = RingSprite; rimImg.type = Image.Type.Simple; rimImg.color = C611GoldDim; }
+                    else rimImg.enabled = false;
+                    rimImg.raycastTarget = false;
+                }
+            }
+            if (!string.IsNullOrEmpty(keyBadge))
+            {
+                // Small key badge chip, top-left of the medallion (mockup).
+                var badge = new GameObject("KeyBadge", typeof(Image));
+                badge.transform.SetParent(slot.root.transform, false);
+                var brt = (RectTransform)badge.transform;
+                brt.anchorMin = new Vector2(-0.06f, 0.68f); brt.anchorMax = new Vector2(0.34f, 1.08f);
+                brt.offsetMin = Vector2.zero; brt.offsetMax = Vector2.zero;
+                var bimg = badge.GetComponent<Image>();
+                bimg.sprite = CircleSprite; bimg.type = Image.Type.Simple;
+                bimg.color = new Color(C611Obsidian.r, C611Obsidian.g, C611Obsidian.b, 0.95f);
+                bimg.raycastTarget = false;
+                if (bimg.sprite == null) ApplyRounded(bimg);   // rounded fallback, never a bare quad
+                var bring = new GameObject("Ring", typeof(Image));
+                bring.transform.SetParent(badge.transform, false);
+                var bringRt = (RectTransform)bring.transform;
+                bringRt.anchorMin = Vector2.zero; bringRt.anchorMax = Vector2.one;
+                bringRt.offsetMin = Vector2.zero; bringRt.offsetMax = Vector2.zero;
+                var bringImg = bring.GetComponent<Image>();
+                if (RingSprite != null) { bringImg.sprite = RingSprite; bringImg.type = Image.Type.Simple; bringImg.color = C611GoldDim; }
+                else bringImg.enabled = false;
+                bringImg.raycastTarget = false;
+                var keyLabel = Label(badge.transform, keyBadge, 0f, 1f, C611Gold,
+                                     ElarionUi.FontMicro, TextAlignmentOptions.Center, 0f, 1f, bold: true);
+                keyLabel.raycastTarget = false;
+            }
+        }
+
+        /// <summary>WO-611 SOFT under-glow cooldown driver (owner pick over a hard clock sweep). Set by
+        /// the HUD from the ability's cooldown state: a soft GOLD radial glow that is brightest when the
+        /// cooldown starts and DEPLETES to nothing as it completes.</summary>
+        public sealed class SoftGlowCooldown
+        {
+            internal Image glow;
+            /// <summary>Drive the glow from cooldown state (remaining/total): alpha fades 0.55 -> 0.</summary>
+            public void Set(float remaining, float total)
+            {
+                if (glow == null) return;
+                float frac = (remaining > 0f && total > 0f) ? Mathf.Clamp01(remaining / total) : 0f;
+                var c = glow.color; c.a = 0.55f * frac; glow.color = c;
+                glow.enabled = frac > 0.001f;
+            }
+        }
+
+        /// <summary>WO-611: add a soft depleting gold under-glow to an ability medallion and SUPPRESS the
+        /// slot's hard radial clock-sweep. Returns the driver the HUD updates each refresh.</summary>
+        public static SoftGlowCooldown AddSoftCooldownGlow(ActionSlotHandle slot)
+        {
+            var g = new SoftGlowCooldown();
+            if (slot == null || slot.root == null) return g;
+            if (slot.cdRing != null) { var cc = slot.cdRing.color; cc.a = 0f; slot.cdRing.color = cc; }   // hide hard sweep
+            var go = new GameObject("SoftCdGlow", typeof(Image));
+            go.transform.SetParent(slot.root.transform, false);
+            var rt = (RectTransform)go.transform;
+            // UNDER-glow (mockup): the gold radial glow rises FROM THE BOTTOM of the medallion,
+            // so the rect is bottom-biased rather than a concentric halo.
+            rt.anchorMin = new Vector2(-0.12f, -0.30f); rt.anchorMax = new Vector2(1.12f, 0.62f);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var img = go.GetComponent<Image>();
+            img.sprite = CircleSprite; img.type = Image.Type.Simple;
+            img.color = new Color(C611Gold.r, C611Gold.g, C611Gold.b, 0f);
+            img.raycastTarget = false; img.enabled = false;
+            go.transform.SetAsFirstSibling();   // glow behind the medallion
+            g.glow = img;
+            return g;
+        }
+
+        /// <summary>WO-611 actionBar housing (mockup spec): a rounded (~11px) obsidian panel — vertical
+        /// gradient #20252d -> #13161c — with a 1px #3d4552 EDGE border and an INNER GOLD RING
+        /// (rgba(212,175,90,.28), ~3px inside). Built EXPLICITLY: AddInnerRim is a BlinkChrome-gated
+        /// translucent FILL (not a ring) and ObsidianFill alone read tan/washed against the Blink slot
+        /// art in the 07-05 capture. Parented as the first child so the slots draw on top.</summary>
+        public static GameObject BuildActionBarHousing(Transform parent, Vector2 anchorMin, Vector2 anchorMax)
+        {
+            var go = new GameObject("ActionBarHousing", typeof(Image));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var img = go.GetComponent<Image>();
+            var grad = CombatHousingSprite;
+            if (grad != null)
+            {
+                img.sprite = grad;
+                img.type = Image.Type.Sliced;
+                img.color = Color.white;   // gradient baked in the sprite
+            }
+            else
+            {
+                img.color = new Color(0.100f, 0.115f, 0.143f, 0.98f);   // flat gradient midpoint fallback
+                ApplyRounded(img);
+            }
+            img.raycastTarget = false;
+            AddRoundedRing(go.transform, "Edge", 0f, C611Edge, 1f);                                    // 1px edge border
+            AddRoundedRing(go.transform, "GoldRing", 3f, new Color(C611Gold.r, C611Gold.g, C611Gold.b, 0.28f), 3f); // inner gold ring
+            go.transform.SetAsFirstSibling();
+            return go;
+        }
+
+        /// <summary>WO-611: restyle a HOUSED action slot (hot-swap bar) as an obsidian steel cell —
+        /// replaces the tan/khaki Blink Action_Bar_Slot art that dominated the 07-05 capture with the
+        /// mockup's dark steel cell (#1a1f27) + 1px #3d4552 edge. Presentation-only.</summary>
+        public static void StyleAsObsidianCell(ActionSlotHandle slot)
+        {
+            if (slot == null || slot.root == null || slot.frame == null) return;
+            slot.frame.sprite = null;
+            slot.frame.color = new Color(0.102f, 0.122f, 0.153f, 0.97f);   // #1a1f27 steel cell
+            ApplyRounded(slot.frame);            // rounded when available; tinted quad otherwise (never blank)
+            slot.frame.type = slot.frame.sprite != null ? Image.Type.Sliced : Image.Type.Simple;
+            slot.frame.fillCenter = true;
+            AddRoundedRing(slot.root.transform, "Edge", 0f, C611Edge, 1f);
+        }
+
+        /// <summary>WO-611 target lock badge — a bordered CHIP (mockup spec): dark obsidian fill, 1px
+        /// state-coloured border, the crosshair art (hud/crosshair_1|2|3, imported this branch) on the
+        /// left and the uppercase state WORD on the right. States: 0 unlocked (gray #8b929b), 1 locking
+        /// (amber #e0b95c, PULSE), 2 locked (gold #d4af5a). Driven by <see cref="SetState"/> bound to
+        /// TargetModel.HasTarget/Locked. ASCII-only text (TMP glyph landmine).</summary>
+        public sealed class LockCrosshairHandle : MonoBehaviour
+        {
+            internal Image icon;
+            internal Image border;
+            internal TMP_Text label;
+            private Sprite _s1, _s2, _s3;
+            private int _state = -1;
+            private bool _pulse;
+
+            internal void Init(Sprite s1, Sprite s2, Sprite s3) { _s1 = s1; _s2 = s2; _s3 = s3; }
+
+            /// <summary>0 = unlocked (gray), 1 = acquiring/locking (amber pulse), 2 = locked (gold).</summary>
+            public void SetState(int state)
+            {
+                if (state == _state) return;
+                _state = state;
+                _pulse = state == 1;
+                Color c = state >= 2 ? C611Gold : state == 1 ? C611Amber : C611Gray;
+                Sprite s = state >= 2 ? _s3 : state == 1 ? _s2 : _s1;
+                if (icon != null)
+                {
+                    if (s != null) { icon.sprite = s; icon.enabled = true; }
+                    icon.color = state == 0 ? new Color(c.r, c.g, c.b, 0.75f) : c;
+                }
+                if (label != null)
+                {
+                    label.text = state >= 2 ? "LOCKED" : state == 1 ? "LOCKING" : "UNLOCKED";
+                    label.color = c;
+                    // Capture 9406: "LOCKING" wrapped to two lines and spilled out of the chip —
+                    // the badge label must fit-or-ellipsize, never wrap (kit fit, floor 12 for
+                    // this deliberately-small chip word; state word is redundant with the color+
+                    // crosshair shape, so a squeezed word stays readable enough).
+                    FitSingleLine(label, 12f);
+                }
+                if (border != null)
+                    border.color = state >= 2 ? c : new Color(c.r, c.g, c.b, 0.8f);
+            }
+
+            private void Update()
+            {
+                if (!_pulse) return;
+                float a = 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(Time.unscaledTime * 5f));
+                if (icon != null)   { var c = icon.color;   c.a = a; icon.color = c; }
+                if (label != null)  { var c = label.color;  c.a = a; label.color = c; }
+                if (border != null) { var c = border.color; c.a = a; border.color = c; }
+            }
+        }
+
+        /// <summary>WO-611: build the 3-state lock badge CHIP. Resolves hud/crosshair_1|2|3 (imported by
+        /// BlinkUiImporter this branch); falls back to the kit ring/circle vector when the frames are
+        /// absent so the badge never blanks. Returns the handle whose
+        /// <see cref="LockCrosshairHandle.SetState"/> the HUD drives.</summary>
+        public static LockCrosshairHandle BuildLockCrosshairBadge(Transform parent, Vector2 anchorMin, Vector2 anchorMax)
+        {
+            var go = new GameObject("LockBadge", typeof(Image));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+
+            // Chip fill — dark obsidian, rounded.
+            var fill = go.GetComponent<Image>();
+            fill.color = new Color(C611Obsidian.r, C611Obsidian.g, C611Obsidian.b, 0.92f);
+            ApplyRounded(fill);
+            fill.raycastTarget = false;
+
+            // 1px state-coloured border ring.
+            var border = AddRoundedRing(go.transform, "Border", 0f, C611Gray, 1f);
+
+            // Crosshair icon (left) — sprite-first, vector ring fallback (never blank).
+            var s1 = RpgUiCatalog.Get(RpgUiCatalog.RoleHud, "crosshair_1");
+            var s2 = RpgUiCatalog.Get(RpgUiCatalog.RoleHud, "crosshair_2");
+            var s3 = RpgUiCatalog.Get(RpgUiCatalog.RoleHud, "crosshair_3");
+            var vector = RingSprite != null ? RingSprite : CircleSprite;
+            var iconGo = new GameObject("Crosshair", typeof(Image));
+            iconGo.transform.SetParent(go.transform, false);
+            var irt = (RectTransform)iconGo.transform;
+            irt.anchorMin = new Vector2(0.03f, 0.14f); irt.anchorMax = new Vector2(0.28f, 0.86f);
+            irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
+            var iconImg = iconGo.GetComponent<Image>();
+            iconImg.preserveAspect = true; iconImg.raycastTarget = false;
+            if (s1 == null && vector != null) { iconImg.sprite = vector; iconImg.type = Image.Type.Simple; }
+            else if (s1 == null && vector == null) iconImg.enabled = false;
+
+            // Uppercase state word (right) — ASCII only.
+            var word = Label(go.transform, "UNLOCKED", 0f, 1f, C611Gray,
+                             ElarionUi.FontMicro, TextAlignmentOptions.MidlineLeft, 0.32f, 0.97f, bold: true);
+            word.raycastTarget = false;
+
+            var h = go.AddComponent<LockCrosshairHandle>();
+            h.icon = iconImg;
+            h.border = border;
+            h.label = word;
+            h.Init(s1 != null ? s1 : vector, s2 != null ? s2 : vector, s3 != null ? s3 : vector);
+            h.SetState(0);
+            return h;
         }
     }
 }

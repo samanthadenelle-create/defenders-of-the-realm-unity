@@ -109,15 +109,17 @@ namespace DeNelle.Village.Hud
             return bmc != null && bmc.IsActive;
         }
 
-        /// <summary>WO-579: village wave in its ACTIVE (fighting) phase — Battle context. The calm
-        /// prepare-phase Countdown stays Town (its top-left clock shows the next-wave timer), so only the
-        /// Active phase counts as combat here (matches BattleHudVisibilityManager.IsWaveFighting). Was
-        /// Countdown||Active; narrowed so arming a wave's countdown no longer hides the Town timer.</summary>
+        /// <summary>Owner ruling 2026-07-06 (reverses the WO-579 narrowing): the wave COUNTDOWN
+        /// counts as active battle — "active battle takes over on countdown so that ranged attacks
+        /// can keep enemy further away." Countdown||Active => Battle context, which flips the
+        /// combat HUD + draws gear at countdown start and unifies the carry-state authority
+        /// (EquipmentController's auto-mirror already counted Countdown; the HUD now agrees).</summary>
         private static bool IsWaveActive()
         {
             var wm = WaveManager.Instance;
             if (wm == null) return false;
-            return wm.Phase == DeNelle.Village.WavePhase.Active;
+            return wm.Phase == DeNelle.Village.WavePhase.Active
+                || wm.Phase == DeNelle.Village.WavePhase.Countdown;
         }
 
         /// <summary>

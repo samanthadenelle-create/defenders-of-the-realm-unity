@@ -207,6 +207,7 @@ namespace DeNelle.Onboarding
                 0.94f, 1.00f, ElarionUi.Gold, ElarionUi.FontLabel,
                 TextAlignmentOptions.Center, 0.02f, 0.98f, spacing: 1f, bold: true);
             subtitle.raycastTarget = false;
+            FitLine(subtitle);
 
             // ── The three stage containers (fraction-anchored inside the body well).
             // Owner F8 2026-07-03: lifted the stage floor from 0.020 -> 0.145 so the
@@ -232,6 +233,7 @@ namespace DeNelle.Onboarding
             _confirmLabel = _confirmButton != null
                 ? _confirmButton.GetComponentInChildren<TextMeshProUGUI>(true)
                 : null;
+            FitLine(_confirmLabel);   // CTA label may never spill out of the button
 
             // Open ON the playable hero so the screen starts on the selectable,
             // pre-selected Grom (not a locked class).
@@ -283,6 +285,7 @@ namespace DeNelle.Onboarding
                 0.955f, 1.00f, ElarionUi.Gilt, ElarionUi.FontMicro,
                 TextAlignmentOptions.Center, 0f, 1f, spacing: 2f, bold: true);
             head.raycastTarget = false;
+            FitLine(head);
 
             int n = HeroCatalog.Heroes.Length;
             _classButtonFaces = new Image[n];
@@ -312,6 +315,8 @@ namespace DeNelle.Onboarding
                              : ElarionUiKit.ObsidianButtonColor.Gray,
                     btnMin, btnMax, () => PopulateStage(captured));
                 _classButtonFaces[i] = btn != null ? btn.image : null;
+                if (btn != null)
+                    FitLine(btn.GetComponentInChildren<TextMeshProUGUI>(true));
 
                 if (!playable)
                 {
@@ -321,6 +326,7 @@ namespace DeNelle.Onboarding
                         TextAlignmentOptions.Center, 0.05f, 0.95f);
                     tag.fontStyle = FontStyles.Italic;
                     tag.raycastTarget = false;
+                    FitLine(tag);
                 }
             }
         }
@@ -404,12 +410,14 @@ namespace DeNelle.Onboarding
                     0.46f, 0.60f, ElarionUi.Parchment, ElarionUi.FontHead,
                     TextAlignmentOptions.Center, 0f, 1f, spacing: 3f, bold: true);
                 locked.raycastTarget = false;
+                FitLine(locked);
 
                 var soon = ElarionUiKit.Label(scrim.transform, "Coming Soon",
                     0.38f, 0.46f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
                     TextAlignmentOptions.Center, 0f, 1f);
                 soon.fontStyle = FontStyles.Italic;
                 soon.raycastTarget = false;
+                FitLine(soon);
             }
 
             // Name + role under the portrait. Owner F8 2026-07-03: the playable hero's
@@ -418,11 +426,13 @@ namespace DeNelle.Onboarding
                 0.115f, 0.205f, playable ? Color.white : ElarionUi.ParchmentDim,
                 ElarionUi.FontTitle, TextAlignmentOptions.Center, 0.02f, 0.98f, spacing: 1f, bold: true);
             nameLabel.raycastTarget = false;
+            FitLine(nameLabel);
 
             var roleLabel = ElarionUiKit.Label(_stageCenter, CanonStrings.Locale(info.RoleKey),
                 0.035f, 0.115f, ElarionUi.Gold, ElarionUi.FontLabel,
                 TextAlignmentOptions.Center, 0.02f, 0.98f, spacing: 1.5f, bold: true);
             roleLabel.raycastTarget = false;
+            FitLine(roleLabel);
         }
 
         /// <summary>
@@ -438,6 +448,7 @@ namespace DeNelle.Onboarding
                 TextAlignmentOptions.TopLeft, 0.02f, 0.98f);
             blurb.textWrappingMode = TextWrappingModes.Normal;
             blurb.raycastTarget = false;
+            FitBlock(blurb);
 
             // — STATS — (pip rows; uGUI image pips, no unicode glyphs in TMP)
             SectionHead(_stageRight, "STATS", 0.705f, 0.750f);
@@ -451,11 +462,13 @@ namespace DeNelle.Onboarding
                 0.405f, 0.458f, ElarionUi.Gold, ElarionUi.FontBody,
                 TextAlignmentOptions.Left, 0.02f, 0.98f, bold: true);
             sigName.raycastTarget = false;
+            FitLine(sigName);
             var sigDesc = ElarionUiKit.Label(_stageRight, info.AbilityDesc,
                 0.330f, 0.403f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
                 TextAlignmentOptions.TopLeft, 0.02f, 0.98f);
             sigDesc.textWrappingMode = TextWrappingModes.Normal;
             sigDesc.raycastTarget = false;
+            FitBlock(sigDesc);
 
             // — PRIMARY SKILLS — the hero's Q/F/E/R kit (mirrored from abilities.json
             // via HeroCatalog). A labelled placeholder shows for a hero whose kit is
@@ -481,6 +494,7 @@ namespace DeNelle.Onboarding
                     TextAlignmentOptions.TopLeft, 0.02f, 0.98f);
                 soon.fontStyle = FontStyles.Italic;
                 soon.raycastTarget = false;
+                FitBlock(soon);
             }
         }
 
@@ -491,6 +505,7 @@ namespace DeNelle.Onboarding
                 ElarionUi.Gilt, ElarionUi.FontMicro,
                 TextAlignmentOptions.Left, 0.02f, 0.98f, spacing: 2f, bold: true);
             head.raycastTarget = false;
+            FitLine(head);
 
             var rule = ElarionUiKit.AddImage(parent, "Rule", new Vector2(0.02f, y0),
                 new Vector2(0.98f, y0 + 0.004f),
@@ -509,6 +524,7 @@ namespace DeNelle.Onboarding
                 ElarionUi.Gold, ElarionUi.FontMicro,
                 TextAlignmentOptions.Left, 0.02f, 0.30f, spacing: 1f, bold: true);
             key.raycastTarget = false;
+            FitLine(key);
 
             value = Mathf.Clamp(value, 0, 5);
             const float pipX0 = 0.34f;
@@ -541,11 +557,13 @@ namespace DeNelle.Onboarding
                 ElarionUi.Ink, ElarionUi.FontMicro,
                 TextAlignmentOptions.Center, 0f, 1f, bold: true);
             badgeLbl.raycastTarget = false;
+            FitLine(badgeLbl);
 
             var nameLbl = ElarionUiKit.Label(parent, name, y0, y1,
                 ElarionUi.Parchment, ElarionUi.FontLabel,
                 TextAlignmentOptions.Left, 0.15f, 0.98f, bold: true);
             nameLbl.raycastTarget = false;
+            FitLine(nameLbl);
         }
 
         // =====================================================================
@@ -663,6 +681,7 @@ namespace DeNelle.Onboarding
             var glyph = ElarionUiKit.Label(host.transform, info.Glyph, 0f, 1f,
                 info.Accent, 96, TextAlignmentOptions.Center, 0f, 1f, bold: true);
             glyph.raycastTarget = false;
+            FitLine(glyph);
         }
 
         // =====================================================================
@@ -699,6 +718,44 @@ namespace DeNelle.Onboarding
         {
             var s = CanonStrings.Locale(key);
             return string.IsNullOrEmpty(s) ? fallback : s;
+        }
+
+        // ── Text-fit guards (owner F8 2026-07-06: "screen is writing overtop of
+        // itself" at a small window). Every label on this screen lives in a
+        // fraction-anchored band; the kit's Label() gives it a FIXED font size with
+        // TMP's default Overflow mode, so at small window heights the text spills
+        // out of its band and paints over the section below. These two helpers make
+        // overflow structurally impossible: TMP autosize shrinks the text to fit
+        // its band (down to a legible floor), and Ellipsis truncates anything that
+        // still cannot fit — text can never escape its rect again.
+
+        /// <summary>
+        /// Fits a SINGLE-LINE label inside its band: no wrapping, autosize between a
+        /// legible floor and the authored size, Ellipsis if it still cannot fit.
+        /// </summary>
+        private static void FitLine(TextMeshProUGUI t)
+        {
+            if (t == null) return;
+            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.overflowMode = TextOverflowModes.Ellipsis;
+            t.enableAutoSizing = true;
+            t.fontSizeMax = t.fontSize;
+            t.fontSizeMin = Mathf.Clamp(t.fontSize * 0.5f, 8f, t.fontSize);
+        }
+
+        /// <summary>
+        /// Fits a MULTI-LINE block (lore / ability copy) inside its band: wrapped,
+        /// autosize between a legible floor and the authored size, Ellipsis on the
+        /// last visible line if the copy still cannot fit.
+        /// </summary>
+        private static void FitBlock(TextMeshProUGUI t)
+        {
+            if (t == null) return;
+            t.textWrappingMode = TextWrappingModes.Normal;
+            t.overflowMode = TextOverflowModes.Ellipsis;
+            t.enableAutoSizing = true;
+            t.fontSizeMax = t.fontSize;
+            t.fontSizeMin = Mathf.Clamp(t.fontSize * 0.5f, 8f, t.fontSize);
         }
 
         /// <summary>A transparent fraction-anchored container RectTransform.</summary>

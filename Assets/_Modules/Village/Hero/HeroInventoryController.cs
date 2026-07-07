@@ -118,6 +118,18 @@ namespace DeNelle.Village
             return Instance;
         }
 
+        // Owner 07-06 "Clicking bag doesnt do anything" (RCA log-proven): the event chain's only
+        // listener, HeroEquipHud, is scene-whitelisted and never spawns in Main_Castle_Overworld —
+        // both Bag events fired into ZERO subscribers. Register a scene-INDEPENDENT PanelRouter
+        // opener at boot so the kit Bag button routes reflection-free through Core, with no scene
+        // whitelist to keep in sync. Lazy: nothing spawns until the first real open.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void RegisterPanelOpener()
+        {
+            DeNelle.Core.UI.PanelRouter.Register(DeNelle.Core.UI.PanelId.Inventory,
+                () => EnsureExists().Open());
+        }
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(this); return; }

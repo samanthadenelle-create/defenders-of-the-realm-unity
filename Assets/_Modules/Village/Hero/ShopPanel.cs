@@ -202,6 +202,7 @@ namespace DeNelle.Village.Hero
             t.color = ElarionUi.ParchmentDim;
             t.alignment = TMPro.TextAlignmentOptions.Center;
             t.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(t);   // authored empty-lines fit the row
         }
 
         private void RenderDetails()
@@ -324,7 +325,9 @@ namespace DeNelle.Village.Hero
             _contentRoot = new GameObject("Content", typeof(RectTransform));
             _contentRoot.transform.SetParent(bodyHost, false);
             var cr = _contentRoot.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0.02f, 0.13f);
+            // Eyes-sweep 2026-07-06 rule 2: the list must end ABOVE the shared bottom-centre
+            // Close band (SeatSharedCloseInside seats a fixed 360x120 box there) — was 0.13.
+            cr.anchorMin = new Vector2(0.02f, 0.165f);
             cr.anchorMax = new Vector2(0.62f, 0.71f);
             cr.offsetMin = Vector2.zero;
             cr.offsetMax = Vector2.zero;
@@ -332,8 +335,11 @@ namespace DeNelle.Village.Hero
             BuildFilterBar(bodyHost);
             BuildDetailsPane(bodyHost);
 
+            // Purchase moved OFF the bottom-centre (0.34–0.60 straddled the shared Close's
+            // 360px band at centre-x) to the bottom-LEFT, under the list column — x-disjoint
+            // from both the Close (centre) and the Status strip (right).
             var purchaseBtn = ElarionUiKit.ButtonPack(bodyHost, "Purchase", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.34f, 0.03f), new Vector2(0.60f, 0.105f),
+                new Vector2(0.04f, 0.03f), new Vector2(0.30f, 0.105f),
                 () => { if (_vm != null) { if (_vm.Mode == ShopMode.Sell) _vm.Sell(); else _vm.Buy(); } },
                 packSpriteName: DeNelle.Core.FeatureFlags.BlinkChrome ? RpgUiCatalog.ButtonConfirm : RpgUiCatalog.ButtonGold);
             _actionLabel = purchaseBtn != null ? purchaseBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
@@ -360,6 +366,7 @@ namespace DeNelle.Village.Hero
             _statusText.color = ElarionUi.ParchmentDim;
             _statusText.alignment = TMPro.TextAlignmentOptions.Center;
             _statusText.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(_statusText);   // status copy fits its strip, never spills over Close
         }
 
         private TMPro.TextMeshProUGUI _headerLabel;
@@ -384,10 +391,12 @@ namespace DeNelle.Village.Hero
 
         private void CreateFilterButton(Transform parent, string label, Vector2 anchorX, GearKind kind)
         {
-            ElarionUiKit.ButtonPack(parent, label, ElarionUiKit.ButtonKind.Quiet,
+            var fBtn = ElarionUiKit.ButtonPack(parent, label, ElarionUiKit.ButtonKind.Quiet,
                 new Vector2(anchorX.x, 0.05f), new Vector2(anchorX.y, 0.95f),
                 () => _vm?.SetFilter(kind),
                 packSpriteName: RpgUiCatalog.ButtonFrame);
+            var fLbl = fBtn != null ? fBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
+            if (fLbl != null) ElarionUiKit.FitSingleLine(fLbl);   // filter chips never wrap mid-word
         }
 
         private void HighlightFilter()
@@ -413,7 +422,8 @@ namespace DeNelle.Village.Hero
             var pane = new GameObject("DetailsPane", typeof(RectTransform));
             pane.transform.SetParent(panel, false);
             var pr = pane.GetComponent<RectTransform>();
-            pr.anchorMin = new Vector2(0.63f, 0.12f);
+            // Bottom raised 0.12 -> 0.165: the pane ends above the shared Close band (rule 2).
+            pr.anchorMin = new Vector2(0.63f, 0.165f);
             pr.anchorMax = new Vector2(0.985f, 0.76f);
             pr.offsetMin = Vector2.zero;
             pr.offsetMax = Vector2.zero;
@@ -445,22 +455,30 @@ namespace DeNelle.Village.Hero
             _detailsIcon.raycastTarget = false;
             _detailsIcon.enabled = false;
 
+            // Eyes-sweep 2026-07-06: every details label fits its OWN band (§1.14 NoWrap+ellipsis)
+            // so long names/costs/stats never paint over each other or the description below.
             _detailsName = ElarionUiKit.Label(frameC.transform, "Select an item", 0.285f, 0.375f,
                 ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.20f, 0.80f, bold: true);
             _detailsName.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(_detailsName, 0f, ElarionUi.FontBody);
 
             _detailsCost = ElarionUiKit.Label(frameC.transform, "", 0.245f, 0.29f,
                 ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.20f, 0.80f, bold: true);
             _detailsCost.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(_detailsCost, 0f, ElarionUi.FontLabel);
 
             _detailsStats = ElarionUiKit.Label(frameC.transform, "", 0.115f, 0.235f,
                 ElarionUi.Affordable, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.20f, 0.80f, bold: true);
             _detailsStats.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(_detailsStats, 0f, ElarionUi.FontLabel);
 
-            _detailsDesc = ElarionUiKit.Label(pane.transform, "Tap an item to inspect it.", 0.02f, 0.31f,
+            // Desc top pulled 0.31 -> 0.26: the stats band (frameC 0.115–0.235 = pane ~0.274–0.373)
+            // used to share pane-space with the desc top. FitBlock truncates inside the band.
+            _detailsDesc = ElarionUiKit.Label(pane.transform, "Tap an item to inspect it.", 0.02f, 0.26f,
                 ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Top, 0.06f, 0.94f);
             _detailsDesc.textWrappingMode = TMPro.TextWrappingModes.Normal;
             _detailsDesc.raycastTarget = false;
+            ElarionUiKit.FitBlock(_detailsDesc, 0f, ElarionUi.FontLabel);
         }
 
         private void CreateEconomyReadout(Transform parent)
@@ -468,8 +486,10 @@ namespace DeNelle.Village.Hero
             var go = new GameObject("EcoReadout", typeof(TMPro.TextMeshProUGUI));
             go.transform.SetParent(parent, false);
             var r = go.GetComponent<RectTransform>();
-            r.anchorMin = new Vector2(0.02f, 0.82f);
-            r.anchorMax = new Vector2(0.98f, 0.87f);
+            // Eyes-sweep 2026-07-06: the readout sat at 0.82–0.87 while the BUY/EQUIP/SELL tab bar
+            // spans 0.78–0.86 — the tabs occluded the resource header. Own disjoint band above the tabs.
+            r.anchorMin = new Vector2(0.02f, 0.875f);
+            r.anchorMax = new Vector2(0.98f, 0.93f);
             r.offsetMin = Vector2.zero;
             r.offsetMax = Vector2.zero;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
@@ -478,6 +498,7 @@ namespace DeNelle.Village.Hero
             t.color = ElarionUi.Gilt;
             t.alignment = TMPro.TextAlignmentOptions.Center;
             t.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(t);   // long Gold/Wood/Iron/Food/Crystals line never spills the band
             _ecoText = t;
         }
 
@@ -494,6 +515,7 @@ namespace DeNelle.Village.Hero
                 tab.outlineColor = new Color32(20, 12, 4, 235);
                 tab.outlineWidth = 0.22f;
                 tab.transform.SetAsLastSibling();
+                ElarionUiKit.FitSingleLine(tab);   // BUY/EQUIP/SELL never clip mid-glyph or spill the tab
             }
         }
 
@@ -663,18 +685,29 @@ namespace DeNelle.Village.Hero
                 }
             }
 
+            // Eyes-sweep 2026-07-06: name + price each get a DISJOINT band and fit-or-ellipsize
+            // (§1.14 NoWrap+ellipsis) — long names used to wrap onto neighbouring rows so every
+            // item name painted onto the next ("Apprentice Wand / Arcane Heart ... illegible").
             float nameX0 = isSell ? 0.04f : 0.20f;
-            ElarionUiKit.Label(row.transform, item.Name, 0.15f, 0.85f, ElarionUi.Parchment,
-                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, nameX0, isSell ? 0.55f : 0.5f);
+            float nameX1 = isSell ? 0.52f : 0.48f;
+            var nameLbl = ElarionUiKit.Label(row.transform, item.Name, 0.15f, 0.85f, ElarionUi.Parchment,
+                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, nameX0, nameX1);
+            ElarionUiKit.FitSingleLine(nameLbl, 0f, ElarionUi.FontBody);
 
-            // Affordability colour comes from the VM (item.Affordable) — the View only maps bool->colour.
+            // COLORBLIND CANON (owner is red/green colorblind — meaning is NEVER hue-only).
+            // The old encoding here was green(ElarionUi.Affordable) vs red(ElarionUi.Danger)
+            // price hue ALONE. Now: affordable = normal parchment price; unaffordable =
+            // luminance-DIMMED price + an ASCII bracket marker "[needs N]" (mirrors the
+            // PartyShop "[Lv 6]" lock cue — shape + luminance carry the meaning, not hue).
             string priceText = isSell ? "+" + PriceString(item) : PriceString(item);
-            Color priceColor = isSell ? ElarionUi.Affordable
-                             : (item.Affordable ? ElarionUi.Affordable : ElarionUi.Danger);
-            float px0 = isSell ? 0.55f : 0.5f;
-            float px1 = 0.72f;
-            ElarionUiKit.Label(row.transform, priceText, 0.15f, 0.85f, priceColor,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, px0, px1, bold: true);
+            bool canAfford = isSell || item.Price <= 0 || item.Affordable;
+            if (!canAfford) priceText += "  [needs " + item.Price + "]";
+            Color priceColor = canAfford ? ElarionUi.Parchment : ElarionUi.ParchmentDim;
+            float px0 = isSell ? 0.54f : 0.50f;
+            float px1 = 0.97f;
+            var priceLbl = ElarionUiKit.Label(row.transform, priceText, 0.15f, 0.85f, priceColor,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, px0, px1, bold: canAfford);
+            ElarionUiKit.FitSingleLine(priceLbl, 0f, ElarionUi.FontLabel);
         }
 
         // Render the price text from the item's Price (the VM denominates everything in gold for
@@ -704,6 +737,7 @@ namespace DeNelle.Village.Hero
             t.color = ElarionUi.ParchmentDim;
             t.alignment = TMPro.TextAlignmentOptions.Left;
             t.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(t);   // "Current: ..." header line fits its row
         }
 
         private void CreateEquipRow(Transform parent, ItemVM item)
@@ -717,8 +751,9 @@ namespace DeNelle.Village.Hero
             DressRowPlate(rowImg);
             _rowPlates.Add((item.Id, rowImg));
 
-            ElarionUiKit.Label(row.transform, item.Name, 0.15f, 0.85f, ElarionUi.Parchment,
+            var eqName = ElarionUiKit.Label(row.transform, item.Name, 0.15f, 0.85f, ElarionUi.Parchment,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.04f, 0.62f);
+            ElarionUiKit.FitSingleLine(eqName, 0f, ElarionUi.FontLabel);   // never wraps under the EQUIP button
 
             string id = item.Id;
             ElarionUiKit.ButtonPack(row.transform, "EQUIP", ElarionUiKit.ButtonKind.Gold,

@@ -308,6 +308,10 @@ namespace DeNelle.Village.Hero
                 medallionIcon: "sword");
             var panel = chrome.content.transform;
             _headerLabel = chrome.title;
+            // flag_06 (owner F8 2026-07-06): "The Forge" title clipped mid-glyph at her window size.
+            // Fit-or-ellipsize the shared title inside its band (auto-size down to the FontLabel
+            // rung, never below — §1.14 kit text-fit).
+            ElarionUiKit.FitSingleLine(_headerLabel, ElarionUi.FontLabel, ElarionUi.FontTitle);
 
             // WO-582 (Blink frame zone-fit): fit ALL content into the frame's BODY drop-zone (the
             // templated inner well) instead of floating over the whole panel rect — this stops the
@@ -328,6 +332,7 @@ namespace DeNelle.Village.Hero
             _walletText.color = ElarionUi.Gilt;
             _walletText.alignment = TMPro.TextAlignmentOptions.Right;
             _walletText.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(_walletText);   // flag_06: big wallets never spill the band
 
             // TOP-LEFT party-member selector bar (spec point 1).
             _partyBar = new GameObject("PartyBar", typeof(RectTransform));
@@ -348,6 +353,7 @@ namespace DeNelle.Village.Hero
             _memberLabel.fontStyle = TMPro.FontStyles.Bold;
             _memberLabel.alignment = TMPro.TextAlignmentOptions.Left;
             _memberLabel.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(_memberLabel);   // flag_06: "Name - class (Lv N)" never clips
 
             // BUY / SELL tabs (both on the same screen - spec point 4).
             _tabBar = new GameObject("TabBar", typeof(RectTransform));
@@ -383,7 +389,9 @@ namespace DeNelle.Village.Hero
             _contentRoot = new GameObject("Content", typeof(RectTransform));
             _contentRoot.transform.SetParent(bodyHost, false);
             var cr = _contentRoot.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0.04f, 0.12f); cr.anchorMax = new Vector2(0.52f, 0.645f);   // owner 07-04: widen list column (36%->48%) so item name + "Requires Lv" tag stop crowding in portrait
+            // owner 07-04: widened list column (36%->48%). Orchestrator capture 07-06 #3: bottom
+            // raised 0.12->0.23 so the action-bar stack clears the shared Close CTA (see below).
+            cr.anchorMin = new Vector2(0.04f, 0.23f); cr.anchorMax = new Vector2(0.52f, 0.645f);
             cr.offsetMin = Vector2.zero; cr.offsetMax = Vector2.zero;
 
             // The 3D render preview pane (WO-501 owner point 3) beside the slim list.
@@ -394,17 +402,33 @@ namespace DeNelle.Village.Hero
 
             // ONE Purchase/Sell button whose label + action TOGGLE on _vm.Tab (the proven ShopPanel
             // pattern, ShopPanel.cs:341-344) - routes through _vm.Act on the selected id.
+            // Orchestrator capture 2026-07-06 #3: FrameMerchant declares NO footer zone and the
+            // SHARED Close is force-seated at the panel's bottom-centre DefaultCloseZone (fixed
+            // 360x120 CTA, drawn last = over us) — buttons at body-y 0.03-0.105 sat at panel-y
+            // ~0.14-0.19, INSIDE the Close band (~0.05-0.17) and rendered half-hidden. The whole
+            // bottom stack is raised to clear it: buttons 0.10-0.175, status 0.18-0.22, list/
+            // preview bottoms 0.23 (all body-relative; panel-y of the buttons is now ~0.19+).
             _buySellBtn = ElarionUiKit.ButtonPack(bodyHost, "Purchase", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.30f, 0.03f), new Vector2(0.60f, 0.105f),
+                new Vector2(0.30f, 0.10f), new Vector2(0.60f, 0.175f),
                 () => { var s = _vm?.SelectedId; if (!string.IsNullOrEmpty(s)) _vm.Act(s); },
                 packSpriteName: DeNelle.Core.FeatureFlags.BlinkChrome ? RpgUiCatalog.ButtonConfirm : null);
             CreamTab(_buySellBtn);
             _buySellLabel = _buySellBtn != null ? _buySellBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
 
             // EQUIP the selected owned item to the selected member (IEquipTarget seam via the VM).
+            // Owner ruling 07-06: 3-state control — the tap dispatches on the SELECTED item's
+            // equipped state: worn -> UnequipSelected, owned -> EquipSelected (RenderActionBar
+            // swaps the label + disables state 3; the VM guards re-verify, so a stale tap no-ops
+            // with a status line rather than mis-acting).
             _equipBtn = ElarionUiKit.ButtonPack(bodyHost, "Equip", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.64f, 0.03f), new Vector2(0.86f, 0.105f),
-                () => _vm?.EquipSelected(),
+                new Vector2(0.64f, 0.10f), new Vector2(0.86f, 0.175f),
+                () =>
+                {
+                    if (_vm == null) return;
+                    var it = _vm.SelectedItem;
+                    if (it.HasValue && it.Value.Equipped) _vm.UnequipSelected();
+                    else _vm.EquipSelected();
+                },
                 packSpriteName: DeNelle.Core.FeatureFlags.BlinkChrome ? RpgUiCatalog.ButtonConfirm : null);
             CreamTab(_equipBtn);
             _equipLabel = _equipBtn != null ? _equipBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
@@ -413,13 +437,14 @@ namespace DeNelle.Village.Hero
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
             statusGo.transform.SetParent(bodyHost, false);
             var sRect = statusGo.GetComponent<RectTransform>();
-            sRect.anchorMin = new Vector2(0.04f, 0.115f); sRect.anchorMax = new Vector2(0.96f, 0.16f);
+            sRect.anchorMin = new Vector2(0.04f, 0.18f); sRect.anchorMax = new Vector2(0.96f, 0.22f);   // 07-06 #3: raised with the action bar, clear of the Close CTA
             sRect.offsetMin = Vector2.zero; sRect.offsetMax = Vector2.zero;
             _statusText = statusGo.GetComponent<TMPro.TextMeshProUGUI>();
             _statusText.fontSize = ElarionUi.FontLabel;
             _statusText.color = ElarionUi.ParchmentDim;
             _statusText.alignment = TMPro.TextAlignmentOptions.Center;
             _statusText.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(_statusText);   // flag_06: status copy fits its strip
 
             // Raise the action buttons above the scroll content so a row never eats the tap (ShopPanel trap).
             if (_buySellBtn != null) _buySellBtn.transform.SetAsLastSibling();
@@ -573,8 +598,9 @@ namespace DeNelle.Village.Hero
                         ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.0f, 1f, bold: true);
                 }
                 // Member first name under the token.
-                ElarionUiKit.Label(btn.transform, member.Name, 0.02f, 0.34f, ElarionUi.Parchment,
+                var nameTag = ElarionUiKit.Label(btn.transform, member.Name, 0.02f, 0.34f, ElarionUi.Parchment,
                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.0f, 1f, bold: member.Selected);
+                ElarionUiKit.FitSingleLine(nameTag, 0f, ElarionUi.FontMicro);   // flag_06: chip names never spill
 
                 var plate = btn.GetComponent<Image>();
                 if (plate != null) plate.color = member.Selected ? TabSelectedTint : TabRestTint;
@@ -656,11 +682,13 @@ namespace DeNelle.Village.Hero
             le.preferredHeight = RowHeightPx;
             le.minHeight = RowHeightPx;
             var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(t);
             t.text = msg;
             t.fontSize = ElarionUi.FontLabel;
             t.color = ElarionUi.ParchmentDim;
             t.alignment = TMPro.TextAlignmentOptions.Center;
             t.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(t);   // flag_06: authored empty-lines fit the row
         }
 
         private void HighlightSelectedRow()
@@ -689,7 +717,10 @@ namespace DeNelle.Village.Hero
             plate.color = new Color(c.r, c.g, c.b, c.a * LockedRowAlpha);
         }
 
-        private const float RowHeightPx = 44f;   // WO-501: name-only rows are shorter
+        // flag_06 (owner F8 2026-07-06): rows were 44px but carry FontBody(50) names — the
+        // oversized text painted past each row onto its neighbours ("Requires Lv" stacked over
+        // item names). Row height now fits the text ladder (name auto-sizes 30..50 inside it).
+        private const float RowHeightPx = 56f;
         private const float RowGapPx    = 4f;
 
         private Transform BuildScrollContent()
@@ -702,46 +733,12 @@ namespace DeNelle.Village.Hero
                 if (DeNelle.Core.FeatureFlags.BlinkChrome) { var c = wImg.color; c.a = 0f; wImg.color = c; }
             }
 
-            var viewport = new GameObject("Viewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
-            viewport.transform.SetParent(_contentRoot.transform, false);
-            var vr = viewport.GetComponent<RectTransform>();
-            vr.anchorMin = Vector2.zero; vr.anchorMax = Vector2.one;
-            vr.offsetMin = Vector2.zero; vr.offsetMax = Vector2.zero;
-            var vImg = viewport.GetComponent<Image>();
-            vImg.color = new Color(0f, 0f, 0f, 0.001f);
-
-            var content = new GameObject("ScrollContent", typeof(RectTransform));
-            content.transform.SetParent(viewport.transform, false);
-            var cr = content.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0f, 1f);
-            cr.anchorMax = new Vector2(1f, 1f);
-            cr.pivot = new Vector2(0.5f, 1f);
-            cr.anchoredPosition = Vector2.zero;
-            cr.sizeDelta = Vector2.zero;
-
-            var vlg = content.AddComponent<VerticalLayoutGroup>();
-            vlg.childAlignment = TextAnchor.UpperCenter;
-            vlg.spacing = RowGapPx;
-            vlg.padding = new RectOffset(4, 4, 4, 4);
-            vlg.childControlWidth = true;
-            vlg.childControlHeight = true;
-            vlg.childForceExpandWidth = true;
-            vlg.childForceExpandHeight = false;
-
-            var fitter = content.AddComponent<ContentSizeFitter>();
-            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-            var scroll = viewport.GetComponent<ScrollRect>();
-            scroll.viewport = vr;
-            scroll.content = cr;
-            scroll.horizontal = false;
-            scroll.vertical = true;
-            scroll.movementType = ScrollRect.MovementType.Clamped;
-            scroll.scrollSensitivity = 25f;
-
-            _scrollContent = cr;
-            return content.transform;
+            // flag_06 t=209 ("i need scrollable area on all menus"): the list zone is now a KIT
+            // scroll zone (§1.14 MakeScrollZone) — vertical-only, clamped (no elastic), masked,
+            // auto-hiding scrollbar. One call; the hand-rolled viewport plumbing is gone.
+            var zone = ElarionUiKit.MakeScrollZone(_contentRoot.transform, RowGapPx, 4);
+            _scrollContent = zone.content;
+            return zone.content.transform;
         }
 
         private void FinalizeScroll()
@@ -751,6 +748,9 @@ namespace DeNelle.Village.Hero
             var contentArea = _contentRoot != null ? _contentRoot.transform as RectTransform : null;
             if (contentArea != null) LayoutRebuilder.ForceRebuildLayoutImmediate(contentArea);
             LayoutRebuilder.ForceRebuildLayoutImmediate(_scrollContent);
+            // §12 layout oracle: capture the real child rects after every rebuild so a
+            // renders-empty screenshot is diagnosable from the log, not re-theorized.
+            ElarionUiKit.DumpZoneLayout(_contentRoot != null ? _contentRoot.transform : null, "PartyShop.list");
         }
 
         // SLIM name-only row (WO-501 owner point 2): one plate (for the selected-row hold tint) + the
@@ -786,17 +786,35 @@ namespace DeNelle.Village.Hero
             // A locked row shrinks the name column to make room for the right-aligned "requires" hint.
             Color nameColor = locked ? ElarionUi.ParchmentDim
                             : (item.Equipped ? ElarionUi.Gilt : ElarionUi.Parchment);
-            float nameX1 = hasReason ? 0.56f : 0.94f;
-            ElarionUiKit.Label(row.transform, item.Name,
+            // Orchestrator capture 2026-07-06 #2 ("Wanderer's Cl…" / "Chainm…" / "Req…"): the
+            // 0.06-0.56 name column + the 30px floor ellipsized most names. Rebalanced: wider
+            // name column (0.04-0.66; the hint is short-form now), a lower font cap (FontLabel)
+            // so auto-size has range, and an explicit 22px min (still legible at desktop scale)
+            // before the ellipsis kicks in — full names fit at the captured window size.
+            float nameX1 = hasReason ? 0.66f : 0.96f;
+            var nameLbl = ElarionUiKit.Label(row.transform, item.Name,
                 0.0f, 1f, nameColor,
-                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.06f, nameX1,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.04f, nameX1,
                 bold: item.Equipped && !locked);
+            ElarionUiKit.FitSingleLine(nameLbl, 22f, ElarionUi.FontLabel);
 
-            // Lock reason hint ("Requires Lv 5" / "Class: Ranger"), right-aligned on locked rows.
+            // Lock reason hint, right-aligned on locked rows. Short-form for the slim column:
+            // "Requires Lv 10" -> "Lv 10" (composed in ShopCatalog.LockReason; the action bar
+            // keeps the long form — this is row-display formatting only, view-local).
+            // COLORBLIND CANON (round-3 #3 — owner is red/green colorblind, meaning is NEVER
+            // hue-only): the lock cue is carried by SHAPE + LUMINANCE, not color — ASCII
+            // brackets "[Lv 6]" mark the requirement, the label renders DIM parchment (not red),
+            // and the whole locked row is already luminance-dimmed (DimPlate 0.45 + dim name).
             if (hasReason)
-                ElarionUiKit.Label(row.transform, item.LockReason,
-                    0.0f, 1f, ElarionUi.Danger,
-                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Right, 0.58f, 0.94f, bold: false);
+            {
+                string reason = item.LockReason.StartsWith("Requires Lv ")
+                    ? "Lv " + item.LockReason.Substring("Requires Lv ".Length)
+                    : item.LockReason;
+                var reasonLbl = ElarionUiKit.Label(row.transform, "[" + reason + "]",
+                    0.0f, 1f, ElarionUi.ParchmentDim,
+                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Right, 0.68f, 0.96f, bold: false);
+                ElarionUiKit.FitSingleLine(reasonLbl, 20f, ElarionUi.FontMicro);
+            }
         }
 
         // -- 3D RENDER PREVIEW pane (WO-501 owner point 3) ----------------------------
@@ -809,7 +827,7 @@ namespace DeNelle.Village.Hero
             // the item list (0.12→0.645) so the two columns read as side-by-side portrait columns
             // under the filter stack, instead of a short-and-wide landscape pane. Its internal
             // square/specs/price are pane-relative, so they scale with the taller/narrower column.
-            _previewRoot = ElarionUiKit.Well(panel, new Vector2(0.54f, 0.12f), new Vector2(0.96f, 0.645f));   // owner 07-04: narrowed to pair with the widened list column (no overlap; portrait breathing room)
+            _previewRoot = ElarionUiKit.Well(panel, new Vector2(0.54f, 0.23f), new Vector2(0.96f, 0.645f));   // owner 07-04: narrowed to pair with the widened list column; 07-06 #3: bottom raised 0.12->0.23 with the list (action-bar stack clears the Close CTA)
             var wImg = _previewRoot.GetComponent<Image>();
             if (wImg != null)
             {
@@ -868,16 +886,20 @@ namespace DeNelle.Village.Hero
             // Name (gilt bold).
             _previewName = ElarionUiKit.Label(pane, "", 0.355f, 0.41f, ElarionUi.Gilt,
                 ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+            ElarionUiKit.FitSingleLine(_previewName);   // flag_06: long gear names ellipsize in the pane
 
             // Flavour line (rarity + class fit) - the readable desc under the name.
             _previewStats = ElarionUiKit.Label(pane, "", 0.325f, 0.355f, ElarionUi.ParchmentDim,
                 ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
+            ElarionUiKit.FitSingleLine(_previewStats, 0f, ElarionUi.FontMicro);
 
             // -- Per-stat SPEC block (WO: "make weapons matter") - one line per spec, top->bottom:
             // "<Label>   <Value> (<Delta>)" with the delta tinted green(up)/red(down)/dim(same). Built
             // here as a vertical container; rebuilt per Render from _vm.SelectedSpecs. Sits between the
             // flavour line and the price. --
-            var specsGo = new GameObject("PreviewSpecs", typeof(RectTransform));
+            // flag_06: RectMask2D so overflowing spec rows CLIP inside their block instead of
+            // painting over the price below (text never overlaps siblings — §1.14 law).
+            var specsGo = new GameObject("PreviewSpecs", typeof(RectTransform), typeof(RectMask2D));
             specsGo.transform.SetParent(pane, false);
             _previewSpecs = specsGo.GetComponent<RectTransform>();
             _previewSpecs.anchorMin = new Vector2(0.06f, 0.185f); _previewSpecs.anchorMax = new Vector2(0.94f, 0.32f);
@@ -897,6 +919,7 @@ namespace DeNelle.Village.Hero
             // PRICE - large + readable (WO-501 owner point 3).
             _previewPrice = ElarionUiKit.Label(pane, "", 0.04f, 0.18f, ElarionUi.Gilt,
                 ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+            ElarionUiKit.FitSingleLine(_previewPrice);   // flag_06: "Purchase 1,250 Gold" never spills the pane
         }
 
         // Repaint the preview pane from _vm.Selected ONLY (name/stats/delta/price) + rebuild the 3D
@@ -975,15 +998,19 @@ namespace DeNelle.Village.Hero
                     typeof(TMPro.TextMeshProUGUI), typeof(LayoutElement));
                 go.transform.SetParent(_previewSpecs, false);
                 var le = go.GetComponent<LayoutElement>();
-                le.preferredHeight = 20f;
-                le.minHeight = 16f;
+                // flag_06: rows were 20px but carried FontLabel(40) text — every spec line painted
+                // over the next. Row height now fits the mobile floor; the label auto-sizes into it.
+                le.preferredHeight = 34f;
+                le.minHeight = 30f;
                 var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+                ElarionUiKit.EnsureFont(t);
                 t.richText = true;
                 t.text = line;
                 t.fontSize = ElarionUi.FontLabel;
                 t.color = ElarionUi.Parchment;
                 t.alignment = TMPro.TextAlignmentOptions.Center;
                 t.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(t, 0f, ElarionUi.FontLabel);
             }
         }
 
@@ -1347,11 +1374,24 @@ namespace DeNelle.Village.Hero
                 _buySellBtn.interactable = canBuy;
             }
 
-            // Equip: only for an OWNED, not-yet-equipped, UNLOCKED item on the BUY tab.
+            // 3-STATE EQUIP CONTROL (owner ruling 2026-07-06):
+            //   1. item EQUIPPED       -> "Unequip" (tap unequips via the VM seam)
+            //   2. item OWNED, not worn -> "Equip"  (as before)
+            //   3. item NOT PURCHASED  -> non-clickable: kit disabledColor plate (0.5 gray,
+            //      0.5 alpha — StyleButtonColors) + DIMMED label. The cue is LUMINANCE +
+            //      the label text itself, never hue (owner is red/green colorblind).
+            //      Purchase stays the actionable button for state 3.
             if (_equipBtn != null)
             {
-                bool canEquip = hasSel && !sell && !locked && (item.Value.Price <= 0) && !item.Value.Equipped;
-                _equipBtn.interactable = canEquip;
+                bool equipped = hasSel && item.Value.Equipped;
+                bool owned    = hasSel && (equipped || item.Value.Price <= 0);   // Price<=0 == owned/free row (VM convention, PriceText "Owned")
+                bool canAct   = hasSel && !sell && !locked && owned;
+                _equipBtn.interactable = canAct;
+                if (_equipLabel != null)
+                {
+                    _equipLabel.text = equipped ? "Unequip" : "Equip";   // FitSingleLine (CreamTab) keeps it fitted
+                    _equipLabel.color = canAct ? ElarionUi.Parchment : ElarionUi.ParchmentDim;   // luminance cue on the label too
+                }
             }
         }
 
@@ -1412,14 +1452,54 @@ namespace DeNelle.Village.Hero
 
         private static void CreamTab(Button btn)
         {
-            if (btn == null) return;
-            var lbl = btn.GetComponentInChildren<TMPro.TextMeshProUGUI>();
-            if (lbl == null) return;
+            // Round-3 instrumentation (orchestrator 2026-07-06): the capture showed the BUY/SELL/
+            // category/type/party strips as EMPTY PLATES yet the TextFitGuard sweep contained ZERO
+            // lines for them — so either the label never reaches this dress/fit path, or its text
+            // is empty at dress time. Trace EVERY dress (path + active + text + rect + font) so the
+            // next capture NAMES the branch; the null/inactive branches log as failures ("no dead
+            // buttons" law). Rect here is pre-layout; the guard logs the post-layout rect.
+            if (btn == null)
+            {
+                FlowTrace.Fail("UI", "PartyShop.CreamTab: NULL button (builder returned nothing) — dead strip slot");
+                return;
+            }
+            var lbl = btn.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);   // true: an INACTIVE label must be found + reported, not silently skipped
+            if (lbl == null)
+            {
+                FlowTrace.Fail("UI", "PartyShop.CreamTab: '" + PathOf(btn.transform) +
+                    "' has NO TMP label anywhere under it — dead button (builder produced no text child)");
+                return;
+            }
+            if (!lbl.gameObject.activeSelf)
+            {
+                FlowTrace.Warn("UI", "PartyShop.CreamTab: label under '" + btn.name + "' was INACTIVE (text '" +
+                    lbl.text + "') — re-activating (no dead buttons)");
+                lbl.gameObject.SetActive(true);
+            }
+            FlowTrace.Step("UI", "PartyShop.CreamTab dress '" + PathOf(btn.transform) + "': text='" + lbl.text +
+                "' active=" + lbl.gameObject.activeInHierarchy +
+                " rect=" + ((int)lbl.rectTransform.rect.width) + "x" + ((int)lbl.rectTransform.rect.height) +
+                " font=" + lbl.fontSize.ToString("F0") +
+                " autoSize=" + lbl.enableAutoSizing);
             lbl.color = ElarionUi.Parchment;
             lbl.fontStyle = TMPro.FontStyles.Bold;
             lbl.outlineColor = new Color32(20, 12, 4, 235);
             lbl.outlineWidth = 0.22f;
             lbl.transform.SetAsLastSibling();
+            // flag_06 (owner F8 2026-07-06): tab/button labels truncated mid-word at her window
+            // size ("BU SEL" / "Purcha Equi"). Every CreamTab'd label (BUY/SELL tabs, category,
+            // type chips, party chips, Purchase/Equip) auto-sizes within the mobile floor then
+            // ellipsizes — §1.14 kit text-fit, never a mid-glyph clip.
+            ElarionUiKit.FitSingleLine(lbl);
+        }
+
+        /// <summary>Short hierarchy path for the CreamTab traces (panel/strip/button).</summary>
+        private static string PathOf(Transform t)
+        {
+            string s = t != null ? t.name : "?";
+            int depth = 0;
+            while (t != null && t.parent != null && depth++ < 4) { t = t.parent; s = t.name + "/" + s; }
+            return s;
         }
 
         private static string Cap(string s)

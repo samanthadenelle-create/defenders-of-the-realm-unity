@@ -116,11 +116,15 @@ namespace DeNelle.Village.Hero
             // header here (UI matrix 2026-07-03 dedupe). This builds only the sub-row.
 
             // Difficulty badge + ★★★ target time, just under the header.
+            // HEADER PILE-UP FIX (sweep 9413): this sub-row sat at y 0.885–0.925, which
+            // vertically intersects the FrameCore header band (0.900–0.972) where the
+            // chrome title renders — title + badge + "Target:" stacked text-on-text.
+            // The whole sub-row drops to y 0.840–0.880, fully BELOW the header band.
             Color tint = DifficultyColor(_def != null ? _def.difficulty : null);
             // (#29) Shifted right so it clears the FrameCore top-left medallion socket
             // (~x<=0.22) — it previously overlapped the emblem circle.
             var badge = ElarionUiKit.AddImage(panel, "DiffBadge",
-                new Vector2(0.24f, 0.885f), new Vector2(0.44f, 0.925f),
+                new Vector2(0.24f, 0.840f), new Vector2(0.44f, 0.880f),
                 new Color(tint.r, tint.g, tint.b, 0.85f));
             badge.GetComponent<Image>().raycastTarget = false;
             var badgeLbl = ElarionUiKit.Label(badge.transform, DifficultyLabel(_def != null ? _def.difficulty : null),
@@ -131,9 +135,9 @@ namespace DeNelle.Village.Hero
             // zero m_Unicode:9733 hits), so the old "★★★" text rendered as boxes in
             // builds. Procedural gold diamonds instead (EndStateView's pattern via
             // the shared StarRatingRow), then a plain font-safe "Target:" label.
-            StarRatingRow.Build(panel, 3, 3, 0.45f, 0.885f, 0.515f, 0.925f, sizePx: 12f);
+            StarRatingRow.Build(panel, 3, 3, 0.45f, 0.840f, 0.515f, 0.880f, sizePx: 12f);
             var timeLbl = ElarionUiKit.Label(panel, "Target: " + FormatTime(_def != null ? _def.recommendedClearTime : 0f),
-                0.885f, 0.925f, ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.525f, 0.90f, bold: true);
+                0.840f, 0.880f, ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.525f, 0.90f, bold: true);
             timeLbl.raycastTarget = false;
         }
 
@@ -141,9 +145,11 @@ namespace DeNelle.Village.Hero
         // troop-card list grouped by TroopDefId, then the army-cap indicator.
         private void BuildLeftColumn(Transform panel)
         {
-            // Section label.
-            var lbl = ElarionUiKit.Label(panel, "YOUR FORCES", 0.835f, 0.875f, ElarionUi.Gilt,
-                ElarionUi.FontHead, TMPro.TextAlignmentOptions.Left, 0.05f, 0.50f, bold: true);
+            // Section label. Sweep 9413: dropped below the relocated badge/target sub-row
+            // (now y 0.840–0.880) and inset from x 0.05 -> 0.07 so it no longer rides the
+            // FrameCore corner filigree (body well starts at x 0.055).
+            var lbl = ElarionUiKit.Label(panel, "YOUR FORCES", 0.790f, 0.825f, ElarionUi.Gilt,
+                ElarionUi.FontHead, TMPro.TextAlignmentOptions.Left, 0.07f, 0.50f, bold: true);
             lbl.raycastTarget = false;
 
             // Hero + Companions portrait row.
@@ -158,16 +164,18 @@ namespace DeNelle.Village.Hero
                 capText = $"Army: {used} / {army.MaxArmySize} slots";
             }
             else capText = "Army: —";
-            var capLbl = ElarionUiKit.Label(panel, capText, 0.70f, 0.735f, ElarionUi.Parchment,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.05f, 0.50f, bold: true);
+            // Sweep 9413 re-stack: below the party row (0.700–0.785).
+            var capLbl = ElarionUiKit.Label(panel, capText, 0.655f, 0.690f, ElarionUi.Parchment,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.07f, 0.50f, bold: true);
             capLbl.raycastTarget = false;
 
-            // Troop list content area (left half, below the party row).
+            // Troop list content area (left half, below the party row). Bottom raised to
+            // 0.155 so the list also clears the shared Close box (top ≈0.119 on this panel).
             _troopListRoot = new GameObject("TroopListArea", typeof(RectTransform));
             _troopListRoot.transform.SetParent(panel, false);
             var cr = _troopListRoot.GetComponent<RectTransform>();
-            cr.anchorMin = new Vector2(0.05f, 0.14f);
-            cr.anchorMax = new Vector2(0.49f, 0.69f);
+            cr.anchorMin = new Vector2(0.05f, 0.155f);
+            cr.anchorMax = new Vector2(0.49f, 0.645f);
             cr.offsetMin = Vector2.zero;
             cr.offsetMax = Vector2.zero;
 
@@ -186,8 +194,9 @@ namespace DeNelle.Village.Hero
             var rowHost = new GameObject("PartyRow", typeof(RectTransform));
             rowHost.transform.SetParent(panel, false);
             var rr = rowHost.GetComponent<RectTransform>();
-            rr.anchorMin = new Vector2(0.05f, 0.745f);
-            rr.anchorMax = new Vector2(0.49f, 0.83f);
+            // Sweep 9413 left-column re-stack: sits below "YOUR FORCES" (0.790–0.825).
+            rr.anchorMin = new Vector2(0.05f, 0.700f);
+            rr.anchorMax = new Vector2(0.49f, 0.785f);
             rr.offsetMin = Vector2.zero;
             rr.offsetMax = Vector2.zero;
 
@@ -308,19 +317,26 @@ namespace DeNelle.Village.Hero
         // BOTTOM — Auto Recommend (stub) + the big glowing DEPLOY CTA.
         private void BuildDeployBar(Transform panel)
         {
+            // CLOSE-BAND CLEARANCE (eyes-sweep 2026-07-06): the shared kit Close is a fixed
+            // 360x120px box seated bottom-center (x ≈ 0.29–0.71, y 0.05 → top ≈ 0.119 on this
+            // 0.90-tall panel). The old DEPLOY rect (x 0.49–0.90, y 0.05–0.12) painted OVER it,
+            // making Close unreachable. DEPLOY stays the ONE primary action but moves UP into
+            // the free right-column band above the Close; Auto Recommend takes the bottom-LEFT
+            // lane (x ends 0.28, left of the Close box's ≈0.29 edge).
+
             // Auto Recommend — FIRST PASS stub: selects all deployable (no comp logic yet).
             ElarionUiKit.Button(panel, "Auto Recommend", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.10f, 0.05f), new Vector2(0.42f, 0.12f), OnAutoRecommend);
+                new Vector2(0.05f, 0.05f), new Vector2(0.28f, 0.12f), OnAutoRecommend);
 
             // DEPLOY — the big glowing primary CTA. Confirm-green with a gilt ember glow
             // ring behind it so it reads as the dominant action.
             var glow = ElarionUiKit.AddImage(panel, "DeployGlow",
-                new Vector2(0.475f, 0.035f), new Vector2(0.915f, 0.135f),
+                new Vector2(0.505f, 0.14f), new Vector2(0.965f, 0.29f),
                 new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.35f));
             glow.GetComponent<Image>().raycastTarget = false;
 
             var deployBtn = ElarionUiKit.Button(panel, "DEPLOY", ElarionUiKit.ButtonKind.Confirm,
-                new Vector2(0.49f, 0.05f), new Vector2(0.90f, 0.12f), OnDeploy);
+                new Vector2(0.52f, 0.155f), new Vector2(0.95f, 0.275f), OnDeploy);
             // Gold-ink-on-green reads as the ember CTA; keep it enabled (the raid can be
             // entered to scout even with no troops — the in-raid tray handles placement).
             if (deployBtn != null) deployBtn.interactable = _def != null && !string.IsNullOrEmpty(_def.sceneName);

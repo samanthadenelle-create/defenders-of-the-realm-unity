@@ -178,25 +178,43 @@ namespace DeNelle.Settings
             for (int i = 0; i < Tiers.Length; i++)
             {
                 QualityTier captured = Tiers[i];
+                bool selected = SettingsModel.Quality == captured;
                 float x0 = 0.005f + i / 3f, x1 = x0 + 1f / 3f - 0.01f;
-                ElarionUiKit.BuildObsidianButton(_qualityRow, SettingsModel.TierLabel(captured),
+                var b = ElarionUiKit.BuildObsidianButton(_qualityRow, SettingsModel.TierLabel(captured),
                     ElarionUiKit.ObsidianButtonStyle.Style1,
-                    SettingsModel.Quality == captured ? ElarionUiKit.ObsidianButtonColor.Yellow
-                                                      : ElarionUiKit.ObsidianButtonColor.Gray,
+                    selected ? ElarionUiKit.ObsidianButtonColor.Yellow
+                             : ElarionUiKit.ObsidianButtonColor.Gray,
                     new Vector2(x0, 0.05f), new Vector2(x1, 0.95f),
                     () => OnQualityTierClicked(captured));
+                if (selected) InkButtonLabel(b);
             }
             for (int i = 0; i < Difficulties.Length; i++)
             {
                 Difficulty captured = Difficulties[i];
+                bool selected = SettingsModel.Difficulty == captured;
                 float x0 = 0.005f + i / 3f, x1 = x0 + 1f / 3f - 0.01f;
-                ElarionUiKit.BuildObsidianButton(_difficultyRow, DifficultyTuning.Label(captured),
+                var b = ElarionUiKit.BuildObsidianButton(_difficultyRow, DifficultyTuning.Label(captured),
                     ElarionUiKit.ObsidianButtonStyle.Style1,
-                    SettingsModel.Difficulty == captured ? ElarionUiKit.ObsidianButtonColor.Yellow
-                                                         : ElarionUiKit.ObsidianButtonColor.Gray,
+                    selected ? ElarionUiKit.ObsidianButtonColor.Yellow
+                             : ElarionUiKit.ObsidianButtonColor.Gray,
                     new Vector2(x0, 0.05f), new Vector2(x1, 0.95f),
                     () => OnDifficultyClicked(captured));
+                if (selected) InkButtonLabel(b);
             }
+        }
+
+        // SWEEP 9413 R2 (#2): the selected (gold) chip rendered GOLD text on the GOLD face —
+        // near invisible (luminance law). The kit's constructed mode inks Yellow labels, but the
+        // PREFAB mode keeps the prefab's gold label color, so force dark Ink on the selected
+        // chip's label wherever the build mode put it (children, else the prefab root).
+        private static void InkButtonLabel(Button b)
+        {
+            if (b == null) return;
+            var labels = b.GetComponentsInChildren<TMPro.TMP_Text>(true);
+            if ((labels == null || labels.Length == 0) && b.transform.parent != null)
+                labels = b.transform.parent.GetComponentsInChildren<TMPro.TMP_Text>(true);
+            if (labels == null) return;
+            foreach (var t in labels) t.color = ElarionUi.Ink;
         }
 
         // =====================================================================
@@ -398,7 +416,10 @@ namespace DeNelle.Settings
         /// <summary>Label + uGUI Toggle (gold check), one row. Advances y.</summary>
         private Toggle ToggleRow(Transform body, string label, ref float y, Action<bool> onChanged)
         {
-            float top = y, bottom = y - 0.045f;
+            // SWEEP 9413 R2 (#2): row raised 0.045 → 0.055 and the toggle box is now a FIXED
+            // pixel square (below) — the fraction-stretched box collapsed to a sliver on the
+            // capture aspect once the plate/outline landed.
+            float top = y, bottom = y - 0.055f;
             MakeText(body, label, 13, ElarionUi.Parchment, FontStyles.Normal,
                 TextAlignmentOptions.Left, new Vector2(0.06f, bottom), new Vector2(0.70f, top));
 
@@ -406,8 +427,10 @@ namespace DeNelle.Settings
             var toggleGo = new GameObject("Toggle", typeof(RectTransform), typeof(Toggle));
             toggleGo.transform.SetParent(host, false);
             var trt = toggleGo.GetComponent<RectTransform>();
-            trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one;
-            trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
+            // Fixed 44x44 square centered in the host zone — never height-collapses with the row.
+            trt.anchorMin = new Vector2(0.5f, 0.5f); trt.anchorMax = new Vector2(0.5f, 0.5f);
+            trt.pivot = new Vector2(0.5f, 0.5f);
+            trt.sizeDelta = new Vector2(44f, 44f);
 
             var boxGo = new GameObject("Box", typeof(RectTransform), typeof(Image));
             boxGo.transform.SetParent(toggleGo.transform, false);
@@ -415,7 +438,17 @@ namespace DeNelle.Settings
             brt.anchorMin = Vector2.zero; brt.anchorMax = Vector2.one;
             brt.offsetMin = Vector2.zero; brt.offsetMax = Vector2.zero;
             var boxImg = boxGo.GetComponent<Image>();
-            boxImg.color = new Color(0f, 0f, 0f, 0.6f);
+            // EYES-SWEEP 2026-07-06 (#2): the box was pure black-on-black — an OFF toggle (the
+            // check graphic only renders when isOn) had NO visible control at all ("Mute all audio"
+            // read as label-only while the ON "Screen shake" showed its gold check). The empty box
+            // must always render: kit bar plate when the mirrored art is present, and a gilt outline
+            // in every case so null art never blanks the control.
+            var plate = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, "panel_bar");
+            if (plate != null) { boxImg.sprite = plate; boxImg.type = Image.Type.Sliced; boxImg.color = Color.white; }
+            else boxImg.color = new Color(0.10f, 0.09f, 0.07f, 0.9f);
+            var boxEdge = boxGo.AddComponent<Outline>();
+            boxEdge.effectColor = new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.8f);
+            boxEdge.effectDistance = new Vector2(1.5f, -1.5f);
 
             var checkGo = new GameObject("Check", typeof(RectTransform), typeof(Image));
             checkGo.transform.SetParent(boxGo.transform, false);

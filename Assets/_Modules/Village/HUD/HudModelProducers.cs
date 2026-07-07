@@ -31,6 +31,7 @@ using UnityEngine;
 using DeNelle.Core;
 using DeNelle.Core.Combat;
 using DeNelle.Core.HudModel;
+using DeNelle.Core.UI;         // ConceptIconResolver — resolvable concept key for ability slot icons (F1)
 using DeNelle.Village;
 using DeNelle.Village.Arena;   // BattleStarRating
 using DeNelle.Village.Crafting;
@@ -300,7 +301,10 @@ namespace DeNelle.Village.Hud
             int hp = Mathf.CeilToInt(Mathf.Max(0f, en.Hp));
             int maxHp = Mathf.CeilToInt(Mathf.Max(1f, en.MaxHp));
             float frac = en.HpFraction;
-            int level = EnemyLevelStub(en);
+            // F3 (WO-611): truthful level — read the enemy's REAL Level (authored per-def, stable),
+            // not the old EnemyLevelStub HP/25 heuristic that crept upward as wave-scaling inflated
+            // maxHp. Enemy.Level is derived from the authored def in Configure (see Enemy.Level).
+            int level = en.Level;
             bool locked = _indicator != null && _indicator.LockEngaged;
 
             // Difficulty tell on the TARGET FRAME (mirrors the over-head ThreatSkullPlate).
@@ -397,7 +401,14 @@ namespace DeNelle.Village.Hud
                 float total = equipped ? def.Cooldown : 0f;
                 float remaining = _abilities != null ? _abilities.CooldownRemaining(slot) : 0f;
                 string name = equipped && !string.IsNullOrEmpty(def.Name) ? def.Name : key;
-                string icon = equipped ? def.Icon : null;
+                // F1 (ABILITY_ICON_AUDIT_2026-07-05): do NOT forward def.Icon — that is the decorative
+                // glyph ("✦"), which no concept-icons.json key matches, so every slot resolved null and
+                // rendered blank (0/11). Store a RESOLVABLE concept key (abilityId, then effect) so
+                // UiStyle.Icon(IconKey) downstream draws real RpgUi art; ResolveKey==null (nothing maps)
+                // falls through to def.Effect/def.Id so the SetIcon default-sprite backstop still fills it.
+                string icon = equipped
+                    ? (ConceptIconResolver.ResolveKey(def.Id, def.Effect) ?? def.Effect ?? def.Id)
+                    : null;
                 string accent = equipped ? def.Color : null;
 
                 slots.Add(new AbilitySlotRecord(key, key, name, "", icon, accent, equipped, remaining, total));
@@ -650,7 +661,11 @@ namespace DeNelle.Village.Hud
                 float total = def != null ? def.Cooldown : 0f;
                 float remaining = equipped && _abilities != null ? _abilities.ExtraCooldownRemaining(id) : 0f;
                 string name = def != null && !string.IsNullOrEmpty(def.Name) ? def.Name : (equipped ? id : "—");
-                string icon = def != null ? def.Icon : null;
+                // F1 (ABILITY_ICON_AUDIT_2026-07-05): store a RESOLVABLE concept key (abilityId, then
+                // effect) — not the decorative glyph def.Icon — so the hot-swap slot draws real art.
+                string icon = def != null
+                    ? (ConceptIconResolver.ResolveKey(def.Id, def.Effect) ?? def.Effect ?? def.Id)
+                    : null;
                 string accent = def != null ? def.Color : null;
                 string key = "A" + i;
 

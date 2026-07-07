@@ -213,6 +213,11 @@ namespace DeNelle.Editor
             new Entry { Src = "HUD_Obsidian/Interaction.png",              Role = "hud", Name = "hud_interaction",        Border = 0 },
             new Entry { Src = "HUD_Obsidian/Arc_1.png",                    Role = "hud", Name = "hud_arc_1",              Border = 0 },
             new Entry { Src = "HUD_Obsidian/Arc_2.png",                    Role = "hud", Name = "hud_arc_2",              Border = 0 },
+            // Lock-on crosshair frames (WO-611 F2): target-frame lock badge animation
+            // (Crosshair_1 unlocked → Crosshair_2 acquiring → Crosshair_3 locked). Simple.
+            new Entry { Src = "Cursors_Obsidian/Crosshair_1.png",          Role = "hud", Name = "crosshair_1",            Border = 0 },
+            new Entry { Src = "Cursors_Obsidian/Crosshair_2.png",          Role = "hud", Name = "crosshair_2",            Border = 0 },
+            new Entry { Src = "Cursors_Obsidian/Crosshair_3.png",          Role = "hud", Name = "crosshair_3",            Border = 0 },
 
             // ── BUTTONS (role button/) — Buttons_Obsidian ──────────────────────
             // The full 5×4 family (styles 1..5 × gray/green/red/yellow), 9-sliced.

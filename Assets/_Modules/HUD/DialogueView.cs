@@ -2,8 +2,9 @@
 // DialogueView (DeNelle.HUD) — the dumb uGUI skin for OUR dialogue (WO-455).
 // -----------------------------------------------------------------------------
 // Code-built uGUI (canon: NOT UIDocument), styled with ElarionUiKit so it matches
-// every other panel. Binds to a DialogueViewModel and renders it: a bottom box with
-// speaker + text (tap to advance), and an option list when the VM is at a choice.
+// every other panel. Binds to a DialogueViewModel and renders it: a centered reading
+// panel (owner ruling 2026-07-06 — raised clear of the HUD control zones, scrollable
+// body) with speaker + text (tap to advance), and an option list at a choice.
 // The VIEW holds no game state — it reads the VM and calls Advance/Choose only.
 // Self-bootstraps DDOL behind FeatureFlags.CustomDialogue.
 // =============================================================================
@@ -38,6 +39,16 @@ namespace DeNelle.HUD
         private GameObject _tapHint;
         private ElarionUiKit.PortraitHandle _portrait;   // medallion portrait disc (refreshed per Repaint)
 
+        // F8 2026-07-06 (t=328): the dialogue now routes through the modal arbiter
+        // (mirrors RumorBoardPanel) so the click-guard classifies its TapAdvance
+        // catcher as an intentional modal cover (was 7x false CLICK-BLOCKED per
+        // fleet) and world prompts suppress while a conversation owns the screen.
+        // Registered BATTLE-ALLOWED (WO-437): dialogue is scripted narrative
+        // (tutorial intro/outro around fights, companion meetings, vendor talk) —
+        // the battle-lock must never silently tear a conversation down mid-script.
+        private PanelHandle _handle;
+        private bool _arbiterNotified;
+
         private void OnEnable() { DialogueService.Opened += OnOpened; }
         private void OnDisable() { DialogueService.Opened -= OnOpened; }
 
@@ -57,7 +68,13 @@ namespace DeNelle.HUD
             Repaint();
         }
 
-        private void OnClosed() { Unbind(); _portrait = null; if (_ui != null) { Destroy(_ui); _ui = null; } }
+        private void OnClosed()
+        {
+            Unbind();
+            _portrait = null;
+            if (_ui != null) { Destroy(_ui); _ui = null; }
+            if (_arbiterNotified) { PanelManager.NotifyClosed(_handle); _arbiterNotified = false; }
+        }
 
         private void Unbind()
         {
@@ -73,7 +90,12 @@ namespace DeNelle.HUD
 
             var canvas = _ui.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 900; // above HUD, below hard modals
+            // F8 2026-07-06 (t=328, "dialogue comes up under hud"): 900 sat BELOW the
+            // HUD kit chrome (HudAreasHost canvas = 4000), so the panel rendered under
+            // the bottom action bar. Deliberate band: above the gameplay HUD kit (4000)
+            // and the Echo workforce HUD (4600), below the battle overlay (5000) and
+            // hard modals (30000+).
+            canvas.sortingOrder = 4800;
             var scaler = _ui.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1080, 1920);
@@ -83,18 +105,57 @@ namespace DeNelle.HUD
             // DIALOGUE TEMPLATE (WO-582): the bottom strip is built from the ONE master frame
             // factory using the Blink Dialogue_Panel frame + its pre-styled drop-zones. The VIEW
             // re-styles nothing — it drops the model (speaker / body / choices) into the zones.
+            // OWNER RULING 2026-07-06 ("not over top of HUD controls; moved up, readable on
+            // mobile; larger; scrollable"): a centered READING PANEL that clears every HUD
+            // control zone (HudAreasHost actuals — ActionBar top y=0.150 x0.28-0.72,
+            // MoveCluster top y=0.330 x<=0.270, Dock top y=0.430 x<=0.230, ActionRail top
+            // y=0.420 x>=0.780, TargetInfo bottom y=0.660). x 0.29-0.71 clears the side
+            // thumb clusters with margin; y 0.20 clears the action bar by 0.05; y 0.62
+            // stays under TargetInfo. Both HUD areas and this panel anchor by fraction of
+            // screen, so the clearance holds at 16:9 and 19.5:9 alike.
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "",
-                new Vector2(0.045f, 0.045f), new Vector2(0.955f, 0.235f),
+                new Vector2(0.29f, 0.20f), new Vector2(0.71f, 0.62f),
                 () => _vm?.Close(), withBackdrop: false, frameName: RpgUiCatalog.FrameDialogue);
             _box = chrome.root.GetComponent<RectTransform>();
 
-            var bodyZone = (chrome.layout != null && chrome.layout.body != null)
-                ? chrome.layout.body
-                : chrome.content.GetComponent<RectTransform>();
-            var headerZone = (chrome.layout != null && chrome.layout.header != null)
-                ? chrome.layout.header : bodyZone;
+            // SWEEP 9413 (panel_Dialogue.png: "Brom / Town Crier" + text floated over WORLD
+            // geometry — no fill behind them): the FrameDialogue drop-zones are pixel-measured
+            // for the OLD LANDSCAPE STRIP art (medallion = a full-height far-left column,
+            // header a mid-band at y 0.64-0.93, body a right sub-rect), and only the BODY zone
+            // receives a kit ZoneBacking plate — on this tall reading panel those strip
+            // fractions scatter the content and leave header/hint on the stretched art's
+            // transparent centre. The view now lays out its OWN zones sized for the reading
+            // panel, over ONE opaque obsidian plate spanning the whole interior, so every
+            // element reads on solid fill inside the single frame. The strip-measured kit
+            // zones (and their crest emblem / partial plate) are deactivated on THIS instance.
+            if (chrome.layout != null)
+            {
+                if (chrome.layout.header != null) chrome.layout.header.gameObject.SetActive(false);
+                if (chrome.layout.body != null) chrome.layout.body.gameObject.SetActive(false);
+                if (chrome.layout.medallion != null) chrome.layout.medallion.gameObject.SetActive(false);
+            }
 
-            // Tap-to-advance: a transparent button filling the body zone (advances lines, not choices).
+            var contentRoot = chrome.content.transform;
+            var interior = new GameObject("DialogueInterior", typeof(Image));
+            interior.transform.SetParent(contentRoot, false);
+            var irt = interior.GetComponent<RectTransform>();
+            irt.anchorMin = new Vector2(0.045f, 0.055f);
+            irt.anchorMax = new Vector2(0.955f, 0.945f);
+            irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
+            var iimg = interior.GetComponent<Image>();
+            iimg.color = ElarionUiKit.ObsidianFill;   // the kit's near-black panel fill (opaque)
+            iimg.raycastTarget = false;
+            interior.transform.SetAsFirstSibling();   // behind every zone, above the frame art
+
+            // Own zones (fractions of the panel interior): portrait top-left, speaker header
+            // beside it, reading body below, hint sliver at the body's foot — all INSIDE the
+            // one frame, all over the opaque plate.
+            var portraitHost = MakeZone(contentRoot, "PortraitHost", new Vector2(0.07f, 0.72f), new Vector2(0.24f, 0.92f));
+            var headerZone   = MakeZone(contentRoot, "SpeakerZone",  new Vector2(0.26f, 0.72f), new Vector2(0.93f, 0.92f));
+            var bodyZone     = MakeZone(contentRoot, "BodyZone",     new Vector2(0.07f, 0.24f), new Vector2(0.93f, 0.70f));
+
+            // Tap-to-advance: a transparent button filling the BODY ZONE ONLY (advances lines,
+            // not choices). Deliberately contained to the panel — never a full-screen catcher.
             var tapGo = new GameObject("TapAdvance", typeof(Image), typeof(Button));
             tapGo.transform.SetParent(bodyZone, false);
             var trt = tapGo.GetComponent<RectTransform>();
@@ -105,6 +166,29 @@ namespace DeNelle.HUD
             tapBtn.transition = Selectable.Transition.None;
             tapBtn.onClick.AddListener(OnBoxTapped);
 
+            // F8 fleet capture ("CLICK-BLOCKED: 'CloseButton' covered by 'TapAdvance'" x7):
+            // the kit builds the shared CloseButton BEFORE this catcher, and the frame's
+            // measured close zone overlaps the body zone — so the catcher rendered (and
+            // raycast) on top of the panel's own Close. Raise the Close to the top of the
+            // panel subtree so it stays clickable above the catcher.
+            //
+            // 2026-07-06 owner ruling (supersedes the interim compact-Close override): the
+            // CANONICAL Close size/seat stands on the reading panel. SWEEP 9413 item 3: the
+            // kit seat pins the box's bottom at y=0.050 of the panel, which dips into THIS
+            // frame's thicker painted bottom border — raise the SEAT only (canonical 360x120
+            // size + bottom-centre law preserved; body zone above starts at y=0.24, clear of
+            // the raised box top).
+            if (chrome.close != null)
+            {
+                var closeRt = chrome.close.transform as RectTransform;
+                if (closeRt != null)
+                {
+                    closeRt.anchorMin = new Vector2(0.5f, 0.075f);
+                    closeRt.anchorMax = new Vector2(0.5f, 0.075f);
+                }
+                chrome.close.transform.SetAsLastSibling();
+            }
+
             // Speaker name → header zone (left, gilt) with the guild/shop AFFILIATION as a
             // dim sub-line beneath it (owner-ratified card standard: name + affiliation +
             // portrait on every NPC card). Body text → body zone. (Drop, no re-style.)
@@ -112,29 +196,65 @@ namespace DeNelle.HUD
                 22, ElarionUi.Gilt, TMPro.FontStyles.Bold, TMPro.TextAlignmentOptions.BottomLeft);
             _affiliation = MakeLabel(headerZone, "Affiliation", Vector2.zero, new Vector2(1f, 0.42f),
                 12, ElarionUi.ParchmentDim, TMPro.FontStyles.Italic, TMPro.TextAlignmentOptions.TopLeft);
-            _body = MakeLabel(bodyZone, "Body", new Vector2(0.0f, 0.14f), new Vector2(1.0f, 1.0f),
-                16, ElarionUi.Parchment, TMPro.FontStyles.Normal, TMPro.TextAlignmentOptions.TopLeft);
+            // SCROLLABLE BODY (owner 2026-07-06: "in case there is more text, scrollable"):
+            // the upper region of the body zone hosts the §1.14 kit scroll zone (vertical,
+            // clamped, auto-hide scrollbar); the bottom sliver keeps the tap hint clear of
+            // the frame's close band. Longer passages scroll instead of overflowing.
+            var wellGo = new GameObject("BodyWell", typeof(RectTransform));
+            wellGo.transform.SetParent(bodyZone, false);
+            var wellRt = wellGo.GetComponent<RectTransform>();
+            wellRt.anchorMin = new Vector2(0f, 0.18f); wellRt.anchorMax = Vector2.one;
+            wellRt.offsetMin = Vector2.zero; wellRt.offsetMax = Vector2.zero;
+            var scrollZone = ElarionUiKit.MakeScrollZone(wellGo.transform, spacing: 0f, padding: 8);
 
-            _tapHint = MakeLabel(bodyZone, "TapHint", new Vector2(0.45f, 0.0f), new Vector2(1.0f, 0.14f),
-                11, ElarionUi.ParchmentDim, TMPro.FontStyles.Italic, TMPro.TextAlignmentOptions.BottomRight).gameObject;
+            _body = MakeLabel(scrollZone.content, "Body", Vector2.zero, Vector2.one,
+                16, ElarionUi.Parchment, TMPro.FontStyles.Normal, TMPro.TextAlignmentOptions.TopLeft);
+            // The scroll column deliberately does NOT control child height (§1.14 kit note —
+            // the captured PartyShop collapse, runs 9400/9401), so the label carries its own:
+            // a vertical ContentSizeFitter grows it with its text, and the column's own
+            // fitter sums that into a scrollable content height.
+            var bodyFit = _body.gameObject.AddComponent<ContentSizeFitter>();
+            bodyFit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            bodyFit.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            // §1.14 belt-and-braces: wrap + truncate protection on the block. min=max keeps
+            // the reading size deterministic (the scroll well, not shrinking text, absorbs
+            // long passages).
+            ElarionUiKit.FitBlock(_body, minSize: 16f, maxSize: 16f);
+
+            // Tap-to-advance INSIDE the scrolling well: the viewport's raycast surface
+            // doubles as the click target (Button = click, ScrollRect = drag; uGUI splits
+            // them at the drag threshold) — tapping the text advances, dragging it scrolls.
+            var vpBtn = scrollZone.viewport.gameObject.AddComponent<Button>();
+            vpBtn.transition = Selectable.Transition.None;
+            vpBtn.onClick.AddListener(OnBoxTapped);
+
+            // OWNER F8 t=322: "Tap to continue needs to be as large as the other text,
+            // centered at bottom" — body-size (16), bottom-CENTER of the body zone's
+            // reserved sliver (under the scrolling well, inside the one frame).
+            _tapHint = MakeLabel(bodyZone, "TapHint", new Vector2(0.0f, 0.0f), new Vector2(1.0f, 0.16f),
+                16, ElarionUi.ParchmentDim, TMPro.FontStyles.Italic, TMPro.TextAlignmentOptions.Bottom).gameObject;
             _tapHint.GetComponent<TMPro.TextMeshProUGUI>().text = "tap to continue";
 
             // Speaker portrait → the frame's medallion socket (if present). The actual sprite is
             // resolved + REFRESHED every Repaint (RefreshPortrait), because a per-node `portrait`
             // command can change the speaker portrait mid-conversation. Built once here, repainted live.
-            if (chrome.layout != null && chrome.layout.medallion != null)
-            {
-                _portrait = ElarionUiKit.Portrait(chrome.layout.medallion,
-                    ResolveSpeakerPortrait(_vm != null ? _vm.Speaker : null, out _), active: false);
-                if (_portrait != null && _portrait.image != null) _portrait.image.raycastTarget = false;
-            }
+            // Portrait → the view's OWN top-left socket (the strip-measured kit medallion —
+            // a full-height left column on this tall panel — is deactivated above).
+            _portrait = ElarionUiKit.Portrait(portraitHost,
+                ResolveSpeakerPortrait(_vm != null ? _vm.Speaker : null, out _), active: false);
+            if (_portrait != null && _portrait.image != null) _portrait.image.raycastTarget = false;
+            // OWNER F8 t=322: "can we lose yellow circle around image?" — the kit's
+            // Portrait always adds a gold Ring overlay; hide it here (kit untouched —
+            // HUD/battle portraits keep theirs). The portrait reads plain on the plate.
+            if (_portrait != null && _portrait.ring != null) _portrait.ring.gameObject.SetActive(false);
 
-            // Options column (above the strip), built on demand.
+            // Options column — overlays the panel's lower body (built on demand; the tap
+            // hint hides while options show, and choices render as opaque plates on top).
             var col = new GameObject("Options");
             col.transform.SetParent(_ui.transform, false);
             _optionsCol = col.AddComponent<RectTransform>();
-            _optionsCol.anchorMin = new Vector2(0.12f, 0.25f);
-            _optionsCol.anchorMax = new Vector2(0.88f, 0.55f);
+            _optionsCol.anchorMin = new Vector2(0.31f, 0.30f);
+            _optionsCol.anchorMax = new Vector2(0.69f, 0.52f);
             _optionsCol.offsetMin = Vector2.zero; _optionsCol.offsetMax = Vector2.zero;
             var vlg = col.AddComponent<VerticalLayoutGroup>();
             vlg.spacing = 8; vlg.childControlHeight = true; vlg.childControlWidth = true;
@@ -155,6 +275,20 @@ namespace DeNelle.HUD
             bool open = _vm.IsOpen;
             _ui.SetActive(open);
             if (!open) return;
+
+            // Register + announce to the modal arbiter on the FIRST visible paint.
+            // (DialogueService raises Opened BEFORE vm.Begin(), so IsOpen is still false
+            // inside OnOpened — notifying there would trip the arbiter's isOpen-verify
+            // false-Fail. A command-only dialogue that closes before its first open
+            // paint never registers, correctly.)
+            if (!_arbiterNotified)
+            {
+                if (_handle == null)
+                    _handle = PanelManager.RegisterBattleAllowed("Dialogue",
+                        () => _vm?.Close(), () => _ui != null && _ui.activeSelf);
+                _arbiterNotified = true;
+                PanelManager.NotifyOpened(_handle);
+            }
 
             if (_speaker != null) { _speaker.text = _vm.Speaker; _speaker.gameObject.SetActive(!string.IsNullOrEmpty(_vm.Speaker)); }
             if (_affiliation != null)
@@ -322,6 +456,18 @@ namespace DeNelle.HUD
             var sp = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
             sp.name = "DialogueSilhouette";
             return sp;
+        }
+
+        // Bare fraction-anchored rect inside the panel interior (the view's own drop-zones —
+        // the FrameDialogue kit zones are strip-measured and unusable on the reading panel).
+        private static RectTransform MakeZone(Transform parent, string name, Vector2 aMin, Vector2 aMax)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = aMin; rt.anchorMax = aMax;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            return rt;
         }
 
         private static TMPro.TextMeshProUGUI MakeLabel(Transform parent, string name, Vector2 aMin, Vector2 aMax,

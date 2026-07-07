@@ -44,6 +44,10 @@ namespace DeNelle.Village.Hero
         private Transform _panelRoot;   // WO-562: the obsidian content panel (tab strip re-parents here)
         private GameObject _contentRoot;
         private TMPro.TextMeshProUGUI _statusText;
+        // EYES-SWEEP 2026-07-06 (#4): right-hand detail pane — tapping a rumor row reads its full
+        // text here; the empty state renders an authored line (no silent blanks law).
+        private TMPro.TextMeshProUGUI _detailTitle;
+        private TMPro.TextMeshProUGUI _detailBody;
         private bool _subscribed;
 
         // WO-454 Phase 2: board tab filter. Story/Gear/Endgame read QuestCatalog by Type;
@@ -94,10 +98,11 @@ namespace DeNelle.Village.Hero
             var viewportGo = new GameObject("Viewport", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
             viewportGo.transform.SetParent(bodyHost, false);
             var vpr = viewportGo.GetComponent<RectTransform>();
-            // MOBILE-FIRST (owner 2026-07-03): a centered, thumb-zone column — NOT a full-bleed
-            // stretched bar. Rows still force-expand, but to this narrower centered width.
-            vpr.anchorMin = new Vector2(0.14f, 0.08f);
-            vpr.anchorMax = new Vector2(0.86f, 0.82f); // WO-454: leave room for the tab strip above
+            // EYES-SWEEP 2026-07-06 (#4): the old centered column (0.14–0.86) left the right half of
+            // the wide Quest frame as a large BLANK region. Two-pane layout now: rumor list LEFT,
+            // detail pane RIGHT (built below) with an authored empty state.
+            vpr.anchorMin = new Vector2(0.03f, 0.08f);
+            vpr.anchorMax = new Vector2(0.56f, 0.82f); // WO-454: leave room for the tab strip above
             vpr.offsetMin = Vector2.zero;
             vpr.offsetMax = Vector2.zero;
             viewportGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f); // near-invisible catcher so drags scroll
@@ -115,7 +120,9 @@ namespace DeNelle.Village.Hero
             vlg.childControlWidth  = true; vlg.childForceExpandWidth  = true;
             vlg.childControlHeight = true; vlg.childForceExpandHeight = false;
             vlg.spacing = 10f;
-            vlg.padding = new RectOffset(6, 6, 6, 6);
+            // SWEEP 9413 R2 (#5): bottom padding = one row so the last row scrolls fully clear of
+            // the viewport mask instead of being sliced mid-glyph at max scroll.
+            vlg.padding = new RectOffset(6, 6, 6, 176);
             var csf = _contentRoot.GetComponent<ContentSizeFitter>();
             csf.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
             csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
@@ -128,12 +135,53 @@ namespace DeNelle.Village.Hero
             scroll.movementType = ScrollRect.MovementType.Clamped;
             scroll.scrollSensitivity = 25f;
 
+            // Detail pane (EYES-SWEEP 2026-07-06 #4): right half of the body. A dark plate + title +
+            // body text; ShowDetail fills it when a row is tapped; the empty state is an AUTHORED
+            // line — a blank region is never rendered (no silent blanks law).
+            var detailGo = new GameObject("DetailPane", typeof(Image));
+            detailGo.transform.SetParent(bodyHost, false);
+            var dRect = detailGo.GetComponent<RectTransform>();
+            dRect.anchorMin = new Vector2(0.585f, 0.08f);
+            dRect.anchorMax = new Vector2(0.97f, 0.82f);
+            dRect.offsetMin = Vector2.zero; dRect.offsetMax = Vector2.zero;
+            var dImg = detailGo.GetComponent<Image>();
+            // SWEEP 9413 R2 (#1): the slot_item plate rendered as a large TAN slab under the copy —
+            // wrong family for this well. Obsidian-dark fill, consistent with the row plates; the
+            // title/body stay top-anchored so short copy reads intentional over the dark pane.
+            dImg.color = new Color(0f, 0f, 0f, 0.35f);
+            dImg.raycastTarget = false;
+
+            var dTitleGo = new GameObject("DetailTitle", typeof(TMPro.TextMeshProUGUI));
+            dTitleGo.transform.SetParent(detailGo.transform, false);
+            var dtRect = dTitleGo.GetComponent<RectTransform>();
+            dtRect.anchorMin = new Vector2(0.06f, 0.86f);
+            dtRect.anchorMax = new Vector2(0.94f, 0.97f);
+            dtRect.offsetMin = Vector2.zero; dtRect.offsetMax = Vector2.zero;
+            _detailTitle = dTitleGo.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(_detailTitle);
+            _detailTitle.fontStyle = TMPro.FontStyles.Bold;
+            _detailTitle.color = ElarionUi.Gilt;
+            _detailTitle.alignment = TMPro.TextAlignmentOptions.Left;
+
+            var dBodyGo = new GameObject("DetailBody", typeof(TMPro.TextMeshProUGUI));
+            dBodyGo.transform.SetParent(detailGo.transform, false);
+            var dbRect = dBodyGo.GetComponent<RectTransform>();
+            dbRect.anchorMin = new Vector2(0.06f, 0.05f);
+            dbRect.anchorMax = new Vector2(0.94f, 0.84f);
+            dbRect.offsetMin = Vector2.zero; dbRect.offsetMax = Vector2.zero;
+            _detailBody = dBodyGo.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(_detailBody);
+            _detailBody.color = ElarionUi.Parchment;
+            _detailBody.alignment = TMPro.TextAlignmentOptions.TopLeft;
+            _detailBody.textWrappingMode = TMPro.TextWrappingModes.Normal;
+            ShowDetailEmpty();
+
             // Status line
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
             statusGo.transform.SetParent(bodyHost, false);
             var sRect = statusGo.GetComponent<RectTransform>();
-            sRect.anchorMin = new Vector2(0.14f, 0.01f);
-            sRect.anchorMax = new Vector2(0.86f, 0.07f);
+            sRect.anchorMin = new Vector2(0.03f, 0.01f);
+            sRect.anchorMax = new Vector2(0.97f, 0.07f);
             _statusText = statusGo.GetComponent<TMPro.TextMeshProUGUI>();
             ElarionUiKit.EnsureFont(_statusText); // font-safe: a code-built TMP with no font NREs on first GenerateTextMesh
             _statusText.fontSize = 14;
@@ -168,6 +216,8 @@ namespace DeNelle.Village.Hero
             _ui = null;
             _contentRoot = null;
             _statusText = null;
+            _detailTitle = null;
+            _detailBody = null;
             _tabStrip = null;
             PanelManager.NotifyClosed(_handle);
         }
@@ -267,33 +317,17 @@ namespace DeNelle.Village.Hero
             {
                 string key = TabKeys[i];
                 bool isActive = key == _activeTab;
-
-                var btnGo = new GameObject("Tab_" + key, typeof(Button), typeof(Image));
-                btnGo.transform.SetParent(_tabStrip.transform, false);
-                var br = btnGo.GetComponent<RectTransform>();
-                float x0 = i * (w + gap);
-                br.anchorMin = new Vector2(x0, 0f);
-                br.anchorMax = new Vector2(x0 + w, 1f);
-                br.offsetMin = Vector2.zero;
-                br.offsetMax = Vector2.zero;
-                btnGo.GetComponent<Image>().color = isActive
-                    ? new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.92f)
-                    : new Color(ElarionUi.PanelStone.r, ElarionUi.PanelStone.g, ElarionUi.PanelStone.b, 0.85f);
                 string tabKey = key;
-                btnGo.GetComponent<Button>().onClick.AddListener(() => SetTab(tabKey));
-
-                var lbl = new GameObject("L", typeof(TMPro.TextMeshProUGUI));
-                lbl.transform.SetParent(btnGo.transform, false);
-                var lr = lbl.GetComponent<RectTransform>();
-                lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
-                lr.offsetMin = Vector2.zero; lr.offsetMax = Vector2.zero;
-                var lt = lbl.GetComponent<TMPro.TextMeshProUGUI>();
-                ElarionUiKit.EnsureFont(lt);
-                lt.text = TabLabels[i];
-                lt.fontSize = 12;
-                lt.fontStyle = isActive ? TMPro.FontStyles.Bold : TMPro.FontStyles.Normal;
-                lt.color = isActive ? ElarionUi.Ink : ElarionUi.Parchment;
-                lt.alignment = TMPro.TextAlignmentOptions.Center;
+                float x0 = i * (w + gap);
+                // OWNER 2026-07-06 ("theme buttons to UI common"): tabs were bespoke flat Image
+                // plates (gold/stone Color fills + hand-rolled TMP label). Now the ONE kit button —
+                // active = Yellow (gold), rest Gray — labels fitted by the kit (FitSingleLine).
+                ElarionUiKit.BuildObsidianButton(_tabStrip.transform, TabLabels[i],
+                    ElarionUiKit.ObsidianButtonStyle.Style1,
+                    isActive ? ElarionUiKit.ObsidianButtonColor.Yellow
+                             : ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(x0, 0f), new Vector2(x0 + w, 1f),
+                    () => SetTab(tabKey));
             }
         }
 
@@ -302,6 +336,7 @@ namespace DeNelle.Village.Hero
             if (_activeTab == tab) return;
             _activeTab = tab;
             if (_ui != null) BuildTabStrip(_panelRoot ?? _ui.transform);
+            ShowDetailEmpty();   // the previous selection may not exist under the new tab
             Repaint();
         }
 
@@ -329,12 +364,16 @@ namespace DeNelle.Village.Hero
             var row = MakeRowFrame(parent, "Daily_" + q.Id,
                 new Color(ElarionUi.PanelStoneDark.r, ElarionUi.PanelStoneDark.g, ElarionUi.PanelStoneDark.b, 0.85f), 120f);
 
-            CreateTitle(row.transform, q.Label ?? q.TemplateId ?? q.Slot);
+            string title = q.Label ?? q.TemplateId ?? q.Slot;
+            CreateTitle(row.transform, title);
 
             string progress = q.Completed
                 ? $"Complete  ({q.Target}/{q.Target})"
                 : $"{q.Progress}/{q.Target}";
             CreateHook(row.transform, progress, q.Completed ? ElarionUi.Gilt : ElarionUi.ParchmentDim);
+            MakeRowSelectable(row, title,
+                (q.Completed ? "Complete." : "In progress — " + progress + ".") +
+                "\n\nDaily quests reset with the day. Finish them for a steady trickle of rewards.");
         }
 
         // ── Row builders ─────────────────────────────────────────────────────────
@@ -381,31 +420,24 @@ namespace DeNelle.Village.Hero
             CreateHook(row.transform, objective, ElarionUi.ParchmentDim);
 
             // WO-454: Track → pin this quest to the far-right HUD slot, then close the board.
+            // OWNER 2026-07-06 ("theme buttons to UI common"): was a bespoke flat plate (gold/stone
+            // Image color + hand-rolled TMP). Now the ONE kit button — tracked = Green (the pack's
+            // affirmative, plus the TRACKED label so state is never color-only), untracked = Gold.
+            // SWEEP 9413 R2 (#1): at card size the 0.80–0.99 band ellipsized the label ("TR…" —
+            // the kit's FontFloor won't shrink below 30). Wider band + shorter words: PIN/PINNED.
             bool isTracked = svc != null && svc.TrackedId == def.Id;
-            var trackGo = new GameObject("Track", typeof(Button), typeof(Image));
-            trackGo.transform.SetParent(row.transform, false);
-            var tbr = trackGo.GetComponent<RectTransform>();
-            tbr.anchorMin = new Vector2(0.80f, 0.18f);
-            tbr.anchorMax = new Vector2(0.99f, 0.82f);
-            tbr.offsetMin = Vector2.zero;
-            tbr.offsetMax = Vector2.zero;
-            trackGo.GetComponent<Image>().color = isTracked
-                ? new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.92f)
-                : new Color(ElarionUi.PanelStone.r, ElarionUi.PanelStone.g, ElarionUi.PanelStone.b, 0.92f);
             string tid = def.Id;
-            trackGo.GetComponent<Button>().onClick.AddListener(() => OnTrack(tid));
+            ElarionUiKit.BuildObsidianButton(row.transform,
+                isTracked ? "PINNED" : "PIN",
+                ElarionUiKit.ObsidianButtonStyle.Style1,
+                isTracked ? ElarionUiKit.ObsidianButtonColor.Green
+                          : ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.66f, 0.18f), new Vector2(0.985f, 0.82f),
+                () => OnTrack(tid));
 
-            var tl = new GameObject("TL", typeof(TMPro.TextMeshProUGUI));
-            tl.transform.SetParent(trackGo.transform, false);
-            var tlr = tl.GetComponent<RectTransform>();
-            tlr.anchorMin = Vector2.zero; tlr.anchorMax = Vector2.one;
-            tlr.offsetMin = Vector2.zero; tlr.offsetMax = Vector2.zero;
-            var tlt = tl.GetComponent<TMPro.TextMeshProUGUI>();
-            ElarionUiKit.EnsureFont(tlt);
-            tlt.text = isTracked ? "TRACKED" : "TRACK";
-            tlt.fontSize = 12;
-            tlt.color = ElarionUi.Ink;
-            tlt.alignment = TMPro.TextAlignmentOptions.Center;
+            MakeRowSelectable(row, def.Title ?? def.Id,
+                "Current objective:\n" + objective +
+                "\n\nThis rumor is underway. TRACK pins it to your HUD.");
         }
 
         private void CreateAvailableRow(Transform parent, QuestDef def)
@@ -422,29 +454,19 @@ namespace DeNelle.Village.Hero
                 hook = def.Stages[0].ObjectiveText;
             CreateHook(row.transform, hook, ElarionUi.Parchment);
 
-            // ACCEPT button → StartQuest.
-            var btnGo = new GameObject("Accept", typeof(Button), typeof(Image));
-            btnGo.transform.SetParent(row.transform, false);
-            var br = btnGo.GetComponent<RectTransform>();
-            br.anchorMin = new Vector2(0.80f, 0.18f);
-            br.anchorMax = new Vector2(0.99f, 0.82f);
-            br.offsetMin = Vector2.zero;
-            br.offsetMax = Vector2.zero;
-            btnGo.GetComponent<Image>().color = new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.92f);
+            // ACCEPT button → StartQuest. OWNER F8 2026-07-06 t=171 ("accept buttons should be
+            // themed obsidian"): was a bespoke flat GREEN rectangle (ElarionUi.Affordable Image
+            // color + hand-rolled TMP — a green-hue-only affordance, colorblind law). Now the ONE
+            // kit gold CTA with a fitted label, like every other panel.
+            // SWEEP 9413 R2 (#1): widened band (was 0.80–0.99 → "A…" ellipsis at card size).
             string id = def.Id;
-            btnGo.GetComponent<Button>().onClick.AddListener(() => OnAccept(id));
+            ElarionUiKit.BuildObsidianButton(row.transform, "ACCEPT",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.66f, 0.18f), new Vector2(0.985f, 0.82f),
+                () => OnAccept(id));
 
-            var bl = new GameObject("BL", typeof(TMPro.TextMeshProUGUI));
-            bl.transform.SetParent(btnGo.transform, false);
-            var blr = bl.GetComponent<RectTransform>();
-            blr.anchorMin = Vector2.zero; blr.anchorMax = Vector2.one;
-            blr.offsetMin = Vector2.zero; blr.offsetMax = Vector2.zero;
-            var blt = bl.GetComponent<TMPro.TextMeshProUGUI>();
-            ElarionUiKit.EnsureFont(blt);
-            blt.text = "ACCEPT";
-            blt.fontSize = 13;
-            blt.color = ElarionUi.Ink;
-            blt.alignment = TMPro.TextAlignmentOptions.Center;
+            MakeRowSelectable(row, def.Title ?? def.Id,
+                hook + "\n\nAccept this rumor to add it to your ledger.");
         }
 
         // Shared row frame: an Image strip with a FIXED PIXEL height. The Content's
@@ -457,6 +479,41 @@ namespace DeNelle.Village.Hero
             row.GetComponent<LayoutElement>().preferredHeight = heightPx;
             row.GetComponent<Image>().color = bg;
             return row;
+        }
+
+        // EYES-SWEEP 2026-07-06 (#4): tapping a row reads its rumor in the right-hand detail
+        // pane. The row's own Image becomes the click target; the TRACK/ACCEPT kit buttons sit
+        // on top and keep their own clicks.
+        private void MakeRowSelectable(GameObject row, string title, string body)
+        {
+            var btn = row.AddComponent<Button>();
+            btn.targetGraphic = row.GetComponent<Image>();
+            ElarionUiKit.StyleButtonColors(btn);
+            btn.onClick.AddListener(() => ShowDetail(title, body));
+        }
+
+        // Fill the detail pane with the selected rumor's full text.
+        private void ShowDetail(string title, string body)
+        {
+            if (_detailTitle == null || _detailBody == null) return;
+            _detailTitle.text = title ?? "";
+            ElarionUiKit.FitSingleLine(_detailTitle);
+            _detailBody.text = body ?? "";
+            _detailBody.fontSize = 14;
+            ElarionUiKit.FitBlock(_detailBody, 10f, 15f);
+        }
+
+        // Authored empty state — the pane must never render as a blank region (no silent blanks).
+        private void ShowDetailEmpty()
+        {
+            if (_detailTitle == null || _detailBody == null) return;
+            _detailTitle.text = "The Board Awaits";
+            ElarionUiKit.FitSingleLine(_detailTitle);
+            _detailBody.text = "Select a rumor to read the full tale.\n\n" +
+                "Whispers gather here from every corner of Elarion — pick one up, and Brom will " +
+                "point you where the trouble started.";
+            _detailBody.fontSize = 14;
+            ElarionUiKit.FitBlock(_detailBody, 10f, 15f);
         }
 
         private void CreateTitle(Transform parent, string txt)

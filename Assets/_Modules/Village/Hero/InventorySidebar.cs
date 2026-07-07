@@ -42,27 +42,35 @@ namespace DeNelle.Village
             // NOTHING selected → a quiet hint so the strip never reads as broken.
             if (sel == null)
             {
-                AddLabel(bar.transform, "Tap an item to inspect it.", 0f, 1f, InkDim,
+                // Eyes-sweep 2026-07-06: every strip label fits-or-ellipsizes inside its band
+                // (§1.14 NoWrap+ellipsis) so the thin strip's copy never paints outside it.
+                var hint = AddLabel(bar.transform, "Tap an item to inspect it.", 0f, 1f, InkDim,
                          ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.03f, 0.97f);
+                ElarionUiKit.FitSingleLine(hint, 0f, ElarionUi.FontLabel);
                 // Surface a prior action's status (e.g. "Used X.") even with no live selection.
                 if (!string.IsNullOrEmpty(_vm.Status))
-                    AddLabel(bar.transform, _vm.Status, 0f, 1f,
+                {
+                    var st = AddLabel(bar.transform, _vm.Status, 0f, 1f,
                              new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 1f),
                              ElarionUi.FontMicro, TMPro.TextAlignmentOptions.MidlineRight, 0.03f, 0.74f);
+                    ElarionUiKit.FitSingleLine(st, 0f, ElarionUi.FontMicro);
+                }
                 return;
             }
 
             var d = sel.Value;
 
             // LEFT: item name (top) + stats (bottom). RIGHT: the explicit Equip/Use CTA.
-            AddLabel(bar.transform, d.Name ?? "", 0.50f, 1f, GiltInk,
+            var nmLbl = AddLabel(bar.transform, d.Name ?? "", 0.50f, 1f, GiltInk,
                      ElarionUi.FontBody, TMPro.TextAlignmentOptions.MidlineLeft, 0.03f, 0.74f, bold: true);
+            ElarionUiKit.FitSingleLine(nmLbl, 0f, ElarionUi.FontBody);
             string statLine = d.Stats ?? "";
             if (!string.IsNullOrEmpty(_vm.Status)) statLine = _vm.Status;   // last action confirmation
-            AddLabel(bar.transform, statLine, 0f, 0.50f,
+            var stLbl = AddLabel(bar.transform, statLine, 0f, 0.50f,
                      string.IsNullOrEmpty(_vm.Status) ? InkDim
                         : new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 1f),
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.MidlineLeft, 0.03f, 0.74f);
+            ElarionUiKit.FitSingleLine(stLbl, 0f, ElarionUi.FontMicro);
 
             // The CTA: Equip for gear, Use for a consumable. The action lives HERE (not on the
             // grid tap) — so it always fires on an explicit press and always surfaces vm.Status.

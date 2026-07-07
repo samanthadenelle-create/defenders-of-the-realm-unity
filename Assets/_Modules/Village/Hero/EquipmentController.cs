@@ -870,6 +870,8 @@ namespace DeNelle.Village
             }
 
             gripRoot.transform.SetParent(hand, false);
+            _weaponParentCompensate = true;
+            CompensateParentScale(gripRoot.transform);
             gripRoot.transform.localPosition = vis.gripPos;
 
             // Hold state: store the base grip euler so the idle<->combat pose can offset
@@ -1564,6 +1566,7 @@ namespace DeNelle.Village
                 gripRoot.transform.localPosition = vis.gripPos + fo.pos;
                 gripRoot.transform.localRotation = Quaternion.Euler(fo.eulerRot);
                 gripRoot.transform.localScale    = Vector3.one * (fo.scale > 0f ? fo.scale : 1f);
+                _offHandParentCompensate = false;   // owner dialed fo.scale by eye under this bone — don't re-solve it
             }
             // NATIVE Blink shield: trust the authored grip-at-origin + orientation (scale-only), and
             // seat dead-centre in the hand (zero gripPos/euler) like the bow's proven off-hand seat —
@@ -1575,6 +1578,8 @@ namespace DeNelle.Village
                 FlowTrace.Step("Equip", "off-hand seat: NATIVE (trust authored grip-at-origin, scale-only)");
                 SeatNative(prop, gripRoot.transform, heldLen);
                 gripRoot.transform.SetParent(hand, false);
+                _offHandParentCompensate = true;
+                CompensateParentScale(gripRoot.transform);
                 gripRoot.transform.localPosition = Vector3.zero;
                 gripRoot.transform.localRotation = Quaternion.identity;
             }
@@ -1583,6 +1588,8 @@ namespace DeNelle.Village
                 FlowTrace.Step("Equip", "off-hand seat: NormalizeInto + preset grip (Tripo/Resources shield)");
                 NormalizeInto(prop, gripRoot.transform, heldLen, resolveHilt: false);
                 gripRoot.transform.SetParent(hand, false);
+                _offHandParentCompensate = true;
+                CompensateParentScale(gripRoot.transform);
                 gripRoot.transform.localPosition = vis.gripPos;
                 gripRoot.transform.localRotation = Quaternion.Euler(vis.gripEuler);
             }
@@ -1719,6 +1726,7 @@ namespace DeNelle.Village
                 if (!drawn && back != null)
                 {
                     _gripRoot.SetParent(back, false);
+                    if (_weaponParentCompensate) CompensateParentScale(_gripRoot);
                     _gripRoot.localPosition = _sheatheWeaponLocalPos;
                     // DERIVED sheathe rotation (the fix): build the base orientation from the body's
                     // own axes via the SAME LookRotation(flat, blade) construction the correct battle
@@ -1730,6 +1738,7 @@ namespace DeNelle.Village
                 {
                     // Drawn (or sheathed with no back bone on this rig — never leave it floating unparented).
                     _gripRoot.SetParent(_weaponHand, false);
+                    if (_weaponParentCompensate) CompensateParentScale(_gripRoot);
                     _gripRoot.localPosition = _weaponDrawnLocalPos;
                     _gripRoot.localRotation = _baseGripRot;
                 }
@@ -1742,12 +1751,14 @@ namespace DeNelle.Village
                 if (!drawn && back != null)
                 {
                     offT.SetParent(back, false);
+                    if (_offHandParentCompensate) CompensateParentScale(offT);
                     offT.localPosition = _sheatheOffHandLocalPos;
                     offT.localRotation = ApplyGlobalWeaponYaw(Quaternion.Euler(_sheatheOffHandLocalEuler));
                 }
                 else if (_offHandHand != null)
                 {
                     offT.SetParent(_offHandHand, false);
+                    if (_offHandParentCompensate) CompensateParentScale(offT);
                     offT.localPosition = _offHandDrawnLocalPos;
                     offT.localRotation = _offHandDrawnLocalRot;
                 }
@@ -1759,6 +1770,37 @@ namespace DeNelle.Village
         // (GearVisualApplier.cs:217-218). Returns null on a non-Humanoid / torso-less rig, in which
         // case ApplyHoldPose keeps the prop on the hand (no back socket = never unparented/floating).
         // Cleared on a body swap (ReseatForBody) so it re-creates under the new visible body's chest.
+        // Owner F8 2026-07-06 "Shield larger than hero": props are bounds-normalized to their
+        // proportional heldLength at the WORLD ORIGIN (unit scale), then SetParent(bone, false)
+        // preserves LOCAL scale — so the rendered size gets multiplied by the bone's lossyScale,
+        // which carries the VisualFactory.Fit body-normalization factor (≠1 on CC/AccuRig rigs).
+        // This divides it back out so the world-size solve survives parenting. Re-applied on every
+        // re-parent (hand <-> back socket) since different bones can carry different lossy scales.
+        // Skipped for owner-dialed fullOverride scales (those were tuned by eye under the bone).
+        private bool _weaponParentCompensate, _offHandParentCompensate;
+
+        private static void CompensateParentScale(Transform gripRoot)
+        {
+            var p = gripRoot != null ? gripRoot.parent : null;
+            if (p == null) return;
+            Vector3 ls = p.lossyScale;
+            if (ls.x <= 1e-4f || ls.y <= 1e-4f || ls.z <= 1e-4f) return;
+            gripRoot.localScale = new Vector3(1f / ls.x, 1f / ls.y, 1f / ls.z);
+            // §12: log the RESULTING world size, not just the math — capture 9403 showed the
+            // sheathed shield still rendering oversized while these compensate lines fired,
+            // so the proof must be the rendered bounds, not the applied scale.
+            Bounds wb = default; bool hasB = false;
+            foreach (var r in gripRoot.GetComponentsInChildren<Renderer>())
+            {
+                if (r == null) continue;
+                if (!hasB) { wb = r.bounds; hasB = true; } else wb.Encapsulate(r.bounds);
+            }
+            FlowTrace.Step("Equip",
+                $"parent-scale compensate: parent='{p.name}' lossy=({ls.x:0.###},{ls.y:0.###},{ls.z:0.###}) " +
+                $"-> worldBounds={(hasB ? wb.size.ToString("0.###") : "<no renderer>")} " +
+                "(the proportional solve should read here as the heldLength on the longest axis)");
+        }
+
         private Transform ResolveBackSocket()
         {
             if (_backSocket != null) return _backSocket;   // a destroyed Unity object compares == null → re-created

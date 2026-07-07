@@ -36,7 +36,10 @@ namespace DeNelle.Core.UI
     /// </summary>
     public enum PanelId
     {
-        /// <summary>Hero talent trees — the Arcane Tower.</summary>
+        /// <summary>RETIRED (eyes-sweep 2026-07-06) — the legacy Hero Talents panel was deleted
+        /// (2026-07-03 S6) and its last flag-gated route removed; nothing registers or opens this id.
+        /// The Arcane Tower / talents route is <see cref="HeroSkillTree"/>. Value kept so
+        /// default(PanelId) stays a defined member; do NOT register new panels against it.</summary>
         HeroTalents = 0,
         /// <summary>Village crafting bench — the Workshop.</summary>
         Crafting = 1,
@@ -74,6 +77,12 @@ namespace DeNelle.Core.UI
         /// find-or-spawns the store on first open (merchant "Realm Store" option + ?realmstore=1
         /// demo URL). SEPARATE from the Glimmer cosmetic shop (PanelId.CosmeticShop).</summary>
         RealmStore = 13,
+        /// <summary>Hero inventory (bag). Registered scene-independently by
+        /// HeroInventoryController's boot hook (owner 07-06 "Clicking bag doesnt do anything":
+        /// the old event chain's ONLY listener, HeroEquipHud, is scene-whitelisted and never
+        /// spawns in Main_Castle_Overworld — 0 subscribers, log-proven. The kit Bag button now
+        /// routes here, reflection-free, no scene whitelist to keep in sync).</summary>
+        Inventory = 14,
     }
 
     /// <summary>
@@ -201,6 +210,18 @@ namespace DeNelle.Core.UI
             bool anyOpen = PanelManager.AnyOpen;
             if (!anyOpen)
             {
+                // WO-437 battle-lock refusal is a CONTRACT, not the WO-465 invisible-scrim
+                // class: PanelManager.NotifyOpened rejects a non-battle-allowed panel while
+                // BattleLock.IsInBattle(), so "nothing open" here is the intended refusal
+                // ("no shopping while being killed", WO-599). Fail loud ONLY when nothing
+                // opened AND no battle-lock explains it (fleet 9000/9200 false-flagged the
+                // refusal as scrim on RumorBoard/BuildingUpgrade, 2026-07-06).
+                if (DeNelle.Core.Combat.BattleLock.IsInBattle())
+                {
+                    FlowTrace.Warn("UI",
+                        "PanelRouter: '" + id + "' open REFUSED by battle-lock (WO-437 contract, in-battle) — not a scrim failure.");
+                    return false;
+                }
                 FlowTrace.Fail("UI",
                     "PanelRouter: '" + id + "' open action ran but NO panel is recorded open afterwards " +
                     "— panel failed to become visible (WO-465 invisible-scrim class).");

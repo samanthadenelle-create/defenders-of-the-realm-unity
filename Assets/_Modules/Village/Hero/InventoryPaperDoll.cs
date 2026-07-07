@@ -107,12 +107,19 @@ namespace DeNelle.Village
                                    ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f,
                                    spacing: 2f, bold: true);
             gearTag.raycastTarget = false;
+            // Eyes-sweep 2026-07-06: "VIEW GEAR" painted over "Grom Ironhand / KNIGHT LV1" —
+            // FontHead text overflowed the thin ribbon down into the name band. Fit inside (§1.14).
+            ElarionUiKit.FitSingleLine(gearTag, 0f, ElarionUi.FontHead);
 
             // Name + class • level — centered band just under the portrait (no overlap with the art).
-            AddLabel(medBand.transform, HeroDisplayName(job), 0.44f, 0.515f, Ink,
+            // Both labels fit-or-ellipsize inside their own band so they never bleed into the
+            // ribbon above or the bars below.
+            var heroNameLbl = AddLabel(medBand.transform, HeroDisplayName(job), 0.44f, 0.515f, Ink,
                      ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 1f, bold: true);
-            AddLabel(medBand.transform, Cap(job).ToUpperInvariant() + "   LV " + level, 0.385f, 0.44f,
+            ElarionUiKit.FitSingleLine(heroNameLbl, 0f, ElarionUi.FontHead);
+            var classLbl = AddLabel(medBand.transform, Cap(job).ToUpperInvariant() + "   LV " + level, 0.385f, 0.44f,
                      InkMicro, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 2f);
+            ElarionUiKit.FitSingleLine(classLbl, 0f, ElarionUi.FontMicro);
 
             // Colored bars in NON-overlapping vertical bands (HP red / MP blue / LVL green),
             // full card width below the name. Single HP bar (dup removed).

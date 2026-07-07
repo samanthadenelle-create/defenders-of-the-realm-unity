@@ -294,14 +294,19 @@ namespace DeNelle.Village.Hero
                 if (c != null) Destroy(c.gameObject);
             }
 
+            // Eyes-sweep 2026-07-06 + guard sweep 9413: each caption band (drawn ABOVE its plate)
+            // is a FIXED 0.055 body-fraction tall (see CapH in BuildGearSlot — the old 16%-of-plate
+            // rule gave the short Amulet/Ring plates 9–12px caption bands; TextFitGuard proved they
+            // rendered 0 glyphs: "rect 265x9/265x12 ... STILL renders 0 visible glyphs"). Plate rects
+            // re-tuned so every caption+plate stack stays DISJOINT with the full-height caption.
             // LEFT column: Full Armor Set (large) + Shield (Off Hand).
-            BuildGearSlot(EquipVM.SlotChest,   new Vector2(0.035f, 0.46f), new Vector2(0.235f, 0.82f));
-            BuildGearSlot(EquipVM.SlotOffHand, new Vector2(0.035f, 0.10f), new Vector2(0.235f, 0.42f));
+            BuildGearSlot(EquipVM.SlotChest,   new Vector2(0.035f, 0.455f), new Vector2(0.235f, 0.80f));
+            BuildGearSlot(EquipVM.SlotOffHand, new Vector2(0.035f, 0.115f), new Vector2(0.235f, 0.40f));
 
             // RIGHT column: Weapon (Main Hand) (large) + Amulet + Ring.
-            BuildGearSlot(EquipVM.SlotMainhand, new Vector2(0.765f, 0.52f), new Vector2(0.965f, 0.82f));
-            BuildGearSlot(EquipVM.SlotAmulet,   new Vector2(0.765f, 0.33f), new Vector2(0.965f, 0.49f));
-            BuildGearSlot(EquipVM.SlotRing,     new Vector2(0.765f, 0.10f), new Vector2(0.965f, 0.30f));
+            BuildGearSlot(EquipVM.SlotMainhand, new Vector2(0.765f, 0.525f), new Vector2(0.965f, 0.80f));
+            BuildGearSlot(EquipVM.SlotAmulet,   new Vector2(0.765f, 0.325f), new Vector2(0.965f, 0.47f));
+            BuildGearSlot(EquipVM.SlotRing,     new Vector2(0.765f, 0.115f), new Vector2(0.965f, 0.27f));
         }
 
         // One labeled slot: caption above + a framed plate showing the equipped item's glyph +
@@ -310,11 +315,17 @@ namespace DeNelle.Village.Hero
         {
             var slot = FindSlot(slotKey);
 
-            // Caption above the plate.
-            float capH = (anchorMax.y - anchorMin.y) * 0.16f;
-            ElarionUiKit.Label(_slotsHost.transform, SlotCaption(slotKey),
+            // Caption above the plate — fits-or-ellipsizes inside its own band (§1.14).
+            // Guard sweep 9413 (Player.log TextFitGuard): the old 16%-of-plate-height band gave the
+            // short Amulet/Ring plates 265x9 / 265x12 px captions — below the guard's minimum line
+            // even at floor 12 → 0 visible glyphs. The band is now a FIXED body fraction (CapH =
+            // 0.055 ≈ a full 23px line at the owner's window) regardless of plate height; the
+            // RebuildSlots rects reserve exactly this gap above every plate.
+            const float capH = 0.055f;
+            var capLbl = ElarionUiKit.Label(_slotsHost.transform, SlotCaption(slotKey),
                 anchorMax.y, anchorMax.y + capH, ElarionUi.Gilt,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, anchorMin.x, anchorMax.x, bold: true);
+            ElarionUiKit.FitSingleLine(capLbl, 0f, ElarionUi.FontLabel);
 
             // Framed plate (button).
             var go = new GameObject("Slot_" + slotKey, typeof(Image), typeof(Button));
@@ -353,11 +364,19 @@ namespace DeNelle.Village.Hero
             // armor sprite instead of the generic slot glyph. Owner bug: the armor slot fell to the
             // SlotChest glyph = IconInventory ("icon_inventory" = a gold chest/bag), so equipped armor
             // read as a "gold bag". Empty slots keep the ghost glyph.
+            // Guard sweep 9413: the name band (0.26 of plate height) collapsed to 243x13px on the
+            // short Amulet plate → "Empty" rendered 0 glyphs. Guarantee the band at least the same
+            // 0.055 BODY fraction as the captions (grows on short plates), and seat the icon ABOVE
+            // the grown band so they stay disjoint.
+            float plateH = Mathf.Max(0.01f, anchorMax.y - anchorMin.y);
+            float nameTop = Mathf.Min(0.46f, Mathf.Max(filled ? 0.30f : 0.26f, 0.04f + 0.055f / plateH));
+            float iconY0 = Mathf.Max(filled ? 0.34f : 0.30f, nameTop + 0.02f);
+
             var iconSprite = filled ? ResolveSlotItemArt(slotKey, item) : null;
             if (iconSprite == null)
                 iconSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, SlotIconName(slotKey));
             var iconGo = ElarionUiKit.AddImage(go.transform, "Icon",
-                new Vector2(0.28f, filled ? 0.34f : 0.30f), new Vector2(0.72f, filled ? 0.86f : 0.78f),
+                new Vector2(0.28f, iconY0), new Vector2(0.72f, filled ? 0.86f : 0.78f),
                 Color.white, rounded: false);
             var iconImg = iconGo.GetComponent<Image>();
             iconImg.raycastTarget = false;
@@ -374,11 +393,14 @@ namespace DeNelle.Village.Hero
                     ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
             }
 
-            // Item name (or "Empty") along the bottom band.
+            // Item name (or "Empty") along the bottom band — single line, fitted, so a long name
+            // ("Ironward Plate" / "Apprentice Wand") never wraps out of its plate onto neighbours.
+            // Band top = nameTop (guard 9413: guarantees >= 0.055 body height on the short plates).
             string nameText = filled ? item.Name : "Empty";
-            ElarionUiKit.Label(go.transform, nameText, 0.04f, filled ? 0.30f : 0.26f,
+            var slotName = ElarionUiKit.Label(go.transform, nameText, 0.04f, nameTop,
                 filled ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
                 ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: filled);
+            ElarionUiKit.FitSingleLine(slotName, 0f, ElarionUi.FontMicro);
         }
 
         private void OnSlotTapped(string slotKey)
@@ -403,8 +425,10 @@ namespace DeNelle.Village.Hero
             CloseDrawer();
             _drawerSlotKey = slotKey;
 
+            // Bottom raised 0.02 -> 0.17 (eyes-sweep rule 2): the drawer ends ABOVE the shared
+            // bottom-centre Close band instead of extending underneath it; same drawer height.
             _drawerHost = ElarionUiKit.PanelFramed(_panelTransform,
-                new Vector2(0.06f, 0.02f), new Vector2(0.94f, 0.40f),
+                new Vector2(0.06f, 0.17f), new Vector2(0.94f, 0.55f),
                 deep: true, packSpriteName: RpgUiCatalog.PanelWindowDark);
             var fill = ElarionUiKit.AddImage(_drawerHost.transform, "DrawerFill",
                 new Vector2(0.02f, 0.03f), new Vector2(0.98f, 0.97f),
@@ -413,8 +437,9 @@ namespace DeNelle.Village.Hero
             if (fImg != null) fImg.raycastTarget = false;
             fill.transform.SetAsFirstSibling();
 
-            ElarionUiKit.Label(_drawerHost.transform, "Change " + SlotCaption(slotKey), 0.84f, 0.97f,
+            var drawerTitle = ElarionUiKit.Label(_drawerHost.transform, "Change " + SlotCaption(slotKey), 0.84f, 0.97f,
                 ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+            ElarionUiKit.FitSingleLine(drawerTitle, 0f, ElarionUi.FontLabel);   // never wraps over the buttons
 
             // Unequip + Done buttons (top row of the drawer).
             var unequip = ElarionUiKit.ButtonPack(_drawerHost.transform, "Unequip", ElarionUiKit.ButtonKind.Quiet,
@@ -554,6 +579,7 @@ namespace DeNelle.Village.Hero
             t.color = ElarionUi.ParchmentDim;
             t.alignment = TMPro.TextAlignmentOptions.Center;
             t.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(t);   // empty-state copy fits its row
         }
 
         private Transform BuildScrollContent()
@@ -640,9 +666,10 @@ namespace DeNelle.Village.Hero
 
             string nameText = row.Name;
             if (row.Equipped) nameText += "   [Equipped]";
-            ElarionUiKit.Label(go.transform, nameText, 0.18f, 0.92f,
+            var rowName = ElarionUiKit.Label(go.transform, nameText, 0.18f, 0.92f,
                 row.Equipped ? ElarionUi.Gilt : ElarionUi.Parchment,
                 ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.18f, 0.74f, bold: row.Equipped);
+            ElarionUiKit.FitSingleLine(rowName, 0f, ElarionUi.FontBody);   // never wraps under the Equip CTA
 
             string id = row.Id;
             bool isWeaponSlot = slotKey == EquipVM.SlotMainhand;

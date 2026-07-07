@@ -391,6 +391,7 @@ namespace DeNelle.Core.UI
                             : Label(pf.transform, "", 0f, 1f, ElarionUi.Parchment, ElarionUi.FontLabel,
                                     TextAlignmentOptions.Center, 0f, 1f, bold: true);
                         h.valueLabel.raycastTarget = false;
+                        FitSingleLine(h.valueLabel);                       // §1.14 — value never spills the bar
                     }
                     h.SetImmediate(1f, 1f);
                     return h;
@@ -487,6 +488,7 @@ namespace DeNelle.Core.UI
                 valueLabel.outlineColor = new Color32(10, 10, 14, 200);
                 valueLabel.outlineWidth = 0.14f;
                 valueLabel.raycastTarget = false;
+                FitSingleLine(valueLabel);                                 // §1.14 — value never spills the bar
                 valueLabel.transform.SetAsLastSibling();
             }
 
@@ -577,7 +579,12 @@ namespace DeNelle.Core.UI
                 if (pfBtn != null)
                 {
                     var pfLabel = FindDeep<TMP_Text>(pf.transform, "text", "label");
-                    if (pfLabel != null) { pfLabel.text = label ?? ""; EnsureFont(pfLabel, FontRole.Body); }
+                    if (pfLabel != null)
+                    {
+                        pfLabel.text = label ?? "";
+                        EnsureFont(pfLabel, FontRole.Body);
+                        FitSingleLine(pfLabel);                            // §1.14 — button text never clips ("BU SEL")
+                    }
                     else
                     {
                         var overlay = Label(pf.transform, label ?? "", 0f, 1f,
@@ -585,6 +592,7 @@ namespace DeNelle.Core.UI
                             ElarionUi.FontBody, TextAlignmentOptions.Center, 0f, 1f, bold: true);
                         overlay.raycastTarget = false;
                         EnsureFont(overlay, FontRole.Body);
+                        FitSingleLine(overlay);                            // §1.14
                     }
                     if (onClick != null) pfBtn.onClick.AddListener(() => onClick());
                     return pfBtn;
@@ -620,6 +628,7 @@ namespace DeNelle.Core.UI
                            ElarionUi.FontBody, TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
             tt.raycastTarget = false;
             EnsureFont(tt, FontRole.Body);
+            FitSingleLine(tt);                                             // §1.14 — button text never clips
             return btn;
         }
 
@@ -734,6 +743,7 @@ namespace DeNelle.Core.UI
                 TextAlignmentOptions.MidlineRight, 0.32f, 0.94f, bold: primary);
             amount.raycastTarget = false;
             EnsureFont(amount, FontRole.Body);
+            FitSingleLine(amount);                                         // §1.14 — big wallets never spill the chip
 
             var handle = new CurrencyChipHandle { root = go, icon = icon, amount = amount, plate = plate };
             handle.SetAmount(0, animate: false);
@@ -767,6 +777,11 @@ namespace DeNelle.Core.UI
             public void SetIcon(Sprite s)
             {
                 if (icon == null) return;
+                // WO-611 F1-B (ABILITY_ICON_AUDIT_2026-07-05): a null sprite must NEVER blank an action
+                // slot (owner "there must ALWAYS be an image"; HUD_OBSIDIAN §1 "null art can never blank
+                // a surface"). Substitute the concept table's catch-all default (icon_combat) so a blank
+                // ability/action slot is structurally impossible even when a future concept is unmapped.
+                if (s == null) s = ConceptIconResolver.DefaultSprite();
                 icon.sprite = s;
                 icon.enabled = s != null;
             }
@@ -983,6 +998,7 @@ namespace DeNelle.Core.UI
                               ?? Label(pf.transform, "", 0f, 1f, ElarionUi.Parchment, ElarionUi.FontLabel,
                                        TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
                     h.label.raycastTarget = false;
+                    FitSingleLine(h.label);                                // §1.14 — "Caster: Ability" never spills
                     h.group = pf.GetComponent<CanvasGroup>() ?? pf.AddComponent<CanvasGroup>();
                     h.SetCast("", 0f);
                     return h;
@@ -1045,6 +1061,7 @@ namespace DeNelle.Core.UI
             h.label = Label(go.transform, "", 0f, 1f, ElarionUi.Parchment, ElarionUi.FontLabel,
                             TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
             h.label.raycastTarget = false;
+            FitSingleLine(h.label);                                        // §1.14 — "Caster: Ability" never spills
             h.SetCast("", 0f);
             return h;
         }
@@ -1121,6 +1138,7 @@ namespace DeNelle.Core.UI
                             ElarionUi.FontBody, TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
             lbl.raycastTarget = false;
             EnsureFont(lbl, FontRole.Body);
+            FitSingleLine(lbl);                                            // §1.14 — tab text never truncates mid-word
 
             return new TabHandle { button = btn, label = lbl, selection = sel };
         }
@@ -1299,6 +1317,7 @@ namespace DeNelle.Core.UI
                             0.08f, 0.82f, bold: false);
             h.label.raycastTarget = false;
             EnsureFont(h.label, FontRole.Body);
+            FitSingleLine(h.label);                                        // §1.14 — option text never clips
 
             var caret = Label(go.transform, "v", 0f, 1f, ElarionUi.Gilt, ElarionUi.FontLabel,
                               TextAlignmentOptions.Center, 0.84f, 0.98f, bold: true);
@@ -1466,6 +1485,7 @@ namespace DeNelle.Core.UI
 
             h.name = Label(go.transform, "", 0.60f, 0.95f, ElarionUi.Parchment,
                            ElarionUi.FontHead, TextAlignmentOptions.Center, 0.12f, 0.88f, bold: true);
+            FitSingleLine(h.name);                                         // §1.14 — long target names ellipsize
             h.level = Label(go.transform, "", 0.60f, 0.95f, ElarionUi.Gilt,
                             ElarionUi.FontLabel, TextAlignmentOptions.MidlineLeft, 0.03f, 0.20f, bold: true);
             h.extra = Label(go.transform, "", 0.02f, 0.24f, ElarionUi.ParchmentDim,
@@ -1636,6 +1656,7 @@ namespace DeNelle.Core.UI
                 h.name = Label(go.transform, "", 0.52f, 0.98f, ElarionUi.Parchment,
                                ElarionUi.FontLabel, TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
                 h.name.raycastTarget = false;
+                FitSingleLine(h.name);                                     // §1.14 — long enemy titles ellipsize
                 h.hp = BuildObsidianBar(go.transform, ObsidianBarKind.Health,
                     new Vector2(0.06f, 0.10f), new Vector2(0.94f, 0.48f), withValue: false, framed: false);
                 var kindFill = RpgUiCatalog.Get(RpgUiCatalog.RoleHud, NameplateHpFill(kind));
@@ -1869,6 +1890,7 @@ namespace DeNelle.Core.UI
                     var lbl = Label(ego.transform, label, 0f, 1f, ElarionUi.Parchment,
                                     ElarionUi.FontMicro, TextAlignmentOptions.Center, 0f, 1f, bold: true);
                     lbl.raycastTarget = false;
+                    FitSingleLine(lbl);                                    // §1.14
                     return ebtn;
                 }
                 return Button(row.transform, label, ButtonKind.Quiet,
@@ -1952,6 +1974,318 @@ namespace DeNelle.Core.UI
             if (f != null) { t.font = f; return; }
             var ugui = t as TextMeshProUGUI;
             if (ugui != null) EnsureFont(ugui);   // the proven default chain (ElarionUiKit.EnsureFont)
+        }
+
+        // =====================================================================
+        // §1.14 TEXT-FIT + FIT-OR-SCROLL (owner F8 flags 2026-07-06, flag_06:
+        // "on this size i need scrollable area on all menus" + "needs formatted
+        // to text size"). Kit-level overflow protection: every label fits its
+        // rect (bounded auto-size, never below the mobile-legibility floor,
+        // ellipsis after that) and every list zone can become a vertical
+        // scroller with ONE call — no per-screen scroll plumbing.
+        // =====================================================================
+
+        /// <summary>The mobile-legibility floor in reference px (1080x1920 canvas). Matches the
+        /// proven "mobile floor" used by the nameplate name auto-size (fontSizeMin 30 — the
+        /// mobile-legible ladder commit; ElarionUi.FontMicro=32 is the smallest authored role).
+        /// Auto-sizing never shrinks text below this — past the floor, single-line labels
+        /// ellipsize instead of becoming unreadable or overlapping siblings.</summary>
+        public const float FontFloor = 30f;
+
+        /// <summary>
+        /// Overflow-protect a SINGLE-LINE label (tab / button / row name / title / price):
+        /// no wrap, bounded TMP auto-size [minSize..maxSize], then Ellipsis. Defaults:
+        /// maxSize = the label's current fontSize (never grows), minSize = the FontFloor
+        /// (clamped to maxSize when the label is already authored smaller). This is the
+        /// structural fix for the flag_06 class of bug — "BU SEL" tab clips, titles cut
+        /// mid-glyph, "Requires Lv" stacked over item names.
+        /// </summary>
+        public static void FitSingleLine(TMP_Text t, float minSize = 0f, float maxSize = 0f)
+        {
+            if (t == null) return;
+            if (maxSize <= 0f) maxSize = t.fontSize;
+            if (minSize <= 0f) minSize = FontFloor;
+            if (minSize > maxSize) minSize = maxSize;
+            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.overflowMode = TextOverflowModes.Ellipsis;
+            t.enableAutoSizing = true;
+            t.fontSizeMin = minSize;
+            t.fontSizeMax = maxSize;
+            ArmFitGuard(t);
+        }
+
+        /// <summary>
+        /// Overflow-protect a MULTI-LINE block (description / flavour / status copy):
+        /// normal wrap, bounded auto-size [minSize..maxSize], then Truncate (never paints
+        /// past its rect onto siblings). Same defaults as <see cref="FitSingleLine"/>.
+        /// </summary>
+        public static void FitBlock(TMP_Text t, float minSize = 0f, float maxSize = 0f)
+        {
+            if (t == null) return;
+            if (maxSize <= 0f) maxSize = t.fontSize;
+            if (minSize <= 0f) minSize = FontFloor;
+            if (minSize > maxSize) minSize = maxSize;
+            t.textWrappingMode = TextWrappingModes.Normal;
+            t.overflowMode = TextOverflowModes.Truncate;
+            t.enableAutoSizing = true;
+            t.fontSizeMin = minSize;
+            t.fontSizeMax = maxSize;
+            ArmFitGuard(t);
+        }
+
+        /// <summary>Attach (or re-arm) the §1.14 post-layout guard on a fitted label.</summary>
+        private static void ArmFitGuard(TMP_Text t)
+        {
+            if (t == null || !Application.isPlaying) return;
+            var g = t.GetComponent<UiKitTextFitGuard>();
+            if (g == null) g = t.gameObject.AddComponent<UiKitTextFitGuard>();
+            g.Arm();
+        }
+
+        /// <summary>
+        /// §1.14 post-layout guard — the "no dead buttons" backstop. PROVEN CAUSE (orchestrator
+        /// capture 2026-07-06, panel_PartyShop.png: BUY/SELL + chip strips drew as BARE PLATES):
+        /// TMP's Ellipsis overflow CULLS THE ENTIRE LINE when the line height at fontSizeMin
+        /// exceeds the label rect height — on a 16:9 landscape window the modal canvas reference
+        /// height is ~1080 (match 0.5), so the tab band is ~30px and the 30px FontFloor's ~38px
+        /// line renders ZERO glyphs. The rect is unknowable at build time (layout hasn't run),
+        /// so this one-shot component checks AFTER the first layout pass: if the floor's line
+        /// cannot seat in the band it RELAXES fontSizeMin to fit the height (never below 12 —
+        /// slightly small beats structurally blank), then asserts visible glyphs and FlowTraces
+        /// rect + fontSize + characterCount either way a rescue/failure happened. Disables itself
+        /// after one verified pass; FitSingleLine/FitBlock re-arm it on re-fit.
+        /// </summary>
+        private sealed class UiKitTextFitGuard : MonoBehaviour
+        {
+            private TMP_Text _t;
+            private int _frames;
+
+            private void Awake() { _t = GetComponent<TMP_Text>(); }
+
+            /// <summary>(Re)start the post-layout check.</summary>
+            public void Arm() { _frames = 0; enabled = true; }
+
+            private void LateUpdate()
+            {
+                if (_t == null) { enabled = false; return; }
+                if (_frames++ < 1) return;                        // let the first layout pass size the rect
+                if (string.IsNullOrEmpty(_t.text) || _t.rectTransform.rect.height <= 0f)
+                {
+                    if (_frames > 600)
+                    {
+                        // Round-3 finding: an armed label that never received text/size vanished
+                        // from the log sweep SILENTLY — the exact hole that made the empty tab
+                        // strips untraceable. A stand-down is itself a finding: log it.
+                        FlowTrace.Warn("UI", "TextFitGuard [" + PathOf(_t.transform) + "]: armed but " +
+                            (string.IsNullOrEmpty(_t.text) ? "text still EMPTY" : "rect still zero-height") +
+                            " after 600 frames — standing down (a blank plate here is a TEXT-NEVER-SET bug, not a fit bug)");
+                        enabled = false;
+                    }
+                    return;
+                }
+
+                float h = _t.rectTransform.rect.height;
+                // Round-3 item 1: the 1.3x guess ROUNDED INTO THE CULL ZONE (rect 33 -> relaxed 26
+                // -> real line ~34px -> still 0 glyphs). Use the font's MEASURED line factor
+                // (faceInfo.lineHeight / pointSize), floor the result, take one more off.
+                float factor = 1.3f;
+                var f = _t.font;
+                if (f != null && f.faceInfo.pointSize > 0f)
+                    factor = Mathf.Max(1.05f, f.faceInfo.lineHeight / f.faceInfo.pointSize);
+                float fitMin = Mathf.Max(12f, Mathf.Floor(h / factor) - 1f);
+                float oldMin = _t.fontSizeMin;
+                bool relaxed = false;
+                if (_t.fontSizeMin > fitMin)
+                {
+                    _t.fontSizeMin = fitMin;
+                    if (_t.fontSizeMax < fitMin) _t.fontSizeMax = fitMin;
+                    relaxed = true;
+                }
+                _t.ForceMeshUpdate();                              // refresh textInfo for the checks below
+
+                // GUARANTEE-FIT: iterate the floor DOWN, verified by the guard's own post-check,
+                // until glyphs actually render or the 12pt hard floor (never a static one-shot
+                // recompute again — the post-check is the truth, not the formula).
+                int iter = 0;
+                while (Blank(_t) && _t.fontSizeMin > 12f && iter++ < 10)
+                {
+                    _t.fontSizeMin = Mathf.Max(12f, _t.fontSizeMin - 2f);
+                    if (_t.fontSizeMax < _t.fontSizeMin) _t.fontSizeMax = _t.fontSizeMin;
+                    _t.ForceMeshUpdate();
+                    relaxed = true;
+                }
+
+                if (relaxed)
+                    FlowTrace.Warn("UI", "TextFitGuard '" + _t.text + "' [" + PathOf(_t.transform) + "]: rect " +
+                        ((int)_t.rectTransform.rect.width) + "x" + ((int)h) +
+                        " lineFactor " + factor.ToString("F2") +
+                        " — floor " + oldMin.ToString("F0") + " -> " + _t.fontSizeMin.ToString("F0") +
+                        " (" + iter + " post-check iterations), fontSize now " + _t.fontSize.ToString("F0") +
+                        ", chars " + (_t.textInfo != null ? _t.textInfo.characterCount : -1));
+
+                // Render assert (the DumpZoneLayout-style oracle): a fitted label MUST draw glyphs.
+                if (Blank(_t))
+                    FlowTrace.Fail("UI", "TextFitGuard '" + _t.text + "' [" + PathOf(_t.transform) + "]: STILL renders 0 visible glyphs (rect " +
+                        ((int)_t.rectTransform.rect.width) + "x" + ((int)h) +
+                        ", fontSize " + _t.fontSize.ToString("F0") +
+                        ", min " + _t.fontSizeMin.ToString("F0") + ", max " + _t.fontSizeMax.ToString("F0") +
+                        ", overflow " + _t.overflowMode + ") — dead-button law violated, needs a layout fix");
+                enabled = false;
+            }
+
+            /// <summary>True when the generated mesh has no visible glyph (Ellipsis/Truncate culled).</summary>
+            private static bool Blank(TMP_Text t)
+            {
+                var ti = t.textInfo;
+                if (ti == null || ti.characterCount == 0) return true;
+                for (int i = 0; i < ti.characterCount; i++)
+                    if (ti.characterInfo[i].isVisible) return false;
+                return true;
+            }
+
+            /// <summary>Short hierarchy path for log lines (panel/strip/button/label).</summary>
+            private static string PathOf(Transform t)
+            {
+                string s = t != null ? t.name : "?";
+                int depth = 0;
+                while (t != null && t.parent != null && depth++ < 4) { t = t.parent; s = t.name + "/" + s; }
+                return s;
+            }
+        }
+
+        /// <summary>Live handle of a kit scroll zone (§1.14). Parent rows/cards to
+        /// <see cref="content"/> — it stacks them (VerticalLayoutGroup) and grows
+        /// (ContentSizeFitter); the zone scrolls when they exceed it.</summary>
+        public sealed class ScrollZoneHandle
+        {
+            /// <summary>The ScrollRect (on the zone-filling host).</summary>
+            public ScrollRect scroll;
+            /// <summary>The masked viewport.</summary>
+            public RectTransform viewport;
+            /// <summary>Parent your rows HERE (top-anchored, auto-growing).</summary>
+            public RectTransform content;
+            /// <summary>The auto-hiding vertical scrollbar.</summary>
+            public Scrollbar scrollbar;
+        }
+
+        /// <summary>
+        /// FIT-OR-SCROLL (§1.14): turn any content drop-zone into a vertical scroller —
+        /// vertical only (horizontal off), Clamped movement (elastic OFF — no rubber-band
+        /// on desktop), auto-hiding slim scrollbar, RectMask2D clipping so overflowing rows
+        /// can never paint over the chrome outside the zone. Rows parented to the returned
+        /// <c>content</c> are stacked by a VerticalLayoutGroup (childControlWidth/Height ON,
+        /// force-expand width) and sized by their LayoutElement — content shorter than the
+        /// zone simply fits; longer content scrolls. ONE call per zone; screens add no
+        /// scroll plumbing of their own.
+        /// </summary>
+        /// <summary>§12 layout oracle — dump a zone's child rects one level deep (plus the scroll
+        /// chain when present) so a "panel renders empty" capture names the collapsed layer from
+        /// data. Cheap, gated on FlowTrace.Enabled; call after a panel build.</summary>
+        public static void DumpZoneLayout(Transform zone, string tag)
+        {
+            if (zone == null || !DeNelle.Core.Diagnostics.FlowTrace.Enabled) return;
+            var sb = new System.Text.StringBuilder();
+            void Walk(Transform t, int depth)
+            {
+                if (t == null || depth > 3) return;
+                var rt = t as RectTransform;
+                sb.Append('\n').Append(new string(' ', depth * 2))
+                  .Append(t.name)
+                  .Append(rt != null ? $" h={rt.rect.height:0.#} w={rt.rect.width:0.#}" : "")
+                  .Append(t.gameObject.activeSelf ? "" : " [INACTIVE]");
+                // Recurse into containers that matter for the collapse question.
+                if (depth < 3 && (t.GetComponent<UnityEngine.UI.ScrollRect>() != null ||
+                                  t.name == "Viewport" || t.name == "Content" || depth == 0))
+                    for (int i = 0; i < t.childCount && i < 24; i++) Walk(t.GetChild(i), depth + 1);
+            }
+            Walk(zone, 0);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("UiLayout", $"DumpZoneLayout[{tag}]:{sb}");
+        }
+
+        public static ScrollZoneHandle MakeScrollZone(Transform zone, float spacing = 6f, int padding = 6)
+        {
+            var h = new ScrollZoneHandle();
+
+            // Host (carries the ScrollRect; fills the zone).
+            var host = new GameObject("ScrollZone", typeof(RectTransform), typeof(ScrollRect));
+            host.transform.SetParent(zone, false);
+            var hrt = (RectTransform)host.transform;
+            hrt.anchorMin = Vector2.zero; hrt.anchorMax = Vector2.one;
+            hrt.offsetMin = Vector2.zero; hrt.offsetMax = Vector2.zero;
+
+            // Viewport — masked; near-invisible Image so drag-to-scroll has a raycast surface.
+            var vpGo = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(RectMask2D));
+            vpGo.transform.SetParent(host.transform, false);
+            h.viewport = (RectTransform)vpGo.transform;
+            h.viewport.anchorMin = Vector2.zero; h.viewport.anchorMax = Vector2.one;
+            h.viewport.offsetMin = Vector2.zero; h.viewport.offsetMax = Vector2.zero;
+            h.viewport.pivot = new Vector2(0f, 1f);   // ScrollRect viewport convention
+            var vImg = vpGo.GetComponent<Image>();
+            vImg.color = new Color(0f, 0f, 0f, 0.001f);
+
+            // Content — top-anchored column that grows with its rows.
+            var cGo = new GameObject("Content", typeof(RectTransform));
+            cGo.transform.SetParent(vpGo.transform, false);
+            h.content = (RectTransform)cGo.transform;
+            h.content.anchorMin = new Vector2(0f, 1f);
+            h.content.anchorMax = new Vector2(1f, 1f);
+            h.content.pivot = new Vector2(0.5f, 1f);
+            h.content.anchoredPosition = Vector2.zero;
+            h.content.sizeDelta = Vector2.zero;
+            var vlg = cGo.AddComponent<VerticalLayoutGroup>();
+            vlg.childAlignment = TextAnchor.UpperCenter;
+            vlg.spacing = spacing;
+            vlg.padding = new RectOffset(padding, padding, padding, padding);
+            vlg.childControlWidth = true;
+            // childControlHeight must be FALSE: kit rows are sized by explicit sizeDelta
+            // (RowHeightPx cells) with no ILayoutElement, so a height-controlling group reads
+            // preferred-height 0 and collapses the whole column — captured 2026-07-06 windowed
+            // run: PartyShop resolved 39 items ([Flow:Vendor]) but rendered ZERO rows/tabs.
+            // With control off, each child keeps its own height; the fitter sums real heights.
+            vlg.childControlHeight = false;
+            vlg.childForceExpandWidth = true;
+            vlg.childForceExpandHeight = false;
+            var fitter = cGo.AddComponent<ContentSizeFitter>();
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            // Slim auto-hiding vertical scrollbar (right edge).
+            var sbGo = new GameObject("ScrollbarV", typeof(RectTransform), typeof(Image), typeof(Scrollbar));
+            sbGo.transform.SetParent(host.transform, false);
+            var sbrt = (RectTransform)sbGo.transform;
+            sbrt.anchorMin = new Vector2(1f, 0f); sbrt.anchorMax = Vector2.one;
+            sbrt.pivot = new Vector2(1f, 1f);
+            sbrt.offsetMin = new Vector2(-10f, 0f); sbrt.offsetMax = Vector2.zero;
+            var sbImg = sbGo.GetComponent<Image>();
+            sbImg.color = new Color(0f, 0f, 0f, 0.35f);
+            ApplyRounded(sbImg);
+            var slideArea = new GameObject("SlidingArea", typeof(RectTransform));
+            slideArea.transform.SetParent(sbGo.transform, false);
+            var sart = (RectTransform)slideArea.transform;
+            sart.anchorMin = Vector2.zero; sart.anchorMax = Vector2.one;
+            sart.offsetMin = new Vector2(2f, 2f); sart.offsetMax = new Vector2(-2f, -2f);
+            var handleGo = new GameObject("Handle", typeof(RectTransform), typeof(Image));
+            handleGo.transform.SetParent(slideArea.transform, false);
+            var handleRt = (RectTransform)handleGo.transform;
+            handleRt.offsetMin = Vector2.zero; handleRt.offsetMax = Vector2.zero;
+            var handleImg = handleGo.GetComponent<Image>();
+            handleImg.color = new Color(0.72f, 0.60f, 0.34f, 0.85f);   // gilt thumb (shape+position carry meaning, not colour)
+            ApplyRounded(handleImg);
+            h.scrollbar = sbGo.GetComponent<Scrollbar>();
+            h.scrollbar.handleRect = handleRt;
+            h.scrollbar.targetGraphic = handleImg;
+            h.scrollbar.direction = Scrollbar.Direction.BottomToTop;
+
+            h.scroll = host.GetComponent<ScrollRect>();
+            h.scroll.viewport = h.viewport;
+            h.scroll.content = h.content;
+            h.scroll.horizontal = false;                                   // hidden horizontal
+            h.scroll.vertical = true;
+            h.scroll.movementType = ScrollRect.MovementType.Clamped;       // elastic OFF
+            h.scroll.scrollSensitivity = 25f;
+            h.scroll.verticalScrollbar = h.scrollbar;
+            h.scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
+            return h;
         }
     }
 }

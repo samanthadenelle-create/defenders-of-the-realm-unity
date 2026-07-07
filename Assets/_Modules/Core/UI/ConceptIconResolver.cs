@@ -111,6 +111,24 @@ namespace DeNelle.Core.UI
         }
 
         /// <summary>
+        /// The FIRST candidate conceptId that resolves to real art (its <see cref="Resolve"/> is
+        /// non-null), else null. Lets a caller that must store a STRING key (e.g. a HUD slot record
+        /// whose IconKey is re-resolved downstream by <c>UiStyle.Icon</c>) pick the concept the table
+        /// can actually satisfy — feed it a def's own fields (id, effect) and get back the one that
+        /// draws, with NO icon-name choice in C#. Null when none map / no art — caller keeps its fallback.
+        /// </summary>
+        public static string ResolveKey(params string[] conceptIds)
+        {
+            if (conceptIds == null) return null;
+            for (int i = 0; i < conceptIds.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(conceptIds[i]) && Resolve(conceptIds[i]) != null)
+                    return conceptIds[i];
+            }
+            return null;
+        }
+
+        /// <summary>
         /// Like <see cref="Resolve"/> but returns the sprite ONLY when the matched entry is flagged
         /// <c>override:true</c> in the table (else null) — the OPT-IN path that lets a concept force its
         /// Obsidian icon over a caller's own richer art. Null when unmapped, not-overridden, or art absent.

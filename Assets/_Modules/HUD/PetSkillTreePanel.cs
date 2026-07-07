@@ -130,11 +130,16 @@ namespace DeNelle.HUD
 
             _tabHost = ZoneRect(body, "SpeciesTabs", new Vector2(0.07f, 0.665f), new Vector2(0.93f, 0.855f));
 
-            var scrollHost = ZoneRect(body, "TreeScroll", new Vector2(0.07f, 0.115f), new Vector2(0.93f, 0.655f));
+            // SWEEP 9413 R2 (#8): content-fraction layout — the kit's Close reservation can't
+            // protect it. Floor = closeBandTop (0.050 + 120px/panelHeight) + 0.02 ≈ 0.214 on this
+            // 0.9-tall panel: the row list bottom (was 0.115, Close covered the last row) and the
+            // status line (was 0.055–0.11, fully inside the Close band) both raised above it.
+            var scrollHost = ZoneRect(body, "TreeScroll", new Vector2(0.07f, 0.28f), new Vector2(0.93f, 0.655f));
             _treeContent = BuildScrollColumn(scrollHost);
 
             _statusLabel = MakeText(body, "", 13, ElarionUi.Gold, FontStyles.Normal,
-                TextAlignmentOptions.Left, new Vector2(0.08f, 0.055f), new Vector2(0.92f, 0.11f));
+                TextAlignmentOptions.Left, new Vector2(0.08f, 0.22f), new Vector2(0.92f, 0.272f));
+            ElarionUiKit.FitSingleLine(_statusLabel);
 
             _modal.canvas.SetActive(false);   // built hidden; SetOpen shows it
         }
@@ -285,8 +290,11 @@ namespace DeNelle.HUD
             // Locked = 35% opacity per spec.
             cardGo.GetComponent<CanvasGroup>().alpha = (unlocked || canUnlock) ? 1f : 0.35f;
 
-            MakeText(cardGo.transform, name, 16, ElarionUi.Parchment, FontStyles.Bold,
+            // SWEEP 9413 R2 (#8): row titles straddled the card border — single-line fit so a
+            // long skill name shrinks/ellipsizes inside its band instead of painting past it.
+            var nameLabel = MakeText(cardGo.transform, name, 16, ElarionUi.Parchment, FontStyles.Bold,
                 TextAlignmentOptions.Left, new Vector2(0.04f, 0.72f), new Vector2(0.70f, 0.97f));
+            ElarionUiKit.FitSingleLine(nameLabel);
             // Badge line: tier + type, palette-graded (canon set, not ad-hoc rainbow). UI review 06:
             // bumped 11->13 for legibility (the sub-labels read dense/muddy at 11 over the textured well).
             MakeText(cardGo.transform,

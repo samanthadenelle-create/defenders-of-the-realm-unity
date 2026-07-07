@@ -362,21 +362,27 @@ namespace DeNelle.Village
             AddIcon(techSock.transform, iconSprite, icon, ElarionUi.FontTitle + 4,
                     locked ? InkMicro : rcInk, locked ? 0.6f : 1f);
 
-            // Small number in bottom right corner (e.g. count, level, or "4" style from mockup).
+            // Eyes-sweep 2026-07-06: the rarity letter (C/E) sat at y 0.65–0.88 and overflowed
+            // LEFT over the icon well (0.26–0.74 x, 0.38–0.95 y). Moved to the free bottom-right
+            // corner band (below the icon well) and fitted (§1.14) so it can never spill.
             string numText = lockText != "" ? lockText : (rarity != null ? rarity.Substring(0,1).ToUpper() : " ");
-            AddLabel(cell.transform, numText, 0.65f, 0.88f,
-                     Ink, ElarionUi.FontMicro + 2, TMPro.TextAlignmentOptions.Center, 0.75f, 0.98f, bold: true);
+            var numLbl = AddLabel(cell.transform, numText, 0.04f, 0.30f,
+                     Ink, ElarionUi.FontMicro + 2, TMPro.TextAlignmentOptions.Center, 0.70f, 0.98f, bold: true);
+            ElarionUiKit.FitSingleLine(numLbl, 0f, ElarionUi.FontMicro + 2);
 
             NoRaycast(AddImage(cell.transform, "Gem", new Vector2(0.05f, 0.80f), new Vector2(0.20f, 0.95f),
                                new Color(rc.r, rc.g, rc.b, 0.95f)));
 
             if (equipped)
             {
-                var chip = AddImage(cell.transform, "Equipped", new Vector2(0.62f, 0.80f), new Vector2(0.96f, 0.96f),
+                // Was (0.62,0.80)-(0.96,0.96) — the chip's left half painted over the icon well's
+                // top-right corner. Bottom-LEFT band is free (gem = top-left, letter = bottom-right).
+                var chip = AddImage(cell.transform, "Equipped", new Vector2(0.02f, 0.04f), new Vector2(0.30f, 0.28f),
                                     new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.95f));
                 NoRaycast(chip);
-                AddLabel(chip.transform, "v", 0f, 1f, ElarionUi.Ink, ElarionUi.FontLabel,
+                var chipLbl = AddLabel(chip.transform, "v", 0f, 1f, ElarionUi.Ink, ElarionUi.FontLabel,
                          TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
+                ElarionUiKit.FitSingleLine(chipLbl, 0f, ElarionUi.FontLabel);
             }
             if (locked)
             {
@@ -385,8 +391,9 @@ namespace DeNelle.Village
                 var chip = AddImage(cell.transform, "Locked", new Vector2(0.26f, 0.40f), new Vector2(0.74f, 0.62f),
                                     new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.90f));
                 NoRaycast(chip);
-                AddLabel(chip.transform, "[ " + lockText + " ]", 0f, 1f, Ink,
+                var lockLbl = AddLabel(chip.transform, "[ " + lockText + " ]", 0f, 1f, Ink,
                          ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
+                ElarionUiKit.FitSingleLine(lockLbl, 0f, ElarionUi.FontMicro);
             }
         }
 

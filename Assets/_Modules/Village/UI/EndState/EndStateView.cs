@@ -154,6 +154,27 @@ namespace DeNelle.Village.UI
             // screen (matches the shared Close). The anchors above only centre it in the
             // footer band; the canonical size is stamped here.
             ElarionUiKit.PinCanonicalCtaSize(btn);
+            // #22 (capture 9403, "YOU HAVE FALLEN" strip): on SHORT panels the law-pinned
+            // canonical CTA is TALLER than the carved footer band, so the centred button
+            // spilled UP over the body copy ("Try Again" on top of the death message). The
+            // CTA size is law — so the BAND must grow to contain it: when the pinned button
+            // exceeds the footer band, raise the band's top and lift the reward well above
+            // it (gap preserved). No-op on tall panels and real footer drop-zones.
+            if (!hasFooterZone)
+            {
+                Canvas.ForceUpdateCanvases();
+                var bRt = (RectTransform)btn.transform;
+                float need = bRt.rect.height > 1f ? bRt.rect.height : bRt.sizeDelta.y;
+                float wellH = well.rect.height;
+                if (wellH > 1f && need > footer.rect.height - 4f)
+                {
+                    float frac = Mathf.Clamp01((need + 12f) / wellH);
+                    footer.anchorMax = new Vector2(footer.anchorMax.x, frac);
+                    rewardWell.anchorMin = new Vector2(rewardWell.anchorMin.x, Mathf.Min(0.95f, frac + 0.04f));
+                    FlowTrace.Step("EndState",
+                        $"footer band grown to contain the canonical CTA (need={need:0}px, well={wellH:0}px, band->{frac:0.###})");
+                }
+            }
             Track(btn.gameObject, 0.25f + vm.Spoils.Count * 0.05f + 0.08f, 0.92f);
 
             // Smooth in: whole panel fades+scales, then the staggered content.
@@ -258,9 +279,15 @@ namespace DeNelle.Village.UI
             // — ItemIconCatalog.ForConsumable("mat_wood") resolves null today, EndStateVM.cs:120-122)
             // fall back to a generic resource/loot icon so a reward row NEVER blanks its slot. Same
             // RpgUiCatalog.Get path the other rows resolve through on the model side.
-            var iconSprite = row.Icon != null
-                ? row.Icon
-                : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconInventory);
+            var iconSprite = row.Icon;
+            // SWEEP 9413 R2 (#7): the generic IconInventory fallback painted a plain yellow
+            // square beside every art-less reward line. Resolve the reward CONCEPT icon first
+            // (concept-icons.json maps gold/wood/iron → the currency sprites) from the row label;
+            // only then the generic kit fallback — never a bare placeholder square.
+            if (iconSprite == null)
+                iconSprite = ConceptIconResolver.ResolveAny((row.Label ?? "").Trim().ToLowerInvariant());
+            if (iconSprite == null)
+                iconSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconInventory);
             if (iconSprite != null)
             {
                 var go = new GameObject("Icon", typeof(Image));

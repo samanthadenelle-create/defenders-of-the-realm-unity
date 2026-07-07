@@ -160,7 +160,7 @@ namespace DeNelle.HUD
             // "Include screenshot" untickable toggle (default ON) — kit Quiet button.
             _toggleBtn = ElarionUiKit.Button(body, "", ElarionUiKit.ButtonKind.Quiet,
                 new Vector2(0.08f, 0.51f), new Vector2(0.92f, 0.585f), () => _vm.ToggleScreenshot());
-            _toggleLabel = _toggleBtn.GetComponentInChildren<TextMeshProUGUI>();
+            _toggleLabel = EnsureButtonLabel(_toggleBtn, "[x] Include screenshot", ElarionUi.Parchment);
 
             // Note field — "What went wrong?" (multi-line). The plate is a minimal
             // translucent well so the input is visible; content, not chrome.
@@ -177,7 +177,32 @@ namespace DeNelle.HUD
             // The body's bottom edge sits ABOVE the shared Close, so they never collide.
             _sendBtn = ElarionUiKit.Button(body, "Send report", ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.08f, 0.03f), new Vector2(0.92f, 0.14f), OnSendClicked);
-            _sendLabel = _sendBtn.GetComponentInChildren<TextMeshProUGUI>();
+            // EYES-SWEEP 2026-07-06 (#5): the sweep captured the submit as a BLANK gold bar. In
+            // prefab-button mode the label can live on the prefab ROOT beside a nested Button child,
+            // so GetComponentInChildren(_sendBtn) missed it and Repaint's _sendLabel writes went
+            // nowhere visible. Resolve the label robustly (children → prefab root), CREATE one when
+            // none exists (null art must never blank a control), and fit it (FitSingleLine).
+            _sendLabel = EnsureButtonLabel(_sendBtn, "Send report", ElarionUi.Ink);
+        }
+
+        // Resolve a kit button's label wherever the build mode put it (constructed child, prefab
+        // root overlay), or author one on the button itself when none is found. Always fitted.
+        private static TextMeshProUGUI EnsureButtonLabel(Button btn, string text, Color color)
+        {
+            if (btn == null) return null;
+            var lbl = btn.GetComponentInChildren<TextMeshProUGUI>(true);
+            if (lbl == null && btn.transform.parent != null)
+                lbl = btn.transform.parent.GetComponentInChildren<TextMeshProUGUI>(true);
+            if (lbl == null)
+            {
+                lbl = ElarionUiKit.Label(btn.transform, text, 0f, 1f, color,
+                    ElarionUi.FontBody, TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+                lbl.raycastTarget = false;
+            }
+            lbl.text = text;
+            ElarionUiKit.EnsureFont(lbl);
+            ElarionUiKit.FitSingleLine(lbl);
+            return lbl;
         }
 
         private void BuildNoteInput(RectTransform parent, Vector2 anchorMin, Vector2 anchorMax)
@@ -188,8 +213,14 @@ namespace DeNelle.HUD
             rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             var bg = host.GetComponent<Image>();
-            bg.color = new Color(0f, 0f, 0f, 0.45f);      // translucent well over the frame art
+            // EYES-SWEEP 2026-07-06 (#5): the 0.45-alpha black well was invisible over the black
+            // Obsidian frame — the "What went wrong?" input had NO visible field bounds. Stronger
+            // plate + an always-on gilt outline so the field reads as a field regardless of art.
+            bg.color = new Color(0.10f, 0.09f, 0.07f, 0.92f);
             ElarionUiKit.ApplyRounded(bg);
+            var fieldEdge = host.AddComponent<Outline>();
+            fieldEdge.effectColor = new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.8f);
+            fieldEdge.effectDistance = new Vector2(1.5f, -1.5f);
 
             var areaGo = new GameObject("TextArea", typeof(RectTransform), typeof(RectMask2D));
             areaGo.transform.SetParent(host.transform, false);

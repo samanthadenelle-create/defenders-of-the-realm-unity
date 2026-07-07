@@ -263,25 +263,25 @@ namespace DeNelle.HUD
                 ? (Transform)layout.body
                 : _modal.chrome.content.transform;
 
-            // Glimmer chip — header zone, right side (the frame's close notch is
-            // further right; the chip sits inside the header band).
-            var headHost = layout != null && layout.header != null
-                ? (Transform)layout.header
-                : body;
-            _glimmerLabel = MakeText(headHost, "0", 16, ElarionUi.Gold, FontStyles.Bold,
-                TextAlignmentOptions.Right, new Vector2(0.70f, 0.1f), new Vector2(0.99f, 0.9f));
-
             // Mobile-first (owner rule): compact CENTERED column, not full-bleed edge-to-edge
             // bars — the tabs + card list share one thumb-zone band (0.10–0.90) so cards read as
             // centered plates with side margins on a phone.
             const float BandMin = 0.10f, BandMax = 0.90f;
 
-            // Category tabs across the top of the well.
-            _tabHost = ZoneRect(body, "TabRail", new Vector2(BandMin, 0.90f), new Vector2(BandMax, 0.99f));
+            // Glimmer balance — its OWN band at the top of the body well. EYES-SWEEP 2026-07-06
+            // (#6): the chip lived in the frame's HEADER zone (0.70–0.99) where the centered
+            // "Cosmetic Shop" title painted straight over it on the narrow portrait frame. The
+            // title keeps the header; the balance gets the first body band, right-aligned + fitted.
+            _glimmerLabel = MakeText(body, "0", 16, ElarionUi.Gold, FontStyles.Bold,
+                TextAlignmentOptions.Right, new Vector2(BandMin, 0.955f), new Vector2(BandMax, 0.995f));
+            ElarionUiKit.FitSingleLine(_glimmerLabel);
+
+            // Category tabs — shifted down one band to make room for the balance line.
+            _tabHost = ZoneRect(body, "TabRail", new Vector2(BandMin, 0.875f), new Vector2(BandMax, 0.945f));
             BuildTabs();
 
             // Scrollable card list.
-            var scrollHost = ZoneRect(body, "CardScroll", new Vector2(BandMin, 0.09f), new Vector2(BandMax, 0.89f));
+            var scrollHost = ZoneRect(body, "CardScroll", new Vector2(BandMin, 0.09f), new Vector2(BandMax, 0.865f));
             _listContent = BuildScrollColumn(scrollHost);
 
             // Anti-FOMO footer (spec Section 9).
@@ -565,7 +565,9 @@ namespace DeNelle.HUD
             crt.offsetMin = Vector2.zero; crt.offsetMax = Vector2.zero;
             var layout = contentGo.GetComponent<VerticalLayoutGroup>();
             layout.spacing = 6f;
-            layout.padding = new RectOffset(8, 8, 8, 8);
+            // SWEEP 9413 R2 (#5): bottom padding = one card row (92 + spacing) so the last card
+            // scrolls fully clear of the RectMask2D instead of slicing mid-glyph at max scroll.
+            layout.padding = new RectOffset(8, 8, 8, 100);
             layout.childControlHeight = false;
             layout.childControlWidth = true;
             layout.childForceExpandHeight = false;

@@ -61,7 +61,7 @@ namespace DeNelle.Core.Combat
         {
             if (_probeRegistered) return;
             _probeRegistered = true;
-            BattleLock.RegisterProbe(() => _engaged.Count > 0);
+            BattleLock.RegisterProbe(() => AnyEngaged);   // prunes destroyed tokens on read
         }
 
         /// <summary>
@@ -78,10 +78,23 @@ namespace DeNelle.Core.Combat
             else _engaged.Remove(token);
         }
 
-        /// <summary>True while at least one in-scene combatant is engaging the hero.</summary>
-        public static bool AnyEngaged => _engaged.Count > 0;
+        // DCA fix (owner F8 2026-07-06 t=462 arc): a mid-fight scene reload destroys engaged
+        // enemies WITHOUT their SetEngaged(false) running, so destroyed tokens latched the
+        // static set -> BattleLock stayed true across the respawn -> the HUD booted into
+        // hostile(activebattle) + CloseAll in a peaceful scene (captured: Player.log
+        // "context inputs: wave=False battleLock=True" in the post-reload window, posture
+        // "<boot>->hostile(activebattle)" at 223836). Destroyed UnityEngine.Objects compare
+        // == null (fake-null), so pruning on read makes the set self-healing across loads.
+        private static void PruneDead()
+        {
+            if (_engaged.Count == 0) return;
+            _engaged.RemoveWhere(t => t is UnityEngine.Object o && o == null);
+        }
 
-        /// <summary>Number of combatants currently engaging the hero (diagnostics).</summary>
-        public static int EngagedCount => _engaged.Count;
+        /// <summary>True while at least one LIVE in-scene combatant is engaging the hero.</summary>
+        public static bool AnyEngaged { get { PruneDead(); return _engaged.Count > 0; } }
+
+        /// <summary>Number of live combatants currently engaging the hero (diagnostics).</summary>
+        public static int EngagedCount { get { PruneDead(); return _engaged.Count; } }
     }
 }

@@ -59,6 +59,13 @@ namespace DeNelle.Core.UI
             /// <summary>Mana bar fill — set fillAmount = mp/maxMp (0..1). Its parent (ManaBackground)
             /// can be SetActive(false) to present a single-bar plate (e.g. the Heart of Elarion).</summary>
             public Image ManaFill;
+            /// <summary>XP strip fill (gold on a dark track) — set fillAmount = xp/xpToNext (0..1).
+            /// Null unless built with <c>withXpStrip: true</c> (owner 07-06: "a bar showing exp").</summary>
+            public Image XpFill;
+            /// <summary>XP strip row root (track GameObject). Built INACTIVE — the binder activates it
+            /// on the first valid xp/xpToNext push, so a missing HeroProgression can never show a
+            /// blank/full bar. Null unless built with <c>withXpStrip: true</c>.</summary>
+            public GameObject XpRow;
         }
 
         /// <summary>
@@ -72,7 +79,8 @@ namespace DeNelle.Core.UI
             Transform parent,
             string playerName,
             Vector2 anchorMin, Vector2 anchorMax,
-            Vector2 offsetMin = default, Vector2 offsetMax = default)
+            Vector2 offsetMin = default, Vector2 offsetMax = default,
+            bool withXpStrip = false)
         {
             var h = new PartyNameplateHandle();
 
@@ -116,8 +124,13 @@ namespace DeNelle.Core.UI
             // shared builder must reflow to any area width, so the two rows are STRETCH-
             // anchored instead (identical visual: two stacked horizontal bars). Health = top
             // row, Mana = bottom row.
+            // Owner 07-06 ("can the hp/mp of hero as well as tree stay inside their containers?"):
+            // the old 0.04..0.97 x / 0.05..0.56 y span let the bar rows ride the ornate plate
+            // sprite's decorative border (the sprite's visible frame is inset from its rect), so
+            // fills READ as bleeding outside the plate. Real margin all around — the rows now sit
+            // well inside the visible plate art at any resolution (fraction-of-plate anchors).
             var statBars = AddImage(rootGo.transform, "StatBars",
-                new Vector2(0.04f, 0.05f), new Vector2(0.97f, 0.56f),
+                new Vector2(0.06f, 0.08f), new Vector2(0.94f, 0.55f),
                 new Color(0f, 0f, 0f, 0f), rounded: false);
             statBars.GetComponent<Image>().raycastTarget = false;
             // WO-437: clip the bars to the StatBars container so no HP/MP fill can bleed past the
@@ -125,17 +138,64 @@ namespace DeNelle.Core.UI
             // border intact while confining every bar row + fill inside it.
             statBars.AddComponent<RectMask2D>();
 
+            // Row layout: two stacked bars; when the XP strip is requested (hero plate only —
+            // owner 07-06 "expecting a bar showing exp in relationship to next level") the rows
+            // compress upward to free a thin gold strip along the container's bottom.
+            Vector2 hpMin = withXpStrip ? new Vector2(0f, 0.62f) : new Vector2(0f, 0.52f);
+            Vector2 mpMin = withXpStrip ? new Vector2(0f, 0.22f) : new Vector2(0f, 0f);
+            Vector2 mpMax = withXpStrip ? new Vector2(1f, 0.58f) : new Vector2(1f, 0.48f);
+
             h.HealthFill = BuildNameplateRow(statBars.transform, "Health",
-                new Vector2(0f, 0.52f), new Vector2(1f, 1f),
+                hpMin, new Vector2(1f, 1f),
                 new Color(0.1226f, 0.1226f, 0.1226f, 1f),   // HealthBackground #1f1f1f
                 RpgUiCatalog.HudNameplateHealth,
                 new Color(0.82f, 0.16f, 0.16f, 1f));        // fallback fill = red
 
             h.ManaFill = BuildNameplateRow(statBars.transform, "Mana",
-                new Vector2(0f, 0f), new Vector2(1f, 0.48f),
+                mpMin, mpMax,
                 new Color(0.3679f, 0.3679f, 0.3679f, 1f),   // ManaBackground #5e5e5e
                 RpgUiCatalog.HudNameplateMana,
                 new Color(0.24f, 0.44f, 0.86f, 1f));        // fallback fill = blue
+
+            if (withXpStrip)
+            {
+                // ── XP strip (owner 07-06): thin gold-on-dark progress line under HP/MP, inside
+                // the same masked StatBars container (so it can never bleed either). No text —
+                // the adjacent "Lv N" label carries the number; gold (Gilt) is luminance-distinct
+                // from the red HP / blue MP rows (colorblind-safe by position + brightness).
+                // Procedural (no sprite lookup — no warning spam); FillSpriteChain keeps the
+                // §1.1 non-null-sprite contract so uGUI honours fillAmount.
+                var xpBg = new GameObject("XpTrack", typeof(Image));
+                xpBg.transform.SetParent(statBars.transform, false);
+                var xrt = (RectTransform)xpBg.transform;
+                xrt.anchorMin = new Vector2(0f, 0f); xrt.anchorMax = new Vector2(1f, 0.14f);
+                xrt.offsetMin = Vector2.zero; xrt.offsetMax = Vector2.zero;
+                var xpBgImg = xpBg.GetComponent<Image>();
+                xpBgImg.raycastTarget = false;
+                xpBgImg.color = new Color(0f, 0f, 0f, 0.60f);   // dark track
+                ApplyRounded(xpBgImg);
+                xpBg.AddComponent<RectMask2D>();                 // belt-and-braces like the rows
+
+                var xpFillGo = new GameObject("XpFill", typeof(Image));
+                xpFillGo.transform.SetParent(xpBg.transform, false);
+                var xfrt = (RectTransform)xpFillGo.transform;
+                xfrt.anchorMin = Vector2.zero; xfrt.anchorMax = Vector2.one;
+                xfrt.offsetMin = new Vector2(1f, 1f); xfrt.offsetMax = new Vector2(-1f, -1f);
+                var xpFillImg = xpFillGo.GetComponent<Image>();
+                xpFillImg.sprite = FillSpriteChain(null);        // guaranteed non-null (9/145 law)
+                xpFillImg.color = ElarionUi.Gilt;                // gold progress
+                xpFillImg.type = Image.Type.Filled;
+                xpFillImg.fillMethod = Image.FillMethod.Horizontal;
+                xpFillImg.fillOrigin = (int)Image.OriginHorizontal.Left;
+                xpFillImg.fillAmount = 0f;
+                xpFillImg.raycastTarget = false;
+
+                h.XpFill = xpFillImg;
+                h.XpRow = xpBg;
+                // Hidden until the binder pushes a real xp/xpToNext — a missing HeroProgression
+                // therefore hides the strip (never a blank or stuck-full bar).
+                xpBg.SetActive(false);
+            }
 
             return h;
         }

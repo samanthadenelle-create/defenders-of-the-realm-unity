@@ -103,33 +103,40 @@ namespace DeNelle.Village
 
             // The whole modal in one call: canvas + scrim (tap-outside closes) + Obsidian
             // chrome (near-black fill + gold trim + one Close). Compact, centred panel.
+            // CLOSE-BAND CLEARANCE (eyes-sweep 2026-07-06): on the old 0.32-tall panel
+            // (≈614px at the 1920 ref) the fixed 360x120px shared Close topped out at
+            // frac ≈0.245, and "Dump All" (y 0.16–0.32, built as a LATER sibling) painted
+            // over it — Close was occluded/unreachable. The panel grows to 0.44 tall
+            // (Close top ≈0.192) and the content stack re-seats so Dump All's bottom
+            // edge (0.25) clears the Close band with a gap.
             var built = ElarionUiKit.BuildObsidianModal(
                 "EchoHarvestPanel", "ECHO HARVEST",
-                new Vector2(0.30f, 0.34f), new Vector2(0.70f, 0.66f),
+                new Vector2(0.30f, 0.28f), new Vector2(0.70f, 0.72f),
                 onClose: Hide, sortingOrder: 4600,   // above gameplay HUD, below the battle overlay (5000)
                 frameName: RpgUiCatalog.FrameCore);
             _modal = built.canvas;
             var content = built.chrome.content.transform;
 
             // Echo count line.
-            _countLabel = ElarionUiKit.Label(content, "Echoes  1/4", 0.70f, 0.84f,
+            _countLabel = ElarionUiKit.Label(content, "Echoes  1/4", 0.76f, 0.88f,
                 ElarionUi.Gilt, ElarionUi.FontHead, TextAlignmentOptions.Center,
                 0.08f, 0.92f, bold: true);
 
             // Silo fill bar (life-force green) — Well track + Image.Type.Filled fill.
             var bar = ElarionUiKit.Bar(content, ElarionUiKit.BarKind.Castle,
-                new Vector2(0.10f, 0.50f), new Vector2(0.90f, 0.62f), withValue: false);
+                new Vector2(0.10f, 0.60f), new Vector2(0.90f, 0.70f), withValue: false);
             _fill = bar.fill;
             if (_fill != null) { _fill.color = LifeGreen; _fill.fillAmount = 0f; }
 
             // Silo % + raw value line under the bar.
-            _siloLabel = ElarionUiKit.Label(content, "Silo  0%", 0.36f, 0.48f,
+            _siloLabel = ElarionUiKit.Label(content, "Silo  0%", 0.48f, 0.58f,
                 new Color(0.85f, 0.85f, 0.9f, 1f), ElarionUi.FontBody, TextAlignmentOptions.Center,
                 0.08f, 0.92f, bold: false);
 
             // Dump All button (large tap target) -> EchoService.DumpSilos().
+            // Seated ABOVE the shared Close band (bottom 0.25 > Close top ≈0.192 + gap).
             var dumpBtn = ElarionUiKit.Button(content, "Dump All", ElarionUiKit.ButtonKind.Confirm,
-                new Vector2(0.22f, 0.16f), new Vector2(0.78f, 0.32f), OnDumpTapped);
+                new Vector2(0.22f, 0.25f), new Vector2(0.78f, 0.42f), OnDumpTapped);
             _dumpLabel = dumpBtn != null ? dumpBtn.GetComponentInChildren<TextMeshProUGUI>() : null;
         }
 

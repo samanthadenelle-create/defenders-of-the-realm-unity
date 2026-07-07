@@ -472,6 +472,37 @@ namespace DeNelle.Village.Hero
             Raise();
         }
 
+        /// <summary>Owner ruling 07-06 (3-state shop Equip button): UNEQUIP the selected,
+        /// currently-worn item from the selected member through the SAME IEquipTarget seam
+        /// <see cref="EquipSelected"/> uses. Routes by the slot that actually wears the id —
+        /// main-hand, off-hand (shield), or armor — so a shield unequips from the off-hand,
+        /// never a dead UnequipWeapon call. No-op with a status line when nothing is selected
+        /// or the selected item isn't worn by the selected member.</summary>
+        public void UnequipSelected()
+        {
+            string id = SelectedId;
+            if (string.IsNullOrEmpty(id)) { Status = "Select an item to unequip."; Raise(); return; }
+            var m = SelectedMember;
+            if (m == null) { Status = "No hero selected."; Raise(); return; }
+
+            bool main = m.EquippedWeapon != null && string.Equals(m.EquippedWeapon.id, id, StringComparison.OrdinalIgnoreCase);
+            bool off  = m.EquippedOffHand != null && string.Equals(m.EquippedOffHand.id, id, StringComparison.OrdinalIgnoreCase);
+            bool body = m.EquippedArmor != null && string.Equals(m.EquippedArmor.id, id, StringComparison.OrdinalIgnoreCase);
+            if (!main && !off && !body) { Status = "That item isn't equipped."; Raise(); return; }
+
+            var w = GearCatalog.FindWeapon(id);
+            var a = GearCatalog.FindArmor(id);
+            string name = w != null ? Display(w.name, w.id) : a != null ? Display(a.name, a.id) : id;
+
+            if (main) m.UnequipWeapon();
+            else if (off) m.UnequipOffHand();
+            else m.UnequipArmor();
+
+            Status = "Unequipped " + name + " from " + MemberName() + ".";
+            Rebuild();
+            Raise();
+        }
+
         private void Raise() { if (!_disposed) Changed?.Invoke(); }
 
         private void OnModelChanged()

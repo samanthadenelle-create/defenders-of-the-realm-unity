@@ -118,9 +118,20 @@ namespace DeNelle.HUD
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
             // SECURITY (LB-11 / E-DEVTOOLS): the "Dev tools" launcher opens AdminOverlay
             // (grant buttons) — compile-stripped from release builds with its handler.
-            ElarionUiKit.BuildObsidianButton(body, "Dev Tools",
+            // SWEEP 9413 R2 (#6): the prefab-mode gold button keeps the prefab's GOLD label —
+            // gold-on-gold (luminance law). Force dark Ink on the label wherever the build mode
+            // put it (children, else the prefab root) — same fix as the Settings selected chips.
+            var devBtn = ElarionUiKit.BuildObsidianButton(body, "Dev Tools",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 new Vector2(0.10f, 0.40f), new Vector2(0.90f, 0.52f), OnOpenDevTools);
+            if (devBtn != null)
+            {
+                var devLbls = devBtn.GetComponentsInChildren<TMPro.TMP_Text>(true);
+                if ((devLbls == null || devLbls.Length == 0) && devBtn.transform.parent != null)
+                    devLbls = devBtn.transform.parent.GetComponentsInChildren<TMPro.TMP_Text>(true);
+                if (devLbls != null)
+                    foreach (var t in devLbls) t.color = ElarionUi.Ink;
+            }
             FlowTrace.Step("UI", "Dev tools button wired (HelpMenu Obsidian card)");
 #endif
             ElarionUiKit.BuildObsidianButton(body, "Credits",

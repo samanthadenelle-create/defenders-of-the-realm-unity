@@ -94,10 +94,14 @@ namespace DeNelle.Village
             Transform content = chrome.content.transform;
 
             // Left vertical tab rail (scrollable) + right scrollable body.
+            // SWEEP 9413 R2 (#8): this panel builds on chrome.content FRACTIONS, so the kit's
+            // zone-level Close/footer reservation can't protect it — the 0.045 bottoms ran under
+            // the shared Close band. Floor = closeBandTop (0.050 + 120px/panelHeight) + 0.02
+            // ≈ 0.214 on this 0.9-tall panel → bottoms raised to 0.22.
             _railContent = AddVerticalScroll(content,
-                new Vector2(0.035f, 0.045f), new Vector2(0.295f, 0.885f), padding: 8, spacing: 6f);
+                new Vector2(0.035f, 0.22f), new Vector2(0.295f, 0.885f), padding: 8, spacing: 6f);
             _bodyContent = AddVerticalScroll(content,
-                new Vector2(0.320f, 0.045f), new Vector2(0.965f, 0.885f), padding: 16, spacing: 10f);
+                new Vector2(0.320f, 0.22f), new Vector2(0.965f, 0.885f), padding: 16, spacing: 10f);
         }
 
         // ── Render: repaint rail + body from vm.* ONLY ────────────────────────────

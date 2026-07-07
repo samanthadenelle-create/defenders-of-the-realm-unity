@@ -186,13 +186,13 @@ namespace DeNelle.Village.Buildings.Progression
 
             _walletText = MakeLine(body, "Wallet", ElarionUi.Gilt, ElarionUi.FontLabel,
                 new Vector2(0f, 0.065f), new Vector2(1f, 0.128f));
-            _walletText.enableAutoSizing = true;
-            _walletText.fontSizeMin = 10f;
-            _walletText.fontSizeMax = ElarionUi.FontLabel;
-            _walletText.textWrappingMode = TMPro.TextWrappingModes.Normal;
+            // §1.14: bounded fit + Truncate (keeps the authored 10px min) so the wallet
+            // line can never overflow its strip onto the status line below.
+            ElarionUiKit.FitBlock(_walletText, 10f, ElarionUi.FontLabel);
 
             _statusText = MakeLine(body, "Status", ElarionUi.ParchmentDim, ElarionUi.FontLabel,
                 new Vector2(0f, 0f), new Vector2(1f, 0.06f));
+            ElarionUiKit.FitSingleLine(_statusText);
 
             // Eased open (owner smoothness directive): scale 0.92->1 + fade 0->1, ease-out.
             var fx = _ui.AddComponent<PanelOpenCloseFx>();
@@ -362,6 +362,7 @@ namespace DeNelle.Village.Buildings.Progression
                     new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, dim),
                     ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
                 g.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(g);
             }
 
             // NAME.
@@ -369,6 +370,11 @@ namespace DeNelle.Village.Buildings.Progression
                 new Color(ElarionUi.Parchment.r, ElarionUi.Parchment.g, ElarionUi.Parchment.b, dim),
                 ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
             nameLbl.raycastTarget = false;
+            // §1.14 (eyes-sweep 2026-07-06): each tile label OWNS its strip. A long perk
+            // name used to wrap past its band and paint over the effect + cost lines
+            // ("Unlock Village" / "Opens tier-2 enhancements" / "500 Crystals" stack).
+            // Titles fit single-line (bounded auto-size, then ellipsis) — never spill.
+            ElarionUiKit.FitSingleLine(nameLbl);
 
             // EFFECT — the one-line concrete payoff, from the perk data (VM-relayed).
             string effect = _vm != null ? _vm.EffectFor(item.Id) : "";
@@ -376,6 +382,8 @@ namespace DeNelle.Village.Buildings.Progression
                 new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.85f * dim),
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
             effLbl.raycastTarget = false;
+            // Descriptions wrap INSIDE their band and truncate — never onto siblings.
+            ElarionUiKit.FitBlock(effLbl);
 
             // BOTTOM LINE — owned: "UNLOCKED"; locked: the requirement; else the COST.
             string bottom;
@@ -394,11 +402,18 @@ namespace DeNelle.Village.Buildings.Progression
             {
                 bottom = _vm != null ? _vm.CostFor(item.Id) : "";
                 bottomColor = item.Affordable ? ElarionUi.Affordable : ElarionUi.Danger;
+                // Colorblind law: affordability was encoded by green-vs-red hue ALONE —
+                // add a text cue ("Need ...") so the unaffordable state reads without hue.
+                if (!item.Affordable && !string.IsNullOrEmpty(bottom)) bottom = "Need " + bottom;
             }
             var botLbl = ElarionUiKit.Label(tile.transform, bottom, 0.05f, 0.20f,
                 new Color(bottomColor.r, bottomColor.g, bottomColor.b, dim),
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: !item.Locked);
             botLbl.raycastTarget = false;
+            // Cost/"UNLOCKED" fit single-line; a locked tile's requirement copy may run
+            // long — let it wrap-and-truncate INSIDE its band instead of ellipsizing away.
+            if (item.Locked) ElarionUiKit.FitBlock(botLbl);
+            else ElarionUiKit.FitSingleLine(botLbl);
         }
 
         private static string TierGlyph(string id)

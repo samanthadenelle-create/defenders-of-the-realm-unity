@@ -46,7 +46,9 @@ namespace DeNelle.Village
 
             // Left: Narrow portrait area to match mockup exactly - ornate gold frame with hero portrait, Lvl, name, colored bars, stats.
             // Matches the mockup's left panel width and style.
-            var niche = ElarionUiKit.Niche(panel.transform, new Vector2(0.04f, 0.12f), new Vector2(0.26f, 0.78f));
+            // Eyes-sweep 2026-07-06 rule 2: all content columns end ABOVE the shared bottom-centre
+            // Close band (SeatSharedCloseInside seats a fixed 360x120 box there) — bottom 0.12 -> 0.165.
+            var niche = ElarionUiKit.Niche(panel.transform, new Vector2(0.04f, 0.165f), new Vector2(0.26f, 0.78f));
             _paperDoll = AddImage(niche.transform, "PaperDollArea", new Vector2(0.02f, 0.01f), new Vector2(0.98f, 0.99f), new Color(0, 0, 0, 0));
             NoRaycast(_paperDoll);
 
@@ -61,16 +63,19 @@ namespace DeNelle.Village
             // WO-582 frame pass: the grid sits in the Blink frame's own dark well now, so the grid
             // root is TRANSPARENT (no grey Well sub-frame, no old PanelInventory gold-grid sprite that
             // double-framed the middle). Items render directly on the frame's central well.
+            // Eyes-sweep 2026-07-06: the right column re-stacked so NOTHING sits under the shared
+            // bottom-centre Close band — grid 0.30–0.80, detail strip 0.240–0.295, footer 0.165–0.235.
             _gridRoot = AddImage(panel.transform, "GridRoot",
-                                 new Vector2(0.30f, 0.16f), new Vector2(0.93f, 0.80f), new Color(0f, 0f, 0f, 0f));
+                                 new Vector2(0.30f, 0.30f), new Vector2(0.93f, 0.80f), new Color(0f, 0f, 0f, 0f));
             NoRaycast(_gridRoot);
 
             // WO-585 — selection DETAIL strip: a thin host between the grid bottom (0.16) and the
             // footer top (0.10). Empty/transparent until an item is tapped; RebuildSidebar then drops
             // the selected item's name + stats + an explicit Equip/Use CTA + the equip Status line
             // into it, so a tap has a visible, separate-from-equip response (was the inert feel).
+            // (was 0.103–0.156 — the "Tap an item to inspect it." bar painted over the shared Close)
             _sidebarRoot = AddImage(panel.transform, "DetailStrip",
-                                    new Vector2(0.30f, 0.103f), new Vector2(0.93f, 0.156f), new Color(0f, 0f, 0f, 0f));
+                                    new Vector2(0.30f, 0.240f), new Vector2(0.93f, 0.295f), new Color(0f, 0f, 0f, 0f));
             NoRaycast(_sidebarRoot);
 
             BuildFooterBar(panel.transform);
@@ -81,8 +86,10 @@ namespace DeNelle.Village
         {
             // WO-582 frame pass: the footer sits on the Blink frame's ornate base now, so the tray is
             // a transparent layout host (no Track fill / rim / rule that boxed the bottom over the art).
+            // Eyes-sweep 2026-07-06 rule 2 (was 0.035–0.100): the wallet tray now ends above the
+            // shared bottom-centre Close band instead of sitting underneath it.
             var tray = AddImage(panel, "FooterTray",
-                                new Vector2(0.30f, 0.035f), new Vector2(0.93f, 0.100f), new Color(0f, 0f, 0f, 0f));
+                                new Vector2(0.30f, 0.165f), new Vector2(0.93f, 0.235f), new Color(0f, 0f, 0f, 0f));
             NoRaycast(tray);
 
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
@@ -139,10 +146,15 @@ namespace DeNelle.Village
             AddInnerRim(well, new Color(valueColor.r, valueColor.g, valueColor.b, 0.55f));
             NoRaycast(AddImage(well.transform, "Glint", new Vector2(0.42f, 0.80f), new Vector2(0.58f, 0.96f),
                                new Color(valueColor.r, valueColor.g, valueColor.b, 0.85f)));
-            AddLabel(well.transform, value, 0.40f, 0.96f, valueColor,
+            // Eyes-sweep 2026-07-06: GOLD/CRYSTALS/WALLET caps painted over their values — the
+            // caps/value text overflowed the narrow wells. Disjoint bands kept; both labels now
+            // fit-or-ellipsize inside their own band (§1.14 NoWrap+ellipsis).
+            var valLbl = AddLabel(well.transform, value, 0.42f, 0.96f, valueColor,
                      ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
-            AddLabel(well.transform, caps, 0.06f, 0.40f, InkMicro,
+            ElarionUiKit.FitSingleLine(valLbl, 0f, ElarionUi.FontLabel);
+            var capsLbl = AddLabel(well.transform, caps, 0.06f, 0.40f, InkMicro,
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 2f);
+            ElarionUiKit.FitSingleLine(capsLbl, 0f, ElarionUi.FontMicro);
         }
 
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
@@ -254,6 +266,17 @@ namespace DeNelle.Village
                     var im = ic.GetComponent<Image>();
                     im.sprite = tabIcon; im.color = Color.white; im.type = Image.Type.Simple;
                     im.preserveAspect = true;
+                }
+                // Eyes-sweep 2026-07-06: tab labels wrapped mid-word over the tab art
+                // ("Weapon s" / "Accesso ries" / "Consum ables"). The label gets its OWN band
+                // (clear of the icon strip at x 0.04–0.30) and fits-or-ellipsizes (§1.14).
+                var tabLbl = btn.GetComponentInChildren<TMPro.TextMeshProUGUI>();
+                if (tabLbl != null)
+                {
+                    var lr = tabLbl.GetComponent<RectTransform>();
+                    lr.anchorMin = new Vector2(tabIcon != null ? 0.32f : 0.06f, 0f);
+                    lr.anchorMax = new Vector2(0.96f, 1f);
+                    ElarionUiKit.FitSingleLine(tabLbl, 0f, ElarionUi.FontBody);
                 }
                 if (sel)
                 {

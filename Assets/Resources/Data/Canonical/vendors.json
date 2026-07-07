@@ -27,8 +27,7 @@
       "displayName": "The Forge",
       "layout": "gear",
       "categories": [
-        "weapon",
-        "armor"
+        "weapon"
       ],
       "classFilter": "roster",
       "maxReqLevel": 0,

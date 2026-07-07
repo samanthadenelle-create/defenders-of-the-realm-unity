@@ -1219,14 +1219,35 @@ namespace DeNelle.Village
                 $"PACKAGE albedo audit: {withAlbedo}/{mats} material(s) carry a _BaseMap/_MainTex texture" +
                 (missing.Length > 0 ? $" (textureless: [{missing}])" : "") + ".");
 
+            // NULL-albedo package materials are EXPECTED — ColorPackageBody tints them via
+            // _BaseColor (PaladinPalette), so the hero renders COLORED, not white. Only a
+            // break-log Fail if the tint ALSO failed (a material with neither texture nor a
+            // non-default base color would truly render white). Was an unconditional Fail —
+            // polluted every fleet run 12/12 with a false WHITE HERO ROOT (2026-07-06 audit).
             if (mats > 0 && withAlbedo == 0)
-                FlowTrace.Fail("HeroBody",
-                    $"WHITE HERO ROOT: all {mats} package-body material(s) have a NULL albedo (_BaseMap/_MainTex) — " +
-                    "Knight_Hero.fbx imports textureless materials (no extracted .fbm/, no external .mat), and the " +
-                    "package path keeps them as-is (RetargetMaterialsToUrp skips already-URP mats). The Paladin " +
-                    "renders solid white. FIX (asset-side): extract the Paladin albedo to a reliably Resources-" +
-                    "loadable folder and bind it here (mirror ApplyExtractedTexture), or give KnightPackage.prefab " +
-                    "materials that reference a shipped albedo texture.");
+            {
+                bool anyTinted = false;
+                foreach (var r in body.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (r == null) continue;
+                    foreach (var m in r.sharedMaterials)
+                        if (m != null &&
+                            ((m.HasProperty("_BaseColor") && m.GetColor("_BaseColor") != Color.white) ||
+                             (m.HasProperty("_Color") && m.GetColor("_Color") != Color.white)))
+                        { anyTinted = true; break; }
+                    if (anyTinted) break;
+                }
+                if (anyTinted)
+                    FlowTrace.Warn("HeroBody",
+                        $"PACKAGE body: all {mats} material(s) are textureless but _BaseColor-tinted " +
+                        "(PaladinPalette) — colored-not-textured is the WO-604 interim look, not a white hero.");
+                else
+                    FlowTrace.Fail("HeroBody",
+                        $"WHITE HERO ROOT: all {mats} package-body material(s) have NULL albedo AND default-white " +
+                        "_BaseColor — the Paladin genuinely renders solid white. FIX (asset-side): extract the " +
+                        "Paladin albedo to a Resources-loadable folder and bind it here (mirror " +
+                        "ApplyExtractedTexture), or give KnightPackage.prefab materials a shipped albedo texture.");
+            }
         }
 
         // ─────────────────────────────────────────────────────────────────────────────

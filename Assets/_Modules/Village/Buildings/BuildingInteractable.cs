@@ -376,11 +376,10 @@ namespace DeNelle.Village
             switch (building.Type)
             {
                 case BuildingType.ArcaneTower:
-                    // OWNER 2026-07-04: legacy HeroTalents (screen 01) consolidated into HeroSkillTree
-                    // (screen 02) — identical content. Route to HeroTalents only when ff.herotalents is ON.
-                    panelId = DeNelle.Core.FeatureFlags.HeroTalentsPanel
-                        ? PanelId.HeroTalents
-                        : PanelId.HeroSkillTree;
+                    // OWNER 2026-07-04 consolidation, finished EYES-SWEEP 2026-07-06: the legacy
+                    // HeroTalents route is REMOVED entirely (a stale ff.herotalents PlayerPrefs
+                    // re-armed the dead route → panel_HeroTalents rendered black). Always HeroSkillTree.
+                    panelId = PanelId.HeroSkillTree;
                     return true;
                 case BuildingType.Workshop:
                     panelId = PanelId.Crafting;

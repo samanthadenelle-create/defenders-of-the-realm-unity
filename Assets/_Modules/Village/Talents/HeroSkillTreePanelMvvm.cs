@@ -56,6 +56,11 @@ namespace DeNelle.Village.Talents
         private TMPro.TextMeshProUGUI _quickStatus;
         private TMPro.TextMeshProUGUI _respecStatus;
         private GameObject _quickRoot;
+        // Detail strip FOLDS (eyes-sweep 2026-07-06): the "Select a talent" empty-state
+        // painted OVER the SELECTED TALENT header + body. The two are ALTERNATIVES —
+        // RenderDetail activates exactly one, never both.
+        private GameObject _detailGroup;   // header + name + description + state
+        private GameObject _emptyGroup;    // "Select a talent" prompt + hint copy
 
         private PanelHandle _panelHandle;
 
@@ -73,13 +78,11 @@ namespace DeNelle.Village.Talents
         {
             _panelHandle = PanelManager.Register("Skills", Close, () => IsOpen);
             PanelRouter.Register(PanelId.HeroSkillTree, Open);
-            // OWNER 2026-07-04: screen 01 (PanelId.HeroTalents) and screen 02 (PanelId.HeroSkillTree)
-            // render IDENTICAL content — both route here. Owner call: consolidate to ONE panel. The
-            // legacy HeroTalents route is now gated behind ff.herotalents (default OFF); when off it is
-            // not registered and its entry points route to HeroSkillTree instead (see BuildingInteractable
-            // ArcaneTower + DialogueCommandSink OpenTalents). Flip ff.herotalents=1 to restore both routes.
-            if (DeNelle.Core.FeatureFlags.HeroTalentsPanel)
-                PanelRouter.Register(PanelId.HeroTalents, Open);
+            // EYES-SWEEP 2026-07-06: the legacy PanelId.HeroTalents route is REMOVED (was
+            // ff.herotalents-gated; a stale PlayerPrefs "ff.herotalents"=1 re-armed the dead route and
+            // the capture fleet rendered panel_HeroTalents fully black). One panel, ONE route:
+            // HeroSkillTree. All entry points (ArcaneTower building, dialogue OpenTalents) route to
+            // PanelId.HeroSkillTree unconditionally; PanelId.HeroTalents is retired-unroutable.
         }
 
         private void OnDestroy()
@@ -89,8 +92,6 @@ namespace DeNelle.Village.Talents
             if (_ui != null) Destroy(_ui);
             _ui = null;
             PanelRouter.Unregister(PanelId.HeroSkillTree, Open);
-            if (DeNelle.Core.FeatureFlags.HeroTalentsPanel)
-                PanelRouter.Unregister(PanelId.HeroTalents, Open);
         }
 
         // ── Open: build chrome, construct + bind the VM ───────────────────────────
@@ -178,14 +179,15 @@ namespace DeNelle.Village.Talents
         {
             if (_vm == null) return;
             bool has = _vm.HasSelection;
-            if (_detailName != null)
-                _detailName.text = has ? _vm.SelectedNodeName : "Select a talent";
-            if (_detailDesc != null)
-                _detailDesc.text = has
-                    ? _vm.SelectedNodeDescription
-                    : "Tap any node to read what it does before you confirm.";
-            if (_detailState != null)
-                _detailState.text = has ? _vm.SelectedNodeStateLine : "";
+            // Empty-state renders INSTEAD of the detail fold — never on top of it.
+            if (_detailGroup != null) _detailGroup.SetActive(has);
+            if (_emptyGroup != null) _emptyGroup.SetActive(!has);
+            if (has)
+            {
+                if (_detailName != null) _detailName.text = _vm.SelectedNodeName;
+                if (_detailDesc != null) _detailDesc.text = _vm.SelectedNodeDescription;
+                if (_detailState != null) _detailState.text = _vm.SelectedNodeStateLine;
+            }
             if (_quickStatus != null)
                 _quickStatus.text = _vm.QuickSwapStatus;
         }
@@ -392,8 +394,11 @@ namespace DeNelle.Village.Talents
             Color nameColor = node.Owned || node.CanUnlock || node.IsPending
                 ? ElarionUi.Parchment : ElarionUi.ParchmentDim;
             float nameTop = sprite != null ? 0.40f : 0.82f;
-            ElarionUiKit.Label(go.transform, node.Name, nameTop - 0.22f, nameTop, nameColor,
+            var nameLbl = ElarionUiKit.Label(go.transform, node.Name, nameTop - 0.22f, nameTop, nameColor,
                 ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f, bold: true);
+            // §1.14 (eyes-sweep 2026-07-06): node labels triple-stacked — a wrapping name
+            // painted over the state band and vice versa. Each strip fits its own rect.
+            ElarionUiKit.FitSingleLine(nameLbl);
 
             // State line (bottom): owned / planned / cost / lock reason.
             // Locked nodes: readability pass (UI matrix 2026-07-03) — the red "Requires..."
@@ -413,11 +418,17 @@ namespace DeNelle.Village.Talents
                 lockedNode ? ElarionUi.FontMicro - 1 : ElarionUi.FontMicro,
                 TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f);
             if (lockedNode) stateLbl.fontStyle = TMPro.FontStyles.Italic;
+            // "Locked\nRequires ..." wraps + truncates INSIDE the bottom band (full reason
+            // lives in the detail strip on select) — it can never climb over the name.
+            ElarionUiKit.FitBlock(stateLbl);
 
             // Equipped chip (Skill nodes slotted in the loadout).
             if (node.IsEquipped)
-                ElarionUiKit.Label(go.transform, "EQUIPPED", 0.80f, 0.99f, ElarionUi.Affordable,
+            {
+                var chip = ElarionUiKit.Label(go.transform, "EQUIPPED", 0.80f, 0.99f, ElarionUi.Affordable,
                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Right, 0.30f, 0.98f, bold: true);
+                ElarionUiKit.FitSingleLine(chip);
+            }
         }
 
         // Plate colour by state (procedural fallback path).
@@ -476,6 +487,8 @@ namespace DeNelle.Village.Talents
             _walletText.fontStyle = TMPro.FontStyles.Bold;
             _walletText.alignment = TMPro.TextAlignmentOptions.Center;
             _walletText.raycastTarget = false;
+            // §1.14: the Wisdom/plan readout is one strip over the graph — fit, never spill.
+            ElarionUiKit.FitSingleLine(_walletText);
 
             // (The old "Equip" button that opened a second loadout screen is GONE — the
             // quick-swap row below folds that assign flow into THIS screen, owner 2026-06-28.)
@@ -502,24 +515,45 @@ namespace DeNelle.Village.Talents
             var dbImg = detailBg.GetComponent<Image>();
             if (dbImg != null) dbImg.raycastTarget = false;
 
-            ElarionUiKit.Label(panel, "SELECTED TALENT", 0.805f, 0.835f, ElarionUi.Gilt,
+            // Two ALTERNATIVE folds (eyes-sweep 2026-07-06 fix): the empty-state prompt
+            // and the selected-talent detail share the strip's bands but live under
+            // separate full-rect hosts — RenderDetail activates exactly ONE. Children
+            // keep their panel-fraction anchors (the hosts span the whole body zone).
+            _detailGroup = MakeGroupHost(panel, "DetailGroup");
+            _emptyGroup = MakeGroupHost(panel, "EmptyStateGroup");
+            _detailGroup.SetActive(false);   // empty-state is the default fold until a node is selected
+
+            var selHeader = ElarionUiKit.Label(_detailGroup.transform, "SELECTED TALENT", 0.805f, 0.835f, ElarionUi.Gilt,
                 ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);
+            ElarionUiKit.FitSingleLine(selHeader);
 
-            _detailName = ElarionUiKit.Label(panel, "Select a talent", 0.745f, 0.805f, ElarionUi.Parchment,
+            _detailName = ElarionUiKit.Label(_detailGroup.transform, "", 0.745f, 0.805f, ElarionUi.Parchment,
                 ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);
+            ElarionUiKit.FitSingleLine(_detailName);   // long talent names shrink/ellipsize, never spill
 
-            _detailDesc = ElarionUiKit.Label(panel,
-                "Tap any node to read what it does before you confirm.",
+            _detailDesc = ElarionUiKit.Label(_detailGroup.transform, "",
                 0.475f, 0.735f, ElarionUi.Parchment, ElarionUi.FontLabel,
                 TMPro.TextAlignmentOptions.TopLeft, txX0, txX1);
-            _detailDesc.textWrappingMode = TMPro.TextWrappingModes.Normal;
+            ElarionUiKit.FitBlock(_detailDesc);        // wraps + truncates inside its band
 
-            _detailState = ElarionUiKit.Label(panel, "", 0.41f, 0.465f, ElarionUi.Affordable,
+            _detailState = ElarionUiKit.Label(_detailGroup.transform, "", 0.41f, 0.465f, ElarionUi.Affordable,
                 ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);
+            ElarionUiKit.FitSingleLine(_detailState);
 
-            // Quick-swap caption + slot row.
-            ElarionUiKit.Label(panel, "QUICK-SWAP  (1-4)", 0.365f, 0.395f, ElarionUi.Gilt,
+            // Empty-state fold — SAME bands, rendered INSTEAD of the detail fold.
+            var emptyTitle = ElarionUiKit.Label(_emptyGroup.transform, "Select a talent", 0.745f, 0.805f,
+                ElarionUi.Parchment, ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);
+            ElarionUiKit.FitSingleLine(emptyTitle);
+            var emptyBody = ElarionUiKit.Label(_emptyGroup.transform,
+                "Tap any node to read what it does before you confirm.",
+                0.475f, 0.735f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
+                TMPro.TextAlignmentOptions.TopLeft, txX0, txX1);
+            ElarionUiKit.FitBlock(emptyBody);
+
+            // Quick-swap caption + slot row (always visible — outside both folds).
+            var quickCaption = ElarionUiKit.Label(panel, "QUICK-SWAP  (1-4)", 0.365f, 0.395f, ElarionUi.Gilt,
                 ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);
+            ElarionUiKit.FitSingleLine(quickCaption);
 
             _quickRoot = new GameObject("QuickSwapRow", typeof(RectTransform));
             _quickRoot.transform.SetParent(panel, false);
@@ -531,6 +565,19 @@ namespace DeNelle.Village.Talents
             _quickStatus = ElarionUiKit.Label(panel, "Select an owned skill, then tap a slot (1-4).",
                 0.145f, 0.175f, ElarionUi.ParchmentDim, ElarionUi.FontMicro,
                 TMPro.TextAlignmentOptions.Center, txX0, txX1);
+            ElarionUiKit.FitSingleLine(_quickStatus);
+        }
+
+        // Full-rect transparent layout host — children keep their fractional anchors;
+        // toggling the host swaps the whole fold on/off atomically.
+        private static GameObject MakeGroupHost(Transform parent, string name)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            return go;
         }
 
         // The scrollable graph viewport (mask) + fixed-size content (nodes/edges).
@@ -602,6 +649,7 @@ namespace DeNelle.Village.Talents
             _planText.color = ElarionUi.Gilt;
             _planText.alignment = TMPro.TextAlignmentOptions.Left;
             _planText.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(_planText);
 
             _confirmBtn = ElarionUiKit.ButtonPack(panel, "CONFIRM", ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.55f, 0.07f), new Vector2(0.80f, 0.135f),
@@ -634,6 +682,7 @@ namespace DeNelle.Village.Talents
 
             _respecStatus = ElarionUiKit.Label(panel, "", 0.14f, 0.17f, ElarionUi.ParchmentDim,
                 ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Right, 0.55f, 0.955f);
+            ElarionUiKit.FitSingleLine(_respecStatus);
 
             // Close is the SHARED top-right Obsidian Close button (WO-554) — no per-panel footer Close.
         }
@@ -705,15 +754,18 @@ namespace DeNelle.Village.Talents
             int idx = slot.SlotIndex;
             btn.onClick.AddListener(() => { if (_vm != null) _vm.AssignSelectedToSlot(idx); });
 
-            ElarionUiKit.Label(tile.transform, slot.SlotKey, 0.60f, 0.95f, ElarionUi.Gilt,
+            var keyLbl = ElarionUiKit.Label(tile.transform, slot.SlotKey, 0.60f, 0.95f, ElarionUi.Gilt,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
+            ElarionUiKit.FitSingleLine(keyLbl);
 
             string body = slot.IsEmpty ? (assignTarget ? "tap to set" : "+") : slot.AbilityName;
             Color bodyColor = slot.IsEmpty
                 ? (assignTarget ? ElarionUi.Gilt : ElarionUi.ParchmentDim)
                 : ElarionUi.Parchment;
-            ElarionUiKit.Label(tile.transform, body, 0.06f, 0.56f, bodyColor,
+            var bodyLbl = ElarionUiKit.Label(tile.transform, body, 0.06f, 0.56f, bodyColor,
                 ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: !slot.IsEmpty);
+            // Ability names wrap + truncate inside their band — never over the slot key.
+            ElarionUiKit.FitBlock(bodyLbl);
         }
 
         // ── Black-grid node-canvas sprite (generated once) ────────────────────────
@@ -794,6 +846,8 @@ namespace DeNelle.Village.Talents
             _detailState = null;
             _quickStatus = null;
             _quickRoot = null;
+            _detailGroup = null;
+            _emptyGroup = null;
             if (_ui != null) Destroy(_ui);
             _ui = null;
             _graphContent = null;

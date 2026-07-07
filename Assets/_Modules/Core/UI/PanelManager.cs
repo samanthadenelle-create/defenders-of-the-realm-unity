@@ -179,6 +179,19 @@ namespace DeNelle.Core.UI
         }
 
         /// <summary>
+        /// WO-611: close EVERY open registered panel so a screen can take sole ownership (the
+        /// combat HUD on the hostile posture flip). Today the arbiter enforces at-most-one-open, so
+        /// this closes that one; the bounded loop guards against any future multi-open without ever
+        /// spinning. Safe to call when nothing is open (no-op).
+        /// </summary>
+        public static void CloseAll()
+        {
+            int guard = 0;
+            while (_open != null && guard++ < 32)
+                CloseOpen();
+        }
+
+        /// <summary>
         /// Close whatever panel is currently open (if any). Useful for a global "back"
         /// / ESC handler. Safe to call when nothing is open.
         /// </summary>
