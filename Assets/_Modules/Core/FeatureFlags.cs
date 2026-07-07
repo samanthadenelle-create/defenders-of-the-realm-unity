@@ -473,8 +473,11 @@ namespace DeNelle.Core
         /// rotation is a frame mismatch (e.g. sword_A's drawn euler (117,-61,-111) swings the back
         /// carry arbitrarily). ON = the 0492d7dc behavior (position + rotation compose) as the
         /// BACKUP if position-only doesn't carry the town fix. Explicit @sheathed entries are
-        /// identical under both. PlayerPrefs "ff.sheathdrawnrot" = 1 to flip.</summary>
-        public static bool SheathedDrawnRotFallback => Get("sheathdrawnrot", defaultOn: false);
+        /// identical under both. PlayerPrefs "ff.sheathdrawnrot" = 0 to flip back to pos-only.
+        /// 2026-07-07 owner A/B: default ON — pos-only preserved the exact plank pose she flagged
+        /// (felt-verdict from flag_00 10:25); trying the full compose next. Toggle lives in the
+        /// OwnerDevToolsOverlay flag list for live comparison.</summary>
+        public static bool SheathedDrawnRotFallback => Get("sheathdrawnrot", defaultOn: true);
 
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)

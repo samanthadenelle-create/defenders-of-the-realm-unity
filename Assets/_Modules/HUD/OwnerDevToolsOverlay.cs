@@ -248,6 +248,10 @@ namespace DeNelle.HUD
             AddFlagToggle(parent, "noautoheal",   () => FeatureFlags.NoAutoHeal);
             AddFlagToggle(parent, "lockon",       () => FeatureFlags.LockOn);
             AddFlagToggle(parent, "basebuilding", () => FeatureFlags.BaseBuilding);
+            // 07-07 sheathed-pose A/B: ON = drawn offset composes pos+rot onto the back pose
+            // (the 0492d7dc behavior); OFF = pos-only nudge. Re-equip applies it on next
+            // sheathe re-parent (walk/combat flip), no restart needed.
+            AddFlagToggle(parent, "sheathdrawnrot", () => FeatureFlags.SheathedDrawnRotFallback);
 
             // --- State / diagnostics ---
             AddTool(parent, "Reset to New Game",        ResetToNewGame);
