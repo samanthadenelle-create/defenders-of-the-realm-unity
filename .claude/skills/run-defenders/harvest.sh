@@ -31,7 +31,11 @@ import sys,json
 from collections import Counter
 art=['videodecode','video decode shader','videocomposite','custom render path shader',
      'could not find video','could not find material hidden/video','d3d11','direct3d',
-     'no graphics device','gfxdevice']
+     'no graphics device','gfxdevice',
+     # -nographics MSAA/render-target artifacts (Camera:Render, no real GfxDevice) —
+     # mirrors AutoPilotTickets.RenderArtifactNeedles (2026-07-06 audit)
+     'samples but','endrenderpass','not inside a renderpass','rendertexture.create failed',
+     'drawopaqueobjects','drawtransparentobjects','attachment 0 was created']
 c=Counter()
 for l in sys.stdin:
   try:

@@ -1065,6 +1065,7 @@ namespace DeNelle.Editor
             ConsumableCatalog.Reload();
             ConsumableCraftingCatalog.Reload();
             LootTableCatalog.Reload();
+            VendorRegistry.Reload();
 
             var materialIds = new HashSet<string>();
             foreach (var m in MaterialCatalog.All)
@@ -1082,6 +1083,20 @@ namespace DeNelle.Editor
                     if (!materialIds.Contains(d.MaterialId) && !legacy.Contains(d.MaterialId))
                         failures.Add($"loot-tables.json: table '{t.Id}' drops phantom material '{d.MaterialId}' (no MaterialDef)");
                 }
+            }
+
+            // Union of every material/consumable id any vendor actually SELLS, resolved
+            // through the REAL shelf path (vendors.json -> VendorStockResolver — the WO-598
+            // Market surfaces every non-gem priced material). Buy-only ingredients are a
+            // legitimate acquisition mode; "obtainable" = droppable OR purchasable.
+            var purchasable = new HashSet<string>();
+            foreach (var v in VendorRegistry.All)
+            {
+                if (v == null || string.IsNullOrEmpty(v.Id)) continue;
+                foreach (var ware in DeNelle.Village.Hero.VendorStockResolver.Resolve(v.Id, "knight", 99, new[] { "knight" }))
+                    if (ware.Kind == DeNelle.Village.Hero.VendorWareKind.Material ||
+                        ware.Kind == DeNelle.Village.Hero.VendorWareKind.Consumable)
+                        purchasable.Add(ware.Id);
             }
 
             var recipes = ConsumableCraftingCatalog.All;
@@ -1108,11 +1123,12 @@ namespace DeNelle.Editor
                             failures.Add($"consumable-recipes.json: '{r.Id}' needs unknown ingredient '{ing.Id}' (no MaterialDef)");
                             ingredientsOk = false;
                         }
-                        // Art-backed ingredient must be obtainable from a drop, else the
-                        // recipe is uncraftable in normal play.
-                        if (isMat && ing.Id.StartsWith("ing_") && !droppable.Contains(ing.Id))
+                        // Art-backed ingredient must be obtainable — from a drop OR a vendor
+                        // shelf — else the recipe is uncraftable in normal play. (Was drops-only;
+                        // that false-failed the 5 Market buy-only herbs/liquids, WO-600 reclassed.)
+                        if (isMat && ing.Id.StartsWith("ing_") && !droppable.Contains(ing.Id) && !purchasable.Contains(ing.Id))
                         {
-                            failures.Add($"consumable-recipes.json: '{r.Id}' ingredient '{ing.Id}' drops from NO loot table (uncraftable)");
+                            failures.Add($"consumable-recipes.json: '{r.Id}' ingredient '{ing.Id}' has NO acquisition path (no loot drop AND no vendor shelf) (uncraftable)");
                             ingredientsOk = false;
                         }
                     }

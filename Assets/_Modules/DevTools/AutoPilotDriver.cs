@@ -440,8 +440,31 @@ namespace DeNelle.DevTools
             FlowTrace.Step(Tag, "AssertEncounterRealPath: dropped to battle (BattleInProgress=true) via the REAL watcher engage.");
 
             // 6) Let the arena build + bake + warp + spawn settle, then assert the family staged.
-            float build = 0f;
-            while (build < 4f) { build += Time.deltaTime; yield return null; }
+            // COMBAT-HUD CAPTURE (WO-611 image-pair): the EARLY shot fires at 0.9s — runs
+            // 9405-9408 proved even 2.2s races the Lv1 bot's death (timeout tails show an
+            // end-state on screen; only run 9404 ever landed the 2.2s frame). The HUD posture
+            // flips the moment the battle drops, so 0.9s is enough for the widgets; a second
+            // best-effort LATE shot at 2.6s gets a dressed-arena frame when the bot survives.
+            float build = 0f; int shots = 0;
+            while (build < 4f)
+            {
+                build += Time.deltaTime; yield return null;
+                bool early = shots == 0 && build >= 0.9f;
+                bool late = shots == 1 && build >= 2.6f;
+                if (early || late)
+                {
+                    shots++;
+                    try
+                    {
+                        string shotDir = System.IO.Path.Combine(Application.persistentDataPath, "ui-shots");
+                        System.IO.Directory.CreateDirectory(shotDir);
+                        string name = early ? "battle_hud.png" : "battle_hud_late.png";
+                        ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(shotDir, name));
+                        FlowTrace.Step(Tag, "AssertEncounterRealPath: " + name + " captured at " + build.ToString("F1") + "s.");
+                    }
+                    catch (Exception ex) { FlowTrace.Warn(Tag, "battle_hud capture threw " + ex.Message); }
+                }
+            }
 
             var found = new System.Collections.Generic.List<DeNelle.Village.Enemy>();
             foreach (var e in UnityEngine.Object.FindObjectsByType<DeNelle.Village.Enemy>())
@@ -452,9 +475,14 @@ namespace DeNelle.DevTools
             {
                 if (e == null) continue;
                 if (e.GetComponentInChildren<SkinnedMeshRenderer>() != null) skinned++;   // real orc mesh, not a capsule
+                // WO-606 made arena families data-driven (SpawnAreaTable draws), so non-orc
+                // rosters (SkeletonHumanoid etc.) are legitimate — assert the real invariant
+                // "will animate" (controller bound + valid avatar when Humanoid), not the
+                // controller NAME containing "Orc" (false T-pose flags on skeleton draws).
                 var anim = e.GetComponentInChildren<Animator>();
-                string ctrl = (anim != null && anim.runtimeAnimatorController != null) ? anim.runtimeAnimatorController.name : "";
-                if (ctrl.IndexOf("Orc", StringComparison.OrdinalIgnoreCase) >= 0) orcCtrl++;
+                bool rigged = anim != null && anim.runtimeAnimatorController != null
+                              && (!anim.isHuman || (anim.avatar != null && anim.avatar.isValid));
+                if (rigged) orcCtrl++;
             }
 
             if (found.Count == 0)
@@ -462,9 +490,9 @@ namespace DeNelle.DevTools
             else if (skinned < found.Count)
                 FlowTrace.Fail(Tag, "AssertEncounterRealPath: " + (found.Count - skinned) + "/" + found.Count + " orcs fell back to a CAPSULE (model failed to load).");
             else if (orcCtrl < found.Count)
-                FlowTrace.Fail(Tag, "AssertEncounterRealPath: " + (found.Count - orcCtrl) + "/" + found.Count + " orcs lack an Orc animator controller (would T-pose).");
+                FlowTrace.Fail(Tag, "AssertEncounterRealPath: " + (found.Count - orcCtrl) + "/" + found.Count + " arena enemies lack a valid animator (no controller, or Humanoid with an invalid avatar — would T-pose).");
             else
-                FlowTrace.Step(Tag, "AssertEncounterRealPath: " + found.Count + " orcs spawned, all skinned + Orc-rigged.");
+                FlowTrace.Step(Tag, "AssertEncounterRealPath: " + found.Count + " arena enemies spawned, all skinned + validly rigged.");
 
             // Force the WIN path deterministically (headless can't drive hero attacks).
             foreach (var e in found)
@@ -543,9 +571,39 @@ namespace DeNelle.DevTools
         /// (FlowTrace.Fail) and the run advances — never hangs. The global cap is
         /// also enforced here.
         /// </summary>
+        // Optional phase filter ("--phases=Encounter,PopupClose"): when present, only phases
+        // whose name contains one of the comma tokens (case-insensitive) run; the rest are
+        // skipped with a Step line. Boot/hero prerequisites always run. Added 2026-07-06 so a
+        // single-purpose capture run (one UI frame) is ~2 minutes, not the full 24-phase sweep.
+        private static string[] _phaseFilter;
+        private static bool PhaseAllowed(string name)
+        {
+            if (_phaseFilter == null)
+            {
+                var args = Environment.GetCommandLineArgs();
+                string raw = null;
+                foreach (var a in args)
+                    if (a != null && a.StartsWith("--phases=", StringComparison.OrdinalIgnoreCase))
+                        raw = a.Substring("--phases=".Length);
+                _phaseFilter = string.IsNullOrEmpty(raw)
+                    ? Array.Empty<string>()
+                    : raw.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            }
+            if (_phaseFilter.Length == 0) return true;
+            if (name == "BootToGameplay" || name == "ResolveHero") return true;   // prerequisites
+            foreach (var t in _phaseFilter)
+                if (name.IndexOf(t.Trim(), StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            return false;
+        }
+
         private IEnumerator RunPhase(string name, IEnumerator phase, bool abortIfFailed = false)
         {
             if (_abortRun) yield break;
+            if (!PhaseAllowed(name))
+            {
+                FlowTrace.Step("Auto", $"PHASE SKIPPED by --phases filter: {name}");
+                yield break;
+            }
 
             float start = Time.realtimeSinceStartup;
             FlowTrace.Step("Auto", $"PHASE ENTER: {name}");
@@ -1562,10 +1620,16 @@ namespace DeNelle.DevTools
             }
 
             var state = svc.State;
-            string key = DeNelle.Core.State.SaveSchema.PlayerPrefsKey;
 
-            // Preserve the existing save so the probe never corrupts a real player save.
-            string origSave = PlayerPrefs.HasKey(key) ? PlayerPrefs.GetString(key) : null;
+            // WO-586 fleet save-probe ISOLATION: all N fleet processes share ONE PlayerPrefs
+            // hive, so probing the real "dotr-save" slot let sibling instances stomp the blob
+            // inside this probe's 2-frame Save()->Load() window — the 07-03/07-06 false
+            // WALLET/ROSTER/QUEST drift (foreign blob carries a valid HMAC, loads silently).
+            // Swap in a seed-suffixed provider for the probe's duration: every write/read maps
+            // slot -> slot + "-probe-<seed>", unique per instance. The REAL slot is never
+            // touched, so no preserve/restore of the player blob is needed.
+            var origProvider = DeNelle.Core.State.GameStateService.Provider;
+            DeNelle.Core.State.GameStateService.Provider = new SeedScopedSaveProvider(origProvider, "-probe-" + _seed);
 
             string probeRosterId = "AutoPilotSaveProbe-" + _seed;
             string probeQuestId  = "autopilot-quest-" + _seed;
@@ -1586,7 +1650,7 @@ namespace DeNelle.DevTools
             {
                 FlowTrace.Fail(Tag, "AssertSaveRoundTrip: failed to set marker state — " + err);
                 _lastDetail = "set-marker threw";
-                RestoreSave(key, origSave, svc);
+                RestoreProbe(origProvider, svc);
                 yield break;
             }
 
@@ -1596,7 +1660,7 @@ namespace DeNelle.DevTools
             {
                 FlowTrace.Fail(Tag, "AssertSaveRoundTrip: Save() threw — " + err);
                 _lastDetail = "Save threw";
-                RestoreSave(key, origSave, svc);
+                RestoreProbe(origProvider, svc);
                 yield break;
             }
             yield return null;
@@ -1618,7 +1682,7 @@ namespace DeNelle.DevTools
             {
                 FlowTrace.Fail(Tag, "AssertSaveRoundTrip: Load() threw — " + err);
                 _lastDetail = "Load threw";
-                RestoreSave(key, origSave, svc);
+                RestoreProbe(origProvider, svc);
                 yield break;
             }
             yield return null;
@@ -1645,22 +1709,39 @@ namespace DeNelle.DevTools
                 FlowTrace.Step(Tag, $"AssertSaveRoundTrip: PASS — wallet+roster+quest all survived Save()->Load() (crystals={crystalsAfter}, roster has probe, quest='{questAfter}').");
             _lastDetail = $"wallet={walletOk} roster={rosterOk} quest={questOk} -> {(pass ? "PASS" : "FAIL")}";
 
-            // Restore the player's original save so the probe leaves no marker behind.
-            RestoreSave(key, origSave, svc);
+            // Restore the real provider so the probe leaves no marker behind.
+            RestoreProbe(origProvider, svc);
         }
 
-        // Restore the save string captured before AssertSaveRoundTrip (or clear it if there
-        // was none) and re-apply it onto the live SO, so the rest of the run continues from
-        // the player's real state rather than the probe markers. Never throws.
-        private static void RestoreSave(string key, string origSave, DeNelle.Core.State.GameStateService svc)
+        // WO-586: unwind the probe's seed-scoped provider — delete the probe slot, restore
+        // the real provider, and re-Load the player's untouched real save (when one exists)
+        // so the rest of the run continues from real state. Never throws.
+        private static void RestoreProbe(DeNelle.Core.State.ISaveProvider origProvider, DeNelle.Core.State.GameStateService svc)
         {
             try
             {
-                if (origSave != null) { PlayerPrefs.SetString(key, origSave); PlayerPrefs.Save(); }
-                else PlayerPrefs.DeleteKey(key);
-                if (svc != null && origSave != null) svc.Load();
+                string slot = DeNelle.Core.State.SaveSchema.PlayerPrefsKey;
+                DeNelle.Core.State.GameStateService.Provider?.Delete(slot);   // maps to the -probe-<seed> slot
+                DeNelle.Core.State.GameStateService.Provider = origProvider;
+                if (svc != null && origProvider != null && origProvider.Exists(slot)) svc.Load();
             }
             catch (Exception ex) { FlowTrace.Warn("Auto", "AssertSaveRoundTrip: restore threw — " + ex.Message); }
+        }
+
+        // WO-586: test-only decorator — maps every slot to slot+suffix ("-probe-<seed>") so a
+        // fleet instance's save probe round-trips a slot no sibling process touches. Shipping
+        // save code (GameStateService/SaveSchema/LocalSaveProvider) is unchanged; this lives
+        // and dies inside AssertSaveRoundTrip.
+        private sealed class SeedScopedSaveProvider : DeNelle.Core.State.ISaveProvider
+        {
+            private readonly DeNelle.Core.State.ISaveProvider _inner;
+            private readonly string _suffix;
+            public SeedScopedSaveProvider(DeNelle.Core.State.ISaveProvider inner, string suffix)
+            { _inner = inner; _suffix = suffix; }
+            public bool Exists(string slot)             => _inner.Exists(slot + _suffix);
+            public string Read(string slot)             => _inner.Read(slot + _suffix);
+            public void Write(string slot, string json) => _inner.Write(slot + _suffix, json);
+            public void Delete(string slot)             => _inner.Delete(slot + _suffix);
         }
 
         // =====================================================================
@@ -1715,8 +1796,26 @@ namespace DeNelle.DevTools
 
             const float Window = 12f;   // defense window
             float t0 = Time.realtimeSinceStartup;
+            bool hudShot = false;
             while (Time.realtimeSinceStartup - t0 < Window)
             {
+                // COMBAT-HUD CAPTURE (WO-611 image-pair): the wave flips the SAME
+                // hostile(activebattle) posture as the arena, and the bot reliably survives
+                // waves (12/12 fleet) — unlike the arena drop, where 4 straight runs died
+                // before the frame. Shoot once, 3s into the defense window (wave live,
+                // widgets settled). Realtime-driven, so a death-pause can't stall it.
+                if (!hudShot && Time.realtimeSinceStartup - t0 >= 3f)
+                {
+                    hudShot = true;
+                    try
+                    {
+                        string shotDir = System.IO.Path.Combine(Application.persistentDataPath, "ui-shots");
+                        System.IO.Directory.CreateDirectory(shotDir);
+                        ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(shotDir, "battle_hud_wave.png"));
+                        FlowTrace.Step(Tag, "AssertCombatInvariants: battle_hud_wave.png captured (hostile posture HUD).");
+                    }
+                    catch (Exception ex) { FlowTrace.Warn(Tag, "battle_hud_wave capture threw " + ex.Message); }
+                }
                 // (1) hero HP invariant — never negative while still alive.
                 if (hero != null && hero.Hp < 0f && hero.IsAlive)
                 {

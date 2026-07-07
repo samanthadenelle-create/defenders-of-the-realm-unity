@@ -36,12 +36,15 @@ namespace DeNelle.Editor
                             || lower.Contains("victory") || lower.Contains("defeat")
                             || lower.Contains("gameover") || lower.Contains("title");
 
-                // Size comes from the low-bitrate Vorbis RE-ENCODE, not loadType — so DecompressOnLoad
-                // keeps the size win. CompressedInMemory + Vorbis is FMOD-ILLEGAL on WebGL (FMOD's
-                // compressed-sample path only supports MP3/XMA/ADPCM) → "Cannot create FMOD::Sound"
-                // on every clip. DecompressOnLoad decodes Vorbis to PCM at load = WebGL-safe, same size.
+                // Size comes from the low-bitrate RE-ENCODE, not loadType — so DecompressOnLoad
+                // keeps the size win (CompressedInMemory was the FMOD-illegal "Cannot create
+                // FMOD::Sound" class). Codec = AAC, NOT Vorbis: WebGL clips decode via the
+                // browser's WebAudio decodeAudioData, and mobile Safari / WebKit (incl. the Pi
+                // Browser) REJECTS Vorbis with "EncodingError: Decoding failed" (owner mobile
+                // capture 2026-07-06, first fired at the arena warp where echo_theme/WeaponDraw
+                // first play). AAC decodes on every mobile browser at comparable size.
                 var s = imp.GetOverrideSampleSettings(Platform);
-                s.compressionFormat = AudioCompressionFormat.Vorbis;
+                s.compressionFormat = AudioCompressionFormat.AAC;
                 s.loadType = AudioClipLoadType.DecompressOnLoad;
                 s.quality = isMusic ? 0.30f : 0.45f;
 
@@ -51,7 +54,7 @@ namespace DeNelle.Editor
             }
 
             Debug.Log($"WEBGL_AUDIO_SLIM_OK :: WebGL audio override set on {changed} AudioClip(s) " +
-                      $"(DecompressOnLoad + Vorbis, music q0.30 / sfx q0.45); skipped {skipped}. " +
+                      $"(DecompressOnLoad + AAC, music q0.30 / sfx q0.45); skipped {skipped}. " +
                       "Desktop/default settings untouched; no texture/mesh changed.");
         }
     }

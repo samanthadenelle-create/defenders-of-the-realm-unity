@@ -62,10 +62,11 @@ namespace DeNelle.DevTools
         // De-dupe: a given defect (stable key) is reported at most once per run.
         private readonly HashSet<string> _reported = new HashSet<string>();
 
-        // PanelSettings names that legitimately drive MORE THAN ONE UIDocument at once
-        // (none today — every canonical panel owns its own PanelSettings). Add a name
-        // here if a deliberate multi-document panel is introduced.
-        private static readonly string[] ExpectedMultiple = Array.Empty<string>();
+        // PanelSettings names that legitimately drive MORE THAN ONE UIDocument at once.
+        // AdminRuntimePanelSettings: the dev AdminOverlay's root settings are deliberately
+        // BORROWED by MusicToggleHud (+50 sortingOrder) and LevelUpSkillPopup — a supported
+        // multi-doc compositing pattern, not a leak (fleet 9000 false-flag, 2026-07-06).
+        private static readonly string[] ExpectedMultiple = { "AdminRuntimePanelSettings" };
 
         /// <summary>
         /// Arm the guard. Called by <see cref="AutoPilotDriver"/> on an autopilot run.

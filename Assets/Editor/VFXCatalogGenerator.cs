@@ -87,7 +87,11 @@ namespace DeNelle.Editor
             // Upgrade from the small Hit_stone spark to a readable SLASH ARC so every
             // sword connect reads as a strike, not a pebble poof. Still a cheap oneshot.
             { "Impact_Physical",        new Pick(Lana + "Slash/Slash_stone_once.prefab") },
-            { "Impact_Flame",           new Pick(Lana + "Range_attack/Hit_fire.prefab") },
+            // FIREBALL headline (overnight build): the mage/hero fireball's regular fire-impact
+            // burst is the rich Spells Pack Spell_Fire_6 (a fiery detonation) instead of the small
+            // Lana Hit_fire spark, so a fireball reads as a real fireball. URP-proofed at load by
+            // VFXManager.ProofUrpParticleShaders (memory: half-upgraded URP pack = pixelated).
+            { "Impact_Flame",           new Pick(Spells + "Spells/Spell_Fire_6.prefab") },
             { "Impact_Ice",             new Pick(Lana + "Range_attack/Hit_frost.prefab") },
             { "Impact_Aether",          new Pick(Lana + "Range_attack/Hit_magic.prefab") },
             { "Impact_Heal",            new Pick(Lana + "Range_attack/Hit_heart.prefab") },
@@ -101,7 +105,11 @@ namespace DeNelle.Editor
             { "Projectile_ArcaneBolt",  new Pick(Res + "Projectile_Arcane.prefab", isLoop: true) },
             { "Projectile_FrostBolt",   new Pick(Res + "Projectile_Ice.prefab",    isLoop: true) },
             { "Projectile_Arrow",       new Pick(Lana + "Range_attack/Projectiles_green_shuriken.prefab", isLoop: true) },
-            { "Projectile_FlameArrow",  new Pick(Res + "Projectile_Fire.prefab",   isLoop: true) },
+            // FIREBALL travel beat (overnight build): the fire projectile / fireball body is the
+            // Spells Pack Projectile_Fire_3 (a proper flaming bolt with trail) instead of the small
+            // custom Res orb, so the fireball is visible streaking to its target. Loop until impact;
+            // SpellVfxFactory maps a Fire spell's projectile -> Projectile_FlameArrow.
+            { "Projectile_FlameArrow",  new Pick(Spells + "Projectiles/Projectiles/Projectile_Fire_3.prefab", isLoop: true) },
             { "Projectile_EnemyCasterBolt", new Pick(Lana + "Range_attack/Projectiles_dark_magic.prefab", isLoop: true) },
 
             // -- Casts (wind-up on caster) -------------------------------------
@@ -116,10 +124,20 @@ namespace DeNelle.Editor
             //   so the impressive cast survives a fresh checkout. Element-coded +
             //   cheap oneshots (loops are scaled down via the Orbs' own short life).
             { "Cast_MageCharge",        new Pick(Lana + "Orbs/Orbs_electric.prefab") },               // arcane violet gather
-            { "Cast_FireCharge",        new Pick(Lana + "Orbs/Orbs_fire.prefab") },                   // ember gather (Meteor/Radiant)
+            // FIREBALL cast windup (overnight build): the fire-charge wind-up is the Spells Pack
+            // Casting_Fire (gathering embers at the caster's hand) so the fireball reads as a real
+            // charge -> release. Fires on the caster in sync with the Cast animation trigger
+            // (Combat_Spell_Fireball) via HeroAbilities.CastResolved -> SpawnVfx -> SpellVfxFactory
+            // (Fire spell resolves cast -> Cast_FireCharge). URP-proofed at load.
+            { "Cast_FireCharge",        new Pick(Spells + "Projectiles/Casting/Casting_Fire.prefab") }, // ember gather (Meteor/Radiant/Fireball)
             { "Cast_KnightSlam",        new Pick(Lana + "Burst/Flash_dubble_circle.prefab") },        // bigger double-ring cast pulse
             { "Cast_RangerDraw",        new Pick(Lana + "Orbs/Orbs_leaves.prefab") },                 // nature-green gather at the bow
-            { "Cast_Heal",              new Pick(Lana + "Regeneration/Regeneration_health_area.prefab") }, // rising warm heal column
+            // SOFT HEAL (overnight build): the heal ability (Healing Beacon / Mending) fires ONLY
+            // VFXType.Cast_Heal on the caster (HeroAbilities Heal branch -> VFXManager.Play(Cast_Heal)).
+            // Wire it to the Spells Pack Buff_Nature — a calm, gentle rising green restoration glow
+            // (soft, not flashy). Reads as "heal" via shape + rising motion + the heal number, not
+            // colour alone (owner is red/green colourblind). URP-proofed at load.
+            { "Cast_Heal",              new Pick(Spells + "Buffs/Buff_Nature.prefab") },              // soft green restoration glow (heal)
             { "Cast_FrostNova",         new Pick(Lana + "Area_generic/Area_generic_blue_outbreak.prefab") }, // spreading frost ground ring
             { "Cast_NecromancerSummon", new Pick(Lana + "Area_generic/Area_generic_green_outbreak.prefab") }, // dark/poison summon swell
             { "Cast_EnemyCaster",       new Pick(Lana + "Orbs/Orbs_electric.prefab") },               // enemy caster violet swell

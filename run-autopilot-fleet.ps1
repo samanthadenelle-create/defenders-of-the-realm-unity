@@ -26,7 +26,8 @@ param(
     [int]$SeedStart = 1,
     [string]$ExePath = 'Builds\Windows\DefendersOfTheRealm.exe',
     [int]$TimeoutMin = 8,
-    [switch]$Graphics   # render WITH a graphics device so the per-panel UI shots are not blank
+    [switch]$Graphics,  # render WITH a graphics device so the per-panel UI shots are not blank
+    [string]$Phases = ''  # optional comma list; driver runs ONLY matching phases (substring, case-insensitive) — fast single-purpose capture runs
 )
 
 $ErrorActionPreference = 'Stop'
@@ -80,6 +81,7 @@ for ($i = 0; $i -lt $Count; $i++) {
     $w = if ($Graphics) { '1280' } else { '800' }
     $h = if ($Graphics) { '720' }  else { '600' }
     $args += @('-screen-width', $w, '-screen-height', $h, '--autopilot', "--run=$i", "--seed=$seed")
+    if ($Phases -ne '') { $args += "--phases=$Phases" }
     $p = Start-Process -FilePath $ExePath -ArgumentList $args -PassThru
     $procs += $p
     Write-Host "[fleet] launched run=$i seed=$seed pid=$($p.Id)"

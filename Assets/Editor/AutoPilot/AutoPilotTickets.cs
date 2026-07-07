@@ -344,6 +344,16 @@ namespace DeNelle.Editor
             "direct3d",
             "no graphics device",
             "gfxdevice",
+            // -nographics MSAA/render-target artifacts (Camera:Render with no real
+            // GfxDevice) — ~26k lines/fleet collapsed into false top-ranked tickets
+            // until these needles landed (fleet 9000/9200 audit, 2026-07-06).
+            "samples but",
+            "endrenderpass",
+            "not inside a renderpass",
+            "rendertexture.create failed",
+            "drawopaqueobjects",
+            "drawtransparentobjects",
+            "attachment 0 was created",
         };
 
         private static bool IsRenderArtifact(string message)
