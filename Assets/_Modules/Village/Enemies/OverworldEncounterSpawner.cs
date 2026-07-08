@@ -64,6 +64,63 @@ namespace DeNelle.Village
         private const float SpawnMinDistance = 28f;  // was 14f — push reps deeper into the overworld
         private const float SpawnMaxDistance = 55f;  // ring outer edge (unchanged)
 
+        // ── SCATTER RECORDS (F8-8, owner directive) ────────────────────────────────
+        // "Random enemy families around the map, only need instantiated when within
+        // sight" + "further from castle is harder levels". A SEEDED, persistent set of
+        // scatter RECORDS (anchor + family + level) is generated ONCE per session across
+        // distance BANDS from the world origin (the castle). Records are pure data —
+        // the actual rep GameObject is only instantiated when the hero comes within
+        // ScatterActivateRadius (sight), and is culled (record kept) past ScatterCullRadius.
+        // Bounded per ARCHITECTURE_PRINCIPLES §2b.1: at most ScatterLiveCap live at once.
+        // The owner-felt-tuned hero-ring reps above are UNCHANGED — this layer is additive.
+        private const int    ScatterRecordCount    = 18;    // total records across all bands (~6 per band)
+        private const float  ScatterBandNearMin    = 60f;   // EASY band: 60-120m from origin
+        private const float  ScatterBandNearMax    = 120f;
+        private const float  ScatterBandMidMin     = 120f;  // MID band: 120-200m
+        private const float  ScatterBandMidMax     = 200f;
+        private const float  ScatterBandFarMin     = 200f;  // HARD band: 200-320m
+        private const float  ScatterBandFarMax     = 320f;
+        private const float  ScatterActivateRadius = 85f;   // hero within this of a record -> instantiate its rep
+        private const float  ScatterCullRadius     = 115f;  // hero beyond this -> destroy the live rep (record stays)
+        private const float  ScatterRespawnSeconds = 180f;  // killed/engaged record respawn cooldown
+        private const int    ScatterLiveCap        = 8;     // max concurrently-live scatter reps (bounded law)
+        private const int    ScatterSeed           = 20260707; // FIXED deterministic seed (never wall-clock)
+        private const int    ScatterPlaceAttempts  = 24;    // candidate rolls per record before giving up
+
+        // Band levels (floor — the record level is max(band, ZoneManager.ThreatLevel at the anchor)).
+        private const int ScatterNearLevel = 1;
+        private const int ScatterMidLevel  = 2;
+        private const int ScatterFarLevel  = 3;
+
+        // Band families. Every id below is VERIFIED to resolve through the engage path
+        // (BattleArena.BuildEncounterDef + EnemyFactory model map). NOTE: "hollow-apprentice"
+        // exists only in the ATB stack, NOT in EnemyFactory — do not author it here.
+        private static readonly string[] ScatterNearFamily      = { "orc-warrior", "orc-warrior", "orc-mage" };
+        private static readonly string[] ScatterMidOrcFamily    = { "orc-tank", "orc-warrior", "orc-mage" };
+        private static readonly string[] ScatterMidHollowFamily = { "hollow-warrior", "hollow-rogue", "hollow-acolyte" };
+        private static readonly string[] ScatterFarHollowFamily = { "hollow-warrior", "hollow-warrior", "hollow-rogue", "hollow-acolyte" };
+        private static readonly string[] ScatterFarOrcFamily    = { "orc-tank", "orc-tank", "orc-warrior", "orc-mage" };
+
+        /// <summary>One persistent scatter record — pure data; the rep GameObject only
+        /// exists while the hero is within sight (ScatterActivateRadius).</summary>
+        private sealed class ScatterRecord
+        {
+            public int      Index;
+            public int      Band;          // 0 near / 1 mid / 2 far
+            public Vector3  Anchor;
+            public string[] FamilyIds;
+            public int      Level;
+            public string   ArenaPreset;
+            public bool     Alive = true;  // false while on the post-kill respawn cooldown
+            public float    RespawnAt;     // Time.time the record comes back Alive
+            public GameObject Live;        // the instantiated rep (null while dormant)
+            public bool     Spawned;       // true while Live was spawned by us (distinguishes kill from cull)
+            public bool     WarnedUnreachable; // one-shot log guard for a no-path anchor
+        }
+
+        private readonly List<ScatterRecord> _scatter = new List<ScatterRecord>();
+        private bool _scatterGenerated;
+
         private readonly List<GameObject> _reps = new List<GameObject>();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -115,6 +172,14 @@ namespace DeNelle.Village
             for (int i = 0; i < _reps.Count; i++)
                 if (_reps[i] != null) { Destroy(_reps[i]); n++; }
             _reps.Clear();
+            // Scatter layer (F8-8): cull live scatter reps too — the RECORDS persist (pure
+            // data), so they re-activate on sight when the hero returns to the overworld.
+            for (int i = 0; i < _scatter.Count; i++)
+            {
+                var rec = _scatter[i];
+                if (rec.Live != null) { Destroy(rec.Live); n++; }
+                rec.Live = null; rec.Spawned = false;
+            }
             if (n > 0)
                 FlowTrace.Step("Encounter",
                     $"DespawnAllReps: cleared {n} carried rep(s) (OuterWorld not loaded — chain scene); re-populate on return.");
@@ -207,6 +272,11 @@ namespace DeNelle.Village
                 if (BattleArena.Instance != null && BattleArena.Instance.BattleInProgress) continue; // not mid-battle
                 if (!OuterWorldLoaded()) continue;                              // OuterWorld only
                 if (!HeroInOuterWorld()) continue;                              // anchor to the hero only once she is out
+
+                // SCATTER LAYER (F8-8): generate the seeded records on the first eligible tick
+                // (navmesh is up by now — this loop starts 3s+ after the world load), then each
+                // tick activate/cull records by hero SIGHT distance. Shares the gates above.
+                Guard.Try("Encounter", "scatter maintain", MaintainScatter);
 
                 _reps.RemoveAll(r => r == null);   // drop consumed/destroyed reps
                 if (_reps.Count >= RepCount) continue;
@@ -401,6 +471,249 @@ namespace DeNelle.Village
             int t = 1;
             Guard.Try("Encounter", "zone threat", () => t = Mathf.Max(1, DeNelle.Core.World.ZoneManager.ThreatLevel(pos)));
             return t;
+        }
+
+        // =====================================================================
+        // SCATTER RECORDS LAYER (F8-8) — see the const block at the top.
+        // Records are generated ONCE per session from a FIXED seed (deterministic
+        // — never wall-clock), distributed across origin-distance bands; reps are
+        // instantiated only on hero sight and culled beyond ScatterCullRadius.
+        // =====================================================================
+
+        /// <summary>Per-tick scatter upkeep: generate once, then activate/cull/respawn.
+        /// Called from MaintainLoop AFTER its flag/scene/battle/hero gates.</summary>
+        private void MaintainScatter()
+        {
+            if (!_scatterGenerated) { GenerateScatterRecords(); _scatterGenerated = true; }
+            if (_scatter.Count == 0) return;
+
+            var hero = GameObject.FindWithTag("Player");
+            if (hero == null) return;
+            Vector3 heroPos = hero.transform.position;
+
+            // Pass 1 — reconcile: a record whose rep GameObject vanished WITHOUT us culling it
+            // was killed in the field or consumed by an engage -> record goes on the respawn
+            // cooldown. Also count the live reps for the cap.
+            int live = 0;
+            for (int i = 0; i < _scatter.Count; i++)
+            {
+                var rec = _scatter[i];
+                if (rec.Spawned && rec.Live == null)
+                {
+                    rec.Spawned = false;
+                    rec.Alive = false;
+                    rec.RespawnAt = Time.time + ScatterRespawnSeconds;
+                    FlowTrace.Step("Encounter",
+                        $"scatter record #{rec.Index} CONSUMED (killed/engaged) -> respawn in {ScatterRespawnSeconds:0}s.");
+                }
+                if (rec.Live != null) live++;
+            }
+
+            // Pass 2 — respawn cooldowns, culls, activations.
+            for (int i = 0; i < _scatter.Count; i++)
+            {
+                var rec = _scatter[i];
+
+                if (!rec.Alive && Time.time >= rec.RespawnAt)
+                {
+                    rec.Alive = true;
+                    FlowTrace.Step("Encounter", $"scatter record #{rec.Index} respawn cooldown elapsed -> alive again.");
+                }
+
+                float dist = Vector3.Distance(heroPos, rec.Anchor);
+
+                // CULL: hero left sight range — destroy the body, keep the record.
+                if (rec.Live != null && dist > ScatterCullRadius)
+                {
+                    Destroy(rec.Live);
+                    rec.Live = null; rec.Spawned = false;
+                    live--;
+                    FlowTrace.Step("Encounter",
+                        $"scatter CULL #{rec.Index} (family '{rec.FamilyIds[0]}', lvl {rec.Level}) dist={dist:0}m > {ScatterCullRadius:0}m — record kept.");
+                    continue;
+                }
+
+                // ACTIVATE: hero within sight of a dormant, alive record (bounded by the cap).
+                if (rec.Alive && rec.Live == null && dist <= ScatterActivateRadius && live < ScatterLiveCap)
+                {
+                    // Reachability: only realize a rep the hero could actually meet — an
+                    // island anchor would be a dead rep (same concern SpawnRep's PathComplete
+                    // check covers, evaluated here at activation time when it's meaningful).
+                    var path = new UnityEngine.AI.NavMeshPath();
+                    bool reachable = UnityEngine.AI.NavMesh.CalculatePath(heroPos, rec.Anchor, UnityEngine.AI.NavMesh.AllAreas, path)
+                                     && path.status == UnityEngine.AI.NavMeshPathStatus.PathComplete;
+                    if (!reachable)
+                    {
+                        if (!rec.WarnedUnreachable)
+                        {
+                            rec.WarnedUnreachable = true;
+                            FlowTrace.Warn("Encounter",
+                                $"scatter record #{rec.Index} at {rec.Anchor} has NO complete path from the hero — activation skipped (will retry).");
+                        }
+                        continue;
+                    }
+                    rec.WarnedUnreachable = false;
+
+                    if (SpawnScatterRep(rec))
+                    {
+                        live++;
+                        FlowTrace.Step("Encounter",
+                            $"scatter ACTIVATE #{rec.Index} band={rec.Band} family=[{string.Join(",", rec.FamilyIds)}] lvl={rec.Level} dist={dist:0}m (live {live}/{ScatterLiveCap}).");
+                    }
+                }
+            }
+        }
+
+        /// <summary>Seeded one-time generation of the scatter records across the three
+        /// origin-distance bands. Deterministic (fixed ScatterSeed + fixed world/navmesh);
+        /// each candidate passes the SAME belt-and-suspenders validation SpawnRep uses
+        /// (navmesh sample + moat exclusion + roster-zone gate + post-snap re-checks).</summary>
+        private void GenerateScatterRecords()
+        {
+            var rng = new System.Random(ScatterSeed);   // FIXED seed — never Date.now/GetHashCode nondeterminism
+            int[] bandCounts = new int[3];
+            int placed = 0, failed = 0;
+
+            for (int i = 0; i < ScatterRecordCount; i++)
+            {
+                int band = i % 3;   // even spread: 6 near / 6 mid / 6 far
+                float min, max;
+                switch (band)
+                {
+                    case 0:  min = ScatterBandNearMin; max = ScatterBandNearMax; break;
+                    case 1:  min = ScatterBandMidMin;  max = ScatterBandMidMax;  break;
+                    default: min = ScatterBandFarMin;  max = ScatterBandFarMax;  break;
+                }
+
+                bool found = false;
+                Vector3 anchor = Vector3.zero;
+                for (int attempt = 0; attempt < ScatterPlaceAttempts && !found; attempt++)
+                {
+                    float a = (float)(rng.NextDouble() * System.Math.PI * 2.0);
+                    float dist = min + (float)rng.NextDouble() * (max - min);
+                    Vector3 cand = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * dist;   // origin = castle (0,0,0)
+
+                    // Same validation chain as SpawnRep: navmesh -> moat -> roster zone -> snap -> re-checks.
+                    if (!UnityEngine.AI.NavMesh.SamplePosition(cand, out var ch, 8f, UnityEngine.AI.NavMesh.AllAreas)) continue;
+                    if (MoatExclusion.IsInMoatBand(ch.position)) continue;
+                    bool inOuter = false;
+                    Guard.Try("Encounter", "scatter zone gate", () => inOuter =
+                        DeNelle.Core.World.RegionSpawnTable.HasRoster(DeNelle.Core.World.ZoneManager.GetZone(ch.position)));
+                    if (!inOuter) continue;
+
+                    Vector3 snapped = ch.position;
+                    if (UnityEngine.AI.NavMesh.SamplePosition(snapped, out var navHit, 12f, UnityEngine.AI.NavMesh.AllAreas))
+                        snapped = navHit.position;
+
+                    // Post-snap re-checks (the snap can drift across the seam/moat — mirror SpawnRep).
+                    bool finalInOuter = false;
+                    Guard.Try("Encounter", "scatter zone gate (post-snap)", () => finalInOuter =
+                        DeNelle.Core.World.RegionSpawnTable.HasRoster(DeNelle.Core.World.ZoneManager.GetZone(snapped)));
+                    if (!finalInOuter) continue;
+                    if (MoatExclusion.IsInMoatBand(snapped)) continue;
+
+                    anchor = snapped;
+                    found = true;
+                }
+
+                if (!found) { failed++; continue; }   // sparse band coverage — bounded, never force-place
+
+                // FAMILY + LEVEL. DATA PATH FIRST (WO-606 seam): if spawn-areas.json is authored,
+                // the geotagged area at this anchor carries the families/levels/preset — the band
+                // constants below are the fallback that carries F8-8 until that JSON exists.
+                string[] family = null; int level = 0; string preset = null;
+                if (DeNelle.Core.World.SpawnAreaTable.HasAny)
+                {
+                    var draw = DeNelle.Core.World.SpawnAreaTable.BuildDraw(anchor);
+                    if (draw.Valid && draw.EnemyIds != null && draw.EnemyIds.Length > 0)
+                    {
+                        family = draw.EnemyIds;
+                        level = Mathf.Max(1, draw.Level);
+                        preset = draw.ArenaPreset;
+                    }
+                }
+                if (family == null)
+                {
+                    switch (band)
+                    {
+                        case 0:
+                            family = ScatterNearFamily;
+                            level = ScatterNearLevel;
+                            break;
+                        case 1:
+                            // MID = mix: alternate orc warbands and hollow packs (seeded, stable).
+                            family = rng.Next(2) == 0 ? ScatterMidOrcFamily : ScatterMidHollowFamily;
+                            level = ScatterMidLevel;
+                            break;
+                        default:
+                            // FAR = hollow-heavy with an occasional heavy orc warband.
+                            family = rng.Next(3) == 0 ? ScatterFarOrcFamily : ScatterFarHollowFamily;
+                            level = ScatterFarLevel;
+                            break;
+                    }
+                    // Danger gradient composes with the shared zone read: never BELOW the zone threat.
+                    level = Mathf.Max(level, ZoneThreatAt(anchor));
+                }
+
+                _scatter.Add(new ScatterRecord
+                {
+                    Index = i, Band = band, Anchor = anchor,
+                    FamilyIds = family, Level = level, ArenaPreset = preset,
+                });
+                bandCounts[band]++; placed++;
+            }
+
+            FlowTrace.Step("Encounter",
+                $"GenerateScatterRecords: seed={ScatterSeed} placed {placed}/{ScatterRecordCount} " +
+                $"(near {bandCounts[0]}, mid {bandCounts[1]}, far {bandCounts[2]}; {failed} found no valid ground) " +
+                $"— sight-activated at {ScatterActivateRadius:0}m, culled at {ScatterCullRadius:0}m, cap {ScatterLiveCap}.");
+        }
+
+        /// <summary>Record-anchored variant of SpawnRep: SAME EnemyFactory.Build + Configure +
+        /// RepEngageWatcher.Init chain, but anchored at the record's persistent anchor (position
+        /// picking/validation already happened at generation). The rep body is the family LEADER's
+        /// model (FamilyIds[0] — a hollow record visibly reads as a skeleton). Field-killable,
+        /// zero contact damage, engage pops the full family into the BattleArena — identical
+        /// behaviour contract to the ring reps.</summary>
+        private bool SpawnScatterRep(ScatterRecord rec)
+        {
+            string leadId = rec.FamilyIds != null && rec.FamilyIds.Length > 0 ? rec.FamilyIds[0] : "orc-warrior";
+            bool hollow = leadId.IndexOf("hollow", System.StringComparison.OrdinalIgnoreCase) >= 0;
+            float levelScale = 1f + 0.08f * (rec.Level - 1);   // same +8%/tier curve as BattleArena.BuildEncounterDef
+
+            var def = new EnemyDef
+            {
+                Id = leadId,                      // drives the EnemyFactory model — hollow leaders read as skeletons
+                Name = hollow ? "Hollow Prowler" : "Orc Warleader",
+                DisplayName = hollow ? "Hollow Pack" : "Orc Warband",
+                Ai = "walker",
+                Hp = 98f * levelScale,            // ring-rep baseline, scaled by the band level (danger gradient)
+                MoveSpeed = RepChaseSpeed,
+                ContactDamage = 0f,               // hook, not a combatant (identical to ring reps)
+                AttackInterval = 1.5f, Height = 2.0f, AggroRadius = 8f,
+                XpReward = Mathf.RoundToInt(42 * levelScale),
+                GlimmerReward = Mathf.RoundToInt(9 * levelScale),
+            };
+
+            Enemy enemy = null;
+            Guard.Try("Encounter", $"spawn scatter rep #{rec.Index}", () =>
+            {
+                enemy = EnemyFactory.Build(def, rec.Anchor, Quaternion.identity, transform);
+                if (enemy == null) return;
+                enemy.gameObject.name = $"ScatterRep_{rec.Index}";
+                enemy.Configure($"scatter-rep-{rec.Index}", def, null);   // no Heart — tether + hero aggro only
+                enemy.SetBrainTargetPosition(rec.Anchor);                 // leash centred on the record anchor
+                enemy.gameObject.AddComponent<RepEngageWatcher>().Init(rec.FamilyIds, rec.Level, rec.ArenaPreset);
+            });
+
+            if (enemy == null)
+            {
+                FlowTrace.Warn("Encounter", $"SpawnScatterRep #{rec.Index}: EnemyFactory.Build returned null for '{leadId}' — record left dormant.");
+                return false;
+            }
+            rec.Live = enemy.gameObject;
+            rec.Spawned = true;
+            return true;
         }
     }
 
@@ -640,6 +953,10 @@ namespace DeNelle.Village
             foreach (var id in _family)
                 if (id != null && id.IndexOf("orc", System.StringComparison.OrdinalIgnoreCase) >= 0)
                     return "Orc Warband";
+            // F8-8: hollow scatter families get a proper warband-style title too.
+            foreach (var id in _family)
+                if (id != null && id.IndexOf("hollow", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    return "Hollow Pack";
             var lead = _family[0] ?? "Foes";
             lead = lead.Replace('-', ' ').Replace('_', ' ').Trim();
             return lead.Length == 0 ? "Foes" : (char.ToUpperInvariant(lead[0]) + (lead.Length > 1 ? lead.Substring(1) : ""));

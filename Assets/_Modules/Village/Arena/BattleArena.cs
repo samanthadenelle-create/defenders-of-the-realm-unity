@@ -1214,6 +1214,15 @@ namespace DeNelle.Village.Arena
             // stacked "Orc Mage Wizard"); the HUD target frame/cycle list read this
             // DisplayName via Enemy.DisplayName (single source of truth).
             if (s.Contains("warlord") || s.Contains("boss")) { display = "Orcish Warlord"; hp = 520; dmg = 34; spd = 2.6f; atk = 1.8f; height = 2.6f; }
+            // F8-8 — HOLLOW family rows. The overworld scatter records stage hollow packs through
+            // this same synthesizer; without these branches "hollow-warrior" substring-matches the
+            // ORC "warrior" row below and titles a skeleton "Orcish Warrior" (owner canon: one
+            // PRECISE title per enemy). Checked BEFORE the orc rows. Stats sit in the same softened
+            // early-game band as the orcs, coherent with the ATB Defs.ENEMY_DEFS hollow entries.
+            else if (s.Contains("hollow-rogue"))   { display = "Hollow Rogue";   hp = 58;  dmg = 13; spd = 3.6f; atk = 1.0f; height = 1.9f; }
+            else if (s.Contains("acolyte"))        { display = "Hollow Acolyte"; hp = 50;  dmg = 8;  spd = 2.8f; atk = 1.6f; height = 1.9f; }
+            else if (s.Contains("hollow-warrior")) { display = "Hollow Warrior"; hp = 84;  dmg = 15; spd = 3.0f; atk = 1.2f; height = 2.0f; }
+            else if (s.Contains("hollow"))         { display = "Hollow Walker";  hp = 55;  dmg = 9;  spd = 2.8f; atk = 1.3f; height = 1.9f; }
             // 2026-07-01 owner call — early overworld orcs ~35% softer (HP+dmg ×0.65) so new
             // players aren't slaughtered. Warlord (boss above) left intact. NOTE: these are
             // HARDCODED here (not read from enemies.json) — see follow-up ticket to make the arena

@@ -36,6 +36,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;   // F8-16: FlowTrace on the enemy-tick data path (HUD -> Core edge only)
 
 namespace DeNelle.HUD.Kit
 {
@@ -254,13 +255,26 @@ namespace DeNelle.HUD.Kit
             return (t - 0.5f) * stripW;
         }
 
+        private int _lastEnemyCount = -1;
+
         private void RefreshEnemies()
         {
             _enemyBuf.Clear();
             var list = EnemyProvider != null ? EnemyProvider() : null;
-            if (list == null) return;
-            for (int i = 0; i < list.Count; i++)
-                if (list[i] != null) _enemyBuf.Add(list[i]);
+            if (list != null)
+                for (int i = 0; i < list.Count; i++)
+                    if (list[i] != null) _enemyBuf.Add(list[i]);
+
+            // F8-16 instrumentation ("red ticks exist but the owner reports none render"):
+            // log ON CHANGE only (never per-poll) so the next capture PROVES which half fails —
+            // data-empty (count stays 0 => provider/type resolution) vs built-but-invisible
+            // (count > 0 while the owner sees nothing => a render/layout issue in this widget).
+            if (_enemyBuf.Count != _lastEnemyCount)
+            {
+                FlowTrace.Step("Compass",
+                    $"enemy tick source count {_lastEnemyCount} -> {_enemyBuf.Count} (provider={(EnemyProvider != null ? "wired" : "NULL")}, hero={(_hero != null ? "ok" : "NULL")}).");
+                _lastEnemyCount = _enemyBuf.Count;
+            }
         }
 
         private void HideAllTicks()
@@ -279,7 +293,11 @@ namespace DeNelle.HUD.Kit
                 rt.anchorMin = new Vector2(0.5f, 0.5f);
                 rt.anchorMax = new Vector2(0.5f, 0.5f);
                 rt.pivot     = new Vector2(0.5f, 0.5f);
-                rt.sizeDelta = new Vector2(TickWidthPx, Mathf.Max(4f, _tickLayer.rect.height - 6f));
+                // F8-16 hardening: the layer rect can still be 0-height when the FIRST enemies
+                // appear on the same frame the pool grows (layout not yet run) — the old
+                // Mathf.Max(4f, ...) then baked a 4x4px sliver FOREVER (sizeDelta is set once
+                // per pooled tick). Floor at 10px so a tick is never sub-visible on mobile.
+                rt.sizeDelta = new Vector2(TickWidthPx, Mathf.Max(10f, _tickLayer.rect.height - 6f));
                 var img = go.GetComponent<Image>();
                 img.color = ElarionUi.Danger;
                 img.raycastTarget = false;
