@@ -109,17 +109,38 @@ namespace DeNelle.Village.Hud
             return bmc != null && bmc.IsActive;
         }
 
-        /// <summary>Owner ruling 2026-07-06 (reverses the WO-579 narrowing): the wave COUNTDOWN
-        /// counts as active battle — "active battle takes over on countdown so that ranged attacks
-        /// can keep enemy further away." Countdown||Active => Battle context, which flips the
-        /// combat HUD + draws gear at countdown start and unifies the carry-state authority
-        /// (EquipmentController's auto-mirror already counted Countdown; the HUD now agrees).</summary>
+        // Countdown seconds at which a wave reads "imminent" (battle-worthy). Mirrors the
+        // single-sourced WaveProducer.ImminentThreshold (HudModelProducers.cs) — that const is
+        // `private` inside WaveProducer so it can't be referenced here without touching that file;
+        // this evaluator is edit-scoped to itself, so the value is duplicated with THIS pointer.
+        // Keep the two in lockstep; promote to a shared const if they ever diverge.
+        private const float ImminentThreshold = 5f;
+
+        /// <summary>Owner ruling 2026-07-08 (refines the 2026-07-06 "countdown counts as battle"): a
+        /// wave COUNTDOWN reads as Battle ONLY when the wave is IMMINENT (final ~<see cref="ImminentThreshold"/>s),
+        /// NOT for the whole long empty between-wave gap. So an ACTIVE wave is always battle; a countdown
+        /// with more than the threshold remaining releases the HUD to its non-battle context (Town/Overworld),
+        /// and only the last few seconds re-arm the "wave incoming" tension. This keeps the imminent window
+        /// single-sourced to the same threshold WaveProducer already uses.</summary>
         private static bool IsWaveActive()
         {
             var wm = WaveManager.Instance;
             if (wm == null) return false;
-            return wm.Phase == DeNelle.Village.WavePhase.Active
-                || wm.Phase == DeNelle.Village.WavePhase.Countdown;
+
+            if (wm.Phase == DeNelle.Village.WavePhase.Active)
+                return true;
+
+            if (wm.Phase == DeNelle.Village.WavePhase.Countdown)
+            {
+                bool imminent = wm.CountdownRemaining <= ImminentThreshold;
+                FlowTrace.Step("HUD",
+                    imminent
+                        ? $"countdown IMMINENT ({wm.CountdownRemaining:0.0}s <= {ImminentThreshold}s) -> counts as Battle"
+                        : $"countdown long-gap ({wm.CountdownRemaining:0.0}s > {ImminentThreshold}s) -> gated OUT of Battle (HUD releases)");
+                return imminent;
+            }
+
+            return false;
         }
 
         /// <summary>
