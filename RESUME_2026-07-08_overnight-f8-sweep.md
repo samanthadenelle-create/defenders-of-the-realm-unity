@@ -91,8 +91,10 @@ ticket (**WHITE PALADIN**) is fixed at the root: the fbx *embedded* its textures
   · F8-22 needs a re-capture (its screenshot was destroyed by the old overwrite bug — now fixed:
   flag files are session-stamped).
 - **F8-15 death popups:** instrumentation is live — your first death names all three popups.
-- **Deploy:** WebGL built overnight + pushed to the **Vercel PREVIEW** (URL in the final HANDOVER
-  stamp); production untouched — promotion is yours.
+- **Deploy:** WebGL rebuilt from the FIXED tree (`7e663981`, includes the P0 dialogue fix) and
+  pushed to the **Vercel PREVIEW**: https://defenders-of-the-realm-v2-2dizrqgws.vercel.app
+  (deployment dpl_5wPh6T2dsx882MigSUu9SFL5u2FB, READY). Production untouched — promotion is yours
+  (`vercel deploy --prod` or the dashboard).
 
 ## PROOF INDEX (per the RCA rule — where every claim lives)
 Board tickets F8-1..F8-30 carry verbatim lines + commits in their metadata. RCA docs:

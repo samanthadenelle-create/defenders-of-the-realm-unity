@@ -37,7 +37,9 @@ the 3 known pre-existers only (WO-602 home-return, CavePortal seam reach, WO-453
 
 **FULL LEDGER:** `RESUME_2026-07-08_overnight-f8-sweep.md` (the morning report — verify list +
 verbatim-line ledger + the honest open list). WebGL rebuilt from `7e663981` and deployed to the
-**Vercel PREVIEW** (URL in the final stamp below when the deploy lands); production untouched.
+**Vercel PREVIEW**: https://defenders-of-the-realm-v2-2dizrqgws.vercel.app — production untouched,
+promotion is the owner's call. Windows felt-pass exe: `Builds/Windows/DefendersOfTheRealm.exe`
+stamped **2026-07-07 23:50:04**.
 
 ---
 
