@@ -264,24 +264,24 @@ namespace DeNelle.HUD
             vpBtn.transition = Selectable.Transition.None;
             vpBtn.onClick.AddListener(OnBoxTapped);
 
-            // SWEEP 2026-07-06 (supersedes the bare "tap to continue" italic hint): the fresh
-            // capture showed NO visible advance affordance at all — a tap-anywhere contract
-            // with no control fails the no-dead-interaction law. The affordance is a REAL
-            // labeled kit button (Continue chip). OPTION A: it drops into the kit FOOTER zone
-            // — the factory relocates that band to start just ABOVE the shared Close box
-            // (footer relocation, close-band reservation), so the chip sits between the body
-            // and the Close by RESERVED geometry, not hand fractions. Repaint keeps driving
-            // its visibility through _tapHint (hidden while options show).
-            var contBtn = ElarionUiKit.Button(footerZone, "Continue", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.26f, 0f), new Vector2(0.74f, 1f), OnBoxTapped);
-            if (contBtn != null)
+            // OWNER 2026-07-08 ("instead of continue button, maybe tap to continue?"): the
+            // advance affordance is a passive HINT, not a button — the whole panel already
+            // advances (viewport Button above + the TapAdvance modal catcher), so a chip was
+            // a duplicate control. The no-dead-interaction law (2026-07-06 sweep) demands a
+            // VISIBLE affordance: this label renders in the kit FOOTER zone (the factory's
+            // close-band reservation keeps it clear of the shared Close), gold + italic so
+            // it reads as guidance, raycast OFF so taps on it fall through to the catcher.
+            // Repaint keeps driving its visibility through _tapHint (hidden while options show).
+            var hintLbl = ElarionUiKit.Label(footerZone, "Tap to continue ▸",
+                0.10f, 0.90f, new Color(1f, 0.82f, 0.29f), 17,
+                TMPro.TextAlignmentOptions.Center);
+            if (hintLbl != null)
             {
-                var contLbl = contBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);
-                if (contLbl == null && contBtn.transform.parent != null)
-                    contLbl = contBtn.transform.parent.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);
-                if (contLbl != null) { contLbl.text = "Continue"; ElarionUiKit.FitSingleLine(contLbl); }
+                hintLbl.fontStyle = TMPro.FontStyles.Italic;
+                hintLbl.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(hintLbl);
             }
-            _tapHint = contBtn != null ? contBtn.gameObject : null;
+            _tapHint = hintLbl != null ? hintLbl.gameObject : null;
 
             // Speaker portrait → the frame's MEDALLION socket (layout.medallion — FrameCore's
             // top-left circle socket; the factory's crest emblem is hidden above so the two
