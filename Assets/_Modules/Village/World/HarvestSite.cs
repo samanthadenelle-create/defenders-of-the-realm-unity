@@ -239,15 +239,22 @@ namespace DeNelle.Village.World
             // Tripo resource model on its side. SeatFlat derives the upright pose from the model's own
             // bounds (narrowest axis → +Y, §4) so the flat face rests down — same fix as MineNodeVisual.
             // Owner F8 2026-07-08 "tree toation" (RCA, Player.log 15609-15840): SkinOptions.LocalRotation
-            // ASSIGNS (never composes) — a bare yaw wiped the wood FBX's native (270,0,0) up-axis
-            // correction and tipped the tree, and SeatFlat's narrowest-axis heuristic ratified the
-            // lying pose. Wood authors the full pose (native 270 X + owner yaw) and opts OUT of
-            // SeatFlat — same fix as MineNodeVisual (both consumers of Harvest/wood stay consistent).
+            // ASSIGNS (never composes) — a bare yaw wipes the FBX's native up-axis correction and tips
+            // the prop, and SeatFlat's narrowest-axis heuristic ratifies the lying pose. The fix: the
+            // prop authors its full pose and opts OUT of SeatFlat (§4: an authored orientation is canon,
+            // never overwritten by the auto pass). Kept identical to MineNodeVisual so both consumers of
+            // each Harvest/<type> model stay consistent.
+            // Owner F8 2026-07-08 (scope update): WOOD, IRON, and CRYSTALS all share ONE authored
+            // upright pose — the euler (-90,0,90). (Supersedes the earlier F8-6 wood value (270,90,0).)
+            // FOOD keeps the auto SeatFlat pass.
+            bool authoredPose = ResourceType == MineResource.Wood
+                || ResourceType == MineResource.Iron
+                || ResourceType == MineResource.AetherCrystal;
             var model = string.IsNullOrEmpty(modelPath) ? null : VisualFactory.Skin(transform, modelPath,
                 new SkinOptions { FitLargest = 2.4f, SeatOnGround = true, FixTripoMaterials = true,
-                    SeatFlat = ResourceType != MineResource.Wood,
-                    LocalRotation = ResourceType == MineResource.Wood
-                        ? Quaternion.Euler(270f, 90f, 0f) : (Quaternion?)null });
+                    SeatFlat = !authoredPose,
+                    LocalRotation = authoredPose
+                        ? Quaternion.Euler(-90f, 0f, 90f) : (Quaternion?)null });
             if (model != null)
             {
                 model.name = "HarvestVisual_Model";
