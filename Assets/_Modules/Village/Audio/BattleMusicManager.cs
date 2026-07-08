@@ -60,6 +60,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using DeNelle.Audio;            // AudioService (Village references DeNelle.Audio)
+using DeNelle.Core.Diagnostics; // FlowTrace (Village references DeNelle.Core)
 using UnityEngine;
 using UnityEngine.Audio;
 using UnityEngine.SceneManagement;
@@ -331,6 +332,8 @@ namespace DeNelle.Village
         {
             if (next == _state) return;
 
+            BattleMusicState prev = _state;
+
             // Cancel a pending Victory→ambient handoff if the state changes first.
             if (_victoryReturn != null)
             {
@@ -339,6 +342,27 @@ namespace DeNelle.Village
             }
 
             _state = next;
+
+            // ── Single-engine handoff (doubled-music fix) ─────────────────────
+            // On the None → battle EDGE only (BattleMusicManager is TAKING OVER
+            // playback), silence AudioService's ambient/idle track so exactly one
+            // music engine is audible — our dedicated source pair now owns the
+            // music. Fires ONCE on this entering edge: a battle→battle change
+            // (e.g. Combat→Boss) has prev != None, so the ambient is already
+            // stopped and we never re-trigger it mid-battle. The exit path
+            // (→ None → FadeOutToAmbient → ReturnToAmbient) restarts the ambient;
+            // since CurrentTrack == None after StopMusic, that restart is genuine
+            // (PlayMusic's "already playing" short-circuit no longer swallows it).
+            if (prev == BattleMusicState.None && next != BattleMusicState.None)
+            {
+                FlowTrace.Step("BattleMusic",
+                    "took over playback — stopped AudioService ambient (None → " + next + ")");
+                try { AudioService.Instance?.StopMusic(); }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning("[BattleMusicManager] StopMusic (ambient handoff) failed: " + e.Message);
+                }
+            }
 
             try
             {
@@ -498,6 +522,8 @@ namespace DeNelle.Village
             if (_fade != null) StopCoroutine(_fade);
             _fade = StartCoroutine(FadeOutRoutine());
 
+            FlowTrace.Step("BattleMusic",
+                "returned ambient — faded battle sources out, AudioService.ReturnToAmbient()");
             try { AudioService.Instance?.ReturnToAmbient(); }
             catch (System.Exception e)
             {
