@@ -18,7 +18,9 @@ that fires it) · `fleet-pending` (needs a runtime/render drive) · `fixed` · `
 | Metric | Value (as of 2026-07-08, post-Wave-1 catch pass) |
 |---|---|
 | Token spend on the coverage system | coverage-map ~1.64M + pilot instrument+oracles ~0.9M + Wave-1 8 teams ~1.66M + enemy oracle ~0.12M ≈ **4.3M** |
-| **Real bugs PROVEN by data** | **5 classes** — F8-39 tower-respawn, F8-41 5 untargetable towers, arena 2 untextured surfaces, **pet-skill-trees 0-trees mapping break (NEW)**, version-triple guard armed |
+| **Real bugs PROVEN by data** | **5 classes** — F8-39 tower-respawn, F8-41 5 untargetable towers, arena 2 untextured surfaces, **Wood/Iron dual-wallet divergence (COV-021, NEW — exposed once the harness was honest)**, version-triple guard armed. *(COV-015 pet-skill-trees RETRACTED — was an oracle-shape bug, not a game bug; content then retired.)* |
+| Dead content surfaced + retired (earns-its-place) | pet skill-tree stack (COV-022, deleted) + pet-combat-vs-pivot reconciled (COV-023, gated) — the coverage census made the owner's "pets don't need a skill tree" checkable |
+| Last-100-bugs audit (the ROI question, literal) | 107 bugs mapped: 22 oracle-covered + 36 fleet-probe-covered + **49 NONE (no check → can silently reoccur)**. Zero true reoccurrences found (no fixed bug maps to a failing oracle). Fleet confirms the 36 next. |
 | Real bugs instrumented, fleet-pending | 3 (COV-004 arena pole, COV-005 walk-cast, COV-006 death UI) |
 | Fail-by-design confirmed (real gap, needs data/save fix) | 1 (COV-013 pet-slot); COV-012 save-drops still to-oracle |
 | **False leads REFUTED by real-path oracles** | **2** (COV-010 HeroPortraits, COV-011 Aegis) — saved chasing non-bugs |
@@ -59,11 +61,14 @@ that fires it) · `fleet-pending` (needs a runtime/render drive) · `fixed` · `
 | COV-012 | core / save | `Tribes/Settlements/Wards` not in SaveSchema → dropped on reload | map RCA (MASTER_CATALOG #20) | fail-by-design | to-verify | not yet oracled (core-save asserts version-triple only); Wave-2/save-owner |
 | COV-013 | economy-meta | Pet active-slot not persisted (only StarterPetId survives reload) | `[glimmer]` FAIL (fail-by-design) | fail-by-design | proven | add persisted slot field + SaveSchema round-trip; oracle then flips green |
 | COV-014 | core | Version-triple drift risk (SaveSchema vs GameState vs Migrator) | `[core-save]` GREEN | real-bug (guarded) | fixed/guarded | aligned at 28/28/28 today; oracle fires the instant a schema bump lands without its migrator step |
-| COV-015 | economy-meta | **`pet-skill-trees.json` deserializes to 0 trees (mapping break)** — silent empty collection | `[econ-meta]` FAIL | real-bug | proven | NEW find (nothing else watched it). Fix the JSON key/schema so trees map. |
-| COV-016 | economy-meta | `packs.json` has 13 packs with tiers 6–13; oracle expected canon 5 / tiers 1–5 | `[econ-meta]` FAIL | to-triage | to-verify | drift OR stale oracle assumption — verify whether 13 packs is intended + fix the tier-range assert or the data |
-| COV-017 | village-systems | `OfflineHarvestRegression` false-fails: needs a live `GameStateService` unavailable in editmode | `[offline-harvest]` FAIL "no State" | coverage-artifact | to-fix | construct a throwaway GameState in the oracle (or skip-with-note) — harness-integrity fix |
-| COV-018 | village-systems | `VillageEconomyRegression` false-fails: same "no GameStateService/State" | `[village-econ]` FAIL "no State" | coverage-artifact | to-fix | same throwaway-GameState fix |
+| COV-015 | economy-meta | pet-skill-trees "0 trees" (oracle read a keyed object as an array) — then the CONTENT was RETIRED entirely | RCA + owner ruling | REFUTED→retired | resolved | NOT a bug (data parsed fine); the whole skill-tree stack deleted `279c56be` (vestigial, nothing read it) → oracle assertion removed |
+| COV-016 | economy-meta | `packs.json` 13 packs — INTENDED growth; oracle's "canon 5" was stale | monetization review 07-02 | stale-oracle | fixed | oracle updated to 13 packs / tiers 1–13. Follow-up: `PackCatalogTest` still asserts 5-tier ladder |
+| COV-017 | village-systems | `OfflineHarvest` false-fail (no live GameState in editmode) | `[offline-harvest]` now GREEN | coverage-artifact | fixed `821bac80` | throwaway GameState installed via reflection; now asserts real clock logic + PASSES |
+| COV-018 | village-systems | `VillageEconomy` false-fail (same) | `[village-econ]` now RUNS | coverage-artifact | fixed `821bac80` | fixed → exposed the real COV-021 below |
 | COV-019 | village-enemies-world | Every enemy rigged + colored (owner ask) | `[enemy-rig-color]` GREEN | not-a-bug | proven-healthy | 10/10 rigged+colored in ~30s; the check the owner requested, now a permanent gate |
+| COV-021 | village-systems | **Wood/Iron dual-wallet divergence** — `econ.Grant(wood:25)` moves the shop pool but the upgrade `ResourceLedger` reads `GameState.Wood` (0) → wood income invisible to building-upgrade | `[village-econ]` FAIL (exposed once harness honest) | real-bug | proven | route income through `GrantSpendable` or unify the pools — owner/economy call |
+| COV-022 | economy-meta/hud | Pet SKILL TREE was vestigial — renders + stores unlocks but NOTHING reads them; level counter never incremented; contradicts "no pets in battle" | pet audit (cited) | dead-content | retired `279c56be` | owner ruled RETIRE; stack deleted, save-safe |
+| COV-023 | pets | Pet COMBAT + leveling wired in code but contradicts the 06-22 "no pets in battle" pivot | pet audit (cited) | canon-vs-code | gated `279c56be` | owner ruled GATE OFF; `ff.petcombat` default OFF; PetHarvester stays the V1 role |
 
 ---
 
@@ -73,6 +78,9 @@ that fires it) · `fleet-pending` (needs a runtime/render drive) · `fixed` · `
 |---|---|---|---|---|---|
 | Pilot | 2026-07-08 17:02 | 3 (COV-001/002/003) | 0 (pre-instrument exe) | 3 | no |
 | Wave-1 | 2026-07-08 17:33 | 7 FAIL / 14 PASS (21 oracles, ~30s): 3 known real (COV-001/002/003) + 1 NEW real (COV-015 pet-skill-trees) + 1 fail-by-design (COV-013) + 2 harness-artifact (COV-017/018) | — | 1 real (COV-015) + 1 to-triage (COV-016) | no |
+
+| Baseline | 2026-07-08 17:48 | **5 FAIL / 16 PASS — ZERO false-fails** (offline-harvest + econ-meta fixed): F8-39, F8-41, arena, **dual-wallet (COV-021, newly exposed)**, pet-slot (by-design) | — | 1 real (COV-021) | trustworthy baseline reached |
+| Pet-lane | 2026-07-08 ~18:0x | pet-skill-tree oracle assertion RETIRED (content deleted); pets-combat gated off | (rebuild+fleet in flight) | 0 | — |
 
 ### Wave-1 catch-pass detail (2026-07-08 17:33)
 - **14 GREEN** = those invariants locked + regression-guarded: core-datahub (48 files + dual-copy), core-catalog, core-world, **core-save (version triple 28/28/28)**, hero-prog, aegis, build-upgrade, arena-cat, companion-roster, townsfolk, **atb-engine (15/15 map, determinism)**, scene-route, art-resource, **enemy-rig-color (10/10 rigged+colored)**.
