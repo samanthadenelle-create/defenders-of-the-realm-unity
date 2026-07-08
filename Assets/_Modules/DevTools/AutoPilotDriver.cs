@@ -808,6 +808,26 @@ namespace DeNelle.DevTools
             widget.ForceProviderPoll();
             while (w < 3f && widget.EnemyMarkCount == 0) { w += Time.unscaledDeltaTime; widget.ForceProviderPoll(); yield return null; }
 
+            // Fleet flake 2/4 (seeds 3/4): a lone surviving Enemy can be a PAUSED rep or sit
+            // outside the compass provider's range, so 'anyEnemy' skipped the probe build and
+            // link 2 failed on a legitimately-empty buffer. If the buffer is still empty and we
+            // did not build our own NEAR-HERO enemy, build it now and re-wait — the probe must
+            // assert the provider against an in-range enemy, not whatever the wave left behind.
+            if (widget.EnemyMarkCount == 0 && diag == null)
+            {
+                Vector3 want2 = (_hero != null ? _hero.transform.position : Vector3.zero) + new Vector3(4f, 0f, 6f);
+                if (UnityEngine.AI.NavMesh.SamplePosition(want2, out var hit2, 10f, UnityEngine.AI.NavMesh.AllAreas)) want2 = hit2.position;
+                try
+                {
+                    var def2 = DeNelle.Village.World.Camps.GarrisonStatBlocks.BuildTypedDef("orc-raider", 1);
+                    diag = EnemyFactory.Build(def2, want2, Quaternion.identity, null);
+                    if (diag != null) { diag.gameObject.name = "CompassProbeEnemy"; FlowTrace.Step(Tag, "AssertCompassMarks: buffer empty with only distant/paused enemies — built near-hero 'CompassProbeEnemy'."); }
+                }
+                catch (Exception ex) { FlowTrace.Warn(Tag, "AssertCompassMarks: near-hero probe enemy build threw " + ex.Message); }
+                w = 0f;
+                while (w < 3f && widget.EnemyMarkCount == 0) { w += Time.unscaledDeltaTime; widget.ForceProviderPoll(); yield return null; }
+            }
+
             int live = 0;
             foreach (var e in UnityEngine.Object.FindObjectsByType<Enemy>())
                 if (e != null && e.gameObject.activeInHierarchy) live++;
@@ -3330,10 +3350,19 @@ namespace DeNelle.DevTools
                         int taps = 0;
                         for (; taps < 12 && DialogueService.IsRunning; taps++)
                         {
-                            try { vm.Advance(); }
+                            try
+                            {
+                                // A linear line advances; an OPTIONS node needs a choice — the
+                                // player picks; the bot picks the LAST option (cards put the
+                                // leave/decline exit last by authoring convention).
+                                if (vm.ShowingOptions && vm.OptionLabels.Count > 0)
+                                    vm.Choose(vm.OptionLabels.Count - 1);
+                                else
+                                    vm.Advance();
+                            }
                             catch (Exception ex)
                             {
-                                FlowTrace.Fail("PopupClose", $"POPUP_NO_CLOSE :: {RowName} — Advance() threw on tap {taps + 1}: {ex.Message}");
+                                FlowTrace.Fail("PopupClose", $"POPUP_NO_CLOSE :: {RowName} — Advance/Choose threw on tap {taps + 1}: {ex.Message}");
                                 break;
                             }
                         }
