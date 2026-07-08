@@ -35,7 +35,8 @@ namespace DeNelle.Editor
 {
     public static class CastleWallStairsSeatFix
     {
-        private const string ScenePath   = "Assets/Scenes/MainCastle_Hall.unity";
+        private const string ScenePath       = "Assets/Scenes/MainCastle_Hall.unity";
+        private const string MergedScenePath = "Assets/Scenes/Main_Castle_Overworld.unity"; // the SHIPPED world (F8-24)
         private const string StairPrefix = "Dungeon_Stairs";
         private const string PlinthName  = "CastleBasePlinth";
 
@@ -76,17 +77,33 @@ namespace DeNelle.Editor
         private const string RemovedPref = "castle.stairsRemoved";
 
         [MenuItem("Defenders/Castle/REMOVE Wall Stairs (owner 2026-07-08)")]
-        public static void RemoveAll()
+        public static void RemoveAll() => RemoveAllInScene(ScenePath);
+
+        // F8-24 (owner "two sets of steps still in the air"): the SHIPPED scene is the merged
+        // Main_Castle_Overworld.unity, not the Hall — the 07-07 removal commit swept only the Hall,
+        // leaving the two ORIGINAL PrefabInstances ('Dungeon_Stairs_Stone' / '(1)') floating at y≈3
+        // (WorldMergeBuilder.LiftedCastleRoots lowers by exact name and only lists the _West/_South
+        // clones). This entry sweeps the merged scene directly. Batchmode:
+        //   -executeMethod DeNelle.Editor.CastleWallStairsSeatFix.RemoveAllInMergedScene
+        // Then rebake nav (the floaters carry MeshColliders): WorldMergeBuilder.BakeMergedWorldNavmesh.
+        [MenuItem("Defenders/Castle/REMOVE Wall Stairs in MERGED World (F8-24)")]
+        public static void RemoveAllInMergedScene() => RemoveAllInScene(MergedScenePath);
+
+        /// <summary>Open <paramref name="scenePath"/>, destroy every Dungeon_Stairs* object, save.
+        /// Sets the 'castle.stairsRemoved' gate so the census/seat-fix can't resurrect them.</summary>
+        public static void RemoveAllInScene(string scenePath)
         {
-            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
-            RemoveAllOnOpenScene(scene);
+            var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+            int removed = RemoveAllOnOpenScene(scene);
             EditorSceneManager.MarkSceneDirty(scene);
-            bool saved = EditorSceneManager.SaveScene(scene, ScenePath);
+            bool saved = EditorSceneManager.SaveScene(scene, scenePath);
             AssetDatabase.SaveAssets();
-            Log("=== wall-stairs REMOVE standalone save: saved=" + saved + " ===");
+            Debug.Log($"[StairsSweep] removed {removed} stair object(s) from {scenePath}");
+            Log("=== wall-stairs REMOVE standalone save: saved=" + saved + " (" + scenePath + ") ===");
         }
 
-        public static void RemoveAllOnOpenScene(UnityEngine.SceneManagement.Scene scene)
+        /// <summary>Sweep the ALREADY-OPEN scene (caller owns lifecycle/save). Returns the count destroyed.</summary>
+        public static int RemoveAllOnOpenScene(UnityEngine.SceneManagement.Scene scene)
         {
             EditorPrefs.SetBool(RemovedPref, true);
             var doomed = new List<Transform>();
@@ -102,6 +119,7 @@ namespace DeNelle.Editor
             }
             Log($"=== wall-stairs REMOVE DONE — {doomed.Count} object(s) destroyed; census disarmed " +
                 "(EditorPrefs castle.stairsRemoved). Rebake nav next. ===");
+            return doomed.Count;
         }
 
         [MenuItem("Defenders/Castle/Restore Wall Stairs (re-arm census)")]

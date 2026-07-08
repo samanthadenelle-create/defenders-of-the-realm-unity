@@ -60,6 +60,12 @@ namespace DeNelle.Editor
         // CastleSide_* walls", CastleHubBuilder note). The base pedestal + hero-spawn + plinth ride
         // CastleHubRoot (its children), so they lower automatically with it.
         private const string CastleRootName = "CastleHubRoot";
+        // F8-24 NOTE: this exact-name list only covers the _West/_South stair CLONES — the two
+        // ORIGINAL PrefabInstances ('Dungeon_Stairs_Stone' / 'Dungeon_Stairs_Stone (1)') were never
+        // listed, so they stayed floating at y≈3 in the merged scene. The gap is now MOOT for stairs:
+        // the owner-ruled removal sweep (CastleWallStairsSeatFix, EditorPrefs 'castle.stairsRemoved')
+        // SUPERSEDES lowering — RemoveStairsIfRuled() below destroys ALL Dungeon_Stairs* by prefix
+        // after the lower pass, so a re-merge can't resurrect floaters regardless of name.
         private static readonly string[] LiftedCastleRoots =
         {
             "CastleHubRoot",
@@ -132,6 +138,13 @@ namespace DeNelle.Editor
             //    wall beside the hero. REMOVE them entirely (no PlaceDecorativeBridges) and strip the
             //    now-dangling cross-seam NavMeshLinks baked into the old castle scene.
             StripSeamRemnants();
+
+            // 8b) STRUCTURAL stair removal (F8-24): when the owner's removal ruling is in force
+            //     (EditorPrefs 'castle.stairsRemoved'), sweep ALL Dungeon_Stairs* out of the merged
+            //     scene by prefix — the LiftedCastleRoots exact-name lower above misses the two
+            //     original PrefabInstances, and the ruling is removal, not lowering. This makes a
+            //     future re-merge/re-bake unable to resurrect floating stairs.
+            RemoveStairsIfRuled(castleScene);
 
             // 9) Mark dirty + SAVE AS the NEW merged path (original MainCastle_Hall.unity untouched).
             EditorSceneManager.MarkSceneDirty(castleScene);
@@ -290,6 +303,31 @@ namespace DeNelle.Editor
                     FlowTrace.Step("WorldMerge", "disabled '" + PlinthName + "' (the raised pedestal is gone — castle meets the flat ground with no lip).");
                 }
                 else FlowTrace.Step("WorldMerge", "'" + PlinthName + "' not found — nothing to disable.");
+            });
+        }
+
+        // --------------------------------------------------------------------
+        //  STRUCTURAL STAIR REMOVAL (F8-24, owner "two sets of steps still in the air").
+        //  When the owner-ruled removal gate (EditorPrefs 'castle.stairsRemoved', set by
+        //  CastleWallStairsSeatFix) is armed, sweep every Dungeon_Stairs* object out of the
+        //  merged scene by PREFIX — not by exact name, so the two original PrefabInstances
+        //  ('Dungeon_Stairs_Stone' / '(1)') that LiftedCastleRoots never listed are caught too.
+        //  Delegates to CastleWallStairsSeatFix.RemoveAllOnOpenScene (single source of truth
+        //  for the match rule + gate). Runs on the merge path so a re-bake can't resurrect them.
+        // --------------------------------------------------------------------
+        private static void RemoveStairsIfRuled(Scene mergedScene)
+        {
+            Guard.Try("WorldMerge", "structural stair sweep (owner removal ruling)", () =>
+            {
+                if (!EditorPrefs.GetBool("castle.stairsRemoved", false))
+                {
+                    FlowTrace.Step("WorldMerge", "stair removal ruling NOT armed (EditorPrefs castle.stairsRemoved unset) — stairs left as-is.");
+                    return;
+                }
+                int removed = CastleWallStairsSeatFix.RemoveAllOnOpenScene(mergedScene);
+                Debug.Log("[StairsSweep] removed " + removed + " stair object(s) from " + MergedScenePath);
+                FlowTrace.Step("WorldMerge", "structural stair sweep destroyed " + removed +
+                    " Dungeon_Stairs* object(s) — removal ruling enforced in the merged scene.");
             });
         }
 
