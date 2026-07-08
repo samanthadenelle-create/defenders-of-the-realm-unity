@@ -1514,6 +1514,7 @@ namespace DeNelle.Core.UI
                     h.name.raycastTarget = false;
                     h.level = FindDeep<TMP_Text>(pf.transform, "level");
                     h.extra = null;
+                    GuardSpriteNullImages(pf, h.plate);   // no-silent-white law (F8-31)
                     h.Clear();
                     return h;
                 }
@@ -1550,6 +1551,50 @@ namespace DeNelle.Core.UI
                 new Vector2(0.10f, 0.28f), new Vector2(0.90f, 0.56f), withValue: true, framed: false);
             h.Clear();
             return h;
+        }
+
+        /// <summary>No-silent-white law (F8-31): a mirrored prefab with a dangling sprite GUID
+        /// deserializes as sprite==null and uGUI paints the Image as a flat tinted RECTANGLE —
+        /// the "white target frame". After binding a prefab, sweep its whole subtree: any Image
+        /// left with a null sprite is re-bound from RpgUiCatalog on a role match (the root plate
+        /// → hud/target_core) or DISABLED loudly — never rendered as a silent white quad.</summary>
+        private static void GuardSpriteNullImages(GameObject root, Image plate)
+        {
+            if (root == null) return;
+            var images = root.GetComponentsInChildren<Image>(true);
+            for (int i = 0; i < images.Length; i++)
+            {
+                var img = images[i];
+                if (img == null || img.sprite != null) continue;
+
+                // Role match: the root plate gets the committed target-core art.
+                if (img == plate)
+                {
+                    var core = RpgUiCatalog.Get(RpgUiCatalog.RoleHud, RpgUiCatalog.HudTargetCore);
+                    if (core != null)
+                    {
+                        img.sprite = core;
+                        img.type = Image.Type.Simple;   // ornate core — never slice
+                        FlowTrace.Warn("UiKit", "sprite-null plate Image " + ImagePath(root.transform, img.transform)
+                                              + " re-bound to hud/target_core — dangling ref");
+                        continue;
+                    }
+                }
+
+                img.enabled = false;
+                FlowTrace.Warn("UiKit", "sprite-null Image " + ImagePath(root.transform, img.transform)
+                                      + " disabled — dangling ref");
+            }
+        }
+
+        /// <summary>Root-relative transform path for guard logs.</summary>
+        private static string ImagePath(Transform root, Transform t)
+        {
+            if (t == null) return "<null>";
+            var path = t.name;
+            for (var p = t.parent; p != null && p != root.parent; p = p.parent)
+                path = p.name + "/" + path;
+            return path;
         }
 
         /// <summary>Which nameplate flavour to build (§1.10).</summary>

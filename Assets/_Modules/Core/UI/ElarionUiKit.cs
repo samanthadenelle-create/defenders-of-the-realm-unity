@@ -1815,7 +1815,40 @@ namespace DeNelle.Core.UI
             dr.anchorMin = Vector2.zero; dr.anchorMax = Vector2.one;
             dr.offsetMin = Vector2.zero; dr.offsetMax = Vector2.zero;
             var disc = discGo.GetComponent<Image>();
-            if (sprite != null) { disc.sprite = sprite; disc.color = Color.white; disc.preserveAspect = true; }
+            Image maskedArt = null;
+            if (sprite != null)
+            {
+                // F8-32 hardening: non-square art (e.g. the 2:3 hero-select card) must never
+                // letterbox as a raw rectangle inside the painted oval. When the aspect is off
+                // by >10%, render it aspect-FILL under a circular Mask (CircleSprite as the
+                // mask graphic) so any card/tall art reads as a round crop. Square sprites
+                // keep the original direct path.
+                float w = sprite.rect.width, hgt = sprite.rect.height;
+                float aspect = hgt > 0f ? w / hgt : 1f;
+                if (Mathf.Abs(aspect - 1f) > 0.10f)
+                {
+                    disc.sprite = CircleSprite;          // the round crop shape
+                    disc.color = Color.white;
+                    var mask = discGo.AddComponent<Mask>();
+                    mask.showMaskGraphic = false;
+
+                    var artGo = new GameObject("PortraitArt", typeof(Image));
+                    artGo.transform.SetParent(discGo.transform, false);
+                    var ar = artGo.GetComponent<RectTransform>();
+                    ar.anchorMin = Vector2.zero; ar.anchorMax = Vector2.one;
+                    ar.offsetMin = Vector2.zero; ar.offsetMax = Vector2.zero;
+                    maskedArt = artGo.GetComponent<Image>();
+                    maskedArt.sprite = sprite;
+                    maskedArt.color = Color.white;
+                    maskedArt.raycastTarget = false;
+                    var fit = artGo.AddComponent<AspectRatioFitter>();
+                    fit.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent; // aspect-FILL the circle
+                    fit.aspectRatio = aspect;
+                    FlowTrace.Once("UiKit", "portrait-nonsquare/" + sprite.name,
+                        "portrait " + sprite.name + " non-square (" + w + "x" + hgt + ") — circle-masked");
+                }
+                else { disc.sprite = sprite; disc.color = Color.white; disc.preserveAspect = true; }
+            }
             else { disc.sprite = CircleSprite; disc.color = PortraitPlaceholder; }
             disc.raycastTarget = false;
 
@@ -1830,7 +1863,9 @@ namespace DeNelle.Core.UI
             ring.raycastTarget = false;
             ringGo.transform.SetAsLastSibling();
 
-            return new PortraitHandle { image = disc, ring = ring };
+            // Circle-masked path: the handle's image = the art Image (callers assign .sprite
+            // there); the disc stays the mask shape.
+            return new PortraitHandle { image = maskedArt != null ? maskedArt : disc, ring = ring };
         }
 
         /// <summary>Warm tan placeholder fill for a portrait disc with no class art yet (resolves from UiStyle.Theme).</summary>
