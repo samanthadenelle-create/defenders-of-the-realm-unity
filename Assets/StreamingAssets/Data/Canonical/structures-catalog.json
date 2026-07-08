@@ -71,9 +71,6 @@
      "crystals": 60
     },
     "maxLevel": 3,
-    "upgradeVisualPath": [
-     "Structures/Tower_Medieval_Big"
-    ],
     "navSurface": "Blocker",
     "visualHeight": 5.0,
     "range": 55.0,
