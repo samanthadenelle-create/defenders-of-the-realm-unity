@@ -324,6 +324,14 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// Public read of the shared combat-active authority (ticket F8-14): the SAME
+        /// wave/battle signal the townsfolk flee to shelter on (wave Countdown/Active
+        /// OR <c>BattleLock.IsInBattle()</c>, shared 0.25s poll). Reused by the castle
+        /// vendor hider + the wave shop-gate so nothing invents a second combat poll.
+        /// </summary>
+        public static bool IsCombatActive => CombatActive();
+
+        /// <summary>
         /// Steps the flee/hide/return state machine. Only WANDERING villagers with a
         /// live NavMeshAgent participate — static bodies (vendors, the companion
         /// introducer, idlers) are configured wander=false and never leave their post.

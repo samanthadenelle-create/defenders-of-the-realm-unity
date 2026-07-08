@@ -99,6 +99,17 @@ namespace DeNelle.Village
             var entry = BuildingCatalog.Find(structureId);
             if (entry != null && entry.IsShoppable)
             {
+                // Ticket F8-14 ("disable shopping" during the wave): the vendor NPCs are
+                // hidden by CastleVendorWaveHider, so Talk is normally unreachable — this
+                // guards any remaining direct shop route on the SAME combat authority the
+                // townsfolk flee on. Warn (never a silent no-op) + surface the reason.
+                if (AmbientNPC.IsCombatActive)
+                {
+                    FlowTrace.Warn("UI",
+                        $"PlayStructure('{structureId}'): shop open BLOCKED — combat active (shops closed during the assault).");
+                    BuildFeedbackToast.Show("Shops closed during the assault!");
+                    return true;   // handled (blocked + toast) — don't fall through to a panel fallback
+                }
                 bool opened = PanelRouter.Open(PanelId.PartyShop, structureId);
                 if (opened) FlowTrace.Step("UI", $"DialogueService.PlayStructure('{structureId}') -> shop panel (transaction).");
                 return opened;

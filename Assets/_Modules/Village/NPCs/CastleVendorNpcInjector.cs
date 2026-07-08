@@ -452,6 +452,13 @@ namespace DeNelle.Village
                 float localHeadClear = SignHeightAboveHead(body);
                 InteractableSign.ForStructureId(body, v.StructureId, localHeadClear);
             });
+
+            // Ticket F8-14 (owner 2026-07-08: "when the other NPCs leave we should hide the
+            // vendor ones, then show after"): vendors are wander=false so AmbientNPC's flee
+            // state machine deliberately skips them — this watcher hides the body + kills the
+            // Talk registration on the SAME combat signal the townsfolk flee on, restores after.
+            if (body.GetComponent<CastleVendorWaveHider>() == null)
+                body.AddComponent<CastleVendorWaveHider>();
         }
 
         // V (render-verify): the spawned body must carry >=1 ENABLED Renderer with an actual mesh.
@@ -524,6 +531,97 @@ namespace DeNelle.Village
             foreach (var t in FindObjectsByType<Transform>())
                 if (t != null && t.name.StartsWith("Hero")) return t;
             return null;
+        }
+    }
+
+    // =========================================================================
+    // CastleVendorWaveHider — ticket F8-14: vendor NPCs duck OUT OF SIGHT for the
+    // duration of a wave/battle, exactly like the fleeing townsfolk, then reappear
+    // at their storefronts when the fight ends. Vendors are configured wander=false
+    // so AmbientNPC's flee state machine deliberately skips them — this watcher
+    // REUSES the SAME combat authority (AmbientNPC.IsCombatActive: wave
+    // Countdown/Active OR BattleLock, shared 0.25s poll) instead of inventing a
+    // second signal.
+    //
+    // Hide = renderers off (body + floating sign) + CastleNpcInteractable disabled —
+    // its OnDisable releases the MobileInteractButton, deregisters from
+    // TalkPromptRegistry (so the HUD Talk light dies) and clears HudBuildingFocus.
+    // The GameObject stays ACTIVE so this watcher keeps polling for the all-clear
+    // (mirrors AmbientNPC.SetBodyVisible's hide-without-deactivate rule).
+    // =========================================================================
+    /// <summary>Hides a castle vendor NPC while combat is live (ticket F8-14) and
+    /// restores it after — same signal the townsfolk flee-to-shelter system uses.</summary>
+    [DisallowMultipleComponent]
+    public sealed class CastleVendorWaveHider : MonoBehaviour
+    {
+        // Only the renderers WE disabled get restored — a renderer something else
+        // deliberately disabled (e.g. an injector fallback) stays off.
+        private readonly System.Collections.Generic.List<Renderer> _hiddenRenderers =
+            new System.Collections.Generic.List<Renderer>();
+        private CastleNpcInteractable _interact;
+        private bool _hidden;
+        private bool _counted;
+
+        // Observability: one Step per global combat transition, carrying the counts.
+        private static int s_registered;
+        private static int s_hiddenCount;
+        private static bool s_lastCombat;
+
+        private void Start()
+        {
+            _interact = GetComponent<CastleNpcInteractable>();
+            s_registered++;
+            _counted = true;
+        }
+
+        private void OnDestroy()
+        {
+            if (_counted && s_registered > 0) s_registered--;
+            if (_hidden && s_hiddenCount > 0) s_hiddenCount--;
+        }
+
+        private void Update()
+        {
+            bool combat = AmbientNPC.IsCombatActive;
+
+            // One announcement per global transition (first hider to notice logs it),
+            // instrumented per the ticket: "vendors hidden (wave)" / "vendors restored".
+            if (combat != s_lastCombat)
+            {
+                s_lastCombat = combat;
+                FlowTrace.Step("Village", combat
+                    ? $"vendors hidden (wave): {s_registered} vendor NPC(s) duck out of sight"
+                    : $"vendors restored: {s_registered} vendor NPC(s) back at their storefronts " +
+                      $"(were hidden={s_hiddenCount})");
+            }
+
+            if (combat && !_hidden) Hide();
+            else if (!combat && _hidden) Show();
+        }
+
+        private void Hide()
+        {
+            _hidden = true;
+            s_hiddenCount++;
+            _hiddenRenderers.Clear();
+            // Fetch fresh (not cached at Start): the InteractableSign / bubble children
+            // may be built after this component attaches.
+            foreach (var r in GetComponentsInChildren<Renderer>(true))
+                if (r != null && r.enabled) { r.enabled = false; _hiddenRenderers.Add(r); }
+            // OnDisable releases the interact button, the TalkPromptRegistry entry
+            // (HUD Talk light) and HudBuildingFocus — and its Update never re-registers
+            // while disabled, so talk-shopping is unreachable for the whole wave.
+            if (_interact != null) _interact.enabled = false;
+        }
+
+        private void Show()
+        {
+            _hidden = false;
+            if (s_hiddenCount > 0) s_hiddenCount--;
+            foreach (var r in _hiddenRenderers)
+                if (r != null) r.enabled = true;
+            _hiddenRenderers.Clear();
+            if (_interact != null) _interact.enabled = true;
         }
     }
 

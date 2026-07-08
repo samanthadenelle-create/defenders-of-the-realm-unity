@@ -54,6 +54,19 @@ namespace DeNelle.Village
             FlowTrace.Step("Dialogue", "Custom dialogue command sink registered (Yarn-free).");
         }
 
+        // Ticket F8-14 ("disable shopping" during the wave): a dialogue already OPEN when
+        // the wave countdown starts could still fire a shop verb after the vendors hide —
+        // block it on the SAME combat authority the townsfolk flee on (AmbientNPC), Warn
+        // (never a silent no-op) and surface the reason via the shared feedback toast.
+        private static bool ShopsClosedForCombat(string verb)
+        {
+            if (!AmbientNPC.IsCombatActive) return false;
+            FlowTrace.Warn("Dialogue",
+                $"{verb} BLOCKED — combat active (shops closed during the assault).");
+            BuildFeedbackToast.Show("Shops closed during the assault!");
+            return true;
+        }
+
         // ── Commands → direct service calls (mirrors DialogueCommandBridge routing) ──
         public void Run(string verb, IReadOnlyList<string> args)
         {
@@ -68,7 +81,7 @@ namespace DeNelle.Village
                 // ── Panels via PanelRouter (cross-assembly, reflection-free) ──────
                 case "OpenRumorBoard": PanelRouter.Open(PanelId.RumorBoard); break;
                 case "OpenUpgrade":    PanelRouter.Open(PanelId.BuildingUpgrade, a0); break;
-                case "OpenShop":       PanelRouter.Open(PanelId.PartyShop, a0); break;
+                case "OpenShop":       if (!ShopsClosedForCombat("OpenShop")) PanelRouter.Open(PanelId.PartyShop, a0); break;
                 case "OpenCraft":      PanelRouter.Open(PanelId.Crafting); break;
                 // Apothecary NPC (owner F8 2026-07-02): the herbalist's card-first dialogue ends
                 // by opening the consumable-crafting / alchemy bench — the SAME panel the station's
@@ -81,11 +94,11 @@ namespace DeNelle.Village
                 // EYES-SWEEP 2026-07-06: legacy PanelId.HeroTalents route REMOVED (dead panel;
                 // rendered black). One panel, one route: HeroSkillTree.
                 case "OpenTalents":    PanelRouter.Open(PanelId.HeroSkillTree); break;
-                case "OpenCosmetics":  PanelRouter.Open(PanelId.CosmeticShop); break;
+                case "OpenCosmetics":  if (!ShopsClosedForCombat("OpenCosmetics")) PanelRouter.Open(PanelId.CosmeticShop); break;
                 // Realm Store (SKR/SOL/USDC packs) — the merchant's "Realm Store" option opens the
                 // monetization PackStore, ALONGSIDE the existing Glimmer/gear paths (PackStoreBootstrap
                 // registered the opener + find-or-spawns the store host-free on first open).
-                case "OpenRealmStore": PanelRouter.Open(PanelId.RealmStore); break;
+                case "OpenRealmStore": if (!ShopsClosedForCombat("OpenRealmStore")) PanelRouter.Open(PanelId.RealmStore); break;
                 case "OpenPetSkills":  PanelRouter.Open(PanelId.PetSkillTree); break;
 
                 // ── Panels via find-or-spawn (no PanelId opener of their own) ──────
