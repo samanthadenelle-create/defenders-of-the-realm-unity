@@ -25,9 +25,9 @@ All morning lanes committed through `bb0094cc`; final fleet on exe **2026-07-08 
 EXECUTED (`[StairsSweep] removed 4 stair object(s)`) + navmesh rebaked + committed (13e85e12).
 Wave-2 late finds, fixed with data: ArcaneTower fake-null NRE (`?.` misses Unity fake-null),
 popup oracle taught the tap-advance/Choose contract, compass ForceProviderPoll dead-nudge on
-inactive instances. **WebGL build from bb0094cc was IN FLIGHT at prep time** — if this session
-died before deploy: mirror `C:\defenders-webgl-build\Builds\WebGL` → `C:\eoa\Builds\WebGL`, then
-`npx -y vercel deploy --yes` from C:\eoa (preview; NEVER --prod). Owner felt-pass = exe 05:10:11.
+inactive instances. **WebGL DEPLOYED from bb0094cc:** Vercel PREVIEW
+https://defenders-of-the-realm-v2-h0h6hfsf5.vercel.app (READY; supersedes the pre-morning
+2dizrqgws preview). Production untouched — promotion is the owner's. Owner felt-pass = exe 05:10:11.
 The section below is retained for the process pattern; its steps are DONE except WebGL deploy.
 
 ## THE UNFINISHED WAVE — finish THIS first, in order
