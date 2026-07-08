@@ -249,6 +249,42 @@ namespace DeNelle.Editor
         /// been re-generated (e.g. with new animations) and the embedded
         /// textures changed.
         /// </summary>
+        /// <summary>
+        /// F8 2026-07-08 ("showing as white though so needs tripo color", ArcaneSpire_1): run the
+        /// one-shot extraction for a SINGLE never-extracted FBX without touching the rest of the
+        /// Tripo set (ForceReextractAll clears every marker — needless churn on assets that render
+        /// fine). Batchmode-safe: drains synchronously like ForceReextractAll.
+        /// </summary>
+        [MenuItem("Defenders/Tripo/Extract ArcaneSpire_1 (white fix)")]
+        public static void ExtractArcaneSpire1()
+        {
+            const string path = "Assets/Resources/Structures/ArcaneSpire_1.fbx";
+            string marker = MarkerPathFor(path);
+            if (File.Exists(marker)) File.Delete(marker);
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            DrainPending();
+
+            // PERSIST the binding (F8 2026-07-08 verify pass): ProcessOne only EXTRACTS — the
+            // header's promised SearchAndRemapMaterials step was never in the code, and Unity 6
+            // dropped External material location ("MaterialLocation.External is obsolete" import
+            // warnings), so the OnPreprocessModel settings are transient and externalObjects
+            // stayed {} — the model kept its embedded null-albedo material (still white on any
+            // reimport). Remap by texture name against the generated Materials/*.mat (which DO
+            // bind the extracted albedo) and SAVE, so the meta carries the binding durably.
+            var importer = AssetImporter.GetAtPath(path) as ModelImporter;
+            if (importer != null)
+            {
+                importer.SearchAndRemapMaterials(
+                    ModelImporterMaterialName.BasedOnTextureName,
+                    ModelImporterMaterialSearch.Local);
+                importer.SaveAndReimport();
+                var map = importer.GetExternalObjectMap();
+                Debug.Log("[TripoAssetPostprocessor] remap saved for " + path +
+                          " — externalObjects=" + map.Count);
+            }
+            Debug.Log("[TripoAssetPostprocessor] single-asset extraction drained for " + path);
+        }
+
         [MenuItem("Defenders/Tripo/Force re-extract all textures")]
         public static void ForceReextractAll()
         {
