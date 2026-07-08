@@ -1119,10 +1119,11 @@ namespace DeNelle.Village
                     if (srcShaderName.StartsWith("Universal Render Pipeline/", System.StringComparison.Ordinal))
                     { skipped++; continue; }
 
-                    // Diffuse / base texture — try every common property name.
-                    Texture baseTex = null;
-                    if (src.HasProperty("_MainTex"))      baseTex = src.GetTexture("_MainTex");
-                    if (baseTex == null && src.HasProperty("_BaseMap"))       baseTex = src.GetTexture("_BaseMap");
+                    // Diffuse / base texture — SHEET read first (_BaseMap/_MainTex without the
+                    // HasProperty gate; see SheetAlbedo header): the gate is shader-dependent and a
+                    // shaderless (-nographics / stripped) source would otherwise convert to a
+                    // textureless white URP material, silently DESTROYING a bound albedo.
+                    Texture baseTex = SheetAlbedo(src);
                     if (baseTex == null && src.HasProperty("_BaseColorMap")) baseTex = src.GetTexture("_BaseColorMap");
 
                     // Base colour — try URP first, then Built-in.
@@ -1214,12 +1215,53 @@ namespace DeNelle.Village
         /// <summary>True if the last audit emitted the WHITE HERO ROOT Fail (no texture AND no tint).</summary>
         public static bool LastAuditWhiteHeroRootFired { get; private set; }
 
+        // ─────────────────────────────────────────────────────────────────────────────
+        // -NOGRAPHICS-SAFE MATERIAL READS (fleet WHITE-HERO RCA 2026-07-08, §12-proven).
+        // The AutoPilot fleet launches the player with -nographics (run-autopilot-fleet.ps1:80).
+        // With no graphics device, SHADERS DO NOT RESOLVE in that player (same break-log run:
+        // "Could not find video decode shader pass Default in shader <not found>",
+        // "RenderTexture.Create failed") — and Material.HasProperty consults the SHADER's
+        // property table, so EVERY HasProperty-gated read/write in this file was dead in the
+        // fleet. That is the whole "albedo 0/19 + default-white _BaseColor" 4/4 capture: the
+        // very same imported KnightV3 materials read 19/19 in the windowed player of the same
+        // import state (Player.log 2026-07-07 22:34 — "RetargetMaterialsToUrp: converted=0,
+        // skipped (already URP)=17" + "PACKAGE albedo audit: 19/19"; KnightV3 assets unchanged
+        // since commit f4397b7b 2026-07-03, no reimports in any session log). Proof it was the
+        // property gate and not a lost binding: had the final materials carried a live shader,
+        // ColorPackageBodyIfNullAlbedo would have tinted them and the audit would have logged
+        // the "textureless but _BaseColor-tinted" Warn — instead the Fail fired, which requires
+        // texture reads AND tint reads AND tint writes to ALL be dead at once.
+        //
+        // Material.GetTexture/GetColor/SetColor/SetFloat operate on the material's OWN
+        // serialized property sheet, loaded with or without a graphics device — so reading the
+        // sheet measures the actual shipped BINDING. A genuinely unbound slot still reads null
+        // and still FAILS the audit: the check is environment-robust, not weakened.
+        // ─────────────────────────────────────────────────────────────────────────────
+        private static Texture SheetAlbedo(Material m)
+        {
+            if (m == null) return null;
+            Texture t = m.GetTexture("_BaseMap");   // sheet read — deliberately NOT HasProperty-gated
+            if (t == null) t = m.GetTexture("_MainTex");
+            return t;
+        }
+
+        /// <summary>Sheet-based tint probe: non-white with any alpha counts as a deliberate tint.
+        /// An absent sheet entry reads back as clear (a=0), so an untinted material can never
+        /// masquerade as tinted.</summary>
+        private static bool IsSheetTinted(Material m, string prop)
+        {
+            if (m == null) return false;
+            Color c = m.GetColor(prop);             // sheet read — returns clear when absent
+            return c.a > 0f && c != Color.white;
+        }
+
         public static void AuditPackageAlbedo(GameObject body)
         {
             if (body == null) return;
             LastAlbedoAuditRan = true;
             LastAuditWhiteHeroRootFired = false;
             int mats = 0, withAlbedo = 0;
+            string firstMatDiag = null; // §12 capture: shader state proves headless vs real-GPU per run
             var missing = new System.Text.StringBuilder();
             foreach (var r in body.GetComponentsInChildren<Renderer>(true))
             {
@@ -1228,9 +1270,12 @@ namespace DeNelle.Village
                 {
                     if (m == null) continue;
                     mats++;
-                    Texture albedo = null;
-                    if (m.HasProperty("_BaseMap"))            albedo = m.GetTexture("_BaseMap");
-                    if (albedo == null && m.HasProperty("_MainTex")) albedo = m.GetTexture("_MainTex");
+                    if (firstMatDiag == null)
+                        firstMatDiag = $"first-mat '{m.name}' shader=" +
+                                       (m.shader != null ? $"'{m.shader.name}'" : "<null — headless/-nographics>");
+                    // Sheet read, NOT HasProperty-gated: HasProperty consults the SHADER, which does
+                    // not resolve in the -nographics fleet player (the 4/4 false "0/19" root, 2026-07-08).
+                    Texture albedo = SheetAlbedo(m);
                     if (albedo != null) withAlbedo++;
                     else if (missing.Length < 200)
                     { if (missing.Length > 0) missing.Append(", "); missing.Append(m.name); }
@@ -1242,7 +1287,8 @@ namespace DeNelle.Village
 
             FlowTrace.Step("HeroBody",
                 $"PACKAGE albedo audit: {withAlbedo}/{mats} material(s) carry a _BaseMap/_MainTex texture" +
-                (missing.Length > 0 ? $" (textureless: [{missing}])" : "") + ".");
+                (missing.Length > 0 ? $" (textureless: [{missing}])" : "") +
+                (firstMatDiag != null ? $" | {firstMatDiag}" : "") + ".");
 
             // NULL-albedo package materials are EXPECTED — ColorPackageBody tints them via
             // _BaseColor (PaladinPalette), so the hero renders COLORED, not white. Only a
@@ -1256,9 +1302,10 @@ namespace DeNelle.Village
                 {
                     if (r == null) continue;
                     foreach (var m in r.sharedMaterials)
-                        if (m != null &&
-                            ((m.HasProperty("_BaseColor") && m.GetColor("_BaseColor") != Color.white) ||
-                             (m.HasProperty("_Color") && m.GetColor("_Color") != Color.white)))
+                        // Sheet-based tint read (see SheetAlbedo header): the HasProperty gate is
+                        // shader-dependent and dead in the -nographics fleet, which made a TINTED
+                        // body read as untinted and escalated the Warn into the false WHITE HERO ROOT.
+                        if (m != null && (IsSheetTinted(m, "_BaseColor") || IsSheetTinted(m, "_Color")))
                         { anyTinted = true; break; }
                     if (anyTinted) break;
                 }
@@ -1389,18 +1436,22 @@ namespace DeNelle.Village
                 {
                     var src = mats[i];
                     if (src == null) continue;
-                    Texture albedo = null;
-                    if (src.HasProperty("_BaseMap"))               albedo = src.GetTexture("_BaseMap");
-                    if (albedo == null && src.HasProperty("_MainTex")) albedo = src.GetTexture("_MainTex");
+                    // Sheet read (see SheetAlbedo header): TEXTURE-WINS must hold in the -nographics
+                    // fleet too — the HasProperty-gated read saw NULL there and over-painted textured slots.
+                    Texture albedo = SheetAlbedo(src);
                     if (albedo != null) { keptTextured++; slotIndex++; continue; } // TEXTURE WINS — leave it alone
 
                     var inst = new Material(src);
                     string slotName = src.name ?? "";
                     Color c = ResolvePaladinColor(slotName, slotIndex, out string label);
-                    if (inst.HasProperty("_BaseColor")) inst.SetColor("_BaseColor", c);
-                    if (inst.HasProperty("_Color"))     inst.SetColor("_Color", c);
-                    if (inst.HasProperty("_Smoothness")) inst.SetFloat("_Smoothness", 0.1f);
-                    if (inst.HasProperty("_Metallic"))   inst.SetFloat("_Metallic", 0f);
+                    // Ungated sheet WRITES (Set* stores to the material's property sheet even when the
+                    // shader is unresolvable): a genuinely textureless slot therefore reads back as
+                    // TINTED in the audit in EVERY environment — Warn "colored-not-textured", never a
+                    // false WHITE HERO ROOT. Extra sheet entries on shaders lacking a prop are inert.
+                    inst.SetColor("_BaseColor", c);
+                    inst.SetColor("_Color", c);
+                    inst.SetFloat("_Smoothness", 0.1f);
+                    inst.SetFloat("_Metallic", 0f);
                     mats[i] = inst;
                     colored++;
                     if (log.Length < 300)
