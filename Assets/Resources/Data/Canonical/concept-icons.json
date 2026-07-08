@@ -47,16 +47,16 @@
    "name": "run_dash"
   },
   "knockback": {
-   "role": "icons",
-   "name": "icon_shield"
+   "role": "abilities",
+   "name": "shield_bash"
   },
   "taunt": {
    "role": "icons",
    "name": "icon_shield"
   },
   "knight.ranged-poke": {
-   "role": "icons",
-   "name": "icon_sword"
+   "role": "abilities",
+   "name": "attack_sword"
   },
   "knight.mending-salve": {
    "role": "abilities",
@@ -81,6 +81,10 @@
   "universal.mend": {
    "role": "abilities",
    "name": "heal_cross"
+  },
+  "universal.arcane-bolt": {
+   "role": "icons",
+   "name": "icon_energy_sword"
   },
   "universal.dash": {
    "role": "abilities",

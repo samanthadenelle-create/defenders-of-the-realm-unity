@@ -288,15 +288,44 @@ namespace DeNelle.Village.UI
                 $"{vm.Kind} shown: spoils={vm.Spoils.Count} action={vm.PrimaryRoute}");
         }
 
-        /// <summary>Stack the VM's content top-down inside the body zone, each band sized
-        /// by weight so the panel is exactly as tall as its content demands.</summary>
+        // ── F8-35 pixel row heights (post-scale canvas units — same space as the kit's
+        // canonical 360x120 CTA and the ElarionUi font constants: FontBody=50 etc.).
+        // Each band OWNS this height; bands never share pixels. If the well is still
+        // shorter than the total after the panel extension hit its clamp, all bands
+        // compress by one uniform factor and the labels' FitSingleLine shrink-to-fit
+        // keeps the text inside its band (never overprinting a sibling).
+        private const float EmblemPx  = 80f;
+        private const float SubLinePx = 54f;   // per wrapped subtitle line (FontBody 50)
+        private const float StarsPx   = 34f;
+        private const float TimePx    = 44f;   // FontLabel 40 bold — its OWN row, clear of the subtitle/stars
+        private const float RowPx     = 56f;   // one spoils row (FontBody 50 + plate inset)
+        private const float BandGapPx = 8f;
+
+        /// <summary>Total body-well pixels the VM's bands demand (drives the panel extension).</summary>
+        private static float RequiredBodyPx(EndStateVM vm)
+        {
+            float px = 0f; int n = 0;
+            if (vm.Emblem != null) { px += EmblemPx; n++; }
+            if (!string.IsNullOrEmpty(vm.Subtitle)) { px += SubLinePx * SubtitleLines(vm.Subtitle); n++; }
+            if (vm.Stars >= 0) { px += StarsPx; n++; }
+            if (vm.TimeSeconds >= 0f) { px += TimePx; n++; }
+            px += vm.Spoils.Count * RowPx; n += vm.Spoils.Count;
+            if (n > 1) px += BandGapPx * (n - 1);
+            return px;
+        }
+
+        /// <summary>Stack the VM's content top-down inside the body zone. F8-35: bands are
+        /// PIXEL-sized (each row owns a real row height) instead of fraction-weighted — the
+        /// old weights divided whatever space survived the close-band reservation + CTA
+        /// floor-raise, so a 5-reward victory squeezed every row to ~13px and all the
+        /// labels/values overprinted (owner capture flag_20260708-085151_03.png).</summary>
         private void BuildBody(EndStateVM vm, RectTransform body)
         {
-            // (weight, builder) bands, top to bottom.
-            var bands = new List<(float w, Action<RectTransform> build)>();
+            // (pixel height, builder) bands, top to bottom.
+            var bands = new List<(float px, Action<RectTransform> build)>();
 
             if (vm.Emblem != null)
-                bands.Add((2.4f, host =>
+                bands.Add((EmblemPx, host =>
                 {
                     var go = new GameObject("Emblem", typeof(Image));
                     go.transform.SetParent(host, false);
@@ -320,7 +349,7 @@ namespace DeNelle.Village.UI
             // guard so the copy can NEVER escape its rect (§1.14: text never overlaps
             // siblings) if the estimate is ever short.
             if (!string.IsNullOrEmpty(vm.Subtitle))
-                bands.Add((1.1f * SubtitleLines(vm.Subtitle), host =>
+                bands.Add((SubLinePx * SubtitleLines(vm.Subtitle), host =>
                 {
                     var l = ElarionUiKit.Label(host, vm.Subtitle, 0f, 1f, ElarionUi.Parchment,
                         ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
@@ -332,14 +361,15 @@ namespace DeNelle.Village.UI
                 }));
 
             if (vm.Stars >= 0)
-                bands.Add((1.0f, host => BuildStarRow(host, vm.Stars)));
+                bands.Add((StarsPx, host => BuildStarRow(host, vm.Stars)));
 
             if (vm.TimeSeconds >= 0f)
-                bands.Add((0.8f, host =>
+                bands.Add((TimePx, host =>
                 {
                     var l = ElarionUiKit.Label(host, "Time  " + FormatTime(vm.TimeSeconds), 0f, 1f,
                         ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center,
                         0.06f, 0.94f, bold: true);
+                    ElarionUiKit.FitSingleLine(l);   // §1.14 — the time line never spills its own row
                     l.raycastTarget = false;
                     Track(l.gameObject, 0.20f, 1f);
                 }));
@@ -347,22 +377,28 @@ namespace DeNelle.Village.UI
             for (int i = 0; i < vm.Spoils.Count; i++)
             {
                 int idx = i;
-                bands.Add((1.0f, host =>
+                bands.Add((RowPx, host =>
                     Guard.Try("EndState", "spoils row " + idx,
                         () => BuildSpoilRow(host, vm.Spoils[idx], 0.25f + idx * 0.05f))));
             }
 
-            // Lay the bands out by cumulative weight (small fixed gap between bands).
-            float total = 0f;
-            foreach (var b in bands) total += b.w;
-            if (total <= 0f) return;
-            const float gap = 0.012f;
-            float cursor = 1f;
-            foreach (var (w, build) in bands)
+            // Lay the bands out top-down at their OWN pixel heights. Only when the well is
+            // still shorter than the total (panel extension clamped at 94% screen height)
+            // do all bands compress by one uniform factor — logged, never silent.
+            if (bands.Count == 0) return;
+            Canvas.ForceUpdateCanvases();
+            float wellH = body.rect.height;
+            float totalPx = BandGapPx * (bands.Count - 1);
+            foreach (var b in bands) totalPx += b.px;
+            float scale = wellH > 1f && totalPx > wellH ? wellH / totalPx : 1f;
+            if (scale < 1f)
+                FlowTrace.Warn("EndState",
+                    $"body rows compressed to fit: need={totalPx:0}px well={wellH:0}px scale={scale:0.###} (panel extension clamped)");
+            float y = 0f;
+            foreach (var (px, build) in bands)
             {
-                float h = (w / total) * (1f - gap * (bands.Count - 1));
-                var host = MakeZone(body, "Band", 0f, cursor - h, 1f, cursor);
-                cursor -= h + gap;
+                var host = MakeZonePx(body, "Band", y, px * scale);
+                y += (px + BandGapPx) * scale;
                 build(host);
             }
         }
@@ -412,13 +448,19 @@ namespace DeNelle.Village.UI
                 rt.anchoredPosition = Vector2.zero;
                 rt.sizeDelta = new Vector2(40f, 40f);
             }
+            // F8-35: label left / value right, each FIT to ONE line in its own column —
+            // "Equipped" wrapped to "Equipp/d" and long gear names spilled into the value
+            // column at the fixed FontBody size. FitSingleLine (§1.14) shrinks-to-fit with
+            // ellipsis so neither side can ever wrap or cross the column split again.
             var label = ElarionUiKit.Label(plate.transform, row.Label ?? "", 0f, 1f,
                 ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.MidlineLeft,
-                iconSprite != null ? 0.17f : 0.06f, 0.68f);
+                iconSprite != null ? 0.17f : 0.06f, 0.62f);
+            ElarionUiKit.FitSingleLine(label);
             label.raycastTarget = false;
             var amount = ElarionUiKit.Label(plate.transform, row.Amount ?? "", 0f, 1f,
                 ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.MidlineRight,
-                0.68f, 0.95f, bold: true);
+                0.64f, 0.95f, bold: true);
+            ElarionUiKit.FitSingleLine(amount);
             amount.raycastTarget = false;
             Track(plate, revealDelay, 0.96f);
         }
@@ -550,6 +592,23 @@ namespace DeNelle.Village.UI
             es.AddComponent<UnityEngine.EventSystems.EventSystem>();
             es.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
             DontDestroyOnLoad(es);
+        }
+
+        /// <summary>A full-width zone at a FIXED pixel height, stacked from the TOP of the
+        /// parent (F8-35: bands own their row height instead of splitting the well by
+        /// fraction — a squeezed well can no longer overprint every row into ~13px).</summary>
+        private static RectTransform MakeZonePx(RectTransform parent, string name,
+                                                float topPx, float heightPx)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.offsetMin = new Vector2(0f, -(topPx + heightPx));
+            rt.offsetMax = new Vector2(0f, -topPx);
+            return rt;
         }
 
         private static RectTransform MakeZone(Transform parent, string name,

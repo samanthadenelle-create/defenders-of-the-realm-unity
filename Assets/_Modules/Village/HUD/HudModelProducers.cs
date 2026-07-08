@@ -391,6 +391,7 @@ namespace DeNelle.Village.Hud
             string cls = _abilities != null && !string.IsNullOrEmpty(_abilities.HeroClass) ? _abilities.HeroClass : "knight";
             var slots = new List<AbilitySlotRecord>(4);
             var sb = new System.Text.StringBuilder();
+            List<string> unmapped = null;   // F8-33: equipped slots whose concept resolved NO real art
 
             for (int i = 0; i < 4; i++)
             {
@@ -406,9 +407,17 @@ namespace DeNelle.Village.Hud
                 // rendered blank (0/11). Store a RESOLVABLE concept key (abilityId, then effect) so
                 // UiStyle.Icon(IconKey) downstream draws real RpgUi art; ResolveKey==null (nothing maps)
                 // falls through to def.Effect/def.Id so the SetIcon default-sprite backstop still fills it.
-                string icon = equipped
-                    ? (ConceptIconResolver.ResolveKey(def.Id, def.Effect) ?? def.Effect ?? def.Id)
-                    : null;
+                string resolvedKey = equipped ? ConceptIconResolver.ResolveKey(def.Id, def.Effect) : null;
+                string icon = equipped ? (resolvedKey ?? def.Effect ?? def.Id) : null;
+                // F8-33 (owner: right-side ability icons hard-coded/placeholder): a slot whose
+                // concept did NOT resolve real art renders the SetIcon default backstop — that
+                // fallback must never be silent. Collected here, warned once below on a loadout
+                // signature change (Poll runs 5x/s — warning per poll would spam the log).
+                if (equipped && resolvedKey == null)
+                {
+                    if (unmapped == null) unmapped = new List<string>(2);
+                    unmapped.Add($"{key}='{def.Id ?? def.Name}' (effect='{def.Effect}')");
+                }
                 string accent = equipped ? def.Color : null;
 
                 slots.Add(new AbilitySlotRecord(key, key, name, "", icon, accent, equipped, remaining, total));
@@ -419,6 +428,13 @@ namespace DeNelle.Village.Hud
             string sig = sb.ToString();
             if (sig == _sig) return;
             _sig = sig;
+            // F8-33: name every ability that fell back to placeholder art — once per loadout
+            // change, never per poll. No silent placeholder (CLAUDE.md §12 "no silent failures").
+            if (unmapped != null)
+                for (int i = 0; i < unmapped.Count; i++)
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("HudModel",
+                        "ability icon unmapped — placeholder shown for " + unmapped[i] +
+                        "; add a concept-icons.json entry to bind real art");
             Model.Abilities.SetSlots(slots);
         }
 
