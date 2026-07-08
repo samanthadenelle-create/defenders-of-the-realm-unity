@@ -87,6 +87,22 @@ namespace DeNelle.Village
         /// already covers the whole first run; this lock is the explicit seam.</summary>
         public static bool PressureHeld { get; private set; }
 
+        // ── Probe/observability surface (AutoPilot AssertTutorialArms, F8-29) ──
+        // Read-only: lets the headless probe assert "fresh save => flow is LIVE, not
+        // parked Finished" without reflection. No behaviour hangs off these.
+
+        /// <summary>Current interpreter phase name (probe read — e.g. "Settling", "AwaitCompletion", "Finished").</summary>
+        public string PhaseName => _phase.ToString();
+
+        /// <summary>True when the mandatory chain is parked <c>Finished</c> (returning player,
+        /// already ran this session, or — the F8-29 failure — declined a fresh run).</summary>
+        public bool IsFinished => _phase == Phase.Finished;
+
+        /// <summary>True once a mandatory chain has started this session (the
+        /// <c>s_ranThisSession</c> resume block) — a probe uses this to tell a legitimate
+        /// mid-session Finished from the fresh-boot decline.</summary>
+        public static bool RanThisSession => s_ranThisSession;
+
         private enum Phase { Idle, Settling, WaitTrigger, Running, AwaitCompletion, Finished }
 
         private List<TutorialStepDef> _steps;            // mandatory chain (ordered)

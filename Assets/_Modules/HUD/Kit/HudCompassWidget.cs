@@ -80,6 +80,45 @@ namespace DeNelle.HUD.Kit
         /// <summary>The last-resolved hero (so a provider closure can read it without re-scanning).</summary>
         public Transform Hero => _hero;
 
+        // ── F8-16 PROBE SEAMS (AutoPilot 'AssertCompassMarks') — read-only + one nudge ──
+        // -nographics renders nothing, but the enemy-buffer fill and the pip RECT math both
+        // run in LateUpdate, so a headless probe can assert the data half AND the layout half.
+
+        /// <summary>True when HudKitController wired the enemy provider delegate.</summary>
+        public bool EnemyProviderWired => EnemyProvider != null;
+
+        /// <summary>Enemies currently in the tick buffer (last provider poll).</summary>
+        public int EnemyMarkCount => _enemyBuf.Count;
+
+        /// <summary>Pooled pip GameObjects ACTIVE this frame.</summary>
+        public int ActiveTickCount
+        {
+            get
+            {
+                int n = 0;
+                for (int i = 0; i < _tickPool.Count; i++)
+                    if (_tickPool[i] != null && _tickPool[i].gameObject.activeSelf) n++;
+                return n;
+            }
+        }
+
+        /// <summary>Rect size (sizeDelta) of the first ACTIVE pip — the F8-16 visibility-floor
+        /// assert (width >= 10, height >= 16). False when no pip is active.</summary>
+        public bool TryGetFirstActiveTickSize(out Vector2 size)
+        {
+            for (int i = 0; i < _tickPool.Count; i++)
+            {
+                var t = _tickPool[i];
+                if (t != null && t.gameObject.activeSelf) { size = t.sizeDelta; return true; }
+            }
+            size = Vector2.zero;
+            return false;
+        }
+
+        /// <summary>Force the next LateUpdate to poll the providers immediately (probe
+        /// determinism — skips the remaining 0.25s throttle window; no other effect).</summary>
+        public void ForceProviderPoll() => _pollTimer = 0f;
+
         /// <summary>Kit-builder factory: create the compass under a parent RectTransform
         /// (HudKitController wraps + registers it like every other widget).</summary>
         public static HudCompassWidget Create(Transform parent)

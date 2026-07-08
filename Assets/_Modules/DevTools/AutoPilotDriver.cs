@@ -67,7 +67,7 @@ namespace DeNelle.DevTools
     public sealed class AutoPilotDriver : MonoBehaviour
     {
         // ── tunables (realtime seconds) ──────────────────────────────────────
-        private const float GlobalCapSeconds   = 300f;  // ~5 min hard cap on the whole run (240→300 WO-597: the AssertPopupClose oracle adds a bounded panel-walk; without headroom the cap would abort the late outpost/encounter phases)
+        private const float GlobalCapSeconds   = 420f;  // ~7 min hard cap on the whole run (240→300 WO-597 popup oracle; 300→420 verification probes 2026-07-07: AssertScatterRecords alone waits up to 3 bounded 25s maintain-tick windows — without headroom the cap would abort the late encounter phases)
         private const float WalkToGateTimeout   = 25f;   // per-gate approach
         private const float VendorTimeout       = 20f;   // per-vendor open+actuate+close
         private const float ContractTimeout     = 12f;   // per-vendor-context contract assertion
@@ -228,6 +228,14 @@ namespace DeNelle.DevTools
                 // walk the hero into the entry and assert it WARPS to the destination. Runs first so --scene=Village2
                 // proves the gate crossing headless (owner never the detector).
                 yield return RunPhase("AssertHeroCrossing", AssertHeroCrossing());
+                // F8-29 verification probe: runs EARLY (before any phase mutates the save /
+                // completes tutorial steps) — asserts the sceneLoaded re-arm actually put a
+                // TutorialFlow in the hub and, on a fresh save, that the flow is LIVE.
+                yield return RunPhase("AssertTutorialArms", AssertTutorialArms());
+                // WHITE-PALADIN VERIFICATION PROBE (owner directive: every fixed flow proves its
+                // repaired chain): assert the hero body's PACKAGE albedo audit bound every
+                // material (19/19 post-extraction) AND that the WHITE HERO ROOT Fail stayed dead.
+                yield return RunPhase("AssertHeroHasAlbedo", AssertHeroHasAlbedo());
                 yield return RunPhase("WalkToEachGate", WalkToEachGate());
                 yield return RunPhase("OpenEachVendor", OpenEachVendor());
                 // Runs even if building discovery found 0 vendors: it opens shops DIRECTLY
@@ -250,6 +258,15 @@ namespace DeNelle.DevTools
                 // Save()->Load(), and assert all three survived. Complements the headless
                 // SessionRegression schema round-trip by guarding the LIVE play->save->reload path.
                 yield return RunPhase("AssertSaveRoundTrip", AssertSaveRoundTrip());
+                // P0 (owner 2026-07-07, "armed but zero PlaceConfirm checks"): drive the REAL
+                // tutorial first-tower path end-to-end — Enter build mode, arm tower_ground_archer
+                // via the real Arm path, inject a click through the REAL IBuildInput seam
+                // (BuildModeController.SetInput — the same seam EnsureTouchInput installs through),
+                // then assert PlaceConfirm→StructurePlaced→TutorialSignals 'build.tower_placed'→
+                // (if the tutorial flow is live) step persistence. NO logic bypass: if a placement
+                // gate is stuck, this FAILS and the throttled '[Flow:Build] PlaceLoop BLOCKED at
+                // <gate>' lines name the culprit — that is its purpose.
+                yield return RunPhase("AssertTutorialFirstTower", AssertTutorialFirstTower());
                 // DETERMINISTIC GARRISON-ROSTER DIAG (tickets #2 troll-orientation + #4 magenta): the chaos
                 // walk cannot reliably reach Village2's garrison before the time budget, so the orc/troll
                 // roster never spawns to be inspected. Build the EXACT village2_stronghold roster HERE via the
@@ -257,6 +274,11 @@ namespace DeNelle.DevTools
                 // worldUp trace + TripoMatFix VERIFY lines capture each one. Also warps the hero to prove the
                 // WarpTo path keeps its body (the #2 bare-pill hero-side check). Read-only diagnosis; cleans up.
                 yield return RunPhase("DiagGarrisonRoster", DiagGarrisonRoster());
+                // P0 re-entrancy verification probe: Play(A) -> A's Closed synchronously
+                // chains Play(B) (the tutorial's dialogue.ended shape) -> close B. Proves
+                // the per-VM stale-Closed guard keeps the successor's panel alive and that
+                // hero input releases (the frozen-build-mode root, DialogueView.cs RCA).
+                yield return RunPhase("AssertDialogueChain", AssertDialogueChain());
                 yield return RunPhase("OpenEachHUDPanel", OpenEachHUDPanel());
                 // WO-597 slice 1: the POPUP-CLOSABLE oracle — registry-driven walk of every
                 // PanelId: open -> assert a close affordance exists (the shared master-frame
@@ -265,6 +287,11 @@ namespace DeNelle.DevTools
                 // "POPUP_OPEN_FAILED :: ..." so break-log ranks them; per-panel verdicts go
                 // into autopilot-summary.json (popupClose[]).
                 yield return RunPhase("AssertPopupClose", AssertPopupClose());
+                // F8-30 VERIFICATION PROBE: open the orient editor via the real OpenDevOrient
+                // path, assert the PanelManager 'OrientEditor' registration, then release it
+                // through the EXTERNAL path (PanelManager.CloseAll) that leaked pre-fix. Runs
+                // BEFORE TriggerWave so the arbiter's battle-lock cannot reject the open.
+                yield return RunPhase("AssertOrientModalReleases", AssertOrientModalReleases());
                 // UI-fidelity capture for the DOCK overlays the PanelRouter sweep can't reach
                 // (ClanChat/Leaderboard/Jukebox/HelpMenu open via their own singleton Toggle()/
                 // Open(), not PanelRouter.Open) + a castle-facing moat-ring beauty angle. Both
@@ -295,6 +322,17 @@ namespace DeNelle.DevTools
                 // defense window, and >=2 distinct enemy types appeared. N/A (skipped) in a scene
                 // with no wave loop (e.g. the MainCastle_Hall hub).
                 yield return RunPhase("AssertCombatInvariants", AssertCombatInvariants());
+                // F8-14 verification probe: rides the wave TriggerWave just forced —
+                // asserts the shared combat authority armed, vendors ducked out of sight,
+                // a shop-open verb is BLOCKED (Warn+toast, never a panel), the build-mode
+                // entry gate stays open (read-only), then force-clears the wave and
+                // watches the vendors restore.
+                yield return RunPhase("AssertWaveVendorRules", AssertWaveVendorRules());
+                // F8-16 VERIFICATION PROBE: with live enemies in scene (the wave just ran; a
+                // disposable factory enemy is built if none survived), assert the compass enemy
+                // buffer fills AND >=1 ACTIVE pip meets the 10x16px visibility floor —
+                // -nographics renders nothing but the rect math is fully assertable.
+                yield return RunPhase("AssertCompassMarks", AssertCompassMarks());
                 // AttemptExitCastle deliberately crosses a scene seam, so tell the
                 // UNEXPECTED-CROSS probe this load is intentional (else it would flag
                 // the bot's own exit). Clear it again right after.
@@ -313,6 +351,11 @@ namespace DeNelle.DevTools
                 // UNEXPECTED-CROSS probe stays ARMED (NOT marked intentional): a re-introduced
                 // raid/outpost teleport would trip AutoPilotProbes' scene-load Fail.
                 yield return RunPhase("WalkToOuterWorldOutpost", WalkToOuterWorldOutpost());
+
+                // F8-8 VERIFICATION PROBE: warp into an outer roster zone inside the scatter
+                // band, drive the REAL MaintainLoop, and assert generation -> 85m sight
+                // ACTIVATION -> 115m CULL, with counts + bands in the PASS lines.
+                yield return RunPhase("AssertScatterRecords", AssertScatterRecords());
 
                 // WO-482: drive the overworld-encounter -> isolated BattleArena loop HEADLESSLY via the
                 // REAL trigger path end-to-end (NOT a BeginEncounter bypass). Warp the hero into an
@@ -534,6 +577,428 @@ namespace DeNelle.DevTools
             else PlayerPrefs.SetInt("ff.overworldencounter", prev);
         }
 
+        // =====================================================================
+        //  PHASE: AssertScatterRecords — F8-8 verification probe
+        // ---------------------------------------------------------------------
+        // Proves the repaired scatter chain with captured lines, end-to-end:
+        //   link 2  GenerateScatterRecords produced seeded records across bands
+        //   link 3  a record within the 85m sight radius ACTIVATED a live rep
+        //   link 4  warping past the 115m cull radius CULLED it (record kept)
+        // Drives the REAL production path: EnsureMaintainLoopForTest starts the
+        // same MaintainLoop MaybePopulate would (all its gates still apply every
+        // tick — the new on-change 'MaintainLoop gated: <gate>' line names any
+        // stuck gate). Ring reps are frozen via RepEngageWatcher.PauseAll so a
+        // chase-engage cannot drop a battle mid-probe (battle gates the loop).
+        // =====================================================================
+        private IEnumerator AssertScatterRecords()
+        {
+            const string Tag = "Auto";
+            if (_hero == null) { _lastDetail = "no hero - skipped"; FlowTrace.Warn(Tag, "AssertScatterRecords: no hero - skipped."); yield break; }
+
+            int prevFlag = PlayerPrefs.GetInt("ff.overworldencounter", -1);
+            PlayerPrefs.SetInt("ff.overworldencounter", 1);
+            RepEngageWatcher.PauseAll();   // no roam/chase/engage while the probe holds still
+            Vector3 home = _hero.transform.position;
+            Quaternion homeRot = _hero.transform.rotation;
+
+            var spawner = DeNelle.Village.OverworldEncounterSpawner.Instance;
+            if (spawner == null)
+            {
+                _lastDetail = "OverworldEncounterSpawner.Instance NULL";
+                FlowTrace.Fail(Tag, "AssertScatterRecords: FAIL at link 0 — OverworldEncounterSpawner.Instance was NULL (spawner never bootstrapped).");
+                RestoreScatterProbe(prevFlag);
+                yield break;
+            }
+
+            // link 1 — warp the hero onto navmesh, in an OUTER roster zone, inside the
+            // 60-320m scatter band from world origin (same mechanics as AssertEncounterRealPath).
+            Vector3 landing = Vector3.zero;
+            bool placed = false;
+            float[] radii = { 70f, 90f, 110f };
+            for (int r = 0; r < radii.Length && !placed; r++)
+            {
+                for (int a = 0; a < 8 && !placed; a++)
+                {
+                    float ang = a * 45f * Mathf.Deg2Rad;
+                    Vector3 cand = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * radii[r];
+                    if (!UnityEngine.AI.NavMesh.SamplePosition(cand, out var nh, 12f, UnityEngine.AI.NavMesh.AllAreas)) continue;
+                    float dOrigin = new Vector2(nh.position.x, nh.position.z).magnitude;
+                    if (dOrigin < 60f || dOrigin > 320f) continue;
+                    bool roster = false;
+                    try { roster = DeNelle.Core.World.RegionSpawnTable.HasRoster(DeNelle.Core.World.ZoneManager.GetZone(nh.position)); }
+                    catch (Exception ex) { FlowTrace.Warn(Tag, "AssertScatterRecords: zone check threw " + ex.Message); }
+                    if (!roster) continue;
+                    landing = nh.position;
+                    placed = true;
+                }
+            }
+            if (!placed)
+            {
+                _lastDetail = "no on-mesh roster point in the 60-320m scatter band";
+                FlowTrace.Fail(Tag, "AssertScatterRecords: FAIL at link 1 — no candidate point was on navmesh AND in a roster zone AND inside the 60-320m scatter band (navmesh not baked / zones not defined).");
+                RestoreScatterProbe(prevFlag);
+                yield break;
+            }
+            try { _hero.WarpTo(landing); } catch (Exception ex) { FlowTrace.Warn(Tag, "AssertScatterRecords: WarpTo threw " + ex.Message); }
+            yield return null;
+            FlowTrace.Step(Tag, $"AssertScatterRecords: hero warped into the scatter band @ {landing} ({new Vector2(landing.x, landing.z).magnitude:0}m from origin).");
+
+            // link 2 — GENERATION: ensure the real maintain loop runs, then wait up to
+            // 2 maintain ticks (interval 10s) + margin for GenerateScatterRecords.
+            spawner.EnsureMaintainLoopForTest();
+            float w = 0f;
+            while (w < 25f && spawner.GeneratedScatterCount == 0) { w += Time.unscaledDeltaTime; yield return null; }
+            if (spawner.GeneratedScatterCount == 0)
+            {
+                _lastDetail = "0 scatter records after 2 maintain ticks";
+                FlowTrace.Fail(Tag, "AssertScatterRecords: FAIL at link 2 — GenerateScatterRecords produced 0 records within 2 maintain ticks (~25s). Read the 'MaintainLoop gated: <gate>' line in this run — it names the stuck gate (else generation found no valid ground).");
+                RestoreScatterProbe(prevFlag);
+                _hero.WarpTo(home, homeRot);
+                yield break;
+            }
+            int nearC = 0, midC = 0, farC = 0;
+            for (int i = 0; i < spawner.GeneratedScatterCount; i++)
+                if (spawner.TryGetScatterAnchor(i, out _, out int b)) { if (b == 0) nearC++; else if (b == 1) midC++; else farC++; }
+            FlowTrace.Step(Tag, $"AssertScatterRecords: link 2 PASS — {spawner.GeneratedScatterCount} scatter records generated (bands: near[60-120m]={nearC} mid[120-200m]={midC} far[200-320m]={farC}).");
+
+            // link 3 — ACTIVATION: stand on the nearest record's anchor (well inside the
+            // 85m sight radius) and wait up to 2 maintain ticks for the live rep.
+            int nearest = -1; float bestD = float.MaxValue; Vector3 nearestAnchor = Vector3.zero;
+            for (int i = 0; i < spawner.GeneratedScatterCount; i++)
+                if (spawner.TryGetScatterAnchor(i, out var anc, out _))
+                {
+                    float d = Vector3.Distance(_hero.transform.position, anc);
+                    if (d < bestD) { bestD = d; nearest = i; nearestAnchor = anc; }
+                }
+            if (bestD > 40f && UnityEngine.AI.NavMesh.SamplePosition(nearestAnchor, out var ah, 12f, UnityEngine.AI.NavMesh.AllAreas))
+            {
+                try { _hero.WarpTo(ah.position); } catch (Exception ex) { FlowTrace.Warn(Tag, "AssertScatterRecords: WarpTo(anchor) threw " + ex.Message); }
+                yield return null;
+            }
+            float heroToRec = Vector3.Distance(_hero.transform.position, nearestAnchor);
+            int actBefore = spawner.ScatterActivations;
+            w = 0f;
+            while (w < 25f && spawner.ScatterActivations == actBefore && spawner.LiveScatterCount == 0)
+            { w += Time.unscaledDeltaTime; yield return null; }
+            bool activated = spawner.ScatterActivations > actBefore || spawner.LiveScatterCount > 0;
+            if (!activated)
+            {
+                _lastDetail = $"record #{nearest} at {heroToRec:0}m never ACTIVATED";
+                FlowTrace.Fail(Tag, $"AssertScatterRecords: FAIL at link 3 — record #{nearest} with the hero {heroToRec:0}m away (< 85m sight) never ACTIVATED within 2 maintain ticks. See the 'scatter record ... NO complete path' / 'MaintainLoop gated' lines in this run — they name the dead link (reachability / live cap / gated tick).");
+                RestoreScatterProbe(prevFlag);
+                _hero.WarpTo(home, homeRot);
+                yield break;
+            }
+            FlowTrace.Step(Tag, $"AssertScatterRecords: link 3 PASS — scatter ACTIVATED (activations +{spawner.ScatterActivations - actBefore}, live={spawner.LiveScatterCount}) with the hero {heroToRec:0}m from record #{nearest} (sight radius 85m).");
+
+            // link 4 — CULL: warp >=150m away (another roster-valid record anchor when one
+            // exists, else a sampled roster point at ~300m) and wait for the cull trace.
+            Vector3 farPoint = Vector3.zero;
+            bool haveFar = false;
+            for (int i = 0; i < spawner.GeneratedScatterCount && !haveFar; i++)
+                if (spawner.TryGetScatterAnchor(i, out var anc, out _) && Vector3.Distance(anc, nearestAnchor) >= 150f)
+                { farPoint = anc; haveFar = true; }
+            for (int a = 0; a < 8 && !haveFar; a++)
+            {
+                float ang = a * 45f * Mathf.Deg2Rad;
+                Vector3 cand = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * 300f;
+                if (Vector3.Distance(cand, nearestAnchor) < 150f) continue;
+                if (!UnityEngine.AI.NavMesh.SamplePosition(cand, out var nh2, 20f, UnityEngine.AI.NavMesh.AllAreas)) continue;
+                bool roster = false;
+                try { roster = DeNelle.Core.World.RegionSpawnTable.HasRoster(DeNelle.Core.World.ZoneManager.GetZone(nh2.position)); }
+                catch (Exception ex) { FlowTrace.Warn(Tag, "AssertScatterRecords: far zone check threw " + ex.Message); }
+                if (!roster) continue;
+                farPoint = nh2.position;
+                haveFar = true;
+            }
+            if (!haveFar)
+            {
+                _lastDetail = $"gen={spawner.GeneratedScatterCount} act OK, cull SKIPPED (no far roster point)";
+                FlowTrace.Warn(Tag, "AssertScatterRecords: cull leg SKIPPED — no roster-valid navmesh point >= 150m from the activated record (world/navmesh too small for the cull assert).");
+            }
+            else
+            {
+                int cullBefore = spawner.ScatterCulls;
+                try { _hero.WarpTo(farPoint); } catch (Exception ex) { FlowTrace.Warn(Tag, "AssertScatterRecords: WarpTo(far) threw " + ex.Message); }
+                yield return null;
+                float away = Vector3.Distance(_hero.transform.position, nearestAnchor);
+                w = 0f;
+                while (w < 25f && spawner.ScatterCulls == cullBefore) { w += Time.unscaledDeltaTime; yield return null; }
+                if (spawner.ScatterCulls == cullBefore)
+                {
+                    _lastDetail = "cull trace never fired after the 150m warp";
+                    FlowTrace.Fail(Tag, $"AssertScatterRecords: FAIL at link 4 — hero warped {away:0}m from the live record (> cull radius 115m) but no scatter CULL fired within 2 maintain ticks (cull pass in MaintainScatter dead or the tick gated — see 'MaintainLoop gated').");
+                }
+                else
+                {
+                    _lastDetail = $"PASS gen={spawner.GeneratedScatterCount} (near {nearC}/mid {midC}/far {farC}) act+{spawner.ScatterActivations - actBefore} cull+{spawner.ScatterCulls - cullBefore}";
+                    FlowTrace.Step(Tag, $"AssertScatterRecords: PASS — {spawner.GeneratedScatterCount} records generated (near {nearC}, mid {midC}, far {farC}), ACTIVATED at {heroToRec:0}m (< 85m sight), CULLED at {away:0}m (> 115m; culls +{spawner.ScatterCulls - cullBefore}).");
+                }
+            }
+
+            _hero.WarpTo(home, homeRot);
+            RestoreScatterProbe(prevFlag);
+        }
+
+        // Shared probe cleanup: unfreeze the reps + restore the encounter flag.
+        private static void RestoreScatterProbe(int prevFlag)
+        {
+            RepEngageWatcher.ResumeAll();
+            RestoreEncounterFlag(prevFlag);
+        }
+
+        // =====================================================================
+        //  PHASE: AssertCompassMarks — F8-16 verification probe
+        // ---------------------------------------------------------------------
+        // With >=1 live Enemy (a disposable factory orc is built if the wave left
+        // none), asserts BOTH halves of the F8-16 fix on the HUD-kit compass:
+        //   data half    — the enemy buffer fills (provider wired + resolves)
+        //   layout half  — >=1 ACTIVE pip whose rect meets the 10x16px visibility
+        //                  floor (-nographics renders nothing; rect math asserts).
+        // =====================================================================
+        private IEnumerator AssertCompassMarks()
+        {
+            const string Tag = "Auto";
+            var widget = UnityEngine.Object.FindAnyObjectByType<DeNelle.HUD.Kit.HudCompassWidget>(FindObjectsInactive.Include);
+            if (widget == null)
+            {
+                bool kitAlive = UnityEngine.Object.FindAnyObjectByType<DeNelle.HUD.Kit.HudKitController>(FindObjectsInactive.Include) != null;
+                if (kitAlive)
+                {
+                    _lastDetail = "HudKitController alive but NO compass widget";
+                    FlowTrace.Fail(Tag, "AssertCompassMarks: FAIL at link 0 — HudKitController is alive but no HudCompassWidget exists (kit build / hud-areas occupancy row broken).");
+                }
+                else
+                {
+                    _lastDetail = "no HUD kit this run - skipped";
+                    FlowTrace.Warn(Tag, "AssertCompassMarks: no HudKitController/compass in this scene — skipped.");
+                }
+                yield break;
+            }
+
+            // Guarantee a live Enemy for the buffer (the wave usually leaves some).
+            Enemy diag = null;
+            bool anyEnemy = false;
+            foreach (var e in UnityEngine.Object.FindObjectsByType<Enemy>())
+                if (e != null && e.gameObject.activeInHierarchy) { anyEnemy = true; break; }
+            if (!anyEnemy)
+            {
+                Vector3 want = (_hero != null ? _hero.transform.position : Vector3.zero) + new Vector3(4f, 0f, 6f);
+                if (UnityEngine.AI.NavMesh.SamplePosition(want, out var hit, 10f, UnityEngine.AI.NavMesh.AllAreas)) want = hit.position;
+                try
+                {
+                    var def = DeNelle.Village.World.Camps.GarrisonStatBlocks.BuildTypedDef("orc-raider", 1);
+                    diag = EnemyFactory.Build(def, want, Quaternion.identity, null);
+                    if (diag != null) { diag.gameObject.name = "CompassProbeEnemy"; FlowTrace.Step(Tag, "AssertCompassMarks: no live Enemy — built disposable 'CompassProbeEnemy' via the canonical factory."); }
+                }
+                catch (Exception ex) { FlowTrace.Warn(Tag, "AssertCompassMarks: fallback enemy build threw " + ex.Message); }
+                yield return null;
+            }
+
+            if (!widget.EnemyProviderWired)
+            {
+                _lastDetail = "EnemyProvider NULL";
+                FlowTrace.Fail(Tag, "AssertCompassMarks: FAIL at link 1 — the compass EnemyProvider delegate is NOT wired (HudKitController provider wiring broken) — the buffer can never fill (data-empty half).");
+                if (diag != null) UnityEngine.Object.Destroy(diag.gameObject);
+                yield break;
+            }
+
+            // Force provider polls + let LateUpdate run the buffer + rect math.
+            float w = 0f;
+            widget.ForceProviderPoll();
+            while (w < 3f && widget.EnemyMarkCount == 0) { w += Time.unscaledDeltaTime; widget.ForceProviderPoll(); yield return null; }
+
+            int live = 0;
+            foreach (var e in UnityEngine.Object.FindObjectsByType<Enemy>())
+                if (e != null && e.gameObject.activeInHierarchy) live++;
+
+            if (widget.EnemyMarkCount == 0)
+            {
+                _lastDetail = $"buffer EMPTY with {live} live Enemy";
+                FlowTrace.Fail(Tag, $"AssertCompassMarks: FAIL at link 2 — compass enemy buffer EMPTY while {live} live Enemy exist (provider/type resolution — the data-empty half of F8-16).");
+                if (diag != null) UnityEngine.Object.Destroy(diag.gameObject);
+                yield break;
+            }
+
+            w = 0f;
+            while (w < 3f && widget.ActiveTickCount == 0) { w += Time.unscaledDeltaTime; yield return null; }
+            bool sized = widget.TryGetFirstActiveTickSize(out Vector2 pip);
+            if (widget.ActiveTickCount == 0 || !sized)
+            {
+                _lastDetail = $"buffer={widget.EnemyMarkCount} but 0 ACTIVE pips";
+                FlowTrace.Fail(Tag, $"AssertCompassMarks: FAIL at link 3 — buffer holds {widget.EnemyMarkCount} enemies but NO pip GameObject went ACTIVE (built-but-invisible half — UpdateEnemyTicks hero/tick-layer path).");
+            }
+            else if (pip.x < 10f || pip.y < 16f)
+            {
+                _lastDetail = $"pip {pip.x:0}x{pip.y:0}px below the 10x16 floor";
+                FlowTrace.Fail(Tag, $"AssertCompassMarks: FAIL at link 4 — active pip rect {pip.x:0}x{pip.y:0}px is below the 10x16 visibility floor (the F8-16 sub-visible-sliver regression is back).");
+            }
+            else
+            {
+                _lastDetail = $"PASS buffer={widget.EnemyMarkCount} pips={widget.ActiveTickCount} rect={pip.x:0}x{pip.y:0}px";
+                FlowTrace.Step(Tag, $"AssertCompassMarks: PASS — enemy buffer={widget.EnemyMarkCount} (live Enemy={live}), active pips={widget.ActiveTickCount}, first pip rect {pip.x:0}x{pip.y:0}px >= the 10x16 visibility floor.");
+            }
+
+            if (diag != null) UnityEngine.Object.Destroy(diag.gameObject);
+        }
+
+        // =====================================================================
+        //  PHASE: AssertHeroHasAlbedo — white-Paladin verification probe
+        // ---------------------------------------------------------------------
+        // Asserts the WHITE-HERO ASSET FIX chain held this run: the PACKAGE albedo
+        // audit bound EVERY material (19/19 once ExtractKnightHeroPackage remapped
+        // the embedded PNGs) AND the 'WHITE HERO ROOT' Fail did NOT fire. The check
+        // ordering was verified from code: the Fail lives inside AuditPackageAlbedo,
+        // which runs AFTER ColorPackageBodyIfNullAlbedo (the binding/tint), and it
+        // early-outs when a texture OR tint is bound — no reorder was needed; this
+        // probe pins that ordering so a regression is a named Fail, not a false alarm.
+        // =====================================================================
+        private IEnumerator AssertHeroHasAlbedo()
+        {
+            const string Tag = "Auto";
+            if (_hero == null) { _lastDetail = "no hero - skipped"; FlowTrace.Warn(Tag, "AssertHeroHasAlbedo: no hero - skipped."); yield break; }
+
+            // The build-time audit fires inside HeroBodySwapper on the package/KnightV3
+            // paths — give a late body swap a moment, else run the SAME read-only audit
+            // on the live body ourselves.
+            float w = 0f;
+            while (w < 5f && !HeroBodySwapper.LastAlbedoAuditRan) { w += Time.unscaledDeltaTime; yield return null; }
+            if (!HeroBodySwapper.LastAlbedoAuditRan)
+            {
+                Transform bodyT = _hero.transform.Find("HeroBody");
+                GameObject target = bodyT != null ? bodyT.gameObject : _hero.gameObject;
+                FlowTrace.Step(Tag, $"AssertHeroHasAlbedo: build-time audit never ran (non-package body path this run) — running the read-only audit on '{target.name}' now.");
+                try { HeroBodySwapper.AuditPackageAlbedo(target); }
+                catch (Exception ex) { FlowTrace.Warn(Tag, "AssertHeroHasAlbedo: audit threw " + ex.Message); }
+            }
+
+            int bound = HeroBodySwapper.LastAlbedoAuditBound;
+            int total = HeroBodySwapper.LastAlbedoAuditTotal;
+            bool white = HeroBodySwapper.LastAuditWhiteHeroRootFired;
+
+            if (total <= 0)
+            {
+                _lastDetail = "audit scanned 0 materials";
+                FlowTrace.Fail(Tag, "AssertHeroHasAlbedo: FAIL — the albedo audit scanned 0 materials on the hero body (no renderers/materials: the body build itself broke upstream — see the [Flow:HeroBody] lines this run).");
+                yield break;
+            }
+            if (bound < total)
+            {
+                _lastDetail = $"albedo {bound}/{total} bound";
+                FlowTrace.Fail(Tag, $"AssertHeroHasAlbedo: FAIL — PACKAGE albedo audit {bound}/{total}: {total - bound} material(s) still textureless (TripoAssetPostprocessor.ExtractKnightHeroPackage extraction/remap did not bind — the white-Paladin class).");
+            }
+            else
+            {
+                FlowTrace.Step(Tag, $"AssertHeroHasAlbedo: PASS — PACKAGE albedo audit {bound}/{total} (every material carries a bound _BaseMap/_MainTex).");
+            }
+
+            if (white)
+            {
+                _lastDetail = (_lastDetail ?? "") + " + WHITE HERO ROOT fired";
+                FlowTrace.Fail(Tag, "AssertHeroHasAlbedo: FAIL — the 'WHITE HERO ROOT' Fail fired this run. It runs AFTER ColorPackageBodyIfNullAlbedo and only when texture AND tint are BOTH absent, so this is a genuine white hero — not the retired stale-ordering false alarm.");
+            }
+            else
+            {
+                FlowTrace.Step(Tag, "AssertHeroHasAlbedo: PASS — 'WHITE HERO ROOT' did NOT fire this run (check ordered after the tint/texture binding; early-outs when either is bound).");
+                if (bound == total) _lastDetail = $"PASS albedo {bound}/{total}, no WHITE HERO ROOT";
+            }
+        }
+
+        // =====================================================================
+        //  PHASE: AssertOrientModalReleases — F8-30 verification probe
+        // ---------------------------------------------------------------------
+        // Drives the REAL dev-orient open path (the same OpenDevOrient call
+        // BuildPaletteUI's OnOrientRequested / BuildModeController.
+        // OpenOrientEditorForArmed land on, with a real catalog id + loadable
+        // prefab), asserts the F8-30 PanelManager 'OrientEditor' registration,
+        // then releases it via the EXTERNAL path that leaked pre-fix —
+        // PanelManager.CloseAll — and asserts the full release: IsOpen=false +
+        // AnyOpen=false (BuildModeController's placement freeze reads IsOpen, so
+        // the build freeze releases with it). The Orient open/close FlowTrace
+        // lines from the F8-30 fix are the paired evidence.
+        // =====================================================================
+        private IEnumerator AssertOrientModalReleases()
+        {
+            const string Tag = "Auto";
+
+            // Deterministic baseline: no other modal may hold the arbiter slot.
+            PanelManager.CloseAll();
+            yield return null;
+
+            // A REAL catalog id with a Resources-loadable visual prefab (prefer the
+            // tutorial tower; else first loadable entry across every CatalogType).
+            string id = null; GameObject prefab = null; string display = null;
+            var candidates = new List<DeNelle.Core.Catalog.CatalogEntry>();
+            var preferred = DeNelle.Core.Catalog.CatalogRegistry.Get("tower_ground_archer");
+            if (preferred != null) candidates.Add(preferred);
+            foreach (DeNelle.Core.Catalog.CatalogType t in Enum.GetValues(typeof(DeNelle.Core.Catalog.CatalogType)))
+            {
+                var list = DeNelle.Core.Catalog.CatalogRegistry.OfType(t);
+                if (list == null) continue;
+                foreach (var e in list) if (e != null) candidates.Add(e);
+            }
+            foreach (var e in candidates)
+            {
+                if (string.IsNullOrEmpty(e.id) || string.IsNullOrEmpty(e.visualPrefabPath)) continue;
+                var p = Resources.Load<GameObject>(e.visualPrefabPath);
+                if (p == null) continue;
+                id = e.id; prefab = p;
+                display = string.IsNullOrEmpty(e.displayName) ? e.id : e.displayName;
+                break;
+            }
+            if (id == null)
+            {
+                _lastDetail = "no catalog entry with a loadable visual prefab";
+                FlowTrace.Fail(Tag, "AssertOrientModalReleases: FAIL at link 0 — no CatalogRegistry entry has a Resources-loadable visualPrefabPath; cannot drive OpenDevOrient with a real id.");
+                yield break;
+            }
+
+            var menu = UnityEngine.Object.FindAnyObjectByType<TowerPlacementRotateMenu>(FindObjectsInactive.Include);
+            bool created = false;
+            if (menu == null)
+            {
+                menu = new GameObject("DevOrientMenu(Probe)").AddComponent<TowerPlacementRotateMenu>();
+                created = true;
+            }
+            menu.OpenDevOrient(id, prefab, display);
+            yield return null;
+
+            if (!menu.IsOpen)
+            {
+                _lastDetail = $"OpenDevOrient('{id}') did not open";
+                FlowTrace.Fail(Tag, $"AssertOrientModalReleases: FAIL at link 1 — OpenDevOrient('{id}') left IsOpen=false (open rejected or threw — battle-lock, or ShowPanel never ran).");
+                if (created) UnityEngine.Object.Destroy(menu.gameObject);
+                yield break;
+            }
+            if (!(PanelManager.AnyOpen && PanelManager.OpenPanelName == "OrientEditor"))
+            {
+                _lastDetail = $"open but arbiter slot='{PanelManager.OpenPanelName ?? "<none>"}'";
+                FlowTrace.Fail(Tag, $"AssertOrientModalReleases: FAIL at link 2 — orient editor IsOpen=true but PanelManager does not hold 'OrientEditor' (slot='{PanelManager.OpenPanelName ?? "<none>"}') — the F8-30 registration regressed (external closers can no longer see it).");
+                menu.Close();
+                if (created) UnityEngine.Object.Destroy(menu.gameObject);
+                yield break;
+            }
+            FlowTrace.Step(Tag, $"AssertOrientModalReleases: links 1+2 PASS — OpenDevOrient('{id}') open AND PanelManager slot 'OrientEditor' taken (the F8-30 registration).");
+
+            // link 3 — the EXTERNAL release path that never worked pre-F8-30.
+            PanelManager.CloseAll();
+            yield return null;
+
+            if (!menu.IsOpen && !PanelManager.AnyOpen)
+            {
+                _lastDetail = $"PASS open+registered+released via CloseAll ('{id}')";
+                FlowTrace.Step(Tag, "AssertOrientModalReleases: PASS — PanelManager.CloseAll released the orient editor (IsOpen=false, AnyOpen=false; BuildModeController's placement-freeze gate reads IsOpen, so the build freeze released with it).");
+            }
+            else
+            {
+                _lastDetail = $"CloseAll leak: IsOpen={menu.IsOpen} AnyOpen={PanelManager.AnyOpen}";
+                FlowTrace.Fail(Tag, $"AssertOrientModalReleases: FAIL at link 3 — after PanelManager.CloseAll the modal leaked (IsOpen={menu.IsOpen}, AnyOpen={PanelManager.AnyOpen}, slot='{PanelManager.OpenPanelName ?? "<none>"}') — the F8-30 external-release click-lock is back.");
+                menu.Close();
+            }
+
+            if (created) UnityEngine.Object.Destroy(menu.gameObject);
+        }
+
         // Background guard: dismiss any Yarn dialogue that auto-starts, so the bot never
         // stalls inside a conversation it cannot read headless. Runs ~1/sec for the bot's
         // lifetime (the host GameObject is destroyed on quit, ending this loop).
@@ -594,6 +1059,230 @@ namespace DeNelle.DevTools
             foreach (var t in _phaseFilter)
                 if (name.IndexOf(t.Trim(), StringComparison.OrdinalIgnoreCase) >= 0) return true;
             return false;
+        }
+
+        // =====================================================================
+        //  AssertTutorialFirstTower — P0 real-input build-placement probe
+        // ---------------------------------------------------------------------
+        // Owner 2026-07-07 (captured symptom: '[Flow:Build] Armed placement for ...'
+        // x5 but ZERO '[Flow:Build] PlaceConfirm check' lines): drive the REAL
+        // tutorial first-tower evaluation path headless, with NO logic bypass —
+        //   Enter() -> ArmById('tower_ground_archer') (the same Arm() a palette tap
+        //   fires) -> inject one click/frame through the REAL IBuildInput seam
+        //   (SetInput — the exact seam EnsureTouchInput installs the touch driver
+        //   through) -> assert each link and NAME the one that broke:
+        //     link 1  the place loop POLLS the input (if not: a gate is stuck —
+        //             the throttled 'PlaceLoop BLOCKED at <gate>' lines name it)
+        //     link 2  a consumed click COMMITS (StructurePlaced fires)
+        //     link 3  TutorialSignals 'build.tower_placed' raises
+        //     link 4  (if a TutorialFlow is live) a tutorial_v2 step persists
+        // If the real path is blocked, this probe FAILS — that is its purpose.
+        // =====================================================================
+
+        /// <summary>
+        /// Deterministic <see cref="IBuildInput"/> for the probe: one injected click is
+        /// latched and consumed on the first PlaceOrSelect read (mirrors the touch driver's
+        /// single-frame latch). Polls/Consumed counters split "loop never evaluated input"
+        /// (gate stuck upstream) from "click read but never committed" (suppress/invalid).
+        /// </summary>
+        private sealed class BotBuildInput : IBuildInput
+        {
+            private Vector2 _point;
+            private bool _pending;
+            /// <summary>How many times the place loop read PlaceOrSelect (0 = loop never evaluated).</summary>
+            public int Polls { get; private set; }
+            /// <summary>How many injected clicks were actually consumed by the loop.</summary>
+            public int Consumed { get; private set; }
+            public void Click(Vector2 screenPoint) { _point = screenPoint; _pending = true; }
+            public Vector2 ScreenPoint => _point;
+            public bool PlaceOrSelect
+            {
+                get
+                {
+                    Polls++;
+                    if (!_pending) return false;
+                    _pending = false;
+                    Consumed++;
+                    return true;
+                }
+            }
+            public bool Cancel => false;
+            public bool Rotate => false;
+        }
+
+        /// <summary>Count persisted mandatory tutorial-step completions ("tutorial_v2:*" keys).</summary>
+        private static int CountTutorialV2Seen()
+        {
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            var st = svc != null ? svc.State : null;
+            if (st == null || st.SeenTutorials == null) return 0;
+            int n = 0;
+            foreach (var kv in st.SeenTutorials)
+                if (kv.Value && kv.Key != null && kv.Key.StartsWith("tutorial_v2:", StringComparison.OrdinalIgnoreCase)) n++;
+            return n;
+        }
+
+        /// <summary>The camera actually rendering to screen (highest depth, no RT) — same rule
+        /// BuildModeController.ActiveScreenCamera uses, so the probe projects through the view
+        /// the placement ray will cast from.</summary>
+        private static Camera HighestDepthScreenCamera()
+        {
+            Camera best = null;
+            foreach (var c in Camera.allCameras)
+            {
+                if (c == null || !c.enabled || c.targetTexture != null) continue;
+                if (best == null || c.depth > best.depth) best = c;
+            }
+            return best != null ? best : Camera.main;
+        }
+
+        private IEnumerator AssertTutorialFirstTower()
+        {
+            const string Tag = "Auto";
+            const string TowerId = "tower_ground_archer";
+
+            // 0) Snapshot the tutorial persistence BEFORE the drive (link-4 baseline).
+            int seenBefore = CountTutorialV2Seen();
+            bool tutorialLive = FindAnyObjectByType<TutorialFlow>() != null;
+
+            // 1) ENTER build mode through the real path (real Enter — no state poking).
+            var ctrl = BuildModeController.EnsureExists();
+            if (ctrl.IsActive) { ctrl.Exit(); yield return null; }
+            ctrl.Enter();
+            yield return null; yield return null;   // let Enter settle (camera pull, palette, grid)
+            if (!ctrl.IsActive)
+            {
+                _lastDetail = "Enter() refused — build mode never activated";
+                FlowTrace.Fail(Tag, "AssertTutorialFirstTower: BuildModeController.Enter() did not activate (enemy-owned scene / entry gate) — link 0 BROKEN before placement could even arm.");
+                yield break;
+            }
+
+            // 2) Fund the cost gate (test setup, not a bypass — the gate still runs), then ARM
+            //    through the SAME Arm() path a palette-card tap fires.
+            var entry = DeNelle.Core.Catalog.CatalogRegistry.Get(TowerId);
+            if (entry == null)
+            {
+                _lastDetail = "'" + TowerId + "' not in CatalogRegistry";
+                FlowTrace.Fail(Tag, "AssertTutorialFirstTower: '" + TowerId + "' is not in CatalogRegistry — the tutorial first-tower entry is missing from the catalog.");
+                ctrl.Exit();
+                yield break;
+            }
+            var cost = BuildModeController.CostFor(entry);
+            var econ = EconomyService.Instance;
+            if (econ != null) econ.Grant(BuildModeController.ToEconomy(cost));
+            else DeNelle.Core.State.GameStateService.Instance?.AddCrystals(cost.crystals);
+
+            if (!ctrl.ArmById(TowerId))
+            {
+                _lastDetail = "ArmById failed";
+                FlowTrace.Fail(Tag, "AssertTutorialFirstTower: ArmById('" + TowerId + "') returned false — arming path broken.");
+                ctrl.Exit();
+                yield break;
+            }
+
+            // 3) Swap the bot input in through the REAL seam (SetInput — same seam
+            //    EnsureTouchInput installs LeanTouchBuildDriver through).
+            var bot = new BotBuildInput();
+            ctrl.SetInput(bot);
+
+            bool placedFired = false;
+            string placedId = null;
+            Action<string> onPlaced = id => { placedFired = true; placedId = id; };
+            BuildModeController.StructurePlaced += onPlaced;
+            DeNelle.Core.Tutorial.TutorialSignals.Clear(DeNelle.Core.Tutorial.TutorialSignals.TowerPlaced);
+
+            try
+            {
+                // 4) Inject clicks at candidate ground points: grid cells around the map centre,
+                //    projected through the live overview camera (the same view the ground ray
+                //    casts from). Several candidates so one occupied/gate-lane cell can't fail
+                //    the probe for the wrong reason.
+                var cam = HighestDepthScreenCamera();
+                var grid = PlacementGrid.Instance;
+                if (cam == null || grid == null)
+                {
+                    _lastDetail = "cam=" + (cam != null) + " grid=" + (grid != null);
+                    FlowTrace.Fail(Tag, "AssertTutorialFirstTower: " + (cam == null ? "no screen camera" : "no PlacementGrid") + " after Enter() — cannot project a ground click.");
+                    yield break;
+                }
+                var cellOffsets = new Vector2Int[]
+                {
+                    new Vector2Int(3, 3), new Vector2Int(-4, 2), new Vector2Int(5, -3),
+                    new Vector2Int(-5, -5), new Vector2Int(0, 6), new Vector2Int(6, 0),
+                    new Vector2Int(-6, 4), new Vector2Int(2, -6),
+                };
+                var centre = new Vector2Int(grid.gridWidth / 2, grid.gridHeight / 2);
+                foreach (var off in cellOffsets)
+                {
+                    if (placedFired) break;
+                    Vector3 world = grid.CellToWorld(centre + off);
+                    Vector3 sp = cam.WorldToScreenPoint(world);
+                    if (sp.z <= 0f) continue;   // behind the camera — skip
+                    bot.Click(new Vector2(sp.x, sp.y));
+                    FlowTrace.Step(Tag, "AssertTutorialFirstTower: injected click at screen (" + sp.x.ToString("F0") + "," + sp.y.ToString("F0") + ") for cell " + (centre + off) + ".");
+                    float w = 0f;
+                    while (w < 1.2f && !placedFired) { w += Time.deltaTime; yield return null; }
+                }
+
+                // 5) Verdict — name the broken link. The bot's counters split the failure modes.
+                if (!placedFired)
+                {
+                    if (bot.Polls == 0)
+                    {
+                        _lastDetail = "input seam NEVER polled — a gate upstream blocks the place loop";
+                        FlowTrace.Fail(Tag, "AssertTutorialFirstTower: FAIL at link 1 — the place loop NEVER polled IBuildInput.PlaceOrSelect while armed. A gate between 'armed' and PlaceConfirm is blocking: read the throttled '[Flow:Build] PlaceLoop BLOCKED at <gate>' lines in this run — they name it.");
+                    }
+                    else if (bot.Consumed == 0)
+                    {
+                        _lastDetail = "polled " + bot.Polls + "x but the click latch was never consumed";
+                        FlowTrace.Fail(Tag, "AssertTutorialFirstTower: FAIL at link 1 — input polled " + bot.Polls + "x but no injected click was ever consumed (latch/frame-ordering fault in the input seam).");
+                    }
+                    else
+                    {
+                        _lastDetail = "clicks consumed (" + bot.Consumed + ") but no StructurePlaced";
+                        FlowTrace.Fail(Tag, "AssertTutorialFirstTower: FAIL at link 2 — " + bot.Consumed + " click(s) reached the PlaceConfirm evaluation but NO placement committed at any candidate point (suppressed by joystick-zone/pickable-UI, rejected invalid, or Place() aborted) — see the '[Flow:Build] PlaceConfirm' / reject lines in this run.");
+                    }
+                    yield break;
+                }
+                FlowTrace.Step(Tag, "AssertTutorialFirstTower: links 1+2 PASS — PlaceConfirm CONFIRMED, placement committed, StructurePlaced('" + placedId + "') fired.");
+
+                // 6) Link 3 — the tutorial signal bus.
+                float sw = 0f;
+                while (sw < 2f && !DeNelle.Core.Tutorial.TutorialSignals.HasFired(DeNelle.Core.Tutorial.TutorialSignals.TowerPlaced))
+                { sw += Time.deltaTime; yield return null; }
+                if (!DeNelle.Core.Tutorial.TutorialSignals.HasFired(DeNelle.Core.Tutorial.TutorialSignals.TowerPlaced))
+                {
+                    _lastDetail = "StructurePlaced fired but 'build.tower_placed' never raised";
+                    FlowTrace.Fail(Tag, "AssertTutorialFirstTower: FAIL at link 3 — StructurePlaced fired but TutorialSignals 'build.tower_placed' never raised within 2s (TutorialSignalAdapters not alive / not subscribed to the LIVE placement event).");
+                    yield break;
+                }
+                FlowTrace.Step(Tag, "AssertTutorialFirstTower: link 3 PASS — TutorialSignals 'build.tower_placed' raised.");
+
+                // 7) Link 4 — STEP-COMPLETE, only assertable when a TutorialFlow is live. Soft
+                //    (Warn, not Fail) because a mid-run bot's flow is rarely parked ON the build
+                //    step; a Fail here would be noise, while the Warn still surfaces a dead
+                //    interpreter when the owner's repro IS on that step.
+                if (tutorialLive)
+                {
+                    float cw = 0f;
+                    while (cw < 3f && CountTutorialV2Seen() <= seenBefore) { cw += Time.deltaTime; yield return null; }
+                    if (CountTutorialV2Seen() > seenBefore)
+                        FlowTrace.Step(Tag, "AssertTutorialFirstTower: link 4 PASS — a tutorial_v2 step completed (persisted) after the signal.");
+                    else
+                        FlowTrace.Warn(Tag, "AssertTutorialFirstTower: link 4 SOFT — signal raised but no tutorial_v2 step persisted within 3s (flow not awaiting the build step in this run, or the interpreter did not consume the signal).");
+                }
+                else
+                    FlowTrace.Step(Tag, "AssertTutorialFirstTower: link 4 skipped — no live TutorialFlow this run.");
+
+                _lastDetail = "PASS — placed '" + placedId + "', signal raised (polls=" + bot.Polls + ", clicks=" + bot.Consumed + ")";
+                FlowTrace.Step(Tag, "AssertTutorialFirstTower: PASS — the real tutorial first-tower chain is intact end-to-end.");
+            }
+            finally
+            {
+                BuildModeController.StructurePlaced -= onPlaced;
+                ctrl.SetInput(null);           // restore the default DesktopBuildInput
+                if (ctrl.IsActive) ctrl.Exit();
+            }
         }
 
         private IEnumerator RunPhase(string name, IEnumerator phase, bool abortIfFailed = false)
@@ -869,6 +1558,7 @@ namespace DeNelle.DevTools
                 case "AssertEconomyDeduct": return EconomyDeductTimeout;
                 case "AssertEquip":       return EquipTimeout;
                 case "AssertSaveRoundTrip": return 20f;       // WO-452 D — save/load round-trip
+                case "AssertTutorialFirstTower": return 45f;  // P0 real-input build-placement probe (enter + arm + 8 candidate clicks + signal waits)
                 case "AssertCombatInvariants": return 20f;    // WO-452 C — ~12s defense window + slack
                 case "OpenEachHUDPanel":  return HudPanelTimeout * 8f;
                 case "AssertPopupClose":  return 100f;  // WO-597: ~13 registered ids x (settle + bounded 3s close-wait worst case) + the dialogue-card row
@@ -877,6 +1567,13 @@ namespace DeNelle.DevTools
                 case "CaptureMoatRing":   return 40f;    // 5 shots (overview + 4 cardinal seams) x (spawn cam + 2-frame render + capture + destroy)
                 case "CaptureCastleExterior": return 40f; // 5 shots (1 aerial + 4 gate-exterior) x (spawn cam + 2-frame render + capture + destroy)
                 case "TriggerWave":       return WaveTimeout;
+                case "AssertDialogueChain": return 25f;   // quiesce + Play A + chain B + close + input-release poll
+                case "AssertWaveVendorRules": return 75f; // arm-wait 15s + hide-wait 6s + shop attempt + clear-wait 20s + restore-wait 6s + slack
+                case "AssertTutorialArms": return 12f;    // 4s find-poll + state reads
+                case "AssertScatterRecords": return 110f; // F8-8 probe — 3 bounded 25s maintain-tick waits + warps
+                case "AssertCompassMarks": return 20f;    // F8-16 probe — provider polls + rect asserts
+                case "AssertHeroHasAlbedo": return 15f;   // white-Paladin probe — audit read (5s late-swap grace)
+                case "AssertOrientModalReleases": return 20f; // F8-30 probe — open + arbiter asserts + CloseAll
                 case "AttemptExitCastle": return ExitTimeout;
                 case "HomeReturnRoundTrip": return HomeReturnTimeout;   // WO-602 — walk out 20m + walk back + warp
                 case "BootToGameplay":    return BootTimeout;
@@ -886,6 +1583,402 @@ namespace DeNelle.DevTools
                 case "AssertHeroCrossing": return 18f;
                 default:                  return 30f;
             }
+        }
+
+        // =====================================================================
+        //  PROBE: AssertDialogueChain — P0 dialogue re-entrancy verification
+        // ---------------------------------------------------------------------
+        // Drives the JUST-LANDED per-VM stale-Closed guard (DialogueView RCA
+        // 2026-07-08: a Closed handler chaining synchronously into the NEXT
+        // dialogue left the successor alive-but-headless — Ended never fired,
+        // HeroLocomotion.InputSuppressed stuck TRUE, build mode froze at its
+        // first gate). Real path, real authored ids:
+        //   Play(A='lumbermill') -> FROM A's Closed invocation (EndedWithId)
+        //   synchronously Play(B='arcane-tower') -> close B normally.
+        // Links asserted (each named on FAIL):
+        //   1  A plays and its panel builds (DialogueView.IsShowing).
+        //   2  A's Closed chain fires and the chained Play(B) is accepted.
+        //   3  B SURVIVES the chain: IsRunning + IsShowing true, and the
+        //      'stale Closed ... IGNORED' Warn fired for A only (<=1, never B).
+        //   4  B's Ended fires on a normal close.
+        //   5  HeroLocomotion.InputSuppressed releases (the felt symptom).
+        // =====================================================================
+        private IEnumerator AssertDialogueChain()
+        {
+            const string Tag = "Auto";
+            const string DlgA = "lumbermill";     // authored in dialogues.json (structure talk)
+            const string DlgB = "arcane-tower";   // authored successor — the chained dialogue
+            FlowTrace.Step(Tag, $"AssertDialogueChain: ENTER — Play('{DlgA}') -> Closed-chain Play('{DlgB}') -> close (tutorial re-entrancy shape).");
+
+            if (!DeNelle.Core.FeatureFlags.CustomDialogue)
+            {
+                _lastDetail = "ff.customdialogue OFF — N/A (skipped)";
+                FlowTrace.Step(Tag, "AssertDialogueChain: ff.customdialogue OFF — N/A, skipping (gate declined, traced).");
+                yield break;
+            }
+            var view = FindAnyObjectByType<DeNelle.HUD.DialogueView>();
+            if (view == null)
+            {
+                _lastDetail = "no DialogueView — bootstrap never spawned it";
+                FlowTrace.Fail(Tag, "AssertDialogueChain: FAIL at link 0 — ff.customdialogue is ON but no DialogueView exists (view bootstrap dead; NO dialogue can render).");
+                yield break;
+            }
+
+            // The bot's own suppressor Stop()s any running dialogue ~1/sec — pause it
+            // (same mechanism the WO-597 popup-close oracle uses) for this probe.
+            _pauseDialogueSuppression = true;
+
+            // Quiesce: close anything already talking (tutorial intro etc.) so the chain starts clean.
+            if (DeNelle.Core.Dialogue.DialogueService.IsRunning)
+            {
+                DeNelle.Core.Dialogue.DialogueService.Stop();
+                yield return null;
+            }
+
+            int staleWarns = 0;      // 'stale Closed from a superseded dialogue IGNORED' count
+            int panelBuilds = 0;     // one [Flow:DlgLayout] line per DialogueView.BuildUi
+            bool chainFired = false, chainPlayOk = false, bEnded = false;
+            Application.LogCallback logCb = (msg, stack, type) =>
+            {
+                if (string.IsNullOrEmpty(msg)) return;
+                if (msg.Contains("stale Closed from a superseded dialogue IGNORED")) staleWarns++;
+                if (msg.Contains("[Flow:DlgLayout]")) panelBuilds++;
+            };
+            Action<string> onEnded = id =>
+            {
+                if (!chainFired && string.Equals(id, DlgA, StringComparison.Ordinal))
+                {
+                    chainFired = true;
+                    // SYNCHRONOUS re-entrant chain FROM INSIDE A's Closed invocation list —
+                    // exactly the tutorial's dialogue.ended -> STEP-ENTER -> Play(next) shape.
+                    chainPlayOk = DeNelle.Core.Dialogue.DialogueService.Play(DlgB);
+                }
+                else if (string.Equals(id, DlgB, StringComparison.Ordinal)) bEnded = true;
+            };
+            Application.logMessageReceived += logCb;
+            DeNelle.Core.Dialogue.DialogueService.EndedWithId += onEnded;
+            try
+            {
+                // Link 1 — Play A and see its panel.
+                if (!DeNelle.Core.Dialogue.DialogueService.Play(DlgA))
+                {
+                    _lastDetail = $"'{DlgA}' unknown to DialogueCatalog";
+                    FlowTrace.Fail(Tag, $"AssertDialogueChain: FAIL at link 1 — Play('{DlgA}') returned false (id missing from dialogues.json / catalog not loaded).");
+                    yield break;
+                }
+                yield return null; yield return null;
+                if (!view.IsShowing)
+                {
+                    _lastDetail = "A played but no panel";
+                    FlowTrace.Fail(Tag, $"AssertDialogueChain: FAIL at link 1 — Play('{DlgA}') ran but DialogueView.IsShowing=false (panel never built).");
+                    yield break;
+                }
+                FlowTrace.Step(Tag, $"AssertDialogueChain: link 1 PASS — '{DlgA}' playing, panel built (builds={panelBuilds}).");
+
+                // Link 2 — close A; the Closed callback synchronously chains Play(B).
+                DeNelle.Core.Dialogue.DialogueService.Stop();
+                yield return null; yield return null;
+                if (!chainFired)
+                {
+                    _lastDetail = "A closed but EndedWithId never fired";
+                    FlowTrace.Fail(Tag, $"AssertDialogueChain: FAIL at link 2 — Stop() on '{DlgA}' but EndedWithId('{DlgA}') never raised (the tutorial's chain trigger is dead).");
+                    yield break;
+                }
+                if (!chainPlayOk)
+                {
+                    _lastDetail = "chained Play(B) refused";
+                    FlowTrace.Fail(Tag, $"AssertDialogueChain: FAIL at link 2 — the chained Play('{DlgB}') from inside A's Closed returned false (re-entrant Play refused).");
+                    yield break;
+                }
+                FlowTrace.Step(Tag, $"AssertDialogueChain: link 2 PASS — A's Closed chained synchronously into Play('{DlgB}').");
+
+                // Link 3 — THE FIX'S INVARIANT: B survives A's stale close.
+                bool bAlive = DeNelle.Core.Dialogue.DialogueService.IsRunning;
+                if (!bAlive || !view.IsShowing)
+                {
+                    _lastDetail = $"post-chain IsRunning={bAlive} IsShowing={view.IsShowing} staleWarns={staleWarns}";
+                    FlowTrace.Fail(Tag, $"AssertDialogueChain: FAIL at link 3 — successor '{DlgB}' did NOT survive the chain (IsRunning={bAlive}, panel={view.IsShowing}) — the per-VM stale-Closed guard is not protecting the successor (alive-but-headless regression).");
+                    yield break;
+                }
+                if (staleWarns > 1)
+                {
+                    _lastDetail = $"staleWarns={staleWarns} (>1 — guard swallowed a REAL close)";
+                    FlowTrace.Fail(Tag, $"AssertDialogueChain: FAIL at link 3 — stale-Closed Warn fired {staleWarns}x; it must fire for A only (a second fire means B's own close was mis-classified as stale).");
+                    yield break;
+                }
+                if (staleWarns == 0)
+                    FlowTrace.Warn(Tag, "AssertDialogueChain: link 3 SOFT — the stale-Closed guard never fired for A (invocation order changed?); B's panel survived regardless.");
+                else
+                    FlowTrace.Step(Tag, $"AssertDialogueChain: link 3 PASS — B alive+visible; stale-Closed Warn fired exactly once (A, not B); panel builds={panelBuilds}.");
+
+                // Link 4 — close B normally; its Ended must fire.
+                DeNelle.Core.Dialogue.DialogueService.Stop();
+                yield return null; yield return null;
+                if (!bEnded)
+                {
+                    _lastDetail = "B closed but Ended never fired";
+                    FlowTrace.Fail(Tag, $"AssertDialogueChain: FAIL at link 4 — Stop() on '{DlgB}' but EndedWithId('{DlgB}') never raised (Ended lost after the chain — the alive-but-headless symptom).");
+                    yield break;
+                }
+
+                // Link 5 — hero input releases (HeroLocomotion polls IsRunning; give it a beat).
+                float w = 0f;
+                while (w < 2f && HeroLocomotion.InputSuppressed) { w += Time.unscaledDeltaTime; yield return null; }
+                if (HeroLocomotion.InputSuppressed)
+                {
+                    _lastDetail = "InputSuppressed stuck TRUE after the chain";
+                    FlowTrace.Fail(Tag, "AssertDialogueChain: FAIL at link 5 — HeroLocomotion.InputSuppressed is still TRUE 2s after the chained dialogue closed (the captured frozen-build-mode symptom).");
+                    yield break;
+                }
+
+                _lastDetail = $"PASS — chain A->B survived (staleWarns={staleWarns}, panelBuilds={panelBuilds}, input released)";
+                FlowTrace.Step(Tag, $"AssertDialogueChain: PASS — Play->Closed->Play chain intact end-to-end: B's panel survived the stale close, B's Ended fired, hero input released (staleWarns={staleWarns}, builds={panelBuilds}).");
+            }
+            finally
+            {
+                DeNelle.Core.Dialogue.DialogueService.EndedWithId -= onEnded;
+                Application.logMessageReceived -= logCb;
+                if (DeNelle.Core.Dialogue.DialogueService.IsRunning) DeNelle.Core.Dialogue.DialogueService.Stop();
+                _pauseDialogueSuppression = false;
+            }
+        }
+
+        // =====================================================================
+        //  PROBE: AssertWaveVendorRules — F8-14 combat shop-rules verification
+        // ---------------------------------------------------------------------
+        // Rides the wave TriggerWave just forced (or forces one via the SAME
+        // mechanism). Links asserted (each named on FAIL):
+        //   1  AmbientNPC.IsCombatActive goes TRUE (the ONE shared authority).
+        //   2  Vendors duck out of sight — 'vendors hidden (wave)' trace OR a
+        //      direct read: every CastleVendorWaveHider's renderers disabled +
+        //      its CastleNpcInteractable disabled; TalkPromptRegistry drains.
+        //   3  A shop-open verb (DialogueCommandSink.Run("OpenShop")) is
+        //      BLOCKED: the 'OpenShop BLOCKED' Warn fires and PartyShop never
+        //      opens (PanelRouter.PanelOpened watched).
+        //   4  Build-mode entry stays open — READ-ONLY check of Enter()'s only
+        //      gate (SceneOwnership.IsEnemyOwned); we do NOT enter.
+        //   5  Best-effort: force-clear the wave (kill enemies) and see
+        //      'vendors restored' after the all-clear.
+        // =====================================================================
+        private IEnumerator AssertWaveVendorRules()
+        {
+            const string Tag = "Auto";
+            FlowTrace.Step(Tag, "AssertWaveVendorRules: ENTER — wave => vendors hidden + shop blocked + build gate open (F8-14).");
+
+            var wm = WaveManager.Instance ?? UnityEngine.Object.FindAnyObjectByType<WaveManager>();
+            if (wm == null)
+            {
+                _lastDetail = "no WaveManager — N/A (skipped)";
+                FlowTrace.Step(Tag, "AssertWaveVendorRules: no WaveManager in scene — N/A (no wave loop), skipping.");
+                yield break;
+            }
+
+            bool hiddenLine = false, restoredLine = false, blockedLine = false;
+            Application.LogCallback logCb = (msg, stack, type) =>
+            {
+                if (string.IsNullOrEmpty(msg)) return;
+                if (msg.Contains("vendors hidden (wave)")) hiddenLine = true;
+                if (msg.Contains("vendors restored")) restoredLine = true;
+                if (msg.Contains("OpenShop BLOCKED")) blockedLine = true;
+            };
+            Application.logMessageReceived += logCb;
+            try
+            {
+                // Link 1 — a wave is running (reuse the TriggerWave mechanism verbatim).
+                if (wm.Phase == WavePhase.Idle)
+                {
+                    FlowTrace.Step(Tag, "AssertWaveVendorRules: wave Idle — forcing via ForceSpawnNextWaveNow (the TriggerWave mechanism).");
+                    wm.ForceSpawnNextWaveNow();
+                }
+                float t0 = Time.realtimeSinceStartup;
+                while (Time.realtimeSinceStartup - t0 < 15f && !AmbientNPC.IsCombatActive) yield return null;
+                if (!AmbientNPC.IsCombatActive)
+                {
+                    _lastDetail = $"combat authority never armed (phase {wm.Phase})";
+                    FlowTrace.Fail(Tag, $"AssertWaveVendorRules: FAIL at link 1 — wave forced but AmbientNPC.IsCombatActive never went TRUE within 15s (phase '{wm.Phase}') — the shared combat authority is dead, so EVERY downstream rule (vendor hide, shop gate) is inert.");
+                    yield break;
+                }
+                FlowTrace.Step(Tag, $"AssertWaveVendorRules: link 1 PASS — AmbientNPC.IsCombatActive=true (wave phase '{wm.Phase}').");
+
+                // Link 2 — vendors hidden (trace line OR direct renderer/interactable read).
+                var hiders = FindObjectsByType<CastleVendorWaveHider>(FindObjectsSortMode.None);
+                if (hiders.Length == 0)
+                {
+                    FlowTrace.Warn(Tag, "AssertWaveVendorRules: link 2 N/A — no CastleVendorWaveHider in this scene (no vendor NPCs to hide); hide-rule unverifiable here.");
+                }
+                else
+                {
+                    bool allHidden = false;
+                    float h0 = Time.realtimeSinceStartup;
+                    while (Time.realtimeSinceStartup - h0 < 6f && !allHidden)
+                    {
+                        allHidden = true;
+                        foreach (var h in hiders)
+                        {
+                            if (h == null) continue;
+                            foreach (var r in h.GetComponentsInChildren<Renderer>(true))
+                                if (r != null && r.enabled) { allHidden = false; break; }
+                            var it = h.GetComponent<CastleNpcInteractable>();
+                            if (it != null && it.enabled) allHidden = false;
+                            if (!allHidden) break;
+                        }
+                        if (!allHidden) yield return null;
+                    }
+                    if (!allHidden && !hiddenLine)
+                    {
+                        _lastDetail = $"{hiders.Length} vendor(s) still visible/interactable in combat";
+                        FlowTrace.Fail(Tag, $"AssertWaveVendorRules: FAIL at link 2 — combat active for 6s but {hiders.Length} vendor NPC(s) are still visible/interactable and no 'vendors hidden (wave)' trace fired (CastleVendorWaveHider not hiding).");
+                        yield break;
+                    }
+                    FlowTrace.Step(Tag, $"AssertWaveVendorRules: link 2 PASS — {hiders.Length} vendor(s) hidden (trace={hiddenLine}, renderers+interact off={allHidden}).");
+                    if (TalkPromptRegistry.Count > 0)
+                        FlowTrace.Warn(Tag, $"AssertWaveVendorRules: TalkPromptRegistry still holds {TalkPromptRegistry.Count} talkable(s) during combat — vendors deregister on hide; a non-vendor talkable may be in hero range (verify in this run's trace).");
+                    else
+                        FlowTrace.Step(Tag, "AssertWaveVendorRules: TalkPromptRegistry empty during combat — the HUD Talk route is unreachable.");
+                }
+
+                // Link 3 — a shop-open verb is BLOCKED (Warn + toast), never a panel.
+                bool shopOpened = false;
+                Action<PanelId> onOpen = id => { if (id == PanelId.PartyShop) shopOpened = true; };
+                PanelRouter.PanelOpened += onOpen;
+                try
+                {
+                    // The EXACT method DialogueService routes dialogue verbs to — its
+                    // ShopsClosedForCombat gate is the F8-14 fix under test.
+                    new DialogueCommandSink().Run("OpenShop", new[] { "lumbermill" });
+                }
+                finally { PanelRouter.PanelOpened -= onOpen; }
+                yield return null;
+                if (shopOpened)
+                {
+                    _lastDetail = "OpenShop OPENED PartyShop mid-combat";
+                    FlowTrace.Fail(Tag, "AssertWaveVendorRules: FAIL at link 3 — DialogueCommandSink.Run('OpenShop') OPENED PartyShop while combat is active (the F8-14 shop gate is dead).");
+                    yield break;
+                }
+                if (!blockedLine)
+                {
+                    _lastDetail = "OpenShop neither opened nor warned (silent no-op)";
+                    FlowTrace.Fail(Tag, "AssertWaveVendorRules: FAIL at link 3 — OpenShop neither opened a panel NOR fired the 'OpenShop BLOCKED' Warn/toast (silently swallowed — the no-silent-failure rule is violated).");
+                    yield break;
+                }
+                FlowTrace.Step(Tag, "AssertWaveVendorRules: link 3 PASS — OpenShop BLOCKED via the Warn+toast path; PartyShop never opened.");
+
+                // Link 4 — build-mode entry gate, READ-ONLY (do not Enter). Enter()'s only
+                // refusal gate is enemy ownership — a wave must NOT lock building.
+                if (SceneOwnership.IsEnemyOwned)
+                {
+                    _lastDetail = "IsEnemyOwned=true in hub during wave";
+                    FlowTrace.Fail(Tag, "AssertWaveVendorRules: FAIL at link 4 — SceneOwnership.IsEnemyOwned=TRUE during the hub wave; BuildModeController.Enter() would refuse (build lock regression).");
+                    yield break;
+                }
+                FlowTrace.Step(Tag, "AssertWaveVendorRules: link 4 PASS — build entry gate open (IsEnemyOwned=false); the wave does not lock build mode.");
+
+                // Link 5 — best-effort all-clear: force-clear the wave and watch the restore.
+                int killed = 0;
+                foreach (var e in UnityEngine.Object.FindObjectsByType<Enemy>())
+                    if (e != null) { try { e.Kill(); killed++; } catch (Exception ex) { FlowTrace.Warn(Tag, "AssertWaveVendorRules: Kill threw " + ex.Message); } }
+                FlowTrace.Step(Tag, $"AssertWaveVendorRules: force-cleared the wave ({killed} enemies killed) — waiting for the all-clear.");
+                float c0 = Time.realtimeSinceStartup;
+                while (Time.realtimeSinceStartup - c0 < 20f && AmbientNPC.IsCombatActive) yield return null;
+                if (AmbientNPC.IsCombatActive)
+                {
+                    FlowTrace.Step(Tag, "AssertWaveVendorRules: link 5 N/A — combat authority still active after the clear (loop re-armed a countdown / staged battle live); restore rides the next calm window.");
+                }
+                else if (hiders.Length > 0)
+                {
+                    float r0 = Time.realtimeSinceStartup;
+                    while (Time.realtimeSinceStartup - r0 < 6f && !restoredLine) yield return null;
+                    if (restoredLine)
+                        FlowTrace.Step(Tag, "AssertWaveVendorRules: link 5 PASS — 'vendors restored' fired after the all-clear.");
+                    else
+                        FlowTrace.Warn(Tag, "AssertWaveVendorRules: link 5 SOFT — all-clear reached but no 'vendors restored' trace within 6s (restore transition not observed this run).");
+                }
+                _lastDetail = $"PASS — authority armed, {hiders.Length} vendor(s) hidden, shop blocked, build gate open, restore={restoredLine}";
+                FlowTrace.Step(Tag, "AssertWaveVendorRules: PASS — F8-14 combat shop-rules chain verified end-to-end.");
+            }
+            finally { Application.logMessageReceived -= logCb; }
+        }
+
+        // =====================================================================
+        //  PROBE: AssertTutorialArms — F8-29 tutorial re-arm verification
+        // ---------------------------------------------------------------------
+        // Drives the sceneLoaded re-arm fix (TutorialFlow.Bootstrap used to be a
+        // one-shot that evaluated the TITLE scene and never re-armed; proof was
+        // ZERO [Flow:Tutorial] lines in the owner's fresh session). Links:
+        //   1  In a hub with ff.tutorialv2 ON, the '[Flow:Tutorial] Bootstrap(...)
+        //      armed' precondition holds: FindAnyObjectByType<TutorialFlow>() != null.
+        //   2  Fresh-save context (GameStateService.State.Onboarded == false and
+        //      the flow has not already run this session): the flow phase is NOT
+        //      Finished (a Finished fresh flow IS the 'no tutorial' symptom).
+        // Read via TutorialFlow's public probe surface (PhaseName / IsFinished /
+        // RanThisSession) — no reflection.
+        // =====================================================================
+        private IEnumerator AssertTutorialArms()
+        {
+            const string Tag = "Auto";
+            string scene = ActiveScene();
+            FlowTrace.Step(Tag, $"AssertTutorialArms: ENTER — verify the sceneLoaded re-arm put a TutorialFlow in '{scene}' (F8-29).");
+
+            if (!DeNelle.Core.FeatureFlags.TutorialV2)
+            {
+                _lastDetail = "ff.tutorialv2 OFF — N/A (skipped)";
+                FlowTrace.Step(Tag, "AssertTutorialArms: ff.tutorialv2 OFF — N/A, skipping (Bootstrap correctly dormant, already traced by the flow).");
+                yield break;
+            }
+            if (!DeNelle.Core.HubScenes.IsHub(scene))
+            {
+                _lastDetail = $"'{scene}' not a hub — N/A (skipped)";
+                FlowTrace.Step(Tag, $"AssertTutorialArms: scene '{scene}' is not a hub — N/A; Bootstrap correctly waits for a hub load.");
+                yield break;
+            }
+
+            // Link 1 — the interpreter exists (poll briefly: Bootstrap fires on sceneLoaded,
+            // construction is same-frame, but give a slow boot a beat).
+            TutorialFlow flow = null;
+            float t0 = Time.realtimeSinceStartup;
+            while (Time.realtimeSinceStartup - t0 < 4f)
+            {
+                flow = FindAnyObjectByType<TutorialFlow>();
+                if (flow != null) break;
+                yield return null;
+            }
+            if (flow == null)
+            {
+                _lastDetail = "hub + ff ON but NO TutorialFlow — re-arm dead";
+                FlowTrace.Fail(Tag, $"AssertTutorialArms: FAIL at link 1 — ff.tutorialv2 ON and '{scene}' IS a hub, but FindAnyObjectByType<TutorialFlow>() found nothing within 4s — the Bootstrap/sceneLoaded re-arm (F8-29 fix) did not construct the interpreter.");
+                yield break;
+            }
+            FlowTrace.Step(Tag, $"AssertTutorialArms: link 1 PASS — TutorialFlow armed in hub '{scene}' (the 'Bootstrap(...) armed' precondition holds).");
+
+            // Link 2 — fresh-save context: the flow must be LIVE, not parked Finished.
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            var st = svc != null ? svc.State : null;
+            if (st == null)
+            {
+                _lastDetail = "armed; GameStateService unavailable — phase assert skipped";
+                FlowTrace.Warn(Tag, "AssertTutorialArms: link 2 SOFT — GameStateService/State unavailable; fresh-save phase assertion skipped.");
+                yield break;
+            }
+            if (st.Onboarded)
+            {
+                _lastDetail = $"armed; save Onboarded — Finished is correct (phase '{flow.PhaseName}')";
+                FlowTrace.Step(Tag, $"AssertTutorialArms: link 2 N/A — save already Onboarded; parked phase '{flow.PhaseName}' is the correct returning-player state.");
+                yield break;
+            }
+            if (flow.IsFinished && TutorialFlow.RanThisSession)
+            {
+                _lastDetail = "armed; flow already ran this session (resume block) — Finished expected";
+                FlowTrace.Step(Tag, "AssertTutorialArms: link 2 N/A — flow already ran this session (s_ranThisSession resume block); Finished is expected mid-session.");
+                yield break;
+            }
+            if (flow.IsFinished)
+            {
+                _lastDetail = "FRESH save but flow parked Finished — declined to run";
+                FlowTrace.Fail(Tag, "AssertTutorialArms: FAIL at link 2 — FRESH save (Onboarded=false, not run this session) yet TutorialFlow phase=Finished — the interpreter declined the run (the F8-29 'no tutorial on fresh boot' symptom).");
+                yield break;
+            }
+            _lastDetail = $"PASS — armed + LIVE (phase '{flow.PhaseName}', fresh save)";
+            FlowTrace.Step(Tag, $"AssertTutorialArms: PASS — fresh save and the flow is LIVE (phase '{flow.PhaseName}', not Finished).");
         }
 
         // =====================================================================

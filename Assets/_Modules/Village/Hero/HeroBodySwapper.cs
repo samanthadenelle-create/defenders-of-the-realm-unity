@@ -1200,9 +1200,25 @@ namespace DeNelle.Village
         /// Resources-loadable folder and bind it, mirroring ApplyExtractedTexture). Read-only — never
         /// mutates a material, so it cannot regress a correctly-textured package body.
         /// </summary>
-        private static void AuditPackageAlbedo(GameObject body)
+        // ── WHITE-PALADIN PROBE SEAMS (AutoPilot 'AssertHeroHasAlbedo') — results of the
+        // LAST AuditPackageAlbedo run, readable by the fleet probe. The WHITE HERO ROOT
+        // check already runs AFTER the binding applies (audit is called immediately after
+        // ColorPackageBodyIfNullAlbedo on both the KnightV3 + package paths) and early-outs
+        // when a texture OR tint is bound — these seams let a probe PROVE that each run.
+        /// <summary>True once the audit has run at least once this session.</summary>
+        public static bool LastAlbedoAuditRan { get; private set; }
+        /// <summary>Materials with a bound _BaseMap/_MainTex in the last audit.</summary>
+        public static int LastAlbedoAuditBound { get; private set; }
+        /// <summary>Total materials scanned in the last audit.</summary>
+        public static int LastAlbedoAuditTotal { get; private set; }
+        /// <summary>True if the last audit emitted the WHITE HERO ROOT Fail (no texture AND no tint).</summary>
+        public static bool LastAuditWhiteHeroRootFired { get; private set; }
+
+        public static void AuditPackageAlbedo(GameObject body)
         {
             if (body == null) return;
+            LastAlbedoAuditRan = true;
+            LastAuditWhiteHeroRootFired = false;
             int mats = 0, withAlbedo = 0;
             var missing = new System.Text.StringBuilder();
             foreach (var r in body.GetComponentsInChildren<Renderer>(true))
@@ -1220,6 +1236,9 @@ namespace DeNelle.Village
                     { if (missing.Length > 0) missing.Append(", "); missing.Append(m.name); }
                 }
             }
+
+            LastAlbedoAuditBound = withAlbedo;
+            LastAlbedoAuditTotal = mats;
 
             FlowTrace.Step("HeroBody",
                 $"PACKAGE albedo audit: {withAlbedo}/{mats} material(s) carry a _BaseMap/_MainTex texture" +
@@ -1248,11 +1267,14 @@ namespace DeNelle.Village
                         $"PACKAGE body: all {mats} material(s) are textureless but _BaseColor-tinted " +
                         "(PaladinPalette) — colored-not-textured is the WO-604 interim look, not a white hero.");
                 else
+                {
+                    LastAuditWhiteHeroRootFired = true;   // probe-readable — proves the residual false-alarm class stays dead
                     FlowTrace.Fail("HeroBody",
                         $"WHITE HERO ROOT: all {mats} package-body material(s) have NULL albedo AND default-white " +
                         "_BaseColor — the Paladin genuinely renders solid white. FIX (asset-side): extract the " +
                         "Paladin albedo to a Resources-loadable folder and bind it here (mirror " +
                         "ApplyExtractedTexture), or give KnightPackage.prefab materials a shipped albedo texture.");
+                }
             }
         }
 

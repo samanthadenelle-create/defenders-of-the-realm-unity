@@ -256,6 +256,10 @@ namespace DeNelle.Village
 
         private bool _maintaining;
 
+        // F8-8 probe: last MaintainLoop blocking gate — logged on change only. Starts at a
+        // sentinel so the FIRST tick always logs its state (clear or gated).
+        private string _lastMaintainGate = "<never-ticked>";
+
         // Perpetual top-up: every RespawnCheckInterval, while OuterWorld is loaded + no battle is
         // staged + the hero is in OuterWorld, re-spawn replacements until the live count is back at
         // RepCount. The respawn DELAY is the interval itself (a consumed rep is replaced on the next
@@ -268,10 +272,22 @@ namespace DeNelle.Village
             {
                 yield return wait;
 
-                if (!FeatureFlags.OverworldEncounter) continue;                 // dormant
-                if (BattleArena.Instance != null && BattleArena.Instance.BattleInProgress) continue; // not mid-battle
-                if (!OuterWorldLoaded()) continue;                              // OuterWorld only
-                if (!HeroInOuterWorld()) continue;                              // anchor to the hero only once she is out
+                // SILENT-GATE INSTRUMENTATION (F8-8 probe): these four gates used to skip the
+                // tick with NO trace, so "scatter never generates" was undiagnosable from a
+                // capture. Name the blocking gate ON CHANGE only (never per-tick spam).
+                string gate = null;
+                if (!FeatureFlags.OverworldEncounter) gate = "flag-off (ff.overworldencounter)";                 // dormant
+                else if (BattleArena.Instance != null && BattleArena.Instance.BattleInProgress) gate = "battle-in-progress"; // not mid-battle
+                else if (!OuterWorldLoaded()) gate = "overworld-not-loaded";                                     // OuterWorld only
+                else if (!HeroInOuterWorld()) gate = "hero-not-in-outer-roster-zone";                            // anchor to the hero only once she is out
+                if (gate != _lastMaintainGate)
+                {
+                    _lastMaintainGate = gate;
+                    FlowTrace.Step("Encounter", gate == null
+                        ? "MaintainLoop gates CLEAR — ticking (scatter upkeep + ring top-up run)."
+                        : $"MaintainLoop gated: {gate} (logged on change).");
+                }
+                if (gate != null) continue;
 
                 // SCATTER LAYER (F8-8): generate the seeded records on the first eligible tick
                 // (navmesh is up by now — this loop starts 3s+ after the world load), then each
@@ -465,6 +481,49 @@ namespace DeNelle.Village
             FlowTrace.Step("Encounter", $"ForcePopulateForTest: ensured {_reps.Count}/{RepCount} reps live (spawned {spawned} via real SpawnRep).");
         }
 
+        // -----------------------------------------------------------------------------
+        // F8-8 PROBE SEAMS (AutoPilot 'AssertScatterRecords') — read-only counters plus
+        // one starter. The probe flips ff.overworldencounter ON mid-run, but MaybePopulate
+        // gated on the flag at boot, so MaintainLoop (the only caller of MaintainScatter)
+        // may never have started — EnsureMaintainLoopForTest starts the SAME production
+        // MaintainLoop (no logic bypass; all its gates still apply every tick).
+        // -----------------------------------------------------------------------------
+
+        /// <summary>Scatter records generated this session (0 until the first eligible maintain tick).</summary>
+        public int GeneratedScatterCount => _scatter.Count;
+
+        /// <summary>Scatter records with a LIVE (activated) rep GameObject right now.</summary>
+        public int LiveScatterCount
+        {
+            get { int n = 0; for (int i = 0; i < _scatter.Count; i++) if (_scatter[i].Live != null) n++; return n; }
+        }
+
+        /// <summary>Cumulative scatter ACTIVATE events this session (each pairs a 'scatter ACTIVATE' trace).</summary>
+        public int ScatterActivations { get; private set; }
+
+        /// <summary>Cumulative scatter CULL events this session (each pairs a 'scatter CULL' trace).</summary>
+        public int ScatterCulls { get; private set; }
+
+        /// <summary>Read a generated record's anchor + band (0 near / 1 mid / 2 far). False when out of range.</summary>
+        public bool TryGetScatterAnchor(int index, out Vector3 anchor, out int band)
+        {
+            anchor = Vector3.zero; band = -1;
+            if (index < 0 || index >= _scatter.Count) return false;
+            anchor = _scatter[index].Anchor;
+            band = _scatter[index].Band;
+            return true;
+        }
+
+        /// <summary>Start the real MaintainLoop if it is not already running (probe runs flip the
+        /// flag AFTER boot, when MaybePopulate has already declined). Idempotent.</summary>
+        public void EnsureMaintainLoopForTest()
+        {
+            if (_maintaining) return;
+            _maintaining = true;
+            StartCoroutine(MaintainLoop());
+            FlowTrace.Step("Encounter", "EnsureMaintainLoopForTest: maintain loop started (flag flipped after boot — probe run).");
+        }
+
         // Light threat read from the world zone (reuses the shared classifier).
         private static int ZoneThreatAt(Vector3 pos)
         {
@@ -528,6 +587,7 @@ namespace DeNelle.Village
                     Destroy(rec.Live);
                     rec.Live = null; rec.Spawned = false;
                     live--;
+                    ScatterCulls++;   // F8-8 probe counter — pairs with the CULL trace below
                     FlowTrace.Step("Encounter",
                         $"scatter CULL #{rec.Index} (family '{rec.FamilyIds[0]}', lvl {rec.Level}) dist={dist:0}m > {ScatterCullRadius:0}m — record kept.");
                     continue;
@@ -557,6 +617,7 @@ namespace DeNelle.Village
                     if (SpawnScatterRep(rec))
                     {
                         live++;
+                        ScatterActivations++;   // F8-8 probe counter — pairs with the ACTIVATE trace below
                         FlowTrace.Step("Encounter",
                             $"scatter ACTIVATE #{rec.Index} band={rec.Band} family=[{string.Join(",", rec.FamilyIds)}] lvl={rec.Level} dist={dist:0}m (live {live}/{ScatterLiveCap}).");
                     }
