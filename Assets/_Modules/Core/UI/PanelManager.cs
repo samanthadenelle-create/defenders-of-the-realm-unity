@@ -25,6 +25,7 @@
 // =============================================================================
 
 using System;
+using System.Runtime.CompilerServices;
 using DeNelle.Core.Combat;
 using DeNelle.Core.Diagnostics;
 
@@ -100,10 +101,19 @@ namespace DeNelle.Core.UI
         /// open panel (if any and different) so only one panel is ever visible. No-op
         /// if the same handle is already the open one.
         /// </summary>
-        public static bool NotifyOpened(PanelHandle handle)
+        public static bool NotifyOpened(PanelHandle handle,
+            // F8-15 death forensic window: name WHO opened each panel. CallerInfo params are
+            // compile-time defaults — zero cost, no call-site changes (all callers verified direct).
+            [CallerMemberName] string openerMember = null,
+            [CallerFilePath]  string openerFile   = null)
         {
             if (handle == null) return false;
             if (ReferenceEquals(_open, handle)) return true;
+
+            // F8-15 (owner 2026-07-08 "why so many screens on death"): while the hero-death
+            // forensic window is live, every arbiter open logs panel + opener. Window-gated —
+            // normal play emits nothing here (ScreenOpenWatchdog covers the steady state).
+            string opener = DeathTrace.Active ? DeathTrace.Describe(openerMember, openerFile) : null;
 
             // WO-437 battle-lock: during an active battle (ATB combat / Arena raid)
             // only battle-allowed panels (Battle HUD, Pause) may open. Every gameplay
@@ -112,6 +122,8 @@ namespace DeNelle.Core.UI
             if (!handle.BattleAllowed && BattleLock.IsInBattle())
             {
                 FlowTrace.Warn("Input", "battle-lock: rejected open of '" + handle.Name + "' (in battle)");
+                if (opener != null)
+                    DeathTrace.Note("SCREEN OPEN REJECTED (battle-lock): " + handle.Name + " by " + opener);
                 var blocked = handle;
                 try { blocked.Close?.Invoke(); }
                 catch (Exception ex)
@@ -124,6 +136,15 @@ namespace DeNelle.Core.UI
 
             var previous = _open;
             _open = handle; // set first so a re-entrant probe sees the new owner
+
+            // F8-15: the open was ACCEPTED — record panel + opener in the death window.
+            if (opener != null)
+            {
+                DeathTrace.ScreenOpened(handle.Name, opener);
+                if (previous != null)
+                    DeathTrace.ScreenClosed(previous.Name,
+                        "PanelManager (swapped out for '" + handle.Name + "')");
+            }
 
             if (previous != null)
             {
@@ -170,11 +191,15 @@ namespace DeNelle.Core.UI
         /// if this handle is the one currently held (a stale close from a panel that was
         /// already swapped out is ignored).
         /// </summary>
-        public static void NotifyClosed(PanelHandle handle)
+        public static void NotifyClosed(PanelHandle handle,
+            [CallerMemberName] string closerMember = null,
+            [CallerFilePath]  string closerFile   = null)
         {
             if (handle == null) return;
             if (!ReferenceEquals(_open, handle)) return;
             _open = null;
+            // F8-15: window-gated close record (who dismissed which panel during the death window).
+            DeathTrace.ScreenClosed(handle.Name, DeathTrace.Describe(closerMember, closerFile));
             OpenStateChanged?.Invoke();
         }
 
@@ -200,6 +225,9 @@ namespace DeNelle.Core.UI
             var open = _open;
             if (open == null) return;
             _open = null;
+            // F8-15: name who forced the close during the death window (ESC/back/CloseAll).
+            if (DeathTrace.Active)
+                DeathTrace.ScreenClosed(open.Name, "PanelManager.CloseOpen <- " + DeathTrace.Caller());
             try { open.Close?.Invoke(); }
             catch (Exception ex)
             {

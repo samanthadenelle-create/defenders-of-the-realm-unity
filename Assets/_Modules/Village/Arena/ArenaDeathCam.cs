@@ -81,6 +81,12 @@ namespace DeNelle.Village.Arena
                 var smc = cam.GetComponent("SmartMobileCamera") as Behaviour;
                 if (smc != null && smc.enabled) { smc.enabled = false; _suspendedCam = smc; }
             });
+            // F8-15 death forensic window: the death-cam TAKES the camera here — if this fires on a
+            // HERO death, the push-in target below is what the owner sees instead of the follow cam
+            // (owner ruling: camera must stay on the hero for the death animation).
+            DeathTrace.Camera(
+                $"follow cam {(_suspendedCam != null ? "SUSPENDED" : "not present")} -> death-cam push-in on '{target.name}' for {seconds:F1}s",
+                "ArenaDeathCam.HoldRoutine");
 
             // Frame: capture the start seat, aim a touch above the body, ease toward it.
             Vector3 startPos = cam.transform.position;
@@ -117,6 +123,9 @@ namespace DeNelle.Village.Arena
             {
                 if (_suspendedCam != null) _suspendedCam.enabled = true;
             });
+            // F8-15: camera handed back (BattleArena warps the hero home next — the next
+            // HERO MOVED line after this is that return warp).
+            DeathTrace.Camera("death-cam released -> follow cam restored", "ArenaDeathCam.HoldRoutine");
             _suspendedCam = null;
 
             FlowTrace.Step("BattleArena", "ArenaDeathCam: linger complete - camera released.");

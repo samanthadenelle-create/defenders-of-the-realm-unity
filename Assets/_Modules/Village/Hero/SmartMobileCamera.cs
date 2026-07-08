@@ -428,6 +428,9 @@ namespace DeNelle.Village
         private void OnEnable()
         {
             SceneManager.sceneLoaded += OnSceneLoadedForCamera;
+            // F8-15 death forensic window: follow camera back online (pairs with the DISABLED edge).
+            DeNelle.Core.Diagnostics.DeathTrace.Camera("SmartMobileCamera ENABLED (follow on)",
+                DeNelle.Core.Diagnostics.DeathTrace.Active ? DeNelle.Core.Diagnostics.DeathTrace.Caller() : "n/a");
         }
 
         private void OnDisable()
@@ -436,6 +439,11 @@ namespace DeNelle.Village
             UnsubscribeTeleport();   // WO-383: detach the hero teleport handler (re-attaches on next acquire)
             RestoreAllFaded();   // WO-385: restore any faded occluders so nothing is left invisible
             _lockTarget = null;  // WO-512: drop the lock-on framing target so a re-enable starts clean
+            // F8-15 death forensic window: the follow camera going DARK during the death window
+            // (ArenaDeathCam suspend or any other disabler) is exactly the "camera leaves the
+            // hero" symptom — record the edge. Window-gated.
+            DeNelle.Core.Diagnostics.DeathTrace.Camera("SmartMobileCamera DISABLED (follow off)",
+                DeNelle.Core.Diagnostics.DeathTrace.Active ? DeNelle.Core.Diagnostics.DeathTrace.Caller() : "n/a");
         }
 
         private void OnSceneLoadedForCamera(Scene scene, LoadSceneMode mode)
@@ -735,6 +743,11 @@ namespace DeNelle.Village
                 _posVelocity = Vector3.zero;
                 EnforceSoleCamera();
                 Debug.Log("[SmartMobileCamera] ForceFollowImmediate snap executed");
+                // F8-15 death forensic window: an instant camera SNAP during the death window is a
+                // felt "camera jumped" — name who asked for it. Window-gated.
+                DeNelle.Core.Diagnostics.DeathTrace.Camera(
+                    $"ForceFollowImmediate SNAP to target '{(_target != null ? _target.name : "<null>")}' @ {transform.position}",
+                    DeNelle.Core.Diagnostics.DeathTrace.Active ? DeNelle.Core.Diagnostics.DeathTrace.Caller() : "n/a");
             }
         }
 
@@ -760,6 +773,11 @@ namespace DeNelle.Village
             _lockTarget = t;
             DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena",
                 "LOCKON camera framing target bound '" + t.name.Replace("(Clone)", "").Trim() + "'.");
+            // F8-15 death forensic window: a framing-target change while the hero is dying = the
+            // camera looking away from the fall. Window-gated.
+            DeNelle.Core.Diagnostics.DeathTrace.Camera(
+                "lock framing target -> '" + t.name + "'",
+                DeNelle.Core.Diagnostics.DeathTrace.Active ? DeNelle.Core.Diagnostics.DeathTrace.Caller() : "n/a");
         }
 
         /// <summary>Release the lock-on framing (back to today's auto-framing / free-look). The
@@ -769,6 +787,9 @@ namespace DeNelle.Village
             if (_lockTarget == null) return;
             _lockTarget = null;
             DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena", "LOCKON camera framing target cleared.");
+            // F8-15 death forensic window: framing released back to hero auto-follow.
+            DeNelle.Core.Diagnostics.DeathTrace.Camera("lock framing target cleared -> hero auto-follow",
+                DeNelle.Core.Diagnostics.DeathTrace.Active ? DeNelle.Core.Diagnostics.DeathTrace.Caller() : "n/a");
         }
 
         /// <summary>

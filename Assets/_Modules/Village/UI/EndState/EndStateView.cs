@@ -59,9 +59,22 @@ namespace DeNelle.Village.UI
         // ── entry point ───────────────────────────────────────────────────────
 
         /// <summary>Show the end-state screen for <paramref name="vm"/> (replaces any open one).</summary>
-        public static EndStateView Show(EndStateVM vm)
+        public static EndStateView Show(EndStateVM vm,
+            // F8-15 death forensic window: name WHO opened each end-state (GameOverScreen /
+            // HeroDeathEndState / BattleArenaHud / WaveCelebrationManager all funnel HERE, and
+            // this screen bypasses PanelManager — so this is the second screen chokepoint).
+            [System.Runtime.CompilerServices.CallerMemberName] string openerMember = null,
+            [System.Runtime.CompilerServices.CallerFilePath]  string openerFile   = null)
         {
             if (vm == null) return null;
+            if (DeathTrace.Active)
+            {
+                DeathTrace.ScreenOpened("EndState '" + vm.Title + "'",
+                    DeathTrace.Describe(openerMember, openerFile));
+                if (_open != null)
+                    DeathTrace.ScreenClosed("EndState '" + (_open._vm != null ? _open._vm.Title : "?") + "'",
+                        "EndStateView.Show (replaced by '" + vm.Title + "')");
+            }
             if (_open != null) { Destroy(_open.gameObject); _open = null; }
 
             // REAL EventSystem buttons (audit §2e: GameOverScreen's manual Input hit-test
@@ -221,6 +234,37 @@ namespace DeNelle.Village.UI
                     rewardWell.anchorMin = new Vector2(rewardWell.anchorMin.x, Mathf.Min(0.5f, floor));
                     FlowTrace.Step("EndState",
                         $"reward well floor raised above the canonical CTA (ctaTop={ctaTop:0.###}, well {wellMin:0.###}-{wellMax:0.###}, floor->{Mathf.Min(0.5f, floor):0.###})");
+                }
+            }
+
+            // F8-35 ("characters still overlap, extend panel"): the reward well is laid out
+            // in PIXELS now (each row owns a fixed row height — see BuildBody), so the well
+            // must be at least RequiredBodyPx tall. The old fraction-weight layout simply
+            // divided whatever space was left after the close-band reservation + the CTA
+            // floor-raise, squeezing 11+ units of content into ~150px — every label/value
+            // overprinted the next row. Measure the well and EXTEND the panel (grow the
+            // frame root's Y anchors; every zone is fraction-anchored so the whole chrome
+            // scales, and the fixed-px CTA/close bands become MORE generous, never less).
+            if (!vm.Compact && chrome.root != null)
+            {
+                Canvas.ForceUpdateCanvases();
+                float wellPx = rewardWell.rect.height;
+                float needPx = RequiredBodyPx(vm);
+                if (wellPx > 1f && needPx > wellPx + 1f)
+                {
+                    var rootRt = (RectTransform)chrome.root.transform;
+                    float y0 = rootRt.anchorMin.y, y1 = rootRt.anchorMax.y;
+                    float halfNow = (y1 - y0) * 0.5f;
+                    float grownHalf = Mathf.Min(0.47f, halfNow * (needPx / wellPx));
+                    if (grownHalf > halfNow + 0.001f)
+                    {
+                        float cy = Mathf.Clamp((y0 + y1) * 0.5f, 0.03f + grownHalf, 0.97f - grownHalf);
+                        rootRt.anchorMin = new Vector2(rootRt.anchorMin.x, cy - grownHalf);
+                        rootRt.anchorMax = new Vector2(rootRt.anchorMax.x, cy + grownHalf);
+                        Canvas.ForceUpdateCanvases();
+                        FlowTrace.Step("EndState",
+                            $"panel extended for content: need={needPx:0}px well {wellPx:0}->{rewardWell.rect.height:0}px half {halfNow:0.###}->{grownHalf:0.###}");
+                    }
                 }
             }
 

@@ -189,6 +189,9 @@ namespace DeNelle.Village
             // we gate the music on the death context. Null-guarded per CLAUDE.md §10.
             if (isHeartDestroyed)
                 CoreServices.Audio?.PlayMusic(DeNelle.Core.Audio.MusicTrack.Defeat);
+            // F8-15 death forensic window: the hub game-over PAUSES time here — anything queued
+            // after this (respawn coroutine, warps) freezes until Retry. Window-gated note.
+            DeathTrace.Note($"GameOverScreen.Show('{title}'): Time.timeScale=0 (paused) in '{_defeatScene}' — scaled-time respawn/down-beat coroutines freeze until Retry");
             Time.timeScale = 0f;
 
             // WO-B: the ONE shared Obsidian end-state template renders the screen

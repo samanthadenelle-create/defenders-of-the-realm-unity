@@ -243,6 +243,15 @@ namespace DeNelle.Village
         /// </summary>
         public void WarpTo(Vector3 worldPos, Quaternion? rot = null)
         {
+            // F8-15 death forensic window: EVERY explicit hero warp names its caller (stack-derived —
+            // this signature must stay exactly (Vector3, Quaternion?) because BattleArena.WarpHero
+            // resolves it by exact-signature reflection GetMethod). Always logs (throttled outside
+            // the window); FlowTrace-gated so the StackTrace cost never runs with tracing off.
+            if (DeNelle.Core.Diagnostics.FlowTrace.Enabled)
+                DeNelle.Core.Diagnostics.DeathTrace.HeroMoved(transform.position, worldPos,
+                    DeNelle.Core.Diagnostics.DeathTrace.Caller(2),   // 2: skip Caller() + this WarpTo frame
+                    "HeroLocomotion.WarpTo explicit warp", always: true);
+
             _isTeleporting = true;   // clamp/movement skips this frame
 
             // §12 ticket #2: prove ground-side vs hero-side at the garrison warp. A MISS (or a large

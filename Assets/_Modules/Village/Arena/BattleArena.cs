@@ -1250,12 +1250,20 @@ namespace DeNelle.Village.Arena
             var hero = GameObject.FindWithTag("Player");
             if (hero == null) { FlowTrace.Warn("BattleArena", "WarpHero: no 'Player' hero found - skipped."); return; }
 
+            // F8-15 death forensic window: name the arena warp (stage-in / win-return /
+            // loss-safe-retreat all route here). WarpTo logs the executed move with its caller;
+            // this note carries the arena context either way.
+            DeathTrace.Note($"HERO MOVE REQUESTED: BattleArena.WarpHero {hero.transform.position} -> {pos} (arena stage/return warp)");
+
             var loco = hero.GetComponent("HeroLocomotion") as MonoBehaviour;
             if (loco != null)
             {
                 var warp = loco.GetType().GetMethod("WarpTo", new[] { typeof(Vector3), typeof(Quaternion?) });
                 if (warp != null) { warp.Invoke(loco, new object[] { pos, (Quaternion?)rot }); FlowTrace.Step("BattleArena", $"WarpHero -> {pos}."); return; }
             }
+            // F8-15: the raw-transform fallback bypasses WarpTo's chokepoint log — attribute it here.
+            DeathTrace.HeroMoved(hero.transform.position, pos,
+                "BattleArena.WarpHero", "transform fallback (WarpTo not found)", always: true);
             hero.transform.SetPositionAndRotation(pos, rot);
             FlowTrace.Warn("BattleArena", "WarpHero: WarpTo not found - used transform fallback.");
         }

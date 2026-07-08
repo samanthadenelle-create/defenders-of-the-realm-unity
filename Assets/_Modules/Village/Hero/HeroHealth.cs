@@ -105,6 +105,15 @@ namespace DeNelle.Village
         private Vector3 _spawnPosition;          // captured in Awake — respawn anchor
         private float   _invulnUntil;            // Time.time at which post-respawn invuln ends
 
+        // ── F8-15 death forensic window (owner 2026-07-08) ────────────────────
+        // Catch-all HERO-MOVED monitor: while DeathTrace's window is live, LateUpdate
+        // compares this frame's position to last frame's; a single-frame jump > 2m is
+        // non-locomotive (max walk speed 6 m/s -> ~0.1m/frame) and gets logged even if
+        // no warp chokepoint attributed it. Zero cost outside the window (one static check).
+        private Vector3 _deathTraceLastPos;
+        private bool    _deathTraceHasPos;
+        private const float DeathTraceJumpMeters = 2f;
+
         // WO-284/285: death/revive animation routes through the canonical ActorAnimator
         // driver (Dead bool latch + DeathDir). Guarded internally — a controller without
         // a Death state is a silent no-op, never the per-frame param-spam pitfall.
@@ -316,6 +325,26 @@ namespace DeNelle.Village
             }
         }
 
+        // F8-15: the catch-all hero-jump monitor for the death forensic window. LateUpdate so
+        // it samples AFTER every mover this frame (warps, agent, coroutines) has run. Dark
+        // outside the window: the first check is one static property read.
+        private void LateUpdate()
+        {
+            if (!DeNelle.Core.Diagnostics.DeathTrace.Active) { _deathTraceHasPos = false; return; }
+            Vector3 now = transform.position;
+            if (_deathTraceHasPos &&
+                (now - _deathTraceLastPos).sqrMagnitude > DeathTraceJumpMeters * DeathTraceJumpMeters)
+            {
+                // A chokepoint (WarpTo / WarpHero / Respawn) should ALSO have logged this move
+                // with its caller; this line firing ALONE means an unattributed mover exists.
+                DeNelle.Core.Diagnostics.DeathTrace.HeroMoved(_deathTraceLastPos, now,
+                    "<frame-jump monitor — see adjacent chokepoint line for the mover, or NONE = unattributed>",
+                    "single-frame jump > " + DeathTraceJumpMeters + "m during death window");
+            }
+            _deathTraceLastPos = now;
+            _deathTraceHasPos  = true;
+        }
+
         /// <summary>
         /// WO-566: bounce a fraction of the damage just taken back to the contact attackers
         /// (Retaliation Surge reflect + Last Stand reflect window). Data-driven — the fraction
@@ -457,6 +486,16 @@ namespace DeNelle.Village
                     "lethal hit: downSeconds=" + _downSeconds.ToString("F1") +
                     " | OnDeath listeners=[" + ListenerNames(OnDeath) + "]" +
                     " | OnDied listeners=[" + ListenerNames(OnDied) + "]");
+                // F8-15 extension (owner 2026-07-08 "capture why so many screens + moving character
+                // location"): open the DEATH FORENSIC WINDOW. For the next 15s every screen open
+                // (PanelManager / EndStateView), every hero warp/jump (>2m per frame, see
+                // TraceDeathWindowJumps), and every camera takeover logs [Flow:DeathTrace] with
+                // WHO did it. Window baseline = the death position.
+                DeNelle.Core.Diagnostics.DeathTrace.OpenWindow(
+                    DeNelle.Core.Diagnostics.DeathTrace.DefaultWindowSeconds,
+                    $"hero lethal hit at {transform.position} scene='{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}' downSeconds={_downSeconds:F1}");
+                _deathTraceLastPos = transform.position;
+                _deathTraceHasPos  = true;
                 HitStopManager.DoImpact(HitTier.Heavy);   // one dramatic beat on death
                 PlayDeathAnim();
                 OnDeath?.Invoke();
@@ -589,6 +628,9 @@ namespace DeNelle.Village
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Death",
                     "HandleDeath: down-beat elapsed -> EVAC branch (enemy-owned scene, GoCastle).");
                 Debug.Log("[HeroHealth] Hero down in enemy territory — raid ends, retreating to home hub.");
+                // F8-15: a scene route is a HERO MOVE (the hub load relocates the hero) — name it.
+                DeNelle.Core.Diagnostics.DeathTrace.Note(
+                    $"HERO MOVED (pending scene route): SceneRouter.GoCastle() by HeroHealth.HandleDeath from {transform.position} — hub load will relocate the hero");
                 DeNelle.Core.SceneRouter.GoCastle();
                 yield break;
             }
@@ -617,6 +659,10 @@ namespace DeNelle.Village
         /// </summary>
         public void Respawn(Vector3 position)
         {
+            // F8-15: attribute the respawn placement in the death forensic window (always logs
+            // for this explicit warp, throttled outside the window).
+            DeNelle.Core.Diagnostics.DeathTrace.HeroMoved(transform.position, position,
+                "HeroHealth.Respawn", "in-place respawn at spawn anchor", always: true);
             var agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
             if (agent != null && agent.enabled && agent.isOnNavMesh)
                 agent.Warp(position);
