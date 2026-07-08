@@ -103,9 +103,18 @@ namespace DeNelle.HUD
             scaler.matchWidthOrHeight = 0.5f;
             _ui.AddComponent<GraphicRaycaster>();
 
-            // DIALOGUE TEMPLATE (WO-582): the bottom strip is built from the ONE master frame
-            // factory using the Blink Dialogue_Panel frame + its pre-styled drop-zones. The VIEW
-            // re-styles nothing — it drops the model (speaker / body / choices) into the zones.
+            // DIALOGUE TEMPLATE — F8-1/F8-5 fix (RCA_DIALOGUE_DOUBLE_FRAME_2026-07-07, OPTION A):
+            // the panel is built on the WINDOW-family FrameCore (Core_Panel, portrait 1210x1815)
+            // instead of the landscape FrameDialogue STRIP — the strip art stretched tall was
+            // rectangle #1 of the proven "frame inside a frame" read. FrameCore is drawn for a
+            // tall reading window, so the frame SUPPLIES the chrome (canon §4): its measured kit
+            // zones + the factory's ObsidianFill body plate replace the deleted per-screen
+            // DialogueInterior patch plate (rectangle #2), and the factory's close-band
+            // reservation + footer relocation keep content geometrically above the ONE shared
+            // Close (rectangle #3 no longer collides). NOTE: panel_window/panel_window_dark are
+            // `panel/` role sprites — BuildObsidianPanel resolves frameName under RoleFrame, so
+            // they'd fall to the zone-less PROCEDURAL path; FrameCore IS the window frame here.
+            // FrameDialogue stays in the catalog for any true bottom-strip use.
             // OWNER RULING 2026-07-06 ("not over top of HUD controls; moved up, readable on
             // mobile; larger; scrollable"): a centered READING PANEL that clears every HUD
             // control zone (HudAreasHost actuals — ActionBar top y=0.150 x0.28-0.72,
@@ -116,53 +125,29 @@ namespace DeNelle.HUD
             // screen, so the clearance holds at 16:9 and 19.5:9 alike.
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "",
                 new Vector2(0.29f, 0.20f), new Vector2(0.71f, 0.62f),
-                () => _vm?.Close(), withBackdrop: false, frameName: RpgUiCatalog.FrameDialogue);
+                () => _vm?.Close(), withBackdrop: false, frameName: RpgUiCatalog.FrameCore);
             _box = chrome.root.GetComponent<RectTransform>();
 
-            // SWEEP 9413 (panel_Dialogue.png: "Brom / Town Crier" + text floated over WORLD
-            // geometry — no fill behind them): the FrameDialogue drop-zones are pixel-measured
-            // for the OLD LANDSCAPE STRIP art (medallion = a full-height far-left column,
-            // header a mid-band at y 0.64-0.93, body a right sub-rect), and only the BODY zone
-            // receives a kit ZoneBacking plate — on this tall reading panel those strip
-            // fractions scatter the content and leave header/hint on the stretched art's
-            // transparent centre. The view now lays out its OWN zones sized for the reading
-            // panel, over ONE opaque obsidian plate spanning the whole interior, so every
-            // element reads on solid fill inside the single frame. The strip-measured kit
-            // zones (and their crest emblem / partial plate) are deactivated on THIS instance.
-            if (chrome.layout != null)
-            {
-                if (chrome.layout.header != null) chrome.layout.header.gameObject.SetActive(false);
-                if (chrome.layout.body != null) chrome.layout.body.gameObject.SetActive(false);
-                if (chrome.layout.medallion != null) chrome.layout.medallion.gameObject.SetActive(false);
-            }
-
             var contentRoot = chrome.content.transform;
-            var interior = new GameObject("DialogueInterior", typeof(Image));
-            interior.transform.SetParent(contentRoot, false);
-            var irt = interior.GetComponent<RectTransform>();
-            // SWEEP 2026-07-06 (fresh 1280x720 capture): the plate at 0.045/0.055 covered the
-            // frame's painted interior ornament so the whole panel read as a raw black rectangle
-            // with frame edges sticking out. Inset the plate INSIDE the frame border (the
-            // landscape-strip art's stretched top/bottom borders are thick on this tall panel).
-            irt.anchorMin = new Vector2(0.06f, 0.10f);
-            irt.anchorMax = new Vector2(0.94f, 0.935f);
-            irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
-            var iimg = interior.GetComponent<Image>();
-            iimg.color = ElarionUiKit.ObsidianFill;   // the kit's near-black panel fill (opaque)
-            iimg.raycastTarget = false;
-            interior.transform.SetAsFirstSibling();   // behind every zone, above the frame art
 
-            // Own zones (fractions of the panel interior): portrait top-left, speaker header
-            // beside it, reading body below, hint sliver at the body's foot — all INSIDE the
-            // one frame, all over the opaque plate.
-            // SWEEP 2026-07-06 re-stack (top → bottom): portrait+speaker band, reading body,
-            // Continue chip band, then the canonical Close — every band inside the interior
-            // plate, none overlapping. The old body (0.24–0.70) left a giant dead band above
-            // a Close whose fixed 120-unit box actually spans y 0.12–0.385 of this 453-unit
-            // panel on a landscape screen (the kit reserves against the PORTRAIT reference).
-            var portraitHost = MakeZone(contentRoot, "PortraitHost", new Vector2(0.075f, 0.71f), new Vector2(0.22f, 0.91f));
-            var headerZone   = MakeZone(contentRoot, "SpeakerZone",  new Vector2(0.24f, 0.71f), new Vector2(0.93f, 0.91f));
-            var bodyZone     = MakeZone(contentRoot, "BodyZone",     new Vector2(0.075f, 0.515f), new Vector2(0.925f, 0.69f));
+            // Kit drop-zones (the protected class — the factory's close-band reservation only
+            // guards content INSIDE layout.*; laying custom fractions on chrome.content is the
+            // documented "unprotected class" failure). Fallback fractions mirror the FrameCore
+            // anatomy for the PROCEDURAL path (frame art absent → chrome.layout is null).
+            var layout = chrome.layout;
+            var headerZone   = (layout != null && layout.header != null) ? layout.header
+                : MakeZone(contentRoot, "SpeakerZone",  new Vector2(0.24f, 0.90f),  new Vector2(0.88f, 0.972f));
+            var bodyZone     = (layout != null && layout.body != null) ? layout.body
+                : MakeZone(contentRoot, "BodyZone",     new Vector2(0.055f, 0.41f), new Vector2(0.945f, 0.855f));
+            var footerZone   = (layout != null && layout.footer != null) ? layout.footer
+                : MakeZone(contentRoot, "ContinueZone", new Vector2(0.08f, 0.33f),  new Vector2(0.92f, 0.395f));
+            var portraitHost = (layout != null && layout.medallion != null) ? layout.medallion
+                : MakeZone(contentRoot, "PortraitHost", new Vector2(0.037f, 0.868f), new Vector2(0.220f, 0.988f));
+
+            // The medallion socket hosts the SPEAKER PORTRAIT (refreshed per Repaint), not the
+            // factory's generic crest emblem — hide the fallback emblem so the two never stack.
+            var emblem = portraitHost.Find("MedallionEmblem");
+            if (emblem != null) emblem.gameObject.SetActive(false);
 
             // Tap-to-advance: a transparent button filling the BODY ZONE ONLY (advances lines,
             // not choices). Deliberately contained to the panel — never a full-screen catcher.
@@ -177,48 +162,28 @@ namespace DeNelle.HUD
             tapBtn.onClick.AddListener(OnBoxTapped);
 
             // F8 fleet capture ("CLICK-BLOCKED: 'CloseButton' covered by 'TapAdvance'" x7):
-            // the kit builds the shared CloseButton BEFORE this catcher, and the frame's
-            // measured close zone overlaps the body zone — so the catcher rendered (and
-            // raycast) on top of the panel's own Close. Raise the Close to the top of the
-            // panel subtree so it stays clickable above the catcher.
-            //
-            // 2026-07-06 owner ruling (supersedes the interim compact-Close override): the
-            // CANONICAL Close size/seat stands on the reading panel. Fresh-capture sweep: at
-            // y=0.075 the fixed box's bottom still sat inside the stretched painted bottom
-            // border (~0.10 of this panel) — seat it at y=0.12, just above the interior
-            // plate's floor (canonical 360x120 size + bottom-centre law preserved; the box
-            // then spans y 0.12–0.385, and the Continue chip band starts at 0.40 above it).
+            // the kit builds the shared CloseButton BEFORE this catcher — raise the Close to
+            // the top of the panel subtree so it stays clickable above the catcher.
+            // OPTION A (F8-1/F8-5): the per-view anchor override is REMOVED — the factory's
+            // SeatSharedCloseInside owns the seat (canonical 360x120, bottom-centre band), and
+            // the factory's close-band reservation already ends layout.body/footer above it.
             if (chrome.close != null)
-            {
-                var closeRt = chrome.close.transform as RectTransform;
-                if (closeRt != null)
-                {
-                    closeRt.anchorMin = new Vector2(0.5f, 0.12f);
-                    closeRt.anchorMax = new Vector2(0.5f, 0.12f);
-                }
                 chrome.close.transform.SetAsLastSibling();
 
-                // F8-1/F8-5 RCA instrumentation (owner 2026-07-07 "still here RCA first"): the
-                // capture shows the Close hanging BELOW the frame + colliding with Continue,
-                // contradicting the bottom-pivot seat math — something re-stamps pivot/size after
-                // this override, or the fractions land in a different parent space. Log the REAL
-                // post-layout geometry once per build. SYNCHRONOUS (ForceUpdateCanvases runs the
-                // layout pass on demand) — WaitForEndOfFrame never fires under -nographics, so a
-                // coroutine trace is blind to the headless fleet.
-                TraceDialogueLayout(chrome, interior);
-            }
-
-            // Speaker name → header zone (left, gilt) with the guild/shop AFFILIATION as a
-            // dim sub-line beneath it (owner-ratified card standard: name + affiliation +
+            // Speaker name → the kit HEADER zone (left, gilt) with the guild/shop AFFILIATION
+            // as a dim sub-line beneath it (owner-ratified card standard: name + affiliation +
             // portrait on every NPC card). Body text → body zone. (Drop, no re-style.)
-            _speaker = MakeLabel(headerZone, "Speaker", new Vector2(0f, 0.42f), Vector2.one,
+            // FrameCore's header band is thin (~7% of the panel) — FitSingleLine bounds both
+            // lines (auto-size + ellipsis, §1.14) so they can never clip in the band.
+            _speaker = MakeLabel(headerZone, "Speaker", new Vector2(0f, 0.45f), Vector2.one,
                 24, ElarionUi.Gilt, TMPro.FontStyles.Bold, TMPro.TextAlignmentOptions.BottomLeft);
-            _affiliation = MakeLabel(headerZone, "Affiliation", Vector2.zero, new Vector2(1f, 0.42f),
+            ElarionUiKit.FitSingleLine(_speaker);
+            _affiliation = MakeLabel(headerZone, "Affiliation", Vector2.zero, new Vector2(1f, 0.45f),
                 13, ElarionUi.ParchmentDim, TMPro.FontStyles.Italic, TMPro.TextAlignmentOptions.TopLeft);
+            ElarionUiKit.FitSingleLine(_affiliation);
             // SCROLLABLE BODY (owner 2026-07-06: "in case there is more text, scrollable"):
-            // the upper region of the body zone hosts the §1.14 kit scroll zone (vertical,
-            // clamped, auto-hide scrollbar); the bottom sliver keeps the tap hint clear of
-            // the frame's close band. Longer passages scroll instead of overflowing.
+            // the body zone hosts the §1.14 kit scroll zone (vertical, clamped, auto-hide
+            // scrollbar). Longer passages scroll instead of overflowing.
             var wellGo = new GameObject("BodyWell", typeof(RectTransform));
             wellGo.transform.SetParent(bodyZone, false);
             var wellRt = wellGo.GetComponent<RectTransform>();
@@ -251,12 +216,14 @@ namespace DeNelle.HUD
 
             // SWEEP 2026-07-06 (supersedes the bare "tap to continue" italic hint): the fresh
             // capture showed NO visible advance affordance at all — a tap-anywhere contract
-            // with no control fails the no-dead-interaction law. The affordance is now a REAL
-            // labeled kit button (Continue chip) in its own band between the body and the
-            // Close; tapping the body text still advances too (catcher above). Repaint keeps
-            // driving its visibility through _tapHint (hidden while options show).
-            var contBtn = ElarionUiKit.Button(contentRoot, "Continue", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.30f, 0.40f), new Vector2(0.70f, 0.495f), OnBoxTapped);
+            // with no control fails the no-dead-interaction law. The affordance is a REAL
+            // labeled kit button (Continue chip). OPTION A: it drops into the kit FOOTER zone
+            // — the factory relocates that band to start just ABOVE the shared Close box
+            // (footer relocation, close-band reservation), so the chip sits between the body
+            // and the Close by RESERVED geometry, not hand fractions. Repaint keeps driving
+            // its visibility through _tapHint (hidden while options show).
+            var contBtn = ElarionUiKit.Button(footerZone, "Continue", ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.26f, 0f), new Vector2(0.74f, 1f), OnBoxTapped);
             if (contBtn != null)
             {
                 var contLbl = contBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);
@@ -266,11 +233,11 @@ namespace DeNelle.HUD
             }
             _tapHint = contBtn != null ? contBtn.gameObject : null;
 
-            // Speaker portrait → the frame's medallion socket (if present). The actual sprite is
-            // resolved + REFRESHED every Repaint (RefreshPortrait), because a per-node `portrait`
-            // command can change the speaker portrait mid-conversation. Built once here, repainted live.
-            // Portrait → the view's OWN top-left socket (the strip-measured kit medallion —
-            // a full-height left column on this tall panel — is deactivated above).
+            // Speaker portrait → the frame's MEDALLION socket (layout.medallion — FrameCore's
+            // top-left circle socket; the factory's crest emblem is hidden above so the two
+            // never stack). The actual sprite is resolved + REFRESHED every Repaint
+            // (RefreshPortrait), because a per-node `portrait` command can change the speaker
+            // portrait mid-conversation. Built once here, repainted live.
             _portrait = ElarionUiKit.Portrait(portraitHost,
                 ResolveSpeakerPortrait(_vm != null ? _vm.Speaker : null, out _), active: false);
             if (_portrait != null && _portrait.image != null) _portrait.image.raycastTarget = false;
@@ -279,28 +246,36 @@ namespace DeNelle.HUD
             // HUD/battle portraits keep theirs). The portrait reads plain on the plate.
             if (_portrait != null && _portrait.ring != null) _portrait.ring.gameObject.SetActive(false);
 
-            // Options column — INSIDE the panel (fresh-capture sweep: the old screen-anchored
-            // column at screen y 0.30–0.52 laid its plates over the panel's Close band). It
-            // now parents to the panel content, spanning the body + Continue bands (built on
-            // demand; the Continue chip hides while options show, so nothing collides).
+            // Options column — INSIDE the kit BODY zone (the protected class: the factory
+            // reservation already ends this zone above the Close band, so option plates can
+            // never collide with the shared Close). Spans the body's lower half, growing UP
+            // (built on demand; the Continue chip hides while options show).
             var col = new GameObject("Options");
-            col.transform.SetParent(contentRoot, false);
+            col.transform.SetParent(bodyZone, false);
             _optionsCol = col.AddComponent<RectTransform>();
-            _optionsCol.anchorMin = new Vector2(0.10f, 0.40f);
-            _optionsCol.anchorMax = new Vector2(0.90f, 0.70f);
+            _optionsCol.anchorMin = new Vector2(0.05f, 0f);
+            _optionsCol.anchorMax = new Vector2(0.95f, 0.60f);
             _optionsCol.offsetMin = Vector2.zero; _optionsCol.offsetMax = Vector2.zero;
             var vlg = col.AddComponent<VerticalLayoutGroup>();
             vlg.spacing = 8; vlg.childControlHeight = true; vlg.childControlWidth = true;
             vlg.childForceExpandHeight = false; vlg.childForceExpandWidth = true;
             vlg.childAlignment = TextAnchor.LowerCenter;
+
+            // F8-1/F8-5 instrumentation (kept per the RCA): log the REAL post-layout geometry
+            // of the new kit zones — panel / body / footer / close / continue — once per build.
+            // Runs at the END of BuildUi so `continue` is a real rect (the old call fired
+            // before the chip existed and honestly logged `<null>`). SYNCHRONOUS
+            // (ForceUpdateCanvases) — headless-safe under -nographics.
+            TraceDialogueLayout(chrome, bodyZone, footerZone);
         }
 
-        // F8-1/F8-5 RCA (owner "still here RCA first", 2026-07-07 23:28): dump the REAL post-layout
-        // geometry of the panel / interior plate / Close / Continue, in fractions of the PANEL rect.
-        // The capture shows the Close hanging below the frame + colliding with Continue; this names
-        // which transform actually breaks the seat math. ForceUpdateCanvases makes the world corners
-        // valid synchronously (headless-safe — no reliance on a render frame).
-        private void TraceDialogueLayout(ElarionUiKit.PanelChrome chrome, GameObject interior)
+        // F8-1/F8-5 (kept per the RCA, re-pointed at the OPTION A anatomy): dump the REAL
+        // post-layout geometry of the panel / kit body zone / kit footer zone / Close /
+        // Continue, in fractions of the PANEL rect — proves the factory's close-band
+        // reservation is protecting the dropped content. ForceUpdateCanvases makes the world
+        // corners valid synchronously (headless-safe — no reliance on a render frame).
+        private void TraceDialogueLayout(ElarionUiKit.PanelChrome chrome,
+            RectTransform bodyZone, RectTransform footerZone)
         {
             if (chrome == null || chrome.root == null) return;
             Canvas.ForceUpdateCanvases();
@@ -321,10 +296,10 @@ namespace DeNelle.HUD
 
             var closeRt = chrome.close != null ? chrome.close.transform as RectTransform : null;
             var contRt = _tapHint != null ? _tapHint.transform as RectTransform : null;
-            var intRt = interior != null ? interior.GetComponent<RectTransform>() : null;
             DeNelle.Core.Diagnostics.FlowTrace.Step("DlgLayout",
                 "panel worldY " + pMin.y.ToString("F1") + ".." + pMax.y.ToString("F1") +
-                " | interior " + Frac(intRt) +
+                " | body " + Frac(bodyZone) +
+                " | footer " + Frac(footerZone) +
                 " | close " + Frac(closeRt) +
                 (closeRt != null
                     ? " (pivot=" + closeRt.pivot.ToString("F2") + " anchors=" + closeRt.anchorMin.ToString("F3") +
@@ -529,8 +504,9 @@ namespace DeNelle.HUD
             return sp;
         }
 
-        // Bare fraction-anchored rect inside the panel interior (the view's own drop-zones —
-        // the FrameDialogue kit zones are strip-measured and unusable on the reading panel).
+        // Bare fraction-anchored rect inside the panel interior — FALLBACK ONLY, for the
+        // procedural chrome path (frame art absent → chrome.layout is null). On the normal
+        // FrameCore path the view uses the kit's layout.{header,body,footer,medallion} zones.
         private static RectTransform MakeZone(Transform parent, string name, Vector2 aMin, Vector2 aMax)
         {
             var go = new GameObject(name, typeof(RectTransform));
