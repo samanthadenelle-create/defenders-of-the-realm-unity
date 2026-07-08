@@ -94,7 +94,7 @@
     "manual": true,
     "euler": [
      0.0,
-     0.0,
+     45.0,
      -90.0
     ],
     "offset": [
@@ -103,7 +103,7 @@
      0.0
     ],
     "scale": 1.0,
-    "note": "manual \u2014 owner F8 2026-07-07 'wizard tower needs z-90' (Tripo WizardTower_1 roll). Base visual only; L2 Tower_Medieval_Big is upright polyperfect (ReskinForLevel skips base-authored orientation)."
+    "note": "manual \u2014 owner-dialed via the in-game Orient tool 2026-07-08 ([OrientRecipe] id=tower_wall_wizard euler=(0,45,-90)): the F8 z-90 roll + her +45 yaw. Base visual only; L2 Tower_Medieval_Big is upright polyperfect (ReskinForLevel skips base-authored orientation)."
    },
    "canHitAir": true
   },
