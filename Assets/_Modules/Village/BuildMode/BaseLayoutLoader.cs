@@ -337,6 +337,29 @@ namespace DeNelle.Village
             obstacle.size = new Vector3(w, 4f, d);
             obstacle.center = new Vector3(0f, 2f, 0f);
             obstacle.carving = true;   // carve the baked mesh, no full rebake
+
+            // F8-19 (invisible blocker) — the footprint box above is the ONE collider of
+            // record for a placed structure. SkinOptions.Structure does NOT strip the source
+            // prefab's own colliders, so the visual arrives carrying its raw MeshCollider —
+            // whose physics AABB (e.g. tower_ground_archer: 10.79×11.21×10.79 on a 2.5 m
+            // footprint) blocks movement FAR beyond the visible mesh. Strip every collider on
+            // the visual CHILDREN; colliders on the ROOT stay (the footprint box, plus any
+            // behavior-owned root collider like Gate's force-field BoxCollider). The select-tap
+            // raycast (BuildModeController.UpdateSelectLoop) resolves PlacedStructure via
+            // GetComponentInParent from the hit collider — the root footprint box satisfies it.
+            int stripped = 0;
+            Guard.Try("Structure", "strip visual colliders (footprint box is collider-of-record)", () =>
+            {
+                foreach (var c in go.GetComponentsInChildren<Collider>(true))
+                {
+                    if (c == null || c.gameObject == go) continue;   // root colliders stay
+                    Object.Destroy(c);
+                    stripped++;
+                }
+            });
+            FlowTrace.Step("Structure",
+                $"'{go.name}' footprint blocker: stripped {stripped} visual collider(s); " +
+                $"kept root footprint box {w:0.##}x{d:0.##}m (h=4) as the one physical/nav footprint.");
         }
     }
 }
