@@ -1,6 +1,9 @@
 # WORK ORDER 614 — Skill Tree Solo Rework (party-buff purge + hot-swap density)
 
-**Status: DRAFT — RULING 1 RECEIVED, rulings 2–3 open**
+**Status: RULED — READY TO IMPLEMENT (rulings 1, 2, 2a, 3 received; one open detail: T4 signature placement)**
+**⭐ OWNER RULING 3 (2026-07-08, verbatim "data only always"):** conversions and this whole pass are
+**100% data-only — no new code hooks, ever, as the standing default.** Any proposed effect that
+would need a code hook is redesigned to compose from existing effect primitives or dropped.
 **⭐ OWNER RULING 1 (2026-07-08, verbatim "new ones bsed on the premuim animations"):** the
 replacement/new actives are **NEW signature skills cut from the premium mocap clips** (the $370
 suite / Action-Knight set) — clip-first design wins over plain orphan re-wiring; orphan abilities
