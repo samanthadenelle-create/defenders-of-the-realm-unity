@@ -23,6 +23,7 @@
 
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using DeNelle.Core.Combat;
@@ -448,6 +449,14 @@ namespace DeNelle.Village
                 // lethal ticks in one frame can't start multiple death coroutines.
                 _isDead = true;
                 Debug.Log("[HeroHealth] Hero defeated.");
+                // F8-15 SLOW TRACE ON DIE (owner 2026-07-08: "three separate pop ups" + "stay on
+                // screen so we can see hero fall"): name every death listener at the lethal moment
+                // — the popup spam RCA is these invocation lists + the [Flow:ScreenOpen] lines that
+                // follow. downSeconds = how long the fallen hero holds before respawn/evac.
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Death",
+                    "lethal hit: downSeconds=" + _downSeconds.ToString("F1") +
+                    " | OnDeath listeners=[" + ListenerNames(OnDeath) + "]" +
+                    " | OnDied listeners=[" + ListenerNames(OnDied) + "]");
                 HitStopManager.DoImpact(HitTier.Heavy);   // one dramatic beat on death
                 PlayDeathAnim();
                 OnDeath?.Invoke();
@@ -547,11 +556,25 @@ namespace DeNelle.Village
         /// scene, so that path always fell through to a hard scene reload.
         /// </para>
         /// </summary>
+        /// <summary>F8-15: readable method names of a death event's subscribers (the popup RCA data).</summary>
+        private static string ListenerNames(Action evt)
+        {
+            if (evt == null) return "none";
+            var parts = new List<string>();
+            foreach (var d in evt.GetInvocationList())
+                parts.Add((d.Target != null ? d.Target.GetType().Name : "static") + "." + d.Method.Name);
+            return string.Join(", ", parts);
+        }
+
         private IEnumerator HandleDeath()
         {
             // Disable control immediately so a dead hero can't be walked or cast.
             if (_locomotion != null) _locomotion.enabled = false;
             if (_abilities  != null) _abilities.enabled  = false;
+
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Death",
+                "HandleDeath: down-beat starts (" + Mathf.Max(0.1f, _downSeconds).ToString("F1") +
+                "s) — the fall animation window; any panel opening before this elapses hides the fall.");
 
             // Brief "down" beat. WaitForSeconds is scaled time, but the lethal
             // HitStop above restores Time.timeScale within ~0.1s, so this elapses.
@@ -563,10 +586,15 @@ namespace DeNelle.Village
             // keep the normal in-place respawn below.
             if (DeNelle.Village.SceneOwnership.IsEnemyOwned)
             {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Death",
+                    "HandleDeath: down-beat elapsed -> EVAC branch (enemy-owned scene, GoCastle).");
                 Debug.Log("[HeroHealth] Hero down in enemy territory — raid ends, retreating to home hub.");
                 DeNelle.Core.SceneRouter.GoCastle();
                 yield break;
             }
+
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Death",
+                "HandleDeath: down-beat elapsed -> in-place respawn branch.");
 
             // Respawn at the recorded spawn point, falling back to the Heart's
             // position if that point is no longer meaningful (e.g. it was captured
