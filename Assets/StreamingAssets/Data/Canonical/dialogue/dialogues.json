@@ -7,7 +7,7 @@
     { "name": "Arcanist",    "affiliation": "Arcane Tower",     "portrait": "Portraits/arcane-tower" },
     { "name": "Drillmaster", "affiliation": "Barracks",         "portrait": "Portraits/barracks" },
     { "name": "Brom",        "affiliation": "Town Crier",       "portrait": "Portraits/brom" },
-    { "name": "Sylas",       "affiliation": "Ranger Companion", "portrait": "HeroPortraits/Sylas" },
+    { "name": "Sylas",       "affiliation": "Ranger Companion", "portrait": "Portraits/Sylas" },
     { "name": "Coppin",      "affiliation": "Marketplace",      "portrait": "Portraits/market" },
     { "name": "Blacksmith",  "affiliation": "Forge",            "portrait": "Portraits/forge" },
     { "name": "Armorer",     "affiliation": "Armorer's Hall",   "portrait": "Portraits/armorer" },

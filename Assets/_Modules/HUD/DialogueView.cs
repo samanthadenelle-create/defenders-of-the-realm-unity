@@ -45,6 +45,8 @@ namespace DeNelle.HUD
         private RectTransform _box;       // the dialogue box (tap to advance)
         private RectTransform _optionsCol;
         private GameObject _tapHint;
+        private Button _close;            // the factory's shared Close — arbitrated per Repaint (F8-22)
+        private string _lastActionArb;    // one FlowTrace arbitration line per state change, not per repaint
         private ElarionUiKit.PortraitHandle _portrait;   // medallion portrait disc (refreshed per Repaint)
 
         // F8 2026-07-06 (t=328): the dialogue now routes through the modal arbiter
@@ -213,6 +215,10 @@ namespace DeNelle.HUD
             // the factory's close-band reservation already ends layout.body/footer above it.
             if (chrome.close != null)
                 chrome.close.transform.SetAsLastSibling();
+            // F8-22 (one-action-one-button): keep the factory's shared Close handle so Repaint
+            // can arbitrate it against the Continue chip — exactly ONE primary action visible.
+            _close = chrome.close;
+            _lastActionArb = null;
 
             // Speaker name → the kit HEADER zone (left, gilt) with the guild/shop AFFILIATION
             // as a dim sub-line beneath it (owner-ratified card standard: name + affiliation +
@@ -392,7 +398,24 @@ namespace DeNelle.HUD
             RefreshPortrait();
 
             BuildOptions();
-            if (_tapHint != null) _tapHint.SetActive(!_vm.ShowingOptions && !string.IsNullOrEmpty(_vm.Text));
+
+            // F8-22 ONE-ACTION ARBITRATION: exactly ONE primary action visible at any moment.
+            //   Continue — a linear line with text (Advance always works: the VM's OnEnded
+            //              auto-closes on the last line's Advance, so Continue suffices).
+            //   Options  — ShowingOptions: each option IS the action; both chips hide.
+            //   Close    — the degenerate remainder only (no options, empty text): the shared
+            //              Close is the sole way out of a text-less non-choice state.
+            bool showContinue = !_vm.ShowingOptions && !string.IsNullOrEmpty(_vm.Text);
+            bool showClose = !_vm.ShowingOptions && !showContinue;
+            if (_tapHint != null) _tapHint.SetActive(showContinue);
+            if (_close != null) _close.gameObject.SetActive(showClose);
+            string arb = "action arb: continue=" + showContinue + " close=" + showClose +
+                " options=" + _vm.ShowingOptions;
+            if (arb != _lastActionArb)
+            {
+                _lastActionArb = arb;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue", arb);
+            }
         }
 
         private void BuildOptions()
