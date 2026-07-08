@@ -262,18 +262,43 @@ namespace DeNelle.Village
 
         private void Update()
         {
-            if (!IsActive) return;
+            // §12 P0 GATE TRACE (owner 2026-07-07 "armed but zero PlaceConfirm checks"):
+            // EVERY early-return between 'armed' and the PlaceConfirm evaluation now
+            // self-names, throttled ~1/sec, whenever it BLOCKS while an entry is armed.
+            // An armed player whose clicks do nothing can no longer fail silently —
+            // one '[Flow:Build] PlaceLoop BLOCKED at <gate>' line per second names the
+            // culprit. Helper: TraceBlockedWhileArmed (below).
+            if (!IsActive)
+            {
+                TraceBlockedWhileArmed("IsActive",
+                    "IsActive=false while an entry is still armed (Exit ran without CancelArmed?)");
+                return;
+            }
 
             // WO-377: freeze the placement loops while a Yarn dialogue is on screen so a
             // click meant for the dialogue box can't place/select/cancel a structure.
             // HeroLocomotion owns the global input gate (set on dialogue start, cleared on
             // complete). The ghost is hidden so nothing tracks the cursor mid-conversation.
-            if (HeroLocomotion.InputSuppressed) { _ghost?.Hide(); return; }
+            if (HeroLocomotion.InputSuppressed)
+            {
+                TraceBlockedWhileArmed("HeroLocomotion.InputSuppressed",
+                    "dialogue/cutscene input lock is holding the whole placement loop");
+                _ghost?.Hide(); return;
+            }
             // DEF-117 — raycast from the camera that is ACTUALLY on screen (the one
             // we pulled into the overview), never Camera.main: with rogue cameras in
             // play Camera.main can resolve to a non-rendering / wrong camera, so taps
             // would miss the build grid. _camera is set in PullCameraBack().
-            if (_camera == null) { _camera = ActiveScreenCamera(); if (_camera == null) return; }
+            if (_camera == null)
+            {
+                _camera = ActiveScreenCamera();
+                if (_camera == null)
+                {
+                    TraceBlockedWhileArmed("ActiveScreenCamera",
+                        "no enabled screen camera found — nothing to raycast from");
+                    return;
+                }
+            }
 
             // Move the overview each frame (WASD / edge-scroll / drag / zoom on desktop;
             // touch pans via the Lean driver). Runs in every mode so the player can re-frame
@@ -283,13 +308,40 @@ namespace DeNelle.Village
             // While the 3-axis orient editor is open, the placement loops are frozen so a tap
             // behind the modal can't drop a piece (the modal owns its own confirm/cancel).
             if (_orientEditor != null && _orientEditor.isActiveAndEnabled && _orientEditor.IsOpen)
-            { _ghost?.Hide(); return; }
+            {
+                // F8-30 suspect — the orient editor registered with PanelManager; if a dormant
+                // instance ever holds IsOpen=true this line names it with its full state.
+                TraceBlockedWhileArmed("orient-editor freeze",
+                    $"_orientEditor='{_orientEditor.gameObject.name}', isActiveAndEnabled={_orientEditor.isActiveAndEnabled}, " +
+                    $"IsOpen={_orientEditor.IsOpen}, PanelManager.AnyOpen={DeNelle.Core.UI.PanelManager.AnyOpen}, " +
+                    $"openPanel='{DeNelle.Core.UI.PanelManager.OpenPanelName ?? "<none>"}'");
+                _ghost?.Hide(); return;
+            }
 
             // Three exclusive modes: re-placing a selected structure (MOVE), arming a
             // new one (CREATE), or idle (tap a structure to SELECT it).
-            if (_movingSelected) { UpdateMoveLoop(); return; }
+            if (_movingSelected)
+            {
+                // Not a hard block, but while armed it DIVERTS the click away from the place
+                // loop — a stuck _movingSelected reads as "my armed tower won't place".
+                TraceBlockedWhileArmed("move-mode diversion",
+                    $"_movingSelected=true (selected='{(_selected != null ? _selected.itemId : "<null>")}') — the MOVE loop owns the click, place loop skipped");
+                UpdateMoveLoop(); return;
+            }
             if (_armed != null) { UpdatePlaceLoop(); return; }
             UpdateSelectLoop();
+        }
+
+        /// <summary>
+        /// §12 P0 gate trace — one throttled (~1/sec per gate) line whenever a gate in the
+        /// Update→UpdatePlaceLoop chain BLOCKS while an entry is armed. Silent while nothing
+        /// is armed (idle/select gating is normal), zero-cost when FlowTrace is off.
+        /// </summary>
+        private void TraceBlockedWhileArmed(string gate, string state)
+        {
+            if (_armed == null) return;
+            FlowTrace.Throttle("Build", "blocked-" + gate, 1f,
+                $"PlaceLoop BLOCKED at {gate}: {state} (armed='{_armed.id}')");
         }
 
         /// <summary>
@@ -431,17 +483,28 @@ namespace DeNelle.Village
         /// <summary>CREATE mode: the original armed-entry ghost-follow place loop (P1).</summary>
         private void UpdatePlaceLoop()
         {
-            if (_ghost == null) return;
+            if (_ghost == null)
+            {
+                TraceBlockedWhileArmed("ghost-null",
+                    "_ghost is null — no preview object, place loop cannot evaluate");
+                return;
+            }
 
             // WO-334 — while the Preview & Rotate panel is open, the placement is in the
             // player's hands (the modal owns confirm/cancel). Freeze the ghost loop so a
             // stray tap behind the modal can't drop a second structure.
-            if (_pendingPlace) { _ghost.Hide(); return; }
+            if (_pendingPlace)
+            {
+                TraceBlockedWhileArmed("pending-place freeze",
+                    $"_pendingPlace=true (dormant WO-334 modal path), rotateMenu={(_rotateMenu != null ? (_rotateMenu.gameObject.activeInHierarchy ? "live" : "inactive") : "<null>")} — a stuck _pendingPlace freezes evaluation forever");
+                _ghost.Hide(); return;
+            }
 
             // Cancel (right-click / Escape / touch Cancel button) backs out the armed
             // entry (keeps build mode open).
             if (_input.Cancel)
             {
+                FlowTrace.Step("Build", $"PlaceLoop: Cancel intent read — disarming '{_armed?.id}'");
                 CancelArmed();
                 return;
             }
@@ -452,6 +515,8 @@ namespace DeNelle.Village
 
             if (!RaycastGround(out RaycastHit hit))
             {
+                TraceBlockedWhileArmed("ground-raycast miss",
+                    $"ray from '{(_camera != null ? _camera.name : "<null>")}' through screenPoint={_input?.ScreenPoint} hit NOTHING within {_rayDistance}m — PlaceConfirm never evaluated");
                 _ghost.Hide();
                 return;
             }
@@ -465,6 +530,13 @@ namespace DeNelle.Village
             Vector3 seatSnapped = new Vector3(snapped.x, seatY, snapped.z);
             _ghost.MoveTo(seatSnapped, _armedYawSteps);
             _ghost.SetValid(valid);
+
+            // §12 heartbeat — EVERY gate above passed this frame: the PlaceConfirm latch IS
+            // polled below. If the owner clicks and still nothing happens while these LIVE
+            // lines flow, the dead link is the input source itself (device state included).
+            FlowTrace.Throttle("Build", "placeloop-live", 1f,
+                $"PlaceLoop LIVE: armed='{_armed?.id}', ghostValid={valid}{(valid ? "" : $" (reject={reason})")}, input={_input?.GetType().Name}, " +
+                $"Mouse.current={(UnityEngine.InputSystem.Mouse.current != null)} — PlaceConfirm poll runs this frame");
 
             // WO-394 — a CLICK that lands on an invalid target must never fail silently:
             // pop a specific reason toast (+ denied buzz). The ghost already tints red via
@@ -946,6 +1018,25 @@ namespace DeNelle.Village
         // =====================================================================
         //  Arming
         // =====================================================================
+
+        /// <summary>
+        /// Probe/dev entry — arm a catalog entry by id through the SAME <see cref="Arm"/> path a
+        /// palette-card tap uses (BuildPaletteUI.OnEntrySelected → Arm). NOTHING is bypassed:
+        /// the armed entry still runs the full ghost / validity / cost placement loop. Used by
+        /// the AutoPilot 'AssertTutorialFirstTower' real-input probe. Returns false (and traces)
+        /// when the id is not in the registry.
+        /// </summary>
+        public bool ArmById(string id)
+        {
+            var entry = CatalogRegistry.Get(id);
+            if (entry == null)
+            {
+                FlowTrace.Warn("Build", $"ArmById: '{id}' not found in CatalogRegistry — cannot arm.");
+                return false;
+            }
+            Arm(entry);
+            return true;
+        }
 
         private void Arm(CatalogEntry entry)
         {
