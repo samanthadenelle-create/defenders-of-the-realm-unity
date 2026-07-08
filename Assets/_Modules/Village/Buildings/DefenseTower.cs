@@ -42,6 +42,18 @@ namespace DeNelle.Village
         public Color BoltColor   = Color.white;
         public DamageElement Element = DamageElement.None;
 
+        // TOWER IDENTITY (owner 2026-07-08 "ballista shoots arrows not round pellet" /
+        // "arcane casts spells"): per-catalog-entry projectile VISUAL style. Set by
+        // StructureFactory from RepoProps.projectileStyle ("pellet"|"bolt"|"spell";
+        // null/empty/unknown -> pellet, the legacy sphere). Visual only — damage,
+        // targeting and travel logic are untouched.
+        public string ProjectileStyle = null;
+
+        /// <summary>Resolved projectile visual archetype (see <see cref="ProjectileStyle"/>).</summary>
+        private enum BoltStyle { Pellet, Bolt, Spell }
+        private BoltStyle _style;
+        private bool _styleResolved;
+
         // Allegiance — PlayerOwned (default) preserves every existing tower's
         // behaviour byte-for-byte; EnemyOwned garrison turrets target the player
         // party. Set by the spawner (GarrisonController) for garrison towers.
@@ -173,27 +185,10 @@ namespace DeNelle.Village
             // GUARD the bolt spawn: a thrown CreatePrimitive/material step must NOT abort the
             // shot (and orphan a half-built bolt). On failure we still apply damage below so the
             // turret stays functional — never silently dead.
-            GameObject bolt = null;
-            Guard.Try("DefenseTower", "spawn party bolt", () =>
-            {
-                bolt = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                bolt.name = "Bolt";
-                bolt.transform.localScale = Vector3.one * 0.4f;
-                var col = bolt.GetComponent<Collider>(); if (col != null) Destroy(col);
-                var sh = Shader.Find("Universal Render Pipeline/Lit");
-                if (sh != null)
-                {
-                    var m = new Material(sh);
-                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", BoltColor);
-                    if (m.HasProperty("_EmissionColor")) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", BoltColor * 2f); }
-                    var r = bolt.GetComponent<Renderer>(); if (r != null) r.sharedMaterial = m;
-                }
-                bolt.transform.position = muzzle;
-                bolt.AddComponent<ProjectileMover>().Launch(targetPos + Vector3.up * 1f, 40f, CanHitAir ? 0.1f : 0.35f);
-            });
+            GameObject bolt = SpawnProjectileVisual(muzzle, targetPos + Vector3.up * 1f, "party");
             VerifyBoltRenders(bolt, "party");
 
-            VFXManager.Play(MuzzleVfxFor(Element), muzzle);
+            PlayFireVfx(muzzle, targetPos + Vector3.up * 1f);
 
             target?.ApplyContactDamage(Damage);   // same seam the enemy attacks use on the hero
         }
@@ -284,32 +279,16 @@ namespace DeNelle.Village
             // GUARD the bolt spawn: a thrown CreatePrimitive/material step must NOT abort the
             // shot (and orphan a half-built bolt). Damage still lands below — the tower never
             // silently stops firing because one bolt's visual threw.
-            GameObject bolt = null;
-            Guard.Try("DefenseTower", "spawn bolt", () =>
-            {
-                bolt = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                bolt.name = "Bolt";
-                bolt.transform.localScale = Vector3.one * 0.4f;
-                var col = bolt.GetComponent<Collider>(); if (col != null) Destroy(col);
-                var sh = Shader.Find("Universal Render Pipeline/Lit");
-                if (sh != null)
-                {
-                    var m = new Material(sh);
-                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", BoltColor);
-                    if (m.HasProperty("_EmissionColor")) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", BoltColor * 2f); }
-                    var r = bolt.GetComponent<Renderer>(); if (r != null) r.sharedMaterial = m;
-                }
-                bolt.transform.position = muzzle;
-                bolt.AddComponent<ProjectileMover>().Launch(target.WorldPosition + Vector3.up * 1f, 40f, CanHitAir ? 0.1f : 0.35f);
-            });
+            GameObject bolt = SpawnProjectileVisual(muzzle, target.WorldPosition + Vector3.up * 1f, "hostile");
             VerifyBoltRenders(bolt, "hostile");
 
-            // ── Muzzle flash ──────────────────────────────────────────────────
+            // ── Muzzle flash / cast ───────────────────────────────────────────
             // Brief pooled burst at the fire point each shot. Reuses the shared
-            // VFXManager (object-pooled, quality-gated) — element-tinted so a
-            // Flame tower reads orange, Ice pale-blue, Aether/None violet.
+            // VFXManager (object-pooled, quality-gated) — element-tinted; a Spell-
+            // style tower plays a caster wind-up + an impact burst at the target
+            // instead, so its shot reads as a CAST, not a turret muzzle flash.
             // Null-safe via the static API: a no-op if VFXManager isn't booted.
-            VFXManager.Play(MuzzleVfxFor(Element), muzzle);
+            PlayFireVfx(muzzle, target.WorldPosition + Vector3.up * 1f);
 
             target.TakeDamage(EffectiveDamage, Element);   // hitscan damage on fire (WO-430: + Arcane Tower damage perk)
         }
@@ -341,6 +320,173 @@ namespace DeNelle.Village
             }
             FlowTrace.Throttle("DefenseTower", $"boltok:{GetInstanceID()}", 1f,
                 $"VerifyBolt ({kind}) ok: enabledRenderers={enabled} withMesh={withMesh}.");
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Projectile VISUAL styles (owner 2026-07-08 tower-identity pass).
+        // Data-driven off the catalog row's optional "projectileStyle" string;
+        // pure presentation — travel (ProjectileMover), damage and targeting
+        // are byte-identical across styles.
+        //   Pellet — legacy emissive sphere (default / fallback).
+        //   Bolt   — elongated shaft + tip, oriented along velocity (ballista
+        //            arrow; ProjectileMover already faces travel each frame).
+        //   Spell  — glowing arcane orb; PlayFireVfx adds cast + impact bursts.
+        // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>Resolve the catalog style string once (Step on resolution, Warn +
+        /// pellet fallback on an unknown value — per docs/INSTRUMENTATION_STANDARD.md).</summary>
+        private BoltStyle ResolveStyle()
+        {
+            if (_styleResolved) return _style;
+            _styleResolved = true;
+
+            string s = ProjectileStyle != null ? ProjectileStyle.Trim().ToLowerInvariant() : string.Empty;
+            switch (s)
+            {
+                case "":
+                case "pellet": _style = BoltStyle.Pellet; break;
+                case "bolt":   _style = BoltStyle.Bolt;   break;
+                case "spell":  _style = BoltStyle.Spell;  break;
+                default:
+                    FlowTrace.Warn("DefenseTower",
+                        $"'{name}': unknown projectileStyle '{ProjectileStyle}' — falling back to pellet (valid: pellet|bolt|spell).");
+                    _style = BoltStyle.Pellet;
+                    return _style;
+            }
+            FlowTrace.Step("DefenseTower",
+                $"'{name}': projectile style resolved -> {_style} (catalog projectileStyle='{ProjectileStyle ?? "<null>"}', element={Element}).");
+            return _style;
+        }
+
+        /// <summary>
+        /// Build + launch the per-shot projectile visual for the resolved style.
+        /// Guarded: a thrown CreatePrimitive/material step logs + returns whatever was
+        /// built (possibly null) — the caller's damage still lands, and VerifyBoltRenders
+        /// self-reports an invisible shot. Same non-pooled ProjectileMover path as ever.
+        /// </summary>
+        private GameObject SpawnProjectileVisual(Vector3 muzzle, Vector3 targetPos, string kind)
+        {
+            GameObject bolt = null;
+            Guard.Try("DefenseTower", $"spawn {kind} projectile", () =>
+            {
+                switch (ResolveStyle())
+                {
+                    case BoltStyle.Bolt:  bolt = BuildBoltVisual();  break;
+                    case BoltStyle.Spell: bolt = BuildSpellVisual(); break;
+                    default:              bolt = BuildPelletVisual(); break;
+                }
+                bolt.transform.position = muzzle;
+                // Face the target immediately so the first rendered frame of an elongated
+                // bolt already lies along the flight line (ProjectileMover re-faces per frame).
+                Vector3 dir = targetPos - muzzle;
+                if (dir.sqrMagnitude > 0.0001f) bolt.transform.rotation = Quaternion.LookRotation(dir);
+                bolt.AddComponent<ProjectileMover>().Launch(targetPos, 40f, CanHitAir ? 0.1f : 0.35f);
+            });
+            return bolt;
+        }
+
+        /// <summary>Legacy pellet — the emissive 0.4 m sphere (default style).</summary>
+        private GameObject BuildPelletVisual()
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            go.name = "Bolt";
+            go.transform.localScale = Vector3.one * 0.4f;
+            StripCollider(go);
+            ApplyBoltMaterial(go, BoltColor, 2f);
+            return go;
+        }
+
+        /// <summary>
+        /// Ballista/archer BOLT — a thin elongated shaft (cylinder laid along +Z) with a
+        /// short steel tip cube at the nose. Code-built primitives, one shared parent the
+        /// mover rotates along velocity. Reads as an arrow, not a pellet.
+        /// </summary>
+        private GameObject BuildBoltVisual()
+        {
+            var root = new GameObject("Bolt");
+
+            // Shaft: cylinder's long axis is local Y — rotate X+90 so it lies along the
+            // parent's forward (+Z), the direction ProjectileMover faces.
+            var shaft = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            shaft.name = "Shaft";
+            shaft.transform.SetParent(root.transform, false);
+            shaft.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            shaft.transform.localScale    = new Vector3(0.08f, 0.55f, 0.08f);   // 1.1 m long, thin
+            StripCollider(shaft);
+            // Wooden-dark shaft: the tower's BoltColor darkened so element tint still reads.
+            ApplyBoltMaterial(shaft, BoltColor * 0.55f, 0.6f);
+
+            // Tip: a small cube at the nose, yaw/pitched 45° so its corner leads — a
+            // cheap diamond arrowhead silhouette.
+            var tip = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            tip.name = "Tip";
+            tip.transform.SetParent(root.transform, false);
+            tip.transform.localPosition = new Vector3(0f, 0f, 0.62f);
+            tip.transform.localRotation = Quaternion.Euler(45f, 45f, 0f);
+            tip.transform.localScale    = Vector3.one * 0.12f;
+            StripCollider(tip);
+            ApplyBoltMaterial(tip, new Color(0.75f, 0.78f, 0.82f), 1.2f);   // steel glint
+
+            return root;
+        }
+
+        /// <summary>
+        /// Arcane SPELL orb — a larger, strongly emissive sphere that reads as a glowing
+        /// projectile (the cast/impact VFX around it come from PlayFireVfx).
+        /// </summary>
+        private GameObject BuildSpellVisual()
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            go.name = "SpellOrb";
+            go.transform.localScale = Vector3.one * 0.5f;
+            StripCollider(go);
+            // Hot emissive violet-leaning glow; BoltColor still tints per tower.
+            ApplyBoltMaterial(go, BoltColor, 4f);
+            return go;
+        }
+
+        private static void StripCollider(GameObject go)
+        {
+            var col = go.GetComponent<Collider>(); if (col != null) Destroy(col);
+        }
+
+        /// <summary>Shared URP/Lit emissive material apply (the legacy pellet look, tunable).</summary>
+        private static void ApplyBoltMaterial(GameObject go, Color color, float emission)
+        {
+            var sh = Shader.Find("Universal Render Pipeline/Lit");
+            if (sh == null) return;
+            var m = new Material(sh);
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
+            if (m.HasProperty("_EmissionColor")) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", color * emission); }
+            var r = go.GetComponent<Renderer>(); if (r != null) r.sharedMaterial = m;
+        }
+
+        /// <summary>
+        /// Per-shot fire VFX. Pellet/Bolt keep the legacy element-tinted muzzle burst;
+        /// Spell style reads as a CAST — wind-up at the muzzle + an element impact burst
+        /// at the target point. All through the pooled, null-safe VFXManager static API.
+        /// </summary>
+        private void PlayFireVfx(Vector3 muzzle, Vector3 targetPos)
+        {
+            if (ResolveStyle() == BoltStyle.Spell)
+            {
+                VFXManager.Play(VFXType.Cast_MageCharge, muzzle);
+                VFXManager.Play(ImpactVfxFor(Element), targetPos);
+                return;
+            }
+            VFXManager.Play(MuzzleVfxFor(Element), muzzle);
+        }
+
+        /// <summary>Maps the tower's damage element to a point-impact VFXType (spell style).</summary>
+        private static VFXType ImpactVfxFor(DamageElement element)
+        {
+            switch (element)
+            {
+                case DamageElement.Flame: return VFXType.Impact_Flame;
+                case DamageElement.Ice:   return VFXType.Impact_Ice;
+                case DamageElement.None:  return VFXType.Impact_Physical;
+                default:                  return VFXType.Impact_Aether;   // Aether
+            }
         }
 
         /// <summary>Maps the tower's damage element to its tower-bolt muzzle VFXType.</summary>

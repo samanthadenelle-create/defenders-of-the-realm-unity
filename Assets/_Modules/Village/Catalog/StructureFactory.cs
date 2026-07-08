@@ -544,6 +544,10 @@ namespace DeNelle.Village
                     t.FireRate  = r.fireRate;
                     t.CanHitAir = r.canHitAir;
                     t.Element   = r.element;
+                    // TOWER IDENTITY (owner 2026-07-08): optional per-entry projectile
+                    // VISUAL style ("pellet"|"bolt"|"spell"; null = pellet). Data-driven —
+                    // the component resolves + instruments the string itself.
+                    t.ProjectileStyle = r.projectileStyle;
                     break;
                 }
 

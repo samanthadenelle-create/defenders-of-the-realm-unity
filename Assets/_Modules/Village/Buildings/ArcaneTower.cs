@@ -166,8 +166,54 @@ namespace DeNelle.Village
             Vector3 muzzle  = transform.position + Vector3.up * 2.5f;
             Vector3 impact  = primary.WorldPosition;
 
-            // ── Cast + blast VFX (null-safe: no-op if VFXManager isn't booted) ──
+            // ── SPELL CAST (owner 2026-07-08 "arcane casts spells") ────────────
+            // Wind-up at the spire top, then a glowing arcane orb LOBS to the
+            // impact point; the blast VFX + damage/slow land when the orb ARRIVES
+            // (ProjectileMover.onArrive — its designed 'hit connects on landing'
+            // contract), so the shot reads as a cast spell, not a hitscan pop.
+            // Null-safe: VFXManager statics no-op when not booted.
             VFXManager.Play(VFXType.Cast_MageCharge, muzzle);
+
+            GameObject orb = null;
+            Guard.Try("ArcaneTower", "spawn spell orb", () =>
+            {
+                orb = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                orb.name = "ArcaneSpellOrb";
+                orb.transform.localScale = Vector3.one * 0.55f;
+                var col = orb.GetComponent<Collider>(); if (col != null) Destroy(col);
+                var sh = Shader.Find("Universal Render Pipeline/Lit");
+                if (sh != null)
+                {
+                    var m = new Material(sh);
+                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", BlastColor);
+                    if (m.HasProperty("_EmissionColor")) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", BlastColor * 4f); }
+                    var r = orb.GetComponent<Renderer>(); if (r != null) r.sharedMaterial = m;
+                }
+                orb.transform.position = muzzle;
+                // Arcing lob; blast applies ON ARRIVAL (the un-pooled mover self-destroys).
+                orb.AddComponent<ProjectileMover>().Launch(impact + Vector3.up * 0.5f, 26f, 0.35f,
+                    () => ApplyBlast(primary, impact));
+            });
+
+            if (orb == null)
+            {
+                // Orb visual failed to build — never let the spire go silently dead:
+                // fall back to the legacy instant blast (Warn per INSTRUMENTATION_STANDARD).
+                FlowTrace.Warn("ArcaneTower",
+                    "FireBlast: spell-orb spawn failed — applying blast instantly (visual-less fallback).");
+                ApplyBlast(primary, impact);
+            }
+        }
+
+        /// <summary>
+        /// Detonate the blast at <paramref name="impact"/>: explosion VFX + full damage to
+        /// the primary, splash + Slow to every other live Hostile in <see cref="AoeRadius"/>.
+        /// Called on spell-orb ARRIVAL (or instantly by the fallback path above).
+        /// </summary>
+        private void ApplyBlast(IDamageable primary, Vector3 impact)
+        {
+            if (this == null) return;   // tower destroyed while the orb was in flight
+
             VFXManager.Play(VFXType.Impact_ExplosionAether, impact);
 
             float aoeSq = AoeRadius * AoeRadius;

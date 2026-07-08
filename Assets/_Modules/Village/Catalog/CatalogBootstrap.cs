@@ -153,8 +153,9 @@ namespace DeNelle.Village
                     buildCost  = 100,
                     navSurface = NavSurfaceKind.Blocker,
                     visualHeight = 5f,
-                    range = 16f, damage = 6f, fireRate = 2.5f,
+                    range = 14f, damage = 6f, fireRate = 2.5f,
                     canHitAir = false, element = DamageElement.None,
+                    projectileStyle = "bolt",   // owner 2026-07-08: arrows, not pellets
                     placement = new PlacementRules
                     {
                         mustSitOn = PlacementSurface.Ground,
@@ -177,8 +178,12 @@ namespace DeNelle.Village
                     buildCost  = 150,
                     navSurface = NavSurfaceKind.Blocker,
                     visualHeight = 5f,
-                    range = 55f, damage = 14f, fireRate = 1f,
-                    canHitAir = true, element = DamageElement.Aether,
+                    // Owner 2026-07-08 tower-identity ladder: the Ballista is the SNIPER —
+                    // longest range of the three, slowest fire, heaviest PHYSICAL single hit
+                    // (55 m map-wide range + Aether were the pre-ladder values).
+                    range = 22f, damage = 20f, fireRate = 0.5f,
+                    canHitAir = true, element = DamageElement.None,
+                    projectileStyle = "bolt",
                     placement = new PlacementRules
                     {
                         mustSitOn = PlacementSurface.WallWalk,
@@ -206,8 +211,9 @@ namespace DeNelle.Village
                     buildCost  = 200,
                     navSurface = NavSurfaceKind.Blocker,
                     visualHeight = 6f,
-                    range = 24f, damage = 16f, fireRate = 0.6f,
+                    range = 16f, damage = 16f, fireRate = 0.6f,   // owner 2026-07-08: mid-range zone caster
                     canHitAir = true, element = DamageElement.Aether,
+                    projectileStyle = "spell",
                     aoeRadius = 6f, slowSeconds = 2.5f, splashFraction = 0.7f,
                     maxLevel = 3,
                     placement = new PlacementRules

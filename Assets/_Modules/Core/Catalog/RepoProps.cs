@@ -116,6 +116,17 @@ namespace DeNelle.Core.Catalog
         public bool          canHitAir = false;  // ground = false · wall-walk = true
         public DamageElement element   = DamageElement.None;
 
+        /// <summary>
+        /// TOWER IDENTITY (owner 2026-07-08 "ballista shoots arrows not round pellet") —
+        /// OPTIONAL projectile VISUAL style for tower behaviours. Enum-by-name string kept
+        /// loose on purpose (pure data, no Village ref): "pellet" (legacy sphere, the
+        /// default when null/empty/unknown), "bolt" (elongated shaft + tip, oriented along
+        /// velocity — ballista/archer), "spell" (glowing orb + cast/impact VFX — arcane).
+        /// Visual ONLY: damage/targeting/travel logic never read it. JSON deserializes the
+        /// optional "projectileStyle" string straight in.
+        /// </summary>
+        public string projectileStyle = null;
+
         // --- AoE / debuff stats (WO-113 ArcaneTower) — OPTIONAL, additive ---
         // Only the ArcaneTower behaviour reads these; every other behaviorId ignores
         // them. All default 0 so existing rows are unaffected and the component falls
