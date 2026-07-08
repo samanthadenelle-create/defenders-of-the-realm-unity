@@ -82,10 +82,9 @@
     "canHitAir": true,
     "element": "Aether",
     "placement": {
-     "mustSitOn": "WallWalk",
+     "mustSitOn": "Ground",
      "footprint": 2.0,
      "noOverlap": true,
-     "requiresSupport": true,
      "checkAffordable": true
     }
    },
