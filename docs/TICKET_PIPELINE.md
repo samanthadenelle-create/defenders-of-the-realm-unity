@@ -70,6 +70,13 @@ At every arrow, **log the hand-off** (who → who, why) for observability.
 
 ## Key principles (binding)
 
+0. **RCA proof SHOWN by data, on every ticket (owner directive 2026-07-08).** Every hand-off —
+   board metadata, RESULT file, or a dated RCA doc for anything non-trivial — carries a PROOF
+   section: the verbatim captured line(s) with source (Player.log:NNNN / break-log entry /
+   FlowTrace tag / .meta field / screenshot name) and one sentence on what each proves. If the
+   data doesn't exist yet, instrument first and capture it; the RCA is not done until the proving
+   line is quotable. The owner judges the fix's grounding herself — never a narrative-only RCA.
+   (Templates: docs/RCA_WEAPON_OFFSETS_2026-07-07.md, docs/RCA_DIALOGUE_DOUBLE_FRAME_2026-07-07.md.)
 1. **Role separation — no overlap.** QA doesn't write; CLI doesn't triage-classify; PO doesn't RCA.
 2. **Read-only early triage.** QA/RCA agents are gate-free and never mutate the tree.
 3. **New-vs-old gate is mandatory.** Classify before any fix. New function → feature WO, not a patch.
