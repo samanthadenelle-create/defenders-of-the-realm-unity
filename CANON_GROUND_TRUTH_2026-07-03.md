@@ -1,5 +1,11 @@
 # CANON GROUND TRUTH — 2026-07-03
 
+> ## ⚠ SUPERSEDED 2026-07-08 — this is no longer the live anchor.
+> Current anchor = **`CANON_GROUND_TRUTH_2026-07-08.md`**. This 07-03 snapshot is frozen history: it
+> predates the 07-07/08 F8 ticket program (P0 tower re-entrancy fix owner-confirmed, 30+ F8 tickets,
+> wave-2 close on exe 2026-07-08 05:10:11, WebGL preview `h0h6hfsf5`). Read the 07-08 anchor for live
+> state; the body below is kept per §15 (banner, don't rewrite).
+
 > **Purpose:** the single anchor of *current reality*, derived ONLY from verified sources (tonight's
 > fleet captures, bake logs, live HTTP reads, the working tree, owner felt-verdicts). If a doc
 > contradicts a line here, the doc is STALE. **Supersedes `CANON_GROUND_TRUTH_2026-07-01.md`.**

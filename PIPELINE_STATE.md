@@ -10,11 +10,22 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
 
 ---
 
-## CURRENT STATE — 2026-06-28 (supersedes ALL blocks below; anchor now `CANON_GROUND_TRUTH_2026-07-03.md`)
+## CURRENT STATE — 2026-06-28 (supersedes ALL blocks below; anchor now `CANON_GROUND_TRUTH_2026-07-08.md`)
 
 > The 2026-06-09 and 2026-05-29 blocks below are kept for history. Where they conflict, **this block wins.**
 
-- **2026-07-03 delta (see the anchor for full detail):** current focus = **THE FEEL ARC** (ten-year-old
+- **2026-07-08 delta (LIVE — see `CANON_GROUND_TRUTH_2026-07-08.md` for full detail):** focus = THE FEEL
+  ARC run through the **F8 ticket program**. **P0 "still cant do the tower" FIXED + owner felt-confirmed**
+  (dialogue Closed re-entrancy froze build-mode input; per-VM Closed guard `82422d11`). The 07-07/08 F8
+  board (30+ tickets) is fixed/spec'd/evidence-pinned (white-Paladin root fix, F8-24 stairs sweep, dialogue
+  FrameCore rebuild, "Tap to continue" hint, scatter enemy families, tower identity, combat HUD v8 ON).
+  **Wave 2 CLOSED** on exe **2026-07-08 05:10:11** (fleet ZERO tickets); fresh HEAD gates `COMPILE_GATE_OK`
+  + `REGRESSION_OK`. Branch `wip/village2-and-f8-tickets`, HEAD `d944d161`, **71 ahead, push HELD**. Save
+  schema **v28**. **WebGL preview `h0h6hfsf5`** (prod untouched, 07-01 Pi build). Next big lane = **WO-614
+  skill-tree solo rework** (RULED, READY). Open owner directives: F8-40 max-tier tower identity / F8-41
+  waves attack the city / F8-42 repair costs. Pre-existers: WO-602, CavePortal seam, WO-453.
+
+- **2026-07-03 delta (⚠ superseded by the 07-08 delta above; see the anchor for full detail):** current focus = **THE FEEL ARC** (ten-year-old
   test is the quality bar); south vertical slice fleet-proven 6/6 (natural seam: raise→moat→water→bridge),
   owner felt-pass pending. Post-processing was structurally DEAD until 07-02 (null postProcessData) —
   fixed via WorldFeelInjector (`ff.worldfeel`, dusk palette) + terrain relief/treelines. **Tutorial V2

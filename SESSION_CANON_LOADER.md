@@ -1,18 +1,20 @@
 # DeNelle Studios — Project Canon Loader
 
-> ## ▶ LIVE THREAD (2026-07-03) — READ BEFORE WORKING
+> ## ▶ LIVE THREAD (2026-07-08) — READ BEFORE WORKING
 > Current focus = **THE FEEL ARC** (owner: "the most important thing is how it FEELS"; quality bar =
-> the ten-year-old test). The 07-02→03 convergence session (~25 agents) landed: world feel (post-processing
-> was structurally DEAD until now — fixed; dusk sky, terrain relief), castle-raise fallout (all fixed),
-> character/anim/combat feel, NPC cards, vendors data-mapped, WC3 perk grid, end-state template, Tutorial V2
-> (built, ff.tutorialv2 OFF), new fleet oracles. **South vertical slice fleet-proven 6/6 (masked warp fires
-> mid-bridge)** — owner felt-pass pending; N/W/E waits for south "feels perfect". Read the live anchor
-> **`CANON_GROUND_TRUTH_2026-07-03.md`** + **`RESUME_2026-07-03_morning.md`** + `SESSION_BOOT_DIRECTIVE.md`.
-> **Next headline = WO-545 full Addressables** ("what CAN stream SHOULD stream") — blueprint in
-> `docs/WEBGL_DELIVERY_PLAN_2026-07-03.md`. Vercel preview of the convergence build is LIVE
-> (`defenders-of-the-realm-v2-69mafg5pj.vercel.app`); prod stays on the 07-01 Pi-sign-in build until promoted.
-> Seam un-stack (WO-453) still PARKED in `stash@{0}` (encounter-return strands 7.1km — publisher critique #1;
-> owner decision pending). **BINDING owner rule 07-03: read-before-assert applies to EVERYTHING (code + non-code).**
+> the ten-year-old test) driven through the **F8 ticket program** (owner felt-tests → F8 flags →
+> watcher auto-harvests → CLI RCA-from-data + fix + headless-verify → owner felt-verifies + closes).
+> **P0 "still cant do the tower" is FIXED + owner felt-confirmed** (dialogue Closed re-entrancy froze
+> build-mode input; per-VM Closed guard `82422d11`; 8 real-input probes PASS 4/4). The 07-07/08 F8 board
+> (30+ tickets) is fixed/spec'd/evidence-pinned; **wave 2 CLOSED** on exe **2026-07-08 05:10:11** (fleet
+> ZERO tickets). Read the live anchor **`CANON_GROUND_TRUTH_2026-07-08.md`** +
+> **`CLI_PREP_2026-07-08_next-session.md`** + `RESUME_2026-07-08_overnight-f8-sweep.md`.
+> **Next big lane = WO-614 skill-tree solo rework** (RULED, READY — signature actives from premium mocap,
+> T1 ranged Thunderbolt/Arcane Blast, "data only always"). Open owner directives: F8-40 max-tier tower
+> identity · F8-41 waves attack the city · F8-42 repair costs. **WebGL PREVIEW =
+> `defenders-of-the-realm-v2-h0h6hfsf5.vercel.app`** (from `bb0094cc`); **prod UNTOUCHED** (07-01 Pi build);
+> promotion + push are the owner's call. Branch `wip/village2-and-f8-tickets`, 71 commits ahead, **push
+> HELD**. **BINDING: read-before-assert applies to EVERYTHING (code + non-code).**
 
 **READ THIS FIRST on any new session (owner directive 2026-06-20).** Every CLI/agent
 loads this before doing anything, to stay an SME. It is the fast-path summary; the
@@ -43,9 +45,9 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   (implement + headless-verify) → PO (felt-verify + close). Shared board = the Task list; log
   every hand-off. Full spec: `docs/TICKET_PIPELINE.md`.
 
-## Current State (updated 2026-07-03 — anchored to `CANON_GROUND_TRUTH_2026-07-03.md`)
-- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). The 07-02→03 convergence session is in the tree, uncommitted — commit lanes staged by path, **push held for owner felt-pass**. Save schema **v28** (WO-587).
-- **THE FEEL ARC is the live focus** (2026-07-03 — supersedes web/Pi stabilization): ten-year-old test = quality bar; south vertical slice fleet-proven 6/6; Tutorial V2 built behind `ff.tutorialv2` (OFF). Pi sign-in RESOLVED; **game IS live on Vercel** (preview = convergence build at 79.7MB Brotli — the "blocked by 100MB" claim is stale; WO-545 Addressables is still the next headline). Seam un-stack PARKED in `stash@{0}` (publisher critique ranks closing it #1).
+## Current State (updated 2026-07-08 — anchored to `CANON_GROUND_TRUTH_2026-07-08.md`)
+- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). **HEAD `d944d161`, 71 commits ahead of origin, clean tree, push HELD for owner word.** Last code commit `bb0094cc`. Save schema **v28** (WO-587). Fresh headless gates on HEAD = `COMPILE_GATE_OK` + `REGRESSION_OK`.
+- **THE FEEL ARC is the live focus**, run through the **F8 ticket program**: ten-year-old test = quality bar; **P0 tower placement FIXED + owner felt-confirmed**; 30+ F8 tickets fixed/spec'd/evidence-pinned; **wave 2 CLOSED** (exe 2026-07-08 05:10:11, fleet ZERO tickets). White-Paladin root fixed. **WebGL preview `h0h6hfsf5`** deployed; **prod untouched** (07-01 Pi build). **Next big lane = WO-614 skill-tree solo rework** (RULED, READY).
 - **Title:** **"Echoes of Elarion"** (chapter) within the **"Defenders of the Realm"** series; tagline **"Hold the last light."** (WO-570).
 - **Combat space:** WO-584 consolidation (READY) — one warp-in space primitive, 3 skins (dungeon/outpost/arena), ownership flip; replaces flat ATB dungeon (`ff.atbdungeon` OFF).
 - **Game:** Echoes of Elarion / Defenders of the Realm (Unity 6 / URP). **V1 = ONE controllable hero
@@ -64,7 +66,8 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
 - **In-flight:** HEAD targeting sweep (`ff.enemystructureaware`) is **UNVERIFIED** — do not push until proven.
 
 ## Key Files to Remember
-- `CANON_GROUND_TRUTH_2026-07-03.md` (the single live anchor of current reality — read FIRST; supersedes the 07-01 / 06-28 / 06-26 snapshots)
+- `CANON_GROUND_TRUTH_2026-07-08.md` (the single live anchor of current reality — read FIRST; supersedes the 07-03 / 07-01 / 06-28 / 06-26 snapshots)
+- `CLI_PREP_2026-07-08_next-session.md` (wave-2 close prep + open F8-37..F8-42 tickets + WO-614 rulings)
 - `docs/COMBAT_PIVOT_NORTHSTAR.md` (single-Knight pivot — supersedes all "Blink/party-of-4" canon)
 - `docs/ARCHITECTURE_PRINCIPLES.md` · `docs/ARCHITECTURE.md` (hub)
 - `docs/TICKET_PIPELINE.md` (QA→CLI→PO ticket lifecycle, BINDING)

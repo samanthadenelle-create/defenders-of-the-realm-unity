@@ -15,7 +15,31 @@
 
 ---
 
-## ★★ SESSION HANDOVER — 2026-07-08 overnight verified-root-cause sweep (READ FIRST) ★★
+## ★★ SESSION HANDOVER — 2026-07-08 WAVE-2 CLOSE (READ FIRST) ★★
+
+**WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`, **HEAD `d944d161`, 71 commits ahead of origin,
+clean tree, push HELD for the owner's word.** Live anchor = **`CANON_GROUND_TRUTH_2026-07-08.md`**;
+wave-2 prep + open board = **`CLI_PREP_2026-07-08_next-session.md`**. The overnight P0 fix (below) is
+**owner felt-confirmed** (tutorial completes, placement works).
+
+**WAVE 2 CLOSED (05:10):** all morning F8 lanes committed through `bb0094cc`; final fleet on exe
+**2026-07-08 05:10:11 = ZERO tickets, all probes PASS**. Landed since the overnight sweep: F8-24 castle
+wall-stairs swept from the SHIPPED merged scene + navmesh rebaked (`13e85e12`), F8-31/32 nameplate GUID
+repair + portrait circle-mask, F8-33/35 Victory rows + BR ability icons, F8-15 death forensics
+(`[Flow:DeathTrace]`), F8-6 tree pose, "Tap to continue ▸" passive hint replacing the Continue chip,
+WO-614 skill-tree rulings stamped, fleet self-fixes (ArcaneTower fake-null NRE, popup oracle tap-advance
+contract, compass ForceProviderPoll). **WebGL PREVIEW = https://defenders-of-the-realm-v2-h0h6hfsf5.vercel.app**
+(from `bb0094cc`, READY; supersedes `2dizrqgws`). **Production untouched** (07-01 Pi build) — promotion +
+push are the owner's. Fresh HEAD gates this session: `COMPILE_GATE_OK` + `REGRESSION_OK`. Save schema **v28**.
+
+**NEXT:** owner felt-pass on exe 05:10:11 → name passes → push. Big next lane = **WO-614 skill-tree solo
+rework** (RULED, READY). Open owner directives: F8-40 max-tier tower identity · F8-41 waves attack the
+city · F8-42 repair costs (all in `CLI_PREP_2026-07-08_next-session.md`). Pre-existers unchanged: WO-602
+home-return, CavePortal seam, WO-453 rep spawn.
+
+---
+
+## ★★ SESSION HANDOVER — 2026-07-08 overnight verified-root-cause sweep (⚠ superseded as newest by the WAVE-2 CLOSE block above) ★★
 
 **WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`, ~75 local commits through `7e663981`,
 **push HELD for the owner's morning word**. The owner's night session ended with a BINDING directive

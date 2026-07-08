@@ -5,15 +5,18 @@ Code map: `Assets/_Modules/README.md`. Assets map: `Assets/README.md`.
 Docs index: `docs/README.md`.
 
 > **Branch = `wip/village2-and-f8-tickets`**. The live anchor of current reality is
-> `CANON_GROUND_TRUTH_2026-07-03.md` (updated 2026-07-03). Several files this index historically called "living/current" are now
+> `CANON_GROUND_TRUTH_2026-07-08.md` (updated 2026-07-08; supersedes the 07-03 anchor, now bannered).
+> Several files this index historically called "living/current" are now
 > STALE (pre-pivot: tower-defense + Solana + party-of-4 + Blink) — corrected per `CANON_READINESS_LEDGER_2026-06-26.md`.
 
 ## Living documents (read these; they are current)
 
 | File | Purpose |
 |---|---|
-| `CANON_GROUND_TRUTH_2026-07-03.md` | **The single live anchor of current reality — read FIRST** (supersedes the 07-01 / 06-28 / 06-26 anchors, now frozen) |
-| `RESUME_2026-07-03_morning.md` | **The live work thread / session resume** — 07-02→03 convergence session results + owner decisions + next steps |
+| `CANON_GROUND_TRUTH_2026-07-08.md` | **The single live anchor of current reality — read FIRST** (supersedes the 07-03 / 07-01 / 06-28 / 06-26 anchors, now frozen/bannered) |
+| `CLI_PREP_2026-07-08_next-session.md` | **The wave-2 close prep + open ticket board** (F8-37..F8-42, WO-614 rulings) — read after the anchor |
+| `RESUME_2026-07-08_overnight-f8-sweep.md` | Overnight verified-root-cause sweep ledger (P0 tower fix + verification lines) |
+| `RESUME_2026-07-03_morning.md` | 07-02→03 convergence session results (⚠ superseded by the 07-08 docs above; kept for history) |
 | `RESUME_2026-06-30_seam-unstack.md` | Seam un-stack (WO-453) resume path — still parked as of 07-03; FROZEN-VALID |
 | `CLAUDE.md` | **Agent rules — read first, non-negotiable** (§15 = canon maintenance) |
 | `SESSION_CANON_LOADER.md` | At-a-glance SME primer (current state + key files) |
