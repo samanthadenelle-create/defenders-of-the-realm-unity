@@ -65,10 +65,65 @@ namespace DeNelle.Editor
         private static readonly Dictionary<string, float> SideYaw = new Dictionary<string, float>
         { { "South", 0f }, { "West", 90f }, { "North", 180f }, { "East", 270f } };
 
+        // ── Owner ruling 2026-07-08: "if you cannot fix so they end at the top simply
+        // remove the steps for now" ──────────────────────────────────────────────────
+        // The walls rose +liftY (WO-593) but the Dungeon_Stairs_Stone prefab's rise is
+        // fixed, so the seated stairs END MID-AIR short of the rampart top ("stairs
+        // still in air", "2 sets of steps on the air" — the census self-heal can also
+        // duplicate: rebuild-restored originals + surviving clones). Removal is gated
+        // by EditorPrefs 'castle.stairsRemoved' so the census can't resurrect them;
+        // clear the pref (or run Restore) when stair models that reach the top exist.
+        private const string RemovedPref = "castle.stairsRemoved";
+
+        [MenuItem("Defenders/Castle/REMOVE Wall Stairs (owner 2026-07-08)")]
+        public static void RemoveAll()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            RemoveAllOnOpenScene(scene);
+            EditorSceneManager.MarkSceneDirty(scene);
+            bool saved = EditorSceneManager.SaveScene(scene, ScenePath);
+            AssetDatabase.SaveAssets();
+            Log("=== wall-stairs REMOVE standalone save: saved=" + saved + " ===");
+        }
+
+        public static void RemoveAllOnOpenScene(UnityEngine.SceneManagement.Scene scene)
+        {
+            EditorPrefs.SetBool(RemovedPref, true);
+            var doomed = new List<Transform>();
+            foreach (var root in scene.GetRootGameObjects())
+                foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                    if (t.name.StartsWith(StairPrefix, System.StringComparison.OrdinalIgnoreCase)
+                        && !HasStairAncestor(t))
+                        doomed.Add(t);
+            foreach (var t in doomed)
+            {
+                Log("REMOVED '" + t.name + "' at " + t.position + " (owner ruling: steps end mid-air).");
+                Object.DestroyImmediate(t.gameObject);
+            }
+            Log($"=== wall-stairs REMOVE DONE — {doomed.Count} object(s) destroyed; census disarmed " +
+                "(EditorPrefs castle.stairsRemoved). Rebake nav next. ===");
+        }
+
+        [MenuItem("Defenders/Castle/Restore Wall Stairs (re-arm census)")]
+        public static void RestoreCensus()
+        {
+            EditorPrefs.DeleteKey(RemovedPref);
+            Log("census re-armed — the next seat-fix run re-clones the four wall stairs.");
+        }
+
         /// <summary>Seat the stairs in the ALREADY-OPEN scene. No open, no save — the caller
         /// owns scene lifecycle (the batch rebuild saves once at the end).</summary>
         public static void RunOnOpenScene(UnityEngine.SceneManagement.Scene scene)
         {
+            if (EditorPrefs.GetBool(RemovedPref, false))
+            {
+                // Owner ruling in force: keep the scene stair-free even across rebuilds
+                // (CastleHubBuilder calls this seat-fix — without the sweep a rebuild-restored
+                // original would come back mid-air).
+                RemoveAllOnOpenScene(scene);
+                Log("seat fix SKIPPED — owner removal ruling in force (castle.stairsRemoved).");
+                return;
+            }
             Log("=== wall-stairs seat fix START ===");
             EnsureFourStairs(scene);
 
