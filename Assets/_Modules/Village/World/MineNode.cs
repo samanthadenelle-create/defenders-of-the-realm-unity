@@ -30,6 +30,23 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class MineNode : MonoBehaviour
     {
+        /// <summary>Player-facing harvest verb per resource (ticket F8-21, owner-specified):
+        /// Wood="Chop Wood", Food="Harvest Food", Iron="Mine Iron",
+        /// AetherCrystal="Mine Crystals". EVERY harvest interact prompt routes through
+        /// this so the verb never regresses to a generic "Mine &lt;Resource&gt;".
+        /// Zero-allocation: returns interned string literals (safe in per-frame polls).</summary>
+        public static string HarvestVerbFor(MineResource r)
+        {
+            switch (r)
+            {
+                case MineResource.Wood:          return "Chop Wood";
+                case MineResource.Food:          return "Harvest Food";
+                case MineResource.Iron:          return "Mine Iron";
+                case MineResource.AetherCrystal: return "Mine Crystals";
+                default:                         return "Harvest";
+            }
+        }
+
         [Header("Yield")]
         [Tooltip("Which resource this node banks into GameState.")]
         public MineResource Resource = MineResource.Iron;
@@ -96,7 +113,6 @@ namespace DeNelle.Village
         // via PerfLeakHunter (MineNode was the 90% culprit).
         private System.Action _extractAction;
         private System.Action _extractReserveAction;
-        private string _label;
         private float _playerFindTimer;
         private const float PlayerFindInterval = 0.5f;
 
@@ -108,11 +124,13 @@ namespace DeNelle.Village
             _player = p != null ? p.transform : null;
             EnsureVisual();
 
-            // PERF (leak fix): cache the interaction delegates + label ONCE so the per-frame
-            // poll never re-allocates a method-group delegate or concatenates the label.
+            // PERF (leak fix): cache the interaction delegates ONCE so the per-frame poll
+            // never re-allocates a method-group delegate. The label is NOT cached here:
+            // spawners AddComponent<MineNode>() (Awake fires) BEFORE assigning Resource,
+            // so an Awake-cached label froze on the default (F8-21 "wrong verb" root).
+            // HarvestVerbFor returns interned literals — zero per-frame allocation.
             _extractAction        = Extract;
             _extractReserveAction = ExtractReserve;
-            _label                = "Mine " + Resource;
         }
 
         // Give the node a distinct, readable per-resource look (the owner's "we need an
@@ -362,7 +380,7 @@ namespace DeNelle.Village
             // DEF-203: register the shared on-screen Interact button while in range and
             // off cooldown so touch/mobile (no keyboard) can extract too. Desktop F kept.
             if (inRange && _cooldown <= 0f)
-                MobileInteractButton.Request(this, _label, _extractAction);
+                MobileInteractButton.Request(this, HarvestVerbFor(Resource), _extractAction);
             else
                 MobileInteractButton.Release(this);
 
@@ -402,7 +420,7 @@ namespace DeNelle.Village
                            <= InteractRadius * InteractRadius;
 
             if (inRange && _cooldown <= 0f)
-                MobileInteractButton.Request(this, _label, _extractReserveAction);
+                MobileInteractButton.Request(this, HarvestVerbFor(Resource), _extractReserveAction);
             else
                 MobileInteractButton.Release(this);
 

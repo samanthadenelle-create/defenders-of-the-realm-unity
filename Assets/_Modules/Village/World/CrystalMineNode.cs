@@ -359,7 +359,9 @@ namespace DeNelle.Village
             string upgrade = !ShowUpgradeVerb ? "" : IsMaxTier
                 ? $"Mine maxed (T{Tier})"
                 : $"〔 Tap 〕 Upgrade  T{Tier}->{Tier + 1} ({NextUpgradeCost()} ✦)";
-            string label = $"〔 Tap 〕 Harvest {_grade} ✦      {upgrade}";
+            // F8-21 — use the shared per-resource verb (crystals = "Mine Crystals") so
+            // the world bubble matches the on-screen Interact button's verb.
+            string label = $"〔 Tap 〕 {MineNode.HarvestVerbFor(MineResource.AetherCrystal)} {_grade} ✦      {upgrade}";
             // V1 harvest-only: when the upgrade affordance is suppressed, trim the trailing
             // pad so the bubble reads as a clean harvest-only prompt (no dangling spaces).
             if (!ShowUpgradeVerb) label = label.TrimEnd();
