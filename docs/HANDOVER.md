@@ -15,7 +15,33 @@
 
 ---
 
-## ★★ SESSION HANDOVER — 2026-07-07 evening F8 batch (READ FIRST) ★★
+## ★★ SESSION HANDOVER — 2026-07-08 overnight verified-root-cause sweep (READ FIRST) ★★
+
+**WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`, ~75 local commits through `7e663981`,
+**push HELD for the owner's morning word**. The owner's night session ended with a BINDING directive
+(now memory `step-in-step-out-verified-root-cause-every-bug` + TICKET_PIPELINE rule 0): every
+reported-broken flow gets step-in/step-out gate instrumentation + a REAL-PATH automated probe, and
+closes only with TWO verbatim captured lines (root cause + post-fix verification).
+
+**THE P0:** "still cant do the tower" — dialogue Closed re-entrancy destroyed the successor
+dialogue's panel → `InputSuppressed` stuck → build-mode Update frozen, zero click evaluations.
+Fixed with a per-VM Closed identity guard (`82422d11`); every placement gate now names itself when
+it blocks (`aec9feca`).
+
+**VERIFIED (final exe 2026-07-07 23:50:04, 4/4 fleet runs, real input seams):** 8 new probes ALL
+PASS — first-tower placement chain, dialogue chain survival, tutorial arms on fresh save (F8-29),
+orient-modal release (F8-30), wave vendor rules (F8-14), compass pips (F8-16), scatter bands (F8-8),
+hero albedo 19/19 with no WHITE HERO ROOT (`f4aeae8c` probes, `7e663981` retired the -nographics
+HasProperty false-Fail — audits now read the serialized material sheet). Remaining fleet tickets =
+the 3 known pre-existers only (WO-602 home-return, CavePortal seam reach, WO-453 rep spawn).
+
+**FULL LEDGER:** `RESUME_2026-07-08_overnight-f8-sweep.md` (the morning report — verify list +
+verbatim-line ledger + the honest open list). WebGL rebuilt from `7e663981` and deployed to the
+**Vercel PREVIEW** (URL in the final stamp below when the deploy lands); production untouched.
+
+---
+
+## ★★ SESSION HANDOVER — 2026-07-07 evening F8 batch (⚠ superseded as newest by the 2026-07-08 overnight block above) ★★
 
 **WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`, 5 lanes committed LOCAL (`26cc6d47` →
 `90541989`), **push held for owner felt-pass**. The owner's evening felt-test produced 7 F8 flags +
