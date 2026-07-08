@@ -120,17 +120,34 @@ namespace DeNelle.Village
             }
 
             go.transform.localPosition = Vector3.zero;
+
+            // XFORM VALUE-TRACE (owner 2026-07-08: "i want to see everything that happens to it
+            // from selecting fbx to placement" — the euler ping-pong RCA): one line per mutation
+            // stage with the ACTUAL local euler/pos/scale, so a single placement prints the whole
+            // transform journey. Companion census: docs/STRUCTURE_TRANSFORM_CENSUS (agent).
+            void TraceXform(string stage)
+            {
+                var t = go.transform;
+                FlowTrace.Step("Xform", $"'{prefab.name}' after {stage}: " +
+                    $"euler={t.localEulerAngles} pos={t.localPosition} scale={t.localScale}");
+            }
+            TraceXform("instantiate (prefab-native pose)");
+
             // DEF-232: apply the caller's orientation BEFORE Fit/SeatOnGround so the body is
             // measured + centred in its FINAL facing. A post-Skin rotation (the old pattern)
             // swung the off-pivot bounds sideways. Default is identity (unchanged for callers
             // that don't pass LocalRotation, e.g. enemies/structures).
             go.transform.localRotation = opts.LocalRotation ?? Quaternion.identity;
+            TraceXform(opts.LocalRotation.HasValue ? "opts.LocalRotation" : "LocalRotation identity");
 
             // FLAT-SEAT: derive the natural resting orientation from geometry (narrowest world-bounds
             // axis → +Y, §4) so the model sits flat side down. Runs BEFORE Fit/SeatOnGround so the
             // upright bounds are what gets fit + seated. Replaces guessed magic-euler tips.
             if (opts.SeatFlat)
+            {
                 FlowTrace.Try("VisualFactory", "seat flat (bounds-derived)", () => SeatFlat(go));
+                TraceXform("SeatFlat");
+            }
 
             if (opts.StripColliders)
                 FlowTrace.Try("VisualFactory", "strip colliders",
@@ -150,6 +167,7 @@ namespace DeNelle.Village
                 if (opts.SeatOnGround)
                     SeatOnGround(go, host != null ? host.position : go.transform.position);
             });
+            TraceXform("Fit+SeatOnGround");
 
             // RENDER-VERIFY (owner directive 2026-06-19: "anything that renders can be broken — check
             // render==true and roll back the error"). This is the #1 shared choke point — every

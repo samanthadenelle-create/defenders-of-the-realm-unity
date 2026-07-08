@@ -46,6 +46,8 @@ namespace DeNelle.HUD
 
         // Lock-On A/B toggle button (WO-512) — label reflects ff.lockon state, retargeted on tap.
         private Button _lockOnButton;
+        private Button _fullResetButton;
+        private float _fullResetArmedUntil;   // two-tap confirm window (owner 2026-07-08 full reset)
 #endif
 
         // Reflection handles — resolved lazily on first show.
@@ -243,6 +245,11 @@ namespace DeNelle.HUD
             scroll.Add(_lockOnButton);
             // F8-11 (owner 2026-07-07): "Reset Yarn" row REMOVED — Yarn was dropped (WO-455/557);
             // OnReplayTutorial stays in the file per the owner-trim convention above.
+            // Owner 2026-07-08: "full reset option that clears all persistent data and resources
+            // and wisdom to a brand new instance". Two-tap confirm; see OnFullReset for the design
+            // (wipe PlayerPrefs, ARCHIVE owner-dialed local files, quit — relaunch boots fresh).
+            _fullResetButton = Button("FULL RESET (new player — wipes + quits)", OnFullReset);
+            scroll.Add(_fullResetButton);
 #endif
             card.Add(Button("Close",                        Toggle));
             FlowTrace.Step("UI", "DevPanel (AdminOverlay) UI built");
@@ -843,6 +850,49 @@ namespace DeNelle.HUD
 
             FlowTrace.Step("Hero", $"DevPanel (AdminOverlay) granted +{amount} Wisdom -> {wisdom} total.");
             SetStatus($"+{amount} Wisdom — now {wisdom} to spend in the skill tree.");
+        }
+
+        // ── FULL RESET (owner 2026-07-08: "clears all persistent data and resources and
+        // wisdom to a brand new instance") ────────────────────────────────────────────
+        // Design: wipe + QUIT — a relaunch boots genuinely fresh. In-place resets leave
+        // stale DDOL singletons (EconomyService in-session Wood/Iron pool, Wisdom, HUD
+        // models) holding old values; quitting is the only zero-residue "new instance".
+        // Owner-dialed local files (gear offsets, structure orientations) are ARCHIVED
+        // (renamed .bak-<stamp>), never deleted — a reset must not destroy un-baked
+        // creative tuning. Two-tap confirm, same pattern as the flee button.
+        private void OnFullReset()
+        {
+            if (Time.unscaledTime >= _fullResetArmedUntil)
+            {
+                _fullResetArmedUntil = Time.unscaledTime + 3f;
+                if (_fullResetButton != null) _fullResetButton.text = "SURE? Wipes save+prefs, archives dials, QUITS";
+                SetStatus("Full reset armed — tap again within 3s. PlayerPrefs wiped (save, flags, cosmetics), local dial files archived, app quits.");
+                return;
+            }
+
+            Guard.Try("Admin", "full reset (wipe + archive + quit)", () =>
+            {
+                string stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+                string root = Application.persistentDataPath;
+                int archived = 0;
+                foreach (var name in new[] { "attachment-offsets.json", "structure-orientations.json" })
+                {
+                    string path = System.IO.Path.Combine(root, name);
+                    if (System.IO.File.Exists(path))
+                    {
+                        System.IO.File.Move(path, path + ".bak-" + stamp);
+                        archived++;
+                    }
+                }
+                FlowTrace.Step("Admin", "FULL RESET: archived " + archived + " owner-dial file(s) " +
+                    "(.bak-" + stamp + "), wiping ALL PlayerPrefs (save 'dotr-save', feature-flag " +
+                    "overrides, cosmetics 'dotr-cosmetics-v1', battle-pass) — quitting for a fresh boot.");
+                PlayerPrefs.DeleteAll();
+                PlayerPrefs.Save();
+                Application.Quit();
+                // Editor Play mode: Quit() is a no-op — tell the owner what to do.
+                SetStatus("FULL RESET done (prefs wiped, dials archived). In the editor, stop Play manually; the next run is a brand-new instance.");
+            });
         }
 
         private void OnReplayTutorial()
