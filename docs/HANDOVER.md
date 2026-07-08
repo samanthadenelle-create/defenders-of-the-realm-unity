@@ -46,6 +46,19 @@ pill = pixel energy-sword, no black interact at storefronts, compass visible in 
 frame only with a real target, resource chips show the five icons. Board = Task list tickets
 F8-1..F8-10 with full hand-off logs.
 
+**WAVE-2 ADDENDUM (2026-07-08 late night, commits `908add29`→wave end):** owner directive "get
+everyone working" — 10 parallel agents, one batch gate, ONE build (owner ruling: no piecemeal
+rebuilds — memory `one-build-one-handoff-never-retest-stale`). Landed: F8-8 scatter enemy families
+(18 seeded records, 3 danger bands, sight-instantiated 85m/cull 115m — runtime traces pending owner
+session) · F8-1/5 dialogue rebuilt on FrameCore (interior plate deleted) · F8-14 wave rules (vendors
+hide, shops closed toast, build timers verified wall-clock) · tower identity (Ballista 22-range
+physical BOLTS, Arcane CASTS — orb + Aether blast on arrival, new repo.projectileStyle) · F8-29
+tutorial bootstrap fixed (one-shot hub gate on Title = V2 never constructed; now sceneLoaded re-arm)
+· F8-10 PartyBar label (fleet-verified GONE) · F8-13 watchdog build-mode gate · F8-21 harvest verbs
+· ff.combathud611 default ON · flag screenshots session-stamped (evidence-loss fix) · WO-613B
+outpost chunk spec. Fleet: 3 confirmed = pre-existing knowns only. RCA docs:
+docs/STRUCTURE_TRANSFORM_CENSUS_2026-07-08.md (+risks R1-R6, R1 = fit-before-upright). Exe 21:39:47.
+
 **LATE-SESSION ADDENDUM (2026-07-08, commits `b45bb0bb`→`c7d913a3`):** RCA-PROOF-BY-DATA is now
 BINDING pipeline rule 0 (`75e4d128`; owner directive — every ticket carries verbatim proving lines).
 Landed: F8-11 DevTools scroll + yarn row removed · F8-12 dock pinned to real size (was ~5% of screen
