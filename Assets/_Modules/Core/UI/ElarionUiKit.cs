@@ -555,6 +555,7 @@ namespace DeNelle.Core.UI
                 bool closeIsDefault = z.close == DefaultCloseZone;
                 bool reservationFired = false;
                 float reservedYMinDbg = 0f;
+                float canvasHDbg = 0f, closeBandTopDbg = 0f;
                 if (closeIsDefault)
                 {
                     float panelFracH   = Mathf.Max(0.05f, anchorMax.y - anchorMin.y);
@@ -562,16 +563,19 @@ namespace DeNelle.Core.UI
                     // from z.close.y) expressed as a fraction of THIS panel's height.
                     // LANDSCAPE FIX (overnight sweep 2026-07-07, proven by the panel-batch RCA):
                     // dividing by the PORTRAIT reference height (1920) under-reserves ~78% on a
-                    // landscape canvas (~1080 units tall) — the Close painted over Send report /
-                    // DEPLOY / dialogue Close across panels. Measure the REAL canvas height.
-                    float canvasH = 1920f;
-                    var canvasRt = frameGo.GetComponentInParent<Canvas>();
-                    if (canvasRt != null)
-                    {
-                        float h = ((RectTransform)canvasRt.transform).rect.height;
-                        if (h > 100f) canvasH = h;
-                    }
+                    // landscape canvas — the Close painted over Send report / DEPLOY / dialogue
+                    // Close across panels. F8-5 FOLLOW-UP (DlgLayout capture 2026-07-07): reading
+                    // the live canvas rect is ALSO wrong on the canvas's creation frame — the
+                    // CanvasScaler hasn't applied yet, so rect.height returns RAW SCREEN PIXELS
+                    // (captured 1351) instead of the post-scale local height (1047 @ scale 1.291);
+                    // dividing the fixed 120-local-unit Close by the too-tall raw height
+                    // under-reserved (0.211 vs the real 0.273) and the footer/Continue overlapped
+                    // the Close band 0.276-0.323. PostScaleCanvasHeight replicates the scaler's
+                    // own math from its settings — same value on the creation frame and after —
+                    // so the reserved band always matches where the 120-unit box REALLY tops out.
+                    float canvasH = PostScaleCanvasHeight(frameGo.transform);
                     float closeBandTop = z.close.y + CanonCtaHeight / (panelFracH * canvasH);
+                    canvasHDbg = canvasH; closeBandTopDbg = closeBandTop;
                     // ── FOOTER RELOCATION (sweep 9413) ──────────────────────────────────
                     // The footer zone's designed bands (default 0.030–0.095; FrameCrafting
                     // action strip 0.085–0.145; etc.) sit INSIDE the Close band — the Close
@@ -610,12 +614,14 @@ namespace DeNelle.Core.UI
                     "BuildObsidianPanel '{0}' frame={1} closeIsDefault={2} fired={3} " +
                     "close=({4:F3},{5:F3},{6:F3},{7:F3}) default=({8:F3},{9:F3},{10:F3},{11:F3}) " +
                     "bodyYMin {12:F3}->{13:F3} footerY {14:F3}->{15:F3} reservedYMin={16:F3} " +
-                    "panelAnchors=({17:F2},{18:F2})-({19:F2},{20:F2})",
+                    "panelAnchors=({17:F2},{18:F2})-({19:F2},{20:F2}) " +
+                    "canvasH={21:F0} closeBandTop={22:F3}",
                     title, frameName, closeIsDefault, reservationFired,
                     z.close.x, z.close.y, z.close.z, z.close.w,
                     DefaultCloseZone.x, DefaultCloseZone.y, DefaultCloseZone.z, DefaultCloseZone.w,
                     bodyYBefore, z.body.y, footerYBefore, z.footer.y, reservedYMinDbg,
-                    anchorMin.x, anchorMin.y, anchorMax.x, anchorMax.y));
+                    anchorMin.x, anchorMin.y, anchorMax.x, anchorMax.y,
+                    canvasHDbg, closeBandTopDbg));
                 var layout = new FrameLayout
                 {
                     header = Zone(chrome.content.transform, "Zone_Header", z.header),
@@ -842,6 +848,70 @@ namespace DeNelle.Core.UI
             rt.pivot = new Vector2(0.5f, 0f);   // seat by the button's BOTTOM edge → grows up
             rt.anchoredPosition = Vector2.zero;
             rt.sizeDelta = new Vector2(CanonCtaWidth, CanonCtaHeight);
+        }
+
+        /// <summary>
+        /// Height of the canvas above <paramref name="under"/> in CANVAS-LOCAL units, as it
+        /// will be AFTER the CanvasScaler has applied — NOT the live rect. F8-5 root cause
+        /// (DlgLayout capture 2026-07-07): a ScreenSpaceOverlay canvas created the SAME
+        /// frame still has scaleFactor 1, so its rect.height reads RAW SCREEN PIXELS
+        /// (captured 1351) while the ScaleWithScreenSize scaler later shrinks the local
+        /// rect (÷1.291 → 1047). The close-band reservation divided the fixed 120-unit
+        /// Close box by the too-tall raw height and UNDER-reserved (0.211 vs the real
+        /// 0.273 panel fraction) — the footer/Continue overlapped the Close band
+        /// 0.276–0.323 and the last-sibling Close won the raycasts. Replicating the
+        /// scaler's own math from its settings yields the SAME value on the creation
+        /// frame and every frame after, so the reserved band always matches where
+        /// <see cref="SeatSharedCloseInside"/>'s fixed 120-local-unit box really tops out.
+        /// Order of trust: overlay-canvas scaler math (deterministic) → laid-out live
+        /// rect (non-overlay / physical-size modes) → the kit's 1920 portrait reference
+        /// (no canvas / headless with no valid Screen).
+        /// </summary>
+        private static float PostScaleCanvasHeight(Transform under)
+        {
+            const float fallbackH = 1920f;   // kit portrait reference height
+            var canvas = under != null ? under.GetComponentInParent<Canvas>() : null;
+            if (canvas == null) return fallbackH;
+            var root = canvas.rootCanvas != null ? canvas.rootCanvas : canvas;
+            var rootRt = root.transform as RectTransform;
+            float liveH = rootRt != null ? rootRt.rect.height : 0f;
+
+            float screenH = Screen.height;
+            var scaler = root.GetComponent<CanvasScaler>();
+            if (root.renderMode == RenderMode.ScreenSpaceOverlay && scaler != null && screenH > 1f)
+            {
+                float scale = 0f;
+                switch (scaler.uiScaleMode)
+                {
+                    case CanvasScaler.ScaleMode.ScaleWithScreenSize:
+                        float refW = Mathf.Max(1f, scaler.referenceResolution.x);
+                        float refH = Mathf.Max(1f, scaler.referenceResolution.y);
+                        float screenW = Mathf.Max(1f, (float)Screen.width);
+                        switch (scaler.screenMatchMode)
+                        {
+                            case CanvasScaler.ScreenMatchMode.Expand:
+                                scale = Mathf.Min(screenW / refW, screenH / refH);
+                                break;
+                            case CanvasScaler.ScreenMatchMode.Shrink:
+                                scale = Mathf.Max(screenW / refW, screenH / refH);
+                                break;
+                            default:   // MatchWidthOrHeight — Unity's own log-space lerp
+                                scale = Mathf.Pow(2f, Mathf.Lerp(
+                                    Mathf.Log(screenW / refW, 2f),
+                                    Mathf.Log(screenH / refH, 2f),
+                                    scaler.matchWidthOrHeight));
+                                break;
+                        }
+                        break;
+                    case CanvasScaler.ScaleMode.ConstantPixelSize:
+                        scale = scaler.scaleFactor;
+                        break;
+                    // ConstantPhysicalSize: DPI-dependent — fall through to the live rect.
+                }
+                if (scale > 0.01f) return screenH / scale;
+            }
+            // Non-overlay / no scaler / physical-size / headless: the laid-out rect, else the reference.
+            return liveH > 100f ? liveH : fallbackH;
         }
 
         // =====================================================================
