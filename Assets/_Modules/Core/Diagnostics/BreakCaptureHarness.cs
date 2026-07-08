@@ -80,6 +80,11 @@ namespace DeNelle.Core.Diagnostics
         // on its own ("ugly", "feels off", "wrong text"). One tap = screenshot + mark.
         const KeyCode FlagKey = KeyCode.F8;
         int _flagCount;
+        // EVIDENCE-LOSS FIX (triage 2026-07-08): flag_NN.png restarted at 00 each session, so a new
+        // session OVERWROTE the previous session's screenshots — the F8-19/F8-22 ticket evidence was
+        // destroyed exactly this way. Every flag shot now carries a per-session stamp so no session
+        // can clobber another's captures (the RCA-proof-by-data rule depends on these files).
+        readonly string _sessionStamp = System.DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
         float _toastUntil = -1f;
         // note-entry: tap F8 -> screenshot clean frame -> freeze + type one line
         bool _noteMode;
@@ -273,6 +278,24 @@ namespace DeNelle.Core.Diagnostics
                     MarkProgress();
                     return;
                 }
+                // F8-13 (2026-07-07): a live Build Mode edit session is the PLAYER choosing to
+                // stand still — placing towers for minutes is normal (false capture 01:21Z while
+                // the owner's Player.log showed [Flow:Build] PlaceConfirm CONFIRMED lines through
+                // the window). Core-legal read: HudContextEvaluator (Village) already mirrors
+                // BuildModeController.IsActive into the Core-side HudContextModel every 0.20s;
+                // we read that mirror via CoreServices.HudModel — no Village reference needed.
+                if (IsBuildModeActive())
+                {
+                    if (!_buildSuppressTraced)
+                    {
+                        _buildSuppressTraced = true;
+                        FlowTrace.Step("BreakCapture", "softlock watchdog suppressed: build mode active");
+                    }
+                    if (_hero != null) _lastHeroPos = _hero.position;
+                    MarkProgress();
+                    return;
+                }
+                _buildSuppressTraced = false;   // re-trace on the next build session's rising edge
                 if (!_softlockReported && now - _lastProgressTime > SoftlockSeconds)
                 {
                     _softlockReported = true;
@@ -314,12 +337,32 @@ namespace DeNelle.Core.Diagnostics
             catch { return false; }   // any reflection failure -> behave as today (count as stall)
         }
 
+        // F8-13: rising-edge flag so the build-mode suppression FlowTrace fires once per
+        // build session (not every 2s watchdog tick); cleared when build mode exits.
+        bool _buildSuppressTraced;
+
+        // F8-13: true while a Build Mode edit session is live. Core-legal without reflection:
+        // Village's HudContextEvaluator is the single writer that mirrors
+        // BuildModeController.IsActive into the Core-side HudContextModel every 0.20s
+        // (HUD_OBSIDIAN §3.3 seam); we read that mirror via CoreServices.HudModel.
+        // Null-safe: no HudModelHost registered (headless/boot) -> false, watchdog
+        // behaves exactly as before this guard existed.
+        static bool IsBuildModeActive()
+        {
+            try
+            {
+                var ctx = CoreServices.HudModel?.Context;
+                return ctx != null && ctx.BuildModeActive;
+            }
+            catch { return false; }
+        }
+
         // ---- owner-pressed flag (F8): screenshot, freeze, type one line ---------
         void FlagHere()
         {
             if (_noteMode) return;                                 // already flagging
             // screenshot the CLEAN frame first (the note box draws next frame)
-            try { ScreenCapture.CaptureScreenshot(Path.Combine(_outDir ?? Application.persistentDataPath, $"flag_{_flagCount:00}.png")); }
+            try { ScreenCapture.CaptureScreenshot(Path.Combine(_outDir ?? Application.persistentDataPath, $"flag_{_sessionStamp}_{_flagCount:00}.png")); }
             catch { }
             _noteBuffer = "";
             _noteShowFrame = Time.frameCount + 1;
