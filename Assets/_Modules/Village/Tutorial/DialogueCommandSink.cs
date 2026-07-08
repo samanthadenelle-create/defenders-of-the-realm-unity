@@ -99,7 +99,8 @@ namespace DeNelle.Village
                 // monetization PackStore, ALONGSIDE the existing Glimmer/gear paths (PackStoreBootstrap
                 // registered the opener + find-or-spawns the store host-free on first open).
                 case "OpenRealmStore": if (!ShopsClosedForCombat("OpenRealmStore")) PanelRouter.Open(PanelId.RealmStore); break;
-                case "OpenPetSkills":  PanelRouter.Open(PanelId.PetSkillTree); break;
+                // RETIRED (2026-07-08): "OpenPetSkills" removed — the pet SKILL-TREE stack was deleted
+                // (dead content; pets are harvest/companion-only per docs/COMBAT_PIVOT_NORTHSTAR.md).
 
                 // ── Panels via find-or-spawn (no PanelId opener of their own) ──────
                 case "OpenEquip": OpenEquipPanel(); break;

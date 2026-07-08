@@ -12,7 +12,7 @@ Pet companion runtime (village-side hooks live in `Village/Pets/`).
 - `PetHarvester`, `MineNodeBridge` — auto-harvest (WO-119 / WO-106); pet farming
   now feeds the live economy via MineNode/HarvestSite → EconomyService.AddResource / Grant.
   Assigned pets on HarvestSites get yield bonuses. Note a second `PetHarvester.cs` also exists in `Economy/` (superseded — use this one).
-- `PetProgression`, `PetSkillTreeCatalog` — leveling + skill tree
+- `PetProgression` — leveling (kill-XP; gated off with `ff.petcombat`, default OFF). `PetSkillTreeCatalog` DELETED 2026-07-08 (pet skill-tree retire — dead content, pets are harvest/companion only per docs/COMBAT_PIVOT_NORTHSTAR.md).
 - `PetAnimatorController`, `PetClipPlayer`, `PetAttackVfxBridge`, `PetEmoteController`,
   `PetBillboard` — presentation
 

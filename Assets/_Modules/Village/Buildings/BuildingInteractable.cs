@@ -14,7 +14,7 @@
 //   • Forge (Armorer)        → Building Upgrade       (PanelId.BuildingUpgrade)
 //   • Farm / Lumbermill /
 //     CrystalMine            → Building Upgrade       (PanelId.BuildingUpgrade)
-//   • PetHouse               → Pet / Companion tree   (PanelId.PetSkillTree)
+//   • PetHouse               → (no panel — pet skill-tree RETIRED 2026-07-08; harvest/companion only)
 // The panel is opened through DeNelle.Core.UI.PanelRouter — no cross-asmdef
 // reference, no reflection. Each panel routes its own open through PanelManager
 // (DEF-212), so the one-panel-at-a-time rule still holds. A building with no
@@ -395,9 +395,9 @@ namespace DeNelle.Village
                 case BuildingType.Workshop:
                     panelId = PanelId.Crafting;
                     return true;
-                case BuildingType.PetHouse:
-                    panelId = PanelId.PetSkillTree;
-                    return true;
+                // RETIRED (2026-07-08): the PetHouse -> Pet skill-tree panel hook is removed — the pet
+                // SKILL-TREE stack was deleted (dead content; pets are harvest/companion-only per
+                // docs/COMBAT_PIVOT_NORTHSTAR.md). PetHouse now has no panel (Interact shows "coming soon").
                 // Apothecary workbench → the consumable-crafting / alchemy bench. Routed here
                 // (NOT via StructureHookIdFor) ON PURPOSE: Interact() tries the Yarn structure
                 // dialogue BEFORE TryPanelFor, so apothecary must return null from

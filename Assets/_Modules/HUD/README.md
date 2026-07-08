@@ -23,12 +23,11 @@ Village pushes data through `IVillageHud` / `CoreServices.Hud`.
 - `HUDManager` — rich dark fantasy battle HUD (HUD-001)
 - `VirtualDPadLean` — Lean Touch D-Pad (static Move + pre-wired LeanFinger* components)
 - `README_HUD.md` — setup, Lean notes, integration wiring, acceptance checklist
-- Other: `XPBarController`, `FloatingXpText`, panel + bootstrap pairs (AdminOverlay*, ClanChatPanel*, CompassHud*, CosmeticShopPanel*, DailyQuestHud*, HelpMenu*, PetSkillTreePanel*, PetUnlockTracker) — on-demand popups. Legacy UXML (VillageHud.uxml/uss) retained only for reference (not used at runtime). Deleted 2026-07-03 (dead-surface sweep): `HeroTalentPanel`+bootstrap (superseded by `Village/Talents/HeroSkillTreePanelMvvm`), `PlayerProgressPanel` (orphan, no opener).
+- Other: `XPBarController`, `FloatingXpText`, panel + bootstrap pairs (AdminOverlay*, ClanChatPanel*, CompassHud*, CosmeticShopPanel*, DailyQuestHud*, HelpMenu*) — on-demand popups. Legacy UXML (VillageHud.uxml/uss) retained only for reference (not used at runtime). Deleted 2026-07-03 (dead-surface sweep): `HeroTalentPanel`+bootstrap (superseded by `Village/Talents/HeroSkillTreePanelMvvm`), `PlayerProgressPanel` (orphan, no opener). Deleted 2026-07-08 (pet skill-tree retire, dead content): `PetSkillTreePanel`+bootstrap, `PetUnlockTracker` — pets are harvest/companion only (docs/COMBAT_PIVOT_NORTHSTAR.md).
 - `XPBarController`, `FloatingXpText` — progression
 - Panel + bootstrap pairs (code-built, popups):
   `AdminOverlay`, `ClanChatPanel`, `CompassHud`, `CosmeticShopPanel`,
-  `DailyQuestHud`, `HelpMenu`, `PetSkillTreePanel`
-- `PetUnlockTracker`
+  `DailyQuestHud`, `HelpMenu`
 
 Pattern: every `XPanel.cs` has a matching `XPanelBootstrap.cs` that wires it
 into the scene at runtime.

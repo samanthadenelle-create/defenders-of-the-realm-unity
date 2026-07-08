@@ -54,7 +54,17 @@ namespace DeNelle.Pets
         private void OnEnable()
         {
             if (_pet == null) _pet = GetComponent<Pet>();
-            XpEarnerRegistry.Register(this);
+            // PET COMBAT GATE (owner 2026-07-08, ff.petcombat default OFF): when combat is off pets do
+            // NOT earn kill-XP (they don't fight — Pet.Update no-ops the hunt) so we skip registering as
+            // an IXpEarner entirely. ProgressionManager grants XP only to registered earners by id, so a
+            // pet that never registers is simply never credited — the cleanest seam (canon: pets are
+            // harvest/companion only per docs/COMBAT_PIVOT_NORTHSTAR.md). ApplyBonuses still re-asserts the
+            // base (level-1) stats so the companion is fully configured.
+            if (DeNelle.Core.FeatureFlags.PetCombat)
+                XpEarnerRegistry.Register(this);
+            else
+                DeNelle.Core.Diagnostics.FlowTrace.Once("PetCombat", "xp-gated-" + (_pet != null ? _pet.PetId : "<null>"),
+                    "pet combat gated OFF (ff.petcombat) — PetProgression NOT registered as an IXpEarner (no combat XP)");
             ApplyBonuses();   // re-assert the level-1 (or restored) stats
         }
 

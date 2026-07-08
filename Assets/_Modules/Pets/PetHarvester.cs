@@ -279,6 +279,10 @@ namespace DeNelle.Pets
         // yes/no). Pet.HasHostileInRange exposes that.
         private bool ShouldYieldToCombat()
         {
+            // PET COMBAT GATE (owner 2026-07-08, ff.petcombat default OFF): with combat gated off the
+            // pet never fights (Pet.Update no-ops the hunt/attack), so harvesting must NOT yield to a
+            // hostile it can't engage — otherwise the pet would freeze near an enemy instead of gathering.
+            if (!DeNelle.Core.FeatureFlags.PetCombat) return false;
             return _pet.Mode == PetMode.Defend && _pet.HasHostileInRange;
         }
 

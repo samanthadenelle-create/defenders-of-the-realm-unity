@@ -47,8 +47,9 @@ namespace DeNelle.Core.UI
         BuildingUpgrade = 2,
         /// <summary>Cosmetic shop — the Marketplace / Realm Store.</summary>
         CosmeticShop = 3,
-        /// <summary>Pet / companion skill tree — the Pet House.</summary>
-        PetSkillTree = 4,
+        // RETIRED (2026-07-08): PetSkillTree = 4 removed — the pet SKILL-TREE stack was deleted (dead
+        // content; pets are harvest/companion-only per docs/COMBAT_PIVOT_NORTHSTAR.md). Value 4 is left
+        // unused so the following members keep their numeric values; nothing registers/opens a pet tree.
         /// <summary>Party weapon/armor shop — the native code-built MVVM gear store (PartyShopPanelMvvm).</summary>
         PartyShop = 5,
         /// <summary>Quest / rumor board — the real story board (RumorBoardPanel, WO-304/436).

@@ -24,9 +24,8 @@
 //     one founderOnly pack (Founder's Vow, tier 5).
 //   • wallets.json — the two PUBLIC addresses resolve, look base58, and the blob
 //     carries NO secret-key material (privatekey/seed/keypair/mnemonic).
-//   • pet-skill-trees.json — every species in pets.json has a tree (deploy path
-//     intact). The extra authored trees (11 vs 3 deployable — the catalog's flag_15
-//     over-specification) are reported as a NOTE, not a failure (forward authoring).
+//   (pet-skill-trees.json check RETIRED 2026-07-08 — that catalog was deleted; pets are
+//    harvest/companion only per docs/COMBAT_PIVOT_NORTHSTAR.md.)
 // =============================================================================
 using System;
 using System.Collections.Generic;
@@ -64,11 +63,12 @@ namespace DeNelle.Editor
             CheckPets(failures, notes);
             CheckPacks(failures, notes);
             CheckWallets(failures, notes);
-            CheckPetSkillTrees(failures, notes);
+            // RETIRED (2026-07-08): CheckPetSkillTrees removed — pet-skill-trees.json was deleted
+            // (dead content; pets are harvest/companion-only per docs/COMBAT_PIVOT_NORTHSTAR.md).
 
             if (failures.Count == 0)
             {
-                reason = "ECONOMY-META CATALOG OK — cosmetics/pets/packs/wallets/pet-skill-trees invariants hold" +
+                reason = "ECONOMY-META CATALOG OK — cosmetics/pets/packs/wallets invariants hold" +
                          (notes.Count > 0 ? $" [notes: {string.Join("; ", notes)}]" : "");
                 return true;
             }
@@ -202,42 +202,8 @@ namespace DeNelle.Editor
             }
         }
 
-        // --- pet-skill-trees.json --------------------------------------------
-        private static void CheckPetSkillTrees(List<string> failures, List<string> notes)
-        {
-            string json = SafeRead("Data/Canonical/pet-skill-trees.json", failures, notes);
-            if (json == null) return;
-            JObject root;
-            try { root = JObject.Parse(json); }
-            catch (Exception ex) { failures.Add($"pet-skill-trees.json: parse error ({ex.Message})"); return; }
-
-            // 'trees' is a species-KEYED map, not an array — it deserializes to
-            // Dictionary<string,PetSkillTreeDef> in the real loader (PetSkillTreeCatalog.cs).
-            // Reading it as a JArray was the false "0 trees (mapping break)": a JObject
-            // 'as JArray' is null. Iterate the property map instead.
-            var trees = root["trees"] as JObject;
-            if (trees == null || !trees.HasValues) { failures.Add("pet-skill-trees.json: 0 trees (mapping break — 'trees' missing or not a keyed object)"); return; }
-
-            var treeSpecies = new HashSet<string>();
-            foreach (var prop in trees.Properties())
-            {
-                // Prefer the inner 'species' field; fall back to the map key.
-                string sp = (prop.Value as JObject) != null ? Str((JObject)prop.Value, "species") : null;
-                if (string.IsNullOrEmpty(sp)) sp = prop.Name;
-                if (!string.IsNullOrEmpty(sp)) treeSpecies.Add(sp);
-            }
-
-            // Deploy-path invariant: every DEPLOYABLE species must have a tree.
-            foreach (var sp in EnumSpecies)
-                if (!treeSpecies.Contains(sp))
-                    failures.Add($"pet-skill-trees.json: deployable species '{sp}' has NO skill tree");
-
-            // flag_15: authored trees (e.g. 11) exceed the 3 deployable species — this is
-            // forward authoring, NOT a break. Report it so an edit that shrinks below 3 is caught.
-            int extra = treeSpecies.Count - EnumSpecies.Count;
-            if (extra > 0)
-                notes.Add($"pet-skill-trees.json over-specifies by {extra} species vs the 3 deployable (flag_15 forward authoring)");
-        }
+        // RETIRED (2026-07-08): CheckPetSkillTrees removed with pet-skill-trees.json (dead content;
+        // pets are harvest/companion-only per docs/COMBAT_PIVOT_NORTHSTAR.md).
 
         // ── helpers ───────────────────────────────────────────────────────────
 

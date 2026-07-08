@@ -375,6 +375,17 @@ namespace DeNelle.Pets
             // integrator drives that), Fortify holds its wall span.
             if (_mode != PetMode.Defend) return;
 
+            // PET COMBAT GATE (owner 2026-07-08, ff.petcombat default OFF): pets are HARVEST /
+            // COMPANION only per docs/COMBAT_PIVOT_NORTHSTAR.md ("no pets in battle"). A Defend pet
+            // does NOT acquire or attack enemies (no hunt scan, no OverlapSphere, no Attack) unless
+            // combat is explicitly enabled. The pet stays alive; PetHarvester keeps gathering.
+            if (!DeNelle.Core.FeatureFlags.PetCombat)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Once("PetCombat", "gated-" + _petId,
+                    $"pet combat gated OFF (ff.petcombat) — pet '{_petId}' will not hunt/attack (harvest/companion only)");
+                return;
+            }
+
             // WO-410 perf #4 — THROTTLE the target HUNT scans. The two
             // OverlapSphere sweeps (ranged threat @45m + nearest foe @60m) are
             // the expensive part and scale with deployed pet count; re-run them

@@ -482,6 +482,16 @@ namespace DeNelle.Core
         /// OwnerDevToolsOverlay flag list for live comparison.</summary>
         public static bool SheathedDrawnRotFallback => Get("sheathdrawnrot", defaultOn: true);
 
+        /// <summary>PET COMBAT (owner 2026-07-08) — gates whether deployed pets FIGHT. When OFF (default),
+        /// pets are HARVEST / COMPANION only per docs/COMBAT_PIVOT_NORTHSTAR.md ("no pets in battle"; pets =
+        /// autonomous harvesters in V1): a Defend pet's hunt/target/attack loop (<see cref="DeNelle.Pets.Pet"/>
+        /// Update/Attack/OverlapSphere scan) NO-OPs — the pet acquires no target and deals no damage, and it
+        /// earns no combat XP (<see cref="DeNelle.Pets.PetProgression"/> does not register as an IXpEarner).
+        /// The pet stays alive as a companion and <see cref="DeNelle.Pets.PetHarvester"/> keeps gathering
+        /// (harvest no longer yields to a fight that can't happen). When ON, the full pet combat behaviour is
+        /// restored. Default OFF — reversible: PlayerPrefs "ff.petcombat" = 1.</summary>
+        public static bool PetCombat => Get("petcombat", defaultOn: false);
+
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
         {
