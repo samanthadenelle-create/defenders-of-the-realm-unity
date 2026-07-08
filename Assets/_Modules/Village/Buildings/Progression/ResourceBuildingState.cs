@@ -22,6 +22,7 @@
 
 using System;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.Buildings.Progression
 {
@@ -125,23 +126,24 @@ namespace DeNelle.Village.Buildings.Progression
         /// </summary>
         public static UpgradeResult TryUpgrade(string buildingId)
         {
+            FlowTrace.Step("Upgrade", $"TryUpgrade id='{buildingId ?? "<null>"}'");
             var def = ResourceBuildingProgression.Find(buildingId);
-            if (def == null) return UpgradeResult.Unknown;
+            if (def == null) { FlowTrace.Warn("Upgrade", $"id='{buildingId ?? "<null>"}' is not a resource building -> Unknown"); return UpgradeResult.Unknown; }
 
             int level = GetLevel(buildingId);
             var lvlDef = def.LevelDef(level);
-            if (lvlDef == null || lvlDef.IsMaxLevel) return UpgradeResult.MaxLevel;
+            if (lvlDef == null || lvlDef.IsMaxLevel) { FlowTrace.Warn("Upgrade", $"'{buildingId}' at level {level} is max/no-def -> MaxLevel"); return UpgradeResult.MaxLevel; }
 
             if (!ResourceLedger.CanAfford(lvlDef.UpgradeCost))
-                return UpgradeResult.Insufficient;
+            { FlowTrace.Warn("Upgrade", $"'{buildingId}' lvl {level}->{level + 1} unaffordable (harvestables) -> Insufficient"); return UpgradeResult.Insufficient; }
 
             // DEF-121 — a Magic-gated tier additionally requires the Magic tech axis.
             if (lvlDef.IsMagicGated && ResourceLedger.MagicBalance() < lvlDef.MagicCost)
-                return UpgradeResult.NeedMagic;
+            { FlowTrace.Warn("Upgrade", $"'{buildingId}' magic-gated tier short on Magic (have {ResourceLedger.MagicBalance()}, need {lvlDef.MagicCost}) -> NeedMagic"); return UpgradeResult.NeedMagic; }
 
             // Atomic spend: harvestables + (optional) Magic in one transaction.
             if (!ResourceLedger.TrySpendWithMagic(lvlDef.UpgradeCost, lvlDef.MagicCost))
-                return lvlDef.IsMagicGated ? UpgradeResult.NeedMagic : UpgradeResult.Insufficient; // raced / no service
+            { FlowTrace.Fail("Upgrade", $"'{buildingId}' TrySpendWithMagic FAILED after affordability check passed (raced / no GameStateService) — spend rolled back"); return lvlDef.IsMagicGated ? UpgradeResult.NeedMagic : UpgradeResult.Insufficient; } // raced / no service
 
             int next = def.ClampLevel(level + 1);
             PlayerPrefs.SetInt(Key(buildingId), next);
@@ -149,8 +151,9 @@ namespace DeNelle.Village.Buildings.Progression
 
             // Buying a Magic-gated tier lights up the tech-tree node it unlocks.
             if (!string.IsNullOrEmpty(lvlDef.UnlocksTechNode))
-                TechTree.Unlock(lvlDef.UnlocksTechNode);
+            { FlowTrace.Step("Upgrade", $"'{buildingId}' unlocks tech node '{lvlDef.UnlocksTechNode}'"); TechTree.Unlock(lvlDef.UnlocksTechNode); }
 
+            FlowTrace.Step("Upgrade", $"'{buildingId}' upgraded to level {next}");
             LevelChanged?.Invoke(buildingId);
             return UpgradeResult.Upgraded;
         }

@@ -27,6 +27,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -56,11 +57,16 @@ namespace DeNelle.Village
         /// <summary>Art sprite for a weapon, or null (caller uses the glyph fallback).</summary>
         public static Sprite ForWeapon(WeaponDef w)
         {
-            if (w == null) return null;
+            if (w == null) { FlowTrace.Warn("ItemIcon", "ForWeapon(<null>) -> null"); return null; }
+            FlowTrace.Step("ItemIcon", $"ForWeapon id='{w.id}' name='{w.name}' rarity='{w.rarity}'");
             // Catalog-authored icon (ITEM_MODEL §3): the rendered mesh silhouette keyed by id.
             // When present, this is authoritative — image + title both identify the same shape.
             var authored = LoadAuthoredIcon(w.iconPath);
-            if (authored != null) return authored;
+            if (authored != null)
+            {
+                FlowTrace.Step("ItemIcon", $"ForWeapon '{w.id}' -> authored icon '{w.iconPath}'");
+                return authored;
+            }
 
             EnsureLoaded();
             string key = ((w.id ?? "") + " " + (w.name ?? "")).ToLowerInvariant();
@@ -78,7 +84,10 @@ namespace DeNelle.Village
             // sword sheet by tier (acts as the generic "magic weapon" silhouette) is
             // wrong visually -> prefer NO sprite so the staff GLYPH (✦) shows instead.
             if (Has(key, "wand", "staff", "scepter", "sceptre", "stave", "rod"))
+            {
+                FlowTrace.Warn("ItemIcon", $"ForWeapon '{w.id}' is a staff/wand -> null (no tiered staff sheet; caller shows ✦ glyph)");
                 return null;
+            }
 
             // Swords / blades / great-weapons -> tiered sword sheet.
             if (Has(key, "greatsword", "claymore", "sword", "blade", "longsword",
@@ -99,9 +108,14 @@ namespace DeNelle.Village
         /// <summary>Art sprite for an armor piece, or null (caller uses the glyph fallback).</summary>
         public static Sprite ForArmor(ArmorDef a)
         {
-            if (a == null) return null;
+            if (a == null) { FlowTrace.Warn("ItemIcon", "ForArmor(<null>) -> null"); return null; }
+            FlowTrace.Step("ItemIcon", $"ForArmor id='{a.id}' name='{a.name}' rarity='{a.rarity}'");
             var authored = LoadAuthoredIcon(a.iconPath);
-            if (authored != null) return authored;
+            if (authored != null)
+            {
+                FlowTrace.Step("ItemIcon", $"ForArmor '{a.id}' -> authored icon '{a.iconPath}'");
+                return authored;
+            }
 
             EnsureLoaded();
             string key = ((a.id ?? "") + " " + (a.name ?? "")).ToLowerInvariant();
@@ -150,6 +164,7 @@ namespace DeNelle.Village
         /// <summary>Art sprite for a consumable id/name, or null (glyph fallback).</summary>
         public static Sprite ForConsumable(string id, string name)
         {
+            FlowTrace.Step("ItemIcon", $"ForConsumable id='{id}' name='{name}'");
             EnsureLoaded();
             string key = ((id ?? "") + " " + (name ?? "")).ToLowerInvariant();
 
@@ -178,6 +193,7 @@ namespace DeNelle.Village
             if (Has(key, "potion", "elixir", "draught", "tonic", "flask", "brew"))
                 return First("potion_a", "potion_e", "potion_mana");
 
+            FlowTrace.Warn("ItemIcon", $"ForConsumable '{id}' matched no keyword -> null (caller uses glyph fallback)");
             return null; // -> glyph fallback
         }
 
@@ -197,16 +213,23 @@ namespace DeNelle.Village
             _loaded = true;
             _byName = new Dictionary<string, Sprite>(System.StringComparer.OrdinalIgnoreCase);
 
+            FlowTrace.Step("ItemIcon", $"EnsureLoaded -> {Sheets.Length} sheet(s) under Resources/ItemIcons");
             for (int i = 0; i < Sheets.Length; i++)
             {
                 Sprite[] subs;
                 try { subs = Resources.LoadAll<Sprite>(Sheets[i]); }
                 catch (System.Exception e)
                 {
+                    // Hard load fault on a sheet — error level (was Debug.LogWarning only).
+                    FlowTrace.Fail("ItemIcon", $"LoadAll FAILED for '{Sheets[i]}': {e.GetType().Name}: {e.Message}");
                     Debug.LogWarning("[ItemIconCatalog] load failed for " + Sheets[i] + ": " + e.Message);
                     continue;
                 }
-                if (subs == null) continue;
+                if (subs == null || subs.Length == 0)
+                {
+                    FlowTrace.Warn("ItemIcon", $"sheet '{Sheets[i]}' resolved 0 sub-sprites (not sliced/imported)");
+                    continue;
+                }
                 for (int j = 0; j < subs.Length; j++)
                 {
                     var sp = subs[j];
@@ -216,8 +239,17 @@ namespace DeNelle.Village
             }
 
             if (_byName.Count == 0)
+            {
+                // Data-empty (not a render bug): every caller silently drops to the glyph fallback.
+                FlowTrace.Warn("ItemIcon", "0 item-icon sprites indexed under Resources/ItemIcons " +
+                    "-> ALL items use glyph fallback (run Defenders/Art/Slice Item Icons)");
                 Debug.LogWarning("[ItemIconCatalog] no item-icon sprites found under Resources/ItemIcons — " +
                                  "run Defenders/Art/Slice Item Icons. Inventory will use glyph fallback.");
+            }
+            else
+            {
+                FlowTrace.Step("ItemIcon", $"indexed {_byName.Count} item-icon sprite(s)");
+            }
         }
 
         private static Sprite Get(string name)

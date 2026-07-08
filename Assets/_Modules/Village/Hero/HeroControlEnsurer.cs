@@ -116,20 +116,31 @@ namespace DeNelle.Village
 
         private void Ensure()
         {
+            string scene = SceneManager.GetActiveScene().name;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Hero", $"Ensure begin scene='{scene}' isVillage={IsVillageScene(scene)}");
             DedupeHeroes();
             var loco = FindLoco();
             GameObject hero = loco != null ? loco.gameObject : FindHeroByName();
             if (hero == null)
             {
-                if (IsVillageScene(SceneManager.GetActiveScene().name))
+                if (IsVillageScene(scene))
                 {
                     // In primary scene (Village2), ensure a hero exists immediately on load so
                     // camera can acquire target and not stay stuck on the tree. Watch() still
                     // monitors for later destruction.
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Hero", $"Ensure: no hero found in village scene '{scene}' — spawning emergency hero.");
                     SpawnEmergencyHero();
                     hero = FindLoco()?.gameObject ?? FindHeroByName();
                 }
-                if (hero == null) return;
+                if (hero == null)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Hero", $"Ensure: no hero in non-village scene '{scene}' — nothing to ensure (skipping).");
+                    return;
+                }
+            }
+            else
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Hero", $"Ensure: found existing hero '{hero.name}' (via {(loco != null ? "HeroLocomotion" : "name")}).");
             }
 
             if (!hero.activeSelf) hero.SetActive(true);
@@ -272,6 +283,7 @@ namespace DeNelle.Village
                 yield return new WaitForSeconds(0.5f);
                 if (FindLoco() == null && spawns < MaxEmergencySpawns)
                 {
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Hero", $"Watch: hero vanished mid-scene '{SceneManager.GetActiveScene().name}' — emergency respawn #{spawns + 1}/{MaxEmergencySpawns}.");
                     SpawnEmergencyHero();
                     spawns++;
                 }

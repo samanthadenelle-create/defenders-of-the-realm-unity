@@ -6,6 +6,7 @@
 // =============================================================================
 
 using DeNelle.Core;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -93,6 +94,7 @@ namespace DeNelle.Village
         {
             if (other == null || other.GetComponentInParent<HeroLocomotion>() == null) return;
             _heroInRange = true;
+            FlowTrace.Step("Dungeon", $"hero entered entrance '{_def?.ResolveName() ?? "<null def>"}' (scene='{_def?.SceneName ?? "<null>"}').");
             ShowPrompt(true);
         }
 
@@ -100,6 +102,7 @@ namespace DeNelle.Village
         {
             if (other == null || other.GetComponentInParent<HeroLocomotion>() == null) return;
             _heroInRange = false;
+            FlowTrace.Step("Dungeon", $"hero left entrance '{_def?.ResolveName() ?? "<null def>"}'.");
             ShowPrompt(false);
         }
 
@@ -122,6 +125,9 @@ namespace DeNelle.Village
 
             // DEF-203: register the shared on-screen Interact button while in range so
             // touch/mobile (no keyboard) can enter the dungeon too. Desktop F unchanged.
+            if (FlowTrace.Enabled)
+                FlowTrace.Throttle("Dungeon", "in-range-" + GetInstanceID(), 1f,
+                    $"in range of '{_def.ResolveName()}' — Interact button armed (active={MobileInteractButton.IsActive}).");
             MobileInteractButton.Request(this, "Enter: " + _def.ResolveName(), EnterDungeon);
 
             // DEF-217: the shared button is the single canonical prompt — suppress the
@@ -140,12 +146,19 @@ namespace DeNelle.Village
 
         private void EnterDungeon()
         {
-            if (_def == null || string.IsNullOrEmpty(_def.SceneName)) return;
+            FlowTrace.Step("Dungeon", $"EnterDungeon tapped: def='{_def?.ResolveName() ?? "<null>"}' scene='{_def?.SceneName ?? "<null>"}'.");
+            if (_def == null || string.IsNullOrEmpty(_def.SceneName))
+            {
+                FlowTrace.Warn("Dungeon", "EnterDungeon aborted: null def or empty SceneName — entry silently skipped.");
+                return;
+            }
             if (!_def.SceneExists)
             {
+                FlowTrace.Warn("Dungeon", $"EnterDungeon: '{_def.SceneName}' scene not built yet — no-op scaffold entry.");
                 Debug.LogWarning($"[DungeonEntrance] '{_def.SceneName}' scene not built yet — entry is a no-op (scaffold).");
                 return;
             }
+            FlowTrace.Step("Dungeon", $"EnterDungeon routing to SceneRouter.LoadScene('{_def.SceneName}').");
             Debug.Log($"[DungeonEntrance] Entering '{_def.SceneName}'.");
             // SceneRouter.LoadScene logs + aborts if the scene isn't in Build Settings.
             SceneRouter.LoadScene(_def.SceneName);

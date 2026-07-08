@@ -55,11 +55,13 @@ namespace DeNelle.Core.World
             if (_recipes != null) return;
             _recipes = new List<GarrisonRecipe>();
 
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Garrison", "EnsureLoaded — reading garrison-recipes.json.");
             try
             {
                 string text = CanonicalJson.Read(StreamingRelativePath);
                 if (string.IsNullOrEmpty(text))
                 {
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Garrison", $"{StreamingRelativePath} not found/empty (0 recipes — data-empty).");
                     Debug.LogWarning($"[GarrisonRecipeCatalog] {StreamingRelativePath} not found (no recipes loaded).");
                     return;
                 }
@@ -67,17 +69,24 @@ namespace DeNelle.Core.World
                 var file = JsonConvert.DeserializeObject<GarrisonRecipeFile>(text);
                 if (file != null && file.Recipes != null && file.Recipes.Count > 0)
                 {
+                    int skipped = 0;
                     foreach (var r in file.Recipes)
                         if (r != null && !string.IsNullOrEmpty(r.Id)) _recipes.Add(r);
+                        else skipped++;
+                    if (skipped > 0)
+                        DeNelle.Core.Diagnostics.FlowTrace.Warn("Garrison", $"skipped {skipped} null/id-less recipe row(s).");
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Garrison", $"loaded {_recipes.Count} recipe(s) (from {file.Recipes.Count} row(s)).");
                     Debug.Log($"[GarrisonRecipeCatalog] Loaded {_recipes.Count} garrison/dungeon recipe(s).");
                 }
                 else
                 {
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Garrison", "garrison-recipes.json parsed EMPTY (json present but 0 recipes — mapping break?).");
                     Debug.LogWarning("[GarrisonRecipeCatalog] garrison-recipes.json parsed empty.");
                 }
             }
             catch (Exception ex)
             {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Garrison", $"read/parse garrison-recipes.json threw {ex.GetType().Name}: {ex.Message}");
                 Debug.LogWarning($"[GarrisonRecipeCatalog] Failed to read garrison-recipes.json: {ex.Message}");
             }
         }

@@ -30,6 +30,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Core.UI
 {
@@ -306,29 +307,40 @@ namespace DeNelle.Core.UI
         {
             if (string.IsNullOrEmpty(role) || _ordered.ContainsKey(role)) return;
 
+            FlowTrace.Step("RpgUi", $"EnsureRole '{role}' -> LoadAll Resources/{ResRoot}{role}");
             var map = new Dictionary<string, Sprite>(System.StringComparer.OrdinalIgnoreCase);
             var list = new List<Sprite>();
             Sprite[] subs = null;
             try { subs = Resources.LoadAll<Sprite>(ResRoot + role); }
             catch (System.Exception e)
             {
+                // Hard load fault — error level so it lands in break-log (was Debug.LogWarning only).
+                FlowTrace.Fail("RpgUi", $"LoadAll FAILED for role '{role}': {e.GetType().Name}: {e.Message}");
                 Debug.LogWarning("[RpgUiCatalog] load failed for role '" + role + "': " + e.Message);
             }
             if (subs != null)
             {
-                for (int i = 0; i < subs.Length; i++)
+                Guard.TryEach("RpgUi", $"index sprite (role '{role}')", subs, sp =>
                 {
-                    var sp = subs[i];
-                    if (sp == null || string.IsNullOrEmpty(sp.name)) continue;
+                    if (sp == null || string.IsNullOrEmpty(sp.name)) return;
                     if (!map.ContainsKey(sp.name)) map[sp.name] = sp;
                     list.Add(sp);
-                }
+                });
             }
             _byName[role] = map;
             _ordered[role] = list;
             if (list.Count == 0)
+            {
+                // Fallback/anomaly: role folder empty or not imported -> callers keep procedural glyph.
+                FlowTrace.Warn("RpgUi", $"role '{role}' resolved 0 sprites (Resources/{ResRoot}{role} " +
+                    "empty/not imported) -> callers use procedural fallback");
                 Debug.Log("[RpgUiCatalog] no sprites under Resources/" + ResRoot + role +
                           " — run Defenders/Art/Import RPG UI Pack. Callers keep procedural fallback.");
+            }
+            else
+            {
+                FlowTrace.Step("RpgUi", $"role '{role}' indexed {list.Count} sprite(s)");
+            }
         }
 
 #if UNITY_EDITOR

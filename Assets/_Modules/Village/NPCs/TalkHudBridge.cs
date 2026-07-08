@@ -70,6 +70,10 @@ namespace DeNelle.Village
             {
                 _lastAvailable = available;
                 _haveLast = true;
+                // Edge-triggered availability push at the HUD seam — trace the transition so a
+                // "Talk button never appeared" capture shows whether availability was ever pushed
+                // true (registry populated) vs stayed false (nothing registered in range).
+                FlowTrace.Step("Talk", $"availability edge -> {available} (registry count={TalkPromptRegistry.Count}).");
                 PostureSignals.SetTalkAvailable(available);   // Core static — cannot go stale
             }
         }
@@ -80,9 +84,16 @@ namespace DeNelle.Village
             {
                 var p = GameObject.FindWithTag("Player");
                 _hero = p != null ? p.transform : null;
+                if (_hero == null)
+                    FlowTrace.Warn("Talk", "OnTalkPressed: no 'Player'-tagged hero resolved — routing from origin.");
             }
             Vector3 from = _hero != null ? _hero.position : Vector3.zero;
-            TalkPromptRegistry.NearestTalk(from)?.Invoke();
+            var talk = TalkPromptRegistry.NearestTalk(from);
+            // NearestTalk already traces empty/hit; here we mark the actual invoke so a capture
+            // splits "resolved a target but the target's Interact no-op'd" from "nothing resolved".
+            if (talk != null)
+                FlowTrace.Step("Talk", "OnTalkPressed -> invoking nearest talk action.");
+            talk?.Invoke();
         }
     }
 }

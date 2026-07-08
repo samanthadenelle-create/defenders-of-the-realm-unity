@@ -209,6 +209,7 @@ namespace DeNelle.Village
                 // member. We only repurpose the existing companion; we never spawn a
                 // second one.
                 _companionClass = ResolveCompanionClass();
+                FlowTrace.Step("Roster", $"SylasFirstMeeting: scripted-bubble path (no Yarn node) — companion class {_companionClass}.");
                 StoryCompanion companion = ResolveAndConfigureCompanion();
 
                 // Drive the scripted greeting through the companion's own bubble so it
@@ -246,6 +247,9 @@ namespace DeNelle.Village
             {
                 // Never wedge the game on a narrative hiccup — still mark seen so a
                 // broken beat can't loop, and restore any suppressed companion voice.
+                // No silent swallow (§12): roll the fault up to the break-log with its type so a
+                // "Sylas never joined / never spoke" capture pins the throw instead of a marked-seen no-op.
+                FlowTrace.Fail("Roster", $"SylasFirstMeeting.Run threw — finishing anyway (marks seen, restores voice): {ex.GetType().Name}: {ex.Message}");
                 Debug.LogWarning($"[SylasFirstMeeting] Meeting beat error — finishing anyway. {ex.Message}");
                 ResolveCompanion()?.SetSpeechSuppressed(false);
                 MarkSeen();

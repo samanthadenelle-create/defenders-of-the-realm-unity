@@ -33,6 +33,7 @@ using DeNelle.BattleATB.Engine;
 using DeNelle.BattleATB.State;
 using DeNelle.Core;
 using DeNelle.Core.Combat;  // ActorAnimator / IActorAnimator for 3D fight anims (knight swings, mage casts, hits, deaths)
+using DeNelle.Core.Diagnostics;   // FlowTrace / Guard — §12 instrument-first (AtbBattle bounded context)
 using TMPro;
 using UnityEngine;
 
@@ -127,10 +128,12 @@ namespace DeNelle.BattleATB
 
         private void Start()
         {
+            FlowTrace.Step("AtbBattle", "Start: entering battle scene lifecycle");
             Subscribe();   // wire events
 
             if (_runtimeState == null)
             {
+                FlowTrace.Fail("AtbBattle", "Start: no ATBRuntimeState assigned — battle cannot run (hard stop).");
                 Debug.LogError("[BattleController] No ATBRuntimeState assigned — battle cannot run.");
                 return;
             }
@@ -142,6 +145,7 @@ namespace DeNelle.BattleATB
             // "Last Stand" (Heart consequences commit on close); Wave == 0 or no
             // handoff (dungeon / dev) is a Dungeon encounter (no village damage).
             _source = ResolveSource();
+            FlowTrace.Step("AtbBattle", $"Start: source={_source} enemies={setup?.Enemies?.Count ?? 0} party={setup?.PartyMembers?.Count ?? 0}");
             _runtimeState.StartBattle(setup, _source);
 
             // Build the clean FF7 uGUI HUD (code-built Canvas + panels exactly as specified).
@@ -175,6 +179,12 @@ namespace DeNelle.BattleATB
                 mgr.onEnemyAutoAttack.RemoveListener(HandleIdleTimeout); // guard double-wire
                 mgr.onEnemyAutoAttack.AddListener(HandleIdleTimeout);
                 mgr.StartCombat();
+                FlowTrace.Step("AtbBattle", "Start: ATBCombatManager wired + StartCombat()");
+            }
+            else
+            {
+                // F-MGR-1: no manager instance means the idle-timeout safety net is absent.
+                FlowTrace.Warn("AtbBattle", "Start: ATBCombatManager.Instance is null — idle-turn timer NOT armed.");
             }
         }
 
@@ -187,7 +197,12 @@ namespace DeNelle.BattleATB
         /// </summary>
         private void HandleIdleTimeout()
         {
-            if (_runtimeState == null || !_runtimeState.IsAwaitingPlayer()) return;
+            if (_runtimeState == null || !_runtimeState.IsAwaitingPlayer())
+            {
+                FlowTrace.Step("AtbBattle", "HandleIdleTimeout: not awaiting player (AI turn / over) — no-op.");
+                return;
+            }
+            FlowTrace.Warn("AtbBattle", "HandleIdleTimeout: idle timer expired — forcing Defend (turtle) for the active hero.");
             _runtimeState.ChooseAction(BattleAction.MakeDefend());
             ATBCombatManager.Instance?.OnPlayerActed(); // re-arm for the next player turn
         }
@@ -235,6 +250,8 @@ namespace DeNelle.BattleATB
             // each mapped to a valid engine def (was a single inspector-fallback
             // enemy regardless of who actually breached).
             var enemies = BuildEnemyRoster(handoff);
+
+            FlowTrace.Step("AtbBattle", $"BuildSetup: wave={wave} seed={seed} rosterCount={enemies?.Count ?? 0}");
 
             HeroClass heroClass = ResolveHeroClass(); // owner: ATB ran as Mage even when you're an Archer
             string heroName = ResolveHeroName(heroClass); // DEF-259 #7: was always "Blaise"
@@ -412,9 +429,17 @@ namespace DeNelle.BattleATB
                 // ATB engine (stats/abilities) until it gets its own kit. Mapping it
                 // here keeps the engine HeroClass enum 3-valued so HERO_STATS /
                 // HERO_ABILITIES lookups never miss a key.
-                case DeNelle.Core.State.HeroClassOpt.Cleric: cls = HeroClass.Mage;   break;
-                default:                                     cls = HeroClass.Mage;   break; // no save / None
+                case DeNelle.Core.State.HeroClassOpt.Cleric:
+                    // WO-226: the Cleric silently reuses the Mage archetype (no own kit yet).
+                    FlowTrace.Warn("AtbBattle", "ResolveHeroClass: Cleric -> Mage alias (Cleric has no ATB kit; reuses Mage stats/abilities).");
+                    cls = HeroClass.Mage;   break;
+                default:
+                    // No save / None — the Mage default. Surface it so a missing GameState reads in the trace.
+                    if (opt == DeNelle.Core.State.HeroClassOpt.None)
+                        FlowTrace.Warn("AtbBattle", "ResolveHeroClass: GameState None/no save -> Mage default.");
+                    cls = HeroClass.Mage;   break; // no save / None
             }
+            FlowTrace.Step("AtbBattle", $"ResolveHeroClass: {cls} (GameState={opt}).");
             Debug.Log($"[BattleController] ATB hero class resolved to {cls} (GameState={opt}).");
             return cls;
         }
@@ -458,17 +483,20 @@ namespace DeNelle.BattleATB
             var roster = new List<BreachEnemySpec>();
 
             string[] ids = handoff != null ? handoff.BreachedIds : null;
+            FlowTrace.Step("AtbBattle", $"BuildEnemyRoster: handoff ids={(ids != null ? ids.Length.ToString() : "<null>")}");
             if (ids != null)
             {
-                foreach (string raw in ids)
+                // One bad breach id must never blank the whole roster (INSTRUMENTATION_STANDARD §3).
+                Guard.TryEach("AtbBattle", "map breach id -> engine def", ids, raw =>
                 {
-                    if (roster.Count >= MaxEnemies) break;
+                    if (roster.Count >= MaxEnemies) return;
                     roster.Add(new BreachEnemySpec { DefId = MapToEngineDef(raw) });
-                }
+                });
             }
 
             if (roster.Count == 0)
             {
+                FlowTrace.Warn("AtbBattle", "BuildEnemyRoster: no breach handoff — staging the OrcFamily dev/prototype encounter.");
                 // WO-481 combat-pivot: the V1 prototype encounter is the Orc FAMILY (leader +
                 // followers), not a lone skeleton. With no breach handoff (dev / direct ATBBattle
                 // play) stage the family so the battle anchor shows the real V1 fight. The swapper
@@ -491,15 +519,19 @@ namespace DeNelle.BattleATB
         /// </summary>
         private static string MapToEngineDef(string id)
         {
-            if (string.IsNullOrEmpty(id)) return "skeleton";
+            if (string.IsNullOrEmpty(id))
+            {
+                FlowTrace.Warn("AtbBattle", "MapToEngineDef: null/empty id -> 'skeleton' fallback.");
+                return "skeleton";
+            }
             if (Defs.ENEMY_DEFS.ContainsKey(id)) return id;          // already a valid engine key
 
             string lower = id.ToLowerInvariant();
 
             // WO-94: village enemies.json ids — map to ATB engine archetypes.
             if (lower == "hollow-warrior") return "hollow-warrior"; // standard melee (not bruiser tank)
-            if (lower == "hollow-walker")  return "skeleton";    // standard grunt
-            if (lower == "hollow-rogue")   return "skeleton";    // fast skirmisher → grunt fallback
+            if (lower == "hollow-walker")  { FlowTrace.Step("AtbBattle", "MapToEngineDef: 'hollow-walker' -> 'skeleton'."); return "skeleton"; }
+            if (lower == "hollow-rogue")   { FlowTrace.Step("AtbBattle", "MapToEngineDef: 'hollow-rogue' -> 'skeleton'."); return "skeleton"; }
 
             // Generic heuristics for dungeon / other 3D-layer tokens.
             if (lower.Contains("necro"))   return "necromancer";
@@ -507,6 +539,8 @@ namespace DeNelle.BattleATB
                 || lower.Contains("bulwark") || lower.Contains("boss")
                 || lower.Contains("dragon")) return "bruiser";
             if (lower.Contains("goblin"))  return "goblin";
+            // Unknown id — the silent skeleton fallback (a roster that doesn't match who breached).
+            FlowTrace.Warn("AtbBattle", $"MapToEngineDef: unknown id '{id}' -> 'skeleton' fallback (roster may not match the real breach).");
             return "skeleton";
         }
 
@@ -577,6 +611,7 @@ namespace DeNelle.BattleATB
         {
             if (result == null || _returnScheduled) return;
             _returnScheduled = true;
+            FlowTrace.Step("AtbBattle", $"HandleOutcome: battle ended outcome={result.Outcome} source={result.Source} — scheduling return.");
             ATBCombatManager.Instance?.StopCombat(); // WO-68: halt the turn timer
             ReturnAfterResult(result).Forget();
         }
@@ -590,7 +625,13 @@ namespace DeNelle.BattleATB
         /// </summary>
         private void SubmitPlayerAction(BattleAction action)
         {
-            if (_runtimeState == null || !_runtimeState.IsAwaitingPlayer() || action == null) return;
+            if (_runtimeState == null || !_runtimeState.IsAwaitingPlayer() || action == null)
+            {
+                // Stale-click / not-awaiting guard — the action is dropped on purpose.
+                FlowTrace.Warn("AtbBattle", $"SubmitPlayerAction: dropped (awaiting={_runtimeState?.IsAwaitingPlayer()} action={(action != null ? action.Kind.ToString() : "<null>")}).");
+                return;
+            }
+            FlowTrace.Step("AtbBattle", $"SubmitPlayerAction: {action.Kind}");
 
             // WO-93: hero swing on the placeholder capsule / swapped model (no-op
             // when there is no Animator). Only meaningful for an attack/ability.

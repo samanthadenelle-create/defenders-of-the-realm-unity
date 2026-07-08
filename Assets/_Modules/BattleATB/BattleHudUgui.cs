@@ -187,6 +187,7 @@ namespace DeNelle.BattleATB
         /// <summary>Build the full FF7-style HUD. Creates its own Canvas if none supplied.</summary>
         public void Build(Canvas existingCanvas = null)
         {
+            FlowTrace.Step("UI", $"BattleHudUgui.Build: existingCanvas={(existingCanvas != null ? "supplied" : "self-create")}");
             if (existingCanvas != null)
             {
                 _canvas = existingCanvas;
@@ -768,7 +769,13 @@ namespace DeNelle.BattleATB
         public void Render(ATBRuntimeState runtime)
         {
             var state = runtime?.Battle;
-            if (state == null) return;
+            if (state == null)
+            {
+                // Built-but-nothing-to-show: the HUD renders blank because there is no live battle.
+                FlowTrace.Once("UI", "battlehud-render-null-state",
+                    "Render: runtime/Battle is null — HUD has no state to paint (data-empty, not a build miss).");
+                return;
+            }
             _lastState = state;
 
             // Top info

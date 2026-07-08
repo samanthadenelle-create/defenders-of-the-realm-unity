@@ -9,6 +9,7 @@
 // =============================================================================
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -36,6 +37,7 @@ namespace DeNelle.Village
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;   // de-dupe across domain reloads
             SceneManager.sceneLoaded += OnSceneLoaded;
+            FlowTrace.Step("World", $"Init (AfterSceneLoad): subscribed to sceneLoaded; active scene='{SceneManager.GetActiveScene().name}'.");
             Debug.Log("[WorldSceneLoader] DEBUG Init fired — subscribed to sceneLoaded. " +
                 "Active scene now = '" + SceneManager.GetActiveScene().name + "'. Watching for '" +
                 VillageSceneName + "'. (DEF-108 diagnostic)");
@@ -45,9 +47,14 @@ namespace DeNelle.Village
 
         private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
+            FlowTrace.Step("World", $"sceneLoaded '{scene.name}' (mode={mode}).");
             Debug.Log("[WorldSceneLoader] DEBUG sceneLoaded event: '" + scene.name +
                 "' (mode=" + mode + ").");
-            if (DeNelle.Core.HubScenes.IsOverworld(scene.name)) DiagTerrain(scene);
+            if (DeNelle.Core.HubScenes.IsOverworld(scene.name))
+            {
+                FlowTrace.Step("World", $"'{scene.name}' is overworld — running terrain diagnostics.");
+                DiagTerrain(scene);
+            }
             TryLoadOuterWorld(scene, "sceneLoaded");
         }
 
@@ -138,6 +145,7 @@ namespace DeNelle.Village
                         (baseY + t.SampleHeight(new Vector3(0f, 0f, d))).ToString("0.000"));
                 return;
             }
+            FlowTrace.Warn("World", $"DiagTerrain: no Terrain found in overworld scene '{scene.name}' — nothing to diagnose.");
             Debug.Log("[WorldSceneLoader] TERRAINDIAG no Terrain found in OuterWorld!");
         }
 
@@ -149,6 +157,7 @@ namespace DeNelle.Village
             // This method is kept for compatibility but does nothing. The merged single scene ALREADY
             // contains all overworld content in-scene (welded into one continuous navmesh by WorldMergeBuilder).
             // No additive loading is needed or possible.
+            FlowTrace.Step("World", $"TryLoadOuterWorld({via}): DEPRECATED no-op — OuterWorld removed (WO-608 MergedWorld); content is in-scene ('{MergedWorldSceneName}'), no additive stream.");
             Debug.Log("[WorldSceneLoader] (" + via + ") DEPRECATED: OuterWorld scene removed (WO-608 MergedWorld). " +
                 "All world content is in Main_Castle_Overworld. No streaming loader needed.");
         }

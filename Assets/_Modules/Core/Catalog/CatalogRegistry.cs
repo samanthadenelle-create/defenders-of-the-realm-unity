@@ -21,9 +21,11 @@ namespace DeNelle.Core.Catalog
         {
             if (entry == null || string.IsNullOrEmpty(entry.id))
             {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Catalog", "skipped a null / id-less entry (never registered).");
                 Debug.LogWarning("[CatalogRegistry] skipped a null / id-less entry.");
                 return;
             }
+            bool replaced = _byId.ContainsKey(entry.id);
             _byId[entry.id] = entry;
             if (!_byType.TryGetValue(entry.type, out var list))
             {
@@ -31,6 +33,10 @@ namespace DeNelle.Core.Catalog
                 _byType[entry.type] = list;
             }
             if (!list.Contains(entry)) list.Add(entry);
+            if (replaced)
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Catalog", $"REPLACED existing entry id='{entry.id}' (type={entry.type}).");
+            else
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Catalog", $"registered id='{entry.id}' (type={entry.type}); total={_byId.Count}.");
         }
 
         /// <summary>Look up a single entry by id; null if absent.</summary>

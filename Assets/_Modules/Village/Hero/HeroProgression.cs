@@ -22,6 +22,7 @@
 
 using System;
 using DeNelle.Core.Progression;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Village.Talents;
 using UnityEngine;
 
@@ -131,13 +132,14 @@ namespace DeNelle.Village
             {
                 if (Instance.gameObject != gameObject && Instance.gameObject.name == "HeroProgression")
                 {
+                    FlowTrace.Step("HeroXp", $"Awake: hero takes over standalone bootstrap — migrating level={Instance._level} xp={Instance._xp:0.#}");
                     _level = Instance._level;
                     _xp = Instance._xp;
                     _lifetimeXp = Instance._lifetimeXp;
                     _hasGrantedStarterPoints = Instance._hasGrantedStarterPoints;
                     Destroy(Instance.gameObject);   // the standalone, NOT the hero
                 }
-                else { Destroy(this); return; }
+                else { FlowTrace.Warn("HeroXp", $"Awake: duplicate HeroProgression on '{gameObject.name}' — removing this component."); Destroy(this); return; }
             }
         }
 
@@ -153,6 +155,7 @@ namespace DeNelle.Village
         public int AddXp(float amount)
         {
             if (amount <= 0f) return 0;
+            FlowTrace.Step("HeroXp", $"AddXp amount={amount:0.#} (level={_level} xp={_xp:0.#}/{XpToNextFor(_level):0.#})");
             _xp += amount;
             _lifetimeXp += amount;
 
@@ -165,6 +168,8 @@ namespace DeNelle.Village
                 ApplyLevelRewards(_level);
             }
 
+            if (gained > 0)
+                FlowTrace.Step("HeroXp", $"leveled +{gained} -> level={_level} (xp={_xp:0.#}/{XpToNextFor(_level):0.#})");
             OnXpChanged?.Invoke(_xp, XpToNextFor(_level));
             return gained;
         }
@@ -172,13 +177,19 @@ namespace DeNelle.Village
         /// <summary>Applies one level's rewards (Wisdom; the damage bonus is read live).</summary>
         private void ApplyLevelRewards(int newLevel)
         {
+            FlowTrace.Step("HeroXp", $"ApplyLevelRewards level={newLevel} wisdomGrant={WisdomForLevel(newLevel)} firstLevel={( !_hasGrantedStarterPoints )}");
+
             // Owner's decision: a hero level grants Wisdom talent points so leveling
             // feeds the talent tree (the DamageMultiplier is read live, no push needed).
-            try { WisdomCurrencyService.Instance?.Grant(WisdomForLevel(newLevel)); } catch { }
+            // §12: the previously-SILENT catch is now surfaced — a throw here means the
+            // level's Wisdom is LOST (debit-of-progression without grant), so it is a Fail.
+            try { WisdomCurrencyService.Instance?.Grant(WisdomForLevel(newLevel)); }
+            catch (System.Exception e) { FlowTrace.Fail("HeroXp", $"Wisdom grant THREW at level {newLevel} — {WisdomForLevel(newLevel)} Wisdom NOT granted: {e.GetType().Name}: {e.Message}"); }
 
             // DEF-77 — each hero level also banks a spendable craft-skill point; the
             // LevelUpSkillPopup reacts via SkillSystem.OnSkillsChanged + OnLevelUp.
-            try { SkillSystem.Instance?.GrantSkillPoint(); } catch { }
+            try { SkillSystem.Instance?.GrantSkillPoint(); }
+            catch (System.Exception e) { FlowTrace.Fail("HeroXp", $"SkillPoint grant THREW at level {newLevel}: {e.GetType().Name}: {e.Message}"); }
 
             // DEF-82 — on the very first level-up, gift two bonus skill points so
             // new players can immediately engage the skill tree.
@@ -187,12 +198,15 @@ namespace DeNelle.Village
                 _hasGrantedStarterPoints = true;
                 SkillSystem.Instance?.GrantSkillPoint();
                 SkillSystem.Instance?.GrantSkillPoint();
+                FlowTrace.Step("HeroXp", "granted 2 starter skill points (first level-up).");
             }
 
-            try { OnLevelUp?.Invoke(newLevel); } catch { }
+            try { OnLevelUp?.Invoke(newLevel); }
+            catch (System.Exception e) { FlowTrace.Fail("HeroXp", $"OnLevelUp subscriber THREW at level {newLevel}: {e.GetType().Name}: {e.Message}"); }
             // DEF-261 — also fire the instance-swap-proof static relay so listeners
             // that outlive a HeroProgression instance (LevelUpSkillPopup) still hear it.
-            try { OnAnyLevelUp?.Invoke(newLevel); } catch { }
+            try { OnAnyLevelUp?.Invoke(newLevel); }
+            catch (System.Exception e) { FlowTrace.Fail("HeroXp", $"OnAnyLevelUp subscriber THREW at level {newLevel}: {e.GetType().Name}: {e.Message}"); }
         }
     }
 }

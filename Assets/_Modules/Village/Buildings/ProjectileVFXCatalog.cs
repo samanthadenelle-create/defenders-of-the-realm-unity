@@ -40,6 +40,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -89,9 +90,15 @@ namespace DeNelle.Village
         /// (or null if the prefab is missing). Caller may reuse/destroy it.</summary>
         public static GameObject SpawnFlying(Transform mover, DamageElement element)
         {
-            if (mover == null) return null;
-            var prefab = Load(FlyingPath(element));
-            if (prefab == null) return null;
+            if (mover == null) { FlowTrace.Warn("ProjVfx", $"SpawnFlying(<null mover>, {element}) -> null"); return null; }
+            string path = FlyingPath(element);
+            FlowTrace.Step("ProjVfx", $"SpawnFlying element={element} path='{path}'");
+            var prefab = Load(path);
+            if (prefab == null)
+            {
+                FlowTrace.Warn("ProjVfx", $"SpawnFlying element={element}: no prefab at '{path}' -> projectile flies with NO FX body");
+                return null;
+            }
 
             var go = Object.Instantiate(prefab, mover.position, mover.rotation, mover);
             go.transform.localPosition = Vector3.zero;
@@ -128,16 +135,24 @@ namespace DeNelle.Village
         /// No-op when the prefab is missing.</summary>
         public static void SpawnImpact(Vector3 position, DamageElement element)
         {
-            var prefab = Load(ImpactPath(element));
-            if (prefab == null) return;
+            string path = ImpactPath(element);
+            FlowTrace.Step("ProjVfx", $"SpawnImpact element={element} path='{path}'");
+            var prefab = Load(path);
+            if (prefab == null)
+            {
+                FlowTrace.Warn("ProjVfx", $"SpawnImpact element={element}: no prefab at '{path}' -> no impact burst");
+                return;
+            }
 
             // Pool the impact burst (GC-free, no per-shot transient GameObject) when the
             // pool is up; fall back to the legacy Instantiate+Destroy otherwise.
             if (ImpactFXPool.Instance != null)
             {
+                FlowTrace.Step("ProjVfx", $"SpawnImpact -> pooled play '{path}'");
                 ImpactFXPool.Instance.Play(prefab, position, Quaternion.identity, -1f, prepared: false);
                 return;
             }
+            FlowTrace.Warn("ProjVfx", $"SpawnImpact '{path}': ImpactFXPool absent -> legacy Instantiate+Destroy");
 
             var go = Object.Instantiate(prefab, position, Quaternion.identity);
             CleanToVisualOnly(go);
@@ -180,17 +195,21 @@ namespace DeNelle.Village
             try { prefab = Resources.Load<GameObject>(path); }
             catch (System.Exception e)
             {
+                // Hard load fault — error level so it lands in break-log (was Debug.LogWarning only).
+                FlowTrace.Fail("ProjVfx", $"Resources.Load FAILED for '{path}': {e.GetType().Name}: {e.Message}");
                 Debug.LogWarning("[ProjectileVFXCatalog] load failed for " + path + ": " + e.Message);
             }
 
             if (prefab == null)
             {
                 _missing.Add(path);
+                FlowTrace.Warn("ProjVfx", $"missing prefab '{path}' (cached as missing) -> projectile flies with no FX body");
                 Debug.LogWarning("[ProjectileVFXCatalog] missing prefab '" + path +
                     "' — projectile will fly with no FX body. Ensure it exists under " +
                     "Assets/Resources/" + path + ".prefab");
                 return null;
             }
+            FlowTrace.Step("ProjVfx", $"loaded + cached prefab '{path}'");
             _prefabCache[path] = prefab;
             return prefab;
         }
@@ -201,18 +220,18 @@ namespace DeNelle.Village
         private static void CleanToVisualOnly(GameObject go)
         {
             // Rigidbodies (root + children).
-            foreach (var rb in go.GetComponentsInChildren<Rigidbody>(true))
-                Object.Destroy(rb);
+            Guard.TryEach("ProjVfx", "strip Rigidbody",
+                go.GetComponentsInChildren<Rigidbody>(true), rb => Object.Destroy(rb));
 
             // Colliders (so it never triggers anything; our logic owns hit detection).
-            foreach (var col in go.GetComponentsInChildren<Collider>(true))
-                Object.Destroy(col);
+            Guard.TryEach("ProjVfx", "strip Collider",
+                go.GetComponentsInChildren<Collider>(true), col => Object.Destroy(col));
 
             // Any MonoBehaviour that isn't ours — the pack's demo Projectile mover/exploder.
             // (ParticleSystem / renderers / TrailRenderer are NOT MonoBehaviours, so they
             // survive. A null entry = a missing-script ref on our Resources copy; skip it.)
-            foreach (var mb in go.GetComponentsInChildren<MonoBehaviour>(true))
-                if (mb != null) Object.Destroy(mb);
+            Guard.TryEach("ProjVfx", "strip demo MonoBehaviour",
+                go.GetComponentsInChildren<MonoBehaviour>(true), mb => { if (mb != null) Object.Destroy(mb); });
         }
 
         // Built-in particle shader → URP particle shader remap (cached per material so we

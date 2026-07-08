@@ -18,6 +18,7 @@
 
 using UnityEngine;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.Arena
 {
@@ -47,6 +48,7 @@ namespace DeNelle.Village.Arena
             a.TotalPurse += System.Math.Max(0, purseWon);
             SetLive(a);
             Persist(a);
+            FlowTrace.Step("ArenaProgress", $"RecordWin purse={purseWon} -> {a.Wins}W/{a.Losses}L streak={a.Streak}");
             Debug.Log($"[ArenaProgressStore] WIN recorded - {a.Wins}W/{a.Losses}L, streak {a.Streak}, purse {a.TotalPurse}.");
         }
 
@@ -59,6 +61,7 @@ namespace DeNelle.Village.Arena
             a.Streak = 0;
             SetLive(a);
             Persist(a);
+            FlowTrace.Step("ArenaProgress", $"RecordLoss -> {a.Wins}W/{a.Losses}L streak reset");
             Debug.Log($"[ArenaProgressStore] LOSS recorded - {a.Wins}W/{a.Losses}L, streak reset.");
         }
 

@@ -27,6 +27,7 @@
 
 using UnityEngine;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -112,6 +113,7 @@ namespace DeNelle.Village
             var state = svc?.State;
             if (state == null)
             {
+                FlowTrace.Fail("Crystal", "TrySpend rejected: GameStateService unavailable (no wallet)");
                 Debug.LogWarning("[CrystalEconomy] GameStateService unavailable — spend rejected.");
                 return false;
             }
@@ -119,10 +121,12 @@ namespace DeNelle.Village
             int current = state.Resources.Crystals;
             if (current < cost)
             {
+                FlowTrace.Warn("Crystal", $"TrySpend insufficient — need {cost}, have {current}");
                 Debug.Log($"[CrystalEconomy] Insufficient Crystals — need {cost}, have {current}.");
                 return false;
             }
 
+            FlowTrace.Step("Crystal", $"TrySpend {cost} (single source: GameState.Resources.Crystals)");
             // AddCrystals clamps >= 0, persists, and raises ResourcesChanged.
             svc.AddCrystals(-cost);
             Debug.Log($"[CrystalEconomy] Spent {cost} Crystals — balance now {state.Resources.Crystals}.");
@@ -141,10 +145,12 @@ namespace DeNelle.Village
             var state = svc?.State;
             if (state == null)
             {
+                FlowTrace.Fail("Crystal", $"AddCrystals({amount}) dropped: GameStateService unavailable (award lost)");
                 Debug.LogWarning("[CrystalEconomy] GameStateService unavailable — award dropped.");
                 return;
             }
 
+            FlowTrace.Step("Crystal", $"AddCrystals +{amount} (single source: GameState.Resources.Crystals)");
             // AddCrystals writes Resources.Crystals, clamps >= 0, persists, raises ResourcesChanged.
             svc.AddCrystals(amount);
             Debug.Log($"[CrystalEconomy] +{amount} Crystals awarded — balance now {state.Resources.Crystals}.");

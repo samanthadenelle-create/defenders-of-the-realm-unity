@@ -191,14 +191,17 @@ namespace DeNelle.Core
         /// </summary>
         public static void LoadScene(string sceneName)
         {
+            FlowTrace.Step("SceneRouter", $"LoadScene(sync) name='{sceneName ?? "<null>"}'");
             if (!IsSceneRegistered(sceneName))
             {
+                FlowTrace.Fail("SceneRouter", $"LoadScene ABORTED: '{sceneName ?? "<null>"}' not in Build Settings — hero stranded on current scene.");
                 Debug.LogError($"[SceneRouter] Scene '{sceneName}' is not in Build Settings — load aborted.");
                 return;
             }
             // WO1: local save before synchronous transitions (no await available here;
             // the background delta-sync timer will push the backend diff shortly after).
             DeNelle.Core.State.GameStateService.Instance?.Save();
+            FlowTrace.Step("SceneRouter", $"LoadScene committing SceneManager.LoadScene('{sceneName}')");
             SceneManager.LoadScene(sceneName);
         }
 
@@ -213,8 +216,10 @@ namespace DeNelle.Core
         /// </summary>
         public static async UniTask LoadSceneWithFade(string sceneName, float fadeSeconds = DefaultFadeSeconds)
         {
+            FlowTrace.Step("SceneRouter", $"LoadSceneWithFade name='{sceneName ?? "<null>"}' fade={fadeSeconds:F2}s");
             if (!IsSceneRegistered(sceneName))
             {
+                FlowTrace.Fail("SceneRouter", $"LoadSceneWithFade ABORTED: '{sceneName ?? "<null>"}' not in Build Settings — hero stranded on current scene.");
                 Debug.LogError($"[SceneRouter] Scene '{sceneName}' is not in Build Settings — load aborted.");
                 return;
             }
@@ -258,13 +263,14 @@ namespace DeNelle.Core
         /// </summary>
         private static void ArmReturnPointRestore()
         {
-            if (Return == null) return;
+            if (Return == null) { FlowTrace.Step("SceneRouter", "ArmReturnPointRestore: no Return stashed — nothing to arm."); return; }
 
             // Audit P1 fix (return-point double-subscribe): if GoBattle arms again
             // while a prior load is still pending, a second handler would subscribe —
             // handler#1 clears Return, handler#2 then sees null and skips the warp
             // (wrong scene on return). Always detach before attaching so exactly one
             // handler is ever active.
+            FlowTrace.Step("SceneRouter", $"ArmReturnPointRestore: arming one-shot sceneLoaded handler for return scene '{Return.Scene ?? "<null>"}' (detach-before-attach de-dupe).");
             SceneManager.sceneLoaded -= OnReturnSceneLoaded;
             // Capture once; the handler runs after the load completes.
             SceneManager.sceneLoaded += OnReturnSceneLoaded;
@@ -272,12 +278,20 @@ namespace DeNelle.Core
 
         private static void OnReturnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
+            FlowTrace.Step("SceneRouter", $"OnReturnSceneLoaded fired for scene '{scene.name}' (mode={mode}).");
             // One-shot: always detach, even on an early-out / failure path.
             SceneManager.sceneLoaded -= OnReturnSceneLoaded;
 
             ReturnPoint rp = Return;
             Return = null;            // consume regardless of outcome
-            if (rp == null) return;
+            if (rp == null)
+            {
+                // DOUBLE-SUBSCRIBE STRAND: a prior handler already consumed Return (set it null).
+                // This second handler now has nothing to warp with — the hero stays where the
+                // load dropped them instead of returning to the launch pose.
+                FlowTrace.Fail("SceneRouter", $"OnReturnSceneLoaded: Return already consumed (null) on scene '{scene.name}' — double-subscribe STRAND, hero NOT warped home.");
+                return;
+            }
 
             try
             {
@@ -288,6 +302,7 @@ namespace DeNelle.Core
                 var loco = (hero != null) ? FindHeroLocomotionOn(hero) : FindHeroLocomotion();
                 if (loco == null)
                 {
+                    FlowTrace.Fail("SceneRouter", $"Return-point restore: no HeroLocomotion in '{scene.name}' — warp SKIPPED, hero not repositioned to launch pose {rp.Position}.");
                     Debug.LogWarning("[SceneRouter] Return-point restore: no HeroLocomotion found — warp skipped.");
                     return;
                 }
@@ -303,17 +318,20 @@ namespace DeNelle.Core
                 if (warp != null)
                 {
                     warp.Invoke(loco, new object[] { rp.Position, (Quaternion?)rot });
+                    FlowTrace.Step("SceneRouter", $"Return-point restored hero via WarpTo to {rp.Position} yaw={rp.Yaw:F0} in '{scene.name}'.");
                     Debug.Log($"[SceneRouter] Return-point restored hero to {rp.Position} in '{scene.name}'.");
                 }
                 else
                 {
                     // Last-ditch fallback: plain transform move so the player at least lands home.
+                    FlowTrace.Warn("SceneRouter", $"Return-point: HeroLocomotion.WarpTo(Vector3,Quaternion?) not found via reflection — using transform fallback (no NavMesh re-warp/camera event) to {rp.Position}.");
                     loco.transform.SetPositionAndRotation(rp.Position, rot);
                     Debug.LogWarning("[SceneRouter] Return-point: WarpTo not found — used transform fallback.");
                 }
             }
             catch (System.Exception e)
             {
+                FlowTrace.Fail("SceneRouter", $"Return-point restore threw on '{scene.name}': {e.GetType().Name}: {e.Message} — hero NOT returned to launch pose.");
                 Debug.LogWarning("[SceneRouter] Return-point restore threw (non-fatal): " + e.Message);
             }
         }
@@ -381,7 +399,12 @@ namespace DeNelle.Core
         /// village, so it uses the standard fade load rather than the village overlay.
         /// From the castle the player travels out to the village TD loop.
         /// </summary>
-        public static void GoCastle() => LoadSceneWithFade(Castle).Forget();
+        public static void GoCastle()
+        {
+            var castle = Castle;
+            FlowTrace.Step("SceneRouter", $"GoCastle -> '{castle}' (MergedWorld={DeNelle.Core.FeatureFlags.MergedWorld}).");
+            LoadSceneWithFade(castle).Forget();
+        }
 
         /// <summary>
         /// Go to a RAID BASE scene (WO-453 Step 4) — the troop DEPLOY/RALLY/RETREAT
@@ -411,8 +434,10 @@ namespace DeNelle.Core
         /// </summary>
         public static async UniTask LoadVillageWithLoader()
         {
+            FlowTrace.Step("SceneRouter", $"LoadVillageWithLoader -> '{Village}' (overlay load).");
             if (!IsSceneRegistered(Village))
             {
+                FlowTrace.Fail("SceneRouter", $"LoadVillageWithLoader ABORTED: '{Village}' not in Build Settings — village load aborted.");
                 Debug.LogError($"[SceneRouter] Scene '{Village}' is not in Build Settings — load aborted.");
                 return;
             }
@@ -477,15 +502,18 @@ namespace DeNelle.Core
                 if (tree != null)
                 {
                     tree.transform.position = new Vector3(0f, -0.25f, 0f);
+                    FlowTrace.Step("SceneRouter", $"Tree of Life planted at {tree.transform.position} (roots underground).");
                     Debug.Log($"[SceneRouter] Tree of Life planted at {tree.transform.position} (roots underground).");
                 }
                 else
                 {
+                    FlowTrace.Warn("SceneRouter", "Tree of Life (TreeOfLifeMaterialFixer) not found on village load — root-seat skipped.");
                     Debug.LogWarning("[SceneRouter] Tree of Life (TreeOfLifeMaterialFixer) not found on village load — root-seat skipped.");
                 }
             }
             catch (System.Exception e)
             {
+                FlowTrace.Fail("SceneRouter", $"Tree root-seat threw: {e.GetType().Name}: {e.Message}");
                 Debug.LogWarning("[SceneRouter] Tree root-seat threw (non-fatal): " + e.Message);
             }
         }
@@ -503,6 +531,7 @@ namespace DeNelle.Core
         /// </summary>
         public static UniTask GoBattle(BattleParams p)
         {
+            FlowTrace.Step("SceneRouter", $"GoBattle wave={p?.Wave ?? -1} breachedIds={p?.BreachedIds?.Length ?? 0} -> ATBBattle");
             PendingBattle = p;
 
             // RETURN-POINT (return-point feature): stash the scene + hero pose we are
@@ -535,6 +564,7 @@ namespace DeNelle.Core
         private static void StashReturnPoint(BattleParams p)
         {
             string activeScene = SceneManager.GetActiveScene().name;
+            FlowTrace.Step("SceneRouter", $"StashReturnPoint from active scene '{activeScene}'.");
             var rp = new ReturnPoint { Scene = activeScene };
 
             try
@@ -547,6 +577,7 @@ namespace DeNelle.Core
                 {
                     // Fallback: locate the HeroLocomotion host by type name (reflection — no
                     // Core→Village asmdef reference).
+                    FlowTrace.Warn("SceneRouter", "StashReturnPoint: no 'Player'-tagged hero — falling back to reflected HeroLocomotion lookup.");
                     var loco = FindHeroLocomotion();
                     if (loco != null) hero = loco.gameObject;
                 }
@@ -555,14 +586,17 @@ namespace DeNelle.Core
                 {
                     rp.Position = hero.transform.position;
                     rp.Yaw = hero.transform.eulerAngles.y;
+                    FlowTrace.Step("SceneRouter", $"StashReturnPoint captured hero pose pos={rp.Position} yaw={rp.Yaw:F0}.");
                 }
                 else
                 {
+                    FlowTrace.Warn("SceneRouter", $"StashReturnPoint: no hero found in '{activeScene}' — scene stashed, position defaults to {rp.Position}.");
                     Debug.LogWarning("[SceneRouter] Return-point: no hero found — scene stashed, position skipped.");
                 }
             }
             catch (System.Exception e)
             {
+                FlowTrace.Fail("SceneRouter", $"StashReturnPoint threw on '{activeScene}': {e.GetType().Name}: {e.Message} — return pose may be wrong on the round-trip.");
                 Debug.LogWarning("[SceneRouter] Return-point stash threw (non-fatal): " + e.Message);
             }
 

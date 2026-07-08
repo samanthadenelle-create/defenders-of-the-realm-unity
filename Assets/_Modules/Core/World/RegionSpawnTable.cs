@@ -154,7 +154,13 @@ namespace DeNelle.Core.World
         public static string PickEnemyId(RegionId region, float depth, float rng01)
         {
             var entries = RosterFor(region);
-            if (entries == null || entries.Length == 0) return null;
+            if (entries == null || entries.Length == 0)
+            {
+                // Village (no roster) is the expected path here; a NON-Village miss is an anomaly.
+                if (region != RegionId.Village)
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("SpawnTable", $"PickEnemyId: region '{region}' has NO roster (spawns nothing).");
+                return null;
+            }
 
             DepthBand band = BandFor(depth);
 
@@ -169,6 +175,7 @@ namespace DeNelle.Core.World
                 // No band-eligible entry (e.g. an edge spawn in a region whose only
                 // entry is Core-gated) — fall back to the shallowest entry so the
                 // region is never empty.
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("SpawnTable", $"PickEnemyId('{region}',depth={depth:F2},band={band}): no band-eligible entry (total weight 0) -> shallowest fallback.");
                 return ShallowestId(entries);
             }
 

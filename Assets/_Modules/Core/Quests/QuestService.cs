@@ -78,16 +78,25 @@ namespace DeNelle.Core.Quests
         {
             if (string.IsNullOrEmpty(id)) return;
             var prog = Progress;
-            if (prog == null) return;
+            if (prog == null)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Quest", $"StartQuest('{id}') before GameState ready (Progress null) — no-op.");
+                return;
+            }
             if (prog.Active.ContainsKey(id)) return;
             if (prog.Completed.TryGetValue(id, out bool done) && done) return;
 
             var def = QuestCatalog.FindQuest(id);
-            if (def == null) { Debug.LogWarning($"[QuestService] StartQuest unknown id '{id}'."); return; }
+            if (def == null)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Quest", $"StartQuest unknown id '{id}' (not in QuestCatalog) — no-op.");
+                Debug.LogWarning($"[QuestService] StartQuest unknown id '{id}'."); return;
+            }
 
             string firstStage = (def.Stages != null && def.Stages.Count > 0) ? def.Stages[0].StageId : null;
             prog.Active[id] = new QuestState { BeatIndex = 0, StageId = firstStage };
             prog.Available.Remove(id);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Quest", $"StartQuest '{id}' -> Active @stage '{firstStage ?? "<none>"}'.");
             Persist();
         }
 
@@ -101,9 +110,14 @@ namespace DeNelle.Core.Quests
             if (string.IsNullOrEmpty(id)) return;
             var prog = Progress;
             if (prog == null) return;
-            if (!prog.Active.TryGetValue(id, out var st) || st == null) return;
+            if (!prog.Active.TryGetValue(id, out var st) || st == null)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Quest", $"AdvanceQuest('{id}') but quest is not Active — no-op.");
+                return;
+            }
 
             var stages = QuestCatalog.Stages(id);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Quest", $"AdvanceQuest '{id}' leaving beat {st.BeatIndex}/{(stages?.Count ?? 0)}.");
             // Reward + keystone come from the stage we are LEAVING.
             if (stages != null && st.BeatIndex >= 0 && st.BeatIndex < stages.Count)
             {
@@ -111,13 +125,18 @@ namespace DeNelle.Core.Quests
                 if (leaving != null)
                 {
                     if (leaving.GrantsKeystone) GiveKeystoneInternal(id + ":" + (leaving.StageId ?? st.BeatIndex.ToString()));
-                    if (leaving.Reward != null) RewardEarned?.Invoke(leaving.Reward);
+                    if (leaving.Reward != null)
+                    {
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("Quest", $"reward earned on '{id}' beat {st.BeatIndex} (crystals={leaving.Reward.Crystals},food={leaving.Reward.Food},magic={leaving.Reward.Magic},item='{leaving.Reward.GrantItemId}').");
+                        RewardEarned?.Invoke(leaving.Reward);
+                    }
                 }
             }
 
             int next = st.BeatIndex + 1;
             if (stages != null && next >= stages.Count)
             {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Quest", $"'{id}' final stage cleared -> CompleteQuest.");
                 CompleteQuest(id); // final stage cleared
                 return;
             }

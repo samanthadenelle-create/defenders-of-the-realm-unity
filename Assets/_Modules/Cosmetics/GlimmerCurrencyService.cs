@@ -30,6 +30,7 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using UnityEngine;
 using DeNelle.Core.Quests;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Cosmetics
 {
@@ -119,21 +120,29 @@ namespace DeNelle.Cosmetics
         /// </summary>
         public bool TryPurchase(string id)
         {
-            if (string.IsNullOrEmpty(id)) return false;
+            FlowTrace.Step("Glimmer", $"TryPurchase id='{id ?? "<null>"}'");
+            if (string.IsNullOrEmpty(id)) { FlowTrace.Warn("Glimmer", "TryPurchase rejected: null/empty id"); return false; }
             var def = CosmeticCatalog.Find(id);
-            if (def == null) return false;
+            if (def == null) { FlowTrace.Warn("Glimmer", $"TryPurchase rejected: '{id}' not in CosmeticCatalog (cosmetics.json)"); return false; }
 
             EnsureState();
-            if (_ownedSet.Contains(id)) return false;
-            if (def.IsAchievement) return false;
-            if (def.GlimmerCost <= 0) return false;
-            if (_state.Glimmer < def.GlimmerCost) return false;
+            if (_ownedSet.Contains(id)) { FlowTrace.Warn("Glimmer", $"TryPurchase rejected: '{id}' already owned"); return false; }
+            if (def.IsAchievement) { FlowTrace.Warn("Glimmer", $"TryPurchase rejected: '{id}' is achievement-gated (not buyable)"); return false; }
+            if (def.GlimmerCost <= 0) { FlowTrace.Warn("Glimmer", $"TryPurchase rejected: '{id}' has cost<=0 ({def.GlimmerCost})"); return false; }
+            if (_state.Glimmer < def.GlimmerCost) { FlowTrace.Warn("Glimmer", $"TryPurchase rejected: insufficient balance for '{id}' (have {_state.Glimmer}, need {def.GlimmerCost})"); return false; }
 
+            // Debit-and-grant — the highest-risk economy op. A debit that is not matched by a
+            // grant means the player paid and got nothing. Prove the invariant from the trace.
+            int before = _state.Glimmer;
             _state.Glimmer -= def.GlimmerCost;
-            _ownedSet.Add(id);
+            FlowTrace.Step("Glimmer", $"DEBIT {def.GlimmerCost} for '{id}' (balance {before} -> {_state.Glimmer})");
+            bool granted = _ownedSet.Add(id);
+            if (!granted)
+                FlowTrace.Fail("Glimmer", $"DEBIT-WITHOUT-GRANT: spent {def.GlimmerCost} on '{id}' but ownership set already contained it — player paid, got nothing");
             _state.OwnedCosmetics.Add(id);
             Save();
             Changed?.Invoke();
+            FlowTrace.Step("Glimmer", $"purchase COMMITTED '{id}' owned={_ownedSet.Count} balance={_state.Glimmer}");
             return true;
         }
 
@@ -144,6 +153,7 @@ namespace DeNelle.Cosmetics
         /// </summary>
         public void Equip(string id)
         {
+            FlowTrace.Step("Glimmer", $"Equip id='{id ?? "<null>"}'");
             EnsureState();
 
             // Clear request.
@@ -151,18 +161,20 @@ namespace DeNelle.Cosmetics
             {
                 // We do not know which slot to clear without an id - callers
                 // wanting to clear should use UnequipCategory.
+                FlowTrace.Warn("Glimmer", "Equip no-op: null/empty id (use UnequipCategory to clear a slot)");
                 return;
             }
 
             var def = CosmeticCatalog.Find(id);
-            if (def == null) return;
-            if (!_ownedSet.Contains(id)) return;
+            if (def == null) { FlowTrace.Warn("Glimmer", $"Equip no-op: '{id}' not in CosmeticCatalog"); return; }
+            if (!_ownedSet.Contains(id)) { FlowTrace.Warn("Glimmer", $"Equip no-op: '{id}' not owned"); return; }
 
             var category = def.Category ?? string.Empty;
             if (_state.EquippedByCategory.TryGetValue(category, out var current) && current == id)
                 return; // already equipped - no churn
 
             _state.EquippedByCategory[category] = id;
+            FlowTrace.Step("Glimmer", $"equipped '{id}' into category '{category}'");
             Save();
             Changed?.Invoke();
         }
@@ -180,9 +192,12 @@ namespace DeNelle.Cosmetics
         /// <summary>Grants Glimmer (wave milestones, daily quests, IAP). Returns true on a non-zero grant.</summary>
         public bool TryAddGlimmer(int amount)
         {
-            if (amount <= 0) return false;
+            FlowTrace.Step("Glimmer", $"TryAddGlimmer amount={amount}");
+            if (amount <= 0) { FlowTrace.Warn("Glimmer", $"TryAddGlimmer rejected: non-positive amount ({amount})"); return false; }
             EnsureState();
+            int before = _state.Glimmer;
             _state.Glimmer += amount;
+            FlowTrace.Step("Glimmer", $"GRANT {amount} (balance {before} -> {_state.Glimmer}) — CryptoPaymentManager/quest/IAP landing point");
             Save();
             Changed?.Invoke();
             // WO-558: wildcard daily-quest progress — "earn N glimmer" advances by the granted amount.
@@ -198,10 +213,13 @@ namespace DeNelle.Cosmetics
         /// </summary>
         public bool SpendGlimmer(int amount)
         {
-            if (amount <= 0) return false;
+            FlowTrace.Step("Glimmer", $"SpendGlimmer amount={amount}");
+            if (amount <= 0) { FlowTrace.Warn("Glimmer", $"SpendGlimmer rejected: non-positive amount ({amount})"); return false; }
             EnsureState();
-            if (_state.Glimmer < amount) return false;
+            if (_state.Glimmer < amount) { FlowTrace.Warn("Glimmer", $"SpendGlimmer rejected: insufficient balance (have {_state.Glimmer}, need {amount})"); return false; }
+            int before = _state.Glimmer;
             _state.Glimmer -= amount;
+            FlowTrace.Step("Glimmer", $"SPEND {amount} (balance {before} -> {_state.Glimmer}) — caller (BattlePass premium etc.) owns the matching grant");
             Save();
             Changed?.Invoke();
             return true;
@@ -214,13 +232,15 @@ namespace DeNelle.Cosmetics
         /// </summary>
         public bool GrantAchievement(string id)
         {
-            if (string.IsNullOrEmpty(id)) return false;
+            FlowTrace.Step("Glimmer", $"GrantAchievement id='{id ?? "<null>"}'");
+            if (string.IsNullOrEmpty(id)) { FlowTrace.Warn("Glimmer", "GrantAchievement rejected: null/empty id"); return false; }
             var def = CosmeticCatalog.Find(id);
-            if (def == null) return false;
+            if (def == null) { FlowTrace.Warn("Glimmer", $"GrantAchievement rejected: '{id}' not in CosmeticCatalog"); return false; }
             EnsureState();
-            if (_ownedSet.Contains(id)) return false;
+            if (_ownedSet.Contains(id)) { FlowTrace.Warn("Glimmer", $"GrantAchievement no-op: '{id}' already owned"); return false; }
             _ownedSet.Add(id);
             _state.OwnedCosmetics.Add(id);
+            FlowTrace.Step("Glimmer", $"achievement cosmetic '{id}' granted (free path) owned={_ownedSet.Count}");
             Save();
             Changed?.Invoke();
             return true;
@@ -260,6 +280,7 @@ namespace DeNelle.Cosmetics
             }
             catch (Exception ex)
             {
+                FlowTrace.Fail("Glimmer", $"load failed (wallet resets to fresh state, purchases at risk): {ex.GetType().Name}: {ex.Message}");
                 Debug.LogWarning("[GlimmerCurrencyService] load failed: " + ex.Message);
                 data = null;
             }
@@ -275,6 +296,7 @@ namespace DeNelle.Cosmetics
             }
             catch (Exception ex)
             {
+                FlowTrace.Fail("Glimmer", $"save failed (balance/ownership not persisted — a paid grant could be lost): {ex.GetType().Name}: {ex.Message}");
                 Debug.LogWarning("[GlimmerCurrencyService] save failed: " + ex.Message);
             }
         }

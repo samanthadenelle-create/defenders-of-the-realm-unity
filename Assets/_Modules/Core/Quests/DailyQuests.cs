@@ -109,6 +109,7 @@ namespace DeNelle.Core.Quests
             // WebGL-safe: CanonicalJson reads the Resources dual-copy first
             // (works in a browser build) and falls back to StreamingAssets on
             // desktop. Raw File.ReadAllText would throw in WebGL → empty panel.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("DailyQuest", "EnsureLoaded — reading daily-quests.json.");
             try
             {
                 string text = CanonicalJson.Read(StreamingRelativePath);
@@ -116,13 +117,22 @@ namespace DeNelle.Core.Quests
                 {
                     var parsed = JsonConvert.DeserializeObject<DailyQuestCatalogData>(text);
                     if (parsed != null && parsed.Templates != null && parsed.Templates.Count > 0)
-                    { _data = parsed; return; }
+                    {
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("DailyQuest", $"loaded {parsed.Templates.Count} template(s), {parsed.Slots?.Count ?? 0} slot reward(s).");
+                        _data = parsed; return;
+                    }
+                    DeNelle.Core.Diagnostics.FlowTrace.Fail("DailyQuest", "daily-quests.json parsed EMPTY (0 templates — mapping break) -> empty catalog.");
                     Debug.LogError("[DailyQuestCatalog] daily-quests.json parsed empty.");
                 }
-                else Debug.LogError($"[DailyQuestCatalog] daily-quests.json not found ({StreamingRelativePath}).");
+                else
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Fail("DailyQuest", $"daily-quests.json not found/empty ({StreamingRelativePath}) -> empty catalog.");
+                    Debug.LogError($"[DailyQuestCatalog] daily-quests.json not found ({StreamingRelativePath}).");
+                }
             }
             catch (Exception ex)
             {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("DailyQuest", $"read/parse daily-quests.json threw {ex.GetType().Name}: {ex.Message} -> empty catalog.");
                 Debug.LogError($"[DailyQuestCatalog] Failed to read daily-quests.json: {ex.Message}");
             }
             _data = new DailyQuestCatalogData();
@@ -337,7 +347,11 @@ namespace DeNelle.Core.Quests
                 pool.Add(t);
                 totalWeight += Mathf.Max(0.01f, t.Weight);
             }
-            if (pool.Count == 0) return null;
+            if (pool.Count == 0)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("DailyQuest", $"RollOne('{slot}') found NO eligible template (empty pool) -> slot stays empty.");
+                return null;
+            }
 
             float pick = (float)_rng.NextDouble() * totalWeight;
             DailyQuestTemplate chosen = pool[0];
@@ -386,7 +400,11 @@ namespace DeNelle.Core.Quests
             set = null;
             if (!PlayerPrefs.HasKey(PrefKey)) return false;
             try { set = JsonConvert.DeserializeObject<DailyQuestSet>(PlayerPrefs.GetString(PrefKey)); }
-            catch (Exception ex) { Debug.LogWarning("[DailyQuestService] load failed: " + ex.Message); }
+            catch (Exception ex)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("DailyQuest", $"TryLoad from PlayerPrefs threw {ex.GetType().Name}: {ex.Message} -> fresh roll.");
+                Debug.LogWarning("[DailyQuestService] load failed: " + ex.Message);
+            }
             return set != null;
         }
 
@@ -399,6 +417,7 @@ namespace DeNelle.Core.Quests
             }
             catch (Exception ex)
             {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("DailyQuest", $"Save to PlayerPrefs threw {ex.GetType().Name}: {ex.Message} (progress not persisted this tick).");
                 Debug.LogWarning("[DailyQuestService] save failed: " + ex.Message);
             }
         }

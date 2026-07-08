@@ -26,6 +26,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 
 namespace DeNelle.Village.Arena
@@ -141,6 +142,7 @@ namespace DeNelle.Village.Arena
             // world here — troops are placed onto it); only the HUD is hidden.
             ArenaHudBridge.SetVisible(false);
 
+            FlowTrace.Step("ArenaDefense", "Enter setup");
             SetupModeChanged?.Invoke(true);
             Debug.Log("[ArenaDefense] Entered Arena Defense Setup.");
         }
@@ -164,6 +166,7 @@ namespace DeNelle.Village.Arena
             RestoreCamera();
             // Restore the gameplay HUD suppressed on Enter.
             ArenaHudBridge.SetVisible(true);
+            FlowTrace.Step("ArenaDefense", "Exit setup — ArenaDefense persisted");
             SetupModeChanged?.Invoke(false);
             Debug.Log("[ArenaDefense] Exited Arena Defense Setup — defense saved.");
         }
@@ -276,12 +279,13 @@ namespace DeNelle.Village.Arena
             // since the ghost frame). The point pool is the single budget gate.
             if (!ArenaDefenseCatalog.CanAfford(CurrentLayout, _armed.Id))
             {
+                FlowTrace.Warn("ArenaDefense", $"place aborted: not enough points for '{_armed.Id}' (re-check at commit)");
                 Debug.Log($"[ArenaDefense] Not enough points to place '{_armed.Id}' — placement aborted.");
                 return;
             }
 
             var layout = CurrentLayout;
-            if (layout == null) return;
+            if (layout == null) { FlowTrace.Fail("ArenaDefense", "place failed: GameState.ArenaDefense list is null (no GameStateService?)"); return; }
 
             // Occupy the cell so two defenders can't share it (reuses the SAME grid the
             // base build uses — the defender's own id marks the cell).
@@ -289,6 +293,7 @@ namespace DeNelle.Village.Arena
 
             layout.Add(new PlacedDefenderData(_armed.Id, cell.x, cell.y, _armedYawSteps));
 
+            FlowTrace.Step("ArenaDefense", $"placed '{_armed.Id}' at ({cell.x},{cell.y}) — {ArenaDefenseCatalog.RemainingPoints(layout)} pts left");
             Debug.Log($"[ArenaDefense] Placed '{_armed.Id}' at cell ({cell.x},{cell.y}) yaw {_armedYawSteps * 90}deg — " +
                       $"{ArenaDefenseCatalog.RemainingPoints(layout)} pts left.");
 

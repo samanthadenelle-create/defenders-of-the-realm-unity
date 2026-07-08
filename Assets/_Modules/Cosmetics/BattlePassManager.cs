@@ -27,6 +27,7 @@ using System.Reflection;
 using UnityEngine;
 using DeNelle.Core.Data;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Cosmetics
 {
@@ -106,13 +107,15 @@ namespace DeNelle.Cosmetics
         /// </summary>
         public void AddXP(int amount)
         {
-            if (amount <= 0) return;
+            if (amount <= 0) { FlowTrace.Warn("BattlePass", $"AddXP no-op: non-positive amount ({amount})"); return; }
+            FlowTrace.Step("BattlePass", $"AddXP +{amount} (level={currentLevel} xp={currentXP}/{xpPerLevel})");
             currentXP += amount;
 
             while (currentXP >= xpPerLevel)
             {
                 currentXP -= xpPerLevel;
                 currentLevel++;
+                FlowTrace.Step("BattlePass", $"tier up -> Lv{currentLevel} (carry xp={currentXP})");
                 GrantReward(currentLevel);
             }
 
@@ -126,11 +129,13 @@ namespace DeNelle.Cosmetics
         /// </summary>
         public bool PurchasePremiumPass()
         {
-            if (_hasPremium) return true;
+            FlowTrace.Step("BattlePass", $"PurchasePremiumPass (cost={premiumCostGlimmer} glimmer, level={currentLevel})");
+            if (_hasPremium) { FlowTrace.Step("BattlePass", "already premium — no charge"); return true; }
 
             var svc = GlimmerCurrencyService.Instance;
             if (svc == null)
             {
+                FlowTrace.Fail("BattlePass", "premium purchase aborted: GlimmerCurrencyService.Instance is null (no debit, no grant)");
                 Debug.LogWarning("[BattlePassManager] GlimmerCurrencyService not available.");
                 return false;
             }
@@ -138,11 +143,14 @@ namespace DeNelle.Cosmetics
             // Deduct Glimmer via SpendGlimmer (balance-checked, same assembly).
             if (!svc.SpendGlimmer(premiumCostGlimmer))
             {
+                FlowTrace.Warn("BattlePass", $"premium purchase rejected: SpendGlimmer failed (have {svc.Glimmer}, need {premiumCostGlimmer}) — no debit taken");
                 Debug.LogWarning($"[BattlePassManager] Not enough Glimmer for premium pass " +
                     $"(have {svc.Glimmer}, need {premiumCostGlimmer}).");
                 return false;
             }
 
+            // DEBIT LANDED — the matching grant (premium flag + back-dated rewards) MUST follow.
+            FlowTrace.Step("BattlePass", $"DEBITED {premiumCostGlimmer} glimmer — now granting premium + back-dating rewards to Lv{currentLevel}");
             _hasPremium = true;
             SaveProgress();
             Debug.Log("[BattlePassManager] Premium pass unlocked!");
@@ -151,6 +159,7 @@ namespace DeNelle.Cosmetics
             for (int i = 1; i <= currentLevel; i++)
                 GrantReward(i);
 
+            FlowTrace.Step("BattlePass", $"premium purchase COMMITTED (back-dated {currentLevel} tier(s))");
             return true;
         }
 
@@ -198,8 +207,10 @@ namespace DeNelle.Cosmetics
                         if (gs != null)
                         {
                             gs.AddCrystals(reward.amount);
+                            FlowTrace.Step("BattlePass", $"{track} reward Lv{level}: +{reward.amount} Crystals");
                             Debug.Log($"[BattlePassManager] {track} reward Lv{level}: +{reward.amount} Crystals.");
                         }
+                        else FlowTrace.Warn("BattlePass", $"{track} reward Lv{level}: {reward.amount} Crystals NOT granted — GameStateService.Instance null");
                     }
                     break;
 
@@ -208,7 +219,9 @@ namespace DeNelle.Cosmetics
                     {
                         var svc = GlimmerCurrencyService.Instance;
                         if (svc != null && svc.GrantAchievement(reward.rewardId))
-                            Debug.Log($"[BattlePassManager] {track} reward Lv{level}: cosmetic '{reward.rewardId}' unlocked.");
+                            FlowTrace.Step("BattlePass", $"{track} reward Lv{level}: cosmetic '{reward.rewardId}' unlocked");
+                        else if (svc == null)
+                            FlowTrace.Warn("BattlePass", $"{track} reward Lv{level}: cosmetic '{reward.rewardId}' NOT granted — GlimmerCurrencyService null");
                     }
                     break;
 
@@ -219,6 +232,7 @@ namespace DeNelle.Cosmetics
                     break;
 
                 default:
+                    FlowTrace.Warn("BattlePass", $"unknown reward kind {reward.kind} at Lv{level} — nothing granted");
                     Debug.LogWarning($"[BattlePassManager] Unknown reward kind {reward.kind} at Lv{level}.");
                     break;
             }
@@ -239,6 +253,7 @@ namespace DeNelle.Cosmetics
             }
             catch (Exception ex)
             {
+                FlowTrace.Fail("BattlePass", $"LevelUpVFX invoke failed (cosmetic-only, reward already granted): {ex.GetType().Name}: {ex.Message}");
                 Debug.LogWarning("[BattlePassManager] LevelUpVFX invoke failed: " + ex.Message);
             }
         }
@@ -267,6 +282,7 @@ namespace DeNelle.Cosmetics
             }
             catch (Exception ex)
             {
+                FlowTrace.Fail("BattlePass", $"LevelUpVFX reflection resolve failed (VFX will no-op): {ex.GetType().Name}: {ex.Message}");
                 Debug.LogWarning("[BattlePassManager] LevelUpVFX reflection failed: " + ex.Message);
             }
         }

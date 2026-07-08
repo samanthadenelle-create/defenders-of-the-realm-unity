@@ -25,6 +25,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -171,7 +172,8 @@ namespace DeNelle.Village
         /// dispatched worker, or null.</summary>
         public Worker DispatchNearestFreeWorkerTo(MineNode node)
         {
-            if (node == null || node.IsDepleted || node.IsClaimedByWorker) return null;
+            if (node == null || node.IsDepleted || node.IsClaimedByWorker)
+            { FlowTrace.Warn("Worker", $"dispatch refused: node {(node == null ? "<null>" : node.IsDepleted ? "depleted" : "already-claimed")}"); return null; }
 
             Worker best = null;
             float bestSqr = float.MaxValue;
@@ -183,7 +185,8 @@ namespace DeNelle.Village
                 if (d < bestSqr) { bestSqr = d; best = w; }
             }
 
-            if (best == null) return null;
+            if (best == null) { FlowTrace.Warn("Worker", "dispatch refused: no free worker available"); return null; }
+            FlowTrace.Step("Worker", "dispatching nearest free worker to node");
             return best.DispatchTo(node) ? best : null;
         }
 
@@ -229,11 +232,14 @@ namespace DeNelle.Village
         /// last-active time at the end.</summary>
         private void ApplyOfflineCatchUp()
         {
+            // NOTE: this is the SUPERSEDED fallback path (UseOfflineCatchUp default OFF). If it
+            // ever runs alongside OfflineHarvestService this Warn flags the double-grant risk.
+            FlowTrace.Warn("Worker", "ApplyOfflineCatchUp running (superseded fallback — OfflineHarvestService is the canonical path)");
             float awaySeconds = ReadAwaySeconds();
-            if (awaySeconds <= 0f) { StampLastActive(); return; }
+            if (awaySeconds <= 0f) { FlowTrace.Step("Worker", "catch-up: no away time — stamp only"); StampLastActive(); return; }
 
             var nodes = ActiveAssignments();
-            if (nodes.Count == 0) { StampLastActive(); return; }
+            if (nodes.Count == 0) { FlowTrace.Step("Worker", "catch-up: no active assignments — stamp only"); StampLastActive(); return; }
 
             int total = 0;
             for (int i = 0; i < nodes.Count; i++)

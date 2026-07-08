@@ -41,6 +41,12 @@ namespace DeNelle.Core.World
         /// <summary>Classify a world position into its <see cref="RegionId"/>.</summary>
         public static RegionId GetZone(Vector3 worldPos)
         {
+            // Hot path (raids/harvest/spawns call this often) — throttle so the trace
+            // proves classification is live without flooding the log (§12 hot-loop rule).
+            if (DeNelle.Core.Diagnostics.FlowTrace.Enabled)
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("Zone", "getzone", 1f,
+                    $"GetZone(x={worldPos.x:F1},z={worldPos.z:F1}).");
+
             // Inside the wall footprint on BOTH axes → the safe home zone.
             if (Mathf.Abs(worldPos.x) <= VillageHalfX && Mathf.Abs(worldPos.z) <= VillageHalfZ)
                 return RegionId.Village;
@@ -59,7 +65,13 @@ namespace DeNelle.Core.World
         }
 
         /// <summary>The region record for a position (danger tier, name, cardinal).</summary>
-        public static RegionZone ZoneAt(Vector3 worldPos) => Regions[GetZone(worldPos)];
+        public static RegionZone ZoneAt(Vector3 worldPos)
+        {
+            var id = GetZone(worldPos);
+            if (!Regions.ContainsKey(id))
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Zone", $"ZoneAt: Regions table missing key '{id}' (classified region has no record) — indexer will throw.");
+            return Regions[id];
+        }
 
         /// <summary>Danger tier of a position (0 Village … 4 Ashwood). Convenience for
         /// raid scaling (WO-143) and crystal-grade gating (WO-144).</summary>

@@ -218,6 +218,25 @@ namespace DeNelle.Editor
             if (!TowerRespawnRegression.Run(out var towerRespawnReason)) failures.Add(towerRespawnReason); else log.AppendLine("[tower-respawn] " + towerRespawnReason);
             if (!DefenseTargetableRegression.Run(out var defTargetReason)) failures.Add(defTargetReason); else log.AppendLine("[def-target] " + defTargetReason);
             if (!ArenaPrefabAuditRegression.Run(out var arenaReason)) failures.Add(arenaReason); else log.AppendLine("[arena-prefab] " + arenaReason);
+            // --- Wave-1 full-coverage oracles (docs/FULL_COVERAGE_PLAN_2026-07-08.md) ---
+            if (!CoreDataHubRegression.Run(out var coreDataHubReason)) failures.Add(coreDataHubReason); else log.AppendLine("[core-datahub] " + coreDataHubReason);
+            if (!CoreCatalogRegression.Run(out var coreCatalogReason)) failures.Add(coreCatalogReason); else log.AppendLine("[core-catalog] " + coreCatalogReason);
+            if (!CoreWorldLogicRegression.Run(out var coreWorldReason)) failures.Add(coreWorldReason); else log.AppendLine("[core-world] " + coreWorldReason);
+            if (!CoreSaveContractRegression.Run(out var coreSaveReason)) failures.Add(coreSaveReason); else log.AppendLine("[core-save] " + coreSaveReason);
+            if (!HeroProgressionRegression.Run(out var heroProgReason)) failures.Add(heroProgReason); else log.AppendLine("[hero-prog] " + heroProgReason);
+            if (!AegisSetReachabilityRegression.Run(out var aegisReason)) failures.Add(aegisReason); else log.AppendLine("[aegis] " + aegisReason);
+            if (!BuildingUpgradeRegression.Run(out var buildUpgReason)) failures.Add(buildUpgReason); else log.AppendLine("[build-upgrade] " + buildUpgReason);
+            if (!OfflineHarvestRegression.Run(out var offlineReason)) failures.Add(offlineReason); else log.AppendLine("[offline-harvest] " + offlineReason);
+            if (!VillageEconomyRegression.Run(out var villEconReason)) failures.Add(villEconReason); else log.AppendLine("[village-econ] " + villEconReason);
+            if (!ArenaCatalogRegression.Run(out var arenaCatReason)) failures.Add(arenaCatReason); else log.AppendLine("[arena-cat] " + arenaCatReason);
+            if (!CompanionRosterRegression.Run(out var compRosterReason)) failures.Add(compRosterReason); else log.AppendLine("[companion-roster] " + compRosterReason);
+            if (!TownsfolkDialogueRegression.Run(out var townsfolkReason)) failures.Add(townsfolkReason); else log.AppendLine("[townsfolk] " + townsfolkReason);
+            if (!AtbEngineRegression.Run(out var atbReason)) failures.Add(atbReason); else log.AppendLine("[atb-engine] " + atbReason);
+            if (!EconomyMetaCatalogRegression.Run(out var econMetaReason)) failures.Add(econMetaReason); else log.AppendLine("[econ-meta] " + econMetaReason);
+            if (!GlimmerEconomyRegression.Run(out var glimmerReason)) failures.Add(glimmerReason); else log.AppendLine("[glimmer] " + glimmerReason);
+            if (!SceneRoutingRegression.Run(out var sceneRouteReason)) failures.Add(sceneRouteReason); else log.AppendLine("[scene-route] " + sceneRouteReason);
+            if (!ArtResourceRegression.Run(out var artResReason)) failures.Add(artResReason); else log.AppendLine("[art-resource] " + artResReason);
+            if (!EnemyRigColorRegression.Run(out var enemyRigColorReason)) failures.Add(enemyRigColorReason); else log.AppendLine("[enemy-rig-color] " + enemyRigColorReason);
 
             // --- Store/Inventory icon coverage (key data: real art vs glyph fallback) ---
             CheckItemIconCoverage(weapons, armors, failures, log);

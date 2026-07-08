@@ -33,6 +33,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -60,13 +61,18 @@ namespace DeNelle.Village
         public static Sprite ForElement(DamageElement element)
         {
             EnsureLoaded();
+            FlowTrace.Step("ProjArt", $"ForElement {element}");
+            Sprite s;
             switch (element)
             {
-                case DamageElement.Aether: return First("bolt_arcane", "bolt_arcane_lc");
-                case DamageElement.Flame:  return First("bolt_fire", "bolt_fire_lc", "arrow_fire");
-                case DamageElement.Ice:    return First("bolt_ice_blue", "bolt_ice_lc", "arrow_ice");
+                case DamageElement.Aether: s = First("bolt_arcane", "bolt_arcane_lc"); break;
+                case DamageElement.Flame:  s = First("bolt_fire", "bolt_fire_lc", "arrow_fire"); break;
+                case DamageElement.Ice:    s = First("bolt_ice_blue", "bolt_ice_lc", "arrow_ice"); break;
                 default:                   return ForArrow(); // None / physical -> arrow
             }
+            if (s == null)
+                FlowTrace.Warn("ProjArt", $"ForElement {element} -> null (no matching bolt sprite; caller keeps procedural visual)");
+            return s;
         }
 
         /// <summary>Impact-burst sprite for a projectile of <paramref name="element"/>,
@@ -87,7 +93,10 @@ namespace DeNelle.Village
         public static Sprite ForArrow()
         {
             EnsureLoaded();
-            return First("arrow_plain", "arrow_plain_b", "arrow_steel", "arrow_gold");
+            var s = First("arrow_plain", "arrow_plain_b", "arrow_steel", "arrow_gold");
+            if (s == null)
+                FlowTrace.Warn("ProjArt", "ForArrow -> null (no arrow sprite in ProjectileIcons; caller keeps procedural visual)");
+            return s;
         }
 
         /// <summary>The Mage spell-orb sprite (arcane bolt), or null.</summary>
@@ -132,16 +141,23 @@ namespace DeNelle.Village
             _loaded = true;
             _byName = new Dictionary<string, Sprite>(System.StringComparer.OrdinalIgnoreCase);
 
+            FlowTrace.Step("ProjArt", $"EnsureLoaded -> {Sheets.Length} sheet(s) under Resources/ProjectileIcons");
             for (int i = 0; i < Sheets.Length; i++)
             {
                 Sprite[] subs;
                 try { subs = Resources.LoadAll<Sprite>(Sheets[i]); }
                 catch (System.Exception e)
                 {
+                    // Hard load fault on a sheet — error level (was Debug.LogWarning only).
+                    FlowTrace.Fail("ProjArt", $"LoadAll FAILED for '{Sheets[i]}': {e.GetType().Name}: {e.Message}");
                     Debug.LogWarning("[ProjectileArtCatalog] load failed for " + Sheets[i] + ": " + e.Message);
                     continue;
                 }
-                if (subs == null) continue;
+                if (subs == null || subs.Length == 0)
+                {
+                    FlowTrace.Warn("ProjArt", $"sheet '{Sheets[i]}' resolved 0 sub-sprites (not sliced/imported)");
+                    continue;
+                }
                 for (int j = 0; j < subs.Length; j++)
                 {
                     var sp = subs[j];
@@ -151,9 +167,18 @@ namespace DeNelle.Village
             }
 
             if (_byName.Count == 0)
+            {
+                // Data-empty (not a render bug): every projectile silently keeps its procedural visual.
+                FlowTrace.Warn("ProjArt", "0 projectile sprites indexed under Resources/ProjectileIcons " +
+                    "-> ALL projectiles use procedural visual (run Defenders/Art/Slice Projectile Icons)");
                 Debug.LogWarning("[ProjectileArtCatalog] no projectile sprites found under " +
                                  "Resources/ProjectileIcons — run Defenders/Art/Slice Projectile Icons. " +
                                  "Projectiles will use their procedural visual.");
+            }
+            else
+            {
+                FlowTrace.Step("ProjArt", $"indexed {_byName.Count} projectile sprite(s)");
+            }
         }
 
         private static Sprite Get(string name)

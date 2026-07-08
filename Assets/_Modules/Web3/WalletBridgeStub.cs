@@ -20,6 +20,7 @@
 
 using System;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Web3
 {
@@ -36,14 +37,16 @@ namespace DeNelle.Web3
             Action<string> onError = null)
         {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+            int len = serialisedSwapJson != null ? serialisedSwapJson.Length : 0;
+            FlowTrace.Warn("WalletBridge", $"STUB sign+send (editor/dev): NO real signing, firing fake signature. Payload={len} chars (flag_14)");
             Debug.Log("[WalletBridgeStub] Would sign + send transaction. " +
                       "Replace this stub with the real wallet swap signer.");
-            int len = serialisedSwapJson != null ? serialisedSwapJson.Length : 0;
             Debug.Log($"[WalletBridgeStub] Payload length: {len} chars");
             // Simulate a successful signing with a fake signature.
             string fakeSig = "STUB_SIG_" + Guid.NewGuid().ToString("N").Substring(0, 8);
             if (onSuccess != null) onSuccess(fakeSig);
 #else
+            FlowTrace.Fail("WalletBridge", "HARD FAIL: WalletBridgeStub reached in a RELEASE build — no real swap signer wired; swap cannot complete (flag_14)");
             Debug.LogError("[WalletBridgeStub] WalletBridgeStub reached in a release " +
                            "build. Wire the real wallet swap signer before shipping.");
             if (onError != null) onError("Wallet bridge not configured.");

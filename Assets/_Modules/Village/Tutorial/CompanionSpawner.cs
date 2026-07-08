@@ -21,6 +21,7 @@
 // =============================================================================
 
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -59,10 +60,12 @@ namespace DeNelle.Village
         public Transform Spawn()
         {
             _companionClass = CompanionClassFor(ResolvePlayerClass());
+            FlowTrace.Step("Companion", $"Spawn — mapped companion class '{_companionClass}' (always != player)");
 
             var injector = StoryCompanionInjector.Instance;
             if (injector == null)
             {
+                FlowTrace.Warn("Companion", "StoryCompanionInjector not present — class override may lag a frame (companion spawns at its own bootstrap)");
                 // The injector self-bootstraps AfterSceneLoad; if it isn't up yet the
                 // companion simply appears a frame later as its own player-class spawn.
                 // Set the override anyway via a fresh instance so the mapped class wins
@@ -72,6 +75,7 @@ namespace DeNelle.Village
                 return null;
             }
 
+            FlowTrace.Step("Companion", $"override applied on injector — companion '{_companionClass}'");
             injector.SetHeroClassOverride(_companionClass);
             return injector.CompanionTransform;
         }

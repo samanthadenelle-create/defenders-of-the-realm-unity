@@ -33,6 +33,7 @@
 // =============================================================================
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using DeNelle.Core.World;
 using DeNelle.Village.UI;
@@ -129,9 +130,10 @@ namespace DeNelle.Village
         /// </summary>
         public OfflineHarvestResult ClaimAccrual()
         {
+            FlowTrace.Step("Offline", "ClaimAccrual");
             var svc = GameStateService.Instance;
             var state = svc != null ? svc.State : null;
-            if (state == null) return OfflineHarvestResult.None;
+            if (state == null) { FlowTrace.Warn("Offline", "no GameStateService — accrual skipped (None)"); return OfflineHarvestResult.None; }
 
             double nowMs = TimeSource.NowUnixMs();
             double lastClaimMs = state.LastHarvestClaimMs;
@@ -139,6 +141,7 @@ namespace DeNelle.Village
             // Fresh save (0) → seed the clock to now, accrue nothing this launch.
             if (lastClaimMs <= 0)
             {
+                FlowTrace.Step("Offline", "fresh save (LastHarvestClaimMs<=0) — seed clock to now, accrue nothing");
                 state.LastHarvestClaimMs = nowMs;
                 svc.Save();
                 return OfflineHarvestResult.None;
@@ -148,6 +151,8 @@ namespace DeNelle.Village
             // delta → clamp to 0 (no accrual, no error). Never re-claim a window.
             double elapsedSec = System.Math.Max(0.0, (nowMs - lastClaimMs) / 1000.0);
             double cappedSec = System.Math.Min(elapsedSec, OfflineCapSeconds);
+            if (nowMs < lastClaimMs) FlowTrace.Warn("Offline", $"clock ran BACKWARDS (now={nowMs:0} < last={lastClaimMs:0}) — elapsed clamped to 0, no re-claim");
+            if (elapsedSec > OfflineCapSeconds) FlowTrace.Warn("Offline", $"away {elapsedSec:0}s exceeds cap {OfflineCapSeconds:0}s — capped");
 
             var result = new OfflineHarvestResult
             {
@@ -164,9 +169,11 @@ namespace DeNelle.Village
                 AccrueWorkerNodes(result, cappedSec);
                 AccrueSettlements(result, cappedSec);
                 AccruePets(result, cappedSec);
+                FlowTrace.Step("Offline", $"accrued over {cappedSec:0}s: worker-owned={_workerOwnedThisClaim.Count} node(s), total={result.Total}");
             }
 
             if (result.Total > 0) Grant(result, state);
+            else FlowTrace.Step("Offline", "zero haul — clock still advances (prevents retroactive first-claim)");
 
             // ALWAYS advance the clock — even on a zero haul (prevents a giant first
             // claim once a node is finally placed) — and persist atomically with the grant.

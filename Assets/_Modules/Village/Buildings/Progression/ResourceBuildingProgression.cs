@@ -483,9 +483,9 @@ namespace DeNelle.Village.Buildings.Progression
 
             var service = GameStateService.Instance;
             var s = service?.State;
-            if (s == null) return false;
+            if (s == null) { FlowTrace.Fail("Progression", "TrySpend: no GameStateService — spend rejected (no wallet)"); return false; }
 
-            if (!CanAfford(costs)) return false;
+            if (!CanAfford(costs)) { FlowTrace.Warn("Progression", "TrySpend: harvestables unaffordable — no deduction"); return false; }
 
             // Resources is a struct — read whole, mutate, write whole back.
             var bal = s.Resources;
@@ -516,12 +516,13 @@ namespace DeNelle.Village.Buildings.Progression
         /// </summary>
         public static bool TrySpendWithMagic(IReadOnlyList<ResourceCost> costs, int magicCost)
         {
+            FlowTrace.Step("Progression", $"TrySpendWithMagic magicCost={magicCost}");
             var service = GameStateService.Instance;
             var s = service?.State;
-            if (s == null) return false;
+            if (s == null) { FlowTrace.Fail("Progression", "TrySpendWithMagic: no GameStateService — spend rejected (no wallet)"); return false; }
 
-            if (!CanAfford(costs)) return false;
-            if (magicCost > 0 && MagicBalance() < magicCost) return false;
+            if (!CanAfford(costs)) { FlowTrace.Warn("Progression", "TrySpendWithMagic: harvestables unaffordable — no deduction"); return false; }
+            if (magicCost > 0 && MagicBalance() < magicCost) { FlowTrace.Warn("Progression", $"TrySpendWithMagic: Magic short (have {MagicBalance()}, need {magicCost}) — no deduction"); return false; }
 
             // Deduct harvestables.
             var bal = s.Resources;

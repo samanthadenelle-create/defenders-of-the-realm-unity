@@ -20,6 +20,7 @@
 // =============================================================================
 using UnityEngine;
 using UnityEngine.AI;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -59,8 +60,9 @@ namespace DeNelle.Village
         /// claimed. Returns false if the node is null or depleted.</summary>
         public bool DispatchTo(MineNode node)
         {
-            if (node == null || node.IsDepleted) return false;
+            if (node == null || node.IsDepleted) { FlowTrace.Warn("Worker", $"DispatchTo refused: node {(node == null ? "<null>" : "depleted")}"); return false; }
 
+            FlowTrace.Step("Worker", "DispatchTo — claimed node, entering Traveling");
             TargetNode = node;
             node.SetWorkerClaim(true);
             State = WorkerState.Traveling;
@@ -128,6 +130,7 @@ namespace DeNelle.Village
             if (arrived)
             {
                 if (_usingAgent && _agent != null && _agent.isOnNavMesh) _agent.isStopped = true;
+                FlowTrace.Step("Worker", $"arrived at node (agent={_usingAgent}) — entering Collecting");
                 State = WorkerState.Collecting;
             }
         }

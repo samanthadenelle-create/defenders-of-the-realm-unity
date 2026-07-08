@@ -48,9 +48,11 @@ namespace DeNelle.Core
         public static bool TryInject<T>(string table, out T value)
         {
             value = default;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("DataInject", $"TryInject<{typeof(T).Name}> table='{table ?? "<null>"}'");
 
             if (string.IsNullOrEmpty(table))
             {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("DataInject", "empty table path — skipped (returning default).");
                 Debug.LogWarning("[DataInjector] Inject called with an empty table path — skipped.");
                 return false;
             }
@@ -62,12 +64,15 @@ namespace DeNelle.Core
             }
             catch (Exception ex)
             {
+                // Read threw (not just missing) — hard anomaly, surface it loud.
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("DataInject", $"CanonicalJson.Read('{table}') threw {ex.GetType().Name}: {ex.Message}");
                 Debug.LogWarning($"[DataInjector] Failed reading table '{table}': {ex.Message}");
                 return false;
             }
 
             if (string.IsNullOrEmpty(json))
             {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("DataInject", $"table '{table}' not found/empty (data-empty, not a parse bug) — returning default.");
                 Debug.LogWarning($"[DataInjector] Table '{table}' not found or empty " +
                                  "(no Resources dual-copy and no StreamingAssets file) — returning default.");
                 return false;
@@ -79,11 +84,16 @@ namespace DeNelle.Core
             }
             catch (Exception ex)
             {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("DataInject", $"table '{table}' did NOT parse to {typeof(T).Name}: {ex.GetType().Name}: {ex.Message}");
                 Debug.LogWarning($"[DataInjector] Table '{table}' did not parse to {typeof(T).Name}: {ex.Message}");
                 value = default;
                 return false;
             }
 
+            if (value == null)
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("DataInject", $"table '{table}' parsed to NULL {typeof(T).Name} (json present but mapped empty).");
+            else
+                DeNelle.Core.Diagnostics.FlowTrace.Step("DataInject", $"table '{table}' -> {typeof(T).Name} OK.");
             return value != null;
         }
     }

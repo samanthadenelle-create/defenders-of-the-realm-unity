@@ -17,6 +17,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -43,6 +44,7 @@ namespace DeNelle.Village
         /// </summary>
         public static void Show(string armorLabel, string weaponLabel = null)
         {
+            FlowTrace.Step("CompanionGear", $"GearGrantToast.Show armor='{armorLabel ?? "<null>"}' weapon='{weaponLabel ?? "<null>"}'.");
             if (s_active != null) { Object.Destroy(s_active.gameObject); s_active = null; }
 
             var go = new GameObject("GearGrantToast");
@@ -79,6 +81,10 @@ namespace DeNelle.Village
             crt.anchoredPosition = new Vector2(0f, -120f);
             crt.sizeDelta = new Vector2(460f, 110f);
             if (parts.label != null) parts.label.text = BuildText(armorLabel, weaponLabel);
+            else
+                // Built-but-invisible split (§2.5): the toast card came up with no label — the "+gear"
+                // text will never render even though the card exists. Warn so a capture names it.
+                FlowTrace.Warn("CompanionGear", "GearGrantToast: ToastCard returned a null label — '+gear' text will not render.");
 
             _shownAt = Time.unscaledTime;
         }

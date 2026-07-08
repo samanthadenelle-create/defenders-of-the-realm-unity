@@ -21,6 +21,7 @@
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -62,11 +63,13 @@ namespace DeNelle.Village
         /// </summary>
         public async UniTask SpawnAt(WaveSpawnPoint spawnPoint, int count)
         {
+            FlowTrace.Step("TutorialWave", $"SpawnAt count={count} gate={(spawnPoint != null ? spawnPoint.SpawnId : "<null>")}");
             _spawnRequested = true;
             _spawned.Clear();
 
             if (_wave == null || spawnPoint == null)
             {
+                FlowTrace.Warn("TutorialWave", $"skip: WaveManager={(_wave != null)} spawnPoint={(spawnPoint != null)} — IsCleared returns true, tutorial proceeds");
                 Debug.LogWarning("[TutorialWaveSpawner] No WaveManager / spawn point — " +
                                  "skipping the tutorial wave (IsCleared returns true).");
                 return;
@@ -77,6 +80,7 @@ namespace DeNelle.Village
             EnemyDef def = ResolveEnemyDef(catalog);
             if (def == null)
             {
+                FlowTrace.Warn("TutorialWave", "enemy catalog empty / no def resolved — no tutorial enemies spawned");
                 Debug.LogWarning("[TutorialWaveSpawner] Enemy catalog empty — no tutorial enemies spawned.");
                 return;
             }
@@ -102,12 +106,13 @@ namespace DeNelle.Village
 
                 string id = $"tutorial-{def.Id}-{i}";
                 Enemy e = _wave.SpawnEnemyForExternalMode(def, pos, heart, id);
-                if (e == null) continue;
+                if (e == null) { FlowTrace.Warn("TutorialWave", $"SpawnEnemyForExternalMode returned null for '{id}' — skipped"); continue; }
 
                 e.Died += OnEnemyDied;
                 _spawned.Add(e);
             }
 
+            FlowTrace.Step("TutorialWave", $"spawned {_spawned.Count}/{n} tutorial enemy(ies)");
             Debug.Log($"[TutorialWaveSpawner] Spawned {_spawned.Count} tutorial enemy(ies) " +
                       $"at {spawnPoint.Direction} gate ({spawnPoint.SpawnId}).");
         }

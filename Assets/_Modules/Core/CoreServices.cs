@@ -43,8 +43,12 @@ namespace DeNelle.Core
         public static void RegisterHud(IVillageHud hud)
         {
             if (Hud != null && !ReferenceEquals(Hud, hud))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("CoreSvc", "REPLACING existing IVillageHud registration (double-register / stale host?).");
                 Debug.LogWarning("[CoreServices] Replacing existing IVillageHud registration.");
+            }
             Hud = hud;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("CoreSvc", hud != null ? "IVillageHud registered." : "IVillageHud registered as NULL.");
         }
 
         /// <summary>Unregisters the village HUD. Called by VillageHudController.OnDestroy.</summary>
@@ -103,8 +107,12 @@ namespace DeNelle.Core
         public static void RegisterAudio(IAudioService audio)
         {
             if (Audio != null && !ReferenceEquals(Audio, audio))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("CoreSvc", "REPLACING existing IAudioService registration (double-register / stale host?).");
                 Debug.LogWarning("[CoreServices] Replacing existing IAudioService registration.");
+            }
             Audio = audio;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("CoreSvc", audio != null ? "IAudioService registered." : "IAudioService registered as NULL.");
         }
 
         /// <summary>Unregisters the audio service. Called by AudioService.OnDestroy.</summary>
@@ -171,8 +179,12 @@ namespace DeNelle.Core
         public static void RegisterSceneLinkResolver(DeNelle.Core.World.ISceneLinkResolver resolver)
         {
             if (SceneLinkResolver != null && !ReferenceEquals(SceneLinkResolver, resolver))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("CoreSvc", "REPLACING existing ISceneLinkResolver registration (double-register / stale host?).");
                 Debug.LogWarning("[CoreServices] Replacing existing ISceneLinkResolver registration.");
+            }
             SceneLinkResolver = resolver;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("CoreSvc", resolver != null ? "ISceneLinkResolver registered." : "ISceneLinkResolver registered as NULL.");
         }
 
         /// <summary>Unregisters the scene-link resolver. Called by SceneLinkResolverHost.OnDestroy.</summary>

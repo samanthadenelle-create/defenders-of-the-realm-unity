@@ -32,6 +32,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using DeNelle.BattleATB.Engine;
+using DeNelle.Core.Diagnostics;   // FlowTrace — §12 instrument-first (AtbState bounded context)
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -194,6 +195,7 @@ namespace DeNelle.BattleATB.State
         /// </summary>
         public void StartBattle(BattleSetup setup, BattleSource source = BattleSource.Village)
         {
+            FlowTrace.Step("AtbState", $"StartBattle: source={source} enemies={setup?.Enemies?.Count ?? 0} party={setup?.PartyMembers?.Count ?? 0} seed={setup?.Seed ?? 0}");
             Source = source;
 
             // CreateBattle + StartBattle each return a fresh object the engine
@@ -214,6 +216,7 @@ namespace DeNelle.BattleATB.State
             // A new battle clears any settled result from the previous one.
             Result = DeriveResult(state, null);
 
+            FlowTrace.Step("AtbState", $"StartBattle: opened phase={Battle.Phase} active='{Battle.ActiveUnitId ?? "<none>"}' units={Battle.Units?.Count ?? 0}");
             OnBattleChanged.Invoke(Battle);
             OnTurnResolved.Invoke(Battle);
             if (Result != null) OnOutcome.Invoke(Result);
@@ -228,7 +231,13 @@ namespace DeNelle.BattleATB.State
         /// </summary>
         public void ChooseAction(BattleAction action)
         {
-            if (Battle == null || Battle.Phase != BattlePhase.AwaitingInput) return;
+            if (Battle == null || Battle.Phase != BattlePhase.AwaitingInput)
+            {
+                // Silent-skip guard: an action arriving while not awaiting input is dropped.
+                FlowTrace.Warn("AtbState", $"ChooseAction: ignored — phase={(Battle != null ? Battle.Phase.ToString() : "<no battle>")} (not AwaitingInput).");
+                return;
+            }
+            FlowTrace.Step("AtbState", $"ChooseAction: {(action != null ? action.Kind.ToString() : "<null>")} by '{Battle.ActiveUnitId ?? "<none>"}'");
 
             Resolving = true;
             BattleState next = Turn.SubmitAction(Battle, action);
@@ -253,7 +262,11 @@ namespace DeNelle.BattleATB.State
 
             OnBattleChanged.Invoke(Battle);
             OnTurnResolved.Invoke(Battle);
-            if (Battle.Phase == BattlePhase.Ended && Result != null) OnOutcome.Invoke(Result);
+            if (Battle.Phase == BattlePhase.Ended && Result != null)
+            {
+                FlowTrace.Step("AtbState", $"ChooseAction: battle ENDED outcome={Result.Outcome}");
+                OnOutcome.Invoke(Result);
+            }
         }
 
         /// <summary>
@@ -264,7 +277,11 @@ namespace DeNelle.BattleATB.State
         /// </summary>
         public void StepAi()
         {
-            if (Battle == null || Battle.Phase != BattlePhase.Resolving) return;
+            if (Battle == null || Battle.Phase != BattlePhase.Resolving)
+            {
+                FlowTrace.Step("AtbState", $"StepAi: no-op (phase={(Battle != null ? Battle.Phase.ToString() : "<no battle>")}, not Resolving).");
+                return;
+            }
 
             BattleState next = BattleStateOps.CloneBattle(Turn.ResolveAiTurn(Battle));
             next = ApplyFullResetAfterFight(next);
@@ -307,6 +324,9 @@ namespace DeNelle.BattleATB.State
                 }
             }
 
+            if (guard >= AutoResolveGuard && s.Phase != BattlePhase.Ended)
+                FlowTrace.Fail("AtbState", $"AutoResolve: hit AutoResolveGuard ({AutoResolveGuard}) without ending — engine non-termination (phase={s.Phase}).");
+
             // Clone at the boundary — the loop mutated the engine state in place.
             s = BattleStateOps.CloneBattle(s);
             s = ApplyFullResetAfterFight(s);
@@ -334,6 +354,7 @@ namespace DeNelle.BattleATB.State
         /// </summary>
         public void EndBattle()
         {
+            FlowTrace.Step("AtbState", $"EndBattle: clearing live snapshot (kept Result outcome={(Result != null ? Result.Outcome.ToString() : "<none>")}).");
             Battle = null;
             Resolving = false;
             OnBattleChanged.Invoke(null);
@@ -357,8 +378,14 @@ namespace DeNelle.BattleATB.State
                 guard += 1;
                 s = Turn.ResolveAiTurn(s);
             }
+            if (guard >= AiDrainLimit && s.Phase == BattlePhase.Resolving)
+                FlowTrace.Fail("AtbState", $"RunAiUntilPlayer: hit AiDrainLimit ({AiDrainLimit}) still Resolving — AI drain non-termination.");
             // If the engine somehow parked in 'filling', nudge it forward once.
-            if (s.Phase == BattlePhase.Filling) s = Turn.BeginNextTurn(s);
+            if (s.Phase == BattlePhase.Filling)
+            {
+                FlowTrace.Warn("AtbState", "RunAiUntilPlayer: engine parked in Filling — nudging BeginNextTurn once.");
+                s = Turn.BeginNextTurn(s);
+            }
             return s;
         }
 

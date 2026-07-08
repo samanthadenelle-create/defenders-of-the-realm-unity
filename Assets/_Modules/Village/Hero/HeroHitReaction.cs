@@ -22,6 +22,7 @@
 using System.Collections;
 using UnityEngine;
 using DeNelle.Core.Combat;   // WO-285: ActorAnimator hit-reaction driver
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -60,7 +61,11 @@ namespace DeNelle.Village
             // events exist. Resolve on the same GameObject, fall back to the singleton.
             _health = GetComponent<HeroHealth>();
             if (_health == null) _health = HeroHealth.Instance;
-            if (_health == null) return;
+            if (_health == null)
+            {
+                FlowTrace.Warn("HitReact", "OnEnable: no HeroHealth on GO or singleton — hit reaction INERT (no flash / no death slow-mo).");
+                return;
+            }
 
             _lastHp = _health.Hp;
             if (!TryGetComponent(out _actor)) _actor = gameObject.AddComponent<ActorAnimator>();
@@ -82,6 +87,7 @@ namespace DeNelle.Village
             // Flash only on a decrease (ignore heals / the initial broadcast).
             if (_lastHp >= 0f && current < _lastHp)
             {
+                if (FlowTrace.Enabled) FlowTrace.Step("HitReact", $"damage flash: hp {_lastHp:0.#}->{current:0.#}/{max:0.#} fatal={(current <= 0f)}");
                 _flashAlpha = _flashPeak;
                 // WO-285: play the body flinch — but NOT on the killing blow (the death
                 // anim owns that beat; HandleDied fires for it). No attacker bearing is
@@ -95,6 +101,7 @@ namespace DeNelle.Village
         {
             if (_diedHandled) return;
             _diedHandled = true;
+            FlowTrace.Step("HitReact", "hero died — strong flash + death slow-mo beat.");
             _flashAlpha = _flashPeak;            // strong flash on the killing blow
             StartCoroutine(DeathSlowMo());
         }
@@ -116,6 +123,7 @@ namespace DeNelle.Village
                 yield return null;
             }
             Time.timeScale = 1f;
+            FlowTrace.Step("HitReact", "death slow-mo complete — Time.timeScale restored to 1.");
             // Game-over flow hooks off HeroHealth.OnDied elsewhere (WO46 P11).
         }
 

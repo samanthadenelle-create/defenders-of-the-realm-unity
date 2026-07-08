@@ -14,6 +14,7 @@
 // =============================================================================
 
 using DeNelle.Core.Progression;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Data;       // PetData SO — WO-86
 using UnityEngine;
 
@@ -72,13 +73,17 @@ namespace DeNelle.Pets
                 _level++;
                 gained++;
             }
-            if (gained > 0) ApplyBonuses();
+            if (gained > 0)
+            {
+                FlowTrace.Step("PetXp", $"pet '{EarnerId ?? "<null>"}' leveled +{gained} -> Lv{_level} (xp {_xp:0}/{XpToNextFor(_level):0}, +{amount:0} this grant)");
+                ApplyBonuses();
+            }
             return gained;
         }
 
         private void ApplyBonuses()
         {
-            if (_pet == null) return;
+            if (_pet == null) { FlowTrace.Warn("PetXp", "ApplyBonuses skipped: _pet is null (no RequireComponent(Pet)?) — level-up stats NOT applied"); return; }
             float dmgMult = Mathf.Min(MaxMultiplier, 1f + (_level - 1) * DamagePerLevel);
             float hpMult  = Mathf.Min(MaxMultiplier, 1f + (_level - 1) * HpPerLevel);
             _pet.SetProgressionMultipliers(dmgMult, hpMult);

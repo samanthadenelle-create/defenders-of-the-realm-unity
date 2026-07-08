@@ -25,6 +25,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -89,6 +90,7 @@ namespace DeNelle.Village
         {
             if (string.IsNullOrWhiteSpace(message)) message = "Can't build there";
 
+            FlowTrace.Warn("BuildToast", $"placement rejected -> '{message}'");
             Debug.Log($"[BuildMode] Placement blocked: {message}");
             GameSfx.PlayBuildDenied();
 

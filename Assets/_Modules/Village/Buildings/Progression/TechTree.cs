@@ -22,6 +22,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.Buildings.Progression
 {
@@ -52,9 +53,10 @@ namespace DeNelle.Village.Buildings.Progression
         /// </summary>
         public static void Unlock(string nodeId)
         {
-            if (string.IsNullOrEmpty(nodeId) || IsUnlocked(nodeId)) return;
+            if (string.IsNullOrEmpty(nodeId) || IsUnlocked(nodeId)) { FlowTrace.Step("TechTree", $"Unlock('{nodeId ?? "<null>"}') no-op (empty or already-lit)"); return; }
             PlayerPrefs.SetInt(Key(nodeId), 1);
             PlayerPrefs.Save();
+            FlowTrace.Step("TechTree", $"Unlocked node '{nodeId}'");
             Debug.Log($"[TechTree] Unlocked tech node '{nodeId}'.");
             NodeUnlocked?.Invoke(nodeId);
         }

@@ -15,6 +15,7 @@
 // =============================================================================
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -40,12 +41,25 @@ namespace DeNelle.Village
         /// <summary>The partner marker sharing this crossingId (the destination), or null if unpaired.</summary>
         public HeroLinkCrossing Partner()
         {
-            if (string.IsNullOrEmpty(crossingId)) return null;
+            if (string.IsNullOrEmpty(crossingId))
+            {
+                // Once-per-object: an UNPAIRED marker (blank id) can never cross — surface it
+                // without spamming the per-frame lookup HeroLocomotion drives.
+                FlowTrace.Once("Crossing", "blank-" + GetInstanceID(),
+                    $"Partner: marker '{name}' has a blank crossingId — can never pair (crossing dead).");
+                return null;
+            }
             for (int i = 0; i < All.Count; i++)
             {
                 var o = All[i];
-                if (o != null && o != this && o.crossingId == crossingId) return o;
+                if (o != null && o != this && o.crossingId == crossingId)
+                {
+                    FlowTrace.Once("Crossing", "paired-" + crossingId, $"Partner: crossingId '{crossingId}' resolved a pair.");
+                    return o;
+                }
             }
+            FlowTrace.Once("Crossing", "unpaired-" + crossingId,
+                $"Partner: crossingId '{crossingId}' has NO partner in the registry (count={All.Count}) — one-ended crossing.");
             return null;
         }
     }

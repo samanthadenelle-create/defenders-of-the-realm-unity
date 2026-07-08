@@ -40,6 +40,7 @@
 using System;
 using System.Collections.Generic;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 
 namespace DeNelle.Pets
@@ -183,9 +184,11 @@ namespace DeNelle.Pets
         /// </summary>
         public bool Acquire(string species, PetAcquisitionSource source)
         {
+            FlowTrace.Step("PetAcquire", $"Acquire species='{species ?? "<null>"}' source={source}");
             species = NormalizeSpecies(species);
             if (string.IsNullOrEmpty(species))
             {
+                FlowTrace.Warn("PetAcquire", $"Acquire rejected: empty/invalid species (source={source})");
                 Debug.LogWarning($"[PetAcquisitionService] Acquire('{species}', {source}) — empty/invalid species.");
                 return false;
             }
@@ -194,6 +197,7 @@ namespace DeNelle.Pets
             var def = PetCatalog.FindBySpecies(species);
             if (def == null)
             {
+                FlowTrace.Warn("PetAcquire", $"Acquire rejected: '{species}' not in PetCatalog (pets.json) — data-driven gate");
                 Debug.LogWarning($"[PetAcquisitionService] Acquire('{species}') — not in PetCatalog (pets.json). " +
                                  "Add the species to pets.json before it can be acquired.");
                 return false;
@@ -203,11 +207,12 @@ namespace DeNelle.Pets
             var state = svc != null ? svc.State : null;
             if (state == null)
             {
+                FlowTrace.Fail("PetAcquire", $"Acquire aborted: no GameState — cannot record acquired pet '{species}'");
                 Debug.LogWarning("[PetAcquisitionService] no GameState — cannot record the acquired pet.");
                 return false;
             }
 
-            if (Owns(species)) return false; // already owned — idempotent
+            if (Owns(species)) { FlowTrace.Step("PetAcquire", $"Acquire no-op: '{species}' already owned (idempotent)"); return false; } // already owned — idempotent
 
             // 1) Roster entry (GameState.Pets) — id / species / fresh level.
             if (state.Pets == null) state.Pets = new List<PetData>();
@@ -230,13 +235,24 @@ namespace DeNelle.Pets
                 if (state.OwnedPets == null) state.OwnedPets = new List<PetSpecies>();
                 if (!state.OwnedPets.Contains(speciesEnum)) state.OwnedPets.Add(speciesEnum);
             }
+            else
+            {
+                // flag_15: only the 3 starters map to PetSpecies; other species live in the
+                // Pets roster (by def.Id) but CANNOT be carried in the OwnedPets enum list.
+                FlowTrace.Warn("PetAcquire", $"'{species}' has no PetSpecies enum mapping — roster-only, OwnedPets enum list will NOT carry it (flag_15)");
+            }
 
             // 3) Auto-fill a free deploy slot so a freshly-won pet shows up.
-            TryAssignFreeSlot(species);
+            int slot = TryAssignFreeSlot(species);
+            if (slot < 0)
+                FlowTrace.Warn("PetAcquire", $"'{species}' acquired but no free deploy slot (MaxSlots={MaxSlots}, filled={FilledSlotCount}) — rests at the Stables");
 
             // 4) Persist through the unified save (never a stale balance).
+            // flag_17: the exact slot assignment is NOT persisted here — only StarterPetId's
+            // slot is auto-restored on load (SyncSlotsFromState), so multi-slot rosters reset.
             svc.Save();
 
+            FlowTrace.Step("PetAcquire", $"Acquired '{species}' via {source} — roster now {state.Pets.Count} pet(s), slot={slot}");
             Debug.Log($"[PetAcquisitionService] Acquired '{species}' via {source} → roster ({state.Pets.Count} pets).");
             PetAcquired?.Invoke(species);
             Changed?.Invoke();
@@ -324,16 +340,22 @@ namespace DeNelle.Pets
         {
             _activeSlots.Clear();
             var state = StateOrNull();
-            if (state == null) return;
+            if (state == null) { FlowTrace.Warn("PetAcquire", "SyncSlotsFromState: no GameState — slots left empty"); return; }
 
             string starter = null;
             if (!string.IsNullOrEmpty(state.StarterPetId))
             {
                 var def = PetCatalog.Find(state.StarterPetId);
                 if (def != null) starter = def.Species;
+                else FlowTrace.Warn("PetAcquire", $"SyncSlotsFromState: StarterPetId '{state.StarterPetId}' not in PetCatalog — slot 0 empty");
             }
             if (!string.IsNullOrEmpty(starter))
+            {
                 _activeSlots.Add(starter); // slot 0
+                // flag_17: ONLY the starter is restored — any non-starter that was slotted
+                // last session is lost because slot assignment is not persisted.
+                FlowTrace.Step("PetAcquire", $"SyncSlotsFromState: restored starter '{starter}' to slot 0 (non-starter slots NOT persisted — flag_17)");
+            }
         }
 
         /// <summary>
@@ -345,7 +367,8 @@ namespace DeNelle.Pets
         private void RequestRedeploy()
         {
             var deployer = FindAnyObjectByType<PetDeployer>();
-            if (deployer == null) return;
+            if (deployer == null) { FlowTrace.Warn("PetAcquire", "RequestRedeploy no-op: no PetDeployer in scene (slot change not reflected in deployment)"); return; }
+            FlowTrace.Step("PetAcquire", $"RequestRedeploy -> PetDeployer with {FilledSlotCount} active slot(s)");
             deployer.SyncDeployedToSlots(ActiveSlotSpecies);
         }
 

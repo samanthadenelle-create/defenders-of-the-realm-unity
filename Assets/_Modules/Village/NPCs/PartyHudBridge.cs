@@ -20,6 +20,7 @@
 using System.Reflection;
 using DeNelle.Core;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -61,11 +62,17 @@ namespace DeNelle.Village
             // fill entirely. Flag OFF restores the full party-of-4 fill below.
             if (FeatureFlags.SingleHero)
             {
+                if (FlowTrace.Enabled)
+                    FlowTrace.Once("Party", "singlehero", "SingleHero ON -> hiding companion slots 1..3 (no party fill)");
                 for (int slot = 0; slot < CompanionSlots; slot++)
                 {
                     _visibleArgs[0] = slot + 1; // 0 is the hero
                     _visibleArgs[1] = false;
-                    _setPartyVisible?.Invoke(_hud, _visibleArgs);
+                    // The reflection Invoke crosses the Village->HUD asmdef seam (no compile-time
+                    // ref); a stale/destroyed HUD target would throw a TargetInvocationException that
+                    // otherwise blanks the whole party column silently. Guard so it self-reports.
+                    Guard.Try("Party", "SetPartyMemberVisible(single-hero hide)",
+                        () => _setPartyVisible?.Invoke(_hud, _visibleArgs));
                 }
                 return;
             }
@@ -95,6 +102,7 @@ namespace DeNelle.Village
                 _scratch[n++] = c;
             }
 
+            int shown = 0;
             for (int slot = 0; slot < CompanionSlots; slot++)
             {
                 int hudSlot = slot + 1; // 0 is the hero
@@ -120,15 +128,28 @@ namespace DeNelle.Village
                     _memberArgs[1] = string.IsNullOrEmpty(c.DisplayName) ? c.DisplayName : c.DisplayName.Split(',')[0].Trim();
                     _memberArgs[2] = cur;
                     _memberArgs[3] = max;
-                    _setPartyMember?.Invoke(_hud, _memberArgs);
+                    // Reflection Invoke across the Village->HUD asmdef seam. A destroyed HUD or a
+                    // fake-null companion slipping past the guard above would throw here and blank
+                    // the party column with no log — Guard rolls the throw up to the break-log.
+                    Guard.Try("Party", $"SetPartyMember(slot={hudSlot})",
+                        () => _setPartyMember?.Invoke(_hud, _memberArgs));
+                    shown++;
                 }
                 else
                 {
                     _visibleArgs[0] = hudSlot;
                     _visibleArgs[1] = false;
-                    _setPartyVisible?.Invoke(_hud, _visibleArgs);
+                    Guard.Try("Party", $"SetPartyMemberVisible(slot={hudSlot} hide)",
+                        () => _setPartyVisible?.Invoke(_hud, _visibleArgs));
                 }
             }
+
+            // Trace point (5) — the producer-side commit summary at the HUD seam. Throttled
+            // (this refresh runs ~2Hz) so a capture shows roster=N / shown=M without flooding;
+            // splits "roster says 0" (data-empty) from "committed but invisible" (HUD render).
+            if (FlowTrace.Enabled)
+                FlowTrace.Throttle("Party", "commit", 2f,
+                    $"party refresh: rosterCount={rosterCount} activeRegistry={roster.Count} committed={shown}/{CompanionSlots}");
         }
 
         // Resolve the HUD instance + its party methods once it is registered.
@@ -147,8 +168,19 @@ namespace DeNelle.Village
                     BindingFlags.Public | BindingFlags.Instance, null,
                     new[] { typeof(int), typeof(bool) }, null);
                 if (_setPartyMember == null)
+                {
+                    // Reflection resolve MISS at the HUD seam — the party column can never fill.
+                    // Warn (soft, recoverable if a later HUD instance has it) alongside the legacy log.
+                    FlowTrace.Warn("Party", $"HUD '{t.Name}' has no SetPartyMember(int,string,float,float) " +
+                                            "— companion frames will not show (reflection seam miss).");
                     Debug.LogWarning("[PartyHudBridge] HUD has no SetPartyMember(int,string,float,float) — " +
                                      "companion frames will not show.");
+                }
+                else
+                {
+                    FlowTrace.Step("Party", $"resolved HUD party methods on '{t.Name}' " +
+                                            $"(setMember={_setPartyMember != null}, setVisible={_setPartyVisible != null}).");
+                }
             }
             return _setPartyMember != null;
         }

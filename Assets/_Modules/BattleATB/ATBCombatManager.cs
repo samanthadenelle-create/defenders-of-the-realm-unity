@@ -20,6 +20,7 @@
 // =============================================================================
 
 using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics;   // FlowTrace — §12 instrument-first (AtbTimer bounded context)
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.SceneManagement;
@@ -60,7 +61,10 @@ namespace DeNelle.BattleATB
                 scene.name.IndexOf("ATBBattle", System.StringComparison.OrdinalIgnoreCase) < 0)
                 return;
             if (Instance == null)
+            {
+                FlowTrace.Step("AtbTimer", $"Bootstrap: auto-creating ATBCombatManager for scene '{scene.name}'.");
                 new GameObject("ATBCombatManager (auto)").AddComponent<ATBCombatManager>();
+            }
         }
 
         // ── Inspector ─────────────────────────────────────────────────────────
@@ -126,6 +130,8 @@ namespace DeNelle.BattleATB
             {
                 _playerTurn  = false;
                 _currentTime = 0f;
+                // Discrete event (fires once per timeout, not per-frame) — safe to log unthrottled.
+                FlowTrace.Warn("AtbTimer", $"Update: player idle > {maxTurnTime}s — firing onEnemyAutoAttack ({onEnemyAutoAttack?.GetPersistentEventCount() ?? 0} persistent listener(s)).");
                 onEnemyAutoAttack?.Invoke();
             }
         }
@@ -139,6 +145,7 @@ namespace DeNelle.BattleATB
         /// </summary>
         public void StartCombat()
         {
+            FlowTrace.Step("AtbTimer", $"StartCombat: combat active, idle timer armed (maxTurnTime={maxTurnTime}s).");
             _combatActive = true;
             _currentTime  = 0f;
             _playerTurn   = true;
@@ -152,7 +159,11 @@ namespace DeNelle.BattleATB
         /// </summary>
         public void OnPlayerActed()
         {
-            if (!_combatActive) return;
+            if (!_combatActive)
+            {
+                FlowTrace.Warn("AtbTimer", "OnPlayerActed: combat not active — idle-timer reset ignored.");
+                return;
+            }
             _currentTime = 0f;
             _playerTurn  = true;
             onPlayerTurnStart?.Invoke();
@@ -163,6 +174,7 @@ namespace DeNelle.BattleATB
         /// </summary>
         public void StopCombat()
         {
+            FlowTrace.Step("AtbTimer", "StopCombat: combat session ended, idle timer halted.");
             _combatActive = false;
             _currentTime  = 0f;
             _playerTurn   = false;

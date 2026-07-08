@@ -25,6 +25,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -65,10 +66,15 @@ namespace DeNelle.Village
             if (_health == null) _health = GetComponent<HeroHealth>();
             // HeroHealth is attached lazily by HeroHealthBootstrap a frame or two after
             // the hero spawns; if it isn't here yet, a later Refresh()/OnEnable retries.
-            if (_health == null) return;
+            if (_health == null)
+            {
+                FlowTrace.Warn("Aegis", "TrySubscribe: HeroHealth not on GO yet — ward NOT wired; a later Refresh()/OnEnable retries.");
+                return;
+            }
             _lastHp = _health.Hp;
             _health.OnHealthChanged += OnHeroHealthChanged;
             _subscribed = true;
+            FlowTrace.Step("Aegis", $"ward wired to HeroHealth.OnHealthChanged (startHp={_lastHp:0.#}, setActive={WardActive}).");
         }
 
         private void Unsubscribe()
@@ -86,17 +92,32 @@ namespace DeNelle.Village
             // Only react to a real DECREASE (damage). Heals / respawns raise HP and
             // must not pull from the Heart.
             float lost = prev - current;
-            if (lost <= 0f) return;
+            if (lost <= 0f) return;   // heal / initial broadcast — not damage, no ward pull (common; not traced)
 
             // Ward only while the full Aegis set is worn.
-            if (_gear == null || !_gear.AegisSetActive) return;
+            if (_gear == null || !_gear.AegisSetActive)
+            {
+                // The inert path (hero without the full set) — the dominant case; log once so a
+                // trace confirms "damage taken but ward OFF" (set not equipped) vs "ward fired".
+                if (FlowTrace.Enabled) FlowTrace.Step("Aegis", $"damage {lost:0.#} — ward INERT (gear={( _gear == null ? "<null>" : "no-set")}).");
+                return;
+            }
 
             float refund = lost * Mathf.Max(0f, _gear.WardRefundFraction);
-            if (refund <= 0f) return;
+            if (refund <= 0f)
+            {
+                FlowTrace.Warn("Aegis", $"ward active but refund<=0 (lost={lost:0.#} frac={_gear.WardRefundFraction:0.00}) — no Heart heal.");
+                return;
+            }
 
             var heart = ResolveHeart();
-            if (heart == null) return;
+            if (heart == null)
+            {
+                FlowTrace.Fail("Aegis", $"Oathweld ward ACTIVE + refund={refund:0.#} but NO HeartController found — ward payoff LOST.");
+                return;
+            }
 
+            FlowTrace.Step("Aegis", $"Oathweld ward: hero lost {lost:0.#} -> refunding {refund:0.#} HP to Heart.");
             // Heal the Heart (SetHp-clamped internally; a no-op if the Heart is full).
             heart.Heal(refund);
 

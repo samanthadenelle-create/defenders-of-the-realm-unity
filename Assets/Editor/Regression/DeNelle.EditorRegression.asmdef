@@ -5,6 +5,7 @@
         "DeNelle.Core",
         "DeNelle.Village",
         "DeNelle.Data",
+        "DeNelle.BattleATB",
         "Unity.Addressables",
         "Unity.ResourceManager"
     ],

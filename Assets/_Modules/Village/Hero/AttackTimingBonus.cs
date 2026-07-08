@@ -39,6 +39,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -113,7 +114,11 @@ namespace DeNelle.Village
                 int prev = _chain;
                 _chain = 1;
                 _pendingBonus = _chain1Bonus;
-                if (prev != _chain) OnChainChanged?.Invoke(_chain);
+                if (prev != _chain)
+                {
+                    FlowTrace.Step("Chain", $"window expired — chain reset {prev}->1 (bonus back to baseline).");
+                    OnChainChanged?.Invoke(_chain);
+                }
             }
         }
 
@@ -126,7 +131,11 @@ namespace DeNelle.Village
         /// </summary>
         public static float NotifyCast(Vector3 castWorldPos)
         {
-            if (Instance == null) return 1f;
+            if (Instance == null)
+            {
+                FlowTrace.Warn("Chain", "NotifyCast: no AttackTimingBonus instance — returning baseline 1.0 (no chain bonus).");
+                return 1f;
+            }
             return Instance.RegisterCast(castWorldPos);
         }
 
@@ -144,6 +153,7 @@ namespace DeNelle.Village
             _windowTimer  = _chainWindowSeconds;
             _pendingBonus = BonusForChain(_chain);
 
+            FlowTrace.Step("Chain", $"RegisterCast inWindow={inWindow} -> chain={_chain} bonus={_pendingBonus:0.00}x");
             OnChainChanged?.Invoke(_chain);
 
             // Pop a chain label for chains ≥ 2 so the player gets feedback.

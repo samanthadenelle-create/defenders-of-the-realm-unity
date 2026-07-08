@@ -19,6 +19,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -166,6 +167,7 @@ namespace DeNelle.Village
         /// <summary>Mark a footprint's cells occupied by <paramref name="structureId"/>.</summary>
         public void Occupy(Vector2Int cell, Vector2Int footprint, string structureId)
         {
+            FlowTrace.Step("Grid", $"Occupy cell=({cell.x},{cell.y}) footprint=({footprint.x}x{footprint.y}) id='{structureId ?? "<null>"}'");
             EnsureGrid();
             int fw = Mathf.Max(1, footprint.x);
             int fh = Mathf.Max(1, footprint.y);
@@ -200,6 +202,7 @@ namespace DeNelle.Village
         /// <summary>Wipe all occupancy (re-seeding the grid from a fresh layout).</summary>
         public void ClearAll()
         {
+            FlowTrace.Step("Grid", $"ClearAll — wiping {gridWidth}x{gridHeight} occupancy");
             _occupied = new string[Mathf.Max(1, gridWidth), Mathf.Max(1, gridHeight)];
         }
 

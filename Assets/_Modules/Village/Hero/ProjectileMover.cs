@@ -23,6 +23,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -107,6 +108,7 @@ namespace DeNelle.Village
             _t             = 0f;
             _launched      = true;
             _onArrive      = onArrive;
+            FlowTrace.Step("Projectile", $"Launch dist={_totalDistance:0.0} speed={_speed:0.0} arc={_arc:0.00} pooled={_pooled} hasPayload={(onArrive != null)}");
         }
 
         // ── Update ────────────────────────────────────────────────────────────
@@ -116,7 +118,12 @@ namespace DeNelle.Village
             if (!_launched) return;
 
             // Instant-arrive safety (same-position launch).
-            if (_totalDistance < 0.001f) { Arrive(); return; }
+            if (_totalDistance < 0.001f)
+            {
+                FlowTrace.Warn("Projectile", "Update: zero-distance launch (start==target) — arriving immediately.");
+                Arrive();
+                return;
+            }
 
             _t += Time.deltaTime * _speed / _totalDistance;
             _t  = Mathf.Min(_t, 1f);
@@ -143,6 +150,7 @@ namespace DeNelle.Village
         private void Arrive()
         {
             _launched = false;
+            FlowTrace.Step("Projectile", $"Arrive at {transform.position} impactFX={(ImpactFX != null)} pooled={(_pooled && _pool != null)}");
 
             if (ImpactFX != null)
             {

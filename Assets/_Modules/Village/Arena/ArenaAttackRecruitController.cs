@@ -20,6 +20,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 
 namespace DeNelle.Village.Arena
@@ -148,10 +149,12 @@ namespace DeNelle.Village.Arena
 
             if (!ArenaDefenseCatalog.CanAfford(SquadAsPlaced(), def.Id))
             {
+                FlowTrace.Warn("ArenaAttack", $"recruit refused: not enough squad points for '{def.Id}'");
                 Debug.Log($"[ArenaAttack] Not enough squad points to recruit '{def.Id}'.");
                 return;
             }
 
+            FlowTrace.Step("ArenaAttack", $"recruited '{def.Id}' — squad now {_squad.Count + 1}");
             _squad.Add(def.Id);
             Debug.Log($"[ArenaAttack] Recruited '{def.Id}' — squad now {_squad.Count} units, " +
                       $"{ArenaDefenseCatalog.RemainingPoints(SquadAsPlaced())} pts left.");
@@ -166,8 +169,10 @@ namespace DeNelle.Village.Arena
         /// </summary>
         private void Launch()
         {
+            FlowTrace.Step("ArenaAttack", $"Launch squad={_squad.Count}");
             if (_squad.Count == 0)
             {
+                FlowTrace.Warn("ArenaAttack", "launch aborted: no troops recruited");
                 Debug.Log("[ArenaAttack] Cannot launch — no troops recruited.");
                 return;
             }
@@ -182,6 +187,7 @@ namespace DeNelle.Village.Arena
             }
             if (opponent == null)
             {
+                FlowTrace.Warn("ArenaAttack", "launch aborted: no opponent available (SetOpponent never called, empty catalog)");
                 Debug.LogWarning("[ArenaAttack] Cannot launch — no opponent available.");
                 return;
             }
@@ -201,6 +207,7 @@ namespace DeNelle.Village.Arena
             {
                 // Raid blocked (e.g. can't afford the wager) — clear the committed squad
                 // so a stale roster doesn't spawn on a later defend raid.
+                FlowTrace.Warn("ArenaAttack", "TryStartRaid returned false — committed squad cleared so it can't leak to a later defend raid");
                 ArenaMode.AttackSquad = null;
                 Debug.LogWarning("[ArenaAttack] Raid did not start — squad cleared.");
             }

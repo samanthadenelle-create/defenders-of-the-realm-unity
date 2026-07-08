@@ -33,6 +33,7 @@ using UnityEngine.AI;
 using DeNelle.Core;
 using DeNelle.Core.Audio;
 using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using DeNelle.Village.World.Camps;
 
@@ -141,13 +142,16 @@ namespace DeNelle.Village.Arena
         /// </summary>
         public bool TryStartRaid(ArenaOpponentDef opponent)
         {
+            FlowTrace.Step("Arena", $"TryStartRaid opponent='{(opponent != null ? opponent.Id : "<null>")}'");
             if (RaidInProgress)
             {
+                FlowTrace.Warn("Arena", "TryStartRaid blocked: a raid is already in progress");
                 Debug.LogWarning("[ArenaMode] a raid is already in progress - ignored.");
                 return false;
             }
             if (opponent == null)
             {
+                FlowTrace.Warn("Arena", "TryStartRaid blocked: null opponent");
                 Debug.LogWarning("[ArenaMode] null opponent - ignored.");
                 return false;
             }
@@ -156,9 +160,11 @@ namespace DeNelle.Village.Arena
             // STUB — replace with WalletService (CurrencyKind.Skr) backend escrow when deployed.
             if (!ArenaWalletService.Debit(opponent.Wager))
             {
+                FlowTrace.Warn("Arena", $"TryStartRaid blocked: cannot afford {opponent.Wager} SKR wager (no debit, no spawn)");
                 Debug.LogWarning($"[ArenaMode] cannot afford {opponent.Wager} SKR wager - raid blocked.");
                 return false;
             }
+            FlowTrace.Step("Arena", $"staked {opponent.Wager} SKR — spawning opponent base");
 
             CurrentOpponent = opponent;
             _stakedWager = opponent.Wager;
@@ -344,6 +350,7 @@ namespace DeNelle.Village.Arena
 
             // No walkable mesh found anywhere along the ray — return the raw forward
             // point; the runtime ArenaNavMeshBaker then lays a local surface under it.
+            FlowTrace.Warn("Arena", "ResolveRaidAnchor: no walkable NavMesh along the hero ray — using raw forward point (relies on runtime bake / risks empty-Arena spawn-fail)");
             return origin + fwd * RaidAnchorDistance;
         }
 
@@ -372,6 +379,7 @@ namespace DeNelle.Village.Arena
             long opponentWager = CurrentOpponent != null ? CurrentOpponent.Wager : _stakedWager;
             long purse = opponentWager * 2L;   // your stake back + theirs
 
+            FlowTrace.Step("Arena", $"WIN — outpost cleared; crediting purse {purse} SKR (stake {_stakedWager})");
             // CREDIT the won purse. STUB — replace with WalletService payout on deploy.
             ArenaWalletService.Credit(purse);
             // RECORD the win (W/L ledger + total purse).
@@ -420,6 +428,7 @@ namespace DeNelle.Village.Arena
             if (_resolved) return;
             _resolved = true;
 
+            FlowTrace.Step("Arena", $"LOSS ({reason}) — forfeiting staked {_stakedWager} SKR (no refund)");
             // FORFEIT: the stake was already debited at start, so a loss just records
             // it (no refund). STUB — backend escrow keeps the real stake on deploy.
             ArenaProgressStore.RecordLoss();
@@ -440,6 +449,7 @@ namespace DeNelle.Village.Arena
             if (_resolved) return;
             _resolved = true;
 
+            FlowTrace.Fail("Arena", $"raid vs '{NameOf()}' ABORTED — garrison failed to spawn (no NavMesh at anchor); refunding staked {_stakedWager} SKR (no-contest, NOT a win)");
             // Refund the staked wager — the raid never actually happened (spawn failure),
             // so the player should not forfeit. STUB wallet mirror of TryStartRaid's Debit.
             ArenaWalletService.Credit(_stakedWager);

@@ -26,6 +26,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.Arena
 {
@@ -154,6 +155,7 @@ namespace DeNelle.Village.Arena
             // the Enter-Arena entrance.
             HideHeraldVisual(_heraldRoot);
             _placed = true;
+            FlowTrace.Step("ArenaHerald", $"herald placed at {_heraldRoot.position} (proximity Interact live)");
             Debug.Log($"[ArenaHeraldSpawner] Arena herald placed at {_heraldRoot.position}. " +
                       "Walk up + Interact (Tap / F) to open the Arena.");
         }
@@ -195,6 +197,7 @@ namespace DeNelle.Village.Arena
                 var host = new GameObject("ArenaPanelHost");
                 _panel = host.AddComponent<ArenaPanel>();
             }
+            FlowTrace.Step("ArenaHerald", "hero interacted — opening Arena panel");
             _panel.Open();
             // Dismiss the world "Enter Arena" prompt the moment the panel opens so it
             // can't linger over the Arena UI. The proximity loop's AnyArenaScreenOpen

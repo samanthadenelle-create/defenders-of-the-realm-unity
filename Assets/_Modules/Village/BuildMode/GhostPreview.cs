@@ -16,6 +16,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Catalog;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -48,9 +49,10 @@ namespace DeNelle.Village
         /// </summary>
         public void SetEntry(CatalogEntry entry)
         {
-            if (entry == null) { Hide(); return; }
+            if (entry == null) { FlowTrace.Warn("Ghost", "SetEntry(null) — hiding ghost"); Hide(); return; }
             if (_visual != null && _builtForId == entry.id) return;
 
+            FlowTrace.Step("Ghost", $"SetEntry id='{entry.id}' prefabPath='{entry.visualPrefabPath ?? "<null>"}'");
             Clear();
             _builtForId = entry.id;
             _orientation = entry.orientation;   // applied UNDER the yaw on the skinned model
@@ -105,6 +107,7 @@ namespace DeNelle.Village
 
             if (skinned == null)
             {
+                FlowTrace.Warn("Ghost", $"VisualFactory.Skin returned null for '{entry.visualPrefabPath ?? "<none>"}' — falling back to a flat disc marker");
                 // Pack-missing-safe: a flat translucent disc stands in for the mesh.
                 var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 disc.transform.SetParent(_visual.transform, false);
@@ -246,7 +249,9 @@ namespace DeNelle.Village
                 // Treat a null/broken/Standard/Legacy/error source shader as "unusable" and build the
                 // ghost on URP/Lit so it renders translucent, never magenta.
                 Shader srcShader = src != null ? src.shader : null;
-                Shader shader = (srcShader != null && !IsBrokenGhostShader(srcShader))
+                bool broken = srcShader == null || IsBrokenGhostShader(srcShader);
+                if (broken) FlowTrace.Warn("Ghost", $"source shader '{(srcShader != null ? srcShader.name : "<null>")}' is broken/stripped for URP — rebuilding ghost on URP/Lit (pink-ghost guard)");
+                Shader shader = !broken
                                 ? srcShader
                                 : (Shader.Find("Universal Render Pipeline/Lit")
                                    ?? Shader.Find("Sprites/Default"));

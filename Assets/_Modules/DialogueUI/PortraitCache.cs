@@ -17,6 +17,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.DialogueUI
 {
@@ -38,11 +39,28 @@ namespace DeNelle.DialogueUI
         /// </summary>
         public static Sprite Get(string resourcePath)
         {
-            if (string.IsNullOrEmpty(resourcePath)) return null;
-            if (_sprites.TryGetValue(resourcePath, out var cached)) return cached;
+            if (string.IsNullOrEmpty(resourcePath))
+            {
+                FlowTrace.Warn("Portrait", "Get called with <null/empty> path -> null");
+                return null;
+            }
+            // Cache hit is the hot path (once per dialogue line) — guard the string-build.
+            if (_sprites.TryGetValue(resourcePath, out var cached))
+            {
+                if (FlowTrace.Enabled)
+                    FlowTrace.Step("Portrait", $"cache hit '{resourcePath}' -> {(cached != null ? "sprite" : "<null cached>")}");
+                return cached;
+            }
 
+            FlowTrace.Step("Portrait", $"cache MISS '{resourcePath}' -> Build");
             Sprite sprite = Build(resourcePath);
             _sprites[resourcePath] = sprite;   // cache nulls too — one lookup per missing speaker
+            if (sprite == null)
+                // The bug the trace must prove: Resources/HeroPortraits folder is ABSENT, so
+                // BOTH the Sprite and the Texture2D loads return null and this caches a null
+                // silently (the speaker renders no portrait, no error). Warn, don't fix.
+                FlowTrace.Warn("Portrait", $"NO art resolved for '{resourcePath}' -> caching null " +
+                    "(folder likely absent, e.g. Resources/HeroPortraits/* — speaker shows no portrait)");
             return sprite;
         }
 
@@ -51,11 +69,20 @@ namespace DeNelle.DialogueUI
         private static Sprite Build(string path)
         {
             Sprite sprite = Resources.Load<Sprite>(path);
-            if (sprite != null) return sprite;
+            if (sprite != null)
+            {
+                FlowTrace.Step("Portrait", $"Build '{path}' -> loaded as Sprite");
+                return sprite;
+            }
 
             Texture2D tex = Resources.Load<Texture2D>(path);
-            if (tex == null) return null;
+            if (tex == null)
+            {
+                FlowTrace.Warn("Portrait", $"Build '{path}' -> neither Sprite nor Texture2D at path (missing art)");
+                return null;
+            }
 
+            FlowTrace.Step("Portrait", $"Build '{path}' -> wrapped Texture2D {tex.width}x{tex.height} in runtime Sprite");
             return Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height),
                                  new Vector2(0.5f, 0.5f));
         }

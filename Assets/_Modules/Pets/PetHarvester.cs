@@ -33,6 +33,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Pets
 {
@@ -110,7 +111,11 @@ namespace DeNelle.Pets
             // to Pet.cs's own hunt/attack loop — never starve defending to gather.
             if (ShouldYieldToCombat())
             {
-                if (_state != HarvestState.Idle) StopHarvesting(restoreLeash: true);
+                if (_state != HarvestState.Idle)
+                {
+                    FlowTrace.Step("PetHarvest", $"pet '{_pet.PetId}' YIELDING harvest to combat (Defend + hostile in range)");
+                    StopHarvesting(restoreLeash: true);
+                }
                 return;
             }
 
@@ -138,6 +143,7 @@ namespace DeNelle.Pets
             var node = MineNodeBridge.FindNearest(transform.position, _detectRadius);
             if (node == null) return;
 
+            FlowTrace.Step("PetHarvest", $"pet '{_pet.PetId}' found node @ {node.Position} within {_detectRadius}m — moving to harvest");
             BeginMovingTo(node);
         }
 
@@ -155,6 +161,7 @@ namespace DeNelle.Pets
             float distSqr = (_target.Position - transform.position).sqrMagnitude;
             if (distSqr <= _arriveRadius * _arriveRadius)
             {
+                FlowTrace.Step("PetHarvest", $"pet '{_pet.PetId}' arrived at node — begin harvesting");
                 _state = HarvestState.Harvesting;
                 _nextHarvest = Time.time;   // allow an immediate first tick
                 return;
@@ -162,7 +169,10 @@ namespace DeNelle.Pets
 
             // Unreachable / stuck — give up and rescan from Idle.
             if (Time.time >= _moveDeadline)
+            {
+                FlowTrace.Warn("PetHarvest", $"pet '{_pet.PetId}' gave up reaching node after {_moveTimeout}s (off-NavMesh/unreachable) — rescan");
                 StopHarvesting(restoreLeash: true);
+            }
         }
 
         // Harvesting: on station, pull one extract per tick via the node's EXISTING
@@ -182,11 +192,13 @@ namespace DeNelle.Pets
             if (banked > 0)
             {
                 _carried += banked;
+                FlowTrace.Throttle("PetHarvest", "banked-" + _pet.PetId, 1f, $"pet '{_pet.PetId}' banked +{banked} (carried {_carried}/{_carryCapacity})");
                 if (_carried >= _carryCapacity)
                 {
                     // Soft budget reached — release this node and look for another so
                     // one pet doesn't camp a single node forever. (Yield is already
                     // banked per extract; nothing to "carry home".)
+                    FlowTrace.Step("PetHarvest", $"pet '{_pet.PetId}' hit carry budget {_carryCapacity} — releasing node to roam");
                     _carried = 0;
                     StopHarvesting(restoreLeash: false);   // go idle → rescan next frame
                     _nextScan = 0f;
@@ -226,6 +238,7 @@ namespace DeNelle.Pets
         {
             if (_target != null)
             {
+                FlowTrace.Step("PetHarvest", $"pet '{(_pet != null ? _pet.PetId : "<null>")}' stop harvest — released node claim (restoreLeash={restoreLeash})");
                 _target.SetClaim(false);
                 _target = null;
             }

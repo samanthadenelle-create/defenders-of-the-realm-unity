@@ -20,6 +20,7 @@
 using System.Collections;
 using UnityEngine;
 using DeNelle.Core.Combat;   // DamageElement (projectile art element typing)
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -94,6 +95,7 @@ namespace DeNelle.Village
         public void FireArrow(Vector3 targetWorldPos, System.Action onArrive = null)
         {
             Vector3 origin = LaunchOrigin();
+            FlowTrace.Step("Ranged", $"FireArrow -> target={targetWorldPos} origin={origin} prefab={(_arrowPrefab == null ? "<pooled-vfx>" : _arrowPrefab.name)}");
             StartCoroutine(PlayCastBurst(origin, FireColor, 0.15f));   // GREEN: fired
 
             // VFX: fire a real particle-FX-bodied projectile (Storm bolt for the
@@ -124,6 +126,7 @@ namespace DeNelle.Village
         public void FireSpellOrb(Vector3 targetWorldPos, System.Action onArrive = null)
         {
             Vector3 origin = LaunchOrigin();
+            FlowTrace.Step("Ranged", $"FireSpellOrb -> target={targetWorldPos} origin={origin} prefab={(_spellOrbPrefab == null ? "<pooled-vfx>" : _spellOrbPrefab.name)}");
             StartCoroutine(PlayCastBurst(origin, FireColor, 0.35f));   // GREEN: fired
 
             // VFX: fire a real particle-FX-bodied arcane orb (wins over the WO-280
@@ -211,6 +214,7 @@ namespace DeNelle.Village
             }
             else
             {
+                FlowTrace.Warn("Ranged", "PlayCastBurst: AbilityVfxPool not booted — using per-shot GameObject fallback (pre-boot).");
                 host = new GameObject("CastBurst");
                 host.transform.position = pos;
                 ps = host.AddComponent<ParticleSystem>();
@@ -256,6 +260,7 @@ namespace DeNelle.Village
             if (MoverProjectilePool.Instance != null)
                 return MoverProjectilePool.Instance.Acquire(kind, origin, Quaternion.identity);
 
+            FlowTrace.Warn("Ranged", $"LeaseMover: MoverProjectilePool not bootstrapped yet — building one-off {kind} body (pre-AfterSceneLoad fallback).");
             // Fallback (pool not yet bootstrapped): build a one-off VFX body the old way.
             // Unbound → ProjectileMover self-destructs on arrival via its legacy path.
             DamageElement element = kind == ProjectileBodyKind.MageOrbVfx ? DamageElement.Aether : DamageElement.None;

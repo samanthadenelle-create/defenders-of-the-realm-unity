@@ -28,6 +28,7 @@
 using System;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -137,11 +138,20 @@ namespace DeNelle.Village
         private void OnWaveCleared(int waveId)
         {
             if (_running || s_ranThisSession) return;
-            if (!ForceRun && waveId < JoinWave) return;
+            if (!ForceRun && waveId < JoinWave)
+            {
+                FlowTrace.Step("Roster", $"ElaraWaveThreeJoin: wave {waveId} cleared (< JoinWave {JoinWave}) — not yet.");
+                return;
+            }
 
             var svc = GameStateService.Instance;
-            if (!ForceRun && svc != null && svc.State != null && HasSeen(svc.State)) return;
+            if (!ForceRun && svc != null && svc.State != null && HasSeen(svc.State))
+            {
+                FlowTrace.Step("Roster", "ElaraWaveThreeJoin: already seen on this save — stand down.");
+                return;
+            }
 
+            FlowTrace.Step("Roster", $"ElaraWaveThreeJoin: wave {waveId} cleared >= {JoinWave} — starting Elara join beat.");
             Run().Forget();
         }
 
@@ -161,17 +171,26 @@ namespace DeNelle.Village
             try
             {
                 _companionClass = ResolveCompanionClass();
+                FlowTrace.Step("Roster", $"ElaraWaveThreeJoin.Run: companion class resolved = {_companionClass}.");
 
                 // THE JOIN: enrol the companion into the persisted party roster. The
                 // injector listens to PlayerChanged (fired by AddToParty) and spawns a
                 // body for the new roster member that follows + fights; PartyHudBridge
                 // grows the party frame to match PartySize. Idempotent in AddToParty.
-                GameStateService.Instance?.AddToParty(_companionClass.ToString());
+                // This is the cross-assembly hand-off (State -> injector -> HUD bridge) —
+                // trace it so a "party frame never grew" capture pins whether AddToParty ran.
+                var joinSvc = GameStateService.Instance;
+                if (joinSvc == null)
+                    FlowTrace.Fail("Roster", "ElaraWaveThreeJoin: GameStateService null at AddToParty — companion cannot enrol.");
+                joinSvc?.AddToParty(_companionClass.ToString());
+                FlowTrace.Step("Roster", $"ElaraWaveThreeJoin: AddToParty('{_companionClass}') fired (PartySize now {joinSvc?.State?.PartySize ?? -1}).");
 
                 // Let the body spawn + settle, then frame a short arrival via its bubble.
                 await UniTask.Delay(TimeSpan.FromSeconds(1.0f));
 
                 StoryCompanion companion = ResolveCompanion(_companionClass);
+                if (companion == null)
+                    FlowTrace.Warn("Roster", $"ElaraWaveThreeJoin: no StoryCompanion body resolved for {_companionClass} after AddToParty+settle — arrival lines will have no bubble.");
                 _dialogue = gameObject.AddComponent<TutorialDialogue>();
                 if (companion != null)
                 {
@@ -195,6 +214,7 @@ namespace DeNelle.Village
                 // join lines above) and flag the node for authoring.
                 if (!HasSeenEchoIntro())
                 {
+                    FlowTrace.Step("Roster", "ElaraWaveThreeJoin: playing Echo (pet) intro sub-beat (WO-360).");
                     foreach (string line in EchoIntroLines())
                         _dialogue.Say(speaker, line);
                 }
@@ -208,6 +228,7 @@ namespace DeNelle.Village
                 // only flavours the follow-up line. Idempotent via its OWN seen-flag.
                 if (!HasSeenGearOffer())
                 {
+                    FlowTrace.Step("Roster", "ElaraWaveThreeJoin: playing hero gear-up offer sub-beat (WO-364).");
                     await RunGearOffer(speaker);
                 }
 
@@ -220,6 +241,10 @@ namespace DeNelle.Village
             }
             catch (Exception ex)
             {
+                // No silent swallow (§12): the beat recovers (marks seen, restores voice) but the
+                // fault MUST roll up to the break-log with its type — a join beat that quietly
+                // half-ran (companion enrolled, gear/echo skipped) would otherwise look "fine".
+                FlowTrace.Fail("Roster", $"ElaraWaveThreeJoin.Run threw — finishing anyway (companion may be enrolled without gear/echo): {ex.GetType().Name}: {ex.Message}");
                 Debug.LogWarning($"[ElaraWaveThreeJoin] Join beat error — finishing anyway. {ex.Message}");
                 ResolveCompanion(_companionClass)?.SetSpeechSuppressed(false);
                 MarkSeen();

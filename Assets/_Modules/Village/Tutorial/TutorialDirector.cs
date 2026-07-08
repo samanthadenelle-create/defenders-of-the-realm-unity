@@ -40,6 +40,7 @@ using System;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
 using DeNelle.Core.Data;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -116,6 +117,7 @@ namespace DeNelle.Village
             // "Village2", so the FTUE runs in MainCastle_Hall too (companion-meeting fix).
             if (!HubScenes.IsHub(SceneManager.GetActiveScene().name))
             {
+                FlowTrace.Step("Tutorial", $"Awake self-destruct — scene '{SceneManager.GetActiveScene().name}' is not a hub");
                 Destroy(gameObject);
                 return;
             }
@@ -129,12 +131,14 @@ namespace DeNelle.Village
             // finisher on the V2 path. Deleted only in WO-T5 after the flip is verified.
             if (DeNelle.Core.FeatureFlags.TutorialV2)
             {
+                FlowTrace.Step("Tutorial", "TutorialV2 flag ON — legacy director stands down (TutorialFlow owns FTUE)");
                 Destroy(gameObject);
                 return;
             }
 
             if (!ShouldRun)
             {
+                FlowTrace.Step("Tutorial", $"ShouldRun=false (ranThisSession={s_ranThisSession} forceSkip={ForceSkip} firstRun={IsFirstRun()}) — no FTUE");
                 // Returning player (or dev-skip) — nothing to teach. If a first-run
                 // skip was forced, still mark onboarded + kick the loop so the game
                 // proceeds; otherwise leave the (already-running) loop alone.
@@ -144,6 +148,7 @@ namespace DeNelle.Village
                 return;
             }
 
+            FlowTrace.Step("Tutorial", "ShouldRun=true — starting FTUE sequence");
             Run().Forget();
         }
 
@@ -196,9 +201,11 @@ namespace DeNelle.Village
             // Skipped when the player opted into the full tutorial via "Play Intro".
             if (OnboardingMode.FastPath)
             {
+                FlowTrace.Step("Tutorial", "FastPath — brief hook then Wave 1 (default new-game)");
                 await RunFastPath();
                 return;
             }
+            FlowTrace.Step("Tutorial", "Full tutorial path (opt-in Play Intro)");
 
             // ─────────────────────────────────────────────────────────────────
             // FULL TUTORIAL (opt-in via "Play Intro") — the original path below.
@@ -229,6 +236,7 @@ namespace DeNelle.Village
             await UniTask.Delay(TimeSpan.FromSeconds(0.75f));
             if (!CompanionMeetingTrigger.Hosted)
             {
+                FlowTrace.Warn("Tutorial", "no FTUE narrative hosted (prefab/pack absent) — finishing inline so a dialogue-less build still proceeds");
                 Debug.Log("[TutorialDirector] No FTUE narrative hosted — finishing tutorial inline (fallback).");
                 FinishTutorial();
             }
@@ -291,6 +299,7 @@ namespace DeNelle.Village
             }
             catch (Exception ex)
             {
+                FlowTrace.Fail("Tutorial", $"fast-path companion hook threw — skipping into gameplay (WebGL crash-guard): {ex.GetType().Name}: {ex.Message}");
                 Debug.LogWarning("[TutorialDirector] Fast-path companion hook threw — skipping straight " +
                                  "into gameplay so the village is never stranded (WebGL crash-guard). " + ex);
             }
@@ -604,10 +613,12 @@ namespace DeNelle.Village
         /// </summary>
         private void SkipToGameplay()
         {
+            FlowTrace.Step("Tutorial", "SkipToGameplay — FinishOnboarding + kick Wave 1");
             GameStateService.Instance?.FinishOnboarding();
 
             // Kick Wave 1 — BeginLoop is the loop's entry the integrator uses.
             if (_wave == null) _wave = FindAnyObjectByType<WaveManager>();
+            if (_wave == null) FlowTrace.Warn("Tutorial", "no WaveManager found — Wave 1 not kicked");
             _wave?.BeginLoop().Forget();
 
             Debug.Log("[TutorialDirector] Tutorial complete — Onboarded persisted, wave loop kicked.");
@@ -748,11 +759,13 @@ namespace DeNelle.Village
             var econ = EconomyService.Instance;
             if (econ != null)
             {
+                FlowTrace.Step("Tutorial", $"post-battle grant {amount} crystals via EconomyService");
                 econ.Grant(crystals: amount);
             }
             else
             {
                 // No EconomyService in this scene — grant straight to the store.
+                FlowTrace.Warn("Tutorial", $"no EconomyService — granting {amount} crystals straight to GameState");
                 GameStateService.Instance?.AddCrystals(amount);
             }
 

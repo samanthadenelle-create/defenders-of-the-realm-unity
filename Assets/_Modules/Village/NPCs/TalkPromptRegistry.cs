@@ -15,6 +15,7 @@
 // registry pattern used by Tower.ActiveCount / StoryCompanion.Active.
 // =============================================================================
 using System.Collections.Generic;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -30,10 +31,19 @@ namespace DeNelle.Village
         /// <summary>NPC enters range: register (or refresh) its talk action. Idempotent per node.</summary>
         public static void Register(Transform node, System.Action talk)
         {
-            if (node == null || talk == null) return;
+            // Fallback/anomaly: a null node or action means the caller has no talk target to
+            // register — never silent, so a mis-wired NPC shows up in the trace instead of a
+            // Talk button that never lights.
+            if (node == null || talk == null)
+            {
+                FlowTrace.Warn("Talk", $"Register skipped: node={(node != null ? node.name : "<null>")} " +
+                                       $"talk={(talk != null ? "set" : "<null>")}");
+                return;
+            }
             for (int i = 0; i < _entries.Count; i++)
-                if (_entries[i].Node == node) { _entries[i].Talk = talk; return; }
+                if (_entries[i].Node == node) { _entries[i].Talk = talk; return; }   // refresh — already in range
             _entries.Add(new Entry { Node = node, Talk = talk });
+            FlowTrace.Step("Talk", $"registered '{node.name}' in range (count={_entries.Count}).");
         }
 
         /// <summary>NPC leaves range / is disabled: drop it. Safe if not present.</summary>
@@ -51,10 +61,17 @@ namespace DeNelle.Village
             for (int i = _entries.Count - 1; i >= 0; i--)
             {
                 var e = _entries[i];
-                if (e.Node == null) { _entries.RemoveAt(i); continue; }
+                if (e.Node == null) { _entries.RemoveAt(i); continue; }   // stale entry — prune
                 float d = (e.Node.position - from).sqrMagnitude;
                 if (d < bestSqr) { bestSqr = d; best = e.Talk; }
             }
+            // Talk press → resolve. A null result means the Talk button fired with nothing in range
+            // (registry emptied between the availability push and the press) — trace it so a dead
+            // Talk press is a logged line, not a silent no-op.
+            if (best == null)
+                FlowTrace.Warn("Talk", $"NearestTalk resolved NOTHING (entries={_entries.Count}) — Talk press did nothing.");
+            else
+                FlowTrace.Step("Talk", $"NearestTalk -> nearest of {_entries.Count} entry(ies) at {Mathf.Sqrt(bestSqr):F1}m.");
             return best;
         }
     }

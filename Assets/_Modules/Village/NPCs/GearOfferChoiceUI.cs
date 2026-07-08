@@ -19,6 +19,7 @@
 // =============================================================================
 
 using System;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -53,6 +54,7 @@ namespace DeNelle.Village
         /// </summary>
         public static void Show(Action<bool> onChosen)
         {
+            FlowTrace.Step("CompanionGear", "GearOfferChoiceUI.Show — two-button gear offer up (await player pick).");
             if (s_active != null) { Destroy(s_active.gameObject); s_active = null; }
             var go = new GameObject("GearOfferChoiceUI");
             var ui = go.AddComponent<GearOfferChoiceUI>();
@@ -127,7 +129,14 @@ namespace DeNelle.Village
             if (_done) return;
             float elapsed = Time.unscaledTime - _shownAt;
 
-            if (elapsed >= AutoChooseSeconds) { Choose(false); return; }
+            if (elapsed >= AutoChooseSeconds)
+            {
+                // Fallback/default (§2.3): input lost — auto-pick "already equipped" so the beat
+                // can never wedge waiting on a tap. Warn so a capture shows the failsafe fired.
+                FlowTrace.Warn("CompanionGear", $"GearOfferChoiceUI auto-chose (in-place) after {AutoChooseSeconds:F0}s — no player tap.");
+                Choose(false);
+                return;
+            }
             if (elapsed < MinHold) return;
 
             if (TryGetTap(out Vector2 tap))
@@ -143,11 +152,19 @@ namespace DeNelle.Village
         {
             if (_done) return;
             _done = true;
+            FlowTrace.Step("CompanionGear", $"GearOfferChoiceUI.Choose -> {(visitForge ? "visit-forge" : "in-place")} (both auto-equip in place).");
             var cb = _onChosen;
             _onChosen = null;
             if (s_active == this) s_active = null;
             Destroy(gameObject);
-            try { cb?.Invoke(visitForge); } catch (Exception ex) { Debug.LogWarning($"[GearOfferChoiceUI] {ex.Message}"); }
+            // The callback drives the gear-grant beat across into ElaraWaveThreeJoin — a throw here
+            // would strand the join beat's WaitUntil(chosen). No silent swallow (§12): Fail rolls it up.
+            try { cb?.Invoke(visitForge); }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("CompanionGear", $"GearOfferChoiceUI choice callback threw: {ex.GetType().Name}: {ex.Message}");
+                Debug.LogWarning($"[GearOfferChoiceUI] {ex.Message}");
+            }
         }
 
         private void OnDestroy()

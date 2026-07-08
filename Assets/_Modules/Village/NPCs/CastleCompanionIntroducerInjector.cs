@@ -140,10 +140,13 @@ namespace DeNelle.Village
 
         private void Inject()
         {
+            using var _ = FlowTrace.Enter("CompanionIntro", "Inject");
+
             // Already recruited on this save? Then the intro is done — don't re-spawn the
             // introducer (the recruited companion already follows via StoryCompanionInjector).
             if (HasSeen())
             {
+                FlowTrace.Step("CompanionIntro", "intro already seen on this save — no introducer spawned (branch taken).");
                 Debug.Log("[CastleCompanionIntroducer] intro already seen on this save — no introducer spawned.");
                 return;
             }
@@ -154,6 +157,8 @@ namespace DeNelle.Village
 
             var holder = new GameObject(HolderName);
             Transform hero = ResolveHero();
+            if (hero == null)
+                FlowTrace.Warn("CompanionIntro", "Inject: hero unresolved — introducer falls back to the fixed courtyard point (0,0,20).");
 
             // QUICK FIX (owner 2026-06-13, RCA): the introducer used to spawn at a FIXED far
             // point (0,0,+20) while the hero spawns ~(0,y,-11) by the Tree of Life — ~31m away —
@@ -455,8 +460,13 @@ namespace DeNelle.Village
             {
                 _fired = true;
                 TalkPromptRegistry.Deregister(transform);
+                FlowTrace.Step("CompanionIntro", $"Interact fired intro node '{_node}' ({_label}) — recruit path launched (fire-once).");
                 Debug.Log($"[CompanionIntroducerInteractable] {_label} -> intro node '{_node}' (recruits the first companion).");
                 _onPlayed?.Invoke();
+            }
+            else
+            {
+                FlowTrace.Warn("CompanionIntro", $"Interact: DialogueService.Play('{_node}') returned false — intro node did not launch, NPC stays talkable.");
             }
         }
 

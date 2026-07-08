@@ -102,6 +102,7 @@ namespace DeNelle.Core.Quests
             // WebGL-safe: CanonicalJson reads the Resources dual-copy first (works in
             // a browser build) and falls back to StreamingAssets on desktop. Raw
             // File.ReadAllText would throw in WebGL → empty quest list.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("QuestCat", "EnsureLoaded — reading quests.json.");
             try
             {
                 string text = CanonicalJson.Read(StreamingRelativePath);
@@ -109,13 +110,22 @@ namespace DeNelle.Core.Quests
                 {
                     var parsed = JsonConvert.DeserializeObject<QuestCatalogData>(text);
                     if (parsed != null && parsed.Quests != null && parsed.Quests.Count > 0)
-                    { _data = parsed; return; }
+                    {
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("QuestCat", $"loaded {parsed.Quests.Count} quest(s) (v{parsed.Version}).");
+                        _data = parsed; return;
+                    }
+                    DeNelle.Core.Diagnostics.FlowTrace.Fail("QuestCat", "quests.json parsed EMPTY (json present but 0 quests — mapping break) -> empty catalog.");
                     Debug.LogError("[QuestCatalog] quests.json parsed empty.");
                 }
-                else Debug.LogError($"[QuestCatalog] quests.json not found ({StreamingRelativePath}).");
+                else
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Fail("QuestCat", $"quests.json not found/empty ({StreamingRelativePath}) -> empty catalog.");
+                    Debug.LogError($"[QuestCatalog] quests.json not found ({StreamingRelativePath}).");
+                }
             }
             catch (Exception ex)
             {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("QuestCat", $"read/parse quests.json threw {ex.GetType().Name}: {ex.Message} -> empty catalog.");
                 Debug.LogError($"[QuestCatalog] Failed to read quests.json: {ex.Message}");
             }
             _data = new QuestCatalogData();

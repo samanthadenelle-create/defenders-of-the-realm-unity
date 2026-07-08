@@ -42,8 +42,21 @@ namespace DeNelle.Core
         {
             // Defensive: a caller could null out Source; fall back to a fresh local source
             // so catalog loads never silently break (no silent failure, §12).
-            var src = Source ?? (Source = new LocalJsonCatalogSource());
-            return src.Read(relativePath);
+            var src = Source;
+            if (src == null)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("CanonJson",
+                    $"Source was null — rebuilt LocalJsonCatalogSource for '{relativePath}'.");
+                src = Source = new LocalJsonCatalogSource();
+            }
+            var text = src.Read(relativePath);
+            if (string.IsNullOrEmpty(text))
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("CanonJson",
+                    $"Read('{relativePath}') via {src.GetType().Name} returned EMPTY (no Resources dual-copy + no StreamingAssets file).");
+            else
+                DeNelle.Core.Diagnostics.FlowTrace.Step("CanonJson",
+                    $"Read('{relativePath}') via {src.GetType().Name} -> {text.Length} chars.");
+            return text;
         }
     }
 }

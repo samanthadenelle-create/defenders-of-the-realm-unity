@@ -24,6 +24,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.Arena
 {
@@ -64,14 +65,16 @@ namespace DeNelle.Village.Arena
         public static bool Debit(long amount)
         {
             EnsureLoaded();
-            if (amount <= 0) return false;
+            if (amount <= 0) { FlowTrace.Warn("ArenaWallet", $"Debit refused: non-positive amount {amount}"); return false; }
             if (_balance < amount)
             {
+                FlowTrace.Warn("ArenaWallet", $"Debit refused: need {amount} SKR, have {_balance}");
                 Debug.LogWarning($"[ArenaWalletService] STUB Debit refused: need {amount} SKR, have {_balance}.");
                 return false;
             }
             _balance -= amount;
             Persist();
+            FlowTrace.Step("ArenaWallet", $"Debit {amount} SKR -> balance {_balance}");
             Debug.Log($"[ArenaWalletService] STUB Debit {amount} SKR -> balance {_balance}.");
             return true;
         }
@@ -83,9 +86,10 @@ namespace DeNelle.Village.Arena
         public static void Credit(long amount)
         {
             EnsureLoaded();
-            if (amount <= 0) return;
+            if (amount <= 0) { FlowTrace.Warn("ArenaWallet", $"Credit no-op: non-positive amount {amount}"); return; }
             _balance += amount;
             Persist();
+            FlowTrace.Step("ArenaWallet", $"Credit {amount} SKR -> balance {_balance}");
             Debug.Log($"[ArenaWalletService] STUB Credit {amount} SKR -> balance {_balance}.");
         }
 

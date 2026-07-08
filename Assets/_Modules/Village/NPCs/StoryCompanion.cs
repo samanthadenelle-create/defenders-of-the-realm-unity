@@ -446,6 +446,7 @@ namespace DeNelle.Village
 
             applyHeal();
             _abilityTimer = _abilityCooldown;
+            FlowTrace.Once("Companion", $"mend-{GetInstanceID()}", $"{DisplayName} Cleric Mend fired (heal={healAmount:F0}) — team sustain reached.");
 
             // Reuse the hero/respawn heal VFX (Impact_Heal green sparkle). Null-safe static.
             VFXManager.Play(VFXType.Impact_Heal, healPos + Vector3.up);
@@ -549,6 +550,7 @@ namespace DeNelle.Village
             }
             _bulwarkUntil = Time.time + _bulwarkSeconds;
             _abilityTimer = _abilityCooldown;
+            FlowTrace.Once("Companion", $"taunt-{GetInstanceID()}", $"{DisplayName} Knight Taunt+Bulwark fired (taunted {s_aoeBuf.Count}) — team tank reached.");
             // Reuse the shockwave-ring impact as a stand-in "ground slam / shout" tell.
             VFXManager.Play(VFXType.Impact_ShockwaveRing, transform.position);
         }
@@ -585,6 +587,7 @@ namespace DeNelle.Village
             }
             FaceWorld(foe.transform.position);
             _abilityTimer = _abilityCooldown;
+            FlowTrace.Once("Companion", $"multishot-{GetInstanceID()}", $"{DisplayName} Ranger Multishot fired ({_multishotArrows} arrows) — team burst reached.");
         }
 
         /// <summary>
@@ -617,6 +620,7 @@ namespace DeNelle.Village
             VFXManager.Play(VFXType.Impact_ExplosionAether, centre + Vector3.up * 0.5f);
             FaceWorld(centre);
             _abilityTimer = _abilityCooldown;
+            FlowTrace.Once("Companion", $"burst-{GetInstanceID()}", $"{DisplayName} Mage Arcane Burst fired ({s_aoeBuf.Count} in radius) — team AoE reached.");
         }
 
         /// <summary>Smoothly turns the companion to face a world point (heal/cast tell).</summary>
