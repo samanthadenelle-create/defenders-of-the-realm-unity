@@ -143,19 +143,22 @@ namespace DeNelle.Village
 
                     // FixTripoMaterials so a Tripo/AccuRIG export renders in URP (no magenta).
                     // SeatFlat + Fit + Seat run inside Skin — prop stood up, sized, seated on the node.
-                    // Owner F8 2026-07-07 "tree node y+90": the wood log-pile gets a +90 Y yaw. Skin
-                    // applies LocalRotation BEFORE SeatFlat, and SeatFlat only corrects the narrowest
-                    // axis to +Y, so a pure yaw survives the auto pass (the manual-over-auto seam for
-                    // this path). Keyed per resource — the other props keep identity.
+                    // Owner F8 2026-07-08 "tree toation" (RCA, Player.log 15609-15840): SkinOptions.
+                    // LocalRotation is an ASSIGNMENT, not a compose — the bare (0,90,0) yaw WIPED the
+                    // wood FBX's native (270,0,0) up-axis correction and tipped the tree; SeatFlat's
+                    // narrowest-axis→+Y heuristic then read the LYING tree as "already flat" (and
+                    // would knock an upright tall prop over). So Wood authors the full pose like the
+                    // building callers do (native 270 X + the owner's 90 yaw) and opts OUT of
+                    // SeatFlat; the squat props (iron/food/crystals) keep the auto pass.
                     var skinned = VisualFactory.Skin(_visual.transform, path,
                         new SkinOptions
                         {
                             FitLargest = 2.0f,
                             SeatOnGround = true,
                             FixTripoMaterials = true,
-                            SeatFlat = true,
+                            SeatFlat = Resource != MineResource.Wood,
                             LocalRotation = Resource == MineResource.Wood
-                                ? Quaternion.Euler(0f, 90f, 0f) : (Quaternion?)null,
+                                ? Quaternion.Euler(270f, 90f, 0f) : (Quaternion?)null,
                         });
                     if (skinned != null) return;
                 }
