@@ -866,9 +866,15 @@ namespace DeNelle.HUD.Kit
                 le.minHeight = 34f; le.preferredHeight = 34f; le.minWidth = 168f;
             }
             // WO-440: right-edge tab that toggles the chips panel (collapsed by default).
+            // F8-25a (flag_01/02): the old x 0.95..1.0 anchors are fractions of the actionRail
+            // ZONE mount (0.780..0.995 screen, ~232px at the 1080 ref — HudAreasHost.cs:97), NOT
+            // the screen — the tab rendered ~12px wide, squashing the ornate button1_yellow
+            // 9-slice (24px borders need >=48px) into a thin stretched vertical strip with the
+            // newly-resolving coin icon inside it. x 0.60 gives the tab ~93px — room for the
+            // sliced chrome, the coin icon and the "Resources" word.
             var resTab = ElarionUiKit.BuildObsidianButton(_resDock.transform, "$",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.95f, 0.86f), new Vector2(1.0f, 0.99f), ToggleResourcePanel);
+                new Vector2(0.60f, 0.86f), new Vector2(1.0f, 0.99f), ToggleResourcePanel);
             // Owner F8 07-06 (flag_03): the collapsed dock read as an anonymous box — the "$"
             // glyph was swapped for a coin icon with NO text. The tab now ALWAYS says
             // "Resources" (icon rides above the word when it resolves; text never hides).
