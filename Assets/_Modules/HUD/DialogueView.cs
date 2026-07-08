@@ -24,7 +24,14 @@ namespace DeNelle.HUD
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Bootstrap()
         {
-            if (!DeNelle.Core.FeatureFlags.CustomDialogue) return; // migration flag (default off)
+            if (!DeNelle.Core.FeatureFlags.CustomDialogue)
+            {
+                // Instrumentation standard: a declined gate must trace, never skip silently —
+                // with the flag off NOTHING can render a dialogue, and that must be readable.
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue",
+                    "DialogueView.Bootstrap: ff.customdialogue OFF — view not spawned (no dialogue can render).");
+                return;
+            }
             var go = new GameObject("DialogueView");
             DontDestroyOnLoad(go);
             go.AddComponent<DialogueView>();
@@ -50,8 +57,25 @@ namespace DeNelle.HUD
         private PanelHandle _handle;
         private bool _arbiterNotified;
 
+        /// <summary>Probe/observability surface (AutoPilot AssertDialogueChain): TRUE while a
+        /// dialogue panel is built and visible (_ui alive + active). This is the P0 re-entrancy
+        /// fix's testable invariant — after a Closed-callback synchronously chains into a
+        /// successor dialogue, this must stay TRUE; a stale close tearing the successor's panel
+        /// down (the frozen-build-mode root) flips it false.</summary>
+        public bool IsShowing => _ui != null && _ui.activeSelf;
+
         private void OnEnable() { DialogueService.Opened += OnOpened; }
         private void OnDisable() { DialogueService.Opened -= OnOpened; }
+
+        // P0 RE-ENTRANCY FIX (owner "still cant do the tower", RCA 2026-07-08): when a dialogue's
+        // Closed invocation-list SYNCHRONOUSLY chains into the NEXT dialogue (the tutorial's
+        // dialogue.ended -> STEP-ENTER -> Play), the STALE dialogue's Closed handler runs AFTER
+        // this view has already rebound to the successor — it destroyed the successor's just-built
+        // panel and unbound its handlers, leaving the new VM alive-but-headless: Ended never fired,
+        // HeroLocomotion.InputSuppressed stayed TRUE forever, and BuildModeController.Update froze
+        // at its first gate (zero PlaceConfirm evaluations — her captured session). The Closed
+        // handler is now bound PER-VM and ignores any close for a VM this view no longer shows.
+        private System.Action _vmClosedHandler;
 
         private void OnOpened(DialogueViewModel vm)
         {
@@ -64,9 +88,23 @@ namespace DeNelle.HUD
             _lastCardKey = null;
             _vm = vm;
             _vm.Changed += Repaint;
-            _vm.Closed += OnClosed;
+            var closedFor = vm;   // identity capture — this handler belongs to THIS vm only
+            _vmClosedHandler = () => OnClosedFor(closedFor);
+            _vm.Closed += _vmClosedHandler;
             BuildUi();
             Repaint();
+        }
+
+        private void OnClosedFor(DialogueViewModel vm)
+        {
+            if (!ReferenceEquals(vm, _vm))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Dialogue",
+                    "stale Closed from a superseded dialogue IGNORED — the successor's panel survives " +
+                    "(re-entrancy guard; was the frozen-build-mode root).");
+                return;
+            }
+            OnClosed();
         }
 
         private void OnClosed()
@@ -79,7 +117,13 @@ namespace DeNelle.HUD
 
         private void Unbind()
         {
-            if (_vm != null) { _vm.Changed -= Repaint; _vm.Closed -= OnClosed; _vm = null; }
+            if (_vm != null)
+            {
+                _vm.Changed -= Repaint;
+                if (_vmClosedHandler != null) _vm.Closed -= _vmClosedHandler;
+                _vmClosedHandler = null;
+                _vm = null;
+            }
         }
 
         // ── Build the bottom dialogue box ────────────────────────────────────────
