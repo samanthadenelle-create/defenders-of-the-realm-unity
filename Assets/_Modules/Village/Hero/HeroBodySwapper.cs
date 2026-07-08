@@ -798,9 +798,15 @@ namespace DeNelle.Village
                 // a reversible RUNTIME tint (instanced materials, never touches the on-disk asset, needs no bake)
                 // and is WebGL-safe (pure _BaseColor, zero texture load). Colors come from the owner-tunable
                 // PaladinPalette table below (matched by slot NAME, else per-index fallback).
-                ColorPackageBody(body);
-                // AUDIT (read-only diagnostic): still reports the _BaseMap albedo as absent BY DESIGN — the fix
-                // sets _BaseColor, not _BaseMap. A "NULL albedo" audit line is now EXPECTED (colored, not textured).
+                // WHITE-HERO ASSET FIX (fleet ticket 2026-07-07): Knight_Hero.fbx actually EMBEDS its
+                // 3 Paladin PNGs (binary-scan verified) — TripoAssetPostprocessor.ExtractKnightHeroPackage
+                // extracts + remaps them into the FBX materials, so the package body can now arrive
+                // TEXTURED. Use the TEXTURE-WINS variant (same as KnightV3): slots with a bound albedo
+                // keep it; only null-albedo slots get the PaladinPalette tint. Before the extraction runs
+                // this behaves EXACTLY like ColorPackageBody (all slots are null-albedo → all tinted).
+                ColorPackageBodyIfNullAlbedo(body);
+                // AUDIT (read-only diagnostic): pre-extraction it still reports NULL albedo BY DESIGN — the
+                // tint sets _BaseColor, not _BaseMap. Post-extraction the audit proves the texture bound.
                 AuditPackageAlbedo(body);
             }
             // DEF: the Ranger/Archer fires arrows via the projectile system but held

@@ -64,6 +64,11 @@ namespace DeNelle.Editor
             "Assets/Models/Cathedral/",
             "Assets/Art/TripoStructures/",   // owner Tripo building models (farm/forge/etc.)
             "Assets/Resources/Structures/",  // owner Tripo Portal_To_Dungeon (dungeon entrance)
+            // WHITE HERO ROOT (fleet [Flow:HeroBody] 2026-07-07): the Paladin package FBX embeds
+            // 3 PNGs (diffuse/normal/specular) that were never extracted → NULL albedo → solid-white
+            // hero. EXACT FILE prefix (StartsWith match) so the sibling Animations/ FBXs and the
+            // Paladin_Hero source don't get marker/Textures churn on their next reimport.
+            "Assets/HeroPackages/Knight/Knight_Hero.fbx",
         };
 
         /// <summary>Sentinel file appended next to a processed FBX so we only run once.</summary>
@@ -271,6 +276,45 @@ namespace DeNelle.Editor
             // stayed {} — the model kept its embedded null-albedo material (still white on any
             // reimport). Remap by texture name against the generated Materials/*.mat (which DO
             // bind the extracted albedo) and SAVE, so the meta carries the binding durably.
+            var importer = AssetImporter.GetAtPath(path) as ModelImporter;
+            if (importer != null)
+            {
+                importer.SearchAndRemapMaterials(
+                    ModelImporterMaterialName.BasedOnTextureName,
+                    ModelImporterMaterialSearch.Local);
+                importer.SaveAndReimport();
+                var map = importer.GetExternalObjectMap();
+                Debug.Log("[TripoAssetPostprocessor] remap saved for " + path +
+                          " — externalObjects=" + map.Count);
+            }
+            Debug.Log("[TripoAssetPostprocessor] single-asset extraction drained for " + path);
+        }
+
+        /// <summary>
+        /// Fleet ticket 2026-07-07 ("[Flow:HeroBody] WHITE HERO ROOT", Paladin package): one-shot
+        /// extraction for Assets/HeroPackages/Knight/Knight_Hero.fbx — it embeds 3 PNGs
+        /// (Paladin diffuse/normal/specular, verified binary scan) that were never extracted because
+        /// the FBX lives outside the original TargetFolders, so its one material ("Paladin_MAT")
+        /// carries a NULL albedo and the hero renders solid white. Mirrors ExtractArcaneSpire1
+        /// exactly: marker-delete + ForceUpdate import + synchronous DrainPending (batchmode-safe)
+        /// + SearchAndRemapMaterials(BasedOnTextureName, Local) + SaveAndReimport so the meta's
+        /// externalObjects carries the albedo binding durably. KnightPackage.prefab references the
+        /// FBX materials, so the prefab (Resources/Heroes/KnightPackage.prefab) picks the texture up
+        /// with no prefab edit.
+        /// </summary>
+        [MenuItem("Defenders/Tripo/Extract Knight_Hero Paladin package (white hero fix)")]
+        public static void ExtractKnightHeroPackage()
+        {
+            const string path = "Assets/HeroPackages/Knight/Knight_Hero.fbx";
+            string marker = MarkerPathFor(path);
+            if (File.Exists(marker)) File.Delete(marker);
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            DrainPending();
+
+            // PERSIST the binding (same rationale as ExtractArcaneSpire1): ProcessOne only
+            // EXTRACTS; Unity 6 dropped External material location, so without an explicit remap
+            // the model keeps its embedded null-albedo material on every reimport. Remap by
+            // texture name against the extracted Textures/*.png and SAVE so the meta carries it.
             var importer = AssetImporter.GetAtPath(path) as ModelImporter;
             if (importer != null)
             {
