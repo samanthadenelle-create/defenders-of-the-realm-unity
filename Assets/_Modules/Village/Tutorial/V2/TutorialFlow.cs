@@ -666,16 +666,34 @@ namespace DeNelle.Village
         private void TickWatchdog()
         {
             if (_step == null) return;
+            if (_phase != Phase.AwaitCompletion) return;   // only a live, awaiting step can strand
             if (Time.unscaledTime - _watchdogAt < WatchdogSeconds) return;
-            _watchdogAt = Time.unscaledTime;   // re-arm (throttled repeat, never a wedge)
 
-            FlowTrace.Fail("Tutorial", $"STEP-STUCK :: {_step.Id} — no '{_awaitSignal}' after " +
-                $"{Time.unscaledTime - _stepEnteredAt:0}s in-step (ff.tutorialv2 on).");
+            // Owner ruling 2026-07-08 ("auto-advance the watchdog"): a step whose combat/
+            // completion driver can never settle (e.g. town_wave's scripted spawner) must not
+            // strand the banner forever. On trip we AUTO-COMPLETE (advance) the stuck step down
+            // the SAME path a real completion signal takes — CompleteCurrentStep -> AdvanceToNextStep
+            // — so state stays consistent (latch disarmed, drivers disarmed, seen-marked, UI hidden,
+            // next step entered with a fresh watchdog window).
+            //
+            // Fires ONCE per stuck step: CompleteCurrentStep advances _step and EnterStep resets
+            // _watchdogAt/_stepEnteredAt, so this cannot re-trip on the same step.
+            string stuckId = _step.Id;
+            string awaited  = _awaitSignal;
+            float  idle     = Time.unscaledTime - _stepEnteredAt;
+            _watchdogAt = Time.unscaledTime;   // re-arm guard (belt-and-suspenders alongside the advance)
+
+            FlowTrace.Fail("Tutorial", $"STEP-STUCK :: {stuckId} — no '{awaited}' after " +
+                $"{idle:0}s in-step (ff.tutorialv2 on); AUTO-ADVANCED via watchdog.");
             DeNelle.Core.Analytics.EventTracker.Track("tutorial_step_drop", new
             {
-                stepId = _step.Id,
-                secondsIdle = Time.unscaledTime - _stepEnteredAt,
+                stepId = stuckId,
+                secondsIdle = idle,
+                autoAdvanced = true,
             });
+
+            // Reuse the normal completion/advance path (not skipped — the step is credited).
+            CompleteCurrentStep(skipped: false);
         }
 
         // =====================================================================

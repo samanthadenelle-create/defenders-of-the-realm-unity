@@ -296,6 +296,27 @@ namespace DeNelle.Core.Diagnostics
                     return;
                 }
                 _buildSuppressTraced = false;   // re-trace on the next build session's rising edge
+
+                // F8 (2026-07-08): sitting on a MENU / onboarding scene is not a softlock — the
+                // player is legitimately parked on Title / HeroSelect / PetSelect / Intro / Store,
+                // etc. (false capture: possible_softlock "No movement or progress for 180s in
+                // 'Title'" while the player sat on the title screen). Same class as the F8-13 build-
+                // mode gate. Core cannot reference DeNelle.HUD, so we MIRROR the HUD bootstrap's
+                // allowlist (VillageHudBootstrap.MenuScenes — the canonical set; keep in sync) here.
+                if (IsMenuOrOnboardingScene(SceneManager.GetActiveScene().name))
+                {
+                    MarkProgress();
+                    return;
+                }
+                // F8 (2026-07-08): a modal owning the screen is the player reading a dialogue/panel,
+                // not a softlock. PanelManager.AnyOpen above catches code-built modals; this also
+                // honours the Core HUD context mirror (modal=True) the same Core-legal way F8-13
+                // reads BuildModeActive — covers modals surfaced only through the HudContextModel.
+                if (IsModalOpen())
+                {
+                    MarkProgress();
+                    return;
+                }
                 if (!_softlockReported && now - _lastProgressTime > SoftlockSeconds)
                 {
                     _softlockReported = true;
@@ -355,6 +376,39 @@ namespace DeNelle.Core.Diagnostics
                 return ctx != null && ctx.BuildModeActive;
             }
             catch { return false; }
+        }
+
+        // F8 (2026-07-08): a modal owning the screen (context modal=True) is legitimate idle —
+        // read the Core HUD context mirror the same null-safe way IsBuildModeActive does. Null-safe:
+        // no HudModelHost registered (headless/boot) -> false, watchdog behaves as before this guard.
+        static bool IsModalOpen()
+        {
+            try
+            {
+                var ctx = CoreServices.HudModel?.Context;
+                return ctx != null && ctx.ModalOpen;
+            }
+            catch { return false; }
+        }
+
+        // F8 (2026-07-08): the menu / onboarding / front-end scenes where standing still is normal.
+        // MIRROR of DeNelle.HUD VillageHudBootstrap.MenuScenes (Core cannot reference the HUD asm;
+        // that list is the canonical source — keep these in sync). Matched case-insensitively.
+        static readonly string[] MenuScenes =
+        {
+            "Title", "HeroSelect", "PetSelect", "Intro", "IntroFlow",
+            "Store", "PackStore", "Boot", "Bootstrap", "MainMenu", "GameOver",
+        };
+
+        static bool IsMenuOrOnboardingScene(string sceneName)
+        {
+            if (string.IsNullOrEmpty(sceneName)) return false;
+            for (int i = 0; i < MenuScenes.Length; i++)
+            {
+                if (string.Equals(sceneName, MenuScenes[i], StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
         }
 
         // ---- owner-pressed flag (F8): screenshot, freeze, type one line ---------
