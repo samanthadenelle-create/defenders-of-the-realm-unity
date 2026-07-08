@@ -49,6 +49,12 @@ namespace DeNelle.Village
         /// </summary>
         public static event System.Action<bool> BuildModeChanged;
 
+        /// <summary>Raised at every committed player placement (after spawn + charge), with the
+        /// catalog entry id. F8 2026-07-08 (owner "stuck on raise first tower"): the tutorial's
+        /// build.tower_placed adapter listened only to the LEGACY TowerPlacementSystem/BuildMenu —
+        /// this is the LIVE placement path's event, so the signal finally has a live source.</summary>
+        public static event System.Action<string> StructurePlaced;
+
         /// <summary>True while a build session is active.</summary>
         public bool IsActive { get; private set; }
 
@@ -915,6 +921,10 @@ namespace DeNelle.Village
                 if (state.BaseLayout == null) state.BaseLayout = new List<PlacedStructureData>();
                 state.BaseLayout.Add(data);
             }
+
+            // Committed placement — announce it (tutorial build.tower_placed rides this; guarded so
+            // a throwing subscriber can never abort the placement it is observing).
+            Guard.Try("BuildMode", "StructurePlaced event", () => StructurePlaced?.Invoke(_armed.id));
 
             // WO-612 (owner 2026-07-06): construction takes TIME — start a WO-172 timer job
             // AFTER the charge (the WO-131 seam the service documents). A null job (both

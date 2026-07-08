@@ -68,6 +68,10 @@ namespace DeNelle.Village
         private void OnEnable()
         {
             BuildModeController.BuildModeChanged += OnBuildModeChanged;
+            // F8 2026-07-08 ("stuck on raise first tower", STEP-STUCK capture): the LIVE placement
+            // path is BuildModeController.Place — its StructurePlaced event is the primary
+            // build.tower_placed source (the TowerPlacementSystem/BuildMenu hooks below are legacy).
+            BuildModeController.StructurePlaced += OnStructurePlaced;
             // skillpoint.earned:first — the static level-up relay survives HeroProgression
             // instance swaps (DEF-261); every level banks a point, so level 1 = first point.
             HeroProgression.OnAnyLevelUp += OnAnyLevelUp;
@@ -82,6 +86,7 @@ namespace DeNelle.Village
         private void OnDisable()
         {
             BuildModeController.BuildModeChanged -= OnBuildModeChanged;
+            BuildModeController.StructurePlaced -= OnStructurePlaced;
             HeroProgression.OnAnyLevelUp -= OnAnyLevelUp;
             if (_tps != null) _tps.OnTowerPlaced -= OnTowerPlaced;
             if (_buildMenu != null) _buildMenu.BuildingPlaced -= OnBuildingPlaced;
@@ -98,6 +103,9 @@ namespace DeNelle.Village
             _nextDiscoverAt = Time.unscaledTime + DiscoverInterval;
             Discover();
         }
+
+        private void OnStructurePlaced(string entryId) =>
+            TutorialSignals.Raise(TutorialSignals.TowerPlaced);
 
         // ── Late-spawning source discovery (1 Hz) ─────────────────────────────
 
