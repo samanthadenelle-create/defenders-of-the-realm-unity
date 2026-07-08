@@ -200,6 +200,21 @@ namespace DeNelle.Village
             EnsureGrid();
             SeedBaseLayoutIfFirstEntry();
 
+            // F8-39: census on build ENTRY — how many placed structures are LIVE in the scene vs how
+            // many the persisted BaseLayout says should exist. If live << persisted here (before any
+            // placement), the structures were already torn down (e.g. on the preceding death) and the
+            // upcoming place is what makes them visually "return" — captures the vanish BEFORE the add.
+            {
+                int liveNow = FindObjectsByType<PlacedStructure>().Length;
+                int loadedNow = BaseLayoutLoader.Instance != null ? BaseLayoutLoader.Instance.Loaded.Count : -1;
+                var stEnter = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+                int persistedNow = stEnter != null && stEnter.BaseLayout != null ? stEnter.BaseLayout.Count : 0;
+                FlowTrace.Step("BaseLayout",
+                    $"Enter build mode CENSUS: live PlacedStructure(s) in scene={liveNow}, loader.Loaded={loadedNow}, " +
+                    $"persisted BaseLayout={persistedNow}, scene='{DeNelle.Village.SceneOwnership.IsEnemyOwned}'-enemyOwned. " +
+                    "live << persisted = structures already gone before this build session (F8-39 vanish happened earlier).");
+            }
+
             FreezeWaves();
             PullCameraBack();
 
@@ -953,6 +968,13 @@ namespace DeNelle.Village
             }
 
             var loader = BaseLayoutLoader.EnsureExists();
+            // F8-39 (towers vanish on death, ALL return on next placement): prove this path adds
+            // exactly ONE structure (loader.Spawn), NOT a full refresh. The live loaded count
+            // BEFORE the add is logged here and AFTER below; if the count jumps by MORE than 1 on a
+            // single place, a hidden mass-rebuild is riding the placement (the "all reappear" half).
+            FlowTrace.Step("BaseLayout",
+                $"Place: committing ONE structure add — loader.Loaded count BEFORE spawn = {loader.Loaded.Count} " +
+                $"(scene='{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}').");
             // Persist the SEAT height (snapped.y — wall-top for a wall-walk mount, else the surface
             // Y) + the wall-mounted flag so the piece reloads on the wall TOP (not y=0) and the
             // loader re-applies the elevation perk. worldY defaults 0 / wallMounted false for ground.
@@ -980,6 +1002,12 @@ namespace DeNelle.Village
                     $"Place: placed structure '{_armed.id}' at cell ({cell.x},{cell.y}) has NO Renderer — " +
                     "it will be INVISIBLE (placement committed; check the StructureFactory prefab).");
 
+            // F8-39: loaded count AFTER the single Spawn. A delta of exactly +1 vs the BEFORE line
+            // confirms placement adds ONE piece; a larger jump means a full rebuild rode this place.
+            FlowTrace.Step("BaseLayout",
+                $"Place: loader.Loaded count AFTER spawn = {loader.Loaded.Count} (expected +1 over the BEFORE line). " +
+                "If the owner sees ALL prior towers reappear on this single place, they were HIDDEN/torn-down " +
+                "earlier (see [Flow:Structures] teardown lines) and this add merely re-triggered their visual.");
             // Charge ONLY AFTER the committed valid placement (WO-131): the persisted
             // multi-resource ledger (EconomyService → GameState-backed Crystals/Food +
             // in-session Wood/Iron). TrySpend is atomic; it can't fail here (we re-checked

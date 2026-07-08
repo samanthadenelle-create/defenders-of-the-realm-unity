@@ -103,6 +103,81 @@ namespace DeNelle.Core.Diagnostics
             FlowTrace.Step("DeathTrace", message);
         }
 
+        // ── F8-15 self-reporting DEFECTS (owner 2026-07-08 "why so many screens") ──────
+        // Two known death-flow defects that the next run must PROVE, not infer:
+        //   • an end-state popup that opens WITHOUT registering with the PanelManager
+        //     arbiter (so the single-modal law can't swap it / can't dismiss it) — Warn.
+        //   • GameOverScreen pausing Time.timeScale=0 and (potentially) never restoring it —
+        //     freeze step-in / restore step-out, plus a stuck-freeze Warn from the LateUpdate poll.
+
+        /// <summary>A screen opened WITHOUT going through PanelManager (the arbiter never
+        /// recorded it). This is the known F8-15 defect — end-states bypass the single-modal
+        /// arbiter — so it self-reports at Warn level while the death window is live.</summary>
+        public static void ScreenBypassedArbiter(string panelName, string by)
+        {
+            if (!Active) return;
+            FlowTrace.Warn("DeathTrace",
+                $"SCREEN OPENED *BYPASSING* PanelManager: {panelName} by {by} — no arbiter registration " +
+                "(single-modal law can't swap/dismiss it; this is the known death-popup-stacking defect)");
+        }
+
+        // Freeze state (unscaled clock so it advances even while Time.timeScale==0).
+        private static bool   _freezeActive;
+        private static float  _freezeAtUnscaled;
+        private static string _freezeBy = "?";
+        private static bool   _freezeStuckWarned;
+
+        /// <summary>Time.timeScale was set to 0 (hard pause). Step-in of the freeze; records the
+        /// pending freeze so a missing restore self-reports via <see cref="PollFreezeStuck"/>.</summary>
+        public static void TimeScaleFroze(string by, string context)
+        {
+            if (!FlowTrace.Enabled) return;
+            _freezeActive      = true;
+            _freezeAtUnscaled  = Time.unscaledTime;
+            _freezeBy          = string.IsNullOrEmpty(by) ? "?" : by;
+            _freezeStuckWarned = false;
+            FlowTrace.Step("DeathTrace",
+                $"TIMESCALE -> 0 (FROZEN, step-in) by {_freezeBy} — {context}");
+        }
+
+        /// <summary>Time.timeScale restored to running. Step-out of the freeze; pairs with the
+        /// most recent <see cref="TimeScaleFroze"/> and reports how long the pause held.</summary>
+        public static void TimeScaleRestored(string by)
+        {
+            if (!FlowTrace.Enabled) return;
+            if (!_freezeActive)
+            {
+                FlowTrace.Step("DeathTrace",
+                    $"TIMESCALE -> 1 (RESTORED, step-out) by {(string.IsNullOrEmpty(by) ? "?" : by)} (no freeze was pending)");
+                return;
+            }
+            float held = Time.unscaledTime - _freezeAtUnscaled;
+            _freezeActive = false;
+            FlowTrace.Step("DeathTrace",
+                $"TIMESCALE -> 1 (RESTORED, step-out) by {(string.IsNullOrEmpty(by) ? "?" : by)} " +
+                $"— pause held {held:F1}s (frozen by {_freezeBy})");
+        }
+
+        /// <summary>Seconds a hard pause may hold before the poll flags it as never-restored.</summary>
+        private const float FreezeStuckSeconds = 4f;
+
+        /// <summary>Called each frame from the hero's LateUpdate while the window is live (LateUpdate
+        /// runs even at timeScale==0). If a freeze has held past <see cref="FreezeStuckSeconds"/> of
+        /// UNSCALED time and Time.timeScale is still 0, Warn ONCE — the self-report that the pause
+        /// was set and never restored within the death flow.</summary>
+        public static void PollFreezeStuck()
+        {
+            if (!_freezeActive || _freezeStuckWarned) return;
+            if (!FlowTrace.Enabled) return;
+            if (Time.timeScale > 0.0001f) return;   // still 0 == still frozen
+            if (Time.unscaledTime - _freezeAtUnscaled < FreezeStuckSeconds) return;
+            _freezeStuckWarned = true;
+            FlowTrace.Warn("DeathTrace",
+                $"TIMESCALE STILL 0 after {Time.unscaledTime - _freezeAtUnscaled:F1}s — {_freezeBy} froze time " +
+                "and it has NOT been restored within the death flow (only Retry / sceneLoaded clears it; " +
+                "any scaled-time respawn/down-beat coroutine is stalled behind this pause)");
+        }
+
         /// <summary>Formats CallerMemberName + CallerFilePath into "Class.Method".</summary>
         public static string Describe(string memberName, string filePath)
         {

@@ -69,8 +69,15 @@ namespace DeNelle.Village.UI
             if (vm == null) return null;
             if (DeathTrace.Active)
             {
-                DeathTrace.ScreenOpened("EndState '" + vm.Title + "'",
-                    DeathTrace.Describe(openerMember, openerFile));
+                string opener = DeathTrace.Describe(openerMember, openerFile);
+                DeathTrace.ScreenOpened("EndState '" + vm.Title + "'", opener);
+                // F8-15 KNOWN DEFECT self-report: EndStateView.Show NEVER calls
+                // PanelManager.NotifyOpened — it opens its own modal canvas directly. So every
+                // end-state popup BYPASSES the single-modal arbiter (the arbiter can neither swap
+                // it out nor dismiss it), which is exactly why death popups stack. Warn on it so
+                // the next run PROVES the bypass instead of us inferring it. (Instrument only —
+                // NOT routed through PanelManager here; that is the fix, tracked separately.)
+                DeathTrace.ScreenBypassedArbiter("EndState '" + vm.Title + "'", opener);
                 if (_open != null)
                     DeathTrace.ScreenClosed("EndState '" + (_open._vm != null ? _open._vm.Title : "?") + "'",
                         "EndStateView.Show (replaced by '" + vm.Title + "')");
@@ -501,6 +508,9 @@ namespace DeNelle.Village.UI
             if (_fired) return;
             _fired = true;
             FlowTrace.Step("EndState", $"{_vm.Kind} primary fired: action={_vm.PrimaryRoute}");
+            // F8-15: the continue/respawn path OUT of the death screen — name the route the
+            // player chose so the death window shows the full open->close lifecycle.
+            DeathTrace.Note($"END-STATE CONTINUE: '{_vm.Title}' primary fired -> action={_vm.PrimaryRoute} (screen tearing down)");
             var act = _vm.Primary;
             _vm.Primary = null;
             act?.Invoke();
@@ -526,6 +536,11 @@ namespace DeNelle.Village.UI
             SceneManager.sceneLoaded -= OnSceneLoaded;
             if (_open == this)
             {
+                // F8-15: close step-out for the death window — pairs with the ScreenOpened above so
+                // the chain shows each end-state's full open->close lifecycle (which popup outlived which).
+                if (DeathTrace.Active)
+                    DeathTrace.ScreenClosed("EndState '" + (_vm != null ? _vm.Title : "?") + "'",
+                        "EndStateView.OnDestroy" + (_fired ? " (primary fired)" : " (torn down without firing)"));
                 _open = null;
                 // P23 (A4.6): the decision node closed — the posture arc moves on.
                 DeNelle.Core.HudModel.PostureSignals.SetEndState(false);

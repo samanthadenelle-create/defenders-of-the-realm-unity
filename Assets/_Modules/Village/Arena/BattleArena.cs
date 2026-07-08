@@ -446,6 +446,9 @@ namespace DeNelle.Village.Arena
         // NO structures (owner: "no mapping of structures, just a large enough arena").
         private void BuildArena(string theme)
         {
+            // F8-37 STEP-IN (§12): name the build entry + theme so the trace opens the arena
+            // BUILD/DRESS flow the giant untextured "pole" is captured inside.
+            FlowTrace.Step("BattleArena", $"BuildArena ENTER theme='{theme ?? "<null>"}' at {ArenaCentre} (dressing the kite stage).");
             _arenaRoot = new GameObject("[BattleArena_Stage]");
             _arenaRoot.transform.position = ArenaCentre;
 
@@ -455,6 +458,8 @@ namespace DeNelle.Village.Arena
             // biome only drives the painted backdrop + the per-biome particles.
             int threat = _current != null ? _current.Threat : 0;
             _activeBiome = ArenaBiomeDressing.ResolveBiome(theme, threat);
+            // F8-37: the SKIN/theme chosen for this stage (the branch the dressing takes).
+            FlowTrace.Step("BattleArena", $"BuildArena SKIN resolved biome='{_activeBiome}' (theme='{theme ?? "<null>"}' threat={threat}).");
 
             // WO-506: the REAL authored landscape. Load + instantiate the forest-clearing
             // PREFAB (Resources/Arena/ForestClearingArena, built by ArenaPrefabBuilder) onto
@@ -520,7 +525,103 @@ namespace DeNelle.Village.Arena
             if ((theme ?? "outerworld").ToLowerInvariant() == "cavern")
                 ApplyCavernMood();
 
+            // F8-37 (§12): with the whole stage now dressed (landscape prefab + walls + backdrop +
+            // bloom + particles), AUDIT every staged MESH so a headless/felt run NAMES the giant
+            // untextured "arena pole" instead of guessing. This is the trace that identifies it even
+            // WITHOUT a render (it reads mesh name + world size + material state, not pixels).
+            AuditArenaRenderers();
+
             FlowTrace.Step("BattleArena", $"BuildArena: open kite floor {ArenaHalfWidth * 2f}x{ArenaHalfDepth * 2f} at {ArenaCentre} (theme '{theme}', no structures).");
+        }
+
+        // ---------------------------------------------------------------------
+        //  F8-37 INSTRUMENTATION (§12, INSTRUMENT-ONLY — NO fix): audit every mesh
+        //  renderer staged under _arenaRoot so a run PROVES what the giant untextured
+        //  "arena pole" is and where it was created, rather than inferring it.
+        //  Per renderer we log: root-relative PATH, MESH name (a "Cylinder"/"Capsule"
+        //  primitive is the prime pole suspect AND is provable from the mesh name with
+        //  NO render), world-space SIZE (proves "giant"), and material/shader/texture
+        //  state. Classification:
+        //    • an untextured/default/error material            -> Warn (soft suspect)
+        //    • ANY Cylinder/Capsule mesh (never legitimately built in this arena path)
+        //                                                       -> Fail (loud -> break-log; the pole)
+        //  Guard.TryEach so one bad renderer NAMES itself instead of blanking the audit.
+        //  This adds ZERO gameplay/logic change — it only reads + logs.
+        // ---------------------------------------------------------------------
+        private void AuditArenaRenderers()
+        {
+            if (_arenaRoot == null)
+            {
+                FlowTrace.Warn("BattleArena", "AuditArenaRenderers: _arenaRoot null - nothing to audit.");
+                return;
+            }
+
+            var mrs = _arenaRoot.GetComponentsInChildren<MeshRenderer>(true);
+            var smrs = _arenaRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            var all = new List<Renderer>(mrs.Length + smrs.Length);
+            all.AddRange(mrs);
+            all.AddRange(smrs);
+            FlowTrace.Step("BattleArena", $"AUDIT arena renderers: mesh={mrs.Length} skinned={smrs.Length} (naming any untextured primitive -> F8-37 pole).");
+
+            var res = Guard.TryEach("BattleArena", "audit arena renderer", all, r =>
+            {
+                if (r == null) return;
+                string path = RendererPath(r.transform);
+
+                // Mesh name reveals a CreatePrimitive Cylinder/Capsule/Cube/Sphere/Plane/Quad
+                // (a runtime primitive) vs an imported FBX mesh (the authored props).
+                string meshName = "<none>";
+                var mf = r.GetComponent<MeshFilter>();
+                if (mf != null && mf.sharedMesh != null) meshName = mf.sharedMesh.name;
+                else if (r is SkinnedMeshRenderer smr && smr.sharedMesh != null) meshName = smr.sharedMesh.name;
+
+                // World-space size proves "giant" (the pole dwarfs the ~1-2m props).
+                Vector3 wsize = r.bounds.size;
+
+                // Material / shader / texture state.
+                var mat = r.sharedMaterial;
+                string matName = mat != null ? mat.name : "<null>";
+                string shName = (mat != null && mat.shader != null) ? mat.shader.name : "<null>";
+                bool errorShader = shName.IndexOf("InternalErrorShader", StringComparison.OrdinalIgnoreCase) >= 0;
+                bool defaultMat = matName.IndexOf("Default-", StringComparison.OrdinalIgnoreCase) >= 0
+                               || matName.IndexOf("Default_", StringComparison.OrdinalIgnoreCase) >= 0;
+                bool hasTex = mat != null &&
+                              ((mat.HasProperty("_BaseMap") && mat.GetTexture("_BaseMap") != null)
+                            || (mat.HasProperty("_MainTex") && mat.GetTexture("_MainTex") != null));
+                bool untextured = mat == null || errorShader || defaultMat || !hasTex;
+
+                string mlow = meshName.ToLowerInvariant();
+                bool poleShape = mlow == "cylinder" || mlow == "capsule";
+
+                string line = $"path='{path}' mesh='{meshName}' size=({wsize.x:0.0},{wsize.y:0.0},{wsize.z:0.0})" +
+                              $" mat='{matName}' shader='{shName}' textured={hasTex}";
+
+                // A Cylinder/Capsule is NEVER built by the arena BUILD/DRESS path (it makes only
+                // Plane + Quads + FBX props) -> its mere presence IS the F8-37 finding. Fail loud
+                // (error-level -> break-log.jsonl + screenshot) so one headless run pins it.
+                if (poleShape)
+                    FlowTrace.Fail("BattleArena", "F8-37 ARENA POLE SUSPECT untextured=" + untextured + " " + line);
+                else if (untextured)
+                    FlowTrace.Warn("BattleArena", "F8-37 untextured/default-material renderer (soft suspect): " + line);
+                else
+                    FlowTrace.Step("BattleArena", "AUDIT " + line);
+            });
+            FlowTrace.Step("BattleArena", $"AUDIT arena renderers done: {res.built} audited, {res.failed} threw.");
+        }
+
+        // Root-relative hierarchy path for the F8-37 audit line (ASCII, depth-capped).
+        private static string RendererPath(Transform t)
+        {
+            if (t == null) return "<null>";
+            var sb = new System.Text.StringBuilder(t.name);
+            var p = t.parent;
+            int guard = 0;
+            while (p != null && guard++ < 16)
+            {
+                sb.Insert(0, p.name + "/");
+                p = p.parent;
+            }
+            return sb.ToString();
         }
 
         // ---------------------------------------------------------------------

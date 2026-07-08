@@ -72,6 +72,13 @@ namespace DeNelle.Village
         {
             if (Instance != null && Instance != this) { Destroy(this); return; }
             Instance = this;
+            // F8-39: a FRESH loader instance in Awake means the scene (re)loaded — the death→EVAC
+            // GoCastle route or any hub load spins up a new loader whose Start() decides the replay.
+            // Capturing the scene here shows whether the respawn came back into a scene that WILL
+            // replay the base (village) or one that SKIPS it (hub-scope guard) — the "towers gone" split.
+            FlowTrace.Step("BaseLayout",
+                $"Awake: loader instance created in scene '{SceneManager.GetActiveScene().name}' " +
+                $"(_loadedOnce={_loadedOnce}) — Start() will decide replay.");
         }
 
         private void OnDestroy()
@@ -81,6 +88,14 @@ namespace DeNelle.Village
 
         private void Start()
         {
+            // F8-39: name the count the loader is about to (not) replay, so a post-respawn/reload
+            // capture proves whether the visual rebuild fires (Rebuild logs the built count) or is
+            // skipped (hub guard / empty layout Warn). Pairs with LoadFromState's own lines.
+            var st0 = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            int persisted = st0 != null && st0.BaseLayout != null ? st0.BaseLayout.Count : 0;
+            FlowTrace.Step("BaseLayout",
+                $"Start: loadOnStart={_loadOnStart}, persisted BaseLayout={persisted}, live loaded={_loaded.Count}, " +
+                $"scene='{SceneManager.GetActiveScene().name}'.");
             if (_loadOnStart) LoadFromState();
         }
 
@@ -166,6 +181,13 @@ namespace DeNelle.Village
         /// <summary>Destroy currently-loaded structures and free their grid cells.</summary>
         public void ClearLoaded()
         {
+            // F8-39: this is the ONLY controlled mass-destroy path (called by Rebuild). Log the
+            // count + caller so a PlacedStructure.OnDestroy attributed to ClearLoaded reads as
+            // EXPECTED, and a teardown attributed to anything else during a death is the defect.
+            if (_loaded.Count > 0)
+                FlowTrace.Step("Structures",
+                    $"ClearLoaded: destroying {_loaded.Count} loaded structure(s) (controlled rebuild teardown) " +
+                    $"by {DeathTrace.Caller(1)} in scene '{SceneManager.GetActiveScene().name}'.");
             var grid = PlacementGrid.Instance;
             foreach (var ps in _loaded)
             {

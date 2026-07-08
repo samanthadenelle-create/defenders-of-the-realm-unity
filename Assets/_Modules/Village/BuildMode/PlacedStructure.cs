@@ -13,6 +13,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.State;
+using DeNelle.Core.Diagnostics;   // F8-39: teardown/hide monitor — prove whether DEATH tears structures down
 
 namespace DeNelle.Village
 {
@@ -56,6 +57,46 @@ namespace DeNelle.Village
         /// <summary>Snapshot this live structure into its persisted record.</summary>
         public PlacedStructureData ToSaveData() =>
             new PlacedStructureData(itemId, gridCell.x, gridCell.y, yawSteps, level, 0f, worldY, wallMounted);
+
+        // ── F8-39 TEARDOWN / HIDE MONITOR (towers vanish on death, all return on next placement) ──
+        // The ticket's split: do the placed structures get DESTROYED / HIDDEN when the hero dies
+        // (a death-path teardown), or does the respawn simply skip the visual rebuild? These
+        // MonoBehaviour lifecycle hooks answer it from data: every time a placed structure is
+        // destroyed or disabled we log WHO did it (stack-derived caller) with a [Flow:Structures]
+        // line, and — while the DeathTrace forensic window is live — an additional [Flow:DeathTrace]
+        // line so the death capture shows the teardown inline with the death sequence. A DESTROY
+        // whose caller is ClearLoaded/Rebuild (a controlled mass-rebuild) is EXPECTED; a destroy/
+        // disable attributed to a scene-unload or a death listener during the window is the defect.
+        // Instrumentation only — no gameplay state is read here to make a decision.
+        private static bool s_appQuitting;   // suppress the end-of-play teardown storm
+
+        private void OnDisable()
+        {
+            if (s_appQuitting || !FlowTrace.Enabled) return;
+            // OnDisable fires on a genuine SetActive(false)/hide AND on scene-unload/destroy. The
+            // caller frame distinguishes "someone hid my tower" from ordinary teardown.
+            string by = DeathTrace.Caller(1);
+            FlowTrace.Throttle("Structures", "hide/" + itemId, 1f,
+                $"PlacedStructure HIDDEN/disabled id='{itemId}' cell=({gridCell.x},{gridCell.y}) " +
+                $"activeInHierarchy={gameObject.activeInHierarchy} by {by}");
+            if (DeathTrace.Active)
+                DeathTrace.Note($"STRUCTURE HIDDEN/disabled: id='{itemId}' cell=({gridCell.x},{gridCell.y}) by {by} " +
+                                "— if the hero just died, THIS is a tower vanishing on death.");
+        }
+
+        private void OnDestroy()
+        {
+            if (s_appQuitting || !FlowTrace.Enabled) return;
+            string by = DeathTrace.Caller(1);
+            FlowTrace.Step("Structures",
+                $"PlacedStructure DESTROYED id='{itemId}' cell=({gridCell.x},{gridCell.y}) by {by} " +
+                "(ClearLoaded/Rebuild = expected mass-rebuild; any other caller during a death is the F8-39 teardown).");
+            if (DeathTrace.Active)
+                DeathTrace.Note($"STRUCTURE DESTROYED: id='{itemId}' cell=({gridCell.x},{gridCell.y}) by {by} " +
+                                "— a placed tower is being torn down inside the death window.");
+        }
+
+        private void OnApplicationQuit() => s_appQuitting = true;
 
         // ── Selection highlight (WO-108 P2) ──────────────────────────────────────
         // A non-destructive emissive tint via a shared MaterialPropertyBlock — the

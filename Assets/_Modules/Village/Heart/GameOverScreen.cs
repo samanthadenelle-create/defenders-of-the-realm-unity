@@ -93,6 +93,9 @@ namespace DeNelle.Village
             // this class only resets its trigger state for the incoming scene.
             _shown = false;
             Time.timeScale = 1f;
+            // F8-15: freeze STEP-OUT on the scene-swap restore path (raid-evac / route out of the
+            // paused defeat screen re-runs time here). Pairs with GameOverScreen.Show's freeze.
+            DeathTrace.TimeScaleRestored("GameOverScreen.OnSceneLoaded('" + scene.name + "')");
             _heart = null;
             _hero = null;
             ClearCustomActions(); // WO-320: don't let a caller retry/leave action survive the scene swap
@@ -190,9 +193,11 @@ namespace DeNelle.Village
             if (isHeartDestroyed)
                 CoreServices.Audio?.PlayMusic(DeNelle.Core.Audio.MusicTrack.Defeat);
             // F8-15 death forensic window: the hub game-over PAUSES time here — anything queued
-            // after this (respawn coroutine, warps) freezes until Retry. Window-gated note.
-            DeathTrace.Note($"GameOverScreen.Show('{title}'): Time.timeScale=0 (paused) in '{_defeatScene}' — scaled-time respawn/down-beat coroutines freeze until Retry");
+            // after this (respawn coroutine, warps) freezes until Retry. Freeze STEP-IN: records
+            // the pending freeze so DeathTrace.PollFreezeStuck self-reports if it is never restored.
             Time.timeScale = 0f;
+            DeathTrace.TimeScaleFroze("GameOverScreen.Show",
+                $"'{title}' in '{_defeatScene}' — scaled-time respawn/down-beat coroutines freeze until Retry/sceneLoaded");
 
             // WO-B: the ONE shared Obsidian end-state template renders the screen
             // (real EventSystem buttons — EndStateView ensures one; the old manual
@@ -207,6 +212,10 @@ namespace DeNelle.Village
         private void OnRetry()
         {
             Time.timeScale = 1f;
+            // F8-15: freeze STEP-OUT — the player chose Retry, unpausing the death flow. This is the
+            // continue path out of the paused game-over; pairs with GameOverScreen.Show's freeze.
+            DeathTrace.TimeScaleRestored("GameOverScreen.OnRetry");
+            DeathTrace.Note($"RETRY chosen -> unpause + reload/route (scene='{_defeatScene}', customRetry={( _onRetry != null)})");
             _shown = false;
             // WO-320: prefer the caller-supplied retry (e.g. reload the DTT scene);
             // onLeave is the legacy secondary — used only as a fallback route when a

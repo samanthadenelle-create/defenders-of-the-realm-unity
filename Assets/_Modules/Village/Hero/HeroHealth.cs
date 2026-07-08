@@ -331,6 +331,9 @@ namespace DeNelle.Village
         private void LateUpdate()
         {
             if (!DeNelle.Core.Diagnostics.DeathTrace.Active) { _deathTraceHasPos = false; return; }
+            // F8-15: LateUpdate runs even at Time.timeScale==0, so it is the ticker that catches a
+            // hub game-over pause that was set and never restored (GameOverScreen freeze). Self-reports once.
+            DeNelle.Core.Diagnostics.DeathTrace.PollFreezeStuck();
             Vector3 now = transform.position;
             if (_deathTraceHasPos &&
                 (now - _deathTraceLastPos).sqrMagnitude > DeathTraceJumpMeters * DeathTraceJumpMeters)
@@ -484,6 +487,9 @@ namespace DeNelle.Village
                 // follow. downSeconds = how long the fallen hero holds before respawn/evac.
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Death",
                     "lethal hit: downSeconds=" + _downSeconds.ToString("F1") +
+                    " | hero state: hp=" + _hp.ToString("F0") + "/" + MaxHp.ToString("F0") +
+                    " pos=" + transform.position + " lastDmgFrom=" + _lastDamageSourceWorld +
+                    " enemyOwnedScene=" + DeNelle.Village.SceneOwnership.IsEnemyOwned +
                     " | OnDeath listeners=[" + ListenerNames(OnDeath) + "]" +
                     " | OnDied listeners=[" + ListenerNames(OnDied) + "]");
                 // F8-15 extension (owner 2026-07-08 "capture why so many screens + moving character

@@ -392,7 +392,8 @@ namespace DeNelle.DevTools
         private IEnumerator AssertEncounterRealPath()
         {
             const string Tag = "Auto";
-            if (_hero == null) { _lastDetail = "no hero - skipped"; FlowTrace.Warn(Tag, "AssertEncounterRealPath: no hero - skipped."); yield break; }
+            EnsureHero("AssertEncounterBattle");   // re-resolve a post-stream hero (RCA 2026-07-08) — unlock overworld coverage
+            if (_hero == null) { _lastDetail = "no hero - skipped"; FlowTrace.Warn(Tag, "AssertEncounterRealPath: no hero - skipped (EnsureHero named the reason above)."); yield break; }
 
             // 1) Enable the (default-OFF) feature for the assertion; restore after.
             int prevFlag = PlayerPrefs.GetInt("ff.overworldencounter", -1);
@@ -593,7 +594,8 @@ namespace DeNelle.DevTools
         private IEnumerator AssertScatterRecords()
         {
             const string Tag = "Auto";
-            if (_hero == null) { _lastDetail = "no hero - skipped"; FlowTrace.Warn(Tag, "AssertScatterRecords: no hero - skipped."); yield break; }
+            EnsureHero("AssertScatterRecords");   // re-resolve a post-stream hero (RCA 2026-07-08) — unlock overworld coverage
+            if (_hero == null) { _lastDetail = "no hero - skipped"; FlowTrace.Warn(Tag, "AssertScatterRecords: no hero - skipped (EnsureHero named the reason above)."); yield break; }
 
             int prevFlag = PlayerPrefs.GetInt("ff.overworldencounter", -1);
             PlayerPrefs.SetInt("ff.overworldencounter", 1);
@@ -2106,6 +2108,62 @@ namespace DeNelle.DevTools
                 yield break;
             }
             FlowTrace.Step("Auto", $"ResolveHero: hero '{_hero.name}' at {_hero.transform.position}.");
+        }
+
+        // =====================================================================
+        //  EnsureHero — LATE (overworld) hero re-resolve + self-reporting skip.
+        //  RCA 2026-07-08 (the "overworld probes all skip: no hero" linchpin):
+        //  the driver resolves _hero EXACTLY ONCE in ResolveHero and only ever
+        //  re-resolves it in the popup-recovery reload path. The town probes run
+        //  early (WalkToEachGate…AssertCompassMarks) while that cached handle is
+        //  still alive, so they find the hero. Between them and the overworld
+        //  probes a scene stream/unload (WorldSceneLoader additive OuterWorld,
+        //  a wave/celebration swap, or the popup-recovery reload) DESTROYS the
+        //  GameObject _hero points at — Unity-fake-nulls the cached reference —
+        //  and NOTHING re-resolves it, so AttemptExitCastle / HomeReturnRoundTrip
+        //  / WalkToOuterWorldOutpost / AssertScatterRecords / AssertEncounterBattle
+        //  each read _hero==null and skip. The sibling AutoPilotProbes component
+        //  never went hero-blind because its RefreshHero re-runs the SAME lookup
+        //  every 2s (AutoPilotProbes.cs:339); the DRIVER lacked that refresh —
+        //  THAT is the difference between the town probes (pass) and the overworld
+        //  probes (skip).
+        //
+        //  This re-runs the CANONICAL lookup ResolveHero uses
+        //  (FindAnyObjectByType<HeroLocomotion>) so a fresh post-stream hero
+        //  instance is picked up and coverage UNLOCKS. HARNESS-INTEGRITY: it never
+        //  emits a Fail — a genuinely hero-less state returns false and the caller
+        //  keeps its existing NAMED Warn/skip, so a legitimately-blocked probe
+        //  reports a named skip, never a false ticket. It only finds the hero
+        //  wherever it currently lives; it does NOT cross the WO-453 warp/seam.
+        //  Returns true when _hero is (now) non-null.
+        // =====================================================================
+        private bool EnsureHero(string phase)
+        {
+            if (_hero != null) return true;   // cached handle still alive — nothing to do
+
+            var found = UnityEngine.Object.FindAnyObjectByType<HeroLocomotion>();
+            string active = ActiveScene();
+            int loaded = SceneManager.sceneCount;
+            if (found != null)
+            {
+                _hero = found;
+                FlowTrace.Step("Auto", $"EnsureHero[{phase}]: cached hero handle was STALE (destroyed by a scene stream/reload since ResolveHero) — " +
+                    $"RE-RESOLVED '{found.name}' in scene '{found.gameObject.scene.name}' at {found.transform.position} " +
+                    $"(active '{active}', {loaded} scene(s) loaded). Overworld coverage proceeds.");
+                return true;
+            }
+
+            // Genuinely no HeroLocomotion in ANY loaded scene — NAME the reason (not a bare skip).
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < loaded; i++)
+            {
+                var sc = SceneManager.GetSceneAt(i);
+                sb.Append(sc.name);
+                if (i < loaded - 1) sb.Append(", ");
+            }
+            FlowTrace.Warn("Auto", $"EnsureHero[{phase}]: no HeroLocomotion in ANY loaded scene " +
+                $"(active '{active}', loaded=[{sb}]) — the hero was destroyed and not re-spawned; the phase legitimately skips (named, not a false ticket).");
+            return false;
         }
 
         // =====================================================================
@@ -3768,6 +3826,7 @@ namespace DeNelle.DevTools
         // =====================================================================
         private IEnumerator AttemptExitCastle()
         {
+            EnsureHero("AttemptExitCastle");   // re-resolve a post-stream hero (RCA 2026-07-08) — unlock overworld coverage
             var gates = UnityEngine.Object.FindObjectsByType<SceneTransitionTrigger>();
             if (gates == null || gates.Length == 0)
             {
@@ -4689,10 +4748,11 @@ namespace DeNelle.DevTools
             const float ReturnLegBudget   = 40f;  // leg 2: navigate back + re-enter (25+15+40 < HomeReturnTimeout-2)
             float t0 = Time.realtimeSinceStartup;
 
+            EnsureHero("HomeReturnRoundTrip");   // re-resolve a post-stream hero (RCA 2026-07-08) — unlock overworld coverage
             if (_hero == null)
             {
                 // The ONLY remaining SKIP: with no hero there is nothing to drive.
-                FlowTrace.Warn("Auto", "HomeReturnRoundTrip: no hero — impossible to attempt, skipping.");
+                FlowTrace.Warn("Auto", "HomeReturnRoundTrip: no hero — impossible to attempt, skipping (EnsureHero named the reason above).");
                 _lastDetail = "skipped (no hero)";
                 _homeReturnVerdicts.Add(new HomeReturnResult { gate = "n/a", verdict = "SKIPPED", seconds = 0f, detail = _lastDetail });
                 yield break;
@@ -4898,9 +4958,10 @@ namespace DeNelle.DevTools
             var rng = new System.Random(seed);
             FlowTrace.Step("Auto", $"WalkToOuterWorldOutpost seed={seed}");
 
+            EnsureHero("WalkToOuterWorldOutpost");   // re-resolve a post-stream hero (RCA 2026-07-08) — unlock overworld coverage
             if (_hero == null)
             {
-                FlowTrace.Warn("Auto", "WalkToOuterWorldOutpost: no hero — skipping.");
+                FlowTrace.Warn("Auto", "WalkToOuterWorldOutpost: no hero — skipping (EnsureHero named the reason above).");
                 _lastDetail = "no hero — skipped";
                 yield break;
             }

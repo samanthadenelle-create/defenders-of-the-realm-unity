@@ -936,6 +936,18 @@ namespace DeNelle.Village
         {
             if (_agent == null) return;
 
+            // F8-38 money gate: DriveNav runs EVERY frame with NO _casting awareness. RootedCast sets
+            // agent.isStopped=true, but unless a live contact-target lock holds it (the branch below),
+            // this method un-stops + re-paths within the same frame -> the caster WALKS while channeling.
+            // This trace PROVES it: velocity>0 (or isStopped flips to False) while _casting == the bug.
+            if (_casting)
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyCast", $"drivenav-casting-{_enemyId}", 0.5f,
+                    $"{_enemyId}: DriveNav TICK mid-cast — " +
+                    $"isStopped={((_agent.isOnNavMesh) ? _agent.isStopped.ToString() : "n/a")} " +
+                    $"vel={((_agent.isOnNavMesh) ? _agent.velocity.magnitude.ToString("F2") : "n/a")}m/s " +
+                    $"contactLock={(_currentTarget != null && _currentTarget.IsAlive)} " +
+                    "(DriveNav has NO _casting guard -> it may override the cast root this frame)");
+
             // HEARTLESS HOOK (overworld encounter rep) — DATA-PROVEN root of "no chase" 2026-06-23:
             // a rep has NO Heart (Configure(...,null)), so the old `_heart == null` bail returned
             // IMMEDIATELY and the agent was NEVER driven -> the rep stood still (no roam, no chase)
@@ -1486,6 +1498,14 @@ namespace DeNelle.Village
                 _agent.isStopped = true;
             }
 
+            // F8-38 gate-in (cast-start): record that the cast ASKED the agent to stop. The next
+            // per-frame DriveNav tick has NO _casting awareness, so pair this with the DriveNav
+            // mid-cast trace to see whether the root actually holds for the whole channel.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("EnemyCast",
+                $"{_enemyId}: CAST-START windUp={windUp:F2}s -> agent.isStopped set TRUE " +
+                $"(wasStopped={wasStopped}, onNavMesh={(_agent != null && _agent.isOnNavMesh)}, " +
+                $"contactTarget={((_currentTarget as MonoBehaviour)?.name ?? "<null>")}). Root must hold until CAST-END.");
+
             // Telegraph: wind-up pose + audio charge cue.
             _actor?.PlayWindUp();
             EnemyCombatAudio.PlayCastCharge();
@@ -1536,8 +1556,15 @@ namespace DeNelle.Village
             }
 
             // Resume movement (only if WE rooted it — don't un-stop a contact-locked agent).
-            if (_agent != null && _agent.isOnNavMesh && !wasStopped && _currentTarget == null)
+            bool casterResumed = _agent != null && _agent.isOnNavMesh && !wasStopped && _currentTarget == null;
+            if (casterResumed)
                 _agent.isStopped = false;
+
+            // F8-38 gate-out (cast-end): record the final root state so the channel window is
+            // bounded in the trace (pair with CAST-START + the DriveNav mid-cast line).
+            DeNelle.Core.Diagnostics.FlowTrace.Step("EnemyCast",
+                $"{_enemyId}: CAST-END resumedByCast={casterResumed} " +
+                $"finalIsStopped={((_agent != null && _agent.isOnNavMesh) ? _agent.isStopped.ToString() : "n/a")}");
 
             // P4 cast seam — the wind-up is complete (orb released / damage committed).
             CastEnded?.Invoke(this);
@@ -1560,12 +1587,29 @@ namespace DeNelle.Village
         /// </summary>
         private IDamageableStructure ProbeForStructure()
         {
+            // F8-41 gate-in: name the acquisition params so a capture shows the mask/radius the
+            // whole structure-target probe uses (fwd SphereCast dist, all-direction sweep radius,
+            // the layer mask, and whether the awareness flag routes us into the sweep at all).
+            DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"probe-in-{_enemyId}", 2f,
+                $"{_enemyId}: ProbeForStructure ENTRY fwdProbeDist={_contactProbeDistance:F1}m " +
+                $"sweepRadius={_structureSweepRadius:F1}m mask=~0(all layers) " +
+                $"awareFlag={DeNelle.Core.FeatureFlags.EnemyStructureAwareness} heart={(_heart != null)}");
+
             // 1. Legacy forward probe — keeps hero contact damage + path-blocking structures.
             IDamageableStructure forward = ProbeForStructureForward();
             if (forward != null) return forward;
 
             // Flag OFF => exact legacy (forward-only) behaviour — fully reversible.
-            if (!DeNelle.Core.FeatureFlags.EnemyStructureAwareness) return null;
+            if (!DeNelle.Core.FeatureFlags.EnemyStructureAwareness)
+            {
+                // F8-41 root candidate: with the flag OFF the all-direction sweep never runs, so a
+                // brain-less wave enemy only ever hits a structure it is LITERALLY facing -> marches
+                // past every side defence. Once (not per-frame) — one line per enemy is enough proof.
+                DeNelle.Core.Diagnostics.FlowTrace.Once("EnemyAggro", $"awareflag-off-{_enemyId}",
+                    $"{_enemyId}: ff.enemystructureaware OFF -> forward-probe-only, structure sweep SKIPPED " +
+                    "(F8-41 root candidate: no off-axis defence acquisition)");
+                return null;
+            }
 
             // HERO-PRIMARY: while the hero is near, keep chasing it — do NOT peel onto a
             // side structure. (A structure literally ahead was already returned above.)
@@ -1611,6 +1655,11 @@ namespace DeNelle.Village
                 var structure = hit.collider.GetComponentInParent<IDamageableStructure>();
                 if (structure != null && structure.IsAlive)
                     return structure;
+                // F8-41 gate: the forward cast HIT geometry but it carried no live structure —
+                // name why (no interface on parent vs dead) so the null return is not silent.
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"fwd-reject-{_enemyId}", 2f,
+                    $"{_enemyId}: forward SphereCast HIT '{hit.collider.name}' but rejected " +
+                    $"({(structure == null ? "no IDamageableStructure on parent" : "structure is DEAD")}) -> no forward target");
             }
             return null;
         }
@@ -1652,18 +1701,32 @@ namespace DeNelle.Village
 
             IDamageableStructure nearest = null;
             float nearestSqr = float.MaxValue;
+            // F8-41 reject tally — split silent `continue`s into named reasons so a capture shows
+            // WHY the sweep found nothing: count=0 (radius too small / no colliders) vs all-filtered
+            // (only hero/dead/no-component in range). Behaviour-neutral: same accepts, same `nearest`.
+            int rejNull = 0, rejNoComp = 0, rejDead = 0, rejHero = 0, accepted = 0;
             for (int i = 0; i < count; i++)
             {
                 var c = _structureScanBuffer[i];
-                if (c == null) continue;
+                if (c == null) { rejNull++; continue; }
                 var structure = c.GetComponentInParent<IDamageableStructure>();
-                if (structure == null || !structure.IsAlive) continue;
+                if (structure == null) { rejNoComp++; continue; }
+                if (!structure.IsAlive) { rejDead++; continue; }
                 // The hero implements IDamageableStructure — never grab it via the siege
                 // sweep (the verified hero-aggro path owns hero engagement).
-                if (structure is HeroHealth) continue;
+                if (structure is HeroHealth) { rejHero++; continue; }
+                accepted++;
                 float sqr = (c.transform.position - transform.position).sqrMagnitude;
                 if (sqr < nearestSqr) { nearestSqr = sqr; nearest = structure; }
             }
+
+            // F8-41 gate: name the scan outcome every ~2s per enemy. This is the line that PROVES
+            // whether "no structure target" is data-empty (colliders=0) or all-rejected, and which
+            // filter did the rejecting.
+            DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"sweep-scan-{_enemyId}", 2f,
+                $"{_enemyId}: sweep OverlapSphere r={radius:F1}m colliders={count} -> accepted={accepted} " +
+                $"rejected[null={rejNull},noStructComp={rejNoComp},dead={rejDead},hero={rejHero}] " +
+                $"nearest={((nearest as MonoBehaviour)?.name ?? "<null>")}");
 
             if (nearest != null)
                 DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"sweep-{_enemyId}", 1f,
