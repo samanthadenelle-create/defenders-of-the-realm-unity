@@ -124,16 +124,41 @@ namespace DeNelle.Village
         //  Bootstrap (no scene edit) — mirrors the legacy director's pattern
         // =====================================================================
 
+        // F8-29 (owner fresh-boot "i did not get a tutorial", RCA 2026-07-08): this was a ONE-SHOT
+        // AfterSceneLoad that evaluated the hub gate against the TITLE scene (IsHub false) and —
+        // unlike its sibling bootstraps (CompanionMeetingTrigger, CastleCompanionIntroducerInjector)
+        // — never subscribed sceneLoaded, so the V2 interpreter could NEVER construct in the real
+        // Title -> HeroSelect -> hub flow. Proof: zero [Flow:Tutorial] lines in the fresh session.
+        // Now: evaluate at boot AND on every scene load; the decline path traces (never silent).
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
-            if (!FeatureFlags.TutorialV2) return;                     // flag-gated, default OFF
-            if (!HubScenes.IsHub(SceneManager.GetActiveScene().name)) return;
+            SceneManager.sceneLoaded -= OnAnySceneLoaded;
+            SceneManager.sceneLoaded += OnAnySceneLoaded;
+            TryArm("boot");
+        }
+
+        private static void OnAnySceneLoaded(Scene scene, LoadSceneMode mode) => TryArm("sceneLoaded");
+
+        private static void TryArm(string reason)
+        {
+            string scene = SceneManager.GetActiveScene().name;
+            if (!FeatureFlags.TutorialV2)
+            {
+                FlowTrace.Step("Tutorial", $"Bootstrap({reason}): ff.tutorialv2 OFF — dormant.");
+                return;
+            }
+            if (!HubScenes.IsHub(scene))
+            {
+                FlowTrace.Step("Tutorial", $"Bootstrap({reason}): scene '{scene}' is not a hub — waiting.");
+                return;
+            }
             if (FindAnyObjectByType<TutorialFlow>() != null) return;
             var go = new GameObject("TutorialFlow");
             go.AddComponent<TutorialFlow>();
             go.AddComponent<TutorialSignalAdapters>();   // Village-side real-event → bus adapters
             go.AddComponent<TutorialWorldAnchors>();     // world.sylas / world.gate_direction resolvers
+            FlowTrace.Step("Tutorial", $"Bootstrap({reason}): TutorialFlow armed in hub '{scene}'.");
         }
 
         private void Start()
