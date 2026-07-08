@@ -246,8 +246,13 @@ namespace DeNelle.Village
                 // The primary resolved but nothing took the blast — the cluster vanished between
                 // Acquire and detonation, or every victim was already dead. Self-report (not a
                 // hard fail): the shot fired but landed on no one.
+                // Fleet NRE 4/4 (break-log run0 t=60.8, ApplyBlast:249): `?.` does not see Unity's
+                // fake-null — a DESTROYED primary passes and .name throws on the dead native
+                // object. Explicit Unity-null check (project rule: no ?. on UnityEngine.Object).
+                var pmb = primary as MonoBehaviour;
+                string pname = pmb != null ? pmb.name : "<primary destroyed>";
                 FlowTrace.Warn("ArcaneTower",
-                    $"FireBlast: 0 enemies affected (primary='{(primary as MonoBehaviour)?.name ?? "<primary>"}') — cluster gone/all dead at detonation.");
+                    $"FireBlast: 0 enemies affected (primary='{pname}') — cluster gone/all dead at detonation.");
             }
         }
 

@@ -3309,27 +3309,50 @@ namespace DeNelle.DevTools
                 }
                 else
                 {
-                    // Card is up — the DialogueView builds the shared Obsidian chrome, so the
-                    // ONE standard Close must be present.
+                    // Card is up. OWNER CONTRACT 2026-07-08 (F8-22 one-action-one-button +
+                    // 'tap to continue'): a linear line shows ONLY the passive tap hint — the
+                    // close path IS advancing (the VM auto-closes on the final Advance). The
+                    // oracle drives that REAL path; the shared Close only exists in the
+                    // degenerate no-options/empty-text state, so demanding a Close button
+                    // here was asserting the pre-ruling contract (fleet 4/4 false ticket).
                     UnityEngine.UI.Button uClose = FindUGuiCloseButton();
-                    if (uClose == null)
-                    {
-                        FlowTrace.Fail("PopupClose", $"POPUP_NO_CLOSE :: {RowName} — dialogue card is running but no Close affordance found (searched active uGUI 'CloseButton'/*close*).");
-                        _popupVerdicts.Add(new PopupCloseResult
-                        {
-                            panel = RowName, verdict = "NO_CLOSE", route = "searched uGUI 'CloseButton'/*close* — none found",
-                            seconds = Time.realtimeSinceStartup - tRow, detail = "dialogue card exposes no Close control",
-                        });
-                        DialogueService.Stop();   // force-continue
-                    }
-                    else
+                    if (uClose != null)
                     {
                         string route = $"uGUI button '{uClose.name}'";
                         bool clicked = false;
                         try { uClose.onClick?.Invoke(); clicked = true; }
                         catch (Exception ex) { FlowTrace.Fail("PopupClose", $"POPUP_NO_CLOSE :: {RowName} — close handler THREW via {route}: {ex.Message}"); }
-
                         _cardCloseClicked = clicked; _cardCloseRoute = route;
+                    }
+                    else
+                    {
+                        var vm = DeNelle.Core.Dialogue.DialogueService.ActiveVm;
+                        int taps = 0;
+                        for (; taps < 12 && DialogueService.IsRunning; taps++)
+                        {
+                            try { vm.Advance(); }
+                            catch (Exception ex)
+                            {
+                                FlowTrace.Fail("PopupClose", $"POPUP_NO_CLOSE :: {RowName} — Advance() threw on tap {taps + 1}: {ex.Message}");
+                                break;
+                            }
+                        }
+                        if (!DialogueService.IsRunning)
+                        {
+                            _cardCloseClicked = true;
+                            _cardCloseRoute = $"tap-advance x{taps} (owner one-action contract — VM auto-closed on final line)";
+                            FlowTrace.Step("PopupClose", $"'{RowName}': closed via {_cardCloseRoute}.");
+                        }
+                        else
+                        {
+                            FlowTrace.Fail("PopupClose", $"POPUP_NO_CLOSE :: {RowName} — still running after {taps} tap-advances and no Close affordance (options stuck or advance dead).");
+                            _popupVerdicts.Add(new PopupCloseResult
+                            {
+                                panel = RowName, verdict = "NO_CLOSE", route = $"tap-advance x{taps} — card never ended",
+                                seconds = Time.realtimeSinceStartup - tRow, detail = "dialogue card unclosable through the real player path",
+                            });
+                            DialogueService.Stop();   // force-continue
+                        }
                     }
                 }
             }
