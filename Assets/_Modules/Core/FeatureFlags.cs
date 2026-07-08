@@ -463,8 +463,11 @@ namespace DeNelle.Core
         /// unlocked -> acquiring -> locked, bound to TargetModel.HasTarget/Locked). On the posture flip to
         /// hostile(prebattle|activebattle) it also calls PanelManager.CloseAll() so every other screen closes
         /// and ONLY the combat HUD renders. Default OFF — the shipping HUD is BYTE-IDENTICAL when OFF (every
-        /// combat-HUD widget is flag-gated at its build site). PlayerPrefs "ff.combathud611" = 1 to preview.</summary>
-        public static bool CombatHud611 => Get("combathud611", defaultOn: false);
+        /// combat-HUD widget is flag-gated at its build site). PlayerPrefs "ff.combathud611" = 0 reverts.
+        /// DEFAULT ON (owner 2026-07-08, F8-25): the v8 combat HUD is the approved design — after the
+        /// FULL RESET wiped her PlayerPrefs override, the legacy battle HUD (old arrow pad / legacy
+        /// right-thumb layout) resurfaced because this still defaulted OFF. Approved = default.</summary>
+        public static bool CombatHud611 => Get("combathud611", defaultOn: true);
 
         /// <summary>2026-07-07 sheathed-pose fallback (owner A/B): when a weapon has NO explicit
         /// "&lt;mesh&gt;@sheathed" registry entry, its DRAWN offset falls back onto the built-in back
