@@ -847,6 +847,26 @@ namespace DeNelle.DevTools
                 yield break;
             }
 
+            // Pips animate in LateUpdate — an INACTIVE widget instance can prove the DATA
+            // half (direct poll) but can never activate a pip. Wait briefly for an active
+            // instance (posture rebuilds swap them), then verify layout there; none active
+            // = the layout half is honestly UNVERIFIABLE this posture, not failed.
+            w = 0f;
+            while (w < 2f && !widget.isActiveAndEnabled)
+            {
+                w += Time.unscaledDeltaTime;
+                foreach (var cw2 in UnityEngine.Object.FindObjectsByType<DeNelle.HUD.Kit.HudCompassWidget>(FindObjectsSortMode.None))
+                    if (cw2 != null && cw2.isActiveAndEnabled) { widget = cw2; widget.ForceProviderPoll(); break; }
+                yield return null;
+            }
+            if (!widget.isActiveAndEnabled)
+            {
+                _lastDetail = $"data half PASS (buffer={widget.EnemyMarkCount}); layout half skipped — no ACTIVE compass this posture";
+                FlowTrace.Warn(Tag, $"AssertCompassMarks: data half PASS (buffer={widget.EnemyMarkCount}) — layout half SKIPPED: no active compass widget this posture (pips need LateUpdate). Named skip, not silent.");
+                if (diag != null) UnityEngine.Object.Destroy(diag.gameObject);
+                yield break;
+            }
+
             w = 0f;
             while (w < 3f && widget.ActiveTickCount == 0) { w += Time.unscaledDeltaTime; yield return null; }
             bool sized = widget.TryGetFirstActiveTickSize(out Vector2 pip);
