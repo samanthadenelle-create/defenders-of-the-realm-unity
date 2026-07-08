@@ -46,6 +46,21 @@ pill = pixel energy-sword, no black interact at storefronts, compass visible in 
 frame only with a real target, resource chips show the five icons. Board = Task list tickets
 F8-1..F8-10 with full hand-off logs.
 
+**LATE-SESSION ADDENDUM (2026-07-08, commits `b45bb0bb`→`c7d913a3`):** RCA-PROOF-BY-DATA is now
+BINDING pipeline rule 0 (`75e4d128`; owner directive — every ticket carries verbatim proving lines).
+Landed: F8-11 DevTools scroll + yarn row removed · F8-12 dock pinned to real size (was ~5% of screen
+— fraction-of-parent in the tiny Dock mount) · Wizard Tower → **Ballista** (owner ruling; upright
+X-90; Ground placement — was stuck on the old WallWalk rule, 'stays red' RCA `164d0c24`) · Arcane
+Spire base euler (-90,90,90) + WHITE FIX (extraction never ran + the remap step was never in the
+code; new single-asset extract+remap+save, externalObjects verified — `f23d05ae`) · **Orient tool
+saves locally** (StructureOrientationLocalStore, persistentDataPath overlay wins at catalog load —
+the gear-offsets pattern; `96a90054`) · Ballista card art ×3 transparent (`917e8d23`) · F8-15 stage-1
+death slow-trace (listener dump + down-beat milestones, `e95c538d`) · owner gear/sheathed harvests
+(`c7d913a3`). RCA doc: `docs/RCA_DIALOGUE_DOUBLE_FRAME_2026-07-07.md` (owner decision pending:
+option A = window frame + delete the interior plate). Board tickets F8-11..F8-16 filed. Exe built
+2026-07-07 late evening carries ALL of it — the owner was felt-testing a stale exe earlier (proof:
+session_start 19:24 vs exe 19:53); RELAUNCH before judging.
+
 ---
 
 ## ★★ SESSION HANDOVER — 2026-07-07 offset persistence (⚠ superseded as newest by the evening F8 batch above) ★★
