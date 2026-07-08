@@ -19,8 +19,9 @@
 //   • pets.json — exactly the 3 starter species (aether-sprite/flame-pup/ice-wolf,
 //     the only ones PetAcquisitionService maps to the PetSpecies enum), each with 5
 //     bond ranks and a slot index; species are distinct.
-//   • packs.json — 5 packs, tiers 1..5 each present & unique, each with a USD
-//     reference price, exactly one founderOnly pack.
+//   • packs.json — 13 packs (5 price-ladder + 8 themed bundles, v2 2026-06-28),
+//     tiers 1..13 each present & unique, each with a USD reference price, exactly
+//     one founderOnly pack (Founder's Vow, tier 5).
 //   • wallets.json — the two PUBLIC addresses resolve, look base58, and the blob
 //     carries NO secret-key material (privatekey/seed/keypair/mnemonic).
 //   • pet-skill-trees.json — every species in pets.json has a tree (deploy path
@@ -42,6 +43,11 @@ namespace DeNelle.Editor
         {
             "aether-sprite", "flame-pup", "ice-wolf",
         };
+
+        // Canonical pack-shelf size (docs/MONETIZATION_REVIEW_2026-07-02.md §1.1: "13 authored
+        // packs … 5 price-ladder + 8 themed bundles"; packs.json header). Tiers are a UNIQUE
+        // 1..N lookup key (PackCatalog.FindByTier), not the price band.
+        private const int CanonPackCount = 13;
 
         private static readonly string[] SecretFragments =
         {
@@ -152,7 +158,7 @@ namespace DeNelle.Editor
                 string sku = Str(o, "sku");
                 int tier = Int(o, "tier");
                 if (string.IsNullOrEmpty(sku)) failures.Add("packs.json: a pack with null/empty sku");
-                if (tier < 1 || tier > 5) failures.Add($"packs.json: '{sku}' tier {tier} out of 1..5");
+                if (tier < 1 || tier > CanonPackCount) failures.Add($"packs.json: '{sku}' tier {tier} out of 1..{CanonPackCount}");
                 else if (!tiers.Add(tier)) failures.Add($"packs.json: duplicate tier {tier}");
 
                 var pricing = o["pricing"] as JObject;
@@ -161,8 +167,13 @@ namespace DeNelle.Editor
                 if (o["founderOnly"] != null && o["founderOnly"].Type == JTokenType.Boolean && (bool)o["founderOnly"])
                     founderCount++;
             }
-            if (count != 5) failures.Add($"packs.json: {count} packs (canon is 5 — Hearth Spark → Founder's Vow)");
-            if (founderCount != 1) failures.Add($"packs.json: {founderCount} founderOnly packs (expected exactly 1)");
+            // Canon = 13 packs (v2, 2026-06-28): the 5-tier price ladder (Hearth Spark →
+            // Founder's Vow) + 8 themed starter bundles (Frostfall … Builder's Cache), each
+            // with a UNIQUE tier lookup key 1..13. Source: docs/MONETIZATION_REVIEW_2026-07-02.md
+            // §1.1 ("13 authored packs … 5 price-ladder + 8 themed bundles") + packs.json header.
+            // The old "5 / tiers 1..5" oracle predated the 06-28 bundle expansion (STALE).
+            if (count != CanonPackCount) failures.Add($"packs.json: {count} packs (canon is {CanonPackCount} — 5 price-ladder Hearth Spark→Founder's Vow + 8 themed bundles, tiers 1..{CanonPackCount})");
+            if (founderCount != 1) failures.Add($"packs.json: {founderCount} founderOnly packs (expected exactly 1 — Founder's Vow, tier 5)");
         }
 
         // --- wallets.json -----------------------------------------------------
@@ -200,16 +211,21 @@ namespace DeNelle.Editor
             try { root = JObject.Parse(json); }
             catch (Exception ex) { failures.Add($"pet-skill-trees.json: parse error ({ex.Message})"); return; }
 
-            var trees = root["trees"] as JArray;
-            if (trees == null || trees.Count == 0) { failures.Add("pet-skill-trees.json: 0 trees (mapping break)"); return; }
+            // 'trees' is a species-KEYED map, not an array — it deserializes to
+            // Dictionary<string,PetSkillTreeDef> in the real loader (PetSkillTreeCatalog.cs).
+            // Reading it as a JArray was the false "0 trees (mapping break)": a JObject
+            // 'as JArray' is null. Iterate the property map instead.
+            var trees = root["trees"] as JObject;
+            if (trees == null || !trees.HasValues) { failures.Add("pet-skill-trees.json: 0 trees (mapping break — 'trees' missing or not a keyed object)"); return; }
 
             var treeSpecies = new HashSet<string>();
-            foreach (var tok in trees)
-                if (tok is JObject o)
-                {
-                    string sp = Str(o, "species");
-                    if (!string.IsNullOrEmpty(sp)) treeSpecies.Add(sp);
-                }
+            foreach (var prop in trees.Properties())
+            {
+                // Prefer the inner 'species' field; fall back to the map key.
+                string sp = (prop.Value as JObject) != null ? Str((JObject)prop.Value, "species") : null;
+                if (string.IsNullOrEmpty(sp)) sp = prop.Name;
+                if (!string.IsNullOrEmpty(sp)) treeSpecies.Add(sp);
+            }
 
             // Deploy-path invariant: every DEPLOYABLE species must have a tree.
             foreach (var sp in EnumSpecies)

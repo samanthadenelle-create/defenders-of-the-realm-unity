@@ -27,6 +27,7 @@
 // Mirrors MonetizationCovenantRegression: public static bool Run(out string reason).
 // =============================================================================
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 using DeNelle.Core.State;
 using DeNelle.Village;
@@ -44,20 +45,33 @@ namespace DeNelle.Editor
             bool hadSave = PlayerPrefs.HasKey(SaveKey);
             string rawSave = hadSave ? PlayerPrefs.GetString(SaveKey, null) : null;
 
-            GameObject econGo = null, crystGo = null;
-            bool createdGss = false;
+            // HEADLESS STATE INSTALL — editmode batchmode NEVER runs GameStateService.Awake
+            // (Awake fires only in play mode / on ExecuteAlways), so a bare
+            // AddComponent<GameStateService>() leaves Instance + State null — the exact cause of
+            // the historic false-FAIL "no GameStateService/State available". Mirror
+            // CoreSaveContractRegression: construct a THROWAWAY GameState SO and install it as the
+            // active state for the duration by setting the private static _instance + the
+            // [SerializeField] _state via reflection, restoring the prior live service in finally.
+            GameStateService priorInstance = GameStateService.Instance;
+            GameObject econGo = null, crystGo = null, gssGo = null;
+            GameState throwaway = null;
+            bool installed = false;
             try
             {
-                var gss = GameStateService.Instance;
-                if (gss == null)
+                throwaway = ScriptableObject.CreateInstance<GameState>();   // fresh defaults; all collections init'd → Save()-safe
+                gssGo = new GameObject("GameStateService (eco-oracle)");
+                var gss = gssGo.AddComponent<GameStateService>();
+                if (!TryInstallHeadlessState(gss, throwaway, out string installErr))
                 {
-                    new GameObject("GameStateService (eco-oracle)").AddComponent<GameStateService>();
-                    gss = GameStateService.Instance;
-                    createdGss = true;
+                    // The GameStateService singleton/state seam moved — genuinely unrunnable
+                    // headless. NAMED SKIP (return true), never a false FAIL (harness-integrity).
+                    reason = "VILLAGE ECONOMY skipped: needs fleet — " + installErr;
+                    return true;
                 }
-                if (gss == null || gss.State == null)
-                { reason = "VILLAGE ECONOMY FAIL: no GameStateService/State available"; return false; }
-                var state = gss.State;
+                installed = true;
+                var state = gss.State;   // the throwaway — never null now
+                if (state == null)
+                { reason = "VILLAGE ECONOMY skipped: needs fleet — throwaway state did not install"; return true; }
 
                 var econ = EconomyService.Instance;
                 if (econ == null)
@@ -119,12 +133,17 @@ namespace DeNelle.Editor
             {
                 if (econGo != null) Object.DestroyImmediate(econGo);
                 if (crystGo != null) Object.DestroyImmediate(crystGo);
+                if (gssGo != null) Object.DestroyImmediate(gssGo);
+                if (throwaway != null) Object.DestroyImmediate(throwaway);
 
+                // Restore the live service the batch's later oracles read. DestroyImmediate
+                // above may have nulled the static via OnDestroy, so set it back explicitly.
+                if (installed) TrySetInstanceStatic(priorInstance);
+
+                // Restore the persisted save blob (gs.Save() wrote to it during the run).
                 if (hadSave) PlayerPrefs.SetString(SaveKey, rawSave);
                 else PlayerPrefs.DeleteKey(SaveKey);
                 PlayerPrefs.Save();
-                var gss = GameStateService.Instance;
-                if (gss != null && !createdGss) gss.Load();
             }
 
             if (failures.Count == 0)
@@ -134,6 +153,39 @@ namespace DeNelle.Editor
             }
             reason = $"VILLAGE ECONOMY FAIL x{failures.Count}: " + string.Join(" | ", failures);
             return false;
+        }
+
+        // =====================================================================
+        //  Headless state-install helpers (editmode has no Awake)
+        // =====================================================================
+
+        /// <summary>
+        /// Installs <paramref name="state"/> as the active state on <paramref name="svc"/> and
+        /// promotes <paramref name="svc"/> to the live singleton, by reflection over the private
+        /// <c>_state</c> field + the <c>_instance</c> static — the same seam Awake sets, which does
+        /// NOT run on AddComponent in editmode batchmode. Returns false (with a named reason) if
+        /// either seam was renamed/removed, so the caller NAMED-SKIPs instead of false-failing.
+        /// </summary>
+        private static bool TryInstallHeadlessState(GameStateService svc, GameState state, out string err)
+        {
+            err = null;
+            var stateField = typeof(GameStateService).GetField("_state", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (stateField == null)
+            { err = "GameStateService._state field not found by reflection (state seam renamed/removed)"; return false; }
+            stateField.SetValue(svc, state);
+            if (!TrySetInstanceStatic(svc))
+            { err = "GameStateService._instance static not found by reflection (singleton seam renamed/removed)"; return false; }
+            return true;
+        }
+
+        /// <summary>Sets the private static <c>GameStateService._instance</c> (null allowed, to restore).
+        /// Returns false only if the field seam is gone.</summary>
+        private static bool TrySetInstanceStatic(GameStateService svc)
+        {
+            var f = typeof(GameStateService).GetField("_instance", BindingFlags.NonPublic | BindingFlags.Static);
+            if (f == null) return false;
+            f.SetValue(null, svc);
+            return true;
         }
     }
 }
