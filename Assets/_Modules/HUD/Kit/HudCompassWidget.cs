@@ -56,7 +56,10 @@ namespace DeNelle.HUD.Kit
         // The strip plots a ±FovDegrees fan centred on the heading; markers outside the
         // fan clamp to the nearest edge so they stay visible.
         private const float FovDegrees   = 120f;
-        private const float TickWidthPx  = 4f;
+        // F8-16: 4px hairlines over a 120° fan were imperceptible — the enemy mark is now a
+        // 10px-wide RED TRIANGLE PIP (apex up), a distinct SHAPE vs the gold objective needle
+        // (owner is red/green colorblind — meaning never by color alone, §7 canon).
+        private const float TickWidthPx  = 10f;
         private const float ProviderPollInterval = 0.25f;   // reflection scans ~4 Hz, never per-frame
 
         // ── Runtime refs ──────────────────────────────────────────────────────
@@ -113,13 +116,14 @@ namespace DeNelle.HUD.Kit
             _needle   = compass.needle;
             if (_cardinal != null) _cardinal.characterSpacing = 6f;
 
-            // Marker layer (enemy threat ticks): clipped to the octagon so ticks never spill past it.
-            // Slides horizontally across the octagon centre as a compact threat band (interim; a radial
-            // placement is a follow-up). Above the octagon face, below the cardinal label.
+            // Marker layer (enemy threat pips): clipped to the octagon so pips never spill past it.
+            // F8-16: the band now spans the strip's FULL usable width (was x 0.12–0.88 — the 120° fan
+            // was squeezed into ~12% of widget width and marks were imperceptible) and is tall enough
+            // to hold a clearly-visible triangle pip. Above the octagon face, below the cardinal label.
             var layerGo = new GameObject("CompassMarkers", typeof(RectTransform), typeof(RectMask2D));
             layerGo.transform.SetParent(_strip, false);
             _tickLayer = layerGo.GetComponent<RectTransform>();
-            _tickLayer.anchorMin = new Vector2(0.12f, 0.42f); _tickLayer.anchorMax = new Vector2(0.88f, 0.58f);
+            _tickLayer.anchorMin = new Vector2(0.02f, 0.36f); _tickLayer.anchorMax = new Vector2(0.98f, 0.64f);
             _tickLayer.offsetMin = Vector2.zero; _tickLayer.offsetMax = Vector2.zero;
 
             // Legacy objective chevron kept but DISABLED — the rotating needle is the objective cue now.
@@ -223,6 +227,7 @@ namespace DeNelle.HUD.Kit
             int n = _enemyBuf.Count;
             EnsureTickPool(n);
             Vector3 heroPos = _hero.position;
+            int clampedCount = 0;   // enemies outside the ±60° fan this frame (edge-arrow mode)
 
             for (int i = 0; i < _tickPool.Count; i++)
             {
@@ -237,11 +242,32 @@ namespace DeNelle.HUD.Kit
                 to.Normalize();
 
                 float bearing = Vector3.SignedAngle(fwd, to, Vector3.up);
-                float x = BearingToStripX(bearing, out _);
+                float x = BearingToStripX(bearing, out bool clamped);
                 if (!tick.gameObject.activeSelf) tick.gameObject.SetActive(true);
                 tick.anchoredPosition = new Vector2(x, 0f);
+
+                // F8-16 edge-arrow port (old CompassHud.UpdateArrows): an enemy OUTSIDE the fan
+                // pins to the band edge with the triangle ROTATED to point the shorter way around
+                // (apex-up sprite: -90° = points right, +90° = points left). Inside the fan the
+                // pip stands apex-up at its bearing. Same pooled Image — zero extra alloc.
+                if (clamped)
+                {
+                    clampedCount++;
+                    tick.localRotation = Quaternion.Euler(0f, 0f, bearing > 0f ? -90f : 90f);
+                }
+                else if (tick.localRotation != Quaternion.identity)
+                {
+                    tick.localRotation = Quaternion.identity;
+                }
             }
+
+            // One Step on the ENGAGE transition only (never per-frame spam).
+            if (clampedCount > 0 && _lastClampedCount == 0)
+                FlowTrace.Step("Compass", $"edge-arrows engaged ({clampedCount} enemies outside the ±{FovDegrees * 0.5f:0}° fan).");
+            _lastClampedCount = clampedCount;
         }
+
+        private int _lastClampedCount;
 
         // Map a signed bearing (deg, + = right) to an X offset across the strip width,
         // clamping off-fan bearings to the nearest edge (so a marker never disappears).
@@ -293,17 +319,56 @@ namespace DeNelle.HUD.Kit
                 rt.anchorMin = new Vector2(0.5f, 0.5f);
                 rt.anchorMax = new Vector2(0.5f, 0.5f);
                 rt.pivot     = new Vector2(0.5f, 0.5f);
-                // F8-16 hardening: the layer rect can still be 0-height when the FIRST enemies
-                // appear on the same frame the pool grows (layout not yet run) — the old
-                // Mathf.Max(4f, ...) then baked a 4x4px sliver FOREVER (sizeDelta is set once
-                // per pooled tick). Floor at 10px so a tick is never sub-visible on mobile.
-                rt.sizeDelta = new Vector2(TickWidthPx, Mathf.Max(10f, _tickLayer.rect.height - 6f));
+                // F8-16 hardening (kept from the earlier landing): the layer rect can still be
+                // 0-height when the FIRST enemies appear on the same frame the pool grows (layout
+                // not yet run) — the old Mathf.Max(4f, ...) then baked a 4x4px sliver FOREVER
+                // (sizeDelta is set once per pooled tick). Floor at 16px so a pip is never
+                // sub-visible on mobile.
+                rt.sizeDelta = new Vector2(TickWidthPx, Mathf.Max(16f, _tickLayer.rect.height - 4f));
                 var img = go.GetComponent<Image>();
+                // F8-16 colorblind-safe SHAPE: red apex-up TRIANGLE pip (procedural sprite,
+                // built once, static-cached) — a distinct silhouette vs the gold objective
+                // needle even with red/green desaturated. Doubles as the edge ARROW when
+                // rotated ±90° by UpdateEnemyTicks.
+                img.sprite = EnemyPipSprite();
                 img.color = ElarionUi.Danger;
                 img.raycastTarget = false;
                 go.SetActive(false);
                 _tickPool.Add(rt);
             }
+        }
+
+        // Procedural white apex-up triangle, tinted by Image.color. Built ONCE per app run
+        // (static cache, HideAndDontSave) — no per-frame or per-tick allocation.
+        private static Sprite _pipSprite;
+        private static Sprite EnemyPipSprite()
+        {
+            if (_pipSprite != null) return _pipSprite;
+            const int W = 16, H = 16;
+            var tex = new Texture2D(W, H, TextureFormat.RGBA32, false)
+            {
+                hideFlags = HideFlags.HideAndDontSave,
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            var px = new Color32[W * H];
+            float cx = (W - 1) * 0.5f;
+            for (int y = 0; y < H; y++)
+            {
+                float t = (float)y / (H - 1);                 // 0 = bottom (wide) .. 1 = top (apex)
+                float half = (1f - t) * cx;
+                for (int x = 0; x < W; x++)
+                {
+                    bool inside = Mathf.Abs(x - cx) <= half;
+                    px[y * W + x] = inside ? new Color32(255, 255, 255, 255) : new Color32(255, 255, 255, 0);
+                }
+            }
+            tex.SetPixels32(px);
+            tex.Apply(false, true);
+            _pipSprite = Sprite.Create(tex, new Rect(0, 0, W, H), new Vector2(0.5f, 0.5f), 100f, 0,
+                SpriteMeshType.FullRect);
+            _pipSprite.hideFlags = HideFlags.HideAndDontSave;
+            return _pipSprite;
         }
 
         // ── uGUI helpers (mirror the kit conventions) ──────────────────────────
