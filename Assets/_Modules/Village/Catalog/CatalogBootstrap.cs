@@ -67,6 +67,9 @@ namespace DeNelle.Village
             {
                 Debug.Log($"[CatalogBootstrap] Registered {CatalogRegistry.Count} catalog " +
                           $"entrie(s) from structures-catalog.json — data-driven path is live.");
+                // Owner-dialed poses saved by the Orient tool overlay the shipped data
+                // (local wins — the 2026-07-08 "save locally" directive; gear-offsets pattern).
+                StructureOrientationLocalStore.ApplyAll();
                 return;
             }
 

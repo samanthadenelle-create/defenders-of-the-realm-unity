@@ -898,7 +898,10 @@ namespace DeNelle.Village
                 scaleAxis = new[] { scaleAxis.x, scaleAxis.y, scaleAxis.z },
                 note      = "build-mode orient editor"
             };
-            Debug.Log($"[Orient] applied to catalog '{id}' (live; bake the [OrientRecipe] line to persist).");
+            // Owner 2026-07-08 ("should it save locally as well?"): persist the dial to the
+            // local overlay store so it survives sessions/rebuilds (local wins at catalog load).
+            StructureOrientationLocalStore.Upsert(id, entry.orientation);
+            Debug.Log($"[Orient] applied to catalog '{id}' (live + local-saved; the [OrientRecipe] line is the bake source).");
         }
 
         private void ReportOrientRecipe(string id, Vector3 euler, Vector3 scaleAxis)
