@@ -338,7 +338,12 @@ namespace DeNelle.Village.Hero
             _partyBar = new GameObject("PartyBar", typeof(RectTransform));
             _partyBar.transform.SetParent(bodyHost, false);
             var pb = _partyBar.GetComponent<RectTransform>();
-            pb.anchorMin = new Vector2(0.04f, 0.80f); pb.anchorMax = new Vector2(0.96f, 0.885f);
+            // F8-10 (fleet 4/4): the 0.80..0.885 band gave each chip's name label a 13px rect —
+            // shorter than the 12pt hard-floor line (~15px), so TMP Ellipsis culled the whole
+            // line (0 glyphs). Bar grows into the free 0.885..0.90 strip (wallet starts 0.905;
+            // MemberLabel below tops at 0.80) and the chip's name band widens (see RebuildPartyBar)
+            // so the label seats ~18px — a LAYOUT fix, never a font-floor cut.
+            pb.anchorMin = new Vector2(0.04f, 0.80f); pb.anchorMax = new Vector2(0.96f, 0.90f);
             pb.offsetMin = Vector2.zero; pb.offsetMax = Vector2.zero;
 
             // Selected-member sub-header (name - class (Lv N)).
@@ -588,17 +593,20 @@ namespace DeNelle.Village.Hero
                 if (icon != null)
                 {
                     var imgGo = ElarionUiKit.AddImage(btn.transform, "Portrait",
-                        new Vector2(0.12f, 0.30f), new Vector2(0.88f, 0.95f), Color.white, rounded: false);
+                        new Vector2(0.12f, 0.42f), new Vector2(0.88f, 0.95f), Color.white, rounded: false);
                     var img = imgGo.GetComponent<Image>();
                     img.sprite = icon; img.preserveAspect = true; img.raycastTarget = false;
                 }
                 else
                 {
-                    ElarionUiKit.Label(btn.transform, ClassCrest(member.Class), 0.40f, 0.98f, ElarionUi.Gilt,
+                    ElarionUiKit.Label(btn.transform, ClassCrest(member.Class), 0.44f, 0.98f, ElarionUi.Gilt,
                         ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.0f, 1f, bold: true);
                 }
-                // Member first name under the token.
-                var nameTag = ElarionUiKit.Label(btn.transform, member.Name, 0.02f, 0.34f, ElarionUi.Parchment,
+                // Member first name under the token. F8-10: band was 0.02..0.34 of a ~40px chip
+                // = 13px — below the 12pt guard floor's ~15px line, so Ellipsis culled ALL glyphs
+                // (fleet 4/4, TextFitGuard capture). With the taller PartyBar (0.80..0.90) this
+                // 0.02..0.40 band seats ~18px: the floor's line fits with margin.
+                var nameTag = ElarionUiKit.Label(btn.transform, member.Name, 0.02f, 0.40f, ElarionUi.Parchment,
                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.0f, 1f, bold: member.Selected);
                 ElarionUiKit.FitSingleLine(nameTag, 0f, ElarionUi.FontMicro);   // flag_06: chip names never spill
 
