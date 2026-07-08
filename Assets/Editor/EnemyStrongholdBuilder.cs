@@ -566,14 +566,17 @@ namespace DeNelle.Editor
                 }
                 else
                 {
-                    // arrow trap = a tinted TRIGGER floor marker tile (trigger volume; excluded from bake).
+                    // arrow trap = an INVISIBLE TRIGGER floor tile (trigger volume; excluded from bake).
+                    // F8-27 (flag_06): the old tinted renderer read as a flat untextured debris quad on
+                    // the approach — triggers must not render. Renderer+filter stripped; collider kept.
                     var tile = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     tile.name = $"Trap_Arrow_{i}";
                     tile.transform.SetParent(parent, false);
                     tile.transform.localPosition = pos;
                     tile.transform.localScale = new Vector3(2f, 0.05f, 2f);
                     var col = tile.GetComponent<Collider>(); if (col != null) col.isTrigger = true;
-                    TintMesh(tile, new Color(0.45f, 0.15f, 0.12f));
+                    var tileMr = tile.GetComponent<MeshRenderer>(); if (tileMr != null) Object.DestroyImmediate(tileMr);
+                    var tileMf = tile.GetComponent<MeshFilter>();   if (tileMf != null) Object.DestroyImmediate(tileMf);
                     placed++;
                 }
             }
