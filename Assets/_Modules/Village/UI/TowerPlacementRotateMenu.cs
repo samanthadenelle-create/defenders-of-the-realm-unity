@@ -31,6 +31,7 @@ using System.IO;
 using System.Globalization;
 using DeNelle.Core.Data;
 using DeNelle.Core.Catalog;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -117,6 +118,13 @@ namespace DeNelle.Village
         private TowerPreviewCamera _preview;
         private Font _cinzel;
 
+        // F8-30 — registration with the PanelManager modal arbiter, so ESC (PauseGate →
+        // CloseOpen), the tutorial-skip / hostile-posture CloseAll sweeps, and the softlock
+        // watchdog can all SEE and CLOSE this modal. Without it the full-screen scrim had no
+        // external release path — the owner's tutorial click-lock. Close routes through
+        // OnCancelClicked so the caller's onCancel fires (build mode un-freezes cleanly).
+        private PanelHandle _panelHandle;
+
         // ── Lifecycle ─────────────────────────────────────────────────────────
         private void Awake()
         {
@@ -128,8 +136,17 @@ namespace DeNelle.Village
 
         private void OnDisable()
         {
+            // F8-30 — a disable/destroy while open must be a FULL release, not just a
+            // preview teardown: clear IsOpen (BuildModeController's freeze gate reads it),
+            // hide the scrim, and release the PanelManager registration. Previously this
+            // left IsOpen=true + the arbiter slot held — a leaked click-lock.
+            if (IsOpen)
+                FlowTrace.Step("Orient", "OnDisable while OPEN — forcing full release (preview + PanelManager + scrim).");
+            IsOpen = false;
             DisposePreview();
+            if (_root != null) _root.style.display = DisplayStyle.None;
             if (_document != null) _document.enabled = false;
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
         }
 
         private void Update()
@@ -248,14 +265,18 @@ namespace DeNelle.Village
             ShowPanel();
         }
 
-        /// <summary>Close the panel and tear down the preview rig. Fires NO callback.</summary>
+        /// <summary>Close the panel and tear down the preview rig. Fires NO callback.
+        /// F8-30 — EVERY exit path funnels here (Confirm, Cancel, ESC via PanelManager,
+        /// arbiter swap, disable/destroy) and this releases everything the modal holds:
+        /// the preview camera rig, the full-screen scrim, and the PanelManager slot.</summary>
         public void Close()
         {
-            Debug.Log("[Orient] Close.");
             IsOpen = false;
             DisposePreview();
             if (_root != null) _root.style.display = DisplayStyle.None;
             if (_document != null) _document.enabled = false;
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
+            FlowTrace.Step("Orient", "panel CLOSED — released: preview rig disposed, scrim hidden, PanelManager slot freed.");
         }
 
         // ── Panel construction ──────────────────────────────────────────────────
@@ -993,6 +1014,19 @@ namespace DeNelle.Village
             _document.enabled = true;
             if (_root != null) _root.style.display = DisplayStyle.Flex;
             IsOpen = true;
+
+            // F8-30 — register with the PanelManager arbiter (SeatingEditorOverlay pattern).
+            // The handle's close action is OnCancelClicked (NOT bare Close) so an external
+            // close — ESC/PauseGate CloseOpen, tutorial-skip CloseAll, arbiter swap — also
+            // fires the caller's onCancel and build mode un-freezes exactly like a Cancel tap.
+            // NotifyOpened can REJECT (battle-lock) — it invokes our close itself, and we
+            // must not overwrite the released state, so only trace when it sticks.
+            if (_panelHandle == null)
+                _panelHandle = PanelManager.Register("OrientEditor", OnCancelClicked, () => IsOpen);
+            bool accepted = PanelManager.NotifyOpened(_panelHandle);
+            FlowTrace.Step("Orient", accepted
+                ? "panel OPEN — PanelManager slot 'OrientEditor' taken; release paths: Confirm/Cancel/ESC(CloseOpen)/CloseAll/OnDisable."
+                : "panel open REJECTED by PanelManager (battle-lock) — already released via OnCancelClicked.");
         }
 
         // ── PanelSettings adoption (renders in builds) ───────────────────────────

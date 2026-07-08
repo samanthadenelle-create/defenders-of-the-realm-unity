@@ -486,8 +486,14 @@ namespace DeNelle.Village
         /// <summary>Show the Orient button only while an entry is armed.</summary>
         private void UpdateOrientButton()
         {
+            // F8-30 — Orient is a DEV offset-authoring tool, not player UI: during the
+            // tutorial the owner tapped it next to Done and the orient modal click-locked
+            // the screen. Gate it behind the global DevHotkeys kill-switch (default OFF —
+            // same gate as AdminOverlay/DebugCanvas), so players/tutorial never see it;
+            // the owner reaches it via the devhotkeys flag + the AdminOverlay path.
             if (_orientBtn != null)
-                _orientBtn.gameObject.SetActive(!string.IsNullOrEmpty(_armedId));
+                _orientBtn.gameObject.SetActive(
+                    DeNelle.Core.FeatureFlags.DevHotkeys && !string.IsNullOrEmpty(_armedId));
         }
 
         /// <summary>The persisted crystal wallet (WO-131 — the single source of truth).</summary>

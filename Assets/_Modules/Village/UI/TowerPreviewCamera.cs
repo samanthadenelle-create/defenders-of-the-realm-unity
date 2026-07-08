@@ -20,6 +20,7 @@
 
 using UnityEngine;
 using DeNelle.Core.Catalog;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -208,10 +209,12 @@ namespace DeNelle.Village
             int layer = LayerMask.NameToLayer(PreviewLayerName);
             if (layer >= 0) return layer;
 
-            Debug.LogWarning(
-                "[TowerPreviewCamera] Layer 'TowerPreview' not found — add it in " +
-                "Project Settings > Tags and Layers so the preview camera masks " +
-                "correctly. Falling back to layer 31.");
+            // F8-30 — a missing project layer is a one-time setup note, not a per-open
+            // warning: FlowTrace.Once logs it a single time per session; the layer-31
+            // fallback below keeps the preview drawing either way.
+            FlowTrace.Once("Orient", "preview-layer-missing",
+                "Layer 'TowerPreview' not found — add it in Project Settings > Tags and Layers " +
+                "so the preview camera masks correctly. Falling back to layer 31.");
             return 31;
         }
 
