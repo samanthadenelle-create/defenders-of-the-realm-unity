@@ -19,6 +19,17 @@ handoffs name the exe timestamp; owner is red/green colorblind (never meaning by
   (a9828b40), F8-15 death forensics (242a352a), F8-22/32 dialogue arb + Sylas headshot (926309ca),
   WO-614 (3a4426b6).
 
+## ⭐ WAVE 2 CLOSED (05:10) — FLEET = ZERO TICKETS
+All morning lanes committed through `bb0094cc`; final fleet on exe **2026-07-08 05:10:11** =
+**0 tickets, all probes PASS** (compass full PASS buffer=1 pips=1 rect=10x23px). The stairs sweep
+EXECUTED (`[StairsSweep] removed 4 stair object(s)`) + navmesh rebaked + committed (13e85e12).
+Wave-2 late finds, fixed with data: ArcaneTower fake-null NRE (`?.` misses Unity fake-null),
+popup oracle taught the tap-advance/Choose contract, compass ForceProviderPoll dead-nudge on
+inactive instances. **WebGL build from bb0094cc was IN FLIGHT at prep time** — if this session
+died before deploy: mirror `C:\defenders-webgl-build\Builds\WebGL` → `C:\eoa\Builds\WebGL`, then
+`npx -y vercel deploy --yes` from C:\eoa (preview; NEVER --prod). Owner felt-pass = exe 05:10:11.
+The section below is retained for the process pattern; its steps are DONE except WebGL deploy.
+
 ## THE UNFINISHED WAVE — finish THIS first, in order
 
 1. **Collect in-flight agent lanes** (if not already in tree — check `git status`):
