@@ -759,7 +759,14 @@ namespace DeNelle.DevTools
         private IEnumerator AssertCompassMarks()
         {
             const string Tag = "Auto";
-            var widget = UnityEngine.Object.FindAnyObjectByType<DeNelle.HUD.Kit.HudCompassWidget>(FindObjectsInactive.Include);
+            // Prefer the ACTIVE instance — posture-driven kit rebuilds can leave stale
+            // inactive compass widgets, and asserting against one fails on a dead buffer.
+            DeNelle.HUD.Kit.HudCompassWidget widget = null;
+            foreach (var cw in UnityEngine.Object.FindObjectsByType<DeNelle.HUD.Kit.HudCompassWidget>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (widget == null) widget = cw;
+                if (cw != null && cw.isActiveAndEnabled) { widget = cw; break; }
+            }
             if (widget == null)
             {
                 bool kitAlive = UnityEngine.Object.FindAnyObjectByType<DeNelle.HUD.Kit.HudKitController>(FindObjectsInactive.Include) != null;

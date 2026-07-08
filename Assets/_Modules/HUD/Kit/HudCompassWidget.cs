@@ -117,7 +117,17 @@ namespace DeNelle.HUD.Kit
 
         /// <summary>Force the next LateUpdate to poll the providers immediately (probe
         /// determinism — skips the remaining 0.25s throttle window; no other effect).</summary>
-        public void ForceProviderPoll() => _pollTimer = 0f;
+        public void ForceProviderPoll()
+        {
+            // Fleet 3/4 (AssertCompassMarks link 2): a timer-only nudge is DEAD on an
+            // inactive widget instance (no LateUpdate -> no poll -> buffer empty forever,
+            // while the wired-provider + live-enemy checks all pass). Poll NOW instead —
+            // read-only provider refresh, safe regardless of active state.
+            _pollTimer = 0f;
+            if (HeroProvider != null) _hero = HeroProvider();
+            _objective = ObjectiveProvider != null ? ObjectiveProvider() : (Vector3?)null;
+            RefreshEnemies();
+        }
 
         /// <summary>Kit-builder factory: create the compass under a parent RectTransform
         /// (HudKitController wraps + registers it like every other widget).</summary>
