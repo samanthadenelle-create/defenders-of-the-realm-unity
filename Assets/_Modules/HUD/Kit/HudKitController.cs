@@ -557,16 +557,21 @@ namespace DeNelle.HUD.Kit
             var wbrt = (RectTransform)_waveBlockRoot.transform;
             wbrt.anchorMin = Vector2.zero; wbrt.anchorMax = Vector2.one;
             wbrt.offsetMin = Vector2.zero; wbrt.offsetMax = Vector2.zero;
-            _waveLabel = ElarionUiKit.Label(_waveBlockRoot.transform, "", 0.62f, 0.98f,
+            // BUTTON/LABEL HEIGHT FIX (F8 2026-07-08): the Start Wave button was authored at only
+            // 17% of the block (y 0.01-0.18) → a ~25px label rect that CULLED its glyphs (guard
+            // FAIL "0 visible glyphs, rect 333x25"). The stack is re-flowed UPWARD so the button
+            // gets ~33% of the block (a ~48px label rect that seats the readable font); the labels
+            // + progress bar shift up proportionally so nothing overlaps.
+            _waveLabel = ElarionUiKit.Label(_waveBlockRoot.transform, "", 0.70f, 0.99f,
                 ElarionUi.Parchment, ElarionUi.FontHead, TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
-            _waveCountdown = ElarionUiKit.Label(_waveBlockRoot.transform, "", 0.34f, 0.60f,
+            _waveCountdown = ElarionUiKit.Label(_waveBlockRoot.transform, "", 0.49f, 0.68f,
                 ElarionUi.Gilt, ElarionUi.FontLabel, TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
             _waveProgress = ElarionUiKit.BuildObsidianBar(_waveBlockRoot.transform,
-                ElarionUiKit.ObsidianBarKind.Stat, new Vector2(0.08f, 0.20f), new Vector2(0.92f, 0.32f),
+                ElarionUiKit.ObsidianBarKind.Stat, new Vector2(0.08f, 0.38f), new Vector2(0.92f, 0.46f),
                 withValue: false, framed: false);
             _startWaveButton = ElarionUiKit.BuildObsidianButton(_waveBlockRoot.transform, "Start Wave",
                 ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
-                new Vector2(0.22f, 0.01f), new Vector2(0.78f, 0.18f),
+                new Vector2(0.22f, 0.01f), new Vector2(0.78f, 0.34f),
                 () => { if (_owner != null) _owner.StartWaveRequested?.Invoke(); });
             // Carry-over (WO-T2 working-tree intent): the tutorial spotlight target.
             TutorialHighlightRegistry.Register("hud.wave_button", (RectTransform)_startWaveButton.transform);
@@ -817,7 +822,9 @@ namespace DeNelle.HUD.Kit
             var rrt = (RectTransform)_resExpandedRow.transform;
             // Top-RIGHT pivot so the fitter grows the frame down/left, tucked under the right-edge tab.
             rrt.anchorMin = new Vector2(1f, 1f); rrt.anchorMax = new Vector2(1f, 1f);
-            rrt.pivot = new Vector2(1f, 1f); rrt.anchoredPosition = new Vector2(-6f, -52f);
+            // -84 (was -52): the toggle tab grew taller (y 0.80-0.99, F8 2026-07-08 label-fit fix),
+            // so the expanded panel drops further below the tab's new bottom edge — no overlap.
+            rrt.pivot = new Vector2(1f, 1f); rrt.anchoredPosition = new Vector2(-6f, -84f);
 
             // Obsidian dark frame + gold inner rim (reused kit chrome, near-black ObsidianFill
             // — NOT the olive Panel()). ignoreLayout so it stretches to the fitter-sized content.
@@ -872,9 +879,14 @@ namespace DeNelle.HUD.Kit
             // 9-slice (24px borders need >=48px) into a thin stretched vertical strip with the
             // newly-resolving coin icon inside it. x 0.60 gives the tab ~93px — room for the
             // sliced chrome, the coin icon and the "Resources" word.
+            // TAB HEIGHT FIX (F8 2026-07-08): the tab was only y 0.86-0.99 (~13% of the dock →
+            // ~50px), and with the coin icon riding above the word the "Resources" label was
+            // squished into the lower ~36% (~18px) — the guard CULLED its glyphs ("0 visible
+            // glyphs, rect 167x18"). Give the tab ~19% (y 0.80-0.99, ~73px) so the label band
+            // below the icon is tall enough to seat the ≥20px font.
             var resTab = ElarionUiKit.BuildObsidianButton(_resDock.transform, "$",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.60f, 0.86f), new Vector2(1.0f, 0.99f), ToggleResourcePanel);
+                new Vector2(0.60f, 0.80f), new Vector2(1.0f, 0.99f), ToggleResourcePanel);
             // Owner F8 07-06 (flag_03): the collapsed dock read as an anonymous box — the "$"
             // glyph was swapped for a coin icon with NO text. The tab now ALWAYS says
             // "Resources" (icon rides above the word when it resolves; text never hides).
@@ -889,12 +901,14 @@ namespace DeNelle.HUD.Kit
             if (resTabIcon != null && resTabLbl != null)
             {
                 var ico = ElarionUiKit.AddImage(resTab.transform, "TabIcon",
-                    new Vector2(0.25f, 0.42f), new Vector2(0.75f, 0.92f), Color.white, rounded: false);
+                    new Vector2(0.30f, 0.56f), new Vector2(0.70f, 0.96f), Color.white, rounded: false);
                 var icoImg = ico.GetComponent<Image>();
                 icoImg.sprite = resTabIcon; icoImg.preserveAspect = true; icoImg.raycastTarget = false;
-                var lblRt = (RectTransform)resTabLbl.transform;   // word drops to the lower half
-                lblRt.anchorMin = new Vector2(0.02f, 0.04f);
-                lblRt.anchorMax = new Vector2(0.98f, 0.40f);
+                // Word takes the LOWER HALF of the (now taller) tab so its rect can seat the font
+                // instead of clipping to nothing (F8 2026-07-08 guard FAIL). Icon rides the top.
+                var lblRt = (RectTransform)resTabLbl.transform;
+                lblRt.anchorMin = new Vector2(0.02f, 0.03f);
+                lblRt.anchorMax = new Vector2(0.98f, 0.52f);
                 lblRt.offsetMin = Vector2.zero; lblRt.offsetMax = Vector2.zero;
             }
             _resPanelOpen = false;

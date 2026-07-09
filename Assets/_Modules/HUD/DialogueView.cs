@@ -190,6 +190,20 @@ namespace DeNelle.HUD
             var portraitHost = (layout != null && layout.medallion != null) ? layout.medallion
                 : MakeZone(contentRoot, "PortraitHost", new Vector2(0.037f, 0.868f), new Vector2(0.220f, 0.988f));
 
+            // HEADER-BAND HEIGHT FIX (F8 2026-07-08 "text too small to read on mobile"):
+            // FrameCore's stock header band is only ~0.072 of the panel (~31px) — far too thin to
+            // seat a 36px Speaker over a 26px Affiliation. The guard measured the Speaker sub-rect
+            // at 17px / the Affiliation at 13px and CULLED BOTH lines (0 visible glyphs). Grow the
+            // header band DOWN into the empty gap above the body (FrameCore body top = 0.855, header
+            // bottom = 0.900 → dead space), and pull the body top below the taller band so the two
+            // never overlap. These are THIS panel's own per-instance zones (Zone()/MakeZone each mint
+            // a fresh RectTransform), so no other FrameCore screen is affected. Absolute anchors keep
+            // the fix identical on the frame-art path and the procedural fallback path.
+            headerZone.anchorMin = new Vector2(headerZone.anchorMin.x, 0.790f);   // was ~0.900
+            headerZone.anchorMax = new Vector2(headerZone.anchorMax.x, 0.985f);   // was ~0.972
+            if (bodyZone.anchorMax.y > 0.780f)                                    // keep body top clear of the band
+                bodyZone.anchorMax = new Vector2(bodyZone.anchorMax.x, 0.780f);
+
             // The medallion socket hosts the SPEAKER PORTRAIT (refreshed per Repaint), not the
             // factory's generic crest emblem — hide the fallback emblem so the two never stack.
             var emblem = portraitHost.Find("MedallionEmblem");
