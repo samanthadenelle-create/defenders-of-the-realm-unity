@@ -57,13 +57,14 @@ namespace DeNelle.Village
         [Header("Look")]
         public Color BlastColor = new Color(0.6f, 0.4f, 1f, 1f);   // arcane violet
 
-        // MAGIC PROJECTILE VISUAL (owner 2026-07-08 "arcane tower needs to shoot MAGIC" — picked
-        // the Spells-Pack "Fire 6" fireball). Resolved by name from Resources/VFX/Projectiles/ via
-        // ProjectileVFXCatalog.SpawnNamedFlying. A mirrored (committed) copy of the gitignored pack
-        // prefab lives at Assets/Resources/VFX/Projectiles/Spell_Fire_6.prefab. Tunable in-Inspector;
-        // if it can't resolve, FireBlast falls back to the emissive violet orb (never invisible).
-        [Tooltip("Resources/VFX/Projectiles/<name> prefab used as the flying MAGIC bolt visual.")]
-        public string ArcaneBoltVfx = "Spell_Fire_6";
+        // VFX ELEMENT (visual only — gameplay damage stays on <see cref="Element"/>).
+        // Spell_Fire_6 is a STATIONARY detonation (force-field + lava swirl), NOT a flying bolt —
+        // parented to ProjectileMover it reads as broken/invisible. Use the Spells-Pack projectile
+        // chain instead: Cast_FireCharge → Projectile_Fire → Explosion_Fire (all mirrored under
+        // Assets/Resources/VFX/Projectiles/ and loaded by ProjectileVFXCatalog).
+        [Header("VFX (visual only)")]
+        [Tooltip("Element for cast / travel / impact particles. Flame = fireball chain.")]
+        public DamageElement BoltVisualElement = DamageElement.Flame;
 
         // Elevation perk (wall-mounted): a spire seated on a wall-walk TOP gets the high-ground
         // range/LOS bonus. 1 = ground (no bonus); set by BaseLayoutLoader.Spawn (e.g. 1.25) when
@@ -263,36 +264,26 @@ namespace DeNelle.Village
             Vector3 muzzle  = transform.position + Vector3.up * 2.5f;
             Vector3 impact  = primary.WorldPosition;
 
-            // ── SPELL CAST (owner 2026-07-08 "arcane casts spells") ────────────
-            // Wind-up at the spire top, then a glowing arcane orb LOBS to the
-            // impact point; the blast VFX + damage/slow land when the orb ARRIVES
-            // (ProjectileMover.onArrive — its designed 'hit connects on landing'
-            // contract), so the shot reads as a cast spell, not a hitscan pop.
+            // ── SPELL CAST (owner 2026-07-08 "arcane casts fireballs") ─────────
+            // Wind-up at the spire top, then a Spells-Pack projectile LOBS to the impact point;
+            // blast VFX + damage/slow land when the bolt ARRIVES (ProjectileMover.onArrive).
             // Null-safe: VFXManager statics no-op when not booted.
-            VFXManager.Play(VFXType.Cast_MageCharge, muzzle);
+            VFXManager.Play(CastVfxFor(BoltVisualElement), muzzle);
 
-            // ROOT FIX (owner 2026-07-08): the flying body used to be a bare
-            // GameObject.CreatePrimitive(Sphere) — a violet "pellet", which is exactly why the
-            // spire "still doesn't shoot magic" despite the cast (Cast_MageCharge) + blast
-            // (Impact_ExplosionAether) already firing. Swap that primitive for the owner-picked
-            // Spells-Pack "Fire 6" fireball, spawned through ProjectileVFXCatalog so it inherits
-            // the SAME URP magenta-proof reshade (the 3a7d4fae "kill magenta cubes on cast VFX"
-            // path — HealHalfUpgradedParticleMaterial) that the hero/enemy spell VFX use. The
-            // body rides the ProjectileMover; if the mirrored prefab can't resolve we fall back to
-            // the emissive orb so the shot is never invisible.
+            // Flying body: ProjectileVFXCatalog element chain (Projectile_Fire for Flame) — the same
+            // path DefenseTower / PooledProjectile use. URP heal runs at spawn (FixUrpShaders).
+            // Fall back to emissive orb if the mirrored Resources prefab is missing.
             GameObject bolt = null;
             Guard.Try("ArcaneTower", "spawn spell bolt", () =>
             {
                 bolt = new GameObject("ArcaneSpellBolt");
                 bolt.transform.position = muzzle;
 
-                var fx = ProjectileVFXCatalog.SpawnNamedFlying(bolt.transform, ArcaneBoltVfx);
+                var fx = ProjectileVFXCatalog.SpawnFlying(bolt.transform, BoltVisualElement);
                 if (fx == null)
                 {
-                    // Named pack VFX unresolved — fall back to the legacy emissive violet orb,
-                    // childed under the mover so it still travels + reads as a magic bolt.
                     FlowTrace.Warn("ArcaneTower",
-                        $"FireBlast: named VFX '{ArcaneBoltVfx}' unresolved (not under Resources/VFX/Projectiles) — using fallback emissive orb.");
+                        $"FireBlast: SpawnFlying({BoltVisualElement}) unresolved — using fallback emissive orb.");
                     var orb = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                     orb.name = "ArcaneSpellOrb";
                     orb.transform.SetParent(bolt.transform, false);
@@ -334,7 +325,7 @@ namespace DeNelle.Village
         {
             if (this == null) return;   // tower destroyed while the orb was in flight
 
-            VFXManager.Play(VFXType.Impact_ExplosionAether, impact);
+            ProjectileVFXCatalog.SpawnImpact(impact, BoltVisualElement);
 
             float aoeSq = AoeRadius * AoeRadius;
             float splash = Mathf.Clamp01(SplashDamageFraction);
@@ -375,6 +366,14 @@ namespace DeNelle.Village
                     $"FireBlast: 0 enemies affected (primary='{pname}') — cluster gone/all dead at detonation.");
             }
         }
+
+        private static VFXType CastVfxFor(DamageElement element) => element switch
+        {
+            DamageElement.Flame  => VFXType.Cast_FireCharge,
+            DamageElement.Ice    => VFXType.Cast_FrostNova,
+            DamageElement.Aether => VFXType.Cast_MageCharge,
+            _                    => VFXType.Cast_MageCharge,
+        };
 
         private void OnDrawGizmosSelected()
         {

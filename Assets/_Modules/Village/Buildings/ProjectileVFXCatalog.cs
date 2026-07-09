@@ -112,8 +112,8 @@ namespace DeNelle.Village
         /// <summary>Spawn a NAMED flying VFX body from Resources/VFX/Projectiles/&lt;resourceName&gt;,
         /// parented to <paramref name="mover"/> as a PURE visual (physics/demo scripts stripped,
         /// built-in particle shaders remapped to URP, all particle systems played). This is the
-        /// owner-picked-asset path: the Arcane Spire rides the Spells-Pack "Spell_Fire_6" fireball
-        /// so its shot reads as a real cast MAGIC bolt, not a primitive pellet. Returns the live
+        /// owner-picked-asset path for custom Resources names. Note: Spell_Fire_6 is a stationary
+        /// detonation, not a flying bolt — ArcaneTower uses SpawnFlying(Flame) instead. Returns the live
         /// instance, or null (Warn) when the mirrored prefab isn't under Resources — the caller
         /// then falls back to its own primitive so a shot is never invisible.</summary>
         public static GameObject SpawnNamedFlying(Transform mover, string resourceName)
