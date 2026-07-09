@@ -29,10 +29,32 @@ using UnityEngine.SceneManagement;
 
 namespace DeNelle.Village
 {
-    /// <summary>Restores the hero to full HP + MP on entering a safe-zone (hub) scene.</summary>
+    /// <summary>Restores the hero to full HP + MP on entering a safe-zone (hub) scene,
+    /// and while the hero STANDS inside the town/castle footprint, regens HP by tick.</summary>
     public sealed class SafeZoneRecovery : MonoBehaviour
     {
         public static SafeZoneRecovery Instance { get; private set; }
+
+        // ── TOWN-FOOTPRINT tick regen (owner 2026-07-08 felt-test) ────────────────────
+        // The on-load RestoreToFull below tops the hero off when it ENTERS a hub. But
+        // combat can happen INSIDE a hub with NO scene reload — the wave-loop-in-hub, or
+        // the FTUE teaching wave that floors the hero at 1 HP (HeroHealth.TakeDamage). In
+        // that case OnSceneLoaded never re-fires, so the hero sits at 1 HP with no recovery
+        // option (the exact bug the owner hit). This adds a CONTINUOUS while-standing-in-town
+        // top-up: while the hero is in a hub scene AND inside the town/castle footprint
+        // (within TownRadius of the Heart-at-origin — mirroring the HUD's HudContextEvaluator
+        // radial model), regen HP by tick up to full.
+        //
+        // SAFE-ZONE ONLY (preserves the ff.noautoheal field difficulty): the ring test IS the
+        // gate. Outside the ring / in the field / in enemy-owned raid scenes the hero never
+        // regens here, so no-auto-heal-in-the-field still holds; the town footprint is the sole
+        // exception (identical design to the on-load RestoreToFull, which also ignores the flag).
+        private const float TownRegenFractionPerSecond = 0.12f; // ~8s empty->full; "rest a few seconds to top up"
+        private const float TownRadius     = 60f;   // matches HudContextEvaluator.TownRadius (Heart at world origin, canon §7)
+        private const float TownRadiusHyst = 8f;    // matches HudContextEvaluator hysteresis so the edge doesn't chatter
+
+        private HeroLocomotion _hero;
+        private bool _inTownRing;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -66,6 +88,49 @@ namespace DeNelle.Village
         {
             if (HubScenes.IsHub(scene.name))
                 Recover(scene.name);
+        }
+
+        /// <summary>
+        /// TOWN-FOOTPRINT tick regen: while the hero stands inside the town/castle safe ring
+        /// of a hub scene, feed a small HP top-up each frame up to full. This covers the
+        /// battle->town RETURN and the in-hub combat cases the on-load RestoreToFull misses
+        /// (fight in town / FTUE 1-HP floor -> no scene reload -> nothing re-fires the restore).
+        /// Gated to the safe ring ONLY, so the field keeps its ff.noautoheal difficulty.
+        /// </summary>
+        private void Update()
+        {
+            var health = HeroHealth.Instance;
+            if (health == null || !health.IsAlive) return;
+            if (health.Hp >= health.MaxHp) return;   // already full — nothing to regen
+
+            if (!HubScenes.IsHub(SceneManager.GetActiveScene().name)) { _inTownRing = false; return; }
+
+            // Town footprint test = HudContextEvaluator's radial model: hub scene AND hero within
+            // TownRadius of the Heart-at-origin (canon §7). Hero not resolved yet -> treat the hub
+            // as safe (matches the HUD's "default to town before the hero spawns").
+            bool inRing;
+            if (_hero == null || !_hero) _hero = Object.FindAnyObjectByType<HeroLocomotion>();
+            if (_hero == null)
+            {
+                inRing = true;
+            }
+            else
+            {
+                Vector3 p = _hero.transform.position;
+                float distSqr = p.x * p.x + p.z * p.z;   // horizontal distance to the Heart at origin
+                float edge = _inTownRing ? TownRadius + TownRadiusHyst : TownRadius;  // hysteresis at the edge
+                inRing = distSqr <= edge * edge;
+            }
+            _inTownRing = inRing;
+            if (!inRing) return;
+
+            float amount = health.MaxHp * TownRegenFractionPerSecond * Time.deltaTime;
+            if (amount <= 0f) return;
+            float before = health.Hp;
+            health.RegenTick(amount);
+            FlowTrace.Throttle("SafeZone", "town-regen", 1f,
+                $"town regen +{(health.Hp - before):F1} -> {health.Hp:F0}/{health.MaxHp:F0} " +
+                "(inside town/castle footprint; field still no-auto-heal).");
         }
 
         /// <summary>Full HP + MP restore. Null-safe; logs each leg; never throws into the load.</summary>

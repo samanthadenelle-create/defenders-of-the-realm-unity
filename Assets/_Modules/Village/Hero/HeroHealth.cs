@@ -739,6 +739,23 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// TOWN-FOOTPRINT tick regen (owner 2026-07-08 felt-test: "when in town, life should
+        /// recover ... the longer you're in the town/castle footprint"). Called every frame by
+        /// <see cref="SafeZoneRecovery"/> while the hero stands inside the town/castle safe ring.
+        /// Unlike <see cref="Heal"/> this does NOT fire the heal VFX (a burst every frame would
+        /// strobe) and it no-ops when dead or already full. Accumulated small fractional amounts
+        /// still climb because <c>_hp</c> is a float. Recovers from the FTUE 1-HP floor upward.
+        /// </summary>
+        public void RegenTick(float amount)
+        {
+            if (amount <= 0f || _isDead || _hp <= 0f) return;
+            if (_hp >= MaxHp) return;
+            _hp = Mathf.Min(MaxHp, _hp + amount);
+            OnHealthChanged?.Invoke(_hp, MaxHp);
+            UpdateInjuredState();   // clears the injured vignette once regen climbs back above the cutoff
+        }
+
+        /// <summary>
         /// Restores the hero to FULL HP (the "heal up between fights at home base" beat —
         /// called when the hero returns to town after an arena battle, win, flee, OR death).
         /// Works from ANY HP including 0: a hero that DIED in the arena must come back to town
