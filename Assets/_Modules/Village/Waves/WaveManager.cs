@@ -794,6 +794,23 @@ namespace DeNelle.Village
         /// </summary>
         private void GuardedKickoff(string source)
         {
+            // FTUE GUARD (regression fix 2026-07-08): while the first-time tutorial is active the
+            // ambient wave loop stays closed — BeginLoop() returns early on
+            // TutorialFlow.HostilesSuppressedForTutorial. Firing the force-start path here would
+            // arm RetryTillActive, which re-fires BeginLoop StartRetryCap times (each returns
+            // suppressed → phase never leaves Idle) and then emits a FlowTrace.Fail to the
+            // break-log for an EXPECTED state (the exact regression from the spawn-suppression fix).
+            // Exit CLEANLY here — a Step, NOT a retry loop and NOT a Fail — so ANY force-start caller
+            // (DEFEND button, dev seams, bot jump) is safe during the FTUE. The tutorial's OWN scripted
+            // teaching wave uses TutorialWaveSpawner -> SpawnEnemyForExternalMode, NOT this loop, so it
+            // is unaffected. This keys off !Onboarded exactly like the BeginLoop guard, so it LIFTS the
+            // instant onboarding completes and post-tutorial DEFEND / force-start works normally.
+            if (TutorialFlow.HostilesSuppressedForTutorial)
+            {
+                FlowTrace.Step("Wave", $"GuardedKickoff ({source}) — force-start suppressed: tutorial (FTUE) active; ambient wave loop stays closed until onboarding completes. No retry, no fail.");
+                return;
+            }
+
             try
             {
                 FlowTrace.Step("Wave", $"GuardedKickoff ({source}) — BeginLoop().Forget() phase={_phase}");
