@@ -355,7 +355,8 @@ namespace DeNelle.Village
             // Presentation (Core kit affordances — read the step model only).
             if (step.Objective != null && !string.IsNullOrEmpty(step.Objective.Text))
                 ObjectiveBannerUi.Show(step.Objective.Text, step.Objective.Count,
-                    step.Skippable ? (Action)SkipCurrentStep : null);
+                    step.Skippable ? (Action)SkipCurrentStep : null,
+                    (Action)SkipAll);   // persistent whole-FTUE skip (confirmed in the banner)
             if (step.Highlight != null && step.Highlight.Count > 0)
                 UiSpotlight.Show(step.Highlight[0]);
             else
@@ -409,6 +410,69 @@ namespace DeNelle.Village
             });
             FlowTrace.Step("Tutorial", $"STEP-SKIP :: {_step.Id}.");
             CompleteCurrentStep(skipped: true);
+        }
+
+        /// <summary>
+        /// Player-facing SKIP TUTORIAL (owner directive 2026-07-08): completes the ENTIRE
+        /// FTUE in one call so a skipper ends in the SAME state as a completer — NOT half-
+        /// granted. It (a) applies every mandatory step's cumulative essential GRANTS (today
+        /// the only <c>grant.*</c> authored is <c>first_tower.grant.prepaidTower</c> = +150
+        /// crystals; ApplyPrepaidTowerGrant is idempotent per save), (b) marks every step
+        /// seen so a resume never replays one, then (c) reuses the SINGLE completion path
+        /// <see cref="FinishFlow"/> — which sets Onboarded (GameStateService.FinishOnboarding),
+        /// tears down the spotlight/banner/pressure-hold, and kicks the normal town wave loop.
+        /// Step-scoped combat drivers (scripted town wave, staged rep) + any live contextual
+        /// hint are disarmed first so nothing fires after skip. Idempotent — a second call
+        /// once <see cref="Phase.Finished"/> is a no-op.
+        /// </summary>
+        public void SkipAll()
+        {
+            if (_phase == Phase.Finished) return;
+
+            FlowTrace.Step("Tutorial", $"SKIP-ALL :: requested at step '{(_step != null ? _step.Id : "<none>")}' " +
+                $"(index {_index}/{(_steps != null ? _steps.Count : 0)}) — completing the whole FTUE.");
+
+            // Disarm the current step's completion latch + every step-scoped combat driver so a
+            // late scripted-wave clear / still-pending rep stage can never fire after the skip.
+            _completionArmed = false;
+            _townWaveArmed = false;
+            _stagedRepPending = false;
+
+            // Dismiss any live contextual hint (clears its spotlight) so nothing lingers.
+            if (_activeCtx != null) CompleteContextual("skip");
+
+            // Apply EVERY mandatory step's cumulative essential grants + mark each step seen, so
+            // the skipper ends in the SAME state as a completer. ApplyPrepaidTowerGrant persists a
+            // grant flag BEFORE crediting (idempotent per save — no double-grant); already-seen
+            // steps are skipped for the seen-mark but their grant is still reconciled idempotently.
+            var svc = GameStateService.Instance;
+            var state = svc != null ? svc.State : null;
+            if (_steps != null)
+            {
+                foreach (var step in _steps)
+                {
+                    if (step == null || string.IsNullOrEmpty(step.Id)) continue;
+                    if (step.Grant != null && step.Grant.PrepaidTower)
+                        ApplyPrepaidTowerGrant(step);   // idempotent: no-op if already granted this save
+                    bool alreadySeen = state != null && state.SeenTutorials != null &&
+                        state.SeenTutorials.TryGetValue(SeenPrefix + step.Id, out bool seen) && seen;
+                    if (!alreadySeen) svc?.MarkTutorialSeen(SeenPrefix + step.Id);
+                }
+            }
+
+            DeNelle.Core.Analytics.EventTracker.Track("tutorial_skipped_all", new
+            {
+                fromStep = _step != null ? _step.Id : null,
+                index = _index,
+                seconds = Time.unscaledTime - _flowStartedAt,
+            });
+            FlowTrace.Step("Tutorial", "SKIP-ALL :: grants applied + all steps marked seen — finishing flow " +
+                "(Onboarded set, spotlight/banner/pressure-hold torn down, town loop kicked).");
+
+            // Reuse the SINGLE completion path — do NOT invent a divergent finisher.
+            _index = _steps != null ? _steps.Count : 0;
+            _step = null;
+            FinishFlow();
         }
 
         private void CompleteCurrentStep(bool skipped)

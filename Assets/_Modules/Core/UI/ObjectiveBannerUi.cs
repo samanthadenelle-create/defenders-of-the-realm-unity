@@ -40,6 +40,12 @@ namespace DeNelle.Core.UI
         private Button _skipBtn;
         private GameObject _skipHost;
         private Action _onSkip;
+        // Persistent "Skip Tutorial" affordance — completes the WHOLE FTUE (distinct
+        // from the per-step _skipHost Skip>). Shown whenever a caller supplies onSkipAll
+        // and confirmed through a lightweight kit confirm before firing (never on accident).
+        private Button _skipAllBtn;
+        private GameObject _skipAllHost;
+        private Action _onSkipAll;
         private bool _visible;
         private float _fadeT;
 
@@ -48,16 +54,18 @@ namespace DeNelle.Core.UI
         /// <summary>Show (or update) the objective line. <paramref name="count"/> &gt; 0
         /// appends " (0/count)"-style progress via <see cref="SetProgress"/>.
         /// <paramref name="onSkip"/> non-null ⇒ the Skip affordance shows and raises it.</summary>
-        public static void Show(string text, int count = 0, Action onSkip = null)
+        public static void Show(string text, int count = 0, Action onSkip = null, Action onSkipAll = null)
         {
             var b = Ensure();
             b._visible = true;
             b._onSkip = onSkip;
+            b._onSkipAll = onSkipAll;
             b._baseText = text ?? "";
             b._count = Mathf.Max(0, count);
             b._done = 0;
             b.RefreshLabel();
             if (b._skipHost != null) b._skipHost.SetActive(onSkip != null);
+            if (b._skipAllHost != null) b._skipAllHost.SetActive(onSkipAll != null);
         }
 
         /// <summary>Update progress on a counted objective (e.g. 1 of 1 towers).</summary>
@@ -74,6 +82,7 @@ namespace DeNelle.Core.UI
             if (_instance == null) return;
             _instance._visible = false;
             _instance._onSkip = null;
+            _instance._onSkipAll = null;
         }
 
         // ── Internals ─────────────────────────────────────────────────────────
@@ -184,6 +193,74 @@ namespace DeNelle.Core.UI
             st.raycastTarget = false;
 
             _skipHost.SetActive(false);
+
+            // Persistent "Skip Tutorial" affordance — top-right SCREEN corner (child of the
+            // canvas root, not the strip), so it stays put while the tutorial runs. Confirmed
+            // before it fires. Kit chrome vocabulary (obsidian glass + gold trim + parchment).
+            _skipAllHost = new GameObject("SkipTutorial", typeof(RectTransform), typeof(Image), typeof(Button));
+            _skipAllHost.transform.SetParent(transform, false);
+            var sart = (RectTransform)_skipAllHost.transform;
+            sart.anchorMin = new Vector2(1f, 1f);
+            sart.anchorMax = new Vector2(1f, 1f);
+            sart.pivot = new Vector2(1f, 1f);
+            sart.anchoredPosition = new Vector2(-14f, -14f);
+            sart.sizeDelta = new Vector2(180f, 44f);
+            var saimg = _skipAllHost.GetComponent<Image>();
+            saimg.color = new Color(ElarionUiKit.ObsidianFill.r, ElarionUiKit.ObsidianFill.g,
+                                    ElarionUiKit.ObsidianFill.b, 0.90f);
+            _skipAllBtn = _skipAllHost.GetComponent<Button>();
+            _skipAllBtn.targetGraphic = saimg;
+            ElarionUiKit.StyleButtonColors(_skipAllBtn);
+            _skipAllBtn.onClick.AddListener(RequestSkipAll);
+
+            // Gold trim rule along the bottom edge (kit chrome).
+            var satrim = new GameObject("Trim", typeof(RectTransform), typeof(Image));
+            satrim.transform.SetParent(sart, false);
+            var satr = (RectTransform)satrim.transform;
+            satr.anchorMin = new Vector2(0f, 0f);
+            satr.anchorMax = new Vector2(1f, 0f);
+            satr.pivot = new Vector2(0.5f, 0f);
+            satr.sizeDelta = new Vector2(0f, 2f);
+            var satimg = satrim.GetComponent<Image>();
+            satimg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f);
+            satimg.raycastTarget = false;
+
+            var saTextGo = new GameObject("Label", typeof(RectTransform));
+            saTextGo.transform.SetParent(sart, false);
+            var satxrt = (RectTransform)saTextGo.transform;
+            satxrt.anchorMin = Vector2.zero;
+            satxrt.anchorMax = Vector2.one;
+            satxrt.offsetMin = Vector2.zero;
+            satxrt.offsetMax = Vector2.zero;
+            var sat = saTextGo.AddComponent<TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(sat);
+            sat.fontSize = 20f;   // mobile-readable text floor (>=20px) — no 0-glyph casualty
+            sat.color = ElarionUi.Parchment;
+            sat.alignment = TextAlignmentOptions.Center;
+            sat.text = "Skip Tutorial";   // ASCII only (no glyphs in TMP)
+            sat.raycastTarget = false;
+
+            _skipAllHost.SetActive(false);
+        }
+
+        /// <summary>The persistent Skip-Tutorial tap: presentation raises a lightweight
+        /// confirm (kit ConfirmModal) and only invokes the caller's onSkipAll intent on
+        /// confirm — MVVM: the banner owns the confirm chrome, the caller owns what skip
+        /// means (TutorialFlow.SkipAll). Never fires on an accidental single tap.</summary>
+        private void RequestSkipAll()
+        {
+            var skip = _onSkipAll;
+            if (skip == null) return;
+
+            ElarionUiKit.ConfirmModal modal = null;
+            modal = ElarionUiKit.BuildConfirmModal(
+                "SkipTutorialConfirm",
+                "Skip Tutorial",
+                "Skip the tutorial? You'll keep everything it grants.",
+                "Skip",
+                "Keep Playing",
+                onConfirm: () => { if (modal != null && modal.canvas != null) Destroy(modal.canvas); skip(); },
+                onCancel:  () => { if (modal != null && modal.canvas != null) Destroy(modal.canvas); });
         }
 
         private void Update()
@@ -192,7 +269,8 @@ namespace DeNelle.Core.UI
             _fadeT = Mathf.Clamp01(_fadeT + dir * (Time.unscaledDeltaTime / FadeSeconds));
             float eased = _fadeT * _fadeT * (3f - 2f * _fadeT);
             _group.alpha = eased;
-            _group.blocksRaycasts = _visible && _onSkip != null;   // only for the Skip tap
+            // Raycast only for a live tap target: the per-step Skip> or the persistent Skip Tutorial.
+            _group.blocksRaycasts = _visible && (_onSkip != null || _onSkipAll != null);
             _group.interactable = _group.blocksRaycasts;
         }
     }
