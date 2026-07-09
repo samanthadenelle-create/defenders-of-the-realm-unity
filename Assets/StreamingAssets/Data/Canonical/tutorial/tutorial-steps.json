@@ -12,7 +12,7 @@
       "highlight": ["world.sylas"],
       "completion": { "signal": "hero.reached:sylas_anchor" },
       "skippable": true,
-      "objective": { "text": "Walk to Sylas, the scout by the gate" }
+      "objective": { "text": "Walk to Sylas, the scout in the town square" }
     },
     {
       "id": "meet_sylas",

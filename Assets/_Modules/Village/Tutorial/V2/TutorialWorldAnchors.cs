@@ -20,7 +20,9 @@
 // =============================================================================
 
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace DeNelle.Village
 {
@@ -35,6 +37,10 @@ namespace DeNelle.Village
         private static float _sylasCachedAt = float.NegativeInfinity;
         private static Transform _gateCache;
         private static float _gateCachedAt = float.NegativeInfinity;
+        private static Transform _townAnchor;
+
+        // Runtime holder for the SAFE TOWN Sylas anchor (see ResolveTownAnchor).
+        private const string TownAnchorName = "SylasTownAnchor (runtime)";
 
         private void OnEnable()
         {
@@ -94,9 +100,50 @@ namespace DeNelle.Village
                 // 2. Any explicitly-named Sylas object (future dedicated NPC spawn).
                 go = GameObject.Find("Sylas");
             }
+            // 3. No Sylas body (ff.singlehero default ON no-ops both companion-intro
+            //    spawners) -> a SAFE TOWN anchor, NOT the nearest wave gate. The old
+            //    ResolveNearestGate() fallback put "Sylas" ON the enemy WAVE-SPAWN
+            //    cluster CastleSpawnPointInjector injects just outside the south gate
+            //    (z ~ -60..-64), so step 1 "walk to Sylas" marched the player straight
+            //    onto the spawn ring — owner F8 2026-07-08 "when you start at the gate
+            //    the enemies spawn on you". Town anchor = a short, safe in-town walk.
             _sylasCache = go != null ? go.transform
-                                     : ResolveNearestGate();   // 3. "the scout by the gate"
+                                     : ResolveTownAnchor();
             return _sylasCache;
+        }
+
+        // ── Safe TOWN anchor (single-hero: no Sylas body to walk up to) ────────
+
+        /// <summary>
+        /// A safe town spot for the tutorial's "walk to Sylas" step when no Sylas body
+        /// exists — a short walk from the baked hero start (world ~origin / the Heart in
+        /// Main_Castle_Overworld, town-central, NORTH of the south gate at z=-50) and
+        /// ~65m from the south wave-spawn cluster (z ~ -60..-64, CastleSpawnPointInjector).
+        /// Replaces the old nearest-wave-gate fallback that sat the player on the enemy
+        /// spawn ring. Snapped onto the baked walkable courtyard NavMesh; (6,0,4) is the
+        /// same known-walkable courtyard point HeroControlEnsurer's hero-recovery uses.
+        /// Created once per scene (a runtime holder, cleared on scene change).
+        /// </summary>
+        private static Transform ResolveTownAnchor()
+        {
+            if (_townAnchor != null) return _townAnchor;
+
+            var existing = GameObject.Find(TownAnchorName);
+            if (existing != null) { _townAnchor = existing.transform; return _townAnchor; }
+
+            Vector3 townPos = new Vector3(6f, 0f, 4f);
+            if (NavMesh.SamplePosition(townPos, out var hit, 12f, NavMesh.AllAreas))
+                townPos = hit.position;
+
+            var anchor = new GameObject(TownAnchorName);
+            anchor.transform.position = townPos;
+            _townAnchor = anchor.transform;
+
+            FlowTrace.Step("Tutorial",
+                $"Sylas TOWN anchor placed at {townPos} (safe town spot, " +
+                $"~{Vector3.Distance(townPos, new Vector3(0f, 0f, -62f)):0}m from the south gate spawn cluster) " +
+                "— replaces the enemy-spawn nearest-gate fallback (owner F8 'enemies spawn on you').");
+            return _townAnchor;
         }
 
         // ── Nearest gate to the hero ──────────────────────────────────────────
