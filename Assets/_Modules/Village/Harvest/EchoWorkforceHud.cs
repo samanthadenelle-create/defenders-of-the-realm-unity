@@ -29,6 +29,7 @@ using UnityEngine.EventSystems;
 using TMPro;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Village.Buildings.Progression;
 
 namespace DeNelle.Village
 {
@@ -133,10 +134,9 @@ namespace DeNelle.Village
                 new Color(0.85f, 0.85f, 0.9f, 1f), ElarionUi.FontBody, TextAlignmentOptions.Center,
                 0.08f, 0.92f, bold: false);
 
-            // Dump All button (large tap target) -> EchoService.DumpSilos().
-            // Seated ABOVE the shared Close band (bottom 0.25 > Close top ≈0.192 + gap).
-            var dumpBtn = ElarionUiKit.Button(content, "Dump All", ElarionUiKit.ButtonKind.Confirm,
-                new Vector2(0.22f, 0.25f), new Vector2(0.78f, 0.42f), OnDumpTapped);
+            // Collect All (CoC pipe-home): collectors pending + echo silo.
+            var dumpBtn = ElarionUiKit.Button(content, "Collect All", ElarionUiKit.ButtonKind.Confirm,
+                new Vector2(0.22f, 0.25f), new Vector2(0.78f, 0.42f), OnCollectAllTapped);
             _dumpLabel = dumpBtn != null ? dumpBtn.GetComponentInChildren<TextMeshProUGUI>() : null;
         }
 
@@ -149,17 +149,19 @@ namespace DeNelle.Village
             if (_fill != null) _fill.fillAmount = svc.FillFraction;
             if (_siloLabel != null)
             {
-                int pct = Mathf.RoundToInt(svc.FillFraction * 100f);
-                _siloLabel.text = $"Silo  {pct}%   ({Mathf.FloorToInt((float)svc.Silo)})";
+                int pending = ResourceCollectorService.TotalPending();
+                int siloPct = Mathf.RoundToInt(svc.FillFraction * 100f);
+                int collectorPct = Mathf.RoundToInt(ResourceCollectorService.MaxFillFraction() * 100f);
+                _siloLabel.text = $"Pending  {pending}   Echo {siloPct}%   Collectors {collectorPct}%";
             }
         }
 
-        private void OnDumpTapped()
+        private void OnCollectAllTapped()
         {
-            int banked = EchoService.Instance != null ? EchoService.Instance.DumpSilos() : 0;
+            int banked = ResourceCollectorService.CollectAll();
             if (_dumpLabel != null)
             {
-                _dumpLabel.text = banked > 0 ? $"+{banked} banked!" : "Silo empty";
+                _dumpLabel.text = banked > 0 ? $"+{banked} collected!" : "Nothing to collect";
                 CancelInvoke(nameof(ResetDumpLabel));
                 Invoke(nameof(ResetDumpLabel), 1.5f);
             }
@@ -168,7 +170,7 @@ namespace DeNelle.Village
 
         private void ResetDumpLabel()
         {
-            if (_dumpLabel != null) _dumpLabel.text = "Dump All";
+            if (_dumpLabel != null) _dumpLabel.text = "Collect All";
         }
 
         private void OnEchoUnlocked(int newCount)

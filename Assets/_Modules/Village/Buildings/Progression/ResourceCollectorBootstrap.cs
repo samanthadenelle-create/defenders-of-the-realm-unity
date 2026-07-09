@@ -1,0 +1,103 @@
+// =============================================================================
+// ResourceCollectorBootstrap — wire typed hub collectors + DDOL fallbacks (WO-664).
+// No scene hand-edit — finds storefronts by name or spawns logical hosts.
+// =============================================================================
+
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using DeNelle.Core.Diagnostics;
+
+namespace DeNelle.Village.Buildings.Progression
+{
+    public static class ResourceCollectorBootstrap
+    {
+        private const string HostName = "ResourceCollectorHost";
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Init()
+        {
+            EnsureHost();
+            WireScene(SceneManager.GetActiveScene());
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            SceneManager.sceneLoaded += OnSceneLoaded;
+        }
+
+        private static void OnSceneLoaded(Scene scene, LoadSceneMode mode) => WireScene(scene);
+
+        private static void EnsureHost()
+        {
+            var existing = GameObject.Find(HostName);
+            if (existing != null) return;
+            var host = new GameObject(HostName);
+            Object.DontDestroyOnLoad(host);
+            FlowTrace.Step("Harvest", "ResourceCollectorHost DDOL created");
+        }
+
+        private static void WireScene(Scene scene)
+        {
+            if (!scene.IsValid()) return;
+
+            EnsureCollectorOn(ResourceBuildingProgression.FarmId, "Windmill_Food_Storefront");
+            EnsureCollectorOn(ResourceBuildingProgression.LumbermillId, "Lumbermill_Wood_Storefront");
+            EnsureCollectorOn(ResourceBuildingProgression.ForgeId, "Forge_Armor_Storefront");
+
+            // Logical fallbacks when hub storefronts are absent (OuterWorld / Village2).
+            EnsureFallbackCollector(ResourceBuildingProgression.FarmId);
+            EnsureFallbackCollector(ResourceBuildingProgression.LumbermillId);
+            EnsureFallbackCollector(ResourceBuildingProgression.ForgeId);
+        }
+
+        private static void EnsureCollectorOn(string buildingId, string storefrontName)
+        {
+            var found = GameObject.Find(storefrontName);
+            if (found == null) return;
+
+            var col = found.GetComponent<ResourceCollector>();
+            if (col == null) col = found.AddComponent<ResourceCollector>();
+            col.Configure(buildingId);
+
+            // Slim hitbox for siege contact (non-trigger, Default layer).
+            if (found.GetComponent<Collider>() == null)
+            {
+                var box = found.AddComponent<BoxCollider>();
+                box.size = new Vector3(4f, 3f, 4f);
+                box.center = new Vector3(0f, 1.5f, 0f);
+                box.isTrigger = false;
+            }
+
+            FlowTrace.Once("Harvest", $"wire-{buildingId}",
+                $"collector wired building={buildingId} storefront={storefrontName}");
+        }
+
+        private static void EnsureFallbackCollector(string buildingId)
+        {
+            if (ResourceCollectorRegistry.Get(buildingId) != null) return;
+
+            var host = GameObject.Find(HostName);
+            if (host == null) return;
+
+            var childName = "Collector_" + buildingId;
+            Transform child = host.transform.Find(childName);
+            GameObject go;
+            if (child != null)
+                go = child.gameObject;
+            else
+            {
+                go = new GameObject(childName);
+                go.transform.SetParent(host.transform, false);
+            }
+
+            var col = go.GetComponent<ResourceCollector>();
+            if (col == null) col = go.AddComponent<ResourceCollector>();
+            col.Configure(buildingId);
+            if (go.GetComponent<Collider>() == null)
+            {
+                var box = go.AddComponent<BoxCollider>();
+                box.size = new Vector3(3f, 2f, 3f);
+                box.isTrigger = false;
+            }
+            FlowTrace.Once("Harvest", $"fallback-{buildingId}",
+                $"collector fallback host for building={buildingId}");
+        }
+    }
+}

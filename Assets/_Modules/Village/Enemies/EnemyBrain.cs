@@ -173,6 +173,94 @@ namespace DeNelle.Village
             }
         }
 
+        // Wave-squad flankers opt into coordinated pincer release (EnemyGroupCoordinator).
+        private static TacticalData s_coordinatedFlankerTactics;
+        public static TacticalData CoordinatedFlankerTactics
+        {
+            get
+            {
+                if (s_coordinatedFlankerTactics == null)
+                {
+                    s_coordinatedFlankerTactics = ScriptableObject.CreateInstance<TacticalData>();
+                    s_coordinatedFlankerTactics.name = "TacticalData_CoordinatedFlanker(runtime)";
+                    s_coordinatedFlankerTactics.Archetype = EnemyArchetype.Flanker;
+                    s_coordinatedFlankerTactics.FlankAngleOffset = 90f;
+                    s_coordinatedFlankerTactics.CoordinatedFlank = true;
+                }
+                return s_coordinatedFlankerTactics;
+            }
+        }
+
+        // Front-line tanks: direct siege march with a brief group-hold beat.
+        private static TacticalData s_siegeTactics;
+        public static TacticalData SiegeTactics
+        {
+            get
+            {
+                if (s_siegeTactics == null)
+                {
+                    s_siegeTactics = ScriptableObject.CreateInstance<TacticalData>();
+                    s_siegeTactics.name = "TacticalData_Siege(runtime)";
+                    s_siegeTactics.Archetype = EnemyArchetype.Siege;
+                    s_siegeTactics.SuppressDelay = 1.5f;
+                }
+                return s_siegeTactics;
+            }
+        }
+
+        // Healers cluster with wounded allies instead of charging solo.
+        private static TacticalData s_supportTactics;
+        public static TacticalData SupportTactics
+        {
+            get
+            {
+                if (s_supportTactics == null)
+                {
+                    s_supportTactics = ScriptableObject.CreateInstance<TacticalData>();
+                    s_supportTactics.name = "TacticalData_Support(runtime)";
+                    s_supportTactics.Archetype = EnemyArchetype.Support;
+                }
+                return s_supportTactics;
+            }
+        }
+
+        /// <summary>
+        /// Map a roster/family id to an <see cref="EnemyRole"/> (orc-tank → Tank, orc-mage → Ranged).
+        /// Shared by BattleArena, overworld families, and spawn-area data.
+        /// </summary>
+        public static EnemyRole RoleForId(string id)
+        {
+            string s = (id ?? "").ToLowerInvariant();
+            if (s.Contains("tank")) return EnemyRole.Tank;
+            if (s.Contains("mage") || s.Contains("caster") || s.Contains("shaman")) return EnemyRole.Ranged;
+            if (s.Contains("heal") || s.Contains("acolyte")) return EnemyRole.Healer;
+            return EnemyRole.DPS;
+        }
+
+        /// <summary>
+        /// Assign the shared runtime <see cref="TacticalData"/> archetype for a wave/arena role.
+        /// Null-safe; no-op when <paramref name="brain"/> is null.
+        /// </summary>
+        public static void ApplyRoleTactics(EnemyBrain brain, EnemyRole role)
+        {
+            if (brain == null) return;
+            switch (role)
+            {
+                case EnemyRole.Ranged:
+                    brain.SetTactics(KiterTactics);
+                    break;
+                case EnemyRole.DPS:
+                    brain.SetTactics(CoordinatedFlankerTactics);
+                    break;
+                case EnemyRole.Tank:
+                    brain.SetTactics(SiegeTactics);
+                    break;
+                case EnemyRole.Healer:
+                    brain.SetTactics(SupportTactics);
+                    break;
+            }
+        }
+
         // ── Runtime ───────────────────────────────────────────────────────────
 
         private Enemy    _enemy;
@@ -269,6 +357,12 @@ namespace DeNelle.Village
 
         /// <summary>Current tactical posture. Read by <see cref="EnemyGroupCoordinator"/>.</summary>
         public EnemyTacticalState TacticalState => _tacticalState;
+
+        /// <summary>True while this brain is committed to a fight — drives combat-idle locomotion.</summary>
+        public bool WantsCombatPresentation =>
+            _currentTarget != null
+            || Time.time < _provokedUntil
+            || (Time.time < _tauntUntil && _taunter != null);
 
         /// <summary>
         /// Suppress delay from the assigned <see cref="TacticalData"/>; 0 when no
@@ -1003,6 +1097,15 @@ namespace DeNelle.Village
                 if (tower != null && tower.IsAlive)
                 {
                     ConsiderCandidate(tower.transform, 0.5f, 1f, 0.6f,
+                                      scanR, roleW, lowHpW, threatW, distW, bias, ref best, ref bestScore);
+                    continue;
+                }
+
+                // CoC collectors (WO-664): high-value when pending bubble is full.
+                var loot = _scanBuffer[i].GetComponentInParent<ISiegeLootTarget>();
+                if (loot != null && loot.IsLootTargetAlive)
+                {
+                    ConsiderCandidate(loot.LootTransform, loot.SiegeRoleValue, 1f, 0.55f,
                                       scanR, roleW, lowHpW, threatW, distW, bias, ref best, ref bestScore);
                     continue;
                 }

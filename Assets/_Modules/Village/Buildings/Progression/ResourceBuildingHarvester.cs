@@ -12,9 +12,9 @@
 // per-building cooldown for Farm / Lumbermill / Forge, reads the live level's
 // HarvestInterval (the SPEED upgrade axis) + effective yield (YieldPerTick ×
 // YieldSizeMultiplier, the SIZE axis), and credits the harvestable through the
-// existing ResourceLedger.Credit surface (which persists + raises ResourcesChanged
-// so the HUD resource bar updates). Upgrading a building now visibly ticks FASTER
-// and pays MORE — the speed/size fields have a real effect, not just a number.
+// ResourceCollector pending buffer (CoC spine WO-663): ticks accrue into Pending on
+// each collector; the player Collect All at Heart banks into the wallet. Upgrading
+// a building now visibly ticks FASTER and fills the bubble MORE.
 //
 // SCOPE / CROSS-SILO: this references only the silo's own data (Progression +
 // ResourceLedger, both DeNelle.Village -> DeNelle.Core legal). It does NOT touch
@@ -85,11 +85,14 @@ namespace DeNelle.Village.Buildings.Progression
                 int amount = ResourceBuildingState.CurrentEffectiveYield(id);
                 if (amount <= 0) continue;
 
-                // WO-424: bank through EconomyService (the in-session pool the HUD bar
-                // READS) so Lumbermill→Wood / Forge→Iron actually move the counter. Routing
-                // through ResourceLedger.Credit wrote GameState.Wood/.Iron, which Snapshot
-                // never reads back — so Wood/Iron ticks were invisible on the HUD (Food/
-                // Crystals happened to work because Snapshot proxies those from GameState).
+                var collector = ResourceCollectorRegistry.Get(id);
+                if (collector != null)
+                {
+                    collector.Accrue(amount);
+                    continue;
+                }
+
+                // Pre-bootstrap fallback: direct grant when collector not wired yet.
                 var econ = EconomyService.Instance;
                 if (econ != null)
                 {
@@ -103,7 +106,6 @@ namespace DeNelle.Village.Buildings.Progression
                 }
                 else
                 {
-                    // Pre-bootstrap fallback: still persist so the tick isn't lost.
                     ResourceLedger.Credit(def.Yields, amount);
                 }
             }

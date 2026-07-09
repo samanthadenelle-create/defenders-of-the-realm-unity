@@ -223,6 +223,7 @@ namespace DeNelle.Village
         // (idle<->walk<->run pops). Only the ANIM feed is damped; gameplay reads raw.
         private float _animSpeedSmoothed;
         private const float AnimSpeedDampSecs = 0.12f; // ~response time of the smoothing
+        private bool _presentationCombat;   // overworld rep / external alert — braced combat locomotion
 
         // ── DEF-21 / DEF-72: EnemyBrain nav-target override ──────────────────
         // DEF-21: EnemyBrain.Update() calls SetBrainTarget each frame with a role-
@@ -447,6 +448,21 @@ namespace DeNelle.Village
         /// Pass null to clear the override and revert to the role/Heart-march path.
         /// </summary>
         public void SetBrainTargetPosition(Vector3? pos) => _brainPositionOverride = pos;
+
+        /// <summary>Braced combat locomotion (InCombat) for overworld packs / alert hooks.</summary>
+        public void SetCombatPresentation(bool on) => _presentationCombat = on;
+
+        /// <summary>Cosmetic gesture while idle-roaming — wind-up, cast pose, or swing by role.</summary>
+        public void PlayAmbientGesture()
+        {
+            var brain = GetComponent<EnemyBrain>();
+            if (brain != null && brain.Role == EnemyRole.Ranged)
+                _actor?.PlayCast();
+            else if (brain != null && brain.Role == EnemyRole.Tank)
+                _actor?.PlayWindUp();
+            else
+                _actor?.PlayAttack();
+        }
 
         /// <summary>
         /// DEF-21: Restore HP by <paramref name="amount"/> up to <see cref="MaxHp"/>.
@@ -890,12 +906,19 @@ namespace DeNelle.Village
             if (DeNelle.Core.FeatureFlags.EnemyInjuredStance)
                 _actor?.SetInjured(HpFraction < 0.3f);
 
-            // Battle idle / ready when stopped with target (for family enemies in combat).
-            // Combined with speed drive gives Idle (0 no target), Movement, Engagement/BattleReady.
-            // Hit/Death/Attack driven from damage/contact (PlayHit/PlayAttack/Die on _actor
-            // in TickContactAttack / OnDamage hooks if wired; see EnemyHitReaction).
-            if (speed < 0.1f && _currentTarget != null)
-                _actor?.SetCombatStance(true);
+            // Combat-stance locomotion (InCombat bool): braced idle + weapon gait while alert,
+            // chasing, or stopped on a target. PresentationCombat covers overworld rep packs;
+            // EnemyBrain covers wave/arena fighters.
+            bool inCombat = _presentationCombat;
+            if (!inCombat)
+            {
+                var brain = GetComponent<EnemyBrain>();
+                if (brain != null && brain.enabled)
+                    inCombat = brain.WantsCombatPresentation;
+                else if (speed < 0.1f && _currentTarget != null)
+                    inCombat = true;
+            }
+            _actor?.SetCombatStance(inCombat);
 
             // FOOT-SKATE MEASURE (owner 2026-07-04, gates the KnightMocap builder) — mirrors
             // HeroLoco: emit each ACTIVE locomotion clip's name + blend weight + authored length
@@ -1385,7 +1408,7 @@ namespace DeNelle.Village
 
             NoteHeroDamageSource(_currentTarget);
             _currentTarget.ApplyContactDamage(_contactDamage);
-            if (_animator != null && _hasAttackParam) _animator.SetTrigger(AnimAttack);
+            _actor?.PlayAttack();
             PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
         }
 
@@ -1435,7 +1458,7 @@ namespace DeNelle.Village
             // ── Legacy instant ranged hit (flag OFF) ─────────────────────────
             NoteHeroDamageSource(structure);
             structure.ApplyContactDamage(damage);
-            if (_animator != null && _hasAttackParam) _animator.SetTrigger(AnimAttack);
+            _actor?.PlayCast();
             PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
             return true;
         }
@@ -1700,7 +1723,7 @@ namespace DeNelle.Village
                 origin, radius, _structureScanBuffer, ~0, QueryTriggerInteraction.Ignore);
 
             IDamageableStructure nearest = null;
-            float nearestSqr = float.MaxValue;
+            float bestScore = float.MinValue;
             // F8-41 reject tally — split silent `continue`s into named reasons so a capture shows
             // WHY the sweep found nothing: count=0 (radius too small / no colliders) vs all-filtered
             // (only hero/dead/no-component in range). Behaviour-neutral: same accepts, same `nearest`.
@@ -1717,7 +1740,12 @@ namespace DeNelle.Village
                 if (structure is HeroHealth) { rejHero++; continue; }
                 accepted++;
                 float sqr = (c.transform.position - transform.position).sqrMagnitude;
-                if (sqr < nearestSqr) { nearestSqr = sqr; nearest = structure; }
+                float dist = Mathf.Sqrt(sqr);
+                float normDist = radius > 0.01f ? Mathf.Clamp01(dist / radius) : 0f;
+                var loot = structure as ISiegeLootTarget;
+                float role = loot != null && loot.IsLootTargetAlive ? loot.SiegeRoleValue : 0.3f;
+                float score = role * (1f - normDist * 0.35f);
+                if (score > bestScore) { bestScore = score; nearest = structure; }
             }
 
             // F8-41 gate: name the scan outcome every ~2s per enemy. This is the line that PROVES
