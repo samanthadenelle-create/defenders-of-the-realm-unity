@@ -41,18 +41,18 @@ namespace DeNelle.Village
         [Tooltip("Auto-load GameState.BaseLayout on Start. Disable to drive load manually (tests).")]
         [SerializeField] private bool _loadOnStart = true;
 
-        // HUB-SCOPE GUARD (build-defense regression, owner playtest 2026-06-19):
-        // GameState.BaseLayout is the PLAYER'S VILLAGE base — a single GLOBAL list (NOT
-        // scene-scoped). The pure HUB scenes (MainCastle_Hall / CastleHub) are NOT the
-        // village; they must never replay the village base. Build Mode was wired into the
-        // castle hub by commit ff2d64b7 ("drop Village-only scene guard"), which also let a
-        // place-in-hub spin up a BaseLayoutLoader whose Start() then re-instantiated the
-        // WHOLE prior-session village base INTO THE HUB ("it remembers the previous play's
-        // towers and re-adds them on load"). This is the regressed guard, restored: the
-        // loader spawns the base layout ONLY in a buildable VILLAGE scene, never in a hub.
+        // HUB-SCOPE GUARD (build-defense regression, owner playtest 2026-06-19; RESCOPED
+        // F8-39/COV-001 2026-07-08): GameState.BaseLayout is the PLAYER'S HOME base — a single
+        // GLOBAL list (NOT scene-scoped). Under the combat pivot the base is now BUILT and
+        // COMMITTED in the HOME HUB (SceneRouter.Castle = MainCastle_Hall, or Main_Castle_Overworld
+        // when ff.MergedWorld is ON) — see BuildModeController.CommitLayout ("MainCastle_Hall is the
+        // HOME hub where the player's base IS built"). So the home hub MUST replay its own base on a
+        // reload; skipping it was F8-39 ("towers vanish on death->GoCastle return, all reappear when
+        // I add one"). MainCastle_Hall is therefore REMOVED from this skip set (proven by
+        // TowerRespawnRegression). The set now only names LEGACY pure-hub variants that are NOT a
+        // base-build scene, so a stray place-in-a-non-base-hub can't dump the home base into them.
         private static readonly HashSet<string> _hubScenesNoBaseLayout = new HashSet<string>
         {
-            "MainCastle_Hall",
             "CastleHub",
         };
 
@@ -134,12 +134,12 @@ namespace DeNelle.Village
             if (_loadedOnce) return;
             _loadedOnce = true;
 
-            // HUB-SCOPE GUARD: never replay the player's VILLAGE base into a pure HUB scene
-            // (MainCastle_Hall / CastleHub). BaseLayout is a single GLOBAL list, so without
-            // this a build-in-hub (which spins up this loader via EnsureExists) would dump the
-            // whole prior-session village base into the hub — the reported "remembers previous
-            // play's towers and re-adds them" regression. Self-reports so a future regression
-            // (a new hub name, or the guard removed again) is visible in the capture, §12.
+            // HUB-SCOPE GUARD: never replay the home base into a LEGACY pure-hub variant that is
+            // NOT a base-build scene (CastleHub — see _hubScenesNoBaseLayout). BaseLayout is a
+            // single GLOBAL list, so a stray build-in-a-non-base-hub would dump the whole home base
+            // there. The HOME hub (SceneRouter.Castle = MainCastle_Hall / Main_Castle_Overworld) is
+            // NOT in the set — it is where the base is built/committed, so it MUST replay (F8-39 fix).
+            // Self-reports so a future regression (a new hub name mis-added) is visible in capture, §12.
             string scene = SceneManager.GetActiveScene().name;
             if (_hubScenesNoBaseLayout.Contains(scene))
             {
@@ -382,6 +382,87 @@ namespace DeNelle.Village
             FlowTrace.Step("Structure",
                 $"'{go.name}' footprint blocker: stripped {stripped} visual collider(s); " +
                 $"kept root footprint box {w:0.##}x{d:0.##}m (h=4) as the one physical/nav footprint.");
+        }
+    }
+
+    /// <summary>
+    /// F8-39 / COV-001 (owner felt-test 2026-07-08: "on town respawn after death all the towers
+    /// are missing until I add one, then all replaced"). ROOT: <see cref="BaseLayoutLoader"/> is
+    /// created ONLY lazily inside <c>BuildModeController.Place</c> (the sole
+    /// <see cref="BaseLayoutLoader.EnsureExists"/> caller) — NOTHING recreates it on a scene load.
+    /// So on the death → <c>SceneRouter.GoCastle()</c> hub RELOAD the loader (and every tower) is
+    /// torn down with the old scene and the persisted <see cref="GameState.BaseLayout"/> is never
+    /// replayed → the towers vanish; the base only re-materialises when the player PLACES one,
+    /// which lazily recreates the loader whose deferred <c>Start()</c> then runs the full
+    /// <see cref="BaseLayoutLoader.Rebuild"/> (the "all reappear at once" tell).
+    /// <para>
+    /// FIX: a self-bootstrapping DDOL singleton (mirrors <c>SafeZoneRecovery</c> /
+    /// <c>HeroHealthBootstrap</c> — no scene edit, CLAUDE.md §3) that ENSURES a loader exists the
+    /// moment the HOME HUB (<c>SceneRouter.Castle</c> — MainCastle_Hall, or Main_Castle_Overworld
+    /// when ff.MergedWorld is ON) loads, so the persisted base auto-replays on the death-return AND
+    /// on a fresh boot, with NO placement needed. Gated to the home hub ONLY (the scene where the
+    /// base is built/committed) so it never dumps the home base into Village2 / raids / dungeons.
+    /// No double-build: each scene load destroys the previous (non-DDOL) loader, and the loader's
+    /// own idempotent <c>_loadedOnce</c> latch builds exactly once per instance;
+    /// <see cref="BaseLayoutLoader.EnsureExists"/> returns the existing instance if a placement
+    /// already made one this load.
+    /// </para>
+    /// </summary>
+    internal sealed class BaseLayoutLoaderBootstrap : MonoBehaviour
+    {
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Boot()
+        {
+            var go = new GameObject("BaseLayoutLoaderBootstrap");
+            DontDestroyOnLoad(go);
+            go.AddComponent<BaseLayoutLoaderBootstrap>();
+        }
+
+        private void Awake()
+        {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            SceneManager.sceneLoaded += OnSceneLoaded;
+            // The scene that booted us may already BE the home hub (fresh boot straight into
+            // MainCastle_Hall / Main_Castle_Overworld) — arm immediately so the base loads at boot.
+            TryArmForScene(SceneManager.GetActiveScene().name);
+        }
+
+        private void OnDestroy()
+        {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+        }
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            // Single loads only — an additive stream must not re-arm/rebuild the base.
+            if (mode != LoadSceneMode.Single) return;
+            TryArmForScene(scene.name);
+        }
+
+        /// <summary>Ensure the loader (and thus the base replay) exists when the HOME HUB loads.</summary>
+        private void TryArmForScene(string sceneName)
+        {
+            // Replay the persisted HOME base ONLY in the scene it is built/committed in
+            // (SceneRouter.Castle — flag-aware: MainCastle_Hall, or Main_Castle_Overworld when
+            // ff.MergedWorld is ON). Never in Village2 / raids / dungeons / enemy scenes.
+            if (string.IsNullOrEmpty(sceneName) || sceneName != DeNelle.Core.SceneRouter.Castle) return;
+
+            // A placement this same load may have already spun the loader up — don't make a second.
+            if (BaseLayoutLoader.Instance != null)
+            {
+                FlowTrace.Step("BaseLayout",
+                    $"Bootstrap: home hub '{sceneName}' loaded — a BaseLayoutLoader already exists " +
+                    $"(loaded={BaseLayoutLoader.Instance.Loaded.Count}); leaving it to its own replay.");
+                return;
+            }
+
+            // Create the loader; its Start() runs LoadFromState() → Rebuild() → the base replays
+            // (the death->GoCastle return + fresh boot, with no placement). Rebuild logs the rebuilt
+            // count; this Step names the trigger so a capture reads "base replayed on hub load".
+            FlowTrace.Step("BaseLayout",
+                $"Bootstrap: home hub '{sceneName}' loaded with NO loader — ensuring BaseLayoutLoader so " +
+                "the persisted base AUTO-REPLAYS (death->GoCastle return / fresh boot), no placement needed.");
+            BaseLayoutLoader.EnsureExists();
         }
     }
 }
