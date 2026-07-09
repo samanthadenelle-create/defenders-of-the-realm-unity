@@ -36,7 +36,7 @@ namespace DeNelle.Village
     /// every Hostile in a radius around the impact. Stats are copied off the
     /// catalog RepoProps by StructureFactory; all fields are tunable in-Inspector.
     /// </summary>
-    public sealed class ArcaneTower : MonoBehaviour
+    public sealed class ArcaneTower : MonoBehaviour, IDamageableStructure
     {
         [Header("Core combat (set from the catalog RepoProps by StructureFactory)")]
         public float Range     = 22f;
@@ -61,6 +61,95 @@ namespace DeNelle.Village
         // range/LOS bonus. 1 = ground (no bonus); set by BaseLayoutLoader.Spawn (e.g. 1.25) when
         // wall-mounted. A MULTIPLIER on EffectiveRange so it survives tier upgrades. Bounded.
         public float ElevationRangeMult = 1f;
+
+        // ── IDamageableStructure — the marching-enemy siege target (F8-41) ─────
+        // ROOT of F8-41 (DefenseTargetableRegression): like DefenseTower, this component did NOT
+        // implement IDamageableStructure, so Enemy.SweepForNearestStructure's
+        // collider.GetComponentInParent<IDamageableStructure>() returned null for the spire —
+        // enemies marched straight past it. Implementing the interface (mirrors WallSegment / Gate)
+        // makes the arcane spire a real siege target. The arcane tower is always player-owned.
+        //
+        // HP: no per-entry hp is authored in structures-catalog.json / RepoProps, so this is a
+        // serialized default. 160 is sturdier than a wall (WallSegment's 0-100 track) but a touch
+        // squishier than the single-target DefenseTower (200) — the AoE spire reads as the softer,
+        // higher-value backline target. Tunable.
+        [Header("Durability (IDamageableStructure — enemy siege target)")]
+        [Tooltip("Max HP. Enemies deal contact damage to the spire they path to. No catalog hp is " +
+                 "authored; this default (160) is sturdier than a wall, slightly softer than DefenseTower (200).")]
+        [SerializeField, Min(10f)] private float _maxHp = 160f;
+        private float _hp = -1f;   // <0 = not yet initialised; set to _maxHp on first use / Awake
+
+        /// <summary>Fired once when enemies destroy this spire (HP reaches 0). Observers
+        /// (respawn/persistence) can subscribe; the F8-39 respawn work owns re-placement.</summary>
+        public event System.Action<ArcaneTower> Destroyed;
+
+        /// <summary>Current HP (lazy-initialised to <see cref="_maxHp"/>).</summary>
+        private float Hp
+        {
+            get { if (_hp < 0f) _hp = _maxHp; return _hp; }
+        }
+
+        /// <summary><see cref="IDamageableStructure"/> — true while the spire still stands.</summary>
+        public bool IsAlive => Hp > 0f;
+
+        /// <summary>
+        /// <see cref="IDamageableStructure"/> contact-attack entry point — a Hollow One in melee
+        /// contact routes its hit here (the SAME seam WallSegment / Gate / the Heart use). Reduces
+        /// HP; at zero the spire is destroyed and <see cref="Destroyed"/> fires. Traces the hit +
+        /// the kill (§12).
+        /// </summary>
+        public void ApplyContactDamage(float amount)
+        {
+            if (amount <= 0f || Hp <= 0f) return;
+
+            _hp = Hp - amount;
+            FlowTrace.Throttle("ArcaneTower", $"hurt:{GetInstanceID()}", 1f,
+                $"'{name}' took {amount:0.#} contact dmg -> HP {_hp:0.#}/{_maxHp:0.#} (enemy siege).");
+
+            if (_hp <= 0f)
+            {
+                _hp = 0f;
+                FlowTrace.Step("ArcaneTower", $"'{name}' DESTROYED by enemy siege (HP 0) — removing spire.");
+                Destroyed?.Invoke(this);
+                Destroy(gameObject);   // consistent with Tower.cs DEF-74 removal; F8-39 respawn is separate
+            }
+        }
+
+        private void Awake()
+        {
+            if (_hp < 0f) _hp = _maxHp;
+            EnsureContactCollider();
+        }
+
+        /// <summary>
+        /// Guarantees a NON-TRIGGER collider exists so the enemy sweep's
+        /// Physics.OverlapSphere(..., QueryTriggerInteraction.Ignore) can actually RETURN this
+        /// spire. Idempotent: skips if a solid collider already exists in the hierarchy (the
+        /// skinned visual usually carries one). Sized from the visual's renderer bounds — mirrors
+        /// Tower.EnsureBodyCollider (DEF-74). The IDamageableStructure lives on this root, so
+        /// GetComponentInParent from any child collider resolves it.
+        /// </summary>
+        private void EnsureContactCollider()
+        {
+            foreach (var c in GetComponentsInChildren<Collider>(true))
+                if (c != null && !c.isTrigger) return;   // already hittable by the sweep
+
+            float height = 4.5f, radius = 0.9f;
+            var rends = GetComponentsInChildren<Renderer>(true);
+            if (rends != null && rends.Length > 0)
+            {
+                Bounds b = rends[0].bounds;
+                for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+                height = Mathf.Max(1f, b.size.y);
+                radius = Mathf.Max(0.4f, Mathf.Max(b.size.x, b.size.z) * 0.5f);
+            }
+
+            var cap = gameObject.AddComponent<CapsuleCollider>();
+            cap.isTrigger = false;
+            cap.height = height;
+            cap.radius = radius;
+            cap.center = new Vector3(0f, height * 0.5f, 0f);
+        }
 
         private float _cd;
         private float _scan;
