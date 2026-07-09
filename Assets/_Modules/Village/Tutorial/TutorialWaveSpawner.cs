@@ -54,6 +54,14 @@ namespace DeNelle.Village
         private readonly List<Enemy> _spawned = new List<Enemy>();
         private bool _spawnRequested;
 
+        // Tracks whether we've told BattleMusicManager the teaching-wave combat is live,
+        // so the town→battle music swap fires exactly once on spawn and the battle→town
+        // swap fires exactly once when the last tutorial enemy dies. The scripted teaching
+        // wave bypasses the WaveManager wave loop (it spawns via SpawnEnemyForExternalMode),
+        // so it never raises WaveManager.OnWaveStarted — without this explicit signal the
+        // defend moment would keep playing town music. See BattleMusicManager.NotifyExternal*.
+        private bool _combatMusicActive;
+
         /// <summary>True once every spawned tutorial enemy is dead / gone.</summary>
         public bool IsCleared
         {
@@ -134,6 +142,31 @@ namespace DeNelle.Village
             FlowTrace.Step("TutorialWave", $"spawned {_spawned.Count}/{n} tutorial enemy(ies)");
             Debug.Log($"[TutorialWaveSpawner] Spawned {_spawned.Count} tutorial enemy(ies) " +
                       $"at {spawnPoint.Direction} gate ({spawnPoint.SpawnId}).");
+
+            // The teaching wave is now LIVE. It bypasses the WaveManager wave loop (spawned
+            // via SpawnEnemyForExternalMode), so it never raises WaveManager.OnWaveStarted —
+            // signal BattleMusicManager directly so the defend moment stops the town ambient
+            // and plays the battle track, exactly like an ambient wave. Paired with the
+            // battle→town return in ClearCombatMusicIfDone() when the last enemy dies.
+            if (_spawned.Count > 0 && !_combatMusicActive)
+            {
+                _combatMusicActive = true;
+                FlowTrace.Step("TutorialWave", "teaching wave live → BattleMusicManager.NotifyExternalCombatActive()");
+                BattleMusicManager.NotifyExternalCombatActive();
+            }
+        }
+
+        /// <summary>
+        /// When the last tutorial enemy is gone, hand the music back to the town ambient
+        /// (battle→town). Fires exactly once, and only if we started the battle music.
+        /// </summary>
+        private void ClearCombatMusicIfDone()
+        {
+            if (!_combatMusicActive) return;
+            if (_spawned.Count > 0) return;
+            _combatMusicActive = false;
+            FlowTrace.Step("TutorialWave", "teaching wave cleared → BattleMusicManager.NotifyExternalCombatEnded()");
+            BattleMusicManager.NotifyExternalCombatEnded();
         }
 
         /// <summary>
@@ -192,6 +225,8 @@ namespace DeNelle.Village
         {
             if (enemy != null) enemy.Died -= OnEnemyDied;
             _spawned.Remove(enemy);
+            // Last teaching enemy down → return the music to the town ambient.
+            ClearCombatMusicIfDone();
         }
 
         private void PruneDead()
@@ -210,6 +245,8 @@ namespace DeNelle.Village
                 e.Kill();
             }
             _spawned.Clear();
+            // Never leave the battle music stuck on if the spawner is torn down mid-fight.
+            ClearCombatMusicIfDone();
         }
     }
 }

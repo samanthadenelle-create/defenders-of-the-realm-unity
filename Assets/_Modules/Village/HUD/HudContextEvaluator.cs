@@ -133,7 +133,7 @@ namespace DeNelle.Village.Hud
             if (wm.Phase == DeNelle.Village.WavePhase.Countdown)
             {
                 bool imminent = wm.CountdownRemaining <= ImminentThreshold;
-                FlowTrace.Step("HUD",
+                FlowTrace.Throttle("HUD", "countdown-posture", 1f,
                     imminent
                         ? $"countdown IMMINENT ({wm.CountdownRemaining:0.0}s <= {ImminentThreshold}s) -> counts as Battle"
                         : $"countdown long-gap ({wm.CountdownRemaining:0.0}s > {ImminentThreshold}s) -> gated OUT of Battle (HUD releases)");

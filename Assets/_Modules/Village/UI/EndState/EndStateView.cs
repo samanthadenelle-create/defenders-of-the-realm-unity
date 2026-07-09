@@ -97,8 +97,13 @@ namespace DeNelle.Village.UI
                 canvas = ElarionUiKit.BuildModalCanvas("EndState", 31000);
                 var c = canvas.GetComponent<Canvas>();
                 if (c != null) c.overrideSorting = true;
+                // Grown DOWN (top edge held at 0.86) to 0.30 of screen height: the compact
+                // banner does NOT auto-extend like the full modal (see the !vm.Compact guard
+                // below), so it must carry enough height for the enlarged SPLASH header band
+                // (Bind) plus the emblem+subtitle below it — otherwise the tall title band
+                // would crush them. (Was 0.64–0.86 = 0.22h, too short to seat the headline.)
                 chrome = ElarionUiKit.BuildObsidianPanel(canvas.transform, vm.Title,
-                    new Vector2(0.15f, 0.64f), new Vector2(0.85f, 0.86f),
+                    new Vector2(0.15f, 0.56f), new Vector2(0.85f, 0.86f),
                     onClose: null, withBackdrop: false, frameName: RpgUiCatalog.FrameCore,
                     medallionIcon: "crest");   // explicit: the socket seats the crest family, never blank
             }
@@ -164,6 +169,30 @@ namespace DeNelle.Village.UI
         private void Bind(EndStateVM vm, ElarionUiKit.PanelChrome chrome)
         {
             _vm = vm;
+
+            // ── SPLASH TITLE HEADER BAND (F8 2026-07-08: "Wave 1 Cleared!" title rendered
+            //    0 visible glyphs) ────────────────────────────────────────────────────────
+            // FrameCore's stock header band is only ~0.072 of the panel — the captured title
+            // rect was 906x16px, far too SHORT to seat even the kit's 20px FontHardFloor, so
+            // UiKitTextFitGuard culled the whole title (0 glyphs). This is the same too-short-
+            // band class as the DialogueView header fix, but the EndState panel is ALSO
+            // FrameCore-based and the earlier fix didn't reach here. An end-state is a
+            // victory / defeat / wave-clear SPLASH — so grow the header into a TALL top band
+            // and let a BIG headline (up to FontTitle=88) render, then pull the body top below
+            // the band so title and content can never overlap. These are THIS panel's OWN
+            // per-instance zones (Zone() mints a fresh RectTransform for each panel), so no
+            // other FrameCore screen is affected. Anchors are fractions of panel height, so the
+            // splash scales with the panel; the title authors up to 88 and FitSingleLine already
+            // bounds it — we only give it ROOM, never shrink the font.
+            if (chrome.layout != null && chrome.layout.header != null)
+            {
+                var hdr = chrome.layout.header;
+                hdr.anchorMin = new Vector2(hdr.anchorMin.x, 0.760f);   // was ~0.900
+                hdr.anchorMax = new Vector2(hdr.anchorMax.x, 0.985f);   // was ~0.972
+                if (chrome.layout.body != null && chrome.layout.body.anchorMax.y > 0.745f)
+                    chrome.layout.body.anchorMax =                       // body top clears the band
+                        new Vector2(chrome.layout.body.anchorMax.x, 0.745f);
+            }
 
             // Drop-zones (sprite-first contract: layout is null on the procedural
             // fallback panel — mirror the default zone fractions on the content).

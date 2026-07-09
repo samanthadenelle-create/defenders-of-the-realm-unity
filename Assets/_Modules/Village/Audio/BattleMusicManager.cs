@@ -285,6 +285,73 @@ namespace DeNelle.Village
             TransitionTo(BattleMusicState.None);
         }
 
+        // ─────────────────────────────────────────────────────────────────────
+        //  Public combat trigger for NON-wave-loop combat (FTUE teaching wave)
+        // ─────────────────────────────────────────────────────────────────────
+        //
+        // The wave loop scores itself via the WaveManager.OnWaveStarted/OnWaveCleared
+        // subscription above. But some combat DOES NOT run through that loop — most
+        // notably the FTUE's scripted teaching wave, which spawns its enemies through
+        // WaveManager.SpawnEnemyForExternalMode (TutorialWaveSpawner) and never raises
+        // OnWaveStarted, so the wave-event path can't see it. These two static entries
+        // are the SINGLE signal any such external combat producer calls to drive the
+        // SAME state machine (town ambient stops → battle track plays, then back), so we
+        // stay single-source rather than re-implementing the swap per caller. Null-safe:
+        // no-op before the DDOL host has bootstrapped.
+
+        /// <summary>
+        /// Combat that does NOT run through the WaveManager wave loop just went live
+        /// (e.g. the FTUE teaching wave's enemies spawned). Enters the general Combat
+        /// state — town ambient stops, the battle track plays — exactly as
+        /// <see cref="OnWaveStarted"/> does for an ambient wave. Ignored if a real
+        /// wave/boss already owns a higher combat state.
+        /// </summary>
+        public static void NotifyExternalCombatActive()
+        {
+            var m = _instance;
+            if (m == null) return;
+            try
+            {
+                // Never demote a live Boss (or an already-running combat/intense) — only
+                // take over from None (or a Victory sting that's winding down).
+                if (m._state == BattleMusicState.Boss
+                    || m._state == BattleMusicState.Combat
+                    || m._state == BattleMusicState.Intense)
+                    return;
+                FlowTrace.Step("BattleMusic",
+                    "external combat active (non-wave, e.g. FTUE teaching wave) → Combat (town ambient stops)");
+                m.TransitionTo(BattleMusicState.Combat);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BattleMusicManager] NotifyExternalCombatActive failed: " + e.Message);
+            }
+        }
+
+        /// <summary>
+        /// Paired with <see cref="NotifyExternalCombatActive"/>: the non-wave combat
+        /// ended (all its enemies are dead) — hand the music back to the town/overworld
+        /// ambient. Only leaves a plain Combat/Intense state (the one our external
+        /// trigger owns) so it can never yank a real wave/boss that started meanwhile.
+        /// </summary>
+        public static void NotifyExternalCombatEnded()
+        {
+            var m = _instance;
+            if (m == null) return;
+            try
+            {
+                if (m._state != BattleMusicState.Combat && m._state != BattleMusicState.Intense)
+                    return;
+                FlowTrace.Step("BattleMusic",
+                    "external combat ended (non-wave) → return to town ambient");
+                m.TransitionTo(BattleMusicState.None);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BattleMusicManager] NotifyExternalCombatEnded failed: " + e.Message);
+            }
+        }
+
         /// <summary>
         /// Poll-time re-evaluation: the missed-event safety net + the live-enemy
         /// PRESSURE swap (Combat ↔ Intense). Boss/Victory/None are event-owned and
