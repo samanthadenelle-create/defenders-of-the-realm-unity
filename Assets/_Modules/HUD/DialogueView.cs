@@ -225,11 +225,16 @@ namespace DeNelle.HUD
             // portrait on every NPC card). Body text → body zone. (Drop, no re-style.)
             // FrameCore's header band is thin (~7% of the panel) — FitSingleLine bounds both
             // lines (auto-size + ellipsis, §1.14) so they can never clip in the band.
+            // Authored on the mobile ladder (owner F8 2026-07-08 "text too small to read on
+            // mobile"): Speaker 36 / Affiliation 26 — was 24/13, BELOW the 30px mobile floor, so
+            // FitSingleLine's minSize clamped DOWN to the authored max and the guard then shrank
+            // them to 13/12 in the thin header band. Authoring on the ladder lets auto-size use
+            // the room; the guard's FontHardFloor(20) is now the readable last resort, never 12.
             _speaker = MakeLabel(headerZone, "Speaker", new Vector2(0f, 0.45f), Vector2.one,
-                24, ElarionUi.Gilt, TMPro.FontStyles.Bold, TMPro.TextAlignmentOptions.BottomLeft);
+                36, ElarionUi.Gilt, TMPro.FontStyles.Bold, TMPro.TextAlignmentOptions.BottomLeft);
             ElarionUiKit.FitSingleLine(_speaker);
             _affiliation = MakeLabel(headerZone, "Affiliation", Vector2.zero, new Vector2(1f, 0.45f),
-                13, ElarionUi.ParchmentDim, TMPro.FontStyles.Italic, TMPro.TextAlignmentOptions.TopLeft);
+                26, ElarionUi.ParchmentDim, TMPro.FontStyles.Italic, TMPro.TextAlignmentOptions.TopLeft);
             ElarionUiKit.FitSingleLine(_affiliation);
             // SCROLLABLE BODY (owner 2026-07-06: "in case there is more text, scrollable"):
             // the body zone hosts the §1.14 kit scroll zone (vertical, clamped, auto-hide
@@ -244,7 +249,7 @@ namespace DeNelle.HUD
             var scrollZone = ElarionUiKit.MakeScrollZone(wellGo.transform, spacing: 0f, padding: 8);
 
             _body = MakeLabel(scrollZone.content, "Body", Vector2.zero, Vector2.one,
-                17, ElarionUi.Parchment, TMPro.FontStyles.Normal, TMPro.TextAlignmentOptions.TopLeft);
+                30, ElarionUi.Parchment, TMPro.FontStyles.Normal, TMPro.TextAlignmentOptions.TopLeft);
             // The scroll column deliberately does NOT control child height (§1.14 kit note —
             // the captured PartyShop collapse, runs 9400/9401), so the label carries its own:
             // a vertical ContentSizeFitter grows it with its text, and the column's own
@@ -254,8 +259,9 @@ namespace DeNelle.HUD
             bodyFit.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
             // §1.14 belt-and-braces: wrap + truncate protection on the block. min=max keeps
             // the reading size deterministic (the scroll well, not shrinking text, absorbs
-            // long passages).
-            ElarionUiKit.FitBlock(_body, minSize: 17f, maxSize: 17f);
+            // long passages) — 30px is the mobile reading size (was 17, sub-legible on a phone;
+            // F8 2026-07-08). Longer passages scroll in BodyWell, they never shrink this.
+            ElarionUiKit.FitBlock(_body, minSize: 30f, maxSize: 30f);
 
             // Tap-to-advance INSIDE the scrolling well: the viewport's raycast surface
             // doubles as the click target (Button = click, ScrollRect = drag; uGUI splits
@@ -273,7 +279,7 @@ namespace DeNelle.HUD
             // it reads as guidance, raycast OFF so taps on it fall through to the catcher.
             // Repaint keeps driving its visibility through _tapHint (hidden while options show).
             var hintLbl = ElarionUiKit.Label(footerZone, "Tap to continue ▸",
-                0.10f, 0.90f, new Color(1f, 0.82f, 0.29f), 17,
+                0.10f, 0.90f, new Color(1f, 0.82f, 0.29f), 26,
                 TMPro.TextAlignmentOptions.Center);
             if (hintLbl != null)
             {
@@ -435,10 +441,14 @@ namespace DeNelle.HUD
                 go.GetComponent<Image>().color = new Color(b.r, b.g, b.b, 0.96f);
                 go.GetComponent<Button>().onClick.AddListener(() => _vm?.Choose(idx));
 
+                // Mobile-readable option text (was 15 — sub-legible; F8 2026-07-08). The row's
+                // 48px minHeight seats a 26px line; FitBlock wraps + the guard's readable floor
+                // keeps a long option legible rather than shrinking it into the plate.
                 var lbl = MakeLabel(go.transform, "L", new Vector2(0.04f, 0f), new Vector2(0.96f, 1f),
-                    15, ElarionUi.Parchment, TMPro.FontStyles.Normal, TMPro.TextAlignmentOptions.Left);
+                    26, ElarionUi.Parchment, TMPro.FontStyles.Normal, TMPro.TextAlignmentOptions.Left);
                 lbl.text = labels[i];
                 lbl.raycastTarget = false;
+                ElarionUiKit.FitBlock(lbl, minSize: 20f, maxSize: 26f);
             }
         }
 

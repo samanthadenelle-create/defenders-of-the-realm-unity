@@ -2093,6 +2093,17 @@ namespace DeNelle.Core.UI
         /// ellipsize instead of becoming unreadable or overlapping siblings.</summary>
         public const float FontFloor = 30f;
 
+        /// <summary>The ABSOLUTE last-resort readability floor for the post-layout guard (below).
+        /// The guard exists to prevent a whole line being CULLED when a rect is too thin to seat
+        /// the 30px target — but its old 12px escape hatch produced sub-legible phone text (F8
+        /// 2026-07-08 "text will never be able to be seen on mobile at this size": Sylas floored
+        /// 24->13, Affiliation 13->12, Body 17->15). The guard now never relaxes below THIS —
+        /// ~20px reference on a 1080-wide phone is the smallest still-readable size; a band that
+        /// cannot even seat 20 is a LAYOUT bug and the guard's render assert FlowTrace.Fails it
+        /// (rather than silently shrinking to unreadable). Target stays FontFloor(30); this is the
+        /// floor of the relaxation range, not the goal.</summary>
+        public const float FontHardFloor = 20f;
+
         /// <summary>
         /// Overflow-protect a SINGLE-LINE label (tab / button / row name / title / price):
         /// no wrap, bounded TMP auto-size [minSize..maxSize], then Ellipsis. Defaults:
@@ -2151,8 +2162,10 @@ namespace DeNelle.Core.UI
         /// height is ~1080 (match 0.5), so the tab band is ~30px and the 30px FontFloor's ~38px
         /// line renders ZERO glyphs. The rect is unknowable at build time (layout hasn't run),
         /// so this one-shot component checks AFTER the first layout pass: if the floor's line
-        /// cannot seat in the band it RELAXES fontSizeMin to fit the height (never below 12 —
-        /// slightly small beats structurally blank), then asserts visible glyphs and FlowTraces
+        /// cannot seat in the band it RELAXES fontSizeMin to fit the height (never below
+        /// FontHardFloor — the mobile-readable last resort; a band too thin to seat even that is a
+        /// LAYOUT bug the render assert Fails, NOT something to shrink into illegibility), then
+        /// asserts visible glyphs and FlowTraces
         /// rect + fontSize + characterCount either way a rescue/failure happened. Disables itself
         /// after one verified pass; FitSingleLine/FitBlock re-arm it on re-fit.
         /// </summary>
@@ -2193,7 +2206,7 @@ namespace DeNelle.Core.UI
                 var f = _t.font;
                 if (f != null && f.faceInfo.pointSize > 0f)
                     factor = Mathf.Max(1.05f, f.faceInfo.lineHeight / f.faceInfo.pointSize);
-                float fitMin = Mathf.Max(12f, Mathf.Floor(h / factor) - 1f);
+                float fitMin = Mathf.Max(FontHardFloor, Mathf.Floor(h / factor) - 1f);
                 float oldMin = _t.fontSizeMin;
                 bool relaxed = false;
                 if (_t.fontSizeMin > fitMin)
@@ -2205,12 +2218,12 @@ namespace DeNelle.Core.UI
                 _t.ForceMeshUpdate();                              // refresh textInfo for the checks below
 
                 // GUARANTEE-FIT: iterate the floor DOWN, verified by the guard's own post-check,
-                // until glyphs actually render or the 12pt hard floor (never a static one-shot
-                // recompute again — the post-check is the truth, not the formula).
+                // until glyphs actually render or the FontHardFloor mobile-readable floor (never a
+                // static one-shot recompute again — the post-check is the truth, not the formula).
                 int iter = 0;
-                while (Blank(_t) && _t.fontSizeMin > 12f && iter++ < 10)
+                while (Blank(_t) && _t.fontSizeMin > FontHardFloor && iter++ < 10)
                 {
-                    _t.fontSizeMin = Mathf.Max(12f, _t.fontSizeMin - 2f);
+                    _t.fontSizeMin = Mathf.Max(FontHardFloor, _t.fontSizeMin - 2f);
                     if (_t.fontSizeMax < _t.fontSizeMin) _t.fontSizeMax = _t.fontSizeMin;
                     _t.ForceMeshUpdate();
                     relaxed = true;
