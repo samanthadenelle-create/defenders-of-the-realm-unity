@@ -91,7 +91,7 @@ namespace DeNelle.Editor
             // burst is the rich Spells Pack Spell_Fire_6 (a fiery detonation) instead of the small
             // Lana Hit_fire spark, so a fireball reads as a real fireball. URP-proofed at load by
             // VFXManager.ProofUrpParticleShaders (memory: half-upgraded URP pack = pixelated).
-            { "Impact_Flame",           new Pick(Spells + "Spells/Spell_Fire_6.prefab") },
+            { "Impact_Flame",           new Pick(Res + "Spell_Fire_6.prefab") },
             { "Impact_Ice",             new Pick(Lana + "Range_attack/Hit_frost.prefab") },
             { "Impact_Aether",          new Pick(Lana + "Range_attack/Hit_magic.prefab") },
             { "Impact_Heal",            new Pick(Lana + "Range_attack/Hit_heart.prefab") },
@@ -109,7 +109,7 @@ namespace DeNelle.Editor
             // Spells Pack Projectile_Fire_3 (a proper flaming bolt with trail) instead of the small
             // custom Res orb, so the fireball is visible streaking to its target. Loop until impact;
             // SpellVfxFactory maps a Fire spell's projectile -> Projectile_FlameArrow.
-            { "Projectile_FlameArrow",  new Pick(Spells + "Projectiles/Projectiles/Projectile_Fire_3.prefab", isLoop: true) },
+            { "Projectile_FlameArrow",  new Pick(Res + "Projectile_Fire_3.prefab", isLoop: true) },
             { "Projectile_EnemyCasterBolt", new Pick(Lana + "Range_attack/Projectiles_dark_magic.prefab", isLoop: true) },
 
             // -- Casts (wind-up on caster) -------------------------------------
@@ -129,7 +129,7 @@ namespace DeNelle.Editor
             // charge -> release. Fires on the caster in sync with the Cast animation trigger
             // (Combat_Spell_Fireball) via HeroAbilities.CastResolved -> SpawnVfx -> SpellVfxFactory
             // (Fire spell resolves cast -> Cast_FireCharge). URP-proofed at load.
-            { "Cast_FireCharge",        new Pick(Spells + "Projectiles/Casting/Casting_Fire.prefab") }, // ember gather (Meteor/Radiant/Fireball)
+            { "Cast_FireCharge",        new Pick(Res + "Casting_Fire.prefab") }, // ember gather (Meteor/Radiant/Fireball)
             { "Cast_KnightSlam",        new Pick(Lana + "Burst/Flash_dubble_circle.prefab") },        // bigger double-ring cast pulse
             { "Cast_RangerDraw",        new Pick(Lana + "Orbs/Orbs_leaves.prefab") },                 // nature-green gather at the bow
             // SOFT HEAL (overnight build): the heal ability (Healing Beacon / Mending) fires ONLY

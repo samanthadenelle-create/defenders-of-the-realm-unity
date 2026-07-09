@@ -57,14 +57,18 @@ namespace DeNelle.Village
         [Header("Look")]
         public Color BlastColor = new Color(0.6f, 0.4f, 1f, 1f);   // arcane violet
 
-        // VFX ELEMENT (visual only — gameplay damage stays on <see cref="Element"/>).
-        // Spell_Fire_6 is a STATIONARY detonation (force-field + lava swirl), NOT a flying bolt —
-        // parented to ProjectileMover it reads as broken/invisible. Use the Spells-Pack projectile
-        // chain instead: Cast_FireCharge → Projectile_Fire → Explosion_Fire (all mirrored under
-        // Assets/Resources/VFX/Projectiles/ and loaded by ProjectileVFXCatalog).
+        // VFX CHAIN (visual only — gameplay damage stays on <see cref="Element"/>).
+        // Full Arcane-Fire tower roster (docs/MAGIC_VFX_LIBRARY.md), all mirrored under
+        // Assets/Resources/VFX/Projectiles/ via SpellsPackVfxMirror:
+        //   Casting_Fire_2 → Projectile_Fire_3 (travel) → Explosion_Fire + Spell_Fire_6 (detonation).
+        // Spell_Fire_6 is a stationary swirl — never parent it to ProjectileMover; only on impact.
         [Header("VFX (visual only)")]
-        [Tooltip("Element for cast / travel / impact particles. Flame = fireball chain.")]
+        [Tooltip("Element for travel + base impact burst (Explosion_*).")]
         public DamageElement BoltVisualElement = DamageElement.Flame;
+        [Tooltip("Resources/VFX/Projectiles/<name> cast wind-up at the spire muzzle.")]
+        public string BoltCastVfx = "Casting_Fire_2";
+        [Tooltip("Resources/VFX/Projectiles/<name> extra AoE detonation layered on impact.")]
+        public string BoltImpactExtraVfx = "Spell_Fire_6";
 
         // Elevation perk (wall-mounted): a spire seated on a wall-walk TOP gets the high-ground
         // range/LOS bonus. 1 = ground (no bonus); set by BaseLayoutLoader.Spawn (e.g. 1.25) when
@@ -264,14 +268,11 @@ namespace DeNelle.Village
             Vector3 muzzle  = transform.position + Vector3.up * 2.5f;
             Vector3 impact  = primary.WorldPosition;
 
-            // ── SPELL CAST (owner 2026-07-08 "arcane casts fireballs") ─────────
-            // Wind-up at the spire top, then a Spells-Pack projectile LOBS to the impact point;
-            // blast VFX + damage/slow land when the bolt ARRIVES (ProjectileMover.onArrive).
-            // Null-safe: VFXManager statics no-op when not booted.
-            VFXManager.Play(CastVfxFor(BoltVisualElement), muzzle);
+            // ── SPELL CAST (Casting_Fire_2 ember gather at spire top) ──────────
+            ProjectileVFXCatalog.SpawnNamedOneShot(muzzle, BoltCastVfx);
 
-            // Flying body: ProjectileVFXCatalog element chain (Projectile_Fire for Flame) — the same
-            // path DefenseTower / PooledProjectile use. URP heal runs at spawn (FixUrpShaders).
+            // Flying body: Projectile_Fire_3 (hero fireball bolt) via SpawnFlying(Flame).
+            // URP heal runs at spawn (FixUrpShaders).
             // Fall back to emissive orb if the mirrored Resources prefab is missing.
             GameObject bolt = null;
             Guard.Try("ArcaneTower", "spawn spell bolt", () =>
@@ -326,6 +327,7 @@ namespace DeNelle.Village
             if (this == null) return;   // tower destroyed while the orb was in flight
 
             ProjectileVFXCatalog.SpawnImpact(impact, BoltVisualElement);
+            ProjectileVFXCatalog.SpawnNamedOneShot(impact, BoltImpactExtraVfx);
 
             float aoeSq = AoeRadius * AoeRadius;
             float splash = Mathf.Clamp01(SplashDamageFraction);
@@ -366,14 +368,6 @@ namespace DeNelle.Village
                     $"FireBlast: 0 enemies affected (primary='{pname}') — cluster gone/all dead at detonation.");
             }
         }
-
-        private static VFXType CastVfxFor(DamageElement element) => element switch
-        {
-            DamageElement.Flame  => VFXType.Cast_FireCharge,
-            DamageElement.Ice    => VFXType.Cast_FrostNova,
-            DamageElement.Aether => VFXType.Cast_MageCharge,
-            _                    => VFXType.Cast_MageCharge,
-        };
 
         private void OnDrawGizmosSelected()
         {

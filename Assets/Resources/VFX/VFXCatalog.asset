@@ -20,7 +20,7 @@ MonoBehaviour:
     MinQuality: 0
     LifetimeOverride: 0
   - Type: 3
-    Prefab: {fileID: 1835174905073365006, guid: adfd6c86cf180e64aaaa1bece2395926, type: 3}
+    Prefab: {fileID: 1320848605815502591, guid: 261eb9072f04721f8c173b555ffde263, type: 3}
     PoolSize: 4
     IsLoop: 0
     MinQuality: 0
@@ -92,7 +92,7 @@ MonoBehaviour:
     MinQuality: 0
     LifetimeOverride: 0
   - Type: 14
-    Prefab: {fileID: 1485987801625442810, guid: 1b695686da9a4cf1953e751f929adb2d, type: 3}
+    Prefab: {fileID: 283538348305088910, guid: 0572842d6fd8b034faef84bfb5b9966c, type: 3}
     PoolSize: 4
     IsLoop: 1
     MinQuality: 0
@@ -110,7 +110,7 @@ MonoBehaviour:
     MinQuality: 0
     LifetimeOverride: 0
   - Type: 20
-    Prefab: {fileID: 3546323823116515695, guid: 8d1dff39f05ce0e44804cb469b83a578, type: 3}
+    Prefab: {fileID: 6881474406348169789, guid: fac8e23af4c86d143a67494c0a624abc, type: 3}
     PoolSize: 4
     IsLoop: 0
     MinQuality: 0
@@ -128,7 +128,7 @@ MonoBehaviour:
     MinQuality: 0
     LifetimeOverride: 0
   - Type: 23
-    Prefab: {fileID: 5640737727654945505, guid: 3d0c8d31a8a941646b2de64e41f449a8, type: 3}
+    Prefab: {fileID: 970493957870217587, guid: 4c1531c376675e646ae7aabcf20f9bdb, type: 3}
     PoolSize: 4
     IsLoop: 0
     MinQuality: 0

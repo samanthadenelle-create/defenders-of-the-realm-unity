@@ -65,7 +65,7 @@ namespace DeNelle.Village
         private static string FlyingPath(DamageElement element) => element switch
         {
             DamageElement.Aether => Root + "Projectile_Arcane",
-            DamageElement.Flame  => Root + "Projectile_Fire",
+            DamageElement.Flame  => Root + "Projectile_Fire_3",
             DamageElement.Ice    => Root + "Projectile_Ice",
             _                    => Root + "Projectile_Storm", // None / Physical → fast storm bolt
         };
@@ -94,6 +94,12 @@ namespace DeNelle.Village
             string path = FlyingPath(element);
             FlowTrace.Step("ProjVfx", $"SpawnFlying element={element} path='{path}'");
             var prefab = Load(path);
+            if (prefab == null && element == DamageElement.Flame)
+            {
+                // Projectile_Fire_3 may be absent on a clone before SpellsPackVfxMirror runs.
+                path = Root + "Projectile_Fire";
+                prefab = Load(path);
+            }
             if (prefab == null)
             {
                 FlowTrace.Warn("ProjVfx", $"SpawnFlying element={element}: no prefab at '{path}' -> projectile flies with NO FX body");
@@ -162,6 +168,28 @@ namespace DeNelle.Village
         /// <summary>Fire a one-shot impact burst for <paramref name="element"/> at
         /// <paramref name="position"/>; it self-destroys after its particle lifetime.
         /// No-op when the prefab is missing.</summary>
+        /// <summary>Fire a one-shot named burst from Resources/VFX/Projectiles/&lt;name&gt; at
+        /// <paramref name="position"/> (cast wind-up, rich detonation, etc.). Self-destroys
+        /// after particle lifetime. No-op when missing.</summary>
+        public static void SpawnNamedOneShot(Vector3 position, string resourceName)
+        {
+            if (string.IsNullOrEmpty(resourceName)) return;
+            string path = Root + resourceName;
+            FlowTrace.Step("ProjVfx", $"SpawnNamedOneShot name='{resourceName}' path='{path}'");
+            var prefab = Load(path);
+            if (prefab == null)
+            {
+                FlowTrace.Warn("ProjVfx", $"SpawnNamedOneShot '{resourceName}': no prefab at '{path}'");
+                return;
+            }
+
+            var go = Object.Instantiate(prefab, position, Quaternion.identity);
+            CleanToVisualOnly(go);
+            FixUrpShaders(go);
+            PlayAll(go);
+            Object.Destroy(go, LongestLifetime(go) + 0.3f);
+        }
+
         public static void SpawnImpact(Vector3 position, DamageElement element)
         {
             string path = ImpactPath(element);
