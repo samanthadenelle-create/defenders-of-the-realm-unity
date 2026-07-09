@@ -38,8 +38,10 @@ namespace DeNelle.Village
         public static OverworldEncounterSpawner Instance { get; private set; }
 
         private const string OuterWorldScene = "Main_Castle_Overworld";  // WO-608: OuterWorld merged into Main_Castle_Overworld
-        // The full family staged in the BATTLE when a rep is engaged (the rep is just the leader's face).
-        private static readonly string[] OrcFamily = { "orc-warrior", "orc-tank", "orc-mage" };
+        // Roster POOLS rolled into variable packs (1–7 bodies) at spawn/record time — not fixed trios.
+        private static readonly string[] OrcPool = { "orc-warrior", "orc-tank", "orc-mage" };
+        private const int PackSizeMin = 1;
+        private const int PackSizeMax = 7;
 
         // Rep tuning. Wide aggro + a chase a touch faster than the hero (~6 base) so it
         // "means something" if you wandered into one too strong. Contact damage ZERO
@@ -92,14 +94,14 @@ namespace DeNelle.Village
         private const int ScatterMidLevel  = 2;
         private const int ScatterFarLevel  = 3;
 
-        // Band families. Every id below is VERIFIED to resolve through the engage path
-        // (BattleArena.BuildEncounterDef + EnemyFactory model map). NOTE: "hollow-apprentice"
-        // exists only in the ATB stack, NOT in EnemyFactory — do not author it here.
-        private static readonly string[] ScatterNearFamily      = { "orc-warrior", "orc-warrior", "orc-mage" };
-        private static readonly string[] ScatterMidOrcFamily    = { "orc-tank", "orc-warrior", "orc-mage" };
-        private static readonly string[] ScatterMidHollowFamily = { "hollow-warrior", "hollow-rogue", "hollow-acolyte" };
-        private static readonly string[] ScatterFarHollowFamily = { "hollow-warrior", "hollow-warrior", "hollow-rogue", "hollow-acolyte" };
-        private static readonly string[] ScatterFarOrcFamily    = { "orc-tank", "orc-tank", "orc-warrior", "orc-mage" };
+        // Band pools (composition rolled to 1–7 at record generation). Every id is VERIFIED
+        // through the engage path (BattleArena.BuildEncounterDef + EnemyFactory model map).
+        // NOTE: "hollow-apprentice" exists only in the ATB stack, NOT in EnemyFactory.
+        private static readonly string[] ScatterNearPool      = { "orc-warrior", "orc-tank", "orc-mage" };
+        private static readonly string[] ScatterMidOrcPool    = { "orc-tank", "orc-warrior", "orc-mage" };
+        private static readonly string[] ScatterMidHollowPool = { "hollow-warrior", "hollow-rogue", "hollow-acolyte" };
+        private static readonly string[] ScatterFarHollowPool = { "hollow-warrior", "hollow-rogue", "hollow-acolyte" };
+        private static readonly string[] ScatterFarOrcPool    = { "orc-tank", "orc-warrior", "orc-mage" };
 
         /// <summary>One persistent scatter record — pure data; the rep GameObject only
         /// exists while the hero is within sight (ScatterActivateRadius).</summary>
@@ -420,60 +422,30 @@ namespace DeNelle.Village
                 return;
             }
 
-            var def = new EnemyDef
+            // WO-606: pool/threat/preset from geotagged SpawnArea when authored; roll 1–7 bodies.
+            string[] pool = OrcPool;
+            int repThreat = ZoneThreatAt(anchor);
+            string repPreset = null;
+            if (DeNelle.Core.World.SpawnAreaTable.HasAny)
             {
-                Id = "orc-warrior", Name = "Orc Warleader", DisplayName = "Orc Warband", Ai = "walker",
-                // FIELD-KILLABLE REP (owner 2026-06-28): the rep is no longer an un-killable hook.
-                // The player can KITE it with ranged attacks and KILL it in the open world BEFORE the
-                // BattleArena triggers, earning the SAME payout an arena win of this orc family grants
-                // (Enemy.Die(killed:true) -> HeroProgression.AddXp + Glimmer/gold + ItemDropWatcher loot).
-                // Hp ~ one tanky orc's worth (arena tank=190, warrior=120 at threat 1): kitable in a few
-                // ranged hits, never a one-shot. XP/Glimmer aggregate the 3-orc family (BattleArena
-                // BuildEncounterDef: ~14 XP + ~3 Glimmer per orc, x3). All three are OWNER-TUNABLE.
-                Hp = 98f,                   // 2026-07-01 owner call: early fights ~35% softer; sits between the softened arena warrior(78) and tank(124); kitable, not one-shot
-                MoveSpeed = RepChaseSpeed,  // ~+5% over the hero so it can run you down
-                ContactDamage = 0f,         // never hurts the hero in-world (hook only)
-                AttackInterval = 1.5f, Height = 2.0f, AggroRadius = 8f, // notice radius (owner 2026-06-27: 22->8, reconciled to RepEngageWatcher.AggroRange)
-                XpReward = 42, GlimmerReward = 9, // owner-tunable: ~14 XP + ~3 Glimmer per orc x3 (matches an arena win of this family)
-            };
-
-            Enemy enemy = null;
-            Guard.Try("Encounter", $"spawn rep #{index}", () =>
-            {
-                enemy = EnemyFactory.Build(def, anchor, Quaternion.identity, transform);
-                if (enemy == null) return;
-                enemy.gameObject.name = $"OrcRep_{index}";
-                enemy.Configure($"orc-rep-{index}", def, null);   // no Heart -> it wanders its tether + aggros the hero
-                enemy.SetBrainTargetPosition(anchor);             // tether: idle at its spawn until it sees you
-                // NO EnemyBrain (fix 2026-06-23 "can't find the orc"): a DPS brain calls
-                // SetBrainTargetPosition(null) EVERY frame (DPS returns no destination), which CLEARED
-                // RepEngageWatcher's chase target each frame -> the rep never actually chased. The
-                // RepEngageWatcher now fully owns the rep: tether (above) until aggro, then it drives
-                // the brain-position override onto the hero uncontested so the orc runs you down.
-                // WO-606: the FAMILY the rep drops to battle + the LEVEL + arena preset now come from the
-                // geotagged SpawnArea at this anchor (data-driven), replacing the hardcoded OrcFamily +
-                // ZoneThreatAt read. When no area is authored/loaded (HasAny == false) OR the anchor is
-                // outside every area, fall back to the legacy family/threat so this stays non-breaking.
-                string[] repFamily = OrcFamily;
-                int repThreat = ZoneThreatAt(anchor);
-                string repPreset = null;
-                if (DeNelle.Core.World.SpawnAreaTable.HasAny)
+                var draw = DeNelle.Core.World.SpawnAreaTable.BuildDraw(anchor);
+                if (draw.Valid && draw.EnemyIds != null && draw.EnemyIds.Length > 0)
                 {
-                    var draw = DeNelle.Core.World.SpawnAreaTable.BuildDraw(anchor);
-                    if (draw.Valid && draw.EnemyIds != null && draw.EnemyIds.Length > 0)
-                    {
-                        repFamily = draw.EnemyIds;
-                        repThreat = Mathf.Max(1, draw.Level);
-                        repPreset = draw.ArenaPreset;
-                    }
+                    pool = draw.EnemyIds;
+                    repThreat = Mathf.Max(1, draw.Level);
+                    repPreset = draw.ArenaPreset;
                 }
-                enemy.gameObject.AddComponent<RepEngageWatcher>().Init(repFamily, repThreat, repPreset);
-            });
+            }
+            string[] repFamily = RollFamilyPack(pool);
 
-            if (enemy != null)
+            GameObject pack = SpawnOverworldFamilyPack(
+                anchor, repFamily, repThreat, repPreset, $"OrcRep_{index}", $"orc-rep-{index}");
+
+            if (pack != null)
             {
-                _reps.Add(enemy.gameObject);
-                FlowTrace.Step("Encounter", $"spawned orc rep #{index} at {anchor} (wide aggro, +5% chase, 0 dmg).");
+                _reps.Add(pack);
+                FlowTrace.Step("Encounter",
+                    $"spawned family pack #{index} at {anchor} ({repFamily.Length} bodies, threat {repThreat}, +5% chase, 0 dmg).");
             }
         }
 
@@ -693,42 +665,40 @@ namespace DeNelle.Village
 
                 if (!found) { failed++; continue; }   // sparse band coverage — bounded, never force-place
 
-                // FAMILY + LEVEL. DATA PATH FIRST (WO-606 seam): if spawn-areas.json is authored,
-                // the geotagged area at this anchor carries the families/levels/preset — the band
-                // constants below are the fallback that carries F8-8 until that JSON exists.
-                string[] family = null; int level = 0; string preset = null;
+                // POOL + LEVEL. DATA PATH FIRST (WO-606 seam): spawn-areas.json carries a roster
+                // pool at this anchor; band constants are the F8-8 fallback. Each record rolls a
+                // variable pack (1–7 bodies) from its pool so the world never reads as fixed trios.
+                string[] pool = null; int level = 0; string preset = null;
                 if (DeNelle.Core.World.SpawnAreaTable.HasAny)
                 {
                     var draw = DeNelle.Core.World.SpawnAreaTable.BuildDraw(anchor);
                     if (draw.Valid && draw.EnemyIds != null && draw.EnemyIds.Length > 0)
                     {
-                        family = draw.EnemyIds;
+                        pool = draw.EnemyIds;
                         level = Mathf.Max(1, draw.Level);
                         preset = draw.ArenaPreset;
                     }
                 }
-                if (family == null)
+                if (pool == null)
                 {
                     switch (band)
                     {
                         case 0:
-                            family = ScatterNearFamily;
+                            pool = ScatterNearPool;
                             level = ScatterNearLevel;
                             break;
                         case 1:
-                            // MID = mix: alternate orc warbands and hollow packs (seeded, stable).
-                            family = rng.Next(2) == 0 ? ScatterMidOrcFamily : ScatterMidHollowFamily;
+                            pool = rng.Next(2) == 0 ? ScatterMidOrcPool : ScatterMidHollowPool;
                             level = ScatterMidLevel;
                             break;
                         default:
-                            // FAR = hollow-heavy with an occasional heavy orc warband.
-                            family = rng.Next(3) == 0 ? ScatterFarOrcFamily : ScatterFarHollowFamily;
+                            pool = rng.Next(3) == 0 ? ScatterFarOrcPool : ScatterFarHollowPool;
                             level = ScatterFarLevel;
                             break;
                     }
-                    // Danger gradient composes with the shared zone read: never BELOW the zone threat.
                     level = Mathf.Max(level, ZoneThreatAt(anchor));
                 }
+                string[] family = RollFamilyPack(pool, rng);
 
                 _scatter.Add(new ScatterRecord
                 {
@@ -757,43 +727,178 @@ namespace DeNelle.Village
                 FlowTrace.Step("Encounter", $"suppressed scatter rep #{rec.Index} — tutorial (FTUE) active.");
                 return false;
             }
-            string leadId = rec.FamilyIds != null && rec.FamilyIds.Length > 0 ? rec.FamilyIds[0] : "orc-warrior";
-            bool hollow = leadId.IndexOf("hollow", System.StringComparison.OrdinalIgnoreCase) >= 0;
-            float levelScale = 1f + 0.08f * (rec.Level - 1);   // same +8%/tier curve as BattleArena.BuildEncounterDef
+            GameObject pack = SpawnOverworldFamilyPack(
+                rec.Anchor, rec.FamilyIds, rec.Level, rec.ArenaPreset,
+                $"ScatterRep_{rec.Index}", $"scatter-rep-{rec.Index}");
 
-            var def = new EnemyDef
+            if (pack == null)
             {
-                Id = leadId,                      // drives the EnemyFactory model — hollow leaders read as skeletons
-                Name = hollow ? "Hollow Prowler" : "Orc Warleader",
-                DisplayName = hollow ? "Hollow Pack" : "Orc Warband",
-                Ai = "walker",
-                Hp = 98f * levelScale,            // ring-rep baseline, scaled by the band level (danger gradient)
-                MoveSpeed = RepChaseSpeed,
-                ContactDamage = 0f,               // hook, not a combatant (identical to ring reps)
-                AttackInterval = 1.5f, Height = 2.0f, AggroRadius = 8f,
-                XpReward = Mathf.RoundToInt(42 * levelScale),
-                GlimmerReward = Mathf.RoundToInt(9 * levelScale),
-            };
-
-            Enemy enemy = null;
-            Guard.Try("Encounter", $"spawn scatter rep #{rec.Index}", () =>
-            {
-                enemy = EnemyFactory.Build(def, rec.Anchor, Quaternion.identity, transform);
-                if (enemy == null) return;
-                enemy.gameObject.name = $"ScatterRep_{rec.Index}";
-                enemy.Configure($"scatter-rep-{rec.Index}", def, null);   // no Heart — tether + hero aggro only
-                enemy.SetBrainTargetPosition(rec.Anchor);                 // leash centred on the record anchor
-                enemy.gameObject.AddComponent<RepEngageWatcher>().Init(rec.FamilyIds, rec.Level, rec.ArenaPreset);
-            });
-
-            if (enemy == null)
-            {
-                FlowTrace.Warn("Encounter", $"SpawnScatterRep #{rec.Index}: EnemyFactory.Build returned null for '{leadId}' — record left dormant.");
+                string leadId = rec.FamilyIds != null && rec.FamilyIds.Length > 0 ? rec.FamilyIds[0] : "orc-warrior";
+                FlowTrace.Warn("Encounter", $"SpawnScatterRep #{rec.Index}: family pack spawn failed for '{leadId}' — record left dormant.");
                 return false;
             }
-            rec.Live = enemy.gameObject;
+            rec.Live = pack;
             rec.Spawned = true;
             return true;
+        }
+
+        /// <summary>
+        /// Spawns a visible Monster Family in the overworld: index 0 is the engage hook
+        /// (RepEngageWatcher + FamilyLeader), followers hold formation via FamilyMember.
+        /// Zero contact damage — the real fight stages in BattleArena on engage.
+        /// </summary>
+        private GameObject SpawnOverworldFamilyPack(
+            Vector3 anchor,
+            string[] familyIds,
+            int threat,
+            string arenaPreset,
+            string packObjectName,
+            string leaderInstanceId)
+        {
+            if (familyIds == null || familyIds.Length == 0)
+                familyIds = RollFamilyPack(OrcPool);
+
+            GameObject packRoot = null;
+            Guard.Try("Encounter", $"spawn family pack '{packObjectName}'", () =>
+            {
+                packRoot = new GameObject(packObjectName);
+                packRoot.transform.SetParent(transform);
+                packRoot.transform.position = anchor;
+
+                int n = Mathf.Clamp(familyIds.Length, PackSizeMin, PackSizeMax);
+                int packSize = n;
+                FamilyLeader leader = null;
+
+                for (int i = 0; i < n; i++)
+                {
+                    string id = familyIds[i];
+                    Vector3 pos = anchor;
+                    if (i > 0)
+                    {
+                        float angle = (i - 1) * (360f / Mathf.Max(1, n - 1));
+                        Vector3 offset = Quaternion.Euler(0f, angle, 0f) * Vector3.forward * 2.5f;
+                        pos = anchor + offset;
+                        if (UnityEngine.AI.NavMesh.SamplePosition(pos, out var slotHit, 6f, UnityEngine.AI.NavMesh.AllAreas))
+                            pos = slotHit.position;
+                    }
+
+                    bool isLeader = i == 0;
+                    var def = BuildOverworldHookDef(id, threat, isLeader, packSize);
+                    Enemy enemy = EnemyFactory.Build(def, pos, Quaternion.identity, packRoot.transform);
+                    if (enemy == null) continue;
+
+                    enemy.gameObject.name = isLeader ? packObjectName : $"{packObjectName}_{id}_{i}";
+                    enemy.Configure($"{leaderInstanceId}{(isLeader ? "" : $"-f{i}")}", def, null);
+
+                    if (isLeader)
+                    {
+                        enemy.SetBrainTargetPosition(anchor);
+                        // NO EnemyBrain on the leader — RepEngageWatcher is the sole nav writer
+                        // (a DPS brain clears SetBrainTargetPosition every frame).
+                        if (n > 1)
+                            leader = enemy.gameObject.AddComponent<FamilyLeader>();
+                        if (enemy.gameObject.GetComponent<AwarenessSensor>() == null)
+                            enemy.gameObject.AddComponent<AwarenessSensor>();
+                        var watcher = enemy.gameObject.AddComponent<RepEngageWatcher>();
+                        watcher.Init(familyIds, threat, arenaPreset, packRoot);
+                    }
+                    else if (leader != null)
+                    {
+                        var brain = enemy.gameObject.AddComponent<EnemyBrain>();
+                        brain.Role = EnemyBrain.RoleForId(id);
+                        if (enemy.gameObject.GetComponent<AwarenessSensor>() == null)
+                            enemy.gameObject.AddComponent<AwarenessSensor>();
+                        var member = enemy.gameObject.AddComponent<FamilyMember>();
+                        leader.RegisterMember(member);
+                    }
+                }
+
+                if (leader == null)
+                {
+                    Destroy(packRoot);
+                    packRoot = null;
+                }
+            });
+
+            return packRoot;
+        }
+
+        /// <summary>
+        /// Roll a variable pack (1–7) from a roster pool. Leader prefers warrior/tank;
+        /// followers sample the pool with replacement so size and mix stay unpredictable.
+        /// </summary>
+        private static string[] RollFamilyPack(string[] pool, System.Random rng = null)
+        {
+            if (pool == null || pool.Length == 0) pool = OrcPool;
+            int size = rng != null
+                ? rng.Next(PackSizeMin, PackSizeMax + 1)
+                : UnityEngine.Random.Range(PackSizeMin, PackSizeMax + 1);
+
+            var pack = new string[size];
+            pack[0] = PickLeaderFromPool(pool, rng);
+            for (int i = 1; i < size; i++)
+            {
+                int idx = rng != null ? rng.Next(pool.Length) : UnityEngine.Random.Range(0, pool.Length);
+                pack[i] = pool[idx];
+            }
+            return pack;
+        }
+
+        private static string PickLeaderFromPool(string[] pool, System.Random rng)
+        {
+            for (int i = 0; i < pool.Length; i++)
+            {
+                string id = pool[i];
+                if (id != null && id.IndexOf("warrior", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    return id;
+            }
+            for (int i = 0; i < pool.Length; i++)
+            {
+                string id = pool[i];
+                if (id != null && id.IndexOf("tank", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    return id;
+            }
+            int fallback = rng != null ? rng.Next(pool.Length) : UnityEngine.Random.Range(0, pool.Length);
+            return pool[fallback];
+        }
+
+        /// <summary>Hook-only overworld body: leader carries family payout; followers are visual.</summary>
+        private static EnemyDef BuildOverworldHookDef(string id, int threat, bool isLeader, int packSize = 1)
+        {
+            string leadId = id ?? "orc-warrior";
+            bool hollow = leadId.IndexOf("hollow", System.StringComparison.OrdinalIgnoreCase) >= 0;
+            float levelScale = 1f + 0.08f * (Mathf.Max(1, threat) - 1);
+            int bodies = Mathf.Clamp(packSize, PackSizeMin, PackSizeMax);
+
+            if (isLeader)
+            {
+                return new EnemyDef
+                {
+                    Id = leadId,
+                    Name = hollow ? "Hollow Prowler" : "Orc Warleader",
+                    DisplayName = hollow ? "Hollow Pack" : "Orc Warband",
+                    Ai = "walker",
+                    Hp = 98f * levelScale,
+                    MoveSpeed = RepChaseSpeed,
+                    ContactDamage = 0f,
+                    AttackInterval = 1.5f, Height = 2.0f, AggroRadius = 8f,
+                    XpReward = Mathf.RoundToInt(14 * bodies * levelScale),
+                    GlimmerReward = Mathf.RoundToInt(3 * bodies * levelScale),
+                };
+            }
+
+            return new EnemyDef
+            {
+                Id = leadId,
+                Name = leadId.Replace('-', ' '),
+                DisplayName = leadId.Replace('-', ' '),
+                Ai = "walker",
+                Hp = 40f * levelScale,
+                MoveSpeed = RepChaseSpeed * 0.95f,
+                ContactDamage = 0f,
+                AttackInterval = 1.5f, Height = 1.9f, AggroRadius = 0f,
+                XpReward = 0, GlimmerReward = 0,
+            };
         }
     }
 
@@ -808,10 +913,14 @@ namespace DeNelle.Village
         private string[] _family;
         private int _threat;
         private string _arenaPreset;   // WO-606: forwarded from the resolved SpawnArea (data only today)
+        private GameObject _packRoot;  // whole family pack — consumed on engage / leader death
         private bool _engaged;
         private bool _stung;
         private Enemy _enemy;
         private GameObject _threatCue;   // world-space "!" nameplate raised on aggro (child of the rep)
+
+        /// <summary>True once the rep has spotted the hero and is chasing (FamilyLeader → Wedge).</summary>
+        public bool IsPursuing => _stung;
 
         // AggroRange = how far a rep can NOTICE the hero and start the chase. Lowered from 22f
         // (owner 2026-06-24 FELT buffer) so a rep doesn't spot the hero from across the map / reach
@@ -882,6 +991,10 @@ namespace DeNelle.Village
 
         private Vector3 _leashCenter;           // spawn point -- centre of the wander leash
         private float   _roamRepathAt;          // next time to pick a new roam point
+        private Enemy[] _packEnemies;           // every body in the family pack (presentation drive)
+        private float   _nextAmbientGestureAt;  // cosmetic idle fidget while roaming
+        private const float AmbientGestureMin = 10f;
+        private const float AmbientGestureMax = 18f;
 
         // CONTACT ENGAGE (owner 2026-06-27): the battle triggers on near-CONTACT with the HERO,
         // not the old generous 2.6m EngageRange. touchDist = heroRadius + repRadius + 0.2f, resolved
@@ -892,11 +1005,12 @@ namespace DeNelle.Village
         private const float TouchFallbackDist = 0.7f;   // used only if a collider radius can't be resolved
         private float _touchDist = -1f;                 // <0 until resolved from real colliders
 
-        public void Init(string[] family, int threat, string arenaPreset = null)
+        public void Init(string[] family, int threat, string arenaPreset = null, GameObject packRoot = null)
         {
             _family = (family != null && family.Length > 0) ? family : new[] { "orc-warrior" };
             _threat = Mathf.Max(1, threat);
             _arenaPreset = arenaPreset;
+            _packRoot = packRoot;
             _enemy = GetComponent<Enemy>();
             _leashCenter = transform.position;                    // wander leash centred on the spawn
             // FIELD-KILL DECOUPLE (owner 2026-06-28): damage no longer auto-engages the arena. With
@@ -904,6 +1018,29 @@ namespace DeNelle.Village
             // attacks; only near-CONTACT with the hero (TouchDistance in Update) starts the BattleArena.
             // Flip the const true to restore the old "any hit pops the fight" hook behaviour.
             if (RangedHitsEngage && _enemy != null) _enemy.Damaged += OnRepDamaged;   // hero attacked the rep -> engage
+            if (_enemy != null) _enemy.Died += OnRepConsumed;
+            CachePackEnemies();
+            ScheduleAmbientGesture();
+        }
+
+        private void CachePackEnemies()
+        {
+            if (_packRoot == null)
+            {
+                _packEnemies = _enemy != null ? new[] { _enemy } : null;
+                return;
+            }
+            _packEnemies = _packRoot.GetComponentsInChildren<Enemy>(true);
+        }
+
+        private void ScheduleAmbientGesture()
+            => _nextAmbientGestureAt = Time.time + UnityEngine.Random.Range(AmbientGestureMin, AmbientGestureMax);
+
+        private void SetPackCombatPresentation(bool on)
+        {
+            if (_packEnemies == null) return;
+            for (int i = 0; i < _packEnemies.Length; i++)
+                _packEnemies[i]?.SetCombatPresentation(on);
         }
 
         // OWNER-TUNABLE hook: when true, ANY damage to the rep (incl. a ranged hit) instantly engages
@@ -914,7 +1051,10 @@ namespace DeNelle.Village
         private void OnDestroy()
         {
             if (RangedHitsEngage && _enemy != null) _enemy.Damaged -= OnRepDamaged;
+            if (_enemy != null) _enemy.Died -= OnRepConsumed;
         }
+
+        private void OnRepConsumed(Enemy _) => ConsumePack();
 
         private void OnRepDamaged(Vector3 _) => Engage("hero-attacked-rep");
 
@@ -957,6 +1097,7 @@ namespace DeNelle.Village
             if (!_stung && d <= AggroRange)
             {
                 _stung = true;
+                SetPackCombatPresentation(true);
                 Guard.Try("Encounter", "chase sting", () => AbilityAudioBridge.PlayDangerSting());
                 // THREAT CUE (encounter feedback): raise a visible "!" nameplate over the rep the
                 // instant it aggros, so the player connects "that orc is hunting me -> contact starts
@@ -973,11 +1114,20 @@ namespace DeNelle.Village
             {
                 if (_stung)
                     Guard.Try("Encounter", "rep chase", () => _enemy.SetBrainTargetPosition(hero.transform.position));
-                else if (Time.time >= _roamRepathAt)
+                else
                 {
-                    Vector3 roam = PickRoamPoint();
-                    Guard.Try("Encounter", "rep roam", () => _enemy.SetBrainTargetPosition(roam));
-                    _roamRepathAt = Time.time + UnityEngine.Random.Range(2.5f, 5f);
+                    if (Time.time >= _roamRepathAt)
+                    {
+                        Vector3 roam = PickRoamPoint();
+                        Guard.Try("Encounter", "rep roam", () => _enemy.SetBrainTargetPosition(roam));
+                        _roamRepathAt = Time.time + UnityEngine.Random.Range(2.5f, 5f);
+                    }
+                    // Idle-roam fidgets: taunt / cast / swing from the shared humanoid library.
+                    if (Time.time >= _nextAmbientGestureAt)
+                    {
+                        _enemy.PlayAmbientGesture();
+                        ScheduleAmbientGesture();
+                    }
                 }
             }
 
@@ -1178,8 +1328,19 @@ namespace DeNelle.Village
             else
                 FlowTrace.Fail("Encounter", $"Engage: BattleArena.BeginEncounter returned FALSE for rep '{gameObject.name}' — NO drop to battle (check ff.overworldencounter / BattleInProgress / empty family).");
 
-            // Consume the rep regardless (the full family lives in the battle now); if the
-            // battle failed to start (flag off / busy) the rep simply despawns -- never a stuck hook.
+            // Consume the pack regardless (the full family lives in the battle now); if the
+            // battle failed to start (flag off / busy) the pack simply despawns -- never a stuck hook.
+            ConsumePack();
+        }
+
+        private void ConsumePack()
+        {
+            if (_packRoot != null)
+            {
+                Destroy(_packRoot);
+                _packRoot = null;
+                return;
+            }
             Destroy(gameObject);
         }
 

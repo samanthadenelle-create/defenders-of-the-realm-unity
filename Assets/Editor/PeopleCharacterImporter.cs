@@ -106,6 +106,16 @@ namespace DeNelle.Editor
             Debug.Log("[PeopleCharacterImporter] DONE\n" + string.Join("\n", report));
         }
 
+        /// <summary>Rebuild only SkeletonHumanoid.controller (combat locomotion + actions).</summary>
+        public static void RebuildSkeletonHumanoidControllerOnly()
+        {
+            var report = new List<string>();
+            BuildSkeletonHumanoidController(report);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log("[PeopleCharacterImporter] SKELETON_CTRL_OK\n" + string.Join("\n", report));
+        }
+
         [MenuItem("Defenders/Animation/Import Skeleton Family (AccuRig)")]
         public static void ImportSkeletonFamily()
         {
@@ -225,12 +235,14 @@ namespace DeNelle.Editor
 
             AssetDatabase.DeleteAsset(path);
             var ctrl = AnimatorController.CreateAnimatorControllerAtPath(path);
-            ctrl.AddParameter("Speed",   AnimatorControllerParameterType.Float);
-            ctrl.AddParameter("Attack",  AnimatorControllerParameterType.Trigger);
-            ctrl.AddParameter("Hit",     AnimatorControllerParameterType.Trigger);
-            ctrl.AddParameter("Dead",    AnimatorControllerParameterType.Bool);
-            ctrl.AddParameter("Injured", AnimatorControllerParameterType.Bool);
-            ctrl.AddParameter("Cast",    AnimatorControllerParameterType.Trigger);
+            ctrl.AddParameter("Speed",    AnimatorControllerParameterType.Float);
+            ctrl.AddParameter("InCombat", AnimatorControllerParameterType.Bool);
+            ctrl.AddParameter("Attack",   AnimatorControllerParameterType.Trigger);
+            ctrl.AddParameter("Hit",      AnimatorControllerParameterType.Trigger);
+            ctrl.AddParameter("Dead",     AnimatorControllerParameterType.Bool);
+            ctrl.AddParameter("Injured",  AnimatorControllerParameterType.Bool);
+            ctrl.AddParameter("Cast",     AnimatorControllerParameterType.Trigger);
+            ctrl.AddParameter("WindUp",   AnimatorControllerParameterType.Trigger);
 
             var sm = ctrl.layers[0].stateMachine;
 
@@ -273,6 +285,35 @@ namespace DeNelle.Editor
             fromInjured.hasExitTime = false; fromInjured.duration = 0.2f;
             fromInjured.AddCondition(AnimatorConditionMode.IfNot, 0f, "Injured");
 
+            AnimationClip combatIdle = LoadClipAtPath("Assets/Action/Shared/Shared_Combat_Idle.fbx")
+                                       ?? LoadClip("Sword And Shield Idle");
+            AnimationClip combatWalk = LoadClipAtPath("Assets/Action/Knight/sword and shield walk.fbx") ?? walk;
+            AnimationClip combatRun  = LoadClipAtPath("Assets/Action/Knight/sword and shield run.fbx") ?? run;
+            AnimatorState combatLoco = null;
+            if (combatIdle != null)
+            {
+                combatLoco = sm.AddState("CombatLocomotion");
+                var cblend = new BlendTree
+                {
+                    name = "CombatLocomotion", blendType = BlendTreeType.Simple1D,
+                    blendParameter = "Speed", useAutomaticThresholds = false
+                };
+                AssetDatabase.AddObjectToAsset(cblend, ctrl);
+                combatLoco.motion = cblend;
+                cblend.AddChild(combatIdle, 0f);
+                if (combatWalk != null) cblend.AddChild(combatWalk, 1.5f);
+                if (combatRun  != null) cblend.AddChild(combatRun,  3.5f);
+
+                var toCombat = loco.AddTransition(combatLoco);
+                toCombat.hasExitTime = false; toCombat.duration = 0.25f;
+                toCombat.AddCondition(AnimatorConditionMode.If, 0f, "InCombat");
+                var toCalm = combatLoco.AddTransition(loco);
+                toCalm.hasExitTime = false; toCalm.duration = 0.25f;
+                toCalm.AddCondition(AnimatorConditionMode.IfNot, 0f, "InCombat");
+            }
+
+            AnimationClip windUp = LoadClipAtPath("Assets/Action/Standing 2H Magic Attack 01.fbx");
+
             if (attack != null)
             {
                 var st = sm.AddState("Attack");
@@ -281,8 +322,17 @@ namespace DeNelle.Editor
                 var t = sm.AddAnyStateTransition(st);
                 t.hasExitTime = false; t.duration = 0.1f; t.canTransitionToSelf = false;
                 t.AddCondition(AnimatorConditionMode.If, 0f, "Attack");
-                var back = st.AddTransition(loco);
-                back.hasExitTime = true; back.exitTime = 0.8f; back.duration = 0.2f;
+                SkeletonActionReturn(st, loco, combatLoco, 0.8f, 0.2f);
+            }
+
+            if (windUp != null)
+            {
+                var st = sm.AddState("WindUp");
+                st.motion = windUp;
+                var t = sm.AddAnyStateTransition(st);
+                t.hasExitTime = false; t.duration = 0.1f; t.canTransitionToSelf = false;
+                t.AddCondition(AnimatorConditionMode.If, 0f, "WindUp");
+                SkeletonActionReturn(st, loco, combatLoco, 0.85f, 0.2f);
             }
 
             if (cast != null)
@@ -292,8 +342,7 @@ namespace DeNelle.Editor
                 var t = sm.AddAnyStateTransition(st);
                 t.hasExitTime = false; t.duration = 0.1f; t.canTransitionToSelf = false;
                 t.AddCondition(AnimatorConditionMode.If, 0f, "Cast");
-                var back = st.AddTransition(loco);
-                back.hasExitTime = true; back.exitTime = 0.85f; back.duration = 0.2f;
+                SkeletonActionReturn(st, loco, combatLoco, 0.85f, 0.2f);
             }
 
             if (hit != null)
@@ -303,8 +352,7 @@ namespace DeNelle.Editor
                 var t = sm.AddAnyStateTransition(st);
                 t.hasExitTime = false; t.duration = 0.1f; t.canTransitionToSelf = false;
                 t.AddCondition(AnimatorConditionMode.If, 0f, "Hit");
-                var back = st.AddTransition(loco);
-                back.hasExitTime = true; back.exitTime = 0.8f; back.duration = 0.2f;
+                SkeletonActionReturn(st, loco, combatLoco, 0.8f, 0.2f);
             }
 
             if (death != null)
@@ -318,10 +366,25 @@ namespace DeNelle.Editor
 
             EditorUtility.SetDirty(ctrl);
             report.Add($"  SkeletonHumanoid.controller built: Locomotion({n} clips)" +
+                       $"{(combatLoco != null ? " + CombatLocomotion" : "")}" +
                        $"{(attack != null ? " + Attack" : "")}" +
+                       $"{(windUp != null ? " + WindUp" : "")}" +
                        $"{(cast != null ? " + Cast" : "")}" +
                        $"{(hit != null ? " + Hit" : "")}" +
-                       $"{(death != null ? " + Death" : "")} [Speed/Attack/Hit/Dead/Injured/Cast] ✓");
+                       $"{(death != null ? " + Death" : "")} [Speed/InCombat/Attack/Hit/Dead/Injured/Cast/WindUp] ✓");
+        }
+
+        private static void SkeletonActionReturn(AnimatorState state, AnimatorState loco,
+                                                 AnimatorState combatLoco, float exitTime, float duration)
+        {
+            if (combatLoco != null)
+            {
+                var toCombat = state.AddTransition(combatLoco);
+                toCombat.hasExitTime = true; toCombat.exitTime = exitTime; toCombat.duration = duration;
+                toCombat.AddCondition(AnimatorConditionMode.If, 0f, "InCombat");
+            }
+            var toCalm = state.AddTransition(loco);
+            toCalm.hasExitTime = true; toCalm.exitTime = exitTime; toCalm.duration = duration;
         }
 
         /// <summary>Copy the source FBX over the Resources slug name and flip the copy

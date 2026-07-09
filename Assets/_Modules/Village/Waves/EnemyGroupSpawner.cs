@@ -173,6 +173,7 @@ namespace DeNelle.Village
                     if (brain != null)
                     {
                         brain.Role = entry.Role;
+                        EnemyBrain.ApplyRoleTactics(brain, entry.Role);
 
                         // DEF-72: register with coordinator — suppresses the brain
                         // if its TacticalData.SuppressDelay > 0.
@@ -290,6 +291,7 @@ namespace DeNelle.Village
                     var brain = enemy.GetComponent<EnemyBrain>();
                     if (brain == null) brain = enemy.gameObject.AddComponent<EnemyBrain>();
                     brain.Role = member.Role;
+                    EnemyBrain.ApplyRoleTactics(brain, member.Role);
                     coordinator.RegisterMember(brain);
 
                     spawned.Add(enemy);

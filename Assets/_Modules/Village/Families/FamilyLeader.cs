@@ -169,6 +169,12 @@ namespace DeNelle.Village
 
         private FormationContext EvaluateContext()
         {
+            // Overworld rep packs: RepEngageWatcher drives the leader's nav (no brain).
+            // Switch to a Wedge charge once the pack has spotted the hero.
+            var repHook = GetComponent<RepEngageWatcher>();
+            if (repHook != null && repHook.IsPursuing)
+                return FormationContext.Engage;
+
             // Flee when the leader's tactical state is retreating/repositioning.
             if (_brain != null)
             {

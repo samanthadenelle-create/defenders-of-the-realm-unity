@@ -40,6 +40,11 @@ namespace DeNelle.Editor
         private const string InjuredWalkFbx = "Assets/Action/Enemies/injured walk.fbx";
         private const string InjuredRunFbx  = "Assets/Action/Enemies/injured run.fbx";
 
+        // Combat-stance locomotion (InCombat bool — braced idle / weapon gait while alert).
+        private const string CombatIdleFbx = "Assets/Action/Shared/Shared_Combat_Idle.fbx";
+        private const string CombatWalkFbx = "Assets/Action/Knight/sword and shield walk.fbx";
+        private const string CombatRunFbx  = "Assets/Action/Knight/sword and shield run.fbx";
+
         // ── Base (default) action clips — overridden per role below ──────────
         private const string BaseAttackFbx = "Assets/Action/Knight/standing melee combo attack ver. 1.fbx";
         private const string BaseCastFbx   = "Assets/Action/Spell Cast.fbx";
@@ -169,34 +174,56 @@ namespace DeNelle.Editor
             fromInjured.hasExitTime = false; fromInjured.duration = 0.2f;
             fromInjured.AddCondition(AnimatorConditionMode.IfNot, 0f, "Injured");
 
+            // ── CombatLocomotion: braced idle + weapon walk/run (InCombat bool) ──
+            var combatIdle = Clip(CombatIdleFbx);
+            var combatWalk = Clip(CombatWalkFbx);
+            var combatRun  = Clip(CombatRunFbx);
+            AnimatorState combatLocoState = null;
+            if (combatIdle != null)
+            {
+                combatLocoState = sm.AddState("CombatLocomotion");
+                var cblend = new BlendTree { name = "CombatLocomotion", blendType = BlendTreeType.Simple1D,
+                                             blendParameter = "Speed", useAutomaticThresholds = false };
+                AssetDatabase.AddObjectToAsset(cblend, ctrl);
+                combatLocoState.motion = cblend;
+                cblend.AddChild(combatIdle, 0f);
+                if (combatWalk != null) cblend.AddChild(combatWalk, 1.5f);
+                else if (s_walk != null) cblend.AddChild(s_walk, 1.5f);
+                if (combatRun != null) cblend.AddChild(combatRun, 3.5f);
+                else if (s_run != null) cblend.AddChild(s_run, 3.5f);
+                ApplyOrcLocomotionCadence(cblend);
+
+                var toCombat = locoState.AddTransition(combatLocoState);
+                toCombat.hasExitTime = false; toCombat.duration = 0.25f;
+                toCombat.AddCondition(AnimatorConditionMode.If, 0f, "InCombat");
+                var toCalm = combatLocoState.AddTransition(locoState);
+                toCalm.hasExitTime = false; toCalm.duration = 0.25f;
+                toCalm.AddCondition(AnimatorConditionMode.IfNot, 0f, "InCombat");
+            }
+
             // ── Attack — Any -> Attack on the trigger, returns to Locomotion ──
             var sAtk = sm.AddState("Attack");
             sAtk.motion = s_baseAttack != null ? s_baseAttack : s_idle;
             var toAtk = sm.AddAnyStateTransition(sAtk);
             toAtk.hasExitTime = false; toAtk.duration = ActionBlendIn; toAtk.canTransitionToSelf = false;
             toAtk.AddCondition(AnimatorConditionMode.If, 0f, "Attack");
-            var atkBack = sAtk.AddTransition(locoState);
-            atkBack.hasExitTime = true; atkBack.exitTime = 0.8f; atkBack.duration = LocoBlendBack;
+            AddActionReturn(sAtk, locoState, combatLocoState, 0.8f, LocoBlendBack);
 
             // ── WindUp telegraph — Any -> WindUp on the trigger, returns to Loco ─
-            // The readable wind-up pose before a cast / heavy attack lands.
             var sWindUp = sm.AddState("WindUp");
             sWindUp.motion = s_windup != null ? s_windup : s_idle;
             var toWind = sm.AddAnyStateTransition(sWindUp);
             toWind.hasExitTime = false; toWind.duration = ActionBlendIn; toWind.canTransitionToSelf = false;
             toWind.AddCondition(AnimatorConditionMode.If, 0f, "WindUp");
-            var windBack = sWindUp.AddTransition(locoState);
-            windBack.hasExitTime = true; windBack.exitTime = 0.85f; windBack.duration = LocoBlendBack;
+            AddActionReturn(sWindUp, locoState, combatLocoState, 0.85f, LocoBlendBack);
 
             // ── Cast — Any -> Cast on the trigger, returns to Locomotion ──────
-            // The mage spell-cast state (the WindUp telegraph fires just before it).
             var sCast = sm.AddState("Cast");
             sCast.motion = s_baseCast != null ? s_baseCast : (s_baseAttack != null ? s_baseAttack : s_idle);
             var toCast = sm.AddAnyStateTransition(sCast);
             toCast.hasExitTime = false; toCast.duration = ActionBlendIn; toCast.canTransitionToSelf = false;
             toCast.AddCondition(AnimatorConditionMode.If, 0f, "Cast");
-            var castBack = sCast.AddTransition(locoState);
-            castBack.hasExitTime = true; castBack.exitTime = 0.85f; castBack.duration = LocoBlendBack;
+            AddActionReturn(sCast, locoState, combatLocoState, 0.85f, LocoBlendBack);
 
             // ── Hit — Any -> Hit on the trigger, returns to Locomotion ───────
             var sHit = sm.AddState("Hit");
@@ -204,8 +231,7 @@ namespace DeNelle.Editor
             var toHit = sm.AddAnyStateTransition(sHit);
             toHit.hasExitTime = false; toHit.duration = ActionBlendIn; toHit.canTransitionToSelf = false;
             toHit.AddCondition(AnimatorConditionMode.If, 0f, "Hit");
-            var hitBack = sHit.AddTransition(locoState);
-            hitBack.hasExitTime = true; hitBack.exitTime = 0.8f; hitBack.duration = LocoBlendBack;
+            AddActionReturn(sHit, locoState, combatLocoState, 0.8f, LocoBlendBack);
 
             // ── Dead — Any -> Dead on the bool (latched, no return) ──────────
             var sDead = sm.AddState("Dead");
@@ -274,6 +300,19 @@ namespace DeNelle.Editor
             AssetDatabase.CreateAsset(ovr, path);
             EditorUtility.SetDirty(ovr);
             return swapped;
+        }
+
+        private static void AddActionReturn(AnimatorState state, AnimatorState locoState,
+                                            AnimatorState combatLocoState, float exitTime, float duration)
+        {
+            if (combatLocoState != null)
+            {
+                var toCombat = state.AddTransition(combatLocoState);
+                toCombat.hasExitTime = true; toCombat.exitTime = exitTime; toCombat.duration = duration;
+                toCombat.AddCondition(AnimatorConditionMode.If, 0f, "InCombat");
+            }
+            var toCalm = state.AddTransition(locoState);
+            toCalm.hasExitTime = true; toCalm.exitTime = exitTime; toCalm.duration = duration;
         }
 
         private static string Name(AnimationClip c) => c != null ? c.name : "<idle>";

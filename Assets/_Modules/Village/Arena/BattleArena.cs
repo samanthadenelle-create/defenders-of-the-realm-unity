@@ -1144,7 +1144,7 @@ namespace DeNelle.Village.Arena
             int[] rankFill = new int[3];
             for (int i = 0; i < n; i++)
             {
-                formRank[i] = FormationRankForRole(RoleForId(p.EnemyIds[i]));
+                formRank[i] = FormationRankForRole(EnemyBrain.RoleForId(p.EnemyIds[i]));
                 formSlot[i] = rankFill[formRank[i]]++;
             }
 
@@ -1173,7 +1173,7 @@ namespace DeNelle.Village.Arena
                     enemy.gameObject.name = $"ArenaEnemy_{id}_{idx}";
                     enemy.Configure($"encounter-{id}-{idx}", def, heart);
                     var brain = enemy.gameObject.AddComponent<EnemyBrain>();
-                    EnemyRole role = RoleForId(id);
+                    EnemyRole role = EnemyBrain.RoleForId(id);
                     brain.Role = role;
                     // WO-482 (felt-fix 2026-06-24): the arena is an ISOLATED duel -- there is NO
                     // base to siege here. Mark the brain hero-only so target selection ALWAYS
@@ -1181,25 +1181,8 @@ namespace DeNelle.Village.Arena
                     // away), which is what made the orcs mill ("no COMPLETE path to HeartOfElarion").
                     brain.SetHeroOnlyTarget(true);
                     FlowTrace.Step("BattleArena", $"ARENA orc '{id}' target = hero-only (no heart siege).");
-                    // TACTICAL ROLES (felt-fix 2026-06-24): without _tactics every orc just
-                    // melee-charged (mage never kited, nobody flanked). Assign the SHARED runtime
-                    // archetypes via SetTactics right after the brain is added (the Enemy.Configure
-                    // Role="caster" data path can't be used here because Configure runs BEFORE the
-                    // brain is attached in this spawn order). Reuses the existing Kiter/Flanker
-                    // archetypes -- NO new coordinator/formation system.
-                    //  - Ranged (mage) -> Kiter: holds ~10m standoff and pokes ranged, never charges.
-                    //  - DPS warrior   -> Flanker: arcs ~90deg to a side/rear approach.
-                    //  - Tank stays a front-closer (default Rush, no tactics) -- a clean front line.
-                    if (role == EnemyRole.Ranged)
-                    {
-                        brain.SetTactics(EnemyBrain.KiterTactics);
-                        FlowTrace.Step("BattleArena", $"ROLE '{id}': Kiter tactics (hold range + ranged poke).");
-                    }
-                    else if (role == EnemyRole.DPS)
-                    {
-                        brain.SetTactics(EnemyBrain.FlankerTactics);
-                        FlowTrace.Step("BattleArena", $"ROLE '{id}': Flanker tactics (arc to a flank).");
-                    }
+                    EnemyBrain.ApplyRoleTactics(brain, role);
+                    FlowTrace.Step("BattleArena", $"ROLE '{id}': tactics applied for {role}.");
                     // MonsterFamily wiring: first unit leads; the rest follow in formation.
                     if (idx == 0)
                         _familyLeader = enemy.gameObject.AddComponent<FamilyLeader>();
@@ -1211,7 +1194,7 @@ namespace DeNelle.Village.Arena
                 {
                     _liveEnemies.Add(enemy);
                     enemy.Died += HandleEnemyDied;
-                    FlowTrace.Step("BattleArena", $"SpawnFamily: '{id}' (role {RoleForId(id)}) at {pos}{(idx == 0 ? " [LEADER]" : " [follower]")}.");
+                    FlowTrace.Step("BattleArena", $"SpawnFamily: '{id}' (role {EnemyBrain.RoleForId(id)}) at {pos}{(idx == 0 ? " [LEADER]" : " [follower]")}.");
                 }
             }
         }
@@ -1284,17 +1267,6 @@ namespace DeNelle.Village.Arena
                 case EnemyRole.Healer: return 2;  // rear, furthest from the hero
                 default:               return 1;  // DPS / Ranged / MiniBoss — mid rank behind the tanks
             }
-        }
-
-        // Map a family id -> an EnemyBrain role (logic). The orc family: leader=DPS,
-        // tank=Tank, mage=Ranged. Unknown ids default to DPS.
-        private static EnemyRole RoleForId(string id)
-        {
-            string s = (id ?? "").ToLowerInvariant();
-            if (s.Contains("tank")) return EnemyRole.Tank;
-            if (s.Contains("mage") || s.Contains("caster") || s.Contains("shaman")) return EnemyRole.Ranged;
-            if (s.Contains("heal") || s.Contains("acolyte")) return EnemyRole.Healer;
-            return EnemyRole.DPS;
         }
 
         // Synthesise a code EnemyDef for an encounter id (the orc family ids are not in
