@@ -37,6 +37,19 @@ namespace DeNelle.Village
         // Falls back to the first catalog entry if this id isn't present.
         private const string PreferredEnemyId = "hollow-walker";
 
+        // ── Teaching-wave roster (owner directive, felt-test 2026-07-08) ──────────
+        // The FIRST/teaching defend-wave must be UNLOSABLE for a first-time player:
+        // spawn EXACTLY 2 enemies, both VERY low level, so one prepaid tower clears
+        // them easily. We cap + weaken HERE (the tutorial owns its own roster) rather
+        // than in the wave loop or the shared enemies.json catalog, so ONLY the
+        // tutorial is affected — the ambient wave loop keeps its authored balance.
+        //  • Count: 2 (was 3 hollow-walkers).
+        //  • Level: HP is dropped to the floor so Enemy.Configure's displayed level
+        //    (round(def.Hp / 25)) resolves to Lv 1, and contact damage is trivial.
+        private const int   TeachingWaveMaxCount     = 2;    // exactly 2 (down from 3)
+        private const float TeachingWaveHp           = 12f;  // → Enemy.Level rounds to Lv 1
+        private const float TeachingWaveContactDamage = 2f;  // barely scratches a wall / the hero
+
         private WaveManager _wave;
         private readonly List<Enemy> _spawned = new List<Enemy>();
         private bool _spawnRequested;
@@ -75,15 +88,19 @@ namespace DeNelle.Village
                 return;
             }
 
-            // Pull a basic enemy def from the SAME catalog the wave loop uses.
+            // Pull a basic enemy def from the SAME catalog the wave loop uses, then
+            // clone it into a WEAKENED teaching-wave variant so the tutorial fight is
+            // unlosable — the shared catalog def is left untouched (cloning, not
+            // mutating, so the ambient wave loop keeps hollow-walker's real stats).
             EnemyCatalog catalog = await _wave.GetEnemyCatalogAsync();
-            EnemyDef def = ResolveEnemyDef(catalog);
-            if (def == null)
+            EnemyDef baseDef = ResolveEnemyDef(catalog);
+            if (baseDef == null)
             {
                 FlowTrace.Warn("TutorialWave", "enemy catalog empty / no def resolved — no tutorial enemies spawned");
                 Debug.LogWarning("[TutorialWaveSpawner] Enemy catalog empty — no tutorial enemies spawned.");
                 return;
             }
+            EnemyDef def = MakeTeachingVariant(baseDef);
 
             // The wave loop is held closed during the FTUE, so WaveManager.Heart may
             // not be resolved yet — find the HeartController directly so the tutorial
@@ -96,7 +113,9 @@ namespace DeNelle.Village
             Vector3 heading = spawnPoint.HeadingToGate;
             Vector3 lateral = Vector3.Cross(Vector3.up, heading);
 
-            int n = Mathf.Clamp(count, 1, 5);
+            // Teaching wave is capped to EXACTLY 2 (owner directive): the caller's
+            // requested count is honoured only up to that ceiling.
+            int n = Mathf.Clamp(count, 1, TeachingWaveMaxCount);
             for (int i = 0; i < n; i++)
             {
                 // Fan them out laterally so they advance as a small mob, not a
@@ -115,6 +134,47 @@ namespace DeNelle.Village
             FlowTrace.Step("TutorialWave", $"spawned {_spawned.Count}/{n} tutorial enemy(ies)");
             Debug.Log($"[TutorialWaveSpawner] Spawned {_spawned.Count} tutorial enemy(ies) " +
                       $"at {spawnPoint.Direction} gate ({spawnPoint.SpawnId}).");
+        }
+
+        /// <summary>
+        /// Clones <paramref name="src"/> into a VERY-low-level teaching variant
+        /// (floor HP + trivial contact damage) so the tutorial fight is unlosable,
+        /// leaving the shared catalog def untouched. Keeps the same id / family /
+        /// model so it is still a real hollow-walker the hero + tower can fight —
+        /// only the stats that make it dangerous are dialed to the floor. HP at the
+        /// floor also drives <see cref="Enemy"/>'s displayed level (round(Hp/25)) to
+        /// Lv 1.
+        /// </summary>
+        private EnemyDef MakeTeachingVariant(EnemyDef src)
+        {
+            if (src == null) return null;
+            var v = new EnemyDef
+            {
+                Id             = src.Id,
+                Name           = src.Name,
+                Family         = src.Family,
+                Role           = src.Role,
+                Spawn          = src.Spawn != null ? new List<string>(src.Spawn) : null,
+                DisplayName    = src.DisplayName,
+                ModelKey       = src.ModelKey,
+                Ai             = src.Ai,
+                Movement       = src.Movement,
+                // Weakened for the teaching wave:
+                Hp             = TeachingWaveHp,
+                MoveSpeed      = src.MoveSpeed,
+                ContactDamage  = TeachingWaveContactDamage,
+                AttackInterval = src.AttackInterval,
+                Height         = src.Height,
+                Boss           = src.Boss,
+                Flavor         = src.Flavor,
+                AggroRadius    = src.AggroRadius,
+                GroupStaggerDelay = src.GroupStaggerDelay,
+                XpReward       = src.XpReward,
+                GlimmerReward  = src.GlimmerReward,
+                CoinReward     = src.CoinReward,
+            };
+            FlowTrace.Step("TutorialWave", $"teaching variant '{v.Id}' hp={v.Hp} contactDamage={v.ContactDamage} (from base hp={src.Hp}/dmg={src.ContactDamage})");
+            return v;
         }
 
         private EnemyDef ResolveEnemyDef(EnemyCatalog catalog)
