@@ -57,6 +57,14 @@ namespace DeNelle.Village
         [Header("Look")]
         public Color BlastColor = new Color(0.6f, 0.4f, 1f, 1f);   // arcane violet
 
+        // MAGIC PROJECTILE VISUAL (owner 2026-07-08 "arcane tower needs to shoot MAGIC" — picked
+        // the Spells-Pack "Fire 6" fireball). Resolved by name from Resources/VFX/Projectiles/ via
+        // ProjectileVFXCatalog.SpawnNamedFlying. A mirrored (committed) copy of the gitignored pack
+        // prefab lives at Assets/Resources/VFX/Projectiles/Spell_Fire_6.prefab. Tunable in-Inspector;
+        // if it can't resolve, FireBlast falls back to the emissive violet orb (never invisible).
+        [Tooltip("Resources/VFX/Projectiles/<name> prefab used as the flying MAGIC bolt visual.")]
+        public string ArcaneBoltVfx = "Spell_Fire_6";
+
         // Elevation perk (wall-mounted): a spire seated on a wall-walk TOP gets the high-ground
         // range/LOS bonus. 1 = ground (no bonus); set by BaseLayoutLoader.Spawn (e.g. 1.25) when
         // wall-mounted. A MULTIPLIER on EffectiveRange so it survives tier upgrades. Bounded.
@@ -263,33 +271,56 @@ namespace DeNelle.Village
             // Null-safe: VFXManager statics no-op when not booted.
             VFXManager.Play(VFXType.Cast_MageCharge, muzzle);
 
-            GameObject orb = null;
-            Guard.Try("ArcaneTower", "spawn spell orb", () =>
+            // ROOT FIX (owner 2026-07-08): the flying body used to be a bare
+            // GameObject.CreatePrimitive(Sphere) — a violet "pellet", which is exactly why the
+            // spire "still doesn't shoot magic" despite the cast (Cast_MageCharge) + blast
+            // (Impact_ExplosionAether) already firing. Swap that primitive for the owner-picked
+            // Spells-Pack "Fire 6" fireball, spawned through ProjectileVFXCatalog so it inherits
+            // the SAME URP magenta-proof reshade (the 3a7d4fae "kill magenta cubes on cast VFX"
+            // path — HealHalfUpgradedParticleMaterial) that the hero/enemy spell VFX use. The
+            // body rides the ProjectileMover; if the mirrored prefab can't resolve we fall back to
+            // the emissive orb so the shot is never invisible.
+            GameObject bolt = null;
+            Guard.Try("ArcaneTower", "spawn spell bolt", () =>
             {
-                orb = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                orb.name = "ArcaneSpellOrb";
-                orb.transform.localScale = Vector3.one * 0.55f;
-                var col = orb.GetComponent<Collider>(); if (col != null) Destroy(col);
-                var sh = Shader.Find("Universal Render Pipeline/Lit");
-                if (sh != null)
+                bolt = new GameObject("ArcaneSpellBolt");
+                bolt.transform.position = muzzle;
+
+                var fx = ProjectileVFXCatalog.SpawnNamedFlying(bolt.transform, ArcaneBoltVfx);
+                if (fx == null)
                 {
-                    var m = new Material(sh);
-                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", BlastColor);
-                    if (m.HasProperty("_EmissionColor")) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", BlastColor * 4f); }
-                    var r = orb.GetComponent<Renderer>(); if (r != null) r.sharedMaterial = m;
+                    // Named pack VFX unresolved — fall back to the legacy emissive violet orb,
+                    // childed under the mover so it still travels + reads as a magic bolt.
+                    FlowTrace.Warn("ArcaneTower",
+                        $"FireBlast: named VFX '{ArcaneBoltVfx}' unresolved (not under Resources/VFX/Projectiles) — using fallback emissive orb.");
+                    var orb = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    orb.name = "ArcaneSpellOrb";
+                    orb.transform.SetParent(bolt.transform, false);
+                    orb.transform.localScale = Vector3.one * 0.55f;
+                    var col = orb.GetComponent<Collider>(); if (col != null) Destroy(col);
+                    var sh = Shader.Find("Universal Render Pipeline/Lit");
+                    if (sh != null)
+                    {
+                        var m = new Material(sh);
+                        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", BlastColor);
+                        if (m.HasProperty("_EmissionColor")) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", BlastColor * 4f); }
+                        var r = orb.GetComponent<Renderer>(); if (r != null) r.sharedMaterial = m;
+                    }
                 }
-                orb.transform.position = muzzle;
-                // Arcing lob; blast applies ON ARRIVAL (the un-pooled mover self-destroys).
-                orb.AddComponent<ProjectileMover>().Launch(impact + Vector3.up * 0.5f, 26f, 0.35f,
+
+                // Arcing lob; blast applies ON ARRIVAL (the un-pooled mover self-destroys, taking
+                // its visual child with it). The AoE blast VFX (pooled Impact_ExplosionAether) +
+                // damage/slow land in ApplyBlast, so the shot reads as a cast spell.
+                bolt.AddComponent<ProjectileMover>().Launch(impact + Vector3.up * 0.5f, 26f, 0.35f,
                     () => ApplyBlast(primary, impact));
             });
 
-            if (orb == null)
+            if (bolt == null)
             {
-                // Orb visual failed to build — never let the spire go silently dead:
+                // Bolt spawn threw — never let the spire go silently dead:
                 // fall back to the legacy instant blast (Warn per INSTRUMENTATION_STANDARD).
                 FlowTrace.Warn("ArcaneTower",
-                    "FireBlast: spell-orb spawn failed — applying blast instantly (visual-less fallback).");
+                    "FireBlast: spell-bolt spawn failed — applying blast instantly (visual-less fallback).");
                 ApplyBlast(primary, impact);
             }
         }

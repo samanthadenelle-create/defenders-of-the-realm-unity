@@ -109,6 +109,35 @@ namespace DeNelle.Village
             return go;
         }
 
+        /// <summary>Spawn a NAMED flying VFX body from Resources/VFX/Projectiles/&lt;resourceName&gt;,
+        /// parented to <paramref name="mover"/> as a PURE visual (physics/demo scripts stripped,
+        /// built-in particle shaders remapped to URP, all particle systems played). This is the
+        /// owner-picked-asset path: the Arcane Spire rides the Spells-Pack "Spell_Fire_6" fireball
+        /// so its shot reads as a real cast MAGIC bolt, not a primitive pellet. Returns the live
+        /// instance, or null (Warn) when the mirrored prefab isn't under Resources — the caller
+        /// then falls back to its own primitive so a shot is never invisible.</summary>
+        public static GameObject SpawnNamedFlying(Transform mover, string resourceName)
+        {
+            if (mover == null) { FlowTrace.Warn("ProjVfx", $"SpawnNamedFlying(<null mover>, {resourceName}) -> null"); return null; }
+            if (string.IsNullOrEmpty(resourceName)) { FlowTrace.Warn("ProjVfx", "SpawnNamedFlying(<empty name>) -> null"); return null; }
+            string path = Root + resourceName;
+            FlowTrace.Step("ProjVfx", $"SpawnNamedFlying name='{resourceName}' path='{path}'");
+            var prefab = Load(path);
+            if (prefab == null)
+            {
+                FlowTrace.Warn("ProjVfx", $"SpawnNamedFlying '{resourceName}': no prefab at Resources/'{path}' -> caller flies with NO named FX body (fallback visual expected)");
+                return null;
+            }
+
+            var go = Object.Instantiate(prefab, mover.position, mover.rotation, mover);
+            go.transform.localPosition = Vector3.zero;
+            go.transform.localRotation = Quaternion.identity;
+            CleanToVisualOnly(go);
+            FixUrpShaders(go);
+            PlayAll(go);
+            return go;
+        }
+
         /// <summary>Re-skin a pooled projectile's flying VFX for a (possibly new) element:
         /// destroys the previous visual and spawns the element-matched one fresh. Always
         /// correct (never shows a stale element); the per-shot Instantiate is cheap for a
