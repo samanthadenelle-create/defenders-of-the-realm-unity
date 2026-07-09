@@ -137,6 +137,13 @@ namespace DeNelle.Village
             // today's behavior (fully reversible — the spawner is gated, not deleted).
             if (DeNelle.Core.FeatureFlags.OverworldEncounter) return;
 
+            // FTUE GUARD (F8 2026-07-08 "died in tutorial — nothing should spawn"): while the
+            // first-time tutorial is active, suppress ALL ambient region roamers so the player
+            // cannot be aggro'd/killed mid-tutorial. Back-stops the OverworldEncounter suppression
+            // above for any config where that flag is off during the FTUE. Lifts automatically when
+            // onboarding completes (TutorialFlow.HostilesSuppressedForTutorial).
+            if (TutorialFlow.HostilesSuppressedForTutorial) return;
+
             _tickTimer -= Time.deltaTime;
             if (_tickTimer > 0f) return;
             _tickTimer = TickInterval;

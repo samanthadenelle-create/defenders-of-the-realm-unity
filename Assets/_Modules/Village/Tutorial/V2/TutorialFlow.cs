@@ -103,6 +103,35 @@ namespace DeNelle.Village
         /// mid-session Finished from the fresh-boot decline.</summary>
         public static bool RanThisSession => s_ranThisSession;
 
+        /// <summary>
+        /// F8 2026-07-08 ("during tutorial we need to not let anything spawn. died in tutorial"):
+        /// TRUE while the first-time tutorial (FTUE) is active/incomplete — ALL ambient hostile
+        /// spawners (WaveManager auto-loop, OverworldEncounter ring reps + scatter reps,
+        /// RegionMobSpawner) consult this and stay OFF so the player cannot die mid-tutorial.
+        /// <para>
+        /// Robust + INSTANCE-INDEPENDENT (reads GameState, not this component, so it holds even
+        /// before/without a TutorialFlow instance): the SAME <c>!Onboarded</c> gate
+        /// <see cref="WaveManager"/>'s IsFirstRun uses, qualified by <c>ff.tutorialv2</c> so it
+        /// never affects the legacy path. <see cref="GameState.Onboarded"/> flips true ONLY in
+        /// <see cref="FinishFlow"/> -> GameStateService.FinishOnboarding (set synchronously BEFORE
+        /// the FinishFlow BeginLoop kick), so this lifts EXACTLY when the tutorial completes and
+        /// the intended post-tutorial wave loop is never blocked.
+        /// </para>
+        /// NOTE: the tutorial's OWN scripted encounters (TutorialWaveSpawner via
+        /// WaveManager.SpawnEnemyForExternalMode; the staged world_encounter rep) do NOT route
+        /// through the gated ambient paths, so they still fire — only the AMBIENT sources suppress.
+        /// </summary>
+        public static bool HostilesSuppressedForTutorial
+        {
+            get
+            {
+                if (!FeatureFlags.TutorialV2) return false;
+                var svc = GameStateService.Instance;
+                if (svc == null || svc.State == null) return false;
+                return !svc.State.Onboarded;
+            }
+        }
+
         private enum Phase { Idle, Settling, WaitTrigger, Running, AwaitCompletion, Finished }
 
         private List<TutorialStepDef> _steps;            // mandatory chain (ordered)

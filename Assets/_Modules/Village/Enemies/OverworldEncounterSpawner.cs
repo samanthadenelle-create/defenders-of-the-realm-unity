@@ -318,8 +318,20 @@ namespace DeNelle.Village
             return outside;
         }
 
+        // FTUE GUARD (F8 2026-07-08 "died in tutorial — nothing should spawn"): while the first-time
+        // tutorial is active, NO ambient rep may instantiate — engaging one pops the BattleArena where
+        // the hero can die mid-tutorial. Bypassed by _testMode so the fleet oracles (ForcePopulateForTest
+        // / EnsureMaintainLoopForTest) still drive the real spawn path on a fresh (pre-onboard) save.
+        // Lifts automatically when onboarding completes (TutorialFlow.HostilesSuppressedForTutorial).
+        private bool _testMode;
+
         private void SpawnRep(int index)
         {
+            if (!_testMode && TutorialFlow.HostilesSuppressedForTutorial)
+            {
+                FlowTrace.Step("Encounter", $"suppressed ring rep #{index} — tutorial (FTUE) active.");
+                return;
+            }
             var hero = GameObject.FindWithTag("Player");
             Vector3 origin = hero != null ? hero.transform.position : Vector3.zero;
             if (hero == null)
@@ -475,6 +487,7 @@ namespace DeNelle.Village
         // -----------------------------------------------------------------------------
         public void ForcePopulateForTest()
         {
+            _testMode = true;   // fleet oracle drives the REAL spawn path on a fresh save — bypass the FTUE guard
             _reps.RemoveAll(r => r == null);
             int spawned = 0;
             for (int i = _reps.Count; i < RepCount; i++) { SpawnRep(i); spawned++; }
@@ -518,6 +531,7 @@ namespace DeNelle.Village
         /// flag AFTER boot, when MaybePopulate has already declined). Idempotent.</summary>
         public void EnsureMaintainLoopForTest()
         {
+            _testMode = true;   // fleet oracle drives the REAL maintain/scatter path on a fresh save — bypass the FTUE guard
             if (_maintaining) return;
             _maintaining = true;
             StartCoroutine(MaintainLoop());
@@ -738,6 +752,11 @@ namespace DeNelle.Village
         /// behaviour contract to the ring reps.</summary>
         private bool SpawnScatterRep(ScatterRecord rec)
         {
+            if (!_testMode && TutorialFlow.HostilesSuppressedForTutorial)
+            {
+                FlowTrace.Step("Encounter", $"suppressed scatter rep #{rec.Index} — tutorial (FTUE) active.");
+                return false;
+            }
             string leadId = rec.FamilyIds != null && rec.FamilyIds.Length > 0 ? rec.FamilyIds[0] : "orc-warrior";
             bool hollow = leadId.IndexOf("hollow", System.StringComparison.OrdinalIgnoreCase) >= 0;
             float levelScale = 1f + 0.08f * (rec.Level - 1);   // same +8%/tier curve as BattleArena.BuildEncounterDef

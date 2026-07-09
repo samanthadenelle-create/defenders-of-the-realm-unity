@@ -600,6 +600,20 @@ namespace DeNelle.Village
             // headless fleet run shows EXACTLY where the start flow stalls.
             FlowTrace.Step("Wave", $"BeginLoop ENTRY phase={_phase} forceSpawn={_forceSpawnNow} startWave={_startWave} scheduleCached={_schedule != null} catalogCached={_enemyCatalog != null}");
 
+            // FTUE GUARD (F8 2026-07-08 "died in tutorial — nothing should spawn"): while the
+            // first-time tutorial is active the ambient wave loop must NOT arm — a countdown/wave
+            // could otherwise kill the player mid-tutorial. This mirrors (and back-stops) the
+            // Start/auto-arm !IsFirstRun gate for ANY BeginLoop caller (manual DEFEND button, dev
+            // seams, resume). The tutorial's OWN scripted teaching wave uses TutorialWaveSpawner ->
+            // SpawnEnemyForExternalMode (not this loop), so it is unaffected. The intended
+            // post-tutorial kick from TutorialFlow.FinishFlow runs AFTER FinishOnboarding sets
+            // Onboarded=true, so this never blocks the legitimate handoff.
+            if (TutorialFlow.HostilesSuppressedForTutorial)
+            {
+                FlowTrace.Step("Wave", "BeginLoop suppressed — tutorial (FTUE) active; ambient wave loop stays closed until onboarding completes.");
+                return;
+            }
+
             ResolveSceneRefs();
 
             using (FlowTrace.Measure("Wave", "wave data load", warnAboveMs: 2000f))

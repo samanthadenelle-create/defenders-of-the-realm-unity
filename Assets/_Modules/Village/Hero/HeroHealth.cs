@@ -448,7 +448,22 @@ namespace DeNelle.Village
             talentDr = Mathf.Clamp(talentDr, 0f, 0.95f);
             if (talentDr > 0f) amount *= (1f - talentDr);
 
-            _hp = Mathf.Max(0f, _hp - amount);
+            float newHp = Mathf.Max(0f, _hp - amount);
+
+            // FTUE SAFETY NET (F8 2026-07-08 "died in tutorial"): belt-and-suspenders for the
+            // ambient-spawn suppression — even if a pre-placed / stray hostile lands a hit, the
+            // hero can be HURT (the scripted teaching wave still reads as real) but can NEVER die
+            // while the first-time tutorial is active: a would-be-lethal blow is floored at 1 HP.
+            // Gated on the SAME condition the spawners use, so it LIFTS the instant onboarding
+            // completes (TutorialFlow.HostilesSuppressedForTutorial -> !Onboarded flips false).
+            if (newHp <= 0f && TutorialFlow.HostilesSuppressedForTutorial)
+            {
+                newHp = 1f;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("HeroHealth",
+                    "FTUE guard: would-be-lethal hit floored at 1 HP — tutorial death suppressed.");
+            }
+
+            _hp = newHp;
             OnHealthChanged?.Invoke(_hp, MaxHp);
 
             // WO-566: Legendary Resolve (shared) — cheat death ONCE per run. When a hit would drop
