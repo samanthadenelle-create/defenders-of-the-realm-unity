@@ -7,6 +7,11 @@
 /[Bb]uild/
 /[Bb]uilds/
 /[Ll]ogs/
+# F8 triage inbox (runtime artifacts; keep README)
+!/logs/
+!/logs/f8-inbox/
+logs/f8-inbox/*
+!logs/f8-inbox/README.md
 /[Uu]ser[Ss]ettings/
 
 # MemoryCaptures can get excessive in size.

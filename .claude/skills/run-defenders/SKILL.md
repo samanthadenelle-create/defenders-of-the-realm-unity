@@ -104,6 +104,32 @@ Useless on a headless box; this is the only path that renders. Boot a single sce
 | Player build crashes with `level3 corrupted` | you skipped the `Remove-Item Builds\Windows` wipe — incremental builds keep a stale exe stub |
 | `harvest.sh` finds no runs | the fleet hasn't completed (or wiped on relaunch); check `autopilot-runs/` for `*/break-log.jsonl` |
 
+## F8 Live-Triage — persistent daemon (no manual re-arm)
+
+While the owner felt-tests, every F8 flag / error / softlock must land on the CLI without the owner
+saying "rearm" or "watch". Use the **inbox daemon** (not the one-shot `f8-watch.sh`).
+
+**1. Start once** (idempotent; survives the whole play session):
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .claude\skills\run-defenders\f8-watch-start.ps1
+```
+
+**2. Agent session** — `.cursor/rules/f8-auto-triage.mdc` (alwaysApply) requires:
+- Background `f8-watch-poll.ps1` with notify on `F8 INBOX PING` (mid-session wake)
+- Every turn: `f8-check-inbox.ps1` first; if `NEW_CAPTURE`, read `logs/f8-inbox/LATEST_CAPTURE.md` before any code-read
+- After triage: `f8-ack.ps1` + re-launch poll
+
+**3. Stop daemon** (end of day): `f8-watch-stop.ps1`
+
+| Script | Role |
+|--------|------|
+| `f8-watch-daemon.ps1` | Persistent watcher → inbox + `PING.json` |
+| `f8-watch-poll.ps1` | Agent background poller; exits on un-acked capture |
+| `f8-check-inbox.ps1` | Sync poll (`NEW_CAPTURE` / exit 1) |
+| `f8-ack.ps1` | Ack after triage |
+
+Legacy: `f8-watch.sh` (bash, exits on first fire, needs manual re-arm).
+
 ## Reference
 Full operating SOP + the latest run ledger: `OVERNIGHT_AUTOPILOT_LOG.md`. Build/gate/bake cycle
 table: `docs/HANDOVER.md` §4. Instrumentation method (`FlowTrace`/`Guard`/break-log):

@@ -1,4 +1,5 @@
 # =============================================================================
+# DEPRECATED — use .claude/skills/run-defenders/f8-watch-start.ps1 (persistent daemon + inbox).
 # f8-watcher-auto-alert.ps1 — Auto-alert on F8 break-log captures
 #
 # Monitors the Editor.log / Player.log for F8 flags, errors, exceptions.

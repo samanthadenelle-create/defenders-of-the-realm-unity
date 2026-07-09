@@ -1,0 +1,43 @@
+---
+description: Auto-poll F8 inbox every agent turn; persistent daemon + background poll notify on capture.
+alwaysApply: true
+---
+
+# F8 Auto-Triage (BINDING — no manual re-arm)
+
+The owner is NEVER the bug detector. F8 captures must surface on the CLI without the owner saying "rearm" or "watch".
+
+## One-time per machine (owner or first CLI turn)
+
+Ensure the **persistent daemon** is running (survives forever; auto-rearms on every capture):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .claude\skills\run-defenders\f8-watch-start.ps1
+```
+
+Stop only when done for the day: `f8-watch-stop.ps1`.
+
+## Every CLI / Cursor agent session (BINDING)
+
+1. **Session start:** run `f8-watch-start.ps1` (idempotent — no-op if already running).
+2. **Session start:** launch **background inbox poll** so mid-session F8s ping the agent without a new user message:
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File .claude\skills\run-defenders\f8-watch-poll.ps1
+   ```
+   Use Shell `is_background: true` + `notify_on_output` pattern `F8 INBOX PING`.
+3. **Every turn — FIRST action before any other work:**
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File .claude\skills\run-defenders\f8-check-inbox.ps1
+   ```
+4. **If exit code 0 (`NEW_CAPTURE`):** STOP planned work. Read `logs/f8-inbox/LATEST_CAPTURE.md` (auto-harvested `[Flow:*]` context is inside). Triage from that data FIRST — no code-read, no theory (§12). Route per `docs/TICKET_PIPELINE.md`.
+5. **After triage:** `f8-ack.ps1`, then **re-launch** background `f8-watch-poll.ps1` (step 2).
+
+## Inbox files
+
+| File | Role |
+|------|------|
+| `logs/f8-inbox/PING.json` | Monotonic seq; daemon bumps on each capture |
+| `logs/f8-inbox/LATEST_CAPTURE.md` | Full harvest + trigger (read this) |
+| `logs/f8-inbox/ACK.json` | Last acked seq (`f8-ack.ps1`) |
+
+Legacy one-shot watcher `f8-watch.sh` is superseded by daemon + inbox poll unless bash-only environment.

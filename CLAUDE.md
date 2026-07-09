@@ -320,25 +320,31 @@ In one breath:
 
 Owner directive (2026-06-23): **the owner is NEVER the bug detector** (memory
 `never-dragdrop-or-manual-playtest`). Whenever the owner is (or is about to start) felt-testing,
-the CLI **ARMS the F8 break-log watcher** so every F8 flag / error / softlock the harness records
-surfaces on the CLI **the instant it lands** — and the CLI **triages it LIVE** (RCA from the captured
-line + screenshot) instead of waiting to be told.
+every F8 flag / error / softlock the harness records must surface on the CLI **without the owner
+saying "rearm" or "watch"** — the CLI **triages it LIVE** (RCA from the captured line + screenshot).
 
-- **Arm it:** `bash .claude/skills/run-defenders/f8-watch.sh` via the **Bash tool with
-  `run_in_background: true`** (a detached/hook process can't route findings back to the agent — the
-  agent must launch it itself to get the completion notification).
-- **Re-arm after every fire** (it exits on the first real capture) so it covers the whole session.
-- It fires ONLY on real captures (F8 `flagged` / error / exception / softlock); `session_start` +
-  `scene_loaded` startup noise is filtered; it re-baselines on a fresh Play session.
-- On a fire the watcher **AUTO-HARVESTS** the recent `[Flow:*]` / `[FeatureFlags]` / Guard / exception
-  lines from `Editor.log` (in-editor felt-test) or `Player.log` (build) and prints them under
-  `AUTO-HARVESTED CAPTURE CONTEXT`. **TRIAGE FROM THOSE LINES — read the already-captured data FIRST,
-  before any code-read, any agent, any theory.** Spawning a code-reading agent before reading the
-  harvested trace is the banned failure (memory `never-inference-fix` "guessing when the data already
-  exists", owner 2026-06-23: "you have the answers yet choose to not look"). The owner must NEVER have
-  to ask "did the data show that" — the look is structural, not something the owner triggers.
-- Then RCA from the data + screenshot, and route per §13 (CLI implements + headless-verifies; PO
-  felt-verifies + closes). The owner just plays and F8s.
+**Persistent daemon (primary — no manual re-arm):**
+- **Start once:** `powershell -File .claude\skills\run-defenders\f8-watch-start.ps1` (idempotent).
+  Runs `f8-watch-daemon.ps1` hidden; watches `break-log.jsonl` + Editor/Player logs forever.
+- **Inbox:** `logs/f8-inbox/` — daemon writes `LATEST_CAPTURE.md` + bumps `PING.json` on each capture.
+- **Agent poll:** `.cursor/rules/f8-auto-triage.mdc` (alwaysApply) — every turn run `f8-check-inbox.ps1`
+  FIRST; session start also launches background `f8-watch-poll.ps1` (notify on `F8 INBOX PING`).
+- **After triage:** `f8-ack.ps1`, then re-launch `f8-watch-poll.ps1`.
+- **Stop:** `f8-watch-stop.ps1` when done for the day.
+
+Fires ONLY on real captures (F8 `flagged` / error / exception / softlock); `session_start` +
+`scene_loaded` startup noise is filtered; re-baselines on a fresh Play session.
+
+On a fire the daemon **AUTO-HARVESTS** the recent `[Flow:*]` / `[FeatureFlags]` / Guard / exception
+lines into `LATEST_CAPTURE.md`. **TRIAGE FROM THOSE LINES — read the already-captured data FIRST,
+before any code-read, any agent, any theory.** Spawning a code-reading agent before reading the
+harvested trace is the banned failure (memory `never-inference-fix`). The owner must NEVER have
+to ask "did the data show that" — the look is structural.
+
+Then RCA from the data + screenshot, and route per §13 (CLI implements + headless-verifies; PO
+felt-verifies + closes). The owner just plays and F8s.
+
+**Legacy fallback:** `bash .claude/skills/run-defenders/f8-watch.sh` (one-shot; re-arm after each fire).
 
 ---
 
