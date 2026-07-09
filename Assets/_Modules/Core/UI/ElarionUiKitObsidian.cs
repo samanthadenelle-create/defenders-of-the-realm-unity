@@ -2206,6 +2206,39 @@ namespace DeNelle.Core.UI
                 var f = _t.font;
                 if (f != null && f.faceInfo.pointSize > 0f)
                     factor = Mathf.Max(1.05f, f.faceInfo.lineHeight / f.faceInfo.pointSize);
+
+                // ── KIT-LEVEL MIN READABLE BAND FLOOR (additive; only GROWS too-short bands) ──
+                // Root cause of the recurring "0 visible glyphs" class (F8 2026-07-08, Skip-Tutorial
+                // confirm; earlier dialogue + EndState): kit text bands are authored as a FRACTION of
+                // panel height (procedural title = Header y 0.92..0.98 = 0.06; FrameCore z.header
+                // ~0.072). On a SMALL panel (confirm modal ~0.32 of a ~1080 canvas) that fraction
+                // resolves to ~19px — below the height needed to seat the FontHardFloor(20) line
+                // (a 20px line needs ~(20+1)*factor px ≈ 27-30px), so the fit-guard's relaxation
+                // bottoms out at the floor and Ellipsis still CULLS the whole line. Fix the KIT once,
+                // here at the guard the fit path arms on EVERY policed label (title/header/label/
+                // message): if the RESOLVED band is too short to ever seat the hard-floor line, grow
+                // the label rect to the minimum readable band (symmetric about its center so the text
+                // stays put). This is a pure FLOOR — a band already tall enough (h >= minBand) is
+                // untouched, so large panels are unchanged; only sub-legible bands grow. When the rect
+                // is layout-group-driven the offset write is overridden and h is unchanged — same
+                // behaviour as before (no regression), never worse.
+                float minBand = (FontHardFloor + 1f) * factor + 2f;   // seats a 20px line: ~27-30px
+                if (h < minBand)
+                {
+                    var brt = _t.rectTransform;
+                    float deficit = minBand - h;
+                    float half = deficit * 0.5f;
+                    brt.offsetMin = new Vector2(brt.offsetMin.x, brt.offsetMin.y - half);
+                    brt.offsetMax = new Vector2(brt.offsetMax.x, brt.offsetMax.y + half);
+                    float grown = brt.rect.height;                    // honest re-measure (unchanged if driven)
+                    FlowTrace.Warn("UI", "TextFitGuard '" + _t.text + "' [" + PathOf(_t.transform) +
+                        "]: band too short to seat FontHardFloor line — grew rect " +
+                        ((int)h) + "px -> " + ((int)grown) + "px (minBand " + minBand.ToString("F0") +
+                        ", lineFactor " + factor.ToString("F2") + ")");
+                    h = grown;
+                    _t.ForceMeshUpdate();
+                }
+
                 float fitMin = Mathf.Max(FontHardFloor, Mathf.Floor(h / factor) - 1f);
                 float oldMin = _t.fontSizeMin;
                 bool relaxed = false;
