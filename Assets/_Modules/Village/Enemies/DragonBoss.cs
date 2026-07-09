@@ -40,6 +40,7 @@
 
 using System;
 using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics;
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -304,6 +305,7 @@ namespace DeNelle.Village
         private void Awake()
         {
             EnsureAnimator();
+            EnsureHitCollider();
             // Remember a home point so a dragon with no wired anchor still flies
             // a sane orbit instead of collapsing onto the origin.
             _anchorFallback = transform.position;
@@ -355,7 +357,12 @@ namespace DeNelle.Village
 
             if (next != _phase)
             {
+                DragonPhase prev = _phase;
                 _phase = next;
+                // §12 — phase transitions are captured so a headless run shows the
+                // boss is being worn down (i.e. an air-defense IS connecting).
+                FlowTrace.Step("DragonBoss",
+                    $"'{_bossId}' phase {prev} -> {_phase} at HP {_hp:0.#}/{_maxHp:0.#} ({HpFraction:P0}).");
                 // Boss-fight phase VFX: a one-shot enrage burst on the boss, then
                 // swap the persistent phase aura to the new phase's loop.
                 PlayPhaseTransition();
@@ -584,6 +591,12 @@ namespace DeNelle.Village
         {
             if (_dead || amount <= 0f) return;
             _hp = Mathf.Max(0f, _hp - amount);
+            // §12 — throttled so a headless run PROVES a tower/air-defense is
+            // actually connecting (the F8-era "12 towers did 0 damage" symptom
+            // self-reports here the instant a real hit lands).
+            FlowTrace.Throttle("DragonBoss", $"hit:{GetInstanceID()}", 1f,
+                $"'{_bossId}' took {amount:0.#} {element} dmg -> HP {_hp:0.#}/{_maxHp:0.#} " +
+                $"({HpFraction:P0}, phase {_phase}).");
             if (_hp <= 0f) Die();
         }
 
@@ -780,6 +793,48 @@ namespace DeNelle.Village
                     if (p.nameHash == AnimAttack) _hasAttackParam = true;
                     if (p.nameHash == AnimDead)   _hasDeadParam   = true;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Guarantees a NON-TRIGGER collider on the flying dragon so a dedicated
+        /// AIR-DEFENSE structure's ray / projectile physics query can HIT it at
+        /// altitude (mirrors DefenseTower.EnsureContactCollider). Idempotent: skips
+        /// if the rig already carries a solid collider. The <see cref="IDamageable"/>
+        /// + the <see cref="ICombatLayered"/> (<see cref="CombatLayer.Flying"/>) hook
+        /// both live on THIS root, so a child-collider hit resolves the boss via
+        /// GetComponentInParent&lt;IDamageable&gt;() / GetComponentInParent&lt;ICombatLayered&gt;().
+        /// The collider stays on the prefab's (default, raycastable) layer — a
+        /// cruising or swooping dragon is a real physics target either way. Towers
+        /// damage via a direct TakeDamage call once acquired, so this collider is
+        /// specifically for the new air-defense's ray/overlap acquisition + VFX hit.
+        /// </summary>
+        private void EnsureHitCollider()
+        {
+            foreach (var c in GetComponentsInChildren<Collider>(true))
+                if (c != null && !c.isTrigger) return;   // already hittable
+
+            var rends = GetComponentsInChildren<Renderer>(true);
+            var sc = gameObject.AddComponent<SphereCollider>();
+            sc.isTrigger = false;
+
+            if (rends != null && rends.Length > 0)
+            {
+                Bounds b = rends[0].bounds;
+                for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+                sc.center = transform.InverseTransformPoint(b.center);
+                Vector3 ext = b.extents;
+                float maxExt = Mathf.Max(ext.x, Mathf.Max(ext.y, ext.z));
+                // World extent -> local radius (guards a zero/negative lossyScale axis).
+                Vector3 ls = transform.lossyScale;
+                float sMax = Mathf.Max(0.01f,
+                    Mathf.Max(Mathf.Abs(ls.x), Mathf.Max(Mathf.Abs(ls.y), Mathf.Abs(ls.z))));
+                sc.radius = Mathf.Max(0.5f, maxExt / sMax);
+            }
+            else
+            {
+                sc.center = Vector3.zero;
+                sc.radius = 2.5f;   // fallback body radius when the rig has no renderer
             }
         }
 

@@ -145,6 +145,12 @@
           ]
         },
         {
+          "area": "heartStatus",
+          "widgets": [
+            "heartStatus"
+          ]
+        },
+        {
           "area": "status",
           "widgets": [
             "compass"
@@ -194,6 +200,12 @@
           "widgets": [
             "playerNameplate",
             "playerBuffRow"
+          ]
+        },
+        {
+          "area": "heartStatus",
+          "widgets": [
+            "heartStatus"
           ]
         },
         {

@@ -1,315 +1,277 @@
 // =============================================================================
-// BossHealthBar (DEF-60) — full-screen boss HP bar with phase indicators.
+// BossHealthBar — top-of-screen apex-boss HP bar (CODE-BUILT uGUI).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.UI
 //
 // WHAT IT DOES:
-//   Shows a wide HP bar at the top of the screen when a boss is alive.
-//   The bar reflects the boss's live HP fraction via IDamageable polling
-//   (bosses don't broadcast an event) and transitions into a danger tint as
-//   HP drops through the Phase 2 / Phase 3 thresholds.
+//   Shows a wide HP bar across the top of the screen while an apex boss (the
+//   DragonBoss "Syndrath the Devourer") is alive in the scene. The bar reflects
+//   the boss's live HP fraction, tints red -> orange -> gold as HP drops through
+//   the Phase 2 / Phase 3 thresholds, shows the boss name + phase caption + the
+//   raw HP number (4200 max), and marks the two phase-change thresholds with pip
+//   lines so the player can see when the dragon will enrage.
 //
-//   Two modes:
-//     Dragon mode — receives a DragonBoss reference, polls HpFraction + Phase.
-//     Generic mode — receives any IDamageable; shows name + HP fraction only.
+// WHY A REWRITE (2026-07-08, owner felt-test — "show the dragon boss health bar"):
+//   The previous BossHealthBar was UIElements / UIDocument (UXML) based. Project
+//   law (CLAUDE.md §8 / PIPELINE_STATE.md): UXML / UIDocument HUDs do NOT render
+//   in player builds — so the old bar was effectively dead in a build. It is also
+//   never wired to a live DragonBoss anywhere. This rewrite is:
+//     * CODE-BUILT uGUI (Canvas + Image + TMP) — mirrors FloatingHealthBar's
+//       "no UXML, renders in builds" pattern.
+//     * SELF-BOOTSTRAPPING + SELF-DISCOVERING — a RuntimeInitializeOnLoadMethod
+//       spawns exactly one persistent instance; it polls for a DragonBoss and
+//       shows/hides itself. ZERO prefab wiring, no drag-drop, no WaveManager edit
+//       (owner rule: never manual/drag-drop wiring).
+//     * ZERO DragonBoss edits — reads only DragonBoss's public surface
+//       (Hp / MaxHp / HpFraction / Phase / IsAlive). The dragon has no HP-changed
+//       event, so the bar polls each frame WHILE VISIBLE (cheap: one component
+//       read; discovery is throttled to ~2 Hz when no boss is present).
 //
-//   Phase pip indicators (Dragon only) mark the phase-change thresholds on the
-//   bar so the player knows when the boss transitions.
-//
-// ARCHITECTURE:
-//   * Code-UI-Toolkit (no UXML) — same pattern as LevelUpSkillPopup.
-//   * [RequireComponent(typeof(UIDocument))] — attach to a UIDocument GO on the
-//     Village HUD canvas.
-//   * WaveManager calls Show(dragonBoss) when a boss wave starts and Hide() on
-//     wave cleared. WaveManager already hooks OnWaveStarted.
-//   * Polls HP each Update — bosses don't expose a Changed event.
-//   * DragonBoss.HpFraction + Phase read from the public IDamageable interface
-//     and an optional Cast check for the Dragon-specific Phase property.
+// LAYERING: its own ScreenSpaceOverlay Canvas at a high sort order so it sits
+//   above the gameplay HUD; non-interactive (no GraphicRaycaster) so it never
+//   eats input. Built lazily on the first boss sighting, then just hidden.
 // =============================================================================
 
+using DeNelle.Core.Diagnostics;
+using DeNelle.Core.UI;
+using DeNelle.Village;
+using TMPro;
 using UnityEngine;
-using UnityEngine.UIElements;
-using DeNelle.Core.Combat;
+using UnityEngine.UI;
 
 namespace DeNelle.Village.UI
 {
     /// <summary>
-    /// Displays a boss HP bar at the top of the screen when a boss is alive.
-    /// Attach to a UIDocument GameObject. Wire via <see cref="Show"/> /
-    /// <see cref="Hide"/> from <see cref="WaveManager"/>.
+    /// Code-built uGUI apex-boss HP bar. Self-bootstraps and auto-discovers the
+    /// live <see cref="DragonBoss"/>; shows while the boss is alive and hides when
+    /// it dies or leaves the scene. See file header.
     /// </summary>
-    [RequireComponent(typeof(UIDocument))]
+    [DisallowMultipleComponent]
     public sealed class BossHealthBar : MonoBehaviour
     {
-        [Header("Colours")]
-        [SerializeField] private Color _colFull    = new Color(0.82f, 0.12f, 0.12f); // deep red
-        [SerializeField] private Color _colMid     = new Color(0.90f, 0.45f, 0.05f); // orange
-        [SerializeField] private Color _colCrit    = new Color(1.00f, 0.80f, 0.00f); // gold warning
-        [SerializeField] private Color _colEmpty   = new Color(0.22f, 0.22f, 0.22f); // empty track
-        [SerializeField] private Color _colBg      = new Color(0.06f, 0.06f, 0.08f, 0.92f);
-        [SerializeField] private Color _colText    = Color.white;
+        // HP-fraction thresholds marked with phase pips (mirror DragonBoss phases).
+        private const float MidThreshold  = 0.60f;   // Phase 1 -> 2
+        private const float CritThreshold = 0.25f;   // Phase 2 -> 3 (enrage)
 
-        // HP fraction thresholds at which bar colour shifts.
-        private const float MidThreshold  = 0.60f;
-        private const float CritThreshold = 0.25f;
+        // Phase-pip tints — kept distinct by LUMINANCE + position (owner is colorblind), not hue alone.
+        private static readonly Color PipMid  = new Color(1f, 0.60f, 0.10f, 0.90f);
+        private static readonly Color PipCrit = new Color(1f, 0.90f, 0.10f, 0.95f);
 
-        // ── Cached VisualElements ──────────────────────────────────────────────
-        private VisualElement _root;
-        private VisualElement _barFill;
-        private VisualElement _barTrack;
-        private Label         _nameLabel;
-        private Label         _hpLabel;
-        private VisualElement _phaseMarkers;
-        private bool          _uiBuilt;
+        // ── Cached UI ──────────────────────────────────────────────────────────
+        private Canvas _canvas;
+        private GameObject _panel;      // Obsidian chrome root — toggled for show/hide
+        private ElarionUiKit.BarHandle _hpBar;   // Obsidian Health bar — fill driven via SetImmediate
+        private TMP_Text _nameLabel;
+        private TMP_Text _hpLabel;
+        private bool _built;
 
-        // ── Target ────────────────────────────────────────────────────────────
-        private IDamageable _target;
-        private DragonBoss  _dragon;    // non-null when target is a DragonBoss
-        private string      _bossName = "Boss";
+        // ── Target ──────────────────────────────────────────────────────────────
+        private DragonBoss _dragon;
         private DragonPhase _lastPhase = DragonPhase.Circling;
+        private const string BossDisplayName = "Syndrath the Devourer";
 
-        // ── Lifecycle ──────────────────────────────────────────────────────────
+        // Discovery throttle while no boss is present (avoids a per-frame FindObject).
+        private const float DiscoverInterval = 0.5f;
+        private float _discoverTimer;
 
+        // ── Bootstrap ────────────────────────────────────────────────────────────
+        private static BossHealthBar _instance;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap()
+        {
+            if (_instance != null) return;
+            var go = new GameObject("BossHealthBar (bootstrapped)");
+            _instance = go.AddComponent<BossHealthBar>();
+            Object.DontDestroyOnLoad(go);
+        }
+
+        // ── Lifecycle ────────────────────────────────────────────────────────────
         private void Awake()
         {
-            BuildUiIfNeeded();
-            Hide();
+            if (_instance == null) _instance = this;
+        }
+
+        private void OnDestroy()
+        {
+            if (_instance == this) _instance = null;
         }
 
         private void Update()
         {
-            if (_target == null || !_target.IsAlive) { Hide(); return; }
-
-            float frac = _target.Hp / Mathf.Max(1f, GetMaxHp());
-            frac = Mathf.Clamp01(frac);
-
-            // Fill width
-            _barFill.style.width = new StyleLength(new Length(frac * 100f, LengthUnit.Percent));
-
-            // Colour transition based on HP fraction
-            Color fillCol = frac > MidThreshold ? _colFull
-                : frac > CritThreshold          ? Color.Lerp(_colMid, _colFull, (frac - CritThreshold) / (MidThreshold - CritThreshold))
-                :                                  Color.Lerp(_colCrit, _colMid, frac / CritThreshold);
-            _barFill.style.backgroundColor = new StyleColor(fillCol);
-
-            // HP text
-            if (_hpLabel != null)
-                _hpLabel.text = $"{Mathf.CeilToInt(_target.Hp)} / {Mathf.CeilToInt(GetMaxHp())}";
-
-            // Dragon-specific phase label
-            if (_dragon != null)
+            // Discover / re-discover the boss when we don't have a live one.
+            if (_dragon == null || !_dragon.IsAlive)
             {
-                var curPhase = _dragon.Phase;
-                if (curPhase != _lastPhase)
+                _discoverTimer -= Time.unscaledDeltaTime;
+                if (_discoverTimer <= 0f)
                 {
-                    _lastPhase = curPhase;
-                    if (_nameLabel != null)
-                        _nameLabel.text = $"{_bossName}  {PhaseLabel(curPhase)}";
+                    _discoverTimer = DiscoverInterval;
+                    var found = FindFirstObjectByType<DragonBoss>();
+                    if (found != null && found.IsAlive)
+                    {
+                        _dragon = found;
+                        ShowFor(found);
+                    }
+                    else if (_built && _panel != null && _panel.activeSelf)
+                    {
+                        Hide();               // boss gone / dead -> hide
+                    }
                 }
+                if (_dragon == null || !_dragon.IsAlive) return;
             }
+
+            // Live poll while visible — the dragon exposes no HP-changed event.
+            // Drive the Obsidian bar via its handle (the ONE sanctioned §1.1 path:
+            // fillAmount = cur/max); SetImmediate = no ease for a per-frame sweep.
+            if (_hpBar != null) _hpBar.SetImmediate(_dragon.Hp, _dragon.MaxHp);
+            if (_hpLabel != null)
+                _hpLabel.text = Mathf.CeilToInt(_dragon.Hp) + " / " + Mathf.CeilToInt(_dragon.MaxHp);
+
+            var phase = _dragon.Phase;
+            if (phase != _lastPhase && _nameLabel != null)
+            {
+                _lastPhase = phase;
+                _nameLabel.text = BossDisplayName + "   " + PhaseLabel(phase);
+            }
+
+            if (!_dragon.IsAlive) Hide();
         }
 
-        // ── Public API ─────────────────────────────────────────────────────────
+        // ── Public API (also callable directly, e.g. from a WaveManager hook) ────
 
-        /// <summary>
-        /// Shows the bar for a DragonBoss. Called by <see cref="WaveManager"/>
-        /// when a dragon-apex wave starts.
-        /// </summary>
-        public void Show(DragonBoss dragon, string displayName = "Syndrath the Devourer")
+        /// <summary>Show the bar for a specific <see cref="DragonBoss"/>.</summary>
+        public void ShowFor(DragonBoss dragon)
         {
-            BuildUiIfNeeded();
-            _dragon   = dragon;
-            _target   = dragon;
-            _bossName = displayName;
-            if (_nameLabel != null) _nameLabel.text = $"{displayName}  {PhaseLabel(DragonPhase.Circling)}";
-            _lastPhase = DragonPhase.Circling;
-            BuildPhaseMarkers();
-            SetVisible(true);
+            if (dragon == null) return;
+            BuildIfNeeded();
+            _dragon = dragon;
+            _lastPhase = dragon.Phase;
+            if (_nameLabel != null)
+                _nameLabel.text = BossDisplayName + "   " + PhaseLabel(dragon.Phase);
+            if (_panel != null) _panel.SetActive(true);
+            FlowTrace.Step("BossBar", "shown for '" + dragon.BossId + "' HP " +
+                           Mathf.CeilToInt(dragon.Hp) + "/" + Mathf.CeilToInt(dragon.MaxHp));
         }
 
-        /// <summary>
-        /// Shows the bar for any <see cref="IDamageable"/> boss (necromancer, etc.).
-        /// </summary>
-        public void Show(IDamageable target, string displayName = "Boss")
-        {
-            BuildUiIfNeeded();
-            _dragon   = null;
-            _target   = target;
-            _bossName = displayName;
-            if (_nameLabel != null) _nameLabel.text = displayName;
-            ClearPhaseMarkers();
-            SetVisible(true);
-        }
-
-        /// <summary>Hides the boss health bar.</summary>
+        /// <summary>Hide the boss HP bar.</summary>
         public void Hide()
         {
-            SetVisible(false);
-            _target = null;
+            if (_panel != null) _panel.SetActive(false);
             _dragon = null;
+            FlowTrace.Step("BossBar", "hidden (boss absent/dead)");
         }
 
-        // ── UI build ───────────────────────────────────────────────────────────
+        // ── UI construction (code-built uGUI — no UXML) ─────────────────────────
 
-        private void BuildUiIfNeeded()
+        private void BuildIfNeeded()
         {
-            if (_uiBuilt) return;
-            _uiBuilt = true;
+            if (_built) return;
+            _built = true;
 
-            var doc = GetComponent<UIDocument>();
-            if (doc == null) return;
+            // Own overlay canvas — high sort order, non-interactive.
+            var canvasGo = new GameObject("BossHealthBarCanvas",
+                typeof(Canvas), typeof(CanvasScaler));
+            canvasGo.transform.SetParent(transform, false);
+            _canvas = canvasGo.GetComponent<Canvas>();
+            _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            _canvas.sortingOrder = 5000;   // above the gameplay HUD
+            var scaler = canvasGo.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight = 0.5f;
 
-            // Full-width wrapper docked to the top
-            _root = new VisualElement
-            {
-                name = "BossHealthBarRoot",
-                style =
-                {
-                    position       = Position.Absolute,
-                    top            = 16, left = 0, right = 0,
-                    alignItems     = Align.Center,
-                }
-            };
+            // ── Container: OBSIDIAN chrome (near-black panel + gold trim) ────────
+            // Mirrors ElarionUiKit's own procedural Obsidian panel recipe — a gold-
+            // trim rect with a near-black fill inset by the trim thickness — using the
+            // kit's PUBLIC chrome constants + builders (ObsidianTrim / ObsidianFill /
+            // ObsidianTrimPx / AddImage / AddInnerRim). Built this way rather than
+            // BuildObsidianPanel because that bakes in a modal Close button + backdrop,
+            // which a passive top-of-screen HUD HP bar must NOT carry. Top-centre, ~60% wide.
+            _panel = ElarionUiKit.AddImage(canvasGo.transform, "BossBarPanel",
+                new Vector2(0.20f, 0.875f), new Vector2(0.80f, 0.978f),
+                ElarionUiKit.ObsidianTrim, rounded: true);
+            var trimImg = _panel.GetComponent<Image>();
+            if (trimImg != null) trimImg.raycastTarget = false;
 
-            // Card
-            var card = new VisualElement
-            {
-                style =
-                {
-                    width              = new StyleLength(new Length(60f, LengthUnit.Percent)),
-                    backgroundColor    = new StyleColor(_colBg),
-                    borderTopLeftRadius     = 8, borderTopRightRadius    = 8,
-                    borderBottomLeftRadius  = 8, borderBottomRightRadius = 8,
-                    paddingTop    = 8, paddingBottom = 8,
-                    paddingLeft   = 14, paddingRight  = 14,
-                }
-            };
+            var card = ElarionUiKit.AddImage(_panel.transform, "PanelFill",
+                Vector2.zero, Vector2.one, ElarionUiKit.ObsidianFill, rounded: true);
+            var cardRt = (RectTransform)card.transform;
+            cardRt.offsetMin = new Vector2(ElarionUiKit.ObsidianTrimPx, ElarionUiKit.ObsidianTrimPx);
+            cardRt.offsetMax = new Vector2(-ElarionUiKit.ObsidianTrimPx, -ElarionUiKit.ObsidianTrimPx);
+            var cardImg = card.GetComponent<Image>();
+            if (cardImg != null) cardImg.raycastTarget = false;
+            ElarionUiKit.AddInnerRim(card, ElarionUiKit.ObsidianTrim);   // soft gold inner rim
+            var content = card.transform;
 
-            // Name + HP row
-            var infoRow = new VisualElement { style = { flexDirection = FlexDirection.Row, marginBottom = 5 } };
-            _nameLabel = new Label("Boss")
-            {
-                style = { color = new StyleColor(_colText), fontSize = 14,
-                           unityFontStyleAndWeight = FontStyle.Bold, flexGrow = 1 }
-            };
-            _hpLabel = new Label("? / ?")
-            {
-                style = { color = new StyleColor(_colText), fontSize = 12,
-                           unityTextAlign = TextAnchor.MiddleRight }
-            };
-            infoRow.Add(_nameLabel);
-            infoRow.Add(_hpLabel);
+            // Info row: boss name (gilt, left) + HP number (parchment, right) — kit
+            // Label builder handles font-safety + the mobile readable floor (>=40px here).
+            _nameLabel = ElarionUiKit.Label(content, BossDisplayName,
+                0.52f, 0.95f, ElarionUi.Gilt, ElarionUi.FontBody,
+                TextAlignmentOptions.MidlineLeft, x0: 0.04f, x1: 0.72f, bold: true);
+            _hpLabel = ElarionUiKit.Label(content, "",
+                0.52f, 0.95f, ElarionUi.Parchment, ElarionUi.FontLabel,
+                TextAlignmentOptions.MidlineRight, x0: 0.72f, x1: 0.96f, bold: true);
 
-            // Track + fill
-            _barTrack = new VisualElement
-            {
-                style =
-                {
-                    height = 14,
-                    backgroundColor = new StyleColor(_colEmpty),
-                    borderTopLeftRadius     = 4, borderTopRightRadius    = 4,
-                    borderBottomLeftRadius  = 4, borderBottomRightRadius = 4,
-                    overflow = Overflow.Hidden,
-                }
-            };
-            _barFill = new VisualElement
-            {
-                style =
-                {
-                    height = 14,
-                    width  = new StyleLength(new Length(100f, LengthUnit.Percent)),
-                    backgroundColor = new StyleColor(_colFull),
-                    borderTopLeftRadius     = 4, borderTopRightRadius    = 4,
-                    borderBottomLeftRadius  = 4, borderBottomRightRadius = 4,
-                    transitionDuration      = new StyleList<TimeValue>(
-                        new System.Collections.Generic.List<TimeValue>
-                        { new TimeValue(0.15f, TimeUnit.Second) }),
-                    transitionProperty = new StyleList<StylePropertyName>(
-                        new System.Collections.Generic.List<StylePropertyName>
-                        { new StylePropertyName("width") }),
-                }
-            };
-            _barTrack.Add(_barFill);
+            // HP fill: THE Obsidian bar. ObsidianBarKind.Health = the red/health kind
+            // (ObsidianBarTint(Health) => ElarionUi.HpRed) — reads as enemy/boss HP.
+            // framed:false so the wide bar shows just the recessed Obsidian track + red
+            // fill inside our gold-trim panel (the ornate vitals silhouette is sized for
+            // a small nameplate bar and distorts stretched this wide). Drive via BarHandle.
+            var barHost = new GameObject("HpBarHost", typeof(RectTransform));
+            barHost.transform.SetParent(content, false);
+            var barRt = (RectTransform)barHost.transform;
+            barRt.anchorMin = new Vector2(0.03f, 0.12f);
+            barRt.anchorMax = new Vector2(0.97f, 0.47f);
+            barRt.offsetMin = Vector2.zero; barRt.offsetMax = Vector2.zero;
+            _hpBar = ElarionUiKit.BuildObsidianBar(barHost.transform,
+                ElarionUiKit.ObsidianBarKind.Health, Vector2.zero, Vector2.one,
+                withValue: false, framed: false);
+            _hpBar.SetImmediate(1f, 1f);
 
-            // Phase markers container (sits on top of the track)
-            _phaseMarkers = new VisualElement
+            // Phase pip markers across the bar track (60% + 25% enrage thresholds).
+            if (_hpBar != null && _hpBar.track != null)
             {
-                style =
-                {
-                    position = Position.Absolute,
-                    top = 0, left = 0, right = 0, bottom = 0,
-                    flexDirection = FlexDirection.Row,
-                }
-            };
-            _barTrack.Add(_phaseMarkers);
+                AddPip(_hpBar.track, MidThreshold,  PipMid);
+                AddPip(_hpBar.track, CritThreshold, PipCrit);
+            }
 
-            card.Add(infoRow);
-            card.Add(_barTrack);
-            _root.Add(card);
-            doc.rootVisualElement.Add(_root);
+            _panel.SetActive(false);
         }
 
-        // Place thin divider lines at the Phase2/Phase3 thresholds so the player
-        // can see when phases will shift.
-        private void BuildPhaseMarkers()
-        {
-            if (_phaseMarkers == null) return;
-            _phaseMarkers.Clear();
+        // ── Small uGUI builders ─────────────────────────────────────────────────
 
-            // Phase 2 marker at 60%
-            AddMarker(MidThreshold,  new Color(1f, 0.6f, 0.1f, 0.85f));
-            // Phase 3 / enrage marker at 25%
-            AddMarker(CritThreshold, new Color(1f, 0.9f, 0.1f, 0.95f));
+        private static RectTransform NewRect(string name, Transform parent, Vector2 aMin, Vector2 aMax)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            var rt = (RectTransform)go.transform;
+            rt.SetParent(parent, false);
+            rt.anchorMin = aMin; rt.anchorMax = aMax;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            return rt;
         }
 
-        private void AddMarker(float fraction, Color color)
+        // A thin vertical pip at a fractional position across the track.
+        private static void AddPip(Transform track, float fraction, Color color)
         {
-            var spacer = new VisualElement
+            var rt = NewRect("Pip", track, new Vector2(fraction, 0f), new Vector2(fraction, 1f));
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(2.5f, 0f);   // 2.5px wide, full track height
+            var img = rt.gameObject.AddComponent<Image>();
+            img.color = color; img.raycastTarget = false;
+        }
+
+        // ── Helpers ──────────────────────────────────────────────────────────────
+
+        private static string PhaseLabel(DragonPhase phase)
+        {
+            switch (phase)
             {
-                style = { width = new StyleLength(new Length(fraction * 100f, LengthUnit.Percent)) }
-            };
-            var line = new VisualElement
-            {
-                style =
-                {
-                    width = 2f,
-                    height = new StyleLength(new Length(100f, LengthUnit.Percent)),
-                    backgroundColor = new StyleColor(color),
-                    position = Position.Relative,
-                }
-            };
-            spacer.Add(line);
-            _phaseMarkers.Add(spacer);
+                case DragonPhase.Circling: return "Phase I";
+                case DragonPhase.Stooping: return "Phase II";
+                case DragonPhase.LastWing: return "ENRAGED";
+                case DragonPhase.Falling:  return "Falling";
+                default:                   return "";
+            }
         }
-
-        private void ClearPhaseMarkers()
-        {
-            _phaseMarkers?.Clear();
-        }
-
-        private void SetVisible(bool visible)
-        {
-            if (_root != null)
-                _root.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
-        }
-
-        // ── Helpers ────────────────────────────────────────────────────────────
-
-        private float GetMaxHp()
-        {
-            // DragonBoss exposes MaxHp through IDamageable (Hp field only).
-            // Use reflection-free cast since we're in the same assembly.
-            if (_dragon != null) return _dragon.MaxHp;
-            return _target?.Hp ?? 1f;          // fallback — shows 100% until HP drops
-        }
-
-        private static string PhaseLabel(DragonPhase phase) => phase switch
-        {
-            DragonPhase.Circling => "⬧ Phase I",
-            DragonPhase.Stooping => "⬧ Phase II",
-            DragonPhase.LastWing => "⚡ ENRAGED",
-            DragonPhase.Falling  => "✦ Falling",
-            _                    => string.Empty,
-        };
     }
 }

@@ -60,6 +60,7 @@ namespace DeNelle.Village
         private Label _nameLabel;
         private Label _tierBadge;
         private Label _descLabel;
+        private Label _targetingLabel;   // "Land only" / "Land + Air" / "Air only" (towers)
         private Label _costLabel;
         private Label _footprintLabel;
         private VisualElement _statsBox;
@@ -196,6 +197,17 @@ namespace DeNelle.Village
             _descLabel.style.marginBottom = 8;
             _panel.Add(_descLabel);
 
+            // Targeting capability (towers only): "Land only" / "Land + Air" / "Air only".
+            // Colorblind-safe: the meaning is carried by the TEXT label + a distinct leading
+            // shape glyph per capability (never color alone). Gilt so it reads as a key stat.
+            _targetingLabel = new Label();
+            _targetingLabel.style.color = ElarionUi.Gilt;
+            _targetingLabel.style.fontSize = ElarionUi.FontLabel;
+            _targetingLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _targetingLabel.style.whiteSpace = WhiteSpace.Normal;
+            _targetingLabel.style.marginBottom = 8;
+            _panel.Add(_targetingLabel);
+
             // Cost.
             _costLabel = MakeKeyValue("Cost", "Free");
             _panel.Add(_costLabel);
@@ -292,6 +304,18 @@ namespace DeNelle.Village
             _tierBadge.text = maxLevel > 1 ? "Lv 1 / " + maxLevel : "Lv 1";
 
             _descLabel.text = DescriptionFor(e);
+
+            // Targeting line — towers only; hidden (no reserved gap) for non-combat structures.
+            string targeting = TargetingLabelFor(e);
+            if (string.IsNullOrEmpty(targeting))
+            {
+                _targetingLabel.style.display = DisplayStyle.None;
+            }
+            else
+            {
+                _targetingLabel.style.display = DisplayStyle.Flex;
+                _targetingLabel.text = targeting;
+            }
 
             SetKeyValue(_costLabel, "Cost", CostLabel(CostFor(e)));
             SetKeyValue(_footprintLabel, "Footprint", FootprintLabel(e));
@@ -444,6 +468,32 @@ namespace DeNelle.Village
                 case CatalogType.Resource: return "A resource structure — gathers materials over time.";
                 default:                   return "A village structure.";
             }
+        }
+
+        /// <summary>
+        /// Targeting-capability descriptor for a DEFENSIVE tower — what layers it can hit,
+        /// so the player picks the right anti-air / anti-ground counter BEFORE placing
+        /// (owner 2026-07-08: Ballista = Air only, ground towers = Land only, Wizard/Arcane
+        /// = Land + Air). Computed from the repo flags (RepoProps.airOnly / canHitAir):
+        ///   airOnly            → "Air only"
+        ///   canHitAir (!air)   → "Land + Air"
+        ///   else               → "Land only"
+        /// Returns null for non-tower structures (walls/gates/resources/decorations get no
+        /// targeting line). Colorblind-safe: meaning is the TEXT + a distinct leading shape
+        /// glyph per capability, never color alone (owner is red/green colorblind).
+        /// </summary>
+        private static string TargetingLabelFor(CatalogEntry e)
+        {
+            if (e == null || e.type != CatalogType.Tower) return null;
+            var repo = e.repo;
+            if (repo == null) return null;
+            // Read the flags defensively via the tolerant reader so this survives if the
+            // Ballista repurpose swaps how airOnly is surfaced.
+            bool airOnly   = repo.airOnly;
+            bool canHitAir = repo.canHitAir || airOnly;
+            if (airOnly)   return "▲ Targets: Air only";        // ▲ up-triangle = sky
+            if (canHitAir) return "◆ Targets: Land + Air";      // ◆ diamond = both
+            return "▬ Targets: Land only";                      // ▬ bar = ground
         }
 
         private static string FormatNum(float v)

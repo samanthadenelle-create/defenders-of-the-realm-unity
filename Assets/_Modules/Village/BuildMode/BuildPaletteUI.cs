@@ -388,6 +388,48 @@ namespace DeNelle.Village
                 affordable ? ElarionUi.Affordable : ElarionUi.Danger, FontStyles.Bold,
                 TextAlignmentOptions.Center, new Vector2(0.06f, 0.03f), new Vector2(0.94f, 0.24f));
             costLabel.raycastTarget = false;
+
+            // ── Targeting tag (towers only) — at-a-glance anti-air read ─────────
+            // A compact "Land / Air / Land+Air" caption pinned to the bottom of the art
+            // band so the player counters the flying dragon BEFORE tapping into detail
+            // (owner 2026-07-08: Ballista = Air only, ground towers = Land only, Wizard/
+            // Arcane = Land + Air). Colorblind-safe: meaning is the TEXT + a distinct
+            // leading shape glyph, never color alone (owner is red/green colorblind).
+            string targetTag = TargetingTagFor(e);
+            if (!string.IsNullOrEmpty(targetTag))
+            {
+                var tagBackGo = new GameObject("TargetTag", typeof(RectTransform), typeof(Image));
+                tagBackGo.transform.SetParent(bandGo.transform, false);
+                var trt = (RectTransform)tagBackGo.transform;
+                trt.anchorMin = new Vector2(0f, 0f);
+                trt.anchorMax = new Vector2(1f, 0.30f);
+                trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
+                var tagImg = tagBackGo.GetComponent<Image>();
+                tagImg.color = new Color(0f, 0f, 0f, 0.62f);   // dark backing for legibility over art
+                tagImg.raycastTarget = false;
+                var tagLabel = MakeText(tagBackGo.transform, targetTag, 12,
+                    ElarionUi.Gilt, FontStyles.Bold, TextAlignmentOptions.Center,
+                    Vector2.zero, Vector2.one);
+                tagLabel.raycastTarget = false;
+            }
+        }
+
+        /// <summary>
+        /// Compact targeting-capability caption for a DEFENSIVE tower card, from the repo
+        /// flags (RepoProps.airOnly / canHitAir): airOnly → "Air only", canHitAir → "Land
+        /// + Air", else "Land only". Null for non-tower structures (no tag). The leading
+        /// shape glyph (▲ sky / ◆ both / ▬ ground) is a color-independent cue.
+        /// </summary>
+        private static string TargetingTagFor(CatalogEntry e)
+        {
+            if (e == null || e.type != CatalogType.Tower) return null;
+            var repo = e.repo;
+            if (repo == null) return null;
+            bool airOnly   = repo.airOnly;
+            bool canHitAir = repo.canHitAir || airOnly;
+            if (airOnly)   return "▲ Air only";
+            if (canHitAir) return "◆ Land + Air";
+            return "▬ Land only";
         }
 
         // ── Entry art resolution (owner 2026-07-06 image band) ────────────────

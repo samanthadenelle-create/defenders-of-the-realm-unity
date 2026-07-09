@@ -38,6 +38,13 @@ namespace DeNelle.Village
         public float Damage      = 8f;
         public float FireRate    = 1.2f;   // shots per second
         public bool  CanHitAir   = false;  // ground archers: false · wall wizards: true
+        // ANTI-AIR SPECIALIST (owner 2026-07-08 — the strategic counter to the flying dragon):
+        // when true this tower is a DEDICATED anti-air Ballista. Acquire() acquires ONLY targets
+        // whose ICombatLayered.Layer == CombatLayer.Flying and SKIPS all ground traffic — the exact
+        // inverse of a normal tower. Implies CanHitAir (it must reach the air). A non-airOnly tower
+        // is unchanged (ground behaviour + its existing CanHitAir gate). Set by StructureFactory
+        // from the catalog row's optional "airOnly" flag (RepoProps.airOnly).
+        public bool  AirOnly     = false;
         public float AirThreshold = 3.5f;  // target above this Y counts as "flying"
         public Color BoltColor   = Color.white;
         public DamageElement Element = DamageElement.None;
@@ -339,7 +346,29 @@ namespace DeNelle.Village
                 Vector3 p = d.WorldPosition;
                 float sqr = (p - transform.position).sqrMagnitude;
                 if (sqr > range * range) continue;
-                if (p.y > AirThreshold && !CanHitAir) continue;   // ground tower can't reach a flier
+
+                // ANTI-AIR SPECIALIST filter (owner 2026-07-08 — the Ballista is the counter to
+                // the flying dragon). An airOnly tower fires ONLY at FLYING targets and ignores ALL
+                // ground traffic — the inverse of the normal path. The flying hook is the Core
+                // contract: a candidate is a flier iff it implements ICombatLayered and reports
+                // CombatLayer.Flying (anything NOT implementing it defaults to Ground). DragonBoss
+                // returns Flying; every ground Hollow One is skipped. AirOnly implies CanHitAir, so
+                // it bypasses the ground-tower air gate below (which stays for non-airOnly towers).
+                if (AirOnly)
+                {
+                    var layered = d as ICombatLayered;
+                    if (layered == null || layered.Layer != CombatLayer.Flying)
+                    {
+                        // Skip a ground target (throttled — the hot scan touches many enemies/sec).
+                        FlowTrace.Throttle("DefenseTower", $"aa-skip:{GetInstanceID()}", 1f,
+                            $"'{name}' (anti-air Ballista) SKIPS ground target '{(d as MonoBehaviour)?.name ?? "<t>"}' (layer={(layered != null ? layered.Layer.ToString() : "Ground/none")}).");
+                        continue;
+                    }
+                    // Acquired a flier — this is the shot the Ballista exists for.
+                    FlowTrace.Throttle("DefenseTower", $"aa-hit:{GetInstanceID()}", 1f,
+                        $"'{name}' (anti-air Ballista) ACQUIRES flyer '{(d as MonoBehaviour)?.name ?? "<t>"}' (CombatLayer.Flying) at {Mathf.Sqrt(sqr):0.#}m.");
+                }
+                else if (p.y > AirThreshold && !CanHitAir) continue;   // ground tower can't reach a flier
                 int pri = Priority(d);
                 if (pri < bestPri || (pri == bestPri && sqr < bestSqr))
                 {

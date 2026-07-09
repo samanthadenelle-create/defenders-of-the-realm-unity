@@ -543,6 +543,10 @@ namespace DeNelle.Village
                     t.Damage    = r.damage;
                     t.FireRate  = r.fireRate;
                     t.CanHitAir = r.canHitAir;
+                    // ANTI-AIR SPECIALIST (owner 2026-07-08): the Ballista's airOnly flag makes it
+                    // acquire ONLY flying targets. Implies CanHitAir so it reaches the cruising dragon.
+                    t.AirOnly   = r.airOnly;
+                    if (r.airOnly) t.CanHitAir = true;
                     t.Element   = r.element;
                     // TOWER IDENTITY (owner 2026-07-08): optional per-entry projectile
                     // VISUAL style ("pellet"|"bolt"|"spell"; null = pellet). Data-driven —

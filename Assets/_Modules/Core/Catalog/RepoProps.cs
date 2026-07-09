@@ -114,6 +114,11 @@ namespace DeNelle.Core.Catalog
         public float         damage    = 0f;
         public float         fireRate  = 0f;     // shots per second
         public bool          canHitAir = false;  // ground = false · wall-walk = true
+        // ANTI-AIR SPECIALIST (owner 2026-07-08 — the Ballista counters the flying dragon):
+        // when true the DefenseTower behaviour acquires ONLY flying targets (ICombatLayered.Layer
+        // == Flying) and ignores all ground traffic. Implies canHitAir. Default false = every
+        // existing tower keeps its ground-or-mixed behaviour. Read by StructureFactory → DefenseTower.AirOnly.
+        public bool          airOnly   = false;
         public DamageElement element   = DamageElement.None;
 
         /// <summary>
