@@ -89,6 +89,22 @@ namespace DeNelle.Core.HudModel
             }
         }
 
+        /// <summary>Drop one enemy's pursuit pulse (death / despawn). Other live pursuers
+        /// keep <see cref="PursuitActive"/> true so combat HUD stays up until the last
+        /// threat is gone.</summary>
+        public static void RevokePursuit(int key)
+        {
+            for (int i = _pursuitCount - 1; i >= 0; i--)
+            {
+                if (_pursuitKeys[i] != key) continue;
+                _pursuitCount--;
+                _pursuitKeys[i] = _pursuitKeys[_pursuitCount];
+                _pursuitAt[i] = _pursuitAt[_pursuitCount];
+                FlowTrace.Step("HudKit", $"pursuit revoked (key={key}, live={_pursuitCount})");
+                return;
+            }
+        }
+
         /// <summary>Clears all pursuit pulses (hub return / combat end — peaceful HUD).</summary>
         public static void ClearPursuits()
         {

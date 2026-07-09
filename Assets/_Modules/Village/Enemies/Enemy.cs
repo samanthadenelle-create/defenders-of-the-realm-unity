@@ -2091,6 +2091,10 @@ namespace DeNelle.Village
         {
             _dead = true;
             _telegraphing = false;   // audit 2026-05-30: clear the wind-up latch on death (safe for future pooling)
+            // HUD posture (owner 2026-07-09): drop THIS enemy's pursuit pulse immediately so
+            // town/overworld chrome returns as soon as the last threat dies — not after PursuitTtl.
+            // Other live pursuers keep hostile(prebattle) up via their own pulses.
+            DeNelle.Core.HudModel.PostureSignals.RevokePursuit(GetInstanceID());
             if (_agent != null && _agent.isOnNavMesh) _agent.isStopped = true;
 
             // #55: a live NavMeshAgent OWNS the transform (updatePosition) and re-writes the

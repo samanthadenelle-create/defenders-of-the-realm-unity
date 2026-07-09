@@ -239,6 +239,7 @@ namespace DeNelle.Editor
             if (!EnemyRigColorRegression.Run(out var enemyRigColorReason)) failures.Add(enemyRigColorReason); else log.AppendLine("[enemy-rig-color] " + enemyRigColorReason);
             // --- UI-Obsidian conformance (style-everything-obsidian LAW): flags NEW hand-rolled uGUI vs baseline debt ---
             if (!UiObsidianConformanceRegression.Run(out var uiObsidianReason)) failures.Add(uiObsidianReason); else log.AppendLine("[ui-obsidian] " + uiObsidianReason);
+            if (!HudPostureRegression.Run(out var hudPostureReason)) failures.Add(hudPostureReason); else log.AppendLine("[hud-posture] " + hudPostureReason);
 
             // --- Store/Inventory icon coverage (key data: real art vs glyph fallback) ---
             CheckItemIconCoverage(weapons, armors, failures, log);

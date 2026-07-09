@@ -40,6 +40,17 @@ namespace DeNelle.Editor
                 return; // suppress COMPILE_GATE_OK so the gate reports failure
             }
 
+            List<string> braceOffenders = ScanBraceBalance();
+            if (braceOffenders.Count > 0)
+            {
+                foreach (string path in braceOffenders)
+                    Debug.LogError("[CompileGate] BRACE MISMATCH in " + path);
+                Debug.LogError(
+                    "[CompileGate] gate FAILED — " + braceOffenders.Count +
+                    " .cs file(s) have mismatched braces; OK marker withheld.");
+                return;
+            }
+
             Debug.Log("COMPILE_GATE_OK :: scripts compiled clean");
         }
 
@@ -102,6 +113,93 @@ namespace DeNelle.Editor
             }
 
             return false;
+        }
+
+        /// <summary>Fast static scan: every Assets/*.cs must have balanced { } counts.
+        /// Catches mount-garble / half-written files BEFORE a wasted compile cycle.</summary>
+        public static List<string> ScanBraceBalance()
+        {
+            var offenders = new List<string>();
+            string assetsRoot = Path.Combine(Directory.GetCurrentDirectory(), "Assets");
+            if (!Directory.Exists(assetsRoot)) return offenders;
+
+            foreach (string path in Directory.EnumerateFiles(assetsRoot, "*.cs", SearchOption.AllDirectories))
+            {
+                string norm = path.Replace('\\', '/');
+                if (norm.Contains("/Library/") || norm.Contains("/Temp/") ||
+                    norm.Contains("/obj/") || norm.Contains("/.git/"))
+                    continue;
+
+                try
+                {
+                    string text = File.ReadAllText(path);
+                    if (!BraceBalanced(text, out int open, out int close))
+                        offenders.Add(norm + " (" + open + " open vs " + close + " close)");
+                }
+                catch (IOException)
+                {
+                    // unreadable — skip
+                }
+            }
+
+            return offenders;
+        }
+
+        /// <summary>Counts { } outside strings / line+block comments (avoids lint-test false positives).</summary>
+        private static bool BraceBalanced(string text, out int open, out int close)
+        {
+            open = close = 0;
+            bool lineComment = false, blockComment = false, str = false, chr = false;
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (lineComment)
+                {
+                    if (c == '\n') lineComment = false;
+                    continue;
+                }
+                if (blockComment)
+                {
+                    if (c == '*' && i + 1 < text.Length && text[i + 1] == '/')
+                    {
+                        blockComment = false;
+                        i++;
+                    }
+                    continue;
+                }
+                if (str)
+                {
+                    if (c == '\\') { i++; continue; }
+                    if (c == '"') str = false;
+                    continue;
+                }
+                if (chr)
+                {
+                    if (c == '\\') { i++; continue; }
+                    if (c == '\'') chr = false;
+                    continue;
+                }
+                if (c == '/' && i + 1 < text.Length)
+                {
+                    if (text[i + 1] == '/')
+                    {
+                        lineComment = true;
+                        i++;
+                        continue;
+                    }
+                    if (text[i + 1] == '*')
+                    {
+                        blockComment = true;
+                        i++;
+                        continue;
+                    }
+                }
+                if (c == '"') { str = true; continue; }
+                if (c == '\'') { chr = true; continue; }
+                if (c == '{') open++;
+                else if (c == '}') close++;
+            }
+            return open == close;
         }
     }
 }
