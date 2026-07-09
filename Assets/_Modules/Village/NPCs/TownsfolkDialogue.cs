@@ -75,6 +75,36 @@ namespace DeNelle.Village
             Farmer = 8,
         }
 
+        // ── Dragon foreshadow (owner directive 2026-07-08) ───────────────────
+        /// <summary>
+        /// How near the apex Black Dragon ("Syndrath the Devourer") is, driving
+        /// which tier of rumor a townsperson drops. New players "have no clue the
+        /// dragon is coming" — so the town telegraphs it diegetically, escalating
+        /// from uneasy rumors to urgent shouts, nudging the Keeper to build the
+        /// anti-air Sky Ballista BEFORE the dragon arrives. Text only (owner is
+        /// colorblind — never encode this in colour).
+        /// </summary>
+        public enum DragonHintTier
+        {
+            /// <summary>Early — vague unease, birds and weather. No dragon named yet.</summary>
+            Far = 0,
+            /// <summary>Mid — second-hand sightings; something WINGED is out there.</summary>
+            Mid = 1,
+            /// <summary>Near (a wave or two out) — name the threat + the counter: spears to the sky.</summary>
+            Near = 2,
+            /// <summary>Imminent (the dragon wave) — it's here; man the ramparts, loose skyward.</summary>
+            Imminent = 3,
+        }
+
+        /// <summary>
+        /// The wave the apex Black Dragon arrives on — the terminal apexBoss wave
+        /// in waves.json ("The Last Wing", waveId 4). Escalation tiers are computed
+        /// relative to THIS. WaveManager does not expose the apex wave number
+        /// publicly, so it is mirrored here as a documented design constant; if the
+        /// schedule's apex wave moves, update this to match waves.json.
+        /// </summary>
+        public const int DragonWaveId = 4;
+
         // ── Display names per archetype ──────────────────────────────────────
         // LOCALIZE: shown as the speech-bubble attribution line. Index MUST track
         // the Archetype enum value (0..8).
@@ -192,6 +222,88 @@ namespace DeNelle.Village
             "Give me a season of quiet and I'll fill every larder in Elarion. Just a season.",
             "The fields run right up to the moat. Closest a peaceful thing gets to the wall, that.",
         };
+
+        // ── Dragon-foreshadow rumor pools (owner directive 2026-07-08) ───────
+        // LOCALIZE: escalating townsfolk rumors that telegraph the apex Black
+        // Dragon so a new player learns to build the anti-air Sky Ballista BEFORE
+        // it arrives. Spoken by ANY townsperson (see AmbientNPC), regardless of
+        // archetype, when the dragon wave is near. Each tier is clearly MORE
+        // alarmed than the last and nudges toward the counter (spears / walls /
+        // the SKY / the Sky Ballista).
+        // ⚠ FIRST DRAFT for the owner to revise — keep in-world, no "thee/thou".
+
+        // FAR: vague unease. Birds, weather, animals — the dragon is not named.
+        private static readonly string[] _dragonFar =
+        {
+            "The birds have fled the eastern peaks. My grandmother said that only happens before something with wings stirs.",
+            "Cold wind off the mountains, and it carries ash. Uneasy nights lately, Keeper.",
+            "The cattle won't settle — they keep staring up at the ridge, waiting on a storm that isn't in the sky.",
+        };
+
+        // MID: second-hand sightings. Something WINGED is out there; dread rising.
+        private static readonly string[] _dragonMid =
+        {
+            "A trader swore he saw a shadow cross the moon — big as a barn. Tall tales... I hope.",
+            "There's scorch on the ridge road, Keeper. No campfire did that. Something flew low, and it flew hot.",
+            "The scouts came back white as milk. Whatever's out there doesn't march — it circles.",
+        };
+
+        // NEAR (a wave or two out): name the threat AND the counter — spears skyward.
+        private static readonly string[] _dragonNear =
+        {
+            "It comes from the SKY, Keeper — ground walls won't save us. We need spears that reach the clouds.",
+            "Mount the ballistas on the walls! Only a bolt loosed skyward will bring a dragon down.",
+            "Arrows and towers can't touch a thing that flies. Raise the Sky Ballista, Keeper — give us a spear for the heavens, or we're kindling.",
+        };
+
+        // IMMINENT (the dragon wave): it's HERE — man the ramparts, loose skyward.
+        private static readonly string[] _dragonImminent =
+        {
+            "DRAGON! To the ramparts — spears to the sky!",
+            "It's here — WINGS over the ridge! The Sky Ballista, NOW, or we burn!",
+            "Look UP, Keeper! Loose everything skyward — the Devourer is upon us!",
+        };
+
+        /// <summary>
+        /// Maps the current wave to a foreshadow tier from how close the dragon
+        /// (apex) wave is: 2+ waves out = Far, then Mid, Near, and the dragon wave
+        /// itself (or past it) = Imminent. Pure — never throws.
+        /// </summary>
+        public static DragonHintTier TierForWave(int currentWaveId, int dragonWaveId = DragonWaveId)
+        {
+            int wavesUntil = dragonWaveId - currentWaveId;
+            if (wavesUntil <= 0) return DragonHintTier.Imminent;
+            if (wavesUntil == 1) return DragonHintTier.Near;
+            if (wavesUntil == 2) return DragonHintTier.Mid;
+            return DragonHintTier.Far;
+        }
+
+        /// <summary>The rumor pool for a foreshadow tier. Never null / never empty.</summary>
+        public static string[] DragonRumorPool(DragonHintTier tier)
+        {
+            switch (tier)
+            {
+                case DragonHintTier.Far:      return _dragonFar;
+                case DragonHintTier.Mid:      return _dragonMid;
+                case DragonHintTier.Near:     return _dragonNear;
+                case DragonHintTier.Imminent: return _dragonImminent;
+                default:                      return _dragonFar;
+            }
+        }
+
+        /// <summary>
+        /// Picks a dragon-foreshadow rumor for <paramref name="tier"/>. Same
+        /// modulo "steps deterministically / never throws / never null" contract
+        /// as <see cref="LineFor"/>.
+        /// </summary>
+        public static string DragonRumor(DragonHintTier tier, int index)
+        {
+            string[] pool = DragonRumorPool(tier);
+            if (pool == null || pool.Length == 0) return string.Empty;
+            int i = index % pool.Length;
+            if (i < 0) i += pool.Length;
+            return pool[i];
+        }
 
         /// <summary>Returns the speech-bubble display name for an archetype.</summary>
         public static string NameFor(Archetype archetype)

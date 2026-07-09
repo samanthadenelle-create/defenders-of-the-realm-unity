@@ -585,7 +585,7 @@ namespace DeNelle.Village
             {
                 Speaking = true;
                 string name = TownsfolkDialogue.NameFor(_archetype);
-                string line = TownsfolkDialogue.LineFor(_archetype, _lineCursor);
+                string line = PickSpokenLine();
                 _lineCursor++;   // next approach steps to the next line
                 _bubble?.Show(name, line);
             }
@@ -594,6 +594,39 @@ namespace DeNelle.Village
                 Speaking = false;
                 _bubble?.Hide();
             }
+        }
+
+        /// <summary>
+        /// Chooses the line this villager speaks on approach. Normally the next
+        /// line from its archetype pool — BUT as the apex Black Dragon nears, the
+        /// town drops ESCALATING foreshadow rumors so a new player learns to build
+        /// the anti-air Sky Ballista before the dragon arrives (owner directive
+        /// 2026-07-08). The tier is driven by how close the dragon wave is:
+        ///   • NEAR / IMMINENT — urgent; always spoken while the dragon is close
+        ///     (gated so they never fire from wave 1).
+        ///   • FAR / MID — woven in on alternating approaches so the town still
+        ///     reads lived-in rather than one-note.
+        /// Falls back to normal ambient chatter when no wave loop is present.
+        /// </summary>
+        private string PickSpokenLine()
+        {
+            var wm = WaveManager.Instance;
+            if (wm != null)
+            {
+                // A dragon actually aloft forces the most urgent tier outright.
+                bool apexLive = wm.LiveApexBoss != null && !wm.LiveApexBoss.IsDead;
+                TownsfolkDialogue.DragonHintTier tier = apexLive
+                    ? TownsfolkDialogue.DragonHintTier.Imminent
+                    : TownsfolkDialogue.TierForWave(wm.CurrentWaveId);
+
+                bool urgent = tier == TownsfolkDialogue.DragonHintTier.Near ||
+                              tier == TownsfolkDialogue.DragonHintTier.Imminent;
+                // Urgent tiers always warn; distant tiers alternate rumor / normal
+                // chatter so early waves aren't a wall of dragon talk.
+                if (urgent || (_lineCursor & 1) == 0)
+                    return TownsfolkDialogue.DragonRumor(tier, _lineCursor);
+            }
+            return TownsfolkDialogue.LineFor(_archetype, _lineCursor);
         }
 
         // ── Roaming ──────────────────────────────────────────────────────────
