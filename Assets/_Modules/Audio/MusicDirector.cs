@@ -320,6 +320,18 @@ namespace DeNelle.Audio
         private async UniTaskVoid CrossfadeTo(AudioClip clip, float targetVol, bool loop, float fadeSeconds)
         {
             int token = ++_fadeToken;
+            // Owner model "terminate current before starting next" (F8 2026-07-10 "music duplicating —
+            // impossible for a singleton"): if a fade is STILL IN FLIGHT, a rapid re-resolve (e.g.
+            // BattleMusicManager's 0.5s Combat<->Intense flap under this 1.5s crossfade) supersedes it —
+            // and the old fade's coroutine bails on the token check WITHOUT Stop()'ing its source, so both
+            // A and B keep looping = two beds. Hard-terminate BOTH sources first so the next track fades in
+            // from silence: exactly one bed at any instant. A SETTLED transition (_fading already false) is
+            // untouched and keeps its smooth crossfade.
+            if (_fading)
+            {
+                if (_musicA != null) { _musicA.volume = 0f; _musicA.Stop(); }
+                if (_musicB != null) { _musicB.volume = 0f; _musicB.Stop(); }
+            }
             _fading = true;
 
             AudioSource fadeIn = (_activeSource == _musicA) ? _musicB : _musicA;

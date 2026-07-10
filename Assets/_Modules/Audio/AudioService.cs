@@ -354,6 +354,13 @@ namespace DeNelle.Audio
                 return;
             }
 
+            // Idempotency (restored — F8 2026-07-10 music-thrash): already on this track and sounding →
+            // don't re-roll the rotation pool + re-crossfade. Pooled tracks (Battle/Overworld) return a
+            // NEW clip object each ClipFor call, defeating the director's ReferenceEquals guard, so
+            // repeated same-track requests fed the supersede storm that stacked two beds.
+            if (track == CurrentTrack && _director != null && _director.IsAnyPlaying)
+                return;
+
             MusicTrackDef def = MusicTrackRegistry.Get(track);
             if (def == null)
             {
