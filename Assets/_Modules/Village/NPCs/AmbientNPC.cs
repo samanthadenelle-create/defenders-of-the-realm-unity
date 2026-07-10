@@ -290,6 +290,14 @@ namespace DeNelle.Village
 
         // ── Combat shelter (flee into a house during battle, return after) ───
 
+        // Mirror HudContextEvaluator.ImminentThreshold / HeroLocomotion.CombatImminentThreshold
+        // (owner 2026-07-08/10): a long between-wave Countdown reads as TOWN, so ambient NPCs stay
+        // VISIBLE; only the imminent window (or an Active wave / staged battle) hides them. Without
+        // this, a 275s idle-hub countdown counted as combat and left every NPC permanently hidden
+        // while the HUD + hero read Town — F8 "not in battle, where are NPCs" (proven: Player.log
+        // 'vendors hidden (wave): 10' + 'injected 5 villagers' during 'Countdown ... cd269.8').
+        private const float CombatImminentThreshold = 5f;
+
         /// <summary>
         /// Shared combat-active check — the same authority the HUD context uses
         /// (owner ruling 2026-07-06): wave <see cref="WavePhase.Countdown"/> or
@@ -307,7 +315,8 @@ namespace DeNelle.Village
                     var wm = WaveManager.Instance;
                     bool wave = wm != null &&
                                 (wm.Phase == WavePhase.Active ||
-                                 wm.Phase == WavePhase.Countdown);
+                                 (wm.Phase == WavePhase.Countdown &&
+                                  wm.CountdownRemaining <= CombatImminentThreshold));
                     return wave || DeNelle.Core.Combat.BattleLock.IsInBattle();
                 }, false);
 
