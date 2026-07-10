@@ -1834,9 +1834,12 @@ namespace DeNelle.DevTools
             try
             {
                 // Link 1 — a wave is running (reuse the TriggerWave mechanism verbatim).
-                if (wm.Phase == WavePhase.Idle)
+                // Force a REAL combat window (Active wave). Under the owner's 2026-07-10 rule a long
+                // between-wave Countdown reads as TOWN (NPCs visible), so this oracle must drive the wave
+                // to Active — not accept a resting Countdown — or IsCombatActive legitimately stays false.
+                if (wm.Phase == WavePhase.Idle || wm.Phase == WavePhase.Countdown)
                 {
-                    FlowTrace.Step(Tag, "AssertWaveVendorRules: wave Idle — forcing via ForceSpawnNextWaveNow (the TriggerWave mechanism).");
+                    FlowTrace.Step(Tag, $"AssertWaveVendorRules: wave {wm.Phase} — forcing to Active via ForceSpawnNextWaveNow.");
                     wm.ForceSpawnNextWaveNow();
                 }
                 float t0 = Time.realtimeSinceStartup;
