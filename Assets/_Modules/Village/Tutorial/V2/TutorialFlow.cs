@@ -460,6 +460,17 @@ namespace DeNelle.Village
                 }
             }
 
+            // Owner 2026-07-10 felt-bug ("cancelled tutorial but it restarts on the Build button"):
+            // an explicit Skip must ALSO silence the CONTEXTUAL one-shot hints. ctx_first_spend fires
+            // on economy.can_afford_upgrade — which THIS skip's own crystal grant guarantees — and
+            // spotlights hud.build_button, so opening Build after a cancel resurfaced a Sylas hint that
+            // reads as "the tutorial restarted". Mark every one-shot ctx seen (same persistence CtxSeen
+            // checks) so a skipper gets NO further tutorial content; completers still receive the hints.
+            if (_contextual != null)
+                foreach (var ctx in _contextual)
+                    if (ctx != null && !string.IsNullOrEmpty(ctx.Id) && ctx.OneShot)
+                        svc?.MarkTutorialSeen(CtxSeenPrefix + ctx.Id);
+
             DeNelle.Core.Analytics.EventTracker.Track("tutorial_skipped_all", new
             {
                 fromStep = _step != null ? _step.Id : null,
