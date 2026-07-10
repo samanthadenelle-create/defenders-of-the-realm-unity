@@ -46,7 +46,7 @@ namespace DeNelle.Village
         // under the navmesh sample, so a hit just below navmesh IS the floor; a genuine deep basement
         // (the old -0.55 foundation plane) is still below this band and correctly rejected.
         // Owner 2026-07-10 (data-proven via [Flow:NpcSeat]): raise cautiously if a real floor floats.
-        private const float AcceptedFloorBandBelowGround = 0.25f;
+        private const float AcceptedFloorBandBelowGround = 0.35f;
 
         /// <summary>
         /// Drop <paramref name="go"/> so the bottom of its combined renderer bounds
@@ -65,6 +65,9 @@ namespace DeNelle.Village
             // vendor-sink triage (2026-06-23): one-shot trace of the seat decision (remove once stable).
             string state = gap < 0f ? "SUNK-below-floor" : "float-above";
             FlowTrace.Step("NpcSeat", $"'{go.name}': boundsMinY={b.min.y:F2} hitFloor={hitFloor} hitY={rawHitY:F2} fallbackY={fallbackGroundY:F2} -> groundY={groundY:F2} gap={gap:F2} ({state})");
+            // Step-in data (owner 2026-07-10 "rca why with step in step out"): the pivot-to-feet offset —
+            // if a walking NPC re-floats after its NavMeshAgent takes over, this offset is the suspect.
+            FlowTrace.Step("NpcSeat", $"'{go.name}': pivotY={go.transform.position.y:F3} boundsMinY={b.min.y:F3} pivotAboveFeet={(go.transform.position.y - b.min.y):F3}");
             float appliedDeltaY = 0f;
             if (Mathf.Abs(gap) > 0.01f)
             {
@@ -132,10 +135,17 @@ namespace DeNelle.Village
             // NPC). A genuine deep basement (old -0.55 plane) is below this band and still rejected.
             float floorBand = fallbackGroundY - AcceptedFloorBandBelowGround;
             float ceiling   = fallbackGroundY + AcceptedFloorBandAboveGround;
-            float chosen    = Mathf.Clamp(best, floorBand, ceiling);
-            if (Mathf.Abs(chosen - best) > 0.01f)
-                FlowTrace.Step("NpcSeat", $"'{self.name}': rejected raw hitY={best:F2} (outside floor band [{fallbackGroundY:F2}..{ceiling:F2}]) -> chosen groundY={chosen:F2} (fallbackY={fallbackGroundY:F2})");
-            return chosen;
+            // Out of band → REJECT to the navmesh ground (do NOT clamp to the ceiling). The old
+            // Mathf.Clamp pinned an ABOVE-band hit (a raised BUILDING PLATFORM — Lumbermill +1.5m deck,
+            // barracks deck) to fallbackGroundY + 0.40, floating the NPC exactly +0.40m. Data-proven
+            // 2026-07-10 [Flow:NpcSeat]: BarracksDrillmaster hitY=3.34 -> 0.48, Lumbermill hitY=1.11
+            // -> 0.84 (both = navmesh + 0.40). A deep basement below floorBand is likewise rejected.
+            if (best < floorBand || best > ceiling)
+            {
+                FlowTrace.Step("NpcSeat", $"'{self.name}': rejected raw hitY={best:F2} (outside band [{floorBand:F2}..{ceiling:F2}]) -> fallbackY={fallbackGroundY:F2}");
+                return fallbackGroundY;
+            }
+            return best;
         }
     }
 }
