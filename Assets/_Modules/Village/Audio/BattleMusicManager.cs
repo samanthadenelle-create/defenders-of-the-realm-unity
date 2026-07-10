@@ -59,10 +59,10 @@
 
 using System.Collections;
 using System.Collections.Generic;
-using DeNelle.Audio;            // AudioService (Village references DeNelle.Audio)
+using DeNelle.Audio;            // MusicDirector (Village references DeNelle.Audio)
+using DeNelle.Core.Audio;       // MusicLayer (Core contract)
 using DeNelle.Core.Diagnostics; // FlowTrace (Village references DeNelle.Core)
 using UnityEngine;
-using UnityEngine.Audio;
 using UnityEngine.SceneManagement;
 
 namespace DeNelle.Village
@@ -142,12 +142,12 @@ namespace DeNelle.Village
         private AudioClip _bossClip;
         private bool _clipsResolved;
 
-        // ── Dedicated crossfading source pair (routed to the Music mixer group) ─
-        private AudioSource _sourceA;
-        private AudioSource _sourceB;
-        private AudioSource _activeSource;     // the one currently faded-in
-        private Coroutine _fade;
-        private int _fadeToken;                // supersede an in-flight fade
+        // ── Playback ownership REMOVED (2026-07-09, MUSIC_AUTHORITY_DESIGN) ─────
+        // BattleMusicManager no longer owns any AudioSource. It is now a POLICY
+        // PROVIDER: it keeps the wave-state SELECTION logic and Pushes/Releases the
+        // single MusicDirector's Battle layer. The director owns the one A/B pair,
+        // so two beds are impossible and the auto-fallback restores ambient on
+        // Release(Battle) — deleting the old fragile StopMusic/ReturnToAmbient handoff.
 
         // ── State ─────────────────────────────────────────────────────────────
         private BattleMusicState _state = BattleMusicState.None;
@@ -168,7 +168,7 @@ namespace DeNelle.Village
                 return;
             }
             _instance = this;
-            BuildAudioSources();
+            // No AudioSources to build — the single MusicDirector owns playback.
         }
 
         private void OnEnable()
@@ -410,34 +410,20 @@ namespace DeNelle.Village
 
             _state = next;
 
-            // ── Single-engine handoff (doubled-music fix) ─────────────────────
-            // On the None → battle EDGE only (BattleMusicManager is TAKING OVER
-            // playback), silence AudioService's ambient/idle track so exactly one
-            // music engine is audible — our dedicated source pair now owns the
-            // music. Fires ONCE on this entering edge: a battle→battle change
-            // (e.g. Combat→Boss) has prev != None, so the ambient is already
-            // stopped and we never re-trigger it mid-battle. The exit path
-            // (→ None → FadeOutToAmbient → ReturnToAmbient) restarts the ambient;
-            // since CurrentTrack == None after StopMusic, that restart is genuine
-            // (PlayMusic's "already playing" short-circuit no longer swallows it).
-            if (prev == BattleMusicState.None && next != BattleMusicState.None)
-            {
-                FlowTrace.Step("BattleMusic",
-                    "took over playback — stopped AudioService ambient (None → " + next + ")");
-                try { AudioService.Instance?.StopMusic(); }
-                catch (System.Exception e)
-                {
-                    Debug.LogWarning("[BattleMusicManager] StopMusic (ambient handoff) failed: " + e.Message);
-                }
-            }
-
+            // ── Single-owner Push/Release (doubled-music fix, MUSIC_AUTHORITY) ─
+            // BattleMusicManager owns the MusicDirector's Battle layer. It Pushes its
+            // chosen wave-state clip onto that layer and Releases it when battle ends.
+            // The director resolves the highest active layer, so the ambient/idle bed
+            // (AudioService's Ambient/Overworld layer) keeps its slot underneath and
+            // is auto-restored the instant we Release — no StopMusic/ReturnToAmbient
+            // handoff, and two beds are impossible (one owner, one pair).
             try
             {
                 if (next == BattleMusicState.None)
                 {
-                    // End of battle music — fade ours out and let the ambient/idle
-                    // service resume (reuses AudioService's ambient handoff).
-                    FadeOutToAmbient();
+                    FlowTrace.Step("BattleMusic",
+                        "battle ended — Release(Battle); director auto-falls back to ambient.");
+                    MusicDirector.Instance?.Release(MusicLayer.Battle);
                     return;
                 }
 
@@ -452,9 +438,12 @@ namespace DeNelle.Village
                 }
 
                 bool loop = next != BattleMusicState.Victory;   // Victory is a one-shot
-                Crossfade(clip, loop);
+                FlowTrace.Step("BattleMusic",
+                    "Push(Battle) state=" + next + " clip='" + clip.name + "' (prev=" + prev + ")");
+                MusicDirector.Instance?.PushClip(
+                    MusicLayer.Battle, clip, MusicVolume, loop, CrossfadeSeconds, "Battle:" + next);
 
-                // Victory is a one-shot: when it ends, hand back to ambient/idle.
+                // Victory is a one-shot: when it ends, drop to None → Release(Battle).
                 if (next == BattleMusicState.Victory)
                 {
                     float dur = clip.length > 0.01f ? clip.length : 3f;
@@ -488,138 +477,6 @@ namespace DeNelle.Village
             _victoryReturn = null;
             if (_state == BattleMusicState.Victory)
                 TransitionTo(BattleMusicState.None);
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        //  Audio sources + crossfade (own pair, Music-mixer-group routed)
-        // ─────────────────────────────────────────────────────────────────────
-        private void BuildAudioSources()
-        {
-            if (_sourceA != null) return;
-
-            AudioMixerGroup musicGroup = ResolveMusicGroup();
-            _sourceA = CreateSource("BattleMusic_A", musicGroup);
-            _sourceB = CreateSource("BattleMusic_B", musicGroup);
-            _activeSource = _sourceA;
-        }
-
-        private AudioSource CreateSource(string srcName, AudioMixerGroup group)
-        {
-            var go = new GameObject(srcName);
-            go.transform.SetParent(transform, false);
-            var src = go.AddComponent<AudioSource>();
-            src.playOnAwake = false;
-            src.loop = true;
-            src.spatialBlend = 0f;    // 2D — music is non-positional.
-            src.volume = 0f;
-            if (group != null) src.outputAudioMixerGroup = group;
-            return src;
-        }
-
-        // Route through the SHARED Music mixer group so the player's music volume +
-        // mute apply (reuse, not reinvent). The mixer ships at the same Resources
-        // path AudioBootstrap uses; if it's somehow absent we run on the default
-        // output (still audible).
-        private static AudioMixerGroup ResolveMusicGroup()
-        {
-            try
-            {
-                var mixer = Resources.Load<AudioMixer>(AudioBootstrap.MixerResourcePath);
-                if (mixer == null) return null;
-                var groups = mixer.FindMatchingGroups("Music");
-                return (groups != null && groups.Length > 0) ? groups[0] : null;
-            }
-            catch { return null; }
-        }
-
-        private void Crossfade(AudioClip clip, bool loop)
-        {
-            if (clip == null || _sourceA == null || _sourceB == null) return;
-
-            AudioSource fadeIn  = (_activeSource == _sourceA) ? _sourceB : _sourceA;
-            AudioSource fadeOut = _activeSource;
-            _activeSource = fadeIn;
-
-            fadeIn.clip = clip;
-            fadeIn.loop = loop;
-            fadeIn.volume = 0f;
-
-            // Guard a clip object whose underlying file failed to load (FMOD
-            // "file not found" otherwise crashes on Play).
-            if (clip.loadState == AudioDataLoadState.Failed)
-            {
-                Debug.LogWarning($"[BattleMusicManager] Skipping '{clip.name}' — clip failed to load (file missing from build?).");
-                return;
-            }
-
-            fadeIn.Play();
-
-            if (_fade != null) StopCoroutine(_fade);
-            _fade = StartCoroutine(CrossfadeRoutine(fadeIn, fadeOut, MusicVolume));
-        }
-
-        private IEnumerator CrossfadeRoutine(AudioSource fadeIn, AudioSource fadeOut, float target)
-        {
-            int token = ++_fadeToken;
-            float startOut = fadeOut != null ? fadeOut.volume : 0f;
-            float seconds = Mathf.Max(0.01f, CrossfadeSeconds);
-            float t = 0f;
-
-            while (t < seconds)
-            {
-                if (token != _fadeToken) yield break;   // superseded
-                t += Time.unscaledDeltaTime;
-                float k = Mathf.Clamp01(t / seconds);
-                if (fadeIn  != null) fadeIn.volume  = Mathf.Lerp(0f, target, k);
-                if (fadeOut != null) fadeOut.volume = Mathf.Lerp(startOut, 0f, k);
-                yield return null;
-            }
-
-            if (token != _fadeToken) yield break;
-            if (fadeIn  != null) fadeIn.volume = target;
-            if (fadeOut != null) { fadeOut.volume = 0f; fadeOut.Stop(); }
-            _fade = null;
-        }
-
-        // Fade both of OUR sources out, then ask the shared AudioService to resume
-        // the ambient/idle track for whatever context the player is in (reuse —
-        // we do not own the ambient music).
-        private void FadeOutToAmbient()
-        {
-            if (_fade != null) StopCoroutine(_fade);
-            _fade = StartCoroutine(FadeOutRoutine());
-
-            FlowTrace.Step("BattleMusic",
-                "returned ambient — faded battle sources out, AudioService.ReturnToAmbient()");
-            try { AudioService.Instance?.ReturnToAmbient(); }
-            catch (System.Exception e)
-            {
-                Debug.LogWarning("[BattleMusicManager] ReturnToAmbient failed: " + e.Message);
-            }
-        }
-
-        private IEnumerator FadeOutRoutine()
-        {
-            int token = ++_fadeToken;
-            float seconds = Mathf.Max(0.01f, CrossfadeSeconds);
-            float startA = _sourceA != null ? _sourceA.volume : 0f;
-            float startB = _sourceB != null ? _sourceB.volume : 0f;
-            float t = 0f;
-
-            while (t < seconds)
-            {
-                if (token != _fadeToken) yield break;
-                t += Time.unscaledDeltaTime;
-                float k = Mathf.Clamp01(t / seconds);
-                if (_sourceA != null) _sourceA.volume = Mathf.Lerp(startA, 0f, k);
-                if (_sourceB != null) _sourceB.volume = Mathf.Lerp(startB, 0f, k);
-                yield return null;
-            }
-
-            if (token != _fadeToken) yield break;
-            if (_sourceA != null) { _sourceA.volume = 0f; _sourceA.Stop(); }
-            if (_sourceB != null) { _sourceB.volume = 0f; _sourceB.Stop(); }
-            _fade = null;
         }
 
         // ─────────────────────────────────────────────────────────────────────

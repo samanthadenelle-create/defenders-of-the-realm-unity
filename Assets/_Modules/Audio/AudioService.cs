@@ -133,11 +133,18 @@ namespace DeNelle.Audio
 
         // ── Runtime ──────────────────────────────────────────────────────────
 
-        // Two music sources for crossfading: while one fades out the other
-        // fades in. _activeSource always points at the currently-fading-in one.
-        private AudioSource _musicA;
-        private AudioSource _musicB;
-        private AudioSource _activeSource;
+        // MUSIC OWNERSHIP MOVED (2026-07-09, MUSIC_AUTHORITY_DESIGN): AudioService
+        // no longer owns any music AudioSource. The single owner is MusicDirector
+        // (one A/B pair). AudioService is now a POLICY PROVIDER + clip-lookup facade:
+        // PlayMusic/StopMusic map a track → a MusicLayer and Push/Release the
+        // director. Two beds are impossible by construction — there is one pair.
+        private MusicDirector _director;
+
+        // The single layer AudioService's facade currently occupies. PlayMusic moves
+        // this slot (Release old, Push new) so the facade behaves as REPLACE while
+        // the director still layers it against the other policy providers (battle,
+        // wave) so the highest active layer wins and only one bed ever sounds.
+        private MusicLayer _facadeLayer = MusicLayer.None;
 
         // One pooled SFX source set, round-robin, so concurrent one-shots do not
         // cut each other off. Routed per call to the SFX / UI / Voice groups.
@@ -145,15 +152,8 @@ namespace DeNelle.Audio
         private readonly List<AudioSource> _sfxVoices = new List<AudioSource>(SfxVoices);
         private int _sfxCursor;
 
-        /// <summary>The track currently playing (or fading in). <see cref="MusicTrack.None"/> when silent.</summary>
+        /// <summary>The track AudioService's facade last requested (or fading in). <see cref="MusicTrack.None"/> when stopped.</summary>
         public MusicTrack CurrentTrack { get; private set; } = MusicTrack.None;
-
-        /// <summary>True while a crossfade is in flight — used to short-circuit re-entrant requests.</summary>
-        private bool _fading;
-
-        // A monotonically-increasing token: each PlayMusic call bumps it, so an
-        // older in-flight fade can detect it has been superseded and bail.
-        private int _fadeToken;
 
         // True once master mute is on (audio-mix-spec §5). Mute snaps — no fade.
         private bool _muted;
@@ -259,20 +259,19 @@ namespace DeNelle.Audio
         }
 
         /// <summary>
-        /// Builds the two music AudioSources + the SFX voice pool as children of
-        /// this GameObject. All are 2D (spatialBlend 0) — music + UI are non-
-        /// positional. Idempotent: a second call is a no-op.
+        /// Builds the SFX voice pool as children of this GameObject and creates the
+        /// single <see cref="MusicDirector"/> (the ONLY owner of music sources — its
+        /// A/B pair also parents here). All are 2D (spatialBlend 0) — music + UI are
+        /// non-positional. Idempotent: a second call is a no-op.
         /// </summary>
         private void BuildAudioSources()
         {
-            if (_musicA != null) return;
+            if (_director == null)
+                _director = MusicDirector.GetOrCreate(transform, _musicGroup, ClipFor);
 
-            _musicA = CreateChildSource("Music_A", _musicGroup, loop: true);
-            _musicB = CreateChildSource("Music_B", _musicGroup, loop: true);
-            _activeSource = _musicA;
-
-            for (int i = 0; i < SfxVoices; i++)
-                _sfxVoices.Add(CreateChildSource($"Sfx_{i}", _sfxGroup, loop: false));
+            if (_sfxVoices.Count == 0)
+                for (int i = 0; i < SfxVoices; i++)
+                    _sfxVoices.Add(CreateChildSource($"Sfx_{i}", _sfxGroup, loop: false));
         }
 
         private AudioSource CreateChildSource(string srcName, AudioMixerGroup group, bool loop)
@@ -325,8 +324,7 @@ namespace DeNelle.Audio
             _uiGroup     = FirstGroup("UI")     ?? _uiGroup;
             _voiceGroup  = FirstGroup("Voice")  ?? _voiceGroup;
 
-            if (_musicA != null) _musicA.outputAudioMixerGroup = _musicGroup;
-            if (_musicB != null) _musicB.outputAudioMixerGroup = _musicGroup;
+            _director?.SetMusicGroup(_musicGroup);
             foreach (var v in _sfxVoices)
                 if (v != null) v.outputAudioMixerGroup = _sfxGroup;
         }
@@ -350,9 +348,6 @@ namespace DeNelle.Audio
         /// </summary>
         public void PlayMusic(MusicTrack track)
         {
-            if (track == CurrentTrack && !_fading)
-                return; // already playing — no thrash.
-
             if (track == MusicTrack.None)
             {
                 StopMusic();
@@ -366,20 +361,32 @@ namespace DeNelle.Audio
                 return;
             }
 
+            // Clip lookup stays HERE (AudioService owns the serialized clips +
+            // rotation pools); the director owns PLAYBACK. A pooled track (Battle /
+            // Overworld) rotates its next clip on each call.
             AudioClip clip = ClipFor(track);
+            CurrentTrack = track; // record intent so a later SetMusicClip + re-request works.
             if (clip == null)
             {
                 // GUARDED missing clip — wire the path, log the gap, play silent.
-                // No invented audio. The dungeon track's MP3 is known-missing.
+                // No invented audio. Leave whatever is currently sounding untouched.
                 Debug.LogWarning(
                     $"[AudioService] Music track '{track}' has no clip — expected at " +
                     $"'{def.AssetPath}'. Import the MP3 and assign it on the AudioService " +
                     "(or via Resources). Scene plays silent; no audio invented.");
-                CurrentTrack = track; // record intent so a later assign + re-request works.
                 return;
             }
 
-            CrossfadeTo(track, def, clip).Forget();
+            // Map the track to its layer and move the facade's single slot: release
+            // the layer we were on if it differs, then push the new one. The director
+            // resolves the highest active layer across ALL policy providers, so this
+            // never doubles with the battle/wave beds — only the top sounds.
+            MusicLayer layer = MusicDirector.LayerFor(track);
+            if (_facadeLayer != MusicLayer.None && _facadeLayer != layer)
+                _director?.Release(_facadeLayer);
+            _facadeLayer = layer;
+            _director?.PushClip(layer, clip, def.DefaultVolume, def.Loop,
+                                Mathf.Max(0.01f, def.FadeInSeconds), track.ToString(), track);
         }
 
         /// <summary>
@@ -393,113 +400,23 @@ namespace DeNelle.Audio
         public void ResumeAfterUnlock()
         {
             AudioListener.pause = false;
-            var t = CurrentTrack;
-            if (t == MusicTrack.None) return;
-            CurrentTrack = MusicTrack.None;   // clear the "already playing" short-circuit
-            PlayMusic(t);                     // restart so it sounds now the context is unlocked
-        }
-
-        /// <summary>Fades the current music out to silence over its fade-out duration.</summary>
-        public void StopMusic()
-        {
-            if (CurrentTrack == MusicTrack.None && !_fading) return;
-            MusicTrackDef def = MusicTrackRegistry.Get(CurrentTrack);
-            float fadeOut = def?.FadeOutSeconds ?? 1.0f;
-            CurrentTrack = MusicTrack.None;
-            FadeOutAll(fadeOut).Forget();
+            _director?.Reassert();   // re-play the current top from scratch now the context is live
         }
 
         /// <summary>
-        /// The crossfade coroutine — fades the active source out while the idle
-        /// source fades in on the new clip. Each call bumps <see cref="_fadeToken"/>
-        /// so a superseded fade bails cleanly.
+        /// Releases the facade's music layer — the director auto-falls back to the
+        /// next-highest active layer (e.g. a live battle bed), or fades to silence
+        /// when nothing else is held. Exposed so the cinematic intro can drop the
+        /// boot/title music while the video's own voiceover plays.
         /// </summary>
-        private async UniTaskVoid CrossfadeTo(MusicTrack track, MusicTrackDef def, AudioClip clip)
+        public void StopMusic()
         {
-            int token = ++_fadeToken;
-            _fading = true;
-            CurrentTrack = track;
-
-            AudioSource fadeIn = (_activeSource == _musicA) ? _musicB : _musicA;
-            AudioSource fadeOut = _activeSource;
-            _activeSource = fadeIn;
-
-            fadeIn.clip = clip;
-            fadeIn.loop = def.Loop;
-            fadeIn.volume = 0f;
-
-            // Guard against clips that exist as an AudioClip object but whose
-            // underlying audio file is absent from the build (FMOD "File not found"
-            // crash that fires on every wave clear when "victory" is missing).
-            if (clip.loadState == AudioDataLoadState.Failed)
+            CurrentTrack = MusicTrack.None;
+            if (_facadeLayer != MusicLayer.None)
             {
-                Debug.LogWarning($"[AudioService] Skipping Play for '{track}' — clip '{clip.name}' failed to load (file missing from build?).");
-                _fading = false;
-                return;
+                _director?.Release(_facadeLayer);
+                _facadeLayer = MusicLayer.None;
             }
-
-            fadeIn.Play();
-
-            // Diagnostic (DEF audio #8 "no sound"): confirms music actually starts +
-            // surfaces the mute/route state, so a smoke run / playtest can tell
-            // "track never played" from "playing but inaudible (device/route)".
-            Debug.Log($"[AudioService] ▶ music '{track}' clip='{clip.name}' " +
-                      $"muted={_muted} target={def.DefaultVolume:F2} " +
-                      $"mixer={(_mixer != null)} group={(fadeIn.outputAudioMixerGroup != null)}");
-
-            // The fade target is always the track's owner-locked default volume.
-            // Mute is a MIXER concern (the Master param) or, in the no-mixer
-            // fallback, the AudioSource.mute flag — never the source .volume —
-            // so an un-mute restores audio without re-triggering a crossfade.
-            float target = def.DefaultVolume;
-            float fadeSeconds = Mathf.Max(0.01f, def.FadeInSeconds);
-            float startOut = fadeOut.volume;
-            float t = 0f;
-
-            while (t < fadeSeconds)
-            {
-                if (token != _fadeToken) return; // superseded by a newer request.
-                t += Time.unscaledDeltaTime;
-                float k = Mathf.Clamp01(t / fadeSeconds);
-                fadeIn.volume = Mathf.Lerp(0f, target, k);
-                fadeOut.volume = Mathf.Lerp(startOut, 0f, k);
-                await UniTask.Yield(PlayerLoopTiming.Update);
-            }
-
-            if (token != _fadeToken) return;
-
-            fadeIn.volume = target;
-            fadeOut.volume = 0f;
-            fadeOut.Stop();
-            _fading = false;
-        }
-
-        /// <summary>Fades both music sources to silence (used by <see cref="StopMusic"/>).</summary>
-        private async UniTaskVoid FadeOutAll(float fadeSeconds)
-        {
-            int token = ++_fadeToken;
-            _fading = true;
-
-            float seconds = Mathf.Max(0.01f, fadeSeconds);
-            float startA = _musicA != null ? _musicA.volume : 0f;
-            float startB = _musicB != null ? _musicB.volume : 0f;
-            float t = 0f;
-
-            while (t < seconds)
-            {
-                if (token != _fadeToken) return;
-                t += Time.unscaledDeltaTime;
-                float k = Mathf.Clamp01(t / seconds);
-                if (_musicA != null) _musicA.volume = Mathf.Lerp(startA, 0f, k);
-                if (_musicB != null) _musicB.volume = Mathf.Lerp(startB, 0f, k);
-                await UniTask.Yield(PlayerLoopTiming.Update);
-            }
-
-            if (token != _fadeToken) return;
-
-            if (_musicA != null) { _musicA.volume = 0f; _musicA.Stop(); }
-            if (_musicB != null) { _musicB.volume = 0f; _musicB.Stop(); }
-            _fading = false;
         }
 
         /// <summary>
@@ -610,8 +527,7 @@ namespace DeNelle.Audio
 
         private bool IsAnyMusicPlaying()
         {
-            return (_musicA != null && _musicA.isPlaying) ||
-                   (_musicB != null && _musicB.isPlaying);
+            return _director != null && _director.IsAnyPlaying;
         }
 
         // =====================================================================
@@ -759,19 +675,12 @@ namespace DeNelle.Audio
                 _mixer.SetFloat(ParamNameFor(group), LinearToDecibels(v));
 
             // ALSO scale the music source directly — not "mixer XOR source". The
-            // [AudioService] diagnostic shows the music sources can end up NOT
-            // routed through the mixer's Music group (group=False), so the mixer
-            // param has no effect on what's actually heard and the ♪ toggle /
-            // volume slider would do nothing. Driving the source makes the control
-            // affect playback either way. Guarded by !_fading so it never fights an
-            // in-flight crossfade; respects the current mute state.
-            if ((group == MixerGroup.Master || group == MixerGroup.Music)
-                && _activeSource != null && !_fading)
-            {
-                MusicTrackDef def = MusicTrackRegistry.Get(CurrentTrack);
-                float baseVol = def?.DefaultVolume ?? 1f;
-                _activeSource.volume = _muted ? 0f : Mathf.Clamp01(baseVol * v);
-            }
+            // music sources can end up NOT routed through the mixer's Music group,
+            // so the mixer param has no effect on what's heard and the ♪ toggle /
+            // volume slider would do nothing. The director drives its active source
+            // (guarded so it never fights an in-flight crossfade; respects mute).
+            if (group == MixerGroup.Master || group == MixerGroup.Music)
+                _director?.ApplyVolumeScale(v);
         }
 
         /// <summary>
@@ -801,12 +710,11 @@ namespace DeNelle.Audio
             }
             {
                 // ALWAYS snap every source's mute flag too (not just the no-mixer
-                // path). When routing to the mixer group failed (diagnostic
-                // group=False), the Master param can't silence the sources — this
-                // is what actually mutes/unmutes audible playback, so the ♪ toggle
-                // works regardless of mixer routing.
-                if (_musicA != null) _musicA.mute = muted;
-                if (_musicB != null) _musicB.mute = muted;
+                // path). When routing to the mixer group failed, the Master param
+                // can't silence the sources — this is what actually mutes/unmutes
+                // audible playback, so the ♪ toggle works regardless of routing.
+                // The director owns the music sources; AudioService owns the SFX pool.
+                _director?.SetMuted(muted);
                 foreach (var v in _sfxVoices)
                     if (v != null) v.mute = muted;
             }

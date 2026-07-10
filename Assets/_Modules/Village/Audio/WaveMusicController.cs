@@ -37,15 +37,23 @@
 // each request so overlapping fades never fight.
 // =============================================================================
 
-using System.Collections;
+using DeNelle.Audio;        // MusicDirector (Village references DeNelle.Audio)
+using DeNelle.Core.Audio;   // MusicLayer (Core contract)
 using UnityEngine;
 
 namespace DeNelle.Village
 {
     /// <summary>
-    /// A/B AudioSource crossfade driven by the wave loop: combat music while a
-    /// wave is active, exploration music between waves. Attached to the
-    /// WaveManager GameObject by the scene builder.
+    /// Wave-loop music POLICY PROVIDER (2026-07-09, MUSIC_AUTHORITY_DESIGN): combat
+    /// music while a wave is active, exploration between waves. It owns ZERO
+    /// AudioSources — it Pushes/Releases the single <see cref="MusicDirector"/>'s
+    /// Wave layer. Attached to the WaveManager GameObject by the scene builder.
+    ///
+    /// STILL INERT by intent (WO-571): its two track fields ship UNASSIGNED because
+    /// BattleMusicManager (Battle layer) is the live wave scorer; giving this Wave
+    /// clips would double-score. With null clips every Push is a harmless no-op
+    /// (the director treats a null clip as Release). It now owns no sources either,
+    /// so it can never produce a second bed even if clips were wired.
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(WaveManager))]
@@ -58,22 +66,15 @@ namespace DeNelle.Village
         [Tooltip("Calm loop played between waves / before the loop starts.")]
         [SerializeField] private AudioClip _explorationTrack;
 
-        [Tooltip("Tense combat loop crossfaded in when a wave begins.")]
+        [Tooltip("Tense combat loop pushed when a wave begins.")]
         [SerializeField] private AudioClip _combatTrack;
 
-        [Header("Crossfade")]
-        [Tooltip("Seconds for one A/B crossfade. Uses unscaledDeltaTime — safe under timeScale changes.")]
+        [Header("Mix")]
+        [Tooltip("Seconds for one crossfade. Uses unscaledDeltaTime — safe under timeScale changes.")]
         [SerializeField, Min(0.01f)] private float _crossfadeSeconds = 1.5f;
 
         [Tooltip("Target volume of the audible track (0-1).")]
         [SerializeField, Range(0f, 1f)] private float _trackVolume = 1f;
-
-        // Two looping music sources we alternate between so a crossfade never cuts.
-        private AudioSource _sourceA;
-        private AudioSource _sourceB;
-        private bool _useSourceA = true;
-        private Coroutine _fadeRoutine;
-        private AudioClip _currentClip;
 
         // ── Lifecycle ─────────────────────────────────────────────────────────
 
@@ -82,25 +83,7 @@ namespace DeNelle.Village
         private void Awake()
         {
             if (_wave == null) _wave = GetComponent<WaveManager>();
-
-            // Build the two crossfade sources in code (they are music plumbing,
-            // not Inspector-authored — the only AddComponent the task allows, and
-            // it mirrors the spec's "two AudioSource components" intent). Both
-            // loop, start silent, and ignore the scene's spatial blend (2D music).
-            _sourceA = CreateMusicSource("MusicSourceA");
-            _sourceB = CreateMusicSource("MusicSourceB");
-        }
-
-        private AudioSource CreateMusicSource(string label)
-        {
-            var src = gameObject.AddComponent<AudioSource>();
-            src.playOnAwake = false;
-            src.loop = true;
-            src.spatialBlend = 0f;   // 2D — music is non-positional
-            src.volume = 0f;
-            // A label is handy when inspecting at runtime; AudioSource has no name,
-            // so this is purely diagnostic via the component order.
-            return src;
+            // No AudioSources to build — the single MusicDirector owns playback.
         }
 
         private void OnEnable()
@@ -112,9 +95,8 @@ namespace DeNelle.Village
                 _wave.OnWaveCleared.AddListener(HandleWaveCleared);
             }
 
-            // Begin on the calm exploration bed (if assigned) so the village isn't
-            // silent before the first wave.
-            if (_explorationTrack != null) CrossfadeTo(_explorationTrack);
+            // Begin on the calm exploration bed (if assigned). Null → no-op.
+            PushWave(_explorationTrack);
         }
 
         private void OnDisable()
@@ -125,73 +107,41 @@ namespace DeNelle.Village
                 _wave.OnWaveCleared.RemoveListener(HandleWaveCleared);
             }
 
-            // Stop any in-flight fade so a disable mid-crossfade doesn't leave a
-            // coroutine dangling against destroyed sources.
-            if (_fadeRoutine != null) { StopCoroutine(_fadeRoutine); _fadeRoutine = null; }
+            // Give up our layer so a disabled controller never holds the Wave bed.
+            MusicDirector.Instance?.Release(MusicLayer.Wave);
         }
 
         // ── Wave event handlers ────────────────────────────────────────────────
 
         private void HandleWaveStarted(int waveId)
         {
-            CrossfadeTo(_combatTrack);
+            PushWave(_combatTrack);
             // DEF-67: light screen-shake impulse to sell the wave-start transition.
             // SmartMobileCamera.Instance is null between scenes — safe null-conditional.
             SmartMobileCamera.Instance?.Shake(0.12f, 0.35f);
         }
 
-        private void HandleWaveCleared(int waveId) => CrossfadeTo(_explorationTrack);
+        // Wave cleared → release the Wave layer; the director auto-falls back to the
+        // ambient bed (or the exploration clip if this controller re-pushes it).
+        private void HandleWaveCleared(int waveId) => MusicDirector.Instance?.Release(MusicLayer.Wave);
 
         // ── Public API (for any future non-polling caller, e.g. an apex sting) ──
 
-        /// <summary>Crossfade to the combat track. Safe to call repeatedly.</summary>
-        public void PlayCombatTrack() => CrossfadeTo(_combatTrack);
+        /// <summary>Push the combat track onto the Wave layer. Safe to call repeatedly.</summary>
+        public void PlayCombatTrack() => PushWave(_combatTrack);
 
-        /// <summary>Crossfade to the calm exploration track. Safe to call repeatedly.</summary>
-        public void PlayExplorationTrack() => CrossfadeTo(_explorationTrack);
+        /// <summary>Push the calm exploration track onto the Wave layer. Safe to call repeatedly.</summary>
+        public void PlayExplorationTrack() => PushWave(_explorationTrack);
 
-        // ── Crossfade ──────────────────────────────────────────────────────────
+        // ── Request → the single authority ─────────────────────────────────────
 
-        /// <summary>
-        /// Crossfade the audible source out and a fresh source (carrying
-        /// <paramref name="clip"/>) in. No-ops when already playing that clip, or
-        /// when the clip is null (placeholder not yet assigned).
-        /// </summary>
-        private void CrossfadeTo(AudioClip clip)
+        // Push a clip onto the director's Wave layer. A null clip (placeholder not
+        // yet assigned) makes the director Release the layer — a harmless no-op that
+        // keeps this controller inert until clips are wired.
+        private void PushWave(AudioClip clip)
         {
-            if (clip == null) return;
-            if (clip == _currentClip) return;   // already on this track — don't restart
-            _currentClip = clip;
-
-            if (_fadeRoutine != null) StopCoroutine(_fadeRoutine);
-            _fadeRoutine = StartCoroutine(CrossfadeRoutine(clip));
-        }
-
-        private IEnumerator CrossfadeRoutine(AudioClip clip)
-        {
-            AudioSource incoming = _useSourceA ? _sourceA : _sourceB;
-            AudioSource outgoing = _useSourceA ? _sourceB : _sourceA;
-            _useSourceA = !_useSourceA;
-
-            incoming.clip = clip;
-            incoming.volume = 0f;
-            incoming.Play();
-
-            float startOutVol = outgoing.volume;
-            float t = 0f;
-            while (t < _crossfadeSeconds)
-            {
-                t += Time.unscaledDeltaTime;   // timeScale-safe (spec acceptance criterion)
-                float ratio = Mathf.Clamp01(t / _crossfadeSeconds);
-                incoming.volume = ratio * _trackVolume;
-                outgoing.volume = startOutVol * (1f - ratio);
-                yield return null;
-            }
-
-            incoming.volume = _trackVolume;
-            outgoing.volume = 0f;
-            outgoing.Stop();
-            _fadeRoutine = null;
+            MusicDirector.Instance?.PushClip(
+                MusicLayer.Wave, clip, _trackVolume, true, _crossfadeSeconds, "Wave");
         }
     }
 }
