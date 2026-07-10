@@ -110,6 +110,85 @@
       "trigger": "Cast", "combo": -1,
       "clip": "Standing 2H Magic Area Attack 02", "clipExists": true, "fallbackClip": "Wizard_Heal",
       "_note": "Ultimate group heal = a two-hand AREA cast (reuses the area-attack pose as an area-heal gesture). Shares Wizard art."
+    },
+
+    {
+      "class": "knight", "abilityId": "knight.thunderbolt", "skill": "Thunderbolt", "slot": "w",
+      "trigger": "Cast", "combo": -1,
+      "clip": "Combat_Spell_Fireball", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
+      "_note": "WO-614 ranged bolt. Cast trigger fires the spell throw; combo -1 so it never overrides the Attack1/2 combo states the KnightPackageControllerBuilder builds."
+    },
+    {
+      "class": "knight", "abilityId": "knight.emberbrand-throw", "skill": "Emberbrand Throw", "slot": "w",
+      "trigger": "Cast", "combo": -1,
+      "clip": "Combat_Spell_Fireball", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
+      "_note": "WO-614 dot — burning brand throw. Shares the fireball cast."
+    },
+    {
+      "class": "knight", "abilityId": "knight.mending-salve", "skill": "Mending Salve", "slot": "e",
+      "trigger": "Cast", "combo": -1,
+      "clip": "Combat_Spell_Two_Hand_Spell_Casting", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
+      "_note": "WO-614 heal — two-hand spell-casting pose."
+    },
+    {
+      "class": "knight", "abilityId": "knight.oathmend", "skill": "Oathmend", "slot": "e",
+      "trigger": "Cast", "combo": -1,
+      "clip": "Combat_Spell_Two_Hand_Spell_Casting", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
+      "_note": "WO-614 healOverTime — two-hand spell-casting pose."
+    },
+    {
+      "class": "knight", "abilityId": "knight.second-wind", "skill": "Second Wind", "slot": "e",
+      "trigger": "Cast", "combo": -1,
+      "clip": "Combat_Spell_Two_Hand_Spell_Casting", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
+      "_note": "WO-614 heal — two-hand spell-casting pose."
+    },
+    {
+      "class": "knight", "abilityId": "knight.wardens-roar", "skill": "Warden's Roar", "slot": "e",
+      "trigger": "Cast", "combo": -1,
+      "clip": "Signature_Taunt", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
+      "_note": "WO-614 taunt — the dedicated Signature_Taunt shout clip."
+    },
+    {
+      "class": "knight", "abilityId": "knight.shield-bash", "skill": "Shield Slam", "slot": "w",
+      "trigger": "Attack", "combo": -1,
+      "clip": "Combat_Weapon_WeaponSkill_Sword_And_Shield_Slash", "clipExists": true, "fallbackClip": "standing melee attack horizontal",
+      "_note": "WO-614 melee signature — sword-and-shield slash. combo -1 (documentary binding; the combo states are owned by the 4 canonical knight rows above)."
+    },
+    {
+      "class": "knight", "abilityId": "knight.suppressing-volley", "skill": "Suppressing Volley", "slot": "r",
+      "trigger": "Attack", "combo": -1,
+      "clip": "Combat_Weapon_WeaponSkill_Standing_Melee_Attack_360_High", "clipExists": true, "fallbackClip": "standing melee attack horizontal",
+      "_note": "WO-614 melee cleave — 360 high spin reads as a sweeping volley."
+    },
+    {
+      "class": "knight", "abilityId": "knight.sweeping-cut", "skill": "Sweeping Cut", "slot": "w",
+      "trigger": "Attack", "combo": -1,
+      "clip": "Combat_Weapon_WeaponSkill_Outward_Slash", "clipExists": true, "fallbackClip": "standing melee attack horizontal",
+      "_note": "WO-614 melee cleave — wide outward slash."
+    },
+    {
+      "class": "knight", "abilityId": "knight.champions-combo", "skill": "Champion's Combo", "slot": "r",
+      "trigger": "Attack", "combo": -1,
+      "clip": "Combat_Weapon_WeaponSkill_Combo", "clipExists": true, "fallbackClip": "standing melee attack horizontal",
+      "_note": "WO-614 multi-strike finisher — the dedicated combo swing."
+    },
+    {
+      "class": "knight", "abilityId": "knight.eternal-aegis", "skill": "Eternal Aegis", "slot": "r",
+      "trigger": "Cast", "combo": -1,
+      "clip": "sword and shield power up", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
+      "_note": "WO-614 big defensive — the power-up guard pose (maps to Combat_Spell_Two_Hand_Spell_Casting via the package clip table)."
+    },
+    {
+      "class": "knight", "abilityId": "knight.ranged-poke", "skill": "Throwing Spear", "slot": "w",
+      "trigger": "Attack", "combo": -1,
+      "clip": "Combat_Weapon_WeaponSkill_Stabbing", "clipExists": true, "fallbackClip": "standing melee attack horizontal",
+      "_note": "WO-614 ranged poke — stabbing thrust reads as a spear throw."
+    },
+    {
+      "class": "knight", "abilityId": "knight.snare-arrow", "skill": "Pinning Spear", "slot": "w",
+      "trigger": "Attack", "combo": -1,
+      "clip": "Combat_Weapon_WeaponSkill_Stabbing", "clipExists": true, "fallbackClip": "standing melee attack horizontal",
+      "_note": "WO-614 ranged snare — stabbing thrust reads as a pinning spear."
     }
   ]
 }

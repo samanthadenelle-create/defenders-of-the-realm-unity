@@ -97,6 +97,14 @@ namespace DeNelle.Village
         /// <summary>aoe only — seconds the blast freezes the enemies it catches.</summary>
         [JsonProperty("freeze")] public float Freeze;
 
+        // ── WO-614 extra tuning fields (default 0 when absent — backward-compatible) ──
+        /// <summary>dot effect — burn damage-per-second applied after the initial strike.</summary>
+        [JsonProperty("dotDamage")] public float DotDamage;
+        /// <summary>dot effect — seconds the burn ticks.</summary>
+        [JsonProperty("dotSeconds")] public float DotSeconds;
+        /// <summary>healOverTime effect — seconds the HP drip runs; invuln effect — seconds of immunity.</summary>
+        [JsonProperty("seconds")] public float Seconds;
+
         /// <summary>The slot parsed to the <see cref="AbilitySlot"/> enum.</summary>
         public AbilitySlot SlotEnum
         {

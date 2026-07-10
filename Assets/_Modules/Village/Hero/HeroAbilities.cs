@@ -82,6 +82,14 @@ namespace DeNelle.Village
         // onto the rate (simple, correct — never double-counts already-delivered mana).
         private float _manaOverTimeRate;   // mana per second added while active (absolute units)
         private float _manaOverTimeUntil;  // Time.time at which the drip stops
+
+        // WO-614 hook 2 (Oathmend healOverTime): HP drip mirroring the mana-over-time pattern
+        // above. Ticks HeroHealth.RegenTick (silent, no per-frame VFX strobe) each frame while
+        // the window is open. Cached HeroHealth is resolved lazily + survives the body swap.
+        private float _hpOverTimeRate;     // HP per second healed while active
+        private float _hpOverTimeUntil;    // Time.time at which the drip stops
+        private HeroHealth _heroHealth;    // cached hero HP (WO-614 hooks 2 & 3)
+
         private readonly float[] _cooldownRemaining = new float[4]; // indexed by AbilitySlot
 
         // WO-574: per-ability cooldowns for the player-assignable EXTRA skill bar
@@ -265,6 +273,15 @@ namespace DeNelle.Village
                     HeroCombatStatus.GetOrAdd(gameObject)?.ClearNamed("mana-draught");
                 }
             }
+
+            // WO-614 hook 2: Oathmend HP-over-time drip. RegenTick is silent (no per-frame heal
+            // VFX) and no-ops when full/dead, so the drip is safe to run every frame.
+            if (Time.time < _hpOverTimeUntil && _hpOverTimeRate > 0f)
+            {
+                if (_heroHealth == null) _heroHealth = GetComponent<HeroHealth>() ?? HeroHealth.Instance;
+                _heroHealth?.RegenTick(_hpOverTimeRate * dt);
+            }
+
             for (int i = 0; i < _cooldownRemaining.Length; i++)
                 _cooldownRemaining[i] = Mathf.Max(0f, _cooldownRemaining[i] - dt);
 
@@ -572,10 +589,13 @@ namespace DeNelle.Village
             string rawEffect = (def.Effect ?? string.Empty).Trim().ToLowerInvariant();
             switch (rawEffect)
             {
-                case "dash":      ResolveDash(def, origin);      return;
-                case "knockback": ResolveKnockback(def, origin); return;
-                case "taunt":     ResolveTaunt(def, origin);     return;
-                case "blink":     ResolveBlink(def, origin);     return;
+                case "dash":         ResolveDash(def, origin);         return;
+                case "knockback":    ResolveKnockback(def, origin);    return;
+                case "taunt":        ResolveTaunt(def, origin);        return;
+                case "blink":        ResolveBlink(def, origin);        return;
+                case "dot":          ResolveDot(def, origin);          return;   // WO-614 hook 1
+                case "healovertime": ResolveHealOverTime(def, origin); return;   // WO-614 hook 2
+                case "invuln":       ResolveInvuln(def, origin);       return;   // WO-614 hook 3
             }
 
             DamageElement element = ElementOf(def);
@@ -860,6 +880,14 @@ namespace DeNelle.Village
                 if (target == null) continue;
                 // Hold nearby foes on the Knight for the zone duration (def.Freeze = seconds).
                 target.ApplyStatus(StatusEffect.Slow, Mathf.Max(2f, def.Freeze));
+                // WO-614: a taunt that authors damage (Warden's Roar = 10) also strikes each
+                // held foe. Defender's Call authors damage 0 -> no-op, so this is additive.
+                if (def.Damage > 0f)
+                {
+                    (target as DeNelle.Core.Combat.IHeroDamageMarkable)?.MarkNextHitFromHero();
+                    target.TakeDamage(def.Damage, DamageElement.None);
+                    DeNelle.Core.Combat.DamageAttribution.Record(target, HeroProgression.Id, def.Damage);
+                }
             }
             // Temp shield = a small self-heal (the temp-shield system is separate; this is the cheap stand-in).
             var heroHp = GetComponent<HeroHealth>() ?? HeroHealth.Instance;
@@ -867,6 +895,102 @@ namespace DeNelle.Village
             VFXManager.Play(VFXType.Impact_ShockwaveRing, origin + Vector3.up * 1.0f);
             ReportRumble(20f);
             SpawnVfx(origin, def, def.Range);
+        }
+
+        // =====================================================================
+        //  WO-614 — Knight solo re-spec effect shapes: dot / healOverTime / invuln.
+        //  Built on the existing seams (LaunchProjectile, StatusEffect.Burn, the
+        //  TowerCombat burn-DoT pattern, HeroHealth.RegenTick / ActivateInvuln).
+        //  All null-guarded + additive; unknown effect strings fall through to the
+        //  enum switch, so mage/ranger and the six canonical shapes are unchanged.
+        // =====================================================================
+
+        /// <summary>
+        /// WO-614 hook 1 — "dot" (Emberbrand Throw): a ranged strike (reusing the LaunchProjectile
+        /// path) that lands its initial damage AND applies <see cref="StatusEffect.Burn"/> plus a
+        /// ticking burn DoT for <c>def.DotSeconds</c> at <c>def.DotDamage</c> dps. Mirrors the
+        /// Strike branch's target resolution + the TowerCombat burn-DoT coroutine.
+        /// </summary>
+        private void ResolveDot(AbilityDef def, Vector3 origin)
+        {
+            float dmg = DamageFor(def);
+            float maxR = def.Range + _enemyHitRadius;
+            var foe = InReach(LockedTarget, origin, maxR) ? LockedTarget : NearestHostile(origin, maxR);
+            if (foe == null && AimPointOverride == null) foe = LiveBoss();
+
+            float burnDps  = def.DotDamage;
+            float burnSecs = def.DotSeconds > 0f ? def.DotSeconds : 4f;
+            if (foe != null)
+            {
+                var hitFoe = foe;
+                float hitDmg = dmg;
+                LaunchProjectile(foe.WorldPosition, () =>
+                {
+                    if (hitFoe == null || !hitFoe.IsAlive) return;
+                    (hitFoe as DeNelle.Core.Combat.IHeroDamageMarkable)?.MarkNextHitFromHero();
+                    hitFoe.TakeDamage(hitDmg, DamageElement.Flame);
+                    DeNelle.Core.Combat.DamageAttribution.Record(hitFoe, HeroProgression.Id, hitDmg);
+                    if (burnDps > 0f)
+                    {
+                        hitFoe.ApplyStatus(StatusEffect.Burn, burnSecs);
+                        StartCoroutine(BurnDoT(hitFoe, burnDps, burnSecs));
+                    }
+                    ReportRumble(hitDmg);
+                });
+            }
+            SpawnVfx(AimPointOverride ?? origin, def, 1.6f, foe?.WorldPosition);
+        }
+
+        /// <summary>
+        /// WO-614: ticks <paramref name="dps"/> Flame damage per second on <paramref name="target"/>
+        /// for <paramref name="duration"/> seconds; stops early if the target dies. Same shape as
+        /// TowerCombat's EternalEmber burn DoT.
+        /// </summary>
+        private System.Collections.IEnumerator BurnDoT(IDamageable target, float dps, float duration)
+        {
+            float elapsed = 0f;
+            const float tick = 1f;
+            while (elapsed < duration)
+            {
+                yield return new WaitForSeconds(tick);
+                elapsed += tick;
+                if (target == null || !target.IsAlive) yield break;
+                target.TakeDamage(dps * tick, DamageElement.Flame);
+            }
+        }
+
+        /// <summary>
+        /// WO-614 hook 2 — "healOverTime" (Oathmend): opens an HP drip window that heals
+        /// <c>def.Damage</c> HP/s (scaled by heal talents) for <c>def.Seconds</c> seconds. The
+        /// drip runs in Update() via HeroHealth.RegenTick (silent, no per-frame VFX). Fires one
+        /// heal cast beat here (SFX + a single Cast_Heal burst) so the cast reads immediately.
+        /// </summary>
+        private void ResolveHealOverTime(AbilityDef def, Vector3 origin)
+        {
+            float perSec = def.Damage * HeroTalentModifiers.HealAmountMultiplier(_heroClass);
+            float secs   = def.Seconds > 0f ? def.Seconds : 5f;
+            _hpOverTimeRate  = perSec;
+            _hpOverTimeUntil = Time.time + secs;
+            AbilityAudioBridge.PlayForClassAndKind(_heroClass, AbilityEffect.Heal);
+            VFXManager.Play(VFXType.Cast_Heal, origin + Vector3.up * 1.2f);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HeroAbility",
+                $"healOverTime {def.Id}: {perSec:0.0} HP/s for {secs:0}s ({perSec * secs:0} total).");
+        }
+
+        /// <summary>
+        /// WO-614 hook 3 — "invuln" (Eternal Aegis, owner: HOTBAR-CASTABLE): grants the hero a
+        /// full damage-immunity window for <c>def.Seconds</c> via the existing
+        /// <see cref="HeroHealth.ActivateInvuln"/> seam (the same _invulnUntil grace respawn uses).
+        /// </summary>
+        private void ResolveInvuln(AbilityDef def, Vector3 origin)
+        {
+            float secs = def.Seconds > 0f ? def.Seconds : 8f;
+            if (_heroHealth == null) _heroHealth = GetComponent<HeroHealth>() ?? HeroHealth.Instance;
+            _heroHealth?.ActivateInvuln(secs);
+            VFXManager.Play(VFXType.Impact_Heal, origin + Vector3.up * 1.0f);
+            SpawnVfx(origin, def, Mathf.Max(1.5f, def.Range));
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HeroAbility",
+                $"invuln {def.Id}: {secs:0}s full immunity granted (HeroHealth.ActivateInvuln).");
         }
 
         /// <summary>WO-494: the full damage chain (talent x level x timing x weapon) for a def's base damage.</summary>
