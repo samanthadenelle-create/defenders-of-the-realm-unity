@@ -72,8 +72,8 @@ MonoBehaviour:
   _bossId: boss-dragon
   _hp: 4200
   _maxHp: 4200
-  _swoopDamage: 60
-  _breathDamage: 34
+  _swoopDamage: 15
+  _breathDamage: 8.5
   _orbitRadius: 16
   _orbitHeight: 10
   _orbitSpeed: 32

@@ -93,11 +93,12 @@ namespace DeNelle.Village
         [Tooltip("Max hit points.")]
         [SerializeField] private float _maxHp = 4200f;
 
+        // Owner directive 2026-07-10: dragon damage reduced 75% (now 0.25x). Was 60/34.
         [Tooltip("Damage dealt to the Heart / a structure per swoop strike.")]
-        [SerializeField] private float _swoopDamage = 60f;
+        [SerializeField] private float _swoopDamage = 15f;
 
         [Tooltip("Damage dealt by a fire-breath pass.")]
-        [SerializeField] private float _breathDamage = 34f;
+        [SerializeField] private float _breathDamage = 8.5f;
 
         // ── Flight tuning ─────────────────────────────────────────────────────
 
