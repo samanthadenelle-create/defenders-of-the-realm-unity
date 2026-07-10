@@ -361,6 +361,11 @@ namespace DeNelle.Village
                 var brain = mob.Enemy.GetComponent<EnemyBrain>();
                 if (brain == null) brain = mob.Enemy.gameObject.AddComponent<EnemyBrain>();
                 brain.Role = PackRoleForIndex(enemyId, i);
+                // Owner 2026-07-10 F8 "why are rangers chasing me": ranged mobs must KITE, not rush to
+                // melee. The kite system (range band + telegraphed ranged attack) exists but only activates
+                // when tactics are assigned — the wave/arena spawners already call this; the overworld
+                // region spawner forgot to, leaving the brain in Rush. Ranged -> Kiter.
+                EnemyBrain.ApplyRoleTactics(brain, brain.Role);
 
                 _live.Add(mob);
             }

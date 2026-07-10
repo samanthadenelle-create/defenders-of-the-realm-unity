@@ -775,6 +775,12 @@ namespace DeNelle.Village
                 // whole family. Flag-gated to felt-revert to full-family roam.
                 int n = DeNelle.Core.FeatureFlags.OverworldLeaderOnlyRoam ? 1 : packSize;
                 FamilyLeader leader = null;
+                // Did the rep LEADER enemy actually build? Track this SEPARATELY from the FamilyLeader
+                // component (added only when n>1). The destroy guard below used `leader == null` as the
+                // "pack spawned" sentinel — but with leader-only roam (n==1) FamilyLeader is never added,
+                // so a VALID leader-only pack was destroyed and no OrcRep survived (fleet AssertEncounterRealPath
+                // FAIL 8/8, regression f765eef2). Owner 2026-07-10.
+                bool leaderSpawned = false;
 
                 for (int i = 0; i < n; i++)
                 {
@@ -799,6 +805,7 @@ namespace DeNelle.Village
 
                     if (isLeader)
                     {
+                        leaderSpawned = true;
                         enemy.SetBrainTargetPosition(anchor);
                         // NO EnemyBrain on the leader — RepEngageWatcher is the sole nav writer
                         // (a DPS brain clears SetBrainTargetPosition every frame).
@@ -813,6 +820,9 @@ namespace DeNelle.Village
                     {
                         var brain = enemy.gameObject.AddComponent<EnemyBrain>();
                         brain.Role = EnemyBrain.RoleForId(id);
+                        // Owner 2026-07-10 F8: ranged followers KITE, not rush to melee — turn on the
+                        // existing kite system the wave/arena spawners already enable. Ranged -> Kiter.
+                        EnemyBrain.ApplyRoleTactics(brain, brain.Role);
                         if (enemy.gameObject.GetComponent<AwarenessSensor>() == null)
                             enemy.gameObject.AddComponent<AwarenessSensor>();
                         var member = enemy.gameObject.AddComponent<FamilyMember>();
@@ -820,7 +830,7 @@ namespace DeNelle.Village
                     }
                 }
 
-                if (leader == null)
+                if (!leaderSpawned)
                 {
                     Destroy(packRoot);
                     packRoot = null;
