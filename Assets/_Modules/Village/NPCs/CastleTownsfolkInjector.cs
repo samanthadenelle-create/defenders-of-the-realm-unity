@@ -244,6 +244,7 @@ namespace DeNelle.Village
                     $"CastleTownsfolkInjector: missing Resources/{bodyRes} — placeholder villager used (Models gitignored?).");
             }
 
+            float seatDelta = 0f;   // vertical correction NpcGroundSeat applied (held by the wanderer's baseOffset below)
             if (go == null)
             {
                 // Capsule fallback so the slot is never silently empty; AmbientNPC's
@@ -268,7 +269,7 @@ namespace DeNelle.Village
             {
                 go.name = $"CastleVillager_{index}_{arch}";
                 NormalizeToHeroHeight(go);
-                NpcGroundSeat.Seat(go, pos.y);
+                seatDelta = NpcGroundSeat.Seat(go, pos.y);
             }
 
             bool wired = Guard.Try("Townsfolk", $"wire villager {index} ({arch})", () =>
@@ -283,6 +284,10 @@ namespace DeNelle.Village
                 var agent = go.GetComponent<NavMeshAgent>();
                 if (agent == null) agent = go.AddComponent<NavMeshAgent>();
                 agent.enabled = true;
+                // Feet-on-ground while WALKING: once enabled the agent re-snaps Y to the (inflated)
+                // navmesh every frame, undoing the ground-seat. baseOffset carries the seat's vertical
+                // correction so the wanderer stays on the true floor through roam/flee/return.
+                agent.baseOffset = seatDelta;
 
                 var npc = go.GetComponent<AmbientNPC>();
                 if (npc == null) npc = go.AddComponent<AmbientNPC>();

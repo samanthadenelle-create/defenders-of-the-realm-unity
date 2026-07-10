@@ -625,7 +625,10 @@ namespace DeNelle.Village
             var agent = go.AddComponent<NavMeshAgent>();
             agent.height = 2.0f;
             agent.radius = 0.35f;
-            agent.baseOffset = 0f;
+            // Feet-on-ground (owner 2026-07-10): the companion walks, so seat it by renderer-bounds and
+            // carry the correction on baseOffset — it otherwise renders at the inflated navmesh Y (the
+            // same ~8cm float the townsfolk/vendors had). NpcGroundSeat returns the applied delta.
+            agent.baseOffset = NpcGroundSeat.Seat(go, go.transform.position.y);
 
             // HITBOX (WO: companion stakes) — a child capsule collider on the Default
             // layer so the enemy contact-attack lane (Enemy.ProbeForStructure does a

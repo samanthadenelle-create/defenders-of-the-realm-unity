@@ -41,6 +41,13 @@ namespace DeNelle.Village
         // Owner-tunable (felt-verify): raise if a legit step is being rejected.
         private const float AcceptedFloorBandAboveGround = 0.4f;
 
+        // Max depth a raycast floor-hit may sit BELOW the navmesh ground and still be accepted as the
+        // real floor. In the merged Main_Castle_Overworld the true courtyard floor voxelizes a few cm
+        // under the navmesh sample, so a hit just below navmesh IS the floor; a genuine deep basement
+        // (the old -0.55 foundation plane) is still below this band and correctly rejected.
+        // Owner 2026-07-10 (data-proven via [Flow:NpcSeat]): raise cautiously if a real floor floats.
+        private const float AcceptedFloorBandBelowGround = 0.25f;
+
         /// <summary>
         /// Drop <paramref name="go"/> so the bottom of its combined renderer bounds
         /// rests on the floor directly below it. Call AFTER any rescale so the bounds
@@ -48,19 +55,26 @@ namespace DeNelle.Village
         /// hover. <paramref name="fallbackGroundY"/> is used only when no floor collider
         /// is found below (typically the NavMesh-sampled Y or 0).
         /// </summary>
-        public static void Seat(GameObject go, float fallbackGroundY)
+        public static float Seat(GameObject go, float fallbackGroundY)
         {
-            if (go == null) return;
-            if (!TryGetWorldBounds(go, out Bounds b)) return;
+            if (go == null) return 0f;
+            if (!TryGetWorldBounds(go, out Bounds b)) return 0f;
 
             float groundY = ResolveGroundY(go.transform, b, fallbackGroundY, out bool hitFloor, out float rawHitY);
             float gap = b.min.y - groundY;          // >0 = feet float above floor; <0 = sunk in
             // vendor-sink triage (2026-06-23): one-shot trace of the seat decision (remove once stable).
             string state = gap < 0f ? "SUNK-below-floor" : "float-above";
             FlowTrace.Step("NpcSeat", $"'{go.name}': boundsMinY={b.min.y:F2} hitFloor={hitFloor} hitY={rawHitY:F2} fallbackY={fallbackGroundY:F2} -> groundY={groundY:F2} gap={gap:F2} ({state})");
+            float appliedDeltaY = 0f;
             if (Mathf.Abs(gap) > 0.01f)
+            {
                 go.transform.position -= new Vector3(0f, gap, 0f);
+                appliedDeltaY = -gap;   // the vertical correction that put feet on the floor
+            }
             FlowTrace.Step("NpcSeat", $"'{go.name}': seated final pos.y={go.transform.position.y:F2}");
+            // Return the correction so an agent-driven (walking) NPC can hold feet on the floor via
+            // NavMeshAgent.baseOffset — the agent otherwise re-snaps Y to the (inflated) navmesh each frame.
+            return appliedDeltaY;
         }
 
         /// <summary>Combined world-space renderer bounds of the body + its children.</summary>
@@ -112,8 +126,13 @@ namespace DeNelle.Village
             // ground: clamp it to [fallbackGroundY, fallbackGroundY + AcceptedFloorBandAboveGround].
             //  - hit BELOW ground (basement): clamp UP to fallbackGroundY (preserves the -0.55 fix).
             //  - hit far ABOVE ground (building platform): reject, use fallbackGroundY.
-            float ceiling = fallbackGroundY + AcceptedFloorBandAboveGround;
-            float chosen = Mathf.Clamp(best, fallbackGroundY, ceiling);
+            // Accept a floor hit slightly BELOW the navmesh Y as the real floor (merged
+            // Main_Castle_Overworld: true floor ~y0.00 sits under a navmesh sampled at ~0.08-0.44,
+            // so the old [fallbackGroundY, +band] clamp rejected the REAL floor and floated every
+            // NPC). A genuine deep basement (old -0.55 plane) is below this band and still rejected.
+            float floorBand = fallbackGroundY - AcceptedFloorBandBelowGround;
+            float ceiling   = fallbackGroundY + AcceptedFloorBandAboveGround;
+            float chosen    = Mathf.Clamp(best, floorBand, ceiling);
             if (Mathf.Abs(chosen - best) > 0.01f)
                 FlowTrace.Step("NpcSeat", $"'{self.name}': rejected raw hitY={best:F2} (outside floor band [{fallbackGroundY:F2}..{ceiling:F2}]) -> chosen groundY={chosen:F2} (fallbackY={fallbackGroundY:F2})");
             return chosen;
