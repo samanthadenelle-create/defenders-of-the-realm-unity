@@ -835,7 +835,7 @@ namespace DeNelle.Village
                         transform.rotation, target, _rotationSpeed * Time.deltaTime);
                 }
             }
-            else if (!seamConsumed && !engaged && !lockFacing && hasMoveInput && move.sqrMagnitude > 0.0004f)
+            else if (!seamConsumed && (!engaged || moveSpeedCap < OverworldRunSpeed) && !lockFacing && hasMoveInput && move.sqrMagnitude > 0.0004f)
             {
                 // Town move-start: slew toward input heading before velocity spools. Replaces the
                 // low-pivot turn-in-place clips (turnleft180 reads as crouch) that only belong in combat.
@@ -913,7 +913,12 @@ namespace DeNelle.Village
             // a seam slide (the crossing owns movement/facing).
             if (!_crossingSeam)
             {
-                if (engaged) DriveTurnSignal(move, hasMoveInput);
+                // Turn-in-place mocap clips belong ONLY with the RUN gait; below the run child (calmer
+                // combat @ CombatMoveSpeed=5 → walk-weight 0.25) they conflict with the walk gait — the
+                // "turn-left-before-walk / crouch" Grok fixed in 86847b7f (which relied on combat==run@6).
+                // Option 2 dropped combat to 5, reviving it; gate the clip to the run tier, else the smooth
+                // slew below handles rotation. Proven: Player.log turnleft90 @vel5 + walk(0.25)+run blend.
+                if (engaged && moveSpeedCap >= OverworldRunSpeed) DriveTurnSignal(move, hasMoveInput);
                 else _actor?.PlayTurn(TurnDirection.None);
             }
 
