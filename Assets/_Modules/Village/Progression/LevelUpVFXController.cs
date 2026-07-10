@@ -67,7 +67,10 @@ namespace DeNelle.Village
         /// </summary>
         public void PlayLevelUp(Vector3 worldPos, int level)
         {
-            VFXManager.Play(VFXType.Juice_LevelUp, worldPos + Vector3.up * 1.2f);
+            // Owner (2026-07-10): the level-up burst must sit at FOOT/ground level, not
+            // in the air. Callers now pass a foot point; add only a hair of ground
+            // clearance so a grounded ring/decal doesn't z-fight the floor.
+            VFXManager.Play(VFXType.Juice_LevelUp, worldPos + Vector3.up * 0.05f);
             HitStopManager.DoImpact(HitTier.Light);   // small punch — shake only, no freeze
             _flashAlpha = _flashPeak;
         }
