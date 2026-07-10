@@ -95,6 +95,7 @@ namespace DeNelle.HUD
             _vm.Closed += _vmClosedHandler;
             BuildUi();
             Repaint();
+            _openedAt = Time.unscaledTime;   // min-hold: the key/tap that OPENED this can't skip line 1
         }
 
         private void OnClosedFor(DialogueViewModel vm)
@@ -292,16 +293,11 @@ namespace DeNelle.HUD
             // close-band reservation keeps it clear of the shared Close), gold + italic so
             // it reads as guidance, raycast OFF so taps on it fall through to the catcher.
             // Repaint keeps driving its visibility through _tapHint (hidden while options show).
-            var hintLbl = ElarionUiKit.Label(footerZone, "Tap to continue ▸",
-                0.10f, 0.90f, new Color(1f, 0.82f, 0.29f), 26,
-                TMPro.TextAlignmentOptions.Center);
-            if (hintLbl != null)
-            {
-                hintLbl.fontStyle = TMPro.FontStyles.Italic;
-                hintLbl.raycastTarget = false;
-                ElarionUiKit.FitSingleLine(hintLbl);
-            }
-            _tapHint = hintLbl != null ? hintLbl.gameObject : null;
+            // OWNER F8 2026-07-10 ("remove the continue and press any key"): the visible
+            // "Tap to continue ▸" chip is removed. Advance is now ANY key (Update, keyboard-only)
+            // OR a tap on the panel (the existing TapAdvance/viewport Buttons). _tapHint stays null;
+            // its later uses are null-guarded (contRt at ~368, SetActive at ~430) so no dead control.
+            _tapHint = null;
 
             // Speaker portrait → the frame's MEDALLION socket (layout.medallion — FrameCore's
             // top-left circle socket; the factory's crest emblem is hidden above so the two
@@ -376,6 +372,26 @@ namespace DeNelle.HUD
                       " sizeDelta=" + closeRt.sizeDelta.ToString("F0") + " parent='" + closeRt.parent.name + "')"
                     : "") +
                 " | continue " + Frac(contRt));
+        }
+
+        // OWNER F8 2026-07-10: any KEY advances the dialogue (the "press any key" ask). Mouse/touch
+        // already advance via the panel's TapAdvance/viewport Buttons, so this is keyboard-only —
+        // a click firing BOTH the Button and this would skip two lines. Min-hold guards the opening
+        // input; keyboard-only via legacy Input (DeNelle.HUD does not reference the Input System).
+        private float _openedAt;
+        private const float AdvanceMinHold = 0.25f;
+
+        private void Update()
+        {
+            if (_vm == null || !_vm.IsOpen || _vm.ShowingOptions) return;
+            if (Time.unscaledTime - _openedAt < AdvanceMinHold) return;
+            if (UnityEngine.Input.anyKeyDown &&
+                !UnityEngine.Input.GetMouseButtonDown(0) &&
+                !UnityEngine.Input.GetMouseButtonDown(1) &&
+                !UnityEngine.Input.GetMouseButtonDown(2))
+            {
+                _vm.Advance();
+            }
         }
 
         private void OnBoxTapped()
