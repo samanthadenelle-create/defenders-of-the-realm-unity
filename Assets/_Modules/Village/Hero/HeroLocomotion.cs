@@ -71,11 +71,12 @@ namespace DeNelle.Village
         private const float TurnInPlaceSpeedMax = 2.0f; // only "turning in place" while below the walk band (matches the animator gate)
         private const float TurnMinDeg          = 45f;  // must need to pivot at least this much before a turn clip plays
         private const float TurnAroundDeg       = 135f; // beyond this, use the 180° about-face clip
-        // Town calm gait: cap travel + animator feed below the run band (idle@0 / walk@2 / run@6) so the
-        // hero stays on upright Shared walk clips instead of sword+shield run at 6 m/s. Combat keeps _moveSpeed.
-        // Owner 2026-07-06 "feels very slow": town cap raised x1.25 (3.5 -> 4.4). Still under the
-        // 6 m/s braced-run tier, so the calm upright gait holds; cadence scales with speed.
-        private const float TownMoveSpeedMax = 4.4f;
+        // Knight run (owner 2026-07-10, Option 2 "run in the open, calmer in combat"): the OPEN world
+        // moves at the full run tier (6 m/s -> the run blend child idle@0/walk@2/run@6), so traversal
+        // always reads as a RUN; COMBAT is a calmer, planted pace (the braced CombatLocomotion stance +
+        // a lower cap) so fighting feels deliberate. Was combat 6.0 / town 4.4 (walk-in-town). Tunable.
+        private const float OverworldRunSpeed = 6.0f;   // no-threat traversal — always a run
+        private const float CombatMoveSpeed   = 5.0f;   // in a wave/arena — calmer, planted
 
         // WO-512 slice 3: lock-face / strafe. While a soft lock-on is engaged (driven by
         // HeroTargetIndicator), the hero continuously slews its root yaw toward the LOCKED
@@ -732,10 +733,12 @@ namespace DeNelle.Village
             Vector3 move = cameraRotation * new Vector3(input.x, 0f, input.y);
             if (move.sqrMagnitude > 1f) move.Normalize();
 
-            // Combat vs town speed: waves/arena keep the snappy 6 m/s run; hub/town caps at a walk pace
-            // so KnightMocap stays in the upright calm gait (Shared walk) instead of braced run + slide.
+            // Option 2 (owner 2026-07-10): the OPEN world runs at the full run tier; COMBAT is calmer/
+            // planted. Flipped from the old combat-6/town-4.4 so traversal always runs and fighting reads
+            // deliberate (braced stance + lower cap). Overworld hits the run blend child; combat sits just
+            // under it.
             bool engaged = IsWaveInCombat();
-            float moveSpeedCap = engaged ? _moveSpeed : TownMoveSpeedMax;
+            float moveSpeedCap = engaged ? CombatMoveSpeed : OverworldRunSpeed;
 
             // Smooth velocity toward target — instant max-speed felt rigid.
             // Higher accel when grabbing speed, higher decel when releasing,
