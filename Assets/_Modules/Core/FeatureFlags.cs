@@ -499,6 +499,13 @@ namespace DeNelle.Core
         /// restored. Default OFF — reversible: PlayerPrefs "ff.petcombat" = 1.</summary>
         public static bool PetCombat => Get("petcombat", defaultOn: false);
 
+        /// <summary>Owner directive 2026-07-10: the ENTIRE Barracks feature is hidden for V1 —
+        /// structure (building/mesh), the drillmaster NPC, and all barracks dialogue/training.
+        /// When OFF (default): the baked CastleBarracks is hidden at runtime, BarracksNpcInjector
+        /// no-ops, and the barracks dialogue/training entry points are unreachable. Disable-not-
+        /// delete; flip ON for V2 via PlayerPrefs "ff.barracks" = 1.</summary>
+        public static bool Barracks => Get("barracks", defaultOn: false);
+
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
         {

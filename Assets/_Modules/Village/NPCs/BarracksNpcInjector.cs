@@ -93,6 +93,9 @@ namespace DeNelle.Village
         {
             using var _ = FlowTrace.Enter("Village", "BarracksNpcInjector.Inject");
 
+            // Owner 2026-07-10: the whole Barracks feature is hidden for V1 — no drillmaster NPC.
+            if (!DeNelle.Core.FeatureFlags.Barracks) return;
+
             // Idempotent: nuke any prior runtime holder so a re-load doesn't double-spawn.
             var prior = GameObject.Find(HolderName);
             if (prior != null) Destroy(prior);

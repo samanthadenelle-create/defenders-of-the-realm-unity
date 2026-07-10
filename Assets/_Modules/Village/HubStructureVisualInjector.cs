@@ -203,6 +203,14 @@ namespace DeNelle.Village
         {
             Transform target = FindByName(s.bakedName);
             if (target == null) return;                              // not in this scene
+            // Owner 2026-07-10: the whole Barracks is hidden for V1 (ff.barracks OFF) — deactivate the
+            // baked structure entirely (not just re-skin renderers) so the building, its tap-dialogue,
+            // and the drillmaster anchor all disappear; the NPC injector then finds nothing and no-ops.
+            if (s.bakedName == "CastleBarracks" && !DeNelle.Core.FeatureFlags.Barracks)
+            {
+                target.gameObject.SetActive(false);
+                return;
+            }
             string marker = MarkerPrefix + s.bakedName;
             if (target.Find(marker) != null) return;                // already swapped (idempotent)
 
