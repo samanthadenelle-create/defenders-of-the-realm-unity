@@ -765,8 +765,15 @@ namespace DeNelle.Village
                 packRoot.transform.SetParent(transform);
                 packRoot.transform.position = anchor;
 
-                int n = Mathf.Clamp(familyIds.Length, PackSizeMin, PackSizeMax);
-                int packSize = n;
+                int packSize = Mathf.Clamp(familyIds.Length, PackSizeMin, PackSizeMax);
+                // Owner 2026-07-10: only the family REP/leader roams the overworld (perf — bounded
+                // roaming agents). The FULL family (leader + followers) still spawns in the
+                // BattleArena on engage from the recipe carried by RepEngageWatcher.Init(familyIds)
+                // below — the overworld followers were pure redundant cost (the arena rebuilds the
+                // family and destroys the overworld bodies). packSize stays the full rolled size so
+                // the leader's reward scaling (BuildOverworldHookDef 'bodies') still pays for the
+                // whole family. Flag-gated to felt-revert to full-family roam.
+                int n = DeNelle.Core.FeatureFlags.OverworldLeaderOnlyRoam ? 1 : packSize;
                 FamilyLeader leader = null;
 
                 for (int i = 0; i < n; i++)

@@ -84,6 +84,13 @@ namespace DeNelle.Core
         /// walk-to outpost). Default ON. PlayerPrefs "ff.raidwalk".</summary>
         public static bool RaidContinuousWalk => Get("raidwalk", defaultOn: true);
 
+        /// <summary>When ON (default), only the family REP/leader roams the overworld; the full
+        /// family (leader + followers) spawns in the BattleArena on engage from the recipe carried
+        /// by RepEngageWatcher.Init. Owner 2026-07-10: perf — bounded roaming agents (the overworld
+        /// followers were redundant; the arena rebuilds the family regardless). OFF = legacy
+        /// full-family roam. PlayerPrefs "ff.overworldleaderonlyroam".</summary>
+        public static bool OverworldLeaderOnlyRoam => Get("overworldleaderonlyroam", defaultOn: true);
+
         /// <summary>When OFF, the "Travel to &lt;outpost&gt;" confirm-to-cross prompt on garrison /
         /// raid-outpost seams (<see cref="DeNelle.Village.World.SceneTransitionTrigger"/> whose target is a
         /// <c>Garrison_*</c> / <c>Outpost_*</c> / <c>RaidBase_*</c> scene) is SUPPRESSED — the player can NOT
