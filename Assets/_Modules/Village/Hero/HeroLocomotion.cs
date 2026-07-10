@@ -603,24 +603,39 @@ namespace DeNelle.Village
                 _waveManager.OnWaveCleared.AddListener(OnWaveCleared);
         }
 
-        // True only while a wave is genuinely live (Countdown or Active). Matches the
-        // canonical combat signal used by HeroPoseController / CameraModeController /
-        // BattleMusicManager — an idle WaveManager sitting in the hub is NOT combat, so
-        // the hero keeps a relaxed idle in town and only draws ready when a wave runs.
+        // Countdown seconds at which a wave reads "imminent" (battle-worthy), mirroring the HUD
+        // posture authority HudContextEvaluator.ImminentThreshold (owner 2026-07-08). That const is
+        // `private` inside a HUD-facing type this Village-scoped file must not couple to, so the value
+        // is duplicated with THIS pointer. Keep the two in lockstep; promote to a shared Core const if
+        // they ever diverge. (Ticket 2026-07-09: hero must be at friendly idle in town.)
+        private const float CombatImminentThreshold = 5f;
+
+        // Tracks the last stance we drove so we log ONE [Flow:HeroLoco] Step on each flip, not every frame.
+        private bool _lastCombatStance;
+        private bool _hasLastCombatStance;
+
+        // True only while a wave is genuinely live (Active phase, or a Countdown in its final imminent
+        // window) or an actual battle is locked. This MIRRORS the HUD posture authority
+        // (HudContextEvaluator.IsWaveActive): a long between-wave Countdown reads as Town, so the hero
+        // keeps the relaxed idle instead of the braced combat idle. An idle WaveManager sitting in the
+        // hub is NOT combat.
         private bool IsWaveInCombat()
         {
-            // KnightMocap V1 (owner 2026-07-04): the braced combat idle + combat-aware action returns
-            // must engage in the ANIMATED OVERWORLD BATTLE, not only during a village wave. An arena
-            // fight may not be driven by a WaveManager, so raise the combat stance whenever a
-            // BattleArena battle is in progress too (same signal footsteps already use, line ~585).
-            // Either signal → InCombat=true → CombatLocomotion (braced idle) instead of the calm idle.
-            if (DeNelle.Village.Arena.BattleArena.AnyBattleInProgress) return true;
-            // In-place dungeon/outpost fights (HeroCombatEngagement) register on BattleLock
-            // without staging BattleArena — same braced stance as arena/wave combat.
+            // In-place dungeon/outpost fights (HeroCombatEngagement) AND arena battles register on
+            // BattleLock — BattleArena.Awake registers a probe () => BattleInProgress, so
+            // BattleLock.IsInBattle() is already true during any real arena battle. We deliberately do
+            // NOT short-circuit on BattleArena.AnyBattleInProgress directly: it was redundant with the
+            // probe AND a stale/hub battle flag could hold the braced idle while the HUD reads Town
+            // (ticket 2026-07-09). BattleLock stays the single genuine-battle signal.
             if (DeNelle.Core.Combat.BattleLock.IsInBattle()) return true;
             if (_waveManager == null) return false;
             var phase = _waveManager.Phase;
-            return phase == WavePhase.Countdown || phase == WavePhase.Active;
+            if (phase == WavePhase.Active) return true;
+            // A Countdown only counts as combat in its final imminent window — EXACTLY the HUD rule —
+            // so a long between-wave gap in the hub leaves the hero in the calm idle (matches Town).
+            if (phase == WavePhase.Countdown)
+                return _waveManager.CountdownRemaining <= CombatImminentThreshold;
+            return false;
         }
 
         // #51 footstep loop: a dedicated 2D AudioSource that loops the walk clip while the hero
@@ -905,6 +920,21 @@ namespace DeNelle.Village
             // NOT raise the ready pose, or the hero stands weapon-ready in town. Movement is
             // intentionally NOT a combat trigger here: walking around town is relaxed, not
             // battle-ready. speed=0/moving + !combat = casual idle/walk; in-wave = ready.
+            // [Flow:HeroLoco] one Step per stance flip, naming the decision inputs, so a headless/felt
+            // run proves Town->calm (engaged=false with a long countdown + no battle) without breaking
+            // brace-in-battle (engaged=true on Active / imminent countdown / BattleLock).
+            if (!_hasLastCombatStance || _lastCombatStance != engaged)
+            {
+                _hasLastCombatStance = true;
+                _lastCombatStance = engaged;
+                if (DeNelle.Core.Diagnostics.FlowTrace.Enabled)
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("HeroLoco",
+                        $"stance -> {(engaged ? "COMBAT(braced)" : "CALM(town idle)")} " +
+                        $"[battleLock={DeNelle.Core.Combat.BattleLock.IsInBattle()} " +
+                        $"wavePhase={(_waveManager != null ? _waveManager.Phase.ToString() : "<none>")} " +
+                        $"countdownRemaining={(_waveManager != null ? _waveManager.CountdownRemaining.ToString("0.0") : "n/a")} " +
+                        $"imminentThreshold={CombatImminentThreshold:0.0}]");
+            }
             _actor?.SetCombatStance(engaged);
 
             // Edge/floor clamp + ground-snap ONLY when off the NavMesh (the transform
