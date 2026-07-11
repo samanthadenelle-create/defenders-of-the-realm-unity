@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical wave-spawn schedule for the Elarion village defense loop (Defenders of the Realm v2 Unity port). Each wave is preceded by a calm Prepare Phase countdown; when the countdown hits zero the WaveManager spawns the wave's enemy batches at the named WaveSpawnPoints. Wave 1 is the v2-foundation acceptance wave: 8 Hollow Walkers entering from the NORTH gate (port spec Week 4 'Wave 1 = 8 Hollow Walkers from the north gate'). The countdown timings are sourced VERBATIM from the React v1 stream (src/modules/village/waves/waveConfig.ts — PREPARE_SECONDS=45 for the first wave, LATER_PREPARE_SECONDS=300 after). Per-wave enemy counts follow React src/data/battleScaling.ts waveScaling().enemyCount (wave 1 = 8, then 8 + steps*2 capped at 12). Waves 2-3 are AUTHORED here as a defensible continuation so the WaveManager has a multi-wave schedule to drive — the React stream only parameterises waves procedurally, it has no literal wave-2/3 table; flagged in docs/port-notes/week4-waves.md.",
+  "_comment": "Canonical wave-spawn schedule for the Elarion village defense loop (Defenders of the Realm v2 Unity port). Each wave is preceded by a calm Prepare Phase countdown; when the countdown hits zero the WaveManager spawns the wave's enemy batches at the named WaveSpawnPoints. Wave 1 is the v2-foundation acceptance wave: 8 Hollow Walkers entering from the NORTH gate (port spec Week 4 'Wave 1 = 8 Hollow Walkers from the north gate'). The countdown timings are sourced VERBATIM from the React v1 stream (src/modules/village/waves/waveConfig.ts — PREPARE_SECONDS=45 for the first wave, LATER_PREPARE_SECONDS=300 after). Per-wave enemy counts follow React src/data/battleScaling.ts waveScaling().enemyCount (wave 1 = 8, then 8 + steps*2 capped at 12). Waves 2-19 are AUTHORED here as a 20-WAVE SCHEDULE (owner F8-44 2026-07-11): families rotate (hollow / orc / troll) with counts escalating modestly (stat scaling is WaveScalingCurve's job), the Necromancer boss cadence lands every 6 waves (6/12/18), and the APEX dragon wave 'The Last Wing' is the terminal WAVE 20 — beating it requires a heavily-upgraded base. Flagged in docs/port-notes/week4-waves.md.",
   "_sources": {
     "reactWaveConfig": "defenders-of-the-realm/src/modules/village/waves/waveConfig.ts (PREPARE_SECONDS=45, LATER_PREPARE_SECONDS=300, prepSecondsForWave)",
     "reactScaling": "defenders-of-the-realm/src/data/battleScaling.ts (waveScaling().enemyCount: wave1=8, then min(8+steps*2,12))",
@@ -13,7 +13,7 @@
     "type": "Keys into enemies.json 'id'. Wave 1 uses 'hollow-walker' exclusively.",
     "delay": "Seconds after countdown-zero before the batch starts releasing enemies. 0 = release immediately on wave start.",
     "interval": "Seconds between successive enemy spawns within the batch. Staggers a march rather than dumping the batch in one frame.",
-    "boss": "Optional. When present, names a boss enemy (enemies.json id) released alongside the wave. Boss waves recur every 6 waves (React BOSS_EVERY) — none of waves 1-3 are boss waves.",
+    "boss": "Optional. When present, names a boss enemy (enemies.json id) released alongside the wave. Boss waves recur every 6 waves (React BOSS_EVERY) — in the 20-wave schedule the Necromancer of the Wound walks with waves 6, 12, and 18.",
     "apexBoss": "Optional object — declares the APEX flying boss for the wave (the Black Dragon, 'Syndrath the Devourer'). DISTINCT from 'boss' above: 'boss' names a ground NavMesh enemy from enemies.json, whereas apexBoss is the kinematic-flight DragonBoss prefab (Boss_Dragon.prefab) — it is NOT in enemies.json and does not path a NavMesh. Fields: { id (stable per-instance boss id), hp (max HP override; <=0 keeps the prefab's 4200 default), nameKey (canon-strings.json key for the display name) }. The apex wave sits ABOVE the canon Necromancer cadence — see docs/port-notes/dragon-boss.md §2 + dragon-wave-wiring.md."
   },
   "version": 1,
@@ -59,7 +59,7 @@
       ]
     },
     {
-      "_comment": "WAVE 3 = BRUTE BAND (enemy-variety 2026-06-13). Cave Trolls + an Ogre (the 'troll' brute family — big slow silhouettes) with a pair of orc-berserkers for front-line pressure. The heavy payoff wave before the apex dragon.",
+      "_comment": "WAVE 3 = BRUTE BAND (enemy-variety 2026-06-13). Cave Trolls + an Ogre (the 'troll' brute family — big slow silhouettes) with a pair of orc-berserkers for front-line pressure. The heavy payoff wave of the opening act (the apex dragon now closes the schedule at wave 20, F8-44).",
       "waveId": 3,
       "name": "The Deep Ones",
       "countdownSeconds": 300,
@@ -70,8 +70,173 @@
       ]
     },
     {
-      "_comment": "APEX WAVE — the Black Dragon, 'Syndrath the Devourer'. The terminal wave of the schedule and the realm's register breaking under the Withering (dragon-boss.md §2): a rare set-piece sky-boss ABOVE the canon Necromancer of the Wound. No ground enemy batches — the dragon IS the wave; it circles the Heart on its own kinematic flight and dives to strike. 'enemies' is left empty intentionally; WaveManager spawns the Boss_Dragon prefab from the 'apexBoss' block and calls DragonBoss.Configure(id, Heart, hp). hp 4200 mirrors the DragonBoss inspector default (well above the Necromancer's 1700). countdownSeconds 300 = the React LATER_PREPARE_SECONDS build window.",
+      "_comment": "WAVES 4-19 (F8-44, owner 2026-07-11): the escalating mid-schedule. Families rotate orc → troll → hollow so factions alternate; spawn gates rotate spawn-1 → spawn-2 → spawn-3 → spawn-0 so the siege shifts around the compass; counts grow gradually (~wave-3 weight at 4, ~2.5-3x by 19 — WaveScalingCurve handles stat escalation by wave number). Necromancer of the Wound boss cadence at 6/12/18.",
       "waveId": 4,
+      "name": "The Green Tide",
+      "countdownSeconds": 300,
+      "enemies": [
+        { "type": "orc-berserker", "count": 3, "spawnPoint": "spawn-1", "delay": 0,   "interval": 1.2 },
+        { "type": "orc-shaman",    "count": 2, "spawnPoint": "spawn-1", "delay": 0.8, "interval": 1.2 }
+      ]
+    },
+    {
+      "waveId": 5,
+      "name": "Stonebreakers",
+      "countdownSeconds": 300,
+      "enemies": [
+        { "type": "troll", "count": 2, "spawnPoint": "spawn-2", "delay": 0,   "interval": 1.6 },
+        { "type": "ogre",  "count": 2, "spawnPoint": "spawn-2", "delay": 1.2, "interval": 1.6 }
+      ]
+    },
+    {
+      "_comment": "BOSS WAVE (cadence 6): the Necromancer of the Wound walks with the Hollowed.",
+      "waveId": 6,
+      "name": "The Wound Speaks",
+      "countdownSeconds": 300,
+      "boss": "necromancer",
+      "enemies": [
+        { "type": "hollow-walker",  "count": 3, "spawnPoint": "spawn-3", "delay": 0,   "interval": 1.4 },
+        { "type": "hollow-warrior", "count": 2, "spawnPoint": "spawn-3", "delay": 0.6, "interval": 1.4 },
+        { "type": "hollow-acolyte", "count": 1, "spawnPoint": "spawn-3", "delay": 1.2, "interval": 1.4 }
+      ]
+    },
+    {
+      "waveId": 7,
+      "name": "The Deathspeaker's Levy",
+      "countdownSeconds": 300,
+      "enemies": [
+        { "type": "orc-berserker",  "count": 4, "spawnPoint": "spawn-0", "delay": 0,   "interval": 1.2 },
+        { "type": "orc-shaman",     "count": 2, "spawnPoint": "spawn-0", "delay": 0.8, "interval": 1.2 },
+        { "type": "orc-necromancer","count": 1, "spawnPoint": "spawn-0", "delay": 1.6, "interval": 1.2 }
+      ]
+    },
+    {
+      "waveId": 8,
+      "name": "The Warrens Empty",
+      "countdownSeconds": 300,
+      "enemies": [
+        { "type": "troll", "count": 3, "spawnPoint": "spawn-1", "delay": 0,   "interval": 1.6 },
+        { "type": "ogre",  "count": 2, "spawnPoint": "spawn-1", "delay": 1.2, "interval": 1.6 }
+      ]
+    },
+    {
+      "waveId": 9,
+      "name": "March of the Forgotten",
+      "countdownSeconds": 300,
+      "enemies": [
+        { "type": "hollow-walker",  "count": 4, "spawnPoint": "spawn-2", "delay": 0,   "interval": 1.4 },
+        { "type": "hollow-warrior", "count": 2, "spawnPoint": "spawn-2", "delay": 0.6, "interval": 1.4 },
+        { "type": "hollow-rogue",   "count": 2, "spawnPoint": "spawn-2", "delay": 1.0, "interval": 1.0 },
+        { "type": "hollow-acolyte", "count": 1, "spawnPoint": "spawn-2", "delay": 1.4, "interval": 1.4 }
+      ]
+    },
+    {
+      "waveId": 10,
+      "name": "Warband Ascendant",
+      "countdownSeconds": 300,
+      "enemies": [
+        { "type": "orc-berserker",  "count": 5, "spawnPoint": "spawn-3", "delay": 0,   "interval": 1.2 },
+        { "type": "orc-shaman",     "count": 2, "spawnPoint": "spawn-3", "delay": 0.8, "interval": 1.2 },
+        { "type": "orc-necromancer","count": 1, "spawnPoint": "spawn-3", "delay": 1.6, "interval": 1.2 }
+      ]
+    },
+    {
+      "waveId": 11,
+      "name": "Oak and Stone",
+      "countdownSeconds": 300,
+      "enemies": [
+        { "type": "troll", "count": 3, "spawnPoint": "spawn-0", "delay": 0,   "interval": 1.6 },
+        { "type": "ogre",  "count": 3, "spawnPoint": "spawn-0", "delay": 1.2, "interval": 1.6 }
+      ]
+    },
+    {
+      "_comment": "BOSS WAVE (cadence 12): the Necromancer returns at the head of a full Hollow column.",
+      "waveId": 12,
+      "name": "The Second Dirge",
+      "countdownSeconds": 300,
+      "boss": "necromancer",
+      "enemies": [
+        { "type": "hollow-walker",  "count": 4, "spawnPoint": "spawn-1", "delay": 0,   "interval": 1.4 },
+        { "type": "hollow-warrior", "count": 3, "spawnPoint": "spawn-1", "delay": 0.6, "interval": 1.4 },
+        { "type": "hollow-rogue",   "count": 2, "spawnPoint": "spawn-1", "delay": 1.0, "interval": 1.0 },
+        { "type": "hollow-acolyte", "count": 2, "spawnPoint": "spawn-1", "delay": 1.4, "interval": 1.4 }
+      ]
+    },
+    {
+      "waveId": 13,
+      "name": "The Red Banner",
+      "countdownSeconds": 300,
+      "enemies": [
+        { "type": "orc-berserker",  "count": 6, "spawnPoint": "spawn-2", "delay": 0,   "interval": 1.2 },
+        { "type": "orc-shaman",     "count": 2, "spawnPoint": "spawn-2", "delay": 0.8, "interval": 1.2 },
+        { "type": "orc-necromancer","count": 1, "spawnPoint": "spawn-2", "delay": 1.6, "interval": 1.2 }
+      ]
+    },
+    {
+      "waveId": 14,
+      "name": "Giants at the Gate",
+      "countdownSeconds": 300,
+      "enemies": [
+        { "type": "troll", "count": 4, "spawnPoint": "spawn-3", "delay": 0,   "interval": 1.6 },
+        { "type": "ogre",  "count": 3, "spawnPoint": "spawn-3", "delay": 1.2, "interval": 1.6 }
+      ]
+    },
+    {
+      "waveId": 15,
+      "name": "The Hollowed Hundred",
+      "countdownSeconds": 300,
+      "enemies": [
+        { "type": "hollow-walker",  "count": 5, "spawnPoint": "spawn-0", "delay": 0,   "interval": 1.4 },
+        { "type": "hollow-warrior", "count": 3, "spawnPoint": "spawn-0", "delay": 0.6, "interval": 1.4 },
+        { "type": "hollow-rogue",   "count": 2, "spawnPoint": "spawn-0", "delay": 1.0, "interval": 1.0 },
+        { "type": "hollow-acolyte", "count": 2, "spawnPoint": "spawn-0", "delay": 1.4, "interval": 1.4 }
+      ]
+    },
+    {
+      "waveId": 16,
+      "name": "The Last Levy",
+      "countdownSeconds": 300,
+      "enemies": [
+        { "type": "orc-berserker",  "count": 6, "spawnPoint": "spawn-1", "delay": 0,   "interval": 1.2 },
+        { "type": "orc-shaman",     "count": 3, "spawnPoint": "spawn-1", "delay": 0.8, "interval": 1.2 },
+        { "type": "orc-necromancer","count": 2, "spawnPoint": "spawn-1", "delay": 1.6, "interval": 1.2 }
+      ]
+    },
+    {
+      "waveId": 17,
+      "name": "The Mountain Moves",
+      "countdownSeconds": 300,
+      "enemies": [
+        { "type": "troll", "count": 4, "spawnPoint": "spawn-2", "delay": 0,   "interval": 1.6 },
+        { "type": "ogre",  "count": 4, "spawnPoint": "spawn-2", "delay": 1.2, "interval": 1.6 }
+      ]
+    },
+    {
+      "_comment": "BOSS WAVE (cadence 18): the Necromancer's final walk — the heaviest Hollow column before the sky itself turns.",
+      "waveId": 18,
+      "name": "The Third Dirge",
+      "countdownSeconds": 300,
+      "boss": "necromancer",
+      "enemies": [
+        { "type": "hollow-walker",  "count": 5, "spawnPoint": "spawn-3", "delay": 0,   "interval": 1.4 },
+        { "type": "hollow-warrior", "count": 4, "spawnPoint": "spawn-3", "delay": 0.6, "interval": 1.4 },
+        { "type": "hollow-rogue",   "count": 3, "spawnPoint": "spawn-3", "delay": 1.0, "interval": 1.0 },
+        { "type": "hollow-acolyte", "count": 2, "spawnPoint": "spawn-3", "delay": 1.4, "interval": 1.4 }
+      ]
+    },
+    {
+      "waveId": 19,
+      "name": "Eve of the Wing",
+      "countdownSeconds": 300,
+      "enemies": [
+        { "type": "orc-berserker",  "count": 7, "spawnPoint": "spawn-0", "delay": 0,   "interval": 1.2 },
+        { "type": "orc-shaman",     "count": 3, "spawnPoint": "spawn-0", "delay": 0.8, "interval": 1.2 },
+        { "type": "orc-necromancer","count": 2, "spawnPoint": "spawn-0", "delay": 1.6, "interval": 1.2 }
+      ]
+    },
+    {
+      "_comment": "APEX WAVE — the Black Dragon, 'Syndrath the Devourer'. The terminal wave of the schedule and the realm's register breaking under the Withering (dragon-boss.md §2): a rare set-piece sky-boss ABOVE the canon Necromancer of the Wound. No ground enemy batches — the dragon IS the wave; it circles the Heart on its own kinematic flight and dives to strike. 'enemies' is left empty intentionally; WaveManager spawns the Boss_Dragon prefab from the 'apexBoss' block and calls DragonBoss.Configure(id, Heart, hp). hp 4200 mirrors the DragonBoss inspector default (well above the Necromancer's 1700). countdownSeconds 300 = the React LATER_PREPARE_SECONDS build window.",
+      "waveId": 20,
       "name": "The Last Wing",
       "countdownSeconds": 300,
       "enemies": [],
