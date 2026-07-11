@@ -131,27 +131,14 @@ namespace DeNelle.Village
         [Tooltip("Pitch variation range for the whoosh sample.")]
         [SerializeField] private Vector2 _whooshPitchRange = new Vector2(0.9f, 1.1f);
 
-        [Header("Weapon Trail (WO-219)")]
-        [Tooltip("Optional explicit weapon/hand transform the swing trail follows. " +
-                 "When null, the controller auto-resolves a right-hand bone, then falls " +
-                 "back to a child placed at the hero's attack origin.")]
-        [SerializeField] private Transform _trailOrigin;
-
-        [Tooltip("TrailRenderer 'time' (seconds the trail segment persists). Keep short for a crisp swing arc.")]
-        [SerializeField, Range(0.02f, 0.4f)] private float _trailTime = 0.14f;
-
-        [Tooltip("Trail width at the swing-start end (tapers to 0 at the tail).")]
-        [SerializeField, Range(0.02f, 0.6f)] private float _trailStartWidth = 0.18f;
-
-        [Tooltip("Extra seconds the trail stays enabled after the active hit window before fading out.")]
-        [SerializeField, Range(0f, 0.3f)] private float _trailLinger = 0.06f;
-
-        [Tooltip("Trail colour (a cool steel arc by default).")]
-        [SerializeField] private Color _trailColor = new Color(0.75f, 0.85f, 1.0f, 0.85f);
+        // WO-VFX-WEAPON-TRAILS: the swing-trail VFX (WO-219 / WO-504 s3) MOVED OUT of this
+        // controller into the reusable DeNelle.Village.WeaponTrailController, which flashes the
+        // rarity-tinted blade trail off ActorAnimator.AttackStarted — so hero swings, casts, and
+        // ENEMY swings (shared rig) all get a trail with no per-ability wiring. This controller
+        // only ENSURES the component is present (Awake) and forwards the headless test seam.
 
         // ── Runtime ───────────────────────────────────────────────────────────
 
-        private Animator     _animator;
         private AudioSource  _audioSource;
         private float        _nextAttackTime;
         private float        _swingStartTime;
@@ -162,9 +149,9 @@ namespace DeNelle.Village
         // transition so the FlowTrace fires ONCE per transition (not every frame in town).
         private bool         _combatInputSuppressed;
 
-        // WO-219: code-built swing trail. Enabled at swing start, disabled after the
-        // active window (+ a short linger). Lazily built on the resolved trail origin.
-        private TrailRenderer _swingTrail;
+        // WO-VFX-WEAPON-TRAILS: the shared blade-trail component (ensured in Awake). Cached only to
+        // forward the headless ArenaCombatOracle test seam (ApplyWeaponTrailVfxForTest) onto it.
+        private WeaponTrailController _trailController;
 
         // WO-284/285: animation now routes through the canonical ActorAnimator driver
         // (no local StringToHash). PlayAttack cycles a combo for melee classes; casters
@@ -194,7 +181,6 @@ namespace DeNelle.Village
 
         private void Awake()
         {
-            _animator    = GetComponentInChildren<Animator>();
             if (!TryGetComponent(out _actor)) _actor = gameObject.AddComponent<ActorAnimator>();
             _abilities   = GetComponent<HeroAbilities>();
             _loco            = GetComponent<HeroLocomotion>();          // WO-423: sole rotation writer
@@ -217,23 +203,14 @@ namespace DeNelle.Village
             // 0 and HasLoS's degrade rule (value == 0 → clear) keeps the swing able to hit.
             if (_losMask.value == 0) _losMask = LayerMask.GetMask("Structure");
 
-            // WO-504 slice 3: re-tint the swing trail the instant the equipped weapon changes
-            // (rarity-driven color/width), so a swap is FELT without waiting for the next swing.
-            // Null-safe lazy resolve; unsubscribed in OnDestroy.
             if (_gear == null) _gear = GetComponent<GearLoadout>();
-            if (_gear != null) _gear.OnGearChanged += OnGearChangedReTrail;
-        }
 
-        private void OnDestroy()
-        {
-            if (_gear != null) _gear.OnGearChanged -= OnGearChangedReTrail;
-        }
-
-        /// <summary>WO-504 slice 3: weapon swapped -> re-resolve the swing-trail VFX. No-op until
-        /// the trail is built (the next EnsureSwingTrail applies the current weapon's look anyway).</summary>
-        private void OnGearChangedReTrail()
-        {
-            if (_swingTrail != null) ApplyWeaponTrailVfx();
+            // WO-VFX-WEAPON-TRAILS: ensure the shared blade-trail component is present on this rig,
+            // so the hero always gets a swing/cast trail (it self-drives off ActorAnimator.
+            // AttackStarted). DisallowMultipleComponent makes a double-add a no-op; the trail's own
+            // ApplyWeaponTrailVfx re-tints per swing, so no OnGearChanged subscription is needed here.
+            _trailController = GetComponent<WeaponTrailController>()
+                            ?? gameObject.AddComponent<WeaponTrailController>();
         }
 
         private void Update()
@@ -450,13 +427,9 @@ namespace DeNelle.Village
 
             PlayWhoosh();
 
-            // WO-219: light up the swing trail for the duration of the swing arc.
-            EnsureSwingTrail();
-            if (_swingTrail != null)
-            {
-                _swingTrail.Clear();          // drop any stale segment from the last swing
-                _swingTrail.emitting = true;
-            }
+            // WO-VFX-WEAPON-TRAILS: the blade trail now lights up via WeaponTrailController's
+            // subscription to _actor.AttackStarted (fired inside PlayAttack/PlayCast above) — no
+            // explicit call here.
 
             StartCoroutine(ResolveAttack());
         }
@@ -643,129 +616,24 @@ namespace DeNelle.Village
 
             _isInSwing = false;
 
-            // WO-219: stop EMITTING new trail segments once the active window + a short
-            // linger has passed, so the swing arc tapers off instead of snapping. The
-            // existing tail keeps rendering until _trailTime elapses; the next swing
-            // Clears it. This runs after _isInSwing is cleared so it never gates input.
-            StartCoroutine(StopTrailAfterLinger());
-        }
-
-        /// <summary>WO-219: ends trail emission after the active window's linger.</summary>
-        private IEnumerator StopTrailAfterLinger()
-        {
-            float activeWindow = Mathf.Max(0f, _perfectHitWindowEnd - _perfectHitWindowStart);
-            yield return new WaitForSeconds(activeWindow + _trailLinger);
-            if (_swingTrail != null) _swingTrail.emitting = false;
-        }
-
-        /// <summary>
-        /// WO-219: lazily builds the code-built swing TrailRenderer on the resolved
-        /// origin transform. Origin priority: explicit <see cref="_trailOrigin"/> →
-        /// a right-hand humanoid bone → a child placed at the hero's attack origin.
-        /// Cheap (short time, 2-point gradient, additive-ish unlit) and asset-free.
-        /// </summary>
-        private void EnsureSwingTrail()
-        {
-            if (_swingTrail != null) return;
-
-            Transform origin = _trailOrigin;
-            if (origin == null && _animator != null && _animator.isHuman)
-                origin = _animator.GetBoneTransform(HumanBodyBones.RightHand);
-            if (origin == null)
-            {
-                // Fallback: a child at the hero's attack origin (forward + waist height),
-                // so the trail still draws even on a non-humanoid / unrigged test body.
-                var holder = new GameObject("SwingTrailOrigin");
-                holder.transform.SetParent(transform, false);
-                holder.transform.localPosition = new Vector3(0.4f, 1.1f, 0.5f);
-                origin = holder.transform;
-            }
-
-            var go = new GameObject("SwingTrail");
-            go.transform.SetParent(origin, false);
-            go.transform.localPosition = Vector3.zero;
-
-            _swingTrail = go.AddComponent<TrailRenderer>();
-            _swingTrail.time = _trailTime;
-            _swingTrail.startWidth = _trailStartWidth;
-            _swingTrail.endWidth = 0f;
-            _swingTrail.numCornerVertices = 2;
-            _swingTrail.numCapVertices = 2;
-            _swingTrail.minVertexDistance = 0.02f;
-            _swingTrail.autodestruct = false;
-            _swingTrail.emitting = false;
-            _swingTrail.alignment = LineAlignment.View;
-
-            // URP-safe unlit material so the trail isn't magenta in a URP build
-            // (same missing-shader guard the ability VFX uses). Only swap when a
-            // known shader resolves in THIS build.
-            Shader sh = Shader.Find("Universal Render Pipeline/Particles/Unlit")
-                     ?? Shader.Find("Sprites/Default");
-            if (sh != null) _swingTrail.material = new Material(sh);
-
-            // WO-504 slice 3: color + width are driven by the EQUIPPED WEAPON's rarity
-            // (and a makersMark theme tint) so a legendary blade reads legendary even on
-            // the shared mesh. Applied here on build and re-applied on every OnGearChanged.
-            ApplyWeaponTrailVfx();
-        }
-
-        /// <summary>
-        /// WO-504 slice 3: drive the swing trail's color + width from the equipped weapon's
-        /// rarity via the pure <see cref="WeaponVfxMap"/> resolver (null-safe — no loadout /
-        /// no weapon -> the steel common default, identical to the legacy hard-coded look).
-        /// Re-applied on OnGearChanged so swapping a blade re-tints the arc immediately.
-        /// </summary>
-        private void ApplyWeaponTrailVfx()
-        {
-            if (_swingTrail == null) return;
-
-            if (_gear == null) _gear = GetComponent<GearLoadout>();
-            WeaponDef w = _gear != null ? _gear.EquippedWeapon : null;
-            WeaponVfxProfile vfx = WeaponVfxMap.Resolve(w);
-
-            _trailColor = vfx.TrailColor;
-            _trailStartWidth = vfx.TrailWidth;
-
-            // WO-504 s3 ORACLE FIRE-POINT (permanent live instrumentation — leave in behind the
-            // FlowTrace toggle): an explicit FIRED line AT the apply so the headless
-            // ArenaCombatOracle (and the owner's F8 felt-test break-log) PROVE the controller
-            // applied a rarity-driven (non-default for a high-rarity blade) trail color/width on
-            // the real path — not from code-reading. band="" when no weapon (steel default).
-            string band = w != null ? (w.rarity ?? "common") : "<none>";
-            FlowTrace.Step("WeaponVfx",
-                $"TRAIL color=({_trailColor.r:0.00},{_trailColor.g:0.00},{_trailColor.b:0.00},{_trailColor.a:0.00}) " +
-                $"width={_trailStartWidth:0.000} rarity={band} applied.");
-
-            _swingTrail.startWidth = _trailStartWidth;
-            _swingTrail.endWidth = 0f;
-
-            // Colour gradient: bright at the swing edge -> transparent tail.
-            // BLOOM-AWARE (2026-07-02): post-processing is now live (WorldFeelInjector,
-            // bloom threshold 0.9). A mild HDR head (~1.6x) lets the swing arc catch a
-            // soft halo at the blade edge -- rarity colours (WeaponVfxMap) still read
-            // true through the tail. Kept well under the 2-4 point-core band: a trail
-            // is a large screen-space ribbon, not a point core.
-            Color head = new Color(_trailColor.r * 1.6f, _trailColor.g * 1.6f, _trailColor.b * 1.6f, _trailColor.a);
-            var grad = new Gradient();
-            grad.SetKeys(
-                new[] { new GradientColorKey(head, 0f), new GradientColorKey(_trailColor, 0.35f), new GradientColorKey(_trailColor, 1f) },
-                new[] { new GradientAlphaKey(_trailColor.a, 0f), new GradientAlphaKey(0f, 1f) });
-            _swingTrail.colorGradient = grad;
+            // WO-VFX-WEAPON-TRAILS: trail emission is stopped by WeaponTrailController's own
+            // active-window coroutine (started when it received AttackStarted) — nothing to do here.
         }
 
         // ---------------------------------------------------------------------
-        //  HEADLESS ORACLE SEAM (WO-504 s3) — build the real swing trail and apply
-        //  the equipped weapon's rarity-driven VFX, then report the applied color so
-        //  DeNelle.Editor's ArenaCombatOracle can PROVE the controller applied a
-        //  NON-default (non-steel) trail for a high-rarity blade — exercising the
-        //  SAME EnsureSwingTrail + ApplyWeaponTrailVfx path a live swing runs (no
-        //  fork). Editor/QA seam only — gameplay never calls this.
+        //  HEADLESS ORACLE SEAM (WO-504 s3 -> WO-VFX-WEAPON-TRAILS) — the swing-trail
+        //  build + rarity apply now live on WeaponTrailController. This forwarder keeps
+        //  the ArenaCombatOracle (which calls attack.ApplyWeaponTrailVfxForTest()) compiling
+        //  and exercising the SAME EnsureTrail + ApplyWeaponTrailVfx path a live swing runs.
+        //  Ensures the component (the oracle AddComponents this controller in isolation, so
+        //  Awake may not have run its ensure yet). Editor/QA seam only — gameplay never calls it.
         // ---------------------------------------------------------------------
         public Color ApplyWeaponTrailVfxForTest()
         {
-            EnsureSwingTrail();      // real lazy build + first ApplyWeaponTrailVfx
-            ApplyWeaponTrailVfx();   // re-apply against the now-current equipped weapon
-            return _trailColor;
+            if (_trailController == null)
+                _trailController = GetComponent<WeaponTrailController>()
+                                ?? gameObject.AddComponent<WeaponTrailController>();
+            return _trailController.ApplyWeaponTrailVfxForTest();
         }
 
         private void TriggerPerfectHitFeedback(Vector3 hitPos)

@@ -321,6 +321,12 @@ namespace DeNelle.Village
         // — a local-rotation offset on the grip root — so no hero animation clip is needed
         // for the held-low vs held-ready read (the bonus; the GRIP is the priority).
         private Transform _gripRoot;          // current weapon's grip-root transform
+
+        // WO-VFX-WEAPON-TRAILS: read-only accessor so WeaponTrailController can anchor the blade
+        // trail on the actual held weapon's grip root (the moving prop transform) rather than the
+        // bare hand bone. Null until a weapon is equipped/attached; the trail controller falls back
+        // to the RightHand bone (then a synthetic child) when this is null.
+        public Transform GripRoot => _gripRoot;
         private Vector3 _baseGripEuler;       // the weapon's neutral grip rotation
         private bool _combatActive;           // current hold state (false = idle/lowered)
         private bool _combatExplicit;         // a caller drove SetCombatActive -> stop auto-mirroring

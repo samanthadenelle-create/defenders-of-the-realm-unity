@@ -593,6 +593,11 @@ namespace DeNelle.Village
             if (!TryGetComponent(out ActorAnimator actor)) actor = gameObject.AddComponent<ActorAnimator>();
             _actor = actor;
 
+            // WO-VFX-WEAPON-TRAILS: shared blade-trail flash on every enemy swing (owner: "both hero
+            // and enemy"; enemies share the rig + ActorAnimator). Self-drives off AttackStarted; catches
+            // enemies not built via EnemyFactory (e.g. WaveManager fallback). Safe re-add (pooled reuse).
+            if (GetComponent<WeaponTrailController>() == null) gameObject.AddComponent<WeaponTrailController>();
+
             if (_agent != null)
             {
                 _agent.updateRotation = false; // we control facing (to target on attack, or path dir)

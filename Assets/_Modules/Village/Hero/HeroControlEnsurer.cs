@@ -162,6 +162,11 @@ namespace DeNelle.Village
             // swing anim (their animators lack the Attack trigger — damage still lands). Restrict to
             // Knight later if desired.
             if (hero.GetComponent<PlayerAttackController>() == null) hero.AddComponent<PlayerAttackController>();
+            // WO-VFX-WEAPON-TRAILS: the shared blade-trail flash on every swing/cast (self-drives off
+            // ActorAnimator.AttackStarted). PlayerAttackController.Awake also ensures it; this explicit
+            // add guarantees it on the hero rig even for a class/path that skips the attack controller.
+            // DisallowMultipleComponent makes a double-add a no-op.
+            if (hero.GetComponent<WeaponTrailController>() == null) hero.AddComponent<WeaponTrailController>();
             // Default gear stats (even for emergency capsule or non-swapped heroes): GearLoadout
             // pulls level-1 starters from GearCatalog (now populated) and drives WeaponMult/ArmorDefense.
             if (hero.GetComponent<GearLoadout>() == null) hero.AddComponent<GearLoadout>();

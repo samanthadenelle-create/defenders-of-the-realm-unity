@@ -43,6 +43,15 @@ namespace DeNelle.Core.Combat
         private int _upperBodyLayer = -1;
         private const string UpperBodyLayerName = "Upper Body";
 
+        // WO-VFX-WEAPON-TRAILS: a Core-pure signal raised at the END of every attack/cast so a
+        // presentation-layer subscriber (Village-side WeaponTrailController) can flash the blade
+        // trail on EVERY swing/cast — hero, enemy, pet (all share this driver) — with NO per-ability
+        // wiring and NO Core→Village reference (Core cannot see Village, so the seam MUST be an event).
+        // The int payload distinguishes SWING vs CAST: a swing passes its combo index (>= 0); a cast
+        // passes a distinct NEGATIVE code (-1 - variant), so a subscriber can tell them apart. Zero
+        // behaviour change — firing the event does not touch the Animator.
+        public event System.Action<int> AttackStarted;
+
         /// <summary>The resolved Animator (may be null until a body is present).</summary>
         public Animator Animator { get { EnsureAnimator(); return _animator; } }
 
@@ -122,6 +131,8 @@ namespace DeNelle.Core.Combat
             EnsureUpperBodyActive();   // WO-218: arms swing while legs keep walking
             if (Has(AnimParams.ComboHash)) _animator.SetInteger(AnimParams.ComboHash, combo);
             if (Has(AnimParams.AttackHash)) _animator.SetTrigger(AnimParams.AttackHash);
+            // WO-VFX-WEAPON-TRAILS: signal the swing so the trail flashes (combo >= 0 = swing).
+            AttackStarted?.Invoke(combo);
         }
 
         public void PlayCast() => PlayCast(0);
@@ -136,6 +147,9 @@ namespace DeNelle.Core.Combat
             // Controllers without CastVariant / per-variant states fall back to the default Cast.
             if (Has(AnimParams.CastVariantHash)) _animator.SetInteger(AnimParams.CastVariantHash, variant);
             _animator.SetTrigger(AnimParams.CastHash);
+            // WO-VFX-WEAPON-TRAILS: signal the cast so the trail flashes. A distinct NEGATIVE code
+            // (-1 - variant) lets a subscriber tell a cast from a swing (which passes combo >= 0).
+            AttackStarted?.Invoke(-1 - variant);
         }
 
         /// <summary>

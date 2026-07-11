@@ -212,10 +212,16 @@ namespace DeNelle.Village
                         string tFam = def != null ? (def.Family ?? "").Trim().ToLowerInvariant() : "";
                         bool isTroll = model == "Troll" || tId == "troll" || tId == "caveman" || tFam == "troll";
                         bool isOgre  = tId == "ogre" || tId == "ogre-mage" || tFam == "ogre";
+                        // Warlord/Necromancer BOSS distinct from grunt orcs (owner F8 2026-07-10 "enemy green
+                        // needs fixed" — confirmed the BOSS): the flat G-dominant orc tint read as a material
+                        // defect on the prominent boss. Give it a dark, desaturated undead slate so it reads as
+                        // an elite necromancer, not flat-green error — by LUMINANCE (dark), colorblind-safe.
+                        bool isWarlord = model == "Orc_Necromancer" || tId == "orc-warlord" || tId == "orc-necromancer";
                         Color fallbackTint =
-                            isTroll ? new Color(0.38f, 0.40f, 0.34f) :   // grey-green troll hide
-                            isOgre  ? new Color(0.48f, 0.47f, 0.52f) :   // cold ogre grey
-                                      new Color(0.30f, 0.42f, 0.22f);     // orc green/brown
+                            isTroll   ? new Color(0.38f, 0.40f, 0.34f) :   // grey-green troll hide
+                            isOgre    ? new Color(0.48f, 0.47f, 0.52f) :   // cold ogre grey
+                            isWarlord ? new Color(0.22f, 0.20f, 0.26f) :   // Warlord/Necromancer boss — dark undead slate
+                                        new Color(0.30f, 0.42f, 0.22f);     // real Warband orcs — orc green/brown (grunts, intended)
                         warbandFixer.SetFallbackTint(fallbackTint);
                         FlowTrace.Step("Enemy",
                             $"garrison fallback TINT {fallbackTint} bound to '{model}' (id '{tId}', rig {rigForModel}) — " +
@@ -302,6 +308,13 @@ namespace DeNelle.Village
             // Enemy.cs drives (SetLocomotion/PlayAttack/Die) work for skeleton/orc/troll etc.
             if (go.GetComponent<ActorAnimator>() == null)
                 go.AddComponent<ActorAnimator>();
+
+            // WO-VFX-WEAPON-TRAILS: enemies share the same rig + ActorAnimator, so give them the
+            // blade-trail flash too (owner: "both hero and enemy"). It self-drives off
+            // ActorAnimator.AttackStarted; with no GearLoadout it uses the steel-common default
+            // trail and anchors on the RightHand bone. DisallowMultipleComponent => safe re-add.
+            if (go.GetComponent<WeaponTrailController>() == null)
+                go.AddComponent<WeaponTrailController>();
 
             // WO-315 / WO-363: attach the opt-in orientation gate to the enemy ROOT —
             // the same transform Enemy.DriveNav slerps toward agent velocity. The guard
