@@ -44,7 +44,7 @@ waves, buildings, outer world. References **Core only** — never HUD directly
 | `Quests/` | `DailyQuestGateBridge` |
 | `Talents/` | Hero talent catalog/modifiers, talent tree panel, Wisdom currency |
 | `Tutorial/` | `TutorialDirector`, dialogue service, auto-walk, tutorial wave spawner |
-| `Vfx/` (12) | `VFXManager`, `VFXCatalog`, pooling, `WeatherManager`, hit-stop, decals |
+| `Vfx/` (12) | `VFXManager`, `VFXCatalog`, pooling, `WeatherManager`, hit-stop, decals; `ActionBundleCatalog` + `ActionBundlePlayer` (WO-671 — runtime motion-castings.json bundle player: anim via ActorAnimator, pooled VFX, SFX) |
 | `Walls/` | `WallSegment`, wall repair (controller, highlight, HUD bridge), `WallLayout` |
 | `Waves/` (16) | `WaveManager`, `WaveData`, group spawner/coordinator, countdown UI, kill combo, celebrations, scaling curve, `AlertIntelSystem` |
 | `World/` (29) | Outer world: camps (`CampSystem`, `ClaimableCamp`, `Outpost`), mine/crystal nodes, settlements, tribes, ward stones/tether, region mob spawner, navmesh installers, `WorldSceneLoader` |
