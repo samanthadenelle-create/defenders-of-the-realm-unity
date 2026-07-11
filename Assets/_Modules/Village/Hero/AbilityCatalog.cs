@@ -105,6 +105,20 @@ namespace DeNelle.Village
         /// <summary>healOverTime effect — seconds the HP drip runs; invuln effect — seconds of immunity.</summary>
         [JsonProperty("seconds")] public float Seconds;
 
+        // ── WO-VFX-003 Hovl VFX string keys (VFXManager.PlayKey). Empty = no Hovl fx for that beat. ──
+        // Data-driven so a new ability maps its VFX in abilities.json with NO code change: HeroAbilities
+        // reads these keys and calls VFXManager.PlayKey at cast / launch / impact / residual. Keys resolve
+        // through HovlVfxCatalog (author via Defenders/VFX/Generate Hovl VFX Catalog); an unknown/empty key
+        // simply no-ops (throttled log) so this is safe before the catalog rows are authored.
+        /// <summary>Hovl cast/windup VFX key, played at the hero on cast (e.g. "Fireball_Cast").</summary>
+        [JsonProperty("vfxCast")] public string VfxCast;
+        /// <summary>Hovl projectile VFX key (loop) that travels muzzle→target on a ranged throw (e.g. "Thunderbolt_Projectile").</summary>
+        [JsonProperty("vfxProjectile")] public string VfxProjectile;
+        /// <summary>Hovl impact VFX key, played at the hit / blast-centre point (e.g. "Fireball_Impact").</summary>
+        [JsonProperty("vfxImpact")] public string VfxImpact;
+        /// <summary>Hovl residual DoT/HoT/aura/shield LOOP key on the target/hero for the effect's duration (e.g. "Ember_Burn").</summary>
+        [JsonProperty("vfxResidual")] public string VfxResidual;
+
         /// <summary>The slot parsed to the <see cref="AbilitySlot"/> enum.</summary>
         public AbilitySlot SlotEnum
         {

@@ -486,6 +486,12 @@ namespace DeNelle.Village
             // Null-guarded: no locomotion or no resolvable foe leaves facing untouched.
             FaceCastTarget(def, origin);
 
+            // WO-VFX-003: the CAST beat — every active fires its Hovl cast/windup key at the
+            // hero (data-driven from def.VfxCast). Single choke point so all 16 actives (Q/W/E/R
+            // AND the assignable EXTRA bar) get their cast VFX. Additive — the procedural cast
+            // VFX in SpawnVfx still runs; PlayKey no-ops when the key is empty/unauthored.
+            PlayCastVfxKey(def, origin);
+
             ResolveEffect(def, origin);
         }
 
@@ -642,6 +648,9 @@ namespace DeNelle.Village
                         if (heroHp != null) heroHp.Heal(healAmount);
                         VFXManager.Play(VFXType.Cast_Heal, origin + Vector3.up * 1.2f);
                     }
+                    // WO-VFX-003: a brief Hovl heal aura on the hero (reads by shape+motion, not hue —
+                    // owner is colorblind). Instant heals get a short 1.5s glow.
+                    PlayResidualLoop(def, transform, 1.5f, origin + Vector3.up * 1.2f);
                     break;
                 }
 
@@ -703,6 +712,7 @@ namespace DeNelle.Village
                         float hitDmg = dmg;
                         var hitEl = element;
                         bool snare = def.EffectEnum == AbilityEffect.Snare;
+                        var hitDef = def;   // WO-VFX-003: capture for the impact-key play on arrival
                         LaunchProjectile(foe.WorldPosition, () =>
                         {
                             if (hitFoe == null || !hitFoe.IsAlive) return;
@@ -716,7 +726,9 @@ namespace DeNelle.Village
                             DeNelle.Core.Combat.DamageAttribution.Record(hitFoe, HeroProgression.Id, hitDmg);
                             if (snare) hitFoe.ApplyStatus(StatusEffect.Slow, 2.5f); // castAbility.ts snare
                             ReportRumble(hitDmg);   // WO-497: rumble on the projectile CONNECTING
-                        });
+                            // WO-VFX-003: Hovl impact key at the connection point (element-tinted).
+                            PlayImpactVfxKey(hitDef, hitFoe.WorldPosition);
+                        }, def.VfxProjectile, def.UnityColor);
                     }
                     // Cast beat only (origin SFX/VFX). Impact juice now comes from the projectile
                     // ARRIVAL (enemy TakeDamage), so no target hint -> no premature impact flash.
@@ -734,6 +746,8 @@ namespace DeNelle.Village
                     Vector3 centre = ResolveBlastCentre(atk, origin);
                     Blast(centre, def.Range, dmg, element, def.Freeze);
                     SpawnVfx(centre, def, def.Range);
+                    // WO-VFX-003: Hovl impact/slam at the blast centre (Cleave/Aoe land instantly).
+                    PlayImpactVfxKey(def, centre);
                     break;
                 }
 
@@ -755,11 +769,14 @@ namespace DeNelle.Village
                     // (blast + impact VFX), so the ultimate reads as a meteor streaking in and
                     // landing rather than an instant area-pop. Same proven projectile pattern as
                     // Strike/Snare; the RangedAttackVFX cast-burst covers the cast beat.
+                    var meteorDef = def;   // WO-VFX-003: capture for the impact-key play on landing
                     LaunchProjectile(target, () =>
                     {
                         Blast(target, def.Range, dmg, element, 0f);
                         SpawnVfx(target, def, def.Range);
-                    });
+                        // WO-VFX-003: Hovl impact/explosion where the meteor lands.
+                        PlayImpactVfxKey(meteorDef, target);
+                    }, def.VfxProjectile, def.UnityColor);
                     break;
                 }
             }
@@ -802,6 +819,8 @@ namespace DeNelle.Village
                 // Bonus vs backline: a stun/interrupt on the dashed-into target (Freeze = stun).
                 foe.ApplyStatus(StatusEffect.Freeze, 1.0f);
                 ReportRumble(dmg);
+                // WO-VFX-003: Hovl melee impact where the leap connects.
+                PlayImpactVfxKey(def, fp);
             }
             SpawnVfx(origin, def, 1.6f, foe?.WorldPosition);
         }
@@ -861,6 +880,8 @@ namespace DeNelle.Village
             }
             ReportRumble(dmg);
             SpawnVfx(centre, def, def.Range);
+            // WO-VFX-003: Hovl impact/knockback burst at the cone centre.
+            PlayImpactVfxKey(def, centre);
         }
 
         /// <summary>
@@ -895,6 +916,10 @@ namespace DeNelle.Village
             VFXManager.Play(VFXType.Impact_ShockwaveRing, origin + Vector3.up * 1.0f);
             ReportRumble(20f);
             SpawnVfx(origin, def, def.Range);
+            // WO-VFX-003: the roar burst (impact key) + a held taunt aura on the Knight for the
+            // zone duration (def.Freeze), so the "hold them on me" beat reads visually.
+            PlayImpactVfxKey(def, origin + Vector3.up * 1.0f);
+            PlayResidualLoop(def, transform, Mathf.Max(2f, def.Freeze), origin + Vector3.up * 1.0f);
         }
 
         // =====================================================================
@@ -924,19 +949,24 @@ namespace DeNelle.Village
             {
                 var hitFoe = foe;
                 float hitDmg = dmg;
+                var hitDef = def;   // WO-VFX-003: capture for impact + residual on arrival
                 LaunchProjectile(foe.WorldPosition, () =>
                 {
                     if (hitFoe == null || !hitFoe.IsAlive) return;
                     (hitFoe as DeNelle.Core.Combat.IHeroDamageMarkable)?.MarkNextHitFromHero();
                     hitFoe.TakeDamage(hitDmg, DamageElement.Flame);
                     DeNelle.Core.Combat.DamageAttribution.Record(hitFoe, HeroProgression.Id, hitDmg);
+                    // WO-VFX-003: Hovl impact where the brand lands.
+                    PlayImpactVfxKey(hitDef, hitFoe.WorldPosition);
                     if (burnDps > 0f)
                     {
                         hitFoe.ApplyStatus(StatusEffect.Burn, burnSecs);
                         StartCoroutine(BurnDoT(hitFoe, burnDps, burnSecs));
+                        // WO-VFX-003: the residual burn LOOP on the foe for the DoT duration.
+                        PlayResidualLoop(hitDef, (hitFoe as MonoBehaviour)?.transform, burnSecs, hitFoe.WorldPosition);
                     }
                     ReportRumble(hitDmg);
-                });
+                }, def.VfxProjectile, def.UnityColor);
             }
             SpawnVfx(AimPointOverride ?? origin, def, 1.6f, foe?.WorldPosition);
         }
@@ -973,6 +1003,8 @@ namespace DeNelle.Village
             _hpOverTimeUntil = Time.time + secs;
             AbilityAudioBridge.PlayForClassAndKind(_heroClass, AbilityEffect.Heal);
             VFXManager.Play(VFXType.Cast_Heal, origin + Vector3.up * 1.2f);
+            // WO-VFX-003: the residual heal-over-time aura on the hero for the drip window.
+            PlayResidualLoop(def, transform, secs, origin + Vector3.up * 1.2f);
             DeNelle.Core.Diagnostics.FlowTrace.Step("HeroAbility",
                 $"healOverTime {def.Id}: {perSec:0.0} HP/s for {secs:0}s ({perSec * secs:0} total).");
         }
@@ -989,6 +1021,8 @@ namespace DeNelle.Village
             _heroHealth?.ActivateInvuln(secs);
             VFXManager.Play(VFXType.Impact_Heal, origin + Vector3.up * 1.0f);
             SpawnVfx(origin, def, Mathf.Max(1.5f, def.Range));
+            // WO-VFX-003: the residual shield-bubble LOOP on the hero for the immunity window.
+            PlayResidualLoop(def, transform, secs, origin + Vector3.up * 1.0f);
             DeNelle.Core.Diagnostics.FlowTrace.Step("HeroAbility",
                 $"invuln {def.Id}: {secs:0}s full immunity granted (HeroHealth.ActivateInvuln).");
         }
@@ -1025,15 +1059,92 @@ namespace DeNelle.Village
         /// an instant hit-scan ("seeing the arrow/spell go is fun"). Lazily attaches
         /// <see cref="RangedAttackVFX"/> so it works on every hero without a builder change.
         /// </summary>
-        private void LaunchProjectile(Vector3 target, System.Action onArrive)
+        private void LaunchProjectile(Vector3 target, System.Action onArrive,
+                                      string projectileKey = null, Color? tint = null)
         {
             if (_rangedVfx == null)
             {
                 if (!TryGetComponent(out _rangedVfx)) _rangedVfx = gameObject.AddComponent<RangedAttackVFX>();
             }
             if (_heroClass == "ranger")      _rangedVfx.FireArrow(target, onArrive);
-            else if (_heroClass == "knight") onArrive?.Invoke();   // melee: resolve instantly, no projectile (a knight doesn't snipe)
+            else if (_heroClass == "knight")
+            {
+                // WO-VFX-003: the Knight resolves melee-INSTANT (no RangedAttackVFX travelling
+                // body). For its THROWN skill-tree actives (Thunderbolt / Throwing Spear /
+                // Emberbrand Throw / Snare Arrow) fly a COSMETIC Hovl projectile muzzle→target so
+                // the throw reads as a shot travelling; damage still lands instantly via onArrive,
+                // so gameplay timing is UNCHANGED (additive visual only). No key = old behaviour.
+                if (!string.IsNullOrEmpty(projectileKey))
+                    StartCoroutine(FlyCosmeticProjectile(projectileKey, ProjectileMuzzle(), target, tint));
+                onArrive?.Invoke();
+            }
             else                             _rangedVfx.FireSpellOrb(target, onArrive);
+        }
+
+        // ── WO-VFX-003: Hovl skill-tree VFX helpers (string-key path, VFXManager.PlayKey) ──
+        // Data-driven from AbilityDef.VfxCast/VfxProjectile/VfxImpact/VfxResidual (abilities.json).
+        // Every call is null/empty-safe: an unset key or an unauthored catalog row no-ops (throttled
+        // log in VFXManager), so this is safe to ship before the HovlVfxCatalog rows are authored.
+
+        /// <summary>The world point a Knight's thrown projectile spawns from (chest height, slightly ahead).</summary>
+        private Vector3 ProjectileMuzzle() => transform.position + Vector3.up * 1.2f + transform.forward * 0.6f;
+
+        /// <summary>Play the ability's Hovl CAST/windup key at the hero, tinted by the ability accent.</summary>
+        private void PlayCastVfxKey(AbilityDef def, Vector3 origin)
+        {
+            if (def == null || string.IsNullOrEmpty(def.VfxCast)) return;
+            VFXManager.PlayKey(def.VfxCast, origin + Vector3.up * 1.2f, transform.rotation, null, def.UnityColor);
+        }
+
+        /// <summary>Play the ability's Hovl IMPACT key at a hit / blast point, tinted by the ability accent.</summary>
+        private void PlayImpactVfxKey(AbilityDef def, Vector3 at)
+        {
+            if (def == null || string.IsNullOrEmpty(def.VfxImpact)) return;
+            VFXManager.PlayKey(def.VfxImpact, at, Quaternion.identity, null, def.UnityColor);
+        }
+
+        /// <summary>
+        /// Play the ability's Hovl RESIDUAL LOOP (DoT/HoT/aura/shield) parented to <paramref name="target"/>
+        /// (the hero or the struck foe), auto-stopping after <paramref name="seconds"/>. Tinted by the accent.
+        /// </summary>
+        private void PlayResidualLoop(AbilityDef def, Transform target, float seconds, Vector3 fallbackPos)
+        {
+            if (def == null || string.IsNullOrEmpty(def.VfxResidual)) return;
+            Vector3 pos = target != null ? target.position : fallbackPos;
+            var h = VFXManager.PlayKey(def.VfxResidual, pos, Quaternion.identity, target, def.UnityColor);
+            if (h != null && seconds > 0f) StartCoroutine(StopHandleAfter(h, seconds));
+        }
+
+        private System.Collections.IEnumerator StopHandleAfter(VFXHandle h, float seconds)
+        {
+            yield return new WaitForSeconds(seconds);
+            h?.Stop();
+        }
+
+        /// <summary>
+        /// Fly a COSMETIC Hovl projectile (loop key) from <paramref name="from"/> to <paramref name="to"/> over
+        /// a short flight, then stop it. Visual only — no damage (the caller resolves damage on its own timing).
+        /// Used for the Knight's thrown skills, which otherwise resolve melee-instant with no travelling body.
+        /// </summary>
+        private System.Collections.IEnumerator FlyCosmeticProjectile(string key, Vector3 from, Vector3 to, Color? tint)
+        {
+            var proxy = new GameObject("[HovlProjProxy]");
+            proxy.transform.position = from;
+            Vector3 delta = to - from;
+            Quaternion rot = delta.sqrMagnitude > 0.01f ? Quaternion.LookRotation(delta.normalized) : Quaternion.identity;
+            var handle = VFXManager.PlayKey(key, from, rot, null, tint, 0f, 0f, proxy.transform);
+
+            const float speed = 26f;
+            float travel = Vector3.Distance(from, to) / speed;
+            float t = 0f;
+            while (t < travel)
+            {
+                t += Time.deltaTime;
+                if (proxy != null) proxy.transform.position = Vector3.Lerp(from, to, Mathf.Clamp01(t / travel));
+                yield return null;
+            }
+            handle?.Stop();
+            if (proxy != null) Destroy(proxy);
         }
 
         /// <summary>

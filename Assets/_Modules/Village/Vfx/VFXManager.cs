@@ -67,7 +67,7 @@ namespace DeNelle.Village
     /// quality gating, procedural fallback, and hit-stop + screen shake hooks.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class VFXManager : MonoBehaviour
+    public sealed partial class VFXManager : MonoBehaviour
     {
         // ── Singleton ─────────────────────────────────────────────────────────
 
@@ -93,6 +93,11 @@ namespace DeNelle.Village
             DontDestroyOnLoad(gameObject);
             EnsureCatalog();
             InitialisePools();
+            // WO-VFX-002: the Hovl-prefab-by-key subsystem shares this singleton, the
+            // _poolRoot, and the oneshot/loop caps. Load its catalog + pre-warm its pools
+            // alongside the VFXType catalog. See VFXManager.Hovl.cs.
+            EnsureHovlCatalog();
+            InitialiseHovlPools();
         }
 
         // WO-504: the VFXCatalog is a ScriptableObject asset (VFXType -> authored prefab).

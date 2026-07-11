@@ -25,6 +25,9 @@ namespace DeNelle.Village
     {
         private GameObject _go;
         private VFXType    _type;
+        // WO-VFX-002: non-null when this handle represents a Hovl string-keyed effect —
+        // Stop() then returns it via VFXManager.ReturnHovl* instead of the VFXType pool.
+        private readonly string _hovlKey;
 
         /// <summary>True while the underlying GameObject is still alive.</summary>
         public bool IsAlive => _go != null;
@@ -37,6 +40,14 @@ namespace DeNelle.Village
         {
             _go   = go;
             _type = type;
+        }
+
+        // WO-VFX-002: handle for a Hovl string-keyed loop (routes Stop() to the Hovl pool).
+        internal VFXHandle(GameObject go, string hovlKey)
+        {
+            _go      = go;
+            _type    = VFXType.None;
+            _hovlKey = hovlKey;
         }
 
         /// <summary>
@@ -58,6 +69,22 @@ namespace DeNelle.Village
             if (mgr == null)
             {
                 Object.Destroy(go);
+                return;
+            }
+
+            // WO-VFX-002: Hovl string-keyed effects return through the Hovl pool.
+            if (_hovlKey != null)
+            {
+                if (immediate)
+                {
+                    mgr.ReturnHovlToPool(go, _hovlKey);
+                }
+                else
+                {
+                    foreach (var ps in go.GetComponentsInChildren<ParticleSystem>(true))
+                        ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+                    mgr.ReturnHovlAfterDelay(go, _hovlKey, 2.5f);
+                }
                 return;
             }
 

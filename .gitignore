@@ -186,6 +186,10 @@ Assets/Tests/Fixtures/DevnetTestWallet.*
 /Assets/Mirza Beig.meta
 /Assets/Spells Pack/
 /Assets/Spells Pack.meta
+# Hovl Studio VFX pack (236MB, 2026-07-10) — same policy: only the keys we map
+# in HovlVfxCatalog are referenced by path; re-import on fresh clone.
+/Assets/Hovl Studio/
+/Assets/Hovl Studio.meta
 
 # TextMesh Pro package EXAMPLES — re-imported by the TMP package, not our code
 # (34 example scripts that kept churning the working tree). Keep off git.
