@@ -253,7 +253,9 @@ namespace DeNelle.Village.UI
                 Title = "Outpost Claimed",
                 Subtitle = body,
                 Emblem = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconCombat),
-                PrimaryLabel = "Continue",
+                // F8-43: no CTA on a compact banner — it auto-dismisses in seconds, so a
+                // Continue button is a redundant control. Exit = auto-dismiss + tap-anywhere.
+                PrimaryLabel = null,
                 PrimaryRoute = "dismiss",
                 AutoDismissSeconds = Mathf.Max(1f, autoDismissSeconds),
                 Compact = true,
@@ -261,20 +263,63 @@ namespace DeNelle.Village.UI
         }
 
         /// <summary>Wave-clear RESULTS banner (replaces WaveCelebrationManager's IMGUI
-        /// toast / prefab text): compact, non-blocking, auto-dismissing.</summary>
+        /// toast / prefab text): compact, non-blocking, auto-dismissing. F8-45 (owner
+        /// 2026-07-11): carries the DAMAGE REPORT — one spoils row per damaged/destroyed
+        /// structure (worst-first, capped by <see cref="WaveDamageReport.MaxRows"/>),
+        /// with the crystal repair cost where a WallRepairController exists to price it
+        /// and the production hit for damaged collectors (accrual scales with HP).
+        /// State is carried by TEXT ("damaged 40%" / "DESTROYED"), never color alone
+        /// (colorblind law). A clean wave keeps today's 4s row-less banner unchanged.</summary>
         public static EndStateVM FromWaveClear(int waveNumber)
         {
-            return new EndStateVM
+            var vm = new EndStateVM
             {
                 Kind = EndStateKind.WaveResults,
                 Title = $"Wave {waveNumber} Cleared!",
                 Subtitle = "The realm holds. Ready for the next.",
                 Emblem = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconCombat),
-                PrimaryLabel = "Continue",
+                // F8-43: no CTA on a compact banner — it auto-dismisses in seconds, so a
+                // Continue button is a redundant control. Exit = auto-dismiss + tap-anywhere.
+                PrimaryLabel = null,
                 PrimaryRoute = "dismiss",
                 AutoDismissSeconds = 4f,
                 Compact = true,
             };
+
+            // Damage report (model-side aggregation; this factory is the MVVM adapter).
+            foreach (var e in WaveDamageReport.Collect())
+            {
+                if (e == null) continue;
+                int pct = Mathf.Clamp(Mathf.RoundToInt(e.DamageFraction * 100f), 1, 100);
+                string state;
+                if (e.Destroyed)
+                    state = e.IsCollector && e.LootStolen > 0
+                        ? $"DESTROYED, looted {e.LootStolen}"   // collector break steals pending
+                        : "DESTROYED";
+                else
+                    state = e.IsCollector
+                        ? $"damaged {pct}%, production -{pct}%"  // economy hit = HP-scaled accrual
+                        : $"damaged {pct}%";
+                vm.Spoils.Add(new SpoilRowVM
+                {
+                    Icon = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield),
+                    // Plain hyphen (not em-dash) in PLAYER-FACING copy: the build font has a
+                    // tofu precedent (EndStateView.BuildStarRow) and canon strings use " - ".
+                    Label = $"{e.Name} - {state}",
+                    // Repair cost only where the live controller priced it (< 0 = no
+                    // controller alive — omit rather than fake a constant).
+                    Amount = e.RepairCost > 0 ? $"Repair {e.RepairCost} crystals" : string.Empty,
+                });
+            }
+
+            if (vm.Spoils.Count > 0)
+            {
+                // The report needs reading time: 4s -> 8s, and the subtitle names the hit
+                // so the banner never reads as an all-clear over a damage list.
+                vm.Subtitle = "The realm holds - but it took damage.";
+                vm.AutoDismissSeconds = 8f;
+            }
+            return vm;
         }
     }
 }

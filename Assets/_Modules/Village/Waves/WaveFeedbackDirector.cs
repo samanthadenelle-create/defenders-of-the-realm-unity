@@ -15,6 +15,7 @@
 // =============================================================================
 
 using DeNelle.Core;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -111,8 +112,21 @@ namespace DeNelle.Village
             try { DeNelle.Village.Talents.WisdomCurrencyService.Instance?.Grant(wisdomPerWave); } catch { }
             try { DeNelle.Cosmetics.GlimmerCurrencyService.Instance?.TryAddGlimmer(glimmerPerWave); } catch { }
 
+            // F8-45: Main_Castle_Overworld ships with NO editor-wired WallRepair object
+            // (WallRepairSceneSetup only ever targeted the abandoned Village.unity), so
+            // the find used to return null and a silent catch no-op'd the whole WO-38
+            // repair nudge. TrySpawn now self-installs the controller per scene; this
+            // is the belt-and-braces fallback (e.g. the HUD registered after scene load).
             if (_repair == null) _repair = UnityEngine.Object.FindAnyObjectByType<WallRepairController>();
-            if (_repair != null) { try { _repair.SurfaceWorstRepair(); } catch { } }
+            if (_repair == null)
+            {
+                EnsureWallRepairInstalled("wave-cleared fallback");
+                _repair = UnityEngine.Object.FindAnyObjectByType<WallRepairController>();
+            }
+            FlowTrace.Step("WaveClear",
+                $"repair scan: controller={_repair != null} scene='{SceneManager.GetActiveScene().name}'");
+            if (_repair != null)
+                Guard.Try("WaveClear", "SurfaceWorstRepair", () => _repair.SurfaceWorstRepair());
 
             CancelInvoke(nameof(ReturnToVillageMusic));
             Invoke(nameof(ReturnToVillageMusic), 5.5f);
@@ -277,6 +291,14 @@ namespace DeNelle.Village
         {
             var wave = UnityEngine.Object.FindAnyObjectByType<WaveManager>();
             if (wave == null) return;   // not a wave scene (Title/HeroSelect/etc.)
+
+            // F8-45: the WO-38 post-wave repair nudge needs a WallRepairController,
+            // but the editor wiring (WallRepairSceneSetup) only ever installed it
+            // into the abandoned Village.unity — so live wave scenes (Main_Castle_
+            // Overworld) had none and the damage report never showed. Self-install
+            // it here, per scene, the same way this director installs itself.
+            EnsureWallRepairInstalled("scene load");
+
             if (UnityEngine.Object.FindAnyObjectByType<WaveFeedbackDirector>() != null) return;
 
             // Inactive-then-activate so Bind() runs before OnEnable subscribes.
@@ -294,6 +316,44 @@ namespace DeNelle.Village
             // WO-41: HUD is now registered in CoreServices.Hud; no reflection needed.
             // Stub kept so Bind(wave, hud) call-site compiles unchanged.
             return null;
+        }
+
+        /// <summary>
+        /// F8-45: runtime install of the WO-38 wall-repair surface. Mirrors the
+        /// WallRepairSceneSetup editor wiring (one "WallRepair" GameObject carrying
+        /// WallRepairController + WallRepairHudBridge, bridge configured with the
+        /// controller + the VillageHudController instance) — but built at runtime so
+        /// EVERY wave scene gets it, not just the abandoned Village.unity. The HUD
+        /// instance comes from CoreServices.Hud (the WO-41 Core seam; the concrete
+        /// controller is a MonoBehaviour, so the Object cast is the same reference
+        /// the editor wiring serialized) — no Village->HUD asmdef reference is added.
+        /// No per-structure registration is needed: SurfaceWorstRepair calls
+        /// CollectAllDamaged, which scans the scene itself (DEF-226 explicit flow).
+        /// If the HUD has not registered yet, install is deferred — OnWaveCleared
+        /// retries, by which time the HUD is live.
+        /// </summary>
+        private static void EnsureWallRepairInstalled(string context)
+        {
+            if (UnityEngine.Object.FindAnyObjectByType<WallRepairController>() != null) return;
+
+            var hud = CoreServices.Hud as UnityEngine.Object;
+            if (hud == null)
+            {
+                FlowTrace.Warn("WaveClear",
+                    $"wall-repair self-install deferred ({context}): CoreServices.Hud not registered yet");
+                return;
+            }
+
+            // Inactive-then-activate so Configure lands before the bridge's Start binds.
+            var go = new GameObject("WallRepair");
+            go.SetActive(false);
+            var controller = go.AddComponent<WallRepairController>();
+            var bridge = go.AddComponent<WallRepairHudBridge>();
+            bridge.Configure(controller, hud);
+            go.SetActive(true);
+
+            FlowTrace.Step("WaveClear",
+                $"self-installed WallRepairController (scene='{SceneManager.GetActiveScene().name}', {context})");
         }
     }
 }

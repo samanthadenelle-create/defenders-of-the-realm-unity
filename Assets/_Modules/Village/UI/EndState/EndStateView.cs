@@ -97,9 +97,9 @@ namespace DeNelle.Village.UI
                 canvas = ElarionUiKit.BuildModalCanvas("EndState", 31000);
                 var c = canvas.GetComponent<Canvas>();
                 if (c != null) c.overrideSorting = true;
-                // Grown DOWN (top edge held at 0.86) to 0.30 of screen height: the compact
-                // banner does NOT auto-extend like the full modal (see the !vm.Compact guard
-                // below), so it must carry enough height for the enlarged SPLASH header band
+                // Grown DOWN (top edge held at 0.86) to 0.30 of screen height: this is the
+                // row-less SPLASH size (F8-45: a spoils damage report further extends the
+                // banner downward in Bind), so it must carry enough height for the header band
                 // (Bind) plus the emblem+subtitle below it — otherwise the tall title band
                 // would crush them. (Was 0.64–0.86 = 0.22h, too short to seat the headline.)
                 chrome = ElarionUiKit.BuildObsidianPanel(canvas.transform, vm.Title,
@@ -207,7 +207,13 @@ namespace DeNelle.Village.UI
             // drop-zone, carve the button's band out of the BOTTOM of the body well and hand
             // BuildBody only the reward well ABOVE it, leaving a guaranteed gap between the two.
             bool hasFooterZone = chrome.layout != null && chrome.layout.footer != null;
-            RectTransform footer     = hasFooterZone ? chrome.layout.footer
+            // F8-43: compact banners carry NO primary CTA (VM sets PrimaryLabel null/empty)
+            // — they auto-dismiss in seconds, so a Continue button is a redundant control
+            // (owner one-action law). No CTA => no footer band; the reward well owns the
+            // whole body and the exit is auto-dismiss + tap-anywhere (wired below).
+            bool hasCta = !string.IsNullOrEmpty(vm.PrimaryLabel);
+            RectTransform footer     = !hasCta ? null
+                                     : hasFooterZone ? chrome.layout.footer
                                      : MakeZone(well, "Zone_Footer",     0.10f, 0f,    0.90f, 0.16f);
             // VICTORY SWEEP (fresh 1280x720 capture, 2026-07-06: "Wood +15" / "Iron +8" ran
             // BEHIND Continue): on the REAL-footer path (FrameCore relocates its default
@@ -218,59 +224,84 @@ namespace DeNelle.Village.UI
             // own zone, and on the real-footer path its floor is raised above the pinned
             // CTA's measured top edge so rewards and Continue can never share pixels.
             RectTransform rewardWell = MakeZone(well, "Zone_RewardWell",
-                0f, hasFooterZone ? 0f : 0.22f, 1f, 1f);
+                0f, (hasFooterZone || !hasCta) ? 0f : 0.22f, 1f, 1f);
 
             // ONE primary action (Continue / Rise again / ...) — built FIRST so the reward
             // well can be sized around the law-pinned CTA; it still lands LAST in the reveal.
-            var btn = ElarionUiKit.Button(footer, vm.PrimaryLabel, ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.24f, 0.06f), new Vector2(0.76f, 0.94f), FirePrimary);
-            // OWNER F8 x3: the Continue/primary action is the SAME pixel size on every
-            // screen (matches the shared Close). The anchors above only centre it in the
-            // footer band; the canonical size is stamped here.
-            ElarionUiKit.PinCanonicalCtaSize(btn);
-            Canvas.ForceUpdateCanvases();
-            var bRt = (RectTransform)btn.transform;
-            // Robust CTA height: measured rect, else the pinned sizeDelta, floored at the
-            // canonical constant — a 0 here silently disabled the band growth entirely.
-            float need = Mathf.Max(bRt.rect.height,
-                Mathf.Max(bRt.sizeDelta.y, ElarionUiKit.CanonCtaHeight));
-            // #22 (capture 9403, "YOU HAVE FALLEN" strip): on SHORT panels the law-pinned
-            // canonical CTA is TALLER than the carved footer band, so the centred button
-            // spilled UP over the body copy ("Try Again" on top of the death message). The
-            // CTA size is law — so the BAND must grow to contain it: when the pinned button
-            // exceeds the footer band, raise the band's top and lift the reward well above
-            // it (gap preserved).
-            if (!hasFooterZone)
+            // F8-43: skipped entirely when the VM carries no PrimaryLabel (compact banners)
+            // — no button, no footer carving; the banner's exit is auto-dismiss + tap-anywhere.
+            Button btn = null;
+            if (hasCta)
             {
-                float wellH = well.rect.height;
-                if (wellH > 1f && need > footer.rect.height - 4f)
+                btn = ElarionUiKit.Button(footer, vm.PrimaryLabel, ElarionUiKit.ButtonKind.Gold,
+                    new Vector2(0.24f, 0.06f), new Vector2(0.76f, 0.94f), FirePrimary);
+                // OWNER F8 x3: the Continue/primary action is the SAME pixel size on every
+                // screen (matches the shared Close). The anchors above only centre it in the
+                // footer band; the canonical size is stamped here.
+                ElarionUiKit.PinCanonicalCtaSize(btn);
+                Canvas.ForceUpdateCanvases();
+                var bRt = (RectTransform)btn.transform;
+                // Robust CTA height: measured rect, else the pinned sizeDelta, floored at the
+                // canonical constant — a 0 here silently disabled the band growth entirely.
+                float need = Mathf.Max(bRt.rect.height,
+                    Mathf.Max(bRt.sizeDelta.y, ElarionUiKit.CanonCtaHeight));
+                // #22 (capture 9403, "YOU HAVE FALLEN" strip): on SHORT panels the law-pinned
+                // canonical CTA is TALLER than the carved footer band, so the centred button
+                // spilled UP over the body copy ("Try Again" on top of the death message). The
+                // CTA size is law — so the BAND must grow to contain it: when the pinned button
+                // exceeds the footer band, raise the band's top and lift the reward well above
+                // it (gap preserved).
+                if (!hasFooterZone)
                 {
-                    float frac = Mathf.Clamp01((need + 12f) / wellH);
-                    footer.anchorMax = new Vector2(footer.anchorMax.x, frac);
-                    rewardWell.anchorMin = new Vector2(rewardWell.anchorMin.x, Mathf.Min(0.95f, frac + 0.04f));
-                    FlowTrace.Step("EndState",
-                        $"footer band grown to contain the canonical CTA (need={need:0}px, well={wellH:0}px, band->{frac:0.###})");
+                    float wellH = well.rect.height;
+                    if (wellH > 1f && need > footer.rect.height - 4f)
+                    {
+                        float frac = Mathf.Clamp01((need + 12f) / wellH);
+                        footer.anchorMax = new Vector2(footer.anchorMax.x, frac);
+                        rewardWell.anchorMin = new Vector2(rewardWell.anchorMin.x, Mathf.Min(0.95f, frac + 0.04f));
+                        FlowTrace.Step("EndState",
+                            $"footer band grown to contain the canonical CTA (need={need:0}px, well={wellH:0}px, band->{frac:0.###})");
+                    }
+                }
+                else
+                {
+                    // Real footer drop-zone (FrameCore): the footer band cannot grow (it is the
+                    // frame's zone), so instead lift the reward well's FLOOR above the CTA's top
+                    // edge. footer/well anchors are both fractions of the panel content.
+                    var contentRt = chrome.content != null ? chrome.content.GetComponent<RectTransform>() : null;
+                    float panelH = contentRt != null ? contentRt.rect.height : 0f;
+                    float footerCentre = (footer.anchorMin.y + footer.anchorMax.y) * 0.5f;
+                    float ctaTop = panelH > 1f ? footerCentre + (need * 0.5f) / panelH
+                                               : footerCentre + 0.12f;   // conservative unmeasured fallback
+                    float wellMin = well.anchorMin.y, wellMax = well.anchorMax.y;
+                    float floor = Mathf.Clamp01((ctaTop + 0.02f - wellMin)
+                                                / Mathf.Max(0.05f, wellMax - wellMin));
+                    if (floor > 0f)
+                    {
+                        rewardWell.anchorMin = new Vector2(rewardWell.anchorMin.x, Mathf.Min(0.5f, floor));
+                        FlowTrace.Step("EndState",
+                            $"reward well floor raised above the canonical CTA (ctaTop={ctaTop:0.###}, well {wellMin:0.###}-{wellMax:0.###}, floor->{Mathf.Min(0.5f, floor):0.###})");
+                    }
                 }
             }
-            else
+            else if (vm.Compact)
             {
-                // Real footer drop-zone (FrameCore): the footer band cannot grow (it is the
-                // frame's zone), so instead lift the reward well's FLOOR above the CTA's top
-                // edge. footer/well anchors are both fractions of the panel content.
-                var contentRt = chrome.content != null ? chrome.content.GetComponent<RectTransform>() : null;
-                float panelH = contentRt != null ? contentRt.rect.height : 0f;
-                float footerCentre = (footer.anchorMin.y + footer.anchorMax.y) * 0.5f;
-                float ctaTop = panelH > 1f ? footerCentre + (need * 0.5f) / panelH
-                                           : footerCentre + 0.12f;   // conservative unmeasured fallback
-                float wellMin = well.anchorMin.y, wellMax = well.anchorMax.y;
-                float floor = Mathf.Clamp01((ctaTop + 0.02f - wellMin)
-                                            / Mathf.Max(0.05f, wellMax - wellMin));
-                if (floor > 0f)
-                {
-                    rewardWell.anchorMin = new Vector2(rewardWell.anchorMin.x, Mathf.Min(0.5f, floor));
-                    FlowTrace.Step("EndState",
-                        $"reward well floor raised above the canonical CTA (ctaTop={ctaTop:0.###}, well {wellMin:0.###}-{wellMax:0.###}, floor->{Mathf.Min(0.5f, floor):0.###})");
-                }
+                // F8-43: no CTA on the compact banner — tap-anywhere on the PANEL becomes the
+                // manual dismiss (the CTA was the only raycast target before; compact panels
+                // have no scrim/backdrop, so the world stays interactive around the banner).
+                // AutoDismissAfter (below) remains the softlock guard; both funnel FirePrimary,
+                // which latches on _fired so the route still fires exactly once.
+                var tap = new GameObject("TapDismiss", typeof(Image), typeof(Button));
+                tap.transform.SetParent(chrome.root.transform, false);
+                var tapRt = (RectTransform)tap.transform;
+                tapRt.anchorMin = Vector2.zero; tapRt.anchorMax = Vector2.one;
+                tapRt.offsetMin = Vector2.zero; tapRt.offsetMax = Vector2.zero;
+                var tapImg = tap.GetComponent<Image>();
+                tapImg.color = Color.clear;      // invisible; raycastTarget still catches taps
+                tapImg.raycastTarget = true;
+                tap.GetComponent<Button>().transition = Selectable.Transition.None;
+                tap.GetComponent<Button>().onClick.AddListener(FirePrimary);
+                FlowTrace.Step("EndState", "compact banner: primary CTA suppressed (auto-dismiss/tap)");
             }
 
             // F8-35 ("characters still overlap, extend panel"): the reward well is laid out
@@ -281,7 +312,7 @@ namespace DeNelle.Village.UI
             // overprinted the next row. Measure the well and EXTEND the panel (grow the
             // frame root's Y anchors; every zone is fraction-anchored so the whole chrome
             // scales, and the fixed-px CTA/close bands become MORE generous, never less).
-            if (!vm.Compact && chrome.root != null)
+            if (chrome.root != null)
             {
                 Canvas.ForceUpdateCanvases();
                 float wellPx = rewardWell.rect.height;
@@ -289,23 +320,46 @@ namespace DeNelle.Village.UI
                 if (wellPx > 1f && needPx > wellPx + 1f)
                 {
                     var rootRt = (RectTransform)chrome.root.transform;
-                    float y0 = rootRt.anchorMin.y, y1 = rootRt.anchorMax.y;
-                    float halfNow = (y1 - y0) * 0.5f;
-                    float grownHalf = Mathf.Min(0.47f, halfNow * (needPx / wellPx));
-                    if (grownHalf > halfNow + 0.001f)
+                    if (vm.Compact)
                     {
-                        float cy = Mathf.Clamp((y0 + y1) * 0.5f, 0.03f + grownHalf, 0.97f - grownHalf);
-                        rootRt.anchorMin = new Vector2(rootRt.anchorMin.x, cy - grownHalf);
-                        rootRt.anchorMax = new Vector2(rootRt.anchorMax.x, cy + grownHalf);
-                        Canvas.ForceUpdateCanvases();
-                        FlowTrace.Step("EndState",
-                            $"panel extended for content: need={needPx:0}px well {wellPx:0}->{rewardWell.rect.height:0}px half {halfNow:0.###}->{grownHalf:0.###}");
+                        // F8-45 (wave damage report): the compact banner's fixed 0.30h frame
+                        // was sized for the row-less wave-clear splash; a spoils report inside
+                        // it would only uniform-compress (BuildBody's scale<1 fallback) into
+                        // unreadable ~13px rows — the F8-35 class. Grow DOWNWARD (top edge
+                        // held at its splash anchor) just enough for the content; the world
+                        // stays non-blocked (no scrim) and a row-less banner is unchanged.
+                        float y0 = rootRt.anchorMin.y, y1 = rootRt.anchorMax.y;
+                        float hNow = y1 - y0;
+                        float grownH = Mathf.Min(y1 - 0.08f, hNow * (needPx / wellPx));
+                        if (grownH > hNow + 0.001f)
+                        {
+                            rootRt.anchorMin = new Vector2(rootRt.anchorMin.x, y1 - grownH);
+                            Canvas.ForceUpdateCanvases();
+                            FlowTrace.Step("EndState",
+                                $"compact banner extended down for damage report: need={needPx:0}px well {wellPx:0}->{rewardWell.rect.height:0}px h {hNow:0.###}->{grownH:0.###}");
+                        }
+                    }
+                    else
+                    {
+                        float y0 = rootRt.anchorMin.y, y1 = rootRt.anchorMax.y;
+                        float halfNow = (y1 - y0) * 0.5f;
+                        float grownHalf = Mathf.Min(0.47f, halfNow * (needPx / wellPx));
+                        if (grownHalf > halfNow + 0.001f)
+                        {
+                            float cy = Mathf.Clamp((y0 + y1) * 0.5f, 0.03f + grownHalf, 0.97f - grownHalf);
+                            rootRt.anchorMin = new Vector2(rootRt.anchorMin.x, cy - grownHalf);
+                            rootRt.anchorMax = new Vector2(rootRt.anchorMax.x, cy + grownHalf);
+                            Canvas.ForceUpdateCanvases();
+                            FlowTrace.Step("EndState",
+                                $"panel extended for content: need={needPx:0}px well {wellPx:0}->{rewardWell.rect.height:0}px half {halfNow:0.###}->{grownHalf:0.###}");
+                        }
                     }
                 }
             }
 
             BuildBody(vm, rewardWell);
-            Track(btn.gameObject, 0.25f + vm.Spoils.Count * 0.05f + 0.08f, 0.92f);
+            if (btn != null)   // F8-43: compact banners build no CTA
+                Track(btn.gameObject, 0.25f + vm.Spoils.Count * 0.05f + 0.08f, 0.92f);
 
             // Smooth in: whole panel fades+scales, then the staggered content.
             var rootGroup = chrome.root.GetComponent<CanvasGroup>();

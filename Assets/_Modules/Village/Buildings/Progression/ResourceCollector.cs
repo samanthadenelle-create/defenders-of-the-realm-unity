@@ -38,6 +38,16 @@ namespace DeNelle.Village.Buildings.Progression
         public double PendingAmount => _pending;
         public bool IsBroken => _broken;
 
+        /// <summary>Health 0..1 — the accrual scale (F8-45: damage reduces economy) and
+        /// the wave damage-report fraction. Derived from this collector's own HP fields
+        /// (data-driven — no per-type hardcode).</summary>
+        public float HpFraction => _maxHp > 0f ? Mathf.Clamp01(_hp / _maxHp) : 0f;
+
+        /// <summary>Pending resources stolen when the collector last broke under siege
+        /// (session-scoped; cleared on <see cref="Repair"/>). The wave damage report
+        /// reads it to show the "looted" line.</summary>
+        public float LastLootStolen { get; private set; }
+
         public double Capacity => ComputeCapacity();
 
         // ── WO-665a: diegetic collector-fill stack seams (model-only; the view renders) ──
@@ -116,14 +126,33 @@ namespace DeNelle.Village.Buildings.Progression
             if (_hp <= 0f) _hp = _maxHp;
         }
 
-        /// <summary>Add production into pending (clamped to capacity).</summary>
+        // Last accrual scale that was FlowTraced — edge-logged (per state change), never per tick.
+        private float _lastLoggedAccrualScale = 1f;
+
+        /// <summary>
+        /// Add production into pending (clamped to capacity). F8-45 (owner 2026-07-11:
+        /// "if they did damage to collectors then those need to reduce economy"):
+        /// effective accrual = amount × HpFraction — a 40%-damaged collector produces
+        /// 40% less. Broken (<see cref="IsBroken"/>) already yields ZERO accrual via
+        /// the <see cref="CanAccrue"/> gate (IsActive requires IsAlive &amp;&amp; !_broken).
+        /// </summary>
         public void Accrue(int amount)
         {
             if (!CanAccrue || amount <= 0) return;
+            float health = HpFraction;
+            if (health <= 0f) return;   // defensive — CanAccrue should already gate this
+            if (Mathf.Abs(health - _lastLoggedAccrualScale) > 0.005f)
+            {
+                // Edge-only trace: fires when the scale CHANGES (post-hit / post-repair),
+                // not on every accrual tick.
+                _lastLoggedAccrualScale = health;
+                FlowTrace.Step("Harvest",
+                    $"collector '{_buildingId}' accrual scaled x{health:0.##} (hp {_hp:F0}/{_maxHp:F0})");
+            }
             double cap = Capacity;
             double before = _pending;
             int stepsBefore = FilledSteps;
-            _pending = System.Math.Min(cap, _pending + amount);
+            _pending = System.Math.Min(cap, _pending + amount * (double)health);
             if (_pending > before)
             {
                 FlowTrace.Throttle("Harvest", $"accrue-{_buildingId}", 2f,
@@ -181,6 +210,7 @@ namespace DeNelle.Village.Buildings.Progression
         {
             _broken = false;
             _hp = _maxHp;
+            LastLootStolen = 0f;   // F8-45: the loot report is per-break; a repair clears it
             SaveState();
             FlowTrace.Step("Harvest", $"collector-repair building={_buildingId}");
             // Leave the broken/scatter state — re-render the stack from live pending.
@@ -193,6 +223,7 @@ namespace DeNelle.Village.Buildings.Progression
             _broken = true;
             float stolen = Mathf.FloorToInt((float)_pending * RaidLootFraction);
             _pending = System.Math.Max(0, _pending - stolen);
+            LastLootStolen = stolen;   // F8-45: surfaced by the wave damage report ("looted N")
             SaveState();
             FlowTrace.Warn("Harvest",
                 $"collector-destroyed building={_buildingId} loot-stolen={stolen} pending-left={_pending:F0}");
