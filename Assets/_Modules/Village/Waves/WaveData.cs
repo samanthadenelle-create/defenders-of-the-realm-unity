@@ -335,12 +335,49 @@ namespace DeNelle.Village
         }
     }
 
+    /// <summary>
+    /// ENDLESS-MODE tuning (owner ruling 2026-07-11: "after 20 rounds continue to
+    /// allow the user to start waves manually and increase difficulty and mobs
+    /// every level up"). The deserialised shape of the optional <c>waves.json</c>
+    /// <c>endless</c> block. Past the last authored wave the WaveManager cycles
+    /// the authored waves and multiplies each batch's count by
+    /// <c>1 + CountGrowthPerWave * (waveId - lastAuthoredWaveId)</c>, capped at
+    /// <see cref="CountCap"/>. Absent block ⇒ the defaults below (5%/wave, 3×).
+    /// Stat (HP/speed/damage) growth stays WaveScalingCurve's job — it already
+    /// scales by the TRUE wave number, which keeps counting past the schedule.
+    /// </summary>
+    [Serializable]
+    public sealed class EndlessDef
+    {
+        /// <summary>Fractional mob-count growth per wave beyond the authored schedule (0.05 = +5%/wave).</summary>
+        [JsonProperty("countGrowthPerWave")] public float CountGrowthPerWave = 0.05f;
+        /// <summary>Cap on the count multiplier (3 = never more than 3× the authored counts). ≤0 = uncapped.</summary>
+        [JsonProperty("countCap")] public float CountCap = 3f;
+    }
+
     /// <summary>The deserialised root of <c>waves.json</c>.</summary>
     [Serializable]
     public sealed class WaveSchedule
     {
         [JsonProperty("version")] public int Version;
         [JsonProperty("waves")] public List<WaveDef> Waves = new List<WaveDef>();
+
+        /// <summary>Optional endless-mode tuning (null ⇒ WaveManager uses <see cref="EndlessDef"/> defaults).</summary>
+        [JsonProperty("endless")] public EndlessDef Endless;
+
+        /// <summary>The highest authored <see cref="WaveDef.WaveId"/> (0 for an empty schedule).
+        /// Endless mode begins at MaxWaveId + 1.</summary>
+        public int MaxWaveId
+        {
+            get
+            {
+                int max = 0;
+                if (Waves != null)
+                    foreach (var w in Waves)
+                        if (w != null && w.WaveId > max) max = w.WaveId;
+                return max;
+            }
+        }
 
         /// <summary>Finds a wave by its 1-based id, or null when none matches.</summary>
         public WaveDef Find(int waveId)

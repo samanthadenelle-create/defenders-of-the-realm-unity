@@ -305,6 +305,28 @@ namespace DeNelle.Village
         private int _currentWaveId;
         private float _countdownRemaining;
         private bool  _forceSpawnNow;   // dev/bot "jump to wave": zero the countdown on the next BeginLoop
+
+        // ENDLESS MODE (owner ruling 2026-07-11: "after 20 rounds continue to allow the user to
+        // start waves manually and increase difficulty and mobs every level up"). Past the last
+        // authored wave the loop does NOT auto-run the prepare countdown — it parks in phase
+        // Countdown with _countdownRemaining held at 0 and this flag set, WAITING for the player's
+        // DEFEND button (ForceBeginNextWave / ForceSpawnNextWaveNow). The HUD needs no change:
+        // StartWaveHudBridge already shows the DEFEND button in phase Countdown, and the
+        // HudKit wave-timer label only renders while CountdownRemaining > 0 (so it stays blank).
+        private bool _awaitingPlayerStart;
+
+        // Endless cycling: waves beyond the schedule replay the authored waves from this id
+        // upward IN ORDER (4..20 by default — the escalating family squads), so every full
+        // cycle ends on the authored apex wave (the dragon returns as the cycle capstone at
+        // true waves 37, 54, …). Clamped into the schedule range at runtime.
+        private const int EndlessCycleStartWaveId = 4;
+
+        /// <summary>
+        /// True while an endless wave (beyond the authored schedule) is armed and the loop is
+        /// waiting for the player to start it via the HUD DEFEND button. Read-only seam for
+        /// HUD/bot producers; before the schedule is exhausted this is always false.
+        /// </summary>
+        public bool IsAwaitingPlayerStart => _awaitingPlayerStart;
         private float _breachArmTimer;
         private bool _breachArmed;
         private int _spawnInstanceCounter;
@@ -568,6 +590,10 @@ namespace DeNelle.Village
             // Drop the stall watchdog handle — Unity stops coroutines on disable, but
             // clearing the field keeps a stale handle from being StopCoroutine'd later.
             _stallWatchdogRoutine = null;
+
+            // ENDLESS: drop the awaiting-player latch — a re-enabled/reloaded manager
+            // re-derives it from the resume seed via BeginLoop -> EnterCountdown.
+            _awaitingPlayerStart = false;
         }
 
         private void Update()
@@ -926,7 +952,12 @@ namespace DeNelle.Village
             WaveDef wave = _schedule.Find(waveId);
             if (wave == null)
             {
-                // No such wave — the schedule is exhausted.
+                // ENDLESS MODE (owner ruling 2026-07-11): past the authored schedule the loop
+                // does NOT end — arm the next endless wave (cycled def, manual player start).
+                if (TryArmEndlessWave(waveId)) return;
+
+                // No such wave and endless couldn't resolve (empty/degenerate schedule, or a
+                // gap INSIDE the authored range) — the schedule is exhausted.
                 _phase = WavePhase.Complete;
                 FlowTrace.Step("Wave", $"EnterCountdown: no WaveDef for waveId={waveId} — schedule exhausted, phase->Complete");
                 Debug.Log($"[WaveManager] All {_schedule.Waves.Count} waves cleared — schedule complete.");
@@ -959,6 +990,127 @@ namespace DeNelle.Village
             WaveCountdownUI.Instance?.StartCountdown(_countdownRemaining);
         }
 
+        // =====================================================================
+        //  Endless mode (owner ruling 2026-07-11 — past the authored schedule)
+        // =====================================================================
+
+        /// <summary>
+        /// Arms endless wave <paramref name="waveId"/> (a wave BEYOND the authored schedule):
+        /// resolves its cycled authored def, then parks the loop in phase Countdown with the
+        /// countdown held at 0 and <see cref="_awaitingPlayerStart"/> set — the wave will not
+        /// spawn until the player presses the HUD DEFEND button (ForceBeginNextWave) or a
+        /// dev/bot force-start fires. A pending <see cref="_forceSpawnNow"/> (bot jump) skips
+        /// the wait and spawns on the next tick, exactly like the authored-wave force path.
+        /// Returns false when no endless def resolves (empty schedule / waveId inside the
+        /// authored range) so the caller falls through to the legacy Complete handling.
+        /// </summary>
+        private bool TryArmEndlessWave(int waveId)
+        {
+            WaveDef src = ResolveEndlessWaveDef(waveId, out int sourceWaveId);
+            if (src == null) return false;
+
+            _currentWaveId = waveId;
+            _enemyBestSqr.Clear();    // fresh stuck-tracking per wave (parity with EnterCountdown)
+            _enemyStuckTime.Clear();
+
+            float countScale = EndlessCountScale(waveId);
+
+            bool zeroedByForce = _forceSpawnNow;
+            if (_forceSpawnNow) { _forceSpawnNow = false; _awaitingPlayerStart = false; }
+            else _awaitingPlayerStart = true;
+
+            // Phase Countdown + remaining 0 + waiting flag: TickCountdown holds (never
+            // decrements past the flag), the HUD DEFEND button shows (StartWaveHudBridge
+            // treats Countdown as available), and the HudKit "Next wave in Ns" label stays
+            // blank (it only renders while CountdownRemaining > 0). No horn yet — the calm
+            // build phase is open-ended; the lookout horn blows when the wave actually starts.
+            _countdownRemaining = 0f;
+            _phase = WavePhase.Countdown;
+            FlowTrace.Step("Wave",
+                $"endless wave {waveId}: def={sourceWaveId} countScale=x{countScale:F2} " +
+                (zeroedByForce ? "force-spawning now (bot/jump)" : "awaiting player start"));
+            OnCountdownTick.Invoke(0f);
+            Debug.Log($"[WaveManager] Endless mode — wave {waveId} armed (cycled authored wave {sourceWaveId}, " +
+                      $"mob count x{countScale:F2}). " +
+                      (zeroedByForce ? "Force-spawning now." : "Waiting for the player's DEFEND."));
+            return true;
+        }
+
+        /// <summary>
+        /// Resolves the authored WaveDef an endless wave replays. Only waves STRICTLY beyond
+        /// the last authored wave resolve (a gap inside the authored range stays a real gap).
+        /// Cycling rule: waves <see cref="EndlessCycleStartWaveId"/>..max replay IN ORDER, so
+        /// with the 20-wave schedule true wave 21 → def 4, 22 → def 5, …, 37 → def 20 (the
+        /// apex dragon returns as every cycle's capstone), 38 → def 4 again. The TRUE wave
+        /// number keeps counting so WaveScalingCurve keeps scaling HP/speed/damage past 20.
+        /// </summary>
+        private WaveDef ResolveEndlessWaveDef(int waveId, out int sourceWaveId)
+        {
+            sourceWaveId = waveId;
+            if (_schedule == null) return null;
+            int max = _schedule.MaxWaveId;
+            if (max <= 0 || waveId <= max) return null;
+
+            int cycleStart = Mathf.Clamp(EndlessCycleStartWaveId, 1, max);
+            int cycleLen = max - cycleStart + 1;
+            sourceWaveId = cycleStart + (waveId - max - 1) % cycleLen;
+            return _schedule.Find(sourceWaveId);
+        }
+
+        /// <summary>
+        /// The endless mob-count multiplier for <paramref name="waveId"/>: 1 within the
+        /// authored schedule, then 1 + growth × (waveId − lastAuthored), capped. Growth/cap
+        /// are DATA-DRIVEN from the waves.json "endless" block (defaults +5%/wave, cap 3×)
+        /// so the owner tunes balance without a code edit.
+        /// </summary>
+        private float EndlessCountScale(int waveId)
+        {
+            if (_schedule == null) return 1f;
+            int max = _schedule.MaxWaveId;
+            if (max <= 0 || waveId <= max) return 1f;
+
+            float growth = _schedule.Endless != null ? _schedule.Endless.CountGrowthPerWave : 0.05f;
+            float cap    = _schedule.Endless != null ? _schedule.Endless.CountCap : 3f;
+            if (growth <= 0f) return 1f;
+            float scale = 1f + growth * (waveId - max);
+            return cap > 0f ? Mathf.Min(scale, cap) : scale;
+        }
+
+        /// <summary>
+        /// Clones an authored WaveDef for an endless wave with every batch count multiplied by
+        /// <paramref name="countScale"/> (rounded UP, never below the authored count). A CLONE —
+        /// never mutates the cached schedule, since cycled defs are replayed every cycle.
+        /// Boss / apexBoss declarations carry over unchanged (stat growth is WaveScalingCurve's job).
+        /// </summary>
+        private static WaveDef CloneWaveWithScaledCounts(WaveDef src, int waveId, float countScale)
+        {
+            var clone = new WaveDef
+            {
+                WaveId           = waveId,
+                Name             = src.Name,
+                CountdownSeconds = src.CountdownSeconds,
+                Boss             = src.Boss,
+                ApexBoss         = src.ApexBoss,
+                Enemies          = new List<WaveBatch>(src.Enemies != null ? src.Enemies.Count : 0),
+            };
+            if (src.Enemies != null)
+            {
+                foreach (WaveBatch b in src.Enemies)
+                {
+                    if (b == null) continue;
+                    clone.Enemies.Add(new WaveBatch
+                    {
+                        Type       = b.Type,
+                        Count      = Mathf.Max(b.Count, Mathf.CeilToInt(b.Count * countScale)),
+                        SpawnPoint = b.SpawnPoint,
+                        Delay      = b.Delay,
+                        Interval   = b.Interval,
+                    });
+                }
+            }
+            return clone;
+        }
+
         /// <summary>
         /// Scales a wave's authored <paramref name="baseCountdown"/> by the
         /// difficulty the save records. Reads <see cref="GameState.Difficulty"/>
@@ -976,6 +1128,10 @@ namespace DeNelle.Village
 
         private void TickCountdown()
         {
+            // ENDLESS manual start: the countdown is parked (held at 0, never ticking) until
+            // the player fires the DEFEND button / a force-start seam. StartWave clears the flag.
+            if (_awaitingPlayerStart) return;
+
             _countdownRemaining -= Time.deltaTime;
             if (_countdownRemaining <= 0f)
             {
@@ -1056,6 +1212,25 @@ namespace DeNelle.Village
         private void StartWave(int waveId)
         {
             WaveDef wave = _schedule.Find(waveId);
+            if (wave == null)
+            {
+                // ENDLESS MODE: replay the cycled authored def with the endless mob-count
+                // multiplier baked into a CLONE (the cached schedule is never mutated).
+                // The TRUE waveId is what _currentWaveId carries, so WaveScalingCurve keeps
+                // scaling HP/speed/damage by the real wave number in every spawn path.
+                WaveDef src = ResolveEndlessWaveDef(waveId, out int sourceWaveId);
+                if (src != null)
+                {
+                    float countScale = EndlessCountScale(waveId);
+                    wave = CloneWaveWithScaledCounts(src, waveId, countScale);
+                    _awaitingPlayerStart = false;
+                    // The lookout horn was held back while the endless build phase waited on
+                    // the player — blow it now the raid is actually released.
+                    GameSfx.PlayLookoutHorn();
+                    FlowTrace.Step("Wave",
+                        $"endless wave {waveId}: START — def={sourceWaveId} countScale=x{countScale:F2} (player/force released)");
+                }
+            }
             if (wave == null) { FlowTrace.Step("Wave", $"StartWave: no WaveDef for {waveId} — rolling to next countdown"); EnterCountdown(waveId + 1); return; }
 
             _phase = WavePhase.Active;
@@ -1297,6 +1472,24 @@ namespace DeNelle.Village
             EnemyWaveComposition composition =
                 WaveCompositionBuilder.Build(waveId, _enemyCatalog);
             if (composition == null || composition.Entries.Count == 0) return false;
+
+            // ENDLESS MODE: the smart path generates its roster from the TRUE wave number
+            // (so its own count/difficulty ramp continues past the schedule), but the
+            // owner-tunable endless mob-count multiplier from waves.json applies ON TOP —
+            // each slot's count is scaled (rounded up, never below the generated count),
+            // exactly like the batch paths. No-op (x1) within the authored schedule.
+            float endlessScale = EndlessCountScale(waveId);
+            if (endlessScale > 1f)
+            {
+                for (int i = 0; i < composition.Entries.Count; i++)
+                {
+                    WaveCompositionEntry entry = composition.Entries[i];
+                    entry.Count = Mathf.Max(entry.Count, Mathf.CeilToInt(entry.Count * endlessScale));
+                    composition.Entries[i] = entry;   // struct — write back
+                }
+                FlowTrace.Step("Wave",
+                    $"endless wave {waveId}: smart composition countScale=x{endlessScale:F2} total={composition.TotalCount}");
+            }
 
             Transform heartT = _heart != null ? _heart.transform : null;
             List<Enemy> squad = _smartSpawner.SpawnWave(
@@ -1740,6 +1933,12 @@ namespace DeNelle.Village
             // RecordRun writes BestWave to the save (the cross-session resume seed) and saves.
             s_resumeWaveId = cleared + 1;
             GameStateService.Instance?.RecordRun(cleared);
+
+            // ENDLESS: an endless clear persists exactly like an authored clear (BestWave has
+            // no upper clamp — SaveSchema only floors it at 0), and the resume seed lands the
+            // returning player back in the endless awaiting-player state, never Complete.
+            if (_schedule != null && cleared > _schedule.MaxWaveId)
+                FlowTrace.Step("Wave", $"endless wave {cleared}: CLEARED — resume seed -> {cleared + 1}");
 
             AwardWaveResources(cleared);   // WO-330: build resources (Wood/Iron) — the core economy income
             AwardWaveCrystals(cleared);

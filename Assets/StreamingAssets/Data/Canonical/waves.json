@@ -17,6 +17,11 @@
     "apexBoss": "Optional object — declares the APEX flying boss for the wave (the Black Dragon, 'Syndrath the Devourer'). DISTINCT from 'boss' above: 'boss' names a ground NavMesh enemy from enemies.json, whereas apexBoss is the kinematic-flight DragonBoss prefab (Boss_Dragon.prefab) — it is NOT in enemies.json and does not path a NavMesh. Fields: { id (stable per-instance boss id), hp (max HP override; <=0 keeps the prefab's 4200 default), nameKey (canon-strings.json key for the display name) }. The apex wave sits ABOVE the canon Necromancer cadence — see docs/port-notes/dragon-boss.md §2 + dragon-wave-wiring.md."
   },
   "version": 1,
+  "endless": {
+    "_comment": "ENDLESS MODE (owner ruling 2026-07-11: 'after 20 rounds continue to allow the user to start waves manually and increase difficulty and mobs every level up'). Past the last authored wave (20) the WaveManager never goes Complete: it cycles authored waves 4..20 IN ORDER (true wave 21 replays def 4, ... 37 replays def 20 — the apex dragon Syndrath returns as every cycle's capstone) and each wave WAITS for the player's DEFEND button instead of auto-counting down. Mob counts multiply by 1 + countGrowthPerWave * (trueWave - 20), capped at countCap (rounded up, never below the authored count). Enemy HP/speed/damage growth stays WaveScalingCurve's job — it scales by the TRUE wave number, which keeps counting past 20.",
+    "countGrowthPerWave": 0.05,
+    "countCap": 3.0
+  },
   "waves": [
     {
       "_comment": "WO-316 FAMILY COMPOSITION: each wave is authored as ONE Hollow squad with a ROLE MIX (tank + healer + a few DPS), not a clone-swarm. WaveManager.SpawnComposedFamilyGroups buckets these batches by enemies.json 'family', stamps each member's EnemyRole from its 'role' (brute->Tank, caster->Healer, skirmisher->Ranged, grunt->DPS), and releases the whole squad as ONE coordinated group (formation spread + 'hold then charge together'). Keep all batches in a wave on the SAME family + SAME spawnPoint so they compose into a single cohesive squad. Counts scale up per wave.",
