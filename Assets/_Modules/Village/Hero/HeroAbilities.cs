@@ -273,7 +273,18 @@ namespace DeNelle.Village
             float dt = Time.deltaTime;
 
             // ── mana regen + cooldown ticks (heroAbilities.ts lines 122-126) ──
-            _mana = Mathf.Min(_maxMana, _mana + _manaRegenPerSecond * dt * _manaRegenMultiplier);
+            // WO-676 G3 (wire-or-hide): Aether Bond (shared.n5, manaRegen) — fold the talent
+            // bonus into the per-second regen. Same registry read HeroHealth.RegenTick uses
+            // (HeroTalentModifiers, clamped accessor), resolved with THIS component's class
+            // (_heroClass is the class source HeroHealth.HeroClassOrDefault itself reads).
+            // Identity (×1) until the node is learned. Multiplicative with the Aether Sprite's
+            // _manaRegenMultiplier, mirroring how gear and talent HP bonuses stack.
+            float talentManaRegen = DeNelle.Village.Talents.HeroTalentModifiers.ManaRegenBonus(_heroClass);
+            if (talentManaRegen > 0f)
+                DeNelle.Core.Diagnostics.FlowTrace.Once("HeroTalents", "manaRegen",
+                    $"Aether Bond applied: +{talentManaRegen:P0} mana regen (shared.n5).");
+            _mana = Mathf.Min(_maxMana,
+                _mana + _manaRegenPerSecond * dt * _manaRegenMultiplier * (1f + talentManaRegen));
 
             // WO3: Mana Draught — drip the over-time mana restore while the window is open.
             if (Time.time < _manaOverTimeUntil && _manaOverTimeRate > 0f)
@@ -824,6 +835,15 @@ namespace DeNelle.Village
                         var hitEl = element;
                         bool snare = def.EffectEnum == AbilityEffect.Snare;
                         var hitDef = def;   // WO-VFX-003: capture for the impact-key play on arrival
+                        // WO-676 Venombrand: read the poison rider ONCE at cast (the same
+                        // HeroTalentModifiers read seam as Emberbrand's burn proc — see
+                        // PlayerAttackController's ForEachOnHitProc) and capture it for the
+                        // arrival closure. Identity (false) until the talent is owned; the
+                        // node's effect.ability CSV names which abilities carry it
+                        // (Thunderbolt + Throwing Spear), so this is a no-op for every other cast.
+                        bool venom = HeroTalentModifiers.TryGetAbilityDotRider(
+                            _heroClass, def.Id, "poison",
+                            out float venomDps, out float venomSecs, out int venomStacks);
                         LaunchProjectile(foe.WorldPosition, () =>
                         {
                             if (hitFoe == null || !hitFoe.IsAlive) return;
@@ -836,6 +856,8 @@ namespace DeNelle.Village
                             hitFoe.TakeDamage(hitDmg, hitEl);
                             DeNelle.Core.Combat.DamageAttribution.Record(hitFoe, HeroProgression.Id, hitDmg);
                             if (snare) hitFoe.ApplyStatus(StatusEffect.Slow, 2.5f); // castAbility.ts snare
+                            // WO-676 Venombrand: venom in the wound — stack-capped poison DoT.
+                            if (venom) ApplyPoisonRider(hitFoe, venomDps, venomSecs, venomStacks);
                             ReportRumble(hitDmg);   // WO-497: rumble on the projectile CONNECTING
                             // WO-VFX-003: Hovl impact key at the connection point (element-tinted).
                             PlayImpactVfxKey(hitDef, hitFoe.WorldPosition);
@@ -1005,6 +1027,15 @@ namespace DeNelle.Village
         private void ResolveTaunt(AbilityDef def, Vector3 origin)
         {
             float r = def.Range + _enemyHitRadius;
+            // WO-676 Holy Retribution: taunted enemies BURN. Read the taunt-burn rider ONCE
+            // per cast (the node's effect.ability names "knight.wardens-roar", so Defender's
+            // Call and any damage-0 taunt stay untouched); each held foe below then gets the
+            // exact Emberbrand burn shape — StatusEffect.Burn tell + the BurnDoT ticker
+            // (mirrors ResolveDot's landing branch). Identity until the capstone is owned.
+            bool retribution = HeroTalentModifiers.TryGetAbilityDotRider(
+                _heroClass, def.Id, null,
+                out float burnDps, out float burnSecs, out _);
+            int burned = 0;
             int count = Physics.OverlapSphereNonAlloc(origin, r, _overlap, _enemyMask, QueryTriggerInteraction.Collide);
             for (int i = 0; i < count; i++)
             {
@@ -1020,7 +1051,16 @@ namespace DeNelle.Village
                     target.TakeDamage(def.Damage, DamageElement.None);
                     DeNelle.Core.Combat.DamageAttribution.Record(target, HeroProgression.Id, def.Damage);
                 }
+                if (retribution)
+                {
+                    target.ApplyStatus(StatusEffect.Burn, burnSecs);
+                    StartCoroutine(BurnDoT(target, burnDps, burnSecs));
+                    burned++;
+                }
             }
+            if (retribution && burned > 0)
+                DeNelle.Core.Diagnostics.FlowTrace.Step("HeroTalents",
+                    $"Holy Retribution: taunt-burn applied to {burned} foe(s) — {burnDps:F0} dps for {burnSecs:F0}s ({def.Id}).");
             // Temp shield = a small self-heal (the temp-shield system is separate; this is the cheap stand-in).
             var heroHp = GetComponent<HeroHealth>() ?? HeroHealth.Instance;
             heroHp?.Heal(20f);
@@ -1098,6 +1138,72 @@ namespace DeNelle.Village
                 if (target == null || !target.IsAlive) yield break;
                 target.TakeDamage(dps * tick, DamageElement.Flame);
             }
+        }
+
+        // ── WO-676 Venombrand — the poison rider on Thunderbolt / Throwing Spear ──
+        // Per-foe stack ledger: each entry is the expiry time of one live poison stack.
+        // A hit past the cap (effect.targets, Venombrand = 2) refreshes nothing and adds
+        // nothing — "stacks to 2" exactly. The DoT itself mirrors BurnDoT tick-for-tick
+        // but deals PLAIN (None-element) damage and deliberately does NOT ApplyStatus
+        // Burn — poison must not wear the fire tell. Distinct tell = the VFX follow-up
+        // (green DRIP trail + drip icon; never color-only — owner is colorblind).
+        private readonly System.Collections.Generic.Dictionary<IDamageable, System.Collections.Generic.List<float>>
+            _venomStacks = new System.Collections.Generic.Dictionary<IDamageable, System.Collections.Generic.List<float>>();
+
+        /// <summary>WO-676: applies one stack of Venombrand poison to <paramref name="foe"/>,
+        /// capped at <paramref name="maxStacks"/> concurrent stacks per foe.</summary>
+        private void ApplyPoisonRider(IDamageable foe, float dps, float duration, int maxStacks)
+        {
+            if (foe == null || !foe.IsAlive || dps <= 0f || duration <= 0f) return;
+
+            if (!_venomStacks.TryGetValue(foe, out var stamps))
+            {
+                // Opportunistic ledger sweep: drop foes whose stacks have all lapsed
+                // (dead or long-since-cured) so the dictionary never grows unbounded.
+                if (_venomStacks.Count >= 32) PruneVenomLedger();
+                stamps = new System.Collections.Generic.List<float>(2);
+                _venomStacks[foe] = stamps;
+            }
+            stamps.RemoveAll(t => t <= Time.time);
+            if (stamps.Count >= Mathf.Max(1, maxStacks))
+            {
+                FlowTrace.Throttle("HeroTalents", "venom-capped", 1f,
+                    $"Venombrand: foe already at {stamps.Count} poison stack(s) — cap holds, no new stack.");
+                return;
+            }
+            stamps.Add(Time.time + duration);
+            StartCoroutine(PoisonDoT(foe, dps, duration));
+            FlowTrace.Step("HeroTalents",
+                $"Venombrand: poison stack {stamps.Count} applied — {dps:F0} dps for {duration:F0}s.");
+        }
+
+        /// <summary>WO-676: one Venombrand stack — mirrors <see cref="BurnDoT"/> tick-for-tick
+        /// (1s ticks, stops on death) with plain None-element damage (poison, not fire).</summary>
+        private System.Collections.IEnumerator PoisonDoT(IDamageable target, float dps, float duration)
+        {
+            float elapsed = 0f;
+            const float tick = 1f;
+            while (elapsed < duration)
+            {
+                yield return new WaitForSeconds(tick);
+                elapsed += tick;
+                if (target == null || !target.IsAlive) yield break;
+                target.TakeDamage(dps * tick, DamageElement.None);
+            }
+        }
+
+        /// <summary>Drops venom-ledger entries whose stacks have all expired.</summary>
+        private void PruneVenomLedger()
+        {
+            var stale = new System.Collections.Generic.List<IDamageable>();
+            foreach (var kv in _venomStacks)
+            {
+                bool alive = false;
+                foreach (var t in kv.Value)
+                    if (t > Time.time) { alive = true; break; }
+                if (!alive) stale.Add(kv.Key);
+            }
+            foreach (var key in stale) _venomStacks.Remove(key);
         }
 
         /// <summary>

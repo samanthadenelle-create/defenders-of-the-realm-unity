@@ -186,7 +186,10 @@ namespace DeNelle.Village
                 var u = CurrentUpgrade();
                 if (u == null) return 0f;
                 float ranged = TowerPerkTable.EffectiveRange(u.range, EffectiveTier);
-                return ranged * DeNelle.Core.State.ModifierService.Active.TowerRangeMult;
+                // WO-676: + Farsight Emplacements (towerRange, flat metres) — the BULWARK
+                // talent read at this tower's existing range choke point. 0 at Σ=0.
+                return ranged * DeNelle.Core.State.ModifierService.Active.TowerRangeMult
+                       + TalentRangeAdd();
             }
         }
 
@@ -202,9 +205,68 @@ namespace DeNelle.Village
                 var u = CurrentUpgrade();
                 if (u == null) return 0f;
                 float dmg = TowerPerkTable.EffectiveDamage(u.damage, EffectiveTier);
-                return dmg * DeNelle.Core.State.ModifierService.Active.TowerDamageMult;
+                // WO-676: × Keen Ballistics (towerDamage, fractional) — the BULWARK talent
+                // read at this tower's existing damage choke point. ×1 at Σ=0.
+                return dmg * DeNelle.Core.State.ModifierService.Active.TowerDamageMult
+                       * TalentDamageMult();
             }
         }
+
+        // ── WO-676 (BULWARK talents) ──────────────────────────────────────────
+        // Placed towers are ALWAYS player-owned (spawned by TowerPlacementSystem;
+        // garrison turrets are DefenseTower with Allegiance.EnemyOwned), so the
+        // hero's strategic tree applies unconditionally here. Sums come from
+        // HeroTalentModifiers.StatSum — the SAME Σ-registry pattern
+        // HeroHealth.TakeDamage consumes — TTL-cached (0.5s) because CurrentRange
+        // is polled per frame by TowerRangeRing. Σ=0 → identity (×1 / +0), so
+        // baseline stats are byte-identical.
+        // towerAttackSpeed (Standing Orders) is cached HERE alongside damage/range
+        // (one pattern, one refresh) and consumed by TowerCombat's fire tick via
+        // TalentAttackSpeedMult() — TowerCombat divides its EffectiveCooldown by it
+        // (TowerCombat.cs Update), so it never invents a second cache/class-resolve.
+        private float _talentDamageMult = 1f;
+        private float _talentRangeAdd;
+        private float _talentAttackSpeedMult = 1f;
+        private float _talentSumsNextRefresh = -1f;
+
+        private static string ActiveHeroClass()
+        {
+            var hero = HeroHealth.Instance;
+            var abilities = hero != null ? hero.GetComponent<HeroAbilities>() : null;
+            return abilities != null ? abilities.HeroClass : "knight";
+        }
+
+        private void RefreshTalentSumsIfDue()
+        {
+            if (Time.time < _talentSumsNextRefresh) return;
+            _talentSumsNextRefresh = Time.time + 0.5f;
+
+            string heroClass = ActiveHeroClass();
+            float dmg = Talents.HeroTalentModifiers.StatSum(heroClass, "towerDamage");
+            float rng = Talents.HeroTalentModifiers.StatSum(heroClass, "towerRange");
+            // Standing Orders — the clamped accessor (0..+100%, A3 G2 cap) rather than a raw
+            // StatSum, because fire-rate divides a cooldown (an unclamped Σ could zero it).
+            float spd = Talents.HeroTalentModifiers.TowerAttackSpeedBonus(heroClass);
+            _talentDamageMult      = 1f + Mathf.Max(0f, dmg);
+            _talentRangeAdd        = Mathf.Max(0f, rng);
+            _talentAttackSpeedMult = 1f + spd;
+
+            if (dmg > 0f) FlowTrace.Once("Tower", "talent-towerDamage",
+                $"BULWARK towerDamage applied to placed towers: +{dmg:P0} (Keen Ballistics).");
+            if (rng > 0f) FlowTrace.Once("Tower", "talent-towerRange",
+                $"BULWARK towerRange applied to placed towers: +{rng:0.#}m (Farsight Emplacements).");
+            if (spd > 0f) FlowTrace.Once("Tower", "talent-towerAttackSpeed",
+                $"BULWARK towerAttackSpeed applied to placed towers: +{spd:P0} fire rate (Standing Orders).");
+        }
+
+        private float TalentDamageMult() { RefreshTalentSumsIfDue(); return _talentDamageMult; }
+        private float TalentRangeAdd()   { RefreshTalentSumsIfDue(); return _talentRangeAdd; }
+
+        /// <summary>WO-676 BULWARK: 1 + Standing Orders fire-rate bonus (TTL-cached with the
+        /// damage/range sums above). Same-assembly consumer: TowerCombat divides its effective
+        /// cooldown by this. Placed towers are ALWAYS player-owned (see block comment above),
+        /// so the hero's strategic tree applies unconditionally. ×1 at Σ=0.</summary>
+        internal float TalentAttackSpeedMult() { RefreshTalentSumsIfDue(); return _talentAttackSpeedMult; }
 
         private TowerUpgrade CurrentUpgrade()
         {

@@ -22,6 +22,44 @@ using UnityEngine;
 namespace DeNelle.Village.Talents
 {
     /// <summary>
+    /// WO-676: the effect-type vocabulary as compile-time keys. Consumer systems (economy /
+    /// defense readers, lanes A1/A2) reference THESE constants — never string literals — when
+    /// summing via <c>HeroTalentModifiers.StatSum</c>, so a typo is a compile error not a
+    /// silent 0. Values are additive FRACTIONS unless noted. Combat types that predate WO-676
+    /// keep their literal usage inside HeroTalentModifiers (unchanged behaviour).
+    /// </summary>
+    public static class HeroTalentEffectTypes
+    {
+        // ── STEWARD (economy) — WO-676 §A ────────────────────────────────────────
+        /// <summary>+fraction echo/collector harvest rate (Provider's Bond). → EchoService tick + ResourceBuildingHarvester accrual.</summary>
+        public const string HarvestRate = "harvestRate";
+        /// <summary>+fraction collector pending-capacity (Deep Reserves). → ResourceCollector capacity.</summary>
+        public const string CollectorCap = "collectorCap";
+        /// <summary>fraction OFF repair prices (Master Mason). → WO-672 repair pricing path.</summary>
+        public const string RepairCost = "repairCost";
+        /// <summary>fraction OFF build/upgrade timer durations (Foreman's Pace). → BuildTimerService duration calc.</summary>
+        public const string BuildTime = "buildTime";
+        /// <summary>+fraction refunded when selling/losing a structure (Salvager). → BuildModeController sell + WO-672 destroyed-loss.</summary>
+        public const string Salvage = "salvage";
+        /// <summary>+fraction wave rewards (Bountiful Banners capstone). → wave reward grant path.</summary>
+        public const string WaveReward = "waveReward";
+
+        // ── BULWARK (defensive structures) — WO-676 §A ───────────────────────────
+        /// <summary>+fraction tower damage (Keen Ballistics). → DefenseTower/ArcaneTower damage calc.</summary>
+        public const string TowerDamage = "towerDamage";
+        /// <summary>+METERS of tower range (Farsight Emplacements). Additive meters, NOT a fraction.</summary>
+        public const string TowerRange = "towerRange";
+        /// <summary>fraction OFF damage walls/gates/towers take, always-on (Hardened Ramparts). → structure damage intake.</summary>
+        public const string StructureToughness = "structureToughness";
+        /// <summary>+fraction tower fire rate (Standing Orders). → tower fire-rate calc.</summary>
+        public const string TowerAttackSpeed = "towerAttackSpeed";
+        /// <summary>fraction OFF damage ALL defenses take while a wave is ACTIVE only (Warden of
+        /// Elarion capstone — owner pin 4: DEFEND-scoped -25%). The consumer adds this to
+        /// <see cref="StructureToughness"/> only when WaveManager reports a live wave.</summary>
+        public const string StructureToughnessWave = "structureToughnessWave";
+    }
+
+    /// <summary>
     /// v2 talent effect payload (data-driven, owner-thinks-in-data-structures). One small
     /// record per node carrying the effect <see cref="Type"/> + the parameters any handler
     /// might read. Unused params stay 0/null so a node only carries what it needs. The
@@ -31,7 +69,7 @@ namespace DeNelle.Village.Talents
     [Serializable]
     public sealed class HeroTalentEffectDef
     {
-        [JsonProperty("type")] public string Type;        // damageReduction | blockChance | defense | maxHpPct | damageBonus | cdReduction | unlockAbility | modifyAbility | aura | onEvent | proc | taunt | reflect | laststand | invuln | summon | stealth | stun | mark | pull | allStatsPct | critChance | attackSpeed | manaRegen | manaCostReduction | healthRegen | shieldStrength | wisdomPerLevel | moveSpeed | range | dodge
+        [JsonProperty("type")] public string Type;        // damageReduction | blockChance | defense | maxHpPct | damageBonus | cdReduction | unlockAbility | modifyAbility | aura | onEvent | proc | taunt | reflect | laststand | invuln | summon | stealth | stun | mark | pull | allStatsPct | critChance | attackSpeed | manaRegen | manaCostReduction | healthRegen | shieldStrength | wisdomPerLevel | moveSpeed | range | dodge | harvestRate | collectorCap | repairCost | buildTime | salvage | waveReward | towerDamage | towerRange | structureToughness | towerAttackSpeed | structureToughnessWave  (WO-676 strategic types = the HeroTalentEffectTypes consts above)
         [JsonProperty("value")] public float Value;       // primary magnitude (fraction or amount)
         [JsonProperty("stat")] public string Stat;        // disambiguator for modifyAbility (e.g. "heal")
         [JsonProperty("ability")] public string Ability;  // target/unlock ability id
@@ -61,6 +99,15 @@ namespace DeNelle.Village.Talents
         [JsonProperty("description")] public string Description;
         [JsonProperty("effect")] public HeroTalentEffectDef Effect; // v2 effect payload
         [JsonProperty("prerequisites")] public List<string> Prerequisites = new List<string>();
+
+        // WO-676 strategic branches: "war" | "steward" | "bulwark". Absent/empty = war
+        // (the legacy combat nodes) — the View uses this for branch section dividers.
+        [JsonProperty("branch")] public string Branch;
+
+        // WO-676 G3 (wire-or-hide, no dead nodes): a node whose effect type has NO
+        // registered runtime consumer must carry "hidden": true — the View skips it and
+        // the EditMode gate enforces the pairing. Defaults false (visible).
+        [JsonProperty("hidden")] public bool Hidden;
 
         // Node-graph (Path B) layout: canvas-relative position (0..1; y 0=top, 1=bottom)
         // and OPTIONAL extra cosmetic connector targets beyond prerequisites. -1 = unset

@@ -1606,14 +1606,28 @@ namespace DeNelle.Village
                 total.crystals += step.crystals;
             }
 
+            // WO-676 STEWARD (Salvager): ONE HeroTalentModifiers read at this existing
+            // refund calc — `salvage` boosts the 50% sell refund (e.g. +0.15 => 57.5% of
+            // invested cost). StatSum is internally null-safe (0 with no service/tree/
+            // nodes), so the refund is byte-identical to baseline at sum 0.
+            float salvage = DeNelle.Village.Talents.HeroTalentModifiers.StatSum(
+                HeroTalentClassReader.Slug(), "salvage");
+            if (salvage > 0f)
+                DeNelle.Core.Diagnostics.FlowTrace.Once("Talent", "salvage",
+                    $"salvage x{1f + salvage:0.###} applied to sell refund (WO-676 Salvager).");
+
             return new DeNelle.Core.Catalog.ResourceCost
             {
-                wood     = total.wood     / 2,
-                food     = total.food     / 2,
-                iron     = total.iron     / 2,
-                crystals = total.crystals / 2,
+                wood     = ApplySalvage(total.wood     / 2, salvage),
+                food     = ApplySalvage(total.food     / 2, salvage),
+                iron     = ApplySalvage(total.iron     / 2, salvage),
+                crystals = ApplySalvage(total.crystals / 2, salvage),
             };
         }
+
+        /// <summary>WO-676 Salvager: scale one halved refund slot by (1 + salvage sum); identity at 0.</summary>
+        private static int ApplySalvage(int halfRefund, float salvageBonus)
+            => salvageBonus > 0f ? Mathf.RoundToInt(halfRefund * (1f + salvageBonus)) : halfRefund;
 
         // =====================================================================
         //  Cost resolution + ledger boundary (S4 — multi-resource economy)

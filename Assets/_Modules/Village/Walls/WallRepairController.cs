@@ -542,12 +542,29 @@ namespace DeNelle.Village
         /// The one formula: per-material ceil(buildCost x damage fraction). A
         /// destroyed structure (fraction ≥ <see cref="DestroyedFraction"/>) pays
         /// the FULL build cost — that IS the rebuild option. Crystals slot is
-        /// always 0 (never spent on repair).
+        /// always 0 (never spent on repair). WO-676 STEWARD (Master Mason): the
+        /// `repairCost` talent sum discounts the fraction here — the ONE pricing
+        /// choke point every repair path (prompt, confirm, Repair-All, rebuild)
+        /// already flows through. Identity at sum 0.
         /// </summary>
         public static CoreCost CostForFraction(float damageFraction, CoreCost buildCost)
         {
             float frac = Mathf.Clamp01(damageFraction);
             if (frac >= DestroyedFraction) frac = 1f;   // destroyed = full rebuild cost
+
+            // ONE HeroTalentModifiers read (WO-676 §2b). StatSum is internally null-safe
+            // (0 with no service/tree/nodes); clamped so a mis-authored node can never
+            // make repairs free-negative. Applied after the destroyed normalization so
+            // rebuilds are discounted the same as repairs.
+            float discount = Mathf.Clamp01(DeNelle.Village.Talents.HeroTalentModifiers.StatSum(
+                HeroTalentClassReader.Slug(), "repairCost"));
+            if (discount > 0f)
+            {
+                frac *= 1f - discount;
+                FlowTrace.Once("Talent", "repairCost",
+                    $"repairCost -{discount:P0} applied to repair pricing (WO-676 Master Mason).");
+            }
+
             return new CoreCost
             {
                 wood     = Mathf.CeilToInt(buildCost.wood * frac),

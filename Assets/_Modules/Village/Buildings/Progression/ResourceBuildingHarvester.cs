@@ -85,6 +85,20 @@ namespace DeNelle.Village.Buildings.Progression
                 int amount = ResourceBuildingState.CurrentEffectiveYield(id);
                 if (amount <= 0) continue;
 
+                // WO-676 STEWARD (Provider's Bond): ONE HeroTalentModifiers read at this
+                // existing accrual choke point — `harvestRate` scales the per-tick yield.
+                // StatSum is internally null-safe (no service/tree/nodes => 0), so the
+                // yield is byte-identical to baseline at sum 0. Read only when a tick
+                // actually fires (interval seconds), never per-frame.
+                float rateBonus = DeNelle.Village.Talents.HeroTalentModifiers.StatSum(
+                    DeNelle.Village.HeroTalentClassReader.Slug(), "harvestRate");
+                if (rateBonus > 0f)
+                {
+                    amount = Mathf.Max(amount, Mathf.RoundToInt(amount * (1f + rateBonus)));
+                    DeNelle.Core.Diagnostics.FlowTrace.Once("Talent", "building-harvestRate",
+                        $"harvestRate x{1f + rateBonus:0.###} applied to resource-building tick (WO-676 Provider's Bond).");
+                }
+
                 var collector = ResourceCollectorRegistry.Get(id);
                 if (collector != null)
                 {

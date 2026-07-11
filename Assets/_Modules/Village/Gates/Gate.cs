@@ -194,8 +194,14 @@ namespace DeNelle.Village
         /// A thin adapter onto the existing <see cref="TakeDamage"/>, which drives
         /// the shader collapse + blocker toggle. Once the field collapses below
         /// 25% the blocker drops and enemies pour through (port spec Week 4).
+        /// WO-676 (BULWARK): the ENEMY intake is reduced by the hero's structure-
+        /// toughness talents (Hardened Ramparts always-on + Warden of Elarion while
+        /// the wave phase is Active, capped 0.5) via the shared
+        /// <see cref="WallSegment.StructureToughnessReduction"/> reader — ×1 at Σ=0.
+        /// The player-facing <see cref="TakeDamage"/>/<see cref="Repair"/> paths are untouched.
         /// </summary>
-        public void ApplyContactDamage(float amount) => TakeDamage(amount);
+        public void ApplyContactDamage(float amount)
+            => TakeDamage(amount * (1f - WallSegment.StructureToughnessReduction("Gate")));
 
         /// <summary>True while a hero is inside this gate's proximity radius.</summary>
         public bool IsOpenForHero => _isOpenForHero;

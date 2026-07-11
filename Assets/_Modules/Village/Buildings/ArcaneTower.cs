@@ -199,8 +199,50 @@ namespace DeNelle.Village
 
         // WO-430 — the Arcane Tower upgrade buffs ITS OWN damage/range (towerDamageMult /
         // towerRangeMult). Always player-owned, so the perk always applies. LIVE-READ.
-        private float EffectiveDamage => Damage * DeNelle.Core.State.ModifierService.Active.TowerDamageMult;
-        private float EffectiveRange  => Range  * DeNelle.Core.State.ModifierService.Active.TowerRangeMult * ElevationRangeMult;
+        //
+        // WO-676 (BULWARK talents) — the hero's strategic tree is read at this SAME choke
+        // point: Keen Ballistics (towerDamage, fractional), Farsight Emplacements (towerRange,
+        // flat metres), Standing Orders (towerAttackSpeed, fractional). Sums refresh on the
+        // existing 0.4s Rescan tick via HeroTalentModifiers.StatSum (the Σ-registry pattern
+        // HeroHealth.TakeDamage consumes). Σ=0 → identity, byte-identical baseline. The spire
+        // is ALWAYS player-owned (no EnemyOwned variant), so no allegiance gate is needed.
+        private float EffectiveDamage => Damage * DeNelle.Core.State.ModifierService.Active.TowerDamageMult * _talentDamageMult;
+        private float EffectiveRange  => (Range * DeNelle.Core.State.ModifierService.Active.TowerRangeMult + _talentRangeAdd) * ElevationRangeMult;
+        private float EffectiveFireRate => FireRate * _talentFireRateMult;
+
+        // WO-676 — cached talent sums (identity until the first Rescan; refreshed every 0.4s).
+        private float _talentDamageMult   = 1f;
+        private float _talentRangeAdd     = 0f;
+        private float _talentFireRateMult = 1f;
+
+        /// <summary>WO-676 — the active hero's class slug for the talent Σ-registry read
+        /// (mirrors PlayerAttackController's `_abilities.HeroClass : "knight"` resolution).</summary>
+        private static string ActiveHeroClass()
+        {
+            var hero = HeroHealth.Instance;
+            var abilities = hero != null ? hero.GetComponent<HeroAbilities>() : null;
+            return abilities != null ? abilities.HeroClass : "knight";
+        }
+
+        /// <summary>WO-676 — one Σ-registry read per BULWARK type at the spire's existing stat
+        /// seam (called from the 0.4s Rescan tick). Zero unlocked nodes → identity (1/0/1).</summary>
+        private void RefreshTalentSums()
+        {
+            string heroClass = ActiveHeroClass();
+            float dmg  = Talents.HeroTalentModifiers.StatSum(heroClass, "towerDamage");
+            float rng  = Talents.HeroTalentModifiers.StatSum(heroClass, "towerRange");
+            float rate = Talents.HeroTalentModifiers.StatSum(heroClass, "towerAttackSpeed");
+            _talentDamageMult   = 1f + Mathf.Max(0f, dmg);
+            _talentRangeAdd     = Mathf.Max(0f, rng);
+            _talentFireRateMult = 1f + Mathf.Max(0f, rate);
+
+            if (dmg > 0f)  FlowTrace.Once("ArcaneTower", "talent-towerDamage",
+                $"BULWARK towerDamage applied to the arcane spire: +{dmg:P0} (Keen Ballistics).");
+            if (rng > 0f)  FlowTrace.Once("ArcaneTower", "talent-towerRange",
+                $"BULWARK towerRange applied to the arcane spire: +{rng:0.#}m (Farsight Emplacements).");
+            if (rate > 0f) FlowTrace.Once("ArcaneTower", "talent-towerAttackSpeed",
+                $"BULWARK towerAttackSpeed applied to the arcane spire: +{rate:P0} fire rate (Standing Orders).");
+        }
 
         private void Update()
         {
@@ -217,12 +259,17 @@ namespace DeNelle.Village
             var target = Acquire();
             if (target == null) return;
 
-            _cd = 1f / Mathf.Max(0.1f, FireRate);
+            // WO-676: Standing Orders (towerAttackSpeed) folds into the fire cadence.
+            _cd = 1f / Mathf.Max(0.1f, EffectiveFireRate);
             FireBlast(target);
         }
 
         private void Rescan()
         {
+            // WO-676: refresh the BULWARK talent sums on the same 0.4s cadence as the
+            // target scan (never per frame).
+            RefreshTalentSums();
+
             // PERF (overworld 1fps fix): mirrors DefenseTower. The old scan was
             // FindObjectsByType<MonoBehaviour>, which enumerates EVERY MonoBehaviour in ALL
             // loaded scenes (the additive overworld = tens of thousands) every 0.4s tick,

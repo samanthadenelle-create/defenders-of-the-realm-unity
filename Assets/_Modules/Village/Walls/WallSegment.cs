@@ -148,9 +148,44 @@ namespace DeNelle.Village
             // shared 0-100 track). The collapse threshold stays 100; only the rate changes.
             int t = Mathf.Clamp(_tier, 1, 3);
             float effective = amount / s_tierToughness[t];
+            // WO-676 (BULWARK): Hardened Ramparts (structureToughness, always-on) +
+            // Warden of Elarion (structureToughnessWave, only while the wave phase is
+            // Active) reduce the intake ON TOP of the tier divide. Σ=0 → ×1 (unchanged).
+            effective *= 1f - StructureToughnessReduction("WallSegment");
             _damage = Mathf.Clamp(_damage + effective, 0f, 100f);
             DamageChanged?.Invoke(_damage);
             if (_damage >= 100f) Collapsed?.Invoke(this);
+        }
+
+        /// <summary>
+        /// WO-676 (BULWARK) — the hero's structure-toughness talents, read at the damage
+        /// INTAKE choke point the way HeroHealth.TakeDamage consumes HeroTalentModifiers:
+        /// `structureToughness` (Hardened Ramparts) is always-on; `structureToughnessWave`
+        /// (Warden of Elarion) is added ONLY while <see cref="WaveManager.Phase"/> is
+        /// <see cref="WavePhase.Active"/> (null-safe instance check — mirrors
+        /// OfflineHarvestService.IsCombatActive). Total reduction capped at 0.5 (WO-676 G2).
+        /// Walls/gates are the player's Elarion perimeter only (VillageController-built);
+        /// enemy strongholds do not use these components, so no ownership gate is needed.
+        /// Returns 0 with no service / no unlocked nodes — byte-identical baseline.
+        /// </summary>
+        internal static float StructureToughnessReduction(string traceSystem)
+        {
+            var hero = HeroHealth.Instance;
+            var abilities = hero != null ? hero.GetComponent<HeroAbilities>() : null;
+            string heroClass = abilities != null ? abilities.HeroClass : "knight";
+
+            float reduction = Talents.HeroTalentModifiers.StatSum(heroClass, "structureToughness");
+            var wm = WaveManager.Instance;
+            bool waveActive = wm != null && wm.Phase == WavePhase.Active;
+            float waveSlice = waveActive
+                ? Talents.HeroTalentModifiers.StatSum(heroClass, "structureToughnessWave") : 0f;
+            reduction = Mathf.Clamp(reduction + waveSlice, 0f, 0.5f);   // WO-676 G2 cap
+
+            if (reduction > 0f)
+                DeNelle.Core.Diagnostics.FlowTrace.Once(traceSystem, "talent-structureToughness",
+                    $"BULWARK structureToughness applied: -{reduction:P0} intake " +
+                    $"(always-on Σ + waveActive={waveActive} slice {waveSlice:P0}, cap 0.5).");
+            return reduction;
         }
 
         /// <summary>

@@ -220,10 +220,59 @@ namespace DeNelle.Village
         // WO-430 — PLAYER-owned towers get the Arcane Tower tier perks (towerDamageMult /
         // towerRangeMult). LIVE-READ (cheap, no current-HP problem) so the tier-4 Arcane
         // Overload temp-empower can buff dynamically. Enemy garrison turrets use base stats.
+        //
+        // WO-676 (BULWARK talents) — PLAYER-owned towers ALSO read the hero's strategic tree
+        // at this same choke point: Keen Ballistics (towerDamage, fractional damage bonus),
+        // Farsight Emplacements (towerRange, flat metres), Standing Orders (towerAttackSpeed,
+        // fractional fire-rate bonus). Sums are refreshed on the existing 0.4s Rescan tick
+        // (never per frame) via HeroTalentModifiers.StatSum — the SAME Σ-registry pattern
+        // HeroHealth.TakeDamage consumes. Σ=0 (no nodes / no service) keeps every stat
+        // byte-identical. EnemyOwned garrison turrets NEVER read the tree: the Allegiance
+        // gates below hand them raw base stats, and RefreshTalentSums only runs from the
+        // PlayerOwned Rescan path.
         private float EffectiveDamage => Allegiance == TowerAllegiance.PlayerOwned
-            ? Damage * DeNelle.Core.State.ModifierService.Active.TowerDamageMult : Damage;
+            ? Damage * DeNelle.Core.State.ModifierService.Active.TowerDamageMult * _talentDamageMult : Damage;
         private float EffectiveRange => (Allegiance == TowerAllegiance.PlayerOwned
-            ? Range * DeNelle.Core.State.ModifierService.Active.TowerRangeMult : Range) * ElevationRangeMult;
+            ? Range * DeNelle.Core.State.ModifierService.Active.TowerRangeMult + _talentRangeAdd : Range) * ElevationRangeMult;
+        private float EffectiveFireRate => Allegiance == TowerAllegiance.PlayerOwned
+            ? FireRate * _talentFireRateMult : FireRate;
+
+        // WO-676 — cached talent sums (identity until the first Rescan; refreshed every 0.4s).
+        private float _talentDamageMult   = 1f;
+        private float _talentRangeAdd     = 0f;
+        private float _talentFireRateMult = 1f;
+
+        /// <summary>WO-676 — the active hero's class slug for the talent Σ-registry read
+        /// (mirrors PlayerAttackController's `_abilities.HeroClass : "knight"` resolution).</summary>
+        private static string ActiveHeroClass()
+        {
+            var hero = HeroHealth.Instance;
+            var abilities = hero != null ? hero.GetComponent<HeroAbilities>() : null;
+            return abilities != null ? abilities.HeroClass : "knight";
+        }
+
+        /// <summary>
+        /// WO-676 — one Σ-registry read per BULWARK type at the tower's existing stat seam.
+        /// Called from the PlayerOwned <see cref="Rescan"/> tick only (EnemyOwned exclusion
+        /// is structural). Zero unlocked nodes → identity (1 / 0 / 1), no behaviour change.
+        /// </summary>
+        private void RefreshTalentSums()
+        {
+            string heroClass = ActiveHeroClass();
+            float dmg  = Talents.HeroTalentModifiers.StatSum(heroClass, "towerDamage");
+            float rng  = Talents.HeroTalentModifiers.StatSum(heroClass, "towerRange");
+            float rate = Talents.HeroTalentModifiers.StatSum(heroClass, "towerAttackSpeed");
+            _talentDamageMult   = 1f + Mathf.Max(0f, dmg);
+            _talentRangeAdd     = Mathf.Max(0f, rng);
+            _talentFireRateMult = 1f + Mathf.Max(0f, rate);
+
+            if (dmg > 0f)  FlowTrace.Once("DefenseTower", "talent-towerDamage",
+                $"BULWARK towerDamage applied to player towers: +{dmg:P0} (Keen Ballistics).");
+            if (rng > 0f)  FlowTrace.Once("DefenseTower", "talent-towerRange",
+                $"BULWARK towerRange applied to player towers: +{rng:0.#}m (Farsight Emplacements).");
+            if (rate > 0f) FlowTrace.Once("DefenseTower", "talent-towerAttackSpeed",
+                $"BULWARK towerAttackSpeed applied to player towers: +{rate:P0} fire rate (Standing Orders).");
+        }
 
         private void Update()
         {
@@ -255,7 +304,9 @@ namespace DeNelle.Village
             _cd -= Time.deltaTime;
             if (_cd > 0f) return;
             if (target == null) return;
-            _cd = 1f / Mathf.Max(0.1f, FireRate);
+            // WO-676: Standing Orders (towerAttackSpeed) — player towers only; the
+            // EnemyOwned path below uses raw FireRate (garrison turrets read no talents).
+            _cd = 1f / Mathf.Max(0.1f, EffectiveFireRate);
             Fire(target);
         }
 
@@ -345,6 +396,11 @@ namespace DeNelle.Village
 
         private void Rescan()
         {
+            // WO-676: refresh the BULWARK talent sums on the same 0.4s cadence as the
+            // target scan (never per frame). PlayerOwned path only — UpdateEnemyOwned
+            // uses RescanParty, so garrison turrets structurally never read the tree.
+            RefreshTalentSums();
+
             // PERF (overworld 1fps fix): the old scan was FindObjectsByType<MonoBehaviour>,
             // which enumerates EVERY MonoBehaviour in ALL loaded scenes (the additive
             // overworld terrain/props/NPCs = tens of thousands) on every 0.4s tick, per

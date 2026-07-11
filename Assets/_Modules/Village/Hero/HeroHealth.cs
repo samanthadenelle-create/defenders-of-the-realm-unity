@@ -750,6 +750,18 @@ namespace DeNelle.Village
         {
             if (amount <= 0f || _isDead || _hp <= 0f) return;
             if (_hp >= MaxHp) return;
+            // WO-676 G3 (wire-or-hide): Swift Recovery (shared.n7, healthRegen) — fold the
+            // talent bonus into every regen tick. Both callers (SafeZoneRecovery town-footprint
+            // tick + the Oathmend HP-over-time drip) are out-of-combat regen paths, matching the
+            // node's "out of combat" note. Same registry read + hero-class resolution as
+            // TakeDamage's IncomingDamageReduction; identity (×1) until the node is learned.
+            float regenBonus = DeNelle.Village.Talents.HeroTalentModifiers.HealthRegenBonus(HeroClassOrDefault);
+            if (regenBonus > 0f)
+            {
+                amount *= (1f + regenBonus);
+                DeNelle.Core.Diagnostics.FlowTrace.Once("HeroTalents", "healthRegen",
+                    $"Swift Recovery applied: +{regenBonus:P0} HP regen per tick (shared.n7).");
+            }
             _hp = Mathf.Min(MaxHp, _hp + amount);
             OnHealthChanged?.Invoke(_hp, MaxHp);
             UpdateInjuredState();   // clears the injured vignette once regen climbs back above the cutoff

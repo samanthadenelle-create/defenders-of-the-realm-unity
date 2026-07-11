@@ -1989,6 +1989,20 @@ namespace DeNelle.Village
             if (_rewardScalingStepCap > 0) step = Mathf.Min(step, _rewardScalingStepCap);
             float scale = 1f + _rewardScalePerStep * step;
 
+            // WO-676 STEWARD capstone (Bountiful Banners): ONE HeroTalentModifiers read at
+            // this existing reward grant — `waveReward` folds into the same scale multiplier
+            // the wood/iron/food rolls already apply, so every wave-clear payout grows
+            // together. StatSum is internally null-safe (0 with no service/tree/nodes), so
+            // rewards are byte-identical to baseline at sum 0.
+            float rewardBonus = DeNelle.Village.Talents.HeroTalentModifiers.StatSum(
+                HeroTalentClassReader.Slug(), "waveReward");
+            if (rewardBonus > 0f)
+            {
+                scale *= 1f + rewardBonus;
+                FlowTrace.Once("Talent", "waveReward",
+                    $"waveReward x{1f + rewardBonus:0.###} applied to wave-clear rewards (WO-676 Bountiful Banners).");
+            }
+
             // WO-330 wiring contract: the per-wave ramp fields raise the effective base
             // floor by (perWave * waveId) before the random spread + scaling are applied,
             // so they stay LIVE alongside the WO-361 staggered/scaled payout.

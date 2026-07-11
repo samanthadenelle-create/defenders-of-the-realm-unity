@@ -239,14 +239,29 @@ namespace DeNelle.Village.Buildings.Progression
             return def != null ? def.Yields : HarvestResource.Wood;
         }
 
-        /// <summary>~2 hours of max production at current level (CoC internal storage).</summary>
+        /// <summary>~2 hours of max production at current level (CoC internal storage),
+        /// scaled by the STEWARD `collectorCap` talent sum (WO-676 Deep Reserves; x1 at sum 0).</summary>
         private double ComputeCapacity()
         {
             int yield = ResourceBuildingState.CurrentEffectiveYield(_buildingId);
             float interval = ResourceBuildingState.CurrentHarvestInterval(_buildingId);
-            if (yield <= 0 || interval <= 0f) return 50.0;
-            double perHour = yield * (3600.0 / interval);
-            return System.Math.Max(50.0, perHour * 2.0);
+            double baseCap = (yield <= 0 || interval <= 0f)
+                ? 50.0
+                : System.Math.Max(50.0, yield * (3600.0 / interval) * 2.0);
+
+            // WO-676 STEWARD (Deep Reserves): ONE HeroTalentModifiers read at this existing
+            // capacity calc — `collectorCap` grows how much pending the collector holds
+            // before it is full. StatSum is internally null-safe (0 with no service/tree/
+            // nodes), so capacity is unchanged at sum 0.
+            float capBonus = DeNelle.Village.Talents.HeroTalentModifiers.StatSum(
+                HeroTalentClassReader.Slug(), "collectorCap");
+            if (capBonus > 0f)
+            {
+                baseCap *= 1.0 + capBonus;
+                FlowTrace.Once("Talent", "collectorCap",
+                    $"collectorCap x{1f + capBonus:0.###} applied to collector capacity (WO-676 Deep Reserves).");
+            }
+            return baseCap;
         }
 
         private void LoadState()

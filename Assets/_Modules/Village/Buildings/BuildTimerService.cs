@@ -172,6 +172,19 @@ namespace DeNelle.Village
             var kind = type == BuildJobType.Upgrade ? BuildJobKind.Upgrade : BuildJobKind.Build;
             double durationMs = Config.DurationSecondsForTier(tier, kind) * 1000.0;
 
+            // WO-676 STEWARD (Foreman's Pace): ONE HeroTalentModifiers read at this existing
+            // duration calc — `buildTime` shortens every build/upgrade timer at job start.
+            // StatSum is internally null-safe (0 with no service/tree/nodes) and the sum is
+            // clamped so a mis-authored node can never make timers negative. Identity at 0.
+            float haste = Mathf.Clamp01(DeNelle.Village.Talents.HeroTalentModifiers.StatSum(
+                HeroTalentClassReader.Slug(), "buildTime"));
+            if (haste > 0f)
+            {
+                durationMs *= 1.0 - haste;
+                DeNelle.Core.Diagnostics.FlowTrace.Once("Talent", "buildTime",
+                    $"buildTime -{haste:P0} applied to build/upgrade timer duration (WO-676 Foreman's Pace).");
+            }
+
             var job = new BuildJobData
             {
                 StructureId = structureId,

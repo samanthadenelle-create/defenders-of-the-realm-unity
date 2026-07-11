@@ -96,8 +96,23 @@ namespace DeNelle.Village
             get { var s = State; return s != null ? s.SiloResources : 0.0; }
         }
 
-        /// <summary>Total resources/sec the workforce produces right now (echoCount x base).</summary>
-        public double RatePerSecond => EchoCount * (BaseRatePerHour / 3600.0);
+        /// <summary>Total resources/sec the workforce produces right now (echoCount x base,
+        /// scaled by the STEWARD `harvestRate` talent sum — WO-676 Provider's Bond; x1 at sum 0).</summary>
+        public double RatePerSecond => EchoCount * (BaseRatePerHour / 3600.0) * (1.0 + HarvestRateBonus());
+
+        // WO-676 §2b: ONE registry read at the existing rate calc (this property feeds the
+        // online Update tick AND the offline ClaimOffline integral). StatSum is internally
+        // null-safe (no service / no tree / no nodes => 0), so behavior is byte-identical
+        // to baseline until a harvestRate node is learned. Silo CAPACITY deliberately stays
+        // base-rated (capacity is `collectorCap`'s seam, not this one).
+        private static float HarvestRateBonus()
+        {
+            float bonus = Talents.HeroTalentModifiers.StatSum(HeroTalentClassReader.Slug(), "harvestRate");
+            if (bonus <= 0f) return 0f;
+            FlowTrace.Once("Talent", "echo-harvestRate",
+                $"harvestRate x{1f + bonus:0.###} applied to echo tick (WO-676 Provider's Bond).");
+            return bonus;
+        }
 
         /// <summary>The silo's absolute capacity in resources = capHours x ratePerHour x echoCount.</summary>
         public double SiloCapacity => SiloCapHours * BaseRatePerHour * EchoCount;
@@ -349,6 +364,35 @@ namespace DeNelle.Village
             if (s != null && s.SiloResources > SiloCapacity) s.SiloResources = SiloCapacity;
             FlowTrace.Step("Echo", $"SetSiloCapHours: {SiloCapHours}h -> capacity {SiloCapacity:F0}.");
             Changed?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// WO-676 STEWARD-reader helper: resolves the active hero's class slug for
+    /// <see cref="Talents.HeroTalentModifiers.StatSum"/> lookups from systems that do NOT
+    /// sit on the hero rig (economy/defense choke points have no HeroAbilities component
+    /// to ask). Mirrors the HeroAbilities.Awake GameState backstop mapping exactly
+    /// (HeroClassOpt -> slug; Cleric reuses the Mage loadout, WO-226). Returns "knight"
+    /// when unchosen/absent — the V1 solo-Knight north star, and the Shared Universal
+    /// pool applies to any class string, so this is always a safe identity default.
+    /// Stateless + null-safe: no GameState => "knight" => StatSum still returns 0
+    /// without a WisdomCurrencyService, so consumers stay at baseline.
+    /// </summary>
+    internal static class HeroTalentClassReader
+    {
+        public static string Slug()
+        {
+            var svc = GameStateService.Instance;
+            if (svc == null || svc.State == null) return "knight";
+            var opt = svc.State.HeroClass.ToNullable();
+            if (!opt.HasValue) return "knight";
+            switch (opt.Value)
+            {
+                case DeNelle.Core.State.HeroClass.Ranger: return "ranger";
+                case DeNelle.Core.State.HeroClass.Mage:   return "mage";
+                case DeNelle.Core.State.HeroClass.Cleric: return "mage";   // caster reuses the Mage loadout (WO-226)
+                default:                                  return "knight";
+            }
         }
     }
 }

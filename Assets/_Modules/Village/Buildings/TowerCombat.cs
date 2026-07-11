@@ -136,8 +136,16 @@ namespace DeNelle.Village
             // WO-432 — fire rate is now DATA-DRIVEN via the TowerPerkTable (cooldown * fireRateMult),
             // not the old implicit cooldown/level rule. The tier is the tower's EffectiveTier (placed
             // level 1..3, or the capstone tier 4 once Empowered), so upgrading visibly speeds up fire.
+            // WO-676 BULWARK: Standing Orders (towerAttackSpeed) — divide by Tower's TTL-cached
+            // talent multiplier (Tower.TalentAttackSpeedMult, the same cache/class-resolve as
+            // TalentDamageMult/TalentRangeAdd — no second pattern here). Placed towers are ALWAYS
+            // player-owned (Tower.cs: spawned by TowerPlacementSystem; garrison turrets are
+            // DefenseTower with Allegiance.EnemyOwned), so the read applies unconditionally.
+            // ÷1 at Σ=0, so baseline cadence is unchanged.
             int tier = _tower != null ? _tower.EffectiveTier : 1;
-            _nextAttackTime = Time.time + TowerPerkTable.EffectiveCooldown(_baseCooldown, tier);
+            float cooldown = TowerPerkTable.EffectiveCooldown(_baseCooldown, tier)
+                             / (_tower != null ? _tower.TalentAttackSpeedMult() : 1f);
+            _nextAttackTime = Time.time + cooldown;
         }
 
         // ── Target selection ──────────────────────────────────────────────────

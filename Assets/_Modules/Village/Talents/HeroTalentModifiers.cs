@@ -116,6 +116,91 @@ namespace DeNelle.Village.Talents
             return 1f + SumModifyHeal(heroClass);
         }
 
+        // ── Strategic passives (WO-676 — STEWARD / BULWARK branches) ─────────────
+        // Each is Σ(effect.value) over the new HeroTalentEffectTypes keys, clamped to a
+        // sane band (G2). Consumers (EchoService / ResourceCollector / BuildTimerService /
+        // repair-sell paths / towers / walls — lanes A1/A2) call ONE of these at their
+        // existing choke point (`?.`-safe, identity when nothing is learned).
+
+        private const float MaxHarvestRateBonus   = 1f;     // +100% harvest ceiling
+        private const float MaxCollectorCapBonus  = 2f;     // +200% pending-capacity ceiling
+        private const float MaxCostReduction      = 0.75f;  // repair/build-time discounts floor at 25% of base
+        private const float MaxSalvageBonus       = 0.5f;   // +50% refund ceiling
+        private const float MaxWaveRewardBonus    = 1f;     // +100% wave-reward ceiling
+        private const float MaxTowerDamageBonus   = 1f;     // +100% tower damage ceiling
+        private const float MaxTowerRangeMeters   = 10f;    // +10m tower range ceiling
+        private const float MaxStructureToughness = 0.5f;   // structures never shrug more than 50% (G2 cap)
+        private const float MaxTowerAttackSpeed   = 1f;     // +100% fire-rate ceiling
+        private const float MaxHealthRegenBonus   = 1f;     // +100% HP-regen ceiling
+        private const float MaxManaRegenBonus     = 1f;     // +100% mana-regen ceiling
+
+        /// <summary>+fraction echo/collector harvest rate (Provider's Bond). 0 baseline.</summary>
+        public static float HarvestRateBonus(string heroClass)
+            => Mathf.Clamp(StatSum(heroClass, HeroTalentEffectTypes.HarvestRate), 0f, MaxHarvestRateBonus);
+
+        /// <summary>+fraction collector pending-capacity (Deep Reserves). 0 baseline.</summary>
+        public static float CollectorCapBonus(string heroClass)
+            => Mathf.Clamp(StatSum(heroClass, HeroTalentEffectTypes.CollectorCap), 0f, MaxCollectorCapBonus);
+
+        /// <summary>Fraction OFF repair prices (Master Mason). Consumer: cost * (1 - this). 0 baseline.</summary>
+        public static float RepairCostReduction(string heroClass)
+            => Mathf.Clamp(StatSum(heroClass, HeroTalentEffectTypes.RepairCost), 0f, MaxCostReduction);
+
+        /// <summary>Fraction OFF build/upgrade timer durations (Foreman's Pace). Consumer: secs * (1 - this). 0 baseline.</summary>
+        public static float BuildTimeReduction(string heroClass)
+            => Mathf.Clamp(StatSum(heroClass, HeroTalentEffectTypes.BuildTime), 0f, MaxCostReduction);
+
+        /// <summary>+fraction refunded on structure sell/loss (Salvager). 0 baseline.</summary>
+        public static float SalvageBonus(string heroClass)
+            => Mathf.Clamp(StatSum(heroClass, HeroTalentEffectTypes.Salvage), 0f, MaxSalvageBonus);
+
+        /// <summary>+fraction wave rewards (Bountiful Banners). 0 baseline.</summary>
+        public static float WaveRewardBonus(string heroClass)
+            => Mathf.Clamp(StatSum(heroClass, HeroTalentEffectTypes.WaveReward), 0f, MaxWaveRewardBonus);
+
+        /// <summary>+fraction tower damage (Keen Ballistics). 0 baseline.</summary>
+        public static float TowerDamageBonus(string heroClass)
+            => Mathf.Clamp(StatSum(heroClass, HeroTalentEffectTypes.TowerDamage), 0f, MaxTowerDamageBonus);
+
+        /// <summary>+METERS of tower range (Farsight Emplacements). Additive meters, not a fraction. 0 baseline.</summary>
+        public static float TowerRangeBonusMeters(string heroClass)
+            => Mathf.Clamp(StatSum(heroClass, HeroTalentEffectTypes.TowerRange), 0f, MaxTowerRangeMeters);
+
+        /// <summary>+fraction tower fire rate (Standing Orders). 0 baseline.</summary>
+        public static float TowerAttackSpeedBonus(string heroClass)
+            => Mathf.Clamp(StatSum(heroClass, HeroTalentEffectTypes.TowerAttackSpeed), 0f, MaxTowerAttackSpeed);
+
+        // ── Regen bonuses (WO-676 G3 wire-or-hide — shared.n7 / shared.n5) ───────
+        // Literal-string keys (like "reflect" above): these predate the WO-676
+        // HeroTalentEffectTypes constants — they are in the HeroTalentCatalog.cs:34
+        // declared vocabulary, not the strategic-branch block.
+
+        /// <summary>+fraction hero HP regen per tick (Swift Recovery, shared.n7 — the
+        /// town-footprint / out-of-combat regen paths route through HeroHealth.RegenTick).
+        /// 0 baseline.</summary>
+        public static float HealthRegenBonus(string heroClass)
+            => Mathf.Clamp(StatSum(heroClass, "healthRegen"), 0f, MaxHealthRegenBonus);
+
+        /// <summary>+fraction mana regen (Aether Bond, shared.n5 — consumed by the
+        /// HeroAbilities per-second regen tick). 0 baseline.</summary>
+        public static float ManaRegenBonus(string heroClass)
+            => Mathf.Clamp(StatSum(heroClass, "manaRegen"), 0f, MaxManaRegenBonus);
+
+        /// <summary>
+        /// Fraction OFF damage defensive structures take (walls/gates/towers intake read):
+        /// Σ(structureToughness, always-on — Hardened Ramparts) + Σ(structureToughnessWave —
+        /// Warden of Elarion, added ONLY while <paramref name="waveActive"/>; the consumer
+        /// passes WaveManager's live-wave state). Clamped to 0..0.5 (G2 cap) so stacked
+        /// toughness never trivializes a raid. 0 baseline.
+        /// </summary>
+        public static float StructureToughnessReduction(string heroClass, bool waveActive)
+        {
+            float sum = StatSum(heroClass, HeroTalentEffectTypes.StructureToughness);
+            if (waveActive)
+                sum += StatSum(heroClass, HeroTalentEffectTypes.StructureToughnessWave);
+            return Mathf.Clamp(sum, 0f, MaxStructureToughness);
+        }
+
         // ── Generic stat accessor (also exposes not-yet-wired stats: critChance,
         //    attackSpeed, manaRegen, manaCostReduction, healthRegen, moveSpeed,
         //    range, dodge, shieldStrength, wisdomPerLevel) for future consumers. ─────
@@ -218,6 +303,59 @@ namespace DeNelle.Village.Talents
             if (e == null) return false;
             hpFraction = Mathf.Clamp(e.Value <= 0f ? 0.4f : e.Value, 0.05f, 1f);
             return true;
+        }
+
+        /// <summary>
+        /// WO-676: an ability-targeted DoT RIDER — a passive node whose effect is
+        /// <c>modifyAbility</c> aimed at one or more ability ids (effect.ability, comma-
+        /// separated) and carrying dps (value) + duration (+ optional stack cap in targets).
+        /// Mirrors the Emberbrand proc read (ForEachOnHitProc) but keyed by the ABILITY the
+        /// hero just cast rather than the melee swing:
+        ///   • Holy Retribution — ability "knight.wardens-roar", stat empty  → taunt-burn.
+        ///   • Venombrand       — ability "knight.thunderbolt,knight.ranged-poke",
+        ///                        stat "poison" → poison rider (5 dps / 6s, stacks to 2).
+        /// <paramref name="stat"/>: null/empty matches an UNSET effect.stat only (so the
+        /// heal-modify nodes never collide); otherwise exact (case-insensitive) match.
+        /// Returns false (identity) until a matching node is learned.
+        /// </summary>
+        public static bool TryGetAbilityDotRider(string heroClass, string abilityId, string stat,
+                                                 out float dps, out float duration, out int maxStacks)
+        {
+            dps = duration = 0f;
+            maxStacks = 1;
+            if (string.IsNullOrEmpty(abilityId)) return false;
+
+            HeroTalentEffectDef found = null;
+            ForEachUnlocked(heroClass, n =>
+            {
+                if (found != null) return;
+                var e = n.Effect;
+                if (e == null) return;
+                if (!string.Equals(e.Type, "modifyAbility", StringComparison.OrdinalIgnoreCase)) return;
+                // Stat discriminator: empty wanted-stat matches only an empty authored stat.
+                bool statMatch = string.IsNullOrEmpty(stat)
+                    ? string.IsNullOrEmpty(e.Stat)
+                    : string.Equals(e.Stat, stat, StringComparison.OrdinalIgnoreCase);
+                if (!statMatch) return;
+                if (!AbilityListContains(e.Ability, abilityId)) return;
+                found = e;
+            });
+            if (found == null || found.Value <= 0f) return false;
+
+            dps       = found.Value;
+            duration  = found.Duration > 0f ? found.Duration : 4f;
+            maxStacks = found.Targets > 0 ? found.Targets : 1;
+            return true;
+        }
+
+        /// <summary>True when the comma-separated <paramref name="csv"/> ability list contains <paramref name="abilityId"/>.</summary>
+        private static bool AbilityListContains(string csv, string abilityId)
+        {
+            if (string.IsNullOrEmpty(csv)) return false;
+            foreach (var part in csv.Split(','))
+                if (string.Equals(part.Trim(), abilityId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
         }
 
         /// <summary>The effect payload of the FIRST unlocked node (hero tree + shared) whose
