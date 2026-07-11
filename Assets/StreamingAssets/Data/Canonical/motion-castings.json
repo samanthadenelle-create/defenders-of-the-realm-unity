@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "_comment": "KEYWORD -> ACTION registry. Targets (enemy family | hero class) x keywords -> clip (+optional vfx/sfx). Owner picks are manual:true = CANON, never overwritten (Offset Forge law, WO-490). Editor-consumed (controller bakes) in V1 - no Resources mirror until a runtime reader exists; at that point the dual-copy rule (Resources copy WINS) applies.",
+
+  "vocabulary": {
+    "locomotion": ["idle", "walk", "run", "combatIdle", "combatWalk", "combatRun",
+                    "injuredIdle", "injuredWalk", "injuredRun"],
+    "attack":     ["attack0", "attack1", "attack2", "attack3", "heavy",
+                    "skill1", "skill2"],
+    "cast":       ["cast", "castChannel"],
+    "reaction":   ["hit", "block", "parry", "dodge", "knockdown", "gettingUp"],
+    "death":      ["death0", "death1", "death2", "death3", "death4", "death5"],
+    "signature":  ["taunt", "unsheathe", "victory", "windup"]
+  },
+
+  "targets": {
+    "humanoid": {
+      "_comment": "root archetype default - the shared-rig baseline (AnimatorSetup families)"
+    },
+    "largebody": {
+      "_comment": "root archetype default - the Rig_Large heavy bodies (AnimatorSetup LargeEnemy)"
+    },
+    "orc":         { "inherits": "humanoid" },
+    "hollow":      { "inherits": "humanoid" },
+    "troll":       { "inherits": "humanoid" },
+    "orc-mage":    { "inherits": "orc" },
+    "orc-warrior": { "inherits": "orc" },
+    "orc-tank":    { "inherits": "orc" },
+    "knight":      { "inherits": "humanoid" },
+    "mage":        { "inherits": "humanoid" },
+    "ranger":      { "inherits": "humanoid" },
+    "cleric":      { "inherits": "humanoid" }
+  }
+}

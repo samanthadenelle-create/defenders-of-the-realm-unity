@@ -17,6 +17,7 @@
 // =============================================================================
 
 using System.Collections.Generic;
+using DeNelle.Core.Combat;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -26,6 +27,15 @@ namespace DeNelle.Editor
     public static class BuildOrcHumanoidController
     {
         private const string BasePath = "Assets/Resources/Enemies/OrcHumanoid.controller";
+
+        // Action Keyword Registry targets (motion-castings.json, WO-670 slice 1):
+        // base states resolve `orc`; the role overrides resolve orc-mage/-warrior/
+        // -tank (which inherit orc). Every hardcoded pick below stays the terminal
+        // default — empty registry = byte-identical controllers.
+        private const string CastingTargetBase    = "orc";
+        private const string CastingTargetMage    = "orc-mage";
+        private const string CastingTargetWarrior = "orc-warrior";
+        private const string CastingTargetTank    = "orc-tank";
 
         // ── Shared locomotion / shared states ────────────────────────────────
         private const string IdleFbx       = "Assets/Action/Orc Idle.fbx";
@@ -85,18 +95,20 @@ namespace DeNelle.Editor
         [MenuItem("Defenders/Tripo/Build Orc Humanoid Family Controllers (WO-491)")]
         public static void Run()
         {
-            s_idle   = Clip(IdleFbx);
-            s_walk   = Clip(WalkFbx);
-            s_run    = Clip(RunFbx);
-            s_hit    = Clip(HitFbx);
-            s_death  = Clip(DeathFbx);
-            s_windup = Clip(WindUpFbx);
-            s_baseAttack = Clip(BaseAttackFbx);
-            s_baseCast   = Clip(BaseCastFbx);
+            // Registry-wrapped picks (WO-670): keyword resolve against `orc` with the
+            // hardcoded clip as the terminal default (empty registry ⇒ identical output).
+            s_idle   = MotionCastings.Resolve(CastingTargetBase, ActionKeywords.Idle,    Clip(IdleFbx));
+            s_walk   = MotionCastings.Resolve(CastingTargetBase, ActionKeywords.Walk,    Clip(WalkFbx));
+            s_run    = MotionCastings.Resolve(CastingTargetBase, ActionKeywords.Run,     Clip(RunFbx));
+            s_hit    = MotionCastings.Resolve(CastingTargetBase, ActionKeywords.Hit,     Clip(HitFbx));
+            s_death  = MotionCastings.Resolve(CastingTargetBase, ActionKeywords.Death0,  Clip(DeathFbx));
+            s_windup = MotionCastings.Resolve(CastingTargetBase, ActionKeywords.WindUp,  Clip(WindUpFbx));
+            s_baseAttack = MotionCastings.Resolve(CastingTargetBase, ActionKeywords.Attack0, Clip(BaseAttackFbx));
+            s_baseCast   = MotionCastings.Resolve(CastingTargetBase, ActionKeywords.Cast,    Clip(BaseCastFbx));
 
-            var injIdle = Clip(InjuredIdleFbx);
-            var injWalk = Clip(InjuredWalkFbx);
-            var injRun  = Clip(InjuredRunFbx);
+            var injIdle = MotionCastings.Resolve(CastingTargetBase, ActionKeywords.InjuredIdle, Clip(InjuredIdleFbx));
+            var injWalk = MotionCastings.Resolve(CastingTargetBase, ActionKeywords.InjuredWalk, Clip(InjuredWalkFbx));
+            var injRun  = MotionCastings.Resolve(CastingTargetBase, ActionKeywords.InjuredRun,  Clip(InjuredRunFbx));
 
             if (s_idle == null) { Debug.LogError("[OrcCtrl] no idle clip - aborting."); return; }
 
@@ -175,9 +187,9 @@ namespace DeNelle.Editor
             fromInjured.AddCondition(AnimatorConditionMode.IfNot, 0f, "Injured");
 
             // ── CombatLocomotion: braced idle + weapon walk/run (InCombat bool) ──
-            var combatIdle = Clip(CombatIdleFbx);
-            var combatWalk = Clip(CombatWalkFbx);
-            var combatRun  = Clip(CombatRunFbx);
+            var combatIdle = MotionCastings.Resolve(CastingTargetBase, ActionKeywords.CombatIdle, Clip(CombatIdleFbx));
+            var combatWalk = MotionCastings.Resolve(CastingTargetBase, ActionKeywords.CombatWalk, Clip(CombatWalkFbx));
+            var combatRun  = MotionCastings.Resolve(CastingTargetBase, ActionKeywords.CombatRun,  Clip(CombatRunFbx));
             AnimatorState combatLocoState = null;
             if (combatIdle != null)
             {
@@ -244,9 +256,9 @@ namespace DeNelle.Editor
             AssetDatabase.SaveAssets();
 
             // ── Per-role AnimatorOverrideControllers (clip swap on shared states) ─
-            int mage = BuildOverride(ctrl, MageOverridePath, MageIdleFbx, MageAttackFbx, MageCastFbx);
-            int warr = BuildOverride(ctrl, WarriorOverridePath, WarriorIdleFbx, WarriorAttackFbx, WarriorCastFbx);
-            int tank = BuildOverride(ctrl, TankOverridePath, TankIdleFbx, TankAttackFbx, TankCastFbx);
+            int mage = BuildOverride(ctrl, MageOverridePath, CastingTargetMage, MageIdleFbx, MageAttackFbx, MageCastFbx);
+            int warr = BuildOverride(ctrl, WarriorOverridePath, CastingTargetWarrior, WarriorIdleFbx, WarriorAttackFbx, WarriorCastFbx);
+            int tank = BuildOverride(ctrl, TankOverridePath, CastingTargetTank, TankIdleFbx, TankAttackFbx, TankCastFbx);
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -278,11 +290,13 @@ namespace DeNelle.Editor
         /// actually overridden (0 = all role clips missing -> base clips kept).
         /// </summary>
         private static int BuildOverride(AnimatorController baseCtrl, string path,
-                                         string idleFbx, string attackFbx, string castFbx)
+                                         string castingTarget, string idleFbx, string attackFbx, string castFbx)
         {
-            var roleIdle   = Clip(idleFbx);
-            var roleAttack = Clip(attackFbx);
-            var roleCast   = Clip(castFbx);
+            // Registry wrap (WO-670): the role target (orc-mage/-warrior/-tank,
+            // inherits orc) resolves first; the role's hardcoded clip stays terminal.
+            var roleIdle   = MotionCastings.Resolve(castingTarget, ActionKeywords.Idle,    Clip(idleFbx));
+            var roleAttack = MotionCastings.Resolve(castingTarget, ActionKeywords.Attack0, Clip(attackFbx));
+            var roleCast   = MotionCastings.Resolve(castingTarget, ActionKeywords.Cast,    Clip(castFbx));
 
             AssetDatabase.DeleteAsset(path);
             var ovr = new AnimatorOverrideController(baseCtrl) { name = System.IO.Path.GetFileNameWithoutExtension(path) };

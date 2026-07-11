@@ -5,6 +5,7 @@
         "DeNelle.Core",
         "DeNelle.Village",
         "DeNelle.Data",
+        "DeNelle.Editor",
         "UniTask",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"

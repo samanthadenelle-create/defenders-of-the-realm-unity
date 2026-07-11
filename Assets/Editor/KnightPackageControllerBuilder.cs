@@ -51,6 +51,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using DeNelle.Core.Combat;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -67,6 +68,11 @@ namespace DeNelle.Editor
         private const string RuntimePrefab  = "Assets/Resources/Heroes/KnightPackage.prefab";
         private const string WeaponSkillJson = "Assets/Resources/Data/Canonical/weaponskill-animations.json";
         private const string Log = "[KnightPackageControllerBuilder] ";
+
+        // Action Keyword Registry target (motion-castings.json, WO-670 slice 1):
+        // every hardcoded pick below is wrapped in MotionCastings.Resolve with the
+        // current constant as the terminal default — empty registry = byte-identical.
+        private const string CastingTarget = "knight";
 
         // ── Locomotion thresholds — MUST match the raw Speed feed (HeroLocomotion
         // Velocity.magnitude, _moveSpeed = 6): idle@0 / walk@2 / run@6.
@@ -160,13 +166,17 @@ namespace DeNelle.Editor
             var combatIdle = Clip(ClipCombatIdle);
             var combatWalk = Clip(ClipCombatWalk);
             var combatRun  = Clip(ClipCombatRun);
-            var unsheathe  = Clip(ClipUnsheathe);
-            var hit        = Clip(ClipHit);
+            // Registry-wrapped picks (WO-670): keyword resolve with the hardcoded
+            // clip as the terminal default (empty registry ⇒ identical output).
+            var unsheathe  = MotionCastings.Resolve(CastingTarget, ActionKeywords.Unsheathe, Clip(ClipUnsheathe));
+            var hit        = MotionCastings.Resolve(CastingTarget, ActionKeywords.Hit,       Clip(ClipHit));
             var basicSlash = Clip(ClipBasicSlash);
-            var sweepFall  = Clip(ClipSweepFall);
-            var gettingUp  = Clip(ClipGettingUp);
-            var victory    = FbxClip(SharedVictoryFbx);   // package gap — shared pose
-            var block      = FbxClip(SharedBlockFbx);     // package gap — shared block
+            var sweepFall  = MotionCastings.Resolve(CastingTarget, ActionKeywords.Knockdown, Clip(ClipSweepFall));
+            var gettingUp  = MotionCastings.Resolve(CastingTarget, ActionKeywords.GettingUp, Clip(ClipGettingUp));
+            var victory    = MotionCastings.Resolve(CastingTarget, ActionKeywords.Victory,
+                                 FbxClip(SharedVictoryFbx));   // package gap — shared pose
+            var block      = MotionCastings.Resolve(CastingTarget, ActionKeywords.Block,
+                                 FbxClip(SharedBlockFbx));     // package gap — shared block
 
             // ── Idempotent controller create ─────────────────────────────────────
             AssetDatabase.DeleteAsset(ControllerPath);
@@ -271,6 +281,10 @@ namespace DeNelle.Editor
             // Attack0 = the BASIC swing (Sword And Shield Slash, owner spec); Attack1/2
             // resolve from weaponskill-animations.json knight rows via JsonClipToPackage.
             var comboClips = ResolveComboClips(basicSlash);
+            // Registry wrap (WO-670): attack0/1/2 keywords over the json-resolved picks.
+            string[] attackKeywords = { ActionKeywords.Attack0, ActionKeywords.Attack1, ActionKeywords.Attack2 };
+            for (int i = 0; i < comboClips.Length && i < attackKeywords.Length; i++)
+                comboClips[i] = MotionCastings.Resolve(CastingTarget, attackKeywords[i], comboClips[i]);
             for (int i = 0; i < comboClips.Length; i++)
             {
                 if (comboClips[i] == null) continue;
@@ -286,7 +300,19 @@ namespace DeNelle.Editor
             }
 
             // ── Generic Cast + per-variant Cast_q/w/e/r (CastVariant gate) ────────
-            AnimationClip genericCast = basicSlash;
+            // Registry wrap (WO-670): the generic cast resolves the `cast` keyword;
+            // the q/w slots resolve `skill1`/`skill2` (the two skill keywords in the
+            // closed vocabulary — e/r stay on their hardcoded picks). Resolved ONCE
+            // here and reused by the upper-body layer so the two stay in lock-step.
+            AnimationClip genericCast = MotionCastings.Resolve(CastingTarget, ActionKeywords.Cast, basicSlash);
+            var spellClips = new AnimationClip[SpellCastClips.Length];
+            for (int v = 1; v < SpellCastClips.Length; v++)
+            {
+                var slotClip = Clip(SpellCastClips[v]);
+                if (v == 1) slotClip = MotionCastings.Resolve(CastingTarget, ActionKeywords.Skill1, slotClip);
+                else if (v == 2) slotClip = MotionCastings.Resolve(CastingTarget, ActionKeywords.Skill2, slotClip);
+                spellClips[v] = slotClip;
+            }
             if (genericCast != null)
             {
                 var castState = sm.AddState("Cast");
@@ -299,9 +325,9 @@ namespace DeNelle.Editor
                 AddCombatAwareReturn(castState, loco, combatLoco, ActionExitTime, ActionExitDur);
             }
             string[] slotName = { "0", "q", "w", "e", "r" };
-            for (int v = 1; v < SpellCastClips.Length; v++)
+            for (int v = 1; v < spellClips.Length; v++)
             {
-                var clip = Clip(SpellCastClips[v]);
+                var clip = spellClips[v];
                 if (clip == null) continue;
                 var st = sm.AddState("Cast_" + slotName[v]);
                 st.motion = clip;
@@ -346,12 +372,14 @@ namespace DeNelle.Editor
             // default so their extra DeathDir condition gets first match; the default
             // (no DeathDir gate) covers 0 and any unmapped value. Revive (Dead=false)
             // returns every death state to Locomotion.
-            BuildDeath(sm, loco, "DeathLeft",        Clip(ClipDeathLeft),        1);
-            BuildDeath(sm, loco, "DeathRight",       Clip(ClipDeathRight),       2);
-            BuildDeath(sm, loco, "DeathFront",       Clip(ClipDeathFront),       3);
-            BuildDeath(sm, loco, "DeathBack",        Clip(ClipDeathBack),        4);
-            BuildDeath(sm, loco, "DeathAssassinate", Clip(ClipDeathAssassinate), 5); // TENTATIVE mapping
-            BuildDeath(sm, loco, "Death",            Clip(ClipDeathDefault),     -1); // -1 = unconditioned default
+            // Registry wrap (WO-670): death1..5 = the directional table, death0 = the
+            // unconditioned default (DeathDirection Fall) — hardcoded picks stay terminal.
+            BuildDeath(sm, loco, "DeathLeft",        MotionCastings.Resolve(CastingTarget, ActionKeywords.Death1, Clip(ClipDeathLeft)),        1);
+            BuildDeath(sm, loco, "DeathRight",       MotionCastings.Resolve(CastingTarget, ActionKeywords.Death2, Clip(ClipDeathRight)),       2);
+            BuildDeath(sm, loco, "DeathFront",       MotionCastings.Resolve(CastingTarget, ActionKeywords.Death3, Clip(ClipDeathFront)),       3);
+            BuildDeath(sm, loco, "DeathBack",        MotionCastings.Resolve(CastingTarget, ActionKeywords.Death4, Clip(ClipDeathBack)),        4);
+            BuildDeath(sm, loco, "DeathAssassinate", MotionCastings.Resolve(CastingTarget, ActionKeywords.Death5, Clip(ClipDeathAssassinate)), 5); // TENTATIVE mapping
+            BuildDeath(sm, loco, "Death",            MotionCastings.Resolve(CastingTarget, ActionKeywords.Death0, Clip(ClipDeathDefault)),     -1); // -1 = unconditioned default
 
             // ── Victory (package gap — shared pose retargets) ────────────────────
             if (victory != null)
@@ -390,9 +418,9 @@ namespace DeNelle.Editor
             // KEPT per owner 2026-07-03 (reversed the brief "86 it"): the structure stays
             // wired; the current Action/Enemies retargets are a PLACEHOLDER until the owner
             // sources better dedicated Paladin injured clips — swap InjuredIdle/Walk/RunFbx.
-            var injIdle = FbxClip(InjuredIdleFbx) ?? idle;
-            var injWalk = FbxClip(InjuredWalkFbx) ?? walk;
-            var injRun  = FbxClip(InjuredRunFbx)  ?? run;
+            var injIdle = MotionCastings.Resolve(CastingTarget, ActionKeywords.InjuredIdle, FbxClip(InjuredIdleFbx)) ?? idle;
+            var injWalk = MotionCastings.Resolve(CastingTarget, ActionKeywords.InjuredWalk, FbxClip(InjuredWalkFbx)) ?? walk;
+            var injRun  = MotionCastings.Resolve(CastingTarget, ActionKeywords.InjuredRun,  FbxClip(InjuredRunFbx))  ?? run;
             var injured = sm.AddState("InjuredLocomotion");
             injured.motion = MakeTree(ctrl, "InjuredLocomotion",
                 (injIdle, 0f), (injWalk, WalkThreshold), (injRun, RunThreshold));
@@ -405,7 +433,7 @@ namespace DeNelle.Editor
 
             // ── Upper-body overlay (attack/cast while moving, WO-218 pattern) ────
             if (genericCast != null)
-                AddUpperBodyLayer(ctrl, genericCast);
+                AddUpperBodyLayer(ctrl, genericCast, spellClips);
 
             EditorUtility.SetDirty(ctrl);
             AssetDatabase.SaveAssets();
@@ -564,7 +592,8 @@ namespace DeNelle.Editor
         // WO-218 pattern: an "Upper Body" Override layer (arms+torso mask) driven
         // by the same Cast/Attack triggers so the hero swings while moving. Empty
         // default state contributes nothing when idle. Mirrors HeroAnimatorFactory.
-        private static void AddUpperBodyLayer(AnimatorController ctrl, AnimationClip genericCast)
+        private static void AddUpperBodyLayer(AnimatorController ctrl, AnimationClip genericCast,
+                                              AnimationClip[] spellClips)
         {
             var mask = EnsureUpperBodyMask();
 
@@ -588,9 +617,9 @@ namespace DeNelle.Editor
             back.hasExitTime = true; back.exitTime = ActionExitTime; back.duration = ActionExitDur;
 
             string[] slotName = { "0", "q", "w", "e", "r" };
-            for (int v = 1; v < SpellCastClips.Length; v++)
+            for (int v = 1; v < spellClips.Length; v++)
             {
-                var clip = Clip(SpellCastClips[v]);
+                var clip = spellClips[v];
                 if (clip == null) continue;
                 var st = sm.AddState("CastUpper_" + slotName[v]);
                 st.motion = clip;

@@ -59,6 +59,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using DeNelle.Core.Combat;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -116,6 +117,21 @@ namespace DeNelle.Editor
         private const string PHit    = "Hit";     // trigger — flinch
         private const string PDead   = "Dead";    // bool   — death (collapse + hold)
         private const string PCast   = "Cast";    // trigger — Special clip (Boss/Hero)
+
+        // ── Action Keyword Registry targets (motion-castings.json, WO-670) ───
+        // Each archetype controller resolves the registry FIRST (per its target
+        // id); the keyword search over the KayKit library stays the terminal
+        // fallback — empty registry = byte-identical controllers.
+        private static readonly Dictionary<string, string> CastingTargets =
+            new Dictionary<string, string>
+        {
+            { "HumanoidEnemy", "hollow" },
+            { "LargeEnemy",    "largebody" },
+            { "Boss",          "boss" },
+            { "Hero",          "hero-legacy" },
+            { "Pet",           "pet" },
+            { "Npc",           "npc" },
+        };
 
         // Locomotion threshold — Speed above this counts as "moving".
         private const float MoveThreshold = 0.1f;
@@ -319,16 +335,24 @@ namespace DeNelle.Editor
 
             var sm = controller.layers[0].stateMachine;
 
-            // ── Clip resolution (keyword search over the library) ────────────
-            AnimationClip idleClip   = FindClip(library, "idle", "rest", "breathing");
-            AnimationClip moveClip   = FindClip(library, "walk", "run", "move", "jog");
-            AnimationClip attackClip = FindClip(library,
-                "1h_melee_attack", "melee_attack", "attack", "slash", "swing", "shoot");
-            AnimationClip hitClip    = FindClip(library,
-                "hit", "hitrecieve", "recieve_hit", "flinch", "damage", "impact");
-            AnimationClip deathClip  = FindClip(library, "death", "die", "dead");
+            // ── Clip resolution — registry lookup FIRST (WO-670), keyword search
+            //    over the library as the unchanged terminal fallback ────────────
+            string target = CastingTargets.TryGetValue(assetName, out string t) ? t : assetName;
+            AnimationClip idleClip   = MotionCastings.Resolve(target, ActionKeywords.Idle,
+                FindClip(library, "idle", "rest", "breathing"));
+            AnimationClip moveClip   = MotionCastings.Resolve(target, ActionKeywords.Walk,
+                FindClip(library, "walk", "run", "move", "jog"));
+            AnimationClip attackClip = MotionCastings.Resolve(target, ActionKeywords.Attack0,
+                FindClip(library,
+                "1h_melee_attack", "melee_attack", "attack", "slash", "swing", "shoot"));
+            AnimationClip hitClip    = MotionCastings.Resolve(target, ActionKeywords.Hit,
+                FindClip(library,
+                "hit", "hitrecieve", "recieve_hit", "flinch", "damage", "impact"));
+            AnimationClip deathClip  = MotionCastings.Resolve(target, ActionKeywords.Death0,
+                FindClip(library, "death", "die", "dead"));
             AnimationClip castClip   = withCast
-                ? FindClip(library, "cast", "channel", "spellcast", "special", "interact")
+                ? MotionCastings.Resolve(target, ActionKeywords.Cast,
+                    FindClip(library, "cast", "channel", "spellcast", "special", "interact"))
                 : null;
 
             // ── States ───────────────────────────────────────────────────────
@@ -427,8 +451,12 @@ namespace DeNelle.Editor
 
             var sm = controller.layers[0].stateMachine;
 
-            AnimationClip idleClip = FindClip(library, "idle", "rest", "breathing");
-            AnimationClip moveClip = FindClip(library, "walk", "move", "jog");
+            // Registry lookup FIRST (WO-670); keyword search stays the fallback.
+            string target = CastingTargets.TryGetValue(assetName, out string t) ? t : assetName;
+            AnimationClip idleClip = MotionCastings.Resolve(target, ActionKeywords.Idle,
+                FindClip(library, "idle", "rest", "breathing"));
+            AnimationClip moveClip = MotionCastings.Resolve(target, ActionKeywords.Walk,
+                FindClip(library, "walk", "move", "jog"));
 
             var idle = sm.AddState("Idle");
             idle.motion = idleClip;
