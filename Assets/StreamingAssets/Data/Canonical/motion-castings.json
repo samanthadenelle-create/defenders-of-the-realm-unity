@@ -1,18 +1,55 @@
 {
   "version": 2,
   "_comment": "KEYWORD -> ACTION registry. Targets (enemy family | hero class) x keywords -> clip (+optional vfx/sfx). Owner picks are manual:true = CANON, never overwritten (Offset Forge law, WO-490). Editor-consumed (controller bakes) in V1 - no Resources mirror until a runtime reader exists; at that point the dual-copy rule (Resources copy WINS) applies. v2 (2026-07-11): +castHeal keyword (reader = KnightPackageControllerBuilder Cast_e wrap) + the knight owner-pick rows of 2026-07-11.",
-
   "vocabulary": {
-    "locomotion": ["idle", "walk", "run", "combatIdle", "combatWalk", "combatRun",
-                    "injuredIdle", "injuredWalk", "injuredRun"],
-    "attack":     ["attack0", "attack1", "attack2", "attack3", "heavy",
-                    "skill1", "skill2"],
-    "cast":       ["cast", "castChannel", "castHeal"],
-    "reaction":   ["hit", "block", "parry", "dodge", "knockdown", "gettingUp"],
-    "death":      ["death0", "death1", "death2", "death3", "death4", "death5"],
-    "signature":  ["taunt", "unsheathe", "victory", "windup"]
+    "locomotion": [
+      "idle",
+      "walk",
+      "run",
+      "combatIdle",
+      "combatWalk",
+      "combatRun",
+      "injuredIdle",
+      "injuredWalk",
+      "injuredRun"
+    ],
+    "attack": [
+      "attack0",
+      "attack1",
+      "attack2",
+      "attack3",
+      "heavy",
+      "skill1",
+      "skill2"
+    ],
+    "cast": [
+      "cast",
+      "castChannel",
+      "castHeal"
+    ],
+    "reaction": [
+      "hit",
+      "block",
+      "parry",
+      "dodge",
+      "knockdown",
+      "gettingUp"
+    ],
+    "death": [
+      "death0",
+      "death1",
+      "death2",
+      "death3",
+      "death4",
+      "death5"
+    ],
+    "signature": [
+      "taunt",
+      "unsheathe",
+      "victory",
+      "windup"
+    ]
   },
-
   "targets": {
     "humanoid": {
       "_comment": "root archetype default - the shared-rig baseline (AnimatorSetup families)"
@@ -20,23 +57,89 @@
     "largebody": {
       "_comment": "root archetype default - the Rig_Large heavy bodies (AnimatorSetup LargeEnemy)"
     },
-    "orc":         { "inherits": "humanoid" },
-    "hollow":      { "inherits": "humanoid" },
-    "troll":       { "inherits": "humanoid" },
-    "orc-mage":    { "inherits": "orc" },
-    "orc-warrior": { "inherits": "orc" },
-    "orc-tank":    { "inherits": "orc" },
+    "orc": {
+      "inherits": "humanoid"
+    },
+    "hollow": {
+      "inherits": "humanoid"
+    },
+    "troll": {
+      "inherits": "humanoid"
+    },
+    "orc-mage": {
+      "inherits": "orc"
+    },
+    "orc-warrior": {
+      "inherits": "orc"
+    },
+    "orc-tank": {
+      "inherits": "orc"
+    },
     "knight": {
       "inherits": "humanoid",
       "_comment": "OWNER PICKS 2026-07-11 (verbatim canon; manual:true = never overwritten). skill1 = Cast_q = Heroic Leap -> S&S 'atk_jump' (jump + stab down). skill2 = Cast_w = W action button -> plain Slash (REVISED same day from atk_slashup: 'instead of W button Put Slash'; the already-extracted Sword_And_Shield_Slash take). block = Block state -> 'atk_shieldswipe01' (chains into shieldswipe02 via the builder's Block2 second beat) for incoming attacks and spell deflection. castHeal = Cast_e heal/ward slot -> Magical Moves 'Magic Spell Cast 02' (m-ls-magespellcast-02). cast = generic/variant-0 cast (extra-bar Mend et al.) -> the same heal cast so no cast-type action ever swings a sword (F8-48 / melee-caster hard rule). Every row is NO-OP-safe: an unextracted clip falls through to the builder default at bake (run DeNelle.Editor.SwordShieldMovesImporter.Import first).",
-      "skill1":   { "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Weapon_WeaponSkill_SwordShield_Jump.anim", "guid": "", "manual": true, "pickedUtc": "2026-07-11T00:00:00Z", "source": "owner-pick" },
-      "skill2":   { "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Weapon_WeaponSkill_Sword_And_Shield_Slash.anim", "guid": "", "manual": true, "pickedUtc": "2026-07-11T00:00:00Z", "source": "owner-pick" },
-      "block":    { "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Weapon_WeaponSkill_SwordShield_ShieldSwipe01.anim", "guid": "", "manual": true, "pickedUtc": "2026-07-11T00:00:00Z", "source": "owner-pick" },
-      "castHeal": { "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Spell_MagicalMoves_SpellCast_02.anim", "guid": "", "manual": true, "pickedUtc": "2026-07-11T00:00:00Z", "source": "owner-pick" },
-      "cast":     { "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Spell_MagicalMoves_SpellCast_02.anim", "guid": "", "manual": true, "pickedUtc": "2026-07-11T00:00:00Z", "source": "owner-pick" }
+      "skill1": {
+        "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Weapon_WeaponSkill_SwordShield_Jump.anim",
+        "guid": "",
+        "manual": true,
+        "pickedUtc": "2026-07-11T00:00:00Z",
+        "source": "owner-pick"
+      },
+      "skill2": {
+        "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Weapon_WeaponSkill_Sword_And_Shield_Slash.anim",
+        "guid": "",
+        "manual": true,
+        "pickedUtc": "2026-07-11T00:00:00Z",
+        "source": "owner-pick"
+      },
+      "block": {
+        "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Weapon_WeaponSkill_SwordShield_ShieldSwipe01.anim",
+        "guid": "",
+        "manual": true,
+        "pickedUtc": "2026-07-11T00:00:00Z",
+        "source": "owner-pick"
+      },
+      "castHeal": {
+        "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Spell_MagicalMoves_SpellCast_02.anim",
+        "guid": "",
+        "manual": true,
+        "pickedUtc": "2026-07-11T00:00:00Z",
+        "source": "owner-pick"
+      },
+      "cast": {
+        "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Spell_MagicalMoves_SpellCast_02.anim",
+        "guid": "",
+        "manual": true,
+        "pickedUtc": "2026-07-11T00:00:00Z",
+        "source": "owner-pick"
+      },
+      "walk": {
+        "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Passive_Locomotion_Walk.anim",
+        "guid": "",
+        "vfxKey": "",
+        "sfxId": "",
+        "manual": false,
+        "pickedUtc": "2026-07-11T23:40:00Z",
+        "source": "rca-f8-walkdrag"
+      },
+      "run": {
+        "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Passive_Locomotion_Run.anim",
+        "guid": "",
+        "vfxKey": "",
+        "sfxId": "",
+        "manual": false,
+        "pickedUtc": "2026-07-11T23:40:00Z",
+        "source": "rca-f8-walkdrag"
+      }
     },
-    "mage":        { "inherits": "humanoid" },
-    "ranger":      { "inherits": "humanoid" },
-    "cleric":      { "inherits": "humanoid" }
+    "mage": {
+      "inherits": "humanoid"
+    },
+    "ranger": {
+      "inherits": "humanoid"
+    },
+    "cleric": {
+      "inherits": "humanoid"
+    }
   }
 }

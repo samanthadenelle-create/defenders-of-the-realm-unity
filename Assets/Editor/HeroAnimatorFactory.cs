@@ -359,8 +359,15 @@ namespace DeNelle.Editor
         {
             // Locomotion sources honor the optional per-spec overrides (mocap variant); null → shared constants.
             AnimationClip idle    = LoadClip(spec.idleClipOverride ?? IdleClip, spec.searchRoots);
-            AnimationClip walk    = LoadClip(spec.walkClipOverride ?? WalkClip, spec.searchRoots);
-            AnimationClip run     = LoadClip(spec.runClipOverride  ?? RunClip,  spec.searchRoots);
+            // F8 2026-07-11 "walk dragging left foot": the Shared_Walk/Run_Forward Mixamo
+            // takes carry a BAKED left hip list (HeroDrift proof: hipsLocalX −0.25/+0.02 on a
+            // zero-turn single-clip stride) — the movement code is innocent. Route the calm
+            // walk/run through the Motion Caster registry so the clip is re-pickable data
+            // (knight.walk / knight.run manual rows); registry miss = today's clip verbatim.
+            AnimationClip walk    = MotionCastings.Resolve("knight", "walk",
+                                        LoadClip(spec.walkClipOverride ?? WalkClip, spec.searchRoots));
+            AnimationClip run     = MotionCastings.Resolve("knight", "run",
+                                        LoadClip(spec.runClipOverride  ?? RunClip,  spec.searchRoots));
             AnimationClip victory = LoadClip(VictoryClip, spec.searchRoots);
             AnimationClip hit     = LoadClip(spec.hitClipOverride   ?? HitClip,   spec.searchRoots);
             AnimationClip death   = LoadClip(DeathClip, spec.searchRoots);
