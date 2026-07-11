@@ -572,7 +572,12 @@ namespace DeNelle.Village
             // states. Variant 0 stays the generic cast for any caller using the no-arg overload.
             // A controller without CastVariant / per-variant states falls back to the default
             // Cast state, so this is fully backward-compatible (castVariant is the caller's arg).
-            actor?.PlayAttack(0);
+            // F8-48: a HEAL must never drive the melee attack trigger — on the Knight the
+            // attack trigger is a sword swing, so a committed Mend read as "does an attack".
+            // Heals play only the cast side (owner melee/caster rule).
+            string fxRaw = (def.Effect ?? string.Empty).Trim().ToLowerInvariant();
+            bool isHealCast = def.EffectEnum == AbilityEffect.Heal || fxRaw == "healovertime";
+            if (!isHealCast) actor?.PlayAttack(0);
             actor?.PlayCast(castVariant);
 
             Vector3 origin = transform.position;
@@ -695,6 +700,10 @@ namespace DeNelle.Village
             // below, so this is fully additive / flag-safe (no behaviour change for mage/
             // ranger or any ability whose effect is one of the six canonical shapes).
             string rawEffect = (def.Effect ?? string.Empty).Trim().ToLowerInvariant();
+            // F8-48: the Heal branch was trace-silent — every commit now names its id,
+            // effect string, enum branch and damage so a mis-dispatch is one grep away.
+            FlowTrace.Step("HeroAbility",
+                $"resolve '{def.Id}' effect='{rawEffect}' enum={def.EffectEnum} dmg={def.Damage}");
             switch (rawEffect)
             {
                 case "dash":         ResolveDash(def, origin);         return;
