@@ -64,7 +64,12 @@ namespace DeNelle.Village.Hud
             string scene = SceneManager.GetActiveScene().name;
 
             bool combat = IsWaveActive()
-                          || BattleLock.IsInBattle();
+                          || BattleLock.IsInBattle()
+                          // owner F8 2026-07-10 "actively chased should be battle HUD": an overworld rep
+                          // pursuing/striking the hero flips to Battle too (refines the 2026-07-05 ruling
+                          // that scene-ground alone stays prebattle). PursuitActive self-decays over
+                          // PursuitTtl (~1.5s) = built-in hysteresis; distinct from staged BattleLock.
+                          || DeNelle.Core.HudModel.PostureSignals.PursuitActive;
 
             bool inVillage = IsInTownRing(scene);
             bool modal = PanelManager.AnyOpen;
@@ -85,6 +90,7 @@ namespace DeNelle.Village.Hud
             // Observability (mirrors BattleHudVisibilityManager.EvaluateMode's input trace).
             FlowTrace.Throttle("HUD", "ctx-eval", 1f,
                 $"context inputs: wave={IsWaveActive()} battleLock={BattleLock.IsInBattle()} " +
+                $"pursuit={DeNelle.Core.HudModel.PostureSignals.PursuitActive} " +
                 $"inVillage={inVillage} modal={modal} buildMode={buildMode} scene='{scene}' -> {ctx}");
 
             if (_pushedOnce && _combat && !combat)
