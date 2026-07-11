@@ -399,10 +399,33 @@ namespace DeNelle.Village
         /// TowerPlacementSystem's ~0 mask, which works.
         /// </summary>
         private bool RaycastGround(out RaycastHit hit)
+            => RaycastGroundAt(_input.ScreenPoint, out hit);
+
+        /// <summary>Screen-point overload of the ground raycast (same camera/mask/fallback rules).</summary>
+        private bool RaycastGroundAt(Vector2 screenPoint, out RaycastHit hit)
         {
-            Ray ray = _camera.ScreenPointToRay(_input.ScreenPoint);
+            Ray ray = _camera.ScreenPointToRay(screenPoint);
             if (Physics.Raycast(ray, out hit, _rayDistance, _groundMask)) return true;
             return Physics.Raycast(ray, out hit, _rayDistance, ~0);
+        }
+
+        /// <summary>
+        /// AutoPilot probe seam (fleet AssertTutorialFirstTower) — evaluate the SAME
+        /// reason-aware validity gate the live place loop runs (RaycastGround → SnapToGrid →
+        /// IsValidPlacement, identical rules incl. cost) at an arbitrary screen point,
+        /// WITHOUT consuming input, moving the ghost, or placing anything. Read-only over
+        /// grid + scene. Requires build mode active with an armed entry (probes for
+        /// <c>_armed</c>, exactly what the ghost tint evaluates). Returns false + the
+        /// reject reason when the point would not accept a placement.
+        /// </summary>
+        public bool ProbeArmedPlacementAt(Vector2 screenPoint, out BuildRejectReason reason)
+        {
+            reason = BuildRejectReason.Generic;
+            if (!IsActive || _armed == null || _grid == null || _camera == null) return false;
+            if (!RaycastGroundAt(screenPoint, out RaycastHit hit))
+            { reason = BuildRejectReason.BadSurface; return false; }
+            Vector3 snapped = _grid.SnapToGrid(hit.point);
+            return IsValidPlacement(hit, snapped, _armed, out _, out _, out reason, out _, out _);
         }
 
         /// <summary>

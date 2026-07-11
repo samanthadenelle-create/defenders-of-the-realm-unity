@@ -1248,10 +1248,15 @@ namespace DeNelle.DevTools
 
             try
             {
-                // 4) Inject clicks at candidate ground points: grid cells around the map centre,
-                //    projected through the live overview camera (the same view the ground ray
-                //    casts from). Several candidates so one occupied/gate-lane cell can't fail
-                //    the probe for the wrong reason.
+                // 4) Inject clicks at candidate ground points. DYNAMIC (2026-07-11 fix,
+                //    replay-run0.log proof: all 8 fixed cells rejected Occupied/BadSurface
+                //    after the 07-10 Colosseum hub structure landed on them): sample rings
+                //    of cells around the map centre, project each through the live overview
+                //    camera, and PRE-VALIDATE via the controller's own reason-aware gate
+                //    (BuildModeController.ProbeArmedPlacementAt → IsValidPlacement — the
+                //    EXACT check that computes ghostValid). Only actually-valid points are
+                //    clicked; the old fixed offsets remain as a last-resort fallback so a
+                //    probe-seam fault can't silently blind the phase.
                 var cam = HighestDepthScreenCamera();
                 var grid = PlacementGrid.Instance;
                 if (cam == null || grid == null)
@@ -1260,21 +1265,56 @@ namespace DeNelle.DevTools
                     FlowTrace.Fail(Tag, "AssertTutorialFirstTower: " + (cam == null ? "no screen camera" : "no PlacementGrid") + " after Enter() — cannot project a ground click.");
                     yield break;
                 }
-                var cellOffsets = new Vector2Int[]
-                {
-                    new Vector2Int(3, 3), new Vector2Int(-4, 2), new Vector2Int(5, -3),
-                    new Vector2Int(-5, -5), new Vector2Int(0, 6), new Vector2Int(6, 0),
-                    new Vector2Int(-6, 4), new Vector2Int(2, -6),
-                };
                 var centre = new Vector2Int(grid.gridWidth / 2, grid.gridHeight / 2);
-                foreach (var off in cellOffsets)
+                var candidates = new List<Vector2>();   // screen points, pre-validated
+                var candidateCells = new List<Vector2Int>();
+                int sampled = 0;
+                string mode = "dynamic";
+                // Expanding rings (radius 2..12 cells, step 2) around the centre — near
+                // placements first (tutorial-plausible), widening until enough valid cells.
+                for (int r = 2; r <= 12 && candidates.Count < 8; r += 2)
+                {
+                    for (int dx = -r; dx <= r && candidates.Count < 8; dx++)
+                    for (int dz = -r; dz <= r && candidates.Count < 8; dz++)
+                    {
+                        if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dz)) != r) continue;   // ring shell only
+                        var cell = centre + new Vector2Int(dx, dz);
+                        if (cell.x < 0 || cell.y < 0 || cell.x >= grid.gridWidth || cell.y >= grid.gridHeight) continue;
+                        Vector3 sp3 = cam.WorldToScreenPoint(grid.CellToWorld(cell));
+                        if (sp3.z <= 0f) continue;                                     // behind the camera
+                        if (sp3.x < 0f || sp3.y < 0f || sp3.x >= Screen.width || sp3.y >= Screen.height) continue;   // off-screen
+                        sampled++;
+                        var sp = new Vector2(sp3.x, sp3.y);
+                        if (!ctrl.ProbeArmedPlacementAt(sp, out _)) continue;           // the game's own validity gate
+                        candidates.Add(sp);
+                        candidateCells.Add(cell);
+                    }
+                }
+                if (candidates.Count == 0)
+                {
+                    // LAST RESORT — the historical fixed offsets (pre-2026-07-11 behaviour).
+                    mode = "fixed-fallback";
+                    var cellOffsets = new Vector2Int[]
+                    {
+                        new Vector2Int(3, 3), new Vector2Int(-4, 2), new Vector2Int(5, -3),
+                        new Vector2Int(-5, -5), new Vector2Int(0, 6), new Vector2Int(6, 0),
+                        new Vector2Int(-6, 4), new Vector2Int(2, -6),
+                    };
+                    foreach (var off in cellOffsets)
+                    {
+                        Vector3 sp3 = cam.WorldToScreenPoint(grid.CellToWorld(centre + off));
+                        if (sp3.z <= 0f) continue;
+                        candidates.Add(new Vector2(sp3.x, sp3.y));
+                        candidateCells.Add(centre + off);
+                    }
+                }
+                FlowTrace.Step(Tag, "FirstTower candidates: sampled=" + sampled + " valid=" + (mode == "dynamic" ? candidates.Count : 0) + " mode=" + mode);
+                for (int i = 0; i < candidates.Count; i++)
                 {
                     if (placedFired) break;
-                    Vector3 world = grid.CellToWorld(centre + off);
-                    Vector3 sp = cam.WorldToScreenPoint(world);
-                    if (sp.z <= 0f) continue;   // behind the camera — skip
-                    bot.Click(new Vector2(sp.x, sp.y));
-                    FlowTrace.Step(Tag, "AssertTutorialFirstTower: injected click at screen (" + sp.x.ToString("F0") + "," + sp.y.ToString("F0") + ") for cell " + (centre + off) + ".");
+                    Vector2 sp = candidates[i];
+                    bot.Click(sp);
+                    FlowTrace.Step(Tag, "AssertTutorialFirstTower: injected click at screen (" + sp.x.ToString("F0") + "," + sp.y.ToString("F0") + ") for cell " + candidateCells[i] + ".");
                     float w = 0f;
                     while (w < 1.2f && !placedFired) { w += Time.deltaTime; yield return null; }
                 }
