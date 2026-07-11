@@ -1,0 +1,14 @@
+{
+  "_note": "WO-672 Slice D - structure damage-state thresholds for StructureDamageVisuals. HP-fraction thresholds: <= smolder = reduced-scale Ember_Burn loop; <= fire = full-scale Ember_Burn; broken (hp==0) = one-shot Raid_Explosion at the break transition + persistent ember. perType keys are lowercase structure kinds; optOut skips the shared tells for types with bespoke damage presentation (gate force-field collapse, heart crystal states). Dual-copy rule: keep Assets/Resources/Data/Canonical/damage-states.json byte-identical.",
+  "version": 1,
+  "defaults": {
+    "smolder": 0.5,
+    "fire": 0.25,
+    "barOffset": 2.2,
+    "maxBurnLoops": 8
+  },
+  "perType": {
+    "gate": { "optOut": true },
+    "heart": { "optOut": true }
+  }
+}

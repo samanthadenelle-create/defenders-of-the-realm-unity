@@ -38,7 +38,9 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
+using DeNelle.Village.Buildings.Progression;
 
 namespace DeNelle.Village
 {
@@ -483,9 +485,176 @@ namespace DeNelle.Village
         public int CostFor(RepairTarget target)
         {
             if (target == null || !target.IsValid) return _minRepairCost;
-            float frac = Mathf.Clamp01(target.DamageFraction);
+            return CostForFraction(target.DamageFraction);
+        }
+
+        /// <summary>
+        /// WO-672 Slice E: the SAME cost formula keyed by a raw 0..1 damage
+        /// fraction, so structures that are not RepairTarget-wrappable (towers /
+        /// harvest sites — their damage surface is HpFraction/IsBroken) are priced
+        /// by the one cost authority instead of a duplicated constant.
+        /// </summary>
+        public int CostForFraction(float damageFraction)
+        {
+            float frac = Mathf.Clamp01(damageFraction);
             int scaled = Mathf.CeilToInt(_fullRepairCost * frac);
             return Mathf.Max(_minRepairCost, scaled);
+        }
+
+        // =====================================================================
+        //  WO-672 Slice E — Repair All (the damage-report CTA)
+        // =====================================================================
+
+        /// <summary>One repairable item in the Repair-All sweep (uniform view).</summary>
+        private struct RepairAllItem
+        {
+            public string Name;
+            public float DamageFraction;
+            public int Cost;          // 0 = free (collectors — their Repair() flow has no crystal price today)
+            public Action Fix;        // the structure's existing Repair primitive
+        }
+
+        /// <summary>
+        /// Crystal cost of repairing EVERYTHING currently damaged (walls / gates /
+        /// buildings via <see cref="CostFor"/>, towers + harvest sites via
+        /// <see cref="CostForFraction"/>; collectors are free). The damage-report
+        /// CTA shows this total; 0 = nothing costed (clean, or collectors only).
+        /// </summary>
+        public int RepairAllCost()
+        {
+            int total = 0;
+            foreach (var item in CollectRepairAllSet()) total += item.Cost;
+            return total;
+        }
+
+        /// <summary>
+        /// WO-672 Slice E (owner 2026-07-11: "i saw a damage report but could not
+        /// repair"): repairs every damaged structure WORST-FIRST, spending crystals
+        /// through the SAME <see cref="SpendCrystals"/> path the single-repair
+        /// confirm uses (never a second wallet path), until the balance can no
+        /// longer cover an item — unaffordable items are skipped (a cheaper, less-
+        /// damaged one later in the sweep may still fit; partial repair is honest).
+        /// Raises <see cref="FeedbackShown"/> with the summary (the existing HUD
+        /// toast surface). Returns (repairedCount, spentCrystals, remainingDamaged).
+        /// </summary>
+        public (int repairedCount, int spentCrystals, int remainingDamaged) RepairAll()
+        {
+            var items = CollectRepairAllSet();
+            items.Sort((a, b) => b.DamageFraction.CompareTo(a.DamageFraction));   // worst-first
+            FlowTrace.Step("Repair", $"RepairAll: {items.Count} damaged, balance={CrystalBalance}");
+
+            int repaired = 0, spent = 0, remaining = 0;
+            foreach (var item in items)
+            {
+                if (item.Cost > 0 && !SpendCrystals(item.Cost))
+                {
+                    remaining++;
+                    FlowTrace.Step("Repair",
+                        $"RepairAll: SKIPPED '{item.Name}' (dmg {item.DamageFraction:0.00}) — " +
+                        $"cost {item.Cost} > balance {CrystalBalance}");
+                    continue;
+                }
+                var fix = item.Fix;
+                Guard.Try("Repair", $"RepairAll fix '{item.Name}'", () => fix?.Invoke());
+                repaired++;
+                spent += item.Cost;
+                FlowTrace.Step("Repair",
+                    $"RepairAll: repaired '{item.Name}' (dmg {item.DamageFraction:0.00}) for {item.Cost}");
+            }
+
+            FlowTrace.Step("Repair",
+                $"RepairAll SUMMARY: repaired={repaired} spent={spent} remaining={remaining} balance={CrystalBalance}");
+            if (repaired > 0)
+                FeedbackShown?.Invoke(remaining > 0
+                    ? $"Repaired {repaired} structures for {spent} crystals - {remaining} still damaged (out of crystals)"
+                    : $"Repaired {repaired} structures for {spent} crystals", false);
+            else if (items.Count > 0)
+                FeedbackShown?.Invoke("Not enough crystals to repair anything", true);
+
+            ClearSelection();
+            Rescan();
+            return (repaired, spent, remaining);
+        }
+
+        /// <summary>
+        /// The full damaged set as uniform Repair-All items: the RepairTarget scan
+        /// (walls / gates / buildings — <see cref="CollectAllDamaged"/>, the same
+        /// set the single-repair flow sees), the WO-672 Slice A tower surface
+        /// (Tower / DefenseTower / ArcaneTower / HarvestSite: HpFraction / IsBroken
+        /// / Repair()), and resource collectors (free — their existing Repair()
+        /// flow carries no crystal price, so Repair-All triggers it at cost 0).
+        /// </summary>
+        private List<RepairAllItem> CollectRepairAllSet()
+        {
+            var items = new List<RepairAllItem>();
+
+            var targets = new List<RepairTarget>();
+            CollectAllDamaged(targets);
+            foreach (var t in targets)
+            {
+                if (t == null || !t.IsValid || !t.NeedsRepair) continue;
+                var tc = t;
+                items.Add(new RepairAllItem
+                {
+                    Name = t.DisplayName,
+                    DamageFraction = t.DamageFraction,
+                    Cost = CostFor(t),
+                    Fix = () => tc.Repair(100f),   // full repair, same as ConfirmRepair
+                });
+            }
+
+            foreach (var t in UnityEngine.Object.FindObjectsByType<Tower>(FindObjectsSortMode.None))
+            {
+                if (t == null) continue;
+                AddHpItem(items, t.gameObject.name, t.HpFraction, t.IsBroken, t.Repair);
+            }
+            foreach (var t in UnityEngine.Object.FindObjectsByType<DefenseTower>(FindObjectsSortMode.None))
+            {
+                if (t == null) continue;
+                AddHpItem(items, t.gameObject.name, t.HpFraction, t.IsBroken, t.Repair);
+            }
+            foreach (var t in UnityEngine.Object.FindObjectsByType<ArcaneTower>(FindObjectsSortMode.None))
+            {
+                if (t == null) continue;
+                AddHpItem(items, t.gameObject.name, t.HpFraction, t.IsBroken, t.Repair);
+            }
+            foreach (var t in UnityEngine.Object.FindObjectsByType<DeNelle.Village.World.HarvestSite>(FindObjectsSortMode.None))
+            {
+                if (t == null) continue;
+                AddHpItem(items, t.gameObject.name, t.HpFraction, t.IsBroken, t.Repair);
+            }
+
+            foreach (var c in ResourceCollectorRegistry.All)
+            {
+                if (c == null) continue;
+                float frac = c.IsBroken ? 1f : 1f - Mathf.Clamp01(c.HpFraction);
+                if (frac <= 0.0001f) continue;
+                var cc = c;
+                items.Add(new RepairAllItem
+                {
+                    Name = c.BuildingId,
+                    DamageFraction = frac,
+                    Cost = 0,                    // collector repair is free today (its own flow)
+                    Fix = () => cc.Repair(),
+                });
+            }
+
+            return items;
+        }
+
+        /// <summary>Adds one costed item for an HpFraction/IsBroken structure when damaged.</summary>
+        private void AddHpItem(List<RepairAllItem> items, string name,
+            float hpFraction, bool broken, Action repair)
+        {
+            float frac = broken ? 1f : 1f - Mathf.Clamp01(hpFraction);
+            if (frac <= 0.0001f) return;
+            items.Add(new RepairAllItem
+            {
+                Name = name,
+                DamageFraction = frac,
+                Cost = CostForFraction(frac),
+                Fix = repair,
+            });
         }
 
         // =====================================================================

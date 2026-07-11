@@ -212,7 +212,14 @@ namespace DeNelle.Village.UI
             // (owner one-action law). No CTA => no footer band; the reward well owns the
             // whole body and the exit is auto-dismiss + tap-anywhere (wired below).
             bool hasCta = !string.IsNullOrEmpty(vm.PrimaryLabel);
-            RectTransform footer     = !hasCta ? null
+            // WO-672 Slice E: the ONE case the compact banner's CTA seat returns — a
+            // VM-supplied banner CTA ("Repair All - N crystals" on the wave damage
+            // report). It is BUTTON-ONLY and distinct from Primary on purpose:
+            // tap-anywhere + auto-dismiss keep funnelling FirePrimary (dismiss), so
+            // neither can ever silently fire the crystal spend.
+            bool hasBannerCta = !hasCta && vm.Compact && !string.IsNullOrEmpty(vm.CtaLabel);
+            bool anyCta = hasCta || hasBannerCta;
+            RectTransform footer     = !anyCta ? null
                                      : hasFooterZone ? chrome.layout.footer
                                      : MakeZone(well, "Zone_Footer",     0.10f, 0f,    0.90f, 0.16f);
             // VICTORY SWEEP (fresh 1280x720 capture, 2026-07-06: "Wood +15" / "Iron +8" ran
@@ -224,17 +231,25 @@ namespace DeNelle.Village.UI
             // own zone, and on the real-footer path its floor is raised above the pinned
             // CTA's measured top edge so rewards and Continue can never share pixels.
             RectTransform rewardWell = MakeZone(well, "Zone_RewardWell",
-                0f, (hasFooterZone || !hasCta) ? 0f : 0.22f, 1f, 1f);
+                0f, (hasFooterZone || !anyCta) ? 0f : 0.22f, 1f, 1f);
 
             // ONE primary action (Continue / Rise again / ...) — built FIRST so the reward
             // well can be sized around the law-pinned CTA; it still lands LAST in the reveal.
             // F8-43: skipped entirely when the VM carries no PrimaryLabel (compact banners)
             // — no button, no footer carving; the banner's exit is auto-dismiss + tap-anywhere.
             Button btn = null;
-            if (hasCta)
+            if (anyCta)
             {
-                btn = ElarionUiKit.Button(footer, vm.PrimaryLabel, ElarionUiKit.ButtonKind.Gold,
-                    new Vector2(0.24f, 0.06f), new Vector2(0.76f, 0.94f), FirePrimary);
+                // WO-672: the banner CTA fires FireCta (the VM action + dismiss); the
+                // primary CTA keeps firing FirePrimary. Same seat, same canonical size.
+                btn = ElarionUiKit.Button(footer, hasCta ? vm.PrimaryLabel : vm.CtaLabel,
+                    ElarionUiKit.ButtonKind.Gold,
+                    new Vector2(0.24f, 0.06f), new Vector2(0.76f, 0.94f),
+                    hasCta ? (Action)FirePrimary : FireCta);
+                // Unaffordable Repair-All renders DISABLED but still shows the cost
+                // (informative, not dead — owner law; state carried by the disabled
+                // interaction + greyed kit visuals, never color alone).
+                if (hasBannerCta) btn.interactable = vm.CtaEnabled;
                 // OWNER F8 x3: the Continue/primary action is the SAME pixel size on every
                 // screen (matches the shared Close). The anchors above only centre it in the
                 // footer band; the canonical size is stamped here.
@@ -284,13 +299,16 @@ namespace DeNelle.Village.UI
                     }
                 }
             }
-            else if (vm.Compact)
+            if (vm.Compact && !hasCta)
             {
-                // F8-43: no CTA on the compact banner — tap-anywhere on the PANEL becomes the
-                // manual dismiss (the CTA was the only raycast target before; compact panels
-                // have no scrim/backdrop, so the world stays interactive around the banner).
-                // AutoDismissAfter (below) remains the softlock guard; both funnel FirePrimary,
-                // which latches on _fired so the route still fires exactly once.
+                // F8-43: no primary CTA on the compact banner — tap-anywhere on the PANEL
+                // becomes the manual dismiss (compact panels have no scrim/backdrop, so the
+                // world stays interactive around the banner). AutoDismissAfter (below)
+                // remains the softlock guard; both funnel FirePrimary, which latches on
+                // _fired so the route still fires exactly once. WO-672: when the banner
+                // carries a Repair-All CTA the overlay slots BEHIND the panel content
+                // (first sibling) so the CTA button stays on top and gets the click —
+                // dismiss is then the CTA / auto-dismiss / a tap the chrome lets through.
                 var tap = new GameObject("TapDismiss", typeof(Image), typeof(Button));
                 tap.transform.SetParent(chrome.root.transform, false);
                 var tapRt = (RectTransform)tap.transform;
@@ -301,7 +319,10 @@ namespace DeNelle.Village.UI
                 tapImg.raycastTarget = true;
                 tap.GetComponent<Button>().transition = Selectable.Transition.None;
                 tap.GetComponent<Button>().onClick.AddListener(FirePrimary);
-                FlowTrace.Step("EndState", "compact banner: primary CTA suppressed (auto-dismiss/tap)");
+                if (hasBannerCta) tap.transform.SetAsFirstSibling();
+                FlowTrace.Step("EndState", hasBannerCta
+                    ? "compact banner: tap-dismiss behind panel (Repair-All CTA on top)"
+                    : "compact banner: primary CTA suppressed (auto-dismiss/tap)");
             }
 
             // F8-35 ("characters still overlap, extend panel"): the reward well is laid out
@@ -598,6 +619,23 @@ namespace DeNelle.Village.UI
             _vm.Primary = null;
             act?.Invoke();
             Destroy(gameObject);
+        }
+
+        /// <summary>WO-672 Slice E: fire the banner CTA (Repair All) exactly once, then
+        /// dismiss the banner via the normal primary route. The repaired-summary lands
+        /// through WallRepairController.FeedbackShown (the existing HUD toast surface),
+        /// so the banner does not need to re-render its rows (dismiss > refresh: the
+        /// simpler honest option — the toast states exactly what was repaired/spent).</summary>
+        private bool _ctaFired;
+        private void FireCta()
+        {
+            if (_ctaFired || _fired) return;
+            _ctaFired = true;
+            FlowTrace.Step("EndState", $"{_vm.Kind} banner CTA fired: action={_vm.CtaRoute}");
+            var act = _vm.Cta;
+            _vm.Cta = null;
+            Guard.Try("EndState", "banner CTA action", () => act?.Invoke());
+            FirePrimary();   // dismiss after the action; latched, fires exactly once
         }
 
         private IEnumerator AutoDismissAfter(float seconds)

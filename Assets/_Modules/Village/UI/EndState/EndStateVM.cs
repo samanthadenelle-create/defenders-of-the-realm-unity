@@ -76,6 +76,21 @@ namespace DeNelle.Village.UI
         /// <summary>Compact banner mode (wave-clear): small top panel, no scrim/backdrop, non-blocking.</summary>
         public bool Compact;
 
+        // ── WO-672 Slice E: banner CTA (the ONE case the compact CTA seat returns) ──
+        // Distinct from Primary on purpose: on a compact banner, tap-anywhere and
+        // auto-dismiss BOTH funnel Primary — if Primary were "Repair All", a stray
+        // tap or the timer would silently spend crystals. The CTA is the explicit
+        // button-only action; firing it also dismisses the banner.
+
+        /// <summary>Compact-banner CTA label (e.g. "Repair All - 120 crystals"); null/empty = no CTA.</summary>
+        public string CtaLabel;
+        /// <summary>False renders the CTA disabled but still showing its cost (informative, not dead).</summary>
+        public bool CtaEnabled = true;
+        /// <summary>Route tag for the CTA FlowTrace line (e.g. "repair-all").</summary>
+        public string CtaRoute = "cta";
+        /// <summary>Invoked exactly once on CTA tap; the banner then dismisses via Primary.</summary>
+        public Action Cta;
+
         // ── Factories (the adapters — one per outcome) ────────────────────────
 
         /// <summary>
@@ -318,6 +333,27 @@ namespace DeNelle.Village.UI
                 // so the banner never reads as an all-clear over a damage list.
                 vm.Subtitle = "The realm holds - but it took damage.";
                 vm.AutoDismissSeconds = 8f;
+
+                // WO-672 Slice E (owner 2026-07-11: "i saw a damage report but could not
+                // repair"): the CTA seat returns for THIS one case — "Repair All" wired to
+                // WallRepairController.RepairAll (the one wallet/repair authority; this
+                // factory is the model-side adapter, same seam as the icon resolution
+                // above). Unaffordable renders disabled-with-cost (informative, not dead).
+                // Copy uses plain hyphen + the word "crystals": the build font has a tofu
+                // precedent (see the Label note above), so no ◈/— glyphs in player copy.
+                var repair = UnityEngine.Object.FindFirstObjectByType<WallRepairController>();
+                int cost = repair != null ? repair.RepairAllCost() : 0;
+                if (repair != null && cost > 0)
+                {
+                    vm.CtaLabel = $"Repair All - {cost} crystals";
+                    vm.CtaEnabled = repair.CrystalBalance >= cost;
+                    vm.CtaRoute = "repair-all";
+                    // RepairAll raises FeedbackShown (the existing HUD toast) with the
+                    // repaired-summary; the banner itself dismisses after firing.
+                    vm.Cta = () => { if (repair != null) repair.RepairAll(); };
+                    // A decision now sits on the banner — extend the reading window.
+                    vm.AutoDismissSeconds = 10f;
+                }
             }
             return vm;
         }
