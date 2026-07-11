@@ -1,0 +1,211 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ea49e229b47187c459a70e67584359c8, type: 3}
+  m_Name: HovlVfxCatalog
+  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.HovlVfxCatalog
+  Rows:
+  - Key: Fireball_Projectile
+    Prefab: {fileID: 1839610603883104262, guid: 3fff46610e3e8a9448b12a4547cf04f4, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: Fireball_Cast
+    Prefab: {fileID: 1673707391571236, guid: f326479f7cef0794d95f29731f4bbdb3, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: Fireball_Impact
+    Prefab: {fileID: 1373873258365392, guid: cd5def2bb4f6b4e4ab15ba0b6f35b29d, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: Thunderbolt_Projectile
+    Prefab: {fileID: 2928993191275900500, guid: 93070f52828035b4199ff2f22368a3de, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: Thunderbolt_Impact
+    Prefab: {fileID: 1065618375357958, guid: 6f8068e2c99ffb04b932ec74e5773db5, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: Arcane_Projectile
+    Prefab: {fileID: 851269529501799637, guid: 32d222d2f094ed04bb5d3624d2b5ca5c, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: Arcane_Cast
+    Prefab: {fileID: 1716391117806116, guid: 6c45d61ea68f82b4eb2c7f1ff7fdcb81, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: Arcane_Impact
+    Prefab: {fileID: 1348390491135638, guid: d7d554880214e644bbbbfc89aa884b26, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: Frost_Projectile
+    Prefab: {fileID: 6541143317491470949, guid: 208001a3c01dcb04f88030495297a6ad, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: Frost_Impact
+    Prefab: {fileID: 1320316104850776, guid: 1977fc844cb969a44866c4dcd32996d1, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: Collector_Full
+    Prefab: {fileID: 1824691927606644, guid: 51f58a7ac453dab48a238fee31899d31, type: 3}
+    PoolSize: 4
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 0
+    IsLoop: 1
+  - Key: Raid_Explosion
+    Prefab: {fileID: 1850291782047516, guid: 39e6808e995d14e46aae8b87bde2a278, type: 3}
+    PoolSize: 6
+    DefaultScale: 1.5
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: LevelUp_Burst
+    Prefab: {fileID: 2605316480486226868, guid: 114ab6919cf39484e946697e02cfa078, type: 3}
+    PoolSize: 4
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: Thunderbolt_Cast
+    Prefab: {fileID: 1347307786625236, guid: 5b0ac738fb141244d96b28bbd07be221, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: Spear_Projectile
+    Prefab: {fileID: 2722618905728086619, guid: 6d4f02316a3e0a84295cc98929a32b71, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: Spear_Impact
+    Prefab: {fileID: 1746675453279186, guid: 01638115f50284b4fb616d584a6fabff, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: Melee_Slash
+    Prefab: {fileID: 1492667978523942, guid: bd76aad308d231743b8d95dd2c02d6b1, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: Melee_Impact
+    Prefab: {fileID: 1620636520166436, guid: 07757cf211bd45044a1f1917658b9e66, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: Cleave_Impact
+    Prefab: {fileID: 1535640691960112, guid: d79f03dd3c9b07c41a430faecdcdf500, type: 3}
+    PoolSize: 6
+    DefaultScale: 1.3
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: Heal_Cast
+    Prefab: {fileID: 1006680136956838, guid: e5efca12a16df2c4e828be391fa88b84, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 0
+    IsLoop: 0
+  - Key: Heal_Aura
+    Prefab: {fileID: 1592372973558972, guid: 721cfe8018b2cd04abd0748143d2a312, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 0
+    IsLoop: 1
+  - Key: Fountain_Heal_Aura
+    Prefab: {fileID: 1592372973558972, guid: 721cfe8018b2cd04abd0748143d2a312, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: Taunt_Roar
+    Prefab: {fileID: 1535640691960112, guid: d79f03dd3c9b07c41a430faecdcdf500, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: Taunt_Aura
+    Prefab: {fileID: 1686359375265966, guid: 52ba85deb3f9e9c47987bb6123f14767, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: Aegis_Cast
+    Prefab: {fileID: 1341365785022538, guid: 49f4a2628a72b0846afe42d196c02e6c, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 0
+    IsLoop: 0
+  - Key: Aegis_Shield
+    Prefab: {fileID: 1196366361853272, guid: 78afe2d2c6c430649b4c89b6b483db98, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 0
+    IsLoop: 1
+  - Key: Ember_Burn
+    Prefab: {fileID: 1327569613689390, guid: 13a7c7a8d1bb29943ae2fda15a8f1e5c, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
+  - Key: Dash_Blink
+    Prefab: {fileID: 1918476138427834, guid: 3e4e9c6a4ac7e10418454a21dd359975, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
