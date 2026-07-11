@@ -189,6 +189,16 @@ namespace DeNelle.DevTools
             _runStartRealtime = Time.realtimeSinceStartup;
             FlowTrace.Step("Auto", $"AutoPilot START (quitOnDone={_quitOnDone}, seed={_seed}, run='{_runId ?? "<none>"}', scene='{ActiveScene()}').");
 
+            // WAVE-DETERMINISM RESET (replay-wave RCA 2026-07-11, Builds/replay-wave.log): the
+            // fleet's PERSISTENT save accumulates BestWave across runs (all 20 waves cleared ->
+            // WaveManager.ResolveStartWave seeds s_resumeWaveId = BestWave+1 = 21 -> 'no WaveDef
+            // for waveId=21 — schedule exhausted, phase->Complete' instantly -> AssertWaveVendorRules
+            // and every wave oracle fail with 'combat authority never armed (phase Complete)').
+            // Seeded chaos + FIXED oracles require a deterministic STARTING state, so zero the
+            // save's wave-progress fields BEFORE BootToGameplay loads the hub (and its WaveManager).
+            // Autopilot-only by construction: this driver exists only on an opted-in bot run.
+            yield return ResetWaveProgressForDeterminism();
+
             // Arm the passive assertion probes (autopilot-only — this driver is the sole
             // spawner). They watch world state across every phase via FlowTrace.Fail.
             try
@@ -2078,6 +2088,62 @@ namespace DeNelle.DevTools
             }
             _lastDetail = $"PASS — armed + LIVE (phase '{flow.PhaseName}', fresh save)";
             FlowTrace.Step(Tag, $"AssertTutorialArms: PASS — fresh save and the flow is LIVE (phase '{flow.PhaseName}', not Finished).");
+        }
+
+        // =====================================================================
+        //  BOT-BOOT: wave-determinism reset (runs BEFORE BootToGameplay)
+        // =====================================================================
+
+        /// <summary>
+        /// Bot-boot save normalization (replay-wave RCA 2026-07-11): zero ONLY the
+        /// wave-progress fields (<c>GameState.BestWave</c> + <c>WavesCompleted</c>) so
+        /// <c>WaveManager.ResolveStartWave</c> (WaveManager.cs:684-690) seeds
+        /// <c>s_resumeWaveId</c> = 1 instead of the fleet-accumulated BestWave+1, which
+        /// exhausts the 20-wave schedule and parks the loop at phase Complete before any
+        /// oracle runs. Deliberately does NOT touch the rest of the save — Onboarded /
+        /// tutorial / resources feed other probes (AssertTutorialArms link 2 asserts on
+        /// the REAL Onboarded state). Persists via Save() so a later hub-load re-read and
+        /// the next fleet run both start fresh. Autopilot-only by construction: only
+        /// AutoPilotInstaller (opt-in --autopilot/AUTOPILOT) or the dev-panel button
+        /// spawn this driver — a player session never reaches this path.
+        /// </summary>
+        private IEnumerator ResetWaveProgressForDeterminism()
+        {
+            // GameStateService self-installs on its own AfterSceneLoad hook, whose order
+            // vs. AutoPilotInstaller's AfterSceneLoad hook is undefined — poll briefly.
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            float t0 = Time.realtimeSinceStartup;
+            while ((svc == null || svc.State == null) && Time.realtimeSinceStartup - t0 < 5f)
+            {
+                yield return null;
+                svc = DeNelle.Core.State.GameStateService.Instance;
+            }
+            if (svc == null || svc.State == null)
+            {
+                FlowTrace.Warn("Auto", "bot boot: wave-progress reset SKIPPED — GameStateService/State unavailable after 5s poll; a fleet-accumulated BestWave may exhaust the wave schedule (phase Complete before any oracle).");
+                yield break;
+            }
+
+            int wasBest      = svc.State.BestWave;
+            int wasCompleted = svc.State.WavesCompleted;
+            if (wasBest == 0 && wasCompleted == 0)
+            {
+                FlowTrace.Step("Auto", "bot boot: wave progress already fresh (bestCleared=0) -> deterministic wave 1.");
+                yield break;
+            }
+
+            svc.State.BestWave       = 0;
+            svc.State.WavesCompleted = 0;
+            svc.Save();
+
+            // Late-reset diagnostic: if a WaveManager ALREADY armed its loop in the boot
+            // scene (edge: the build's first scene IS the hub and BeginLoop won the race),
+            // its in-session resume static captured the stale BestWave before this landed.
+            var earlyWm = WaveManager.Instance ?? UnityEngine.Object.FindAnyObjectByType<WaveManager>();
+            if (earlyWm != null && earlyWm.CurrentWaveId > 1)
+                FlowTrace.Warn("Auto", $"bot boot: wave-progress reset landed AFTER a WaveManager armed (currentWave={earlyWm.CurrentWaveId}) — the in-session resume static kept the stale seed; wave oracles may still see the exhausted schedule this run.");
+
+            FlowTrace.Step("Auto", $"bot boot: wave progress reset (was bestCleared={wasBest}, wavesCompleted={wasCompleted}) -> deterministic wave 1.");
         }
 
         // =====================================================================
