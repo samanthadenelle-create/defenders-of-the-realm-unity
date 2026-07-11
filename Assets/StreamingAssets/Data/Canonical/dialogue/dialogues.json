@@ -327,15 +327,22 @@
             { "speaker": "Coppin", "text": "Come, have a look before the good pieces go." }
           ],
           "options": [
-            { "text": "Show me your wares.", "goto": "open" },
+            { "text": "I'd like to buy.", "goto": "open_buy" },
+            { "text": "I'd like to sell.", "goto": "open_sell" },
             { "text": "Show me the Realm Store.", "goto": "open_realm" },
             { "text": "Just passing through.", "goto": "end" }
           ]
         },
         {
-          "id": "open",
+          "id": "open_buy",
           "commands": [
-            { "verb": "OpenShop", "args": ["market"] }
+            { "verb": "OpenShop", "args": ["market", "buy"] }
+          ]
+        },
+        {
+          "id": "open_sell",
+          "commands": [
+            { "verb": "OpenShop", "args": ["market", "sell"] }
           ]
         },
         {
@@ -356,12 +363,22 @@
             { "speaker": "Blacksmith", "text": "The steel sings today, Keeper. Blades honed, hafts trued - a forge only rests when the walls do." },
             { "speaker": "Blacksmith", "text": "Take up what the line needs." }
           ],
-          "next": "open"
+          "options": [
+            { "text": "I'd like to buy.", "goto": "open_buy" },
+            { "text": "I'd like to sell.", "goto": "open_sell" },
+            { "text": "Just passing through.", "goto": "end" }
+          ]
         },
         {
-          "id": "open",
+          "id": "open_buy",
           "commands": [
-            { "verb": "OpenShop", "args": ["forge"] }
+            { "verb": "OpenShop", "args": ["forge", "buy"] }
+          ]
+        },
+        {
+          "id": "open_sell",
+          "commands": [
+            { "verb": "OpenShop", "args": ["forge", "sell"] }
           ]
         }
       ]
@@ -376,12 +393,22 @@
             { "speaker": "Armorer", "text": "Plate, mail, and good boiled leather, Keeper - armor that holds when the wall does not." },
             { "speaker": "Armorer", "text": "Step in and let's fit you proper." }
           ],
-          "next": "open"
+          "options": [
+            { "text": "I'd like to buy.", "goto": "open_buy" },
+            { "text": "I'd like to sell.", "goto": "open_sell" },
+            { "text": "Just passing through.", "goto": "end" }
+          ]
         },
         {
-          "id": "open",
+          "id": "open_buy",
           "commands": [
-            { "verb": "OpenShop", "args": ["armorer"] }
+            { "verb": "OpenShop", "args": ["armorer", "buy"] }
+          ]
+        },
+        {
+          "id": "open_sell",
+          "commands": [
+            { "verb": "OpenShop", "args": ["armorer", "sell"] }
           ]
         }
       ]
@@ -396,12 +423,22 @@
             { "speaker": "Sable", "text": "Careful hands, Keeper - everything on this bench remembers a purpose. Rings, amulets, stones that still hold a little light." },
             { "speaker": "Sable", "text": "Come, look closer." }
           ],
-          "next": "open"
+          "options": [
+            { "text": "I'd like to buy.", "goto": "open_buy" },
+            { "text": "I'd like to sell.", "goto": "open_sell" },
+            { "text": "Just passing through.", "goto": "end" }
+          ]
         },
         {
-          "id": "open",
+          "id": "open_buy",
           "commands": [
-            { "verb": "OpenShop", "args": ["jeweler"] }
+            { "verb": "OpenShop", "args": ["jeweler", "buy"] }
+          ]
+        },
+        {
+          "id": "open_sell",
+          "commands": [
+            { "verb": "OpenShop", "args": ["jeweler", "sell"] }
           ]
         }
       ]

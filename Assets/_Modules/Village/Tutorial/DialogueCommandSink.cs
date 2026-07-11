@@ -81,7 +81,17 @@ namespace DeNelle.Village
                 // ── Panels via PanelRouter (cross-assembly, reflection-free) ──────
                 case "OpenRumorBoard": PanelRouter.Open(PanelId.RumorBoard); break;
                 case "OpenUpgrade":    PanelRouter.Open(PanelId.BuildingUpgrade, a0); break;
-                case "OpenShop":       if (!ShopsClosedForCombat("OpenShop")) PanelRouter.Open(PanelId.PartyShop, a0); break;
+                // OpenShop [vendor] [mode?] — a1 is an optional "buy"/"sell" mode (owner F8
+                // 2026-07-10): the NPC offers Buy/Sell as SEPARATE choices, each opening the shop
+                // LOCKED to one flow. When a mode is present route through the subject+mode opener;
+                // the single-arg (both-tabs) path still works for any legacy caller.
+                case "OpenShop":
+                    if (!ShopsClosedForCombat("OpenShop"))
+                    {
+                        if (!string.IsNullOrEmpty(a1)) PanelRouter.Open(PanelId.PartyShop, a0, a1);
+                        else PanelRouter.Open(PanelId.PartyShop, a0);
+                    }
+                    break;
                 case "OpenCraft":      PanelRouter.Open(PanelId.Crafting); break;
                 // Apothecary NPC (owner F8 2026-07-02): the herbalist's card-first dialogue ends
                 // by opening the consumable-crafting / alchemy bench — the SAME panel the station's

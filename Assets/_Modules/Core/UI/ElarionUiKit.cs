@@ -1094,6 +1094,12 @@ namespace DeNelle.Core.UI
                 onCancel ?? onConfirm, sortingOrder);
             var content = modal.chrome.content.transform;
 
+            // A confirm popup's Cancel button IS the close (Close + Cancel share onCancel), and the shared
+            // bottom-band Close renders UNDER the Confirm/Cancel buttons (same y 0.10-0.26 band) so only its
+            // middle "Clo..se" pokes out behind them — owner F8 2026-07-10 "remove the background close
+            // button". Drop the redundant shared Close on every confirm modal.
+            if (modal.chrome.close != null) modal.chrome.close.gameObject.SetActive(false);
+
             var msg = Label(content, message ?? "", 0.40f, 0.82f, ElarionUi.Parchment,
                             ElarionUi.FontBody, TextAlignmentOptions.Center, 0.08f, 0.92f);
 

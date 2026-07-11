@@ -49,6 +49,9 @@ namespace DeNelle.Village.Hero
 
         private string _vendorContext;
         private string _displayName;
+        // Owner F8 2026-07-10: when the NPC opened the shop in a single Buy/Sell flow, the mode
+        // it locked to (null = both-tabs legacy open). Passed to the VM so it presets + locks the tab.
+        private PartyShopTab? _lockMode;
 
         private GameObject _ui;
         private GameObject _contentRoot;
@@ -125,6 +128,9 @@ namespace DeNelle.Village.Hero
             _panelHandle = PanelManager.Register("Party Shop", Close, () => IsOpen);
             PanelRouter.Register(PanelId.PartyShop, OpenGeneric);
             PanelRouter.Register(PanelId.PartyShop, (System.Action<string>)OpenContext);
+            // Subject+mode opener (owner F8 2026-07-10): the NPC's Buy/Sell choice opens the
+            // shop LOCKED to one flow (top tabs hidden, one list + one action).
+            PanelRouter.Register(PanelId.PartyShop, (System.Action<string, string>)OpenContextMode);
         }
 
         private void OnDestroy()
@@ -135,18 +141,39 @@ namespace DeNelle.Village.Hero
             _ui = null;
             PanelRouter.Unregister(PanelId.PartyShop, OpenGeneric);
             PanelRouter.Unregister(PanelId.PartyShop, (System.Action<string>)OpenContext);
+            PanelRouter.Unregister(PanelId.PartyShop, (System.Action<string, string>)OpenContextMode);
         }
 
-        private void OpenGeneric() => Open(null, null);
-        private void OpenContext(string vendorContext) => Open(vendorContext, null);
+        private void OpenGeneric() => Open(null, null, null);
+        private void OpenContext(string vendorContext) => Open(vendorContext, null, null);
+
+        // Owner F8 2026-07-10: the NPC's Buy/Sell choice routes here with mode "buy"/"sell";
+        // parse it to the tab the shop opens LOCKED to (unknown mode = both-tabs open).
+        private void OpenContextMode(string vendorContext, string mode) =>
+            Open(vendorContext, null, ParseMode(mode));
+
+        private static PartyShopTab? ParseMode(string mode)
+        {
+            if (string.IsNullOrEmpty(mode)) return null;
+            switch (mode.Trim().ToLowerInvariant())
+            {
+                case "buy":  return PartyShopTab.Buy;
+                case "sell": return PartyShopTab.Sell;
+                default:      return null;
+            }
+        }
 
         // -- Open: resolve party + store at the open-site, build chrome, bind VM ---
 
-        public void Open(string vendorContext, string displayName)
+        public void Open(string vendorContext, string displayName) =>
+            Open(vendorContext, displayName, null);
+
+        public void Open(string vendorContext, string displayName, PartyShopTab? lockMode)
         {
             Close();
             _vendorContext = vendorContext ?? "";
             _displayName = displayName;
+            _lockMode = lockMode;
 
             BuildChrome();
             ConstructViewModel();
@@ -211,7 +238,7 @@ namespace DeNelle.Village.Hero
             string headerName = !string.IsNullOrEmpty(_displayName)
                 ? _displayName
                 : (string.IsNullOrEmpty(_vendorContext) ? "Party Shop" : null);
-            _vm = new PartyShopVM(_vendorContext, economy, _store, members, levels, headerName, onClose: Close);
+            _vm = new PartyShopVM(_vendorContext, economy, _store, members, levels, headerName, onClose: Close, lockedTab: _lockMode);
         }
 
         private static int ResolveLevel(GameObject go)
@@ -275,6 +302,11 @@ namespace DeNelle.Village.Hero
             if (_partyBar != null) _partyBar.SetActive(gearTrade);
             if (_memberLabel != null) _memberLabel.gameObject.SetActive(gearTrade);
             if (_equipBtn != null) _equipBtn.gameObject.SetActive(gearTrade);
+
+            // Owner F8 2026-07-10: a single-mode (Buy OR Sell) open HIDES the top BUY/SELL strip —
+            // the NPC dialogue already chose the mode, so two competing controls collapse to one
+            // list + one bottom action. A both-tabs open (TabsLocked == false) still shows the strip.
+            if (_tabBar != null) _tabBar.SetActive(!_vm.TabsLocked);
 
             RebuildPartyBar();
             HighlightTab(_vm.Tab);

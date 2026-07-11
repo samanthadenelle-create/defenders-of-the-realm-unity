@@ -185,7 +185,8 @@ namespace DeNelle.Village.Hero
                            IReadOnlyList<IEquipTarget> members,
                            IReadOnlyList<int> memberLevels,
                            string displayName = null,
-                           Action onClose = null)
+                           Action onClose = null,
+                           PartyShopTab? lockedTab = null)
         {
             _vendorContext = vendorContext ?? "";
             _displayName = displayName;
@@ -232,6 +233,16 @@ namespace DeNelle.Village.Hero
                 _unsubscribers.Add(() => mm.EquipChanged -= h);
             }
 
+            // Owner F8 2026-07-10: when the NPC's dialogue opened the shop in a SINGLE mode
+            // (Buy OR Sell as separate choices), preset the tab and LOCK it — the View hides
+            // the top BUY/SELL strip, leaving one list + one bottom action. A null lockedTab
+            // keeps the legacy both-tabs behaviour (SetTab still free to switch).
+            if (lockedTab.HasValue)
+            {
+                _tab = lockedTab.Value;
+                TabsLocked = true;
+            }
+
             Rebuild();
         }
 
@@ -256,6 +267,11 @@ namespace DeNelle.Village.Hero
         // -- Read-only data the View renders -------------------------------------
 
         public PartyShopTab Tab => _tab;
+
+        /// <summary>Owner F8 2026-07-10: true when the shop was opened locked to a SINGLE mode
+        /// (Buy OR Sell, chosen in the NPC dialogue). The View hides the top BUY/SELL tab strip
+        /// and <see cref="SetTab"/> is inert — one list, one bottom action per flow.</summary>
+        public bool TabsLocked { get; private set; }
 
         /// <summary>The active category "dropdown" selection (All / Weapons / Armor). The View
         /// highlights the matching selector chip and rebuilds the list when it changes.</summary>
@@ -402,6 +418,7 @@ namespace DeNelle.Village.Hero
         /// <summary>Switch BUY <-> SELL (both live on the same screen - no leaving to sell).</summary>
         public void SetTab(PartyShopTab tab)
         {
+            if (TabsLocked) return;   // single-mode shop (owner F8 2026-07-10): tab is fixed
             if (tab == _tab) return;
             _tab = tab;
             SelectedId = null;

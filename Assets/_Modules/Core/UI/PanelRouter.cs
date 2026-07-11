@@ -108,6 +108,15 @@ namespace DeNelle.Core.UI
         private static readonly Dictionary<PanelId, Action<string>> _contextOpeners =
             new Dictionary<PanelId, Action<string>>();
 
+        // Vendor-shop simplification (owner F8 2026-07-10): some panels open in a MODE as
+        // well as on a subject — the Party Shop opens LOCKED to buy OR sell (one list, one
+        // action, no competing top tabs). A panel registers a two-arg opener here (subject +
+        // mode) in ADDITION to the plain + single-string openers above; callers that carry a
+        // mode route through Open(id, arg0, arg1), everyone else keeps the existing paths.
+        // Kept as a SEPARATE map so the reflection-free contracts above are untouched.
+        private static readonly Dictionary<PanelId, Action<string, string>> _contextOpeners2 =
+            new Dictionary<PanelId, Action<string, string>>();
+
         /// <summary>
         /// Register (or replace) the open action for <paramref name="id"/>. Panels
         /// call this in Awake/OnEnable. Null actions are ignored. Idempotent: a
@@ -153,6 +162,30 @@ namespace DeNelle.Core.UI
             if (openWithContext == null) return;
             if (_contextOpeners.TryGetValue(id, out var current) && current == openWithContext)
                 _contextOpeners.Remove(id);
+        }
+
+        /// <summary>
+        /// Register (or replace) a SUBJECT+MODE open action for <paramref name="id"/>
+        /// (owner F8 2026-07-10). The first arg is the subject id (e.g. the vendor); the
+        /// second is a mode (e.g. "buy"/"sell") that opens the panel locked to one flow.
+        /// A panel registering this typically ALSO registers the plain + single-string
+        /// openers (they stay the "no mode" fallbacks). Idempotent.
+        /// </summary>
+        public static void Register(PanelId id, Action<string, string> openWithContextMode)
+        {
+            if (openWithContextMode == null) return;
+            _contextOpeners2[id] = openWithContextMode;
+        }
+
+        /// <summary>
+        /// Remove the subject+mode open action for <paramref name="id"/> if it is exactly
+        /// <paramref name="openWithContextMode"/> (mirrors the other Unregisters).
+        /// </summary>
+        public static void Unregister(PanelId id, Action<string, string> openWithContextMode)
+        {
+            if (openWithContextMode == null) return;
+            if (_contextOpeners2.TryGetValue(id, out var current) && current == openWithContextMode)
+                _contextOpeners2.Remove(id);
         }
 
         /// <summary>WO-T1 (Tutorial V2) — raised after a panel opened AND verified visible
@@ -259,6 +292,30 @@ namespace DeNelle.Core.UI
             }
             // No context-aware opener — fall back to the plain open (ignores context).
             return Open(id);
+        }
+
+        /// <summary>
+        /// Open the panel registered for <paramref name="id"/> with BOTH a subject
+        /// <paramref name="context"/> and a <paramref name="mode"/> (owner F8 2026-07-10 —
+        /// e.g. the Party Shop opened locked to "buy"/"sell"). Prefers the subject+mode opener;
+        /// if none is registered, falls back to the single-string <see cref="Open(PanelId, string)"/>
+        /// (mode dropped), then to the plain <see cref="Open(PanelId)"/>. Returns false only when
+        /// NO opener at all is registered. Exceptions are swallowed (logged) like the other Opens.
+        /// </summary>
+        public static bool Open(PanelId id, string context, string mode)
+        {
+            if (_contextOpeners2.TryGetValue(id, out var openCtx2) && openCtx2 != null)
+            {
+                bool ran = Guard.Try("UI", "PanelRouter.Open(ctx,mode) '" + id + "'", () => openCtx2.Invoke(context, mode));
+                if (!ran)
+                {
+                    FlowTrace.Fail("UI", "PanelRouter: context+mode-opening '" + id + "' threw — panel did NOT open.");
+                    return false;
+                }
+                return VerifyOpenedVisible(id);
+            }
+            // No subject+mode opener — fall back to the single-string open (mode dropped).
+            return Open(id, context);
         }
     }
 }

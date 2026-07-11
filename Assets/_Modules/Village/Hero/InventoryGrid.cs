@@ -365,10 +365,17 @@ namespace DeNelle.Village
             // Eyes-sweep 2026-07-06: the rarity letter (C/E) sat at y 0.65–0.88 and overflowed
             // LEFT over the icon well (0.26–0.74 x, 0.38–0.95 y). Moved to the free bottom-right
             // corner band (below the icon well) and fitted (§1.14) so it can never spill.
-            string numText = lockText != "" ? lockText : (rarity != null ? rarity.Substring(0,1).ToUpper() : " ");
-            var numLbl = AddLabel(cell.transform, numText, 0.04f, 0.30f,
-                     Ink, ElarionUi.FontMicro + 2, TMPro.TextAlignmentOptions.Center, 0.70f, 0.98f, bold: true);
-            ElarionUiKit.FitSingleLine(numLbl, 0f, ElarionUi.FontMicro + 2);
+            string numText = lockText != "" ? lockText
+                           : (!string.IsNullOrEmpty(rarity) ? rarity.Substring(0,1).ToUpper() : "");
+            // No rarity letter / lock text -> no glyph to draw. Building a Label for whitespace creates a
+            // permanently 0-glyph "dead" label (a space is never visible), tripping the TextFitGuard on
+            // every cell (owner F8 2026-07-10 "dead-button law violated"). Skip the Label entirely.
+            if (!string.IsNullOrWhiteSpace(numText))
+            {
+                var numLbl = AddLabel(cell.transform, numText, 0.04f, 0.30f,
+                         Ink, ElarionUi.FontMicro + 2, TMPro.TextAlignmentOptions.Center, 0.70f, 0.98f, bold: true);
+                ElarionUiKit.FitSingleLine(numLbl, 0f, ElarionUi.FontMicro + 2);
+            }
 
             NoRaycast(AddImage(cell.transform, "Gem", new Vector2(0.05f, 0.80f), new Vector2(0.20f, 0.95f),
                                new Color(rc.r, rc.g, rc.b, 0.95f)));
