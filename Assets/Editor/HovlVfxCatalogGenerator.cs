@@ -123,6 +123,12 @@ namespace DeNelle.Editor
             { "Heal_Cast",              new Pick(MAGIC + "Magic circle sun.prefab", recolorable: false) },
             { "Heal_Aura",              new Pick(RPG + "Buff heal.prefab", recolorable: false, isLoop: true) },
 
+            // ── Healing Fountain aura (owner 2026-07-10) — a looping buff aura the fountain holds
+            //    while regenerating the Tree of Life out of battle. Recolourable ON so the fountain's
+            //    HDR gold tint (GoldAura) applies; loop until the heal gate closes. Reads by MOTION +
+            //    LUMINANCE (rising aura), not hue (owner colorblind). HealingFountain.cs AuraKey. ──
+            { "Fountain_Heal_Aura",     new Pick(RPG + "Buff heal.prefab", recolorable: true, isLoop: true) },
+
             // ── Taunt (Warden's Roar) — outward roar shock + a held ground aura ──
             { "Taunt_Roar",             new Pick(AOE + "Energy explosion.prefab") },
             { "Taunt_Aura",             new Pick(MAGIC + "Loop version/Magic circle blood loop.prefab", isLoop: true) },

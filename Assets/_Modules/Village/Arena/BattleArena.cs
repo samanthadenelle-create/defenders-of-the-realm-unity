@@ -1689,6 +1689,12 @@ namespace DeNelle.Village.Arena
             // arena, so a resumed rep reads a ~7km distance and cannot aggro until the warp lands.
             RepEngageWatcher.ResumeAll();
 
+            // RETURN TO PEACEFUL (owner F8 2026-07-10 "after battle is over should return to peaceful if not
+            // being aggroed"): on a WIN, quiet every NON-pursuing rep back to calm roam so the overworld does
+            // not read as still-in-combat with leftover reps milling in combat pose. Active chasers
+            // (RepEngageWatcher.IsPursuing) are PRESERVED. A loss keeps the post-loss grace path above.
+            if (won) RepEngageWatcher.QuietNonPursuersOnBattleEnd();
+
             // WO-505: restore explore BGM AFTER the victory/defeat cue has had its beat, so
             // the climax is not cut to silence (the banner shows for ~2.5s; we let the sting
             // breathe, then crossfade back to Overworld). Coroutine on this persistent

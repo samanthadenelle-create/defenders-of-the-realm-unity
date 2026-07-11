@@ -943,7 +943,7 @@ namespace DeNelle.Village
         // (owner 2026-06-24 FELT buffer) so a rep doesn't spot the hero from across the map / reach
         // back across the seam — the hero gets a buffer after crossing before being hunted. Once
         // aggro'd, the chase/leash/engage behaviour below is UNCHANGED (owner loves the chase).
-        private const float AggroRange  = 8f;   // owner 2026-06-27: 14->8 (chase starts at 8m; fight still only at contact/TouchDistance)
+        private const float AggroRange  = 14f;   // owner 2026-07-10 F8 "enemy should aggro in range": 8->14 (8m read as point-blank/ignored; chase notice widens, fight still only at contact/TouchDistance)
         private const float EngageRange = 2.6f; // contact -> transition
         private const float LeashRadius = 14f;  // wander this far from spawn until aggro
 
@@ -971,6 +971,37 @@ namespace DeNelle.Village
 
         /// <summary>Resume home-scene reps after a battle resolves. Called by BattleArena.Resolve.</summary>
         public static void ResumeAll() => _battlePaused = false;
+
+        /// <summary>Battle-WIN cleanup (owner F8 2026-07-10 "after battle is over should return to peaceful
+        /// if not being aggroed"): every rep NOT actively pursuing the hero drops combat presentation and
+        /// resettles to a fresh calm roam, so the world reads peaceful after a fight instead of leftover reps
+        /// milling in combat pose. Reps that ARE pursuing (IsPursuing) are PRESERVED — an active chaser must
+        /// finish. Called by BattleArena.Resolve on a WIN. Idempotent; never throws into Resolve.</summary>
+        public static void QuietNonPursuersOnBattleEnd()
+        {
+            Guard.Try("Encounter", "quiet non-pursuers on battle end", () =>
+            {
+                var watchers = FindObjectsByType<RepEngageWatcher>();
+                if (watchers == null) return;
+                int quieted = 0;
+                foreach (var w in watchers)
+                    if (w != null && w.QuietIfNotPursuing()) quieted++;
+                FlowTrace.Step("Encounter", $"battle-over: quieted {quieted} non-pursuing rep(s) back to peaceful roam.");
+            });
+        }
+
+        /// <summary>Instance helper for <see cref="QuietNonPursuersOnBattleEnd"/>: if this rep is NOT pursuing
+        /// the hero (and not in a staged fight), drop it out of combat presentation, clear any threat cue, and
+        /// force a fresh roam heading so it visibly resettles to calm rather than holding a combat pose.
+        /// Returns true if it was quieted. Pursuers/engaged reps are left untouched.</summary>
+        private bool QuietIfNotPursuing()
+        {
+            if (_stung || _engaged) return false;   // actively pursuing / in a fight — preserve
+            SetPackCombatPresentation(false);
+            if (_threatCue != null) { Destroy(_threatCue); _threatCue = null; }
+            _roamRepathAt = 0f;                     // repick a roam point next Update -> visibly resettles
+            return true;
+        }
 
         /// <summary>Open a post-loss re-aggro grace window: no rep may aggro/engage the hero until
         /// now + <paramref name="seconds"/> (defaults to the tuned PostLossGraceSeconds). Called by
@@ -1093,17 +1124,21 @@ namespace DeNelle.Village
             if (EngagementSuppressed) return;
 
             // FALL-THROUGH GUARD (owner 2026-06-23 "they fall through ground when I change zones"):
-            // a zone/navmesh swap can drop a NavMeshAgent below the floor. If a rep falls below y=-2,
-            // re-snap it onto the navmesh AND log it -- self-heals, and PROVES whether the fall is real.
-            if (transform.position.y < -2f)
+            // a zone/navmesh swap can drop a NavMeshAgent below the floor. Re-seat only when the rep is
+            // meaningfully BELOW the sampled navmesh (a REAL fall-through) -- NOT merely below an absolute y.
+            // (owner F8 2026-07-10 'ScatterRep_17' spam: far-band terrain legitimately sits at y~-3.9, so the
+            // old absolute y<-2 test re-seated onto a navmesh point that was itself <-2 every frame -> dozens
+            // of per-frame Warn lines.) The y<-2 stays as a cheap early gate; the real test is "below the mesh".
+            // Log throttled to ~1/sec so a persistent condition can't spam the break-log.
+            if (transform.position.y < -2f
+                && UnityEngine.AI.NavMesh.SamplePosition(transform.position, out var reseatHit, 20f, UnityEngine.AI.NavMesh.AllAreas)
+                && reseatHit.position.y - transform.position.y > 0.5f)
             {
                 Guard.Try("Encounter", "rep re-seat", () =>
                 {
-                    if (UnityEngine.AI.NavMesh.SamplePosition(transform.position, out var hit, 20f, UnityEngine.AI.NavMesh.AllAreas))
-                    {
-                        transform.position = hit.position;
-                        FlowTrace.Warn("Encounter", $"rep '{gameObject.name}' fell below y=-2 -> re-seated onto navmesh at {hit.position}.");
-                    }
+                    transform.position = reseatHit.position;
+                    FlowTrace.Throttle("Encounter", $"reseat-{gameObject.name}", 1f,
+                        $"rep '{gameObject.name}' fell through floor -> re-seated onto navmesh at {reseatHit.position}.");
                 });
             }
 

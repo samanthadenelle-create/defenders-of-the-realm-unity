@@ -508,18 +508,27 @@ namespace DeNelle.Village
                 // warped into the target scene. (Additive: do NOT DDOL — it already survives.)
                 if (!loadAdditive)
                 {
-                    var heroRoot = (player != null && player.root != null) ? player.root.gameObject : null;
-                    if (heroRoot != null)
+                    // Carry ONLY the hero — NOT player.root. In the merged overworld the Player is nested
+                    // under CastleHubRoot, which ALSO holds WaveManager + HeartController + the Tree of Life;
+                    // DDOL'ing player.root dragged the WHOLE hub into the arena/outpost (owner F8 2026-07-10
+                    // "why is there a tree of life in map", + a stray wave countdown running there). Detach the
+                    // hero from its parent first so its new root is itself, then DDOL just the hero GameObject.
+                    // Fixes every Single-load seam out of the overworld (outposts, dungeons, arenas, Village2).
+                    var loco = player.GetComponentInParent<HeroLocomotion>();
+                    var heroGo = loco != null ? loco.gameObject : (player != null ? player.gameObject : null);
+                    if (heroGo != null)
                     {
-                        Object.DontDestroyOnLoad(heroRoot);
+                        if (heroGo.transform.parent != null)
+                            heroGo.transform.SetParent(null, true);   // detach from CastleHubRoot, keep world pose
+                        Object.DontDestroyOnLoad(heroGo);
                         _carriedHero = true;
                         FlowTrace.Step("Seam",
-                            $"carry: DontDestroyOnLoad hero '{heroRoot.name}' across Single load to '{targetSceneName}'");
+                            $"carry: DontDestroyOnLoad hero '{heroGo.name}' (detached from hub root) across Single load to '{targetSceneName}'");
                     }
                     else
                     {
                         FlowTrace.Warn("Seam",
-                            $"carry: could not resolve hero root for Single load to '{targetSceneName}' — hero may be lost (pill risk)");
+                            $"carry: could not resolve hero for Single load to '{targetSceneName}' — hero may be lost (pill risk)");
                     }
                 }
 
