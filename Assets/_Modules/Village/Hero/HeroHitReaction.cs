@@ -49,6 +49,12 @@ namespace DeNelle.Village
         private float _lastHp = -1f;
         private bool  _diedHandled;
 
+        // FIX 1 (owner "walk became messed up"): under heavy aggro HeroHealth broadcasts an HP tick
+        // every frame; without a cooldown each one re-latches the full-body Hit trigger and pins the
+        // stagger over locomotion. Debounce the body flinch (the red flash still fires on every hit).
+        private float _nextHitAnimTime;
+        private const float HitAnimCooldown = 0.5f;
+
         // WO-285: plays the body hit-reaction clip on damage (the screen flash was the
         // only "I got hit" read before). Resolved on the hero root; guarded internally.
         private ActorAnimator _actor;
@@ -92,7 +98,12 @@ namespace DeNelle.Village
                 // WO-285: play the body flinch — but NOT on the killing blow (the death
                 // anim owns that beat; HandleDied fires for it). No attacker bearing is
                 // available here, so use a generic front/gut flinch.
-                if (current > 0f) _actor?.PlayHit(HitDirection.Gut);
+                // FIX 1: debounce so rapid multi-hits don't re-latch the Hit trigger and pin the stagger.
+                if (current > 0f && Time.unscaledTime >= _nextHitAnimTime)
+                {
+                    _actor?.PlayHit(HitDirection.Gut);
+                    _nextHitAnimTime = Time.unscaledTime + HitAnimCooldown;
+                }
             }
             _lastHp = current;
         }

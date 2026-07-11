@@ -314,8 +314,14 @@ namespace DeNelle.Editor
             mocap.combatIdleClipOverride = MocapCombatIdleClip;  // idle_ready (braced, InCombat)
             mocap.walkClipOverride       = WalkClip;             // Shared_Walk_Forward — upright town gait
             mocap.runClipOverride        = RunClip;              // Shared_Run_Forward (rarely reached; town speed-capped)
-            mocap.combatWalkClipOverride = MocapWalkClip;        // sword+shield braced walk in combat
-            mocap.combatRunClipOverride  = MocapRunClip;
+            // FIX 2 (owner "combat walk, he sits in combat idle bent over"): the in-place AccuRig combat
+            // gait (walkforward01/runforward) is retargeting-warned + applyRootMotion=false, so the stride
+            // reads as a braced weight-shift barely distinct from the combat idle. Reuse the SHARED calm
+            // walk/run — which read as a proper stride on the live avatar — for the combat tree too, so
+            // combat walk/run = the same good-looking gait, just entered in the combat (braced-idle) stance.
+            // Tree structure / thresholds / Speed param are UNCHANGED (they're correct).
+            mocap.combatWalkClipOverride = WalkClip;             // Shared_Walk_Forward (was MocapWalkClip)
+            mocap.combatRunClipOverride  = RunClip;              // Shared_Run_Forward  (was MocapRunClip)
             // Combat onto the AccuRig sword+shield set (the FIGHT shows the purpose-built motion), with
             // readable swing timing. Melee combo + generic/per-spell casts + block + hit all swap; every
             // other state stays as the Knight build.
@@ -343,7 +349,7 @@ namespace DeNelle.Editor
             string atkCombo = string.Join("/", MocapAttackClips);
             Debug.Log($"[HeroAnimatorFactory] KnightMocap.controller built — calm idle ({MocapIdleClip}) + braced " +
                       $"combat idle ({MocapCombatIdleClip}) split on InCombat; calm gait ({WalkClip}/{RunClip}) + " +
-                      $"combat gait ({MocapWalkClip}/{MocapRunClip}); " +
+                      $"combat gait ({WalkClip}/{RunClip}); " +
                       $"AccuRig combat (atk combo {atkCombo}, block {MocapBlockClip}, hit {MocapHitClip}); " +
                       $"turn-in-place (90 {MocapTurnLeftClip}/{MocapTurnRightClip} + 180 {MocapTurnLeft180Clip}/{MocapTurnRight180Clip}) on TurnDir " +
                       $"→ {KnightMocapControllerPath}. Bound for KnightV3 when ff.mocaploco=1.");
@@ -526,12 +532,22 @@ namespace DeNelle.Editor
             {
                 var hitState = sm.AddState("Hit");
                 hitState.motion = hit;
+                // FIX 1 (owner "walk became messed up"): the 4s full-body m-ss-damage flinch pinned the
+                // base layer under heavy aggro. Speed it up so a standing flinch is a fast beat (~0.37s
+                // at exit 0.28 below) instead of a 4s freeze.
+                hitState.speed  = 3f;
                 var toHit = sm.AddAnyStateTransition(hitState);
                 toHit.hasExitTime = false; toHit.duration = 0.04f;
                 toHit.canTransitionToSelf = false;
                 toHit.AddCondition(AnimatorConditionMode.If, 0f, "Hit");
-                // Play most of the stagger, then return combat-aware (braced loco if still InCombat).
-                AddActionReturn(hitState, locoState, combatLocoState, 0.7f, 0.1f);
+                // FIX 1: standing-only gate (mirror the Cast state at ~:489). A MOVING hero (Speed >=
+                // StandingSpeedMax) NEVER enters the full-body stagger — the base layer stays in
+                // Locomotion so the legs keep walking/running; captured proof was vel=6 with
+                // m-ss-damage-01 w=1.0 on baseState. Idle/near-idle still plays the clean flinch.
+                toHit.AddCondition(AnimatorConditionMode.Less, StandingSpeedMax, "Speed");
+                // Exit early (0.28 of the sped-up clip ≈ 0.37s) then return combat-aware (braced loco if
+                // still InCombat) so a standing flinch snaps back cleanly instead of holding the stagger.
+                AddActionReturn(hitState, locoState, combatLocoState, 0.28f, 0.1f);
             }
 
             // ── WO-285: Death — Any → Death on Dead==true (latched), Revive clears ─
