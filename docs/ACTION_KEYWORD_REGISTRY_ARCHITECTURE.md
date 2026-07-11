@@ -254,6 +254,36 @@ Phase 2 end-state ("when we want an action we reference the keyword"):
 - Logs `[MotionCaster] '<target>.<keyword>' -> '<clip>' (manual)` on save and the
   builders log the same line on consume (the WO-670 acceptance line).
 
+## 9a. Reconciliation — the Grok "Action System" proposal (owner Desktop, 2026-07-11)
+
+The owner's Grok session (`Desktop/grok action scriptable`) converged on a "professional
+Action System": one bundle per action = animation + VFX + sound, triggered by keyword
+(`PlayAction("Slash_Left")`), authored as `GameAction` ScriptableObjects with an
+`ActionPlayer` doing `Animator.CrossFade` + `Instantiate(vfxPrefab)`. **The concept is
+this registry** — one keyword resolves the whole action. Deltas, adjudicated:
+
+**ADOPTED into this design:**
+- **The bundle IS the row** — `clip + vfxKey + sfxId` already live on one row (§1/§4);
+  the Motion Caster's authoring UX presents them as ONE action (pick clip → pick paired
+  VFX key → pick SFX → preview together).
+- **`vfxDelay` (float, seconds)** and **`attachBone` (string, e.g. "hand.r")** added as
+  optional row fields — Grok's timing + spawn-point ideas are right; they ride the row
+  as data and the presentation binder honors them.
+- **`PlayOneShot` semantics** (hit reactions/spell moments that don't disturb the
+  base state) — folded into the Phase-2 ActionResolver contract.
+
+**REJECTED (with the law that rejects it):**
+- **Direct `GameObject vfxPrefab` / `AudioClip` references** → keys into HovlVfxCatalog
+  (`VFXManager.PlayKey`, pooled) + `SfxId` instead. `Instantiate` per action is the
+  POOL-by-default violation and the exact two-VFX-stack scar (§2b.1/2b.2).
+- **Raw `Animator.CrossFade(clip.name)` ActionPlayer** → bypasses the tuned baked
+  controllers (transition bands, cadence authority). Phase 2 resolves through
+  ActorAnimator/AnimatorOverrideController (§3) — same call shape, right substrate.
+- **ScriptableObject-per-action assets** → JSON rows are canon (owner data-structure
+  model; inspector drag-drop authoring is BANNED — memory
+  `never-dragdrop-or-manual-playtest`). The Motion Caster window is the authoring UI;
+  the file stays hand-diffable.
+
 ## 9. Risks (top 3)
 
 1. **Three sources of truth during transition** (registry / builder consts /

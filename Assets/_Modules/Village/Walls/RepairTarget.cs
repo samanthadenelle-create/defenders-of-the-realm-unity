@@ -100,29 +100,21 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// DEF-226: true when <paramref name="t"/> or any ancestor is tagged as a
-        /// hero / player object (CLAUDE.md §7: "Player" for locomotion, "HeroTarget"
-        /// for enemy AI). Walks up the hierarchy so a hero's child collider is caught.
+        /// DEF-226: true when <paramref name="t"/> or any ancestor is the hero
+        /// (CLAUDE.md §7: the hero tag is "Player"; a "HeroTarget" tag was NEVER
+        /// declared — in a player build CompareTag on an undefined tag logs a native
+        /// error line the flight recorder captures, so no fallback check exists here).
+        /// Walks up the hierarchy so a hero's child collider is caught.
         /// Used to exclude heroes from ever becoming a repair target.
         /// </summary>
         private static bool IsHeroOrPlayer(Transform t)
         {
             for (var cur = t; cur != null; cur = cur.parent)
             {
-                // "Player" is a built-in tag; "HeroTarget" may be undefined
-                // (CompareTag throws on an undefined tag) — guard the second check.
-                if (cur.CompareTag("Player") || HasTag(cur, "HeroTarget"))
+                if (cur.CompareTag("Player"))
                     return true;
             }
             return false;
-        }
-
-        /// <summary>Undefined-tag-safe CompareTag (Unity throws on an undefined tag).</summary>
-        private static bool HasTag(Component c, string tag)
-        {
-            if (c == null) return false;
-            try { return c.CompareTag(tag); }
-            catch (UnityEngine.UnityException) { return false; }
         }
 
         /// <summary>True while the wrapped structure component still exists.</summary>
