@@ -78,6 +78,34 @@ namespace DeNelle.Village
         private const float OverworldRunSpeed = 6.0f;   // no-threat traversal — always a run
         private const float CombatMoveSpeed   = 5.0f;   // in a wave/arena — calmer, planted
 
+        // ── [Flow:HeroTurn] step-in/step-out rotation trace (owner "turn-left-before-walk" RCA
+        //    2026-07-10). DEFAULT OFF → zero-cost off (the whole trace block is gated on this AND
+        //    FlowTrace.Enabled, so a normal build/play NEVER logs or allocates). Flipped true ONLY
+        //    by the headless HERO_TURN_PROBE (AutoPilotDriver.AssertHeroTurnOnMoveStart) for the
+        //    ~2s probe window, then flipped back off. A reader can then see, frame by frame, WHICH
+        //    rotation branch fired (combat-turn-clip / town-slew / lockface / none), the camera vs
+        //    hero yaw, the move heading, the target dYaw, and the EXACT yaw applied this frame vs
+        //    _rotationSpeed — so the applied slew can be compared directly against the source math.
+        public static bool TurnDebug = false;
+
+        // ── Test-only scripted-move injection seam (headless probe). When active, ReadMoveInput
+        //    returns _scriptedMove INSTEAD of reading Keyboard/Gamepad/joystick — so the
+        //    HERO_TURN_PROBE can drive a deterministic "press forward" through the SAME
+        //    camera-relative move path the player uses, with no keyboard/click dependency
+        //    (batchmode -nographics has no input devices). OFF the normal play path: nothing sets
+        //    _scriptedMoveActive except SetScriptedMove, and ReadMoveInput only diverts while it is
+        //    true. Static because ReadMoveInput is static.
+        private static bool    _scriptedMoveActive;
+        private static Vector2 _scriptedMove;
+
+        /// <summary>TEST SEAM (headless probe): force ReadMoveInput to return <paramref name="move"/>
+        /// (camera-relative input, e.g. (0,1) = press forward) until <see cref="ClearScriptedMove"/>.
+        /// Reuses the real ReadMoveInput → camera-basis → Velocity path; never on the normal play path.</summary>
+        public static void SetScriptedMove(Vector2 move) { _scriptedMove = move; _scriptedMoveActive = true; }
+
+        /// <summary>TEST SEAM: stop the scripted-move override; input reverts to real devices.</summary>
+        public static void ClearScriptedMove() { _scriptedMoveActive = false; _scriptedMove = Vector2.zero; }
+
         // WO-512 slice 3: lock-face / strafe. While a soft lock-on is engaged (driven by
         // HeroTargetIndicator), the hero continuously slews its root yaw toward the LOCKED
         // enemy INSTEAD of the move-direction LookRotation(Velocity) writer — even while
@@ -681,7 +709,16 @@ namespace DeNelle.Village
             // (HeroBodySwapper). We still drive Speed=0 into the animator so the walk
             // blend settles to idle. Returns BEFORE the auto-walk branch so dialogue
             // suppression also pauses a scripted tour mid-step.
-            if (InputSuppressed)
+            // HERO_TURN_PROBE authority: when the headless turn probe is armed (TurnDebug + a scripted
+            // move injected), it must exercise the REAL player movement/rotation path. In the hub a live
+            // TutorialFlow / dialogue can hold InputSuppressed or set _autoWalkTarget, whose early-returns
+            // below would bypass the rotation writer + the [Flow:HeroTurn] trace entirely (the hero would
+            // be steered by AutoWalkStep instead of the slew we're measuring). While the probe is armed we
+            // SKIP those competing owners so the scripted forward drives the genuine slew. Gated on
+            // TurnDebug (default false) → zero effect on normal play; nothing else sets _scriptedMoveActive.
+            bool probeDriving = TurnDebug && _scriptedMoveActive;
+
+            if (InputSuppressed && !probeDriving)
             {
                 Velocity = Vector3.zero;
                 ResolveAnimator();
@@ -697,7 +734,7 @@ namespace DeNelle.Village
             // is reported via AutoWalkArrived; the tutorial clears the target to hand
             // control back. Returns through the SAME NavMesh Move() path as manual
             // walking so stairs/ramparts/walls behave identically.
-            if (_autoWalkTarget != null)
+            if (_autoWalkTarget != null && !probeDriving)
             {
                 // Crossings must fire during auto-walk too (bot tests + scripted cutscene walks), not just
                 // player input — otherwise the hero auto-walks INTO a HeroLinkCrossing and never warps.
@@ -793,6 +830,16 @@ namespace DeNelle.Village
             bool lockFacing = _lockFaceActive && _lockFaceTarget != null &&
                               DeNelle.Core.FeatureFlags.LockOn;
 
+            // [Flow:HeroTurn] step-in: capture the PRE-rotation state so the trace below can report
+            // the exact yaw applied this frame vs the target. moveHeading = Atan2 of the (camera-
+            // relative) move vector — the heading the hero is being asked to face. Cheap scalars,
+            // always computed; the LOGGING is gated on TurnDebug && FlowTrace.Enabled.
+            float heroYawBefore = transform.eulerAngles.y;
+            float moveHeading   = (move.sqrMagnitude > 1e-6f)
+                ? Mathf.Atan2(move.x, move.z) * Mathf.Rad2Deg
+                : heroYawBefore;
+            string turnBranch   = "none";   // which rotation branch actually wrote yaw this frame
+
             if (!seamConsumed && Velocity.sqrMagnitude > 0.0001f)
             {
                 if (!_loggedFirstInput)
@@ -821,6 +868,7 @@ namespace DeNelle.Village
                     // StepYaw + _rotationSpeed (degrees/sec) for the same slew feel; the move vector
                     // above is untouched, so this is the only difference vs. the normal path.
                     ApplyLockFaceYaw();
+                    turnBranch = "lockface";
                 }
                 else
                 {
@@ -833,6 +881,10 @@ namespace DeNelle.Village
                     Quaternion target = Quaternion.LookRotation(Velocity.normalized);
                     transform.rotation = Quaternion.Slerp(
                         transform.rotation, target, _rotationSpeed * Time.deltaTime);
+                    // Rotation writer while MOVING: in the OPEN world (run tier, not engaged) this is
+                    // the "town-slew"; in a wave at the run tier the combat turn-clip feed rides it
+                    // (labeled below). Both slew the ROOT toward the move heading at _rotationSpeed.
+                    turnBranch = (engaged && moveSpeedCap >= OverworldRunSpeed) ? "combat-turn-clip" : "town-slew";
                 }
             }
             else if (!seamConsumed && (!engaged || moveSpeedCap < OverworldRunSpeed) && !lockFacing && hasMoveInput && move.sqrMagnitude > 0.0004f)
@@ -842,6 +894,7 @@ namespace DeNelle.Village
                 Quaternion target = Quaternion.LookRotation(move.normalized, Vector3.up);
                 transform.rotation = Quaternion.Slerp(
                     transform.rotation, target, _rotationSpeed * Time.deltaTime);
+                turnBranch = "town-slew";
             }
             else if (lockFacing && !seamConsumed)
             {
@@ -849,6 +902,28 @@ namespace DeNelle.Village
                 // path only re-faces while moving, which would freeze facing at the last travel
                 // dir during a stationary duel). Move vector is zero here, so this is facing-only.
                 ApplyLockFaceYaw();
+                turnBranch = "lockface";
+            }
+
+            // [Flow:HeroTurn] step-OUT — the "turn-left-before-walk" RCA trace (owner 2026-07-10).
+            // Logs, EVERY frame while moving/holding input, the ROTATION DECISION so a reader can
+            // compare the applied slew directly to the source math: which branch fired, the combat
+            // gate inputs (engaged / caps), camera vs hero yaw, the move heading, the target dYaw,
+            // and the EXACT yaw applied THIS frame vs _rotationSpeed. NOT throttled (we want every
+            // frame of the short probe). Gated on TurnDebug (default false) AND FlowTrace.Enabled, so
+            // it is truly zero-cost in normal play — nothing here runs unless the probe armed it.
+            if (TurnDebug && DeNelle.Core.Diagnostics.FlowTrace.Enabled
+                && (hasMoveInput || Velocity.sqrMagnitude > 0.0001f))
+            {
+                float heroYawAfter = transform.eulerAngles.y;
+                float applied      = Mathf.DeltaAngle(heroYawBefore, heroYawAfter); // yaw actually written this frame
+                float dYaw         = Mathf.DeltaAngle(heroYawBefore, moveHeading);  // remaining angle to the target heading
+                DeNelle.Core.Diagnostics.FlowTrace.Step("HeroTurn",
+                    $"branch={turnBranch} engaged={engaged} moveSpeedCap={moveSpeedCap:F1} " +
+                    $"run={OverworldRunSpeed:F1} combat={CombatMoveSpeed:F1} " +
+                    $"camYaw={yaw:F1} heroYaw={heroYawBefore:F1} moveHeading={moveHeading:F1} " +
+                    $"dYaw={dYaw:F1} applied={applied:F2} rotSpeed={_rotationSpeed:F1} " +
+                    $"vel={Velocity.magnitude:F2}");
             }
 
             // [Flow:HeroDrift] — periodic-WIGGLE RCA (owner refocus 2026-07-04). The camera-relative
@@ -1256,6 +1331,12 @@ namespace DeNelle.Village
 
         private static Vector2 ReadMoveInput()
         {
+            // TEST SEAM (headless HERO_TURN_PROBE): when a scripted move is injected, return it
+            // verbatim so the probe drives a deterministic "press forward" through the SAME
+            // camera-relative → Velocity path the player uses. OFF the normal play path
+            // (_scriptedMoveActive is only ever set by SetScriptedMove).
+            if (_scriptedMoveActive) return _scriptedMove;
+
             Vector2 v = Vector2.zero;
 
             // New Input System path — Keyboard.current / Gamepad.current.

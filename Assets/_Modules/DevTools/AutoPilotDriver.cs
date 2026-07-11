@@ -228,6 +228,12 @@ namespace DeNelle.DevTools
                 // walk the hero into the entry and assert it WARPS to the destination. Runs first so --scene=Village2
                 // proves the gate crossing headless (owner never the detector).
                 yield return RunPhase("AssertHeroCrossing", AssertHeroCrossing());
+                // HERO_TURN_PROBE (owner "turn-left-before-walk" RCA 2026-07-10): from a KNOWN idle
+                // facing offset 90° from the camera-forward, drive FORWARD via the scripted-move seam
+                // and capture the per-frame [Flow:HeroTurn] rotation trace — a headless, deterministic
+                // measurement of the move-start yaw slew the owner FEELS as a left swing. Emits the
+                // HERO_TURN_PROBE :: summary marker; the full step trace is in the [Flow:HeroTurn] lines.
+                yield return RunPhase("AssertHeroTurnOnMoveStart", AssertHeroTurnOnMoveStart());
                 // F8-29 verification probe: runs EARLY (before any phase mutates the save /
                 // completes tutorial steps) — asserts the sceneLoaded re-arm actually put a
                 // TutorialFlow in the hub and, on a fresh save, that the flow is LIVE.
@@ -1630,6 +1636,7 @@ namespace DeNelle.DevTools
                 case "WalkToOuterWorldOutpost": return OuterWalkTimeout;
                 case "DiagGarrisonRoster": return 45f;
                 case "AssertHeroCrossing": return 18f;
+                case "AssertHeroTurnOnMoveStart": return 12f; // settle-to-idle + ~2s forward-hold trace + restore
                 default:                  return 30f;
             }
         }
@@ -2111,6 +2118,100 @@ namespace DeNelle.DevTools
                 yield break;
             }
             FlowTrace.Step("Auto", $"ResolveHero: hero '{_hero.name}' at {_hero.transform.position}.");
+        }
+
+        // =====================================================================
+        //  PHASE: AssertHeroTurnOnMoveStart — HERO_TURN_PROBE
+        // ---------------------------------------------------------------------
+        //  Owner "turn-left-before-walk" RCA (2026-07-10). Grok 86847b7f proved the
+        //  hero SLEWS its root yaw toward the camera-relative move heading on move
+        //  start (Quaternion.Slerp(rotation, LookRotation(move), _rotationSpeed*dt));
+        //  when the idle facing differs from that heading, a large angle = a visible
+        //  swing = the complaint. This probe MEASURES that slew headlessly, with no
+        //  render/click dependency, so the CLI can drive "move north from idle" and
+        //  compare the applied rotation to the source math WITHOUT the owner testing:
+        //    1) settle the hero to idle (Velocity ~0),
+        //    2) set a KNOWN idle facing 90° off the camera-forward (worst-case ~90 dYaw),
+        //    3) arm HeroLocomotion.TurnDebug + FlowTrace so [Flow:HeroTurn] logs EVERY
+        //       frame, then drive FORWARD via the scripted-move seam (the SAME
+        //       ReadMoveInput → camera-basis → Velocity path the player uses),
+        //    4) sample the yaw each frame → framesToAlign / maxDYaw / finalDYaw,
+        //    5) emit the HERO_TURN_PROBE :: summary marker + restore state (TurnDebug off).
+        //  The full step trace is the [Flow:HeroTurn] lines in Player.log/break-log.
+        // =====================================================================
+        private IEnumerator AssertHeroTurnOnMoveStart()
+        {
+            const string Tag = "Auto";
+            EnsureHero("AssertHeroTurnOnMoveStart");
+            if (_hero == null)
+            {
+                _lastDetail = "no hero - skipped";
+                FlowTrace.Warn(Tag, "AssertHeroTurnOnMoveStart: no hero - skipped (EnsureHero named the reason above).");
+                yield break;
+            }
+
+            var tf = _hero.transform;
+            Vector3 startPos = tf.position;
+
+            // Camera-relative forward heading the hero will be asked to face. HeroLocomotion computes
+            // move = Euler(0,camYaw,0) * (input.x,0,input.y); for forward (0,1) the world heading is
+            // exactly camYaw. Headless there is usually no SmartMobileCamera → camYaw 0 → target north.
+            var cam = UnityEngine.Object.FindObjectOfType<SmartMobileCamera>();
+            float camYaw = cam != null ? cam.CameraYaw : 0f;
+            float targetYaw = camYaw;                 // heading of the forward move vector
+            float startYaw  = Mathf.Repeat(camYaw + 90f, 360f);  // idle facing 90° off → worst-case left swing
+
+            // 1) Settle to idle — clear any leftover scripted move, wait for velocity to drain.
+            HeroLocomotion.ClearScriptedMove();
+            float w = 0f;
+            while (w < 2f && _hero.Velocity.sqrMagnitude > 0.01f) { w += Time.deltaTime; yield return null; }
+
+            // 2) Known idle state: warp in place at the chosen facing (WarpTo zeroes velocity + sets yaw).
+            _hero.WarpTo(startPos, Quaternion.Euler(0f, startYaw, 0f));
+            yield return null;
+            startYaw = tf.eulerAngles.y;   // read back the actual applied yaw
+
+            // 3) Arm the fine trace + drive forward through the real input seam.
+            bool prevTurnDebug = HeroLocomotion.TurnDebug;
+            bool prevFlow      = FlowTrace.Enabled;
+            HeroLocomotion.TurnDebug = true;
+            FlowTrace.Enabled        = true;
+            HeroLocomotion.SetScriptedMove(new Vector2(0f, 1f));   // "press forward" — arm the scripted-move seam
+            // Confirm the gate inputs are live AND that no competing owner will bypass the trace block.
+            // probeDriving (TurnDebug && scripted-move) makes the probe authoritative over the
+            // InputSuppressed / _autoWalkTarget early-returns a hub TutorialFlow/dialogue can set.
+            FlowTrace.Step(Tag, $"[Flow:HeroTurn] PROBE ARMED startYaw={startYaw:F1} targetYaw={targetYaw:F1} camYaw={camYaw:F1} " +
+                                $"TurnDebug={HeroLocomotion.TurnDebug} FlowEnabled={FlowTrace.Enabled} " +
+                                $"IsAutoWalking={_hero.IsAutoWalking} InputSuppressed={HeroLocomotion.InputSuppressed}");
+
+            float maxDYaw = 0f, finalDYaw = 0f;
+            int frames = 0, framesToAlign = -1;
+            float probe = 0f;
+            while (probe < 2f)
+            {
+                yield return null;
+                probe += Time.deltaTime;
+                frames++;
+                float dyaw = Mathf.Abs(Mathf.DeltaAngle(tf.eulerAngles.y, targetYaw));
+                if (dyaw > maxDYaw) maxDYaw = dyaw;
+                finalDYaw = dyaw;
+                if (framesToAlign < 0 && dyaw < 2f) framesToAlign = frames;   // first frame within 2° of target
+            }
+
+            // 4) Disarm — stop pressing, clear the seam, restore toggles + position.
+            HeroLocomotion.ClearScriptedMove();
+            HeroLocomotion.TurnDebug = prevTurnDebug;
+            _hero.WarpTo(startPos, Quaternion.Euler(0f, startYaw, 0f));   // put the hero back where the probe found it
+
+            bool aligned = finalDYaw < 2f;
+            string verdict =
+                $"HERO_TURN_PROBE :: startYaw={startYaw:F1} targetYaw={targetYaw:F1} " +
+                $"framesToAlign={(framesToAlign < 0 ? frames : framesToAlign)} " +
+                $"maxDYaw={maxDYaw:F1} finalDYaw={finalDYaw:F1} branch=town-slew aligned={aligned}";
+            FlowTrace.Step(Tag, verdict);
+            _lastDetail = verdict;
+
+            FlowTrace.Enabled = prevFlow;   // restore last (so the marker above still logged)
         }
 
         // =====================================================================
