@@ -2388,9 +2388,14 @@ namespace DeNelle.Village
                 Vector3 pos = transform.position;
                 lerp = Mathf.Clamp01(lerp);
 
-                // Ground/terrain/default layers only — this naturally excludes the
-                // enemy's own collider (on the "Enemy" layer) so the ray never self-hits.
-                int groundMask = LayerMask.GetMask("Default", "Terrain", "Ground");
+                // F8 2026-07-11 (floating corpses in the outpost): the old mask named
+                // "Terrain" and "Ground" — layers that DO NOT EXIST in TagManager (project
+                // layers: Default, TransparentFX, Ignore Raycast, Tower, Water, UI, Building,
+                // Enemy, Structure) — so GetMask silently collapsed to Default-only and the
+                // KayKit outpost floor (Structure/Building surfaces) was never hit; the corpse
+                // settled on the elevated navmesh baseline instead. Use the layers that exist.
+                // Still excludes the enemy's own collider (on the "Enemy" layer) — no self-hit.
+                int groundMask = LayerMask.GetMask("Default", "Structure", "Building", "Water");
                 if (groundMask == 0) groundMask = Physics.DefaultRaycastLayers;
 
                 // #55 (capture-proven 2026-06-29): grounding the TRANSFORM PIVOT to the surface
@@ -2402,11 +2407,26 @@ namespace DeNelle.Village
                 // on the surface. footGap==0 (pivot already at the feet) degrades to the old behaviour.
                 float footGap = PivotToVisibleBottomGap();
 
+                // F8 2026-07-11 sky corpse (proof: 'SnapBodyToGround(ArenaEnemy_orc-shaman_0)
+                // ground=0.00 footGap=53.58 -> pivotY=53.58'): a corrupt child-renderer bound
+                // ~50m below the pivot made the "rest visible bottom on surface" math LAUNCH
+                // the corpse skyward. A ground-snap may only move DOWN or barely up — cap the
+                // addend and the lift.
+                const float MaxFootGap = 3f;
+                const float MaxSettleLift = 1.5f;
+                if (footGap > MaxFootGap)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Enemy",
+                        $"SnapBodyToGround({gameObject.name}): footGap {footGap:0.00}m is absurd " +
+                        $"(corrupt renderer bounds?) — capped to {MaxFootGap}m.");
+                    footGap = MaxFootGap;
+                }
+
                 Vector3 origin = pos + Vector3.up * 2f;
                 if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 50f,
                                     groundMask, QueryTriggerInteraction.Ignore))
                 {
-                    float target = hit.point.y + footGap;
+                    float target = Mathf.Min(hit.point.y + footGap, pos.y + MaxSettleLift);
                     pos.y = (lerp >= 1f) ? target : Mathf.Lerp(pos.y, target, lerp);
                     transform.position = pos;
                     if (lerp >= 1f)
@@ -2419,9 +2439,15 @@ namespace DeNelle.Village
                 // traverses) when no physics ground collider answered.
                 if (NavMesh.SamplePosition(pos, out NavMeshHit navHit, 5f, NavMesh.AllAreas))
                 {
-                    float target = navHit.position.y + footGap;
+                    float target = Mathf.Min(navHit.position.y + footGap, pos.y + MaxSettleLift);
                     pos.y = (lerp >= 1f) ? target : Mathf.Lerp(pos.y, target, lerp);
                     transform.position = pos;
+                    // F8 2026-07-11 (floating corpses): this branch used to settle SILENTLY,
+                    // which hid the Default-only mask bug for weeks. Name the fallback so a
+                    // future float is provable in one grep.
+                    if (lerp >= 1f)
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("Enemy",
+                            $"SnapBodyToGround: raycast MISS in '{gameObject.scene.name}' -> navmesh settle y={pos.y:0.00} (raycast layers missed the floor?)");
                     return;
                 }
 

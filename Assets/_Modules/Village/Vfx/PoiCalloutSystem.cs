@@ -106,6 +106,16 @@ namespace DeNelle.Village
         // =====================================================================
         private void Tick()
         {
+            // F8 2026-07-11 "white rod in arena / carry over from the castle": the arena is
+            // staged 7km away IN THE SAME SCENE, and the Landmark pillar has an infinite
+            // callout radius — an uncleared outpost's 4x beacon was visible from inside the
+            // battle. No open-world POI callout may render while a battle owns the screen.
+            if (DeNelle.Village.Arena.BattleArena.AnyBattleInProgress)
+            {
+                StopAll();
+                return;
+            }
+
             bool heroValid = _hero != null;
             Vector3 heroPos = heroValid ? _hero.position : Vector3.zero;
 

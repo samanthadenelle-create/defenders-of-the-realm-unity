@@ -1352,7 +1352,15 @@ namespace DeNelle.Village
             var proxy = new GameObject("[HovlProjProxy]");
             proxy.transform.position = from;
             Vector3 delta = to - from;
-            Quaternion rot = delta.sqrMagnitude > 0.01f ? Quaternion.LookRotation(delta.normalized) : Quaternion.identity;
+            // F8 2026-07-11 "spell cast on a 60 degree angle not flat" — the muzzle sits
+            // chest-high (+1.2) while the target is at the enemy's base, so at close range the
+            // full-3D delta pitches the launch ROTATION steeply downward. Flatten Y for the
+            // ROTATION ONLY (position/travel below stays full-3D so it still reaches the
+            // target); fall back to the unflattened vector when the horizontal component is
+            // near-zero (target directly above/below).
+            Vector3 flat = new Vector3(delta.x, 0f, delta.z);
+            Vector3 aim  = flat.sqrMagnitude >= 0.0001f ? flat : delta;
+            Quaternion rot = aim.sqrMagnitude > 0.01f ? Quaternion.LookRotation(aim.normalized) : Quaternion.identity;
             var handle = VFXManager.PlayKey(key, from, rot, null, tint, 0f, 0f, proxy.transform);
 
             const float speed = 26f;

@@ -92,6 +92,14 @@ namespace DeNelle.Village.Arena
             Vector3 startPos = cam.transform.position;
             Quaternion startRot = cam.transform.rotation;
             Vector3 focus = target.position + Vector3.up * 1.2f;
+            // F8 2026-07-11 "camera looks straight up at the last kill": the corpse settle
+            // could LIFT the body (footGap bug, now capped enemy-side) and this routine
+            // re-read the risen transform per frame — the victory shot chased it into the
+            // sky. Freeze the focus HEIGHT at the death moment; the corpse may drift in
+            // X/Z during settle but the framing never pitches skyward.
+            float focusY = focus.y;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena",
+                $"death-cam hold on '{target.name}' at y={target.position.y:0.00} (focus height frozen)");
             Vector3 endPos = Vector3.Lerp(startPos, focus, PushInFraction);
 
             if (slowMo) ApplySlowMo();
@@ -105,7 +113,9 @@ namespace DeNelle.Village.Arena
                 float ease = t * t * (3f - 2f * t); // smoothstep push-in
 
                 // Body may be destroyed (DeathHold expiry) mid-linger -> hold the last good focus.
-                if (target != null) focus = target.position + Vector3.up * 1.2f;
+                // Height stays frozen at the death moment (see above); only X/Z track the body.
+                if (target != null)
+                    focus = new Vector3(target.position.x, focusY, target.position.z);
 
                 if (cam != null)
                 {

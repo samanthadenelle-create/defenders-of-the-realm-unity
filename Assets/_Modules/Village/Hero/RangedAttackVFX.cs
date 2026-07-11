@@ -233,6 +233,13 @@ namespace DeNelle.Village
         {
             if (string.IsNullOrEmpty(key) || mover == null) return null;
             Vector3 dir = target - origin;
+            // F8 2026-07-11 "spell cast on a 60 degree angle not flat" — origin is the
+            // chest-high muzzle, target the enemy base, so the full-3D delta tilts the launch
+            // ROTATION steeply at close range. Flatten Y for the ROTATION ONLY (the mover's
+            // travel stays full-3D and still reaches the target); fall back to the unflattened
+            // vector when the horizontal component is near-zero.
+            Vector3 flat = new Vector3(dir.x, 0f, dir.z);
+            if (flat.sqrMagnitude >= 0.0001f) dir = flat;
             Quaternion look = dir.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(dir.normalized) : Quaternion.identity;
             return VFXManager.PlayKey(key, origin, look, null, tint, 0f, 0f, mover.transform);
         }

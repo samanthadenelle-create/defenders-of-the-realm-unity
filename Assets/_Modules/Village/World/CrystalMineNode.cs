@@ -351,6 +351,14 @@ namespace DeNelle.Village
 
         private void ShowPrompt()
         {
+            // F8 2026-07-11 ("one sign or the other not both") — one-action-one-sign law:
+            // when the upgrade verb is suppressed (V1 harvest-only, ShowUpgradeVerb=false)
+            // this bubble's ONLY verb would duplicate the sibling MineNode's on-screen
+            // MobileInteractButton harvest prompt — two signs for one action. Build the
+            // world bubble ONLY when it advertises something the button does not (the
+            // upgrade verb). Harvest-only = no bubble ever; the button path is untouched.
+            if (!ShowUpgradeVerb) return;
+
             // WO-325 — advertise BOTH verbs. The sibling MineNode owns the [F] HARVEST
             // (extract crystals) and this component owns the [G] UPGRADE. The old prompt
             // showed ONLY the upgrade line, so a player at a crystal node never learned

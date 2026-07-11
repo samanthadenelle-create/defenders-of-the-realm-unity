@@ -139,6 +139,14 @@ namespace DeNelle.Village
             Vector3 ahead = Vector3.Lerp(_start, _end, tAhead);
             ahead.y += _arc * Mathf.Sin(tAhead * Mathf.PI);
             Vector3 dir = ahead - pos;
+            // F8 2026-07-11 "spell cast on a 60 degree angle not flat" — the muzzle is
+            // chest-high (+1.2) while the target point is at the enemy base, so at close
+            // range the travel tangent pitches the body steeply downward from the first
+            // frame. Flatten Y for the ROTATION ONLY — flat launch, full-3D travel (the
+            // position lerp above is untouched, so the shot still reaches the target).
+            // Guard near-zero horizontal (fall back to the unflattened tangent).
+            Vector3 flatDir = new Vector3(dir.x, 0f, dir.z);
+            if (flatDir.sqrMagnitude >= 0.0001f) dir = flatDir;
             if (dir.sqrMagnitude > 0.00001f)
                 transform.rotation = Quaternion.LookRotation(dir);
 

@@ -1144,6 +1144,18 @@ namespace DeNelle.Village
 
             var hero = GameObject.FindWithTag("Player");
             if (hero == null) return;
+
+            // F8 2026-07-11 arena RCA: an out-of-family overworld rep MARCHED into the staged
+            // arena mid-battle ('MARCH leader dist=7.5m to hero' during the fight) and stood
+            // T-posed in the owner's frame. While a battle owns the space, reps neither aggro
+            // nor chase the (warped) hero — they hold/roam where they are and resume after.
+            if (BattleArena.AnyBattleInProgress)
+            {
+                FlowTrace.Throttle("Encounter", $"battle-hold-{gameObject.name}", 5f,
+                    $"rep '{gameObject.name}' holding — battle in progress, no chase into the arena.");
+                return;
+            }
+
             float d = Vector3.Distance(hero.transform.position, transform.position);
 
             if (!_stung && d <= AggroRange)
