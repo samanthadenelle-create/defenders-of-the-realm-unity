@@ -213,6 +213,69 @@ namespace DeNelle.Tests.EditMode
                 "a refused WriteRow must leave the file BYTE-IDENTICAL");
         }
 
+        // ── WO-671 bundle fields (vfxDelay / attachBone / playOneShot) ───────
+
+        [Test]
+        public void writerow_roundtrips_bundle_fields()
+        {
+            WriteFixture(
+                "{\n" +
+                "  \"version\": 1,\n" +
+                "  \"vocabulary\": " + VocabularyJson() + ",\n" +
+                "  \"targets\": { \"humanoid\": {} }\n" +
+                "}\n");
+
+            bool wrote = MotionCastings.WriteRow("orc", "attack0", new CastingRow
+            {
+                clip        = FixtureClipAssetPath,
+                vfxKey      = "Fireball_Projectile",
+                sfxId       = "FireExplosion",
+                vfxDelay    = 0.25f,
+                attachBone  = "hand.r",
+                playOneShot = true,
+                manual      = true,
+                source      = "motion-caster",
+            });
+            Assert.That(wrote, Is.True, "WriteRow with bundle fields must succeed");
+
+            Assert.That(MotionCastings.TryGetRow("orc", "attack0", out var row), Is.True,
+                "the saved row must read back through TryGetRow");
+            Assert.That(row.vfxKey, Is.EqualTo("Fireball_Projectile"));
+            Assert.That(row.sfxId, Is.EqualTo("FireExplosion"));
+            Assert.That(row.vfxDelay, Is.EqualTo(0.25f).Within(0.0001f),
+                "vfxDelay must round-trip (WO-671 §1)");
+            Assert.That(row.attachBone, Is.EqualTo("hand.r"),
+                "attachBone must round-trip (WO-671 §1)");
+            Assert.That(row.playOneShot, Is.True,
+                "playOneShot must round-trip (WO-671 §1)");
+        }
+
+        [Test]
+        public void bundle_fields_default_on_legacy_rows()
+        {
+            // Legacy row shape — no vfxDelay/attachBone/playOneShot keys at all.
+            WriteFixture(
+                "{\n" +
+                "  \"version\": 1,\n" +
+                "  \"vocabulary\": " + VocabularyJson() + ",\n" +
+                "  \"targets\": {\n" +
+                "    \"humanoid\": {},\n" +
+                "    \"orc\": {\n" +
+                "      \"inherits\": \"humanoid\",\n" +
+                "      \"attack0\": { \"clip\": \"" + FixtureClipAssetPath + "\", \"manual\": true }\n" +
+                "    }\n" +
+                "  }\n" +
+                "}\n");
+
+            Assert.That(MotionCastings.TryGetRow("orc", "attack0", out var row), Is.True);
+            Assert.That(row.playOneShot, Is.False,
+                "playOneShot must default FALSE on legacy rows (WO-671 §1)");
+            Assert.That(row.vfxDelay, Is.EqualTo(0f),
+                "vfxDelay must default 0 on legacy rows (WO-671 §1)");
+            Assert.That(string.IsNullOrEmpty(row.attachBone), Is.True,
+                "attachBone must default empty on legacy rows (WO-671 §1)");
+        }
+
         // ── #4 fallback chain ────────────────────────────────────────────────
 
         [Test]

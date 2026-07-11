@@ -46,17 +46,22 @@ using UnityEngine;
 
 namespace DeNelle.Editor
 {
-    /// <summary>One (target, keyword) registry row — canon doc §1 field table.</summary>
+    /// <summary>One (target, keyword) registry row — canon doc §1 field table
+    /// + the WO-671 action-bundle fields (§9a adopted: vfxDelay/attachBone/
+    /// playOneShot). All bundle fields optional — absent = today's behavior.</summary>
     [Serializable]
     public class CastingRow
     {
-        public string clip;      // PRIMARY: asset path (FBX or extracted .anim)
-        public string guid;      // secondary/repair reference (survives file moves)
-        public string vfxKey;    // optional — VFXManager.PlayKey namespace
-        public string sfxId;     // optional — SfxId namespace
-        public bool   manual;    // true = owner pick = CANON, never overwritten
-        public string pickedUtc; // provenance timestamp
-        public string source;    // "motion-caster" | "migrated-weaponskill" | "auto"
+        public string clip;       // PRIMARY: asset path (FBX or extracted .anim)
+        public string guid;       // secondary/repair reference (survives file moves)
+        public string vfxKey;     // optional — VFXManager.PlayKey namespace
+        public string sfxId;      // optional — SfxId namespace
+        public float  vfxDelay;   // optional — seconds after anim start to fire the VFX (default 0)
+        public string attachBone; // optional — humanoid bone/attach name ("hand.r", "weapon", "spine")
+        public bool   playOneShot;// optional — one-shot overlay, base state undisturbed (default false)
+        public bool   manual;     // true = owner pick = CANON, never overwritten
+        public string pickedUtc;  // provenance timestamp
+        public string source;     // "motion-caster" | "migrated-weaponskill" | "auto"
     }
 
     /// <summary>
@@ -70,6 +75,12 @@ namespace DeNelle.Editor
     {
         public const string DefaultRegistryPath =
             "Assets/StreamingAssets/Data/Canonical/motion-castings.json";
+
+        /// <summary>The canonical Resources mirror — the DataRegression core-datahub
+        /// oracle enforces the dual-copy rule on every canonical StreamingAssets file
+        /// (canon §1, amended 2026-07-11), so WriteRow keeps BOTH byte-identical.</summary>
+        public const string ResourcesRegistryPath =
+            "Assets/Resources/Data/Canonical/motion-castings.json";
 
         private const string LogHit  = "[MotionCaster] ";   // hit line (WO-670 acceptance)
         private const string LogMiss = "[MotionCasting] ";  // miss/fall-through self-report
@@ -119,6 +130,13 @@ namespace DeNelle.Editor
                     ? (IReadOnlyList<string>)s_vocabulary
                     : DeNelle.Core.Combat.ActionKeywords.All;
             }
+        }
+
+        /// <summary>The vocabulary category names as declared in the json (locomotion/
+        /// attack/cast/reaction/death/signature) — the Motion Caster's chip source.</summary>
+        public static IReadOnlyCollection<string> Categories
+        {
+            get { EnsureLoaded(); return s_vocabularyByCategory.Keys; }
         }
 
         /// <summary>Vocabulary keywords of one json category (locomotion/attack/cast/
@@ -210,7 +228,9 @@ namespace DeNelle.Editor
         /// vocabulary, the row is null/clipless, or the existing row is
         /// <c>manual:true</c> and <paramref name="allowManualOverwrite"/> is false
         /// (manual = CANON — Offset Forge law; the tool passes true only on an
-        /// explicit owner confirm).
+        /// explicit owner confirm). A successful production save writes BOTH
+        /// canonical copies byte-identically (StreamingAssets + Resources mirror,
+        /// dual-copy rule §1).
         /// </summary>
         public static bool WriteRow(string target, string keyword, CastingRow row,
                                     bool allowManualOverwrite = false)
@@ -220,6 +240,15 @@ namespace DeNelle.Editor
             {
                 Debug.LogError(LogMiss + "WriteRow rejected — target/keyword/row.clip required " +
                     $"(target='{target}', keyword='{keyword}').");
+                return false;
+            }
+
+            // Bundle-field sanity (WO-671 §1): a negative delay is meaningless —
+            // reject loudly rather than clamp silently (§5 never-silent).
+            if (row.vfxDelay < 0f)
+            {
+                Debug.LogError(LogMiss + $"WriteRow rejected — vfxDelay {row.vfxDelay} is negative " +
+                    $"('{target}.{keyword}'); seconds after animation start, must be >= 0.");
                 return false;
             }
 
@@ -263,16 +292,33 @@ namespace DeNelle.Editor
 
                 targetObj[keyword] = new JObject
                 {
-                    ["clip"]      = row.clip,
-                    ["guid"]      = row.guid ?? string.Empty,
-                    ["vfxKey"]    = row.vfxKey ?? string.Empty,
-                    ["sfxId"]     = row.sfxId ?? string.Empty,
-                    ["manual"]    = row.manual,
-                    ["pickedUtc"] = row.pickedUtc ?? DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
-                    ["source"]    = string.IsNullOrEmpty(row.source) ? "motion-caster" : row.source,
+                    ["clip"]        = row.clip,
+                    ["guid"]        = row.guid ?? string.Empty,
+                    ["vfxKey"]      = row.vfxKey ?? string.Empty,
+                    ["sfxId"]       = row.sfxId ?? string.Empty,
+                    ["vfxDelay"]    = row.vfxDelay,
+                    ["attachBone"]  = row.attachBone ?? string.Empty,
+                    ["playOneShot"] = row.playOneShot,
+                    ["manual"]      = row.manual,
+                    ["pickedUtc"]   = row.pickedUtc ?? DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                    ["source"]      = string.IsNullOrEmpty(row.source) ? "motion-caster" : row.source,
                 };
 
-                File.WriteAllText(s_registryPath, root.ToString(Formatting.Indented) + "\n");
+                string json = root.ToString(Formatting.Indented) + "\n";
+                File.WriteAllText(s_registryPath, json);
+
+                // Dual-copy rule (canon §1, amended 2026-07-11): the canonical
+                // registry ships a byte-identical Resources mirror. Only mirrors
+                // the PRODUCTION path — test fixtures (RegistryPath redirected)
+                // must never clobber the real Resources copy.
+                if (s_registryPath == DefaultRegistryPath)
+                {
+                    string mirrorDir = Path.GetDirectoryName(ResourcesRegistryPath);
+                    if (!string.IsNullOrEmpty(mirrorDir) && !Directory.Exists(mirrorDir))
+                        Directory.CreateDirectory(mirrorDir);
+                    File.WriteAllText(ResourcesRegistryPath, json);
+                }
+
                 Reload();
                 Debug.Log(LogHit + $"'{target}.{keyword}' -> '{row.clip}' " +
                     $"({(row.manual ? "manual" : string.IsNullOrEmpty(row.source) ? "auto" : row.source)}) saved.");
