@@ -49,6 +49,11 @@ namespace DeNelle.Core.Combat
         // ── cast ─────────────────────────────────────────────────────────────
         public const string Cast        = "cast";
         public const string CastChannel = "castChannel";
+        /// <summary>Heal/ward cast (the hero's E-slot heal state) — added with the
+        /// owner heal-cast pick 2026-07-11 (json vocabulary version 2); reader =
+        /// KnightPackageControllerBuilder's Cast_e slot wrap. Melee/caster hard
+        /// rule: heal-type actions fire a CAST clip, never a swing (F8-48).</summary>
+        public const string CastHeal    = "castHeal";
 
         // ── reaction ─────────────────────────────────────────────────────────
         public const string Hit       = "hit";
@@ -86,7 +91,7 @@ namespace DeNelle.Core.Combat
 
         public static readonly string[] CastKeywords =
         {
-            Cast, CastChannel,
+            Cast, CastChannel, CastHeal,
         };
 
         public static readonly string[] ReactionKeywords =

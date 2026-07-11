@@ -100,6 +100,15 @@ namespace DeNelle.Editor
         private const string ClipSweepFall  = "Signature_Sweep_Fall";
         private const string ClipGettingUp  = "Signature_Getting_Up";
 
+        // Owner pick 2026-07-11 — Block/deflect = S&S ShieldSwipe01 chaining into
+        // ShieldSwipe02 (extracted by SwordShieldMovesImporter). Swipe01 arrives via
+        // the `block` registry row (knight.block, manual); swipe02 is the second
+        // beat the Block2 state plays. Both NO-OP-safe: missing swipe01 leaves the
+        // registry falling through to the Shared_Block default; missing swipe02
+        // leaves Block single-beat (warned, never broken).
+        private const string ClipBlockSwipe01 = "Combat_Weapon_WeaponSkill_SwordShield_ShieldSwipe01";
+        private const string ClipBlockSwipe02 = "Combat_Weapon_WeaponSkill_SwordShield_ShieldSwipe02";
+
         // Directional deaths (owner table — see file header).
         private const string ClipDeathDefault = "Combat_Weapon_Combat_Movement_Locked_Death";
         private const string ClipDeathLeft    = "Signature_Standing_Death_Left_01";
@@ -311,6 +320,12 @@ namespace DeNelle.Editor
                 var slotClip = Clip(SpellCastClips[v]);
                 if (v == 1) slotClip = MotionCastings.Resolve(CastingTarget, ActionKeywords.Skill1, slotClip);
                 else if (v == 2) slotClip = MotionCastings.Resolve(CastingTarget, ActionKeywords.Skill2, slotClip);
+                // Cast_e is the heal/ward slot (E-slot actives: Oathmend / Second
+                // Wind / Mending Salve / Defender's Call). Owner pick 2026-07-11:
+                // heal casts fire the Magical Moves "Magic Spell Cast 02" via the
+                // knight.castHeal registry row (manual) — melee/caster hard rule +
+                // the F8-48 animation half. Registry miss = hardcoded pick stands.
+                else if (v == 3) slotClip = MotionCastings.Resolve(CastingTarget, ActionKeywords.CastHeal, slotClip);
                 spellClips[v] = slotClip;
             }
             if (genericCast != null)
@@ -394,7 +409,12 @@ namespace DeNelle.Editor
             }
             else Debug.LogWarning(Log + "no victory clip (package gap) — Victory trigger no-ops.");
 
-            // ── Block (package gap — shared block retargets) ─────────────────────
+            // ── Block (owner pick 2026-07-11: "Shield block, for incoming attacks
+            // and spell deflection use Shield Swipe 01 into shield swipe 2" — the
+            // knight.block registry row resolves ShieldSwipe01; when it did AND the
+            // extracted ShieldSwipe02 exists, a Block2 second beat chains off it
+            // with the attack-combo transition discipline. Registry miss keeps the
+            // Shared_Block package-gap default, single-beat — never a broken state.)
             if (block != null)
             {
                 var blockState = sm.AddState("Block");
@@ -405,13 +425,39 @@ namespace DeNelle.Editor
                     toBlock.hasExitTime = false; toBlock.duration = 0.1f;
                     toBlock.AddCondition(AnimatorConditionMode.If, 0f, "Block");
                 }
-                var backCombat = blockState.AddTransition(combatLoco);
-                backCombat.hasExitTime = false; backCombat.duration = 0.12f;
-                backCombat.AddCondition(AnimatorConditionMode.IfNot, 0f, "Block");
-                backCombat.AddCondition(AnimatorConditionMode.If, 0f, "InCombat");
-                var backCalm = blockState.AddTransition(loco);
-                backCalm.hasExitTime = false; backCalm.duration = 0.12f;
-                backCalm.AddCondition(AnimatorConditionMode.IfNot, 0f, "Block");
+
+                // Second beat — only when the owner-picked swipe01 actually resolved
+                // (chaining swipe02 after a non-swipe block clip would misread).
+                AnimatorState blockChain = null;
+                if (block.name == ClipBlockSwipe01)
+                {
+                    var swipe02 = Clip(ClipBlockSwipe02);
+                    if (swipe02 != null)
+                    {
+                        blockChain = sm.AddState("Block2");
+                        blockChain.motion = swipe02;
+                        var toChain = blockState.AddTransition(blockChain);
+                        toChain.hasExitTime = true; toChain.exitTime = 0.9f; toChain.duration = 0.08f;
+                        toChain.AddCondition(AnimatorConditionMode.If, 0f, "Block");
+                    }
+                    else Debug.LogWarning(Log + "block second beat missing (" + ClipBlockSwipe02 +
+                        ".anim) — Block stays single-beat on ShieldSwipe01 (run " +
+                        "SwordShieldMovesImporter.Import to extract it).");
+                }
+
+                var blockExitStates = blockChain != null
+                    ? new[] { blockState, blockChain }
+                    : new[] { blockState };
+                foreach (var st in blockExitStates)
+                {
+                    var backCombat = st.AddTransition(combatLoco);
+                    backCombat.hasExitTime = false; backCombat.duration = 0.12f;
+                    backCombat.AddCondition(AnimatorConditionMode.IfNot, 0f, "Block");
+                    backCombat.AddCondition(AnimatorConditionMode.If, 0f, "InCombat");
+                    var backCalm = st.AddTransition(loco);
+                    backCalm.hasExitTime = false; backCalm.duration = 0.12f;
+                    backCalm.AddCondition(AnimatorConditionMode.IfNot, 0f, "Block");
+                }
             }
 
             // ── Injured locomotion (package gap — Action/Enemies injured set) ────

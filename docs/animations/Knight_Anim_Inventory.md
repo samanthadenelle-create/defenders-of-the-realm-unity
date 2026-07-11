@@ -7,6 +7,30 @@
 
 ---
 
+## ⭐ OWNER PICKS 2026-07-11 (verbatim canon — SUPERSEDE the RECOMMENDED column for these rows)
+
+Authored as `manual:true` rows in `motion-castings.json` (knight target) + owner-pick rows in
+`weaponskill-animations.json` (both canonical copies) — all NO-OP-safe: an unextracted clip falls
+through to the builder default at bake time.
+
+| Owner pick (verbatim) | Action / state | Clip | Seam |
+|---|---|---|---|
+| "for Heroic Leap use animation Jump — its a jump and stab down animation" | Heroic Leap (Q → `Cast_q`) | `atk_jump` → `Combat_Weapon_WeaponSkill_SwordShield_Jump` | `motion-castings.json` `knight.skill1` (manual) |
+| "W Slash animation slash up" → **REVISED same day**: "instead of W button Put Slash" | W action button (→ `Cast_w`) | plain **Sword_And_Shield_Slash** (already extracted; the pack has no non-directional `atk_slash` — the revision maps to the extracted plain Slash take; `atk_slashup` stays extracted as a combo finisher) | `motion-castings.json` `knight.skill2` (manual) |
+| "Shield block, for incoming attacks and spell deflection use Shield Swipe 01 into shield swipe 2" | Block / deflect (`Block` → `Block2` chain) | `atk_shieldswipe01` → `atk_shieldswipe02` (builder authors the `Block2` second beat when both extracted) | `motion-castings.json` `knight.block` (manual) + `KnightPackageControllerBuilder` Block2 chain |
+| "Heal use Magic Spell Cast 02" | Heal casts (`Cast_e` heal/ward slot + generic/variant-0 cast, e.g. Mend/Oathmend/Second Wind) | `m-ls-magespellcast-02` → `Combat_Spell_MagicalMoves_SpellCast_02` | `motion-castings.json` `knight.castHeal` + `knight.cast` (manual; new `castHeal` keyword, vocab v2) + `weaponskill-animations.json` heal rows |
+| "fireball Magic Spell cast 04" | Fireball / ranged-bolt cast (Thunderbolt `knight.thunderbolt`, Emberbrand Throw) | `m-h-magespellcast-04` → `Combat_Spell_MagicalMoves_SpellCast_04` (one-hand conjure→release = the projectile read; the ls-04 two-hand take also exists if the owner meant that family) | `weaponskill-animations.json` thunderbolt/emberbrand rows (fallback `Combat_Spell_Fireball` until extracted) |
+
+**Extraction status change:** `Assets/Editor/SwordShieldMovesImporter.cs` now extracts + retargets the
+recommended S&S subset (`atk_jump`, `atk_slashup`, `atk_slashright/left/down`, `atk_stab`, `atk_spin`,
+`atk_shieldcharge`, `atk_shieldswipe01/02`) **plus the first two Magical Moves clips**
+(`m-ls-magespellcast-02`, `m-h-magespellcast-04`) onto the live `Knight_Hero` avatar into
+`…/Animations/Extracted/` (mirrors `HeroPackageImporter`; self-verifying OK/WARN/FAIL per clip).
+Batchmode: `DeNelle.Editor.SwordShieldMovesImporter.Import`. Run it, then rebake
+`DeNelle.Editor.KnightPackageControllerBuilder.Build` for the picks to take effect.
+
+---
+
 ## 1. Packs found (and what is on disk)
 
 | Pack | Location | On disk? | Form | Notes |
@@ -31,7 +55,7 @@ Ready to bind by filename (drop the `.anim`). Length not parsed — "Quality" is
 
 | Animation Name | Pack Source | Type | Recommended Use | Quality Notes |
 |---|---|---|---|---|
-| Combat_Weapon_WeaponSkill_Sword_And_Shield_Slash | Extracted | Attack (light) | **Basic (B1)** | Current `Attack0` + generic Cast. Clean one-handed S&S swing; the safe combo starter. |
+| Combat_Weapon_WeaponSkill_Sword_And_Shield_Slash | Extracted | Attack (light) | **Basic (B1)** — **⭐ OWNER PICK 2026-07-11: also the W action button** ("instead of W button Put Slash", revising the atk_slashup pick; bound as `knight.skill2` → `Cast_w`) | Current `Attack0` + generic Cast. Clean one-handed S&S swing; the safe combo starter. |
 | Combat_Weapon_WeaponSkill_Inward_Slash | Extracted | Attack (light) | Basic combo hit / Heavy | Left-to-right cross swing. Good combo-chain link. Currently `Cast_q`. |
 | Combat_Weapon_WeaponSkill_Outward_Slash | Extracted | Attack (light) | Basic combo hit | Right-to-left backhand. Combo pair with Inward. Only reachable via JSON seam today. |
 | Combat_Weapon_WeaponSkill_Downward_Slice | Extracted | Attack (heavy/overhead) | **Heavy (B2)** | Overhead chop — reads as a heavy. Currently `Cast_r`. Strong. |
@@ -70,20 +94,20 @@ Ready to bind by filename (drop the `.anim`). Length not parsed — "Quality" is
 | Signature_Taunt | Extracted | Special (taunt) | Taunt / Shout | **UNUSED.** Candidate for a shout/taunt skill (B4 alt). |
 | Signature_* Deaths (Death, Death_From_Right, Death_Forward, Standing_Death_Left_01, Standing_Death_Backward_01, Two_Handed_Sword_Death_1, +duplicates) | Extracted | Special (death) | Directional death | WIRED — 6 directional deaths (see §3). Several extra death takes (`Passive_Death`, `Passive_Locomotion_Death`, `Combat_Spell_Death`, `Combat_Weapon_WeaponSkill_Death`, `Signature_Death_From_The_Front`, etc.) are **UNUSED** duplicates. |
 
-### 2B. Sword and Shield Moves (`…/Motion/studio-mocap-sword-and-shield-moves/`, `.fbx` — NEEDS EXTRACTION)
+### 2B. Sword and Shield Moves (`…/Motion/studio-mocap-sword-and-shield-moves/`, `.fbx` — extraction method LANDED 2026-07-11: `SwordShieldMovesImporter.Import` covers the attack+shield subset below; parry/block-hold/locomotion still unextracted)
 Cleanest dedicated S&S set; recommend extracting the attack + shield + parry subset.
 
 | Animation Name | Pack Source | Type | Recommended Use | Quality Notes |
 |---|---|---|---|---|
 | atk_slashright / atk_slashleft | S&S Moves | Attack (light) | **Basic combo 1–2 (B1)** | Purpose-built horizontal light swings — ideal opening two beats of a light combo. |
 | atk_slashdown | S&S Moves | Attack (heavy/overhead) | Basic combo 3 / Heavy | Overhead — combo third beat or heavy. |
-| atk_slashup | S&S Moves | Attack (rising) | Basic combo 4 / launcher | Rising cut — combo finisher / pop. |
+| atk_slashup | S&S Moves | Attack (rising) | Basic combo 4 / launcher | Rising cut — combo finisher / pop. Was briefly the W-button owner pick 2026-07-11; **revised same day to the plain extracted Sword_And_Shield_Slash** — stays in the extraction subset as a finisher. |
 | atk_stab | S&S Moves | Attack (thrust) | Combo (thrust) | Forward lunge stab; combo variety. |
 | atk_spin | S&S Moves | Attack (spin/AoE) | **Skill 1 / Cleave (B3)** | Dedicated spin cleave — cleanest sweep in any pack. Prefer over extracted 360_High if extracted. |
 | atk_shieldcharge | S&S Moves | Attack (charge) | **Skill 2 / Charge (B4)** | Shield-forward charge — best "gap-closer charge" read. |
-| atk_shieldswipe01 / atk_shieldswipe02 | S&S Moves | Attack (shield bash) | **Heavy / Shield Bash (B2)** | Purpose-built shield bash — the correct clip for a "Shield Bash" button. |
+| atk_shieldswipe01 / atk_shieldswipe02 | S&S Moves | Attack (shield bash) | **⭐ OWNER PICK 2026-07-11: Block/deflect chain** (swipe01 → swipe02, covers incoming attacks AND spell deflection — supersedes the Shield-Bash recommendation) | Purpose-built shield swipes; bound via `knight.block` registry row + the builder's `Block2` second beat. |
 | atk_kick | S&S Moves | Attack (kick) | Utility/interrupt | Front kick — stagger/interrupt option. |
-| atk_jump | S&S Moves | Attack (leap) | Leap attack | Jump attack — optional special. |
+| atk_jump | S&S Moves | Attack (leap) | **⭐ OWNER PICK 2026-07-11: Heroic Leap** ("its a jump and stab down animation" — supersedes the leap-attack recommendation) | Jump + stab down; bound via `knight.skill1` registry row (`Cast_q`). |
 | shield_block{up,down,left,right,backward,crouch} | S&S Moves | Block (directional) | Block/Guard | Full directional block set — upgrade over the shared-block package gap. |
 | sword_parry{left,right,up,down,backward01–04,crouch} | S&S Moves | Block (parry) | Parry | Rich parry set — enables a real parry/counter mechanic. |
 | idle_battle / idle_alert / idle_ready | S&S Moves | Locomotion (combat idle) | Combat idle | Native S&S combat idles — better than the aim-idle placeholder. |
@@ -98,8 +122,8 @@ Naming key: `m-`=male take (prefer for the male Paladin), `f-`=female take (reta
 
 | Animation Name | Pack Source | Type | Best caster ability fit | Quality Notes |
 |---|---|---|---|---|
-| m-h-magespellcast-01…06 | Magical Moves | Cast (one-hand conjure) | **Ranged bolt / DoT-curse cast** | Male, one-handed — short conjure→release read. Best for a quick ranged/hex cast that keeps the sword in hand. **6 variants** = per-spell variety. |
-| m-ls-magespellcast-01…06 | Magical Moves | Cast (two-hand / big) | **Buff / shout / heal (big cast)** | Male, long-staff two-hand — bigger windup, "raise power" read. Best for a heal or party-buff moment. **6 variants.** |
+| m-h-magespellcast-01…06 | Magical Moves | Cast (one-hand conjure) | **Ranged bolt / DoT-curse cast** — **⭐ OWNER PICK 2026-07-11: `-04` = the Fireball/ranged-bolt cast** ("fireball Magic Spell cast 04"; in the extraction subset) | Male, one-handed — short conjure→release read. Best for a quick ranged/hex cast that keeps the sword in hand. **6 variants** = per-spell variety. |
+| m-ls-magespellcast-01…06 | Magical Moves | Cast (two-hand / big) | **Buff / shout / heal (big cast)** — **⭐ OWNER PICK 2026-07-11: `-02` = the Heal cast** ("Heal use Magic Spell Cast 02"; in the extraction subset, bound as `knight.castHeal`/`knight.cast`) | Male, long-staff two-hand — bigger windup, "raise power" read. Best for a heal or party-buff moment. **6 variants.** |
 | f-ss-magespellcast-01…08 | Magical Moves | Cast (sword & shield) | **In-combat cast (any) — Knight-ideal** | The ONLY sword-&-shield cast set (casts while holding sword+shield). **Female takes** — retarget onto Knight_Hero and QA; if clean, the single best fit for a Paladin who never stows gear. 8 variants. |
 | f-h-magespellcast-01…04 / f-ls-magespellcast-01…04 | Magical Moves | Cast | Ranged / buff (female alt) | Female one-hand / long-staff casts — fallback variety if a male take doesn't fit a specific spell. |
 | m-ss-magiccontrol-01 (f-magiccontrol-01/02) | Magical Moves | Channel (sustain) | **Channeled DoT / heal-over-time / beam** | Sustained "controlling magic" pose — the correct clip for a held/channeled ability (regen aura, drain, beam). |

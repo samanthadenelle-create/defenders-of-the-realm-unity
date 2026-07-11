@@ -115,32 +115,32 @@
     {
       "class": "knight", "abilityId": "knight.thunderbolt", "skill": "Thunderbolt", "slot": "w",
       "trigger": "Cast", "combo": -1,
-      "clip": "Combat_Spell_Fireball", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
-      "_note": "WO-614 ranged bolt. Cast trigger fires the spell throw; combo -1 so it never overrides the Attack1/2 combo states the KnightPackageControllerBuilder builds."
+      "clip": "Combat_Spell_MagicalMoves_SpellCast_04", "clipExists": false, "fallbackClip": "Combat_Spell_Fireball",
+      "_note": "OWNER PICK 2026-07-11 ('fireball Magic Spell cast 04'): the ranged-bolt/fireball cast = Magical Moves m-h-magespellcast-04 (one-hand conjure->release), extracted by SwordShieldMovesImporter. clipExists flips true once the import runs; until then Combat_Spell_Fireball stands. WO-614 ranged bolt; combo -1 so it never overrides the Attack1/2 combo states."
     },
     {
       "class": "knight", "abilityId": "knight.emberbrand-throw", "skill": "Emberbrand Throw", "slot": "w",
       "trigger": "Cast", "combo": -1,
-      "clip": "Combat_Spell_Fireball", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
-      "_note": "WO-614 dot — burning brand throw. Shares the fireball cast."
+      "clip": "Combat_Spell_MagicalMoves_SpellCast_04", "clipExists": false, "fallbackClip": "Combat_Spell_Fireball",
+      "_note": "WO-614 dot — burning brand throw. Shares the fireball cast (owner pick 2026-07-11: Magic Spell cast 04)."
     },
     {
       "class": "knight", "abilityId": "knight.mending-salve", "skill": "Mending Salve", "slot": "e",
       "trigger": "Cast", "combo": -1,
-      "clip": "Combat_Spell_Two_Hand_Spell_Casting", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
-      "_note": "WO-614 heal — two-hand spell-casting pose."
+      "clip": "Combat_Spell_MagicalMoves_SpellCast_02", "clipExists": false, "fallbackClip": "Combat_Spell_Two_Hand_Spell_Casting",
+      "_note": "OWNER PICK 2026-07-11 ('Heal use Magic Spell Cast 02'): heal casts = Magical Moves m-ls-magespellcast-02 (two-hand raise), extracted by SwordShieldMovesImporter. clipExists flips true once the import runs; until then the Two_Hand_Spell_Casting pose stands. WO-614 heal."
     },
     {
       "class": "knight", "abilityId": "knight.oathmend", "skill": "Oathmend", "slot": "e",
       "trigger": "Cast", "combo": -1,
-      "clip": "Combat_Spell_Two_Hand_Spell_Casting", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
-      "_note": "WO-614 healOverTime — two-hand spell-casting pose."
+      "clip": "Combat_Spell_MagicalMoves_SpellCast_02", "clipExists": false, "fallbackClip": "Combat_Spell_Two_Hand_Spell_Casting",
+      "_note": "WO-614 healOverTime — heal cast (owner pick 2026-07-11: Magic Spell Cast 02)."
     },
     {
       "class": "knight", "abilityId": "knight.second-wind", "skill": "Second Wind", "slot": "e",
       "trigger": "Cast", "combo": -1,
-      "clip": "Combat_Spell_Two_Hand_Spell_Casting", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
-      "_note": "WO-614 heal — two-hand spell-casting pose."
+      "clip": "Combat_Spell_MagicalMoves_SpellCast_02", "clipExists": false, "fallbackClip": "Combat_Spell_Two_Hand_Spell_Casting",
+      "_note": "WO-614 heal — heal cast (owner pick 2026-07-11: Magic Spell Cast 02)."
     },
     {
       "class": "knight", "abilityId": "knight.wardens-roar", "skill": "Warden's Roar", "slot": "e",
