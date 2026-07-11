@@ -590,6 +590,21 @@ namespace DeNelle.Village
                     root.AddComponent<Gate>();
                     break;
 
+                // ResourceCollector — CoC-style typed town collector (Farm / Lumbermill /
+                // Forge). A collector places EXACTLY like any other structure (same grid /
+                // ghost / persist path) — only the attached behaviour differs. Configure it
+                // with the ResourceBuildingProgression id from the row (collectorBuildingId),
+                // falling back to the entry id when the row omits it.
+                case "ResourceCollector":
+                {
+                    var col = root.AddComponent<DeNelle.Village.Buildings.Progression.ResourceCollector>();
+                    var r = entry.repo;
+                    string buildingId = !string.IsNullOrEmpty(r != null ? r.collectorBuildingId : null)
+                        ? r.collectorBuildingId : entry.id;
+                    col.Configure(buildingId);
+                    break;
+                }
+
                 // CrystalMine — passive Aether-Crystal generator (banks +1/wave at
                 // L3 via WaveManager.OnWaveCleared). Self-resolves hero/wave/economy
                 // in Start and builds its own placeholder visual when no prefab is
@@ -597,6 +612,18 @@ namespace DeNelle.Village
                 case "CrystalMine":
                     root.AddComponent<CrystalMine>();
                     break;
+
+                // HealingFountain — Wellspring of Elarion. A SUPPORT structure that heals
+                // the Heart of Elarion out of battle only (rate scales L1=1.0/L2=2.0/L3=3.5
+                // HP/s). Self-resolves Heart + WaveManager in Start; Configure reads the
+                // level ceiling from RepoProps. Gated behind the arcane-tower research perk
+                // 'arcane-wellspring' at the build-palette layer.
+                case "HealingFountain":
+                {
+                    var f = root.AddComponent<HealingFountain>();
+                    f.Configure(entry);
+                    break;
+                }
 
                 // GameplayBuilding — Phase 2: the village's economy/upgrade buildings
                 // (pet-house / workshop / market / mill / lumbermill / forge / arcane-

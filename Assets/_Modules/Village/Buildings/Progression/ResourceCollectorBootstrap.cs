@@ -65,6 +65,11 @@ namespace DeNelle.Village.Buildings.Progression
                 box.isTrigger = false;
             }
 
+            // WO-665a: diegetic CoC-style fill stack (separate presentation component).
+            // Only the visible storefront hosts get it — the origin-parked DDOL fallback
+            // collectors are logical-only (CollectorStackView.Attach self-skips them).
+            CollectorStackView.Attach(col);
+
             FlowTrace.Once("Harvest", $"wire-{buildingId}",
                 $"collector wired building={buildingId} storefront={storefrontName}");
         }

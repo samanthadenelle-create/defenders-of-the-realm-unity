@@ -89,6 +89,16 @@ namespace DeNelle.Core.Catalog
         public string behaviorId = null;
 
         /// <summary>
+        /// COLLECTOR IDENTITY (owner 2026-07-10 generic build-mode) — for a
+        /// <c>behaviorId:"ResourceCollector"</c> row, the ResourceBuildingProgression id
+        /// (<c>farm</c> / <c>lumbermill</c> / <c>forge</c>) the placed collector accrues for.
+        /// Pure-data (no Village ref); StructureFactory.AttachBehavior passes it to
+        /// <c>ResourceCollector.Configure</c>. Null/empty → falls back to the entry id.
+        /// Ignored by every other behaviorId. JSON deserializes "collectorBuildingId" straight in.
+        /// </summary>
+        public string collectorBuildingId = null;
+
+        /// <summary>
         /// Phase 2 (owner): true = at most ONE of these may exist in the village (pet-house,
         /// forge, mill, arcane-tower, Heart). Pure-data flag only for now — the enforce /
         /// auto-find-existing wiring is a follow-up; this just carries the intent so build /

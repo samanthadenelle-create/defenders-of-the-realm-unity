@@ -40,6 +40,30 @@ namespace DeNelle.Village.Buildings.Progression
 
         public double Capacity => ComputeCapacity();
 
+        // ── WO-665a: diegetic collector-fill stack seams (model-only; the view renders) ──
+        /// <summary>Number of discrete fill steps a full collector shows (each = 5% of capacity).</summary>
+        public const int StepCount = 20;
+
+        /// <summary>How many of the <see cref="StepCount"/> stack items should be shown (0..StepCount).</summary>
+        public int FilledSteps => Mathf.Clamp(Mathf.FloorToInt(FillFraction * StepCount), 0, StepCount);
+
+        /// <summary>True when pending is at (or effectively at) capacity — the FULL tell fires.</summary>
+        public bool IsFull => FillFraction >= 0.999f;
+
+        /// <summary>
+        /// Raised ONLY when <see cref="FilledSteps"/> actually changes (event-driven off the
+        /// accrue/collect/siege ticks — never per-frame). A separate view subscribes and re-poses
+        /// its pooled props; the model never builds UI (presentation-separate law).
+        /// </summary>
+        public event System.Action<ResourceCollector> StepChanged;
+
+        // Fire StepChanged if the discrete step count moved since the caller captured it.
+        private void RaiseStepChangedIfMoved(int oldSteps)
+        {
+            int now = FilledSteps;
+            if (now != oldSteps) StepChanged?.Invoke(this);
+        }
+
         // IDamageableStructure
         public bool IsAlive => _hp > 0f && !_broken;
 
@@ -91,12 +115,14 @@ namespace DeNelle.Village.Buildings.Progression
             if (!CanAccrue || amount <= 0) return;
             double cap = Capacity;
             double before = _pending;
+            int stepsBefore = FilledSteps;
             _pending = System.Math.Min(cap, _pending + amount);
             if (_pending > before)
             {
                 FlowTrace.Throttle("Harvest", $"accrue-{_buildingId}", 2f,
                     $"accrue-pending building={_buildingId} pending={_pending:F0}/{cap:F0}");
                 SaveState();
+                RaiseStepChangedIfMoved(stepsBefore);
             }
         }
 
@@ -106,6 +132,7 @@ namespace DeNelle.Village.Buildings.Progression
             if (_pending <= 0.0) return 0;
             int amount = (int)System.Math.Floor(_pending);
             if (amount <= 0) return 0;
+            int stepsBefore = FilledSteps;
 
             var eco = EconomyService.Instance;
             var res = ResolveResource();
@@ -128,6 +155,7 @@ namespace DeNelle.Village.Buildings.Progression
             if (_pending < 0) _pending = 0;
             SaveState();
             FlowTrace.Step("Harvest", $"collect building={_buildingId} +{amount} {res} wallet");
+            RaiseStepChangedIfMoved(stepsBefore);
             return amount;
         }
 
@@ -148,16 +176,23 @@ namespace DeNelle.Village.Buildings.Progression
             _hp = _maxHp;
             SaveState();
             FlowTrace.Step("Harvest", $"collector-repair building={_buildingId}");
+            // Leave the broken/scatter state — re-render the stack from live pending.
+            StepChanged?.Invoke(this);
         }
 
         private void OnSiegeDestroyed()
         {
+            int stepsBefore = FilledSteps;
             _broken = true;
             float stolen = Mathf.FloorToInt((float)_pending * RaidLootFraction);
             _pending = System.Math.Max(0, _pending - stolen);
             SaveState();
             FlowTrace.Warn("Harvest",
                 $"collector-destroyed building={_buildingId} loot-stolen={stolen} pending-left={_pending:F0}");
+            // Fire even if the raw step count is unchanged: IsBroken flipped, and the view
+            // must switch to its scatter/hidden state. StepChanged is the collector's single
+            // "re-render your visual" signal, so raise it on the break edge too.
+            StepChanged?.Invoke(this);
         }
 
         private HarvestResource ResolveResource()

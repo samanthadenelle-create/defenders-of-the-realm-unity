@@ -108,7 +108,7 @@
   {
    "id": "tower_siege_tower",
    "displayName": "Sky Ballista (Anti-Air)",
-   "description": "Wall-mounted spear thrower — fires spears at flying creatures; ignores ground. The strategic counter to the sky dragon.",
+   "description": "Wall-mounted spear thrower \u2014 fires spears at flying creatures; ignores ground. The strategic counter to the sky dragon.",
    "type": "Tower",
    "kind": "Cell",
    "visualPrefabPath": "Structures/Ballista",
@@ -391,6 +391,52 @@
     ],
     "scale": 1.0,
     "note": "prefab 'polyperfect/House_Medieval_Small' not found \u2014 no correction computed"
+   }
+  },
+  {
+   "id": "fountain_healing",
+   "displayName": "Wellspring of Elarion",
+   "type": "Support",
+   "kind": "Cell",
+   "visualPrefabPath": "Structures/Well",
+   "repo": {
+    "behaviorId": "HealingFountain",
+    "buildCost": 150,
+    "cost": {
+     "wood": 150,
+     "food": 60,
+     "iron": 100,
+     "crystals": 40
+    },
+    "maxLevel": 3,
+    "upgradeVisualPath": [
+     "Structures/Fountain_L2",
+     "Structures/Fountain_L3"
+    ],
+    "navSurface": "Blocker",
+    "singleton": true,
+    "placement": {
+     "mustSitOn": "Ground",
+     "footprint": 3.0,
+     "noOverlap": true,
+     "checkAffordable": true
+    }
+   },
+   "orientation": {
+    "corrected": false,
+    "manual": false,
+    "euler": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "offset": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "scale": 1.0,
+    "note": "Wellspring of Elarion support heal fountain; visual reuses Structures/Well until fountain meshes exist"
    }
   },
   {
@@ -814,6 +860,129 @@
     "note": "manual \u2014 owner 2026-07-08 'needs 0 0 0' (local overlay save 01:47Z agrees): after the Tripo extraction reimport ArcaneSpire_1 stands natively; the earlier (-90,90,90) double-rotated it. manual=true kept so the auto baker never re-tips it."
    },
    "canHitAir": true
+  },
+  {
+   "id": "collector_farm",
+   "displayName": "Farm",
+   "type": "Collector",
+   "kind": "Cell",
+   "visualPrefabPath": "Structures/Windmill_Medieval",
+   "repo": {
+    "behaviorId": "ResourceCollector",
+    "collectorBuildingId": "farm",
+    "buildCost": 90,
+    "cost": {
+     "wood": 60,
+     "food": 0,
+     "iron": 20,
+     "crystals": 0
+    },
+    "navSurface": "Blocker",
+    "placement": {
+     "mustSitOn": "Ground",
+     "footprint": 3.4,
+     "noOverlap": true,
+     "checkAffordable": true
+    }
+   },
+   "orientation": {
+    "corrected": false,
+    "manual": false,
+    "euler": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "offset": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "scale": 1.0,
+    "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
+   }
+  },
+  {
+   "id": "collector_lumbermill",
+   "displayName": "Lumbermill",
+   "type": "Collector",
+   "kind": "Cell",
+   "visualPrefabPath": "Structures/Watermill_Medieval",
+   "repo": {
+    "behaviorId": "ResourceCollector",
+    "collectorBuildingId": "lumbermill",
+    "buildCost": 90,
+    "cost": {
+     "wood": 40,
+     "food": 20,
+     "iron": 30,
+     "crystals": 0
+    },
+    "navSurface": "Blocker",
+    "placement": {
+     "mustSitOn": "Ground",
+     "footprint": 3.4,
+     "noOverlap": true,
+     "checkAffordable": true
+    }
+   },
+   "orientation": {
+    "corrected": false,
+    "manual": false,
+    "euler": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "offset": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "scale": 1.0,
+    "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
+   }
+  },
+  {
+   "id": "collector_forge",
+   "displayName": "Forge",
+   "type": "Collector",
+   "kind": "Cell",
+   "visualPrefabPath": "Structures/House_Medieval_Medium",
+   "repo": {
+    "behaviorId": "ResourceCollector",
+    "collectorBuildingId": "forge",
+    "buildCost": 120,
+    "cost": {
+     "wood": 60,
+     "food": 0,
+     "iron": 60,
+     "crystals": 0
+    },
+    "navSurface": "Blocker",
+    "placement": {
+     "mustSitOn": "Ground",
+     "footprint": 3.4,
+     "noOverlap": true,
+     "checkAffordable": true
+    }
+   },
+   "orientation": {
+    "corrected": false,
+    "manual": false,
+    "euler": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "offset": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "scale": 1.0,
+    "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
+   }
   }
  ]
 }

@@ -5,7 +5,17 @@
 namespace DeNelle.Core.Catalog
 {
     /// <summary>Palette tabs — the kinds of thing the catalog can place.</summary>
-    public enum CatalogType { Wall, Stairs, Floor, Room, Tower, Gate, Resource, Decoration, Troop }
+    public enum CatalogType { Wall, Stairs, Floor, Room, Tower, Gate, Resource, Decoration, Troop, Collector, Support }
+
+    /// <summary>
+    /// The BUILD VERB (owner 2026-07-10). ONE generic build-mode entry
+    /// (<c>EnterBuildMode(BuildType)</c>) is parameterised by this enum; each value maps
+    /// via DATA (build-categories.json → BuildCategoryRegistry) to which
+    /// <see cref="CatalogType"/>s feed its palette. <c>Defense</c> → Tower/Wall/Gate;
+    /// <c>Collector</c> → the Collector type. Placement/persist stay generic — a collector
+    /// places exactly like a tower.
+    /// </summary>
+    public enum BuildType { Defense, Collector, Support }
 
     /// <summary>Build grain: one cell, or a pre-arranged bundle of cells.</summary>
     public enum EntryKind { Cell, Composite }

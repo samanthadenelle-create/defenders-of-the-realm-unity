@@ -1,0 +1,41 @@
+{
+ "version": 1,
+ "notes": "Build-verb -> catalog-type mapping (owner 2026-07-10 generic build-mode). ONE generic entry BuildModeController.EnterBuildMode(BuildType) is parameterised by 'buildType'; each row maps it to the CatalogType(s) that feed its palette + the unlock-gated ids to filter. Loaded at startup by BuildCategoryRegistry (Village) via CanonicalJson (Resources-first, WebGL-safe). Keep the Resources + StreamingAssets copies byte-equal. 'buildType' / 'catalogTypes' are enum NAMES (StringEnumConverter). 'lockedIds' are catalog ids kept in the catalog but filtered out of THIS verb's palette until their unlock ships.",
+ "categories": [
+  {
+   "buildType": "Defense",
+   "label": "Build Defenses",
+   "catalogTypes": [
+    "Tower",
+    "Wall",
+    "Gate"
+   ],
+   "lockedIds": [
+    "jeweler",
+    "tower_siege_tower",
+    "tower_catapult",
+    "wall_wood",
+    "wall_stone",
+    "gate_stone"
+   ]
+  },
+  {
+   "buildType": "Collector",
+   "label": "Build Collectors",
+   "catalogTypes": [
+    "Collector"
+   ],
+   "lockedIds": []
+  },
+  {
+   "buildType": "Support",
+   "label": "Build Support",
+   "catalogTypes": [
+    "Support"
+   ],
+   "lockedIds": [
+    "fountain_healing"
+   ]
+  }
+ ]
+}

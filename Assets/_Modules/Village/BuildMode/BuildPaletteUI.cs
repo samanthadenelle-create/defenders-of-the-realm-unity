@@ -60,26 +60,45 @@ namespace DeNelle.Village
         /// </summary>
         public event Action<string> OnOrientRequested;
 
-        [Tooltip("Catalog types the palette lists. Default = Tower (the registered content).")]
-        [SerializeField] private CatalogType[] _types = { CatalogType.Tower, CatalogType.Wall, CatalogType.Gate };
+        // Which catalog types this palette lists + which ids are unlock-gated — now
+        // SOURCED FROM DATA (owner 2026-07-10 generic build-mode). Configure(BuildType)
+        // fills these from BuildCategoryRegistry.Get(type) so the SAME palette serves
+        // every build verb (Defense = Tower/Wall/Gate, Collector = Collector). Defaults
+        // to the Defense recipe so the palette is coherent even if Configure is never
+        // called (back-compat: the old no-arg build path is BuildType.Defense).
+        private CatalogType[] _types = { CatalogType.Tower, CatalogType.Wall, CatalogType.Gate };
 
-        // Catalog ids defined-but-not-yet-buildable. They stay in the catalog (ready
-        // to unlock + referenced elsewhere) but are filtered out of the build palette
-        // until their unlock feature ships. Central + reversible — no JSON risk.
-        // TODO unlock-gate: remove from set when jeweler unlock ships.
-        private static readonly HashSet<string> NotYetUnlockable = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        // Catalog ids defined-but-not-yet-buildable for the active build verb. They stay
+        // in the catalog (ready to unlock + referenced elsewhere) but are filtered out of
+        // the palette until their unlock ships. Sourced from build-categories.json via
+        // Configure; the initial value mirrors the Defense lockedIds so the pre-Configure
+        // palette stays the three tower types (owner ruling 2026-07-06).
+        private HashSet<string> _lockedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "jeweler",
-            // Owner ruling 2026-07-06 (felt-test): the palette is THREE tower types —
-            // Archer, Wizard, Arcane. Everything else pulled. Entries stay in the
-            // catalog — enemy outposts / garrison recipes still reference them
-            // (GarrisonRecipe, EnemyOutpost, OutpostFoundationGenerator).
             "tower_siege_tower",
             "tower_catapult",
             "wall_wood",
             "wall_stone",
             "gate_stone",
         };
+
+        /// <summary>
+        /// Point the palette at a build verb (owner 2026-07-10). Sources <c>_types</c> +
+        /// <c>_lockedIds</c> from <see cref="BuildCategoryRegistry"/> so <c>Render</c> lists
+        /// exactly that verb's catalog types (Defense → Tower/Wall/Gate, Collector →
+        /// Collector). Called by BuildModeController before Show; re-renders live if open.
+        /// </summary>
+        public void Configure(BuildType type)
+        {
+            var cat = BuildCategoryRegistry.Get(type);
+            if (cat != null)
+            {
+                if (cat.Types != null && cat.Types.Length > 0) _types = cat.Types;
+                _lockedIds = cat.LockedIds ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
+            if (_canvas != null && _canvas.activeSelf) Render();
+        }
 
         // Strips sit ABOVE the HUD but BELOW kit modals (BuildObsidianModal defaults 31000).
         private const int SortingOrder = 900;
@@ -268,7 +287,7 @@ namespace DeNelle.Village
                 foreach (var e in entries)
                 {
                     if (e == null) continue;
-                    if (e.id != null && NotYetUnlockable.Contains(e.id)) continue;   // unlock-gated — see NotYetUnlockable
+                    if (e.id != null && _lockedIds.Contains(e.id)) continue;   // unlock-gated — see Configure/_lockedIds
                     candidates.Add(e);
                 }
             }

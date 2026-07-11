@@ -169,11 +169,36 @@ namespace DeNelle.Village
             return go.AddComponent<BuildModeController>();
         }
 
-        /// <summary>Toggle the build session.</summary>
+        // The build verb this session was entered with (owner 2026-07-10 generic build-
+        // mode). Drives which catalog types the palette lists (Defense = Tower/Wall/Gate,
+        // Collector = Collector). Defaults to Defense so the legacy no-arg Enter/Toggle
+        // path is unchanged (back-compat).
+        private BuildType _activeBuildType = BuildType.Defense;
+
+        /// <summary>Toggle the build session (defaults to <see cref="BuildType.Defense"/> — back-compat).</summary>
         public void Toggle()
         {
             if (IsActive) Exit();
-            else Enter();
+            else EnterBuildMode(BuildType.Defense);
+        }
+
+        /// <summary>Toggle the build session for a specific build verb (owner 2026-07-10).</summary>
+        public void Toggle(BuildType type)
+        {
+            if (IsActive) Exit();
+            else EnterBuildMode(type);
+        }
+
+        /// <summary>
+        /// GENERIC build entry (owner 2026-07-10): enter Build Mode for a specific verb.
+        /// Sets the active <see cref="BuildType"/> (which the palette reads via
+        /// BuildCategoryRegistry) then runs the shared <see cref="Enter"/> body — placement
+        /// / ghost / grid / persist stay generic (a collector places exactly like a tower).
+        /// </summary>
+        public void EnterBuildMode(BuildType type)
+        {
+            _activeBuildType = type;
+            Enter();
         }
 
         // =====================================================================
@@ -224,6 +249,11 @@ namespace DeNelle.Village
                 _ghost = new GameObject("GhostPreview").AddComponent<GhostPreview>();
 
             EnsurePalette();
+            // Point the palette at the active build verb BEFORE Show so it lists exactly
+            // that verb's catalog types (Defense = Tower/Wall/Gate, Collector = Collector).
+            // Configure each entry (the palette persists across sessions) so re-entering
+            // with a different verb re-sources its types/lockedIds.
+            _palette.Configure(_activeBuildType);
             _palette.Show();
 
             FlowTrace.Step("Build", "BuildMode.Enter — palette shown, EnsureTouchInput next");
