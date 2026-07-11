@@ -243,6 +243,9 @@ namespace DeNelle.Editor
             // --- WO-673 strategic placement — the §5 permission gates (flag-off parity,
             // migration round-trip, one-per-id, save v30, repair chain, 45° yaw + claim) ---
             if (!StrategicPlacementRegression.Run(out var stratPlaceReason)) failures.Add(stratPlaceReason); else log.AppendLine("[strategic-placement] " + stratPlaceReason);
+            // --- WO-676 skill-tree strategic redesign — §C gates G1-G3 (data/dual-copy/
+            // vocabulary + StatSum stacking/clamps + NO DEAD NODES consumer registry) ---
+            if (!TalentStrategyRegression.Run(out var talentStratReason)) failures.Add(talentStratReason); else log.AppendLine("[talent-strategy] " + talentStratReason);
 
             // --- Store/Inventory icon coverage (key data: real art vs glyph fallback) ---
             CheckItemIconCoverage(weapons, armors, failures, log);
