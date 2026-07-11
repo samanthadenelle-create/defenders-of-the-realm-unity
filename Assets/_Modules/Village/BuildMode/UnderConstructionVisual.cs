@@ -98,6 +98,16 @@ namespace DeNelle.Village
             FlowTrace.Step("Build", $"under-construction armed for '{_key}'");
         }
 
+        /// <summary>
+        /// F8-51: the job key is cell-derived, so a structure MOVED mid-timer re-keys this
+        /// scaffold (paired with BuildTimerService.RepointJob) — otherwise the self-heal
+        /// poll sees IsBuilding(oldKey)==false and reveals early while the job still runs.
+        /// </summary>
+        public void Rekey(string newKey)
+        {
+            if (!string.IsNullOrEmpty(newKey)) _key = newKey;
+        }
+
         private void Update()
         {
             var svc = BuildTimerService.Instance;

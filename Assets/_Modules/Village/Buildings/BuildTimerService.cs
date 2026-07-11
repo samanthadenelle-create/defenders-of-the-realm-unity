@@ -130,11 +130,35 @@ namespace DeNelle.Village
         public BuildJobData? StartBuild(string structureId, int tier = 0)
             => StartJob(structureId, BuildJobType.Build, tier);
 
-        /// <summary>Start an UPGRADE job for an existing structure to <paramref name="targetTier"/>.</summary>
-        public BuildJobData? StartUpgrade(string structureId, int targetTier)
-            => StartJob(structureId, BuildJobType.Upgrade, targetTier);
+        /// <summary>
+        /// Start an UPGRADE job for an existing structure/building to <paramref name="targetLevel"/>
+        /// (F8-51). The caller charges the cost at commit; the LEVEL applies at completion (the
+        /// CompletedUpgradeApplier seam in <see cref="CompleteJob"/>, offline-fair like builds).
+        /// Duration = the WO-172 config curve keyed by the 0-based upgrade STEP (targetLevel-2,
+        /// so the first upgrade of a level-1 structure ≈ baseBuildSeconds × upgradeMultiplier
+        /// ≈ 19s at defaults, ×tierGrowth per further tier). Returns null when a job already
+        /// runs for this id or no build slot is free.
+        /// </summary>
+        public BuildJobData? StartUpgrade(string structureId, int targetLevel)
+            => StartJob(structureId, BuildJobType.Upgrade,
+                        Mathf.Max(0, targetLevel - 2), targetLevel);
 
-        private BuildJobData? StartJob(string structureId, BuildJobType type, int tier)
+        /// <summary>
+        /// True when a new job could start right now (a free CoC build slot exists). F8-51:
+        /// upgrade entry points check this BEFORE charging so a slot-full state rejects
+        /// cleanly instead of degrading to an instant upgrade (placement, which has already
+        /// charged by the time it starts its job, keeps its never-block instant fallback).
+        /// </summary>
+        public bool HasFreeSlot
+        {
+            get
+            {
+                var jobs = Jobs;
+                return jobs != null && jobs.Count < Mathf.Max(1, Config.freeBuildSlots);
+            }
+        }
+
+        private BuildJobData? StartJob(string structureId, BuildJobType type, int tier, int targetLevel = 0)
         {
             if (string.IsNullOrEmpty(structureId)) return null;
             var jobs = Jobs;
@@ -154,9 +178,17 @@ namespace DeNelle.Village
                 JobType = (int)type,
                 StartMs = TimeSource.NowUnixMs(),
                 DurationMs = durationMs,
+                TargetTier = targetLevel,
             };
             jobs.Add(job);
             Persist();
+
+            // F8-51 §12 trace — every upgrade timer names itself when it starts.
+            if (type == BuildJobType.Upgrade)
+                DeNelle.Core.Diagnostics.FlowTrace.Step("BuildTimer",
+                    $"upgrade '{structureId}' started ({durationMs / 1000.0:0}s, " +
+                    $"tier {Mathf.Max(1, targetLevel - 1)}->{targetLevel})");
+
             JobStarted?.Invoke(job);
 
             // A zero-duration job (e.g. tier 0 with base 0) completes immediately.
@@ -294,7 +326,36 @@ namespace DeNelle.Village
             var job = Jobs[i];
             Jobs.RemoveAt(i);
             Persist();
+
+            // F8-51 — UPGRADE jobs apply their deferred level HERE, at the one completion
+            // seam (same seam placement reveals through), so live-expiry, ad/instant skips
+            // AND the offline-fair sweep all land the level identically. Called directly
+            // (not via the event) so the apply can never be missed by a late subscriber;
+            // Guard.Try so one bad apply logs + never blocks the JobCompleted reveal.
+            if (job.Type == BuildJobType.Upgrade && job.TargetTier > 0)
+                DeNelle.Core.Diagnostics.Guard.Try("BuildTimer", "apply completed upgrade",
+                    () => Buildings.Progression.CompletedUpgradeApplier.Apply(job));
+
             JobCompleted?.Invoke(job);
+        }
+
+        /// <summary>
+        /// Re-key an in-flight job (F8-51): a placed structure MOVED mid-timer changes its
+        /// cell-derived job key; without this the finished job would find no structure to
+        /// apply to. Timer progress is untouched. No-op when no job runs for the old key.
+        /// </summary>
+        public void RepointJob(string oldStructureId, string newStructureId)
+        {
+            if (string.IsNullOrEmpty(newStructureId) || oldStructureId == newStructureId) return;
+            int i = IndexOf(oldStructureId);
+            if (i < 0) return;
+            var jobs = Jobs;
+            var j = jobs[i];
+            j.StructureId = newStructureId;
+            jobs[i] = j;
+            Persist();
+            DeNelle.Core.Diagnostics.FlowTrace.Step("BuildTimer",
+                $"job re-keyed '{oldStructureId}' -> '{newStructureId}' (structure moved mid-timer)");
         }
 
         /// <summary>

@@ -1222,6 +1222,11 @@ namespace DeNelle.Village
             // Drop it from the loader's live set so it doesn't double-free on Exit.
             BaseLayoutLoader.Instance?.Forget(ps);
 
+            // F8-51 — selling a structure mid-build/upgrade cancels its timer job (the
+            // caller-owns-refund contract on CancelJob; the 50% sell refund below stands).
+            if (DeNelle.Core.FeatureFlags.BuildTimers)
+                BuildTimerService.Instance?.CancelJob($"{ps.itemId}@{ps.gridCell.x}_{ps.gridCell.y}");
+
             // Refund ~50% of the full multi-resource cost into the persisted ledger
             // (EconomyService.Grant → GameState-backed Crystals/Food + in-session
             // Wood/Iron). Crystals-only entries refund Crystals only.
@@ -1272,10 +1277,76 @@ namespace DeNelle.Village
                 return;
             }
 
+            // ── F8-51 TIMER GATES (before any charge, so a rejection costs nothing) ──
+            // "Should not be able to upgrade till build is complete, should not be able to
+            // upgrade instantly twice." Any structure with an ACTIVE build OR upgrade job
+            // (same key) is LOCKED; a full slot set rejects (upgrades check pre-charge so
+            // they can refuse cleanly — placement keeps its post-charge instant fallback).
+            string jobKey = $"{ps.itemId}@{ps.gridCell.x}_{ps.gridCell.y}";
+            var timerSvc = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+            if (timerSvc != null)
+            {
+                if (timerSvc.IsBuilding(jobKey))
+                {
+                    double rem = timerSvc.RemainingSeconds(jobKey);
+                    FlowTrace.Warn("BuildTimer", $"upgrade '{jobKey}' REJECTED (busy: {rem:0}s)");
+                    Debug.Log($"[BuildMode] '{ps.itemId}' is under construction ({rem:0}s left) — upgrade locked.");
+                    ShowSelectionPanel(ps);
+                    return;
+                }
+                if (!timerSvc.HasFreeSlot)
+                {
+                    FlowTrace.Warn("BuildTimer",
+                        $"upgrade '{jobKey}' REJECTED (no free build slot: {timerSvc.ActiveJobs.Count} active)");
+                    Debug.Log($"[BuildMode] All build slots are busy — finish a construction first.");
+                    ShowSelectionPanel(ps);
+                    return;
+                }
+            }
+
             // Charge ONLY after the affordability gate passes (mirrors the place-charge rule).
             ChargeLedger(cost);
 
             int newLevel = level + 1;
+
+            // F8-51 — the upgrade takes TIME: cost is charged NOW (above), the level/visual
+            // applies at timer COMPLETION (BuildTimerService.CompleteJob -> CompletedUpgrade
+            // Applier -> ApplyUpgradeLevel; offline-fair). Scaffold + countdown = the same
+            // WO-612 affordance placement uses. A null job here (service raced away) degrades
+            // to the instant apply below so a paid charge is never lost.
+            if (timerSvc != null)
+            {
+                var job = timerSvc.StartUpgrade(jobKey, newLevel);
+                if (job != null)
+                {
+                    UnderConstructionVisual.Attach(ps, jobKey);
+                    Debug.Log($"[BuildMode] Upgrading '{ps.itemId}' at cell ({ps.gridCell.x},{ps.gridCell.y}) " +
+                              $"to tier {newLevel}/{maxLevel} — charged {Describe(cost)}, completes in " +
+                              $"{timerSvc.RemainingSeconds(jobKey):0}s.");
+                    ShowSelectionPanel(ps);
+                    return;
+                }
+            }
+
+            ApplyUpgradeLevel(ps, newLevel);
+
+            Debug.Log($"[BuildMode] Upgraded '{ps.itemId}' at cell ({ps.gridCell.x},{ps.gridCell.y}) " +
+                      $"to tier {newLevel}/{maxLevel}, charged {Describe(cost)}.");
+
+            // Re-show the panel at the new tier (refreshed cost / Max-tier state).
+            ShowSelectionPanel(ps);
+        }
+
+        /// <summary>
+        /// Land a level on a placed structure: live marker + visual (per-tier model swap or
+        /// legacy scale/accent) + tier stats + the persisted BaseLayout record. F8-51: shared
+        /// by the instant upgrade path (flag OFF / no service) and the timer-completion path
+        /// (CompletedUpgradeApplier), so both apply identically.
+        /// </summary>
+        internal static void ApplyUpgradeLevel(PlacedStructure ps, int newLevel)
+        {
+            if (ps == null) return;
+            var entry = CatalogRegistry.Get(ps.itemId);
             ps.level = newLevel;
 
             // Owner F8 2026-07-06 ("upgrade just makes it bigger — replace with new structure"):
@@ -1290,12 +1361,6 @@ namespace DeNelle.Village
 
             // Persist the new level in the live BaseLayout (so Exit()'s Save() round-trips it).
             UpdateLayoutLevel(ps.itemId, ps.gridCell, newLevel);
-
-            Debug.Log($"[BuildMode] Upgraded '{ps.itemId}' at cell ({ps.gridCell.x},{ps.gridCell.y}) " +
-                      $"to tier {newLevel}/{maxLevel}, charged {Describe(cost)}.");
-
-            // Re-show the panel at the new tier (refreshed cost / Max-tier state).
-            ShowSelectionPanel(ps);
         }
 
         /// <summary>
@@ -1431,6 +1496,16 @@ namespace DeNelle.Village
             if (movedAt != null) movedAt.ElevationRangeMult = elevMult;
 
             UpdateLayoutEntry(_selected.itemId, oldCell, cell, _armedYawSteps, snapped.y, wallMounted);
+
+            // F8-51 — the job key is cell-derived: a move mid-build/upgrade re-keys the
+            // in-flight job so its completion still finds this structure. No-op when idle.
+            if (DeNelle.Core.FeatureFlags.BuildTimers)
+            {
+                string newKey = $"{_selected.itemId}@{cell.x}_{cell.y}";
+                BuildTimerService.Instance?.RepointJob(
+                    $"{_selected.itemId}@{oldCell.x}_{oldCell.y}", newKey);
+                _selected.GetComponent<UnderConstructionVisual>()?.Rekey(newKey);
+            }
 
             Debug.Log($"[BuildMode] Moved '{_selected.itemId}' to cell ({cell.x},{cell.y}) yaw {_armedYawSteps * 90}° (free).");
 
@@ -1638,7 +1713,9 @@ namespace DeNelle.Village
         /// PlacedStructureData is a struct, so replace the element by index. Exit()'s Save()
         /// then round-trips the new level so an upgraded structure reloads at its tier.
         /// </summary>
-        private static void UpdateLayoutLevel(string itemId, Vector2Int cell, int level)
+        // Internal (F8-51): CompletedUpgradeApplier persists a timer-finished level here even
+        // when the live PlacedStructure is not spawned (offline sweep before BaseLayoutLoader).
+        internal static void UpdateLayoutLevel(string itemId, Vector2Int cell, int level)
         {
             var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
             var layout = state != null ? state.BaseLayout : null;

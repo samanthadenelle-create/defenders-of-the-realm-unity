@@ -63,6 +63,15 @@ namespace DeNelle.Core.State
         /// <summary>Total job duration in ms. May be reduced by ad-skips / instant-finish (StartMs is pulled back).</summary>
         [JsonProperty("durationMs")] public double DurationMs;
 
+        /// <summary>
+        /// F8-51: the LEVEL/TIER this job applies when it completes. For an Upgrade job this is
+        /// the target level the structure/building reaches at completion (costs were charged at
+        /// commit; the level applies at the completion seam — never before). 0 for Build jobs and
+        /// for pre-F8-51 saves (JSON default), which the completion router treats as "nothing to
+        /// apply" — additive, back-compatible.
+        /// </summary>
+        [JsonProperty("targetTier")] public int TargetTier;
+
         /// <summary>Unix-ms the job completes. Convenience = StartMs + DurationMs (not stored).</summary>
         [JsonIgnore] public double FinishMs => StartMs + DurationMs;
 

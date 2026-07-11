@@ -205,11 +205,39 @@ namespace DeNelle.Village.Buildings.Progression
                     }
                 }
 
+                // F8-51 — mirror the service's timer gate for an HONEST status (the service
+                // returns a bare false for busy AND unaffordable). Same one-timer service.
+                var timerSvc = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+                if (timerSvc != null && timerSvc.IsBuilding(_buildingId))
+                {
+                    Status = "Under construction — " + (int)timerSvc.RemainingSeconds(_buildingId)
+                             + "s until work here finishes.";
+                    Raise();
+                    return;
+                }
+                if (timerSvc != null && !timerSvc.HasFreeSlot)
+                {
+                    Status = "All build crews are busy — finish a construction first.";
+                    Raise();
+                    return;
+                }
+
                 bool ok = BuildingUpgradeService.TryUpgrade(_buildingId, next);
                 if (ok)
                 {
-                    Status = "Tier " + next + " unlocked.";
-                    FlowTrace.Step("Upgrade", _buildingId + " unlocked tier-" + next);
+                    // F8-51 — with timers on, a successful buy STARTS the work; the tier
+                    // lands at completion (the tile lights up then).
+                    if (timerSvc != null && timerSvc.IsBuilding(_buildingId))
+                    {
+                        Status = "Tier " + next + " under construction — "
+                                 + (int)timerSvc.RemainingSeconds(_buildingId) + "s.";
+                        FlowTrace.Step("Upgrade", _buildingId + " tier-" + next + " timer started");
+                    }
+                    else
+                    {
+                        Status = "Tier " + next + " unlocked.";
+                        FlowTrace.Step("Upgrade", _buildingId + " unlocked tier-" + next);
+                    }
                 }
                 else Status = "You can't afford that yet.";
                 Rebuild();
@@ -230,6 +258,19 @@ namespace DeNelle.Village.Buildings.Progression
                     case UpgradeResult.Insufficient: Status = "You can't afford that yet."; break;
                     case UpgradeResult.MaxLevel:     Status = "Every enhancement here is already unlocked."; break;
                     case UpgradeResult.NeedMagic:    Status = "That enhancement needs Magic to unlock."; break;
+                    // F8-51 — timer states: work already running here (locked), or the buy
+                    // just STARTED the work (level lands when the timer completes).
+                    case UpgradeResult.InProgress:
+                        Status = "Under construction — finish the current work first.";
+                        break;
+                    case UpgradeResult.Started:
+                    {
+                        var t = BuildTimerService.Instance;
+                        int rem = t != null ? (int)t.RemainingSeconds(_buildingId) : 0;
+                        Status = "Upgrade under construction — " + rem + "s.";
+                        FlowTrace.Step("Upgrade", _buildingId + " level timer started");
+                        break;
+                    }
                     default:                         Status = "Nothing to unlock here."; break;
                 }
                 Rebuild();

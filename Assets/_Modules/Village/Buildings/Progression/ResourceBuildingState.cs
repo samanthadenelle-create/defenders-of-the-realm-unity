@@ -39,6 +39,10 @@ namespace DeNelle.Village.Buildings.Progression
         Unknown = 3,
         /// <summary>The next tier is Magic-gated and the player lacks the Magic (DEF-121).</summary>
         NeedMagic = 4,
+        /// <summary>F8-51: a build/upgrade timer already runs on this building — locked until it completes.</summary>
+        InProgress = 5,
+        /// <summary>F8-51: the cost was charged and an UPGRADE TIMER started — the level applies at completion.</summary>
+        Started = 6,
     }
 
     /// <summary>
@@ -141,21 +145,67 @@ namespace DeNelle.Village.Buildings.Progression
             if (lvlDef.IsMagicGated && ResourceLedger.MagicBalance() < lvlDef.MagicCost)
             { FlowTrace.Warn("Upgrade", $"'{buildingId}' magic-gated tier short on Magic (have {ResourceLedger.MagicBalance()}, need {lvlDef.MagicCost}) -> NeedMagic"); return UpgradeResult.NeedMagic; }
 
+            // ── F8-51 TIMER GATES (before the spend, so a rejection costs nothing) ──
+            // A building with an ACTIVE build/upgrade timer is LOCKED; a full slot set
+            // rejects. Flag OFF (ff.buildtimers=0) or no service = today's instant path.
+            var timerSvc = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+            if (timerSvc != null)
+            {
+                if (timerSvc.IsBuilding(buildingId))
+                {
+                    FlowTrace.Warn("BuildTimer",
+                        $"upgrade '{buildingId}' REJECTED (busy: {timerSvc.RemainingSeconds(buildingId):0}s)");
+                    return UpgradeResult.InProgress;
+                }
+                if (!timerSvc.HasFreeSlot)
+                {
+                    FlowTrace.Warn("BuildTimer",
+                        $"upgrade '{buildingId}' REJECTED (no free build slot: {timerSvc.ActiveJobs.Count} active)");
+                    return UpgradeResult.InProgress;
+                }
+            }
+
             // Atomic spend: harvestables + (optional) Magic in one transaction.
             if (!ResourceLedger.TrySpendWithMagic(lvlDef.UpgradeCost, lvlDef.MagicCost))
             { FlowTrace.Fail("Upgrade", $"'{buildingId}' TrySpendWithMagic FAILED after affordability check passed (raced / no GameStateService) — spend rolled back"); return lvlDef.IsMagicGated ? UpgradeResult.NeedMagic : UpgradeResult.Insufficient; } // raced / no service
 
             int next = def.ClampLevel(level + 1);
+
+            // F8-51 — cost charged above; the LEVEL applies at timer COMPLETION
+            // (BuildTimerService.CompleteJob -> CompletedUpgradeApplier -> ApplyCompletedUpgrade,
+            // offline-fair). A null job here (raced) degrades to the instant apply below so a
+            // paid charge is never lost.
+            if (timerSvc != null && timerSvc.StartUpgrade(buildingId, next) != null)
+                return UpgradeResult.Started;
+
+            ApplyCompletedUpgrade(buildingId, next);
+            return UpgradeResult.Upgraded;
+        }
+
+        /// <summary>
+        /// Land a (charged) upgrade's level: persist it, unlock any tech node the bought tier
+        /// grants, and raise <see cref="LevelChanged"/>. F8-51: shared by the instant path
+        /// (flag OFF / no timer service) and the timer-completion path (CompletedUpgradeApplier),
+        /// so both apply identically. Costs are NOT touched here — they were charged at commit.
+        /// </summary>
+        internal static void ApplyCompletedUpgrade(string buildingId, int targetLevel)
+        {
+            var def = ResourceBuildingProgression.Find(buildingId);
+            if (def == null)
+            { FlowTrace.Warn("Upgrade", $"ApplyCompletedUpgrade: '{buildingId ?? "<null>"}' is not a resource building — level {targetLevel} NOT applied"); return; }
+
+            int next = def.ClampLevel(targetLevel);
             PlayerPrefs.SetInt(Key(buildingId), next);
             PlayerPrefs.Save();
 
-            // Buying a Magic-gated tier lights up the tech-tree node it unlocks.
-            if (!string.IsNullOrEmpty(lvlDef.UnlocksTechNode))
-            { FlowTrace.Step("Upgrade", $"'{buildingId}' unlocks tech node '{lvlDef.UnlocksTechNode}'"); TechTree.Unlock(lvlDef.UnlocksTechNode); }
+            // Buying a Magic-gated tier lights up the tech-tree node it unlocks. The node is
+            // authored on the level def the player upgraded FROM (next - 1).
+            var fromDef = def.LevelDef(next - 1);
+            if (fromDef != null && !string.IsNullOrEmpty(fromDef.UnlocksTechNode))
+            { FlowTrace.Step("Upgrade", $"'{buildingId}' unlocks tech node '{fromDef.UnlocksTechNode}'"); TechTree.Unlock(fromDef.UnlocksTechNode); }
 
             FlowTrace.Step("Upgrade", $"'{buildingId}' upgraded to level {next}");
             LevelChanged?.Invoke(buildingId);
-            return UpgradeResult.Upgraded;
         }
 
         /// <summary>

@@ -50,20 +50,68 @@ namespace DeNelle.Village.Buildings.Progression
                 int villageTier = gateState != null ? gateState.VillageTier : 0;
                 if (def.RequiresVillageTier > villageTier) return false;
 
+                // ── F8-51 TIMER GATES (before the spend, so a rejection costs nothing) ──
+                // A building with an ACTIVE build/upgrade timer is LOCKED; a full slot set
+                // rejects. Flag OFF / no service = today's instant path. The VM mirrors this
+                // check for an honest status line (this bool covers the Yarn path too).
+                var timerSvc = DeNelle.Core.FeatureFlags.BuildTimers
+                    ? DeNelle.Village.BuildTimerService.Instance : null;
+                if (timerSvc != null)
+                {
+                    if (timerSvc.IsBuilding(id))
+                    {
+                        DeNelle.Core.Diagnostics.FlowTrace.Warn("BuildTimer",
+                            $"upgrade '{id}' REJECTED (busy: {timerSvc.RemainingSeconds(id):0}s)");
+                        return false;
+                    }
+                    if (!timerSvc.HasFreeSlot)
+                    {
+                        DeNelle.Core.Diagnostics.FlowTrace.Warn("BuildTimer",
+                            $"upgrade '{id}' REJECTED (no free build slot: {timerSvc.ActiveJobs.Count} active)");
+                        return false;
+                    }
+                }
+
                 var cost = new DeNelle.Village.ResourceCost { Wood = def.CostWood, Food = def.CostFood, Crystals = def.CostCrystal };
                 var econ = EconomyService.Instance;
                 var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
                 if (econ != null && state != null && econ.TrySpend(cost))
                 {
-                    if (state.BuildingTiers == null)
-                        state.BuildingTiers = new System.Collections.Generic.Dictionary<string, int>();
-                    state.BuildingTiers[id] = targetTier;
-                    GameStateService.Instance.Save();
-                    ModifierService.Recompute();
+                    // F8-51 — cost charged above; the TIER applies at timer COMPLETION
+                    // (BuildTimerService.CompleteJob -> CompletedUpgradeApplier -> ApplyTier,
+                    // offline-fair). A null job (raced) degrades to the instant apply so a
+                    // paid charge is never lost.
+                    if (timerSvc != null && timerSvc.StartUpgrade(id, targetTier) != null)
+                        return true;
+
+                    ApplyTier(id, targetTier);
                     return true;
                 }
             }
             return false;
+        }
+
+        /// <summary>
+        /// Land a (charged) city-tier upgrade: write GameState.BuildingTiers, persist, and
+        /// recompute the active GameModifiers. F8-51: shared by the instant path (flag OFF /
+        /// no timer service) and the timer-completion path (CompletedUpgradeApplier), so both
+        /// apply identically. Costs are NOT touched here — they were charged at commit.
+        /// </summary>
+        internal static void ApplyTier(string id, int targetTier)
+        {
+            var svc = GameStateService.Instance;
+            var state = svc != null ? svc.State : null;
+            if (state == null)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("BuildTimer",
+                    $"ApplyTier '{id}' tier {targetTier}: no GameStateService — tier NOT applied");
+                return;
+            }
+            if (state.BuildingTiers == null)
+                state.BuildingTiers = new System.Collections.Generic.Dictionary<string, int>();
+            state.BuildingTiers[id] = targetTier;
+            svc.Save();
+            ModifierService.Recompute();
         }
     }
 }
