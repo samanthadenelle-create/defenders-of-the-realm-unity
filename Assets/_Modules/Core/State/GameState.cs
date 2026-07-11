@@ -382,6 +382,23 @@ namespace DeNelle.Core.State
         /// </summary>
         public int PopulationEchoSlots = 1;
 
+        // ── F8-47 — Hero level/XP persistence (schema v29) ────────────────────
+        /// <summary>
+        /// F8-47 — the hero's current LEVEL. The persisted mirror of
+        /// <c>HeroProgression._level</c> (which is per-run in-memory): HeroProgression
+        /// restores from here on attach and writes back on every XP change, so a scene
+        /// load (e.g. porting home from the challenge outpost) can no longer reset the
+        /// hero to level 1. 1 on a fresh save. Round-trips through SaveSchema v29
+        /// (additive at the END so older saves stay loadable).
+        /// </summary>
+        public int HeroLevel = 1;
+
+        /// <summary>F8-47 — XP banked toward the hero's next level (fractional kill-XP shares; v29).</summary>
+        public float HeroXp = 0f;
+
+        /// <summary>F8-47 — total XP the hero has ever earned (telemetry/UI counter; v29).</summary>
+        public float HeroLifetimeXp = 0f;
+
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
         {

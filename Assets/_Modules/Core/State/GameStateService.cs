@@ -428,6 +428,9 @@ namespace DeNelle.Core.State
                 PopulationQuests = s.PopulationQuests,     // WO-587 — Population quest counter (v28)
                 PopulationOutposts = s.PopulationOutposts, // WO-587 — Population outpost counter (v28)
                 PopulationEchoSlots = s.PopulationEchoSlots, // WO-587 — highest unlocked echo slot (v28)
+                HeroLevel = s.HeroLevel,             // F8-47 — hero level (v29)
+                HeroXp = s.HeroXp,                   // F8-47 — banked XP toward next level (v29)
+                HeroLifetimeXp = s.HeroLifetimeXp,   // F8-47 — lifetime XP counter (v29)
             };
         }
 
@@ -504,6 +507,9 @@ namespace DeNelle.Core.State
             if (p.PopulationQuests.HasValue) s.PopulationQuests = (int)p.PopulationQuests.Value;     // WO-587 — quest counter (v28); absent → keep 0
             if (p.PopulationOutposts.HasValue) s.PopulationOutposts = (int)p.PopulationOutposts.Value; // WO-587 — outpost counter (v28); absent → keep 0
             if (p.PopulationEchoSlots.HasValue) s.PopulationEchoSlots = (int)p.PopulationEchoSlots.Value; // WO-587 — unlocked echo slots (v28); absent → migrator seeds 1
+            if (p.HeroLevel.HasValue) s.HeroLevel = (int)p.HeroLevel.Value;             // F8-47 — hero level (v29); absent → migrator seeds 1
+            if (p.HeroXp.HasValue) s.HeroXp = (float)p.HeroXp.Value;                    // F8-47 — banked XP (v29); absent → keep 0
+            if (p.HeroLifetimeXp.HasValue) s.HeroLifetimeXp = (float)p.HeroLifetimeXp.Value; // F8-47 — lifetime XP (v29); absent → keep 0
             EnsureZoneGraph(s);                       // backfill a pre-v17 / empty save's zone graph
         }
 
@@ -833,6 +839,9 @@ namespace DeNelle.Core.State
             s.PopulationQuests = 0;                           // WO-587 — no quests counted yet.
             s.PopulationOutposts = 0;                         // WO-587 — no outposts counted yet.
             s.PopulationEchoSlots = 1;                        // WO-587 — start with the 1 starter echo slot (Wood).
+            s.HeroLevel = 1;                                  // F8-47 — New Game starts a fresh level-1 hero.
+            s.HeroXp = 0f;                                    // F8-47 — no banked XP yet.
+            s.HeroLifetimeXp = 0f;                            // F8-47 — no lifetime XP yet.
             s.PartyMemberIds = new List<string>();            // WO-301 — start alone; the first companion joins on tutorial complete.
             EnsureZoneGraph(s);                               // WO-164 — seed the default zone graph (5 zones) on New Game.
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately

@@ -19,6 +19,7 @@
 // =============================================================================
 
 using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Progression;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -83,7 +84,15 @@ namespace DeNelle.Village.Progression
 
             var hero = FindAnyObjectByType<HeroAbilities>();
             if (hero != null && hero.GetComponent<HeroProgression>() == null)
-                hero.gameObject.AddComponent<HeroProgression>();
+            {
+                var prog = hero.gameObject.AddComponent<HeroProgression>();
+                // F8-47 — a fresh attach used to start at level 1 regardless of the save
+                // (the outpost-return level reset). OnEnable already tried a restore; re-run
+                // it here explicitly (the save service is definitely up post-scene-load) and
+                // trace what the hero landed on so any future reset names itself.
+                prog.RestoreFromSave();
+                FlowTrace.Step("HeroXp", $"attached HeroProgression to '{hero.gameObject.name}' scene '{SceneManager.GetActiveScene().name}' -> restored level={prog.Level} xp={prog.Xp:0.#} (fromSave={prog.HasRestoredFromSave})");
+            }
         }
 
         // ── Kill -> shared XP ─────────────────────────────────────────────────

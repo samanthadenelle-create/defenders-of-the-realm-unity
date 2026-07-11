@@ -65,6 +65,7 @@ namespace DeNelle.Core.State
                 { 26, MigrateToV26 },
                 { 27, MigrateToV27 },
                 { 28, MigrateToV28 },
+                { 29, MigrateToV29 },
             };
 
         /// <summary>
@@ -417,6 +418,19 @@ namespace DeNelle.Core.State
             if (!s.PopulationQuests.HasValue) s.PopulationQuests = 0;
             if (!s.PopulationOutposts.HasValue) s.PopulationOutposts = 0;
             if (!s.PopulationEchoSlots.HasValue) s.PopulationEchoSlots = 1;
+            return s;
+        }
+
+        // v29 — F8-47 hero level/XP persistence. A pre-v29 save never persisted the hero's
+        // level (it lived only on the in-memory HeroProgression component), so seed the fresh-hero
+        // defaults: level 1, no banked/lifetime XP — exactly what such a player had on every load.
+        // heroXp/heroLifetimeXp are additive-default-on-read (null → 0); we set each explicitly for
+        // a clean round-trip, mirroring the v25/v28 seed precedent. Idempotent (only seeds when null).
+        private static PersistedState MigrateToV29(PersistedState s)
+        {
+            if (!s.HeroLevel.HasValue) s.HeroLevel = 1;
+            if (!s.HeroXp.HasValue) s.HeroXp = 0;
+            if (!s.HeroLifetimeXp.HasValue) s.HeroLifetimeXp = 0;
             return s;
         }
 

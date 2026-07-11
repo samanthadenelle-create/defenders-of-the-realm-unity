@@ -77,6 +77,8 @@ namespace DeNelle.Editor
                     if (!migrated.Resources.HasValue) failures.Add("migrate v1->current did not seed resources (v2 step)");
                     if (migrated.Quests == null) failures.Add("migrate v1->current did not seed quests (v6 step)");
                     if (migrated.Zones == null || migrated.Zones.Count == 0) failures.Add("migrate v1->current did not seed zone graph (v17 step)");
+                    if (!migrated.HeroLevel.HasValue || migrated.HeroLevel.Value != 1)
+                        failures.Add($"migrate v1->current did not seed heroLevel = 1 (v29 step, F8-47) — got {(migrated.HeroLevel.HasValue ? migrated.HeroLevel.Value.ToString() : "null")}");
                 }
 
                 // (4) JSON round-trip through the REAL save settings, then validate.
@@ -91,6 +93,29 @@ namespace DeNelle.Editor
                         var vr = SaveSchema.Validate(back);
                         if (!vr.Ok)
                             failures.Add($"migrated+round-tripped save FAILED validation: field '{vr.FieldPath}' ({vr.Reason})");
+                    }
+                }
+
+                // (4b) F8-47 hero level/XP round-trip: a level-7 hero must come back level 7
+                // through the REAL serialize -> deserialize -> validate path (the outpost-return
+                // level reset was exactly this data never existing in the save).
+                {
+                    var heroState = new SaveSchema.PersistedState { HeroLevel = 7, HeroXp = 123.5, HeroLifetimeXp = 4321.0 };
+                    string heroJson = Newtonsoft.Json.JsonConvert.SerializeObject(heroState, SaveSchema.JsonSettings);
+                    var heroBack = Newtonsoft.Json.JsonConvert.DeserializeObject<SaveSchema.PersistedState>(heroJson, SaveSchema.JsonSettings);
+                    if (heroBack == null)
+                        failures.Add("hero level/XP round-trip deserialized to null (F8-47)");
+                    else
+                    {
+                        var heroVr = SaveSchema.Validate(heroBack);
+                        if (!heroVr.Ok)
+                            failures.Add($"hero level/XP round-trip FAILED validation: field '{heroVr.FieldPath}' ({heroVr.Reason})");
+                        if (!heroBack.HeroLevel.HasValue || (int)heroBack.HeroLevel.Value != 7)
+                            failures.Add($"heroLevel did not survive the save round-trip: wrote 7, read back {(heroBack.HeroLevel.HasValue ? heroBack.HeroLevel.Value.ToString() : "null")} (F8-47 — the outpost-return reset class)");
+                        if (!heroBack.HeroXp.HasValue || System.Math.Abs(heroBack.HeroXp.Value - 123.5) > 0.001)
+                            failures.Add($"heroXp did not survive the save round-trip: wrote 123.5, read back {(heroBack.HeroXp.HasValue ? heroBack.HeroXp.Value.ToString() : "null")} (F8-47)");
+                        else
+                            log.AppendLine("hero level/XP round-trip: level 7 / xp 123.5 survived serialize->deserialize->validate OK (F8-47)");
                     }
                 }
 

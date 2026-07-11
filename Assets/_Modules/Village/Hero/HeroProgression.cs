@@ -17,12 +17,20 @@
 // HeroAbilities attributes its damage to — so the cross-asmdef XP grant resolves
 // back here. Lives in namespace DeNelle.Village to match its hero siblings
 // (HeroAbilities et al.). Attached at runtime by ProgressionManager (no scene
-// wiring). In-memory for a run; cross-run save is a later pass.
+// wiring).
+//
+// PERSISTED via GameState (HeroLevel / HeroXp / HeroLifetimeXp, schema v29 —
+// F8-47): the component is still the live per-run authority, but it RESTORES
+// from GameState on attach (never downgrading a live higher level) and writes
+// back on every XP change — so a Single scene load (e.g. porting home from the
+// challenge outpost) attaching a fresh component no longer resets the hero to
+// level 1. Village → Core write is the sanctioned pattern (CLAUDE.md §5).
 // =============================================================================
 
 using System;
 using DeNelle.Core.Progression;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.State;
 using DeNelle.Village.Talents;
 using UnityEngine;
 
@@ -69,6 +77,9 @@ namespace DeNelle.Village
         /// </summary>
         public static event Action<int> OnAnyLevelUp;
 
+        /// <summary>F8-47 — true once this component has adopted persisted level/XP from GameState.</summary>
+        public bool HasRestoredFromSave { get; private set; }
+
         public string EarnerId => Id;
         public int Level => _level;
         public float Xp => _xp;
@@ -110,12 +121,23 @@ namespace DeNelle.Village
         {
             Instance = this;
             XpEarnerRegistry.Register(this);
+            // F8-47 — adopt the persisted level/XP (never downgrades a live higher
+            // level). Runs after Awake's bootstrap-migration, so a fresh attach on a
+            // scene load lands on the saved level instead of a default level 1.
+            RestoreFromSave();
         }
 
         private void OnDisable()
         {
             if (Instance == this) Instance = null;
             XpEarnerRegistry.Unregister(this);
+        }
+
+        private void OnDestroy()
+        {
+            // F8-47 — a destroyed carrier is where a level reset would originate;
+            // name it so any future loss pinpoints itself in the break-log.
+            FlowTrace.Step("HeroXp", $"carrier destroyed scene '{gameObject.scene.name}' level={_level} xp={_xp:0.#}");
         }
 
         private void Awake()
@@ -137,6 +159,7 @@ namespace DeNelle.Village
                     _xp = Instance._xp;
                     _lifetimeXp = Instance._lifetimeXp;
                     _hasGrantedStarterPoints = Instance._hasGrantedStarterPoints;
+                    HasRestoredFromSave = Instance.HasRestoredFromSave;   // F8-47 — carry the restore mark across the takeover
                     Destroy(Instance.gameObject);   // the standalone, NOT the hero
                 }
                 else { FlowTrace.Warn("HeroXp", $"Awake: duplicate HeroProgression on '{gameObject.name}' — removing this component."); Destroy(this); return; }
@@ -150,6 +173,47 @@ namespace DeNelle.Village
             var go = new GameObject("HeroProgression");
             DontDestroyOnLoad(go);
             go.AddComponent<HeroProgression>();
+        }
+
+        /// <summary>
+        /// F8-47 — adopts the persisted level/XP from GameState. Returns true when the
+        /// saved values were applied. NEVER downgrades: a live component already at a
+        /// higher level (or equal level with more banked XP) keeps its values — a stale
+        /// default-1 save read must not undo a run in progress. Null-safe when the save
+        /// service isn't up yet (the BeforeSceneLoad bootstrap); the ProgressionManager
+        /// attach re-runs it once the scene is ready. Idempotent.
+        /// </summary>
+        public bool RestoreFromSave()
+        {
+            var s = GameStateService.Instance?.State;
+            if (s == null) return false;
+            bool savedAhead = s.HeroLevel > _level || (s.HeroLevel == _level && s.HeroXp > _xp);
+            if (!savedAhead) return false;
+
+            FlowTrace.Step("HeroXp", $"RestoreFromSave: level {_level}->{s.HeroLevel} xp {_xp:0.#}->{s.HeroXp:0.#} (lifetime={s.HeroLifetimeXp:0.#})");
+            _level = Mathf.Max(1, s.HeroLevel);
+            _xp = Mathf.Max(0f, s.HeroXp);
+            _lifetimeXp = Mathf.Max(_lifetimeXp, s.HeroLifetimeXp);
+            // A restored hero past level 1 already received its first-level-up starter
+            // gift in the run that earned the level — never double-grant it.
+            if (_level > 1) _hasGrantedStarterPoints = true;
+            HasRestoredFromSave = true;
+            OnXpChanged?.Invoke(_xp, XpToNextFor(_level));
+            return true;
+        }
+
+        /// <summary>
+        /// F8-47 — mirrors the live level/XP into GameState so any save write (wave
+        /// clear, quit, scene transition) persists it. Deliberately does NOT force a
+        /// Save() — AddXp is hot (every kill); the spine's existing save moments flush it.
+        /// </summary>
+        private void WriteBackToState()
+        {
+            var s = GameStateService.Instance?.State;
+            if (s == null) return;
+            s.HeroLevel = _level;
+            s.HeroXp = _xp;
+            s.HeroLifetimeXp = _lifetimeXp;
         }
 
         public int AddXp(float amount)
@@ -170,6 +234,7 @@ namespace DeNelle.Village
 
             if (gained > 0)
                 FlowTrace.Step("HeroXp", $"leveled +{gained} -> level={_level} (xp={_xp:0.#}/{XpToNextFor(_level):0.#})");
+            WriteBackToState();   // F8-47 — persist level/xp on every change
             OnXpChanged?.Invoke(_xp, XpToNextFor(_level));
             return gained;
         }
