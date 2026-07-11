@@ -209,3 +209,17 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 0
+  - Key: Poi_NodeAura
+    Prefab: {fileID: 1228060220772394, guid: 70b62e0f3bbfee4409228673d6c15926, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 0
+    IsLoop: 1
+  - Key: Poi_Landmark
+    Prefab: {fileID: 1973120614565466, guid: bb1e5545f071a4d4082042807f8ccc85, type: 3}
+    PoolSize: 3
+    DefaultScale: 4
+    DefaultLifetime: 0
+    Recolorable: 0
+    IsLoop: 1
