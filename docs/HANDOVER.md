@@ -15,7 +15,39 @@
 
 ---
 
-## ★★ SESSION HANDOVER — 2026-07-08 WAVE-2 CLOSE (READ FIRST) ★★
+## ★★ SESSION HANDOVER — 2026-07-11 F8 BATCH + ACTION KEYWORD REGISTRY (READ FIRST) ★★
+
+**WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`. Origin sits at `369c4f30`; local commits through
+`10c60eb3` (push held for owner word). **Save schema = v29** (heroLevel/heroXp/heroLifetimeXp — F8-47).
+**Felt-verify exe = `Builds/Windows/DefendersOfTheRealm.exe` stamped 2026-07-11 15:02:34.**
+
+**LANDED (owner's 1:30 PM F8 batch, all RCA-proven-by-data):** F8-47 level-reset-on-outpost-return =
+save-v29 persistence (`4064a44e`) · F8-43 compact-banner Continue CTA removed + F8-45 damage report
+(WO-38 repair prompt self-installs into real wave scenes + WaveDamageReport rows w/ repair costs +
+collector damage scales accrual — owner: "damage to collectors reduces economy") (`761d1d16`) · F8-46
+option A: pursuit raises BattleLock via PursuitBattleProbe (`431f3ea0`) · F8-44 20-wave schedule, Syndrath
+at wave 20, Necromancer cadence 6/12/18 (`c768fe6a`) · RepairTarget undeclared-HeroTarget-tag fix — latent
+§7 violation woken by the F8-45 install, fleet-verified GONE (`10c60eb3`).
+
+**NEW ARCHITECTURE:** `docs/ACTION_KEYWORD_REGISTRY_ARCHITECTURE.md` (BINDING for motion work) —
+keyword→action registry (`motion-castings.json`, dual-copy): targets×keywords→{clip,vfxKey,sfxId,
+vfxDelay,attachBone,playOneShot}, manual:true = owner canon, bake-time V1 / runtime Phase 2. Foundation
+committed (`941ef16c`): MotionCastings resolver + ActionKeywords + builder seams (empty registry =
+byte-identical bakes) + EditMode gate tests. WO-670 = Motion Caster authoring window (lane in flight),
+WO-671 = action bundle rows + runtime ActionBundlePlayer (lane B done in tree, uncommitted). §9a of the
+arch doc = the Grok Action System adopted/rejected ledger.
+
+**FLEET (exe 15:02:34):** clean of new tickets; remaining = known pre-existers only (WO-453 encounter
+strand, WO-602 home return, CavePortal reach) + AssertTutorialFirstTower probe drift (candidates occupied
+by the 07-10 Colosseum_ArenaEntrance — player placement fine, probe fix filed). DataRegression: 3
+pre-existers (arena ground texture → F8-37 evidence · B2 dual-wallet · pet-slot flag_17), zero new.
+
+**NEXT:** owner felt-pass on exe 15:02:34 → push on her word · WO-670/671 lanes gate+commit ·
+open owner pins: F8-40 max-tier tower identity · WO-614 tree→W/E/R rail seam · probe fix.
+
+---
+
+## ★★ SESSION HANDOVER — 2026-07-08 WAVE-2 CLOSE (⚠ superseded as newest by the 2026-07-11 block above) ★★
 
 **WHERE WE ARE:** Branch `wip/village2-and-f8-tickets`, **HEAD `d944d161`, 71 commits ahead of origin,
 clean tree, push HELD for the owner's word.** Live anchor = **`CANON_GROUND_TRUTH_2026-07-08.md`**;
