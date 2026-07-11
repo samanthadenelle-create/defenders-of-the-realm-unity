@@ -91,6 +91,13 @@ namespace DeNelle.Village.Buildings.Progression
         {
             ResourceCollectorRegistry.Register(this);
             HarvestSourceRegistry.Register(this);
+
+            // WO-VFX-POI — opt in to the near-field harvest CALLOUT aura (colorblind-safe:
+            // motion/shape/luminance, not hue). Spent while the collector is not producing.
+            PoiBeacon.Attach(gameObject, PoiBeacon.PoiTier.Node,
+                calloutRadius: 28f, handoffRadius: 3.5f,
+                tint: new Color(1f, 0.94f, 0.72f, 1f),
+                isSpent: () => !IsActive);
         }
 
         private void OnDisable()

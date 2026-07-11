@@ -143,6 +143,13 @@ namespace DeNelle.Village
             var vis = GetComponent<MineNodeVisual>();
             if (vis == null) vis = gameObject.AddComponent<MineNodeVisual>();
             vis.Resource = Resource;   // MineNodeVisual.Start() reads this and builds.
+
+            // WO-VFX-POI — opt in to the near-field harvest CALLOUT aura (colorblind-safe:
+            // motion/shape/luminance, not hue). Spent = depleted or (finite-reserve) mined empty.
+            PoiBeacon.Attach(gameObject, PoiBeacon.PoiTier.Node,
+                calloutRadius: 28f, handoffRadius: InteractRadius + 1f,
+                tint: new Color(1f, 0.94f, 0.72f, 1f),
+                isSpent: () => IsDepleted || IsReserveEmpty);
         }
 
         // =====================================================================

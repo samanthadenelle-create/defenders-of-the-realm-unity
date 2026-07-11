@@ -264,6 +264,15 @@ namespace DeNelle.Village.World.Camps
                 // line lets the headless trace confirm the walk-to outpost actually materialised + is
                 // garrisoned (i.e. the hero has something to fight on approach), not just scheduled.
                 FlowTrace.Step("Raid", $"{OutpostId} garrison live at {transform.position} — combat begins when the hero approaches (~{GarrisonRing + 6}m).");
+
+                // WO-VFX-POI — far-field ENEMY FORTRESS beacon: a tall looping pillar visible from
+                // range (colorblind-safe: verticality/motion/luminance, not hue) that stands until the
+                // outpost is cleared. Landmark tier is NOT discovery-gated. Open-world only (this !arena
+                // branch — the Arena suppresses the open-world beats), so the beacon never shows in-arena.
+                PoiBeacon.Attach(gameObject, PoiBeacon.PoiTier.Landmark,
+                    calloutRadius: float.PositiveInfinity, handoffRadius: 35f,
+                    tint: new Color(1f, 0.94f, 0.72f, 1f),
+                    isSpent: () => Cleared);
             }
         }
 

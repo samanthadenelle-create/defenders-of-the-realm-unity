@@ -74,6 +74,14 @@ namespace DeNelle.Village.World
                 Claim();
             }
             BuildVisual();
+
+            // WO-VFX-POI — opt in to the near-field harvest CALLOUT aura (colorblind-safe:
+            // motion/shape/luminance, not hue). Attached from the caller (not inside BuildVisual,
+            // which early-returns on the real-model path). Node stays callable while claimed/alive.
+            PoiBeacon.Attach(gameObject, PoiBeacon.PoiTier.Node,
+                calloutRadius: 28f, handoffRadius: 3.5f,
+                tint: new Color(1f, 0.94f, 0.72f, 1f),
+                isSpent: () => !_claimed || _hp <= 0f);
         }
 
         private void Update()

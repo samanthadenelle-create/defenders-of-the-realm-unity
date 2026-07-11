@@ -506,6 +506,20 @@ namespace DeNelle.Core
         /// delete; flip ON for V2 via PlayerPrefs "ff.barracks" = 1.</summary>
         public static bool Barracks => Get("barracks", defaultOn: false);
 
+        /// <summary>WO-VFX-POI (owner is red/green colorblind — callouts read by MOTION / SHAPE /
+        /// LUMINANCE / VERTICALITY, never hue): when ON, <see cref="DeNelle.Village.PoiCalloutSystem"/>
+        /// self-bootstraps and drives point-of-interest callouts off <see cref="DeNelle.Village.PoiRegistry"/>
+        /// — a small looping ground AURA on near-field harvest nodes (mine reserves / harvest sites /
+        /// active collectors) that appears within ~28m and hands off to the interact prompt on arrival
+        /// (capped to the nearest ~6 to respect the VFX loop budget), plus a tall looping PILLAR/beacon on
+        /// far-field landmarks (enemy fortress outposts) visible from range until cleared. Presentation
+        /// only — no gameplay/economy change; null-safe (no-ops until the "Poi_*" catalog keys exist).
+        /// Default OFF (dark-ship until the catalog rows are generated + owner felt-verifies). PlayerPrefs
+        /// "ff.poicallouts" = 0 to disable.</summary>
+        // Owner asked to felt-test the node auras + fortress beacon (2026-07-10) — flipped ON for
+        // build 2; the catalog Poi_* keys are authored. Set ff.poicallouts=0 to turn off if too busy.
+        public static bool PoiCallouts => Get("poicallouts", defaultOn: true);
+
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
         {

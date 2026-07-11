@@ -68,6 +68,7 @@ namespace DeNelle.Editor
         private const string RPG    = "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/";
         private const string AOE    = "Assets/Hovl Studio/AOE Magic spells Vol.1/Prefabs/";
         private const string MAGIC  = "Assets/Hovl Studio/Magic circles/Prefabs/";
+        private const string MAP    = "Assets/Hovl Studio/Map track markers VFX/Prefabs/";
 
         // -- Curated shortlist: key -> {prefab path, pool, scale, lifetime, recolor, loop} --
         // Exact paths verified against Docs/VFX/HovlStudio_Inventory.md §5. Owner re-points
@@ -142,6 +143,17 @@ namespace DeNelle.Editor
 
             // ── Universal Dash (blink) — a quick swirl at the blink origin ──
             { "Dash_Blink",             new Pick(RPG + "Buff white twist.prefab") },
+
+            // ═══ WO-VFX-POI: point-of-interest CALLOUTS (owner red/green colorblind — these read
+            // by MOTION / SHAPE / LUMINANCE / VERTICALITY, never hue) ═══
+            // Near-field NODE aura — a looping high-luminance ground circle under a harvest node.
+            // Recolour OFF (keep the bright neutral gold ring); small pool (only ~6 live at once,
+            // capped by PoiCalloutSystem to the shared loop budget).
+            { "Poi_NodeAura",           new Pick(MAGIC + "Loop version/Magic circle sun loop.prefab", poolSize: 6, recolorable: false, isLoop: true) },
+            // Far-field ENEMY FORTRESS beacon — a TALL looping pillar/beam visible from range,
+            // stands until the outpost is cleared. Verticality is the read (not hue). Scale up so it
+            // towers over the fort silhouette.
+            { "Poi_Landmark",           new Pick(MAP + "Marker 4 Pillar Loop.prefab", poolSize: 3, scale: 4f, recolorable: false, isLoop: true) },
         };
 
         [MenuItem("Defenders/VFX/Generate Hovl VFX Catalog")]
