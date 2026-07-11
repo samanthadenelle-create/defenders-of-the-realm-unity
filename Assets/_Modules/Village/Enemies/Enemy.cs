@@ -1487,6 +1487,13 @@ namespace DeNelle.Village
         // Display name for the rooted-cast ability (the visible arcane orb the cast fires).
         private const string RootedCastAbilityName = "Arcane Orb";
 
+        // WO-VFX-RANGED: fallback Hovl keys for the rooted ranged cast when this enemy has no
+        // _typeVfxSet (arena orcs, etc.). A per-type set overrides these (e.g. Fireball_*/Frost_*).
+        private const string DefaultCastVfxKey       = "Arcane_Cast";
+        private const string DefaultProjectileVfxKey = "Arcane_Projectile";
+        private const string DefaultImpactVfxKey     = "Arcane_Impact";
+        private static readonly Color DefaultRangedVfxTint = new Color(0.6f, 0.4f, 1f, 1f); // arcane violet
+
         // Visible-cast VFX for ranged/mage casters (owner F8: "could not tell he was casting").
         // Lazily added so the enemy fires a real arcane orb that the player SEES leave + land.
         private RangedAttackVFX _castVfx;
@@ -1565,12 +1572,27 @@ namespace DeNelle.Village
             {
                 Vector3 aim = target.position + Vector3.up * 1.0f;
                 var vfx = EnsureCastVfx();
+
+                // WO-VFX-RANGED: resolve this enemy's ranged Hovl keys (+ tint); fall back to the
+                // Arcane constants when there is no _typeVfxSet (arena orcs) so the cast still reads.
+                string castKey    = (_typeVfxSet != null && !string.IsNullOrEmpty(_typeVfxSet.CastVfxKey))       ? _typeVfxSet.CastVfxKey       : DefaultCastVfxKey;
+                string projKey    = (_typeVfxSet != null && !string.IsNullOrEmpty(_typeVfxSet.ProjectileVfxKey)) ? _typeVfxSet.ProjectileVfxKey : DefaultProjectileVfxKey;
+                string impactKey  = (_typeVfxSet != null && !string.IsNullOrEmpty(_typeVfxSet.ImpactVfxKey))     ? _typeVfxSet.ImpactVfxKey     : DefaultImpactVfxKey;
+                Color  castTint   = _typeVfxSet != null ? _typeVfxSet.RangedVfxTint : DefaultRangedVfxTint;
+
+                // Muzzle flash at the caster's hands (chest height, slightly ahead) as the orb releases.
+                VFXManager.PlayKey(castKey,
+                    transform.position + Vector3.up * 1.2f + transform.forward * 0.6f,
+                    transform.rotation, null, castTint);
+
                 System.Action land = () =>
                 {
                     // The orb (ProjectileMover) can outlive this Enemy — despawn/teardown destroys
                     // the caster without setting _dead, and a destroyed component's transform throws
                     // (fleet 9200 NRE via NoteHeroDamageSource). Unity fake-null check catches it.
                     if (this == null || _dead || target == null) return;
+                    // WO-VFX-RANGED: Hovl impact where the orb lands (reads even if the target just died).
+                    VFXManager.PlayKey(impactKey, aim, Quaternion.identity, null, castTint);
                     var s = target.GetComponentInParent<IDamageableStructure>();
                     if (s != null && s.IsAlive)
                     {
@@ -1579,7 +1601,9 @@ namespace DeNelle.Village
                         PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
                     }
                 };
-                if (vfx != null) vfx.FireSpellOrb(aim, land);
+                // WO-VFX-RANGED: fly the Hovl orb muzzle→target (projKey travel); impactKey present
+                // suppresses the old SpawnImpact inside RangedAttackVFX (the land closure fires it).
+                if (vfx != null) vfx.FireSpellOrb(aim, land, projKey, impactKey, castTint);
                 else land();
             }
 

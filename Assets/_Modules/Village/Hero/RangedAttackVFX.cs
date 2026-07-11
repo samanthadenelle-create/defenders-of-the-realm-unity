@@ -92,11 +92,21 @@ namespace DeNelle.Village
         /// Fire an arrow projectile toward <paramref name="targetWorldPos"/>.
         /// Plays a brief bow-draw particle burst at the launch point.
         /// </summary>
-        public void FireArrow(Vector3 targetWorldPos, System.Action onArrive = null)
+        /// <param name="hovlProjectileKey">WO-VFX-RANGED: optional Hovl catalog LOOP key for the
+        /// travelling body. When set, a Hovl projectile FX follows the (no-FX) mover and the old
+        /// Spells-Pack storm-bolt body + on-arrival SpawnImpact are SUPPRESSED (no double VFX).</param>
+        /// <param name="hovlImpactKey">Optional Hovl impact key. Its presence (like a travel key)
+        /// suppresses the old ProjectileVFXCatalog.SpawnImpact — the CALLER fires the Hovl impact.</param>
+        /// <param name="tint">Optional HDR recolour for the Hovl travel FX (colourblind: reads by motion).</param>
+        public void FireArrow(Vector3 targetWorldPos, System.Action onArrive = null,
+                              string hovlProjectileKey = null, string hovlImpactKey = null, Color? tint = null)
         {
             Vector3 origin = LaunchOrigin();
-            FlowTrace.Step("Ranged", $"FireArrow -> target={targetWorldPos} origin={origin} prefab={(_arrowPrefab == null ? "<pooled-vfx>" : _arrowPrefab.name)}");
+            FlowTrace.Step("Ranged", $"FireArrow -> target={targetWorldPos} origin={origin} prefab={(_arrowPrefab == null ? "<pooled-vfx>" : _arrowPrefab.name)} hovl={hovlProjectileKey ?? "<none>"}");
             StartCoroutine(PlayCastBurst(origin, FireColor, 0.15f));   // GREEN: fired
+
+            bool useHovl = !string.IsNullOrEmpty(hovlProjectileKey);
+            bool suppressOldImpact = useHovl || !string.IsNullOrEmpty(hovlImpactKey);
 
             // VFX: fire a real particle-FX-bodied projectile (Storm bolt for the
             // physical arrow). This WINS over the WO-280 placeholder suppression — that
@@ -105,9 +115,19 @@ namespace DeNelle.Village
             // per-shot Instantiate; it returns itself to the pool on Arrive.
             if (_arrowPrefab == null)
             {
-                var smover = LeaseMover(ProjectileBodyKind.RangerArrowVfx, origin);
-                smover.Launch(targetWorldPos, _arrowSpeed, _arrowArc,
-                    WithImpactVfx(targetWorldPos, DamageElement.None, WithLandBurst(targetWorldPos, onArrive)));
+                // WO-VFX-RANGED: with a Hovl travel key, lease a NO-FX body so the Hovl
+                // projectile FX (below) is the ONLY travelling visual (no storm-bolt double).
+                var smover = LeaseMover(useHovl ? ProjectileBodyKind.NoFxArrow : ProjectileBodyKind.RangerArrowVfx, origin);
+                System.Action arrive = suppressOldImpact
+                    ? WithLandBurst(targetWorldPos, onArrive)
+                    : WithImpactVfx(targetWorldPos, DamageElement.None, WithLandBurst(targetWorldPos, onArrive));
+                if (useHovl)
+                {
+                    var h = PlayHovlTravel(hovlProjectileKey, origin, targetWorldPos, tint, smover);
+                    var inner = arrive;
+                    arrive = () => { h?.Stop(); inner?.Invoke(); };
+                }
+                smover.Launch(targetWorldPos, _arrowSpeed, _arrowArc, arrive);
                 return;
             }
 
@@ -123,20 +143,40 @@ namespace DeNelle.Village
         /// Fire a spell orb projectile toward <paramref name="targetWorldPos"/>.
         /// Plays a staff-tip charge glow before release.
         /// </summary>
-        public void FireSpellOrb(Vector3 targetWorldPos, System.Action onArrive = null)
+        /// <param name="hovlProjectileKey">WO-VFX-RANGED: optional Hovl LOOP key for the travelling orb.
+        /// When set, the Hovl orb follows the (no-FX) mover and the old arcane-orb body + SpawnImpact are
+        /// SUPPRESSED (no double VFX).</param>
+        /// <param name="hovlImpactKey">Optional Hovl impact key — its presence suppresses the old
+        /// SpawnImpact; the CALLER fires the Hovl impact on arrival.</param>
+        /// <param name="tint">Optional HDR recolour for the Hovl travel FX.</param>
+        public void FireSpellOrb(Vector3 targetWorldPos, System.Action onArrive = null,
+                                 string hovlProjectileKey = null, string hovlImpactKey = null, Color? tint = null)
         {
             Vector3 origin = LaunchOrigin();
-            FlowTrace.Step("Ranged", $"FireSpellOrb -> target={targetWorldPos} origin={origin} prefab={(_spellOrbPrefab == null ? "<pooled-vfx>" : _spellOrbPrefab.name)}");
+            FlowTrace.Step("Ranged", $"FireSpellOrb -> target={targetWorldPos} origin={origin} prefab={(_spellOrbPrefab == null ? "<pooled-vfx>" : _spellOrbPrefab.name)} hovl={hovlProjectileKey ?? "<none>"}");
             StartCoroutine(PlayCastBurst(origin, FireColor, 0.35f));   // GREEN: fired
+
+            bool useHovl = !string.IsNullOrEmpty(hovlProjectileKey);
+            bool suppressOldImpact = useHovl || !string.IsNullOrEmpty(hovlImpactKey);
 
             // VFX: fire a real particle-FX-bodied arcane orb (wins over the WO-280
             // primitive suppression — the FX is the intended visual, not a debug sphere).
             // POOLED: leased from MoverProjectilePool (GC-free), returns itself on Arrive.
             if (_spellOrbPrefab == null)
             {
-                var smover = LeaseMover(ProjectileBodyKind.MageOrbVfx, origin);
-                smover.Launch(targetWorldPos, _orbSpeed, 0f,
-                    WithImpactVfx(targetWorldPos, DamageElement.Aether, WithLandBurst(targetWorldPos, onArrive)));
+                // WO-VFX-RANGED: with a Hovl travel key, lease a NO-FX body so the Hovl orb
+                // (below) is the ONLY travelling visual (no arcane-orb double).
+                var smover = LeaseMover(useHovl ? ProjectileBodyKind.NoFxOrb : ProjectileBodyKind.MageOrbVfx, origin);
+                System.Action arrive = suppressOldImpact
+                    ? WithLandBurst(targetWorldPos, onArrive)
+                    : WithImpactVfx(targetWorldPos, DamageElement.Aether, WithLandBurst(targetWorldPos, onArrive));
+                if (useHovl)
+                {
+                    var h = PlayHovlTravel(hovlProjectileKey, origin, targetWorldPos, tint, smover);
+                    var inner = arrive;
+                    arrive = () => { h?.Stop(); inner?.Invoke(); };
+                }
+                smover.Launch(targetWorldPos, _orbSpeed, 0f, arrive);
                 return;
             }
 
@@ -184,6 +224,17 @@ namespace DeNelle.Village
                 ProjectileVFXCatalog.SpawnImpact(landPos, element);
                 inner?.Invoke();
             };
+        }
+
+        /// <summary>WO-VFX-RANGED: spawn a Hovl LOOP projectile FX that FOLLOWS the travelling
+        /// (no-FX) mover from <paramref name="origin"/> aimed at <paramref name="target"/>. Returns the
+        /// loop handle so the caller Stops it on arrival. Null-safe (returns null if PlayKey no-ops).</summary>
+        private static VFXHandle PlayHovlTravel(string key, Vector3 origin, Vector3 target, Color? tint, ProjectileMover mover)
+        {
+            if (string.IsNullOrEmpty(key) || mover == null) return null;
+            Vector3 dir = target - origin;
+            Quaternion look = dir.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(dir.normalized) : Quaternion.identity;
+            return VFXManager.PlayKey(key, origin, look, null, tint, 0f, 0f, mover.transform);
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────
@@ -266,7 +317,10 @@ namespace DeNelle.Village
             DamageElement element = kind == ProjectileBodyKind.MageOrbVfx ? DamageElement.Aether : DamageElement.None;
             var go = new GameObject(kind.ToString());
             go.transform.position = origin;
-            ProjectileVFXCatalog.SpawnFlying(go.transform, element);
+            // WO-VFX-RANGED: no-FX bodies intentionally carry NO built-in visual — a Hovl
+            // projectile FX supplies the travelling look, so skip the Spells-Pack storm-bolt/orb.
+            if (kind != ProjectileBodyKind.NoFxArrow && kind != ProjectileBodyKind.NoFxOrb)
+                ProjectileVFXCatalog.SpawnFlying(go.transform, element);
             if (!go.TryGetComponent(out ProjectileMover mover)) mover = go.AddComponent<ProjectileMover>();
             return mover;
         }

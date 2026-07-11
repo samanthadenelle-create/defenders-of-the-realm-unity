@@ -30,7 +30,8 @@
           "manaCost": 3,
           "damage": 26,
           "range": 5.2,
-          "freeze": 1.4
+          "freeze": 1.4,
+          "castSeconds": 0.4
         },
         "e": {
           "slot": "e",
@@ -43,7 +44,8 @@
           "cooldown": 16,
           "manaCost": 4,
           "damage": 48,
-          "range": 5
+          "range": 5,
+          "castSeconds": 0.4
         },
         "r": {
           "slot": "r",
@@ -56,7 +58,8 @@
           "cooldown": 45,
           "manaCost": 7,
           "damage": 600,
-          "range": 9
+          "range": 9,
+          "castSeconds": 0.5
         }
       }
     },
@@ -67,7 +70,7 @@
         "q": { "id": "knight.q", "slot": "q", "key": "Q", "name": "Heroic Leap", "description": "Dash to a foe — 30 dmg, +bonus dmg & stun onto a Healer/Wizard (6s cd).", "icon": "➹", "color": "#ffd27a", "effect": "dash", "cooldown": 6, "manaCost": 0, "damage": 30, "range": 10 },
         "w": { "slot": "w", "key": "F", "name": "Shield Bash", "description": "Knockback cone + brief slow — 26 dmg; interrupts a Wizard cast, breaks Tank guard (9s cd).", "icon": "✦", "color": "#facc15", "effect": "knockback", "cooldown": 9, "manaCost": 2, "damage": 26, "range": 4.5 },
         "e": { "slot": "e", "key": "E", "name": "Defender's Call", "description": "Taunt zone + temp shield — forces Tank/DPS onto you for 4s (12s cd).", "icon": "✚", "color": "#7dd3fc", "effect": "taunt", "cooldown": 12, "manaCost": 3, "damage": 0, "range": 6, "freeze": 4 },
-        "r": { "slot": "r", "key": "R", "name": "Radiant Strike", "description": "Ultimate — charge then 220 dmg AoE nuke (9m); bonus on low Healer / interrupted Wizard (40s cd).", "icon": "☄", "color": "#ff7043", "effect": "meteor", "cooldown": 40, "manaCost": 6, "damage": 220, "range": 9 }
+        "r": { "slot": "r", "key": "R", "name": "Radiant Strike", "description": "Ultimate — charge then 220 dmg AoE nuke (9m); bonus on low Healer / interrupted Wizard (40s cd).", "icon": "☄", "color": "#ff7043", "effect": "meteor", "cooldown": 40, "manaCost": 6, "damage": 220, "range": 9, "castSeconds": 0.5 }
       }
     },
     "ranger": {
@@ -75,27 +78,27 @@
       "_comment": "AUTHORED placeholder — not in React v1 yet. Re-sync on v1 data/abilities.json publish.",
       "abilities": {
         "q": { "slot": "q", "key": "Q", "name": "Quick Shot", "description": "Rapid arrow — 25 dmg at long range (0.45s).", "icon": "✦", "color": "#9ae6b4", "effect": "strike", "cooldown": 0.45, "manaCost": 0, "damage": 25, "range": 15 },
-        "w": { "slot": "w", "key": "F", "name": "Snare Trap", "description": "Snares + 18 dmg at range (12m, 11s cd).", "icon": "✦", "color": "#7dd3fc", "effect": "snare", "cooldown": 11, "manaCost": 3, "damage": 18, "range": 12 },
-        "e": { "slot": "e", "key": "E", "name": "Mending Salve", "description": "Heals the Heart for 44 in a 5m ring (15s cd).", "icon": "✚", "color": "#ffd27a", "effect": "heal", "cooldown": 15, "manaCost": 4, "damage": 44, "range": 5 },
-        "r": { "slot": "r", "key": "R", "name": "Storm of Arrows", "description": "Ultimate volley — 72 dmg over a 6.5m area (42s cd).", "icon": "☄", "color": "#ff7043", "effect": "aoe", "cooldown": 42, "manaCost": 7, "damage": 72, "range": 6.5, "freeze": 0 }
+        "w": { "slot": "w", "key": "F", "name": "Snare Trap", "description": "Snares + 18 dmg at range (12m, 11s cd).", "icon": "✦", "color": "#7dd3fc", "effect": "snare", "cooldown": 11, "manaCost": 3, "damage": 18, "range": 12, "castSeconds": 0.35 },
+        "e": { "slot": "e", "key": "E", "name": "Mending Salve", "description": "Heals the Heart for 44 in a 5m ring (15s cd).", "icon": "✚", "color": "#ffd27a", "effect": "heal", "cooldown": 15, "manaCost": 4, "damage": 44, "range": 5, "castSeconds": 0.4 },
+        "r": { "slot": "r", "key": "R", "name": "Storm of Arrows", "description": "Ultimate volley — 72 dmg over a 6.5m area (42s cd).", "icon": "☄", "color": "#ff7043", "effect": "aoe", "cooldown": 42, "manaCost": 7, "damage": 72, "range": 6.5, "freeze": 0, "castSeconds": 0.5 }
       }
     },
     "knight-skills": {
       "displayName": "Knight Skills",
       "_comment": "FLAT pool of equippable Knight skill-tree abilities (WO-614 full solo re-spec: heal / regen(HoT) / dot / ranged / melee-signatures / control / big-defensive). Each carries a unique 'id' so HeroLoadout equips it into a W/E/R slot OR the assignable hot-swap bar via AbilityCatalog.FindById; the per-slot 'slot' key is the chooser's SUGGESTED slot only. Effects: strike / heal / snare / cleave / aoe / taunt PLUS WO-614 shapes dot (ranged strike + Burn status) / healOverTime (HP drip via HeroAbilities) / invuln (HeroHealth.ActivateInvuln) — all resolved by HeroAbilities.ResolveEffect. Extra tuning fields: dotDamage/dotSeconds (dot burn), seconds (healOverTime duration + invuln duration). Referenced by the SKILL nodes (knight.t*) in hero-talents.json via their 'abilityId'.",
       "abilities": {
-        "ranged-poke":       { "id": "knight.ranged-poke",       "slot": "w", "key": "F", "name": "Throwing Spear",    "description": "Hurls a spear at the nearest foe — 28 dmg at range (1.2s cd).",            "icon": "➹", "color": "#fbbf24", "effect": "strike", "cooldown": 1.2, "manaCost": 1, "damage": 28, "range": 16, "vfxCast": "Melee_Slash", "vfxProjectile": "Spear_Projectile", "vfxImpact": "Spear_Impact" },
-        "mending-salve":     { "id": "knight.mending-salve",     "slot": "e", "key": "E", "name": "Mending Salve",     "description": "Binds your wounds — heals 42 in a 5m ring (16s cd).",                       "icon": "✚", "color": "#ffd27a", "effect": "heal",   "cooldown": 16,  "manaCost": 4, "damage": 42, "range": 5, "vfxCast": "Heal_Cast", "vfxResidual": "Heal_Aura" },
-        "snare-arrow":       { "id": "knight.snare-arrow",       "slot": "w", "key": "F", "name": "Snare Arrow",       "description": "Pins a foe — 18 dmg + a 2.5s slow at range (11s cd).",                      "icon": "❄", "color": "#7dd3fc", "effect": "snare",  "cooldown": 11,  "manaCost": 3, "damage": 18, "range": 14, "vfxCast": "Melee_Slash", "vfxProjectile": "Spear_Projectile", "vfxImpact": "Frost_Impact" },
-        "suppressing-volley":{ "id": "knight.suppressing-volley","slot": "r", "key": "R", "name": "Suppressing Volley","description": "Cleaving volley — 36 dmg to all foes in a 6m arc (20s cd).",               "icon": "✦", "color": "#facc15", "effect": "cleave", "cooldown": 20,  "manaCost": 5, "damage": 36, "range": 6, "vfxCast": "Melee_Slash", "vfxImpact": "Cleave_Impact" },
+        "ranged-poke":       { "id": "knight.ranged-poke", "castSeconds": 0.35,       "slot": "w", "key": "F", "name": "Throwing Spear",    "description": "Hurls a spear at the nearest foe — 28 dmg at range (1.2s cd).",            "icon": "➹", "color": "#fbbf24", "effect": "strike", "cooldown": 1.2, "manaCost": 1, "damage": 28, "range": 16, "vfxCast": "Melee_Slash", "vfxProjectile": "Spear_Projectile", "vfxImpact": "Spear_Impact" },
+        "mending-salve":     { "id": "knight.mending-salve", "castSeconds": 0.4,     "slot": "e", "key": "E", "name": "Mending Salve",     "description": "Binds your wounds — heals 42 in a 5m ring (16s cd).",                       "icon": "✚", "color": "#ffd27a", "effect": "heal",   "cooldown": 16,  "manaCost": 4, "damage": 42, "range": 5, "vfxCast": "Heal_Cast", "vfxResidual": "Heal_Aura" },
+        "snare-arrow":       { "id": "knight.snare-arrow", "castSeconds": 0.35,       "slot": "w", "key": "F", "name": "Snare Arrow",       "description": "Pins a foe — 18 dmg + a 2.5s slow at range (11s cd).",                      "icon": "❄", "color": "#7dd3fc", "effect": "snare",  "cooldown": 11,  "manaCost": 3, "damage": 18, "range": 14, "vfxCast": "Melee_Slash", "vfxProjectile": "Spear_Projectile", "vfxImpact": "Frost_Impact" },
+        "suppressing-volley":{ "id": "knight.suppressing-volley", "castSeconds": 0.4,"slot": "r", "key": "R", "name": "Suppressing Volley","description": "Cleaving volley — 36 dmg to all foes in a 6m arc (20s cd).",               "icon": "✦", "color": "#facc15", "effect": "cleave", "cooldown": 20,  "manaCost": 5, "damage": 36, "range": 6, "vfxCast": "Melee_Slash", "vfxImpact": "Cleave_Impact" },
         "shield-bash":       { "id": "knight.shield-bash",       "slot": "w", "key": "F", "name": "Shield Bash",       "description": "Bashes + snares the nearest foe — 22 dmg + a 2.5s slow up close (8s cd).",  "icon": "✦", "color": "#ffd27a", "effect": "snare",  "cooldown": 8,   "manaCost": 2, "damage": 22, "range": 3.6, "vfxCast": "Melee_Slash", "vfxImpact": "Melee_Impact" },
-        "thunderbolt":       { "id": "knight.thunderbolt",       "slot": "w", "key": "F", "name": "Thunderbolt",       "description": "Calls down a crackling bolt at range — 30 dmg @ 16m (3s cd).",             "icon": "⚡", "color": "#a5b4fc", "effect": "strike", "cooldown": 3,   "manaCost": 2, "damage": 30, "range": 16, "vfxCast": "Thunderbolt_Cast", "vfxProjectile": "Thunderbolt_Projectile", "vfxImpact": "Thunderbolt_Impact" },
-        "emberbrand-throw":  { "id": "knight.emberbrand-throw",  "slot": "w", "key": "F", "name": "Emberbrand Throw",  "description": "Throws a burning brand — 12 dmg + 8 dps burn for 4s @ 14m (10s cd).",         "icon": "✹", "color": "#fb923c", "effect": "dot",    "cooldown": 10,  "manaCost": 3, "damage": 12, "range": 14, "dotDamage": 8, "dotSeconds": 4, "vfxCast": "Fireball_Cast", "vfxProjectile": "Fireball_Projectile", "vfxImpact": "Fireball_Impact", "vfxResidual": "Ember_Burn" },
+        "thunderbolt":       { "id": "knight.thunderbolt", "castSeconds": 0.4,       "slot": "w", "key": "F", "name": "Thunderbolt",       "description": "Calls down a crackling bolt at range — 30 dmg @ 16m (3s cd).",             "icon": "⚡", "color": "#a5b4fc", "effect": "strike", "cooldown": 3,   "manaCost": 2, "damage": 30, "range": 16, "vfxCast": "Thunderbolt_Cast", "vfxProjectile": "Thunderbolt_Projectile", "vfxImpact": "Thunderbolt_Impact" },
+        "emberbrand-throw":  { "id": "knight.emberbrand-throw", "castSeconds": 0.4,  "slot": "w", "key": "F", "name": "Emberbrand Throw",  "description": "Throws a burning brand — 12 dmg + 8 dps burn for 4s @ 14m (10s cd).",         "icon": "✹", "color": "#fb923c", "effect": "dot",    "cooldown": 10,  "manaCost": 3, "damage": 12, "range": 14, "dotDamage": 8, "dotSeconds": 4, "vfxCast": "Fireball_Cast", "vfxProjectile": "Fireball_Projectile", "vfxImpact": "Fireball_Impact", "vfxResidual": "Ember_Burn" },
         "wardens-roar":      { "id": "knight.wardens-roar",      "slot": "e", "key": "E", "name": "Warden's Roar",     "description": "A commanding roar — taunts foes within 6m and strikes for 10 (14s cd).",    "icon": "⚔", "color": "#fca5a5", "effect": "taunt",  "cooldown": 14,  "manaCost": 3, "damage": 10, "range": 6, "freeze": 6, "vfxCast": "Taunt_Roar", "vfxImpact": "Melee_Impact", "vfxResidual": "Taunt_Aura" },
         "sweeping-cut":      { "id": "knight.sweeping-cut",      "slot": "w", "key": "F", "name": "Sweeping Cut",      "description": "A wide arc — 30 dmg to all foes in a 5m sweep (12s cd).",                   "icon": "⚔", "color": "#fbbf24", "effect": "cleave", "cooldown": 12,  "manaCost": 3, "damage": 30, "range": 5, "vfxCast": "Melee_Slash", "vfxImpact": "Cleave_Impact" },
-        "oathmend":          { "id": "knight.oathmend",          "slot": "e", "key": "E", "name": "Oathmend",          "description": "A sworn mending — heals 10 HP/s for 5s (50 total, 20s cd).",                "icon": "✚", "color": "#86efac", "effect": "healOverTime", "cooldown": 20, "manaCost": 4, "damage": 10, "range": 5, "seconds": 5, "vfxCast": "Heal_Cast", "vfxResidual": "Heal_Aura" },
+        "oathmend":          { "id": "knight.oathmend", "castSeconds": 0.4,          "slot": "e", "key": "E", "name": "Oathmend",          "description": "A sworn mending — heals 10 HP/s for 5s (50 total, 20s cd).",                "icon": "✚", "color": "#86efac", "effect": "healOverTime", "cooldown": 20, "manaCost": 4, "damage": 10, "range": 5, "seconds": 5, "vfxCast": "Heal_Cast", "vfxResidual": "Heal_Aura" },
         "eternal-aegis":     { "id": "knight.eternal-aegis",     "slot": "r", "key": "R", "name": "Eternal Aegis",     "description": "Raise an unbreakable ward — 8s of full invulnerability (90s cd).",          "icon": "✷", "color": "#fde68a", "effect": "invuln", "cooldown": 90,  "manaCost": 6, "damage": 0,  "range": 0, "seconds": 8, "vfxCast": "Aegis_Cast", "vfxResidual": "Aegis_Shield" },
-        "second-wind":       { "id": "knight.second-wind",       "slot": "e", "key": "E", "name": "Second Wind",       "description": "Catch your breath — heals 35 HP (45s cd).",                                 "icon": "✚", "color": "#86efac", "effect": "heal",   "cooldown": 45,  "manaCost": 4, "damage": 35, "range": 5, "vfxCast": "Heal_Cast", "vfxResidual": "Heal_Aura" },
+        "second-wind":       { "id": "knight.second-wind", "castSeconds": 0.4,       "slot": "e", "key": "E", "name": "Second Wind",       "description": "Catch your breath — heals 35 HP (45s cd).",                                 "icon": "✚", "color": "#86efac", "effect": "heal",   "cooldown": 45,  "manaCost": 4, "damage": 35, "range": 5, "vfxCast": "Heal_Cast", "vfxResidual": "Heal_Aura" },
         "champions-combo":   { "id": "knight.champions-combo",   "slot": "r", "key": "R", "name": "Champion's Combo",  "description": "A three-hit flurry — 120 dmg (3x40) to foes in front (30s cd).",            "icon": "✦", "color": "#facc15", "effect": "cleave", "cooldown": 30,  "manaCost": 5, "damage": 120, "range": 4, "vfxCast": "Melee_Slash", "vfxImpact": "Cleave_Impact" }
       }
     },
@@ -103,8 +106,8 @@
       "displayName": "Universal Skills",
       "_comment": "Cross-class COMMON actives any hero may learn from the Shared Universal talent pool (shared.n9-n11 in hero-talents.json reference these by 'abilityId'). V1 cooldown-gated, NO stamina/mana (manaCost 0 — stamina deferred to V2). Effects use only shapes HeroAbilities.ResolveEffect supports: strike / heal / blink ('blink' = the universal-dash raw-effect dodge added 2026-06-29).",
       "abilities": {
-        "arcane-bolt": { "id": "universal.arcane-bolt", "slot": "w", "key": "F", "name": "Arcane Bolt", "description": "A low-level magic dart at the nearest foe — 22 dmg @ 14m (2s cd).", "icon": "✦", "color": "#b388ff", "effect": "strike", "cooldown": 2,  "manaCost": 0, "damage": 22, "range": 14, "vfxCast": "Arcane_Cast", "vfxProjectile": "Arcane_Projectile", "vfxImpact": "Arcane_Impact" },
-        "mend":        { "id": "universal.mend",        "slot": "e", "key": "E", "name": "Mend",        "description": "Channel a little life back — heals 25 HP (12s cd).",                "icon": "✚", "color": "#86efac", "effect": "heal",   "cooldown": 12, "manaCost": 0, "damage": 25, "range": 5, "vfxCast": "Heal_Cast", "vfxResidual": "Heal_Aura" },
+        "arcane-bolt": { "id": "universal.arcane-bolt", "castSeconds": 0.35, "slot": "w", "key": "F", "name": "Arcane Bolt", "description": "A low-level magic dart at the nearest foe — 22 dmg @ 14m (2s cd).", "icon": "✦", "color": "#b388ff", "effect": "strike", "cooldown": 2,  "manaCost": 0, "damage": 22, "range": 14, "vfxCast": "Arcane_Cast", "vfxProjectile": "Arcane_Projectile", "vfxImpact": "Arcane_Impact" },
+        "mend":        { "id": "universal.mend", "castSeconds": 0.4,        "slot": "e", "key": "E", "name": "Mend",        "description": "Channel a little life back — heals 25 HP (12s cd).",                "icon": "✚", "color": "#86efac", "effect": "heal",   "cooldown": 12, "manaCost": 0, "damage": 25, "range": 5, "vfxCast": "Heal_Cast", "vfxResidual": "Heal_Aura" },
         "dash":        { "id": "universal.dash",        "slot": "w", "key": "F", "name": "Dash",        "description": "Blink 6m in your facing — a quick dodge (8s cd).",                  "icon": "➾", "color": "#7dd3fc", "effect": "blink",  "cooldown": 8,  "manaCost": 0, "damage": 0,  "range": 6, "vfxCast": "Dash_Blink" }
       }
     }

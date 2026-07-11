@@ -97,6 +97,14 @@ namespace DeNelle.Village
         /// <summary>aoe only — seconds the blast freezes the enemies it catches.</summary>
         [JsonProperty("freeze")] public float Freeze;
 
+        /// <summary>
+        /// Interruptible cast WIND-UP, in seconds (F8 "movement interrupts casting"). 0 = instant,
+        /// uninterruptible (basic/melee snap-cast, backward-compatible). >0 opens a wind-up window in
+        /// <see cref="DeNelle.Village.HeroAbilities.TryCast"/>: mana/cooldown are charged up front, but
+        /// the effect only commits after the wind-up completes — moving during it cancels + refunds.
+        /// </summary>
+        [JsonProperty("castSeconds")] public float CastSeconds;
+
         // ── WO-614 extra tuning fields (default 0 when absent — backward-compatible) ──
         /// <summary>dot effect — burn damage-per-second applied after the initial strike.</summary>
         [JsonProperty("dotDamage")] public float DotDamage;

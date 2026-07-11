@@ -48,6 +48,14 @@ namespace DeNelle.Village
         /// <summary>Current XZ velocity, exposed for the follow camera / animator.</summary>
         public Vector3 Velocity { get; private set; }
 
+        /// <summary>
+        /// True when the player is feeding move input THIS frame (F8 "movement interrupts casting").
+        /// Reads the same private <see cref="ReadMoveInput"/> the locomotion consumes, with the WO-423
+        /// hasMoveInput deadzone (sqrMagnitude &gt; 0.02) so resting-stick noise never counts. Static so
+        /// <see cref="HeroAbilities"/>' cast wind-up can poll it each frame without a component ref.
+        /// </summary>
+        public static bool WantsToMove => ReadMoveInput().sqrMagnitude > 0.02f;
+
         // WO-423: face-the-target on attack. The player hero previously only faced its
         // MOVE direction (LookRotation on Velocity), so standing still froze facing at the
         // last travel dir — attacks/projectiles fired the wrong way. FaceToward lets the

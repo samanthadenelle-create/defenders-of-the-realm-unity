@@ -105,6 +105,19 @@ namespace DeNelle.Village
         // Reusable overlap buffer — avoids per-cast GC (Physics.OverlapSphereNonAlloc).
         private readonly Collider[] _overlap = new Collider[64];
 
+        // ── F8 "movement interrupts casting" — interruptible cast WIND-UP ──────────
+        // Casts were INSTANT (TryCast committed in one frame), so there was no window to
+        // interrupt. def.CastSeconds > 0 now opens a wind-up: mana/cooldown are charged up
+        // front (so spamming can't double-charge), the effect commits only AFTER the wind-up,
+        // and feeding move input during it CANCELS + refunds. _casting guards against a second
+        // cast starting mid-wind-up (we IGNORE the new cast — safer than cancel-and-restart).
+        private bool _casting;
+        private Coroutine _castRoutine;
+        // A tiny post-cancel lockout so a self-interrupt doesn't instantly re-fire on the same
+        // key-hold frame (anti-flicker). Time.time until which TryCast/TryCastExtra are refused.
+        private float _castLockoutUntil;
+        private const float CastCancelLockout = 0.2f;
+
         // ── Animation ─────────────────────────────────────────────────────────
         // The hero rig's Animator (Hero.controller, built by the AnimatorSetup
         // editor script; assigned to the hero prefab by the integrator — see
@@ -369,6 +382,11 @@ namespace DeNelle.Village
                 return false;
             }
 
+            // F8 wind-up: ignore a new cast while one is winding up (safer than cancel-and-restart)
+            // and during the brief post-cancel anti-flicker lockout.
+            if (_casting || Time.time < _castLockoutUntil)
+                return false;
+
             // castAbility.ts: `if (combat.cd[kind] > 0 || combat.mana < def.mana) return null;`
             if (_cooldownRemaining[(int)slot] > 0f || _mana < def.ManaCost)
                 return false;
@@ -388,7 +406,20 @@ namespace DeNelle.Village
             GetComponent<AbilityCooldownUI>()?.StartCooldown(scaledCooldown);
 
             // PER-SPELL ANIMATION: pass the slot as the cast variant (q/w/e/r → 1..4).
-            CastResolved(def, (int)slot + 1);
+            // F8 "movement interrupts casting": spells with an authored wind-up (CastSeconds > 0)
+            // start an interruptible routine that commits CastResolved only after the wind-up;
+            // basics/melee (CastSeconds <= 0) stay INSTANT + uninterruptible (backward-compatible).
+            if (def.CastSeconds > 0f)
+            {
+                _casting = true;
+                FlowTrace.Step("HeroAbility",
+                    $"cast-start slot={slot} '{def.Name}' windup={def.CastSeconds:0.00}s (interruptible).");
+                _castRoutine = StartCoroutine(CastRoutine(def, (int)slot + 1, (int)slot, null, scaledCooldown));
+            }
+            else
+            {
+                CastResolved(def, (int)slot + 1);
+            }
             return true;
         }
 
@@ -410,16 +441,87 @@ namespace DeNelle.Village
                 Debug.LogWarning($"[HeroAbilities] Extra skill '{abilityId}' not found in abilities.json.");
                 return false;
             }
+            // F8 wind-up: ignore a new cast while one is winding up + during the anti-flicker lockout.
+            if (_casting || Time.time < _castLockoutUntil) return false;
             if (ExtraCooldownRemaining(abilityId) > 0f || _mana < def.ManaCost) return false;
 
             float scaledCooldown = def.Cooldown * HeroTalentModifiers.CooldownMultiplier(_heroClass);
             _extraCooldown[abilityId] = scaledCooldown;
             _mana -= def.ManaCost;
 
+            // F8 "movement interrupts casting": route spells with a wind-up (CastSeconds > 0) through the
+            // interruptible routine; instant skills (CastSeconds <= 0) commit immediately as before.
             // Variant 0 = the generic cast clip (the per-variant Q/W/E/R clips are slot-keyed).
-            CastResolved(def, 0);
-            DeNelle.Core.Diagnostics.FlowTrace.Step("Hero", "extra-skill cast " + abilityId + " FIRED");
+            if (def.CastSeconds > 0f)
+            {
+                _casting = true;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("HeroAbility",
+                    $"cast-start extra '{abilityId}' windup={def.CastSeconds:0.00}s (interruptible).");
+                _castRoutine = StartCoroutine(CastRoutine(def, 0, -1, abilityId, scaledCooldown));
+            }
+            else
+            {
+                CastResolved(def, 0);
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Hero", "extra-skill cast " + abilityId + " FIRED");
+            }
             return true;
+        }
+
+        /// <summary>
+        /// F8 "movement interrupts casting" — the interruptible cast WIND-UP. The caller has already
+        /// gated + charged mana/cooldown; this waits <c>def.CastSeconds</c> while polling
+        /// <see cref="HeroLocomotion.WantsToMove"/> each frame. Moving CANCELS the cast (no effect) and
+        /// REFUNDS near-full: mana back + the just-charged cooldown reset (slot array or extra-bar id),
+        /// plus a tiny anti-flicker lockout so a self-interrupt feels responsive, not punishing. Only when
+        /// the wind-up completes uninterrupted do we invoke the unchanged <see cref="CastResolved"/> so
+        /// the VFX/anim/effect ordering is byte-identical to the instant path.
+        /// </summary>
+        /// <param name="castVariant">Per-variant cast clip (1..4 = Q/W/E/R; 0 = generic/extra bar).</param>
+        /// <param name="slot">Q/W/E/R slot index whose cooldown to refund on cancel; -1 for extra-bar casts.</param>
+        /// <param name="extraId">Extra-bar ability id whose cooldown to remove on cancel; null for slot casts.</param>
+        /// <param name="chargedCooldown">The cooldown value charged up front (unused on commit; documents intent).</param>
+        private System.Collections.IEnumerator CastRoutine(AbilityDef def, int castVariant, int slot, string extraId, float chargedCooldown)
+        {
+            float elapsed = 0f;
+            while (elapsed < def.CastSeconds)
+            {
+                if (HeroLocomotion.WantsToMove)
+                {
+                    // CANCEL — refund mana + reset the just-charged cooldown, apply the anti-flicker lockout.
+                    _mana = Mathf.Min(_maxMana, _mana + def.ManaCost);
+                    if (extraId != null) _extraCooldown.Remove(extraId);
+                    else if (slot >= 0 && slot < _cooldownRemaining.Length) _cooldownRemaining[slot] = 0f;
+                    _casting = false;
+                    _castRoutine = null;
+                    _castLockoutUntil = Time.time + CastCancelLockout;
+                    FlowTrace.Step("HeroAbility",
+                        $"cast-interrupted '{def.Name}' at {elapsed:0.00}/{def.CastSeconds:0.00}s (moved) — mana+cd refunded.");
+                    yield break;
+                }
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+
+            // Wind-up completed — commit the effect through the UNCHANGED cast core.
+            _casting = false;
+            _castRoutine = null;
+            FlowTrace.Step("HeroAbility", $"cast-committed '{def.Name}' after {def.CastSeconds:0.00}s wind-up.");
+            CastResolved(def, castVariant);
+        }
+
+        /// <summary>
+        /// F8 external cancel hook (stun / knockback parity) — abort any in-flight cast wind-up WITHOUT
+        /// refunding (an external interrupt is a real loss, unlike the player's own move-cancel). No-op
+        /// when nothing is casting. Optional; the move-interrupt path is self-contained in CastRoutine.
+        /// </summary>
+        public void CancelCast()
+        {
+            if (!_casting) return;
+            if (_castRoutine != null) StopCoroutine(_castRoutine);
+            _castRoutine = null;
+            _casting = false;
+            _castLockoutUntil = Time.time + CastCancelLockout;
+            FlowTrace.Step("HeroAbility", "cast-cancelled (external interrupt) — no refund.");
         }
 
         /// <summary>
@@ -1066,7 +1168,11 @@ namespace DeNelle.Village
             {
                 if (!TryGetComponent(out _rangedVfx)) _rangedVfx = gameObject.AddComponent<RangedAttackVFX>();
             }
-            if (_heroClass == "ranger")      _rangedVfx.FireArrow(target, onArrive);
+            // WO-VFX-RANGED: mage/ranger fly a Hovl travel FX (def.VfxProjectile) muzzle→target and
+            // recolour by the ability accent. impactKey=null here — the onArrive closures already fire
+            // the Hovl impact via PlayImpactVfxKey, and a non-null travel key suppresses the old
+            // SpawnImpact inside RangedAttackVFX (no double impact).
+            if (_heroClass == "ranger")      _rangedVfx.FireArrow(target, onArrive, projectileKey, null, tint);
             else if (_heroClass == "knight")
             {
                 // WO-VFX-003: the Knight resolves melee-INSTANT (no RangedAttackVFX travelling
@@ -1078,7 +1184,7 @@ namespace DeNelle.Village
                     StartCoroutine(FlyCosmeticProjectile(projectileKey, ProjectileMuzzle(), target, tint));
                 onArrive?.Invoke();
             }
-            else                             _rangedVfx.FireSpellOrb(target, onArrive);
+            else                             _rangedVfx.FireSpellOrb(target, onArrive, projectileKey, null, tint);
         }
 
         // ── WO-VFX-003: Hovl skill-tree VFX helpers (string-key path, VFXManager.PlayKey) ──

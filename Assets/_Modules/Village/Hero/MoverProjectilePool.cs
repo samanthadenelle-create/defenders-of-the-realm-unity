@@ -48,6 +48,17 @@ namespace DeNelle.Village
         MageOrbVfx,       // particle-FX arcane orb (Mage orb, live default)
         PlaceholderArrow, // code-built brown capsule + trail (dev opt-in)
         PlaceholderOrb,   // code-built blue emissive sphere + trail (dev opt-in)
+        NoFxArrow,        // WO-VFX-RANGED: bare mover, NO built-in visual (Hovl projectile supplies the look)
+        NoFxOrb,          // WO-VFX-RANGED: bare mover, NO built-in visual (Hovl orb supplies the look)
+    }
+
+    /// <summary>WO-VFX-RANGED: kinds that intentionally carry NO built-in visual — a Hovl
+    /// projectile FX follows the mover and IS the travelling look. The has-visual verifier
+    /// must not flag these as an invisible-projectile bug.</summary>
+    internal static class ProjectileBodyKindExtensions
+    {
+        public static bool IsNoFx(this ProjectileBodyKind kind)
+            => kind == ProjectileBodyKind.NoFxArrow || kind == ProjectileBodyKind.NoFxOrb;
     }
 
     /// <summary>Persistent pool of reusable hero/companion ProjectileMover bodies,
@@ -148,7 +159,7 @@ namespace DeNelle.Village
                             || mover.GetComponentInChildren<ParticleSystem>(true) != null;
             FlowTrace.Throttle("MoverPool", "lease", 1f,
                 $"Acquire {kind} leased (expanded={expanded}, queueLeft={q.Count}, hasRenderer={hasRenderer}).");
-            if (!hasRenderer)
+            if (!hasRenderer && !kind.IsNoFx())
                 FlowTrace.Once("MoverPool", $"lease-no-renderer:{kind}",
                     $"Acquire {kind}: leased body has NO Renderer/ParticleSystem — projectile will fly INVISIBLE (visual build missed). See ProjectileBodyVisual.Build.");
             return mover;
@@ -206,6 +217,13 @@ namespace DeNelle.Village
                 case ProjectileBodyKind.PlaceholderOrb:
                     FlowTrace.Try("MoverPool", $"BuildPlaceholder {kind}", () => BuildPlaceholderOrb(host));
                     break;
+                case ProjectileBodyKind.NoFxArrow:
+                case ProjectileBodyKind.NoFxOrb:
+                    // WO-VFX-RANGED: intentionally NO built-in visual — a Hovl projectile FX
+                    // (VFXManager.PlayKey follow) supplies the travelling look. Return early so
+                    // the has-visual verifier below does not flag this as an invisible-body bug.
+                    FlowTrace.Step("MoverPool", $"BuildBodyVisual {kind}: no-FX body (Hovl projectile supplies the visual).");
+                    return;
             }
 
             // V(erify the body was actually built): if every shader/FX path missed, the host carries no

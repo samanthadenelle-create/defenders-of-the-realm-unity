@@ -76,6 +76,25 @@ namespace DeNelle.Village
                  "Leave blank for no ground warning.")]
         [SerializeField] private GameObject _telegraphVFXPrefab;
 
+        // ── Ranged cast Hovl VFX (WO-VFX-RANGED) ──────────────────────────────
+        // String keys into HovlVfxCatalog for this archetype's rooted ranged cast
+        // (muzzle flash, travelling projectile, impact). Default to the Arcane set so a
+        // caster with no per-type override still reads as an arcane orb. A fire/ice enemy
+        // type overrides these to Fireball_*/Frost_* (+ a matching tint).
+
+        [Header("Ranged cast Hovl VFX (WO-VFX-RANGED)")]
+        [Tooltip("HovlVfxCatalog key for the muzzle/cast flash at the caster's hands.")]
+        [SerializeField] private string _castVfxKey = "Arcane_Cast";
+
+        [Tooltip("HovlVfxCatalog LOOP key for the travelling projectile.")]
+        [SerializeField] private string _projectileVfxKey = "Arcane_Projectile";
+
+        [Tooltip("HovlVfxCatalog key for the impact burst where the orb lands.")]
+        [SerializeField] private string _impactVfxKey = "Arcane_Impact";
+
+        [Tooltip("HDR recolour applied to the ranged-cast Hovl FX (colourblind: reads by motion/shape).")]
+        [SerializeField] private Color _rangedVfxTint = new Color(0.6f, 0.4f, 1f, 1f); // arcane violet
+
         // ── API ───────────────────────────────────────────────────────────────
 
         /// <summary>
@@ -110,6 +129,18 @@ namespace DeNelle.Village
         /// the wind-up window. Null when no ground-ring warning is needed.
         /// </summary>
         public GameObject TelegraphVFXPrefab => _telegraphVFXPrefab;
+
+        /// <summary>WO-VFX-RANGED: HovlVfxCatalog key for the ranged-cast muzzle/cast flash.</summary>
+        public string CastVfxKey => _castVfxKey;
+
+        /// <summary>WO-VFX-RANGED: HovlVfxCatalog LOOP key for the travelling ranged-cast projectile.</summary>
+        public string ProjectileVfxKey => _projectileVfxKey;
+
+        /// <summary>WO-VFX-RANGED: HovlVfxCatalog key for the ranged-cast impact burst.</summary>
+        public string ImpactVfxKey => _impactVfxKey;
+
+        /// <summary>WO-VFX-RANGED: HDR recolour applied to the ranged-cast Hovl FX.</summary>
+        public Color RangedVfxTint => _rangedVfxTint;
 
         // ── Helpers ───────────────────────────────────────────────────────────
 
