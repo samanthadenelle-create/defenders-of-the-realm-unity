@@ -1111,7 +1111,19 @@ namespace DeNelle.HUD.Kit
                     if (h.frame != null) h.frame.color = Color.white;   // un-dim (colours baked in the face)
                     if (h.icon != null) h.icon.enabled = true;
                 }
-                h.SetIcon(string.IsNullOrEmpty(s.IconKey) ? null : UiStyle.Icon(s.IconKey));
+                // OWNER PLACEHOLDER (2026-07-11): an IconKey with the in-band "text:" prefix
+                // (AbilityLoadoutProducer sets it for Q/knight.q — "use word Dodge/Attack") renders
+                // as a centered TEXT face instead of a sprite. SetLabel hides the icon; SetLabel(null)
+                // restores icon mode when the loadout changes back. Cooldown glow/press untouched.
+                if (!string.IsNullOrEmpty(s.IconKey) && s.IconKey.StartsWith("text:", System.StringComparison.Ordinal))
+                {
+                    h.SetLabel(s.IconKey.Substring(5));
+                }
+                else
+                {
+                    h.SetLabel(null);
+                    h.SetIcon(string.IsNullOrEmpty(s.IconKey) ? null : UiStyle.Icon(s.IconKey));
+                }
                 // WO-611: combat HUD medallions use the SOFT under-glow; else the hard radial sweep.
                 if (medallion)
                 {
@@ -1130,6 +1142,7 @@ namespace DeNelle.HUD.Kit
         private static void SetEmptyMedallion(ElarionUiKit.ActionSlotHandle h)
         {
             if (h == null) return;
+            h.SetLabel(null);   // 2026-07-11: drop a stale text face (Dodge/Attack) with the icon
             if (h.icon != null) h.icon.enabled = false;
             if (h.frame != null) h.frame.color = new Color(1f, 1f, 1f, 0.45f);
             if (h.button != null) h.button.interactable = false;

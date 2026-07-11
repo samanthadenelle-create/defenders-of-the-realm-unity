@@ -806,6 +806,9 @@ namespace DeNelle.Core.UI
             public TMP_Text count;
             /// <summary>The tap target.</summary>
             public Button button;
+            /// <summary>Optional centered TEXT face (lazy — built on first <see cref="SetLabel"/>);
+            /// null on the icon-only slots, which pay nothing for it.</summary>
+            public TMP_Text label;
 
             private int _shownCd = int.MinValue, _shownCount = int.MinValue;
 
@@ -818,7 +821,46 @@ namespace DeNelle.Core.UI
                 // ability/action slot is structurally impossible even when a future concept is unmapped.
                 if (s == null) s = ConceptIconResolver.DefaultSprite();
                 icon.sprite = s;
-                icon.enabled = s != null;
+                // Text-label mode owns the face while active (SetLabel) — an icon refresh must
+                // not re-enable the sprite underneath the words.
+                icon.enabled = s != null && (label == null || !label.gameObject.activeSelf);
+            }
+
+            /// <summary>TEXT face mode — render centered word(s) on the slot INSTEAD of the icon
+            /// sprite (owner placeholder directive 2026-07-11: "instead of the heroic leap image
+            /// use word Dodge/Attack"). Text carries the meaning on the standard chrome — no
+            /// color-only signalling (colorblind rule). Auto-sizes to fit multi-line inside the
+            /// face; built lazily so every icon-only slot pays zero extra objects. Pass
+            /// null/empty to leave text mode (then SetIcon restores the sprite face).</summary>
+            public void SetLabel(string text)
+            {
+                bool has = !string.IsNullOrEmpty(text);
+                if (!has)
+                {
+                    if (label != null && label.gameObject.activeSelf)
+                    {
+                        label.gameObject.SetActive(false);
+                        if (icon != null) icon.enabled = icon.sprite != null;
+                    }
+                    return;
+                }
+                if (label == null)
+                {
+                    label = Label(root.transform, "", 0.14f, 0.86f, ElarionUi.Parchment,
+                                  ElarionUi.FontLabel, TextAlignmentOptions.Center, 0.08f, 0.92f,
+                                  bold: true);
+                    label.raycastTarget = false;
+                    EnsureFont(label, FontRole.Body);
+                    label.enableAutoSizing = true;              // two-line fit inside the round face
+                    label.fontSizeMax = ElarionUi.FontLabel;
+                    label.fontSizeMin = 6f;
+                    // Sit UNDER the cooldown seconds readout so a live sweep count stays on top.
+                    if (cdText != null)
+                        label.transform.SetSiblingIndex(cdText.transform.GetSiblingIndex());
+                }
+                label.gameObject.SetActive(true);
+                if (label.text != text) label.text = text;
+                if (icon != null) icon.enabled = false;         // words replace the sprite face
             }
 
             /// <summary>Drive the sweep: fillAmount = remaining/total (the only mutation), seconds

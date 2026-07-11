@@ -409,6 +409,17 @@ namespace DeNelle.Village.Hud
                 // falls through to def.Effect/def.Id so the SetIcon default-sprite backstop still fills it.
                 string resolvedKey = equipped ? ConceptIconResolver.ResolveKey(def.Id, def.Effect) : null;
                 string icon = equipped ? (resolvedKey ?? def.Effect ?? def.Id) : null;
+                // OWNER PLACEHOLDER (2026-07-11, verbatim): "for now instead of the heroic leap
+                // image use word Dodge/Attack" — the Q medallion renders TEXT while the leap is
+                // being rebound to a jump+stab dodge/attack move. In-band "text:" IconKey prefix;
+                // HudKitController.OnAbilities routes it to ActionSlotHandle.SetLabel (words on the
+                // standard chrome — meaning carried by text, never color alone). Remove this block
+                // once the rebound ability ships its own icon.
+                if (equipped && slot == AbilitySlot.Q && def.Id == "knight.q")
+                {
+                    icon = "text:Dodge/\nAttack";
+                    resolvedKey = icon;   // deliberate text face — not an unmapped-icon fallback (F8-33)
+                }
                 // F8-33 (owner: right-side ability icons hard-coded/placeholder): a slot whose
                 // concept did NOT resolve real art renders the SetIcon default backstop — that
                 // fallback must never be silent. Collected here, warned once below on a loadout
