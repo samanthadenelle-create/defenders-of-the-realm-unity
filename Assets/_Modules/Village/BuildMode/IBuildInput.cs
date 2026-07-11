@@ -67,7 +67,27 @@ namespace DeNelle.Village
         /// <summary>
         /// True on the single frame a +90° yaw is requested (old R key; an on-screen
         /// Rotate button on touch). Free, so it applies in both the place and move loops.
+        /// LEGACY (WO-673 L5): the controller now polls <see cref="RotateCw"/> /
+        /// <see cref="RotateCcw"/> (45° steps); this remains as the default source for
+        /// <see cref="RotateCw"/> so older implementations (bot probes, Arena setup)
+        /// keep working unchanged.
         /// </summary>
         bool Rotate { get; }
+
+        /// <summary>
+        /// WO-673 L5 (owner ruling 2026-07-11: 45° steps, 8 facings). True on the single
+        /// frame a CLOCKWISE 45° ghost yaw is requested (E key on desktop; the touch
+        /// Rotate ⟳ button). Default implementation rides the legacy <see cref="Rotate"/>
+        /// intent so existing implementors (AutoPilot BotBuildInput, Arena setup) compile
+        /// and behave exactly as before without edits.
+        /// </summary>
+        bool RotateCw => Rotate;
+
+        /// <summary>
+        /// WO-673 L5. True on the single frame a COUNTER-CLOCKWISE 45° ghost yaw is
+        /// requested (Q key on desktop; the touch Rotate ⟲ button). Defaults to false
+        /// (legacy implementors only ever had one rotate direction).
+        /// </summary>
+        bool RotateCcw => false;
     }
 }

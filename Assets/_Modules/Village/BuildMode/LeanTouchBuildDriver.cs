@@ -16,7 +16,7 @@
 //                      ghost isn't hidden under the thumb.
 //   two-finger PAN   → slides the overview camera across the plot.
 //   two-finger PINCH → raises / lowers the overview camera (zoom).
-//   [Rotate] button  → Rotate (+90° yaw)         — replaces the desktop R key.
+//   [⟲/⟳ Rotate]     → RotateCcw / RotateCw (±45° yaw, WO-673 L5) — mirrors Q/E.
 //   [Cancel] button  → Cancel (back out arm/move) — replaces right-click / Escape.
 //
 // The controller installs this via Install() on Enter and Uninstall() on Exit, so
@@ -57,7 +57,9 @@ namespace DeNelle.Village
         private Vector2 _screenPoint;
         private bool _placeOrSelectLatched;   // raised by a Lean tap, consumed next controller poll
         private bool _cancelLatched;           // raised by the Cancel button
-        private bool _rotateLatched;           // raised by the Rotate button
+        private bool _rotateLatched;           // legacy single-direction latch (kept for IBuildInput.Rotate compat)
+        private bool _rotateCwLatched;         // raised by the Rotate ⟳ button (WO-673 L5: +45°)
+        private bool _rotateCcwLatched;        // raised by the Rotate ⟲ button (WO-673 L5: −45°)
 
         // ── On-screen button bar ──────────────────────────────────────────────
         private UIDocument _document;
@@ -105,6 +107,13 @@ namespace DeNelle.Village
         public bool Cancel { get { bool v = _cancelLatched; _cancelLatched = false; return v; } }
 
         public bool Rotate { get { bool v = _rotateLatched; _rotateLatched = false; return v; } }
+
+        // WO-673 L5 (45° steps) — the two directed rotate intents the controller now
+        // polls. Same latch-and-clear shape as the legacy Rotate so a button tap fires
+        // exactly one 45° step per poll.
+        public bool RotateCw  { get { bool v = _rotateCwLatched;  _rotateCwLatched  = false; return v; } }
+
+        public bool RotateCcw { get { bool v = _rotateCcwLatched; _rotateCcwLatched = false; return v; } }
 
         // =====================================================================
         //  Lean.Touch gesture handling
@@ -250,7 +259,14 @@ namespace DeNelle.Village
             _root.style.alignItems = Align.FlexEnd;
             docRoot.Add(_root);
 
-            var rotateBtn = new Button(() => _rotateLatched = true) { text = "Rotate" };
+            // WO-673 L5 (owner ruling 2026-07-11): rotation is 45° stepped, BOTH directions.
+            // The single legacy Rotate button becomes a ⟲/⟳ pair — SAME StyleBigButton
+            // chrome (no new bespoke UI), one 45° step per tap, mirroring desktop Q/E.
+            var rotateCcwBtn = new Button(() => _rotateCcwLatched = true) { text = "⟲ Rotate" };
+            StyleBigButton(rotateCcwBtn, new Color(0.20f, 0.42f, 0.66f, 0.98f));
+            _root.Add(rotateCcwBtn);
+
+            var rotateBtn = new Button(() => _rotateCwLatched = true) { text = "Rotate ⟳" };
             StyleBigButton(rotateBtn, new Color(0.20f, 0.42f, 0.66f, 0.98f));
             _root.Add(rotateBtn);
 

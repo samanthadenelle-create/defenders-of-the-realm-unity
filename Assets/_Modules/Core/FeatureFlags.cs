@@ -520,6 +520,19 @@ namespace DeNelle.Core
         // build 2; the catalog Poi_* keys are authored. Set ff.poicallouts=0 to turn off if too busy.
         public static bool PoiCallouts => Get("poicallouts", defaultOn: true);
 
+        /// <summary>WO-673 — STRATEGIC BUILDING PLACEMENT (owner go 2026-07-11): when ON, the
+        /// player places the FUNCTIONAL town buildings (Forge/production/storefronts/collectors)
+        /// through the BuildMode spine instead of receiving them auto-placed — the build palette
+        /// gains the owner-ruled three-category switcher (Build → Town / Defenses / Walls,
+        /// BuildPaletteUI tab row), the Town verb lists CatalogType.Resource + Collector rows,
+        /// Walls split out of Defense, and the new-game wood/iron seed rises to afford the core
+        /// kit + exactly one leftover choice (GameStateService.ResetToNewGame). Companion lanes
+        /// gate the baked-storefront standdown / vendor anchors / migration behind this SAME flag.
+        /// Default OFF until owner felt-pass — flag-off is today's behavior exactly (Defense-only
+        /// palette, legacy 15w/5i seed, baked town untouched). PlayerPrefs "ff.strategicplacement"
+        /// = 1 to preview. Spec: WORK_ORDER_673 + docs/WO673_ARCHITECTURE_REVIEW.md.</summary>
+        public static bool StrategicPlacement => Get("strategicplacement", defaultOn: false);
+
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
         {

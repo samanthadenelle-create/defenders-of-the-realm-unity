@@ -35,6 +35,13 @@ namespace DeNelle.Village
         /// <summary>Discrete yaw, 0..3 (× 90°).</summary>
         public int yawSteps;
 
+        /// <summary>Extra yaw in degrees on top of <see cref="yawSteps"/> (WO-673 L5:
+        /// a 45° facing persists as yawSteps + yawOffset=45). Mirrors
+        /// <see cref="PlacedStructureData.yawOffset"/> so a move/save keeps the exact
+        /// facing — previously this was dropped (ToSaveData hard-coded 0f) and a moved
+        /// 45°-placed piece would snap back to its cardinal on reload.</summary>
+        public float yawOffset;
+
         /// <summary>Upgrade level (1-based).</summary>
         public int level = 1;
 
@@ -56,7 +63,7 @@ namespace DeNelle.Village
 
         /// <summary>Snapshot this live structure into its persisted record.</summary>
         public PlacedStructureData ToSaveData() =>
-            new PlacedStructureData(itemId, gridCell.x, gridCell.y, yawSteps, level, 0f, worldY, wallMounted);
+            new PlacedStructureData(itemId, gridCell.x, gridCell.y, yawSteps, level, yawOffset, worldY, wallMounted);
 
         // ── F8-39 TEARDOWN / HIDE MONITOR (towers vanish on death, all return on next placement) ──
         // The ticket's split: do the placed structures get DESTROYED / HIDDEN when the hero dies

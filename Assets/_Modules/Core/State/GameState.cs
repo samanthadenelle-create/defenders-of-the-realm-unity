@@ -399,6 +399,18 @@ namespace DeNelle.Core.State
         /// <summary>F8-47 — total XP the hero has ever earned (telemetry/UI counter; v29).</summary>
         public float HeroLifetimeXp = 0f;
 
+        // ── WO-673 — strategic-placement migration marker (v30) ──────────────
+        /// <summary>
+        /// True once the ONE-SHOT WO-673 migration (StrategicPlacementMigration.RunIfNeeded)
+        /// has converted the auto-placed functional structures (baked ring storefronts +
+        /// runtime crafting stations) into <see cref="BaseLayout"/> records. Gates BOTH the
+        /// injector/bake standdown AND the loader's replay of those records — mutual
+        /// exclusion, never a double-spawn (docs/WO673_ARCHITECTURE_REVIEW.md §3). False on
+        /// a fresh save / pre-v30 save = bakes/injectors own everything (prior behaviour).
+        /// Round-trips through SaveSchema v30 — additive at the END so older saves load false.
+        /// </summary>
+        public bool StrategicPlacementMigrated = false;
+
         /// <summary>A fresh List&lt;int&gt; of <paramref name="count"/> zeros.</summary>
         public static List<int> NewZeroed(int count)
         {

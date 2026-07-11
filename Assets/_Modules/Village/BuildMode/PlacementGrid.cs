@@ -213,6 +213,32 @@ namespace DeNelle.Village
             return new Vector2Int(cells, cells);
         }
 
+        /// <summary>
+        /// WO-673 L5 (45° rotation) — the ROTATION-HONEST footprint claim. The footprint
+        /// model is a square of side max(width,depth) metres (MeasureUprightFootprintMetres);
+        /// at cardinal yaws the rotated mesh's world AABB stays inside that square
+        /// (multiplier = 1, byte-identical to the legacy claim), but at a diagonal yaw the
+        /// AABB grows by up to |sin θ|+|cos θ| (√2 at 45°). Claiming the UNROTATED square
+        /// there would under-claim by ~41% — the "placement lies about its cells" bug the
+        /// architecture review vetoed (WO673_ARCHITECTURE_REVIEW G-F). So the claim inflates
+        /// by exactly that factor: slightly conservative for non-square meshes (over-claiming
+        /// is honest; under-claiming is the bug), exact for square ones.
+        /// </summary>
+        public Vector2Int FootprintCells(float footprintMetres, float yawDegrees)
+        {
+            // Snap the multiplier to EXACTLY 1 at cardinal yaws: |sin|+|cos| computes to
+            // 1.0000000000000002 at 180° etc., and on an exact-cell-multiple footprint that
+            // epsilon bumps the claim a whole cell (6m: 2x2 -> 3x3) — a byte-identity break
+            // the strategic-placement regression gate catches. Cardinal = legacy, verbatim.
+            float yawMod = Mathf.Abs(Mathf.DeltaAngle(0f, yawDegrees)) % 90f;
+            bool cardinal = yawMod < 0.01f || yawMod > 89.99f;
+            if (cardinal) return FootprintCells(footprintMetres);
+
+            float rad = yawDegrees * Mathf.Deg2Rad;
+            float inflate = Mathf.Abs(Mathf.Sin(rad)) + Mathf.Abs(Mathf.Cos(rad));   // √2 at 45°
+            return FootprintCells(footprintMetres * inflate);
+        }
+
         // ── Overlay (build-mode only) ──────────────────────────────────────────
 
         /// <summary>Show/hide a translucent grid overlay over the build area.</summary>

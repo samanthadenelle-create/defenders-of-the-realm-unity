@@ -213,21 +213,40 @@ namespace DeNelle.Village
             grid.ClearAll();
 
             int built = 0;
+            int withheld = 0;   // WO-673 — migration-managed records deliberately not replayed
             for (int i = 0; i < layout.Count; i++)
             {
+                // WO-673 L3 DOUBLE-SPAWN GUARD (docs/WO673_ARCHITECTURE_REVIEW.md §3): a
+                // migration-MANAGED record replays only while the bake/injector standdown is
+                // active (marker set + ff.strategicplacement ON + not the migration load
+                // itself). Otherwise the bake/injector owns that structure this session —
+                // replaying the record too would spawn it twice (e.g. flag flipped OFF after
+                // migration = clean rollback to the baked town). Non-managed records
+                // (towers/walls/defenses) are untouched by this filter.
+                if (!StrategicPlacementMigration.ShouldReplayRecord(layout[i].itemId))
+                {
+                    withheld++;
+                    FlowTrace.Step("BaseLayout",
+                        $"Rebuild: record '{layout[i].itemId}' WITHHELD — migration-managed id and standdown " +
+                        "is not active (bake/injector owns it this session; no double-spawn).");
+                    continue;
+                }
                 if (Spawn(layout[i], grid) != null) built++;
             }
             // U + R: a PARTIAL base (built < count) means some of the player's persisted buildings
             // silently vanished on load — the worst kind of "my base is wrong" bug. Warn (not a
             // happy Log) when any record failed so the shortfall self-reports; each failing record
-            // already Fail'd in Spawn with its id.
-            if (built < layout.Count)
+            // already Fail'd in Spawn with its id. Deliberately-withheld WO-673 records (standdown
+            // inactive — the bake owns them) are NOT a shortfall; they're excluded from the check.
+            if (built < layout.Count - withheld)
                 FlowTrace.Warn("BaseLayout",
-                    $"Rebuild: loaded only {built}/{layout.Count} placed structure(s) — " +
-                    $"{layout.Count - built} record(s) FAILED to spawn (see prior FAILED lines for ids).");
+                    $"Rebuild: loaded only {built}/{layout.Count - withheld} replayable structure(s) — " +
+                    $"{layout.Count - withheld - built} record(s) FAILED to spawn (see prior FAILED lines for ids); " +
+                    $"{withheld} withheld (WO-673 standdown inactive).");
             else
                 FlowTrace.Step("BaseLayout",
-                    $"Rebuild: loaded {built}/{layout.Count} placed structure(s) from BaseLayout.");
+                    $"Rebuild: loaded {built}/{layout.Count - withheld} placed structure(s) from BaseLayout" +
+                    (withheld > 0 ? $" ({withheld} migration-managed record(s) withheld — bake owns them)." : "."));
         }
 
         /// <summary>
@@ -255,7 +274,11 @@ namespace DeNelle.Village
             // top — the defensive posture). Old records carry worldY = 0 → ground placement,
             // unchanged. Approximately() so a 0 from an old save is treated as "use the grid plane".
             if (!Mathf.Approximately(data.worldY, 0f)) pos.y = data.worldY;
-            var rot = Quaternion.Euler(0f, data.yawSteps * 90f + data.yawOffset, 0f);
+            // WO-673 L5 — the persisted yaw round-trip: world yaw = yawSteps × 90 + yawOffset.
+            // A 45° facing commits as (yawSteps = facing/2, yawOffset = 45), so it replays
+            // exactly; old records (yawOffset 0) replay byte-identically.
+            float yawDeg = data.yawSteps * 90f + data.yawOffset;
+            var rot = Quaternion.Euler(0f, yawDeg, 0f);
 
             GameObject go = null;
             // G(uard the Build): StructureFactory.Create can throw on a corrupt/missing prefab;
@@ -276,15 +299,27 @@ namespace DeNelle.Village
             // FIX (footprint from CORRECTED bounds) — measure the UPRIGHT, OrientationFix-
             // applied mesh so the footprint matches what the ghost showed (a lying-down
             // prefab would report a long, wrong footprint and refuse to sit near a wall).
-            Vector2Int footprint = grid.FootprintCells(StructureFactory.MeasureUprightFootprintMetres(entry));
+            // WO-673 L5 (45° rotation) — TWO footprints with distinct jobs:
+            //   • blockerFootprint = the model's own (unrotated) size. The blocker box +
+            //     NavMeshObstacle are LOCAL to the yawed root (Pose above), so they rotate
+            //     WITH the model — the carve matches the rotated orientation by construction.
+            //     Inflating this one would over-carve diagonally past the actual mesh.
+            //   • footprint (the grid CLAIM) = rotation-honest cells covering the rotated
+            //     mesh's world AABB (×√2 at diagonal yaws) — must match what IsValidPlacement
+            //     claimed at place time, or a reload would Occupy fewer cells than validity
+            //     promised and a later placement could overlap the diagonal.
+            float footprintMetres = StructureFactory.MeasureUprightFootprintMetres(entry);
+            Vector2Int blockerFootprint = grid.FootprintCells(footprintMetres);
+            Vector2Int footprint = grid.FootprintCells(footprintMetres, yawDeg);
 
-            AddFootprintBlocker(go, footprint, grid.cellSize);
+            AddFootprintBlocker(go, blockerFootprint, grid.cellSize);
 
             var ps = go.AddComponent<PlacedStructure>();
             ps.itemId = data.itemId;
             ps.gridCell = cell;
             ps.footprint = footprint;
             ps.yawSteps = data.yawSteps;
+            ps.yawOffset = data.yawOffset;   // WO-673 L5 — keep the exact facing on the live marker (move/save round-trip)
             ps.level = Mathf.Max(1, data.level);
             ps.worldY = data.worldY;
             ps.wallMounted = data.wallMounted;

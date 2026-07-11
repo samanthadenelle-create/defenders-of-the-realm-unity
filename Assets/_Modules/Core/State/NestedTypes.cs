@@ -58,6 +58,32 @@ namespace DeNelle.Core.State
         public static ResourceBalance Zero => new ResourceBalance(0, 0, 0);
     }
 
+    /// <summary>
+    /// WO-673 strategic-placement NEW-GAME BUDGET (owner ruling 2026-07-11: "core kit +
+    /// exactly one leftover choice"). Wood/Iron are GameState scalar fields (not part of
+    /// <see cref="ResourceBalance"/>), so their raised seeds live here as the ONE
+    /// authoritative constant pair; <c>GameStateService.ResetToNewGame</c> applies them
+    /// when <c>FeatureFlags.StrategicPlacement</c> is ON (flag OFF keeps the legacy
+    /// 15 wood / 5 iron seed — today's behavior byte-identical).
+    ///
+    /// Arithmetic, from the authored structures-catalog.json repo.cost rows:
+    ///   core kit  = forge "Armorer" (60w,70i) + collector_forge (60w,60i)
+    ///             + tower_ground_archer (70w,40i)             = 190w, 170i
+    ///   one extra = the priciest single leftover choice tier
+    ///     (archer tower 70w/40i · market 70w/30i · mill 70w/20i
+    ///      · workshop 60w/40i · collector_farm 60w/20i)       = 70w, 40i
+    ///   seed      = 190+70 wood, 170+40 iron                  = 260w, 210i
+    /// After the kit + one extra, ≤20 wood remains — no second full structure is
+    /// affordable, so the budget affords the kit + EXACTLY one leftover choice.
+    /// </summary>
+    public static class StartingBudget
+    {
+        /// <summary>New-game Wood seed under ff.strategicplacement (see class remarks).</summary>
+        public const int StrategicWood = 260;
+        /// <summary>New-game Iron seed under ff.strategicplacement (see class remarks).</summary>
+        public const int StrategicIron = 210;
+    }
+
     /// <summary>An in-flight pet-assisted tower build (villageSlice PendingTowerBuild).</summary>
     [Serializable]
     public struct PendingTowerBuild

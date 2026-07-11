@@ -66,6 +66,7 @@ namespace DeNelle.Core.State
                 { 27, MigrateToV27 },
                 { 28, MigrateToV28 },
                 { 29, MigrateToV29 },
+                { 30, MigrateToV30 },
             };
 
         /// <summary>
@@ -431,6 +432,17 @@ namespace DeNelle.Core.State
             if (!s.HeroLevel.HasValue) s.HeroLevel = 1;
             if (!s.HeroXp.HasValue) s.HeroXp = 0;
             if (!s.HeroLifetimeXp.HasValue) s.HeroLifetimeXp = 0;
+            return s;
+        }
+
+        // v30 — WO-673 strategic-placement migration marker. A pre-v30 save has never run the
+        // one-shot bake→BaseLayout migration, so seed false: the baked storefronts + runtime
+        // station injectors keep owning the functional structures (exactly the prior behaviour)
+        // until the flag-gated writer (StrategicPlacementMigration.RunIfNeeded) flips it once.
+        // Additive + idempotent (only seeds when null), mirroring the v25/v29 seed precedent.
+        private static PersistedState MigrateToV30(PersistedState s)
+        {
+            if (!s.StrategicPlacementMigrated.HasValue) s.StrategicPlacementMigrated = false;
             return s;
         }
 

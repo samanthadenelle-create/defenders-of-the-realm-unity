@@ -157,12 +157,18 @@ namespace DeNelle.Village
             ApplyTransparentMaterials();
         }
 
-        /// <summary>Move the ghost to a snapped world position with a discrete yaw.</summary>
+        /// <summary>Move the ghost to a snapped world position with a discrete 90° yaw
+        /// (legacy quarter-step callers, e.g. the Arena defense setup screen).</summary>
         public void MoveTo(Vector3 snappedWorldPos, int yawSteps)
+            => MoveTo(snappedWorldPos, yawSteps * 90f);
+
+        /// <summary>Move the ghost to a snapped world position with an exact yaw in degrees
+        /// (WO-673 L5 — Build Mode rotates in 45° steps, so the controller passes degrees).</summary>
+        public void MoveTo(Vector3 snappedWorldPos, float yawDegrees)
         {
             if (_visual == null) return;
             _visual.transform.SetPositionAndRotation(
-                snappedWorldPos, Quaternion.Euler(0f, yawSteps * 90f, 0f));
+                snappedWorldPos, Quaternion.Euler(0f, yawDegrees, 0f));
             if (!_visual.activeSelf) _visual.SetActive(true);
         }
 

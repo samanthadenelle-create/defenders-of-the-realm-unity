@@ -63,23 +63,30 @@ namespace DeNelle.Village
         // Which catalog types this palette lists + which ids are unlock-gated — now
         // SOURCED FROM DATA (owner 2026-07-10 generic build-mode). Configure(BuildType)
         // fills these from BuildCategoryRegistry.Get(type) so the SAME palette serves
-        // every build verb (Defense = Tower/Wall/Gate, Collector = Collector). Defaults
-        // to the Defense recipe so the palette is coherent even if Configure is never
-        // called (back-compat: the old no-arg build path is BuildType.Defense).
-        private CatalogType[] _types = { CatalogType.Tower, CatalogType.Wall, CatalogType.Gate };
+        // every build verb. Defaults to the Defense recipe so the palette is coherent
+        // even if Configure is never called (back-compat: the old no-arg build path is
+        // BuildType.Defense).
+        //
+        // ⚠ PALETTE REVERSAL (WO-673, owner 2026-07-11) — supersedes the 2026-06-27
+        // "Defensive only" ruling that restricted the palette to Tower/Wall/Gate:
+        // functional buildings (CatalogType.Resource + Collector) JOIN the palette under
+        // the Build → Town verb, and Walls split out of Defense (owner taxonomy
+        // Town / Defenses / Walls), all behind ff.strategicplacement. Flag OFF renders
+        // today's Defense-only palette exactly.
+        private CatalogType[] _types = { CatalogType.Tower, CatalogType.Gate };
 
         // Catalog ids defined-but-not-yet-buildable for the active build verb. They stay
         // in the catalog (ready to unlock + referenced elsewhere) but are filtered out of
         // the palette until their unlock ships. Sourced from build-categories.json via
         // Configure; the initial value mirrors the Defense lockedIds so the pre-Configure
-        // palette stays the three tower types (owner ruling 2026-07-06).
+        // palette stays the three tower types (owner ruling 2026-07-06; WO-673 moved the
+        // jeweler lock to the Town verb and the wall ids out with the Walls split — the
+        // rendered pre-Configure set is unchanged, since every removed id was either
+        // locked or not a Tower/Gate type).
         private HashSet<string> _lockedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "jeweler",
             "tower_siege_tower",
             "tower_catapult",
-            "wall_wood",
-            "wall_stone",
             "gate_stone",
         };
 
@@ -91,12 +98,14 @@ namespace DeNelle.Village
         /// </summary>
         public void Configure(BuildType type)
         {
+            _activeType = type;
             var cat = BuildCategoryRegistry.Get(type);
             if (cat != null)
             {
                 if (cat.Types != null && cat.Types.Length > 0) _types = cat.Types;
                 _lockedIds = cat.LockedIds ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             }
+            UpdateTabHighlight();   // WO-673 — move the gold underline to the active category tab
             if (_canvas != null && _canvas.activeSelf) Render();
         }
 
@@ -108,6 +117,18 @@ namespace DeNelle.Village
         private TextMeshProUGUI _balanceLabel;
         private Button _orientBtn;            // shown only while an entry is armed
         private string _armedId;
+
+        // WO-673 category switcher (ff.strategicplacement ON only): the owner-ruled three
+        // build categories — Town / Defenses / Walls — as a tab row between the header and
+        // the card tray. Tapping a tab Configure()s this palette for that verb (placement
+        // stays generic; BuildModeController's _activeBuildType is only ever used to
+        // Configure this palette, verified BuildModeController.cs:256). The active tab
+        // carries a gold UNDERLINE — position/shape tell, never color alone (owner is
+        // red/green colorblind). Flag OFF: no tab row is built and the dock keeps its
+        // exact pre-673 size/layout.
+        private BuildType _activeType = BuildType.Defense;
+        private readonly Dictionary<BuildType, GameObject> _tabUnderlines =
+            new Dictionary<BuildType, GameObject>();
 
         private void OnEnable()
         {
@@ -176,6 +197,15 @@ namespace DeNelle.Village
             // header row (balance | Orient | Done) over a 180px card tray. Only the
             // dock's own graphics raycast — the rest of the screen stays click-through
             // so world taps still land placements.
+            // WO-673: with strategic placement ON, the dock grows a 40px category tab row
+            // (Town / Defenses / Walls) between the header and the card tray — dock 264
+            // tall, header 0.83–1.0 (~45px), tabs 0.68–0.83 (~40px), tray 0–0.68 (~179px,
+            // same tray height as flag-off). Flag OFF: the exact pre-673 layout (224 tall,
+            // header 0.80–1.0, tray 0–0.80), no tab row.
+            bool strategicTabs = DeNelle.Core.FeatureFlags.StrategicPlacement;
+            float trayTop = strategicTabs ? 0.68f : 0.80f;
+            float headerBottom = strategicTabs ? 0.83f : 0.80f;
+
             var dock = new GameObject("PaletteDock", typeof(RectTransform));
             dock.transform.SetParent(_canvas.transform, false);
             var drt = (RectTransform)dock.transform;
@@ -183,11 +213,11 @@ namespace DeNelle.Village
             drt.anchorMax = new Vector2(0.5f, 0f);
             drt.pivot = new Vector2(0.5f, 0f);
             drt.anchoredPosition = Vector2.zero;
-            drt.sizeDelta = new Vector2(540f, 224f);
+            drt.sizeDelta = new Vector2(540f, strategicTabs ? 264f : 224f);
 
             // Slim header row: obsidian fill + gold under-rule (the kit panel language).
             var topBar = ElarionUiKit.AddImage(dock.transform, "TopBar",
-                new Vector2(0f, 0.80f), new Vector2(1f, 1f), ElarionUiKit.ObsidianFill, rounded: false);
+                new Vector2(0f, headerBottom), new Vector2(1f, 1f), ElarionUiKit.ObsidianFill, rounded: false);
             var rule = ElarionUiKit.AddImage(topBar.transform, "GoldRule",
                 new Vector2(0f, 0f), new Vector2(1f, 0f), ElarionUiKit.ObsidianTrim, rounded: false);
             var rrt = rule.GetComponent<RectTransform>();
@@ -219,10 +249,24 @@ namespace DeNelle.Village
                 () => OnExitRequested?.Invoke());
             exitBtn.gameObject.name = "CloseButton";
 
+            // WO-673 category tab row (flag-on only): Town / Defenses / Walls, each tab
+            // Configure()s this palette for that verb; the active tab carries a gold
+            // underline (position/shape tell, not color alone).
+            if (strategicTabs)
+            {
+                _tabUnderlines.Clear();
+                var tabRow = ElarionUiKit.AddImage(dock.transform, "CategoryTabs",
+                    new Vector2(0f, trayTop), new Vector2(1f, headerBottom),
+                    ElarionUiKit.ObsidianFill, rounded: false);
+                BuildCategoryTab(tabRow.transform, "Town",     BuildType.Town,    0.02f, 0.33f);
+                BuildCategoryTab(tabRow.transform, "Defenses", BuildType.Defense, 0.35f, 0.66f);
+                BuildCategoryTab(tabRow.transform, "Walls",    BuildType.Walls,   0.68f, 0.99f);
+            }
+
             // Bottom: horizontal-scrolling slot-plate card tray in a recessed dark well
             // (content-width now, so it reads as a dock — not a screen-wide wall).
             var tray = ElarionUiKit.AddImage(dock.transform, "CardTray",
-                new Vector2(0f, 0f), new Vector2(1f, 0.80f),
+                new Vector2(0f, 0f), new Vector2(1f, trayTop),
                 new Color(0f, 0f, 0f, 0.55f), rounded: false);
 
             var scrollGo = new GameObject("Scroll", typeof(RectTransform), typeof(ScrollRect), typeof(RectMask2D), typeof(Image));
@@ -542,6 +586,47 @@ namespace DeNelle.Village
         private void UpdateBalance()
         {
             if (_balanceLabel != null) _balanceLabel.text = "Crystals: " + CrystalBalance;
+        }
+
+        // ── WO-673 category tabs (ff.strategicplacement) ──────────────────────
+
+        /// <summary>
+        /// Build one category tab (WO-673): a kit button that Configure()s this palette
+        /// for <paramref name="type"/>, plus a gold active-tab underline registered in
+        /// <see cref="_tabUnderlines"/>. Caption = the owner-ruled display name
+        /// (Town / Defenses / Walls), not the enum name.
+        /// </summary>
+        private void BuildCategoryTab(Transform parent, string caption, BuildType type,
+            float xMin, float xMax)
+        {
+            var btn = ElarionUiKit.BuildObsidianButton(parent, caption,
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(xMin, 0.12f), new Vector2(xMax, 0.88f),
+                () => Configure(type));
+
+            // Active-tab tell: a gilt underline bar pinned to the tab's bottom edge —
+            // POSITION + SHAPE carry the meaning (owner is red/green colorblind; never
+            // encode state in hue alone).
+            var underline = new GameObject("ActiveUnderline", typeof(RectTransform), typeof(Image));
+            underline.transform.SetParent(btn.transform, false);
+            var urt = (RectTransform)underline.transform;
+            urt.anchorMin = new Vector2(0.08f, 0f);
+            urt.anchorMax = new Vector2(0.92f, 0f);
+            urt.pivot = new Vector2(0.5f, 0f);
+            urt.sizeDelta = new Vector2(0f, 3f);
+            var img = underline.GetComponent<Image>();
+            img.color = ElarionUi.Gilt;
+            img.raycastTarget = false;
+            underline.SetActive(type == _activeType);
+            _tabUnderlines[type] = underline;
+        }
+
+        /// <summary>Move the gold underline to the tab matching <see cref="_activeType"/>.
+        /// No-op when the tab row was never built (flag off / palette not built yet).</summary>
+        private void UpdateTabHighlight()
+        {
+            foreach (var kv in _tabUnderlines)
+                if (kv.Value != null) kv.Value.SetActive(kv.Key == _activeType);
         }
 
         /// <summary>Show the Orient button only while an entry is armed.</summary>

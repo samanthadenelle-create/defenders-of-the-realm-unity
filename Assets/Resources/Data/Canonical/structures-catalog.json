@@ -723,6 +723,47 @@
    }
   },
   {
+   "id": "armorer",
+   "displayName": "Blacksmith",
+   "type": "Resource",
+   "kind": "Cell",
+   "visualPrefabPath": "Structures/House_Medieval_Medium",
+   "repo": {
+    "behaviorId": "GameplayBuilding",
+    "singleton": true,
+    "buildCost": 130,
+    "cost": {
+     "wood": 60,
+     "food": 0,
+     "iron": 70,
+     "crystals": 0
+    },
+    "navSurface": "Blocker",
+    "placement": {
+     "mustSitOn": "Ground",
+     "footprint": 3.4,
+     "noOverlap": true,
+     "checkAffordable": true
+    }
+   },
+   "orientation": {
+    "corrected": false,
+    "manual": false,
+    "euler": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "offset": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "scale": 1.0,
+    "note": "WO-673 additive row (L4 vendor anchor): the Blacksmith storefront as a player-placeable GameplayBuilding -- vendor structureId 'armorer' (StructureFactory maps blacksmith->BuildingType.Armorer); visual reuses House_Medieval_Medium like its workshop/forge siblings"
+   }
+  },
+  {
    "id": "jeweler",
    "displayName": "Jeweler",
    "type": "Resource",

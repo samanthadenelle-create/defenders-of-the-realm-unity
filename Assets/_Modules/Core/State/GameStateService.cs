@@ -431,6 +431,7 @@ namespace DeNelle.Core.State
                 HeroLevel = s.HeroLevel,             // F8-47 — hero level (v29)
                 HeroXp = s.HeroXp,                   // F8-47 — banked XP toward next level (v29)
                 HeroLifetimeXp = s.HeroLifetimeXp,   // F8-47 — lifetime XP counter (v29)
+                StrategicPlacementMigrated = s.StrategicPlacementMigrated,   // WO-673 — one-shot bake→BaseLayout migration marker (v30)
             };
         }
 
@@ -510,6 +511,7 @@ namespace DeNelle.Core.State
             if (p.HeroLevel.HasValue) s.HeroLevel = (int)p.HeroLevel.Value;             // F8-47 — hero level (v29); absent → migrator seeds 1
             if (p.HeroXp.HasValue) s.HeroXp = (float)p.HeroXp.Value;                    // F8-47 — banked XP (v29); absent → keep 0
             if (p.HeroLifetimeXp.HasValue) s.HeroLifetimeXp = (float)p.HeroLifetimeXp.Value; // F8-47 — lifetime XP (v29); absent → keep 0
+            if (p.StrategicPlacementMigrated.HasValue) s.StrategicPlacementMigrated = p.StrategicPlacementMigrated.Value; // WO-673 — migration marker (v30); absent → migrator seeds false
             EnsureZoneGraph(s);                       // backfill a pre-v17 / empty save's zone graph
         }
 
@@ -804,8 +806,12 @@ namespace DeNelle.Core.State
             s.TowerAbilities = GameState.NewZeroed(Constants.TowerSlots);
             s.WallLevel = 0;
             s.Stone = 20;
-            s.Iron = 5;
-            s.Wood = 15;
+            // WO-673 — strategic-placement new-game budget (owner: core kit + exactly one
+            // leftover choice). Flag ON: seed from the StartingBudget constants (260w/210i —
+            // arithmetic documented on the constants in NestedTypes.cs). Flag OFF: the
+            // legacy 15w/5i seed, byte-identical to pre-673 behavior.
+            s.Iron = FeatureFlags.StrategicPlacement ? StartingBudget.StrategicIron : 5;
+            s.Wood = FeatureFlags.StrategicPlacement ? StartingBudget.StrategicWood : 15;
             s.BuildingCooldowns = new SerializableDict<string, double>();
             s.PendingBuilds = new List<PendingTowerBuild>();
             s.TutorialStep = TutorialStep.Step1;
@@ -842,6 +848,7 @@ namespace DeNelle.Core.State
             s.HeroLevel = 1;                                  // F8-47 — New Game starts a fresh level-1 hero.
             s.HeroXp = 0f;                                    // F8-47 — no banked XP yet.
             s.HeroLifetimeXp = 0f;                            // F8-47 — no lifetime XP yet.
+            s.StrategicPlacementMigrated = false;             // WO-673 — New Game: migration not yet run (bakes/injectors own the town until the flag-gated one-shot writer fires).
             s.PartyMemberIds = new List<string>();            // WO-301 — start alone; the first companion joins on tutorial complete.
             EnsureZoneGraph(s);                               // WO-164 — seed the default zone graph (5 zones) on New Game.
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately

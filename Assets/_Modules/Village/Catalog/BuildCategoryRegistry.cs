@@ -6,8 +6,10 @@
 // ONE generic build entry (BuildModeController.EnterBuildMode(BuildType)) is
 // parameterised by BuildType; each value maps — via DATA, not a hardcoded switch —
 // to which CatalogType(s) feed its palette + which catalog ids are unlock-gated.
-//   build(Defense)   → Tower / Wall / Gate
-//   build(Collector) → Collector
+//   build(Town)      → Resource / Collector   (WO-673, displays "Town")
+//   build(Defense)   → Tower / Gate           (displays "Defenses")
+//   build(Walls)     → Wall                   (WO-673 split-out)
+//   build(Collector) → Collector              (legacy verb, kept for back-compat)
 //
 // DATA-DRIVEN (mirrors CatalogBootstrap): the mapping is loaded from a canonical
 // JSON row-set at startup —
@@ -47,7 +49,8 @@ namespace DeNelle.Village
     /// Loads build-categories.json into a <see cref="BuildType"/> → <see cref="BuildCategory"/>
     /// lookup at startup (data-driven). Idempotent across play sessions (rebuild-then-fill),
     /// so it survives domain-reload-off like the other bootstrappers. Falls back to a
-    /// hardcoded 2-row set (Defense = Tower/Wall/Gate, Collector = Collector) only if the
+    /// hardcoded set mirroring the JSON (WO-673: Town = Resource/Collector, Defense =
+    /// Tower/Gate, Walls = Wall, plus the legacy Collector/Support verbs) only if the
     /// JSON cannot be loaded, so <see cref="Get"/> never returns null.
     /// </summary>
     public static class BuildCategoryRegistry
@@ -168,21 +171,42 @@ namespace DeNelle.Village
         }
 
         // ── Hardcoded fallback — used ONLY when the JSON cannot be loaded ──────────
+        // WO-673 taxonomy (owner ruling 2026-07-11, displays "Town / Defenses / Walls"):
+        // Town → Resource+Collector (player-placed functional buildings, ff.strategicplacement),
+        // Defense → Tower/Gate, Walls → Wall (split out — claimed-outpost wall canon).
+        // Mirrors build-categories.json v2; keep the two in sync.
         private static Dictionary<BuildType, BuildCategory> BuildFallback()
         {
             return new Dictionary<BuildType, BuildCategory>
             {
-                [BuildType.Defense] = new BuildCategory
+                [BuildType.Town] = new BuildCategory
                 {
-                    Types = new[] { CatalogType.Tower, CatalogType.Wall, CatalogType.Gate },
-                    Label = "Build Defenses",
-                    // Mirrors the pre-2026-07-10 BuildPaletteUI.NotYetUnlockable set so the
-                    // Defense palette stays the three tower types when the JSON is absent.
+                    Types = new[] { CatalogType.Resource, CatalogType.Collector },
+                    Label = "Build Town",
+                    // Jeweler stays unlock-gated (moved here from Defense — it is a
+                    // Resource row and belongs to the Town verb).
                     LockedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                     {
-                        "jeweler", "tower_siege_tower", "tower_catapult",
-                        "wall_wood", "wall_stone", "gate_stone",
+                        "jeweler",
                     },
+                },
+                [BuildType.Defense] = new BuildCategory
+                {
+                    // WO-673: walls split out to BuildType.Walls; Defense keeps towers/gates.
+                    // Rendered set is unchanged vs the pre-673 recipe (every wall id was
+                    // already in lockedIds, so none ever rendered under Defense).
+                    Types = new[] { CatalogType.Tower, CatalogType.Gate },
+                    Label = "Build Defenses",
+                    LockedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        "tower_siege_tower", "tower_catapult", "gate_stone",
+                    },
+                },
+                [BuildType.Walls] = new BuildCategory
+                {
+                    Types = new[] { CatalogType.Wall },
+                    Label = "Build Walls",
+                    LockedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase),
                 },
                 [BuildType.Collector] = new BuildCategory
                 {

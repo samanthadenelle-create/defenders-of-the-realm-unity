@@ -13,7 +13,8 @@
 // camera, and resumes waves.
 //
 // P1 = place-only (move / sell / rotate-edit / upgrade are P2, deferred). Rotate
-// the ghost before placing is supported (R key / rotate path) since it is free.
+// the ghost before placing is supported (Q/E keys / touch ⟲⟳ buttons, ±45° steps —
+// WO-673 L5, owner ruling 2026-07-11) since it is free.
 //
 // INPUT is read through the IBuildInput seam (Build Mode S6), not Input.* directly:
 // DesktopBuildInput (mouse/keyboard, unchanged) is the default; on a touch device
@@ -109,8 +110,36 @@ namespace DeNelle.Village
 
         private Camera _camera;
         private CatalogEntry _armed;
-        private int _armedYawSteps;
-        private float _armedYawOffset; // from preview modal (free or 90deg)
+        // WO-673 L5 (owner ruling 2026-07-11): ghost rotation is 45° stepped — 8 facings.
+        // The armed yaw is held as EIGHTH-steps (0..7, ×45°) and committed through the
+        // EXISTING PlacedStructureData fields with NO schema change:
+        //   yawSteps  = _armedYawEighths / 2   (quarter turns, 0..3 — the legacy field)
+        //   yawOffset = (_armedYawEighths & 1) * 45   (the odd half-step)
+        // BaseLayoutLoader replays yawSteps*90 + yawOffset, so a 45° facing round-trips
+        // exactly and old records (yawOffset 0) are untouched.
+        private int _armedYawEighths;
+
+        /// <summary>The armed yaw in degrees (eighth-steps × 45).</summary>
+        private float ArmedYawDegrees => _armedYawEighths * 45f;
+        /// <summary>The legacy quarter-turn component persisted into PlacedStructureData.yawSteps.</summary>
+        private int ArmedYawQuarterSteps => (_armedYawEighths >> 1) & 3;
+        /// <summary>The 45° half-step component persisted into PlacedStructureData.yawOffset.</summary>
+        private float ArmedYawOffsetDeg => (_armedYawEighths & 1) * 45f;
+
+        /// <summary>
+        /// Poll the ±45° rotate intents (Q/E on desktop, ⟲/⟳ touch buttons) and step the
+        /// armed yaw. Shared by the place and move loops (rotation is free in both).
+        /// </summary>
+        private void PollRotateIntents()
+        {
+            int dir = (_input.RotateCw ? 1 : 0) - (_input.RotateCcw ? 1 : 0);
+            // Legacy single-direction Rotate (bot probes / old drivers) still steps CW —
+            // via the IBuildInput default RotateCw => Rotate, so no extra poll needed here.
+            if (dir == 0) return;
+            _armedYawEighths = (_armedYawEighths + dir) & 7;
+            FlowTrace.Throttle("Build", "ghost-rotate", 0.25f,
+                $"ghost rotate -> {_armedYawEighths * 45}°");
+        }
 
         // Pending place data while modal is open for rotation confirmation.
         private bool _pendingPlace;
@@ -577,9 +606,8 @@ namespace DeNelle.Village
                 return;
             }
 
-            // Rotate (R key / touch Rotate button) yaws the ghost 90° before placing (free).
-            if (_input.Rotate)
-                _armedYawSteps = (_armedYawSteps + 1) & 3;
+            // Rotate (Q/E keys / touch ⟲⟳ buttons — WO-673 L5) yaws the ghost ±45° before placing (free).
+            PollRotateIntents();
 
             if (!RaycastGround(out RaycastHit hit))
             {
@@ -596,7 +624,7 @@ namespace DeNelle.Village
             // Preview at the SEAT height (wall-top for a wall-walk mount, else the surface Y) so the
             // ghost shows exactly where the piece lands.
             Vector3 seatSnapped = new Vector3(snapped.x, seatY, snapped.z);
-            _ghost.MoveTo(seatSnapped, _armedYawSteps);
+            _ghost.MoveTo(seatSnapped, ArmedYawDegrees);
             _ghost.SetValid(valid);
 
             // §12 heartbeat — EVERY gate above passed this frame: the PlaceConfirm latch IS
@@ -615,18 +643,18 @@ namespace DeNelle.Village
                 {
                 // PIVOT (owner decision) — placement is now IN-WORLD for ALL types: the
                 // ghost shows the model upright (GhostPreview applies the entry's
-                // OrientationFix) and the player rotates in-world via the R key / touch
-                // Rotate button before tapping to drop. The old modal Preview & Rotate
-                // panel (OpenRotateMenu/OnRotateConfirmed/OnRotateCancelled/_rotateMenu)
-                // is now dormant — no longer called from placement. Direct place leaves
-                // _armedYawOffset = 0, so PlacedStructureData yaw = yawSteps × 90 only
-                // (this also retires the latent double-rotation).
+                // OrientationFix) and the player rotates in-world via Q/E / touch ⟲⟳
+                // buttons (±45° steps, WO-673 L5) before tapping to drop. The old modal
+                // Preview & Rotate panel (OpenRotateMenu/OnRotateConfirmed/
+                // OnRotateCancelled/_rotateMenu) is dormant — no longer called from
+                // placement. Place() derives yawSteps + yawOffset canonically from
+                // _armedYawEighths (yaw = yawSteps × 90 + yawOffset — no double-rotation).
                     Place(cell, footprint, seatSnapped, wallMounted);
 
                     // STAY-ARMED (CoC-style) — deliberately do NOT clear _armed / hide the
                     // ghost after a place. The same entry stays armed so the next valid tap
                     // drops ANOTHER copy (lay a wall/fence run without re-selecting), and
-                    // _armedYawSteps is kept so the run holds its rotation. Each copy still
+                    // _armedYawEighths is kept so the run holds its rotation. Each copy still
                     // re-validates + re-charges inside Place(). The player stops by Cancel/
                     // Esc (_input.Cancel → CancelArmed, which fully disarms + hides the ghost)
                     // or by arming a different palette item (Arm() resets state). Do not add
@@ -675,8 +703,9 @@ namespace DeNelle.Village
             string name = !string.IsNullOrEmpty(_armed.displayName) ? _armed.displayName : _armed.id;
             double costSkr = CostFor(_armed).crystals;
 
-            // Seed the panel from the ghost's current free-rotate yaw step (R key steps).
-            int initialYawSteps = _armedYawSteps & 3;
+            // Seed the panel from the ghost's current rotate yaw, rounded down to the
+            // quarter-step the (dormant) panel understands.
+            int initialYawSteps = ArmedYawQuarterSteps;
 
             // WO-335 FIX — forward the armed entry's upright correction so the preview
             // matches the placed result (StructureFactory applies entry.orientation at
@@ -688,15 +717,17 @@ namespace DeNelle.Village
 
         /// <summary>
         /// WO-335 confirm callback — the player committed a yaw step (0..3 → 0/90/180/270°).
-        /// Map it onto the same fields the place path writes (so the rotation persists into
-        /// PlacedStructureData identically): _armedYawSteps = the step, _armedYawOffset =
-        /// the exact yaw in degrees. Then commit at the pending cell.
+        /// Map it onto the shared eighth-step yaw state the place path commits from
+        /// (_armedYawEighths — WO-673 L5), then commit at the pending cell.
         /// </summary>
         private void OnRotateConfirmed(int yawSteps)
         {
-            _armedYawSteps  = yawSteps & 3;
-            _armedYawOffset = _armedYawSteps * 90f;
-            Debug.Log($"[Orient] confirmed: yawSteps={_armedYawSteps} yaw={_armedYawOffset:F0} cell={_pendingCell}");
+            // WO-673 L5 — map the quarter-step onto the eighth-step state; Place() derives
+            // yawSteps/yawOffset canonically from it, which also retires the latent
+            // double-rotation this dormant path used to write (yawOffset = yawSteps*90 ON
+            // TOP of yawSteps — replayed as 2× the chosen yaw).
+            _armedYawEighths = (yawSteps & 3) * 2;
+            Debug.Log($"[Orient] confirmed: yawSteps={ArmedYawQuarterSteps} yaw={ArmedYawDegrees:F0} cell={_pendingCell}");
 
             _pendingPlace = false;
             // Dormant modal path (no longer called from placement) — ground placement only.
@@ -727,8 +758,7 @@ namespace DeNelle.Village
                 return;
             }
 
-            if (_input.Rotate)
-                _armedYawSteps = (_armedYawSteps + 1) & 3;
+            PollRotateIntents();   // WO-673 L5 — ±45° rotate, free during a move too
 
             if (!RaycastGround(out RaycastHit hit))
             {
@@ -744,7 +774,7 @@ namespace DeNelle.Village
                 out Vector2Int cell, out Vector2Int footprint, out BuildRejectReason reason,
                 out float seatY, out bool wallMounted, ignoreCost: true);
             Vector3 seatSnapped = new Vector3(snapped.x, seatY, snapped.z);
-            _ghost.MoveTo(seatSnapped, _armedYawSteps);
+            _ghost.MoveTo(seatSnapped, ArmedYawDegrees);
             _ghost.SetValid(valid);
 
             if (PlaceConfirmedThisFrame())
@@ -789,7 +819,12 @@ namespace DeNelle.Village
             // FIX (footprint from CORRECTED bounds) — measure the UPRIGHT, OrientationFix-
             // applied mesh (the SAME geometry the ghost + the placed structure use) so the
             // validity footprint matches what lands, letting pieces sit tight to a wall.
-            footprint = _grid.FootprintCells(StructureFactory.MeasureUprightFootprintMetres(entry));
+            // WO-673 L5 — the claim is ROTATION-HONEST: at the armed yaw's diagonal steps
+            // the rotated mesh's world AABB grows ×√2, so the claimed cells inflate to
+            // cover it (PlacementGrid.FootprintCells yaw overload; ×1 at cardinals —
+            // byte-identical to the legacy claim). Under-claiming at 45° was the
+            // placement-lies bug the architecture review vetoed (G-F).
+            footprint = _grid.FootprintCells(StructureFactory.MeasureUprightFootprintMetres(entry), ArmedYawDegrees);
 
             // SURFACE ROLE (data-driven, PlacementRules.mustSitOn) — a WallWalk defense MUST seat
             // on a wall TOP (defensive posture); everything else is a flat-ground placement. The
@@ -1031,8 +1066,11 @@ namespace DeNelle.Village
             // Persist the SEAT height (snapped.y — wall-top for a wall-walk mount, else the surface
             // Y) + the wall-mounted flag so the piece reloads on the wall TOP (not y=0) and the
             // loader re-applies the elevation perk. worldY defaults 0 / wallMounted false for ground.
-            var data = new PlacedStructureData(_armed.id, cell.x, cell.y, _armedYawSteps, 1,
-                _armedYawOffset, snapped.y, wallMounted);
+            // WO-673 L5 — the 45° facing rides the EXISTING schema: quarter-steps in
+            // yawSteps + the odd 45° half-step in yawOffset (replayed as yawSteps*90 +
+            // yawOffset by BaseLayoutLoader.Spawn — no schema change, old saves untouched).
+            var data = new PlacedStructureData(_armed.id, cell.x, cell.y, ArmedYawQuarterSteps, 1,
+                ArmedYawOffsetDeg, snapped.y, wallMounted);
 
             var ps = loader.Spawn(data, _grid);
             if (ps == null)
@@ -1093,7 +1131,7 @@ namespace DeNelle.Village
                     $"no free build slot for '{jobKey}' — completed instantly (never block)");
             }
 
-            Debug.Log($"[BuildMode] Placed '{_armed.id}' at cell ({cell.x},{cell.y}) yaw {_armedYawSteps * 90}°, charged {Describe(cost)}.");
+            Debug.Log($"[BuildMode] Placed '{_armed.id}' at cell ({cell.x},{cell.y}) yaw {ArmedYawDegrees:F0}°, charged {Describe(cost)}.");
         }
 
         // =====================================================================
@@ -1125,8 +1163,7 @@ namespace DeNelle.Village
             // Entering CREATE mode clears any active selection / move (P2).
             ClearSelection();
             _armed = entry;
-            _armedYawSteps = 0;
-            _armedYawOffset = 0;
+            _armedYawEighths = 0;
             _pendingPlace = false;
             if (_ghost == null) _ghost = new GameObject("GhostPreview").AddComponent<GhostPreview>();
             _ghost.SetEntry(entry);
@@ -1451,7 +1488,11 @@ namespace DeNelle.Village
             }
 
             _moveOriginCell = _selected.gridCell;
-            _armedYawSteps = _selected.yawSteps;
+            // WO-673 L5 — seed the eighth-step yaw from the structure's persisted facing
+            // (quarter-steps ×2 + the 45° half-step from yawOffset). Old pieces
+            // (yawOffset 0) seed exactly as before.
+            _armedYawEighths = ((_selected.yawSteps & 3) * 2
+                + Mathf.RoundToInt(Mathf.Repeat(_selected.yawOffset, 360f) / 45f)) & 7;
 
             // Release the structure's own cells for the duration of the move.
             _grid?.Free(_selected.gridCell, _selected.footprint);
@@ -1477,13 +1518,14 @@ namespace DeNelle.Village
             // Move the object (keep the SEAT height from the snap point — wall-top for a wall-walk
             // mount, else the surface Y).
             _selected.transform.SetPositionAndRotation(
-                snapped, Quaternion.Euler(0f, _armedYawSteps * 90f, 0f));
+                snapped, Quaternion.Euler(0f, ArmedYawDegrees, 0f));
 
             // Sync the live marker, then the matching persisted record (old cell → new).
             var oldCell = _selected.gridCell;
             _selected.gridCell = cell;
             _selected.footprint = footprint;
-            _selected.yawSteps = _armedYawSteps;
+            _selected.yawSteps = ArmedYawQuarterSteps;
+            _selected.yawOffset = ArmedYawOffsetDeg;   // WO-673 L5 — keep the 45° half-step across a move
             _selected.worldY = snapped.y;
             _selected.wallMounted = wallMounted;
 
@@ -1495,7 +1537,8 @@ namespace DeNelle.Village
             var movedAt = _selected.GetComponent<ArcaneTower>();
             if (movedAt != null) movedAt.ElevationRangeMult = elevMult;
 
-            UpdateLayoutEntry(_selected.itemId, oldCell, cell, _armedYawSteps, snapped.y, wallMounted);
+            UpdateLayoutEntry(_selected.itemId, oldCell, cell, ArmedYawQuarterSteps, ArmedYawOffsetDeg,
+                snapped.y, wallMounted);
 
             // F8-51 — the job key is cell-derived: a move mid-build/upgrade re-keys the
             // in-flight job so its completion still finds this structure. No-op when idle.
@@ -1507,7 +1550,7 @@ namespace DeNelle.Village
                 _selected.GetComponent<UnderConstructionVisual>()?.Rekey(newKey);
             }
 
-            Debug.Log($"[BuildMode] Moved '{_selected.itemId}' to cell ({cell.x},{cell.y}) yaw {_armedYawSteps * 90}° (free).");
+            Debug.Log($"[BuildMode] Moved '{_selected.itemId}' to cell ({cell.x},{cell.y}) yaw {ArmedYawDegrees:F0}° (free).");
 
             _movingSelected = false;
             _ghost?.Hide();
@@ -1687,7 +1730,7 @@ namespace DeNelle.Village
         /// replace the element by index (not mutate a copy).
         /// </summary>
         private static void UpdateLayoutEntry(string itemId, Vector2Int oldCell, Vector2Int newCell, int yawSteps,
-            float worldY = 0f, bool wallMounted = false)
+            float yawOffset = 0f, float worldY = 0f, bool wallMounted = false)
         {
             var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
             var layout = state != null ? state.BaseLayout : null;
@@ -1700,6 +1743,7 @@ namespace DeNelle.Village
                     d.cellX = newCell.x;
                     d.cellZ = newCell.y;
                     d.yawSteps = yawSteps;
+                    d.yawOffset = yawOffset;      // WO-673 L5 — persist the 45° half-step across a move
                     d.worldY = worldY;            // keep the seat height across a move (wall-top vs ground)
                     d.wallMounted = wallMounted;  // keep the elevation-perk flag across a move
                     layout[i] = d;

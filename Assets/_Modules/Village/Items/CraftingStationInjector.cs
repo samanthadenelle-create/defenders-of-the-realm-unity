@@ -100,6 +100,19 @@ namespace DeNelle.Village
         {
             using var _ = FlowTrace.Enter("Crafting", "CraftingStationInjector.Inject");
 
+            // WO-673 L3 STANDDOWN: once the one-shot strategic-placement migration has written
+            // this station's BaseLayout record (ff.strategicplacement ON + persisted marker),
+            // the injector stands down — BaseLayoutLoader replays the record and owns the
+            // structure (ONE owner per concern, docs/WO673_ARCHITECTURE_REVIEW.md §3). While
+            // the station has NO record (flag off / not yet migrated / catalog row missing),
+            // this injector keeps owning it — nothing vanishes.
+            if (StrategicPlacementMigration.StanddownActiveForStation(StationId))
+            {
+                FlowTrace.Step("Placement",
+                    $"standdown {HolderName} (migrated '{StationId}' -> BaseLayout — injector skips spawn).");
+                return;
+            }
+
             // Idempotent: if an apothecary already exists (a baked building or a prior runtime
             // holder), do NOT spawn a second one.
             if (AlreadyPresent())

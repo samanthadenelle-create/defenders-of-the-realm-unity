@@ -8,6 +8,7 @@
 //   PlaceOrSelect = Mouse.current.leftButton.wasPressedThisFrame   (left-click)
 //   Cancel        = right-click || Escape
 //   Rotate        = (removed — mobile-first; use the touch Rotate button)
+//   RotateCcw/Cw  = Q / E keys (±45° ghost yaw — WO-673 L5)
 //
 // WHY NOT legacy Input.*: this project runs the Input System package with the
 // legacy Input Manager DISABLED, so Input.GetMouseButtonDown(0) / Input.mousePosition
@@ -57,5 +58,15 @@ namespace DeNelle.Village
         // Mobile-first: the R-key rotate trigger is removed. Rotate is reached by the
         // on-screen Rotate button in LeanTouchBuildDriver (the touch IBuildInput impl).
         public bool Rotate => false;
+
+        // WO-673 L5 (owner ruling 2026-07-11: 45° steps, 8 facings) — desktop rotate keys.
+        // Q = counter-clockwise, E = clockwise (the project's WASD-adjacent convention;
+        // WASD/arrows already pan the build camera, so Q/E are free). Single-frame
+        // wasPressedThisFrame edges, null-guarded like every other device read here.
+        public bool RotateCcw =>
+            Keyboard.current != null && Keyboard.current.qKey.wasPressedThisFrame;
+
+        public bool RotateCw =>
+            Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame;
     }
 }

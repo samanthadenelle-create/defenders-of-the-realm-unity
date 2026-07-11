@@ -177,12 +177,31 @@ namespace DeNelle.Village
 
         private void Inject()
         {
-            // Idempotent: nuke any prior runtime holder so a re-load doesn't double-spawn.
+            // Idempotent: nuke any prior runtime holder so a re-load doesn't double-spawn,
+            // and stop any in-flight deferred/anchor polls from the previous load so a
+            // stale coroutine can never race the fresh pass below.
             var prior = GameObject.Find(HolderName);
             if (prior != null) Destroy(prior);
+            StopCoroutine(nameof(SpawnApothecaryWhenReady));
+            StopCoroutine(nameof(SpawnJewelerWhenReady));
+            StopCoroutine(nameof(AnchorVendorsToPlacedBuildings));
 
             var holder = new GameObject(HolderName);
             Transform hero = ResolveHero();
+
+            // WO-673 L4 (ff.strategicplacement): under strategic placement the baked
+            // storefronts (and their NPC_<Role>_Interactable markers) are stood down —
+            // buildings exist only where the PLAYER placed them. Vendors therefore anchor
+            // to the live Building COLLECTION by id (One Model: readers query the
+            // collection, never a baked name) — the generalized form of the apothecary /
+            // jeweler deferred pass below. Flag OFF = the marker loop below, byte-identical.
+            if (DeNelle.Core.FeatureFlags.StrategicPlacement)
+            {
+                FlowTrace.Step("Vendor",
+                    "strategic placement ON — marker loop stood down; anchoring vendors to the Building collection.");
+                StartCoroutine(nameof(AnchorVendorsToPlacedBuildings));
+                return;
+            }
 
             // Collect the storefront interact markers by name (prefix + suffix). They are
             // empty children CastleHubBuilder placed at the front of each building.
@@ -316,6 +335,103 @@ namespace DeNelle.Village
             // Station never appeared — self-report (the missing-NPC symptom would persist).
             FlowTrace.Warn("Village",
                 "CastleVendorNpcInjector: jeweler's bench station never appeared within 6s — no jeweler NPC placed.");
+        }
+
+        // ── WO-673 L4 (ff.strategicplacement) — vendor anchoring by Building collection ──
+        // Role (VendorFor key) -> the Building.BuildingId that anchors it. Under strategic
+        // placement the baked storefronts are stood down, so each vendor waits for a LIVE
+        // Building carrying its id — placed by the player (StructureFactory "GameplayBuilding"
+        // sets BuildingId == catalog id), replayed from a migrated save, or (for the two
+        // runtime stations) injected by their station injector. Ids verified against
+        // structures-catalog.json (:483-773) + CraftingStationInjector/JewelerStationInjector
+        // StationId constants.
+        private static readonly (string Role, string BuildingId)[] AnchorRoles =
+        {
+            ("Blacksmith",    "armorer"),        // no placed armorer catalog row yet (L1) — awaits one
+            ("Lumbermill",    "lumbermill"),
+            ("Windmill",      "mill"),           // building id is "mill"; dialogue structureId stays "farm" (VendorFor)
+            ("EchoHollow",    "pet-house"),
+            ("Forge",         "forge"),
+            ("ArcaneTower",   "arcane-tower"),
+            ("Jeweler",       "jeweler"),
+            ("Marketplace",   "market"),
+            ("Apothecary",    "apothecary"),     // runtime station (CraftingStationInjector.StationId)
+            ("JewelersBench", "jewelers-bench"), // runtime station (JewelerStationInjector.StationId)
+        };
+
+        // Generalized deferred pass (the apothecary/jeweler pattern above, for EVERY role):
+        // poll the live Building collection on a slow tick; when a role's building exists,
+        // spawn its vendor through the SAME SpawnVendor path via a synthetic marker child at
+        // the baked front offset (local (0,0,6)), so placement/interaction/sign composition
+        // is identical to the baked storefronts. A role whose building doesn't exist yet
+        // simply isn't spawned — the poll keeps watching (no timeout: placement is a
+        // player-paced event) so the vendor appears the moment the building does.
+        private IEnumerator AnchorVendorsToPlacedBuildings()
+        {
+            const float PollSeconds = 2f;   // slow tick — placement happens on player time
+            var pending = new System.Collections.Generic.HashSet<string>();
+            foreach (var a in AnchorRoles) pending.Add(a.Role);
+
+            while (pending.Count > 0)
+            {
+                if (!IsCastleHubScene(SceneManager.GetActiveScene().name)) yield break; // scene moved on
+                var holder = GameObject.Find(HolderName);
+                if (holder == null) yield break;   // injector re-ran / tearing down
+
+                var live = FindObjectsByType<Building>();
+                foreach (var (role, buildingId) in AnchorRoles)
+                {
+                    if (!pending.Contains(role)) continue;
+
+                    // Already placed (a prior pass / re-load survivor)? Settle the role.
+                    if (GameObject.Find($"CastleVendor_{role}") != null ||
+                        GameObject.Find($"CastleVendor_{role}_Placeholder") != null)
+                    {
+                        pending.Remove(role);
+                        continue;
+                    }
+
+                    Building anchor = null;
+                    foreach (var b in live)
+                        if (b != null && b.IsAlive && b.BuildingId == buildingId) { anchor = b; break; }
+
+                    if (anchor == null)
+                    {
+                        // Skip decision — Once per id so the poll never spams the trace.
+                        FlowTrace.Once("Vendor", $"await-{buildingId}",
+                            $"{role} awaiting building '{buildingId}' — vendor not spawned.");
+                        continue;
+                    }
+
+                    // Synthetic marker at the baked marker's front offset (local (0,0,6)) —
+                    // SpawnVendor derives the front DISTANCE from it and redirects the vendor
+                    // to the building's Heart-facing side, exactly like the baked markers and
+                    // the station deferred passes above.
+                    var marker = new GameObject($"NPC_{role}_Marker (runtime)");
+                    marker.transform.SetParent(anchor.transform, false);
+                    marker.transform.localPosition = new Vector3(0f, 0f, 6f);
+
+                    bool ok = SpawnVendor(marker.transform, role, ResolveHero(), holder.transform);
+                    Destroy(marker);
+                    if (ok)
+                    {
+                        pending.Remove(role);
+                        FlowTrace.Step("Vendor",
+                            $"{role} anchored to placed '{buildingId}' @ {anchor.transform.position}");
+                    }
+                    else
+                    {
+                        // SpawnVendor self-reported the failure — keep the role pending so the
+                        // next tick retries (e.g. Resources not yet loaded).
+                        FlowTrace.Fail("Vendor",
+                            $"{role} spawn FAILED at placed '{buildingId}' — will retry next poll.");
+                    }
+                }
+
+                if (pending.Count == 0) break;
+                yield return new WaitForSecondsRealtime(PollSeconds);
+            }
+            FlowTrace.Step("Vendor", "vendor anchor poll complete — every role has its NPC.");
         }
 
         /// <summary>Spawns ONE static NPC at the marker and attaches the interaction.</summary>
