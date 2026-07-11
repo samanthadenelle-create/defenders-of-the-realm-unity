@@ -12,6 +12,15 @@
 // pending set, plan cost) lives in HeroSkillTreeVM — the View never reads game
 // state (ui-mvvm-binding-seam rule).
 //
+// WO-676 §B (owner-approved icon-only redesign, 2026-07-11): nodes are ICON-ONLY
+// ~96px plates carrying exactly ONE state affordance — cost pip (unlockable),
+// −n pip + ring (planned), check stamp (owned), dim (locked). ALL name/desc/state
+// text lives in the right-hand detail column. Wisdom is a CurrencyChip (top-right);
+// the plan summary folds into the CONFIRM label ("CONFIRM n · −cost"); quick-swap
+// and respec feedback are transient toasts (BuildFeedbackToast) — target ≤2
+// persistent text strips outside the graph. Colorblind law: every state carries a
+// shape/stamp/pip, never hue alone (dim = luminance, pips/stamps = shape+text).
+//
 // Code-built uGUI ONLY (no UXML — §8). Edge geometry uses a fixed-size content
 // rect (CW×CH px) so rotated connector images are deterministic at build time
 // (no dependence on a layout pass). The content scrolls (owner: one scrollable
@@ -42,9 +51,9 @@ namespace DeNelle.Village.Talents
         private GameObject _ui;
         private RectTransform _graphContent;     // fixed-size scroll content (nodes + edges live here)
         private TMPro.TextMeshProUGUI _headerLabel;
-        private TMPro.TextMeshProUGUI _walletText;
-        private TMPro.TextMeshProUGUI _planText;
+        private ElarionUiKit.CurrencyChipHandle _wisdomChip;   // §B.2 — Wisdom = CurrencyChip, top-right
         private Button _confirmBtn;
+        private TMPro.TextMeshProUGUI _confirmLabel;           // plan summary folds into the CONFIRM label
         private Button _cancelBtn;
         private Button _respecBtn;
 
@@ -53,9 +62,12 @@ namespace DeNelle.Village.Talents
         private TMPro.TextMeshProUGUI _detailName;
         private TMPro.TextMeshProUGUI _detailDesc;
         private TMPro.TextMeshProUGUI _detailState;
-        private TMPro.TextMeshProUGUI _quickStatus;
-        private TMPro.TextMeshProUGUI _respecStatus;
         private GameObject _quickRoot;
+
+        // §B.2 — quick-swap/respec feedback is a transient TOAST, not a persistent strip.
+        // null = not yet baselined (the first Render only records; it never toasts stale text).
+        private string _lastQuickStatus;
+        private string _lastRespecStatus;
         // Detail strip FOLDS (eyes-sweep 2026-07-06): the "Select a talent" empty-state
         // painted OVER the SELECTED TALENT header + body. The two are ALTERNATIVES —
         // RenderDetail activates exactly one, never both.
@@ -68,7 +80,7 @@ namespace DeNelle.Village.Talents
         // this space — a definite size keeps geometry exact without a layout pass.
         private const float CW = 1400f;
         private const float CH = 1040f;
-        private const float NodeSize = 132f;
+        private const float NodeSize = 96f;   // §B.1 icon-only plates (was 132 text-stacked)
 
         public bool IsOpen => _ui != null;
 
@@ -133,21 +145,17 @@ namespace DeNelle.Village.Talents
             if (_vm == null) return;
             if (_headerLabel != null) _headerLabel.text = _vm.Title;
 
-            if (_walletText != null)
-            {
-                int w = _vm.RemainingWisdom;
-                int p = _vm.PendingCost;
-                _walletText.text = p > 0
-                    ? "Wisdom " + w + "    Planning -" + p + "  (" + (w - p) + " left)"
-                    : "Wisdom " + w + "    Skill Points " + _vm.RemainingSkillPoints;
-            }
+            // §B.2 — Wisdom is a CurrencyChip (count-tween; no text wallet strip).
+            if (_wisdomChip != null) _wisdomChip.SetAmount(_vm.RemainingWisdom);
 
-            if (_planText != null)
+            // §B.2 — the plan summary folds into the CONFIRM label: "CONFIRM n · −cost".
+            if (_confirmLabel != null)
             {
                 int n = _vm.PendingCount;
-                _planText.text = n > 0
-                    ? "Plan: " + n + " node" + (n == 1 ? "" : "s") + "  ·  " + _vm.PendingCost + " Wisdom"
-                    : "Tap nodes to plan an unlock path";
+                // ASCII "-" (the TMP font has no U+2212 minus; eyes-on 2026-07-03).
+                _confirmLabel.text = n > 0
+                    ? "CONFIRM " + n + " · -" + _vm.PendingCost
+                    : "CONFIRM";
             }
             if (_confirmBtn != null)
             {
@@ -166,7 +174,12 @@ namespace DeNelle.Village.Talents
                 _respecBtn.interactable = can;
                 SetButtonAlpha(_respecBtn, can ? 1f : 0.4f);
             }
-            if (_respecStatus != null) _respecStatus.text = _vm.RespecStatus;
+            // §B.2 — respec feedback is a transient toast (no persistent status strip).
+            // First Render only baselines (null tracker) so a stale VM line never re-toasts.
+            string respec = _vm.RespecStatus ?? "";
+            if (_lastRespecStatus != null && respec != _lastRespecStatus && respec.Length > 0)
+                BuildFeedbackToast.Show(respec);
+            _lastRespecStatus = respec;
 
             RebuildGraph();
             RenderDetail();
@@ -186,10 +199,16 @@ namespace DeNelle.Village.Talents
             {
                 if (_detailName != null) _detailName.text = _vm.SelectedNodeName;
                 if (_detailDesc != null) _detailDesc.text = _vm.SelectedNodeDescription;
+                // §B.4 — the detail state line doubles as the quick-swap hint (the VM's
+                // state line already says "tap a slot (1-4)" for an owned active skill).
                 if (_detailState != null) _detailState.text = _vm.SelectedNodeStateLine;
             }
-            if (_quickStatus != null)
-                _quickStatus.text = _vm.QuickSwapStatus;
+            // §B.2 — quick-swap ACTION feedback ("X → quick-swap 2.") is a transient toast;
+            // the persistent hint strip is gone. First Render baselines (null tracker).
+            string quick = _vm.QuickSwapStatus ?? "";
+            if (_lastQuickStatus != null && quick != _lastQuickStatus && quick.Length > 0)
+                BuildFeedbackToast.Show(quick);
+            _lastQuickStatus = quick;
         }
 
         // ── Build the node graph (edges behind, nodes in front) ──────────────────
@@ -209,8 +228,8 @@ namespace DeNelle.Village.Talents
             DrawEdges(_vm.Nodes, center, nodeById);
             DrawEdges(_vm.Shared, center, nodeById);
 
-            // Section label (above the shared band).
-            BuildSectionLabel("Universal — any class", 0.965f);
+            // Section divider (above the shared band) — WO-675 crown-glyph band grammar.
+            BuildSectionBand("Universal — any class", 0.965f);
 
             // Nodes on top.
             foreach (var n in _vm.Nodes) BuildGraphNode(n, center);
@@ -268,35 +287,63 @@ namespace DeNelle.Village.Talents
             float len = Vector2.Distance(a, b);
             float ang = Mathf.Atan2(b.y - a.y, b.x - a.x) * Mathf.Rad2Deg;
             r.anchoredPosition = mid;
-            r.sizeDelta = new Vector2(len, live ? 5f : 3f);
+            // §B.3 — quiet the string-web: live path 4px gilt, inactive 1.5px @ ~0.12 alpha.
+            r.sizeDelta = new Vector2(len, live ? 4f : 1.5f);
             r.localRotation = Quaternion.Euler(0f, 0f, ang);
             var img = go.GetComponent<Image>();
             img.color = live
                 ? new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f)
-                : new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.22f);
+                : new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.12f);
             img.raycastTarget = false;
         }
 
-        private void BuildSectionLabel(string text, float y)
+        // Section divider band (WO-675 §2 grammar shared with the upgrade panel): crown
+        // glyph + small gilt label + a thin gilt rule running the rest of the row.
+        private void BuildSectionBand(string text, float y)
         {
-            var go = new GameObject("Section", typeof(TMPro.TextMeshProUGUI));
-            go.transform.SetParent(_graphContent, false);
-            var r = go.GetComponent<RectTransform>();
+            var host = new GameObject("SectionBand", typeof(RectTransform));
+            host.transform.SetParent(_graphContent, false);
+            var r = (RectTransform)host.transform;
             r.anchorMin = r.anchorMax = new Vector2(0.5f, 1f);
             r.pivot = new Vector2(0.5f, 0.5f);
-            r.sizeDelta = new Vector2(CW * 0.5f, 36f);
-            r.anchoredPosition = new Vector2(-CW * 0.22f, -(y * CH) - NodeSize * 0.5f);
-            var t = go.GetComponent<TMPro.TextMeshProUGUI>();
-            ElarionUiKit.EnsureFont(t);
-            t.text = text;
-            t.fontSize = ElarionUi.FontMicro + 2f;
-            t.color = ElarionUi.Gilt;
-            t.alignment = TMPro.TextAlignmentOptions.Left;
-            t.fontStyle = TMPro.FontStyles.Bold;
-            t.raycastTarget = false;
+            r.sizeDelta = new Vector2(CW * 0.92f, 36f);
+            r.anchoredPosition = new Vector2(0f, -(y * CH) - NodeSize * 0.5f);
+
+            // Crown glyph (sprite-first, hidden on miss — the rule+label still carry the band).
+            Sprite crown = RpgUiCatalog.Get(RpgUiCatalog.RoleCrown, RpgUiCatalog.CrownTier1);
+            if (crown != null)
+            {
+                var cGo = new GameObject("Crown", typeof(Image));
+                cGo.transform.SetParent(host.transform, false);
+                var cr = (RectTransform)cGo.transform;
+                cr.anchorMin = new Vector2(0f, 0.10f); cr.anchorMax = new Vector2(0.030f, 0.90f);
+                cr.offsetMin = Vector2.zero; cr.offsetMax = Vector2.zero;
+                var cImg = cGo.GetComponent<Image>();
+                cImg.sprite = crown;
+                cImg.preserveAspect = true;
+                cImg.color = ElarionUi.Gilt;
+                cImg.raycastTarget = false;
+            }
+
+            var label = ElarionUiKit.Label(host.transform, text, 0f, 1f, ElarionUi.Gilt,
+                ElarionUi.FontMicro + 2, TMPro.TextAlignmentOptions.MidlineLeft, 0.038f, 0.40f, bold: true);
+            label.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(label);
+
+            // Thin gilt rule filling the remainder of the band row.
+            var rule = new GameObject("Rule", typeof(Image));
+            rule.transform.SetParent(host.transform, false);
+            var rr = (RectTransform)rule.transform;
+            rr.anchorMin = new Vector2(0.41f, 0.5f); rr.anchorMax = new Vector2(1f, 0.5f);
+            rr.offsetMin = new Vector2(0f, -0.75f); rr.offsetMax = new Vector2(0f, 0.75f);
+            var rImg = rule.GetComponent<Image>();
+            rImg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.35f);
+            rImg.raycastTarget = false;
         }
 
-        // ── One graph node (plate + icon + name + state; click = stage/unstage) ──
+        // ── One graph node (§B.1 icon-only: plate + icon + ONE affordance) ───────
+        // cost pip (unlockable) / −n pip + ring (planned) / check stamp (owned) /
+        // dim (locked). ALL text lives in the detail column. Click = select+stage.
 
         private void BuildGraphNode(SkillNodeVM node, Dictionary<string, Vector2> center)
         {
@@ -372,63 +419,96 @@ namespace DeNelle.Village.Talents
             string id = node.Id;
             btn.onClick.AddListener(() => { if (_vm != null) _vm.Select(id); });
 
-            // Icon (upper portion).
+            // Icon fills the plate (§B.1 — icon-only; no name/state text on the node).
             var sprite = LoadIcon(node.IconPath);
+            bool locked = !node.Owned && !node.CanUnlock && !node.IsPending;
             if (sprite != null)
             {
                 var iconGo = new GameObject("Icon", typeof(Image));
                 iconGo.transform.SetParent(go.transform, false);
                 var ir = iconGo.GetComponent<RectTransform>();
-                ir.anchorMin = new Vector2(0.22f, 0.40f);
-                ir.anchorMax = new Vector2(0.78f, 0.92f);
+                ir.anchorMin = new Vector2(0.17f, 0.17f);
+                ir.anchorMax = new Vector2(0.83f, 0.83f);
                 ir.offsetMin = Vector2.zero; ir.offsetMax = Vector2.zero;
                 var iImg = iconGo.GetComponent<Image>();
                 iImg.sprite = sprite;
                 iImg.preserveAspect = true;
                 iImg.raycastTarget = false;
-                if (!node.Owned && !node.CanUnlock && !node.IsPending)
-                    iImg.color = new Color(1f, 1f, 1f, 0.40f); // dim locked
+                if (locked)
+                    iImg.color = new Color(1f, 1f, 1f, 0.40f); // dim = the locked affordance
             }
-
-            // Name (mid band).
-            Color nameColor = node.Owned || node.CanUnlock || node.IsPending
-                ? ElarionUi.Parchment : ElarionUi.ParchmentDim;
-            float nameTop = sprite != null ? 0.40f : 0.82f;
-            var nameLbl = ElarionUiKit.Label(go.transform, node.Name, nameTop - 0.22f, nameTop, nameColor,
-                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f, bold: true);
-            // §1.14 (eyes-sweep 2026-07-06): node labels triple-stacked — a wrapping name
-            // painted over the state band and vice versa. Each strip fits its own rect.
-            ElarionUiKit.FitSingleLine(nameLbl);
-
-            // State line (bottom): owned / planned / cost / lock reason.
-            // Locked nodes: readability pass (UI matrix 2026-07-03) — the red "Requires..."
-            // read as an error and crowded the plate. Quiet it: ParchmentDim, italic, one
-            // step smaller, with the requirement on its own line under "Locked".
-            string stateLine; Color stateColor; bool lockedNode = false;
-            if (node.Owned) { stateLine = "Owned"; stateColor = ElarionUi.Gilt; }
-            else if (node.IsPending) { stateLine = "Planned -" + node.WisdomCost; stateColor = ElarionUi.Affordable; }
-            else if (node.CanUnlock) { stateLine = node.WisdomCost + " Wisdom"; stateColor = ElarionUi.Affordable; }
             else
             {
-                lockedNode = true;
-                stateLine = string.IsNullOrEmpty(node.LockReason) ? "Locked" : "Locked\n" + node.LockReason;
-                stateColor = ElarionUi.ParchmentDim;
+                // No icon art yet — a two-letter monogram keeps the node identifiable
+                // (never a blank plate; name/desc still live in the detail column).
+                string mono = string.IsNullOrEmpty(node.Name) ? "?" : node.Name.Substring(0, Mathf.Min(2, node.Name.Length));
+                var monoLbl = ElarionUiKit.Label(go.transform, mono, 0.24f, 0.76f,
+                    locked ? ElarionUi.ParchmentDim : ElarionUi.Parchment,
+                    ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0.10f, 0.90f, bold: true);
+                ElarionUiKit.FitSingleLine(monoLbl);
             }
-            var stateLbl = ElarionUiKit.Label(go.transform, stateLine, 0.02f, 0.20f, stateColor,
-                lockedNode ? ElarionUi.FontMicro - 1 : ElarionUi.FontMicro,
-                TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f);
-            if (lockedNode) stateLbl.fontStyle = TMPro.FontStyles.Italic;
-            // "Locked\nRequires ..." wraps + truncates INSIDE the bottom band (full reason
-            // lives in the detail strip on select) — it can never climb over the name.
-            ElarionUiKit.FitBlock(stateLbl);
 
-            // Equipped chip (Skill nodes slotted in the loadout).
-            if (node.IsEquipped)
+            // ONE affordance per state (colorblind law — shape/stamp/pip, never hue alone):
+            //   owned  → check stamp   · planned → ring (above) + "−n" pip
+            //   can-unlock → cost pip  · locked  → dim (icon alpha + plate tint, luminance)
+            if (node.Owned)
+                BuildNodeCheckStamp(go.transform);                                        // check STAMP (shape, font-free)
+            else if (node.IsPending)
+                BuildNodeStamp(go.transform, "-" + node.WisdomCost, ElarionUi.Affordable); // planned -n pip (+ ring above)
+            else if (node.CanUnlock)
+                BuildNodeStamp(go.transform, node.WisdomCost.ToString(), ElarionUi.Parchment); // cost pip
+        }
+
+        // Small bottom-right pip disc: dark plate + a short glyph ("-2", "3").
+        // ASCII only — eyes-on 2026-07-03: ✓/✗/− are missing from the TMP font.
+        private static RectTransform BuildNodeStamp(Transform nodeRoot, string glyph, Color color)
+        {
+            var pip = new GameObject("Stamp", typeof(Image));
+            pip.transform.SetParent(nodeRoot, false);
+            var pr = (RectTransform)pip.transform;
+            pr.anchorMin = new Vector2(0.62f, -0.06f);
+            pr.anchorMax = new Vector2(1.06f, 0.38f);
+            pr.offsetMin = Vector2.zero; pr.offsetMax = Vector2.zero;
+            var pImg = pip.GetComponent<Image>();
+            ElarionUiKit.ApplyRounded(pImg);
+            pImg.color = new Color(0.05f, 0.045f, 0.06f, 0.92f);   // near-black disc
+            pImg.raycastTarget = false;
+
+            if (!string.IsNullOrEmpty(glyph))
             {
-                var chip = ElarionUiKit.Label(go.transform, "EQUIPPED", 0.80f, 0.99f, ElarionUi.Affordable,
-                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Right, 0.30f, 0.98f, bold: true);
-                ElarionUiKit.FitSingleLine(chip);
+                var lbl = ElarionUiKit.Label(pip.transform, glyph, 0.08f, 0.92f, color,
+                    ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
+                lbl.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(lbl);
             }
+            return pr;
+        }
+
+        // Owned = a CHECK stamp drawn from two rotated gilt bars (no font dependency —
+        // the TMP font has no ✓ glyph; a shape also satisfies the colorblind law).
+        private static void BuildNodeCheckStamp(Transform nodeRoot)
+        {
+            var pr = BuildNodeStamp(nodeRoot, null, Color.clear);
+
+            var shortBar = new GameObject("CheckA", typeof(Image));
+            shortBar.transform.SetParent(pr, false);
+            var sr = (RectTransform)shortBar.transform;
+            sr.anchorMin = sr.anchorMax = new Vector2(0.34f, 0.38f);
+            sr.sizeDelta = new Vector2(13f, 4.5f);
+            sr.localRotation = Quaternion.Euler(0f, 0f, 45f);
+            var sImg = shortBar.GetComponent<Image>();
+            sImg.color = ElarionUi.Gilt;
+            sImg.raycastTarget = false;
+
+            var longBar = new GameObject("CheckB", typeof(Image));
+            longBar.transform.SetParent(pr, false);
+            var lr = (RectTransform)longBar.transform;
+            lr.anchorMin = lr.anchorMax = new Vector2(0.60f, 0.50f);
+            lr.sizeDelta = new Vector2(20f, 4.5f);
+            lr.localRotation = Quaternion.Euler(0f, 0f, -50f);
+            var lImg = longBar.GetComponent<Image>();
+            lImg.color = ElarionUi.Gilt;
+            lImg.raycastTarget = false;
         }
 
         // Plate colour by state (procedural fallback path).
@@ -472,23 +552,10 @@ namespace DeNelle.Village.Talents
             Transform panel = bodyHost;
             _headerLabel = chrome.title;
 
-            // Wisdom readout under the header.
-            var walletGo = new GameObject("Wallet", typeof(TMPro.TextMeshProUGUI));
-            walletGo.transform.SetParent(panel, false);
-            var wr = walletGo.GetComponent<RectTransform>();
-            wr.anchorMin = new Vector2(0.04f, 0.85f); wr.anchorMax = new Vector2(0.96f, 0.905f);
-            wr.offsetMin = Vector2.zero; wr.offsetMax = Vector2.zero;
-            _walletText = walletGo.GetComponent<TMPro.TextMeshProUGUI>();
-            ElarionUiKit.EnsureFont(_walletText);
-            _walletText.fontSize = ElarionUi.FontLabel;
-            // Brighter Wisdom/Skill-Points readout: the muted Gilt read as faint against the
-            // black frame — use Parchment + bold so the stat line is legible at a glance.
-            _walletText.color = ElarionUi.Parchment;
-            _walletText.fontStyle = TMPro.FontStyles.Bold;
-            _walletText.alignment = TMPro.TextAlignmentOptions.Center;
-            _walletText.raycastTarget = false;
-            // §1.14: the Wisdom/plan readout is one strip over the graph — fit, never spill.
-            ElarionUiKit.FitSingleLine(_walletText);
+            // §B.2 — Wisdom wallet = the ONE CurrencyChip (top-right of the body zone;
+            // tag "WISDOM" guarantees identity even if the icon art is absent).
+            _wisdomChip = ElarionUiKit.CurrencyChip(panel, ElarionUiKit.CurrencyKind.Wisdom,
+                new Vector2(0.76f, 0.855f), new Vector2(0.955f, 0.915f), tag: "WISDOM");
 
             // (The old "Equip" button that opened a second loadout screen is GONE — the
             // quick-swap row below folds that assign flow into THIS screen, owner 2026-06-28.)
@@ -550,22 +617,15 @@ namespace DeNelle.Village.Talents
                 TMPro.TextAlignmentOptions.TopLeft, txX0, txX1);
             ElarionUiKit.FitBlock(emptyBody);
 
-            // Quick-swap caption + slot row (always visible — outside both folds).
-            var quickCaption = ElarionUiKit.Label(panel, "QUICK-SWAP  (1-4)", 0.365f, 0.395f, ElarionUi.Gilt,
-                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);
-            ElarionUiKit.FitSingleLine(quickCaption);
-
+            // Quick-swap slot row (always visible — outside both folds). §B.4: the caption
+            // + hint strips are GONE — slots keep their numerals; the detail state line
+            // carries the "tap a slot (1-4)" hint; action feedback is a toast.
             _quickRoot = new GameObject("QuickSwapRow", typeof(RectTransform));
             _quickRoot.transform.SetParent(panel, false);
             var qr = _quickRoot.GetComponent<RectTransform>();
-            qr.anchorMin = new Vector2(colX0 + 0.008f, 0.18f);
-            qr.anchorMax = new Vector2(colX1 - 0.008f, 0.36f);
+            qr.anchorMin = new Vector2(colX0 + 0.008f, 0.165f);
+            qr.anchorMax = new Vector2(colX1 - 0.008f, 0.375f);
             qr.offsetMin = Vector2.zero; qr.offsetMax = Vector2.zero;
-
-            _quickStatus = ElarionUiKit.Label(panel, "Select an owned skill, then tap a slot (1-4).",
-                0.145f, 0.175f, ElarionUi.ParchmentDim, ElarionUi.FontMicro,
-                TMPro.TextAlignmentOptions.Center, txX0, txX1);
-            ElarionUiKit.FitSingleLine(_quickStatus);
         }
 
         // Full-rect transparent layout host — children keep their fractional anchors;
@@ -621,7 +681,7 @@ namespace DeNelle.Village.Talents
             // tier rows (authored at y≈0 / y≈1) aren't half-clipped by the viewport — a
             // node's centre sits at y*CH and its plate extends ±NodeSize/2, which fell
             // outside a CH-tall content rect (bottom green row was clipped). CenterPx +
-            // BuildSectionLabel shift down by NodeSize/2 to sit inside this padded rect.
+            // BuildSectionBand shift down by NodeSize/2 to sit inside this padded rect.
             _graphContent.sizeDelta = new Vector2(CW, CH + NodeSize);
             _graphContent.anchoredPosition = Vector2.zero;
 
@@ -635,24 +695,12 @@ namespace DeNelle.Village.Talents
             scroll.scrollSensitivity = 28f;
         }
 
-        // Plan summary + CONFIRM / Cancel / Close.
+        // CONFIRM / Cancel / Respec (§B.2 — no plan-summary strip; the plan folds into
+        // the CONFIRM label, "CONFIRM n · −cost", written by Render).
         private void BuildFooter(Transform panel)
         {
-            var planGo = new GameObject("PlanSummary", typeof(TMPro.TextMeshProUGUI));
-            planGo.transform.SetParent(panel, false);
-            var pr = planGo.GetComponent<RectTransform>();
-            pr.anchorMin = new Vector2(0.06f, 0.075f); pr.anchorMax = new Vector2(0.40f, 0.135f);
-            pr.offsetMin = Vector2.zero; pr.offsetMax = Vector2.zero;
-            _planText = planGo.GetComponent<TMPro.TextMeshProUGUI>();
-            ElarionUiKit.EnsureFont(_planText);
-            _planText.fontSize = ElarionUi.FontMicro + 2f;
-            _planText.color = ElarionUi.Gilt;
-            _planText.alignment = TMPro.TextAlignmentOptions.Left;
-            _planText.raycastTarget = false;
-            ElarionUiKit.FitSingleLine(_planText);
-
             _confirmBtn = ElarionUiKit.ButtonPack(panel, "CONFIRM", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.55f, 0.07f), new Vector2(0.80f, 0.135f),
+                new Vector2(0.52f, 0.07f), new Vector2(0.80f, 0.135f),
                 () => { if (_vm != null) _vm.ConfirmOrAssign(); },
                 packSpriteName: RpgUiCatalog.Get("button", "button_confirm") != null
                     ? RpgUiCatalog.ButtonConfirm : RpgUiCatalog.ButtonGold);
@@ -662,9 +710,10 @@ namespace DeNelle.Village.Talents
                 confLbl.color = ElarionUi.Parchment; confLbl.fontStyle = TMPro.FontStyles.Bold;
                 confLbl.outlineColor = new Color32(20, 12, 4, 235); confLbl.outlineWidth = 0.22f;
             }
+            _confirmLabel = confLbl;
 
             _cancelBtn = ElarionUiKit.ButtonPack(panel, "Cancel", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.41f, 0.075f), new Vector2(0.53f, 0.135f),
+                new Vector2(0.38f, 0.075f), new Vector2(0.50f, 0.135f),
                 () => { if (_vm != null) _vm.CancelPlan(); },
                 packSpriteName: RpgUiCatalog.ButtonFrame);
             var canLbl = _cancelBtn != null ? _cancelBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
@@ -680,10 +729,7 @@ namespace DeNelle.Village.Talents
             var resLbl = _respecBtn != null ? _respecBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
             if (resLbl != null) { resLbl.color = ElarionUi.Parchment; resLbl.fontStyle = TMPro.FontStyles.Bold; }
 
-            _respecStatus = ElarionUiKit.Label(panel, "", 0.14f, 0.17f, ElarionUi.ParchmentDim,
-                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Right, 0.55f, 0.955f);
-            ElarionUiKit.FitSingleLine(_respecStatus);
-
+            // §B.2 — respec status is a transient toast (see Render), not a persistent strip.
             // Close is the SHARED top-right Obsidian Close button (WO-554) — no per-panel footer Close.
         }
 
@@ -835,17 +881,17 @@ namespace DeNelle.Village.Talents
             Unbind();
             if (_vm != null) { _vm.Dispose(); _vm = null; }
             _headerLabel = null;
-            _walletText = null;
-            _planText = null;
+            _wisdomChip = null;
             _confirmBtn = null;
+            _confirmLabel = null;
             _cancelBtn = null;
             _respecBtn = null;
-            _respecStatus = null;
             _detailName = null;
             _detailDesc = null;
             _detailState = null;
-            _quickStatus = null;
             _quickRoot = null;
+            _lastQuickStatus = null;
+            _lastRespecStatus = null;
             _detailGroup = null;
             _emptyGroup = null;
             if (_ui != null) Destroy(_ui);
