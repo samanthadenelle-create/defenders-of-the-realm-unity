@@ -45,6 +45,23 @@ pre-existers (arena ground texture → F8-37 evidence · B2 dual-wallet · pet-s
 **NEXT:** owner felt-pass on exe 15:02:34 → push on her word · WO-670/671 lanes gate+commit ·
 open owner pins: F8-40 max-tier tower identity · WO-614 tree→W/E/R rail seam · probe fix.
 
+**EVENING ADDENDUM (same day, waves 2+3 — current felt-verify exe = 2026-07-11 16:24:14):** the 15:02
+batch was FULLY felt-closed (F8-43/44/45/46/47 all owner-verified). Then landed, gated, fleet-clean
+(only the 3 known pre-existers): **F8-48** Mend heals (28/28 casts were move-interrupted; now instant +
+real cast take, `5c7782f9`+anim) · **WO-672/F8-50** unified damage lifecycle (hp==0 = broken shell
+everywhere, damage bars + Ember smolder/fire tells, Raid_Explosion on break, `damage-states.json`;
+Repair All on the wave report via the one crystal spend path; `80a2f944`+`1b3224f6`) · **F8-49** 135
+built-in legacy particle slots URP-swapped at source via re-runnable MagentaMaterialFixer pass
+(`15b8bf30`) · **owner clip picks ×5** (Leap=jump-stab, W=Slash, Block=swipe01→02 chain, Heal=
+magespellcast-02, Fireball=magespellcast-04) — SwordShieldMovesImporter extracted 12 clips (first
+Magical Moves extraction), KnightPackage rebaked, `[MotionCaster] (manual)` consume lines proven
+(`54d5e9fd`) · **Q medallion "Dodge/Attack" text placeholder** (`977b3737`) · **endless waves past 20**
+(owner ruling: manual DEFEND starts, stats+counts scale, apex returns as cycle capstone; `04481c59`) ·
+fleet self-blindness fixes (probe validates via the real placement gate `2990aaf6`; bots reset wave
+progress `d2f57867`). WO-670/671 committed (`8a0bdddd`/`8084d8ee`): Motion Caster window + runtime
+ActionBundlePlayer. Open: WO-614 rail seam · F8-40 · pet-slot persistence · B2 dual-wallet · arena
+ground texture (F8-37 evidence) · broken-state save persistence follow-up · push authorization.
+
 ---
 
 ## ★★ SESSION HANDOVER — 2026-07-08 WAVE-2 CLOSE (⚠ superseded as newest by the 2026-07-11 block above) ★★
