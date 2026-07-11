@@ -1165,7 +1165,15 @@ namespace DeNelle.Village
             if (_enemy != null)
             {
                 if (_stung)
+                {
                     Guard.Try("Encounter", "rep chase", () => _enemy.SetBrainTargetPosition(hero.transform.position));
+                    // F8-46 (owner OPTION A): a chasing rep ALWAYS counts as pursuit. The chase here
+                    // is driven by SetBrainTargetPosition and relies on Enemy.DriveNav classifying
+                    // chasingHero to pulse ReportPursuit — report directly too (keyed per rep, same
+                    // as Enemy.cs) so the A4.5 window + the pursuit battle-probe (combat inputs live
+                    // while pursued) can never miss this producer. Pulse self-expires (PursuitTtl).
+                    DeNelle.Core.HudModel.PostureSignals.ReportPursuit(_enemy.GetInstanceID());
+                }
                 else
                 {
                     if (Time.time >= _roamRepathAt)
