@@ -454,7 +454,12 @@ namespace DeNelle.Village.Hud
             if (slot == AbilitySlot.Q) return AbilityCatalog.Find(cls, slot);
             var lo = HeroLoadoutAccess.Current;
             string id = lo != null ? lo.AbilityIdForSlot(slot) : null;
-            return string.IsNullOrEmpty(id) ? null : AbilityCatalog.FindById(id);
+            // F8 2026-07-11 "where are the defaults for the action rails": empty loadout
+            // slots fall back to the CLASS KIT (Bash/Charge/Radiant) — the legacy bridge
+            // (HeroAbilitiesHudBridge.ResolveSlotDef:340) always did this; the v8 producer
+            // dropped the line, leaving W/E/R blank in normal play.
+            var eq = string.IsNullOrEmpty(id) ? null : AbilityCatalog.FindById(id);
+            return eq ?? AbilityCatalog.Find(cls, slot);
         }
     }
 
