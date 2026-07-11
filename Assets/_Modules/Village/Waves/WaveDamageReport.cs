@@ -14,10 +14,12 @@
 // Coverage (each through its EXISTING damage surface — no new damage model):
 //   • WallSegment / Gate / Building — wrapped via RepairTarget (the proven
 //     uniform repairable-structure view: DamageFraction + DisplayName), with
-//     the crystal repair cost read from the LIVE WallRepairController.CostFor
-//     when a controller exists (its _fullRepairCost/_minRepairCost are
-//     serialized instance fields — the controller IS the cost authority, so we
-//     never duplicate the constants; no controller => cost omitted, not faked).
+//     the IN-KIND MATERIALS repair cost (owner ruling 2026-07-11: damage
+//     fraction x the structure's own catalog build cost in wood/iron/food;
+//     destroyed = full build cost = the REBUILD price; crystals never charged)
+//     read from the LIVE WallRepairController.CostFor when a controller exists
+//     (the controller IS the one cost authority — data-driven off the catalog
+//     rows; no controller => cost omitted, not faked).
 //   • ResourceCollector — HpFraction damage + IsBroken + LastLootStolen (the
 //     siege-raid steal), so the report shows the ECONOMY hit (accrual scales
 //     with HP — see ResourceCollector.Accrue).
@@ -57,8 +59,14 @@ namespace DeNelle.Village
             public bool Destroyed;
             /// <summary>Collectors only: pending resources stolen when the collector broke (0 = none).</summary>
             public int LootStolen;
-            /// <summary>Crystal cost of a full repair; &lt; 0 = unknown (no WallRepairController alive to price it).</summary>
-            public int RepairCost = -1;
+            /// <summary>
+            /// In-kind materials cost of the repair (owner ruling 2026-07-11:
+            /// damage fraction x the row's own catalog build cost; destroyed =
+            /// full build cost = REBUILD). Only meaningful when <see cref="HasCost"/>.
+            /// </summary>
+            public DeNelle.Core.Catalog.ResourceCost RepairCost;
+            /// <summary>False = no WallRepairController alive to price the row (cost omitted, not faked).</summary>
+            public bool HasCost;
             /// <summary>True for ResourceCollector rows — the label carries the production hit.</summary>
             public bool IsCollector;
         }
@@ -82,6 +90,8 @@ namespace DeNelle.Village
                 AddRepairables<Building>(all, repair);
 
                 // Resource collectors — the economy layer (accrual scales with HP).
+                // Owner ruling 2026-07-11: collectors are priced like everything else
+                // (their Collector catalog row authors a real materials build cost).
                 foreach (var c in ResourceCollectorRegistry.All)
                 {
                     if (c == null) continue;
@@ -96,7 +106,8 @@ namespace DeNelle.Village
                         Destroyed = c.IsBroken,
                         LootStolen = Mathf.RoundToInt(c.LastLootStolen),
                         IsCollector = true,
-                        // Collector repair is its own free Repair() flow today — no crystal price.
+                        HasCost = repair != null,
+                        RepairCost = repair != null ? repair.CostForStructure(c, frac) : default,
                     });
                 }
 
@@ -108,23 +119,23 @@ namespace DeNelle.Village
                     if (t == null) continue;
                     AddStructure(all,
                         t.Data != null && !string.IsNullOrEmpty(t.Data.towerName) ? t.Data.towerName : t.name,
-                        t.HpFraction, t.IsBroken);
+                        t, t.HpFraction, t.IsBroken, repair);
                 }
                 foreach (var t in Object.FindObjectsByType<DefenseTower>(FindObjectsSortMode.None))
                 {
                     // Garrison turrets are enemy assets — never a player damage-report row.
                     if (t == null || t.Allegiance != TowerAllegiance.PlayerOwned) continue;
-                    AddStructure(all, t.name, t.HpFraction, t.IsBroken);
+                    AddStructure(all, t.name, t, t.HpFraction, t.IsBroken, repair);
                 }
                 foreach (var t in Object.FindObjectsByType<ArcaneTower>(FindObjectsSortMode.None))
                 {
                     if (t == null) continue;
-                    AddStructure(all, t.name, t.HpFraction, t.IsBroken);
+                    AddStructure(all, t.name, t, t.HpFraction, t.IsBroken, repair);
                 }
                 foreach (var h in Object.FindObjectsByType<HarvestSite>(FindObjectsSortMode.None))
                 {
                     if (h == null || !h.IsClaimed) continue;   // unclaimed = not the player's yet
-                    AddStructure(all, $"{h.ResourceType} Harvest Site", h.HpFraction, h.IsBroken);
+                    AddStructure(all, $"{h.ResourceType} Harvest Site", h, h.HpFraction, h.IsBroken, repair);
                 }
 
                 // Worst-first, bounded — truncation is LOGGED, never silent.
@@ -144,19 +155,15 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Adds one entry per damaged structure of type <typeparamref name="T"/>,
-        /// wrapped through <see cref="RepairTarget.TryWrap"/> so name + damage come
-        /// from the proven uniform surface (never re-branching on concrete types).
-        /// </summary>
-        /// <summary>
         /// Adds one damaged/broken row from the uniform WO-672 surface
         /// (HpFraction + IsBroken — towers and harvest sites). A broken structure
         /// reads as fully destroyed (fraction 1, "Destroyed" per the existing row
-        /// style); a pristine one adds no row. RepairCost stays -1 (unknown): tower/
-        /// harvest repair is not priced by WallRepairController — the WO-672 Slice E
-        /// repair-from-report lane owns pricing.
+        /// style); a pristine one adds no row. Priced (owner 2026-07-11) through
+        /// WallRepairController.CostForStructure — the structure's own catalog
+        /// row's materials scaled by damage; no controller => cost omitted.
         /// </summary>
-        private static void AddStructure(List<Entry> into, string name, float hpFraction, bool broken)
+        private static void AddStructure(List<Entry> into, string name, Component structure,
+            float hpFraction, bool broken, WallRepairController repair)
         {
             float frac = broken ? 1f : 1f - Mathf.Clamp01(hpFraction);
             if (!broken && frac <= 0.0001f) return;   // pristine — no row
@@ -165,9 +172,16 @@ namespace DeNelle.Village
                 Name = name,
                 DamageFraction = frac,
                 Destroyed = broken,
+                HasCost = repair != null,
+                RepairCost = repair != null ? repair.CostForStructure(structure, frac) : default,
             });
         }
 
+        /// <summary>
+        /// Adds one entry per damaged structure of type <typeparamref name="T"/>,
+        /// wrapped through <see cref="RepairTarget.TryWrap"/> so name + damage come
+        /// from the proven uniform surface (never re-branching on concrete types).
+        /// </summary>
         private static void AddRepairables<T>(List<Entry> into, WallRepairController repair)
             where T : Component
         {
@@ -180,8 +194,9 @@ namespace DeNelle.Village
                 {
                     Name = target.DisplayName,
                     DamageFraction = frac,
-                    Destroyed = frac >= 0.999f,
-                    RepairCost = repair != null ? repair.CostFor(target) : -1,
+                    Destroyed = frac >= WallRepairController.DestroyedFraction,
+                    HasCost = repair != null,
+                    RepairCost = repair != null ? repair.CostFor(target) : default,
                 });
             }
         }

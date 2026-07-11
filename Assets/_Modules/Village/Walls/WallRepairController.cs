@@ -11,14 +11,23 @@
 //   2. SELECT    — the player taps / clicks a structure; a camera raycast finds
 //                  it, RepairTarget wraps it, and a bright violet highlight
 //                  marks the selection.
-//   3. PROMPT    — a crystal cost is computed and shown (the HUD repair prompt).
+//   3. PROMPT    — a MATERIALS cost is computed and shown (the HUD repair
+//                  prompt). OWNER RULING 2026-07-11: repair cost = damage
+//                  fraction x the structure's own BUILD cost in its own
+//                  materials (wood/iron/food per its catalog row); a destroyed
+//                  structure (fraction 1) is a REBUILD at full build cost.
+//                  Crystals are NEVER spent on repair (resource-model canon:
+//                  Wood/Iron/Food build structures; Crystals = the special arc).
 //                  The prompt is MODAL: while it is open every tap belongs to
 //                  the prompt's Confirm / Cancel buttons, never the world — the
 //                  interaction stays deterministic.
-//   4. CONFIRM   — on confirm: if the crystal balance covers the cost, deduct
-//                  the crystals (GameStateService, mirroring BuildMenu) and call
-//                  the structure's existing Repair(); otherwise show an
-//                  insufficient-funds message.
+//   4. CONFIRM   — on confirm: if the material wallets cover the cost, spend
+//                  through the SAME construction-economy path build-mode
+//                  placement charges (EconomyService.TrySpend — the
+//                  BuildModeController.ChargeLedger seam) PLUS the GameState
+//                  Wood/Iron mirror (the GrantSpendable both-sides pattern, see
+//                  SpendMaterials) and call the structure's existing Repair();
+//                  otherwise show an insufficient-materials message.
 //
 // MODULE ISOLATION (port spec Part 2): this file lives in DeNelle.Village and
 // references only DeNelle.Core (GameStateService) + Village types. It CANNOT
@@ -38,9 +47,14 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
+using DeNelle.Core.Catalog;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using DeNelle.Village.Buildings.Progression;
+// The multi-resource cost shape shared with build-mode placement. Aliased: the
+// bare name 'ResourceCost' resolves to DeNelle.Village.ResourceCost (the
+// EconomyService struct) inside this namespace.
+using CoreCost = DeNelle.Core.Catalog.ResourceCost;
 
 namespace DeNelle.Village
 {
@@ -55,15 +69,24 @@ namespace DeNelle.Village
         public string StructureName;
         /// <summary>
         /// The fully-composed, ready-to-display prompt sub-line — e.g.
-        /// "Repair the North Gate?". Composed here (the HUD shows it verbatim).
+        /// "Repair the North Gate? Cost: 12 wood, 4 iron". Composed here (the
+        /// HUD shows it verbatim), so the materials cost travels IN the text.
         /// </summary>
         public string Subtitle;
-        /// <summary>Crystal cost to repair the selected structure.</summary>
+        /// <summary>
+        /// LEGACY (owner 2026-07-11): crystals are NO LONGER spent on repair —
+        /// always 0 now. Field kept so the WallRepairHudBridge payload shape is
+        /// unchanged; the real cost is <see cref="CostText"/> (in the Subtitle).
+        /// </summary>
         public int CrystalCost;
-        /// <summary>True when the current crystal balance covers <see cref="CrystalCost"/>.</summary>
+        /// <summary>The composed in-kind materials cost, e.g. "12 wood, 4 iron".</summary>
+        public string CostText;
+        /// <summary>True when the material wallets cover the repair cost.</summary>
         public bool Affordable;
         /// <summary>Damage fraction 0..1 of the selected structure.</summary>
         public float DamageFraction;
+        /// <summary>True when fully destroyed — the prompt verb is "Rebuild" (full build cost).</summary>
+        public bool Destroyed;
     }
 
     /// <summary>A UnityEvent carrying a <see cref="RepairPromptInfo"/>.</summary>
@@ -80,9 +103,11 @@ namespace DeNelle.Village
 
     /// <summary>
     /// Drives the player wall / gate / building repair loop: highlight damaged
-    /// structures, tap-to-select, show a crystal cost, deduct + repair on
-    /// confirm. A self-contained Village sub-system MonoBehaviour — the
-    /// scene-setup editor file adds it to the built village scene.
+    /// structures, tap-to-select, show an in-kind materials cost (damage
+    /// fraction x the structure's own catalog build cost — full build cost =
+    /// REBUILD when destroyed), spend + repair on confirm. A self-contained
+    /// Village sub-system MonoBehaviour — the scene-setup editor file adds it
+    /// to the built village scene.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class WallRepairController : MonoBehaviour
@@ -96,20 +121,14 @@ namespace DeNelle.Village
         [Tooltip("Layers the selection raycast may hit. Default: everything.")]
         [SerializeField] private LayerMask _selectableMask = ~0;
 
-        [Header("Repair cost")]
-        [Tooltip("Crystal cost of a FULL repair of an undamaged-to-destroyed structure. " +
-                 "The shown cost scales with how damaged the picked structure actually is.")]
-        [SerializeField, Min(1)] private int _fullRepairCost = 40;
-
-        [Tooltip("Minimum crystal cost for any repair, however light the damage.")]
-        [SerializeField, Min(1)] private int _minRepairCost = 5;
-
-        [Tooltip("When true, crystals are spent through GameStateService (the real save). " +
-                 "When false, the local test balance below is used (standalone testing).")]
-        [SerializeField] private bool _useGameState = true;
-
-        [Tooltip("Crystal balance used when GameState is unavailable (standalone testing only).")]
-        [SerializeField, Min(0)] private int _localCrystalBalance = 200;
+        // ── Repair cost (owner ruling 2026-07-11) ────────────────────────────
+        // No serialized cost constants any more: repair is priced DATA-ONLY as
+        // damage-fraction x the structure's own catalog build cost in its own
+        // materials (wood/iron/food). Structures with no materials row anywhere
+        // price from the 'repair_default' catalog row (structures-catalog.json,
+        // dual-copy). Crystals are never charged. The old _fullRepairCost /
+        // _minRepairCost / _useGameState / _localCrystalBalance fields are
+        // removed — spends go through the construction economy (EconomyService).
 
         [Header("Scanning")]
         [Tooltip("Seconds between damaged-structure rescans. Keeps the highlight set fresh " +
@@ -412,7 +431,7 @@ namespace DeNelle.Village
         /// <summary>
         /// Selects <paramref name="target"/> for repair: marks it with the bright
         /// highlight and raises <see cref="PromptShown"/> so the HUD shows the
-        /// crystal cost. An undamaged structure is rejected with feedback.
+        /// materials cost. An undamaged structure is rejected with feedback.
         /// </summary>
         public void RequestRepair(RepairTarget target)
         {
@@ -462,43 +481,196 @@ namespace DeNelle.Village
         private void RaisePrompt()
         {
             if (_selected == null || !_selected.IsValid) return;
-            int cost = CostFor(_selected);
+            CoreCost cost = CostFor(_selected);
+            bool destroyed = _selected.DamageFraction >= DestroyedFraction;
             string name = _selected.DisplayName;
+            string costText = DescribeMaterials(cost);
             PromptShown?.Invoke(new RepairPromptInfo
             {
                 StructureName = name,
-                Subtitle = string.Format(WallRepairStrings.SubtitleFormat, name),
-                CrystalCost = cost,
-                Affordable = CrystalBalance >= cost,
+                // The materials cost travels IN the sub-line (the HUD shows it
+                // verbatim); destroyed rows read "Rebuild", damaged read "Repair".
+                Subtitle = string.Format(
+                    destroyed ? WallRepairStrings.RebuildSubtitleFormat
+                              : WallRepairStrings.SubtitleWithCostFormat,
+                    name, costText),
+                CrystalCost = 0,           // owner 2026-07-11: crystals never spent on repair
+                CostText = costText,
+                Affordable = CanAffordMaterials(cost),
                 DamageFraction = _selected.DamageFraction,
+                Destroyed = destroyed,
             });
         }
 
         // =====================================================================
-        //  Cost
+        //  Cost (owner ruling 2026-07-11 — in-kind materials, data-driven)
         // =====================================================================
 
+        /// <summary>Damage fraction at/above which a structure counts as destroyed → REBUILD.</summary>
+        public const float DestroyedFraction = 0.999f;
+
+        /// <summary>The data-driven default cost row for structures with no materials row anywhere.</summary>
+        private const string DefaultCostCatalogId = "repair_default";
+        /// <summary>Scene-built village wall ring (never player-placed) prices as the canon wall row.</summary>
+        private const string FallbackWallCatalogId = "wall_stone";
+        /// <summary>Scene-built cardinal gates price as the canon gate row.</summary>
+        private const string FallbackGateCatalogId = "gate_stone";
+
         /// <summary>
-        /// Crystal cost to repair <paramref name="target"/> — the full-repair
-        /// cost scaled by how damaged the structure is, floored at the minimum.
+        /// Materials cost to repair <paramref name="target"/> — the structure's
+        /// own catalog BUILD cost (wood/iron/food) scaled by its damage fraction.
+        /// Destroyed (fraction ~1) = the full build cost = the REBUILD price.
+        /// Crystals are never charged (owner 2026-07-11).
         /// </summary>
-        public int CostFor(RepairTarget target)
+        public CoreCost CostFor(RepairTarget target)
         {
-            if (target == null || !target.IsValid) return _minRepairCost;
-            return CostForFraction(target.DamageFraction);
+            if (target == null || !target.IsValid) return default;
+            return CostForFraction(target.DamageFraction,
+                BuildCostForComponent(target.Transform));
         }
 
         /// <summary>
-        /// WO-672 Slice E: the SAME cost formula keyed by a raw 0..1 damage
-        /// fraction, so structures that are not RepairTarget-wrappable (towers /
-        /// harvest sites — their damage surface is HpFraction/IsBroken) are priced
-        /// by the one cost authority instead of a duplicated constant.
+        /// The same one cost authority for structures that are not RepairTarget-
+        /// wrappable (towers / harvest sites / collectors — HpFraction/IsBroken
+        /// surfaces): resolves <paramref name="structure"/>'s catalog build cost
+        /// and scales it by <paramref name="damageFraction"/>.
         /// </summary>
-        public int CostForFraction(float damageFraction)
+        public CoreCost CostForStructure(Component structure, float damageFraction)
+            => CostForFraction(damageFraction, BuildCostForComponent(structure));
+
+        /// <summary>
+        /// The one formula: per-material ceil(buildCost x damage fraction). A
+        /// destroyed structure (fraction ≥ <see cref="DestroyedFraction"/>) pays
+        /// the FULL build cost — that IS the rebuild option. Crystals slot is
+        /// always 0 (never spent on repair).
+        /// </summary>
+        public static CoreCost CostForFraction(float damageFraction, CoreCost buildCost)
         {
             float frac = Mathf.Clamp01(damageFraction);
-            int scaled = Mathf.CeilToInt(_fullRepairCost * frac);
-            return Mathf.Max(_minRepairCost, scaled);
+            if (frac >= DestroyedFraction) frac = 1f;   // destroyed = full rebuild cost
+            return new CoreCost
+            {
+                wood     = Mathf.CeilToInt(buildCost.wood * frac),
+                food     = Mathf.CeilToInt(buildCost.food * frac),
+                iron     = Mathf.CeilToInt(buildCost.iron * frac),
+                crystals = 0,   // owner 2026-07-11: crystals are never spent on repair
+            };
+        }
+
+        /// <summary>
+        /// Resolves a structure's BUILD cost in materials from where that cost
+        /// actually lives, in precedence order:
+        ///   1. a PlacedStructure parent → its own catalog row (the id placement charged);
+        ///   2. a Building → the structures-catalog row matching Building.BuildingId
+        ///      (workshop / market / jeweler / forge / mill / lumbermill / arcane-tower /
+        ///      pet-house — buildings.json authors crystalCost ONLY, so it cannot
+        ///      supply materials and is not consulted);
+        ///   3. a ResourceCollector → the Collector row whose repo.collectorBuildingId
+        ///      matches (collector_farm / collector_lumbermill / collector_forge);
+        ///   4. a scene-built WallSegment / Gate (never Occupy()'d, no PlacedStructure)
+        ///      → the canon wall_stone / gate_stone rows;
+        ///   5. anything else (runtime stations absent from every catalog — the
+        ///      Apothecary case — and harvest sites) → the data-driven
+        ///      'repair_default' catalog row (dual-copy structures-catalog.json).
+        /// A row whose materials (wood/iron/food) are all zero does not count —
+        /// resolution falls through (crystals-only rows can't price a repair).
+        /// </summary>
+        private static CoreCost BuildCostForComponent(Component structure)
+        {
+            if (structure == null) return DefaultBuildCost();
+
+            var ps = structure.GetComponentInParent<PlacedStructure>();
+            if (ps != null)
+            {
+                var c = MaterialsFromEntry(CatalogRegistry.Get(ps.itemId), out bool ok);
+                if (ok) return c;
+            }
+
+            var building = structure.GetComponentInParent<Building>();
+            if (building != null && !string.IsNullOrEmpty(building.BuildingId))
+            {
+                var c = MaterialsFromEntry(CatalogRegistry.Get(building.BuildingId), out bool ok);
+                if (ok) return c;
+            }
+
+            var collector = structure.GetComponentInParent<ResourceCollector>();
+            if (collector != null && !string.IsNullOrEmpty(collector.BuildingId))
+            {
+                foreach (var e in CatalogRegistry.OfType(CatalogType.Collector))
+                {
+                    if (e == null) continue;
+                    string cid = e.repo != null && !string.IsNullOrEmpty(e.repo.collectorBuildingId)
+                        ? e.repo.collectorBuildingId : e.id;
+                    if (cid != collector.BuildingId) continue;
+                    var c = MaterialsFromEntry(e, out bool ok);
+                    if (ok) return c;
+                }
+            }
+
+            if (structure.GetComponentInParent<WallSegment>() != null)
+            {
+                var c = MaterialsFromEntry(CatalogRegistry.Get(FallbackWallCatalogId), out bool ok);
+                if (ok) return c;
+            }
+            if (structure.GetComponentInParent<Gate>() != null)
+            {
+                var c = MaterialsFromEntry(CatalogRegistry.Get(FallbackGateCatalogId), out bool ok);
+                if (ok) return c;
+            }
+
+            return DefaultBuildCost();
+        }
+
+        /// <summary>
+        /// The materials slice (wood/iron/food — crystals dropped per the ruling)
+        /// of a catalog row's build cost. <paramref name="found"/> is false when
+        /// the row is missing or authors no materials (crystals-only rows).
+        /// </summary>
+        private static CoreCost MaterialsFromEntry(CatalogEntry entry, out bool found)
+        {
+            found = false;
+            var repo = entry != null ? entry.repo : null;
+            if (repo == null) return default;
+            var c = new CoreCost
+            {
+                wood = repo.cost.wood,
+                food = repo.cost.food,
+                iron = repo.cost.iron,
+                crystals = 0,
+            };
+            found = c.wood > 0 || c.food > 0 || c.iron > 0;
+            return c;
+        }
+
+        /// <summary>
+        /// The 'repair_default' catalog row's materials (data-driven, dual-copy
+        /// structures-catalog.json). An emergency in-code constant only if the
+        /// row is missing — warned, never silent.
+        /// </summary>
+        private static CoreCost DefaultBuildCost()
+        {
+            var c = MaterialsFromEntry(CatalogRegistry.Get(DefaultCostCatalogId), out bool found);
+            if (found) return c;
+            FlowTrace.Warn("Repair",
+                $"catalog row '{DefaultCostCatalogId}' missing/material-less — " +
+                "using the emergency in-code default (30 wood, 15 iron). Restore the data row.");
+            return new CoreCost { wood = 30, iron = 15 };
+        }
+
+        /// <summary>True when the wood/iron/food slots are all zero (a free repair).</summary>
+        public static bool MaterialsZero(CoreCost c) => c.wood == 0 && c.food == 0 && c.iron == 0;
+
+        /// <summary>
+        /// Player-facing materials list, e.g. "12 wood, 4 iron" (skips zero slots;
+        /// plain copy, no glyphs — tofu rule). "nothing" for an all-zero cost.
+        /// </summary>
+        public static string DescribeMaterials(CoreCost c)
+        {
+            var parts = new List<string>(3);
+            if (c.wood > 0) parts.Add(c.wood + " wood");
+            if (c.iron > 0) parts.Add(c.iron + " iron");
+            if (c.food > 0) parts.Add(c.food + " food");
+            return parts.Count > 0 ? string.Join(", ", parts) : "nothing";
         }
 
         // =====================================================================
@@ -510,70 +682,91 @@ namespace DeNelle.Village
         {
             public string Name;
             public float DamageFraction;
-            public int Cost;          // 0 = free (collectors — their Repair() flow has no crystal price today)
+            public CoreCost Cost;     // in-kind materials (owner 2026-07-11); crystals slot always 0
             public Action Fix;        // the structure's existing Repair primitive
         }
 
         /// <summary>
-        /// Crystal cost of repairing EVERYTHING currently damaged (walls / gates /
-        /// buildings via <see cref="CostFor"/>, towers + harvest sites via
-        /// <see cref="CostForFraction"/>; collectors are free). The damage-report
-        /// CTA shows this total; 0 = nothing costed (clean, or collectors only).
+        /// Materials cost of repairing EVERYTHING currently damaged (walls / gates /
+        /// buildings via <see cref="CostFor"/>, towers / harvest sites / collectors
+        /// via <see cref="CostForStructure"/> — every one priced from its own
+        /// catalog row). The damage-report CTA shows this total; all-zero = clean.
         /// </summary>
-        public int RepairAllCost()
+        public CoreCost RepairAllCost()
         {
-            int total = 0;
-            foreach (var item in CollectRepairAllSet()) total += item.Cost;
+            var total = default(CoreCost);
+            foreach (var item in CollectRepairAllSet())
+            {
+                total.wood += item.Cost.wood;
+                total.food += item.Cost.food;
+                total.iron += item.Cost.iron;
+            }
             return total;
         }
 
         /// <summary>
-        /// WO-672 Slice E (owner 2026-07-11: "i saw a damage report but could not
-        /// repair"): repairs every damaged structure WORST-FIRST, spending crystals
-        /// through the SAME <see cref="SpendCrystals"/> path the single-repair
-        /// confirm uses (never a second wallet path), until the balance can no
-        /// longer cover an item — unaffordable items are skipped (a cheaper, less-
-        /// damaged one later in the sweep may still fit; partial repair is honest).
-        /// Raises <see cref="FeedbackShown"/> with the summary (the existing HUD
-        /// toast surface). Returns (repairedCount, spentCrystals, remainingDamaged).
+        /// WO-672 Slice E + owner ruling 2026-07-11: repairs every damaged structure
+        /// WORST-FIRST, spending in-kind materials through the SAME construction-
+        /// economy path build-mode placement charges (<see cref="SpendMaterials"/> →
+        /// EconomyService.TrySpend + the GameState Wood/Iron mirror — never a second
+        /// wallet path). Greedy per-resource affordability: an unaffordable item is
+        /// skipped (a cheaper, less-damaged one later in the sweep may still fit;
+        /// partial repair is honest). Raises <see cref="FeedbackShown"/> with the
+        /// summary (the existing HUD toast surface).
+        /// Returns (repairedCount, spentMaterials, remainingDamaged).
         /// </summary>
-        public (int repairedCount, int spentCrystals, int remainingDamaged) RepairAll()
+        public (int repairedCount, CoreCost spent, int remainingDamaged) RepairAll()
         {
             var items = CollectRepairAllSet();
             items.Sort((a, b) => b.DamageFraction.CompareTo(a.DamageFraction));   // worst-first
-            FlowTrace.Step("Repair", $"RepairAll: {items.Count} damaged, balance={CrystalBalance}");
+            FlowTrace.Step("Repair", $"RepairAll: {items.Count} damaged, wallet={WalletLine()}");
 
-            int repaired = 0, spent = 0, remaining = 0;
+            int repaired = 0, remaining = 0;
+            var spent = default(CoreCost);
             foreach (var item in items)
             {
-                if (item.Cost > 0 && !SpendCrystals(item.Cost))
+                bool rebuild = item.DamageFraction >= DestroyedFraction;
+                if (!MaterialsZero(item.Cost) && !SpendMaterials(item.Cost,
+                        (rebuild ? "rebuild " : "repair ") + item.Name))
                 {
                     remaining++;
                     FlowTrace.Step("Repair",
                         $"RepairAll: SKIPPED '{item.Name}' (dmg {item.DamageFraction:0.00}) — " +
-                        $"cost {item.Cost} > balance {CrystalBalance}");
+                        $"cost {DescribeMaterials(item.Cost)} unaffordable, wallet={WalletLine()}");
                     continue;
                 }
                 var fix = item.Fix;
                 Guard.Try("Repair", $"RepairAll fix '{item.Name}'", () => fix?.Invoke());
                 repaired++;
-                spent += item.Cost;
+                spent.wood += item.Cost.wood;
+                spent.food += item.Cost.food;
+                spent.iron += item.Cost.iron;
                 FlowTrace.Step("Repair",
-                    $"RepairAll: repaired '{item.Name}' (dmg {item.DamageFraction:0.00}) for {item.Cost}");
+                    $"RepairAll: {(rebuild ? "REBUILT" : "repaired")} '{item.Name}' " +
+                    $"(dmg {item.DamageFraction:0.00}) for {DescribeMaterials(item.Cost)}");
             }
 
             FlowTrace.Step("Repair",
-                $"RepairAll SUMMARY: repaired={repaired} spent={spent} remaining={remaining} balance={CrystalBalance}");
+                $"RepairAll SUMMARY: repaired={repaired} spent={DescribeMaterials(spent)} " +
+                $"remaining={remaining} wallet={WalletLine()}");
             if (repaired > 0)
                 FeedbackShown?.Invoke(remaining > 0
-                    ? $"Repaired {repaired} structures for {spent} crystals - {remaining} still damaged (out of crystals)"
-                    : $"Repaired {repaired} structures for {spent} crystals", false);
+                    ? $"Repaired {repaired} structures for {DescribeMaterials(spent)} - {remaining} still damaged (out of materials)"
+                    : $"Repaired {repaired} structures for {DescribeMaterials(spent)}", false);
             else if (items.Count > 0)
-                FeedbackShown?.Invoke("Not enough crystals to repair anything", true);
+                FeedbackShown?.Invoke("Not enough materials to repair anything", true);
 
             ClearSelection();
             Rescan();
             return (repaired, spent, remaining);
+        }
+
+        /// <summary>Compact wallet line for FlowTrace (in-session EconomyService pools).</summary>
+        private static string WalletLine()
+        {
+            var econ = EconomyService.Instance;
+            if (econ == null) return "<no EconomyService>";
+            return $"W{econ.Wood} I{econ.Iron} F{econ.Food}";
         }
 
         /// <summary>
@@ -581,8 +774,9 @@ namespace DeNelle.Village
         /// (walls / gates / buildings — <see cref="CollectAllDamaged"/>, the same
         /// set the single-repair flow sees), the WO-672 Slice A tower surface
         /// (Tower / DefenseTower / ArcaneTower / HarvestSite: HpFraction / IsBroken
-        /// / Repair()), and resource collectors (free — their existing Repair()
-        /// flow carries no crystal price, so Repair-All triggers it at cost 0).
+        /// / Repair()), and resource collectors. Owner ruling 2026-07-11: EVERY
+        /// item is priced from its own catalog row's materials (collectors are no
+        /// longer free — their Collector row authors a real build cost).
         /// </summary>
         private List<RepairAllItem> CollectRepairAllSet()
         {
@@ -606,22 +800,22 @@ namespace DeNelle.Village
             foreach (var t in UnityEngine.Object.FindObjectsByType<Tower>(FindObjectsSortMode.None))
             {
                 if (t == null) continue;
-                AddHpItem(items, t.gameObject.name, t.HpFraction, t.IsBroken, t.Repair);
+                AddHpItem(items, t.gameObject.name, t, t.HpFraction, t.IsBroken, t.Repair);
             }
             foreach (var t in UnityEngine.Object.FindObjectsByType<DefenseTower>(FindObjectsSortMode.None))
             {
                 if (t == null) continue;
-                AddHpItem(items, t.gameObject.name, t.HpFraction, t.IsBroken, t.Repair);
+                AddHpItem(items, t.gameObject.name, t, t.HpFraction, t.IsBroken, t.Repair);
             }
             foreach (var t in UnityEngine.Object.FindObjectsByType<ArcaneTower>(FindObjectsSortMode.None))
             {
                 if (t == null) continue;
-                AddHpItem(items, t.gameObject.name, t.HpFraction, t.IsBroken, t.Repair);
+                AddHpItem(items, t.gameObject.name, t, t.HpFraction, t.IsBroken, t.Repair);
             }
             foreach (var t in UnityEngine.Object.FindObjectsByType<DeNelle.Village.World.HarvestSite>(FindObjectsSortMode.None))
             {
                 if (t == null) continue;
-                AddHpItem(items, t.gameObject.name, t.HpFraction, t.IsBroken, t.Repair);
+                AddHpItem(items, t.gameObject.name, t, t.HpFraction, t.IsBroken, t.Repair);
             }
 
             foreach (var c in ResourceCollectorRegistry.All)
@@ -634,7 +828,8 @@ namespace DeNelle.Village
                 {
                     Name = c.BuildingId,
                     DamageFraction = frac,
-                    Cost = 0,                    // collector repair is free today (its own flow)
+                    // Priced from its Collector catalog row (was free pre-ruling).
+                    Cost = CostForStructure(c, frac),
                     Fix = () => cc.Repair(),
                 });
             }
@@ -642,8 +837,9 @@ namespace DeNelle.Village
             return items;
         }
 
-        /// <summary>Adds one costed item for an HpFraction/IsBroken structure when damaged.</summary>
-        private void AddHpItem(List<RepairAllItem> items, string name,
+        /// <summary>Adds one costed item for an HpFraction/IsBroken structure when damaged
+        /// — priced from the structure's own catalog row via <see cref="CostForStructure"/>.</summary>
+        private void AddHpItem(List<RepairAllItem> items, string name, Component structure,
             float hpFraction, bool broken, Action repair)
         {
             float frac = broken ? 1f : 1f - Mathf.Clamp01(hpFraction);
@@ -652,20 +848,22 @@ namespace DeNelle.Village
             {
                 Name = name,
                 DamageFraction = frac,
-                Cost = CostForFraction(frac),
+                Cost = CostForStructure(structure, frac),
                 Fix = repair,
             });
         }
 
         // =====================================================================
-        //  Confirm — deduct crystals + repair
+        //  Confirm — spend materials + repair (owner ruling 2026-07-11)
         // =====================================================================
 
         /// <summary>
-        /// Confirms the repair of the selected structure. Checks the crystal
-        /// balance, deducts the cost, calls the structure's existing
+        /// Confirms the repair/rebuild of the selected structure. Checks the
+        /// material wallets, spends the in-kind cost through the construction
+        /// economy (<see cref="SpendMaterials"/> — the SAME EconomyService path
+        /// build-mode placement charges), calls the structure's existing
         /// <c>Repair()</c> primitive (full repair) and raises success feedback.
-        /// On a short balance it raises an insufficient-funds message and leaves
+        /// On a shortfall it raises an insufficient-materials message and leaves
         /// the prompt up so the player can cancel. Bound to the HUD prompt's
         /// Confirm button by the scene-setup editor file.
         /// </summary>
@@ -684,21 +882,22 @@ namespace DeNelle.Village
                 return;
             }
 
-            int cost = CostFor(_selected);
-            if (CrystalBalance < cost)
+            CoreCost cost = CostFor(_selected);
+            bool rebuild = _selected.DamageFraction >= DestroyedFraction;
+            if (!CanAffordMaterials(cost))
             {
                 FeedbackShown?.Invoke(
-                    string.Format(WallRepairStrings.InsufficientFormat, cost), true);
+                    string.Format(WallRepairStrings.InsufficientFormat, DescribeMaterials(cost)), true);
                 // Keep the prompt up but refresh affordability so the HUD greys
                 // the confirm button.
                 RaisePrompt();
                 return;
             }
 
-            if (!SpendCrystals(cost))
+            if (!SpendMaterials(cost, (rebuild ? "rebuild " : "repair ") + _selected.DisplayName))
             {
                 FeedbackShown?.Invoke(
-                    string.Format(WallRepairStrings.InsufficientFormat, cost), true);
+                    string.Format(WallRepairStrings.InsufficientFormat, DescribeMaterials(cost)), true);
                 RaisePrompt();
                 return;
             }
@@ -707,58 +906,74 @@ namespace DeNelle.Village
             // 0..100-scale repair so the structure is fully restored.
             _selected.Repair(100f);
 
-            FeedbackShown?.Invoke(WallRepairStrings.SuccessMessage, false);
+            FeedbackShown?.Invoke(
+                rebuild ? WallRepairStrings.RebuiltMessage : WallRepairStrings.SuccessMessage, false);
             ClearSelection();
             Rescan();
         }
 
         // =====================================================================
-        //  Crystal balance — GameState-backed or local (mirrors BuildMenu.cs)
+        //  Materials wallet — THE construction-economy spend path (WO-131 seam)
         // =====================================================================
 
-        /// <summary>The current crystal balance the repair flow spends from.</summary>
-        public int CrystalBalance
+        /// <summary>
+        /// True when the material wallets cover <paramref name="cost"/> — the
+        /// SAME EconomyService.CanAfford gate build-mode placement validates
+        /// against (BuildModeController.CanAfford). A free cost is affordable.
+        /// </summary>
+        public bool CanAffordMaterials(CoreCost cost)
         {
-            get
-            {
-                if (_useGameState)
-                {
-                    var service = GameStateService.Instance;
-                    if (service != null && service.State != null)
-                        return service.State.Resources.Crystals;
-                }
-                return _localCrystalBalance;
-            }
+            if (MaterialsZero(cost)) return true;
+            var econ = EconomyService.Instance;
+            return econ != null && econ.CanAfford(BuildModeController.ToEconomy(cost));
         }
 
         /// <summary>
-        /// Spends <paramref name="amount"/> crystals. Mirrors BuildMenu.SpendCrystals
-        /// — mutates <see cref="GameState.Resources"/> (a struct, written back
-        /// whole), persists via <see cref="GameStateService.Save"/> and raises
-        /// <c>ResourcesChanged</c> so the HUD crystal counter refreshes. Returns
-        /// false when the balance is short.
+        /// Spends an in-kind materials cost through the SAME construction-economy
+        /// path build-mode placement charges: <see cref="EconomyService.TrySpend"/>
+        /// (the atomic multi-resource debit BuildModeController.ChargeLedger
+        /// drives at placement, WO-131). DUAL-WALLET MIRROR (the known B2
+        /// divergence, MASTER_CATALOG §2c): TrySpend debits Wood/Iron from the
+        /// EconomyService IN-SESSION pool only, while ResourceLedger / the
+        /// upgrade flow reads GameState.Wood/Iron — so, mirroring the
+        /// <see cref="EconomyService.GrantSpendable"/> both-sides pattern on the
+        /// DEBIT side, the same Wood/Iron amounts are also deducted from
+        /// GameState (clamped ≥ 0), persisted, and announced via
+        /// ResourcesChanged. Food is already GameState-backed inside TrySpend.
+        /// FlowTrace on every spend + fail — no silent path.
         /// </summary>
-        private bool SpendCrystals(int amount)
+        private bool SpendMaterials(CoreCost cost, string what)
         {
-            if (amount <= 0) return true;
+            if (MaterialsZero(cost)) return true;
 
-            if (_useGameState)
+            var econ = EconomyService.Instance;
+            if (econ == null)
             {
-                var service = GameStateService.Instance;
-                if (service != null && service.State != null)
-                {
-                    var r = service.State.Resources;
-                    if (r.Crystals < amount) return false;
-                    r.Crystals -= amount;
-                    service.State.Resources = r;
-                    service.Save();
-                    service.ResourcesChanged.Invoke();
-                    return true;
-                }
+                FlowTrace.Fail("Repair",
+                    $"spend BLOCKED for '{what}' — EconomyService absent (cost {DescribeMaterials(cost)})");
+                return false;
             }
 
-            if (_localCrystalBalance < amount) return false;
-            _localCrystalBalance -= amount;
+            if (!econ.TrySpend(BuildModeController.ToEconomy(cost)))
+            {
+                FlowTrace.Step("Repair",
+                    $"spend REFUSED for '{what}' — cost {DescribeMaterials(cost)} > wallet {WalletLine()}");
+                return false;
+            }
+
+            // GameState Wood/Iron mirror (GrantSpendable pattern, debit side) so
+            // the repair spend never desyncs the two wallets.
+            var gs = GameStateService.Instance;
+            if (gs != null && gs.State != null && (cost.wood > 0 || cost.iron > 0))
+            {
+                gs.State.Wood = Mathf.Max(0, gs.State.Wood - cost.wood);
+                gs.State.Iron = Mathf.Max(0, gs.State.Iron - cost.iron);
+                gs.Save();
+                gs.ResourcesChanged.Invoke();
+            }
+
+            FlowTrace.Step("Repair",
+                $"SPENT {DescribeMaterials(cost)} on '{what}' (EconomyService.TrySpend + GameState mirror; wallet now {WalletLine()})");
             return true;
         }
 

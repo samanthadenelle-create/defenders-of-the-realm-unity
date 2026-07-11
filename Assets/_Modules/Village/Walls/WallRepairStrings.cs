@@ -37,22 +37,36 @@ namespace DeNelle.Village
         public const string StructureGenericName = "Structure";
 
         // ── Repair-prompt copy ───────────────────────────────────────────────
+        // OWNER RULING 2026-07-11: repair is priced in IN-KIND MATERIALS (the
+        // structure's own build cost scaled by damage), never crystals. A fully
+        // destroyed structure is a REBUILD at full build cost. Copy uses plain
+        // hyphens only (tofu rule — the build font drops fancy glyphs).
         // LOCALIZE: village.repair.prompt.title
         public const string PromptTitle = "Repair Structure";
         // LOCALIZE: village.repair.prompt.subtitleFormat  ({0} = structure name)
+        // Legacy cost-less form — kept for compatibility; the live prompt uses
+        // SubtitleWithCostFormat / RebuildSubtitleFormat below.
         public const string SubtitleFormat = "Repair the {0}?";
-        // LOCALIZE: village.repair.prompt.costFormat  ({0} = crystal cost)
-        public const string CostFormat = "Cost: {0} crystals";
+        // LOCALIZE: village.repair.prompt.subtitleWithCostFormat  ({0} = name, {1} = materials, e.g. "12 wood, 4 iron")
+        public const string SubtitleWithCostFormat = "Repair the {0}? Cost: {1}";
+        // LOCALIZE: village.repair.prompt.rebuildSubtitleFormat  ({0} = name, {1} = materials)
+        public const string RebuildSubtitleFormat = "Rebuild the {0}? Cost: {1}";
+        // LOCALIZE: village.repair.prompt.costFormat  ({0} = the composed materials list)
+        public const string CostFormat = "Cost: {0}";
         // LOCALIZE: village.repair.prompt.confirm
         public const string ConfirmLabel = "Repair";
+        // LOCALIZE: village.repair.prompt.confirmRebuild
+        public const string RebuildLabel = "Rebuild";
         // LOCALIZE: village.repair.prompt.cancel
         public const string CancelLabel = "Cancel";
 
         // ── Feedback copy ────────────────────────────────────────────────────
         // LOCALIZE: village.repair.feedback.success
         public const string SuccessMessage = "Structure repaired!";
-        // LOCALIZE: village.repair.feedback.insufficientFormat  ({0} = crystal cost)
-        public const string InsufficientFormat = "Not enough crystals — need {0}.";
+        // LOCALIZE: village.repair.feedback.rebuilt
+        public const string RebuiltMessage = "Structure rebuilt!";
+        // LOCALIZE: village.repair.feedback.insufficientFormat  ({0} = the composed materials list)
+        public const string InsufficientFormat = "Not enough materials - need {0}.";
         // LOCALIZE: village.repair.feedback.intact
         public const string IntactMessage = "That structure is undamaged.";
         // LOCALIZE: village.repair.hint

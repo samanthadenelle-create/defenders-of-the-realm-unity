@@ -82,7 +82,7 @@ namespace DeNelle.Village.UI
         // tap or the timer would silently spend crystals. The CTA is the explicit
         // button-only action; firing it also dismisses the banner.
 
-        /// <summary>Compact-banner CTA label (e.g. "Repair All - 120 crystals"); null/empty = no CTA.</summary>
+        /// <summary>Compact-banner CTA label (e.g. "Repair All - 40 wood, 12 iron"); null/empty = no CTA.</summary>
         public string CtaLabel;
         /// <summary>False renders the CTA disabled but still showing its cost (informative, not dead).</summary>
         public bool CtaEnabled = true;
@@ -281,10 +281,13 @@ namespace DeNelle.Village.UI
         /// toast / prefab text): compact, non-blocking, auto-dismissing. F8-45 (owner
         /// 2026-07-11): carries the DAMAGE REPORT — one spoils row per damaged/destroyed
         /// structure (worst-first, capped by <see cref="WaveDamageReport.MaxRows"/>),
-        /// with the crystal repair cost where a WallRepairController exists to price it
-        /// and the production hit for damaged collectors (accrual scales with HP).
-        /// State is carried by TEXT ("damaged 40%" / "DESTROYED"), never color alone
-        /// (colorblind law). A clean wave keeps today's 4s row-less banner unchanged.</summary>
+        /// with the IN-KIND MATERIALS repair cost (owner ruling 2026-07-11: damage
+        /// fraction x the row's own catalog build cost; destroyed rows read "Rebuild"
+        /// at the full build cost; crystals are never charged) where a
+        /// WallRepairController exists to price it, and the production hit for damaged
+        /// collectors (accrual scales with HP). State is carried by TEXT
+        /// ("damaged 40%" / "DESTROYED"), never color alone (colorblind law). A clean
+        /// wave keeps today's 4s row-less banner unchanged.</summary>
         public static EndStateVM FromWaveClear(int waveNumber)
         {
             var vm = new EndStateVM
@@ -321,9 +324,14 @@ namespace DeNelle.Village.UI
                     // Plain hyphen (not em-dash) in PLAYER-FACING copy: the build font has a
                     // tofu precedent (EndStateView.BuildStarRow) and canon strings use " - ".
                     Label = $"{e.Name} - {state}",
-                    // Repair cost only where the live controller priced it (< 0 = no
-                    // controller alive — omit rather than fake a constant).
-                    Amount = e.RepairCost > 0 ? $"Repair {e.RepairCost} crystals" : string.Empty,
+                    // In-kind materials cost only where the live controller priced it
+                    // (no controller — omit rather than fake). Destroyed rows read
+                    // "Rebuild" (full build cost); damaged rows read "Repair"
+                    // (owner ruling 2026-07-11 — crystals never appear here).
+                    Amount = e.HasCost && !WallRepairController.MaterialsZero(e.RepairCost)
+                        ? (e.Destroyed ? "Rebuild " : "Repair ") +
+                          WallRepairController.DescribeMaterials(e.RepairCost)
+                        : string.Empty,
                 });
             }
 
@@ -338,15 +346,18 @@ namespace DeNelle.Village.UI
                 // repair"): the CTA seat returns for THIS one case — "Repair All" wired to
                 // WallRepairController.RepairAll (the one wallet/repair authority; this
                 // factory is the model-side adapter, same seam as the icon resolution
-                // above). Unaffordable renders disabled-with-cost (informative, not dead).
-                // Copy uses plain hyphen + the word "crystals": the build font has a tofu
-                // precedent (see the Label note above), so no ◈/— glyphs in player copy.
+                // above). Priced in IN-KIND MATERIALS summed per resource (owner ruling
+                // 2026-07-11 — crystals never charged). Unaffordable renders
+                // disabled-with-cost (informative, not dead). Copy uses plain hyphens
+                // only: the build font has a tofu precedent (see the Label note above),
+                // so no ◈/— glyphs in player copy.
                 var repair = UnityEngine.Object.FindFirstObjectByType<WallRepairController>();
-                int cost = repair != null ? repair.RepairAllCost() : 0;
-                if (repair != null && cost > 0)
+                var cost = repair != null
+                    ? repair.RepairAllCost() : default(DeNelle.Core.Catalog.ResourceCost);
+                if (repair != null && !WallRepairController.MaterialsZero(cost))
                 {
-                    vm.CtaLabel = $"Repair All - {cost} crystals";
-                    vm.CtaEnabled = repair.CrystalBalance >= cost;
+                    vm.CtaLabel = "Repair All - " + WallRepairController.DescribeMaterials(cost);
+                    vm.CtaEnabled = repair.CanAffordMaterials(cost);
                     vm.CtaRoute = "repair-all";
                     // RepairAll raises FeedbackShown (the existing HUD toast) with the
                     // repaired-summary; the banner itself dismisses after firing.

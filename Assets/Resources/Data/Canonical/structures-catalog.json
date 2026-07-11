@@ -983,6 +983,30 @@
     "scale": 1.0,
     "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
    }
+  },
+  {
+   "id": "repair_default",
+   "displayName": "Repair Default",
+   "type": "Decoration",
+   "kind": "Cell",
+   "_note": "Repair-economy DATA row (owner ruling 2026-07-11), NOT a buildable structure: no visualPrefabPath (regressions skip it) and type Decoration maps to no build verb in build-categories.json, so it never appears in a palette. WallRepairController prices repair as damage-fraction x a structure's own catalog build cost in materials (wood/iron/food; crystals never charged); a structure with no materials cost row anywhere (runtime stations like the Apothecary, harvest sites) falls back to THIS row's repo.cost. Destroyed = 100% fraction = full cost = the Rebuild price. Keep the Resources + StreamingAssets copies byte-equal.",
+   "repo": {
+    "behaviorId": null,
+    "buildCost": 0,
+    "cost": {
+     "wood": 30,
+     "food": 0,
+     "iron": 15,
+     "crystals": 0
+    },
+    "navSurface": "None",
+    "placement": {
+     "mustSitOn": "Ground",
+     "footprint": 1.0,
+     "noOverlap": false,
+     "checkAffordable": false
+    }
+   }
   }
  ]
 }
