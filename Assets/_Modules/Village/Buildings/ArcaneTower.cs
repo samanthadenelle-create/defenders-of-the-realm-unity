@@ -271,6 +271,11 @@ namespace DeNelle.Village
             // ── SPELL CAST (Casting_Fire_2 ember gather at spire top) ──────────
             ProjectileVFXCatalog.SpawnNamedOneShot(muzzle, BoltCastVfx);
 
+            // WO-VFX-TOWERS: Hovl arcane cast burst at the muzzle, layered on top of the
+            // legacy Casting_Fire_2 (null-safe no-op if the key/prefab is missing). Reads by
+            // MOTION (violet gather-and-flash) so it's colorblind-legible; BlastColor is a hint.
+            VFXManager.PlayKey("Arcane_Cast", muzzle, default, null, BlastColor);
+
             // Flying body: Projectile_Fire_3 (hero fireball bolt) via SpawnFlying(Flame).
             // URP heal runs at spawn (FixUrpShaders).
             // Fall back to emissive orb if the mirrored Resources prefab is missing.
@@ -300,11 +305,19 @@ namespace DeNelle.Village
                     }
                 }
 
+                // WO-VFX-TOWERS: a Hovl arcane bolt (loop key) FOLLOWS the mover transform, so the
+                // travelling shot reads as an arcane projectile in motion (colorblind-legible by its
+                // TRAIL/MOTION, not tint). Loop keys return a VFXHandle — Stop() it on arrival so the
+                // trail doesn't linger after detonation. Null-safe if the key/prefab is missing.
+                var boltFx = VFXManager.PlayKey("Arcane_Projectile", muzzle, default, null,
+                                                BlastColor, 0f, 0f, bolt.transform);
+
                 // Arcing lob; blast applies ON ARRIVAL (the un-pooled mover self-destroys, taking
                 // its visual child with it). The AoE blast VFX (pooled Impact_ExplosionAether) +
-                // damage/slow land in ApplyBlast, so the shot reads as a cast spell.
+                // damage/slow land in ApplyBlast, so the shot reads as a cast spell. Stop the
+                // following bolt trail as the shot arrives, then ApplyBlast plays the Hovl impact.
                 bolt.AddComponent<ProjectileMover>().Launch(impact + Vector3.up * 0.5f, 26f, 0.35f,
-                    () => ApplyBlast(primary, impact));
+                    () => { boltFx?.Stop(); ApplyBlast(primary, impact); });
             });
 
             if (bolt == null)
@@ -328,6 +341,11 @@ namespace DeNelle.Village
 
             ProjectileVFXCatalog.SpawnImpact(impact, BoltVisualElement);
             ProjectileVFXCatalog.SpawnNamedOneShot(impact, BoltImpactExtraVfx);
+
+            // WO-VFX-TOWERS: Hovl arcane detonation burst at the impact point, layered on top of
+            // the legacy explosion (null-safe no-op on a missing key). The following-bolt trail is
+            // stopped by the arrival closure in FireBlast before this runs.
+            VFXManager.PlayKey("Arcane_Impact", impact, default, null, BlastColor);
 
             float aoeSq = AoeRadius * AoeRadius;
             float splash = Mathf.Clamp01(SplashDamageFraction);

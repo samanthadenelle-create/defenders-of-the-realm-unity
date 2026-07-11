@@ -354,6 +354,12 @@ namespace DeNelle.Village
                 : VFXType.Projectile_TowerArcane;
             VFXManager.Play(muzzleType, firePos);
 
+            // WO-VFX-TOWERS: Hovl cast burst at the muzzle, LAYERED on top of the legacy
+            // VFXType muzzle flash (fallback stays). Keyed off the shot's element (Aether when
+            // empowered/base). Null-safe — PlayKey no-ops on a null/unknown key (Ice/None have
+            // no cast key, so those fall back to the VFXType flash alone). Reads by motion.
+            VFXManager.PlayKey(CastKeyFor(element), firePos);
+
             // DEF-183: tower fire SFX through the existing audio surface
             // (CoreServices.Audio, null-guarded inside). Mixed low — many towers
             // fire at once.
@@ -439,6 +445,31 @@ namespace DeNelle.Village
             }
         }
 
+        // ── WO-VFX-TOWERS: DamageElement → Hovl catalog key (muzzle cast / impact) ──
+        // Maps the shot's element to the authored Hovl keys. Returns null where no key exists
+        // (Ice/None have no cast burst) — PlayKey no-ops on null, so the legacy VFXType flash
+        // remains the sole visual there. Kept beside AbilityToElement for the element mapping.
+        private static string CastKeyFor(DamageElement element)
+        {
+            switch (element)
+            {
+                case DamageElement.Flame:  return "Fireball_Cast";
+                case DamageElement.Aether: return "Arcane_Cast";
+                default:                   return null;   // Ice / None / Physical — no cast key
+            }
+        }
+
+        private static string ImpactKeyFor(DamageElement element)
+        {
+            switch (element)
+            {
+                case DamageElement.Flame:  return "Fireball_Impact";
+                case DamageElement.Ice:    return "Frost_Impact";
+                case DamageElement.Aether: return "Arcane_Impact";
+                default:                   return "Spear_Impact";   // None / Physical
+            }
+        }
+
         private static DamageElement AbilityToElement(EmpowermentAbility ability) =>
             ability switch
             {
@@ -520,6 +551,12 @@ namespace DeNelle.Village
                     ? VFXType.Impact_Aether
                     : VFXType.Impact_Physical;
             VFXManager.Play(impactType, hitPosition);
+
+            // WO-VFX-TOWERS: Hovl impact burst LAYERED on top of the legacy VFXType impact.
+            // The shot's element mirrors FireAt (Aether when empowered, else Physical/None -> a
+            // Spear impact). Null-safe — no-ops on an unknown key. Reads by shape/motion.
+            DamageElement element = _isEmpowered ? AbilityToElement(_empowerment) : DamageElement.None;
+            VFXManager.PlayKey(ImpactKeyFor(element), hitPosition);
 
             // WO-371: projectile impact SFX through the existing audio surface
             // (CoreServices.Audio, null-guarded inside GameSfx). The tower-fire "pew"

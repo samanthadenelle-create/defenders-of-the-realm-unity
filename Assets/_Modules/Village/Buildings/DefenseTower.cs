@@ -599,9 +599,17 @@ namespace DeNelle.Village
             {
                 VFXManager.Play(VFXType.Cast_MageCharge, muzzle);
                 VFXManager.Play(ImpactVfxFor(Element), targetPos);
+                // WO-VFX-TOWERS: Hovl cast at the muzzle + Hovl impact at the target, LAYERED on
+                // top of the legacy VFXType calls (fallback stays). No following-bolt — Launch has
+                // no onArrive callback here, so muzzle + impact only. Null-safe on unknown keys.
+                VFXManager.PlayKey(CastKeyFor(Element), muzzle, default, null, BoltColor);
+                VFXManager.PlayKey(ImpactKeyFor(Element), targetPos, default, null, BoltColor);
                 return;
             }
             VFXManager.Play(MuzzleVfxFor(Element), muzzle);
+            // WO-VFX-TOWERS: Hovl cast burst at the muzzle for pellet/bolt styles too (layered on
+            // the legacy muzzle flash; null-safe no-op for Ice/None which have no cast key).
+            VFXManager.PlayKey(CastKeyFor(Element), muzzle, default, null, BoltColor);
         }
 
         /// <summary>Maps the tower's damage element to a point-impact VFXType (spell style).</summary>
@@ -624,6 +632,31 @@ namespace DeNelle.Village
                 case DamageElement.Flame: return VFXType.Projectile_TowerFire;
                 case DamageElement.Ice:   return VFXType.Projectile_TowerIce;
                 default:                  return VFXType.Projectile_TowerArcane;   // None / Aether
+            }
+        }
+
+        // ── WO-VFX-TOWERS: DamageElement → Hovl catalog key (muzzle cast / impact) ──
+        // Maps the tower's element to the authored Hovl keys, layered on top of the VFXType
+        // calls above. Returns null where no cast burst is authored (Ice/None) — PlayKey no-ops
+        // on null, leaving the legacy flash as the sole visual there.
+        private static string CastKeyFor(DamageElement element)
+        {
+            switch (element)
+            {
+                case DamageElement.Flame:  return "Fireball_Cast";
+                case DamageElement.Aether: return "Arcane_Cast";
+                default:                   return null;   // Ice / None / Physical — no cast key
+            }
+        }
+
+        private static string ImpactKeyFor(DamageElement element)
+        {
+            switch (element)
+            {
+                case DamageElement.Flame:  return "Fireball_Impact";
+                case DamageElement.Ice:    return "Frost_Impact";
+                case DamageElement.Aether: return "Arcane_Impact";
+                default:                   return "Spear_Impact";   // None / Physical
             }
         }
 
