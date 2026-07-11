@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.World;
 using DeNelle.Core;
 
@@ -44,21 +45,49 @@ namespace DeNelle.Village.World
         private readonly List<Transform> _assignedWorkers = new List<Transform>(4);
         private bool _claimed;
 
+        // WO-672 Slice A (owner rulings F8-39 "either they exist or do not" + F8-42
+        // broken = inoperable until repaired): at 0 HP the site BREAKS instead of
+        // Destroy(gameObject)ing — an inoperable in-world shell until Repair().
+        // Mirrors the ResourceCollector Broken model.
+        private bool _broken;
+
         public bool IsClaimed => _claimed;
         public int AssignedCount => _assignedWorkers.Count;
 
-        // IDamageableStructure
-        public bool IsAlive => _hp > 0f;
+        /// <summary>True once a raid broke this site (hp 0) — no harvest until <see cref="Repair"/>. (WO-672)</summary>
+        public bool IsBroken => _broken;
+
+        /// <summary>Health 0..1 — the wave damage-report fraction (WO-672; mirrors ResourceCollector.HpFraction).</summary>
+        public float HpFraction => MaxHp > 0f ? Mathf.Clamp01(_hp / MaxHp) : 0f;
+
+        // IDamageableStructure — WO-672: a broken shell is not alive (raiders disengage,
+        // sweeps skip it), but the site stays in the world until repaired.
+        public bool IsAlive => _hp > 0f && !_broken;
 
         public void ApplyContactDamage(float amount)
         {
-            if (_hp <= 0f) return;
+            if (_hp <= 0f || _broken) return;
             _hp = Mathf.Max(0f, _hp - Mathf.Abs(amount));
             if (_hp <= 0f)
             {
-                Debug.LogWarning($"[HarvestSite] {ResourceType} site at {transform.position:F1} was destroyed by raid.");
-                Destroy(gameObject);
+                _broken = true;
+                // WO-672 Slice A: no Destroy(gameObject) — the site persists as an
+                // inoperable shell until Repair(). Harvest is gated in Update.
+                FlowTrace.Step("Structure",
+                    $"'{ResourceType} Harvest Site' BROKE (hp 0) — inoperable until repaired");
             }
+        }
+
+        /// <summary>
+        /// WO-672 (F8-42): full restore — HP back to max, broken cleared; harvesting
+        /// resumes on the next tick. Cost enforcement lives with the caller,
+        /// mirroring ResourceCollector.Repair.
+        /// </summary>
+        public void Repair()
+        {
+            _broken = false;
+            _hp = MaxHp;
+            FlowTrace.Step("Structure", $"'{ResourceType} Harvest Site' REPAIRED (hp {MaxHp:0})");
         }
 
         private void Awake()
@@ -81,12 +110,14 @@ namespace DeNelle.Village.World
             PoiBeacon.Attach(gameObject, PoiBeacon.PoiTier.Node,
                 calloutRadius: 28f, handoffRadius: 3.5f,
                 tint: new Color(1f, 0.94f, 0.72f, 1f),
-                isSpent: () => !_claimed || _hp <= 0f);
+                isSpent: () => !_claimed || _broken || _hp <= 0f);
         }
 
         private void Update()
         {
-            if (!_claimed || _hp <= 0f) return;
+            // WO-672 Slice C: the harvest gate extends to !_broken — a broken site
+            // yields NOTHING until repaired (was hp-only before the Broken model).
+            if (!_claimed || _broken || _hp <= 0f) return;
 
             _tick += Time.deltaTime;
             if (_tick < HarvestInterval) return;

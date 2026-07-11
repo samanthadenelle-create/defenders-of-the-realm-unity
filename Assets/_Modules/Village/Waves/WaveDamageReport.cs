@@ -21,17 +21,19 @@
 //   • ResourceCollector — HpFraction damage + IsBroken + LastLootStolen (the
 //     siege-raid steal), so the report shows the ECONOMY hit (accrual scales
 //     with HP — see ResourceCollector.Accrue).
-//   • Towers (Tower / DefenseTower / ArcaneTower): NOT reportable today —
-//     verified 2026-07-11: IDamageableStructure exposes only IsAlive, all three
-//     keep _hp/_maxHp private, and each Destroy(gameObject)s itself at 0 HP, so
-//     a post-wave scan can see neither a damage fraction nor the corpse. Needs
-//     a public HpFraction on those files (separate lane) before rows can exist.
+//   • Towers (Tower / DefenseTower / ArcaneTower) + HarvestSite — WO-672 closed
+//     the old blind spot (they used to keep _hp private and Destroy(gameObject)
+//     at 0 HP, so a post-wave scan saw neither a fraction nor the corpse): all
+//     four now expose public HpFraction/IsBroken and persist as inoperable
+//     BROKEN shells at 0 HP, so the scan reports damage AND the broken row.
+//     EnemyOwned garrison turrets are skipped (an enemy asset, not a defence).
 // =============================================================================
 
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Village.Buildings.Progression;
+using DeNelle.Village.World;
 
 namespace DeNelle.Village
 {
@@ -98,6 +100,33 @@ namespace DeNelle.Village
                     });
                 }
 
+                // Towers + harvest sites (WO-672) — via the uniform HpFraction/IsBroken
+                // surface each now exposes. A broken structure persists as a shell, so
+                // the corpse IS scannable (Destroyed row, worst-first at fraction 1).
+                foreach (var t in Object.FindObjectsByType<Tower>(FindObjectsSortMode.None))
+                {
+                    if (t == null) continue;
+                    AddStructure(all,
+                        t.Data != null && !string.IsNullOrEmpty(t.Data.towerName) ? t.Data.towerName : t.name,
+                        t.HpFraction, t.IsBroken);
+                }
+                foreach (var t in Object.FindObjectsByType<DefenseTower>(FindObjectsSortMode.None))
+                {
+                    // Garrison turrets are enemy assets — never a player damage-report row.
+                    if (t == null || t.Allegiance != TowerAllegiance.PlayerOwned) continue;
+                    AddStructure(all, t.name, t.HpFraction, t.IsBroken);
+                }
+                foreach (var t in Object.FindObjectsByType<ArcaneTower>(FindObjectsSortMode.None))
+                {
+                    if (t == null) continue;
+                    AddStructure(all, t.name, t.HpFraction, t.IsBroken);
+                }
+                foreach (var h in Object.FindObjectsByType<HarvestSite>(FindObjectsSortMode.None))
+                {
+                    if (h == null || !h.IsClaimed) continue;   // unclaimed = not the player's yet
+                    AddStructure(all, $"{h.ResourceType} Harvest Site", h.HpFraction, h.IsBroken);
+                }
+
                 // Worst-first, bounded — truncation is LOGGED, never silent.
                 all.Sort((a, b) => b.DamageFraction.CompareTo(a.DamageFraction));
                 int destroyed = 0;
@@ -119,6 +148,26 @@ namespace DeNelle.Village
         /// wrapped through <see cref="RepairTarget.TryWrap"/> so name + damage come
         /// from the proven uniform surface (never re-branching on concrete types).
         /// </summary>
+        /// <summary>
+        /// Adds one damaged/broken row from the uniform WO-672 surface
+        /// (HpFraction + IsBroken — towers and harvest sites). A broken structure
+        /// reads as fully destroyed (fraction 1, "Destroyed" per the existing row
+        /// style); a pristine one adds no row. RepairCost stays -1 (unknown): tower/
+        /// harvest repair is not priced by WallRepairController — the WO-672 Slice E
+        /// repair-from-report lane owns pricing.
+        /// </summary>
+        private static void AddStructure(List<Entry> into, string name, float hpFraction, bool broken)
+        {
+            float frac = broken ? 1f : 1f - Mathf.Clamp01(hpFraction);
+            if (!broken && frac <= 0.0001f) return;   // pristine — no row
+            into.Add(new Entry
+            {
+                Name = name,
+                DamageFraction = frac,
+                Destroyed = broken,
+            });
+        }
+
         private static void AddRepairables<T>(List<Entry> into, WallRepairController repair)
             where T : Component
         {

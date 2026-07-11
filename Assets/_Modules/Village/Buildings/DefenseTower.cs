@@ -90,8 +90,22 @@ namespace DeNelle.Village
         [SerializeField, Min(10f)] private float _maxHp = 200f;
         private float _hp = -1f;   // <0 = not yet initialised; set to _maxHp on first use / Awake
 
+        // WO-672 Slice A (owner rulings F8-39 "either they exist or do not" + F8-42
+        // broken = inoperable until repaired): at 0 HP the tower BREAKS instead of
+        // Destroy(gameObject)ing — an inoperable in-world shell until Repair().
+        // Mirrors the ResourceCollector Broken model.
+        private bool _broken;
+
+        /// <summary>True once enemies broke this tower (hp 0) — inoperable until <see cref="Repair"/>. (WO-672)</summary>
+        public bool IsBroken => _broken;
+
+        /// <summary>Health 0..1 — the wave damage-report fraction (WO-672; mirrors ResourceCollector.HpFraction).</summary>
+        public float HpFraction => _maxHp > 0f ? Mathf.Clamp01(Hp / _maxHp) : 0f;
+
         /// <summary>Fired once when enemies destroy this tower (HP reaches 0). Observers
-        /// (respawn/persistence) can subscribe; the F8-39 respawn work owns re-placement.</summary>
+        /// (respawn/persistence) can subscribe; the F8-39 respawn work owns re-placement.
+        /// WO-672: fires at the BREAK moment (the tower now persists as an inoperable
+        /// shell) — listeners release targets exactly as before.</summary>
         public event System.Action<DefenseTower> Destroyed;
 
         /// <summary>
@@ -99,9 +113,21 @@ namespace DeNelle.Village
         /// enemy can siege it. EnemyOwned garrison turrets are NOT sieged structures (they are an
         /// enemy asset, not a defence of Elarion): they report NOT-alive so a hostile mob's sweep
         /// skips them (preserves the pre-fix status quo where garrison turrets were untargetable),
-        /// while every PlayerOwned defence becomes attackable.
+        /// while every PlayerOwned defence becomes attackable. WO-672: a broken shell is not alive.
         /// </summary>
-        public bool IsAlive => Allegiance == TowerAllegiance.PlayerOwned && Hp > 0f;
+        public bool IsAlive => Allegiance == TowerAllegiance.PlayerOwned && Hp > 0f && !_broken;
+
+        /// <summary>
+        /// WO-672 (F8-42): full restore — HP back to max, broken cleared; the Update fire
+        /// loop resumes on its own (it early-outs only while <see cref="_broken"/>). Cost
+        /// enforcement lives with the caller, mirroring ResourceCollector.Repair.
+        /// </summary>
+        public void Repair()
+        {
+            _broken = false;
+            _hp = _maxHp;
+            FlowTrace.Step("Structure", $"'{name}' REPAIRED (hp {_maxHp:0})");
+        }
 
         /// <summary>Current HP (lazy-initialised to <see cref="_maxHp"/>).</summary>
         private float Hp
@@ -128,9 +154,12 @@ namespace DeNelle.Village
             if (_hp <= 0f)
             {
                 _hp = 0f;
-                FlowTrace.Step("DefenseTower", $"'{name}' DESTROYED by enemy siege (HP 0) — removing tower.");
+                _broken = true;
+                // WO-672 Slice A: no Destroy(gameObject) — the tower persists as an
+                // inoperable shell ("either they exist or do not", F8-39) until Repair().
+                FlowTrace.Step("Structure", $"'{name}' BROKE (hp 0) — inoperable until repaired");
                 Destroyed?.Invoke(this);
-                Destroy(gameObject);   // consistent with Tower.cs DEF-74 removal; F8-39 respawn is separate
+                if (_aimBeam != null) _aimBeam.enabled = false;   // drop the lock-on beam at the break
             }
         }
 
@@ -198,6 +227,15 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-672 Slice C: a broken tower is INOPERABLE until repaired — no scan,
+            // no acquire, no fire, no aim-beam. Repair() clears the flag and the loop
+            // resumes on the next frame.
+            if (_broken)
+            {
+                if (_aimBeam != null) _aimBeam.enabled = false;
+                return;
+            }
+
             // EnemyOwned garrison turret — target the player party instead of
             // Hostile enemies. Fully separate path so PlayerOwned stays identical.
             if (Allegiance == TowerAllegiance.EnemyOwned)

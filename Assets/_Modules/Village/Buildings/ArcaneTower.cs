@@ -92,8 +92,22 @@ namespace DeNelle.Village
         [SerializeField, Min(10f)] private float _maxHp = 160f;
         private float _hp = -1f;   // <0 = not yet initialised; set to _maxHp on first use / Awake
 
+        // WO-672 Slice A (owner rulings F8-39 "either they exist or do not" + F8-42
+        // broken = inoperable until repaired): at 0 HP the spire BREAKS instead of
+        // Destroy(gameObject)ing — an inoperable in-world shell until Repair().
+        // Mirrors the ResourceCollector Broken model.
+        private bool _broken;
+
+        /// <summary>True once enemies broke this spire (hp 0) — inoperable until <see cref="Repair"/>. (WO-672)</summary>
+        public bool IsBroken => _broken;
+
+        /// <summary>Health 0..1 — the wave damage-report fraction (WO-672; mirrors ResourceCollector.HpFraction).</summary>
+        public float HpFraction => _maxHp > 0f ? Mathf.Clamp01(Hp / _maxHp) : 0f;
+
         /// <summary>Fired once when enemies destroy this spire (HP reaches 0). Observers
-        /// (respawn/persistence) can subscribe; the F8-39 respawn work owns re-placement.</summary>
+        /// (respawn/persistence) can subscribe; the F8-39 respawn work owns re-placement.
+        /// WO-672: fires at the BREAK moment (the spire now persists as an inoperable
+        /// shell) — listeners release targets exactly as before.</summary>
         public event System.Action<ArcaneTower> Destroyed;
 
         /// <summary>Current HP (lazy-initialised to <see cref="_maxHp"/>).</summary>
@@ -102,8 +116,21 @@ namespace DeNelle.Village
             get { if (_hp < 0f) _hp = _maxHp; return _hp; }
         }
 
-        /// <summary><see cref="IDamageableStructure"/> — true while the spire still stands.</summary>
-        public bool IsAlive => Hp > 0f;
+        /// <summary><see cref="IDamageableStructure"/> — true while the spire still stands
+        /// (hp &gt; 0 and not broken, WO-672).</summary>
+        public bool IsAlive => Hp > 0f && !_broken;
+
+        /// <summary>
+        /// WO-672 (F8-42): full restore — HP back to max, broken cleared; the Update fire
+        /// loop resumes on its own (it early-outs only while <see cref="_broken"/>). Cost
+        /// enforcement lives with the caller, mirroring ResourceCollector.Repair.
+        /// </summary>
+        public void Repair()
+        {
+            _broken = false;
+            _hp = _maxHp;
+            FlowTrace.Step("Structure", $"'{name}' REPAIRED (hp {_maxHp:0})");
+        }
 
         /// <summary>
         /// <see cref="IDamageableStructure"/> contact-attack entry point — a Hollow One in melee
@@ -122,9 +149,11 @@ namespace DeNelle.Village
             if (_hp <= 0f)
             {
                 _hp = 0f;
-                FlowTrace.Step("ArcaneTower", $"'{name}' DESTROYED by enemy siege (HP 0) — removing spire.");
+                _broken = true;
+                // WO-672 Slice A: no Destroy(gameObject) — the spire persists as an
+                // inoperable shell ("either they exist or do not", F8-39) until Repair().
+                FlowTrace.Step("Structure", $"'{name}' BROKE (hp 0) — inoperable until repaired");
                 Destroyed?.Invoke(this);
-                Destroy(gameObject);   // consistent with Tower.cs DEF-74 removal; F8-39 respawn is separate
             }
         }
 
@@ -175,6 +204,10 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-672 Slice C: a broken spire is INOPERABLE until repaired — no scan,
+            // no acquire, no blast. Repair() clears the flag; the loop resumes next frame.
+            if (_broken) return;
+
             _scan -= Time.deltaTime;
             if (_scan <= 0f) { Rescan(); _scan = 0.4f; }
 

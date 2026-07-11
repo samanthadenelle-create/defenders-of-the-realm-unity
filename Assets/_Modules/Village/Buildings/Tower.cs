@@ -127,12 +127,27 @@ namespace DeNelle.Village
 
         private float _hp;
 
-        /// <summary>IDamageableStructure — true while this tower still stands.</summary>
-        public bool IsAlive => _hp > 0f;
+        // WO-672 Slice A (owner rulings F8-39 "either they exist or do not" + F8-42
+        // broken = inoperable until repaired): at 0 HP the tower BREAKS instead of
+        // Destroy(gameObject)ing — it stays in the world as an inoperable shell until
+        // Repair() restores it. Mirrors the ResourceCollector Broken model.
+        private bool _broken;
+
+        /// <summary>IDamageableStructure — true while this tower still stands (hp &gt; 0 and not broken).</summary>
+        public bool IsAlive => _hp > 0f && !_broken;
+
+        /// <summary>True once enemies broke this tower (hp 0) — inoperable until <see cref="Repair"/>. (WO-672)</summary>
+        public bool IsBroken => _broken;
+
+        /// <summary>Health 0..1 — the wave damage-report fraction (WO-672; mirrors ResourceCollector.HpFraction).</summary>
+        public float HpFraction => _maxHp > 0f ? Mathf.Clamp01(_hp / _maxHp) : 0f;
 
         /// <summary>
         /// Fired when enemies destroy this tower (HP hits 0).
         /// WaveManager / TowerPersistenceService can subscribe to clean up.
+        /// WO-672: fires at the BREAK moment (renamed semantics: "broke") — the tower
+        /// now persists as an inoperable shell, but listeners release targets exactly
+        /// as before.
         /// </summary>
         public event System.Action<Tower> TowerDestroyed;
 
@@ -207,6 +222,12 @@ namespace DeNelle.Village
             _data = data;
             _currentLevel = 1;
             _hp = _maxHp;   // IDamageableStructure: full HP on spawn
+            // WO-672 persistence note: placed towers are REBUILT from BaseLayout on load
+            // (fresh spawn through this Initialize), so a tower that broke last session
+            // comes back INTACT — today's behavior for survivors, kept deliberately.
+            // Persisting the broken state needs a save-schema change (v29 precedent) and
+            // is a deferred, separately-reviewed lane — do NOT add it here.
+            _broken = false;
             ApplyVisualForLevel(_currentLevel);
             EnsureCombat();   // WO-82 — auto-fire once the tower is built
 
@@ -730,19 +751,43 @@ namespace DeNelle.Village
 
         /// <summary>
         /// IDamageableStructure — called by Enemy contact attack every tick.
-        /// Reduces HP; destroys the tower and fires TowerDestroyed at zero.
+        /// Reduces HP; at zero the tower BREAKS (WO-672): it stays in the world as an
+        /// inoperable shell, TowerDestroyed fires (listeners release targets exactly as
+        /// before), and TowerCombat is disabled so it stops firing until repaired.
         /// </summary>
         public void ApplyContactDamage(float amount)
         {
-            if (_hp <= 0f) return;
+            if (_hp <= 0f || _broken) return;
             _hp -= amount;
             if (_hp <= 0f)
             {
                 _hp = 0f;
-                Debug.Log($"[Tower] {(_data != null ? _data.towerName : name)} destroyed by enemies.");
+                _broken = true;
+                FlowTrace.Step("Structure",
+                    $"'{(_data != null ? _data.towerName : name)}' BROKE (hp 0) — inoperable until repaired");
                 TowerDestroyed?.Invoke(this);
-                Destroy(gameObject);
+                // WO-672 Slice C: gate the fire path — TowerCombat owns this tower's fire
+                // loop (Update lives there), so disabling the component stops all firing
+                // while broken. Repair() re-enables it. IsAlive is already false, so enemy
+                // sweeps release/skip the shell too.
+                var combat = GetComponent<TowerCombat>();
+                if (combat != null) combat.enabled = false;
             }
+        }
+
+        /// <summary>
+        /// WO-672 (F8-42): full restore — HP back to max, broken cleared, the fire loop
+        /// (TowerCombat) re-enabled. Cost enforcement lives with the caller (the repair
+        /// flow), mirroring ResourceCollector.Repair.
+        /// </summary>
+        public void Repair()
+        {
+            _broken = false;
+            _hp = _maxHp;
+            var combat = GetComponent<TowerCombat>();
+            if (combat != null) combat.enabled = true;
+            FlowTrace.Step("Structure",
+                $"'{(_data != null ? _data.towerName : name)}' REPAIRED (hp {_maxHp:0})");
         }
 
         /// <summary>
