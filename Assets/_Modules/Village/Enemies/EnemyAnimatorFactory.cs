@@ -156,7 +156,8 @@ namespace DeNelle.Village
                 // the bind/T-pose while the NavMeshAgent slides it (the "sliding statue" ship path).
                 // Mirror HeroBodySwapper.cs:475 (avatar != null && avatar.isValid). Do NOT hide the
                 // enemy — just self-report LOUDLY so a headless run pinpoints the un-mapped model
-                // (enemies must still spawn). Only meaningful for isHuman animators.
+                // (enemies must still spawn).
+                bool humanoidClips = ControllerHasHumanoidClips(ctrl);
                 if (anim.isHuman && (anim.avatar == null || !anim.avatar.isValid))
                 {
                     FlowTrace.Fail("Enemy",
@@ -166,6 +167,23 @@ namespace DeNelle.Village
                         "bind/T-pose while the agent slides it (the sliding-statue path). Re-import the " +
                         "model as Humanoid with a valid avatar (PeopleCharacterImporter).");
                 }
+                // QA 2026-07-11 (capture-20260711-181253, orcs frozen in T-pose): the guard above
+                // was gated 'if (anim.isHuman ...)', so a GENERIC rig under a Humanoid-clip
+                // controller — the EXACT failure — never logged. Un-gated: a Humanoid clip cannot
+                // pose a Generic rig at all.
+                else if (!anim.isHuman && humanoidClips)
+                {
+                    FlowTrace.Fail("Enemy",
+                        $"animator: model '{modelName}' rig is GENERIC but controller '{ctrlName}' " +
+                        "carries Humanoid clips — bind/T-pose (sliding statue). Re-import Humanoid " +
+                        "(PeopleCharacterImporter).");
+                }
+
+                // Deferred pose-verify (§12, mirrors HeroBodySwapper.VerifyHeroPoseThenReport):
+                // sample the rig over the next ~8 frames; if nothing ever drives it, FAIL LOUD
+                // under [Flow:EnemyPose]. Once per spawned enemy — the verifier component
+                // destroys itself after the window, so no per-frame cost remains.
+                EnemyPoseVerifier.Attach(visual, anim, modelName, ctrlName, humanoidClips);
             }
             else
             {
@@ -179,6 +197,115 @@ namespace DeNelle.Village
                     $"Controller NULL for {modelName} ('Enemies/{ctrlName}') — enemy will SLIDE with no " +
                     "animation (run 'Build Animator Controllers' + EnemyAnimatorSetup to populate Resources/Enemies).");
             }
+        }
+
+        /// <summary>True if any clip on the controller is Humanoid motion — such a clip
+        /// can only pose the rig through a valid Humanoid avatar (Generic rig = T-pose).</summary>
+        private static bool ControllerHasHumanoidClips(RuntimeAnimatorController ctrl)
+        {
+            if (ctrl == null) return false;
+            var clips = ctrl.animationClips;
+            if (clips == null) return false;
+            for (int i = 0; i < clips.Length; i++)
+                if (clips[i] != null && clips[i].humanMotion) return true;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Deferred pose-verify for a spawned enemy (QA 2026-07-11 T-pose RCA; mirrors
+    /// HeroBodySwapper.VerifyHeroPoseThenReport:1003's shape). Over ~8 frames after spawn,
+    /// confirm the Animator actually DRIVES the rig: a clip is playing on layer 0
+    /// (GetCurrentAnimatorClipInfoCount(0) > 0) or a sampled bone transform moved. If
+    /// nothing ever drives it → FlowTrace.Fail under [Flow:EnemyPose] so a headless run /
+    /// F8 capture names the frozen model — the owner is never the detector. Runs ONCE per
+    /// spawned enemy, then destroys itself (zero per-frame cost after the window).
+    /// </summary>
+    internal sealed class EnemyPoseVerifier : MonoBehaviour
+    {
+        private const int MaxPoseFrames = 8;
+
+        private Animator _anim;
+        private string _model;
+        private string _ctrl;
+        private bool _humanoidClips;
+
+        /// <summary>Attach + start the one-shot verify. No-op if a verifier is already
+        /// on this visual (once per spawned enemy).</summary>
+        internal static void Attach(GameObject visual, Animator anim, string model,
+                                    string ctrl, bool humanoidClips)
+        {
+            if (visual == null || anim == null) return;
+            if (visual.GetComponent<EnemyPoseVerifier>() != null) return;   // already verifying/verified
+            if (!visual.activeInHierarchy) return;                          // coroutine needs an active host
+
+            var v = visual.AddComponent<EnemyPoseVerifier>();
+            v._anim = anim;
+            v._model = model;
+            v._ctrl = ctrl;
+            v._humanoidClips = humanoidClips;
+            v.StartCoroutine(v.VerifyPoseThenReport());
+        }
+
+        private System.Collections.IEnumerator VerifyPoseThenReport()
+        {
+            // Sample a real bone so "animator says it's playing but bones are frozen"
+            // (the exact QA capture) is caught: clip-info can report a clip while a
+            // rig-type mismatch leaves every bone at bind pose.
+            Transform bone = FindSampleBone(_anim);
+            Quaternion boneRot = bone != null ? bone.localRotation : Quaternion.identity;
+            Vector3 bonePos = bone != null ? bone.localPosition : Vector3.zero;
+
+            bool everPlayed = false;   // a clip was ever reported on layer 0
+            bool boneMoved = false;   // a sampled bone transform actually changed
+            for (int i = 0; i < MaxPoseFrames; i++)
+            {
+                yield return null;
+                if (this == null || _anim == null) yield break;
+                if (_anim.isActiveAndEnabled && _anim.runtimeAnimatorController != null &&
+                    _anim.GetCurrentAnimatorClipInfoCount(0) > 0)
+                    everPlayed = true;
+                if (bone != null &&
+                    (Quaternion.Angle(boneRot, bone.localRotation) > 0.1f ||
+                     (bonePos - bone.localPosition).sqrMagnitude > 1e-6f))
+                    boneMoved = true;
+                if (everPlayed && (boneMoved || bone == null)) break;   // proven alive — stop early
+            }
+
+            bool frozen = !everPlayed || (bone != null && !boneMoved);
+            if (frozen)
+            {
+                string rigType = _anim == null ? "<gone>"
+                    : _anim.isHuman ? "Humanoid"
+                    : _anim.avatar != null ? "Generic"
+                    : "no-avatar";
+                FlowTrace.Fail("EnemyPose",
+                    $"id={gameObject.GetInstanceID()} model={_model}: everPlayed={everPlayed} " +
+                    $"boneMoved={boneMoved} — frozen T-pose (rig={rigType} vs " +
+                    $"{(_humanoidClips ? "Humanoid" : "Generic")} clips on controller '{_ctrl}'). " +
+                    "Re-import Humanoid (PeopleCharacterImporter.ImportOrcFamily).");
+            }
+            else
+            {
+                FlowTrace.Step("EnemyPose",
+                    $"id={gameObject.GetInstanceID()} model={_model}: pose OK " +
+                    $"(everPlayed={everPlayed} boneMoved={boneMoved}).");
+            }
+
+            Destroy(this);   // one-shot — no per-frame cost after the window
+        }
+
+        /// <summary>Pick a representative bone: first skinned bone under the animator
+        /// (skip the root — root motion is off, the agent moves the root).</summary>
+        private static Transform FindSampleBone(Animator anim)
+        {
+            if (anim == null) return null;
+            var smr = anim.GetComponentInChildren<SkinnedMeshRenderer>();
+            if (smr != null && smr.bones != null)
+                for (int i = 0; i < smr.bones.Length; i++)
+                    if (smr.bones[i] != null && smr.bones[i] != anim.transform)
+                        return smr.bones[i];
+            return null;
         }
     }
 }

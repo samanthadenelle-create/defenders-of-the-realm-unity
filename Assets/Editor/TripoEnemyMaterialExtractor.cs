@@ -209,6 +209,255 @@ namespace DeNelle.Editor
             Debug.Log("[Finalize] DONE — FINALIZE_OGREMAGE_OK");
         }
 
+        // =====================================================================
+        // GREEN ORC_SHAMAN (QA-proven 2026-07-11): Player.log 97402/140579/232065
+        // '[Flow:EnemyVisual] Material on Orc_Shaman: NO renderer/material (would render
+        // blank/fallback)'. Ground truth from the metas: Orc_Shaman.fbx.meta carries an
+        // externalObjects remap  tripo_mat_79fc0b70 -> guid 8c8396fdda11f8141933ef6893cdfef7
+        // and NO asset with that guid exists anywhere in the project (the .mat was
+        // deleted/never committed) — so the material slot resolves NULL and Unity renders
+        // the unlit fallback (VisualFactory.cs:194-202). Orc_Berserker's remap target
+        // (Orc_Berserker.mat) EXISTS — that is the healthy reference state.
+        //
+        // Fix = the proven f23d05ae single-asset extract+remap arch (ArcaneSpire_1 white
+        // fix): extract the FBX-embedded diffuse to a real texture, author a URP/Lit
+        // material from it, wire it via ModelImporter.AddRemap using the EXACT source
+        // material name from importer.GetExternalObjectMap() / the imported material list,
+        // SaveAndReimport, then VERIFY the remap took (externalObjects count + every
+        // renderer slot bound).
+        // Run headless: -executeMethod DeNelle.Editor.TripoEnemyMaterialExtractor.RepairOrcShaman
+        // =====================================================================
+        [MenuItem("Defenders/Art/Repair Orc_Shaman Material (green fix)")]
+        public static void RepairOrcShaman()
+        {
+            bool ok = RepairNullMaterialSlot("Assets/Resources/Enemies/Orc_Shaman.fbx");
+
+            // Same-class sweep (verify-only): report BOUND / MIS-BOUND for every other
+            // orc + Tripo enemy FBX so the fix run names any sibling with the same rot.
+            AuditEnemyMaterialBindings();
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log($"[TripoExtract] Orc_Shaman repair {(ok ? "SUCCEEDED" : "FAILED")} — " +
+                      (ok ? "ORC_SHAMAN_REPAIR_OK" : "ORC_SHAMAN_REPAIR_FAIL"));
+        }
+
+        // Same dangling-remap class as the shaman, caught by the audit on the repair run
+        // ('[MatAudit] Orc_Necromancer: MIS-BOUND — nullSlots=1/1, staleRemaps=[tripo_mat_1cd34ada]').
+        // Run headless: -executeMethod DeNelle.Editor.TripoEnemyMaterialExtractor.RepairOrcNecromancer
+        [MenuItem("Defenders/Art/Repair Orc_Necromancer Material (green fix)")]
+        public static void RepairOrcNecromancer()
+        {
+            bool ok = RepairNullMaterialSlot("Assets/Resources/Enemies/Orc_Necromancer.fbx");
+            AuditEnemyMaterialBindings();
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log($"[TripoExtract] Orc_Necromancer repair {(ok ? "SUCCEEDED" : "FAILED")} — " +
+                      (ok ? "ORC_NECRO_REPAIR_OK" : "ORC_NECRO_REPAIR_FAIL"));
+        }
+
+        /// <summary>
+        /// Repair ONE FBX whose externalObjects material remap points at a missing .mat
+        /// (null slot → unlit fallback). Extract embedded textures → author a URP/Lit
+        /// material next to the FBX → AddRemap with the exact source-material name →
+        /// SaveAndReimport → verify every renderer slot bound. Returns true if verified.
+        /// </summary>
+        public static bool RepairNullMaterialSlot(string fbxPath)
+        {
+            var importer = AssetImporter.GetAtPath(fbxPath) as ModelImporter;
+            if (importer == null)
+            {
+                Debug.LogWarning($"[TripoExtract] Repair: no ModelImporter at '{fbxPath}' — skipped.");
+                return false;
+            }
+
+            string baseName = Path.GetFileNameWithoutExtension(fbxPath);
+
+            // 1) EXACT source-material names, from the importer's own map first (the meta
+            //    already names 'tripo_mat_79fc0b70' for the Shaman); fall back to the
+            //    imported Material sub-assets if the map carries no material entries.
+            var srcNames = new System.Collections.Generic.List<string>();
+            foreach (var kv in importer.GetExternalObjectMap())
+            {
+                if (kv.Key.type == typeof(Material) && !srcNames.Contains(kv.Key.name))
+                    srcNames.Add(kv.Key.name);
+            }
+            if (srcNames.Count == 0)
+            {
+                foreach (var o in AssetDatabase.LoadAllAssetsAtPath(fbxPath))
+                    if (o is Material m && !srcNames.Contains(m.name))
+                        srcNames.Add(m.name);
+            }
+            if (srcNames.Count == 0)
+            {
+                Debug.LogWarning($"[TripoExtract] Repair {baseName}: no source material names found " +
+                                 "(no map entries, no imported materials) — cannot remap.");
+                return false;
+            }
+            Debug.Log($"[TripoExtract] Repair {baseName}: source material name(s) = " +
+                      string.Join(", ", srcNames));
+
+            // 2) Extract the embedded textures to the sibling .fbm (idempotent; the 15MB
+            //    Shaman FBX embeds its PBR set) so the albedo exists as a real asset.
+            ExtractFor(fbxPath);
+
+            string dir = Path.GetDirectoryName(fbxPath).Replace('\\', '/');
+            string fbm = $"{dir}/{baseName}.fbm";
+
+            // 3) Pick the diffuse/albedo from the extracted set (prefer basecolor-style
+            //    names; any extracted texture beats none).
+            Texture2D albedo = null, normal = null;
+            if (AssetDatabase.IsValidFolder(fbm))
+            {
+                foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { fbm }))
+                {
+                    string tp = AssetDatabase.GUIDToAssetPath(guid);
+                    string tn = Path.GetFileNameWithoutExtension(tp).ToLowerInvariant();
+                    var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(tp);
+                    if (tex == null) continue;
+                    if (tn.Contains("basecolor") || tn.Contains("base_color") ||
+                        tn.Contains("albedo") || tn.Contains("diffuse") || tn.Contains("color"))
+                    {
+                        if (albedo == null) albedo = tex;
+                    }
+                    else if (tn.Contains("normal"))
+                    {
+                        if (normal == null) normal = tex;
+                    }
+                    else if (albedo == null)
+                    {
+                        albedo = tex; // last-resort candidate; a named basecolor overrides it
+                    }
+                }
+            }
+            if (albedo == null)
+                Debug.LogWarning($"[TripoExtract] Repair {baseName}: no extracted albedo found under " +
+                                 $"'{fbm}' — authoring a plain URP/Lit material (untextured but LIT, " +
+                                 "kills the unlit-green fallback).");
+
+            // 4) Author (or refresh) the URP/Lit material next to the FBX — same shape as
+            //    the healthy Orc_Berserker.mat the Berserker remap points at.
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            if (lit == null)
+            {
+                Debug.LogWarning("[TripoExtract] Repair: 'Universal Render Pipeline/Lit' shader not found — abort.");
+                return false;
+            }
+            string matPath = $"{dir}/{baseName}.mat";
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+            if (mat == null)
+            {
+                mat = new Material(lit);
+                AssetDatabase.CreateAsset(mat, matPath);
+            }
+            else
+            {
+                mat.shader = lit;
+            }
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", Color.white);
+            if (albedo != null && mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", albedo);
+            if (normal != null && mat.HasProperty("_BumpMap"))
+            {
+                mat.SetTexture("_BumpMap", normal);
+                mat.EnableKeyword("_NORMALMAP");
+            }
+            EditorUtility.SetDirty(mat);
+
+            // 5) Rewire the remap: drop the stale (dangling-guid) entry, AddRemap the same
+            //    EXACT source name to the authored material, and SAVE so the meta carries
+            //    the binding durably (the ArcaneSpire_1 persistence lesson).
+            foreach (var name in srcNames)
+            {
+                var id = new AssetImporter.SourceAssetIdentifier(typeof(Material), name);
+                importer.RemoveRemap(id);
+                importer.AddRemap(id, mat);
+            }
+            importer.SaveAndReimport();
+
+            // 6) VERIFY the remap took: externalObjects entries resolve + every renderer
+            //    slot on the imported model is bound.
+            int mapped = 0, dangling = 0;
+            foreach (var kv in importer.GetExternalObjectMap())
+            {
+                if (kv.Key.type != typeof(Material)) continue;
+                if (kv.Value != null) mapped++; else dangling++;
+            }
+            int slots = 0, nullSlots = 0;
+            var go = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
+            if (go != null)
+            {
+                foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                    foreach (var sm in r.sharedMaterials)
+                    {
+                        slots++;
+                        if (sm == null) nullSlots++;
+                    }
+            }
+            bool bound = mapped > 0 && dangling == 0 && slots > 0 && nullSlots == 0;
+            Debug.Log($"[TripoExtract] Repair {baseName}: VERIFY externalObjects mapped={mapped} " +
+                      $"dangling={dangling}, renderer slots bound={slots - nullSlots}/{slots} -> " +
+                      $"{(bound ? "BOUND ok" : "MIS-BOUND")} (mat='{matPath}' albedo=" +
+                      $"{(albedo != null ? albedo.name : "<none>")})");
+            return bound;
+        }
+
+        /// <summary>
+        /// VERIFY-ONLY audit of every Resources/Enemies FBX (the orc family + the Tripo
+        /// brutes + skeletons) for the null-material-slot class: an externalObjects remap
+        /// whose target asset no longer exists, or a renderer slot that resolves null —
+        /// either renders Unity's unlit fallback. One line per model: BOUND ok / MIS-BOUND.
+        /// Run headless: -executeMethod DeNelle.Editor.TripoEnemyMaterialExtractor.AuditEnemyMaterialBindings
+        /// </summary>
+        [MenuItem("Defenders/Art/Audit Enemy Material Bindings (null-slot scan)")]
+        public static void AuditEnemyMaterialBindings()
+        {
+            const string enemyDir = "Assets/Resources/Enemies";
+            int misBound = 0, total = 0;
+            foreach (var guid in AssetDatabase.FindAssets("t:Model", new[] { enemyDir }))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (!path.EndsWith(".fbx", System.StringComparison.OrdinalIgnoreCase)) continue;
+                total++;
+                string name = Path.GetFileNameWithoutExtension(path);
+
+                // stale remaps: map entries whose target object failed to resolve.
+                int mapped = 0;
+                var stale = new System.Collections.Generic.List<string>();
+                var imp = AssetImporter.GetAtPath(path) as ModelImporter;
+                if (imp != null)
+                {
+                    foreach (var kv in imp.GetExternalObjectMap())
+                    {
+                        if (kv.Key.type != typeof(Material)) continue;
+                        if (kv.Value != null) mapped++;
+                        else stale.Add(kv.Key.name);
+                    }
+                }
+
+                // null renderer slots on the imported model.
+                int slots = 0, nullSlots = 0;
+                var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (go != null)
+                {
+                    foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                        foreach (var sm in r.sharedMaterials)
+                        {
+                            slots++;
+                            if (sm == null) nullSlots++;
+                        }
+                }
+
+                bool ok = stale.Count == 0 && nullSlots == 0 && slots > 0;
+                if (!ok) misBound++;
+                string line = ok
+                    ? $"[MatAudit] {name}: BOUND ok (slots={slots}, externalObjects mapped={mapped})"
+                    : $"[MatAudit] {name}: MIS-BOUND — nullSlots={nullSlots}/{slots}, " +
+                      $"staleRemaps=[{string.Join(", ", stale)}] (renders unlit fallback)";
+                if (ok) Debug.Log(line); else Debug.LogWarning(line);
+            }
+            Debug.Log($"[MatAudit] DONE — {total - misBound}/{total} bound, {misBound} mis-bound. MAT_AUDIT_OK");
+        }
+
         /// <summary>Extract embedded textures for one FBX into its sibling .fbm folder and
         /// reimport so the material links _BaseMap. Returns true if extraction ran.</summary>
         public static bool ExtractFor(string fbxPath)

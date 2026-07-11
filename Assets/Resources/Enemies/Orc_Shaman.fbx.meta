@@ -8,7 +8,7 @@ ModelImporter:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: tripo_mat_79fc0b70
-    second: {fileID: 2100000, guid: 8c8396fdda11f8141933ef6893cdfef7, type: 2}
+    second: {fileID: 2100000, guid: a68663ae8b5366f40b6dc97a9a16bda6, type: 2}
   materials:
     materialImportMode: 2
     materialName: 0

@@ -147,6 +147,136 @@ namespace DeNelle.Editor
             Debug.Log("[PeopleCharacterImporter] ImportSkeletonFamily DONE\n" + string.Join("\n", report));
         }
 
+        // =====================================================================
+        // TRIPO ORC T-POSE (QA-proven 2026-07-11, capture-20260711-181253: animators
+        // playing, bones frozen): Orc_Shaman / Orc_Warrior / Orc_Berserker hold the
+        // bind/T-pose while their controllers (OrcWarband / OrcHumanoid) drive Humanoid
+        // mixamo clips — a Humanoid clip can only pose a rig through a VALID Humanoid
+        // avatar. Re-assert Humanoid in place + per-model avatar verdict (OK Humanoid /
+        // WARN Generic / FAIL), and if a rig did not map, run the ImportSkeletonFamily-
+        // style bone-map repair with an IN-FAMILY donor (the OrcWarband People biped and
+        // the WO-482 Tripo OrcHumanoid family are DIFFERENT rigs — never cross-copy).
+        // Run headless: -executeMethod DeNelle.Editor.PeopleCharacterImporter.ImportOrcFamily
+        // =====================================================================
+
+        // The three QA-named T-posers, each with same-rig donor FBXs for the repair pass.
+        private struct OrcRepairMap { public ModelMap Model; public string[] Donors; }
+        private static readonly OrcRepairMap[] OrcFamily =
+        {
+            // OrcWarband family (People biped — same rig as the DEF-221 heroes).
+            new OrcRepairMap
+            {
+                Model  = new ModelMap { Src = EnemyDir + "Orc_Shaman.fbx",    Dst = EnemyDir + "Orc_Shaman.fbx",    Label = "Orc_Shaman" },
+                Donors = new[] { EnemyDir + "Orc_Berserker.fbx", EnemyDir + "Orc_Necromancer.fbx", HeroDir + "Mage.fbx" },
+            },
+            new OrcRepairMap
+            {
+                Model  = new ModelMap { Src = EnemyDir + "Orc_Berserker.fbx", Dst = EnemyDir + "Orc_Berserker.fbx", Label = "Orc_Berserker" },
+                Donors = new[] { EnemyDir + "Orc_Shaman.fbx", EnemyDir + "Orc_Necromancer.fbx", HeroDir + "Mage.fbx" },
+            },
+            // OrcHumanoid family (WO-482 Tripo trio — its own rig; donors stay in-family).
+            new OrcRepairMap
+            {
+                Model  = new ModelMap { Src = EnemyDir + "Orc_Warrior.fbx",   Dst = EnemyDir + "Orc_Warrior.fbx",   Label = "Orc_Warrior" },
+                Donors = new[] { EnemyDir + "Orc_Tank.fbx", EnemyDir + "Orc_Mage.fbx" },
+            },
+        };
+
+        [MenuItem("Defenders/Animation/Import Orc Family (Humanoid re-import + verdicts)")]
+        public static void ImportOrcFamily()
+        {
+            var report = new List<string>();
+            report.Add("=== ImportOrcFamily (T-pose fix — Humanoid re-import + avatar verdicts) ===");
+
+            report.Add("-- Orc family → Resources/Enemies (in-place Humanoid) --");
+            foreach (var o in OrcFamily)
+                EnsureHumanoidInPlace(o.Model, report);
+
+            report.Add("-- Avatar repair (only models whose verdict is not OK Humanoid) --");
+            foreach (var o in OrcFamily)
+                RepairOrcAvatar(o, report);
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log("[PeopleCharacterImporter] ImportOrcFamily DONE — ORC_FAMILY_IMPORT_OK\n" +
+                      string.Join("\n", report));
+        }
+
+        /// <summary>ImportSkeletonFamily-style bone-map repair for one orc: pass 1 clears
+        /// stale copy-from state + retries CreateFromThisModel; pass 2 copies a proven
+        /// IN-FAMILY donor Humanoid avatar (sourceAvatar); pass 3 copies the donor's
+        /// humanDescription bone map. Verdict-logged after every pass.</summary>
+        private static void RepairOrcAvatar(OrcRepairMap o, List<string> report)
+        {
+            if (SkeletonAvatarVerdict(o.Model.Dst, out string already))
+            {
+                report.Add($"  {o.Model.Label}: {already} — no repair needed");
+                return;
+            }
+
+            var imp = AssetImporter.GetAtPath(o.Model.Dst) as ModelImporter;
+            if (imp == null) { report.Add($"  {o.Model.Label}: NO IMPORTER — skipped avatar repair"); return; }
+
+            // Pass 1 — clear any stale copy-from-other state and retry auto-map.
+            imp.animationType   = ModelImporterAnimationType.Human;
+            imp.importAnimation = false;
+            imp.sourceAvatar    = null;
+            imp.avatarSetup     = ModelImporterAvatarSetup.CreateFromThisModel;
+            imp.SaveAndReimport();
+            if (SkeletonAvatarVerdict(o.Model.Dst, out string pass1))
+            {
+                report.Add($"  {o.Model.Label}: REPAIRED via CreateFromThisModel ({pass1})");
+                return;
+            }
+
+            // Find a proven Humanoid donor in the SAME family.
+            Avatar donorAv = null;
+            ModelImporter donorImp = null;
+            string donorPath = null;
+            foreach (var d in o.Donors)
+            {
+                if (!SkeletonAvatarVerdict(d, out _)) continue;
+                var go   = AssetDatabase.LoadAssetAtPath<GameObject>(d);
+                var anim = go != null ? go.GetComponentInChildren<Animator>() : null;
+                donorAv  = anim != null ? anim.avatar : null;
+                donorImp = AssetImporter.GetAtPath(d) as ModelImporter;
+                donorPath = d;
+                if (donorAv != null) break;
+            }
+            if (donorAv == null)
+            {
+                report.Add($"  {o.Model.Label}: FAIL — auto-map failed and NO in-family Humanoid donor " +
+                           $"among [{string.Join(", ", o.Donors)}]; hand-map in Unity.");
+                return;
+            }
+
+            // Pass 2 — same-family biped: retarget through the donor's proven avatar.
+            imp.animationType   = ModelImporterAnimationType.Human;
+            imp.importAnimation = false;
+            imp.sourceAvatar    = donorAv;
+            imp.SaveAndReimport();
+            if (SkeletonAvatarVerdict(o.Model.Dst, out string pass2))
+            {
+                report.Add($"  {o.Model.Label}: REPAIRED via donor avatar '{donorPath}' ({pass2})");
+                return;
+            }
+
+            // Pass 3 — copy the donor's humanoid bone map (same bone naming in-family).
+            if (donorImp != null)
+            {
+                imp.animationType    = ModelImporterAnimationType.Human;
+                imp.importAnimation  = false;
+                imp.sourceAvatar     = null;
+                imp.avatarSetup      = ModelImporterAvatarSetup.CreateFromThisModel;
+                imp.humanDescription = donorImp.humanDescription;
+                imp.SaveAndReimport();
+            }
+            string verdict = SkeletonAvatarVerdict(o.Model.Dst, out string final)
+                ? $"REPAIRED via copied bone map from '{donorPath}' ({final})"
+                : $"FAIL avatar repair ({final}) — hand-map in Unity if this orc still T-poses";
+            report.Add($"  {o.Model.Label}: {verdict}");
+        }
+
         /// <summary>Copy a proven Humanoid avatar across the skeleton family when a
         /// silhouette's CC_Base rig did not auto-map (same biped, like DEF-221 heroes).</summary>
         private static void RepairSkeletonAvatars(Avatar sourceAv, List<string> report)
