@@ -219,9 +219,16 @@ Repairs the magenta renderers (idempotent): built-in/error-shader materials → 
 (carrying `_Color`→`_BaseColor`, `_MainTex`→`_BaseMap`); null slots → a shared
 `Assets/Materials/MagentaFix_DefaultLit.mat`. Delegates to `PolyperfectUrpFix.Fix()`
 first. In-place same-GUID swaps (no re-bake needed).
+F8-49 pass: prefab renderer slots referencing Unity's read-only BUILT-IN legacy
+particle materials (`Default-Particle`, Resources/unity_builtin_extra — `Legacy
+Shaders/Particles/Alpha Blended Premultiply`, magenta under URP) → a shared
+`Assets/Materials/MagentaFix_DefaultParticle_URP.mat` (URP Particles/Unlit,
+premultiply blend + built-in Default-Particle glow texture). Hovl/Mirza packs are
+gitignored, so this pass is the durable source fix — re-run after pack re-import.
 - `[MenuItem Defenders/Art/Fix Magenta Materials] Run()` — **DESTRUCTIVE** (mutates material assets + prefab/scene slots; SaveAssets).
+- `[MenuItem Defenders/Art/Fix Built-in Particle Materials (F8-49)] FixBuiltinParticles()` — **DESTRUCTIVE** (prefab slot swaps only; batchmode: `DeNelle.Editor.MagentaMaterialFixer.FixBuiltinParticles`).
 - `UpgradeMaterialToUrp(Material, Shader lit)` → bool (public; idempotent).
-- Deps: URP/Lit shader, `PolyperfectUrpFix`. **WIRED/LIVE**.
+- Deps: URP/Lit + URP Particles/Unlit shaders, `PolyperfectUrpFix`. **WIRED/LIVE**.
 
 ---
 

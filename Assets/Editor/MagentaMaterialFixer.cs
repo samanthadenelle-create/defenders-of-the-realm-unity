@@ -11,6 +11,22 @@
 //     material asset, wherever it lives.
 //   * sharedMaterial == null (empty slot): assign a sensible URP/Lit default
 //     (a shared neutral material we create once under Assets/Materials).
+//   * F8-49: renderer slot references Unity's BUILT-IN 'Default-Particle' material
+//     (Resources/unity_builtin_extra, shader 'Legacy Shaders/Particles/Alpha
+//     Blended Premultiply' — magenta under URP). Built-in materials are read-only
+//     and live outside Assets/, so the two passes above both miss them. A dedicated
+//     prefab pass swaps every such slot to a shared URP Particles/Unlit replica
+//     (premultiply blend + the built-in Default-Particle soft-glow texture).
+//     Hovl Studio / Mirza Beig packs are gitignored, so this pass — not a YAML
+//     edit — is the durable source fix; re-run it after any pack re-import.
+//   * F8-49: renderer slot references Unity's BUILT-IN 'Default-Particle' material
+//     (Resources/unity_builtin_extra, shader 'Legacy Shaders/Particles/Alpha
+//     Blended Premultiply' — magenta under URP). Built-in materials are read-only
+//     and live outside Assets/, so the two passes above both miss them. A dedicated
+//     prefab pass swaps every such slot to a shared URP Particles/Unlit replica
+//     (premultiply blend + the built-in Default-Particle soft-glow texture).
+//     Hovl Studio / Mirza Beig packs are gitignored, so this pass — not a YAML
+//     edit — is the durable source fix; re-run it after any pack re-import.
 //
 // If every offender is under Assets/polyperfect, this first delegates to the
 // existing Defenders/Art/Fix Polyperfect URP Materials pass (PolyperfectUrpFix)
@@ -53,6 +69,11 @@ namespace DeNelle.Editor
             // 2) Sweep ALL material assets in the project for built-in/error shaders.
             int matSwaps = SweepAllMaterials(lit);
 
+            // 2b) F8-49: swap renderer slots that reference Unity's read-only BUILT-IN
+            //     legacy particle materials (Default-Particle etc.) — invisible to both
+            //     the Assets/ material sweep and the null-slot pass below.
+            int builtinSwaps = FixBuiltinLegacyParticleSlotsInPrefabs();
+
             // 3) Repair null sharedMaterial slots on prefabs + build scenes with a URP default.
             Material def = GetOrCreateDefaultMaterial(lit);
             int prefabNullFixes = FixNullSlotsInPrefabs(def);
@@ -62,6 +83,7 @@ namespace DeNelle.Editor
             AssetDatabase.Refresh();
 
             Debug.Log($"[MagentaMaterialFixer] DONE — converted {matSwaps} built-in/error material asset(s) → URP/Lit; " +
+                      $"swapped {builtinSwaps} built-in legacy particle slot(s) → URP Particles/Unlit; " +
                       $"assigned default to {prefabNullFixes} null prefab slot(s) + {sceneNullFixes} null scene slot(s).");
         }
 
@@ -120,6 +142,142 @@ namespace DeNelle.Editor
 
             EditorUtility.SetDirty(mat);
             return true;
+        }
+
+        // ---- F8-49: built-in legacy particle material slot swap ---------------
+        // Unity's built-in 'Default-Particle' material (Resources/unity_builtin_extra)
+        // uses 'Legacy Shaders/Particles/Alpha Blended Premultiply' — a dead shader
+        // under URP. It is read-only and NOT under Assets/, so SweepAllMaterials cannot
+        // upgrade it in place; the slot is also non-null, so the null-slot pass skips
+        // it. Root example (F8-49): Hovl 'Flower slash.prefab' → 'Light' child renderer
+        // slot 0 = {fileID: 10301, guid: 0000000000000000f000000000000000}.
+        // Fix: point every such slot at a shared URP Particles/Unlit replica asset
+        // (premultiply blend + the built-in Default-Particle soft-glow texture).
+
+        private const string ParticleFixMatPath = "Assets/Materials/MagentaFix_DefaultParticle_URP.mat";
+
+        /// <summary>Standalone batchmode entry for the F8-49 pass only (Run() also includes it).</summary>
+        [MenuItem("Defenders/Art/Fix Built-in Particle Materials (F8-49)")]
+        public static void FixBuiltinParticles()
+        {
+            int n = FixBuiltinLegacyParticleSlotsInPrefabs();
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log($"[MagentaMaterialFixer] FixBuiltinParticles DONE — swapped {n} built-in legacy particle slot(s) → URP Particles/Unlit.");
+        }
+
+        private static int FixBuiltinLegacyParticleSlotsInPrefabs()
+        {
+            Material replacement = GetOrCreateUrpDefaultParticleMaterial();
+            if (replacement == null) return 0;
+
+            int slotFixes = 0;
+            string[] guids = AssetDatabase.FindAssets("t:Prefab");
+            foreach (var g in guids)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(g);
+                if (!path.StartsWith("Assets/")) continue;
+
+                // Cheap pre-filter: only open prefabs whose YAML actually references a
+                // built-in material (guid 0000000000000000f000000000000000, type 0).
+                try
+                {
+                    string yaml = System.IO.File.ReadAllText(path);
+                    if (!yaml.Contains("guid: 0000000000000000f000000000000000")) continue;
+                }
+                catch { continue; }
+
+                var root = PrefabUtility.LoadPrefabContents(path);
+                if (root == null) continue;
+                bool dirty = false;
+
+                foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (r == null) continue;
+                    var mats = r.sharedMaterials;
+                    if (mats == null) continue;
+                    bool changed = false;
+                    for (int i = 0; i < mats.Length; i++)
+                    {
+                        if (!IsBuiltinLegacyParticleMaterial(mats[i])) continue;
+                        mats[i] = replacement;
+                        changed = true;
+                        slotFixes++;
+                    }
+                    if (changed)
+                    {
+                        r.sharedMaterials = mats;
+                        EditorUtility.SetDirty(r);
+                        dirty = true;
+                    }
+                }
+
+                if (dirty)
+                {
+                    PrefabUtility.SaveAsPrefabAsset(root, path);
+                    Debug.Log($"[MagentaMaterialFixer] built-in legacy particle slot(s) fixed in {path}");
+                }
+                PrefabUtility.UnloadPrefabContents(root);
+            }
+            return slotFixes;
+        }
+
+        /// <summary>True when the material is one of Unity's read-only BUILT-IN materials still on a legacy/dead shader.</summary>
+        private static bool IsBuiltinLegacyParticleMaterial(Material m)
+        {
+            if (m == null) return false;
+            string assetPath = AssetDatabase.GetAssetPath(m);
+            if (assetPath != "Resources/unity_builtin_extra") return false;   // only built-ins; Assets/ mats are handled by SweepAllMaterials
+            var sh = m.shader;
+            string sn = sh != null ? sh.name : "";
+            return sh == null ||
+                   sn.StartsWith("Legacy Shaders/") ||
+                   sn.Contains("InternalError");
+        }
+
+        /// <summary>
+        /// Shared URP replica of Unity's Default-Particle material: URP Particles/Unlit,
+        /// transparent premultiply blend (mirrors 'Particles/Alpha Blended Premultiply'),
+        /// base map = the built-in Default-Particle soft-glow texture. Created once.
+        /// Blend setup mirrors VFXManager.ConfigureUrpParticleBlend (the proven runtime heal).
+        /// </summary>
+        private static Material GetOrCreateUrpDefaultParticleMaterial()
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<Material>(ParticleFixMatPath);
+            if (existing != null) return existing;
+
+            var sh = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+            if (sh == null)
+            {
+                Debug.LogError("[MagentaMaterialFixer] 'Universal Render Pipeline/Particles/Unlit' not found — cannot build the Default-Particle replacement.");
+                return null;
+            }
+
+            const string dir = "Assets/Materials";
+            if (!AssetDatabase.IsValidFolder(dir))
+                AssetDatabase.CreateFolder("Assets", "Materials");
+
+            var mat = new Material(sh) { name = "MagentaFix_DefaultParticle_URP" };
+            // _Surface 1 = Transparent; _Blend 1 = Premultiply (URP BaseShaderGUI enum).
+            if (mat.HasProperty("_Surface"))  mat.SetFloat("_Surface", 1f);
+            if (mat.HasProperty("_Blend"))    mat.SetFloat("_Blend", 1f);
+            if (mat.HasProperty("_SrcBlend")) mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.One);
+            if (mat.HasProperty("_DstBlend")) mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            if (mat.HasProperty("_ZWrite"))   mat.SetFloat("_ZWrite", 0f);
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.EnableKeyword("_ALPHAPREMULTIPLY_ON");
+            mat.DisableKeyword("_ALPHAMODULATE_ON");
+            mat.SetOverrideTag("RenderType", "Transparent");
+            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+
+            // Same soft-glow texture the built-in Default-Particle material used.
+            var tex = AssetDatabase.GetBuiltinExtraResource<Texture2D>("Default-Particle.psd");
+            if (tex != null && mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", tex);
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", Color.white);
+
+            AssetDatabase.CreateAsset(mat, ParticleFixMatPath);
+            AssetDatabase.SaveAssets();
+            return mat;
         }
 
         // ---- null-slot repair: prefabs --------------------------------------
