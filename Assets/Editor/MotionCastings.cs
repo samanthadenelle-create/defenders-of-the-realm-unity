@@ -62,6 +62,7 @@ namespace DeNelle.Editor
         // muzzle→target, vfxImpact lands at the END point. Absent = that phase is silent.
         public string vfxProjectile; // optional — travel-loop key (muzzle→target flight)
         public string vfxImpact;     // optional — landing key (fired at the target point)
+        public string sfxImpact;     // optional — Resources/Sfx clip name played at the landing
         public string attachBone; // optional — humanoid bone/attach name ("hand.r", "weapon", "spine")
         public bool   playOneShot;// optional — one-shot overlay, base state undisturbed (default false)
         public bool   manual;     // true = owner pick = CANON, never overwritten
@@ -304,6 +305,7 @@ namespace DeNelle.Editor
                     ["vfxDelay"]    = row.vfxDelay,
                     ["vfxProjectile"] = row.vfxProjectile ?? string.Empty,
                     ["vfxImpact"]   = row.vfxImpact ?? string.Empty,
+                    ["sfxImpact"]   = row.sfxImpact ?? string.Empty,
                     ["attachBone"]  = row.attachBone ?? string.Empty,
                     ["playOneShot"] = row.playOneShot,
                     ["manual"]      = row.manual,

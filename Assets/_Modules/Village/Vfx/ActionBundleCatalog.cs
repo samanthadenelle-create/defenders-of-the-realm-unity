@@ -55,6 +55,7 @@ namespace DeNelle.Village
         // point. Absent/empty = that phase is silent (registry-only VFX law).
         public string vfxProjectile;     // travel-loop key (muzzle→target flight)
         public string vfxImpact;         // landing key (fired at the target point)
+        public string sfxImpact;         // Resources/Sfx clip name played at the landing
         public string attachBone;        // humanoid bone / attach name ("hand.r", "spine")
         public bool   playOneShot;       // effects-only overlay — base animator state untouched
         public bool   manual;            // owner pick = CANON (provenance)

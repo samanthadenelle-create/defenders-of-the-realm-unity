@@ -1379,6 +1379,19 @@ namespace DeNelle.Village
         {
             if (RegistryOnlyMotionVfx)
             {
+                // Impact-phase AUDIO (owner sound drops 2026-07-12): the row's sfxImpact
+                // names a Resources/Sfx clip, played at the landing through the mixer seam
+                // (ActionBundlePlayer.PlaySfx convention). Independent of vfxImpact — either
+                // phase half can be authored alone.
+                string sfx = TryGetBundleField(_currentCastKeyword, r => r.sfxImpact);
+                if (!string.IsNullOrEmpty(sfx))
+                {
+                    var clip = Resources.Load<AudioClip>("Sfx/" + sfx);
+                    if (clip != null) DeNelle.Core.CoreServices.Audio?.PlaySfx(clip, 0.9f);
+                    else DeNelle.Core.Diagnostics.FlowTrace.Once("Vfx", "sfximpact-missing:" + sfx,
+                        $"sfxImpact '{sfx}' has no clip at Resources/Sfx/{sfx} — silent landing.");
+                }
+
                 string key = TryGetBundleField(_currentCastKeyword, r => r.vfxImpact);
                 if (string.IsNullOrEmpty(key)) return;   // phase unpicked — silent by design
                 Vector3 dir = at - transform.position;

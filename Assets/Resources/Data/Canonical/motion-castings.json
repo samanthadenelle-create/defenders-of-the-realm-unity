@@ -175,7 +175,8 @@
         "pickedUtc": "2026-07-12T03:54:30Z",
         "source": "motion-caster",
         "vfxImpact": "Melee_Impact",
-        "vfxNote": "cli-demo-polish 2026-07-12 (phase VFX only; re-pick freely in Motion Caster)"
+        "vfxNote": "cli-demo-polish 2026-07-12 (phase VFX only; re-pick freely in Motion Caster)",
+        "sfxImpact": "Swords_Clash"
       },
       "skill2": {
         "clip": "Assets/Action/Knight/Motion/studio-mocap-hero-motion/fist_whirlwindkick_m.fbx",
@@ -189,7 +190,8 @@
         "pickedUtc": "2026-07-12T03:54:47Z",
         "source": "motion-caster",
         "vfxImpact": "Cleave_Impact",
-        "vfxNote": "cli-demo-polish 2026-07-12 (phase VFX only; re-pick freely in Motion Caster)"
+        "vfxNote": "cli-demo-polish 2026-07-12 (phase VFX only; re-pick freely in Motion Caster)",
+        "sfxImpact": "Swords_Clash"
       },
       "block": {
         "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Weapon_WeaponSkill_SwordShield_ShieldSwipe01.anim",
@@ -220,7 +222,8 @@
         "vfxProjectile": "Fireball_Projectile",
         "vfxImpact": "Fireball_Impact",
         "vfxDelay": 0.15,
-        "vfxNote": "cli-demo-polish 2026-07-12 (phase VFX only; re-pick freely in Motion Caster)"
+        "vfxNote": "cli-demo-polish 2026-07-12 (phase VFX only; re-pick freely in Motion Caster)",
+        "sfxImpact": "Spell_Impact"
       },
       "walk": {
         "clip": "Assets/Action/Knight/Motion/owner-drops/walk_normal_f.fbx",
