@@ -92,7 +92,69 @@ namespace DeNelle.Village
             // Owner 2026-07-06: 'K' scatters HIGH-LEVEL enemies far from town to felt-test
             // the ThreatSkullPlate warning + the hero-vs-high-level damage feel.
             if (Input.GetKeyDown(KeyCode.K)) SpawnHighLevelScatter();
+            // WO-680: 'B' spawns a Blink orc next to its Tripo counterpart for the
+            // side-by-side felt-compare (Blink Stylized Orcs activation — additive,
+            // DevHotkeys-gated like the rest, so live balance is untouched).
+            if (Input.GetKeyDown(KeyCode.B)) SpawnBlinkOrcCompare();
         }
+
+        /// <summary>
+        /// WO-680 felt-compare: spawn ONE Blink orc warrior (Resources/Enemies/Blink,
+        /// staged by BlinkOrcImporter) beside ONE Tripo orc-warrior, ~8 m in front of
+        /// the hero, both idling at their own anchor (march target = own anchor, the
+        /// SpawnHighLevelScatter pattern) so the owner can walk around them and judge
+        /// look + animation quality side by side. Same stat block on both — the compare
+        /// is purely visual/anim. Requires the import to have run; a missing Blink
+        /// prefab degrades to EnemyFactory's tinted capsule + a FlowTrace.Fail naming
+        /// the unresolved Resources path (run BlinkOrcImporter.Run).
+        /// </summary>
+        private void SpawnBlinkOrcCompare()
+        {
+            var hero = GameObject.FindWithTag("Player");
+            if (hero == null)
+            {
+                Debug.LogWarning("[EnemyFamilyTestSpawner] No 'Player' hero found — cannot spawn the Blink compare.");
+                return;
+            }
+            if (_root == null) _root = new GameObject("[EnemyFamilyTestPack]").transform;
+
+            Vector3 fwd = hero.transform.forward; fwd.y = 0f;
+            if (fwd.sqrMagnitude < 0.001f) fwd = Vector3.forward;
+            fwd.Normalize();
+            Vector3 right = Vector3.Cross(Vector3.up, fwd);
+            Vector3 center = hero.transform.position + fwd * 8f;
+
+            SpawnCompareOrc(CompareDef("blink-orc-warrior", "Blink Orc (new)"), center + right * 1.5f, hero);
+            SpawnCompareOrc(CompareDef("orc-warrior", "Tripo Orc (current)"), center - right * 1.5f, hero);
+
+            Debug.Log("[EnemyFamilyTestSpawner] Blink-vs-Tripo orc compare spawned 8m ahead " +
+                      "(Blink on the right, Tripo on the left — both hold ground; walk around them).");
+        }
+
+        private void SpawnCompareOrc(EnemyDef def, Vector3 pos, GameObject hero)
+        {
+            if (NavMesh.SamplePosition(pos, out NavMeshHit hit, 8f, NavMesh.AllAreas))
+                pos = hit.position;
+
+            // Idle-at-anchor (own anchor = march target) so the pair stands for inspection.
+            var anchor = new GameObject($"CompareAnchor-{def.Id}").transform;
+            anchor.SetParent(_root, false);
+            anchor.position = pos;
+
+            Vector3 toHero = hero.transform.position - pos; toHero.y = 0f;
+            Quaternion rot = toHero.sqrMagnitude > 0.001f ? Quaternion.LookRotation(toHero) : Quaternion.identity;
+
+            var enemy = EnemyFactory.Build(def, pos, rot, _root);
+            enemy.gameObject.name = $"CompareEnemy ({def.DisplayName})";
+            enemy.Configure($"compare-{def.Id}-{_counter++}", def, anchor);
+        }
+
+        private static EnemyDef CompareDef(string id, string label) => new EnemyDef
+        {
+            Id = id, Name = label, DisplayName = label, Ai = "walker",
+            Hp = 80f, MoveSpeed = 2.6f, ContactDamage = 6f, AttackInterval = 1.2f, Height = 1.9f,
+            AggroRadius = 6f, XpReward = 15, GlimmerReward = 2,
+        };
 
         /// <summary>
         /// Scatter 5 high-level enemies 120–200 m out from the hero at random bearings

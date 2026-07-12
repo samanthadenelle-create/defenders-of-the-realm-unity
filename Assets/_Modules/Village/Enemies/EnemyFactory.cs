@@ -391,6 +391,18 @@ namespace DeNelle.Village
                 // raiders (orc-raider → Orc_Berserker), keeping the orc faction read.
                 case "orc-warlord":      return "Orc_Necromancer";   // outpost raid boss — heaviest orc silhouette
 
+                // ── BLINK STYLIZED ORCS (WO-680) — vendor Humanoid family, ADDITIVE ─
+                // Staged by BlinkOrcImporter into Resources/Enemies/Blink/ (committed
+                // mirrors — never a direct Assets/Blink reference; the pack is gitignored).
+                // Side-by-side with the Tripo orcs above for an in-game felt-compare:
+                // NO existing spawner emits these ids — they spawn only via the
+                // DevHotkeys-gated EnemyFamilyTestSpawner 'B' compare, or a future
+                // data-table entry, so live balance is untouched.
+                case "blink-orc-warrior": return "Blink/Blink_Orc_Warrior"; // melee DPS
+                case "blink-orc-hunter":  return "Blink/Blink_Orc_Hunter";  // ranged/skirmisher silhouette
+                case "blink-orc-warlock": return "Blink/Blink_Orc_Warlock"; // caster
+                case "blink-orc-boss":    return "Blink/Blink_Orc_Boss";    // boss (own 22-clip set)
+
                 // ── BRUTES / OGRES / BOSSES ──────────────────────────────────────
                 // STAND-INS (no Troll.fbx / OgreMage.fbx in Resources/Enemies — those render
                 // as tinted capsules): reuse EXISTING OrcWarband-rig orc models until real

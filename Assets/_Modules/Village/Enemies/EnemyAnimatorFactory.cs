@@ -21,7 +21,7 @@ using DeNelle.Core.Diagnostics;
 namespace DeNelle.Village
 {
     /// <summary>Rig family of an enemy mesh — selects which shared controller to apply.</summary>
-    public enum EnemyRig { HumanoidMedium, HumanoidLarge, Boss, Dragon, OrcWarband, LargeHumanoid, OrcHumanoid, SkeletonHumanoid }
+    public enum EnemyRig { HumanoidMedium, HumanoidLarge, Boss, Dragon, OrcWarband, LargeHumanoid, OrcHumanoid, SkeletonHumanoid, BlinkOrc, BlinkOrcBoss }
 
     public static class EnemyAnimatorFactory
     {
@@ -63,6 +63,16 @@ namespace DeNelle.Village
                 case "Skeleton_Warrior":
                 case "Skeleton_Rogue":
                 case "Skeleton_Healer": return EnemyRig.SkeletonHumanoid;
+                // WO-680: Blink Stylized Orcs — professionally Humanoid-rigged vendor family
+                // staged ADDITIVELY by BlinkOrcImporter into Resources/Enemies/Blink/ (side-by-
+                // side with the Tripo orcs for a felt-compare). Their controllers are built from
+                // the pack's own 22-clip Humanoid sets (the bundled OrcAnimator.controller has
+                // ZERO parameters — a demo asset Enemy.cs cannot drive), wired with the standard
+                // ActorAnimator params. Model names carry the Blink/ Resources subfolder.
+                case "Blink/Blink_Orc_Warrior":
+                case "Blink/Blink_Orc_Hunter":
+                case "Blink/Blink_Orc_Warlock": return EnemyRig.BlinkOrc;
+                case "Blink/Blink_Orc_Boss":    return EnemyRig.BlinkOrcBoss;
                 default:               return EnemyRig.HumanoidMedium; // Minion + legacy Generic
             }
         }
@@ -78,6 +88,8 @@ namespace DeNelle.Village
                 case EnemyRig.OrcHumanoid:    return "OrcHumanoid";   // WO-482/491 new Tripo orc family base (Orc_Warrior/Tank/Mage)
                 case EnemyRig.LargeHumanoid:  return "LargeHumanoid"; // WO-445 Humanoid brute controller (Troll/Demon/OgreMage)
                 case EnemyRig.SkeletonHumanoid: return "SkeletonHumanoid";
+                case EnemyRig.BlinkOrc:       return "Blink/BlinkOrc";     // WO-680 Blink Stylized Orcs (built from the pack's own clips)
+                case EnemyRig.BlinkOrcBoss:   return "Blink/BlinkOrcBoss"; // WO-680 Blink orc boss (OrcBoss_* clip set)
                 default:                      return "HumanoidEnemy";
             }
         }
