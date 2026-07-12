@@ -239,6 +239,24 @@ namespace DeNelle.Village
             if (visual.GetComponent<EnemyPoseVerifier>() != null) return;   // already verifying/verified
             if (!visual.activeInHierarchy) return;                          // coroutine needs an active host
 
+            // Headless/culling guard (RCA 2026-07-11): EnemyAnimatorFactory sets
+            // cullingMode=CullUpdateTransforms, so with no renderer visible (batchmode /
+            // -nographics fleets, or simply offscreen) the Animator legitimately does NOT
+            // drive bone transforms — a frozen verdict there is a false positive (proven:
+            // Skeleton_Minion flagged frozen headless while visibly walking in the owner's
+            // rendered session). Skip the verify instead of FlowTrace.Fail-ing it.
+            var guardSmr = anim.GetComponentInChildren<SkinnedMeshRenderer>();
+            bool culledOffscreen = anim.cullingMode != AnimatorCullingMode.AlwaysAnimate &&
+                                   guardSmr != null && !guardSmr.isVisible;
+            if (Application.isBatchMode || culledOffscreen)
+            {
+                FlowTrace.Step("EnemyPose",
+                    $"model={model}: pose-verify skipped (headless/culled — bones not driven offscreen; " +
+                    $"batchMode={Application.isBatchMode} cullingMode={anim.cullingMode} " +
+                    $"smrVisible={(guardSmr != null ? guardSmr.isVisible.ToString() : "<no-smr>")}).");
+                return;
+            }
+
             var v = visual.AddComponent<EnemyPoseVerifier>();
             v._anim = anim;
             v._model = model;
@@ -279,10 +297,24 @@ namespace DeNelle.Village
                     : _anim.isHuman ? "Humanoid"
                     : _anim.avatar != null ? "Generic"
                     : "no-avatar";
+                // Discriminator data (RCA 2026-07-11): avatar identity + validity + the
+                // actual skinned hierarchy names. avatarValid=False → degenerate avatar
+                // (hand-map / donor repair). sampleBone/smrRoot = tripo_part_* → mesh is
+                // skinned to loose Tripo chunks; the FBX needs re-rig/re-export — no
+                // importer fix exists.
+                var avatar = _anim != null ? _anim.avatar : null;
+                var smr = _anim != null ? _anim.GetComponentInChildren<SkinnedMeshRenderer>() : null;
+                string avatarName = avatar != null ? avatar.name : "<none>";
+                string avatarValid = avatar != null ? avatar.isValid.ToString() : "<none>";
+                string isHuman = _anim != null ? _anim.isHuman.ToString() : "<gone>";
+                string sampleBoneName = bone != null ? bone.name : "<none>";
+                string smrRootName = smr != null && smr.rootBone != null ? smr.rootBone.name : "<none>";
                 FlowTrace.Fail("EnemyPose",
                     $"id={gameObject.GetInstanceID()} model={_model}: everPlayed={everPlayed} " +
                     $"boneMoved={boneMoved} — frozen T-pose (rig={rigType} vs " +
                     $"{(_humanoidClips ? "Humanoid" : "Generic")} clips on controller '{_ctrl}'). " +
+                    $"avatar={avatarName} avatarValid={avatarValid} isHuman={isHuman} " +
+                    $"sampleBone={sampleBoneName} smrRoot={smrRootName}. " +
                     "Re-import Humanoid (PeopleCharacterImporter.ImportOrcFamily).");
             }
             else

@@ -180,6 +180,20 @@ namespace DeNelle.Editor
                 Model  = new ModelMap { Src = EnemyDir + "Orc_Warrior.fbx",   Dst = EnemyDir + "Orc_Warrior.fbx",   Label = "Orc_Warrior" },
                 Donors = new[] { EnemyDir + "Orc_Tank.fbx", EnemyDir + "Orc_Mage.fbx" },
             },
+            // Orc_Tank / Orc_Mage (RCA 2026-07-11): both OrcHumanoid-family, both T-pose
+            // in rendered sessions, both omitted from the original repair scope. Donors
+            // stay strictly in the OrcHumanoid family — never the OrcWarband People biped
+            // (different rig; see the never-cross-copy warning above).
+            new OrcRepairMap
+            {
+                Model  = new ModelMap { Src = EnemyDir + "Orc_Tank.fbx",      Dst = EnemyDir + "Orc_Tank.fbx",      Label = "Orc_Tank" },
+                Donors = new[] { EnemyDir + "Orc_Warrior.fbx", EnemyDir + "Orc_Mage.fbx" },
+            },
+            new OrcRepairMap
+            {
+                Model  = new ModelMap { Src = EnemyDir + "Orc_Mage.fbx",      Dst = EnemyDir + "Orc_Mage.fbx",      Label = "Orc_Mage" },
+                Donors = new[] { EnemyDir + "Orc_Warrior.fbx", EnemyDir + "Orc_Tank.fbx" },
+            },
         };
 
         [MenuItem("Defenders/Animation/Import Orc Family (Humanoid re-import + verdicts)")]
