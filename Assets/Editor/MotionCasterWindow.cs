@@ -102,7 +102,10 @@ namespace DeNelle.Editor
         private int _chipIndex;              // 0 = All
         // Owner filter: hide the loose Mixamo clips + the KayKit pack so only the
         // studio-mocap / ActorCore / owner-drop clips list. Persisted across sessions.
-        private bool _mocapOnly = EditorPrefs.GetBool("MotionCaster.MocapOnly", false);
+        // Loaded in OnEnable — EditorPrefs is FORBIDDEN in field initializers
+        // (captured 2026-07-11 Editor.log: "GetBool is not allowed to be called
+        // from a ScriptableObject constructor").
+        private bool _mocapOnly;
         private string[] _chips = { "All" };
         private Vector2 _libScroll;
         private Vector2 _mainScroll;
@@ -156,6 +159,7 @@ namespace DeNelle.Editor
 
         private void OnEnable()
         {
+            _mocapOnly = EditorPrefs.GetBool("MotionCaster.MocapOnly", false);
             ScanLibrary();
             LoadPickerSources();
             _lastTick = EditorApplication.timeSinceStartup;

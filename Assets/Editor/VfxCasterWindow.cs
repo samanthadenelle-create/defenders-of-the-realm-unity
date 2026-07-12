@@ -53,7 +53,10 @@ namespace DeNelle.Editor
         private List<VfxEntry> _library = new List<VfxEntry>();
         private VfxEntry _selected;
         private string _search = string.Empty;
-        private bool _cataloguedOnly = EditorPrefs.GetBool("VfxCaster.CataloguedOnly", false);
+        // Loaded in OnEnable — EditorPrefs is forbidden in field initializers
+        // (ScriptableObject-constructor UnityException, same class as the
+        // MotionCasterWindow capture 2026-07-11).
+        private bool _cataloguedOnly;
         private Vector2 _libScroll;
 
         // ── Preview stage ────────────────────────────────────────────────────
@@ -85,6 +88,7 @@ namespace DeNelle.Editor
 
         private void OnEnable()
         {
+            _cataloguedOnly = EditorPrefs.GetBool("VfxCaster.CataloguedOnly", false);
             ScanLibrary();
             _lastTick = EditorApplication.timeSinceStartup;
             EditorApplication.update += OnEditorTick;
