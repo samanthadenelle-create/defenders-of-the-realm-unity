@@ -800,10 +800,20 @@ namespace DeNelle.Village
                 ? _accelMetresPerSec2
                 : _decelMetresPerSec2) * Time.deltaTime;
             Velocity = Vector3.MoveTowards(Velocity, targetVelocity, maxStep);
-            // Strip stale lateral drift every frame in town so a heading change (or a camera
-            // recenter) cannot leave |velX| on a pure-forward hold (F8 HeroDrift: velX=2.5, input forward).
+            // Correct stale lateral drift in town (F8 HeroDrift: velX=2.5 on a pure-forward hold)
+            // WITHOUT the hard per-frame snap (f7740f4e) — that snap deleted the MoveTowards
+            // direction glide, so turns twitched and diagonal wall contact jittered instead of
+            // sliding (owner: "broke the movement", 2026-07-11). Rotate the heading toward the
+            // stick at a finite-but-fast rate: drift can never accumulate (rate >> recenter gain),
+            // turns keep a readable arc, magnitude untouched.
             if (townInputDrive && Velocity.sqrMagnitude > 0.0001f)
-                Velocity = move.normalized * Velocity.magnitude;
+            {
+                const float headingCorrectDegPerSec = 540f;
+                Velocity = Vector3.RotateTowards(
+                    Velocity, move.normalized * Velocity.magnitude,
+                    headingCorrectDegPerSec * Mathf.Deg2Rad * Time.deltaTime,
+                    0f);
+            }
 
             // WO-423: face-the-attack-target yaw slew. A fresh movement input cancels the
             // request immediately (we never fight the move-direction LookRotation below);
@@ -1169,13 +1179,11 @@ namespace DeNelle.Village
                                 $"— rebake KnightMocap (BuildKnightMocapController) after Motion Caster pick; " +
                                 $"ActorCore FBXs ship 0_T-Pose before the motion take.");
                         }
-                        else if (cn.Contains("move_run_m") || cn == "mixamo.com")
-                        {
-                            DeNelle.Core.Diagnostics.FlowTrace.Fail("HeroLoco",
-                                $"moving at {Velocity.magnitude:F2} m/s but stale loco clip '{ci.clip.name}' " +
-                                $"(expect runforward_218667/walkforward01) — relaunch Builds/Windows exe built AFTER " +
-                                $"BuildKnightMocapController; registry knight.run must not be move_run_m.");
-                        }
+                        // (2026-07-11) The stale-build guard that flagged 'move_run_m' here is
+                        // RETIRED: the registry is owner-authored via Motion Caster now, and
+                        // knight.run = move_run_m IS the owner's manual canon pick — hardcoding
+                        // expected clip names asserts against whatever the owner chooses next.
+                        // The T-pose check above stays: a T-pose take is wrong on ANY pick.
                     }
                 }
                 if (sb.Length == 0) sb.Append("<none>");
