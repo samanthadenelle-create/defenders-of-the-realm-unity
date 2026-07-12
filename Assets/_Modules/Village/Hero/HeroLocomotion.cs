@@ -802,6 +802,14 @@ namespace DeNelle.Village
             // (updateRotation=false), so honoring the request here is enough — no animator
             // turn-in-place (v1 = yaw slew only, deferred Lane 3 WO).
             bool hasMoveInput = input.sqrMagnitude > 0.0001f;
+            // Town/open-world: keep travel aligned to camera input, not NavMesh-injected lateral
+            // velocity. Combat uses Velocity for both facing and step (planted braced gait); after
+            // combat ends the facing writer already switches to `move` — if the step still rides
+            // Velocity.X the hero strafes/sways while looking forward (HeroDrift #1 post-CALM).
+            bool townInputDrive = !engaged && hasMoveInput && move.sqrMagnitude > 0.0001f;
+            if (_hasLastCombatStance && _lastCombatStance && townInputDrive
+                && Velocity.sqrMagnitude > 0.0001f)
+                Velocity = move.normalized * Velocity.magnitude;
             if (_facingActive)
             {
                 if (hasMoveInput)
@@ -861,10 +869,11 @@ namespace DeNelle.Village
                 // follows the surface height, so stairs / ramparts / hills "just work" exactly
                 // like the enemies. Fall back to a raw transform move if the hero isn't on a
                 // NavMesh yet (scene without a bake / spawned off-mesh) so movement never breaks.
-                // NOTE (WO-512): the move STEP is the camera-relative Velocity — UNCHANGED by
-                // lock-face. Only the facing writer below differs, so locking the facing to the
-                // orc while A/D keeps feeding a sideways move vector = strafe, for free.
-                Vector3 step = Velocity * Time.deltaTime;
+                // NOTE (WO-512): the move STEP is camera-relative — UNCHANGED by lock-face. Town
+                // drives along `move` (input heading) at the eased speed; combat keeps Velocity.
+                Vector3 step = townInputDrive
+                    ? move.normalized * (Velocity.magnitude * Time.deltaTime)
+                    : Velocity * Time.deltaTime;
                 if (_agent != null && _agent.isOnNavMesh)
                     _agent.Move(step);
                 else
@@ -886,7 +895,11 @@ namespace DeNelle.Village
                     // pure LookRotation on the velocity for the root transform — no extra Euler
                     // offset. (If the hero ever sidesteps again, the forwardYaw sign in
                     // HeroBodySwapper is the single place to flip.)
-                    Quaternion target = Quaternion.LookRotation(Velocity.normalized);
+                    // Town/open-world: face the camera-relative INPUT heading, not NavMesh velocity —
+                    // agent.Move can inject lateral X while the stick is pure-forward, which made
+                    // LookRotation(Velocity) yaw back and forth (HeroDrift #1: dYaw oscillation).
+                    Vector3 faceBasis = townInputDrive ? move : Velocity;
+                    Quaternion target = Quaternion.LookRotation(faceBasis.normalized);
                     transform.rotation = Quaternion.Slerp(
                         transform.rotation, target, _rotationSpeed * Time.deltaTime);
                     // Rotation writer while MOVING: in the OPEN world (run tier, not engaged) this is
@@ -1027,6 +1040,11 @@ namespace DeNelle.Village
                         $"imminentThreshold={CombatImminentThreshold:0.0}]");
             }
             _actor?.SetCombatStance(engaged);
+            // Weapon carry must mirror the SAME engaged flag (EquipmentController's auto
+            // WaveManager mirror treated ANY Countdown as combat — sword stayed drawn for
+            // 200s+ while the animator flipped to calm m-standby-idle = "bent pose, sword out").
+            var equip = GetComponent<EquipmentController>();
+            equip?.SetCombatActive(engaged);
 
             // Edge/floor clamp + ground-snap ONLY when off the NavMesh (the transform
             // fallback). When the hero is ON the NavMesh, the bake defines the walkable
@@ -1149,6 +1167,13 @@ namespace DeNelle.Village
                                 $"moving at {Velocity.magnitude:F2} m/s but active clip is T-pose '{ci.clip.name}' " +
                                 $"— rebake KnightMocap (BuildKnightMocapController) after Motion Caster pick; " +
                                 $"ActorCore FBXs ship 0_T-Pose before the motion take.");
+                        }
+                        else if (cn.Contains("move_run_m") || cn == "mixamo.com")
+                        {
+                            DeNelle.Core.Diagnostics.FlowTrace.Fail("HeroLoco",
+                                $"moving at {Velocity.magnitude:F2} m/s but stale loco clip '{ci.clip.name}' " +
+                                $"(expect runforward_218667/walkforward01) — relaunch Builds/Windows exe built AFTER " +
+                                $"BuildKnightMocapController; registry knight.run must not be move_run_m.");
                         }
                     }
                 }

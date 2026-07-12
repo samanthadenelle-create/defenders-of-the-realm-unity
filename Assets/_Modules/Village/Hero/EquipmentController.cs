@@ -1738,19 +1738,26 @@ namespace DeNelle.Village
             if (_seatingEditActive) return;
             if (_combatExplicit || _gripRoot == null) return;
             if (_waveManager == null) _waveManager = Object.FindAnyObjectByType<WaveManager>();
-            // CANONICAL in-combat signal — identical to HeroLocomotion.IsWaveInCombat (HeroLocomotion.cs
-            // :552-563) and the calm/combat idle split: a live wave (Countdown/Active) OR a BattleArena
-            // fight in progress. Without the BattleArena term an overworld/arena encounter with no active
-            // WaveManager would keep the weapon SHEATHED mid-fight (weapon never drawn in an arena battle).
-            bool active = DeNelle.Village.Arena.BattleArena.AnyBattleInProgress ||
-                          (_waveManager != null &&
-                           (_waveManager.Phase == WavePhase.Countdown ||
-                            _waveManager.Phase == WavePhase.Active));
+            // CANONICAL in-combat signal — MUST match HeroLocomotion.IsWaveInCombat (BattleLock +
+            // wave Active + imminent Countdown only). The old mirror treated ANY Countdown as drawn,
+            // leaving the sword out for minutes while the animator read calm town idle.
+            bool active = IsHeroCombatEngaged(_waveManager);
             if (active != _combatActive)
             {
                 _combatActive = active;
                 ApplyHoldPose();
             }
+        }
+
+        /// <summary>Mirror of <c>HeroLocomotion.IsWaveInCombat</c> — BattleLock (arena / in-scene
+        /// duel) OR wave Active OR Countdown in its final imminent window only.</summary>
+        private static bool IsHeroCombatEngaged(WaveManager wm)
+        {
+            if (DeNelle.Core.Combat.BattleLock.IsInBattle()) return true;
+            if (wm == null) return false;
+            if (wm.Phase == WavePhase.Active) return true;
+            if (wm.Phase == WavePhase.Countdown && wm.CountdownRemaining <= 5f) return true;
+            return false;
         }
 
         // CARRY STATE (owner design 2026-07-04): place each prop by combat state — DRAWN to the
