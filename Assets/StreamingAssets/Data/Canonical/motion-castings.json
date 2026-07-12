@@ -151,13 +151,16 @@
         "source": "owner-pick"
       },
       "walk": {
-        "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/walkforward01.fbx",
-        "guid": "",
+        "clip": "Assets/Action/Knight/Motion/owner-drops/walk_normal_f.fbx",
+        "guid": "077e3889a09c560409d57d5f9217b9b8",
         "vfxKey": "",
         "sfxId": "",
+        "vfxDelay": 0.0,
+        "attachBone": "",
+        "playOneShot": false,
         "manual": true,
-        "pickedUtc": "2026-07-12T02:15:00Z",
-        "source": "cli-hero-sway-fix"
+        "pickedUtc": "2026-07-12T03:40:06Z",
+        "source": "motion-caster"
       },
       "run": {
         "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/runforward_218667.fbx",
