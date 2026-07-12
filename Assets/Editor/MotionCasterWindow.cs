@@ -91,6 +91,9 @@ namespace DeNelle.Editor
         private ClipEntry _selected;
         private string _search = string.Empty;
         private int _chipIndex;              // 0 = All
+        // Owner filter: hide the loose Mixamo clips + the KayKit pack so only the
+        // studio-mocap / ActorCore / owner-drop clips list. Persisted across sessions.
+        private bool _mocapOnly = EditorPrefs.GetBool("MotionCaster.MocapOnly", false);
         private string[] _chips = { "All" };
         private Vector2 _libScroll;
         private Vector2 _mainScroll;
@@ -579,6 +582,15 @@ namespace DeNelle.Editor
             {
                 EditorGUILayout.LabelField($"Motion Library ({_library.Count} clips)", EditorStyles.boldLabel);
                 _search = EditorGUILayout.TextField(_search, EditorStyles.toolbarSearchField);
+                bool mocapOnly = EditorGUILayout.ToggleLeft(
+                    new GUIContent("Mocap only (hide Mixamo + KayKit)",
+                        "Show only studio-mocap / ActorCore / owner-drops clips."),
+                    _mocapOnly);
+                if (mocapOnly != _mocapOnly)
+                {
+                    _mocapOnly = mocapOnly;
+                    EditorPrefs.SetBool("MotionCaster.MocapOnly", _mocapOnly);
+                }
                 _chipIndex = GUILayout.SelectionGrid(_chipIndex, _chips, 4, EditorStyles.miniButton);
 
                 using (var scroll = new EditorGUILayout.ScrollViewScope(_libScroll,
@@ -588,6 +600,7 @@ namespace DeNelle.Editor
                     string chip = _chipIndex > 0 && _chipIndex < _chips.Length ? _chips[_chipIndex] : null;
                     foreach (var entry in _library)
                     {
+                        if (_mocapOnly && !IsMocapEntry(entry)) continue;
                         if (chip != null && entry.Category != chip) continue;
                         if (!string.IsNullOrEmpty(_search) &&
                             entry.Label.IndexOf(_search, StringComparison.OrdinalIgnoreCase) < 0 &&
@@ -603,6 +616,19 @@ namespace DeNelle.Editor
                     }
                 }
             }
+        }
+
+        /// <summary>Mocap-only filter: studio mocap packs, ActorCore zips, and the
+        /// owner-drops intake folder count as mocap; loose Mixamo clips (Action root,
+        /// source "action" outside those folders) and the KayKit pack are hidden.</summary>
+        private static bool IsMocapEntry(ClipEntry entry)
+        {
+            if (entry.Source == "kaykit") return false;
+            string p = entry.Path;
+            return p.IndexOf("/studio-mocap-", StringComparison.OrdinalIgnoreCase) >= 0
+                || p.IndexOf("/actorcore-",   StringComparison.OrdinalIgnoreCase) >= 0
+                || p.IndexOf("/owner-drops/", StringComparison.OrdinalIgnoreCase) >= 0
+                || entry.Source == "extracted"; // retargeted hero-package .anim = already curated
         }
 
         /// <summary>Select a library entry: reset playback, measure root travel
