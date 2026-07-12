@@ -82,6 +82,34 @@
         "manual": true,
         "pickedUtc": "2026-07-12T01:00:00Z",
         "source": "owner-pick"
+      },
+      "walk": {
+        "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/walkforward01.fbx",
+        "guid": "",
+        "manual": true,
+        "pickedUtc": "2026-07-12T02:00:00Z",
+        "source": "cli-tank-sway-fix"
+      },
+      "run": {
+        "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/runforward_218667.fbx",
+        "guid": "",
+        "manual": true,
+        "pickedUtc": "2026-07-12T02:00:00Z",
+        "source": "cli-tank-sway-fix"
+      },
+      "combatWalk": {
+        "clip": "Assets/Action/Knight/sword and shield walk.fbx",
+        "guid": "",
+        "manual": true,
+        "pickedUtc": "2026-07-12T02:00:00Z",
+        "source": "cli-tank-sway-fix"
+      },
+      "combatRun": {
+        "clip": "Assets/Action/Knight/sword and shield run.fbx",
+        "guid": "",
+        "manual": true,
+        "pickedUtc": "2026-07-12T02:00:00Z",
+        "source": "cli-tank-sway-fix"
       }
     },
     "knight": {

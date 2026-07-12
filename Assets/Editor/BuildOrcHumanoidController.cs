@@ -91,6 +91,7 @@ namespace DeNelle.Editor
         // State / clip names captured on the BASE so overrides can key into them.
         private static AnimationClip s_idle, s_walk, s_run, s_hit, s_death, s_windup;
         private static AnimationClip s_baseAttack, s_baseCast;
+        private static AnimationClip s_combatWalk, s_combatRun;
 
         [MenuItem("Defenders/Tripo/Build Orc Humanoid Family Controllers (WO-491)")]
         public static void Run()
@@ -190,6 +191,8 @@ namespace DeNelle.Editor
             var combatIdle = MotionCastings.Resolve(CastingTargetBase, ActionKeywords.CombatIdle, Clip(CombatIdleFbx));
             var combatWalk = MotionCastings.Resolve(CastingTargetBase, ActionKeywords.CombatWalk, Clip(CombatWalkFbx));
             var combatRun  = MotionCastings.Resolve(CastingTargetBase, ActionKeywords.CombatRun,  Clip(CombatRunFbx));
+            s_combatWalk = combatWalk;
+            s_combatRun  = combatRun;
             AnimatorState combatLocoState = null;
             if (combatIdle != null)
             {
@@ -297,18 +300,25 @@ namespace DeNelle.Editor
             var roleIdle   = MotionCastings.Resolve(castingTarget, ActionKeywords.Idle,    Clip(idleFbx));
             var roleAttack = MotionCastings.Resolve(castingTarget, ActionKeywords.Attack0, Clip(attackFbx));
             var roleCast   = MotionCastings.Resolve(castingTarget, ActionKeywords.Cast,    Clip(castFbx));
+            // Per-role locomotion (orc-tank: S&S mocap walk/run — less Mixamo hip sway on CC_Base bulk).
+            var roleWalk       = MotionCastings.Resolve(castingTarget, ActionKeywords.Walk,       s_walk);
+            var roleRun        = MotionCastings.Resolve(castingTarget, ActionKeywords.Run,        s_run);
+            var roleCombatWalk = MotionCastings.Resolve(castingTarget, ActionKeywords.CombatWalk, s_combatWalk);
+            var roleCombatRun  = MotionCastings.Resolve(castingTarget, ActionKeywords.CombatRun,  s_combatRun);
 
             AssetDatabase.DeleteAsset(path);
             var ovr = new AnimatorOverrideController(baseCtrl) { name = System.IO.Path.GetFileNameWithoutExtension(path) };
 
             int swapped = 0;
-            // Remap the BASE clip instances to the role clips wherever they appear in
-            // the override list (locomotion uses s_idle/walk/run; we only swap idle so
-            // the standing-idle reads per role; walk/run stay the shared loco clips).
+            // Remap BASE clip instances to role clips (idle/attack/cast + optional loco overrides).
             var pairs = new List<KeyValuePair<AnimationClip, AnimationClip>>();
             if (roleIdle   != null && s_idle       != null && roleIdle   != s_idle)       { pairs.Add(new KeyValuePair<AnimationClip, AnimationClip>(s_idle, roleIdle)); swapped++; }
             if (roleAttack != null && s_baseAttack != null && roleAttack != s_baseAttack) { pairs.Add(new KeyValuePair<AnimationClip, AnimationClip>(s_baseAttack, roleAttack)); swapped++; }
             if (roleCast   != null && s_baseCast   != null && roleCast   != s_baseCast)   { pairs.Add(new KeyValuePair<AnimationClip, AnimationClip>(s_baseCast, roleCast)); swapped++; }
+            if (roleWalk       != null && s_walk       != null && roleWalk       != s_walk)       { pairs.Add(new KeyValuePair<AnimationClip, AnimationClip>(s_walk, roleWalk)); swapped++; }
+            if (roleRun        != null && s_run        != null && roleRun        != s_run)        { pairs.Add(new KeyValuePair<AnimationClip, AnimationClip>(s_run, roleRun)); swapped++; }
+            if (roleCombatWalk != null && s_combatWalk != null && roleCombatWalk != s_combatWalk) { pairs.Add(new KeyValuePair<AnimationClip, AnimationClip>(s_combatWalk, roleCombatWalk)); swapped++; }
+            if (roleCombatRun  != null && s_combatRun  != null && roleCombatRun  != s_combatRun)  { pairs.Add(new KeyValuePair<AnimationClip, AnimationClip>(s_combatRun, roleCombatRun)); swapped++; }
             if (pairs.Count > 0) ovr.ApplyOverrides(pairs);
 
             AssetDatabase.CreateAsset(ovr, path);
