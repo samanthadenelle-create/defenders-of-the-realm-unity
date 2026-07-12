@@ -337,17 +337,64 @@ namespace DeNelle.Village
         // ── Overrides / helpers ───────────────────────────────────────────────────
 
         /// <summary>
-        /// Recolour a Hovl effect by writing <paramref name="color"/> (HDR) into every child
-        /// ParticleSystem's StartColor. The Hovl HS_Blend_CG effects tint by StartColor at
-        /// runtime, so one base fireball serves fire/ice/lightning/arcane without material dupes.
+        /// Recolour a Hovl effect toward <paramref name="color"/> the way the VENDOR's own
+        /// recolor tool does (WO-678, docs/HOVL_STUDIO_SME.md §4b): shift each particle
+        /// system's authored startColor HUE to the target hue while PRESERVING its authored
+        /// saturation / value / alpha — so the bright-core / soft-halo layering survives.
+        /// The old flat MinMaxGradient(color) flood-fill stamped every layer one identical
+        /// color, flattening the authored art ("not like the demo"). Near-white hot cores
+        /// (saturation &lt; 0.05) are left untouched — hue means nothing on them and pushing
+        /// the tint in is exactly the flood-fill artifact. Idempotent under pooling: only
+        /// hue is written, so authored S/V/A persist across reuses.
         /// </summary>
         private static void ApplyStartColor(GameObject go, Color color)
         {
+            Color.RGBToHSV(color, out float targetHue, out _, out _);
             foreach (var ps in go.GetComponentsInChildren<ParticleSystem>(true))
             {
                 var main = ps.main;
-                main.startColor = new ParticleSystem.MinMaxGradient(color);
+                var sc = main.startColor;
+                switch (sc.mode)
+                {
+                    case ParticleSystemGradientMode.Color:
+                        sc.color = ShiftHue(sc.color, targetHue);
+                        break;
+                    case ParticleSystemGradientMode.TwoColors:
+                        sc.colorMin = ShiftHue(sc.colorMin, targetHue);
+                        sc.colorMax = ShiftHue(sc.colorMax, targetHue);
+                        break;
+                    case ParticleSystemGradientMode.Gradient:
+                        sc.gradient = ShiftHue(sc.gradient, targetHue);
+                        break;
+                    case ParticleSystemGradientMode.TwoGradients:
+                        sc.gradientMin = ShiftHue(sc.gradientMin, targetHue);
+                        sc.gradientMax = ShiftHue(sc.gradientMax, targetHue);
+                        break;
+                }
+                main.startColor = sc;
             }
+        }
+
+        /// <summary>Move <paramref name="src"/>'s hue to <paramref name="targetHue"/>,
+        /// keeping its authored saturation/value (HDR-safe) and alpha.</summary>
+        private static Color ShiftHue(Color src, float targetHue)
+        {
+            Color.RGBToHSV(src, out _, out float s, out float v);
+            if (s < 0.05f) return src;   // white-hot core layer — leave it white
+            var c = Color.HSVToRGB(targetHue, s, v, hdr: true);
+            c.a = src.a;
+            return c;
+        }
+
+        private static Gradient ShiftHue(Gradient g, float targetHue)
+        {
+            if (g == null) return null;
+            var keys = g.colorKeys;
+            for (int i = 0; i < keys.Length; i++)
+                keys[i].color = ShiftHue(keys[i].color, targetHue);
+            var ng = new Gradient { mode = g.mode };
+            ng.SetKeys(keys, g.alphaKeys);
+            return ng;
         }
 
         // A Hovl VFX object must carry at least one ParticleSystem (or visible Renderer) to be

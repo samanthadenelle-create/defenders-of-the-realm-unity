@@ -114,8 +114,13 @@ namespace DeNelle.Village.World
 
         // ---- (6) POST -- subtle global grade -----------------------------------
         private const float PostVolumePriority = 10f;   // below BattleArena's 100
-        private const float BloomIntensity     = 0.45f; // subtle -- torches/aura pop, no blowout
-        private const float BloomThreshold     = 0.90f;
+        // WO-678 (2026-07-12): raised from 0.45 to demo parity. The Hovl RPG VFX
+        // Bundle demo scenes run Bloom intensity 5 / threshold 1.1 (verified in the
+        // pack's VolumeURP.asset, docs/HOVL_STUDIO_SME.md) -- at 0.45 every spell
+        // rendered glow-less ("not like the demo"). 4.5 = demo range, owner dials.
+        // Threshold 1.1 keeps the glow on HDR-bright VFX cores, off ordinary albedo.
+        private const float BloomIntensity     = 4.5f;
+        private const float BloomThreshold     = 1.1f;
         private const float BloomScatter       = 0.7f;
         private const float VignetteIntensity  = 0.22f; // gentle frame darkening
         private const float VignetteSmoothness = 0.42f;

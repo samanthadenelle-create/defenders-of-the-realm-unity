@@ -160,8 +160,11 @@ namespace DeNelle.Village.Arena
         //
         // Defaults: intensity moderate so HDR pops without washing the scene; threshold ~1.0
         // so only HDR > 1 (the VFX) blooms, not lit geometry. Owner tunes these by eye.
-        private const float ArenaBloomIntensity = 1.4f;   // moderate glow multiplier (0..~3 typical)
-        private const float ArenaBloomThreshold = 1.2f;   // only true-HDR VFX (lum > 1.2) blooms; lit ground stays out of bloom
+        // WO-678 (2026-07-12): aligned to the overworld's new demo-parity bloom
+        // (WorldFeelInjector 4.5/1.1, from the Hovl demo VolumeURP.asset) — at 1.4 this
+        // priority-100 volume would DIM combat relative to town, inverting the intent.
+        private const float ArenaBloomIntensity = 4.5f;   // demo-parity glow (was 1.4)
+        private const float ArenaBloomThreshold = 1.1f;   // only true-HDR VFX blooms; lit ground stays out of bloom
         private const float ArenaBloomScatter   = 0.7f;   // glow spread (URP default)
         private const int   ArenaBloomPriority  = 100;    // outrank the global DefaultVolumeProfile (priority 0)
 
