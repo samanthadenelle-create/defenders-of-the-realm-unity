@@ -187,7 +187,8 @@ namespace DeNelle.Editor
             new OrcRepairMap
             {
                 Model  = new ModelMap { Src = EnemyDir + "Orc_Tank.fbx",      Dst = EnemyDir + "Orc_Tank.fbx",      Label = "Orc_Tank" },
-                Donors = new[] { EnemyDir + "Orc_Warrior.fbx", EnemyDir + "Orc_Mage.fbx" },
+                // AccuRig re-exports use CC_Base_* (same as Skeleton family) — Skeleton_Warrior is the proven donor.
+                Donors = new[] { EnemyDir + "Skeleton_Warrior.fbx", EnemyDir + "Orc_Warrior.fbx", EnemyDir + "Orc_Mage.fbx" },
             },
             new OrcRepairMap
             {
@@ -204,7 +205,11 @@ namespace DeNelle.Editor
 
             report.Add("-- Orc family → Resources/Enemies (in-place Humanoid) --");
             foreach (var o in OrcFamily)
+            {
+                // Owner may drop a fresh AccuRig FBX over the Resources path — force disk re-read.
+                AssetDatabase.ImportAsset(o.Model.Dst, ImportAssetOptions.ForceUpdate);
                 EnsureHumanoidInPlace(o.Model, report);
+            }
 
             report.Add("-- Avatar repair (only models whose verdict is not OK Humanoid) --");
             foreach (var o in OrcFamily)
@@ -240,11 +245,14 @@ namespace DeNelle.Editor
             var imp = AssetImporter.GetAtPath(o.Model.Dst) as ModelImporter;
             if (imp == null) { report.Add($"  {o.Model.Label}: NO IMPORTER — skipped avatar repair"); return; }
 
-            // Pass 1 — clear any stale copy-from-other state and retry auto-map.
+            // Pass 1 — clear stale Tripo-era bone map (Hip/tripo_part) so CC_Base AccuRig can auto-map.
             imp.animationType   = ModelImporterAnimationType.Human;
             imp.importAnimation = false;
             imp.sourceAvatar    = null;
             imp.avatarSetup     = ModelImporterAvatarSetup.CreateFromThisModel;
+            ClearHumanoidDescription(imp);
+            if (PrefabHasCcBaseHip(o.Model.Dst) || o.Model.Label is "Orc_Tank" or "Orc_Warrior" or "Orc_Mage")
+                ApplyAccuRigMeshDefaults(imp);
             imp.SaveAndReimport();
             if (SkeletonAvatarVerdict(o.Model.Dst, out string pass1))
             {
@@ -252,7 +260,7 @@ namespace DeNelle.Editor
                 return;
             }
 
-            // Find a proven Humanoid donor in the SAME family.
+            // Find a proven Humanoid donor (in-family first; CC_Base AccuRig may use Skeleton_Warrior).
             Avatar donorAv = null;
             ModelImporter donorImp = null;
             string donorPath = null;
@@ -364,6 +372,35 @@ namespace DeNelle.Editor
             if (av != null && av.isValid && av.isHuman) { detail = "OK Humanoid"; return true; }
             if (av != null && av.isValid)               { detail = "WARN Generic"; return false; }
             detail = "FAIL no avatar";
+            return false;
+        }
+
+        /// <summary>Stale .meta humanDescription (Tripo Hip map) blocks CC_Base AccuRig avatar creation.</summary>
+        private static void ClearHumanoidDescription(ModelImporter imp)
+        {
+            var hd = imp.humanDescription;
+            hd.human    = new HumanBone[0];
+            hd.skeleton = new SkeletonBone[0];
+            imp.humanDescription = hd;
+        }
+
+        /// <summary>Match Skeleton_Warrior import defaults — scale 1, no cameras/lights debris.</summary>
+        private static void ApplyAccuRigMeshDefaults(ModelImporter imp)
+        {
+            imp.useFileScale      = true;
+            imp.globalScale       = 1f;
+            imp.importVisibility  = false;
+            imp.importCameras     = false;
+            imp.importLights      = false;
+            imp.importBlendShapes = false;
+        }
+
+        private static bool PrefabHasCcBaseHip(string path)
+        {
+            var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (go == null) return false;
+            foreach (var t in go.GetComponentsInChildren<Transform>(true))
+                if (t.name == "CC_Base_Hip") return true;
             return false;
         }
 
