@@ -1229,7 +1229,7 @@ namespace DeNelle.Editor
                 OwnerDropsFolder + "/" + Path.GetFileName(src));
             try
             {
-                File.Copy(src, dst);
+                File.Copy(src, dst, overwrite: true);
             }
             catch (Exception ex)
             {
@@ -1239,7 +1239,12 @@ namespace DeNelle.Editor
                 return;
             }
 
-            AssetDatabase.ImportAsset(dst);
+            // File.Copy lands on disk first; ImportAsset before Refresh races Unity and
+            // logs "'…fbx' does not exist" → no ModelImporter, zero takes (Editor.log RCA).
+            AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
+            AssetDatabase.ImportAsset(dst, ImportAssetOptions.ForceUpdate);
+            WaitForImport(dst);
+
             var importer = AssetImporter.GetAtPath(dst) as ModelImporter;
             if (importer != null)
             {
@@ -1285,11 +1290,29 @@ namespace DeNelle.Editor
             }
 
             string summary = takes == 0
-                ? $"Imported {Path.GetFileName(dst)} — but NO animation takes were found in it."
+                ? $"Imported {Path.GetFileName(dst)} — but NO animation takes were found in it. " +
+                  "If this FBX is mesh-only or from a zip that needs extracting, pick a motion FBX instead."
                 : $"Imported {Path.GetFileName(dst)}: {takes} take(s), {junk} junk " +
                   $"(t-pose/bind) — selected '{(pick != null ? pick.Clip.name : "none")}'.";
             Debug.Log(Log + summary);
             ShowNotification(new GUIContent(summary));
+            if (takes == 0)
+                EditorUtility.DisplayDialog("Motion Caster — no takes",
+                    summary + "\n\nThe file is in:\n" + dst, "OK");
+        }
+
+        /// <summary>Block until Unity finishes importing <paramref name="assetPath"/>
+        /// (or ~30s timeout). Prevents scanning the library before clips exist.</summary>
+        private static void WaitForImport(string assetPath)
+        {
+            const double timeoutSec = 30.0;
+            double start = EditorApplication.timeSinceStartup;
+            while (EditorApplication.timeSinceStartup - start < timeoutSec)
+            {
+                if (!AssetDatabase.IsAssetImporting() &&
+                    AssetDatabase.LoadMainAssetAtPath(assetPath) != null)
+                    break;
+            }
         }
 
         /// <summary>Metres the clip's root travels t0→tEnd. Humanoid clips expose
