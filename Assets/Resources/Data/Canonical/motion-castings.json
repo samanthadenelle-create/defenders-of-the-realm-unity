@@ -114,22 +114,22 @@
         "source": "owner-pick"
       },
       "walk": {
-        "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Passive_Locomotion_Walk.anim",
+        "clip": "Assets/Action/Knight/standing walk forward.fbx",
         "guid": "",
         "vfxKey": "",
         "sfxId": "",
-        "manual": false,
-        "pickedUtc": "2026-07-11T23:40:00Z",
-        "source": "rca-f8-walkdrag"
+        "manual": true,
+        "pickedUtc": "2026-07-12T00:20:00Z",
+        "source": "owner-pick"
       },
       "run": {
-        "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Passive_Locomotion_Run.anim",
+        "clip": "Assets/Action/Knight/standing run forward.fbx",
         "guid": "",
         "vfxKey": "",
         "sfxId": "",
-        "manual": false,
-        "pickedUtc": "2026-07-11T23:40:00Z",
-        "source": "rca-f8-walkdrag"
+        "manual": true,
+        "pickedUtc": "2026-07-12T00:20:00Z",
+        "source": "owner-pick"
       }
     },
     "mage": {
