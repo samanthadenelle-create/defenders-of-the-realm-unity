@@ -604,11 +604,10 @@ namespace DeNelle.Village
             // Null-guarded: no locomotion or no resolvable foe leaves facing untouched.
             FaceCastTarget(def, origin);
 
-            // WO-VFX-003: the CAST beat — every active fires its Hovl cast/windup key at the
-            // hero (data-driven from def.VfxCast). Single choke point so all 16 actives (Q/W/E/R
-            // AND the assignable EXTRA bar) get their cast VFX. Additive — the procedural cast
-            // VFX in SpawnVfx still runs; PlayKey no-ops when the key is empty/unauthored.
-            PlayCastVfxKey(def, origin);
+            // WO-VFX-003 / owner directive 2026-07-12: the CAST beat — in registry-only mode
+            // the variant's motion-castings row is the ONLY VFX source (owner picks); the
+            // abilities.json VfxCast default is suppressed. Single choke point for all actives.
+            PlayCastVfxKey(def, origin, castVariant);
 
             ResolveEffect(def, origin);
         }
@@ -1277,6 +1276,9 @@ namespace DeNelle.Village
         private void LaunchProjectile(Vector3 target, System.Action onArrive,
                                       string projectileKey = null, Color? tint = null)
         {
+            // Owner directive 2026-07-12 (registry-only motion VFX): suppress the abilities.json
+            // travel FX; the flight timing/damage path below is unchanged (invisible travel).
+            if (RegistryOnlyMotionVfx) projectileKey = null;
             if (_rangedVfx == null)
             {
                 if (!TryGetComponent(out _rangedVfx)) _rangedVfx = gameObject.AddComponent<RangedAttackVFX>();
@@ -1305,19 +1307,67 @@ namespace DeNelle.Village
         // Every call is null/empty-safe: an unset key or an unauthored catalog row no-ops (throttled
         // log in VFXManager), so this is safe to ship before the HovlVfxCatalog rows are authored.
 
+        // ── OWNER-AUTHORED VFX ONLY (owner directive 2026-07-12, overnight) ──────────
+        // "turn off the vfx on motion till i select individually": abilities.json Vfx*
+        // defaults are SUPPRESSED at every choke below; the ONLY motion-VFX authority is
+        // the owner's Motion Caster registry (motion-castings.json rows, manual:true),
+        // resolved per cast via ActionBundleCatalog. abilities.json data stays intact —
+        // flip this const to false to restore the data-driven defaults.
+        private const bool RegistryOnlyMotionVfx = true;
+
+        // Cast variant -> registry keyword. MUST mirror HeroAnimatorFactory.ResolveSpellCastClips
+        // ([1] q → skill1, [2] w → skill2, [3] e → castHeal; [4] r has no registry keyword yet —
+        // null = silent until the vocabulary grows a row for it). Variant 0 = generic cast.
+        private static readonly string[] CastVariantKeyword = { "cast", "skill1", "skill2", "castHeal", null };
+
+        /// <summary>The registry casting target for this hero. Combat pivot canon = single
+        /// Knight north star; revisit when a second playable class ships.</summary>
+        private const string RegistryTarget = "knight";
+
         /// <summary>The world point a Knight's thrown projectile spawns from (chest height, slightly ahead).</summary>
         private Vector3 ProjectileMuzzle() => transform.position + Vector3.up * 1.2f + transform.forward * 0.6f;
 
-        /// <summary>Play the ability's Hovl CAST/windup key at the hero, tinted by the ability accent.</summary>
-        private void PlayCastVfxKey(AbilityDef def, Vector3 origin)
+        /// <summary>
+        /// CAST-beat VFX. Registry-only mode (owner directive): resolve the cast variant's
+        /// keyword to the owner's motion-castings row and fire ITS vfxKey (honoring vfxDelay);
+        /// no row / empty key = deliberately silent. Legacy mode: the abilities.json VfxCast key.
+        /// </summary>
+        private void PlayCastVfxKey(AbilityDef def, Vector3 origin, int castVariant)
         {
+            if (RegistryOnlyMotionVfx)
+            {
+                string keyword = castVariant >= 0 && castVariant < CastVariantKeyword.Length
+                    ? CastVariantKeyword[castVariant] : null;
+                if (string.IsNullOrEmpty(keyword)) return;
+                if (!ActionBundleCatalog.TryGetRow(RegistryTarget, keyword, out var row) ||
+                    row == null || string.IsNullOrEmpty(row.vfxKey))
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Once("Vfx",
+                        $"cast '{keyword}': no owner vfx row — silent by design (registry-only motion VFX).");
+                    return;
+                }
+                StartCoroutine(FireRegistryCastVfx(row));
+                return;
+            }
             if (def == null || string.IsNullOrEmpty(def.VfxCast)) return;
             VFXManager.PlayKey(def.VfxCast, origin + Vector3.up * 1.2f, transform.rotation, null, def.UnityColor);
+        }
+
+        /// <summary>Fire an owner bundle row's vfxKey after its authored vfxDelay, at the
+        /// hero's FIRE-TIME position (chest height) so a delayed key tracks the cast.</summary>
+        private System.Collections.IEnumerator FireRegistryCastVfx(ActionBundleRow row)
+        {
+            if (row.vfxDelay > 0f) yield return new WaitForSeconds(row.vfxDelay);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Vfx",
+                $"owner bundle vfx '{row.vfxKey}' fired (delay {row.vfxDelay:0.00}s, registry-only mode).");
+            VFXManager.PlayKey(row.vfxKey, transform.position + Vector3.up * 1.2f,
+                transform.rotation, null, null);
         }
 
         /// <summary>Play the ability's Hovl IMPACT key at a hit / blast point, tinted by the ability accent.</summary>
         private void PlayImpactVfxKey(AbilityDef def, Vector3 at)
         {
+            if (RegistryOnlyMotionVfx) return;   // owner directive 2026-07-12: defaults off
             if (def == null || string.IsNullOrEmpty(def.VfxImpact)) return;
             VFXManager.PlayKey(def.VfxImpact, at, Quaternion.identity, null, def.UnityColor);
         }
@@ -1328,6 +1378,7 @@ namespace DeNelle.Village
         /// </summary>
         private void PlayResidualLoop(AbilityDef def, Transform target, float seconds, Vector3 fallbackPos)
         {
+            if (RegistryOnlyMotionVfx) return;   // owner directive 2026-07-12: defaults off
             if (def == null || string.IsNullOrEmpty(def.VfxResidual)) return;
             Vector3 pos = target != null ? target.position : fallbackPos;
             var h = VFXManager.PlayKey(def.VfxResidual, pos, Quaternion.identity, target, def.UnityColor);

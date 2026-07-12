@@ -113,10 +113,11 @@ namespace DeNelle.Village
                 _stopRoutine = StartCoroutine(StopAfterActive());
             }
 
-            // Optional per-swing slash burst on the blade (Melee_Slash key EXISTS in the catalog).
-            // Null-safe: no VFXManager / no catalog row -> a throttled no-op inside PlayKey.
-            if (origin != null)
-                VFXManager.PlayKey("Melee_Slash", origin.position, origin.rotation, null, _trailColor, 1f, 0f, null);
+            // Per-swing "Melee_Slash" burst RETIRED (owner directive 2026-07-12: motion VFX are
+            // owner-authored only — this hardcoded key fired on EVERY swing AND cast regardless
+            // of ability, the one non-data-driven hero fire site). The blade TrailRenderer above
+            // stays: it is the weapon-trail feature itself, not a Hovl motion effect. To give a
+            // swing a burst again, bind a vfxKey on its motion-castings row in the Motion Caster.
         }
 
         private IEnumerator StopAfterActive()
