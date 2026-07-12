@@ -58,7 +58,55 @@
       "_comment": "root archetype default - the Rig_Large heavy bodies (AnimatorSetup LargeEnemy)"
     },
     "orc": {
-      "inherits": "humanoid"
+      "inherits": "humanoid",
+      "attack0": {
+        "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Weapon_WeaponSkill_Combo.anim",
+        "guid": "ec4eb72ebf3683b42b59b5775c757b0d",
+        "vfxKey": "",
+        "sfxId": "",
+        "vfxDelay": 0.0,
+        "attachBone": "",
+        "playOneShot": true,
+        "manual": true,
+        "pickedUtc": "2026-07-12T04:03:43Z",
+        "source": "motion-caster"
+      },
+      "attack1": {
+        "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/atk_stab.fbx",
+        "guid": "a8b13a3081b16c546a4f34ddfb946518",
+        "vfxKey": "",
+        "sfxId": "",
+        "vfxDelay": 0.0,
+        "attachBone": "",
+        "playOneShot": true,
+        "manual": true,
+        "pickedUtc": "2026-07-12T04:04:03Z",
+        "source": "motion-caster"
+      },
+      "attack2": {
+        "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Weapon_WeaponSkill_Outward_Slash.anim",
+        "guid": "ee18600af7d582a40a8e040a1ebfe42c",
+        "vfxKey": "",
+        "sfxId": "",
+        "vfxDelay": 0.0,
+        "attachBone": "",
+        "playOneShot": true,
+        "manual": true,
+        "pickedUtc": "2026-07-12T04:04:46Z",
+        "source": "motion-caster"
+      },
+      "death0": {
+        "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Passive_Reaction_Death.anim",
+        "guid": "b6b5932b11ca2fc42b3b5b141ccb0429",
+        "vfxKey": "",
+        "sfxId": "",
+        "vfxDelay": 0.0,
+        "attachBone": "",
+        "playOneShot": true,
+        "manual": true,
+        "pickedUtc": "2026-07-12T04:05:46Z",
+        "source": "motion-caster"
+      }
     },
     "hollow": {
       "inherits": "humanoid"
@@ -116,18 +164,28 @@
       "inherits": "humanoid",
       "_comment": "OWNER PICKS 2026-07-11 (verbatim canon; manual:true = never overwritten). skill1 = Cast_q = Heroic Leap -> S&S 'atk_jump' (jump + stab down). skill2 = Cast_w = W action button -> plain Slash (REVISED same day from atk_slashup: 'instead of W button Put Slash'; the already-extracted Sword_And_Shield_Slash take). block = Block state -> 'atk_shieldswipe01' (chains into shieldswipe02 via the builder's Block2 second beat) for incoming attacks and spell deflection. castHeal = Cast_e heal/ward slot -> Magical Moves 'Magic Spell Cast 02' (m-ls-magespellcast-02). cast = generic/variant-0 cast (extra-bar Mend et al.) -> the same heal cast so no cast-type action ever swings a sword (F8-48 / melee-caster hard rule). Every row is NO-OP-safe: an unextracted clip falls through to the builder default at bake (run DeNelle.Editor.SwordShieldMovesImporter.Import first).",
       "skill1": {
-        "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Weapon_WeaponSkill_SwordShield_Jump.anim",
-        "guid": "",
+        "clip": "Assets/Action/Knight/Motion/studio-mocap-hero-motion/fist_flyingkick_m.fbx",
+        "guid": "e51479a72a75d7a4a9c53a4e9763068d",
+        "vfxKey": "",
+        "sfxId": "",
+        "vfxDelay": 0.0,
+        "attachBone": "",
+        "playOneShot": false,
         "manual": true,
-        "pickedUtc": "2026-07-11T00:00:00Z",
-        "source": "owner-pick"
+        "pickedUtc": "2026-07-12T03:54:30Z",
+        "source": "motion-caster"
       },
       "skill2": {
-        "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Weapon_WeaponSkill_Sword_And_Shield_Slash.anim",
-        "guid": "",
+        "clip": "Assets/Action/Knight/Motion/studio-mocap-hero-motion/fist_whirlwindkick_m.fbx",
+        "guid": "93668007519b4c442932f42eee845399",
+        "vfxKey": "",
+        "sfxId": "",
+        "vfxDelay": 0.0,
+        "attachBone": "",
+        "playOneShot": false,
         "manual": true,
-        "pickedUtc": "2026-07-11T00:00:00Z",
-        "source": "owner-pick"
+        "pickedUtc": "2026-07-12T03:54:47Z",
+        "source": "motion-caster"
       },
       "block": {
         "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Weapon_WeaponSkill_SwordShield_ShieldSwipe01.anim",
@@ -137,11 +195,16 @@
         "source": "owner-pick"
       },
       "castHeal": {
-        "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Spell_MagicalMoves_SpellCast_02.anim",
-        "guid": "",
+        "clip": "Assets/Action/Knight/Motion/studio-mocap-series-magical-moves/f-magiccontrol-01.fbx",
+        "guid": "989616476dd7e67438bb14e1274a7fc9",
+        "vfxKey": "Dash_Blink",
+        "sfxId": "Heal",
+        "vfxDelay": 0.0,
+        "attachBone": "",
+        "playOneShot": true,
         "manual": true,
-        "pickedUtc": "2026-07-11T00:00:00Z",
-        "source": "owner-pick"
+        "pickedUtc": "2026-07-12T03:59:40Z",
+        "source": "motion-caster"
       },
       "cast": {
         "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Combat_Spell_MagicalMoves_SpellCast_02.anim",
@@ -163,13 +226,16 @@
         "source": "motion-caster"
       },
       "run": {
-        "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/runforward_218667.fbx",
-        "guid": "",
+        "clip": "Assets/Action/Knight/Motion/actorcore-0712/move_run_m.fbx",
+        "guid": "75f128cbe2a856045a4eefb7eb9b4853",
         "vfxKey": "",
         "sfxId": "",
+        "vfxDelay": 0.0,
+        "attachBone": "",
+        "playOneShot": false,
         "manual": true,
-        "pickedUtc": "2026-07-12T02:15:00Z",
-        "source": "cli-hero-sway-fix"
+        "pickedUtc": "2026-07-12T03:42:29Z",
+        "source": "motion-caster"
       },
       "unsheathe": {
         "clip": "Assets/Action/Knight/Motion/actorcore-0712/sword_drawing_m.fbx",
@@ -197,6 +263,78 @@
         "manual": true,
         "pickedUtc": "2026-07-12T02:15:00Z",
         "source": "cli-hero-sway-fix"
+      },
+      "death0": {
+        "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Signature_Death_Forward.anim",
+        "guid": "1cb67ea0568200146ae71d79fd9cf96e",
+        "vfxKey": "",
+        "sfxId": "",
+        "vfxDelay": 0.0,
+        "attachBone": "",
+        "playOneShot": false,
+        "manual": true,
+        "pickedUtc": "2026-07-12T03:43:30Z",
+        "source": "motion-caster"
+      },
+      "hit": {
+        "clip": "Assets/HeroPackages/Knight/Animations/Extracted/Passive_Reaction_Hit_Reaction.anim",
+        "guid": "55cf53a5776c9f74db0a1892fb68f456",
+        "vfxKey": "",
+        "sfxId": "",
+        "vfxDelay": 0.0,
+        "attachBone": "",
+        "playOneShot": false,
+        "manual": true,
+        "pickedUtc": "2026-07-12T03:44:04Z",
+        "source": "motion-caster"
+      },
+      "heavy": {
+        "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/atk_slashdown.fbx",
+        "guid": "36686f653952f124c8f21dd534b502e6",
+        "vfxKey": "",
+        "sfxId": "",
+        "vfxDelay": 0.0,
+        "attachBone": "",
+        "playOneShot": false,
+        "manual": true,
+        "pickedUtc": "2026-07-12T03:53:01Z",
+        "source": "motion-caster"
+      },
+      "attack1": {
+        "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/atk_spin.fbx",
+        "guid": "f28f30556d9dccc4bbd73511ffc26578",
+        "vfxKey": "",
+        "sfxId": "",
+        "vfxDelay": 0.0,
+        "attachBone": "",
+        "playOneShot": false,
+        "manual": true,
+        "pickedUtc": "2026-07-12T03:53:31Z",
+        "source": "motion-caster"
+      },
+      "attack2": {
+        "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/atk_slashright.fbx",
+        "guid": "cdc0b23df563200439756e9804d4f548",
+        "vfxKey": "",
+        "sfxId": "",
+        "vfxDelay": 0.0,
+        "attachBone": "",
+        "playOneShot": false,
+        "manual": true,
+        "pickedUtc": "2026-07-12T03:53:48Z",
+        "source": "motion-caster"
+      },
+      "attack3": {
+        "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/atk_stab.fbx",
+        "guid": "a8b13a3081b16c546a4f34ddfb946518",
+        "vfxKey": "",
+        "sfxId": "",
+        "vfxDelay": 0.0,
+        "attachBone": "",
+        "playOneShot": false,
+        "manual": true,
+        "pickedUtc": "2026-07-12T03:54:05Z",
+        "source": "motion-caster"
       }
     },
     "mage": {
