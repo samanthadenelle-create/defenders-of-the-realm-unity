@@ -785,6 +785,12 @@ namespace DeNelle.Village
             bool engaged = IsWaveInCombat();
             float moveSpeedCap = engaged ? CombatMoveSpeed : OverworldRunSpeed;
 
+            bool hasMoveInput = input.sqrMagnitude > 0.0001f;
+            // Town/open-world: facing + step ride camera input, not NavMesh lateral velocity.
+            // Combat keeps Velocity for both (planted braced gait). Pairs with SmartMobileCamera's
+            // facing-recenter suspend — camera pivot must not retarget `move` while steering.
+            bool townInputDrive = !engaged && hasMoveInput && move.sqrMagnitude > 0.0001f;
+
             // Smooth velocity toward target — instant max-speed felt rigid.
             // Higher accel when grabbing speed, higher decel when releasing,
             // so the hero responds promptly to a key press but glides slightly
@@ -794,6 +800,10 @@ namespace DeNelle.Village
                 ? _accelMetresPerSec2
                 : _decelMetresPerSec2) * Time.deltaTime;
             Velocity = Vector3.MoveTowards(Velocity, targetVelocity, maxStep);
+            // Strip stale lateral drift every frame in town so a heading change (or a camera
+            // recenter) cannot leave |velX| on a pure-forward hold (F8 HeroDrift: velX=2.5, input forward).
+            if (townInputDrive && Velocity.sqrMagnitude > 0.0001f)
+                Velocity = move.normalized * Velocity.magnitude;
 
             // WO-423: face-the-attack-target yaw slew. A fresh movement input cancels the
             // request immediately (we never fight the move-direction LookRotation below);
@@ -801,15 +811,6 @@ namespace DeNelle.Village
             // requested target for up to the hold duration. This is the SOLE rotation writer
             // (updateRotation=false), so honoring the request here is enough — no animator
             // turn-in-place (v1 = yaw slew only, deferred Lane 3 WO).
-            bool hasMoveInput = input.sqrMagnitude > 0.0001f;
-            // Town/open-world: keep travel aligned to camera input, not NavMesh-injected lateral
-            // velocity. Combat uses Velocity for both facing and step (planted braced gait); after
-            // combat ends the facing writer already switches to `move` — if the step still rides
-            // Velocity.X the hero strafes/sways while looking forward (HeroDrift #1 post-CALM).
-            bool townInputDrive = !engaged && hasMoveInput && move.sqrMagnitude > 0.0001f;
-            if (_hasLastCombatStance && _lastCombatStance && townInputDrive
-                && Velocity.sqrMagnitude > 0.0001f)
-                Velocity = move.normalized * Velocity.magnitude;
             if (_facingActive)
             {
                 if (hasMoveInput)

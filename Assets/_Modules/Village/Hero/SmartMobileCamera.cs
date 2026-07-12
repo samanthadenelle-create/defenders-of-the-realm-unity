@@ -525,16 +525,17 @@ namespace DeNelle.Village
 
         private bool IsTargetValid() => _target != null && _target.gameObject != null;
 
-        // HeroDrift (2026-07-04): true while the followed hero is under active locomotion, so the
-        // facing-recenter can be suspended and never feed the movement-heading feedback loop.
-        // Reads the EXISTING HeroLocomotion.Velocity signal (no new coupling into HeroLocomotion)
-        // and lazily caches the component off the current target (re-resolved if the target swaps).
-        private bool IsTargetMoving()
+        // HeroDrift (2026-07-04, extended 2026-07-12): suspend the facing-recenter while the player
+        // is steering OR the hero already has speed. The 07-04 velocity-only gate (54322074) left a
+        // hole: on stick-down while speed is still ramping, recenter pivoted _panYaw behind the hero,
+        // which retargeted HeroLocomotion's camera-relative `move` mid-press (camYaw→move→facing→camYaw).
+        private bool ShouldSuspendFacingRecenter()
         {
             if (_target == null) return false;
             if (_followLoco == null || _followLoco.transform != _target)
                 _followLoco = _target.GetComponent<HeroLocomotion>();
-            return _followLoco != null && _followLoco.Velocity.sqrMagnitude > MoveEpsilonSqr;
+            if (_followLoco == null) return false;
+            return _followLoco.Velocity.sqrMagnitude > MoveEpsilonSqr || HeroLocomotion.WantsToMove;
         }
 
         // WO-383: (re)subscribe to the current target's HeroLocomotion.OnTeleported so a
@@ -625,17 +626,12 @@ namespace DeNelle.Village
                 // _facingRecenterSpeed and never overshooting the target — loop gain < 1, converges,
                 // and is fully suspended while the player is actively dragging (AddYaw zeroes the timer).
                 _timeSinceLastDrag += dt;
-                // HeroDrift (2026-07-04): SUSPEND the recenter while the hero is actively moving.
-                // The recenter pulls _panYaw toward the hero's FACING, but the hero's facing is
-                // LookRotation(camera-relative Velocity) and Velocity.x is a pure function of
-                // _panYaw (the camera-relative move basis). Running it WHILE steering closes a
-                // {_panYaw → move-heading → Velocity → heroFacing → _panYaw} loop that oscillates
-                // (the left/right wiggle on a pure-forward hold) and drags the effective heading
-                // off the pressed direction. The reframe is only meant to recompose the seat when
-                // the player is IDLE / just finished a drag — so gate it on the hero being ~still.
-                // Manual pan (AddYaw) is untouched; the idle reframe resumes the instant the hero
-                // stops. IsTargetMoving() polls the cached HeroLocomotion.Velocity (existing signal).
-                if (_facingRecenterEnabled && _timeSinceLastDrag > _facingRecenterDelay && !IsTargetMoving())
+                // HeroDrift: SUSPEND the recenter while the player is steering OR the hero already
+                // has speed. Recenter pulls _panYaw toward hero FACING; HeroLocomotion reads
+                // CameraYaw into its move basis — pivoting the seat mid-press retargets `move` and
+                // reopens the wiggle. Reframe only when stick-up AND ~stopped (ShouldSuspend…).
+                if (_facingRecenterEnabled && _timeSinceLastDrag > _facingRecenterDelay
+                    && !ShouldSuspendFacingRecenter())
                 {
                     float angleErr = Mathf.DeltaAngle(_panYaw, _target.eulerAngles.y);
                     float maxStep  = _facingRecenterSpeed * dt;
