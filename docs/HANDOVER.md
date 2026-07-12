@@ -45,7 +45,19 @@ pre-existers (arena ground texture → F8-37 evidence · B2 dual-wallet · pet-s
 **NEXT:** owner felt-pass on exe 15:02:34 → push on her word · WO-670/671 lanes gate+commit ·
 open owner pins: F8-40 max-tier tower identity · WO-614 tree→W/E/R rail seam · probe fix.
 
-**EVENING ADDENDUM (same day, waves 2+3 — current felt-verify exe = 2026-07-11 16:24:14):** the 15:02
+**NIGHT ADDENDUM (2026-07-11 late — current felt-verify exe = 2026-07-11 21:29:43):** the orc
+frozen-bones family is CLOSED: RCA proved loose-part Tripo exports (mesh not skinned to the animated
+skeleton — no importer fix exists); owner re-exported Warrior/Tank/Mage via AccuRig (proper
+pelvis/spine skeleton); ImportOrcFamily verdicts = ENTIRE family "OK Humanoid" incl. the previously
+unrepairable Berserker; the fleet's standing Berserker rig warning is GONE. Grok session landed 8
+commits (T-pose take stripping, walkforward01 calm gait rework, post-combat facing/sheath sync,
+camera recenter, VFX stacking, AccuRig Tank) — reconciled + gated. Motion Caster is now owner
+self-service (bundle preview w/ VFX-on-bone, SFX audition, one-button FBX intake with per-take
+T-pose + root-travel warnings). Grok escalation pack: `logs/debug/BROKEN_ITEMS_2026-07-11.md` +
+`GROK_ESCALATION_2026-07-11_orc-rig-family.md`. Queued next: vfxEuler rotation dial on bundle rows ·
+WO-674 walls · WO-675 panel · WO-673B fast-follows · push authorization.
+
+**EVENING ADDENDUM (same day, waves 2+3 — superseded as newest by the NIGHT block above):** the 15:02
 batch was FULLY felt-closed (F8-43/44/45/46/47 all owner-verified). Then landed, gated, fleet-clean
 (only the 3 known pre-existers): **F8-48** Mend heals (28/28 casts were move-interrupted; now instant +
 real cast take, `5c7782f9`+anim) · **WO-672/F8-50** unified damage lifecycle (hp==0 = broken shell
