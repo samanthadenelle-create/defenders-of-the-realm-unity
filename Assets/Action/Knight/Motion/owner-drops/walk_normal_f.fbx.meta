@@ -49,9 +49,9 @@ ModelImporter:
       hasAdditiveReferencePose: 0
       loopTime: 1
       loopBlend: 1
-      loopBlendOrientation: 0
-      loopBlendPositionY: 0
-      loopBlendPositionXZ: 1
+      loopBlendOrientation: 1
+      loopBlendPositionY: 1
+      loopBlendPositionXZ: 0
       keepOriginalOrientation: 1
       keepOriginalPositionY: 1
       keepOriginalPositionXZ: 0
@@ -269,7 +269,7 @@ ModelImporter:
         value: {x: 0, y: 0, z: 0}
         length: 0
         modified: 0
-    - boneName: CC_Base_L_MidToe1
+    - boneName: CC_Base_L_ToeBase
       humanName: LeftToes
       limit:
         min: {x: 0, y: 0, z: 0}
@@ -277,7 +277,7 @@ ModelImporter:
         value: {x: 0, y: 0, z: 0}
         length: 0
         modified: 0
-    - boneName: CC_Base_R_MidToe1
+    - boneName: CC_Base_R_ToeBase
       humanName: RightToes
       limit:
         min: {x: 0, y: 0, z: 0}
@@ -622,7 +622,7 @@ ModelImporter:
       position: {x: 0.015354404, y: 0.01372303, z: 0.0004123187}
       rotation: {x: -0.28450117, y: -0.048458196, z: 0.017650666, w: 0.95728755}
       scale: {x: 1, y: 0.99999946, z: 1}
-    - name: CC_Base_L_MidToe1
+    - name: CC_Base_L_ToeBase
       parentName: CC_Base_L_ToeBase
       position: {x: 0.00049075123, y: 0.02394024, z: 0.0012261497}
       rotation: {x: -0.21773905, y: -0.03732497, z: 0.0016437953, w: 0.97529167}
@@ -692,7 +692,7 @@ ModelImporter:
       position: {x: -0.015252199, y: 0.013695468, z: 0.0002933991}
       rotation: {x: -0.28463325, y: 0.048476104, z: -0.017730145, w: 0.9572459}
       scale: {x: 1.0000001, y: 1, z: 0.9999998}
-    - name: CC_Base_R_MidToe1
+    - name: CC_Base_R_ToeBase
       parentName: CC_Base_R_ToeBase
       position: {x: -0.0003337097, y: 0.023899632, z: 0.001078701}
       rotation: {x: -0.21769416, y: 0.037335332, z: -0.0016282627, w: 0.9753013}
@@ -1071,7 +1071,7 @@ ModelImporter:
     feetSpacing: 0
     globalScale: 1
     rootMotionBoneName: 
-    hasTranslationDoF: 0
+    hasTranslationDoF: 1
     hasExtraRoot: 0
     skeletonHasParents: 1
   lastHumanDescriptionAvatarSource: {instanceID: 0}

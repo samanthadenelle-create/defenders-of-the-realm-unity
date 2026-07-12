@@ -82,16 +82,36 @@ namespace DeNelle.Editor
                 // via the .meta or a one-off menu gets clobbered on the next reimport.
                 c.loopPose = looping;
 
-                // Bake horizontal root translation into the pose -> in place.
-                c.lockRootPositionXZ = true;
-                c.keepOriginalPositionXZ = false;
-
-                // Preserve vertical motion (jumps / falling deaths read wrong
-                // if flattened) and original facing.
-                c.lockRootHeightY = false;
-                c.keepOriginalPositionY = true;
-                c.lockRootRotation = false;
-                c.keepOriginalOrientation = true;
+                if (looping)
+                {
+                    // LOCOMOTION LOOPS — the standard in-place recipe (SME convergence
+                    // 2026-07-12, owner F8 "hip bones"; Unity RootMotion docs + live
+                    // HeroDrift capture): XZ bake OFF so the take's horizontal travel
+                    // AND its cross-track hip wander go to the ROOT MOTION curve — and
+                    // with applyRootMotion=false they are cleanly DISCARDED. Baking XZ
+                    // INTO the pose (the old branchless behavior) kept the wander in
+                    // the body: move_run_m measured hipsLocalX 0.007→0.846 per loop at
+                    // steady yaw (the felt lurch). Rotation + Y bake ON per the same
+                    // recipe (yaw drift absorbed; bob kept in pose, gravityWeight live).
+                    c.lockRootPositionXZ = false;
+                    c.keepOriginalPositionXZ = false;   // Based Upon: Center of Mass
+                    c.lockRootHeightY = true;
+                    c.keepOriginalPositionY = true;     // Based Upon: Original
+                    c.lockRootRotation = true;
+                    c.keepOriginalOrientation = true;   // Based Upon: Original
+                }
+                else
+                {
+                    // ACTION ONE-SHOTS (attacks/deaths/casts) — keep the original
+                    // behavior: bake horizontal travel into the pose so lunges still
+                    // read (root motion is discarded), preserve vertical + facing.
+                    c.lockRootPositionXZ = true;
+                    c.keepOriginalPositionXZ = false;
+                    c.lockRootHeightY = false;
+                    c.keepOriginalPositionY = true;
+                    c.lockRootRotation = false;
+                    c.keepOriginalOrientation = true;
+                }
 
                 kept.Add(c);
             }

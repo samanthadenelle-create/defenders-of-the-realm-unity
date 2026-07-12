@@ -535,7 +535,11 @@ namespace DeNelle.Village
             if (_followLoco == null || _followLoco.transform != _target)
                 _followLoco = _target.GetComponent<HeroLocomotion>();
             if (_followLoco == null) return false;
-            return _followLoco.Velocity.sqrMagnitude > MoveEpsilonSqr || HeroLocomotion.WantsToMove;
+            // SME audit 2026-07-12 #3b: use the SAME 0.0001 input threshold the locomotion
+            // drive uses (HasAnyMoveInput) — WantsToMove's 0.02 deadzone left a soft-input
+            // band where the hero moved while the recenter still pivoted the camera-relative
+            // basis mid-step (a steady heading curl). WantsToMove keeps its 0.02 for casts.
+            return _followLoco.Velocity.sqrMagnitude > MoveEpsilonSqr || HeroLocomotion.HasAnyMoveInput;
         }
 
         // WO-383: (re)subscribe to the current target's HeroLocomotion.OnTeleported so a

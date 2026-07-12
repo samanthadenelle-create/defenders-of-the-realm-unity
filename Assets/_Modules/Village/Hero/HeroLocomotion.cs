@@ -56,6 +56,15 @@ namespace DeNelle.Village
         /// </summary>
         public static bool WantsToMove => ReadMoveInput().sqrMagnitude > 0.02f;
 
+        /// <summary>
+        /// True on ANY drivable move input — the SAME 0.0001 threshold the locomotion
+        /// drive uses (:788). For the camera's facing-recenter suspend gate (SME audit
+        /// 2026-07-12 #3b): WantsToMove's 0.02 deadzone left a band where the hero MOVES
+        /// while the recenter still pivots the camera-relative basis mid-step (a steady
+        /// heading curl). Cast-interrupt keeps WantsToMove — noise must not cancel casts.
+        /// </summary>
+        public static bool HasAnyMoveInput => ReadMoveInput().sqrMagnitude > 0.0001f;
+
         // WO-423: face-the-target on attack. The player hero previously only faced its
         // MOVE direction (LookRotation on Velocity), so standing still froze facing at the
         // last travel dir — attacks/projectiles fired the wrong way. FaceToward lets the
@@ -880,11 +889,16 @@ namespace DeNelle.Village
                 // follows the surface height, so stairs / ramparts / hills "just work" exactly
                 // like the enemies. Fall back to a raw transform move if the hero isn't on a
                 // NavMesh yet (scene without a bake / spawned off-mesh) so movement never breaks.
-                // NOTE (WO-512): the move STEP is camera-relative — UNCHANGED by lock-face. Town
-                // drives along `move` (input heading) at the eased speed; combat keeps Velocity.
-                Vector3 step = townInputDrive
-                    ? move.normalized * (Velocity.magnitude * Time.deltaTime)
-                    : Velocity * Time.deltaTime;
+                // NOTE (WO-512): the move STEP is camera-relative — UNCHANGED by lock-face.
+                // STEP BASIS RESTORED to Velocity (SME frame-map audit 2026-07-12, owner F8
+                // "walking/running reads wrong", onset = d1eea617): the instant
+                // move.normalized step changed travel direction in ONE frame while the body
+                // slerps over ~0.19s — at 6 m/s that is ~1.1m of travel pointing the wrong
+                // way on every stick change (skid/fishtail), and the 540°/s RotateTowards
+                // arc (:809) never reached translation. Velocity IS arc-corrected toward
+                // the stick at 540°/s, so the F8 HeroDrift lateral-drift proof stays fixed
+                // while travel arcs with the body again.
+                Vector3 step = Velocity * Time.deltaTime;
                 if (_agent != null && _agent.isOnNavMesh)
                     _agent.Move(step);
                 else
@@ -1141,7 +1155,13 @@ namespace DeNelle.Village
             // Self-heal the Animator reference (see ResolveAnimator for rationale).
             // Cheap: only runs while _animator is null, stops once wired.
             ResolveAnimator();
-            if (_animator != null && _hasSpeedParam) _animator.SetFloat(AnimSpeed, Velocity.magnitude);
+            // RAW Speed write RETIRED (SME frame-map audit 2026-07-12): this legacy direct
+            // SetFloat used the SAME "Speed" hash as ActorAnimator.SetLocomotion's 0.12s
+            // DAMPED write above (:1016) and ran LATER in the method — the damp was dead
+            // code, and MoveTowards' turn chord dips |Velocity| ~30% mid-turn, so the
+            // undamped param flicked the walk/run blend on EVERY steering adjustment (the
+            // felt gait hiccup). ActorAnimator is now the SOLE Speed writer; it re-resolves
+            // on body swap and guards missing params, so legacy listeners still get fed.
 
             // §12 (mocap-locomotion retarget verify, owner 2026-07-04): ~1/sec, prove WHICH locomotion
             // clip is playing at a given Speed (Walk-vs-Run band) AND that the avatar retargeted (a valid
