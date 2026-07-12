@@ -630,9 +630,24 @@ namespace DeNelle.Editor
 
         // ── Preview weapons: main hand / off hand ────────────────────────────
 
+        /// <summary>Resolve a DeNelle.Village type by reflection — the SAME seam the
+        /// SfxId lookup uses (DeNelle.Editor deliberately does NOT reference
+        /// DeNelle.Village; see the asmdef + the SerializedObject catalog reads).</summary>
+        private static Type FindVillageType(string fullName)
+        {
+            var t = Type.GetType(fullName + ", DeNelle.Village");
+            if (t != null) return t;
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                t = asm.GetType(fullName);
+                if (t != null) return t;
+            }
+            return null;
+        }
+
         /// <summary>Build the Main/Off-Hand popup lists once from weapons.json via
         /// GearCatalog (shields → off hand, everything else → main hand) and restore
-        /// the persisted picks.</summary>
+        /// the persisted picks. Reflection — cross-assembly seam, see FindVillageType.</summary>
         private void EnsureWeaponLists()
         {
             if (_mainIds != null) return;
@@ -642,15 +657,24 @@ namespace DeNelle.Editor
             var offL  = new List<string> { "None" };
             try
             {
-                foreach (var w in DeNelle.Village.GearCatalog.AllWeapons())
+                var catType = FindVillageType("DeNelle.Village.GearCatalog");
+                var all = catType?.GetMethod("AllWeapons")?.Invoke(null, null)
+                    as System.Collections.IEnumerable;
+                if (all == null) throw new InvalidOperationException("GearCatalog.AllWeapons unresolved");
+                foreach (var w in all)
                 {
-                    if (w == null || string.IsNullOrEmpty(w.id)) continue;
+                    if (w == null) continue;
+                    var wt = w.GetType();
+                    string id       = wt.GetField("id")?.GetValue(w) as string;
+                    string wName    = wt.GetField("name")?.GetValue(w) as string;
+                    string category = wt.GetField("category")?.GetValue(w) as string;
+                    if (string.IsNullOrEmpty(id)) continue;
                     bool shield =
-                        string.Equals(w.category, "shield", StringComparison.OrdinalIgnoreCase) ||
-                        w.id.IndexOf("shield", StringComparison.OrdinalIgnoreCase) >= 0;
-                    string label = string.IsNullOrEmpty(w.name) ? w.id : $"{w.name} ({w.id})";
-                    if (shield) { offs.Add(w.id); offL.Add(label); }
-                    else        { mains.Add(w.id); mainL.Add(label); }
+                        string.Equals(category, "shield", StringComparison.OrdinalIgnoreCase) ||
+                        id.IndexOf("shield", StringComparison.OrdinalIgnoreCase) >= 0;
+                    string label = string.IsNullOrEmpty(wName) ? id : $"{wName} ({id})";
+                    if (shield) { offs.Add(id); offL.Add(label); }
+                    else        { mains.Add(id); mainL.Add(label); }
                 }
             }
             catch (Exception e)
@@ -693,7 +717,15 @@ namespace DeNelle.Editor
             string mainId = _mainIds[Mathf.Clamp(_mainIndex, 0, _mainIds.Length - 1)];
             string offId  = _offIds[Mathf.Clamp(_offIndex,  0, _offIds.Length  - 1)];
 
-            var stale = _previewInstance.GetComponent<DeNelle.Village.EquipmentController>();
+            // Reflection seam (see FindVillageType) — DeNelle.Editor never references
+            // DeNelle.Village, so the component is resolved + driven by Type.
+            var ecType = FindVillageType("DeNelle.Village.EquipmentController");
+            if (ecType == null)
+            {
+                Debug.LogWarning(Log + "EquipmentController type unresolved — preview gear unavailable.");
+                return;
+            }
+            var stale = _previewInstance.GetComponent(ecType);
             if (stale != null) DestroyImmediate(stale);
             var props = new List<Transform>();
             foreach (var t in _previewInstance.GetComponentsInChildren<Transform>(true))
@@ -704,14 +736,18 @@ namespace DeNelle.Editor
             if (string.IsNullOrEmpty(mainId) && string.IsNullOrEmpty(offId)) { Repaint(); return; }
             try
             {
-                var equip = _previewInstance.AddComponent<DeNelle.Village.EquipmentController>();
+                var equip = (Behaviour)_previewInstance.AddComponent(ecType);
                 equip.enabled = false;   // driven explicitly — no OnEnable/Update lifecycle
-                equip.Equip(mainId);
-                equip.EquipOffHand(offId);
+                ecType.GetMethod("Equip", new[] { typeof(string) })
+                    ?.Invoke(equip, new object[] { mainId });
+                ecType.GetMethod("EquipOffHand", new[] { typeof(string) })
+                    ?.Invoke(equip, new object[] { offId });
             }
             catch (Exception e)
             {
-                Debug.LogWarning(Log + $"preview gear attach failed (main='{mainId}' off='{offId}'): {e.Message}");
+                var root = e is TargetInvocationException tie && tie.InnerException != null
+                    ? tie.InnerException : e;
+                Debug.LogWarning(Log + $"preview gear attach failed (main='{mainId}' off='{offId}'): {root.Message}");
             }
             Repaint();
         }
