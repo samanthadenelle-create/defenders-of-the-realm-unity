@@ -170,10 +170,26 @@ namespace DeNelle.Village
 
         private void ClearCustomActions() { _onRetry = null; _onLeave = null; }
 
-        private void ShowHeroFell() => Show(
-            "YOU HAVE FALLEN",
-            "The dark takes you, but Elarion still needs its defender.\nRise, and try again.",
-            isHeartDestroyed: false);
+        private void ShowHeroFell()
+        {
+            // DOUBLE DEATH SCREEN (owner F8 2026-07-12, DeathTrace proof: 'YOU HAVE
+            // FALLEN' by GameOverScreen.Show + 'Defeat' by BattleArenaHud in one death):
+            // while a BattleArena fight owns the death, ITS loss flow (Regroup sting +
+            // revive-at-return) is the ONE death screen — this hub game-over must stand
+            // down, exactly like HeroDeathEndState already does. Bonus hazard removed:
+            // Show() freezes Time.timeScale, which stalled the arena's scaled-time
+            // return-fade coroutines under the stacked screen.
+            if (DeNelle.Village.Arena.BattleArena.AnyBattleInProgress)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("EndState",
+                    "hub game-over (hero-fell) STAND-DOWN — battle in progress; arena Defeat flow owns this death.");
+                return;
+            }
+            Show(
+                "YOU HAVE FALLEN",
+                "The dark takes you, but Elarion still needs its defender.\nRise, and try again.",
+                isHeartDestroyed: false);
+        }
 
         private void Show(string title, string body, bool isHeartDestroyed)
         {
