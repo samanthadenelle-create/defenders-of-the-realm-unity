@@ -210,6 +210,15 @@ namespace DeNelle.Editor
             foreach (var o in OrcFamily)
                 RepairOrcAvatar(o, report);
 
+            report.Add("-- Mesh binding audit (Tripo tripo_part vs armature — Grok RCA 2026-07-11) --");
+            if (!OrcRigBindingAudit.Run(out string bindingReason))
+            {
+                report.Add("  BINDING FAIL: " + bindingReason);
+                report.Add("  >> OrcHumanoid Tripo trio needs AccuRig re-export (see logs/debug/GROK_RESOLUTION_2026-07-11_orc-rig-family.md)");
+            }
+            else
+                report.Add("  " + bindingReason);
+
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             Debug.Log("[PeopleCharacterImporter] ImportOrcFamily DONE — ORC_FAMILY_IMPORT_OK\n" +

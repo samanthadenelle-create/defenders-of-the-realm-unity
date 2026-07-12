@@ -2,6 +2,7 @@
     "name": "DeNelle.Editor",
     "rootNamespace": "DeNelle.Editor",
     "references": [
+        "DeNelle.EditorRegression",
         "DeNelle.Core",
         "DeNelle.Data",
         "DeNelle.Sandbox",

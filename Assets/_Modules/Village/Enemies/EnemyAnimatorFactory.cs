@@ -270,12 +270,19 @@ namespace DeNelle.Village
             // Sample a real bone so "animator says it's playing but bones are frozen"
             // (the exact QA capture) is caught: clip-info can report a clip while a
             // rig-type mismatch leaves every bone at bind pose.
-            Transform bone = FindSampleBone(_anim);
+            var smr = _anim != null ? _anim.GetComponentInChildren<SkinnedMeshRenderer>() : null;
+            Transform bone = FindSampleBone(_anim, smr);
+            Transform hip = _anim != null && _anim.isHuman
+                ? _anim.GetBoneTransform(HumanBodyBones.Hips)
+                : null;
             Quaternion boneRot = bone != null ? bone.localRotation : Quaternion.identity;
             Vector3 bonePos = bone != null ? bone.localPosition : Vector3.zero;
+            Quaternion hipRot = hip != null ? hip.localRotation : Quaternion.identity;
+            Vector3 hipPos = hip != null ? hip.localPosition : Vector3.zero;
 
-            bool everPlayed = false;   // a clip was ever reported on layer 0
-            bool boneMoved = false;   // a sampled bone transform actually changed
+            bool everPlayed = false;
+            bool boneMoved = false;
+            bool hipMoved = false;
             for (int i = 0; i < MaxPoseFrames; i++)
             {
                 yield return null;
@@ -287,35 +294,42 @@ namespace DeNelle.Village
                     (Quaternion.Angle(boneRot, bone.localRotation) > 0.1f ||
                      (bonePos - bone.localPosition).sqrMagnitude > 1e-6f))
                     boneMoved = true;
-                if (everPlayed && (boneMoved || bone == null)) break;   // proven alive — stop early
+                if (hip != null &&
+                    (Quaternion.Angle(hipRot, hip.localRotation) > 0.1f ||
+                     (hipPos - hip.localPosition).sqrMagnitude > 1e-6f))
+                    hipMoved = true;
+                if (everPlayed && (boneMoved || hipMoved || bone == null)) break;
             }
 
-            bool frozen = !everPlayed || (bone != null && !boneMoved);
+            bool smrRootIsTripo = smr != null && smr.rootBone != null &&
+                                  smr.rootBone.name.StartsWith("tripo_part", System.StringComparison.OrdinalIgnoreCase);
+            bool meshUnbound = everPlayed && hipMoved && smrRootIsTripo && !boneMoved;
+            bool frozen = !everPlayed || meshUnbound ||
+                          (bone != null && !boneMoved && !(hip != null && hipMoved));
             if (frozen)
             {
                 string rigType = _anim == null ? "<gone>"
                     : _anim.isHuman ? "Humanoid"
                     : _anim.avatar != null ? "Generic"
                     : "no-avatar";
-                // Discriminator data (RCA 2026-07-11): avatar identity + validity + the
-                // actual skinned hierarchy names. avatarValid=False → degenerate avatar
-                // (hand-map / donor repair). sampleBone/smrRoot = tripo_part_* → mesh is
-                // skinned to loose Tripo chunks; the FBX needs re-rig/re-export — no
-                // importer fix exists.
                 var avatar = _anim != null ? _anim.avatar : null;
-                var smr = _anim != null ? _anim.GetComponentInChildren<SkinnedMeshRenderer>() : null;
                 string avatarName = avatar != null ? avatar.name : "<none>";
                 string avatarValid = avatar != null ? avatar.isValid.ToString() : "<none>";
                 string isHuman = _anim != null ? _anim.isHuman.ToString() : "<gone>";
                 string sampleBoneName = bone != null ? bone.name : "<none>";
+                string hipBoneName = hip != null ? hip.name : "<none>";
                 string smrRootName = smr != null && smr.rootBone != null ? smr.rootBone.name : "<none>";
+                string verdict = meshUnbound
+                    ? "NEEDS_ACCURIG_REEXPORT (animator drives Hip chain; visible mesh is rigid tripo_part chunks)"
+                    : (!avatarValid.Equals("True", System.StringComparison.OrdinalIgnoreCase) || rigType == "Generic")
+                        ? "DEGENERATE_AVATAR (hand-map or donor repair may help)"
+                        : "FROZEN_BIND (re-import Humanoid or check controller)";
                 FlowTrace.Fail("EnemyPose",
                     $"id={gameObject.GetInstanceID()} model={_model}: everPlayed={everPlayed} " +
-                    $"boneMoved={boneMoved} — frozen T-pose (rig={rigType} vs " +
+                    $"boneMoved={boneMoved} hipMoved={hipMoved} — frozen T-pose (rig={rigType} vs " +
                     $"{(_humanoidClips ? "Humanoid" : "Generic")} clips on controller '{_ctrl}'). " +
-                    $"avatar={avatarName} avatarValid={avatarValid} isHuman={isHuman} " +
-                    $"sampleBone={sampleBoneName} smrRoot={smrRootName}. " +
-                    "Re-import Humanoid (PeopleCharacterImporter.ImportOrcFamily).");
+                    $"verdict={verdict} avatar={avatarName} avatarValid={avatarValid} isHuman={isHuman} " +
+                    $"sampleBone={sampleBoneName} hipBone={hipBoneName} smrRoot={smrRootName}.");
             }
             else
             {
@@ -329,10 +343,11 @@ namespace DeNelle.Village
 
         /// <summary>Pick a representative bone: first skinned bone under the animator
         /// (skip the root — root motion is off, the agent moves the root).</summary>
-        private static Transform FindSampleBone(Animator anim)
+        private static Transform FindSampleBone(Animator anim, SkinnedMeshRenderer smr)
         {
             if (anim == null) return null;
-            var smr = anim.GetComponentInChildren<SkinnedMeshRenderer>();
+            if (smr == null)
+                smr = anim.GetComponentInChildren<SkinnedMeshRenderer>();
             if (smr != null && smr.bones != null)
                 for (int i = 0; i < smr.bones.Length; i++)
                     if (smr.bones[i] != null && smr.bones[i] != anim.transform)
