@@ -607,6 +607,10 @@ namespace DeNelle.Village
             // WO-VFX-003 / owner directive 2026-07-12: the CAST beat — in registry-only mode
             // the variant's motion-castings row is the ONLY VFX source (owner picks); the
             // abilities.json VfxCast default is suppressed. Single choke point for all actives.
+            // The keyword is remembered for the PROJECTILE/IMPACT phases of this same cast
+            // (phase bundle: vfxKey=start, vfxProjectile=travel, vfxImpact=end).
+            _currentCastKeyword = castVariant >= 0 && castVariant < CastVariantKeyword.Length
+                ? CastVariantKeyword[castVariant] : null;
             PlayCastVfxKey(def, origin, castVariant);
 
             ResolveEffect(def, origin);
@@ -1276,9 +1280,12 @@ namespace DeNelle.Village
         private void LaunchProjectile(Vector3 target, System.Action onArrive,
                                       string projectileKey = null, Color? tint = null)
         {
-            // Owner directive 2026-07-12 (registry-only motion VFX): suppress the abilities.json
-            // travel FX; the flight timing/damage path below is unchanged (invisible travel).
-            if (RegistryOnlyMotionVfx) projectileKey = null;
+            // Owner directive 2026-07-12 (registry-only motion VFX): the abilities.json travel
+            // key is suppressed; the OWNER's phase bundle supplies it instead — the current
+            // cast keyword's row vfxProjectile (start = muzzle, end = target, same flight
+            // timing/damage path). No row / empty field = invisible travel, by design.
+            if (RegistryOnlyMotionVfx)
+                projectileKey = TryGetBundleField(_currentCastKeyword, r => r.vfxProjectile);
             if (_rangedVfx == null)
             {
                 if (!TryGetComponent(out _rangedVfx)) _rangedVfx = gameObject.AddComponent<RangedAttackVFX>();
@@ -1364,12 +1371,40 @@ namespace DeNelle.Village
                 transform.rotation, null, null);
         }
 
-        /// <summary>Play the ability's Hovl IMPACT key at a hit / blast point, tinted by the ability accent.</summary>
+        /// <summary>Play the IMPACT (end-point) VFX at a hit / blast point. Registry-only
+        /// mode: the owner bundle row's vfxImpact for the current cast keyword, ORIENTED
+        /// along the caster→impact direction (WO-678 item 4 — no more identity-rotation
+        /// landings). Legacy mode: the abilities.json VfxImpact key.</summary>
         private void PlayImpactVfxKey(AbilityDef def, Vector3 at)
         {
-            if (RegistryOnlyMotionVfx) return;   // owner directive 2026-07-12: defaults off
+            if (RegistryOnlyMotionVfx)
+            {
+                string key = TryGetBundleField(_currentCastKeyword, r => r.vfxImpact);
+                if (string.IsNullOrEmpty(key)) return;   // phase unpicked — silent by design
+                Vector3 dir = at - transform.position;
+                dir.y = 0f;   // landings read best yawed toward travel, not pitched into the ground
+                Quaternion rot = dir.sqrMagnitude > 0.01f
+                    ? Quaternion.LookRotation(dir.normalized) : Quaternion.identity;
+                VFXManager.PlayKey(key, at, rot, null, null);
+                return;
+            }
             if (def == null || string.IsNullOrEmpty(def.VfxImpact)) return;
             VFXManager.PlayKey(def.VfxImpact, at, Quaternion.identity, null, def.UnityColor);
+        }
+
+        // Phase-bundle state: the registry keyword of the cast currently resolving —
+        // set in CastAbility, consumed by the projectile/impact phases of that cast.
+        private string _currentCastKeyword;
+
+        /// <summary>Resolve one field off the current keyword's owner bundle row;
+        /// null when there is no keyword / no row / empty field (silent phase).</summary>
+        private string TryGetBundleField(string keyword, System.Func<ActionBundleRow, string> pick)
+        {
+            if (string.IsNullOrEmpty(keyword)) return null;
+            if (!ActionBundleCatalog.TryGetRow(RegistryTarget, keyword, out var row) || row == null)
+                return null;
+            string v = pick(row);
+            return string.IsNullOrEmpty(v) ? null : v;
         }
 
         /// <summary>

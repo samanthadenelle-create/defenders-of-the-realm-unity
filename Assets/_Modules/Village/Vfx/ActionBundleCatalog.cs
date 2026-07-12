@@ -50,6 +50,11 @@ namespace DeNelle.Village
         public string vfxKey;            // VFXManager.PlayKey / HovlVfxCatalog key
         public string sfxId;             // Resources/Sfx/<sfxId> clip name (GameSfx convention)
         public float  vfxDelay;          // seconds after anim start to fire the VFX (default 0)
+        // Phase bundle (2026-07-12): start/travel/end VFX moments. vfxKey = at the
+        // CASTER; vfxProjectile = muzzle→target travel loop; vfxImpact = at the end
+        // point. Absent/empty = that phase is silent (registry-only VFX law).
+        public string vfxProjectile;     // travel-loop key (muzzle→target flight)
+        public string vfxImpact;         // landing key (fired at the target point)
         public string attachBone;        // humanoid bone / attach name ("hand.r", "spine")
         public bool   playOneShot;       // effects-only overlay — base animator state untouched
         public bool   manual;            // owner pick = CANON (provenance)

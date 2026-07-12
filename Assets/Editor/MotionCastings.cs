@@ -57,6 +57,11 @@ namespace DeNelle.Editor
         public string vfxKey;     // optional — VFXManager.PlayKey namespace
         public string sfxId;      // optional — SfxId namespace
         public float  vfxDelay;   // optional — seconds after anim start to fire the VFX (default 0)
+        // Phase bundle (owner ask 2026-07-12 "start and end target data"): a spell is
+        // three moments — vfxKey fires at the CASTER (start), vfxProjectile travels
+        // muzzle→target, vfxImpact lands at the END point. Absent = that phase is silent.
+        public string vfxProjectile; // optional — travel-loop key (muzzle→target flight)
+        public string vfxImpact;     // optional — landing key (fired at the target point)
         public string attachBone; // optional — humanoid bone/attach name ("hand.r", "weapon", "spine")
         public bool   playOneShot;// optional — one-shot overlay, base state undisturbed (default false)
         public bool   manual;     // true = owner pick = CANON, never overwritten
@@ -297,6 +302,8 @@ namespace DeNelle.Editor
                     ["vfxKey"]      = row.vfxKey ?? string.Empty,
                     ["sfxId"]       = row.sfxId ?? string.Empty,
                     ["vfxDelay"]    = row.vfxDelay,
+                    ["vfxProjectile"] = row.vfxProjectile ?? string.Empty,
+                    ["vfxImpact"]   = row.vfxImpact ?? string.Empty,
                     ["attachBone"]  = row.attachBone ?? string.Empty,
                     ["playOneShot"] = row.playOneShot,
                     ["manual"]      = row.manual,

@@ -1001,6 +1001,26 @@ namespace DeNelle.Editor
                     "(hit reactions, impacts)."),
                 _playOneShot);
 
+            // Phase bundle (owner ask 2026-07-12): start/travel/end. The VFX Key above is
+            // the START (at the caster); these two are the TRAVEL (muzzle→target flight
+            // loop) and the END (landing at the target point, travel-oriented). Empty =
+            // that phase stays silent (registry-only VFX law).
+            EditorGUILayout.LabelField("Spell phases (projectile / impact)", EditorStyles.boldLabel);
+            if (_vfxKeys != null)
+            {
+                _vfxProjIndex = EditorGUILayout.Popup(
+                    new GUIContent("Projectile VFX", "Travel-loop key flown muzzle→target."),
+                    _vfxProjIndex, _vfxKeys);
+                _vfxImpactIndex = EditorGUILayout.Popup(
+                    new GUIContent("Impact VFX", "Landing key fired at the target point."),
+                    _vfxImpactIndex, _vfxKeys);
+            }
+            else
+            {
+                _vfxProjFree = EditorGUILayout.TextField("Projectile VFX", _vfxProjFree);
+                _vfxImpactFree = EditorGUILayout.TextField("Impact VFX", _vfxImpactFree);
+            }
+
             // Bundle summary — the "VFX key named" half of the WO-671 §2 preview.
             if (_selected != null)
                 EditorGUILayout.LabelField(
@@ -1045,6 +1065,20 @@ namespace DeNelle.Editor
             _vfxKeys != null
                 ? (_vfxKeyIndex <= 0 ? string.Empty : _vfxKeys[Mathf.Clamp(_vfxKeyIndex, 0, _vfxKeys.Length - 1)])
                 : (_vfxKeyFree ?? string.Empty).Trim();
+
+        // Phase-bundle pickers (projectile / impact) — same key list as the cast VFX.
+        private int _vfxProjIndex, _vfxImpactIndex;          // 0 = "(none)"
+        private string _vfxProjFree = string.Empty, _vfxImpactFree = string.Empty;
+
+        private string SelectedVfxProjectile() =>
+            _vfxKeys != null
+                ? (_vfxProjIndex <= 0 ? string.Empty : _vfxKeys[Mathf.Clamp(_vfxProjIndex, 0, _vfxKeys.Length - 1)])
+                : (_vfxProjFree ?? string.Empty).Trim();
+
+        private string SelectedVfxImpact() =>
+            _vfxKeys != null
+                ? (_vfxImpactIndex <= 0 ? string.Empty : _vfxKeys[Mathf.Clamp(_vfxImpactIndex, 0, _vfxKeys.Length - 1)])
+                : (_vfxImpactFree ?? string.Empty).Trim();
 
         private string SelectedSfxId() =>
             _sfxIds != null
@@ -1106,6 +1140,8 @@ namespace DeNelle.Editor
                 vfxKey      = SelectedVfxKey(),
                 sfxId       = SelectedSfxId(),
                 vfxDelay    = _vfxDelay,
+                vfxProjectile = SelectedVfxProjectile(),
+                vfxImpact   = SelectedVfxImpact(),
                 attachBone  = (_attachBone ?? string.Empty).Trim(),
                 playOneShot = _playOneShot,
                 manual      = true,
