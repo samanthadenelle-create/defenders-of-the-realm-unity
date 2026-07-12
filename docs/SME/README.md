@@ -30,4 +30,10 @@ when you need to know exactly WHAT a folder is.
 4. Update the dossier **in the same commit** as any change to how we consume its pack (§15).
 5. Purchased-but-uninstalled or removed products (e.g. Yarn Spinner, removed per WO-455) are tracked in the ledger, not given dossiers.
 
-*Status 2026-07-12 overnight: ledger + S&S dossier complete; Hovl, KayKit, polyperfect/Quaternius, Blink, VFX-misc, character-packs, and audio dossiers being authored by the overnight research fleet — this index links their target filenames.*
+*Status 2026-07-12 06:00: **ALL EIGHT DOSSIERS COMPLETE** (overnight research fleet). Cross-dossier
+headline for WO-677 Phase 0: the project owns far more production-ready content than it uses —
+Blink's Humanoid-rigged orc bundle (zero references), 608 spell/class icons, KayKit's 33 rigged
+characters, polyperfect's 240 rigged villagers + animation system, the S&S block/parry/combo
+systems, 6 Supercyan bodies. Plus two ⛔ flags: the apex-dragon model is CC BY-NC (license or
+replace before commercial release — CHARACTER_PACKS_SME.md) and audio license provenance needs a
+pre-launch re-verify (AUDIO_SME.md).*

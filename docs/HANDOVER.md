@@ -45,7 +45,25 @@ pre-existers (arena ground texture → F8-37 evidence · B2 dual-wallet · pet-s
 **NEXT:** owner felt-pass on exe 15:02:34 → push on her word · WO-670/671 lanes gate+commit ·
 open owner pins: F8-40 max-tier tower identity · WO-614 tree→W/E/R rail seam · probe fix.
 
-**NIGHT ADDENDUM (2026-07-11 late — current felt-verify exe = 2026-07-11 21:29:43):** the orc
+**MORNING ADDENDUM (2026-07-12 — current felt-verify exe = 2026-07-11 23:51:48):** overnight
+session delivered: (1) **Regroup death-cycle FIXED** — RCA proved one death fired two racing
+recovery systems (arena loss-return left the death latch set under ff.noautoheal; HeroHealth's
+respawn double-warped); arena now owns loss recovery, HandleDeath defers w/ 10s net (36acc05f).
+(2) **Registry-only motion VFX** (owner directive): all abilities.json Vfx* defaults + the
+hardcoded per-swing Melee_Slash burst OFF; the ONLY VFX authority = owner Motion Caster rows,
+now wired to runtime for the first time via ActionBundleCatalog (17862c51). (3) **Movement feel
+restored** — f7740f4e's per-frame velocity snap rate-limited to 540°/s (ee52e399); stale-clip F8
+sentinel retired. (4) **F8-49 ROOT-FIXED** — 19 Lana Studio mats upgraded to URP at source
+(LANA_URP_FIX_OK, b5694a05). (5) **SME PROGRAM: all 8 pack dossiers written + committed** —
+router `docs/SME/README.md`, ledger of all 34 store products; headlines: Hovl demos run Bloom 5
+vs our Bloom OFF; Blink's rigged orc bundle + 608 icons unused; KayKit 33 rigged characters
+unused; polyperfect 240 rigged villagers unused; ⛔ apex-dragon model CC BY-NC (license/replace
+before commercial release, memory + dossier); Raid BGM dead-wired (~8-line fix, AUDIO_SME).
+(6) **WO-677 minted** — Asset Caster toolkit family (Icon/Gear/Audio/Character/Texture Casters),
+Phase 0 applicability assessment ready to run on the dossiers. Tools shipped earlier same night:
+VFX Caster window + Motion Caster preview gear/mocap filter. 24 commits local, push HELD.
+
+**NIGHT ADDENDUM (2026-07-11 late — superseded as newest by the MORNING block above):** the orc
 frozen-bones family is CLOSED: RCA proved loose-part Tripo exports (mesh not skinned to the animated
 skeleton — no importer fix exists); owner re-exported Warrior/Tank/Mage via AccuRig (proper
 pelvis/spine skeleton); ImportOrcFamily verdicts = ENTIRE family "OK Humanoid" incl. the previously
