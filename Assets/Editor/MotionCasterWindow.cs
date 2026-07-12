@@ -72,6 +72,15 @@ namespace DeNelle.Editor
             public float RootTravel = -1f; // metres the root moves t0→tEnd (-1 = not yet measured)
         }
 
+        // ── Preview weapons (main/off hand) ──────────────────────────────────
+        // Owner ask 2026-07-11: see casts/attacks with the real held gear while
+        // mapping spells. Reuses the WORLD EquipmentController on the preview
+        // clone — the exact pattern HeroPreviewViewer (character screen) uses —
+        // so grip/seat/scale match in-game. Index 0 = None; picks persist.
+        private string[] _mainIds, _offIds;       // weapons.json ids ("" = none)
+        private string[] _mainLabels, _offLabels; // popup display labels
+        private int _mainIndex, _offIndex;
+
         // ── Model / verdict ──────────────────────────────────────────────────
         private GameObject _model;
         private string _avatarVerdict;
@@ -488,6 +497,7 @@ namespace DeNelle.Editor
             _previewInstance.transform.position = Vector3.zero;
             _previewInstance.transform.rotation = Quaternion.identity;
             _preview.AddSingleGO(_previewInstance);
+            ApplyPreviewWeapons();   // re-arm the held gear on the fresh clone
             _time = 0f;
             _playing = false;
             SamplePose();
@@ -618,6 +628,94 @@ namespace DeNelle.Editor
             }
         }
 
+        // ── Preview weapons: main hand / off hand ────────────────────────────
+
+        /// <summary>Build the Main/Off-Hand popup lists once from weapons.json via
+        /// GearCatalog (shields → off hand, everything else → main hand) and restore
+        /// the persisted picks.</summary>
+        private void EnsureWeaponLists()
+        {
+            if (_mainIds != null) return;
+            var mains = new List<string> { "" };
+            var mainL = new List<string> { "None" };
+            var offs  = new List<string> { "" };
+            var offL  = new List<string> { "None" };
+            try
+            {
+                foreach (var w in DeNelle.Village.GearCatalog.AllWeapons())
+                {
+                    if (w == null || string.IsNullOrEmpty(w.id)) continue;
+                    bool shield =
+                        string.Equals(w.category, "shield", StringComparison.OrdinalIgnoreCase) ||
+                        w.id.IndexOf("shield", StringComparison.OrdinalIgnoreCase) >= 0;
+                    string label = string.IsNullOrEmpty(w.name) ? w.id : $"{w.name} ({w.id})";
+                    if (shield) { offs.Add(w.id); offL.Add(label); }
+                    else        { mains.Add(w.id); mainL.Add(label); }
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning(Log + $"weapon catalog unavailable for preview gear — popups list None only ({e.Message}).");
+            }
+            _mainIds = mains.ToArray(); _mainLabels = mainL.ToArray();
+            _offIds  = offs.ToArray();  _offLabels  = offL.ToArray();
+            _mainIndex = Mathf.Max(0, Array.IndexOf(_mainIds, EditorPrefs.GetString("MotionCaster.MainHand", "")));
+            _offIndex  = Mathf.Max(0, Array.IndexOf(_offIds,  EditorPrefs.GetString("MotionCaster.OffHand",  "")));
+        }
+
+        private void DrawWeaponRow()
+        {
+            EnsureWeaponLists();
+            EditorGUI.BeginChangeCheck();
+            _mainIndex = EditorGUILayout.Popup(
+                new GUIContent("Main Hand", "Held weapon shown on the preview rig (same grip/seat as in-game)."),
+                _mainIndex, _mainLabels);
+            _offIndex = EditorGUILayout.Popup(
+                new GUIContent("Off Hand", "Shield/off-hand shown on the preview rig."),
+                _offIndex, _offLabels);
+            if (EditorGUI.EndChangeCheck())
+            {
+                EditorPrefs.SetString("MotionCaster.MainHand", _mainIds[_mainIndex]);
+                EditorPrefs.SetString("MotionCaster.OffHand",  _offIds[_offIndex]);
+                ApplyPreviewWeapons();
+            }
+        }
+
+        /// <summary>Attach the picked main/off-hand gear to the preview clone by
+        /// driving a fresh world EquipmentController on it — the HeroPreviewViewer
+        /// pattern, so the shown grip/seat/scale is the in-game one. The controller
+        /// is rebuilt per apply (edit mode: its internal Destroy() calls are no-ops,
+        /// so we DestroyImmediate stale props ourselves to prevent stacking).</summary>
+        private void ApplyPreviewWeapons()
+        {
+            if (_previewInstance == null) return;
+            EnsureWeaponLists();
+            string mainId = _mainIds[Mathf.Clamp(_mainIndex, 0, _mainIds.Length - 1)];
+            string offId  = _offIds[Mathf.Clamp(_offIndex,  0, _offIds.Length  - 1)];
+
+            var stale = _previewInstance.GetComponent<DeNelle.Village.EquipmentController>();
+            if (stale != null) DestroyImmediate(stale);
+            var props = new List<Transform>();
+            foreach (var t in _previewInstance.GetComponentsInChildren<Transform>(true))
+                if (t != null && t.name.StartsWith("EquipmentProp", StringComparison.Ordinal))
+                    props.Add(t);
+            foreach (var t in props) if (t != null) DestroyImmediate(t.gameObject);
+
+            if (string.IsNullOrEmpty(mainId) && string.IsNullOrEmpty(offId)) { Repaint(); return; }
+            try
+            {
+                var equip = _previewInstance.AddComponent<DeNelle.Village.EquipmentController>();
+                equip.enabled = false;   // driven explicitly — no OnEnable/Update lifecycle
+                equip.Equip(mainId);
+                equip.EquipOffHand(offId);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning(Log + $"preview gear attach failed (main='{mainId}' off='{offId}'): {e.Message}");
+            }
+            Repaint();
+        }
+
         /// <summary>Mocap-only filter: studio mocap packs, ActorCore zips, and the
         /// owner-drops intake folder count as mocap; loose Mixamo clips (Action root,
         /// source "action" outside those folders) and the KayKit pack are hidden.</summary>
@@ -649,6 +747,7 @@ namespace DeNelle.Editor
         private void DrawPreviewColumn()
         {
             EditorGUILayout.LabelField("Preview", EditorStyles.boldLabel);
+            DrawWeaponRow();
 
             Rect rect = GUILayoutUtility.GetRect(256f, 260f, GUILayout.ExpandWidth(true));
             HandleOrbitDrag(rect);
