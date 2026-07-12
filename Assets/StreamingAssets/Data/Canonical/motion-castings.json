@@ -73,7 +73,16 @@
       "inherits": "orc"
     },
     "orc-tank": {
-      "inherits": "orc"
+      "inherits": "orc",
+      "attack0": {
+        "clip": "Assets/Action/Knight/Motion/actorcore-0712/axe_chop_tank.fbx",
+        "guid": "",
+        "vfxKey": "",
+        "sfxId": "",
+        "manual": true,
+        "pickedUtc": "2026-07-12T01:00:00Z",
+        "source": "owner-pick"
+      }
     },
     "knight": {
       "inherits": "humanoid",
