@@ -1342,7 +1342,7 @@ namespace DeNelle.Village
                 if (!ActionBundleCatalog.TryGetRow(RegistryTarget, keyword, out var row) ||
                     row == null || string.IsNullOrEmpty(row.vfxKey))
                 {
-                    DeNelle.Core.Diagnostics.FlowTrace.Once("Vfx",
+                    DeNelle.Core.Diagnostics.FlowTrace.Once("Vfx", $"no-row-{keyword}",
                         $"cast '{keyword}': no owner vfx row — silent by design (registry-only motion VFX).");
                     return;
                 }
