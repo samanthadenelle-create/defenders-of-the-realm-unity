@@ -476,32 +476,7 @@ namespace DeNelle.Editor
             return null;
         }
 
-        private static AnimationClip LoadClipAtPath(string path)
-        {
-            if (string.IsNullOrEmpty(path)) return null;
-            var direct = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
-            if (direct != null && IsRealMotionClip(direct))
-                return direct;
-            // FBX container: pick the BEST clip sub-asset, not the first. ActorCore FBXs
-            // ship a '0_T-Pose' take (0.04s) BEFORE the motion take — F8 2026-07-11
-            // 'walking forward' proof: 'clips=[0_T-Pose(w=1.00,len=0.04)]' — the hero
-            // walked on the T-pose frame. Skip preview/T-pose takes; prefer the longest
-            // remaining clip (the motion take).
-            AnimationClip best = null;
-            foreach (var a in AssetDatabase.LoadAllAssetsAtPath(path))
-                if (a is AnimationClip c && IsRealMotionClip(c))
-                    if (best == null || c.length > best.length) best = c;
-            return best;
-        }
-
-        /// <summary>Rejects preview/T-pose/bind-pose takes and sub-0.1s placeholder frames.</summary>
-        private static bool IsRealMotionClip(AnimationClip c)
-        {
-            if (c == null) return false;
-            if (c.name.StartsWith("__preview", StringComparison.Ordinal)) return false;
-            string n = c.name.ToLowerInvariant();
-            if (n.Contains("t-pose") || n.Contains("tpose") || n.Contains("bind")) return false;
-            return c.length >= 0.1f;
-        }
+        private static AnimationClip LoadClipAtPath(string path) =>
+            MotionClipPicker.PickBestFromFbx(path);
     }
 }

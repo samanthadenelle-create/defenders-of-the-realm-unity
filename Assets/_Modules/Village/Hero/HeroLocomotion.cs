@@ -1139,6 +1139,18 @@ namespace DeNelle.Village
                     if (ci.clip == null) continue;
                     if (sb.Length > 0) sb.Append(", ");
                     sb.Append($"{ci.clip.name}(w={ci.weight:F2},len={ci.clip.length:F2}s)");
+                    if (Velocity.magnitude > 0.5f && ci.weight > 0.5f)
+                    {
+                        string cn = ci.clip.name.ToLowerInvariant();
+                        if (cn.Contains("t-pose") || cn.Contains("tpose") ||
+                            (cn.StartsWith("0_") && cn.Contains("pose")))
+                        {
+                            DeNelle.Core.Diagnostics.FlowTrace.Fail("HeroLoco",
+                                $"moving at {Velocity.magnitude:F2} m/s but active clip is T-pose '{ci.clip.name}' " +
+                                $"— rebake KnightMocap (BuildKnightMocapController) after Motion Caster pick; " +
+                                $"ActorCore FBXs ship 0_T-Pose before the motion take.");
+                        }
+                    }
                 }
                 if (sb.Length == 0) sb.Append("<none>");
                 DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroLoco", "loco", 1f,

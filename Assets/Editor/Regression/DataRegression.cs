@@ -238,6 +238,7 @@ namespace DeNelle.Editor
             if (!ArtResourceRegression.Run(out var artResReason)) failures.Add(artResReason); else log.AppendLine("[art-resource] " + artResReason);
             if (!EnemyRigColorRegression.Run(out var enemyRigColorReason)) failures.Add(enemyRigColorReason); else log.AppendLine("[enemy-rig-color] " + enemyRigColorReason);
             if (!OrcRigBindingAudit.Run(out var orcBindingReason)) failures.Add(orcBindingReason); else log.AppendLine("[orc-binding] " + orcBindingReason);
+            if (!HeroLocomotionClipRegression.Run(out var heroLocoClipReason)) failures.Add(heroLocoClipReason); else log.AppendLine("[hero-loco-clips] " + heroLocoClipReason);
             // --- UI-Obsidian conformance (style-everything-obsidian LAW): flags NEW hand-rolled uGUI vs baseline debt ---
             if (!UiObsidianConformanceRegression.Run(out var uiObsidianReason)) failures.Add(uiObsidianReason); else log.AppendLine("[ui-obsidian] " + uiObsidianReason);
             if (!HudPostureRegression.Run(out var hudPostureReason)) failures.Add(hudPostureReason); else log.AppendLine("[hud-posture] " + hudPostureReason);

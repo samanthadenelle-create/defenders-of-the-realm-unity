@@ -1172,45 +1172,18 @@ namespace DeNelle.Editor
         /// motion, not the bind pose). Null + warn if absent.</summary>
         private static AnimationClip LoadClip(string fbxBaseName, string[] searchRoots = null)
         {
-            // WO-283: search the per-type roots in order (type folder first, then
-            // Shared/), falling back to the legacy flat Assets/Action/ for old clips.
-            object[] assets = null;
-            string path = null;
             var roots = new List<string>();
             if (searchRoots != null) roots.AddRange(searchRoots);
             roots.Add(ActionDir);
             foreach (var root in roots)
             {
                 string candidate = root + fbxBaseName + ".fbx";
-                var found = AssetDatabase.LoadAllAssetsAtPath(candidate);
-                if (found != null && found.Length > 0) { assets = found; path = candidate; break; }
+                var clip = MotionClipPicker.PickBestFromFbx(candidate);
+                if (clip != null) return clip;
             }
-            if (assets == null || assets.Length == 0)
-            {
-                Debug.LogWarning($"[HeroAnimatorFactory] clip FBX not found: {fbxBaseName} " +
-                                 $"(searched {string.Join(", ", roots)})");
-                return null;
-            }
-            AnimationClip fallback = null;
-            foreach (var a in assets)
-            {
-                if (!(a is AnimationClip clip)) continue;
-                if (clip.name.StartsWith("__preview__")) continue;
-                string n = clip.name.ToLowerInvariant();
-                // Skip bind/T-pose takes (iClone8 "0_T-Pose"); keep the first as a
-                // fallback in case the FBX has only one usable clip.
-                if (n.Contains("t-pose") || n.Contains("tpose") || n.Contains("bind"))
-                {
-                    fallback ??= clip;
-                    continue;
-                }
-                return clip;   // the real motion take
-            }
-            if (fallback != null)
-                Debug.LogWarning($"[HeroAnimatorFactory] {path}: only a T-pose/bind clip found — using it.");
-            else
-                Debug.LogWarning($"[HeroAnimatorFactory] no motion AnimationClip inside {path}");
-            return fallback;
+            Debug.LogWarning($"[HeroAnimatorFactory] clip FBX not found or only T-pose inside: {fbxBaseName} " +
+                             $"(searched {string.Join(", ", roots)})");
+            return null;
         }
     }
 }

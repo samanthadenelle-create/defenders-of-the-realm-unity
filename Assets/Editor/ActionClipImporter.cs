@@ -48,6 +48,13 @@ namespace DeNelle.Editor
             importer.animationScaleError    = 0.5f;
         }
 
+        internal static bool IsBindOrTPoseClipName(string clipName)
+        {
+            string cn = (clipName ?? string.Empty).ToLowerInvariant();
+            return cn.Contains("t-pose") || cn.Contains("tpose") || cn.Contains("bind")
+                || (cn.StartsWith("0_") && cn.Contains("pose"));
+        }
+
         private void OnPreprocessAnimation()
         {
             if (!IsActionAsset) return;
@@ -61,9 +68,11 @@ namespace DeNelle.Editor
                         || lower.Contains("walk")
                         || lower.Contains("run");
 
+            var kept = new System.Collections.Generic.List<ModelImporterClipAnimation>();
             for (int i = 0; i < clips.Length; i++)
             {
                 var c = clips[i];
+                if (IsBindOrTPoseClipName(c.name)) continue;
 
                 c.loopTime = looping;
                 // Loop Pose (loopBlend): offset the clip so its END pose matches its START,
@@ -84,10 +93,11 @@ namespace DeNelle.Editor
                 c.lockRootRotation = false;
                 c.keepOriginalOrientation = true;
 
-                clips[i] = c;
+                kept.Add(c);
             }
 
-            importer.clipAnimations = clips;
+            if (kept.Count > 0)
+                importer.clipAnimations = kept.ToArray();
         }
 
         // ── Force reimport ────────────────────────────────────────────────────
@@ -118,6 +128,7 @@ namespace DeNelle.Editor
                 importer.avatarSetup   = ModelImporterAvatarSetup.CreateFromThisModel;
                 importer.materialImportMode = ModelImporterMaterialImportMode.None;
                 importer.animationCompression = ModelImporterAnimationCompression.Optimal; // WO-283
+                StripTPoseFromImporterClips(importer, path);
                 importer.SaveAndReimport();
                 if (wasLegacy) flipped++;
             }
@@ -154,9 +165,11 @@ namespace DeNelle.Editor
                 // commit them to clipAnimations with the in-place flags set.
                 var clips = importer.defaultClipAnimations;
                 if (clips == null || clips.Length == 0) continue;
+                var kept = new System.Collections.Generic.List<ModelImporterClipAnimation>();
                 for (int i = 0; i < clips.Length; i++)
                 {
                     var c = clips[i];
+                    if (IsBindOrTPoseClipName(c.name)) continue;
                     c.loopTime = looping;
                     c.loopPose = looping;              // match start/end pose on loop = no snap
                     c.lockRootPositionXZ = true;       // bake horizontal root into pose = in place
@@ -165,9 +178,10 @@ namespace DeNelle.Editor
                     c.keepOriginalPositionY = true;
                     c.lockRootRotation = false;
                     c.keepOriginalOrientation = true;
-                    clips[i] = c;
+                    kept.Add(c);
                 }
-                importer.clipAnimations = clips;
+                if (kept.Count == 0) continue;
+                importer.clipAnimations = kept.ToArray();
                 importer.animationCompression = ModelImporterAnimationCompression.Optimal; // WO-283
                 importer.SaveAndReimport();
                 n++;
@@ -175,6 +189,34 @@ namespace DeNelle.Editor
             UnityEditor.AssetDatabase.SaveAssets();
             UnityEditor.AssetDatabase.Refresh();
             UnityEngine.Debug.Log($"[ActionClipImporter] FixActionClipRootMotion — {n} clip FBX set in-place + loop-matched.");
+        }
+
+        private static void StripTPoseFromImporterClips(ModelImporter importer, string path)
+        {
+            var source = importer.clipAnimations;
+            if (source == null || source.Length == 0)
+                source = importer.defaultClipAnimations;
+            if (source == null || source.Length == 0) return;
+
+            string lower = path.ToLowerInvariant();
+            bool looping = lower.Contains("idle") || lower.Contains("walk") || lower.Contains("run");
+            var kept = new System.Collections.Generic.List<ModelImporterClipAnimation>();
+            for (int i = 0; i < source.Length; i++)
+            {
+                var c = source[i];
+                if (IsBindOrTPoseClipName(c.name)) continue;
+                c.loopTime = looping;
+                c.loopPose = looping;
+                c.lockRootPositionXZ = true;
+                c.keepOriginalPositionXZ = false;
+                c.lockRootHeightY = false;
+                c.keepOriginalPositionY = true;
+                c.lockRootRotation = false;
+                c.keepOriginalOrientation = true;
+                kept.Add(c);
+            }
+            if (kept.Count > 0)
+                importer.clipAnimations = kept.ToArray();
         }
 
         // ── Creature mesh rigs (orc/goblin/etc) ───────────────────────────────
