@@ -26,11 +26,12 @@
 // (no dependence on a layout pass). The content scrolls (owner: one scrollable
 // canvas, Knight + Shared, no pagination yet).
 //
-// This panel LEADS the Obsidian look: it uses the mirrored talent sprites
-// (slot_talent / panel_talent) whenever present — independent of the global
-// BlinkChrome "hide our dressing" flag — and falls back to procedural rounded
-// plates + the default dark frame when the art is absent. Every sprite lookup
-// is null-safe, so it renders correctly in both states.
+// OWNER F8 2026-07-11 (minimal pass): node FACES are deliberately MINIMAL — a flat
+// obsidian plate + thin gilt line border, small tinted-down icon ("remove the
+// background image and just a simple icon with the lines"). The painted talent_N
+// plate art is retired from node faces; the ornate Obsidian look stays on the
+// PANEL frame (BuildObsidianPanel) and the quick-swap tiles. Every sprite lookup
+// remains null-safe.
 //
 // Registers PanelId.HeroSkillTree (+ legacy HeroTalents route; the Skills tab).
 // =============================================================================
@@ -358,53 +359,57 @@ namespace DeNelle.Village.Talents
             rt.sizeDelta = new Vector2(NodeSize, NodeSize);
 
             var img = go.GetComponent<Image>();
-            // Real Blink talent BORDER art (talent_1..4 — the node frames per UI canon) sprite-FIRST,
-            // mapped by node tier (1..4; shared/0 → talent_1). This panel leads the Obsidian look
-            // regardless of the global BlinkChrome dressing flag. Falls back to the mirrored slot_talent
-            // plate, then to the procedural rounded plate, so a node never blanks even with no pack art.
-            int tier = (node.Tier >= 1 && node.Tier <= 4) ? node.Tier : 1;
-            Sprite plateSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, "talent_" + tier)
-                                 ?? RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, "slot_talent");
-            if (plateSprite != null)
-            {
-                img.sprite = plateSprite;
-                img.type = Image.Type.Sliced;
-                img.color = PlateTint(node);
-            }
-            else
-            {
-                ElarionUiKit.ApplyRounded(img);
-                img.color = PlateColor(node);
-            }
+            // OWNER F8 2026-07-11 ("remove the background image and just a simple icon with the
+            // lines, simple and minimalistic"): the node face is MINIMAL — a flat obsidian plate
+            // with a THIN gilt LINE border. The painted talent_1..4 plate art is retired from the
+            // node face (the ornate look stays on the panel frame); the graph reads as quiet
+            // icons + connector lines. Root image = the gilt border; the dark fill is a child
+            // inset by the line width, so the border renders as a crisp ~1.5px line.
+            ElarionUiKit.ApplyRounded(img);
+            img.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, BorderAlpha(node));
 
-            // Capstone frame — distinct gilt border behind the plate.
+            var fillGo = new GameObject("Fill", typeof(Image));
+            fillGo.transform.SetParent(go.transform, false);
+            var fillRt = (RectTransform)fillGo.transform;
+            fillRt.anchorMin = Vector2.zero; fillRt.anchorMax = Vector2.one;
+            fillRt.offsetMin = new Vector2(1.5f, 1.5f);
+            fillRt.offsetMax = new Vector2(-1.5f, -1.5f);
+            var fillImg = fillGo.GetComponent<Image>();
+            ElarionUiKit.ApplyRounded(fillImg);
+            fillImg.color = PlateFill(node);
+            fillImg.raycastTarget = false;
+
+            // Capstone — a THICKER gilt rim (procedural, no art) so the tier-capper still reads
+            // special without reintroducing painted borders. Behind the plate, peeks ~5px.
             if (node.IsCapstone)
             {
-                Sprite frameSprite = RpgUiCatalog.Get("slot", "slot_talent_6");
                 var frame = new GameObject("CapstoneFrame", typeof(Image));
                 frame.transform.SetParent(go.transform, false);
                 var fr = frame.GetComponent<RectTransform>();
-                fr.anchorMin = new Vector2(-0.10f, -0.10f);
-                fr.anchorMax = new Vector2(1.10f, 1.10f);
+                fr.anchorMin = new Vector2(-0.05f, -0.05f);
+                fr.anchorMax = new Vector2(1.05f, 1.05f);
                 fr.offsetMin = Vector2.zero; fr.offsetMax = Vector2.zero;
                 var fImg = frame.GetComponent<Image>();
-                if (frameSprite != null) { fImg.sprite = frameSprite; fImg.type = Image.Type.Sliced; }
+                ElarionUiKit.ApplyRounded(fImg);
                 fImg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b,
-                                       node.Owned || node.CanUnlock || node.IsPending ? 0.85f : 0.45f);
+                                       node.Owned || node.CanUnlock || node.IsPending ? 0.85f : 0.40f);
                 fImg.raycastTarget = false;
                 frame.transform.SetAsFirstSibling();
             }
 
-            // Planned ring — a bright outline so a staged node reads at a glance.
+            // Planned ring — a CLEAN rounded ring (owner F8 2026-07-11: the old un-rounded raw
+            // Image drew a solid square that peeked past the plate as a "rough yellow scribble").
+            // Rounded + behind the opaque plate → reads as a thin ~5px ring around the border.
             if (node.IsPending)
             {
                 var ring = new GameObject("PlanRing", typeof(Image));
                 ring.transform.SetParent(go.transform, false);
                 var rr = ring.GetComponent<RectTransform>();
-                rr.anchorMin = new Vector2(-0.06f, -0.06f);
-                rr.anchorMax = new Vector2(1.06f, 1.06f);
+                rr.anchorMin = new Vector2(-0.05f, -0.05f);
+                rr.anchorMax = new Vector2(1.05f, 1.05f);
                 rr.offsetMin = Vector2.zero; rr.offsetMax = Vector2.zero;
                 var rImg = ring.GetComponent<Image>();
+                ElarionUiKit.ApplyRounded(rImg);
                 rImg.color = new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.9f);
                 rImg.raycastTarget = false;
                 ring.transform.SetAsFirstSibling();
@@ -419,7 +424,9 @@ namespace DeNelle.Village.Talents
             string id = node.Id;
             btn.onClick.AddListener(() => { if (_vm != null) _vm.Select(id); });
 
-            // Icon fills the plate (§B.1 — icon-only; no name/state text on the node).
+            // Icon — SMALL and quiet in the plate centre (owner F8 2026-07-11 minimal pass).
+            // The Talents/* sprites are full-bleed paintings; at ~60% of the plate, tinted
+            // down toward parchment-grey, they read as quiet emblems instead of background art.
             var sprite = LoadIcon(node.IconPath);
             bool locked = !node.Owned && !node.CanUnlock && !node.IsPending;
             if (sprite != null)
@@ -427,15 +434,16 @@ namespace DeNelle.Village.Talents
                 var iconGo = new GameObject("Icon", typeof(Image));
                 iconGo.transform.SetParent(go.transform, false);
                 var ir = iconGo.GetComponent<RectTransform>();
-                ir.anchorMin = new Vector2(0.17f, 0.17f);
-                ir.anchorMax = new Vector2(0.83f, 0.83f);
+                ir.anchorMin = new Vector2(0.20f, 0.20f);
+                ir.anchorMax = new Vector2(0.80f, 0.80f);
                 ir.offsetMin = Vector2.zero; ir.offsetMax = Vector2.zero;
                 var iImg = iconGo.GetComponent<Image>();
                 iImg.sprite = sprite;
                 iImg.preserveAspect = true;
                 iImg.raycastTarget = false;
-                if (locked)
-                    iImg.color = new Color(1f, 1f, 1f, 0.40f); // dim = the locked affordance
+                iImg.color = locked
+                    ? new Color(0.82f, 0.80f, 0.77f, 0.35f)  // dim = the locked affordance
+                    : new Color(0.86f, 0.84f, 0.81f, 0.95f); // tinted-down glyph read
             }
             else
             {
@@ -511,22 +519,24 @@ namespace DeNelle.Village.Talents
             lImg.raycastTarget = false;
         }
 
-        // Plate colour by state (procedural fallback path).
-        private static Color PlateColor(SkillNodeVM node)
+        // Flat obsidian fill (minimal face — owner F8 2026-07-11): state lives in the ONE
+        // affordance (check/ring+pip/cost pip/dim); the fill only carries the locked-dim
+        // luminance step (colorblind law — never hue alone).
+        private static Color PlateFill(SkillNodeVM node)
         {
-            if (node.Owned) return new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.26f);
-            if (node.IsPending) return new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.34f);
-            if (node.CanUnlock) return new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.22f);
-            return new Color(ElarionUiKit.Cell.r, ElarionUiKit.Cell.g, ElarionUiKit.Cell.b, 0.42f);
+            bool locked = !node.Owned && !node.CanUnlock && !node.IsPending;
+            return locked
+                ? new Color(0.030f, 0.028f, 0.040f, 0.96f)
+                : new Color(0.055f, 0.050f, 0.070f, 0.96f);
         }
 
-        // Tint for the sprite plate (sliced Obsidian art) by state.
-        private static Color PlateTint(SkillNodeVM node)
+        // Thin gilt LINE border: actionable/live nodes carry a brighter line; locked recedes
+        // (luminance step, still visible so the graph shape always reads).
+        private static float BorderAlpha(SkillNodeVM node)
         {
-            if (node.Owned) return new Color(0.78f, 1f, 0.82f, 1f);
-            if (node.IsPending) return new Color(1f, 0.92f, 0.62f, 1f);
-            if (node.CanUnlock) return Color.white;
-            return new Color(0.62f, 0.60f, 0.58f, 0.9f); // dim locked
+            if (node.Owned || node.IsPending) return 0.90f;
+            if (node.CanUnlock) return 0.70f;
+            return 0.28f;
         }
 
         // ── Chrome (presentation only) ────────────────────────────────────────────
@@ -554,8 +564,10 @@ namespace DeNelle.Village.Talents
 
             // §B.2 — Wisdom wallet = the ONE CurrencyChip (top-right of the body zone;
             // tag "WISDOM" guarantees identity even if the icon art is absent).
+            // Owner F8 2026-07-11: widened (0.76 → 0.70) — the old width truncated the
+            // tag to "WISD..."; "WISDOM 1,016" must fit on one line.
             _wisdomChip = ElarionUiKit.CurrencyChip(panel, ElarionUiKit.CurrencyKind.Wisdom,
-                new Vector2(0.76f, 0.855f), new Vector2(0.955f, 0.915f), tag: "WISDOM");
+                new Vector2(0.70f, 0.855f), new Vector2(0.955f, 0.915f), tag: "WISDOM");
 
             // (The old "Equip" button that opened a second loadout screen is GONE — the
             // quick-swap row below folds that assign flow into THIS screen, owner 2026-06-28.)
@@ -721,13 +733,19 @@ namespace DeNelle.Village.Talents
 
             // RESPEC — refund this hero's talents for a Crystal cost (owner F8 "no respec option").
             // Surfaces the legacy TalentTreePanel respec on the LIVE MVVM panel via vm.Respec().
+            // Owner F8 2026-07-11: "Respec  300 Crystals" truncated to "Respec 300 Cry..." in
+            // the narrow button — short label ("Respec 300c") + FitSingleLine so it never spills.
             int respecCost = _vm != null ? _vm.RespecCost : HeroSkillTreeVMRespecFallbackCost;
-            _respecBtn = ElarionUiKit.ButtonPack(panel, "Respec  " + respecCost + " Crystals", ElarionUiKit.ButtonKind.Quiet,
+            _respecBtn = ElarionUiKit.ButtonPack(panel, "Respec " + respecCost + "c", ElarionUiKit.ButtonKind.Quiet,
                 new Vector2(0.815f, 0.075f), new Vector2(0.955f, 0.135f),
                 () => { if (_vm != null) _vm.Respec(); },
                 packSpriteName: RpgUiCatalog.ButtonFrame);
             var resLbl = _respecBtn != null ? _respecBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
-            if (resLbl != null) { resLbl.color = ElarionUi.Parchment; resLbl.fontStyle = TMPro.FontStyles.Bold; }
+            if (resLbl != null)
+            {
+                resLbl.color = ElarionUi.Parchment; resLbl.fontStyle = TMPro.FontStyles.Bold;
+                ElarionUiKit.FitSingleLine(resLbl);
+            }
 
             // §B.2 — respec status is a transient toast (see Render), not a persistent strip.
             // Close is the SHARED top-right Obsidian Close button (WO-554) — no per-panel footer Close.
