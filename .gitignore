@@ -307,3 +307,5 @@ terminals/
 # Generated Addressables link.xml (build artifact, not source)
 /Assets/AddressableAssetsData/link.xml
 /Assets/AddressableAssetsData/link.xml.meta
+
+tools/docs/__pycache__/
