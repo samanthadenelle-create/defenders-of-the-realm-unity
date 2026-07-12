@@ -974,7 +974,6 @@ namespace DeNelle.Village
             float dist = def.Range > 0f ? def.Range : 6f;
             Vector3 landing = origin + dir.normalized * dist;
             _loco?.WarpTo(landing);
-            VFXManager.Play(VFXType.Impact_ShockwaveRing, origin + Vector3.up * 1.0f);
             SpawnVfx(landing, def, 1.2f, null);
             DeNelle.Core.Diagnostics.FlowTrace.Step("Hero", "universal blink " + (def.Id ?? "dash") + " -> " + landing);
         }
@@ -1064,7 +1063,6 @@ namespace DeNelle.Village
             // Temp shield = a small self-heal (the temp-shield system is separate; this is the cheap stand-in).
             var heroHp = GetComponent<HeroHealth>() ?? HeroHealth.Instance;
             heroHp?.Heal(20f);
-            VFXManager.Play(VFXType.Impact_ShockwaveRing, origin + Vector3.up * 1.0f);
             ReportRumble(20f);
             SpawnVfx(origin, def, def.Range);
             // WO-VFX-003: the roar burst (impact key) + a held taunt aura on the Knight for the
@@ -1563,6 +1561,13 @@ namespace DeNelle.Village
         // WO-35: real per-ability VFX via AbilityVfxKit (was a single tinted dot
         // burst — the "random dots"). An authored _castVfxPrefab still overrides.
         // targetHint = the foe / impact point (drives the strike tracer + meteor fall).
+        private static bool HasAuthoredHovlVfx(AbilityDef def) =>
+            def != null && (
+                !string.IsNullOrEmpty(def.VfxCast) ||
+                !string.IsNullOrEmpty(def.VfxProjectile) ||
+                !string.IsNullOrEmpty(def.VfxImpact) ||
+                !string.IsNullOrEmpty(def.VfxResidual));
+
         private void SpawnVfx(Vector3 at, AbilityDef def, float radius, Vector3? targetHint = null)
         {
             AbilityAudioBridge.PlayForClassAndKind(_heroClass, def.EffectEnum);   // class-flavoured SFX (WO-37)
@@ -1575,6 +1580,18 @@ namespace DeNelle.Village
                 // prefab effects aren't destroyed before their particles finish.
                 float life = ps.main.duration + ps.main.startLifetime.constantMax;
                 Destroy(ps.gameObject, life + 0.5f);
+                return;
+            }
+
+            // F8 2026-07-11 "ability bar casts random vfx": abilities with authored
+            // vfxCast/vfxProjectile/vfxImpact/vfxResidual keys already fire curated Hovl
+            // beats via PlayCastVfxKey / PlayImpactVfxKey / PlayResidualLoop / FlyCosmeticProjectile.
+            // The legacy procedural stack keys ONLY on EffectEnum (dash/knockback/taunt all read as
+            // Strike) and stacks wrong generic bursts on top — skip it when data owns the visuals.
+            if (HasAuthoredHovlVfx(def))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroAbility", $"vfx-hovl:{def.Id}", 1f,
+                    $"SpawnVfx skipped procedural — '{def.Id}' uses authored Hovl keys.");
                 return;
             }
 
