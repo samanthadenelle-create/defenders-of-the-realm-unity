@@ -151,22 +151,22 @@
         "source": "owner-pick"
       },
       "walk": {
-        "clip": "Assets/Action/Knight/standing walk forward.fbx",
+        "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/walkforward01.fbx",
         "guid": "",
         "vfxKey": "",
         "sfxId": "",
         "manual": true,
-        "pickedUtc": "2026-07-12T00:20:00Z",
-        "source": "owner-pick"
+        "pickedUtc": "2026-07-12T02:15:00Z",
+        "source": "cli-hero-sway-fix"
       },
       "run": {
-        "clip": "Assets/Action/Knight/Motion/actorcore-0712/move_run_m.fbx",
+        "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/runforward_218667.fbx",
         "guid": "",
         "vfxKey": "",
         "sfxId": "",
         "manual": true,
-        "pickedUtc": "2026-07-12T00:30:00Z",
-        "source": "owner-pick"
+        "pickedUtc": "2026-07-12T02:15:00Z",
+        "source": "cli-hero-sway-fix"
       },
       "unsheathe": {
         "clip": "Assets/Action/Knight/Motion/actorcore-0712/sword_drawing_m.fbx",
@@ -178,22 +178,22 @@
         "source": "owner-pick"
       },
       "combatWalk": {
-        "clip": "Assets/Action/Knight/standing walk forward.fbx",
+        "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/walkforward01.fbx",
         "guid": "",
         "vfxKey": "",
         "sfxId": "",
         "manual": true,
-        "pickedUtc": "2026-07-12T01:10:00Z",
-        "source": "owner-pick"
+        "pickedUtc": "2026-07-12T02:15:00Z",
+        "source": "cli-hero-sway-fix"
       },
       "combatRun": {
-        "clip": "Assets/Action/Knight/Motion/actorcore-0712/combat_fastrun_loop.fbx",
+        "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/runforward_218667.fbx",
         "guid": "",
         "vfxKey": "",
         "sfxId": "",
         "manual": true,
-        "pickedUtc": "2026-07-12T00:40:00Z",
-        "source": "owner-pick"
+        "pickedUtc": "2026-07-12T02:15:00Z",
+        "source": "cli-hero-sway-fix"
       }
     },
     "mage": {
