@@ -155,6 +155,16 @@ namespace DeNelle.Village
         private IBuildInput _input = new DesktopBuildInput();
         private LeanTouchBuildDriver _touchDriver;
 
+        // On-screen PLACE confirm (owner ask 2026-07-12, web/mobile demo: clicks/taps
+        // never placed). The button sets this latch; PlaceConfirmedThisFrame consumes
+        // it FIRST and bypasses the joystick-zone suppression — pressing a labeled
+        // button is explicit intent, never a stray tap.
+        private BuildPlaceButton _placeButton;
+        private bool _uiPlaceLatch;
+
+        /// <summary>Explicit confirm from the on-screen PLACE button (web/mobile).</summary>
+        public void RequestUiPlaceConfirm() => _uiPlaceLatch = true;
+
         // ── Selection / edit state (P2) ───────────────────────────────────────
         // The currently tap-selected placed structure (move/sell target).
         private PlacedStructure _selected;
@@ -319,6 +329,11 @@ namespace DeNelle.Village
                 _input = new DesktopBuildInput();
             }
 
+            // Hide the PLACE button + drop any unconsumed press so a queued confirm
+            // can never leak into the next build-mode session.
+            _placeButton?.SetVisible(false);
+            _uiPlaceLatch = false;
+
             CommitLayout();
 
             RestoreCamera();
@@ -378,6 +393,13 @@ namespace DeNelle.Village
             // touch pans via the Lean driver). Runs in every mode so the player can re-frame
             // while arming, moving, or idle.
             UpdateBuildCameraPan();
+
+            // On-screen PLACE confirm (web/mobile, 2026-07-12): lazily created, shown
+            // only while a ghost is armed or a move is in progress — the explicit
+            // confirm that works regardless of which pointer device the browser binds.
+            if (_placeButton == null)
+                _placeButton = BuildPlaceButton.Create(transform, RequestUiPlaceConfirm);
+            _placeButton.SetVisible(_armed != null || _movingSelected);
 
             // While the 3-axis orient editor is open, the placement loops are frozen so a tap
             // behind the modal can't drop a piece (the modal owns its own confirm/cancel).
@@ -498,6 +520,14 @@ namespace DeNelle.Village
         /// </summary>
         private bool PlaceConfirmedThisFrame()
         {
+            // On-screen PLACE button latch — consumed FIRST and NOT zone-suppressed:
+            // a labeled button press is explicit intent (web/mobile fix, 2026-07-12).
+            if (_uiPlaceLatch)
+            {
+                _uiPlaceLatch = false;
+                FlowTrace.Step("Build", "PlaceConfirm: UI PLACE button latch consumed (zone suppression bypassed).");
+                return true;
+            }
             bool confirmed = _input.PlaceOrSelect;   // consumes the latch (touch driver)
             if (!confirmed) return false;
             // TGVRU §12 (EDIT-ONLY instrumentation) — a confirm WAS read this frame; trace the
