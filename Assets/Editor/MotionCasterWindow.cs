@@ -33,6 +33,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
@@ -54,7 +56,10 @@ namespace DeNelle.Editor
 
         private const string Log = "[MotionCaster] ";
 
-        /// <summary>One previewable clip in the library list.</summary>
+        /// <summary>One previewable clip in the library list. Multi-take FBXs
+        /// (ActorCore zips ship a 0.04s '0_T-Pose' take first) produce ONE entry
+        /// PER TAKE — name + length shown, junk takes flagged by TEXT (owner is
+        /// red/green colorblind; never hue-only cues).</summary>
         private sealed class ClipEntry
         {
             public AnimationClip Clip;
@@ -63,6 +68,8 @@ namespace DeNelle.Editor
             public bool NeedsExtraction;   // FBX-borne clip — un-retargeted preview
             public string Category;        // vocabulary-category guess (chip filter)
             public string Label;           // list display
+            public bool JunkTake;          // t-pose / bind / preview take — skip it
+            public float RootTravel = -1f; // metres the root moves t0→tEnd (-1 = not yet measured)
         }
 
         // ── Model / verdict ──────────────────────────────────────────────────
@@ -105,6 +112,27 @@ namespace DeNelle.Editor
         private string _attachBone = string.Empty;
         private bool _playOneShot;
 
+        // ── VFX preview bundle (owner self-service — VFX fires inside the stage) ─
+        private bool _previewBundle;
+        private GameObject _vfxInstance;          // instantiated catalog prefab, child of the bone
+        private string _vfxInstanceKey;           // key the live instance was built from
+        private string _vfxInstanceBone;          // bone the live instance was attached to
+        private ParticleSystem[] _vfxRoots =      // top-level systems — Simulate(t, children:true)
+            Array.Empty<ParticleSystem>();
+        private string _vfxPreviewMsg;            // inline resolve failure, never silent
+
+        // ── SFX audition ─────────────────────────────────────────────────────
+        private string _sfxAuditionMsg;           // inline 'no clip found' feedback
+
+        // ── Save feedback (item 4) ───────────────────────────────────────────
+        private string _lastSaveMsg;              // confirmation + rebake reminder
+
+        // Owner drop folder — one-button ActorCore/Mixamo FBX intake.
+        private const string OwnerDropsFolder = "Assets/Action/Knight/Motion/owner-drops";
+
+        // Root travel above this (metres) = the take will slide/reset in-game.
+        private const float RootTravelWarnThreshold = 0.25f;
+
         [MenuItem("Defenders/Animation/Motion Caster")]
         public static void Open()
         {
@@ -130,6 +158,8 @@ namespace DeNelle.Editor
 
         private void TearDownPreview()
         {
+            DestroyVfxInstance();   // no leaked preview VFX objects on window close
+            StopSfxPreview();
             if (AnimationMode.InAnimationMode())
                 AnimationMode.StopAnimationMode();
             if (_previewInstance != null)
@@ -236,6 +266,13 @@ namespace DeNelle.Editor
 
         private void AddEntry(AnimationClip clip, string path, string source, bool needsExtraction)
         {
+            // Per-take listing: multi-take FBXs (ActorCore zips) already yield one
+            // entry per AnimationClip sub-asset — name + LENGTH shown so a 0.04s
+            // '0_T-Pose' first take is visibly junk, flagged by TEXT not colour.
+            bool junk = IsJunkTake(clip);
+            string label = junk
+                ? $"{clip.name}  ({clip.length:0.00}s)  [SKIP: T-POSE/BIND]  [{source}]"
+                : $"{clip.name}  ({clip.length:0.00}s)  [{source}]";
             _library.Add(new ClipEntry
             {
                 Clip = clip,
@@ -243,8 +280,19 @@ namespace DeNelle.Editor
                 Source = source,
                 NeedsExtraction = needsExtraction,
                 Category = GuessCategory(clip.name),
-                Label = $"{clip.name}  [{source}]",
+                Label = label,
+                JunkTake = junk,
             });
+        }
+
+        /// <summary>T-pose / bind / preview takes (ActorCore ships a 0.04s
+        /// '0_T-Pose' take first in every multi-take FBX) — flagged, never
+        /// default-selected.</summary>
+        private static bool IsJunkTake(AnimationClip clip)
+        {
+            if (clip.length <= 0.1f) return true;
+            return Regex.IsMatch(clip.name, @"t[-_ ]?pose|bind|^__?preview|^preview\b",
+                RegexOptions.IgnoreCase);
         }
 
         /// <summary>Vocabulary-category guess from the clip name (chip filter only —
@@ -410,6 +458,7 @@ namespace DeNelle.Editor
 
         private void RebuildPreviewInstance()
         {
+            DestroyVfxInstance();   // vfx child dies with its parent — clear refs first
             if (AnimationMode.InAnimationMode())
                 AnimationMode.StopAnimationMode();
             if (_previewInstance != null)
@@ -464,6 +513,7 @@ namespace DeNelle.Editor
             {
                 clip.SampleAnimation(_previewInstance, _time);
             }
+            SampleVfx();   // particles follow the scrub time (PreviewRenderUtility never ticks them)
         }
 
         // ── GUI ──────────────────────────────────────────────────────────────
@@ -499,6 +549,16 @@ namespace DeNelle.Editor
                     ScanLibrary();
                     LoadPickerSources();
                 }
+
+                // One-button ActorCore/Mixamo intake — no CLI round-trip (item 3).
+                if (GUILayout.Button(new GUIContent("Import dropped FBX…",
+                        "Pick an FBX anywhere on disk (e.g. an unzipped ActorCore download). " +
+                        "It is copied into " + OwnerDropsFolder + ", imported as Humanoid, and " +
+                        "its longest real take is selected in the list."),
+                    GUILayout.Width(140f)))
+                {
+                    ImportDroppedFbx();
+                }
             }
             if (!string.IsNullOrEmpty(_avatarVerdict) || _model == null)
                 EditorGUILayout.HelpBox(_avatarVerdict ?? "Load a model (FBX or prefab) to begin.",
@@ -530,14 +590,26 @@ namespace DeNelle.Editor
                         var style = isSelected ? EditorStyles.boldLabel : EditorStyles.label;
                         if (GUILayout.Button(entry.Label, style))
                         {
-                            _selected = entry;
-                            _time = 0f;
-                            _playing = false;
-                            SamplePose();
+                            SelectEntry(entry);
                         }
                     }
                 }
             }
+        }
+
+        /// <summary>Select a library entry: reset playback, measure root travel
+        /// once (lazy — scan-time sampling of every clip would be expensive), and
+        /// rebuild the preview VFX instance for the new clip's timeline.</summary>
+        private void SelectEntry(ClipEntry entry)
+        {
+            _selected = entry;
+            _time = 0f;
+            _playing = false;
+            if (entry != null && entry.RootTravel < 0f)
+                entry.RootTravel = ComputeRootTravel(entry.Clip);
+            DestroyVfxInstance();       // clean per selection change — no leaks
+            SyncVfxPreviewInstance();   // rebuild against the new clip if bundling
+            SamplePose();
         }
 
         private void DrawPreviewColumn()
@@ -567,6 +639,19 @@ namespace DeNelle.Editor
                     }
                     _loop = GUILayout.Toggle(_loop, "Loop", GUILayout.Width(50f));
 
+                    EditorGUI.BeginChangeCheck();
+                    _previewBundle = GUILayout.Toggle(_previewBundle,
+                        new GUIContent("Preview bundle",
+                            "Instantiate the selected VFX Key's prefab onto the attach bone and " +
+                            "fire it at VFX Delay into the clip — the felt read, in the stage."),
+                        GUILayout.Width(110f));
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        if (!_previewBundle) DestroyVfxInstance();
+                        else SyncVfxPreviewInstance();
+                        SamplePose();
+                    }
+
                     float length = _selected?.Clip != null ? Mathf.Max(_selected.Clip.length, 0.001f) : 1f;
                     EditorGUI.BeginChangeCheck();
                     _time = EditorGUILayout.Slider(_time, 0f, length);
@@ -578,12 +663,32 @@ namespace DeNelle.Editor
                 }
             }
 
+            // Bundle-preview inline status — a missing prefab/bone is never silent.
+            if (_previewBundle && !string.IsNullOrEmpty(_vfxPreviewMsg))
+                EditorGUILayout.HelpBox(_vfxPreviewMsg, MessageType.Warning);
+
             if (_selected != null)
             {
                 EditorGUILayout.LabelField(
                     $"{_selected.Clip.name}  ({_selected.Clip.length:0.00}s, {_selected.Source})",
                     EditorStyles.miniLabel);
                 EditorGUILayout.LabelField(_selected.Path, EditorStyles.miniLabel);
+
+                // Junk-take flag — text cue (owner is red/green colorblind).
+                if (_selected.JunkTake)
+                    EditorGUILayout.HelpBox(
+                        "SKIP: this take looks like a T-POSE / BIND / preview take (ActorCore " +
+                        "multi-take FBXs ship a 0.04s '0_T-Pose' take first). Pick a real take " +
+                        "from the same FBX instead.", MessageType.Warning);
+
+                // Root-motion travel — today's 'runs left to right then resets' lesson,
+                // surfaced at pick time instead of discovered in-game.
+                if (_selected.RootTravel > RootTravelWarnThreshold)
+                    EditorGUILayout.HelpBox(
+                        $"Root motion: this take travels {_selected.RootTravel:0.0} units — it " +
+                        "will slide/reset in-game. Run 'Defenders → Animation → Fix Action Clip " +
+                        "Root Motion (stop slide)' before binding.", MessageType.Warning);
+
                 if (_selected.NeedsExtraction)
                     EditorGUILayout.HelpBox(
                         "Un-retargeted FBX clip — preview is best-effort and may not match the " +
@@ -653,6 +758,7 @@ namespace DeNelle.Editor
 
             // vfxKey — HovlVfxCatalog key dropdown; free text fallback when the
             // catalog keys couldn't be listed (warned in LoadHovlVfxKeys).
+            EditorGUI.BeginChangeCheck();
             if (_vfxKeys != null)
             {
                 _vfxKeyIndex = EditorGUILayout.Popup("VFX Key", _vfxKeyIndex, _vfxKeys);
@@ -665,27 +771,58 @@ namespace DeNelle.Editor
                         "HovlVfxCatalog keys could not be listed — this key is UNVALIDATED " +
                         "(an unknown key no-ops at play time, logged).", MessageType.Warning);
             }
-
-            // sfxId — SfxId enum names; free text fallback when the type lookup failed.
-            if (_sfxIds != null)
+            if (EditorGUI.EndChangeCheck() && _previewBundle)
             {
-                _sfxIdIndex = EditorGUILayout.Popup("SFX Id", _sfxIdIndex, _sfxIds);
-            }
-            else
-            {
-                _sfxIdFree = EditorGUILayout.TextField("SFX Id", _sfxIdFree);
-                if (!string.IsNullOrEmpty(_sfxIdFree))
-                    EditorGUILayout.HelpBox(
-                        "SfxId enum could not be listed — this id is UNVALIDATED.",
-                        MessageType.Warning);
+                SyncVfxPreviewInstance();   // new key → new preview prefab
+                SamplePose();
             }
 
+            // sfxId — SfxId enum names; free text fallback when the type lookup
+            // failed — plus an audition Play button (editor AudioUtil, item 2).
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (_sfxIds != null)
+                {
+                    _sfxIdIndex = EditorGUILayout.Popup("SFX Id", _sfxIdIndex, _sfxIds);
+                }
+                else
+                {
+                    _sfxIdFree = EditorGUILayout.TextField("SFX Id", _sfxIdFree);
+                }
+                using (new EditorGUI.DisabledScope(SelectedSfxId().Length == 0))
+                {
+                    if (GUILayout.Button(new GUIContent("Play",
+                            "Audition this SFX now (loads Resources/Sfx/<id>)."),
+                        GUILayout.Width(44f)))
+                        AuditionSfx(SelectedSfxId());
+                }
+                if (GUILayout.Button(new GUIContent("Stop", "Stop the SFX audition."),
+                    GUILayout.Width(44f)))
+                    StopSfxPreview();
+            }
+            if (_sfxIds == null && !string.IsNullOrEmpty(_sfxIdFree))
+                EditorGUILayout.HelpBox(
+                    "SfxId enum could not be listed — this id is UNVALIDATED.",
+                    MessageType.Warning);
+            if (!string.IsNullOrEmpty(_sfxAuditionMsg))
+                EditorGUILayout.HelpBox(_sfxAuditionMsg, MessageType.Warning);
+
+            EditorGUI.BeginChangeCheck();
             _vfxDelay = Mathf.Max(0f, EditorGUILayout.FloatField(
                 new GUIContent("VFX Delay (s)", "Seconds after animation start to fire the VFX."),
                 _vfxDelay));
+            if (EditorGUI.EndChangeCheck() && _previewBundle)
+                SamplePose();   // same instance, new fire time — just resimulate
+
+            EditorGUI.BeginChangeCheck();
             _attachBone = EditorGUILayout.TextField(
                 new GUIContent("Attach Bone", "Humanoid bone/attach name, e.g. hand.r / weapon / spine."),
                 _attachBone);
+            if (EditorGUI.EndChangeCheck() && _previewBundle)
+            {
+                SyncVfxPreviewInstance();   // reattach to the new bone
+                SamplePose();
+            }
             _playOneShot = EditorGUILayout.Toggle(
                 new GUIContent("Play One-Shot", "Overlay that must not disturb the base state " +
                     "(hit reactions, impacts)."),
@@ -704,6 +841,11 @@ namespace DeNelle.Editor
                 if (GUILayout.Button("Save Binding (manual = canon)", GUILayout.Height(28f)))
                     SaveBinding();
             }
+
+            // Item 4: persistent inline confirmation — names the saved row + the
+            // rebake the pick needs before it is felt in-game.
+            if (!string.IsNullOrEmpty(_lastSaveMsg))
+                EditorGUILayout.HelpBox(_lastSaveMsg, MessageType.Info);
         }
 
         private string SelectedTarget() =>
@@ -796,12 +938,35 @@ namespace DeNelle.Editor
                 AssetDatabase.ImportAsset(MotionCastings.DefaultRegistryPath);
                 AssetDatabase.ImportAsset(MotionCastings.ResourcesRegistryPath);
                 LoadPickerSources(); // a brand-new target id becomes pickable
+                _lastSaveMsg =
+                    $"SAVED: {target}.{keyword} -> '{_selected.Clip.name}' " +
+                    $"(take of {Path.GetFileName(clipPath)})\n" +
+                    $"REBAKE NEEDED before it is felt in-game: {RebakeHint(target)}";
                 ShowNotification(new GUIContent($"Saved '{target}.{keyword}'"));
             }
             else
             {
+                _lastSaveMsg = null;
                 ShowNotification(new GUIContent("Save refused — see Console"));
             }
+        }
+
+        /// <summary>Which controller builder rebakes this target's animator —
+        /// castings are read at BAKE time, so a saved row is inert until rebaked.</summary>
+        private static string RebakeHint(string target)
+        {
+            string t = (target ?? string.Empty).ToLowerInvariant();
+            if (t.StartsWith("orc", StringComparison.Ordinal))
+                return "'Defenders → Tripo → Build Orc Humanoid Family Controllers (WO-491)'";
+            if (t.StartsWith("knight", StringComparison.Ordinal))
+                return "'Defenders → Heroes → Build Knight Package Controller' " +
+                       "(+ 'Defenders → Animation → Build Knight Mocap Locomotion Controller' " +
+                       "for locomotion keywords)";
+            if (t == "warrior" || t == "mage" || t == "archer" ||
+                t == "ranger" || t == "cleric" || t.StartsWith("hero", StringComparison.Ordinal))
+                return "'Defenders → Animation → Build Hero Animators (Mixamo)'";
+            return "'Defenders → Animation → Build Animator Controllers' " +
+                   "(enemy families — AnimatorSetup)";
         }
 
         private static bool IsCastKeyword(string keyword)
@@ -812,6 +977,347 @@ namespace DeNelle.Editor
             foreach (string kw in castKeywords)
                 if (string.Equals(kw, keyword, StringComparison.Ordinal)) return true;
             return false;
+        }
+
+        // ── Item 1: VFX bundle in the preview stage ──────────────────────────
+        // PreviewRenderUtility never ticks ParticleSystems — the instance's
+        // top-level systems are Simulate()d manually at (scrub time − vfxDelay).
+
+        /// <summary>Create/replace/remove the preview VFX instance so it matches
+        /// the current (previewBundle, vfxKey, attachBone) state. Idempotent —
+        /// safe to call from any change handler.</summary>
+        private void SyncVfxPreviewInstance()
+        {
+            string key = _previewBundle ? SelectedVfxKey() : string.Empty;
+            string bone = (_attachBone ?? string.Empty).Trim();
+
+            bool stale = _vfxInstance != null &&
+                (!string.Equals(_vfxInstanceKey, key, StringComparison.Ordinal) ||
+                 !string.Equals(_vfxInstanceBone, bone, StringComparison.Ordinal));
+            if (stale || key.Length == 0 || _previewInstance == null)
+                DestroyVfxInstance();
+
+            _vfxPreviewMsg = null;
+            if (!_previewBundle) return;
+            if (key.Length == 0)
+            {
+                _vfxPreviewMsg = "Preview bundle is ON but no VFX Key is selected.";
+                return;
+            }
+            if (_previewInstance == null)
+            {
+                _vfxPreviewMsg = "Load a model first — the VFX attaches to the preview rig.";
+                return;
+            }
+            if (_vfxInstance != null) return; // already current
+
+            var prefab = LoadHovlVfxPrefab(key);
+            if (prefab == null)
+            {
+                _vfxPreviewMsg = $"No prefab resolved for VFX key '{key}' in HovlVfxCatalog " +
+                    "(row missing or its Prefab is null) — nothing to preview.";
+                return;
+            }
+
+            Transform attach = ResolveAttachBone(bone, out bool boneFound);
+            // Parenting under the (already-added) preview instance puts the VFX in
+            // the PreviewRenderUtility scene, and it follows the sampled pose.
+            _vfxInstance = Instantiate(prefab, attach, false);
+            _vfxInstance.hideFlags = HideFlags.HideAndDontSave;
+            _vfxInstance.transform.localPosition = Vector3.zero;
+            _vfxInstanceKey = key;
+            _vfxInstanceBone = bone;
+
+            // Top-level systems only — Simulate(withChildren:true) covers subs.
+            var all = _vfxInstance.GetComponentsInChildren<ParticleSystem>(true);
+            var roots = new List<ParticleSystem>();
+            foreach (var ps in all)
+            {
+                var parent = ps.transform.parent;
+                if (parent == null || parent.GetComponentInParent<ParticleSystem>(true) == null)
+                    roots.Add(ps);
+            }
+            _vfxRoots = roots.ToArray();
+
+            if (!boneFound && bone.Length > 0)
+                _vfxPreviewMsg = $"Attach bone '{bone}' not found on this rig — " +
+                    "VFX attached to the model root instead.";
+            if (all.Length == 0)
+                _vfxPreviewMsg = $"'{key}' prefab has no ParticleSystems — " +
+                    "only its static meshes will show in the stage.";
+        }
+
+        private void DestroyVfxInstance()
+        {
+            if (_vfxInstance != null) DestroyImmediate(_vfxInstance);
+            _vfxInstance = null;
+            _vfxInstanceKey = null;
+            _vfxInstanceBone = null;
+            _vfxRoots = Array.Empty<ParticleSystem>();
+        }
+
+        /// <summary>Drive the preview VFX to the current scrub time. Before the
+        /// fire moment (vfxDelay) the systems are cleared; after it they are
+        /// Simulate()d to the elapsed time — deterministic under scrubbing.</summary>
+        private void SampleVfx()
+        {
+            if (_vfxInstance == null) return;
+            float t = _time - _vfxDelay;
+            foreach (var ps in _vfxRoots)
+            {
+                if (ps == null) continue;
+                if (t < 0f)
+                {
+                    ps.Simulate(0f, true, true);
+                    ps.Clear(true);
+                }
+                else
+                {
+                    ps.Simulate(t, true, true);
+                }
+            }
+        }
+
+        /// <summary>Resolve a vfxKey to its catalog prefab the same SerializedObject
+        /// way the key dropdown is listed (DeNelle.Editor never references
+        /// DeNelle.Village).</summary>
+        private static GameObject LoadHovlVfxPrefab(string key)
+        {
+            var asset = AssetDatabase.LoadMainAssetAtPath(HovlCatalogAssetPath);
+            if (asset == null) return null;
+            var so = new SerializedObject(asset);
+            var rows = so.FindProperty("Rows");
+            if (rows == null || !rows.isArray) return null;
+            for (int i = 0; i < rows.arraySize; i++)
+            {
+                var row = rows.GetArrayElementAtIndex(i);
+                var k = row.FindPropertyRelative("Key");
+                if (k == null || !string.Equals(k.stringValue, key, StringComparison.Ordinal))
+                    continue;
+                var prefabProp = row.FindPropertyRelative("Prefab");
+                return prefabProp != null ? prefabProp.objectReferenceValue as GameObject : null;
+            }
+            return null;
+        }
+
+        /// <summary>Attach-bone resolution on the PREVIEW model: humanoid alias →
+        /// Animator.GetBoneTransform, then case-insensitive name search (exact,
+        /// then contains), then the model root.</summary>
+        private Transform ResolveAttachBone(string boneName, out bool found)
+        {
+            found = true;
+            Transform root = _previewInstance.transform;
+            if (string.IsNullOrEmpty(boneName)) return root;
+
+            var animator = _previewInstance.GetComponentInChildren<Animator>(true);
+            if (animator != null && animator.avatar != null &&
+                animator.avatar.isValid && animator.avatar.isHuman)
+            {
+                HumanBodyBones hb = MapBoneAlias(boneName);
+                if (hb != HumanBodyBones.LastBone)
+                {
+                    var t = animator.GetBoneTransform(hb);
+                    if (t != null) return t;
+                }
+            }
+
+            Transform contains = null;
+            foreach (var t in _previewInstance.GetComponentsInChildren<Transform>(true))
+            {
+                if (string.Equals(t.name, boneName, StringComparison.OrdinalIgnoreCase))
+                    return t;
+                if (contains == null &&
+                    t.name.IndexOf(boneName, StringComparison.OrdinalIgnoreCase) >= 0)
+                    contains = t;
+            }
+            if (contains != null) return contains;
+            found = false;
+            return root;
+        }
+
+        /// <summary>Registry bone-name conventions ("hand.r", "weapon", "spine")
+        /// → humanoid bones. LastBone = no alias (name search takes over).</summary>
+        private static HumanBodyBones MapBoneAlias(string boneName)
+        {
+            switch (boneName.Trim().ToLowerInvariant().Replace("_", ".").Replace(" ", "."))
+            {
+                case "hand.r": case "r.hand": case "righthand": case "hand.right":
+                case "weapon": case "weapon.r":
+                    return HumanBodyBones.RightHand;
+                case "hand.l": case "l.hand": case "lefthand": case "hand.left":
+                case "shield": case "offhand":
+                    return HumanBodyBones.LeftHand;
+                case "head":                       return HumanBodyBones.Head;
+                case "neck":                       return HumanBodyBones.Neck;
+                case "spine":                      return HumanBodyBones.Spine;
+                case "chest":                      return HumanBodyBones.Chest;
+                case "hips": case "pelvis": case "root":
+                    return HumanBodyBones.Hips;
+                case "foot.r": case "rightfoot":   return HumanBodyBones.RightFoot;
+                case "foot.l": case "leftfoot":    return HumanBodyBones.LeftFoot;
+                default:                           return HumanBodyBones.LastBone;
+            }
+        }
+
+        // ── Item 2: SFX audition (editor AudioUtil via reflection) ───────────
+
+        /// <summary>Play Resources/Sfx/&lt;id&gt; through the editor's preview
+        /// channel (UnityEditor.AudioUtil — internal, reached by reflection; the
+        /// standard editor audition trick). Failures are inline, never silent.</summary>
+        private void AuditionSfx(string sfxId)
+        {
+            _sfxAuditionMsg = null;
+            if (string.IsNullOrEmpty(sfxId)) return;
+
+            var clip = Resources.Load<AudioClip>("Sfx/" + sfxId);
+            if (clip == null)
+            {
+                _sfxAuditionMsg = $"No clip found at Resources/Sfx/{sfxId} — the id will be " +
+                    "silent in-game until a clip lands there (or the SfxClipLibrary maps it).";
+                return;
+            }
+
+            var audioUtil = typeof(AudioImporter).Assembly.GetType("UnityEditor.AudioUtil");
+            if (audioUtil == null)
+            {
+                _sfxAuditionMsg = "Editor AudioUtil type not found — cannot audition in this " +
+                    "Unity version (the saved id is still valid).";
+                return;
+            }
+            var flags = BindingFlags.Static | BindingFlags.Public;
+            var sig = new[] { typeof(AudioClip), typeof(int), typeof(bool) };
+            // Unity 2020+ names it PlayPreviewClip; older editors used PlayClip.
+            MethodInfo play = audioUtil.GetMethod("PlayPreviewClip", flags, null, sig, null)
+                           ?? audioUtil.GetMethod("PlayClip", flags, null, sig, null);
+            if (play == null)
+            {
+                _sfxAuditionMsg = "AudioUtil.PlayPreviewClip/PlayClip not found — cannot " +
+                    "audition in this Unity version (the saved id is still valid).";
+                return;
+            }
+            StopSfxPreview();
+            play.Invoke(null, new object[] { clip, 0, false });
+        }
+
+        private static void StopSfxPreview()
+        {
+            var audioUtil = typeof(AudioImporter).Assembly.GetType("UnityEditor.AudioUtil");
+            var flags = BindingFlags.Static | BindingFlags.Public;
+            MethodInfo stop = audioUtil?.GetMethod("StopAllPreviewClips", flags)
+                           ?? audioUtil?.GetMethod("StopAllClips", flags);
+            stop?.Invoke(null, null);
+        }
+
+        // ── Item 3: one-button FBX intake (ActorCore zip flow) ───────────────
+
+        /// <summary>Copy any on-disk FBX into the owner-drops folder, import it
+        /// Humanoid, rescan, and select its longest REAL take (multi-take ActorCore
+        /// FBXs lead with a 0.04s '0_T-Pose' junk take — never default to it).</summary>
+        private void ImportDroppedFbx()
+        {
+            string src = EditorUtility.OpenFilePanel(
+                "Import motion FBX (ActorCore / Mixamo / any)", string.Empty, "fbx");
+            if (string.IsNullOrEmpty(src)) return;
+
+            if (!AssetDatabase.IsValidFolder(OwnerDropsFolder))
+            {
+                Directory.CreateDirectory(OwnerDropsFolder);
+                AssetDatabase.Refresh();
+            }
+
+            string dst = AssetDatabase.GenerateUniqueAssetPath(
+                OwnerDropsFolder + "/" + Path.GetFileName(src));
+            try
+            {
+                File.Copy(src, dst);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(Log + $"import failed copying '{src}' -> '{dst}': {ex.Message}");
+                EditorUtility.DisplayDialog("Motion Caster — import failed",
+                    $"Could not copy the FBX into the project:\n{ex.Message}", "OK");
+                return;
+            }
+
+            AssetDatabase.ImportAsset(dst);
+            var importer = AssetImporter.GetAtPath(dst) as ModelImporter;
+            if (importer != null)
+            {
+                bool dirty = false;
+                if (importer.animationType != ModelImporterAnimationType.Human)
+                {
+                    importer.animationType = ModelImporterAnimationType.Human;
+                    dirty = true;
+                }
+                if (importer.avatarSetup == ModelImporterAvatarSetup.NoAvatar)
+                {
+                    importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+                    dirty = true;
+                }
+                if (dirty) importer.SaveAndReimport();
+            }
+            else
+            {
+                Debug.LogWarning(Log + $"'{dst}' imported but no ModelImporter found — " +
+                    "Humanoid rig not forced.");
+            }
+
+            ScanLibrary();
+            LoadPickerSources();
+
+            // Default-select the longest REAL take from the new FBX; count takes.
+            ClipEntry best = null, bestAny = null;
+            int takes = 0, junk = 0;
+            foreach (var e in _library)
+            {
+                if (!string.Equals(e.Path, dst, StringComparison.OrdinalIgnoreCase)) continue;
+                takes++;
+                if (e.JunkTake) junk++;
+                if (bestAny == null || e.Clip.length > bestAny.Clip.length) bestAny = e;
+                if (!e.JunkTake && (best == null || e.Clip.length > best.Clip.length)) best = e;
+            }
+            var pick = best ?? bestAny;
+            if (pick != null)
+            {
+                _search = string.Empty;   // never hide the fresh import behind a filter
+                _chipIndex = 0;
+                SelectEntry(pick);
+            }
+
+            string summary = takes == 0
+                ? $"Imported {Path.GetFileName(dst)} — but NO animation takes were found in it."
+                : $"Imported {Path.GetFileName(dst)}: {takes} take(s), {junk} junk " +
+                  $"(t-pose/bind) — selected '{(pick != null ? pick.Clip.name : "none")}'.";
+            Debug.Log(Log + summary);
+            ShowNotification(new GUIContent(summary));
+        }
+
+        /// <summary>Metres the clip's root travels t0→tEnd. Humanoid clips expose
+        /// the baked root velocity (averageSpeed); generic/legacy clips are sampled
+        /// on a throwaway GO. Travel &gt; threshold = will slide/reset in-game.</summary>
+        private static float ComputeRootTravel(AnimationClip clip)
+        {
+            if (clip == null || clip.length <= 0f) return 0f;
+
+            if (clip.isHumanMotion)
+            {
+                float travel = clip.averageSpeed.magnitude * clip.length;
+                if (travel > 0.001f) return travel;
+            }
+
+            var temp = new GameObject("__MotionCasterRootProbe")
+                { hideFlags = HideFlags.HideAndDontSave };
+            try
+            {
+                clip.SampleAnimation(temp, 0f);
+                Vector3 p0 = temp.transform.position;
+                clip.SampleAnimation(temp, clip.length);
+                return (temp.transform.position - p0).magnitude;
+            }
+            finally
+            {
+                DestroyImmediate(temp);
+            }
         }
     }
 }
