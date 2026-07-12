@@ -21,6 +21,7 @@
 // =============================================================================
 using System.Collections.Generic;
 using System.IO;
+using DeNelle.Core.Combat;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -151,6 +152,15 @@ namespace DeNelle.Editor
             // PREBATTLE unsheathe (KnightMocap): draw-weapon clip basename played standing
             // when InCombat flips true before entering CombatLocomotion. Null = direct flip.
             public string unsheatheClipOverride;
+
+            // ACTION KEYWORD REGISTRY seam (F8 2026-07-11 "all four ability animations are
+            // the same"): when non-null, the cast path resolves through the Motion Caster
+            // registry with the hardcoded pick as terminal default — generic cast = `cast`,
+            // Cast_q = `skill1`, Cast_w = `skill2`, Cast_e = `castHeal` (r stays hardcoded) —
+            // mirroring KnightPackageControllerBuilder EXACTLY (:316-328) so the owner's picks
+            // apply to whichever controller is live. Null (every stock hero) = no registry
+            // lookup, byte-identical build. Set only by BuildKnightMocapController ("knight").
+            public string castingTarget;
 
             // Extended directional deaths (KnightMocap): .anim asset paths under the package
             // extract folder — Humanoid retarget onto CC_Base. Null = skip that bucket.
@@ -338,6 +348,12 @@ namespace DeNelle.Editor
             mocap.turnRightClip    = MocapTurnRightClip;
             mocap.turnLeft180Clip  = MocapTurnLeft180Clip;
             mocap.turnRight180Clip = MocapTurnRight180Clip;
+            // ACTION KEYWORD REGISTRY seam (F8 2026-07-11 "all four ability animations are the
+            // same"): resolve the cast path through the Motion Caster registry — cast/skill1/
+            // skill2/castHeal — so the owner's picks (Heroic Leap = SwordShield_Jump, W = plain
+            // Slash, heal = MagicalMoves_SpellCast_02) apply to THIS live controller exactly as
+            // they do to the package controller. Registry miss = the MocapSpellClips pick verbatim.
+            mocap.castingTarget = "knight";
             // Prebattle draw (Mixamo Humanoid on CC_Base) + package directional deaths.
             mocap.unsheatheClipOverride = "draw sword 1";
             mocap.deathFrontAnimPath = PackageExtractDir + "Signature_Death_Forward.anim";
@@ -351,7 +367,9 @@ namespace DeNelle.Editor
                       $"combat idle ({MocapCombatIdleClip}) split on InCombat; calm gait ({WalkClip}/{RunClip}) + " +
                       $"combat gait ({WalkClip}/{RunClip}); " +
                       $"AccuRig combat (atk combo {atkCombo}, block {MocapBlockClip}, hit {MocapHitClip}); " +
-                      $"turn-in-place (90 {MocapTurnLeftClip}/{MocapTurnRightClip} + 180 {MocapTurnLeft180Clip}/{MocapTurnRight180Clip}) on TurnDir " +
+                      $"turn-in-place (90 {MocapTurnLeftClip}/{MocapTurnRightClip} + 180 {MocapTurnLeft180Clip}/{MocapTurnRight180Clip}) on TurnDir; " +
+                      "cast path registry-resolved (knight.cast/skill1/skill2/castHeal → Cast/Cast_q/w/e states, " +
+                      "owner picks; misses = hardcoded mocap picks) " +
                       $"→ {KnightMocapControllerPath}. Bound for KnightV3 when ff.mocaploco=1.");
         }
 
@@ -382,6 +400,15 @@ namespace DeNelle.Editor
                     Debug.LogWarning($"[HeroAnimatorFactory] {spec.slug}: cast clip '{spec.castClip}' " +
                                      $"missing — using fallback '{spec.castClipFallback}' (placeholder).");
             }
+            // Registry seam (spec.castingTarget, F8 2026-07-11): the generic (variant-0)
+            // cast resolves the `cast` keyword with the hardcoded pick as terminal default —
+            // mirrors KnightPackageControllerBuilder :316. Registry miss = today's clip verbatim.
+            if (!string.IsNullOrEmpty(spec.castingTarget))
+                cast = MotionCastings.Resolve(spec.castingTarget, ActionKeywords.Cast, cast);
+            // Per-slot cast clips resolved ONCE (loads + per-keyword registry wraps) and
+            // reused by BOTH the base-layer Cast_q/w/e/r states and the upper-body overlay,
+            // so the two layers stay in lock-step (package builder pattern, :315-317).
+            AnimationClip[] spellClips = ResolveSpellCastClips(spec);
 
             // Idempotent: recreate the controller from scratch.
             AssetDatabase.DeleteAsset(spec.controllerPath);
@@ -513,7 +540,7 @@ namespace DeNelle.Editor
             // gate ON TOP of the same Cast/standing conditions, so when HeroAbilities fires
             // Cast with CastVariant = slot+1 the matching state wins; absent slots (null clip
             // or no spellCastClips) simply leave the generic Cast to cover them.
-            int spellStates = BuildSpellCastStates(sm, locoState, combatLocoState, actionExit, spec);
+            int spellStates = BuildSpellCastStates(sm, locoState, combatLocoState, actionExit, spellClips);
 
             // ── Victory — Any → Victory on the trigger, returns to Locomotion ──
             if (victory != null)
@@ -624,7 +651,7 @@ namespace DeNelle.Editor
             // so the hero can swing while running. Empty default state = no override
             // when not attacking (legs+arms both come from the base layer).
             if (cast != null)
-                AddUpperBodyLayer(ctrl, cast, spec);
+                AddUpperBodyLayer(ctrl, cast, spellClips);
 
             EditorUtility.SetDirty(ctrl);
             Debug.Log($"[HeroAnimatorFactory] {spec.slug} built — Locomotion({added.Count} clips)" +
@@ -921,8 +948,42 @@ namespace DeNelle.Editor
         }
 
         /// <summary>
+        /// Loads (and, when <see cref="HeroSpec.castingTarget"/> is set, registry-resolves)
+        /// the per-slot cast clips ONCE for both the base layer and the upper-body overlay.
+        /// Keyword mapping mirrors KnightPackageControllerBuilder :318-330 EXACTLY:
+        /// [1] q → skill1, [2] w → skill2, [3] e → castHeal (the heal/ward slot),
+        /// [4] r → hardcoded pick (no keyword — matches the package builder).
+        /// Registry miss = the spec's hardcoded pick verbatim (never a broken state); a
+        /// slot whose clip is null after both is skipped by the callers, so the generic
+        /// Cast covers it. Stock heroes (castingTarget null) = plain loads, byte-identical.
+        /// </summary>
+        private static AnimationClip[] ResolveSpellCastClips(HeroSpec spec)
+        {
+            if (spec.spellCastClips == null) return null;
+            var clips = new AnimationClip[spec.spellCastClips.Length];
+            bool wrap = !string.IsNullOrEmpty(spec.castingTarget);
+            for (int v = 1; v < spec.spellCastClips.Length && v <= 4; v++)
+            {
+                var clip = string.IsNullOrEmpty(spec.spellCastClips[v])
+                    ? null : LoadClip(spec.spellCastClips[v], spec.searchRoots);
+                if (wrap)
+                {
+                    if      (v == 1) clip = MotionCastings.Resolve(spec.castingTarget, ActionKeywords.Skill1,   clip);
+                    else if (v == 2) clip = MotionCastings.Resolve(spec.castingTarget, ActionKeywords.Skill2,   clip);
+                    // Cast_e is the heal/ward slot (E-slot actives) — owner pick 2026-07-11:
+                    // heal casts fire the Magical Moves "Magic Spell Cast 02" via the
+                    // knight.castHeal registry row (melee/caster hard rule, F8-48).
+                    else if (v == 3) clip = MotionCastings.Resolve(spec.castingTarget, ActionKeywords.CastHeal, clip);
+                }
+                clips[v] = clip;
+            }
+            return clips;
+        }
+
+        /// <summary>
         /// PER-SPELL casts: one Cast state per ability slot. For each non-null entry in
-        /// spec.spellCastClips[1..4] builds a "Cast_q/w/e/r" state whose Any→state transition
+        /// spellClips[1..4] (resolved once by <see cref="ResolveSpellCastClips"/>) builds a
+        /// "Cast_q/w/e/r" state whose Any→state transition
         /// fires on the Cast trigger AND CastVariant == that index. The generic Cast state
         /// (built by the caller, unconditioned on CastVariant) covers variant 0 and any slot
         /// without its own clip. Each state returns to Locomotion with the snappy timing.
@@ -930,16 +991,15 @@ namespace DeNelle.Editor
         /// Returns the number of per-spell states built.
         /// </summary>
         private static int BuildSpellCastStates(AnimatorStateMachine sm, AnimatorState locoState,
-                                                AnimatorState combatLocoState, float actionExit, HeroSpec spec)
+                                                AnimatorState combatLocoState, float actionExit,
+                                                AnimationClip[] spellClips)
         {
-            if (spec.spellCastClips == null) return 0;
+            if (spellClips == null) return 0;
             string[] slotName = { "0", "q", "w", "e", "r" };
             int built = 0;
-            for (int v = 1; v < spec.spellCastClips.Length && v <= 4; v++)
+            for (int v = 1; v < spellClips.Length && v <= 4; v++)
             {
-                string basename = spec.spellCastClips[v];
-                if (string.IsNullOrEmpty(basename)) continue;
-                var clip = LoadClip(basename, spec.searchRoots);
+                var clip = spellClips[v];
                 if (clip == null) continue;
 
                 var state = sm.AddState($"Cast_{slotName[v]}");
@@ -987,11 +1047,13 @@ namespace DeNelle.Editor
         /// state (Empty) and a Cast state with the attack clip; Any→Cast on the same
         /// "Cast" trigger, then back to Empty. While not casting the upper layer sits
         /// on the empty state and contributes nothing (legs+arms = base layer).
-        /// Per-spell: also builds an upper-body state per spellCastClips entry, gated
+        /// Per-spell: also builds an upper-body state per spellClips entry (the SAME
+        /// registry-resolved clips the base layer uses — resolved once, lock-step), gated
         /// the same way (Cast + CastVariant==N), so a moving caster's arms play the
         /// SPECIFIC spell while the legs keep running.
         /// </summary>
-        private static void AddUpperBodyLayer(AnimatorController ctrl, AnimationClip cast, HeroSpec spec)
+        private static void AddUpperBodyLayer(AnimatorController ctrl, AnimationClip cast,
+                                              AnimationClip[] spellClips)
         {
             var mask = EnsureUpperBodyMask();
 
@@ -1025,15 +1087,13 @@ namespace DeNelle.Editor
             back.duration = CastExitDur;
 
             // Per-spell upper-body overlays (Cast + CastVariant==N) so a moving caster's
-            // arms play the specific spell. Mirrors the base-layer per-spell states.
-            if (spec.spellCastClips != null)
+            // arms play the specific spell. Same resolved clips as the base-layer states.
+            if (spellClips != null)
             {
                 string[] slotName = { "0", "q", "w", "e", "r" };
-                for (int v = 1; v < spec.spellCastClips.Length && v <= 4; v++)
+                for (int v = 1; v < spellClips.Length && v <= 4; v++)
                 {
-                    string basename = spec.spellCastClips[v];
-                    if (string.IsNullOrEmpty(basename)) continue;
-                    var clip = LoadClip(basename, spec.searchRoots);
+                    var clip = spellClips[v];
                     if (clip == null) continue;
 
                     var st = sm.AddState($"CastUpper_{slotName[v]}");
