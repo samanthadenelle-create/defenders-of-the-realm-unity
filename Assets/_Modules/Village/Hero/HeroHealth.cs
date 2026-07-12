@@ -632,6 +632,31 @@ namespace DeNelle.Village
             if (_locomotion != null) _locomotion.enabled = false;
             if (_abilities  != null) _abilities.enabled  = false;
 
+            // ARENA OWNS THE DEATH (F8 "Regroup breaks the death cycle", RCA 2026-07-12):
+            // while a BattleArena fight is resolving, its loss-return revives the hero at the
+            // home anchor — a respawn/evac HERE double-fires (two HeroMoved warps in one death
+            // window: this coroutine's town-anchor respawn racing the arena's SafeLossReturn
+            // warp). Defer to the arena; SAFETY NET: if nothing has revived the hero within
+            // 10s (stuck resolve / torn-down return coroutine), fall through to the normal
+            // cycle below so the hero is never left dead+frozen.
+            if (DeNelle.Village.Arena.BattleArena.AnyBattleInProgress)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Death",
+                    "HandleDeath: DEFER — battle in progress; arena loss-return owns recovery (10s net).");
+                float netDeadline = Time.time + 10f;
+                while (Time.time < netDeadline && _isDead)
+                    yield return null;
+                if (!_isDead)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Death",
+                        "HandleDeath: arena recovered the hero — deferred cycle complete, no second warp.");
+                    yield break;
+                }
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Death",
+                    "HandleDeath: arena never recovered the hero within 10s (safety net) — " +
+                    "falling through to the normal respawn cycle.");
+            }
+
             DeNelle.Core.Diagnostics.FlowTrace.Step("Death",
                 "HandleDeath: down-beat starts (" + Mathf.Max(0.1f, _downSeconds).ToString("F1") +
                 "s) — the fall animation window; any panel opening before this elapses hides the fall.");

@@ -1785,6 +1785,27 @@ namespace DeNelle.Village.Arena
 
             WarpHero(returnPos, Quaternion.Euler(0f, returnYaw, 0f));
 
+            // DEATH-CYCLE OWNERSHIP (F8 "Regroup breaks the death cycle", RCA 2026-07-12): on a
+            // LOSS the hero arrives home still dead — ff.noautoheal skips RestoreToFull, the only
+            // call on this path that cleared the death latch — and recovery leaned on HeroHealth's
+            // RACING HandleDeath respawn (a SECOND warp to the town anchor: two HeroMoved in one
+            // death window). The arena now OWNS the recovery: revive in place at the loss anchor
+            // (Respawn clears the latch, restores control, applies the respawn HP fraction + grace).
+            // HandleDeath defers while a battle owns the death (see HeroHealth.HandleDeath).
+            {
+                var hhLoss = HeroHealth.Instance;
+                FlowTrace.Step("BattleArena",
+                    $"loss-return state: won={won} heroAlive={(hhLoss != null && hhLoss.IsAlive)} " +
+                    "(Regroup must never present over a dead hero).");
+                if (!won && hhLoss != null && !hhLoss.IsAlive)
+                {
+                    Guard.Try("BattleArena", "revive hero on loss return", () =>
+                        hhLoss.Respawn(hhLoss.transform.position));
+                    FlowTrace.Step("BattleArena",
+                        "loss return: hero revived IN PLACE at the loss anchor — arena owns the death cycle.");
+                }
+            }
+
             // RETURN HEAL (owner felt-test 2026-06-24): top the hero off to FULL HP — the "rest up at
             // home base" beat. Null-safe; no-op on a downed hero (Respawn owns that). HP only.
             // SURVIVAL RULE (owner 2026-06-29): when ff.noautoheal is ON (default) HP/MP do NOT
